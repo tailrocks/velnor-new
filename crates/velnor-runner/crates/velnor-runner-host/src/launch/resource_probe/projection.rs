@@ -2,9 +2,7 @@
 
 use std::fmt;
 
-use bollard::models::{
-    ContainerConfig, ContainerCreateBody, HostConfig, Mount, MountBindOptions, MountType,
-};
+use bollard::models::{ContainerConfig, ContainerCreateBody};
 use bollard::query_parameters::CreateContainerOptions;
 use sha2::{Digest, Sha256};
 
@@ -13,11 +11,14 @@ use crate::worker::{AdmissionReserve, PROBE_CPU_MILLICORES, PROBE_MEMORY_LIMIT_B
 
 #[path = "projection/canonical.rs"]
 mod canonical;
+#[path = "projection/container_config.rs"]
+mod container_config;
 
 const PROBE_TARGET: &str = "/velnor/docker-root";
+pub(super) const CGROUP_TARGET: &str = "/sys/fs/cgroup";
 const PROBE_PLATFORM: &str = "linux/amd64";
 const PROBE_ENTRYPOINT: &str = "/velnor/resource-probe";
-const PROBE_USER: &str = "65532:65532";
+pub(super) const PROBE_USER: &str = "65532:65532";
 const PROBE_WORKING_DIR: &str = "/";
 const PROBE_CPU_PERIOD: i64 = 100_000;
 const PROBE_CPU_QUOTA: i64 = 10_000;
@@ -28,10 +29,6 @@ const PATH_ENV: &str = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/
 const SOURCE_LABEL: &str = "org.opencontainers.image.revision";
 const DAEMON_ARCH_LABEL: &str = "velnor.daemon.architecture";
 const DIGEST_DOMAIN: &[u8] = b"velnor-resource-probe-root-v1\0";
-
-pub(in crate::launch) const fn total_cpu_millicores(cpus: u32) -> Option<u64> {
-    (cpus as u64).checked_mul(MILLICORES_PER_VCPU)
-}
 
 const fn probe_cpu_millicores() -> u64 {
     (PROBE_CPU_QUOTA as u64 * MILLICORES_PER_VCPU) / PROBE_CPU_PERIOD as u64
@@ -233,7 +230,8 @@ impl ProbeProjection {
         }
         let root = DockerRoot::parse(root_path)?;
         let name = format!("velnor-resource-probe-{operation_id}");
-        let config = config(&root, &image, &operation_id, &instance_id, &engine_id);
+        let config =
+            container_config::config(&root, &image, &operation_id, &instance_id, &engine_id);
         let options = CreateContainerOptions {
             name: Some(name.clone()),
             platform: image.platform.clone(),
@@ -250,76 +248,6 @@ impl ProbeProjection {
             config,
             projection_digest: digest,
         })
-    }
-}
-
-fn config(
-    root: &DockerRoot,
-    image: &VerifiedProbeImage,
-    operation_id: &str,
-    instance_id: &str,
-    engine_id: &str,
-) -> ContainerCreateBody {
-    let engine_digest = digest_text(engine_id.as_bytes());
-    let mut labels = std::collections::HashMap::new();
-    labels.insert("velnor.role".to_owned(), "resource-probe".to_owned());
-    labels.insert("velnor.operation".to_owned(), operation_id.to_owned());
-    labels.insert("velnor.instance".to_owned(), instance_id.to_owned());
-    labels.insert("velnor.engine".to_owned(), engine_digest);
-    labels.insert(
-        "velnor.probe.binding".to_owned(),
-        image.binding_fingerprint.clone(),
-    );
-    labels.insert(SOURCE_LABEL.to_owned(), image.source_revision.clone());
-    labels.insert(
-        DAEMON_ARCH_LABEL.to_owned(),
-        image.daemon_architecture.clone(),
-    );
-    ContainerCreateBody {
-        image: Some(image.runtime_id.clone()),
-        user: Some(PROBE_USER.to_owned()),
-        env: None,
-        cmd: None,
-        entrypoint: None,
-        working_dir: None,
-        labels: Some(labels),
-        attach_stdin: Some(false),
-        open_stdin: Some(false),
-        stdin_once: Some(false),
-        attach_stdout: Some(true),
-        attach_stderr: Some(false),
-        tty: Some(false),
-        network_disabled: Some(true),
-        host_config: Some(host_config(root)),
-        ..Default::default()
-    }
-}
-
-fn host_config(root: &DockerRoot) -> HostConfig {
-    HostConfig {
-        auto_remove: Some(false),
-        cap_drop: Some(vec!["ALL".to_owned()]),
-        cpu_period: Some(PROBE_CPU_PERIOD),
-        cpu_quota: Some(PROBE_CPU_QUOTA),
-        mounts: Some(vec![Mount {
-            target: Some(PROBE_TARGET.to_owned()),
-            source: Some(root.path.clone()),
-            typ: Some(MountType::BIND),
-            read_only: Some(true),
-            bind_options: Some(MountBindOptions {
-                create_mountpoint: Some(false),
-                ..Default::default()
-            }),
-            ..Default::default()
-        }]),
-        network_mode: Some("none".to_owned()),
-        privileged: Some(false),
-        memory: Some(PROBE_MEMORY_BYTES),
-        memory_swap: Some(PROBE_MEMORY_BYTES),
-        pids_limit: Some(PROBE_PIDS_LIMIT),
-        readonly_rootfs: Some(true),
-        security_opt: Some(vec!["no-new-privileges:true".to_owned()]),
-        ..Default::default()
     }
 }
 

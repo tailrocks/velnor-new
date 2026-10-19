@@ -1,4 +1,5 @@
 use super::*;
+use crate::launch::inspect_tests::raw_http;
 use serde_json::Value;
 
 #[tokio::test]
@@ -10,6 +11,7 @@ async fn cleanup_timeout_keeps_owned_container_retryable_after_reopen() -> Resul
     responses.extend([
         http(200, "{}"),
         http(200, info),
+        http(200, &inspect(&projection, "running", 0)?),
         http(200, r#"{"StatusCode":0,"Error":null}"#),
         http(200, &inspect(&projection, "exited", 0)?),
         raw_http(200, log_frame(&record_bytes())?),

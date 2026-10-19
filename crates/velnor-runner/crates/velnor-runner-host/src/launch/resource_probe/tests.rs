@@ -3,37 +3,15 @@ use super::record::{InodePolicy, ProbeRecord, fixture_record};
 use crate::Journal;
 use crate::journal::{CapacityLimits, OperationalCapacityLimits, ProbePhase, ProbeSeed};
 use crate::launch_harness::Scratch;
+use bollard::models::HostConfigCgroupnsModeEnum;
+use record_fixture::{GIB, MEMORY_TOTAL, record, record_values};
 
 mod cleanup_proof;
 mod docker_lifecycle;
+mod probe_cpu_pid_binding;
 mod projection_digest;
+mod record_fixture;
 mod sample_permit;
-
-const MEMORY_TOTAL: u64 = 8 * 1024 * 1024 * 1024;
-
-fn record(psi: &str) -> Vec<u8> {
-    record_values(2, 20 * GIB, 40 * GIB, 8 * GIB, 125, psi)
-}
-
-fn record_values(version: u8, free: u64, total: u64, memory: u64, load: u64, psi: &str) -> Vec<u8> {
-    let mut record = fixture_record();
-    record.schema_version = version;
-    record.docker_root_free_bytes = free;
-    record.docker_root_total_bytes = total;
-    record.docker_root_available_bytes = free.min(total).min(19 * GIB);
-    record.memory_available_bytes = memory;
-    record.load_milli = load;
-    record.memory_psi_some_avg10_bps = if psi == "null" {
-        None
-    } else {
-        psi.parse().ok()
-    };
-    let mut bytes = serde_json::to_vec(&record).unwrap_or_default();
-    bytes.push(b'\n');
-    bytes
-}
-
-const GIB: u64 = 1024 * 1024 * 1024;
 
 #[test]
 fn parser_accepts_canonical_record_and_nullable_diagnostic() {
@@ -78,11 +56,11 @@ fn parser_rejects_noncanonical_framing_order_and_duplicates() {
     let reordered = serde_json::to_vec(&serde_json::to_value(fixture_record()).unwrap_or_default())
         .unwrap_or_default();
     let duplicate = valid
-        .windows(b"\"schema_version\":2".len())
-        .position(|part| part == b"\"schema_version\":2")
+        .windows(b"\"schema_version\":3".len())
+        .position(|part| part == b"\"schema_version\":3")
         .map(|position| {
             let mut bytes = valid.clone();
-            bytes.splice(position..position, b"\"schema_version\":2,".iter().copied());
+            bytes.splice(position..position, b"\"schema_version\":3,".iter().copied());
             bytes
         })
         .unwrap_or_default();
@@ -96,9 +74,9 @@ fn parser_rejects_noncanonical_framing_order_and_duplicates() {
 #[test]
 fn parser_rejects_bad_values_missing_fields_and_oversize_output() {
     for invalid in [
-        record_values(2, 41, 40, 30, 125, "null"),
-        record_values(2, 20 * GIB, 40 * GIB, MEMORY_TOTAL + 1, 125, "null"),
-        record_values(2, 20 * GIB, 40 * GIB, 30, 125, "10001"),
+        record_values(3, 41, 40, 30, 125, "null"),
+        record_values(3, 20 * GIB, 40 * GIB, MEMORY_TOTAL + 1, 125, "null"),
+        record_values(3, 20 * GIB, 40 * GIB, 30, 125, "10001"),
         record_values(1, 20 * GIB, 40 * GIB, 30, 125, "null"),
         b"{}\n".to_vec(),
     ] {
@@ -190,7 +168,14 @@ fn projection_is_private_and_uses_only_the_fixed_guest_mount() {
                     .map(String::as_str),
                 Some("ALL")
             );
-            assert_eq!(host.mounts.as_ref().map(Vec::len), Some(1));
+            assert_eq!(host.mounts.as_ref().map(Vec::len), Some(2));
+            assert_eq!(host.pid_mode.as_deref(), Some("host"));
+            assert_eq!(host.cgroupns_mode, Some(HostConfigCgroupnsModeEnum::HOST));
+            if let Some(mounts) = &host.mounts {
+                assert_eq!(mounts[0].source.as_deref(), Some("/var/lib/docker"));
+                assert_eq!(mounts[1].source.as_deref(), Some("/sys/fs/cgroup"));
+                assert!(mounts.iter().all(|mount| mount.read_only == Some(true)));
+            }
         }
         assert!(!format!("{projection:?}").contains("/var/lib/docker"));
         assert_eq!(projection.root.digest().len(), 64);

@@ -15,6 +15,7 @@ const MAX_OBSERVATION_AGE: Duration = Duration::from_secs(30);
 pub(super) struct Observation {
     record: ProbeRecord,
     cpus: u32,
+    effective_cpu_millicores: u64,
     engine_id: String,
     docker_root_digest: String,
     sample_generation_id: String,
@@ -25,13 +26,18 @@ impl Observation {
     pub(super) fn new(
         record: ProbeRecord,
         cpus: u32,
+        inspected_host_pid: u32,
         memory_total_bytes: u64,
         engine_id: String,
         docker_root_digest: String,
         sample_generation_id: String,
         observed_at: Instant,
     ) -> Option<Self> {
+        let effective_cpu_millicores = record.effective_cpu_millicores(cpus)?;
         (cpus > 0
+            && inspected_host_pid > 0
+            && record.probe_host_pid == inspected_host_pid
+            && record.probe_namespace_pid == inspected_host_pid
             && memory_total_bytes > 0
             && record.memory_available_bytes <= memory_total_bytes
             && !engine_id.is_empty()
@@ -39,6 +45,7 @@ impl Observation {
         .then_some(Self {
             record,
             cpus,
+            effective_cpu_millicores,
             engine_id,
             docker_root_digest,
             sample_generation_id,
@@ -70,11 +77,10 @@ impl Observation {
         let reserve = budget.admission_reserve();
         let required_cpu = pair.cpu_millicores.checked_add(reserve.cpu_millicores)?;
         let required_memory = pair.memory_bytes.checked_add(reserve.memory_bytes)?;
-        let available_cpu = super::projection::total_cpu_millicores(self.cpus)?;
         let recent = self.is_recent_at(Instant::now());
         (recent
             && self.record.docker_root_free_bytes >= 10 * 1024 * 1024 * 1024
-            && available_cpu >= required_cpu
+            && self.effective_cpu_millicores >= required_cpu
             && self.record.memory_available_bytes >= required_memory)
             .then_some(StartPermit {
                 observation: self,
@@ -167,6 +173,7 @@ impl StartPermit {
             observation: Observation {
                 record: super::record::fixture_record(),
                 cpus: 1,
+                effective_cpu_millicores: 1_000,
                 engine_id: "test-engine".to_owned(),
                 docker_root_digest,
                 sample_generation_id: generation.to_owned(),
@@ -188,6 +195,7 @@ impl StartPermit {
             observation: Observation {
                 record: super::record::fixture_record(),
                 cpus: 1,
+                effective_cpu_millicores: 1_000,
                 engine_id: engine_id.to_owned(),
                 docker_root_digest,
                 sample_generation_id: generation.to_owned(),

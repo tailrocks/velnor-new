@@ -2,9 +2,7 @@ use serde_json::json;
 
 use crate::error::HostError;
 use crate::journal::{Journal, ProbeSeed};
-use crate::launch::inspect_tests::{
-    DockerResponse, DockerStub, closed, delayed_http, http, raw_http,
-};
+use crate::launch::inspect_tests::{DockerResponse, DockerStub, closed, delayed_http, http};
 use crate::launch::resource_probe::execute;
 use crate::launch::resource_probe::lifecycle::{self, Deadline};
 use crate::launch::resource_probe::projection::{
@@ -12,12 +10,14 @@ use crate::launch::resource_probe::projection::{
 };
 use crate::launch::resource_probe::provider::UnavailableImageProvider;
 use crate::launch_harness::Scratch;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 #[path = "docker_lifecycle/effective_config.rs"]
 mod effective_config;
 #[path = "docker_lifecycle/engine_identity.rs"]
 mod engine_identity;
+#[path = "docker_lifecycle/execution.rs"]
+mod execution;
 #[path = "docker_lifecycle/recovery.rs"]
 mod recovery;
 
@@ -39,163 +39,6 @@ enum RequestKind {
     Logs,
     Remove,
     Other,
-}
-
-#[tokio::test]
-async fn completed_probe_cleans_the_exact_container_before_returning_metrics() -> Result<(), String>
-{
-    let (scratch, journal, projection) = prepared().await?;
-    let cleanup_delay = Duration::from_millis(80);
-    let mut responses = start_responses(&projection)?;
-    responses.push(http(200, "{}"));
-    responses.push(http(200, SELECTED_INFO));
-    responses.push(http(200, r#"{"StatusCode":0,"Error":null}"#));
-    responses.push(http(200, &inspect(&projection, "exited", 0)?));
-    responses.push(raw_http(200, log_frame(&record_bytes())?));
-    append_cleanup(&mut responses, &projection, "exited", 0, cleanup_delay)?;
-    let docker = DockerStub::open(responses)?;
-
-    let output = execute::run(
-        &docker.docker,
-        &journal,
-        &projection,
-        16 * 1024 * 1024 * 1024,
-        &Deadline::new(),
-    )
-    .await;
-    let requests = docker.finish_observed().await?;
-    let mut expected = start_request_order();
-    expected.extend([
-        RequestKind::Start,
-        RequestKind::Info,
-        RequestKind::Wait,
-        RequestKind::Inspect,
-        RequestKind::Logs,
-    ]);
-    expected.extend(cleanup_request_order());
-    assert_request_order(&requests, &expected)?;
-    let output = output.map_err(|error| format!("{error}; requests: {requests:?}"))?;
-    let observed_at = output.observed_at;
-    assert!(observed_at.elapsed() >= cleanup_delay);
-
-    assert_eq!(requests.len(), 25);
-    assert!(
-        journal
-            .active_probe()
-            .await
-            .map_err(|error| error.to_string())?
-            .is_none()
-    );
-    let budget = crate::worker::test_resource_budget().map_err(|error| error.to_string())?;
-    let postcheck_delay = Duration::from_millis(80);
-    tokio::time::sleep(postcheck_delay).await;
-    let observation = lifecycle::observation(
-        output,
-        8,
-        16 * 1024 * 1024 * 1024,
-        ENGINE_ID.to_owned(),
-        projection.root.digest().to_owned(),
-    )
-    .ok_or_else(|| "valid probe result was rejected".to_owned())?;
-    assert_eq!(observation.observed_at(), observed_at);
-    let final_check = Instant::now();
-    assert!(final_check.duration_since(observed_at) >= cleanup_delay + postcheck_delay);
-    let expired_at = observed_at
-        .checked_add(Duration::from_secs(31))
-        .ok_or_else(|| "could not construct expired output time".to_owned())?;
-    assert!(!observation.is_recent_at(expired_at));
-    assert!(observation.into_start_permit(budget).is_some());
-    crate::launch_harness::absent(&scratch.file())
-}
-
-#[tokio::test]
-async fn lost_or_invalid_execution_results_cleanup_without_a_permit() -> Result<(), String> {
-    for failure in [
-        Failure::StartLost,
-        Failure::WaitLost,
-        Failure::WaitNonzero,
-        Failure::LogsLost,
-        Failure::InvalidRecord,
-    ] {
-        let (scratch, journal, projection) = prepared().await?;
-        let mut responses = start_responses(&projection)?;
-        let cleanup_state = append_failure_responses(&mut responses, &projection, failure)?;
-        append_cleanup(
-            &mut responses,
-            &projection,
-            cleanup_state,
-            9,
-            Duration::ZERO,
-        )?;
-        let docker = DockerStub::open(responses)?;
-
-        assert!(
-            execute::run(
-                &docker.docker,
-                &journal,
-                &projection,
-                16 * 1024 * 1024 * 1024,
-                &Deadline::new(),
-            )
-            .await
-            .is_err(),
-            "failure case {failure:?} unexpectedly yielded metrics"
-        );
-        let requests = docker.finish_observed().await?;
-        assert_request_order(&requests, &failure_request_order(failure))?;
-        assert!(
-            journal
-                .active_probe()
-                .await
-                .map_err(|error| error.to_string())?
-                .is_none()
-        );
-        crate::launch_harness::absent(&scratch.file())?;
-    }
-    Ok(())
-}
-
-#[tokio::test]
-async fn prepared_restart_aborts_and_unverified_provider_stays_closed() -> Result<(), String> {
-    let (scratch, journal, _projection) = prepared().await?;
-    drop(journal);
-    let journal = Journal::open(&scratch.file())
-        .await
-        .map_err(|error| error.to_string())?;
-    let info = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":8589934592}"#;
-    let docker = DockerStub::open(vec![http(200, info)])?;
-    let sample = Box::pin(lifecycle::collect(
-        &docker.docker,
-        &journal,
-        &UnavailableImageProvider,
-    ))
-    .await
-    .map_err(|error| error.to_string())?;
-    let requests = docker.finish().await?;
-
-    assert!(sample.is_none());
-    assert_eq!(requests.len(), 1);
-    assert!(
-        requests[0].starts_with("GET ") && requests[0].contains("/info"),
-        "unexpected request: {requests:?}"
-    );
-    assert!(
-        journal
-            .active_probe()
-            .await
-            .map_err(|error| error.to_string())?
-            .is_none()
-    );
-    Ok(())
-}
-
-#[derive(Clone, Copy, Debug)]
-enum Failure {
-    StartLost,
-    WaitLost,
-    WaitNonzero,
-    LogsLost,
-    InvalidRecord,
 }
 
 async fn prepared() -> Result<(Scratch, Journal, ProbeProjection), String> {
@@ -270,6 +113,21 @@ fn start_request_order() -> Vec<RequestKind> {
     ]
 }
 
+fn timeout_request_order() -> Vec<RequestKind> {
+    let mut expected = start_request_order();
+    expected.extend([
+        RequestKind::Start,
+        RequestKind::Info,
+        RequestKind::Inspect,
+        RequestKind::Wait,
+        RequestKind::Inspect,
+        RequestKind::Logs,
+        RequestKind::Info,
+        RequestKind::Info,
+    ]);
+    expected
+}
+
 fn cleanup_request_order() -> Vec<RequestKind> {
     vec![
         RequestKind::Info,
@@ -309,20 +167,6 @@ fn recovery_request_order() -> Vec<RequestKind> {
     ]
 }
 
-fn timeout_request_order() -> Vec<RequestKind> {
-    let mut expected = start_request_order();
-    expected.extend([
-        RequestKind::Start,
-        RequestKind::Info,
-        RequestKind::Wait,
-        RequestKind::Inspect,
-        RequestKind::Logs,
-        RequestKind::Info,
-        RequestKind::Info,
-    ]);
-    expected
-}
-
 fn assert_start_rebind_blocks_effects(requests: &[String]) -> Result<(), String> {
     assert_request_order(
         requests,
@@ -348,55 +192,6 @@ fn assert_start_rebind_blocks_effects(requests: &[String]) -> Result<(), String>
 
 fn assert_recovered_container_cleanup(requests: &[String]) -> Result<(), String> {
     assert_request_order(requests, &recovery_request_order())
-}
-
-fn append_failure_responses(
-    responses: &mut Vec<DockerResponse>,
-    projection: &ProbeProjection,
-    failure: Failure,
-) -> Result<&'static str, String> {
-    if matches!(failure, Failure::StartLost) {
-        responses.push(closed());
-        responses.push(http(200, SELECTED_INFO));
-        responses.push(http(200, &inspect(projection, "created", 0)?));
-        return Ok("created");
-    }
-    responses.extend([http(200, "{}"), http(200, SELECTED_INFO)]);
-    match failure {
-        Failure::WaitLost => responses.push(closed()),
-        Failure::WaitNonzero => responses.push(http(200, r#"{"StatusCode":9,"Error":null}"#)),
-        Failure::LogsLost => responses.extend([
-            http(200, r#"{"StatusCode":0,"Error":null}"#),
-            http(200, &inspect(projection, "exited", 0)?),
-            closed(),
-        ]),
-        Failure::InvalidRecord => responses.extend([
-            http(200, r#"{"StatusCode":0,"Error":null}"#),
-            http(200, &inspect(projection, "exited", 0)?),
-            raw_http(200, log_frame(b"{}\n")?),
-        ]),
-        Failure::StartLost => unreachable!(),
-    }
-    Ok("exited")
-}
-
-fn failure_request_order(failure: Failure) -> Vec<RequestKind> {
-    let mut expected = start_request_order();
-    expected.push(RequestKind::Start);
-    match failure {
-        Failure::StartLost => expected.extend([RequestKind::Info, RequestKind::Inspect]),
-        Failure::WaitLost | Failure::WaitNonzero => {
-            expected.extend([RequestKind::Info, RequestKind::Wait]);
-        }
-        Failure::LogsLost | Failure::InvalidRecord => expected.extend([
-            RequestKind::Info,
-            RequestKind::Wait,
-            RequestKind::Inspect,
-            RequestKind::Logs,
-        ]),
-    }
-    expected.extend(cleanup_request_order());
-    expected
 }
 
 fn assert_request_order(requests: &[String], expected: &[RequestKind]) -> Result<(), String> {
@@ -497,21 +292,30 @@ fn inspect(projection: &ProbeProjection, status: &str, exit_code: i64) -> Result
         "RestartCount": 0,
         "State": {
             "Status": status,
-            "Running": false,
+            "Running": status == "running",
             "Paused": false,
             "Restarting": false,
             "OOMKilled": false,
             "Dead": false,
-            "ExitCode": exit_code
+            "ExitCode": exit_code,
+            "Pid": if status == "running" { 1234 } else { 0 }
         },
         "Config": config,
         "HostConfig": host_config,
-        "Mounts": [{
-            "Type": "bind",
-            "Source": projection.root.path(),
-            "Destination": "/velnor/docker-root",
-            "RW": false
-        }]
+        "Mounts": [
+            {
+                "Type": "bind",
+                "Source": projection.root.path(),
+                "Destination": "/velnor/docker-root",
+                "RW": false
+            },
+            {
+                "Type": "bind",
+                "Source": crate::launch::resource_probe::projection::CGROUP_TARGET,
+                "Destination": crate::launch::resource_probe::projection::CGROUP_TARGET,
+                "RW": false
+            }
+        ]
     });
     serde_json::to_string(&response).map_err(|error| error.to_string())
 }

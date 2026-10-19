@@ -98,6 +98,7 @@ pub(super) fn observation(
     Observation::new(
         output.record,
         cpu_count,
+        output.container_host_pid,
         memory_total,
         engine_id,
         root_digest,

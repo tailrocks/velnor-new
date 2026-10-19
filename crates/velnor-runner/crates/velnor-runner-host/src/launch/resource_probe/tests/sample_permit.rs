@@ -67,9 +67,11 @@ fn observation_with_cpu(
     let memory_total_bytes = record
         .docker_root_total_bytes
         .max(budget.pair().memory_bytes);
+    let inspected_host_pid = record.probe_host_pid;
     Observation::new(
         record,
         cpus,
+        inspected_host_pid,
         memory_total_bytes,
         engine_id.to_owned(),
         root_digest.to_owned(),

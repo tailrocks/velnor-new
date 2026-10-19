@@ -1,9 +1,9 @@
-//! Strict schema-2 output parsing for the isolated guest probe.
+//! Strict schema-3 output parsing for the isolated guest probe.
 
 use serde::{Deserialize, Serialize};
 
 pub(super) const MAX_OUTPUT_BYTES: usize = 2048;
-const SCHEMA_VERSION: u8 = 2;
+const SCHEMA_VERSION: u8 = 3;
 const MAX_PSI_BPS: u64 = 10_000;
 const DOCKER_ROOT_TARGET: &str = "/velnor/docker-root";
 const BTRFS_MAGIC: u64 = 0x9123_683e;
@@ -19,6 +19,15 @@ pub(super) enum InodePolicy {
     DynamicBtrfs,
     /// The probe cannot prove an inode limit.
     Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct CpuAncestorLimit {
+    pub(super) path: String,
+    pub(super) cpuset_cpus_count: u32,
+    pub(super) cpu_quota_micros: Option<u64>,
+    pub(super) cpu_period_micros: u64,
 }
 
 /// One validated output record. It stays in memory for the current attempt.
@@ -81,6 +90,14 @@ pub(super) struct ProbeRecord {
     pub(super) probe_cgroup_cpu_quota_micros: Option<u64>,
     /// Probe cgroup CPU quota period.
     pub(super) probe_cgroup_cpu_period_micros: u64,
+    /// Probe cgroup's effective CPU set count; its own quota is operational overhead.
+    pub(super) probe_cgroup_cpuset_cpus_count: u32,
+    /// CPU limits above the probe leaf, in root-to-parent order.
+    pub(super) cpu_ancestor_limits: Vec<CpuAncestorLimit>,
+    /// Host-visible PID from `/proc/self/status` `NSpid`.
+    pub(super) probe_host_pid: u32,
+    /// PID from the probe's current PID namespace.
+    pub(super) probe_namespace_pid: u32,
     /// Probe cgroup process limit, or null when unlimited.
     pub(super) probe_cgroup_pids_max: Option<u64>,
 }
@@ -112,6 +129,9 @@ impl ProbeRecord {
             && self.docker_root_memory_values_valid(memory_total_bytes)
             && self.inode_values_valid()
             && self.cgroup_values_valid()
+            && self
+                .effective_cpu_millicores(u32::MAX)
+                .is_some_and(|value| value > 0)
             && self
                 .memory_psi_some_avg10_bps
                 .is_none_or(|value| value <= MAX_PSI_BPS)
@@ -158,10 +178,17 @@ impl ProbeRecord {
     fn cgroup_values_valid(&self) -> bool {
         let path = self.probe_cgroup_path.as_str();
         if path.is_empty()
-            || path.len() > 1024
+            || path == "/"
+            || path.len() > 256
             || !path.starts_with('/')
-            || path.split('/').any(|component| component == "..")
+            || path.contains("//")
+            || path.chars().any(char::is_control)
             || self.probe_cgroup_cpu_period_micros == 0
+            || self.probe_cgroup_cpuset_cpus_count == 0
+            || self.probe_cgroup_cpuset_cpus_count > 4096
+            || self.probe_host_pid == 0
+            || self.probe_namespace_pid == 0
+            || self.probe_host_pid != self.probe_namespace_pid
         {
             return false;
         }
@@ -175,7 +202,89 @@ impl ProbeRecord {
             .probe_cgroup_cpu_quota_micros
             .is_none_or(|quota| quota > 0)
             && self.probe_cgroup_pids_max.is_none_or(|limit| limit > 0)
+            && self.cpu_ancestry_valid()
     }
+
+    fn cpu_ancestry_valid(&self) -> bool {
+        let Some(paths) = expected_ancestor_paths(&self.probe_cgroup_path) else {
+            return false;
+        };
+        if paths.len() != self.cpu_ancestor_limits.len() {
+            return false;
+        }
+        let mut parent_cpuset = None;
+        for (expected_path, ancestor) in paths.iter().zip(&self.cpu_ancestor_limits) {
+            if ancestor.path != *expected_path
+                || ancestor.cpuset_cpus_count == 0
+                || ancestor.cpuset_cpus_count > 4096
+                || ancestor.cpu_period_micros == 0
+                || ancestor.cpu_quota_micros.is_some_and(|quota| quota == 0)
+                || parent_cpuset.is_some_and(|count| ancestor.cpuset_cpus_count > count)
+            {
+                return false;
+            }
+            parent_cpuset = Some(ancestor.cpuset_cpus_count);
+        }
+        parent_cpuset.is_none_or(|count| self.probe_cgroup_cpuset_cpus_count <= count)
+    }
+
+    pub(super) fn effective_cpu_millicores(&self, ncpu: u32) -> Option<u64> {
+        if ncpu == 0 || self.probe_cgroup_cpuset_cpus_count == 0 {
+            return None;
+        }
+        let (expected_period, expected_quota, _, _, _) = super::projection::resource_limits();
+        if self.probe_cgroup_cpu_period_micros != u64::try_from(expected_period).ok()?
+            || self.probe_cgroup_cpu_quota_micros != Some(u64::try_from(expected_quota).ok()?)
+        {
+            return None;
+        }
+        let mut effective = u64::from(self.probe_cgroup_cpuset_cpus_count).checked_mul(1_000)?;
+        for ancestor in &self.cpu_ancestor_limits {
+            let cpuset = u64::from(ancestor.cpuset_cpus_count).checked_mul(1_000)?;
+            effective = effective.min(cpuset);
+            if let Some(quota) = ancestor.cpu_quota_micros {
+                let quota_millicores = u128::from(quota)
+                    .checked_mul(1_000)?
+                    .checked_div(u128::from(ancestor.cpu_period_micros))?;
+                effective = effective.min(u64::try_from(quota_millicores).ok()?);
+            }
+        }
+        Some(effective.min(u64::from(ncpu).checked_mul(1_000)?))
+    }
+}
+
+fn expected_ancestor_paths(path: &str) -> Option<Vec<String>> {
+    if !path.starts_with('/') || path.contains("//") || path.len() > 256 {
+        return None;
+    }
+    let components = if path == "/" {
+        Vec::new()
+    } else {
+        path.split('/').skip(1).collect::<Vec<_>>()
+    };
+    if components.len() > 16
+        || components.iter().any(|part| {
+            part.is_empty()
+                || *part == "."
+                || *part == ".."
+                || part.contains('\\')
+                || part.contains(':')
+                || part.chars().any(char::is_control)
+        })
+    {
+        return None;
+    }
+    let mut paths = Vec::with_capacity(components.len());
+    paths.push("/".to_owned());
+    let mut current = String::from("/");
+    for component in components.iter().take(components.len().saturating_sub(1)) {
+        if current != "/" {
+            current.push('/');
+        }
+        current.push_str(component);
+        paths.push(current.clone());
+    }
+    Some(paths)
 }
 
 fn bounded_by(current: u64, limit: Option<u64>) -> bool {
@@ -233,8 +342,29 @@ pub(super) fn fixture_record() -> ProbeRecord {
         probe_cgroup_memory_current_bytes: 64 * 1024 * 1024,
         probe_cgroup_swap_max_bytes: Some(0),
         probe_cgroup_swap_current_bytes: 0,
-        probe_cgroup_cpu_quota_micros: Some(100_000),
+        probe_cgroup_cpu_quota_micros: Some(10_000),
         probe_cgroup_cpu_period_micros: 100_000,
+        probe_cgroup_cpuset_cpus_count: 8,
+        cpu_ancestor_limits: vec![
+            CpuAncestorLimit {
+                path: "/".to_owned(),
+                cpuset_cpus_count: 8,
+                cpu_quota_micros: None,
+                cpu_period_micros: 100_000,
+            },
+            CpuAncestorLimit {
+                path: "/system.slice".to_owned(),
+                cpuset_cpus_count: 8,
+                cpu_quota_micros: None,
+                cpu_period_micros: 100_000,
+            },
+        ],
+        probe_host_pid: 1234,
+        probe_namespace_pid: 1234,
         probe_cgroup_pids_max: Some(64),
     }
 }
+
+#[cfg(test)]
+#[path = "record/schema3_tests.rs"]
+mod schema3_tests;
