@@ -132,6 +132,60 @@ async fn changed_image_id_or_tag_stops_before_the_second_image_inspection() -> R
 }
 
 #[tokio::test]
+async fn changed_descriptor_fields_reject_worker_image() -> Result<(), String> {
+    let images = test_worker_images_for_root(DOCKER_ROOT);
+    let expected = selected_context(&images)?;
+    for field in ["digest", "mediaType", "size", "annotations"] {
+        let mut inspection: Value = serde_json::from_str(&image_inspect(
+            &images,
+            "velnor-runner",
+            images.runner(),
+            false,
+        ))
+        .map_err(|error| error.to_string())?;
+        inspection["Descriptor"][field] = json!("changed");
+        let docker = DockerStub::open(vec![
+            http(200, &engine_info("selected-engine", DOCKER_ROOT, "aarch64")),
+            http(
+                200,
+                &serde_json::to_string(&inspection).map_err(|error| error.to_string())?,
+            ),
+        ])?;
+
+        let result = verify_worker_images_for_engine(&docker.docker, &expected, &images).await;
+        assert!(result.is_err());
+        assert_eq!(docker.finish().await?.len(), 2);
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn platform_manifest_descriptor_keeps_its_runtime_id_binding() -> Result<(), String> {
+    let images = test_worker_images_for_root_with_mutation(
+        DOCKER_ROOT,
+        Some(TestWorkerImageMutation::RunnerManifestStore),
+    );
+    let expected = selected_context(&images)?;
+    let docker = DockerStub::open(vec![
+        http(200, &engine_info("selected-engine", DOCKER_ROOT, "aarch64")),
+        http(
+            200,
+            &image_inspect(&images, "velnor-runner", images.runner(), false),
+        ),
+        http(
+            200,
+            &image_inspect(&images, "velnor-dind", images.dind(), false),
+        ),
+        http(200, &engine_info("selected-engine", DOCKER_ROOT, "aarch64")),
+    ])?;
+
+    let result = verify_worker_images_for_engine(&docker.docker, &expected, &images).await;
+    assert_eq!(result, Ok(()));
+    assert_eq!(docker.finish().await?.len(), 4);
+    Ok(())
+}
+
+#[tokio::test]
 async fn classic_store_rejects_nonempty_repo_digests() -> Result<(), String> {
     let images = test_worker_images_for_root_with_mutation(
         DOCKER_ROOT,
@@ -313,15 +367,24 @@ fn image_inspect(
         inspection["Id"] = json!(identity.config_digest());
         inspection["RepoDigests"] = json!([]);
     } else {
-        let index = identity
-            .image_index_digest()
-            .expect("worker has selected index");
+        let (digest, media_type, size) = match identity.image_index_digest() {
+            Some(index) => (
+                index,
+                "application/vnd.oci.image.index.v1+json",
+                identity.image_index_size().expect("worker index has size"),
+            ),
+            None => (
+                identity.manifest_digest(),
+                "application/vnd.oci.image.manifest.v1+json",
+                identity.manifest_size(),
+            ),
+        };
         let tag = reference.split_once(':').expect("reference has tag").1;
-        inspection["RepoDigests"] = json!([format!("docker.io/library/{image_name}@{index}")]);
+        inspection["RepoDigests"] = json!([format!("docker.io/library/{image_name}@{digest}")]);
         inspection["Descriptor"] = json!({
-            "digest": index,
-            "mediaType": "application/vnd.oci.image.index.v1+json",
-            "size": identity.image_index_size().expect("worker index has size"),
+            "digest": digest,
+            "mediaType": media_type,
+            "size": size,
             "annotations": {
                 "io.containerd.image.name": format!("docker.io/library/{reference}"),
                 "org.opencontainers.image.ref.name": tag

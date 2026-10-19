@@ -254,13 +254,7 @@ async fn create_claimed(
     let image = request(deadline, docker.inspect_image(image_reference))
         .await?
         .map_err(|_| HostError::Docker)?;
-    let expected_config = match claim.role() {
-        BootstrapContainerRole::Runner => images.runner().config_digest(),
-        BootstrapContainerRole::Dind => images.dind().config_digest(),
-    };
-    if image.id.as_deref() != Some(expected_config) {
-        return Err(HostError::Ownership);
-    }
+    require_worker_runtime_id(image.id.as_deref(), claim.role(), images)?;
     let image_config = image.config.ok_or(HostError::Identity)?;
     let created = request(
         deadline,
@@ -291,6 +285,28 @@ async fn create_claimed(
     )
     .await??;
     Ok(created.id)
+}
+
+fn worker_image(
+    images: &VerifiedWorkerImages,
+    role: BootstrapContainerRole,
+) -> &crate::launch::VerifiedImageIdentity {
+    match role {
+        BootstrapContainerRole::Runner => images.runner(),
+        BootstrapContainerRole::Dind => images.dind(),
+    }
+}
+
+fn require_worker_runtime_id(
+    actual: Option<&str>,
+    role: BootstrapContainerRole,
+    images: &VerifiedWorkerImages,
+) -> Result<(), HostError> {
+    if actual == Some(worker_image(images, role).runtime_id()) {
+        Ok(())
+    } else {
+        Err(HostError::Ownership)
+    }
 }
 
 async fn attach_runner(
@@ -370,3 +386,5 @@ async fn start_pair(
 
 mod verify;
 use verify::{inspect, request, valid_resource_id, verify_created};
+#[cfg(test)]
+mod runtime_identity_tests;

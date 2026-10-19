@@ -206,6 +206,7 @@ pub(crate) enum TestWorkerImageMutation {
     DockerRootDigest,
     DaemonArchitecture,
     RunnerClassicStore,
+    RunnerManifestStore,
     RunnerRuntimeId,
     RunnerIndexDigest,
     RunnerManifestDigest,
@@ -246,6 +247,11 @@ pub(crate) fn test_worker_images_with(
         }
         Some(TestWorkerImageMutation::RunnerClassicStore) => {
             images.runner.runtime_id = images.runner.config_digest.clone();
+        }
+        Some(TestWorkerImageMutation::RunnerManifestStore) => {
+            images.runner.runtime_id = images.runner.manifest_digest.clone();
+            images.runner.image_index_digest = None;
+            images.runner.image_index_size = None;
         }
         Some(TestWorkerImageMutation::RunnerRuntimeId) => {
             images.runner.runtime_id = "mutable:tag".to_owned();
