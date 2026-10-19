@@ -29,8 +29,6 @@ pub(super) enum InternalOp {
     Report,
     /// Pre-seed manifest-writing operation.
     PreseedManifest,
-    /// Baseline-publish operation.
-    Publish,
     /// Repository-maintenance operation behind its separate private gate.
     RepoPolicy,
     /// Read-only predecessor resolution for hosted qualification.

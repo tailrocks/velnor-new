@@ -1,8 +1,7 @@
 //! Shared git-origin resolution through Git's config query.
 //!
-//! The single `remote.origin.url` reader for identity checks: both the
-//! Velnor-repository policy (`prepare`) and the baseline provenance
-//! anchor (`provenance_check`) resolve through here, so linked
+//! The single `remote.origin.url` reader for identity checks: the
+//! Velnor-repository policy (`prepare`) resolves through here, so linked
 //! worktrees (`.git` is a file), includes, and worktree configuration
 //! all follow Git semantics. No caller hand-parses `.git/config`.
 //!

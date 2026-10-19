@@ -19,6 +19,7 @@ fn plan_with_tools(qualified_tools: &[QualifiedTool]) -> Plan {
     let mut plan = fixture_plan();
     let mut obligation = plan.obligations.remove(0);
     obligation.task_id = TASK.into();
+    obligation.job_id = "check-demo".into();
     let mut tool_specs: Vec<_> = qualified_tools
         .iter()
         .filter_map(|tool| match &tool.backend {
@@ -47,6 +48,7 @@ fn plan_with_tools(qualified_tools: &[QualifiedTool]) -> Plan {
     plan.task_ids = vec![TASK.into()];
     plan.packages.clear();
     plan.edges.clear();
+    plan.jobs = super::task_report_tests::run_jobs(&plan);
     plan.validate().expect("plan");
     plan
 }

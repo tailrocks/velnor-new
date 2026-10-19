@@ -67,7 +67,7 @@ pub enum ExecutionRole {
     Control,
     /// Comparable verification workload.
     Verification,
-    /// Publish, deploy, release, or baseline promotion.
+    /// Publish, deploy, or release.
     Release,
 }
 

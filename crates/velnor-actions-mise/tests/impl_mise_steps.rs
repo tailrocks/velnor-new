@@ -177,6 +177,7 @@ fn prepared_inputs_argv_is_locked_offline_qualification() -> Result<(), String> 
             "1",
             "--locked",
             "--offline",
+            "--all-features",
             "--manifest-path",
             "Cargo.toml",
         ])

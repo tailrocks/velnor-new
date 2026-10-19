@@ -32,7 +32,9 @@ and overlaps the independent checks.
 
 - Every check still runs and must pass on its own: a failed member fails the
   job at the join, and the always-on report upload still runs afterwards.
-  Required still demands every task report and every crate job.
+  Required still demands every task report and every crate job the plan
+  schedules; a crate job the plan marks `not_affected` must be skipped
+  (decision 4).
 - Clippy and Documentation compile in their own Cargo target lanes
   (`target/velnor-clippy`, `target/velnor-doc`, inside the MBX target cache
   payload) so Cargo's target-directory lock never serializes test execution
@@ -62,3 +64,54 @@ root job). The default is `5`; accepted values are `1..=360`. Zero or more than
 `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. No repository rule,
 ruleset, check, or hook may require any other agent trailer. A human sign-off
 (`Signed-off-by`) may be added but must not be required.
+
+## 4. Pull requests test only what they affect
+
+**Decision.** On `pull_request` (fork pull requests included), the plan
+classifies every crate job as `run` or `not_affected` from the pull request's
+merge-base diff, and a `not_affected` crate job is skipped as a whole job
+through a job-level `if:` on the plan's `not_affected_jobs` output. Touching one
+library used by one app runs exactly those two crate jobs; touching one app runs
+only that app's job. `push`, `merge_group`, and `workflow_dispatch` run every
+job. The baseline-coverage skip path (trusted-baseline artifacts and
+`covered_tasks` step gates) is removed completely; it is not a second skip
+mechanism. See [affected selection](implemented/affected-selection.md).
+Approved by the human owner on 2026-10-19, together with the decision 1
+amendment ("every crate job the plan schedules").
+
+**Rationale.** In a monorepo most pull requests touch one or two crates, but
+every crate job paid runner start, checkout, tool setup, cache restore, and a
+build. Baseline coverage never skipped anything in practice: it needed a green
+default-branch run at the exact merge base, and it still started every crate
+job to skip steps inside it.
+
+**Invariants.**
+
+- Fail closed: any doubt selects everything. Unknown or unowned files, Git
+  failures, a missing base, untracked files, any `Cargo.lock` change, root Cargo
+  configuration, `.velnor/**` and `.github/**`, a workspace without a complete
+  resolved graph, and an owned symlink that escapes, dangles, or loops all run
+  every job. Selection never narrows on an error.
+- Unowned → all. A changed path is narrowed only when a package directory, a
+  scoped Cargo tool config, a workspace root, a declared
+  `[[stacks.rust.inputs]]` rule, or a tracked symlink claims it. No `ignore`
+  list exists until in-job runtime-read capture exists.
+- The dependency graph is the full resolve from
+  `cargo metadata --locked --offline --all-features` at head, unioned with base
+  and head path edges, so registry crates reach `[patch]`ed and vendored crates.
+- Packages with a build script, and sharded archives whose source is not
+  content-bound, always run until in-job read verification exists.
+- The default branch and the merge queue are always full runs.
+- `Required` compares every planned crate job's disposition with its observed
+  result: `not_affected` + skipped passes; `run` + skipped fails
+  (`planned_job_skipped`); `not_affected` + ran fails (`gate_mismatch`); a
+  missing, invalid, or failed plan fails. A planned job is never assumed
+  successful from its conclusion alone.
+- A base retarget re-plans (`edited` is a `pull_request` trigger type), and a
+  partial re-run resolves the plan by the attempt that produced it.
+
+**Must not be reintroduced without owner approval:** baseline-gated skipping or
+any other second skip mechanism, hand-written per-job path filters, an `ignore`
+list without runtime-read capture, narrowing on any selection error, affected
+mode on `push`, `merge_group`, or `workflow_dispatch`, or a `Required` rule that
+passes a skipped job the plan scheduled.

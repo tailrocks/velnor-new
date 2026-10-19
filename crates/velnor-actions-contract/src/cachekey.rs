@@ -52,6 +52,23 @@ pub const MISS_REASONS: [&str; 13] = [
     "source_missing",
 ];
 
+/// Final-gate job-disposition reasons beyond the cache set (hard decision 4).
+///
+/// `planned_job_skipped` marks a job the plan scheduled that never ran;
+/// `gate_mismatch` marks a `not_affected` job that ran anyway. Only the
+/// final report carries them; task reports keep the cache set.
+pub const FINAL_GATE_REASONS: [&str; 2] = ["planned_job_skipped", "gate_mismatch"];
+
+/// Validate one final-report `miss_reason`: cache or final-gate reason.
+/// # Errors
+pub fn validate_final_miss_reason(reason: &str) -> Result<(), ContractError> {
+    if FINAL_GATE_REASONS.contains(&reason) {
+        Ok(())
+    } else {
+        validate_miss_reason(reason)
+    }
+}
+
 /// Validate one `miss_reason` against the closed set.
 /// # Errors
 pub fn validate_miss_reason(reason: &str) -> Result<(), ContractError> {

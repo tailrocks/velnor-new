@@ -301,10 +301,6 @@ fn rendered_inventory_all_success_passes_required() -> TestResult {
         let yaml = rendered_workflow(&prepare(root)?)?;
         let inventory = rendered_needs_inventory(&yaml)?;
         assert!(
-            !inventory.contains(&"publish-baseline".to_owned()),
-            "downstream publish never gates Required: {inventory:?}"
-        );
-        assert!(
             inventory.contains(&"plan".to_owned()) && inventory.contains(&"zizmor".to_owned()),
             "upstream plan and validators still gate: {inventory:?}"
         );

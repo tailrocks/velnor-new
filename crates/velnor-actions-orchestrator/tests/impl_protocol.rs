@@ -11,7 +11,6 @@ use velnor_actions_orchestrator::{
 use crate::impl_common::{
     TestResult, config_with_branch, err_of, git, git_line, make_repo, plan_for_source_change,
 };
-use crate::impl_orch_core_cover::covered_plan;
 
 #[path = "impl_protocol_merge.rs"]
 mod merge_tests;
@@ -203,38 +202,12 @@ fn plan_outputs_agree_with_plan_matrix() -> TestResult {
     assert_eq!(outputs.matrix, canonical_json_str(&value["matrix"])?);
     assert!(!outputs.matrix.contains('\n'));
     assert!(
-        outputs.covered_tasks.is_empty(),
-        "execute-all plans emit no channel"
-    );
-    assert!(
         err_of(
             plan_outputs("not json", PlanOutputMode::Static),
             "outputs reject garbage"
         )
         .is_ok()
     );
-    Ok(())
-}
-
-#[test]
-fn plan_outputs_encode_covered_tasks() -> TestResult {
-    let (_repo, plan) = plan_for_source_change()?;
-    assert!(!plan.task_ids.is_empty(), "fixture must select work");
-    let (plan_json, _) = covered_plan(&plan)?;
-    let response = serde_json::json!({
-        "schema": 1,
-        "plan": plan_json,
-        "matrix": plan_json["matrix"],
-    });
-    let outputs = plan_outputs(&response.to_string(), PlanOutputMode::Static)?;
-    let mut ids: Vec<&str> = plan
-        .obligations
-        .iter()
-        .map(|obligation| obligation.task_id.as_str())
-        .collect();
-    ids.sort_unstable();
-    ids.dedup();
-    assert_eq!(outputs.covered_tasks, format!(",{},", ids.join(",")));
     Ok(())
 }
 
@@ -283,13 +256,17 @@ fn plan_outputs_bind_qualification_phase_and_cache_policy() -> TestResult {
             "matrix",
             "plan_id",
             "run_key",
-            "covered_tasks",
+            "not_affected_jobs",
             "qualification_campaign",
             "qualification_phase",
             "qualification_cache_enabled",
             "qualification_cache_write",
             "qualification_cache_directives",
         ]
+    );
+    assert_eq!(
+        outputs.not_affected_jobs, "",
+        "qualification runs everything"
     );
     let directives: serde_json::Value =
         serde_json::from_str(&outputs.qualification_cache_directives)?;

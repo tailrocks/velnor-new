@@ -3,16 +3,16 @@
 //! Inlined obligation commands are unique per crate, so YAML anchors cannot
 //! share them. When `ci.yml` would exceed 500 KB, those steps move into one
 //! local composite per crate job. The job keeps checkout, tool setup, and
-//! report upload, and passes covered-task ids in, because composite steps
-//! cannot read `needs`.
+//! report upload. Obligation steps are identified structurally: Rust
+//! task executions and the `OpenTofu` provider-cache consumers.
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step};
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::action_ref::CRATE_OBLIGATION_ACTION_PREFIX;
 use crate::lane_share::LaneShare;
-use crate::render::{COVERED_TASKS_OUTPUT, PLAN_JOB_ID, RenderContext};
+use crate::render::RenderContext;
 use crate::tree::RenderedFile;
 use crate::{RenderError, composite, marker, steps, yaml};
 
@@ -23,8 +23,8 @@ use crate::{RenderError, composite, marker, steps, yaml};
 ///
 /// # Errors
 ///
-/// Returns [`RenderError`] when an obligation block is split, its skip
-/// condition is not the covered-task gate, or the action path collides.
+/// Returns [`RenderError`] when an obligation block is split or the action
+/// path collides.
 pub(crate) fn extract_obligation_composites(
     shared: &mut LaneShare,
     ctx: &RenderContext,
@@ -87,27 +87,12 @@ fn extract_job(
             "crate_obligations_split:{job_id}"
         )));
     }
-    let needs = covered_needs_expr();
-    let input = covered_input_expr();
-    let mut obligations = job.steps[start..=end].to_vec();
-    for step in &mut obligations {
-        let Some(condition) = &mut step.condition else {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "crate_obligation_condition:{job_id}"
-            )));
-        };
-        if !condition.contains(&needs) {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "crate_obligation_condition:{job_id}"
-            )));
-        }
-        *condition = condition.replace(&needs, &input);
-    }
+    let obligations = job.steps[start..=end].to_vec();
     let file = obligation_action(job_id, &obligations, ctx)?;
     let call = steps::action_step(
         "Run crate obligations",
         &format!("{CRATE_OBLIGATION_ACTION_PREFIX}{job_id}"),
-        BTreeMap::from([(COVERED_TASKS_OUTPUT.to_owned(), format!("${{{{{needs}}}}}"))]),
+        BTreeMap::new(),
     )?;
     let mut steps = Vec::with_capacity(job.steps.len() - obligations.len() + 1);
     steps.extend(job.steps[..start].iter().cloned());
@@ -118,17 +103,8 @@ fn extract_job(
 }
 
 fn is_obligation_step(step: &Step) -> bool {
-    step.condition
-        .as_deref()
-        .is_some_and(|condition| condition.contains(&covered_needs_expr()))
-}
-
-fn covered_needs_expr() -> String {
-    format!("needs.{PLAN_JOB_ID}.outputs.{COVERED_TASKS_OUTPUT}")
-}
-
-fn covered_input_expr() -> String {
-    format!("inputs.{COVERED_TASKS_OUTPUT}")
+    matches!(step.kind, StepKind::TaskExecution { .. })
+        || step.role == Some(StepRole::TofuProviderUse)
 }
 
 fn obligation_action(
@@ -158,17 +134,7 @@ fn obligation_action(
             &step_context,
         )?);
     }
-    let inputs = vec![(
-        COVERED_TASKS_OUTPUT.to_owned(),
-        yaml::Yaml::Map(vec![
-            (
-                "description".to_owned(),
-                yaml::Yaml::str("Comma-wrapped task ids the plan already covered".to_owned()),
-            ),
-            ("required".to_owned(), yaml::Yaml::Bool(true)),
-        ]),
-    )];
-    let body = composite::composite_yaml_with_inputs(job_id, inputs, rendered)?;
+    let body = composite::composite_yaml(job_id, rendered)?;
     let bytes = marker::with_marker(&ctx.generator_version, &yaml::render_yaml(&body))?;
     steps::scan_for_private_subcommands(&bytes)?;
     Ok(RenderedFile {
@@ -213,13 +179,17 @@ mod tests {
                     parallel: false,
                     name: "Check task".to_owned(),
                     id: None,
-                    role: None,
-                    condition: Some(format!(
-                        "contains(needs.{PLAN_JOB_ID}.outputs.{COVERED_TASKS_OUTPUT}, 'tofu-task')"
-                    )),
+                    role: Some(StepRole::TofuProviderUse),
+                    condition: None,
                     kind: StepKind::Shell {
                         run: vec!["echo".to_owned(), "task".to_owned()],
-                        env: BTreeMap::new(),
+                        env: BTreeMap::from([
+                            (
+                                "TF_PLUGIN_CACHE_DIR".to_owned(),
+                                "${{ runner.temp }}/velnor/tofu-cache/alpha".to_owned(),
+                            ),
+                            ("TF_DATA_DIR".to_owned(), ".terraform".to_owned()),
+                        ]),
                     },
                 },
             ],

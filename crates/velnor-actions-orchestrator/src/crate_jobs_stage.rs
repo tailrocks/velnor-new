@@ -53,7 +53,7 @@ pub(crate) fn is_opentofu(task: &ProposedTask) -> bool {
 
 /// Run condition for lane-staged tofu jobs: collect independent lane
 /// failures instead of skipping past them (`needs` still serializes;
-/// conclusions still fold; step-level coverage gates unaffected).
+/// conclusions still fold).
 /// Only jobs that gain a lane predecessor carry it: first-in-lane
 /// jobs keep the default plan-gated condition.
 pub(crate) const STAGED_TOFU_JOB_CONDITION: &str = "always()";

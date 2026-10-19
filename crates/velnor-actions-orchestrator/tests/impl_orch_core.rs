@@ -9,9 +9,7 @@ use velnor_actions_contract::{
     FinalReport, MatrixReport, MatrixStatus, ObligationDecision, Plan, TaskStatus,
     canonical_json_str, validate_digest,
 };
-use velnor_actions_orchestrator::{
-    PlanOutputMode, baseline_artifact_numeric_id, merge_internal, plan_internal, plan_outputs,
-};
+use velnor_actions_orchestrator::{PlanOutputMode, merge_internal, plan_internal, plan_outputs};
 
 use crate::impl_common::{
     TestResult, config_with_branch, fixture_manifest_json, git, git_line, make_repo,
@@ -69,48 +67,10 @@ pub(crate) fn plan_value(
     event: &str,
     base: Option<&str>,
     head: &str,
-    m: Option<&Value>,
 ) -> WireResult {
     let request = json!({"schema": 1, "run_key": "local", "event": event, "base": base,
-        "head": head, "root": root.display().to_string(), "baseline_manifest": m});
+        "head": head, "root": root.display().to_string()});
     Ok(serde_json::from_str(&plan_internal(&request.to_string())?)?)
-}
-
-/// Plan response value for a pull-request request.
-pub(crate) fn pr_value(
-    root: &std::path::Path,
-    base: &str,
-    head: &str,
-    m: Option<&Value>,
-) -> WireResult {
-    plan_value(root, "pull_request", Some(base), head, m)
-}
-
-/// Baseline manifest fixture for one plan.
-pub(crate) fn manifest_for(plan: &Plan, base: &str, branch: &str) -> WireResult {
-    let first = plan
-        .obligations
-        .first()
-        .ok_or_else(|| std::io::Error::other("obligation"))?;
-    let digest = &first.task_digest;
-    let workflow = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
-    let name = format!("velnor-baseline-{base}-{digest}");
-    let numeric = baseline_artifact_numeric_id(&name);
-    Ok(
-        json!({"schema": 2, "repository_id": digest, "source_commit": base,
-        "ref": format!("refs/heads/{branch}"), "event": "push",
-        "workflow_ref": format!("o/r/{workflow}@refs/heads/{branch}"),
-        "run_id": 7, "run_attempt": 1, "final_status": "passed",
-        "generator_version": plan.generator.version, "generator_sha256": plan.generator.sha256,
-        "compatibility_id": digest, "artifact_id": numeric,
-        "parent": null, "artifact_name": name,
-        "tasks": plan.obligations.iter().map(|ob| json!({"task_id": ob.task_id,
-            "task_digest": ob.task_digest, "input_digest": ob.input_digest,
-            "closure_digest": ob.closure_digest,
-            "proof_run_id": 7, "observed_run_id": 7,
-            "carried_from": Value::Null})).collect::<Vec<_>>(),
-        "parent": Value::Null}),
-    )
 }
 
 /// Merge request for one plan plus its reports.
@@ -312,8 +272,12 @@ fn orch_core_universe_packages_carry_reasons() -> TestResult {
     assert!(!plan.packages.is_empty(), "fixture must inventory members");
     for package in &plan.packages {
         assert!(!package.reasons.is_empty(), "{}", package.package_id);
-        if package.tasks.is_empty() {
+        let unaffected = package.package_id.contains("/b#");
+        if package.tasks.is_empty() || unaffected {
             assert!(!package.selected, "{}", package.package_id);
+            if unaffected {
+                assert!(package.reasons.contains(&"not_affected".to_owned()));
+            }
         } else {
             assert!(package.selected, "{}", package.package_id);
             assert!(package.reasons.contains(&"selected".to_owned()));

@@ -36,6 +36,7 @@ fn discovery_with(statuses: Vec<DetectionStatus>, units: Vec<TofuSelectionUnit>)
         skipped_non_utf8: false,
         tofu_note: None,
         tofu_units: units,
+        affected: crate::affected_inputs::AffectedInputs::default(),
     }
 }
 

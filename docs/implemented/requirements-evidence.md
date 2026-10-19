@@ -105,6 +105,10 @@ Deny = deny ok; R = file read @HEAD; CI6 = dogfood CI green 47/47 on HEAD
 
 ## Gate 5 — trusted baseline
 
+Removed: trusted-baseline coverage and its implementation files and tests
+no longer exist (see hard decision 4 in `docs/hard-decisions.md`). The rows
+below are historical.
+
 | Requirement | Gt | Crate | Impl file(s) | Regression test(s) | Evidence |
 |---|---|---|---|---|---|
 | CACHE: baseline after protected push final-pass only; exact-base lookup; classify-first; broaden on fail | 5 | OR | `OR/src/cover_baseline.rs`, `cover.rs` | `OR/tests/impl_gates_cover.rs:valid_manifest_covers_exact_obligations`, `:wrong_base_manifest_schedules_everything`, `:malformed_manifest_is_a_miss_not_a_failure` | T+F |

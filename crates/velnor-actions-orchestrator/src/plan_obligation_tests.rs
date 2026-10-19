@@ -26,6 +26,7 @@ fn empty_discovery() -> Discovery {
         skipped_non_utf8: false,
         tofu_note: None,
         tofu_units: Vec::new(),
+        affected: crate::affected_inputs::AffectedInputs::default(),
     }
 }
 

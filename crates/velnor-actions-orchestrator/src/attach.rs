@@ -11,7 +11,7 @@ use velnor_actions_contract::{
     GeneratorLock, ReleaseTarget, Step, StepRole, WorkflowIr, is_crate_job_id,
 };
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
-use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID};
+use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID};
 use velnor_actions_workflow_renderer::steps::STAGED_BINARY_PREFIX;
 use velnor_actions_workflow_renderer::{
     PreseedStageSource, preseed_build_step, preseed_download_step, preseed_manifest_step,
@@ -23,12 +23,11 @@ use crate::pins::{lock_acquire_for_runner, lock_acquire_step};
 use crate::vectors::{candidate_build_argv, mbx_probe_argv};
 use crate::workflow::WorkflowPlan;
 
-/// Attach lock-backed Acquire steps to plan, final, publish, and crate jobs.
+/// Attach lock-backed Acquire steps to plan, final, and crate jobs.
 ///
 /// Reads the runner-target record from an already-verified lock, stages the
 /// digest-verified binary under `$RUNNER_TEMP`, and inserts the step between
-/// checkout and plan plus ahead of the report merge and the baseline
-/// publish; every crate job stages right after checkout because its
+/// checkout and plan plus ahead of the report merge; every crate job stages right after checkout because its
 /// obligation wrappers invoke the helper. Consumer generation never
 /// calls this: it embeds the release manifest instead, and never reads
 /// the lock.
@@ -54,13 +53,6 @@ pub(crate) fn attach_lock_acquire(
         });
     };
     final_gate.steps.insert(0, final_step);
-    // The publish job invokes the staged helper too; absent jobs stay
-    // untouched like zero-crate plans.
-    if let Some(publish) = ir.jobs.get_mut(PUBLISH_JOB_ID) {
-        publish
-            .steps
-            .insert(0, lock_acquire_step(lock, label, &staged)?);
-    }
     for (id, job) in &mut ir.jobs {
         if let Some(runner) = &job.check_runner {
             let step = lock_acquire_for_runner(lock, runner, &staged)?;
@@ -148,11 +140,6 @@ pub(crate) fn attach_preseed(
     final_gate
         .steps
         .splice(0..0, preseed_consumers(target, &staged)?);
-    if let Some(publish) = workflow.ir.jobs.get_mut(PUBLISH_JOB_ID) {
-        publish
-            .steps
-            .splice(0..0, preseed_consumers(target, &staged)?);
-    }
     for (id, job) in &mut workflow.ir.jobs {
         if is_crate_job_id(id) || job.check_runner.is_some() {
             let at = 1.min(job.steps.len());

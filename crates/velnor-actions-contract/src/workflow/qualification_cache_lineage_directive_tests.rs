@@ -2,10 +2,10 @@ use super::*;
 
 use crate::ids::{plan_id_for_run, run_key_for_ci};
 use crate::workflow::{
-    EntryCacheIds, ExecuteTaskIds, MatrixEntry, ObligationDecision, Plan, PlanBaseline,
-    PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner, PlannedPlatform,
-    QualificationDispatch, QualificationPhase, QualificationRuntimeIdentity,
-    QualificationRuntimeIdentityRequirements, QualificationRuntimePlatform, WorkflowEvent,
+    EntryCacheIds, ExecuteTaskIds, MatrixEntry, ObligationDecision, Plan, PlanGenerator,
+    PlanMatrix, PlanObligation, PlanPackage, PlanRunner, PlannedPlatform, QualificationDispatch,
+    QualificationPhase, QualificationRuntimeIdentity, QualificationRuntimeIdentityRequirements,
+    QualificationRuntimePlatform, WorkflowEvent,
 };
 use crate::{RunnerSelection, Trust, digest_b3};
 
@@ -107,7 +107,6 @@ pub(super) fn qualification_plan(
             selection: RunnerSelection::LatestDefault,
         },
         trust: Trust::Pr,
-        baseline: PlanBaseline::unavailable(Some("qualification_bypass"))?,
         generator: PlanGenerator {
             version: "0.1.0".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
@@ -128,7 +127,11 @@ pub(super) fn qualification_plan(
             task_digest: task_digest.clone(),
             input_digest,
             closure_digest: digest_b3(b"closure"),
-            baseline_proof: None,
+            job_id: entry.job_id.clone(),
+        }],
+        jobs: vec![crate::workflow::PlanJob {
+            job_id: entry.job_id.clone(),
+            disposition: crate::workflow::JobDisposition::Run,
         }],
         matrix: PlanMatrix {
             include: vec![entry],

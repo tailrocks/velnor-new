@@ -3,7 +3,6 @@
 //! Declared via `#[path]` from `attach.rs` under `cfg(test)`.
 
 use super::*;
-use crate::publish_job::baseline_publish_job;
 use crate::workflow::{CHECKOUT_USES, REQUEST_DIR};
 use crate::workflow_jobs::{PlanJobToolNeeds, PlanRustNeed, final_job, plan_job};
 use std::collections::BTreeMap;
@@ -94,13 +93,8 @@ fn lock_acquire_inserts_digest_verified_stage() {
             "required".to_owned(),
             final_job("ubuntu-26.04", &[], None, &catalog).expect("final job"),
         ),
-        (
-            "publish-baseline".to_owned(),
-            baseline_publish_job("ubuntu-26.04", "main", None).expect("publish job"),
-        ),
     ]));
     assert!(attach_lock_acquire(&mut ir, &lock, "ubuntu-26.04", "0.1.0").is_ok());
-    assert_eq!(ir.jobs["publish-baseline"].steps[0].name, "Acquire Velnor");
     let names: Vec<&str> = ir.jobs["plan"]
         .steps
         .iter()
@@ -192,7 +186,7 @@ fn lock_acquire_records_source_commit() {
     }
 }
 
-/// Plan-shaped workflow with plan, crate, final, and publish jobs.
+/// Plan-shaped workflow with plan, crate, and final jobs.
 fn preseed_attach_plan(catalog: &ToolCatalog) -> WorkflowPlan {
     use velnor_actions_actionlint::ActionlintConfigInput;
     WorkflowPlan {
@@ -214,10 +208,6 @@ fn preseed_attach_plan(catalog: &ToolCatalog) -> WorkflowPlan {
                 "required".to_owned(),
                 final_job("ubuntu-26.04", &["rust-demo".to_owned()], None, catalog)
                     .expect("final job"),
-            ),
-            (
-                "publish-baseline".to_owned(),
-                baseline_publish_job("ubuntu-26.04", "main", None).expect("publish job"),
             ),
         ])),
         support: None,
@@ -310,7 +300,7 @@ fn assert_consumer_triple(id: &str, names: &[&str]) {
 
 /// Every pre-seed consumer downloads and verifies the plan's exact helper.
 fn assert_preseed_consumers(plan: &WorkflowPlan) {
-    for id in ["rust-demo", "required", "publish-baseline"] {
+    for id in ["rust-demo", "required"] {
         let names: Vec<&str> = plan.ir.jobs[id]
             .steps
             .iter()

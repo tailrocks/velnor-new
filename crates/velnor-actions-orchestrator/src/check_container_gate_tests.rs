@@ -100,7 +100,7 @@ fn observation() -> ContainerObservation {
 }
 
 fn runtime() -> Value {
-    let context_hash = crate::cover_identity::generator::sha256_hex(b"ci");
+    let context_hash = crate::generator::sha256_hex(b"ci");
     json!({
         "endpoint":"unix:///run/docker.sock",
         "context":"ci",

@@ -271,7 +271,6 @@ fn assert_rendered_permissions(yaml: &str, plan_auth: bool) -> TestResult {
                     "plan".to_owned(),
                     "Resolve qualification predecessor".to_owned(),
                 ),
-                ("plan".to_owned(), "Plan".to_owned()),
                 expected_required.clone(),
             ]
         } else {
@@ -280,11 +279,7 @@ fn assert_rendered_permissions(yaml: &str, plan_auth: bool) -> TestResult {
     );
     assert_eq!(
         token_binding_steps(&lines, "GH_REPO", "${{ github.repository }}"),
-        if plan_auth {
-            vec![("plan".to_owned(), "Plan".to_owned()), expected_required]
-        } else {
-            vec![expected_required]
-        }
+        vec![expected_required]
     );
     Ok(())
 }

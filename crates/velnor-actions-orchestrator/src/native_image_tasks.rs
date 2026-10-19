@@ -42,7 +42,7 @@ fn resolve_policy(
         RepoRead::Text(script) => script,
         RepoRead::Absent => return Err(failure("native_image_script_missing")),
     };
-    let source_sha256 = crate::cover_identity::generator::sha256_hex(script.as_bytes());
+    let source_sha256 = crate::generator::sha256_hex(script.as_bytes());
     let runner_label = task.platform.runs_on().to_owned();
     Ok(NativeImageTaskPolicy {
         task: task.clone(),

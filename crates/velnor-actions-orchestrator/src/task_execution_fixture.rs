@@ -7,10 +7,10 @@ use tempfile::TempDir;
 use velnor_actions_contract::cachekey::{ToolchainInputs, toolchain_id};
 use velnor_actions_contract::workflow::crate_job::task_digest_for_execution;
 use velnor_actions_contract::workflow::{
-    ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, ObligationDecision, Plan, PlanBaseline,
-    PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, PlannedPlatform,
-    TASK_EXECUTION_MANIFEST_PATH, TASK_EXECUTION_MANIFEST_SCHEMA, TaskExecutionManifestEntryV1,
-    TaskExecutionManifestV1, WorkflowEvent,
+    ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, ObligationDecision, Plan, PlanGenerator,
+    PlanMatrix, PlanObligation, PlanRunner, PlannedPlatform, TASK_EXECUTION_MANIFEST_PATH,
+    TASK_EXECUTION_MANIFEST_SCHEMA, TaskExecutionManifestEntryV1, TaskExecutionManifestV1,
+    WorkflowEvent,
 };
 use velnor_actions_contract::{RunnerSelection, Trust, plan_id_for_run};
 
@@ -140,7 +140,6 @@ fn build_plan(task_digest: String) -> Plan {
             selection: RunnerSelection::LatestDefault,
         },
         trust: Trust::Pr,
-        baseline: PlanBaseline::unavailable(None).expect("baseline"),
         generator: PlanGenerator {
             version: GENERATOR_VERSION.to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
@@ -154,7 +153,11 @@ fn build_plan(task_digest: String) -> Plan {
             task_digest,
             input_digest: digest(11),
             closure_digest: digest(12),
-            baseline_proof: None,
+            job_id: entry.job_id.clone(),
+        }],
+        jobs: vec![velnor_actions_contract::PlanJob {
+            job_id: entry.job_id.clone(),
+            disposition: velnor_actions_contract::JobDisposition::Run,
         }],
         matrix: PlanMatrix {
             include: vec![entry],

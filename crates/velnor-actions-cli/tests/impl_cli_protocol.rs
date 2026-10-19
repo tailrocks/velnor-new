@@ -150,7 +150,7 @@ fn plan_writes_response_and_github_outputs() -> Result<(), Box<dyn Error>> {
     let matrix = lines[1].strip_prefix("matrix=").ok_or("matrix line")?;
     assert_eq!(lines[2], "plan_id=plan-r7-a2");
     assert_eq!(lines[3], "run_key=r7-a2");
-    assert_eq!(lines[4], "covered_tasks=");
+    assert_eq!(lines[4], "not_affected_jobs=");
     assert_eq!(lines[5], "qualification_campaign=");
     assert_eq!(lines[6], "qualification_phase=");
     assert_eq!(lines[7], "qualification_cache_enabled=false");
@@ -253,7 +253,7 @@ fn plan_publishes_plan_artifact_files() -> Result<(), Box<dyn Error>> {
     let matrix = lines[0].strip_prefix("matrix=").ok_or("matrix line")?;
     assert_eq!(lines[1], "plan_id=plan-r7-a2");
     assert_eq!(lines[2], "run_key=r7-a2");
-    assert_eq!(lines[3], "covered_tasks=");
+    assert_eq!(lines[3], "not_affected_jobs=");
     assert_eq!(lines[4], "qualification_campaign=");
     assert_eq!(lines[5], "qualification_phase=");
     assert_eq!(lines[6], "qualification_cache_enabled=false");

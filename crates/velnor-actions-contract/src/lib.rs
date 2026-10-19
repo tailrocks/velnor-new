@@ -70,7 +70,7 @@ pub use config::{
     QualifiedTool, QualifiedToolArtifact, QualifiedToolBackend, QualifiedToolExecutable,
     QualifiedToolOptions, QualifiedToolPlatform, QualifiedToolProbe, RESERVED_SUITE_IDS,
     RESERVED_SUITE_WORKFLOW_SLUGS, ResourcesConfig, RootProblem, RoutingWorkflow, RunnerSelection,
-    RunsOn, RustConfiguration, RustCrateConfig, RustStackConfig, RustSuiteArtifact,
+    RunsOn, RustConfiguration, RustCrateConfig, RustInputRule, RustStackConfig, RustSuiteArtifact,
     RustSuiteArtifactWhen, RustSuiteBuildMode, RustSuiteConfig, RustSuiteTrigger, S3BackendConfig,
     SCALE_SET_NAME, SCALE_SET_PROFILE_ID, ScaleSetSelector, ShardTimingEvidence, StacksConfig,
     TestShardingConfig, TofuApplyConfig, TofuStackConfig, ToolsConfig, Utf8RepoRelDir,
@@ -112,13 +112,12 @@ pub use graph::{
     validate_plan_edges,
 };
 pub use ids::{
-    artifact_id_for_baseline, artifact_id_for_crate_job, artifact_id_for_final,
-    artifact_id_for_matrix, artifact_id_for_plan, is_valid_branch_name,
-    manifest_key_for_cargo_manifest, matrix_id_for_task_group, matrix_key_for_id, plan_id_for_run,
-    report_id_for_matrix, run_key_for_ci, split_shard_suffix, target_key, task_id_for_internal,
-    task_id_for_stack, task_report_id_for_task, validate_artifact_id, validate_fetch_root,
-    validate_id, validate_matrix_key, validate_plan_id, validate_report_id, validate_run_key,
-    validate_task_id, validate_task_report_id,
+    artifact_id_for_crate_job, artifact_id_for_final, artifact_id_for_matrix, artifact_id_for_plan,
+    is_valid_branch_name, manifest_key_for_cargo_manifest, matrix_id_for_task_group,
+    matrix_key_for_id, plan_id_for_run, report_id_for_matrix, run_key_for_ci, split_shard_suffix,
+    target_key, task_id_for_internal, task_id_for_stack, task_report_id_for_task,
+    validate_artifact_id, validate_fetch_root, validate_id, validate_matrix_key, validate_plan_id,
+    validate_report_id, validate_run_key, validate_task_id, validate_task_report_id,
 };
 pub use manifest::{
     ActionPin, CandidateArtifactManifest, GeneratorBinary, GeneratorLock, LockedGenerator,

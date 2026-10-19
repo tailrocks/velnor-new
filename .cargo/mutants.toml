@@ -29,19 +29,18 @@ examine_globs = [
     "crates/velnor-actions-rust/src/metadata.rs",
     "crates/velnor-actions-mise/src/lock.rs",
     "crates/velnor-actions-mise/src/toolfiles.rs",
-    # Identities: validated ids, cache keys/ids, rust identity, cover id.
+    # Identities: validated ids, cache keys/ids, rust and generator identity.
     "crates/velnor-actions-contract/src/ids/**/*.rs",
     "crates/velnor-actions-contract/src/cachekey.rs",
     "crates/velnor-actions-contract/src/workflow/cache_ids.rs",
     "crates/velnor-actions-rust/src/identity.rs",
-    "crates/velnor-actions-orchestrator/src/cover_identity.rs",
+    "crates/velnor-actions-orchestrator/src/generator.rs",
     # Selection: affected-package computation and edge closure.
     "crates/velnor-actions-orchestrator/src/select.rs",
     "crates/velnor-actions-orchestrator/src/select_affected.rs",
     "crates/velnor-actions-orchestrator/src/select_edges.rs",
-    # Aggregation: baseline coverage, final merge, merge requests.
+    # Aggregation: report coverage, final merge, merge requests.
     "crates/velnor-actions-orchestrator/src/cover.rs",
-    "crates/velnor-actions-orchestrator/src/cover_baseline.rs",
     "crates/velnor-actions-orchestrator/src/merge.rs",
     "crates/velnor-actions-orchestrator/src/merge_request.rs",
     # Production wiring under review: inventory assembly, pin records,

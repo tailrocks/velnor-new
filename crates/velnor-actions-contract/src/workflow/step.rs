@@ -14,21 +14,6 @@ pub const MAX_TASK_EXECUTION_ARGV: usize = 512;
 /// Maximum environment pairs carried by one generated task record.
 pub const MAX_TASK_EXECUTION_ENV: usize = 64;
 
-/// Plan output consumed by generated obligation skip conditions.
-pub const TASK_COVERED_OUTPUT: &str = "covered_tasks";
-
-/// Exact generated condition that skips one task only after plan coverage.
-///
-/// # Errors
-///
-/// Returns a contract error for a malformed task ID.
-pub fn task_execution_condition(task_id: &str) -> Result<String, ContractError> {
-    crate::ids::validate_task_id(task_id)?;
-    Ok(format!(
-        "!contains(needs.plan.outputs.{TASK_COVERED_OUTPUT}, ',{task_id},')"
-    ))
-}
-
 /// One workflow step.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Step {
@@ -136,7 +121,7 @@ impl Step {
             ));
         }
         if matches!(&self.kind, StepKind::TaskExecution { .. })
-            && (self.id.is_some() || self.role.is_some() || self.condition.is_none())
+            && (self.id.is_some() || self.role.is_some() || self.condition.is_some())
         {
             return Err(ContractError::identity(
                 "step.task",
@@ -154,14 +139,6 @@ impl Step {
             return Err(ContractError::identity(
                 "step.parallel",
                 format!("parallel_step_authority:{job}"),
-            ));
-        }
-        if let StepKind::TaskExecution { task_id, .. } = &self.kind
-            && self.condition.as_deref() != Some(task_execution_condition(task_id)?.as_str())
-        {
-            return Err(ContractError::identity(
-                "step.task.condition",
-                format!("task_coverage_condition_mismatch:{job}"),
             ));
         }
         if let Some(role) = self.role {
@@ -207,9 +184,6 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
     let valid = match id {
         StepId::Plan => {
             matches!(kind, StepKind::Internal { operation, .. } if operation == "plan-v1")
-        }
-        StepId::PublishBaseline => {
-            matches!(kind, StepKind::Internal { operation, .. } if operation == "publish-baseline-v1")
         }
         StepId::ToolsCacheIdentity => super::step_identity::valid_tools_cache_identity(kind),
         StepId::TofuProviders => {

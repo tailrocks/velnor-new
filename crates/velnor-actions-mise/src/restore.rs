@@ -249,7 +249,6 @@ pub fn fallback_for_error(error: &MiseError) -> Result<MissReason, MiseError> {
         MiseError::ArtifactUnreadable { .. }
         | MiseError::SpawnFailed { .. }
         | MiseError::NonZeroExit { .. }
-        | MiseError::InvalidBaselineInput { .. }
         | MiseError::Contract { .. } => MissReason::CACHE_UNAVAILABLE,
         MiseError::UnknownCacheMode { .. } => MissReason::FORCED_UNCACHED,
         MiseError::UnknownTool { .. }

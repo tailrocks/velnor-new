@@ -4,15 +4,13 @@
 //! Centralizes canonical serialization, strict parsing, checkout-path
 //! normalization, Cargo ID normalization, generator markers, the single
 //! immutable [`ExecutionSnapshot`] per analysis, platform identity and
-//! planned-platform target resolution, SHA-256 executable verification, and the
-//! canonical-schema migration gate. Group identities live in
+//! planned-platform target resolution, and SHA-256 executable verification. Group identities live in
 //! [`super::identities`], per-task closures in [`super::closure`];
 //! unknown inputs are explicit states, never silent `None`s.
 
 use serde::Serialize;
 use velnor_actions_contract::{
     ContractError, PlannedPlatform, ProposedTask, Stack, canonical_json_bytes, digest_b3,
-    parse_strict_json,
 };
 
 /// Explicit unknown marker for unverifiable archive sources.
@@ -23,12 +21,6 @@ pub(crate) const UNKNOWN_ARCHIVE_SOURCE: &str = "velnor-unknown-archive-source-v
 /// SHA-256 of the empty string: explicit unverified-generator marker.
 pub(crate) const UNRESOLVED_GENERATOR_SHA: &str =
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
-/// Current canonical-schema version; evidence carrying any other version
-/// migrates explicitly or is rejected, never silently reinterpreted.
-/// Version 2 records per-task input-closure digests in baseline entries;
-/// version 1 baselines bound no source bytes and are rejected outright.
-pub(crate) const CANONICAL_SCHEMA_VERSION: u32 = 2;
-
 /// BLAKE3 digest over canonical JSON bytes: the single digest function.
 ///
 /// # Errors
@@ -36,15 +28,6 @@ pub(crate) const CANONICAL_SCHEMA_VERSION: u32 = 2;
 /// Returns [`ContractError`] when canonical serialization fails.
 pub(crate) fn canonical_digest<T: Serialize>(value: &T) -> Result<String, ContractError> {
     Ok(digest_b3(&canonical_json_bytes(value)?))
-}
-
-/// Strict JSON parse: duplicate keys are rejected, never last-wins.
-///
-/// # Errors
-///
-/// Returns [`ContractError`] for malformed JSON or duplicate keys.
-pub(crate) fn parse_canonical_json(text: &str) -> Result<serde_json::Value, ContractError> {
-    parse_strict_json(text)
 }
 
 /// Release triple for the build host; unknown pairs keep `{arch}-{os}`.
@@ -56,26 +39,6 @@ pub(crate) fn map_release_triple(arch: &str, os: &str) -> String {
         _ => return format!("{arch}-{os}"),
     }
     .to_owned()
-}
-
-/// Reject any canonical-schema version except the current one.
-///
-/// Old evidence migrates explicitly through a versioned migrator or is
-/// rejected here with a migration error; it is never reinterpreted
-/// under the new schema.
-///
-/// # Errors
-///
-/// Returns [`ContractError`] naming the required migration.
-pub(crate) fn check_canonical_version(found: u32) -> Result<(), ContractError> {
-    if found == CANONICAL_SCHEMA_VERSION {
-        Ok(())
-    } else {
-        Err(ContractError::identity(
-            "canonical_schema",
-            format!("migration_required:v{found}_to_v{CANONICAL_SCHEMA_VERSION}"),
-        ))
-    }
 }
 
 /// Platform identity digest over runner image evidence (P03-4).
@@ -306,8 +269,6 @@ mod tests {
             canonical_digest(&left).expect("digest"),
             canonical_digest(&right).expect("digest")
         );
-        assert!(parse_canonical_json(r#"{"a": 1, "a": 2}"#).is_err());
-        assert!(parse_canonical_json(r#"{"a": 1}"#).is_ok());
     }
 
     #[test]
@@ -326,9 +287,6 @@ mod tests {
         let older = platform_id_for("ubuntu-24.04", "x86_64-unknown-linux-gnu").expect("platform");
         assert_ne!(linux, older);
         assert!(velnor_actions_contract::validate_digest(&linux).is_ok());
-        assert!(check_canonical_version(2).is_ok());
-        assert!(check_canonical_version(0).is_err());
-        assert!(check_canonical_version(1).is_err());
     }
 
     #[test]

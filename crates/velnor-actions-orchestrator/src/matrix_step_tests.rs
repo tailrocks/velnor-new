@@ -324,11 +324,6 @@ fn actual_obligation_producer_renders_150_jobs_through_one_typed_action_shape() 
     assert!(!yaml.contains("argv_"), "argv stays in the manifest");
     assert!(!yaml.contains("task_id:"), "task ID stays in the manifest");
     for index in 0..150 {
-        let task_id = format!("stack/rust/crate-{index}/test/default");
-        assert!(
-            yaml.contains(&format!("',{task_id},'")),
-            "task identity still gates plan coverage: {task_id}"
-        );
         assert!(yaml.contains(&format!("crate-{index}")));
     }
 }

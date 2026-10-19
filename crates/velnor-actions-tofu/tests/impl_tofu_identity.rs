@@ -171,10 +171,10 @@ fn fmt_keeps_shared_qualification() {
     );
 }
 
-/// T23 touches task-result reuse only: baseline coverage still admits
-/// resolved init/validate extensions and still gates unknown slots.
+/// T23 touches task-result reuse only: resolved init/validate extensions
+/// stay non-conservative while unknown slots still force execution.
 #[test]
-fn coverage_path_untouched_by_reuse_off() {
+fn conservative_gate_untouched_by_reuse_off() {
     let workspace = digest_b3(b"workspace");
     let graph = digest_b3(b"graph");
     let config = digest_b3(b"config");
@@ -189,10 +189,6 @@ fn coverage_path_untouched_by_reuse_off() {
             &config,
         ));
         assert!(
-            resolved.coverage_eligible().is_ok(),
-            "{kind:?} still coverable"
-        );
-        assert!(
             !resolved.conservative_execution_required(),
             "{kind:?} needs no conservative execution"
         );
@@ -205,10 +201,6 @@ fn coverage_path_untouched_by_reuse_off() {
             &graph,
             &config,
         ));
-        assert!(
-            unknown.coverage_eligible().is_err(),
-            "{kind:?} coverage still slot-gated"
-        );
         assert!(unknown.conservative_execution_required());
     }
 }

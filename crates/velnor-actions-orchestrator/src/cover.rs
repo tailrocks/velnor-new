@@ -4,11 +4,6 @@
 // module compiles without touching shared files.
 #[path = "shard.rs"]
 pub(crate) mod shard;
-#[path = "shard_baseline.rs"]
-pub(crate) mod shard_baseline;
-// Coverage revalidation lives apart so this file keeps its size gate.
-#[path = "cover_revalidate.rs"]
-pub(crate) mod revalidate;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -21,9 +16,6 @@ use crate::OrchestratorError;
 use crate::internal::internal_contract;
 use crate::internal_plan::wire_w2;
 use crate::merge::MergeRequest;
-
-pub(crate) use self::revalidate::revalidate_coverage;
-pub(crate) use crate::cover_baseline::{BaselineInputs, apply_baseline};
 
 /// Aggregated merge signals feeding result precedence.
 #[derive(Debug, Default)]

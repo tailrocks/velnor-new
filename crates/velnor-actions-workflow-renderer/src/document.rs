@@ -6,10 +6,6 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     RenderError,
-    cache_steps::{
-        MBX_BUILD_SCRIPT_EXECUTION_ENV, MBX_BUILD_SCRIPT_EXECUTION_VALUE, MBX_CC_ENV, MBX_CC_VALUE,
-        MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE,
-    },
     document_steps::string_map_yaml,
     lane_share::LaneShare,
     render::{FINAL_JOB_ID, RenderContext},
@@ -69,6 +65,7 @@ pub(crate) fn workflow_to_yaml(
                 &lane_steps,
                 JobRenderPolicy {
                     native_mbx: mbx_jobs.contains(id),
+                    plan_attempt: crate::document_env::plan_attempt_value(id, job, jobs),
                     actions_read,
                     workflow_env: &workflow_env,
                 },
@@ -251,6 +248,7 @@ fn dispatch_input_to_yaml(input: &DispatchInput) -> Yaml {
 #[derive(Clone, Copy)]
 struct JobRenderPolicy<'a> {
     native_mbx: bool,
+    plan_attempt: Option<&'static str>,
     actions_read: bool,
     workflow_env: &'a BTreeMap<String, String>,
 }
@@ -315,19 +313,7 @@ fn job_to_yaml(
             }
         }
     }
-    if policy.native_mbx {
-        for (key, val) in [
-            (MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE),
-            (MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE),
-            (MBX_CC_ENV, MBX_CC_VALUE),
-            (
-                MBX_BUILD_SCRIPT_EXECUTION_ENV,
-                MBX_BUILD_SCRIPT_EXECUTION_VALUE,
-            ),
-        ] {
-            job_env.insert(key.to_owned(), val.to_owned());
-        }
-    }
+    crate::document_env::extend_job_env(&mut job_env, policy.native_mbx, policy.plan_attempt);
     let mut entries = job_header_fields(job, runs_on);
     append_job_options(&mut entries, job, scale_set, &job_env, policy.workflow_env)?;
     let mut effective_env = policy.workflow_env.clone();

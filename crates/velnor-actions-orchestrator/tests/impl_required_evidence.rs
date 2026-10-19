@@ -8,9 +8,7 @@ use velnor_actions_orchestrator::{assemble_merge_request, merge_internal};
 
 use crate::impl_common::{TestResult, make_repo, passing_reports, plan_for_source_change};
 use crate::impl_orch_core::{merge, merge_request, success_jobs};
-use crate::impl_orch_plansel::{
-    BUMP, anchor_repo, commit, entries_for, make_ws, manifest_for, plan_at, put,
-};
+use crate::impl_orch_plansel::{BUMP, commit, make_ws, plan_at, put};
 
 /// Merge status for one hand-built request value.
 fn status_of(request: &serde_json::Value) -> Result<FinalStatus, Box<dyn std::error::Error>> {
@@ -276,12 +274,14 @@ fn leaf_edit_verifies_unproven_peers() -> TestResult {
     let base = commit(repo.path(), "one")?;
     put(repo.path(), "beta/src/lib.rs", BUMP)?;
     let head = commit(repo.path(), "two")?;
-    let (plan, _) = plan_at(repo.path(), Some(&base), &head, None)?;
+    let (plan, _) = plan_at(repo.path(), Some(&base), &head)?;
     assert!(
-        plan.obligations
-            .iter()
-            .all(|ob| ob.decision == ObligationDecision::Execute),
-        "no baseline, all execute: {:?}",
+        plan.obligations.iter().all(|ob| {
+            let executes = ob.decision == ObligationDecision::Execute;
+            executes == ob.task_id.contains("beta")
+                && (executes || ob.decision == ObligationDecision::NotAffected)
+        }),
+        "beta executes, alpha is not affected: {:?}",
         plan.obligations
     );
     let reports = passing_reports(&plan)?;
@@ -295,35 +295,16 @@ fn leaf_edit_verifies_unproven_peers() -> TestResult {
     );
     let report = merge(&request)?;
     assert_eq!(report.status, FinalStatus::Passed);
-    assert_eq!(report.counts.executed as usize, plan.obligations.len());
-    Ok(())
-}
-
-#[test]
-fn changed_obligations_never_baseline_cover() -> TestResult {
-    let repo = make_ws(&["alpha", "beta"], &[])?;
-    anchor_repo(repo.path())?;
-    let base = commit(repo.path(), "one")?;
-    put(repo.path(), "beta/src/lib.rs", BUMP)?;
-    let head = commit(repo.path(), "two")?;
-    let (seed, _) = plan_at(repo.path(), Some(&base), &head, None)?;
-    // The manifest matches every identity exactly, yet changed work must
-    // still execute: the changed hint guards incomplete identities.
-    let manifest = manifest_for(&seed, &base, &entries_for(&seed));
-    let (plan, _) = plan_at(repo.path(), Some(&base), &head, Some(manifest))?;
-    for ob in &plan.obligations {
-        if ob.task_id.contains("beta") {
-            assert_eq!(ob.decision, ObligationDecision::Execute, "{}", ob.task_id);
-            assert_eq!(ob.reason, "affected_by_change");
-        } else {
-            assert_eq!(
-                ob.decision,
-                ObligationDecision::CoveredByTrustedBaseline,
-                "{}",
-                ob.task_id
-            );
-        }
-    }
+    let not_affected = plan
+        .obligations
+        .iter()
+        .filter(|ob| ob.decision == ObligationDecision::NotAffected)
+        .count();
+    assert_eq!(
+        report.counts.executed as usize,
+        plan.obligations.len() - not_affected
+    );
+    assert_eq!(report.counts.not_affected as usize, not_affected);
     Ok(())
 }
 

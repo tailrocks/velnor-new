@@ -6,7 +6,7 @@
 //! use fake parents, the live case only reads ambient proxy keys.
 use std::ffi::OsString;
 use velnor_actions_mise::command::{
-    CREDENTIAL_ALLOWLIST_BASELINE, CREDENTIAL_ALLOWLIST_BOOTSTRAP, CREDENTIAL_ENV_KEYS, EnvPolicy,
+    CREDENTIAL_ALLOWLIST_BOOTSTRAP, CREDENTIAL_ALLOWLIST_GH_API, CREDENTIAL_ENV_KEYS, EnvPolicy,
     IsolatedCommand, PROXY_ENV_KEYS,
 };
 use velnor_actions_mise::{GitRequest, PinnedTool, PinnedToolExec, ToolCatalog};
@@ -58,7 +58,7 @@ fn bootstrap() -> Result<IsolatedCommand, String> {
     IsolatedCommand::mise_install(&["rust@1.99.1".to_owned()]).map_err(|err| err.to_string())
 }
 
-fn baseline() -> Result<IsolatedCommand, String> {
+fn gh_api() -> Result<IsolatedCommand, String> {
     let exec = PinnedToolExec::new(
         vec![PinnedTool::Gh],
         std::ffi::OsStr::new("gh"),
@@ -97,7 +97,7 @@ fn endpoint_selectors_strip_for_every_policy() -> Result<(), String> {
     parent.push(pair("GH_ENTERPRISE_TOKEN", "__SENTINEL__"));
     let cases: Vec<(&str, Vec<(OsString, OsString)>)> = vec![
         ("bootstrap", bootstrap()?.spawn_env(&parent)),
-        ("baseline", baseline()?.spawn_env(&parent)),
+        ("gh_api", gh_api()?.spawn_env(&parent)),
         ("verify", verify()?.spawn_env(&parent)),
         ("discovery", discovery().spawn_env(&parent)),
         ("repo_task", repo_task()?.spawn_env(&parent)),
@@ -118,7 +118,7 @@ fn tofu_ambient_families_strip_for_every_policy() -> Result<(), String> {
     let parent = hostile_tofu_parent();
     let cases: Vec<(&str, Vec<(OsString, OsString)>)> = vec![
         ("bootstrap", bootstrap()?.spawn_env(&parent)),
-        ("baseline", baseline()?.spawn_env(&parent)),
+        ("gh_api", gh_api()?.spawn_env(&parent)),
         ("verify", verify()?.spawn_env(&parent)),
         ("discovery", discovery().spawn_env(&parent)),
         ("repo_task", repo_task()?.spawn_env(&parent)),
@@ -212,12 +212,12 @@ fn credential_allowlists_are_exact() {
         CREDENTIAL_ALLOWLIST_BOOTSTRAP,
         ["MISE_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"]
     );
-    assert_eq!(CREDENTIAL_ALLOWLIST_BASELINE, ["GITHUB_TOKEN", "GH_TOKEN"]);
+    assert_eq!(CREDENTIAL_ALLOWLIST_GH_API, ["GITHUB_TOKEN", "GH_TOKEN"]);
     assert_eq!(EnvPolicy::Verify.allowed_credentials().len(), 0);
     assert_eq!(EnvPolicy::Discovery.allowed_credentials().len(), 0);
     assert_eq!(EnvPolicy::RepoTask.allowed_credentials().len(), 0);
     assert!(EnvPolicy::Bootstrap.inherits_parent());
-    assert!(EnvPolicy::Baseline.inherits_parent());
+    assert!(EnvPolicy::GhApi.inherits_parent());
     assert!(!EnvPolicy::RepoTask.inherits_parent());
 }
 
@@ -248,10 +248,10 @@ fn bootstrap_keeps_only_download_credentials() -> Result<(), String> {
 }
 
 #[test]
-fn baseline_keeps_only_ci_identity() -> Result<(), String> {
-    let env = baseline()?.spawn_env(&parent_snapshot());
-    for key in CREDENTIAL_ALLOWLIST_BASELINE {
-        assert!(has(&env, key), "{key} must survive baseline");
+fn gh_api_keeps_only_ci_identity() -> Result<(), String> {
+    let env = gh_api()?.spawn_env(&parent_snapshot());
+    for key in CREDENTIAL_ALLOWLIST_GH_API {
+        assert!(has(&env, key), "{key} must survive gh_api");
     }
     for key in [
         "MISE_GITHUB_TOKEN",
@@ -300,12 +300,9 @@ fn repo_task_env_is_proxy_plus_explicit_only() -> Result<(), String> {
 }
 
 #[test]
-fn gh_exec_selects_baseline_policy() -> Result<(), String> {
-    let gh = format!("{:?}", baseline()?);
-    assert!(
-        gh.contains("Baseline"),
-        "gh lookup must carry Baseline: {gh}"
-    );
+fn gh_exec_selects_gh_api_policy() -> Result<(), String> {
+    let gh = format!("{:?}", gh_api()?);
+    assert!(gh.contains("GhApi"), "gh exec must carry GhApi: {gh}");
     let cargo = format!("{:?}", verify()?);
     assert!(cargo.contains("Verify"), "exec stays Verify: {cargo}");
     Ok(())

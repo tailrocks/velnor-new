@@ -110,29 +110,7 @@ impl TaskGroup {
 }
 
 impl RustTaskIdentityExtension {
-    /// Reject baseline coverage when build inputs are undeclared or dynamic.
-    ///
-    /// Mirrors [`reuse_eligible`](Self::reuse_eligible): par §4.2 disables
-    /// both exact reuse and baseline coverage for undeclared reads and
-    /// unresolved slots.
-    /// # Errors
-    pub fn coverage_eligible(&self) -> Result<(), ContractError> {
-        if self.undeclared_reads {
-            return Err(ContractError::identity(
-                "stack_extension",
-                "undeclared_inputs_no_coverage",
-            ));
-        }
-        if let Some(input) = self.first_blocking_input() {
-            return Err(ContractError::identity(
-                "stack_extension",
-                format!("unresolved_input_no_coverage:{}", input.as_str()),
-            ));
-        }
-        Ok(())
-    }
-
-    /// Whether the package MUST execute conservatively (no reuse, no cover).
+    /// Whether the package MUST execute conservatively (no reuse).
     #[must_use]
     pub fn conservative_execution_required(&self) -> bool {
         self.undeclared_reads || self.first_blocking_input().is_some()

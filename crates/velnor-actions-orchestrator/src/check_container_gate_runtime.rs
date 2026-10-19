@@ -1,5 +1,5 @@
 use crate::OrchestratorError;
-use crate::cover_identity::generator::sha256_hex;
+use crate::generator::sha256_hex;
 use crate::internal::internal;
 use serde::Deserialize;
 use serde_json::{Map, Value};

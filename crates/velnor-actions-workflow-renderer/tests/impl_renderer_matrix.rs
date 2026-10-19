@@ -58,10 +58,16 @@ fn fixture_ir(task: Job) -> Result<WorkflowIr, RenderError> {
     Ok(WorkflowIr {
         name: "CI".to_owned(),
         triggers: Trigger {
-            pull_request_types: ["opened", "synchronize", "reopened", "ready_for_review"]
-                .iter()
-                .map(ToString::to_string)
-                .collect(),
+            pull_request_types: [
+                "opened",
+                "edited",
+                "synchronize",
+                "reopened",
+                "ready_for_review",
+            ]
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
             push_branches: vec!["main".to_owned()],
             merge_group: true,
             workflow_dispatch: None,
@@ -123,7 +129,6 @@ fn strategy_shape_exact_and_marker_stripped() -> Result<(), RenderError> {
         "      matrix: ${{ steps.plan.outputs.matrix }}",
         "      plan_id: ${{ steps.plan.outputs.plan_id }}",
         "      run_key: ${{ steps.plan.outputs.run_key }}",
-        "      covered_tasks: ${{ steps.plan.outputs.covered_tasks }}",
         "      qualification_campaign: ${{ steps.plan.outputs.qualification_campaign }}",
         "      qualification_phase: ${{ steps.plan.outputs.qualification_phase }}",
         "      qualification_cache_enabled: ${{ steps.plan.outputs.qualification_cache_enabled }}",
@@ -152,8 +157,8 @@ fn static_task_renders_no_strategy() -> Result<(), RenderError> {
         !text.contains("VELNOR_PLAN_MATRIX_OUTPUT_MODE"),
         "static mode:\n{text}"
     );
-    // The plan job legitimately publishes `covered_tasks`; only the
-    // static task job must stay free of matrix machinery.
+    // The plan job legitimately publishes qualification outputs; only
+    // the static task job must stay free of matrix machinery.
     let start = text.find("velnor-task:").expect("task job renders");
     let task = &text[start..];
     for absent in ["strategy:", "outputs:", "id: plan", "fromJSON"] {
@@ -210,7 +215,7 @@ fn capped_job(env: &BTreeMap<String, String>, needs: Vec<String>) -> Result<Job,
 fn cap_env(max: &str) -> BTreeMap<String, String> {
     BTreeMap::from([
         (MATRIX_NEEDS_JOB_ENV.into(), "plan".into()),
-        (MATRIX_OUTPUT_ENV.into(), "covered_tasks".into()),
+        (MATRIX_OUTPUT_ENV.into(), "plan_id".into()),
         (MATRIX_MAX_PARALLEL_ENV.into(), max.into()),
     ])
 }
