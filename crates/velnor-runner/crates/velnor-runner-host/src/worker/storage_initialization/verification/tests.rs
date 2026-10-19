@@ -67,34 +67,113 @@ fn engine_identity_requires_the_selected_daemon_and_root() {
 }
 
 #[test]
-fn volume_identity_requires_name_worker_and_role() {
-    let worker = "w0123456789abcdef0123456789abcdef";
-    let name = format!("{worker}-home");
-    let labels = HashMap::from([
-        ("velnor.worker".to_owned(), worker.to_owned()),
+fn volume_identity_accepts_created_home_labels() {
+    let connection = "scoped-adapter";
+    let reservation = 1;
+    let operation = 1;
+    let name = "w0123456789abcdef0123456789abcdef-home";
+    let labels = created_home_labels(connection, reservation, operation);
+    assert!(identity_matches(VolumeIdentityCase {
+        actual_name: name,
+        labels: &labels,
+        expected_name: name,
+        connection,
+        reservation,
+        operation,
+        role: "runner-home",
+    }));
+}
+
+#[test]
+fn volume_identity_rejects_foreign_or_legacy_labels() {
+    let connection = "scoped-adapter";
+    let reservation = 1;
+    let operation = 1;
+    let name = "w0123456789abcdef0123456789abcdef-home";
+    let labels = created_home_labels(connection, reservation, operation);
+    let no_labels = HashMap::new();
+    let old_labels = HashMap::from([
+        (
+            "velnor.worker".to_owned(),
+            "w0123456789abcdef0123456789abcdef".to_owned(),
+        ),
         ("velnor.role".to_owned(), "home".to_owned()),
     ]);
-    assert!(volume_identity_matches(
-        &name, &labels, &name, worker, "home"
-    ));
-    assert!(!volume_identity_matches(
-        "foreign-home",
-        &labels,
-        &name,
-        worker,
-        "home"
-    ));
-    assert!(!volume_identity_matches(
-        &name, &labels, &name, "foreign", "home"
-    ));
-    assert!(!volume_identity_matches(
-        &name, &labels, &name, worker, "work"
-    ));
-    assert!(!volume_identity_matches(
-        &name,
-        &HashMap::new(),
-        &name,
-        worker,
-        "home"
-    ));
+    let valid = VolumeIdentityCase {
+        actual_name: name,
+        labels: &labels,
+        expected_name: name,
+        connection,
+        reservation,
+        operation,
+        role: "runner-home",
+    };
+    for case in [
+        VolumeIdentityCase {
+            actual_name: "foreign-home",
+            ..valid
+        },
+        VolumeIdentityCase {
+            connection: "foreign",
+            ..valid
+        },
+        VolumeIdentityCase {
+            reservation: reservation + 1,
+            ..valid
+        },
+        VolumeIdentityCase {
+            operation: operation + 1,
+            ..valid
+        },
+        VolumeIdentityCase {
+            role: "runner-work",
+            ..valid
+        },
+        VolumeIdentityCase {
+            labels: &no_labels,
+            ..valid
+        },
+        VolumeIdentityCase {
+            labels: &old_labels,
+            ..valid
+        },
+    ] {
+        assert!(!identity_matches(case));
+    }
+}
+
+#[derive(Clone, Copy)]
+struct VolumeIdentityCase<'a> {
+    actual_name: &'a str,
+    labels: &'a HashMap<String, String>,
+    expected_name: &'a str,
+    connection: &'a str,
+    reservation: i64,
+    operation: i64,
+    role: &'a str,
+}
+
+fn created_home_labels(
+    connection: &str,
+    reservation: i64,
+    operation: i64,
+) -> HashMap<String, String> {
+    HashMap::from([
+        ("velnor.connection".to_owned(), connection.to_owned()),
+        ("velnor.reservation".to_owned(), reservation.to_string()),
+        ("velnor.operation".to_owned(), operation.to_string()),
+        ("velnor.role".to_owned(), "runner-home".to_owned()),
+    ])
+}
+
+fn identity_matches(case: VolumeIdentityCase<'_>) -> bool {
+    super::volume_identity_matches(
+        case.actual_name,
+        case.labels,
+        case.expected_name,
+        case.connection,
+        case.reservation,
+        case.operation,
+        case.role,
+    )
 }

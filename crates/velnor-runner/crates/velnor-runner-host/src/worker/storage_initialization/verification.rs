@@ -83,8 +83,8 @@ pub(super) async fn verify_volumes(
         return Err(HostError::Ownership);
     }
     for (name, role, expected_id) in [
-        (claim.home_volume(), "home", None),
-        (claim.work_volume(), "work", None),
+        (claim.home_volume(), "runner-home", None),
+        (claim.work_volume(), "runner-work", None),
         (metadata_name, "engine-metadata", Some(metadata_id)),
     ] {
         let volume = docker_deadline(docker.inspect_volume(name))
@@ -96,8 +96,15 @@ pub(super) async fn verify_volumes(
                 _ => HostError::Docker,
             })?;
         let labels = volume.labels;
-        if !volume_identity_matches(&volume.name, &labels, name, base, role)
-            || expected_id.is_some_and(|expected| volume.name != expected)
+        if !volume_identity_matches(
+            &volume.name,
+            &labels,
+            name,
+            claim.connection_id(),
+            claim.reservation_id(),
+            claim.operation_id(),
+            role,
+        ) || expected_id.is_some_and(|expected| volume.name != expected)
         {
             return Err(HostError::Ownership);
         }
@@ -339,11 +346,17 @@ fn volume_identity_matches(
     actual_name: &str,
     labels: &std::collections::HashMap<String, String>,
     expected_name: &str,
-    worker: &str,
+    connection_id: &str,
+    reservation_id: i64,
+    operation_id: i64,
     role: &str,
 ) -> bool {
     actual_name == expected_name
-        && labels.get("velnor.worker").map(String::as_str) == Some(worker)
+        && labels.get("velnor.connection").map(String::as_str) == Some(connection_id)
+        && labels.get("velnor.reservation").map(String::as_str)
+            == Some(reservation_id.to_string().as_str())
+        && labels.get("velnor.operation").map(String::as_str)
+            == Some(operation_id.to_string().as_str())
         && labels.get("velnor.role").map(String::as_str) == Some(role)
 }
 

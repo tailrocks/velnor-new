@@ -51,6 +51,9 @@ pub(crate) struct StorageInitializationClaim {
 }
 
 impl StorageInitializationClaim {
+    pub(crate) fn connection_id(&self) -> &str {
+        &self.connection_id
+    }
     pub(crate) const fn reservation_id(&self) -> i64 {
         self.reservation_id
     }
