@@ -2,7 +2,7 @@
 use crate::impl_common::{TestResult, git, make_repo, plan_for};
 use std::fs;
 use velnor_actions_contract::review_completion::REVIEW_COMPLETION_WORKFLOW_PATH;
-use velnor_actions_orchestrator::{prepare, render_staged_tree};
+use velnor_actions_orchestrator::{GenerateOptions, generate, prepare, render_staged_tree};
 const CONFIG: &str = r#"schema = 1
 [workflow]
 name = "CI"
@@ -62,8 +62,94 @@ fn completion_companion_filename_cannot_be_preserved() -> TestResult {
     let config = format!("{CONFIG}\n");
     let repo = make_repo(&config.replace(
         "name = \"CI\"",
-        "name = \"CI\"\npreserve_workflows = ['review-completion.yml']",
+        "name = \"CI\"\npreserve_workflows = ['.github/workflows/review-completion.yml']",
     ))?;
-    assert!(prepare(repo.path()).is_err());
+    let error = prepare(repo.path()).expect_err("native companion cannot be preserved");
+    assert!(
+        error
+            .to_string()
+            .contains("cannot_preserve_generator_workflow"),
+        "{error}"
+    );
+    Ok(())
+}
+
+#[test]
+fn completion_only_schema2_generation_validates_declared_variables() -> TestResult {
+    let execution = velnor_actions_contract::ExecutionConfig::hosted_default("ubuntu-26.04")?;
+    let config = format!(
+        "{}\n{}",
+        CONFIG.replace("schema = 1", "schema = 2"),
+        toml::to_string(&std::collections::BTreeMap::from([(
+            "execution",
+            execution
+        )]))?
+    );
+    let repo = make_repo(&config)?;
+    git(
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/tailrocks/homebrew-tap.git",
+        ],
+        repo.path(),
+    )?;
+    fs::remove_file(repo.path().join("Cargo.toml"))?;
+    fs::remove_dir_all(repo.path().join("src"))?;
+    let prep = prepare(repo.path())?;
+    assert!(prep.config.stacks.rust.is_none());
+    assert!(prep.config.distribution.homebrew_tap.is_none());
+    let output = tempfile::tempdir()?;
+    let destination = output.path().join("generated");
+    let report = generate(
+        &prep,
+        &GenerateOptions {
+            output_dir: Some(destination.clone()),
+        },
+    )?;
+    assert_eq!(report.validated_by.len(), 3);
+    let actionlint = fs::read_to_string(destination.join(".github/actionlint.yaml"))?;
+    let vars = actionlint
+        .split("\n\n")
+        .nth(1)
+        .ok_or("variable inventory missing")?;
+    assert_eq!(
+        vars,
+        "config-variables:\n  - COMPLETION_APP_ID\n  - REVIEWER_APP_ID"
+    );
+    assert!(destination.join(REVIEW_COMPLETION_WORKFLOW_PATH).is_file());
+    let workflow = destination.join(REVIEW_COMPLETION_WORKFLOW_PATH);
+    let original = fs::read_to_string(&workflow)?;
+    let mutated = original.replace("vars.COMPLETION_APP_ID", "vars.UNDECLARED_NATIVE_APP");
+    assert_ne!(original, mutated);
+    fs::write(workflow, mutated)?;
+    let args = velnor_actions_actionlint::ActionlintToolchain::staged_lint_argv(
+        ".github/actionlint.yaml",
+        &[REVIEW_COMPLETION_WORKFLOW_PATH.to_owned()],
+    );
+    let output = velnor_actions_mise::PinnedToolExec::new(
+        vec![
+            velnor_actions_mise::PinnedTool::Actionlint,
+            velnor_actions_mise::PinnedTool::Shellcheck,
+        ],
+        std::ffi::OsStr::new("actionlint"),
+        args.into_iter().map(Into::into).collect(),
+    )?
+    .command(&velnor_actions_mise::ToolCatalog::pinned())?
+    .with_cwd(destination)
+    .run()?;
+    let diagnostic = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!output.success, "{diagnostic}");
+    assert!(
+        diagnostic
+            .to_ascii_lowercase()
+            .contains("undeclared_native_app"),
+        "{diagnostic}"
+    );
     Ok(())
 }

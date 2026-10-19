@@ -6,14 +6,14 @@
 //! vetting, the plan-job workspace Format step, MBX gating, the Gate-6
 //! task-cache gate, and the V1 actionlint variable set.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_actionlint::{
     ActionlintCapabilities, PinnedActionRef, StepSyntax,
     actions::{CACHE_ACTION_SHA, CACHE_ACTION_VERSION},
     checkout_inputs_schema, validate_action_inputs,
 };
-use velnor_actions_contract::{Job, ProposedTask, Step, StepKind, StepRole};
+use velnor_actions_contract::{Job, ProposedTask, Step, StepKind, StepRole, VelnorConfig};
 use velnor_actions_mise::{Gate6Fixture, TaskCacheMode, ToolCatalog, ToolHomes};
 use velnor_actions_rust::is_workspace_fmt_task;
 use velnor_actions_workflow_renderer::plan_format;
@@ -28,12 +28,33 @@ use crate::utf8::strings_of_env;
 
 /// Declared repository configuration variable names (GEN-2.14).
 ///
-/// V1 emits no `vars:` references, so the exact declared set is empty;
-/// the renderer-side set threads through this single constructor when a
-/// future workflow declares variables.
+/// Native companions declare symbolic App identities independently of the
+/// selected stacks. Collect only the variable references emitted by enabled
+/// policies; secret names never enter this exact, sorted allowlist.
 #[must_use]
-pub(crate) fn declared_config_variables() -> Vec<String> {
-    Vec::new()
+pub(crate) fn declared_config_variables(config: &VelnorConfig) -> Vec<String> {
+    let mut names = BTreeSet::new();
+    if let Some(completion) = &config.workflow.review_completion {
+        names.insert(completion.app_id_variable.clone());
+        names.insert(completion.reviewer_app_id_variable.clone());
+    }
+    if let Some(tap) = config
+        .distribution
+        .homebrew_tap
+        .as_ref()
+        .filter(|tap| tap.enabled)
+    {
+        names.insert(tap.app_id_variable.clone());
+        names.insert(tap.protection_observer.app_id_variable.clone());
+        names.insert(tap.review_completion.app_id_variable.clone());
+        names.extend(
+            tap.review_completion
+                .expected_reviewers
+                .iter()
+                .map(|reviewer| reviewer.app_id_variable.clone()),
+        );
+    }
+    names.into_iter().collect()
 }
 
 /// Pinned checkout action without persisted credentials (WF-3.50).

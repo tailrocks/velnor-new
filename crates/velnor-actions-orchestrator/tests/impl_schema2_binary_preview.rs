@@ -208,6 +208,14 @@ fn generator_emits_tap_jobs_from_native_distribution_config() -> TestResult {
     let workflow = tree
         .get(".github/workflows/binary-preview.yml")
         .ok_or("preview workflow missing")?;
+    let actionlint = tree
+        .get(".github/actionlint.yaml")
+        .ok_or("actionlint missing")?;
+    let vars = actionlint.split("\n\n").nth(1).ok_or("variables missing")?;
+    assert_eq!(
+        vars,
+        "config-variables:\n  - REVIEW_COMPLETION_APP_ID\n  - SECURITY_REVIEW_APP_ID\n  - TAP_APP_ID\n  - TAP_PROTECTION_APP_ID"
+    );
     let prepare = job(workflow, "preview-tap-prepare", Some("preview-tap-writer"))?;
     let writer = job(workflow, "preview-tap-writer", Some("preview-tap-merge"))?;
     let merge = job(workflow, "preview-tap-merge", None)?;
