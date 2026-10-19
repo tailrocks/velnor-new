@@ -111,7 +111,7 @@ fn crate_job_fetches_lockful_sources_before_obligations() -> TestResult {
         .workflow
         .ir
         .jobs
-        .get("rust-demo")
+        .get("rust-demo-lint")
         .ok_or_else(|| std::io::Error::other("missing crate job"))?;
     let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
     let at = |name: &str| names.iter().position(|seen| *seen == name);
@@ -164,7 +164,7 @@ fn lockful_crate_window() -> Result<(String, TaskExecutionManifestV1), Box<dyn s
         .get(WORKFLOW_PATH)
         .ok_or_else(|| std::io::Error::other("missing workflow"))?;
     let task_at = yaml
-        .find("  rust-demo:")
+        .find("  rust-demo-lint:")
         .ok_or_else(|| std::io::Error::other("missing crate job"))?;
     Ok((yaml[task_at..].to_owned(), manifest))
 }
@@ -226,7 +226,7 @@ fn crate_job_omits_fetch_without_lockfile() -> TestResult {
         .workflow
         .ir
         .jobs
-        .get("rust-demo")
+        .get("rust-demo-lint")
         .ok_or_else(|| std::io::Error::other("missing crate job"))?;
     assert!(
         job.steps
@@ -248,7 +248,7 @@ fn mbx_objects_precede_fetch_on_mbx_crates() -> TestResult {
         .workflow
         .ir
         .jobs
-        .get("rust-demo")
+        .get("rust-demo-lint")
         .ok_or_else(|| std::io::Error::other("missing crate job"))?;
     let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
     let at = |name: &str| names.iter().position(|seen| *seen == name);

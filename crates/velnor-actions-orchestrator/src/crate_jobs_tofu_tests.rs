@@ -167,31 +167,34 @@ fn mixed_group_keeps_the_rust_union() {
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
-    assert_eq!(found.jobs.len(), 1, "shared group renders once");
-    let job = &found.jobs[0].1;
-    let names = crate_jobs_tests::names(job);
-    assert!(
-        names.contains(&PREPARE_RUST_COMPONENTS_STEP),
-        "mixed groups keep components: {names:?}"
-    );
+    assert_eq!(found.jobs.len(), 2, "each stack owns its tools");
     let catalog = ToolCatalog::pinned();
-    let prepare = job
-        .steps
-        .iter()
-        .find(|step| step.name == PREPARE_PINNED_TOOLS_STEP)
-        .expect("prepare step");
-    let velnor_actions_contract::StepKind::Shell { run, env } = &prepare.kind else {
-        panic!("prepare must be a shell step");
-    };
-    assert!(
-        run.contains(&catalog.tool_spec(PinnedTool::Rust))
-            && run.contains(&catalog.tool_spec(PinnedTool::Opentofu)),
-        "mixed groups install the union: {run:?}"
-    );
-    assert!(
-        env.contains_key("RUSTUP_TOOLCHAIN"),
-        "mixed prepare keeps the triple: {env:?}"
-    );
+    for (id, job) in &found.jobs {
+        let rust = id.starts_with("rust-");
+        let names = crate_jobs_tests::names(job);
+        assert_eq!(names.contains(&PREPARE_RUST_COMPONENTS_STEP), rust, "{id}");
+        let prepare = job
+            .steps
+            .iter()
+            .find(|step| step.name == PREPARE_PINNED_TOOLS_STEP)
+            .expect("prepare");
+        let velnor_actions_contract::StepKind::Shell { run, env } = &prepare.kind else {
+            panic!("prepare must be a shell step");
+        };
+        assert_eq!(
+            run.contains(&catalog.tool_spec(PinnedTool::Rust)),
+            rust,
+            "{run:?}"
+        );
+        assert_eq!(
+            run.contains(&catalog.tool_spec(PinnedTool::Opentofu)),
+            !rust,
+            "{run:?}"
+        );
+        for key in ["RUSTUP_TOOLCHAIN", "MISE_CARGO_HOME", "MISE_RUSTUP_HOME"] {
+            assert_eq!(env.contains_key(key), rust, "{id} owned homes: {env:?}");
+        }
+    }
 }
 
 /// One fmt/init/validate triple per root, all runnable.
@@ -355,7 +358,6 @@ fn first_tofu_obligation_declares_the_cap() {
 
 #[test]
 fn all_tofu_groups_take_tofu_ids_mixed_keep_rust() {
-    use velnor_actions_contract::TOFU_JOB_ID_PREFIX;
     use velnor_actions_tofu::TofuTaskKind;
     let mut rust = crate_jobs_tests::group("demo", TaskKind::Clippy, &[]);
     let tofu = tofu_group("stacks/a", TofuTaskKind::Validate);
@@ -377,15 +379,12 @@ fn all_tofu_groups_take_tofu_ids_mixed_keep_rust() {
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
-    assert_eq!(found.jobs.len(), 2);
-    let mut ids: Vec<&str> = found.jobs.iter().map(|(id, _)| id.as_str()).collect();
-    ids.sort_unstable();
-    assert_eq!(ids.len(), 2);
-    assert!(
-        ids[0].starts_with("rust-"),
-        "mixed group keeps the rust union: {ids:?}"
+    assert_eq!(found.jobs.len(), 3);
+    let ids: Vec<&str> = found.jobs.iter().map(|(id, _)| id.as_str()).collect();
+    assert_eq!(
+        ids,
+        vec!["rust-demo-lint", "tofu-stacks-a", "tofu-stacks-b"]
     );
-    assert_eq!(ids[1], format!("{TOFU_JOB_ID_PREFIX}stacks-b"));
     for (id, job) in &found.jobs {
         assert!(
             velnor_actions_contract::is_crate_job_id(id),

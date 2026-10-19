@@ -201,7 +201,7 @@ pub(crate) fn install_consumer_manifest(dir: &Path) -> Result<(), Box<dyn Error>
     Ok(())
 }
 
-fn synthetic_sha256(bytes: &[u8]) -> String {
+pub(crate) fn synthetic_sha256(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let digest = Sha256::digest(bytes);
     let mut encoded = String::with_capacity(digest.len() * 2);

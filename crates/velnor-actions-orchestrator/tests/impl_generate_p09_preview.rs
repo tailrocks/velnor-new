@@ -126,7 +126,7 @@ fn fetch_matches_obligation_contract_by_construction() -> TestResult {
         .workflow
         .ir
         .jobs
-        .get("rust-demo")
+        .get("rust-demo-lint")
         .ok_or_else(|| std::io::Error::other("missing crate job"))?;
     let names: Vec<&str> = task.steps.iter().map(|step| step.name.as_str()).collect();
     let at = |name: &str| names.iter().position(|seen| *seen == name);

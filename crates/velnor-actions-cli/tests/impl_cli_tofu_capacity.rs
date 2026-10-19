@@ -4,7 +4,7 @@ use std::error::Error;
 use std::path::Path;
 
 use crate::impl_cli_tmp::{
-    cleanup, code, fresh_tempdir, git_init, install_consumer_manifest, spawn,
+    cleanup, code, fresh_tempdir, git_init, install_consumer_manifest, spawn, synthetic_sha256,
 };
 
 const MAX_WORKFLOW_BYTES: usize = 500_000;
@@ -12,13 +12,30 @@ const MAX_WORKFLOW_BYTES: usize = 500_000;
 /// Build a schema-2 ToFu-only repo using both hosted and scale-set lanes.
 ///
 /// Default policy is `ConsumerV1`, so generation requires the release manifest.
-fn paired_tofu_repo(roots: usize) -> Result<std::path::PathBuf, Box<dyn Error>> {
+fn paired_tofu_repo(
+    roots: usize,
+    distinct_paths: bool,
+) -> Result<std::path::PathBuf, Box<dyn Error>> {
     let repo = fresh_tempdir(&format!("tofu-paired-{roots}"))?;
     git_init(&repo)?;
     std::fs::create_dir_all(repo.join(".velnor"))?;
     install_consumer_manifest(&repo)?;
     let names = (0..roots)
-        .map(|index| format!("stacks/r{index:03}"))
+        .map(|index| {
+            let mut name = format!("stacks/r{index:03}");
+            if distinct_paths {
+                // Valid nested infrastructure identities, not repeated shell
+                // padding: every root-specific job/argument remains distinct.
+                for dimension in ["organization", "region", "environment"] {
+                    let digest = synthetic_sha256(format!("{dimension}/{index}").as_bytes());
+                    name.push('/');
+                    name.push_str(dimension);
+                    name.push('-');
+                    name.push_str(&digest);
+                }
+            }
+            name
+        })
         .collect::<Vec<_>>();
     let roots = names
         .iter()
@@ -59,7 +76,7 @@ fn workflow_path(preview: &Path) -> std::path::PathBuf {
 #[test]
 fn cli_schema2_paired_tofu_stays_within_capacity_and_fails_closed() -> Result<(), Box<dyn Error>> {
     let outer = fresh_tempdir("tofu-paired-output")?;
-    let repo = paired_tofu_repo(60)?;
+    let repo = paired_tofu_repo(60, false)?;
     let preview = outer.join("preview-60");
     let generated = spawn(
         &[
@@ -82,7 +99,10 @@ fn cli_schema2_paired_tofu_stays_within_capacity_and_fails_closed() -> Result<()
         workflow.len()
     );
 
-    let wide_repo = paired_tofu_repo(140)?;
+    // Root count alone no longer implies oversize after exact node sharing.
+    // Distinct nested paths exercise irreducible root-bound identities at the
+    // same 140-root inventory; all components remain below filesystem limits.
+    let wide_repo = paired_tofu_repo(140, true)?;
     let wide_preview = outer.join("preview-140");
     let rejected = spawn(
         &[

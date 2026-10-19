@@ -1,7 +1,8 @@
 //! Workflow job constructors: plan, lint, and final gate.
 //!
-//! Crate jobs live in [`crate::crate_jobs`]: one ordered IR job per
-//! crate, each needing the plan job; the final gate below needs them all.
+//! Crate jobs live in [`crate::crate_jobs`]: each nonempty Rust phase owns
+//! ordered obligations for one crate and configuration. Every owner needs the
+//! plan and its external gate owners; the final gate below needs them all.
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;

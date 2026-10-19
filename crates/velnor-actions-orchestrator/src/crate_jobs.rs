@@ -1,15 +1,18 @@
-//! Crate-job construction: one ordered IR job per crate (P05).
+//! Crate-job construction: closed capacity phases with exact obligation owners.
 //!
-//! Root cause (P05): logical obligations were equated with execution
-//! jobs, so every task fanned out into matrix legs behind one shared
-//! template. The structural fix groups runnable obligations by
-//! `(package, configuration)` into one ordered [`CrateJob`](velnor_actions_contract::CrateJob)
-//! each, validates the grouping through the contract model (stable
-//! unbranded IDs, gates referencing strictly earlier obligations),
-//! then renders each group to a fixed IR job: checkout, pinned tools,
-//! components, lockful sources, the per-root provider restore on
-//! opentofu crates, the MBX local setup on MBX crates, and one
-//! shell step per obligation in gate order.
+//! The P05 migration removed arbitrary per-task matrix fan-out by grouping
+//! obligations into ordered package/configuration jobs. Cold Jackin CI later
+//! demonstrated that serial Clippy, test compilation and documentation can
+//! exhaust the mandatory five-minute budget before all obligations execute.
+//! Rust now groups by package/configuration and the adapter's fixed lint,
+//! tests and docs phases. Test builds and consumers remain on one runner;
+//! logical task identities, argument vectors and report authorities stay intact.
+//! Same-phase gates reference strictly earlier obligations in the validated
+//! [`CrateJob`](velnor_actions_contract::CrateJob). External gate owners become
+//! exact job dependencies, so splitting execution never discards quality gates.
+//! Each job retains checkout, pinned tools, lockful sources, stack-owned cache
+//! preparation, ordered report-wrapped obligations and its own report upload.
+//! `OpenTofu` retains one job per root and its existing bounded lane staging.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -21,6 +24,7 @@ use velnor_actions_contract::{
 #[cfg(test)]
 use velnor_actions_mise::PinnedTool;
 use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
+#[cfg(test)]
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 
@@ -33,6 +37,9 @@ use crate::obligation_order::obligation_order_key;
 
 #[path = "crate_jobs_stage.rs"]
 mod stage;
+
+#[path = "crate_jobs_phase.rs"]
+mod phase;
 
 #[cfg(test)]
 pub(crate) use stage::needs;
@@ -84,13 +91,13 @@ pub(crate) struct CrateJobInputs<'a> {
     pub(crate) cache_policy: velnor_actions_contract::PullRequestCachePolicy,
 }
 
-/// Build one ordered IR job per runnable crate from discovery proposals.
+/// Build ordered IR jobs for each nonempty package/configuration capacity phase.
 ///
 /// Tasks without test targets carry no command and stay out; the
 /// package-less workspace Format scope belongs to the plan job, so its
 /// tasks stay out too. Obligations order Format, Clippy, build, tests,
-/// doctests, docs (shards by task ID); gates keep same-crate edges
-/// only, so every gate references a strictly earlier obligation. The
+/// doctests, docs (shards by task ID); gates keep same-phase edges
+/// locally and lift other runnable owners into job dependencies. The
 /// acquire step stages the helper every report wrapper invokes;
 /// callers without one (pre-seed, lock attach) provision separately.
 ///
@@ -109,23 +116,26 @@ pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, 
         helper_version,
         cache_policy,
     } = input;
-    let grouped = group_runnable(&discovery.proposals);
+    let grouped = group_runnable(&discovery.proposals)?;
     let assigned = assign_group_ids(&grouped);
     let mut jobs = Vec::with_capacity(grouped.len());
     let mut drivers = BTreeMap::new();
     let mut tofu_ids = Vec::new();
-    for ((package_id, configuration), tasks) in &grouped {
+    for (key, tasks) in &grouped {
         let first = tasks.first().ok_or_else(|| internal("crate_empty"))?;
-        let key = (package_id.clone(), configuration.clone());
         let job_id = assigned
-            .get(&key)
+            .get(key)
             .ok_or_else(|| internal("crate_job_id_missing"))?
             .clone();
         let manifest = first.identity.unit_path.clone();
         let display = if group_is_tofu(tasks) {
             tofu_display_name(&first.display_name)
         } else {
-            crate_display_name(&first.display_name, &manifest, configuration)
+            let base = crate_display_name(&first.display_name, &manifest, &key.configuration);
+            match key.phase {
+                Some(phase) => format!("{base} / {}", phase.display_name()),
+                None => base,
+            }
         };
         let use_rust = tasks.iter().any(|task| is_rust(task));
         let use_mbx = tasks.iter().any(|task| is_mbx(task));
@@ -140,12 +150,13 @@ pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, 
             job_id: job_id.clone(),
             display_name: display,
             package_name: first.display_name.clone(),
-            package_id: package_id.clone(),
+            package_id: key.package_id.clone(),
             manifest,
-            configuration: configuration.clone(),
+            configuration: key.configuration.clone(),
             obligations: obligations_for(tasks, catalog)?,
         };
         model.validate()?;
+        let needs = phase::external_needs(tasks, &discovery.proposals, &job_id)?;
         let job = render_job(
             label,
             policy,
@@ -160,6 +171,7 @@ pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, 
             max_parallel_jobs,
             helper_version,
             cache_policy,
+            needs,
         )?;
         drivers.insert(job_id.clone(), driver);
         if use_opentofu {
@@ -208,7 +220,7 @@ fn obligations_for(
     Ok(obligations)
 }
 
-/// One obligation: identities, same-crate gates, fixed argv.
+/// One obligation: identities, same-phase ordered gates, fixed argv.
 fn obligation_for(
     task: &ProposedTask,
     executed: &BTreeSet<&str>,
@@ -232,7 +244,7 @@ fn obligation_for(
     })
 }
 
-/// Sorted same-crate gates: quality gates plus data producers.
+/// Sorted same-phase gates: quality gates plus data producers.
 ///
 /// Gates naming skipped tasks (test-less doctests) are vacuous: the
 /// kind order still sequences the survivors, and dangling references
@@ -279,6 +291,7 @@ fn render_job(
     max_parallel_jobs: u32,
     helper_version: &str,
     cache_policy: velnor_actions_contract::PullRequestCachePolicy,
+    needs: Vec<String>,
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
     steps.extend(acquire.cloned());
@@ -355,7 +368,7 @@ fn render_job(
         runs_on: label.to_owned(),
         check_runner: None,
         timeout_minutes: JobTimeout::CRATE,
-        needs: vec![PLAN_JOB_ID.to_owned()],
+        needs,
         condition: None,
         permissions: None,
         environment: None,

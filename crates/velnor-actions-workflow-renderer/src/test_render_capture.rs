@@ -23,6 +23,7 @@ pub fn clear() {
 }
 
 /// Take the latest complete marked render from this thread.
+#[must_use]
 pub fn take() -> Option<RenderCapture> {
     CAPTURE.with(|capture| capture.borrow_mut().take())
 }

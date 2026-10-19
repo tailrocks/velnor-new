@@ -23,25 +23,15 @@ fn is_crate_job(id: &str) -> bool {
 fn job_window<'a>(yaml: &'a str, id: &str) -> Result<&'a str, Box<dyn std::error::Error>> {
     let header = format!("  {id}:");
     let from = yaml.find(&header).ok_or("job header")?;
-    let mut end = yaml.len();
-    let mut at = from + header.len();
-    for line in yaml[at..].split_inclusive('\n') {
-        let trimmed = line.trim_end();
-        let Some(content) = trimmed.strip_prefix("  ") else {
-            at += line.len();
-            continue;
-        };
-        if !content.starts_with(' ')
-            && content.len() > 1
-            && content.ends_with(':')
-            && !content.contains(' ')
-        {
-            end = at;
+    let tail = &yaml[from..];
+    let mut end = header.len();
+    for line in tail[header.len()..].split_inclusive('\n') {
+        if line.starts_with("  ") && !line.starts_with("   ") && line.trim_end().ends_with(':') {
             break;
         }
-        at += line.len();
+        end += line.len();
     }
-    Ok(&yaml[from..end])
+    Ok(&tail[..end])
 }
 
 /// Step names of one finalized job.
@@ -329,13 +319,28 @@ fn restore_precedes_init_precedes_validate() -> TestResult {
     )?;
     let jobs = finalized_jobs(&prepare(dir.path())?)?;
     let ids = sorted_crate_ids(&jobs);
-    assert_eq!(ids.len(), 2, "rust plus tofu jobs: {ids:?}");
+    assert_eq!(
+        ids.join(","),
+        "rust-demo-docs,rust-demo-lint,rust-demo-tests,tofu-stacks-a",
+        "three Rust phases and one unchanged Tofu root"
+    );
     for id in &ids {
         let job = jobs.get(id).ok_or("missing crate job")?;
         let steps = names(job);
         let first_obligation = steps
             .iter()
-            .position(|name| ["Format", "Clippy", "Init for validate", "Validate"].contains(name))
+            .position(|name| {
+                matches!(
+                    *name,
+                    "Format"
+                        | "Clippy"
+                        | "Unit and integration tests"
+                        | "Doctests"
+                        | "Documentation"
+                        | "Init for validate"
+                        | "Validate"
+                )
+            })
             .ok_or(format!("{id} without obligations: {steps:?}"))?;
         for (at, name) in steps.iter().enumerate() {
             if name.starts_with("Restore") {

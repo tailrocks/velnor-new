@@ -18,7 +18,7 @@ pub(super) fn assert_configured_format_is_per_crate() -> TestResult {
     let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
     let workflow_env = window(yaml, "env:\n", "concurrency:")?;
     let plan = window(yaml, "  plan:", "  required:")?;
-    let job = window(yaml, "  rust-demo:", "  required:")?;
+    let job = window(yaml, "  rust-demo-lint:", "  required:")?;
     assert_no_overlapping_format(plan, yaml);
     assert!(job.contains("- name: Format"), "per-package scope:\n{job}");
     assert_format_task_is_manifest_bound(&prep, &tree, job)?;
@@ -47,7 +47,7 @@ fn assert_format_task_is_manifest_bound(
         .workflow
         .ir
         .jobs
-        .get("rust-demo")
+        .get("rust-demo-lint")
         .ok_or("missing rust-demo IR job")?;
     let format_task = rust_job
         .steps
@@ -79,7 +79,7 @@ fn assert_format_count_matches_crate_jobs(
         .ir
         .jobs
         .keys()
-        .filter(|id| id.starts_with("rust-"))
+        .filter(|id| id.starts_with("rust-") && id.ends_with("-lint"))
         .count();
     assert!(crates >= 1, "fixture needs a crate job");
     assert_eq!(formats, crates, "one Format per crate, none elsewhere");
