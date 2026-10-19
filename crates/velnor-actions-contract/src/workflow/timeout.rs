@@ -1,7 +1,8 @@
 //! One ten-minute maximum for every executable generated job.
 //!
-//! Configured timeouts may be shorter. Non-crate jobs use a five-minute default.
-//! Crate jobs use ten minutes. Workflow validation checks every loaded value.
+//! A configured timeout can be less than the maximum.
+//! Jobs other than Rust crate jobs use a five-minute default.
+//! Rust crate jobs use ten minutes. Workflow admission rejects values outside the permitted range.
 
 use serde::{Deserialize, Serialize};
 
@@ -22,7 +23,7 @@ impl JobTimeout {
     pub const MIN_MINUTES: u16 = 1;
     /// Maximum for every executable job.
     pub const MAX_MINUTES: u16 = 10;
-    /// Default for jobs outside the Rust crate test lane.
+    /// Default for jobs other than Rust crate jobs.
     pub const DEFAULT: Self = Self(5);
 
     /// Planner job.
