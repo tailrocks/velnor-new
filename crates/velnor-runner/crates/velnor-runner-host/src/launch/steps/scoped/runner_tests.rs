@@ -21,6 +21,8 @@ use support::{
     fixture_storage, selected_engine, test_images, test_images_for_engine,
 };
 
+#[path = "runner_tests/adverse_acquire.rs"]
+mod adverse_acquire;
 #[path = "runner_tests/atomic_acquire.rs"]
 mod atomic_acquire;
 #[path = "runner_tests/docker_pair.rs"]

@@ -181,7 +181,7 @@ async fn uncertain_scoped_acquire_keeps_charge_and_sends_no_replay() -> Result<(
     Ok(())
 }
 
-async fn prepare_capacity(fixture: &Fixture) -> Result<(), String> {
+pub(super) async fn prepare_capacity(fixture: &Fixture) -> Result<(), String> {
     fixture
         .journal
         .configure_capacity_with_operational_limits(
@@ -199,12 +199,12 @@ async fn prepare_capacity(fixture: &Fixture) -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
-struct ActiveHostState {
-    path: PathBuf,
+pub(super) struct ActiveHostState {
+    pub(super) path: PathBuf,
 }
 
 impl ActiveHostState {
-    fn new(binding: &crate::config::RepositoryConnection) -> Result<Self, String> {
+    pub(super) fn new(binding: &crate::config::RepositoryConnection) -> Result<Self, String> {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         let index = NEXT.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
@@ -230,7 +230,7 @@ impl Drop for ActiveHostState {
     }
 }
 
-fn drive(fixture: &Fixture, state: &std::path::Path) -> Drive {
+pub(super) fn drive(fixture: &Fixture, state: &std::path::Path) -> Drive {
     Drive {
         set_id: SET_ID,
         queue_path: "https://queue.example.invalid/".to_owned(),

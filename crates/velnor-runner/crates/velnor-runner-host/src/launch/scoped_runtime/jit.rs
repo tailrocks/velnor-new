@@ -12,6 +12,9 @@ use crate::worker::execution_authorization::{VerifiedProofChannelBinding, measur
 #[path = "jit/acquired_resume_tests.rs"]
 mod acquired_resume_tests;
 #[cfg(test)]
+#[path = "jit/adverse_effects_tests.rs"]
+mod adverse_effects_tests;
+#[cfg(test)]
 #[path = "jit/tests.rs"]
 mod tests;
 
