@@ -343,5 +343,5 @@ mod review_completion;
 pub(crate) use distribution::valid_review_check_name;
 pub use review_completion::{ReviewCompletionConfig, ReviewCompletionProvider};
 
-/// Native release/source execution remains strictly bounded independently of general jobs.
-pub(crate) const NATIVE_PREVIEW_MAX_TIMEOUT_MINUTES: u16 = 5;
+/// Tap updater execution remains independently bounded to five minutes.
+pub(crate) const NATIVE_TAP_UPDATER_MAX_TIMEOUT_MINUTES: u16 = 5;

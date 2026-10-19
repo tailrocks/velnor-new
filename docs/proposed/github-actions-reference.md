@@ -366,3 +366,23 @@ filters. Mutation tests add dangerous sibling events while preserving the
 annotation and require rejection before output. The generic restricted-event
 policy, full staged scanner invocation, and other audits remain unchanged. An
 inline annotation alone is never sufficient release authority.
+
+
+## Recursive MBX input matching qualification (2026-10-19)
+
+The runner's original [hashFiles implementation](https://github.com/actions/runner/blob/397b032cbf865e9c3ddfab89d533ec19325e1273/src/Misc/layoutbin/hashFiles/index.js)
+from v2.337.0 was fetched by exact commit and checked against Git blob
+`8313c78812fa4c034608950617523d6769b3f87e` and SHA-256
+`fbcad57b299a699a29f1c750949073d2b9c7ad4b3b742ca3355947f99fcf7e56`.
+Its unmodified bundled matching engine ran offline on Node 26.11.1 with a clean
+environment and temporary workspace. The root and scoped pattern sets cover deep
+Cargo members, custom member paths, build scripts and source members named
+`target` below another directory. Seventeen independent mutations check digest
+changes, actual workspace target exclusion and scoped sibling isolation. This
+qualifies pattern behavior, not hosted performance or Cargo artifact reuse.
+
+GitHub's [expression reference](https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#hashfiles)
+specifies recursive `**` patterns and ordered `!` exclusions. The patterns exclude
+only the selected workspace's mutable target, never every directory named target.
+The native Rust regression tests also bind these patterns to the rendered cache
+keys and unchanged generation, job, toolchain and restore-prefix boundaries.

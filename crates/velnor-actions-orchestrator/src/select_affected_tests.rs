@@ -294,3 +294,37 @@ fn skipped_index_names_broaden_with_explicit_tag() {
         "explicit tag: {warnings:?}"
     );
 }
+
+#[test]
+fn native_parallel_target_helper_changes_select_the_declared_renderer_owner() {
+    let config: toml::Value = toml::from_str(include_str!("../../../.velnor/config.toml"))
+        .expect("native repository configuration");
+    let rust: velnor_actions_contract::RustStackConfig = config["stacks"]["rust"]
+        .clone()
+        .try_into()
+        .expect("typed native Rust input declarations");
+    let owner = "velnor-actions-workflow-renderer";
+    let mut discovery = discovery_with(&[
+        (owner, "crates/velnor-actions-workflow-renderer/Cargo.toml"),
+        ("unrelated", "crates/unrelated/Cargo.toml"),
+    ]);
+    discovery.affected.rules =
+        crate::affected_inputs::resolve_input_rules(Some(&rust), &discovery.workspaces)
+            .expect("configured input packages resolve");
+    let ownership = Ownership::new(&discovery);
+    for file in [
+        "scripts/parallel-targets/seed.py",
+        "scripts/parallel-targets/test_seed.py",
+    ] {
+        let changed = set(&[file]);
+        assert!(
+            !has_unowned_file(&ownership, &changed),
+            "declared native input: {file}"
+        );
+        assert_eq!(affected_packages(&ownership, &changed, &[]), set(&[owner]));
+    }
+    assert!(
+        has_unowned_file(&ownership, &set(&["scripts/unrelated.py"])),
+        "no broad scripts ownership or ignore filter"
+    );
+}

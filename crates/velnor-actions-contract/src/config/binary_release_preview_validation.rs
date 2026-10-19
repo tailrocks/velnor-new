@@ -126,8 +126,7 @@ fn validate_producer_limits(
     producer: &RustBinaryPreviewProducer,
     key: &str,
 ) -> Result<(), ContractError> {
-    if !(1..=crate::config::NATIVE_PREVIEW_MAX_TIMEOUT_MINUTES).contains(&producer.timeout_minutes)
-    {
+    if !(1..=RustBinaryPreviewProducer::MAX_TIMEOUT_MINUTES).contains(&producer.timeout_minutes) {
         return Err(config_error(
             file,
             &format!("{key}.timeout_minutes"),

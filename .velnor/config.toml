@@ -28,6 +28,10 @@ ignore = []
 compile_driver = "mbx"
 test_runner = "cargo_nextest"
 
+[[stacks.rust.inputs]]
+globs = ["scripts/parallel-targets/**"]
+packages = ["velnor-actions-workflow-renderer"]
+
 [[stacks.rust.configurations]]
 name = "default"
 features = ["default"]

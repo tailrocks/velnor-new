@@ -232,7 +232,7 @@ impl TapUpdaterBinding {
         if self.tools.is_empty() || !unique_names(&self.tools) {
             return Err(bad("updater.tools", "invalid_task_tools"));
         }
-        if !(1..=u32::from(crate::config::NATIVE_PREVIEW_MAX_TIMEOUT_MINUTES))
+        if !(1..=u32::from(crate::config::NATIVE_TAP_UPDATER_MAX_TIMEOUT_MINUTES))
             .contains(&self.timeout_minutes)
         {
             return Err(bad("updater.timeout_minutes", "bad_task_timeout"));

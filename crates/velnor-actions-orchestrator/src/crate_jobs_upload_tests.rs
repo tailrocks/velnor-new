@@ -5,6 +5,7 @@
 
 use super::crate_jobs_tests::{discovery, group, names};
 use super::*;
+use std::collections::BTreeSet;
 use velnor_actions_rust::{CompileDriver, TaskKind};
 
 /// The demo crate job keeps clippy and test obligations on one selected driver;
@@ -30,6 +31,7 @@ fn crate_jobs(driver: CompileDriver) -> (Vec<(String, Job)>, ProposedTask, Propo
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");

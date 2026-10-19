@@ -14,11 +14,11 @@
 //! become exact job dependencies. `OpenTofu` retains one job per root, its
 //! sequential obligations and its existing bounded lane staging.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    CrateJob, CrateObligation, Job, JobTimeout, ProposedTask, RustCrateConfig, Stack, Step,
-    VelnorConfig, WorkflowPolicy, crate_display_name, tofu_display_name,
+    CrateJob, Job, JobTimeout, ProposedTask, RustCrateConfig, Stack, Step, VelnorConfig,
+    WorkflowPolicy, crate_display_name, tofu_display_name,
 };
 use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
@@ -38,10 +38,13 @@ mod gates;
 
 #[path = "crate_jobs_build_jobs.rs"]
 mod build_jobs;
-use build_jobs::{cap_cargo_jobs, reject_unknown_crates};
+use build_jobs::reject_unknown_crates;
 
+#[path = "crate_jobs_steps.rs"]
+mod job_steps;
 #[path = "crate_jobs_obligations.rs"]
 mod obligations;
+use job_steps::obligation_steps;
 use obligations::obligations_for;
 #[cfg(test)]
 use obligations::{gates_for, obligation_rank};
@@ -88,6 +91,11 @@ pub(crate) fn build_for_workflow(
         helper_version,
         cache_policy: config.workflow.pull_request_cache_policy,
         crates,
+        seed_parallel_targets: config
+            .stacks
+            .rust
+            .as_ref()
+            .is_some_and(|rust| rust.seed_parallel_targets),
     })
 }
 
@@ -105,6 +113,8 @@ pub(crate) struct CrateJobInputs<'a> {
     pub(crate) timeout: JobTimeout,
     pub(crate) helper_version: &'a str,
     pub(crate) cache_policy: velnor_actions_contract::PullRequestCachePolicy,
+    /// Opt-in cold target initialization; never changes obligation ownership.
+    pub(crate) seed_parallel_targets: bool,
     /// Per-package Rust options keyed by Cargo package name.
     pub(crate) crates: &'a BTreeMap<String, RustCrateConfig>,
 }
@@ -296,86 +306,6 @@ fn render_job(
         steps,
         cache_mode: None,
     })
-}
-
-/// Report-wrapped obligation steps in validated order.
-///
-/// In a Rust job every obligation except the sequential producers (the
-/// Nextest build) is a member of one parallel group, when at least two
-/// exist. No member may gate on another member. Clippy and documentation
-/// members compile in their own target lane below the workspace target.
-fn obligation_steps(
-    input: &CrateJobInputs<'_>,
-    model: &CrateJob,
-    use_opentofu: bool,
-) -> Result<Vec<Step>, OrchestratorError> {
-    let sequential = |obligation: &CrateObligation| {
-        velnor_actions_rust::runs_before_parallel_checks(&obligation.kind)
-    };
-    let concurrent = !use_opentofu
-        && model
-            .obligations
-            .iter()
-            .filter(|obligation| !sequential(obligation))
-            .count()
-            >= 2;
-    let members: BTreeSet<&str> = model
-        .obligations
-        .iter()
-        .filter(|obligation| concurrent && !sequential(obligation))
-        .map(|obligation| obligation.task_id.as_str())
-        .collect();
-    let target_root =
-        crate::source_prep::workspace_root_for_manifest(&model.manifest, input.fetch_roots);
-    let mut steps = Vec::with_capacity(model.obligations.len());
-    for (index, obligation) in model.obligations.iter().enumerate() {
-        let parallel = members.contains(obligation.task_id.as_str());
-        if !parallel && steps.iter().any(|step: &Step| step.parallel) {
-            return Err(internal("crate_parallel_group_split"));
-        }
-        if parallel
-            && obligation
-                .gated_by
-                .iter()
-                .any(|gate| members.contains(gate.as_str()))
-        {
-            return Err(internal("crate_parallel_member_gate"));
-        }
-        let lane = parallel
-            .then(|| velnor_actions_rust::concurrent_target_lane(&obligation.kind))
-            .flatten()
-            .map(|lane| lane_target_dir(target_root, lane));
-        let downstream: Vec<String> = model.obligations[index + 1..]
-            .iter()
-            .map(|later| later.task_id.clone())
-            .collect();
-        // The first obligation declares the root job's concurrency cap;
-        // the renderer turns the marker into `strategy.max-parallel`.
-        let cap = (index == 0 && use_opentofu).then_some(input.max_parallel_jobs);
-        let mut step = crate::matrix_step::obligation_step(
-            obligation,
-            input.catalog,
-            &downstream,
-            cap,
-            input.helper_version,
-            lane.as_deref(),
-        )?;
-        step.parallel = parallel;
-        if let Some(options) = input.crates.get(&model.package_name) {
-            cap_cargo_jobs(&mut step, options.build_jobs);
-        }
-        steps.push(step);
-    }
-    Ok(steps)
-}
-
-/// Workspace-relative Cargo target lane directory for one concurrent check.
-fn lane_target_dir(workspace_root: &str, lane: &str) -> String {
-    if workspace_root.is_empty() {
-        format!("target/{lane}")
-    } else {
-        format!("{workspace_root}/target/{lane}")
-    }
 }
 
 #[cfg(test)]
