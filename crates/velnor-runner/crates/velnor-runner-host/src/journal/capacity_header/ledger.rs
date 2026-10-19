@@ -2,12 +2,17 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "ledger/snapshot.rs"]
+mod snapshot;
+#[path = "ledger/validation.rs"]
+mod validation;
+
 use crate::config::ConnectionId;
 
 use super::model::{
     GenerationState, HeaderAllocation, HeaderDeleteAttempt, HeaderGeneration, HeaderLedgerError,
-    HeaderLedgerSnapshot, HeaderPollAttempt, HeaderRecord, HeaderSessionIdentity, InFlightDelete,
-    InFlightPoll, MAX_HEADER_CAPACITY, MAX_SESSION_ID_BYTES, PollOutcome, PollPurpose, SessionId,
+    HeaderPollAttempt, HeaderRecord, HeaderSessionIdentity, InFlightDelete, InFlightPoll,
+    MAX_HEADER_CAPACITY, PollOutcome, PollPurpose, SessionId,
 };
 
 /// Aggregate reservation ledger for all Scale Set message sessions.
@@ -294,74 +299,6 @@ impl HeaderLedger {
         Ok(())
     }
 
-    /// Copy a deterministic snapshot for durable journal storage.
-    #[must_use]
-    pub(crate) fn snapshot(&self) -> HeaderLedgerSnapshot {
-        HeaderLedgerSnapshot {
-            max_jobs: self.max_jobs,
-            next_generation: self.next_generation,
-            records: self.records.values().cloned().collect(),
-        }
-    }
-
-    /// Restore and validate persisted state; an interrupted poll stays charged.
-    pub(crate) fn restore(snapshot: HeaderLedgerSnapshot) -> Result<Self, HeaderLedgerError> {
-        Self::restore_with_poll_recovery(snapshot, true)
-    }
-
-    /// Restore a validated snapshot inside a running process transaction.
-    ///
-    /// Unlike [`Self::restore`], this keeps a persisted in-flight poll so its
-    /// owning request can durably settle it. Startup recovery must use
-    /// [`Self::restore`] to mark an interrupted request uncertain.
-    pub(crate) fn restore_live(snapshot: HeaderLedgerSnapshot) -> Result<Self, HeaderLedgerError> {
-        Self::restore_with_poll_recovery(snapshot, false)
-    }
-
-    fn restore_with_poll_recovery(
-        mut snapshot: HeaderLedgerSnapshot,
-        recover_interrupted_polls: bool,
-    ) -> Result<Self, HeaderLedgerError> {
-        if snapshot.max_jobs == 0 || snapshot.next_generation == 0 {
-            return Err(HeaderLedgerError::InvalidSnapshot);
-        }
-        let mut records = BTreeMap::new();
-        let mut generations = BTreeSet::new();
-        let mut largest_generation = 0;
-        for mut record in snapshot.records.drain(..) {
-            if !valid_record(&record) || !generations.insert(record.generation) {
-                return Err(HeaderLedgerError::InvalidSnapshot);
-            }
-            largest_generation = largest_generation.max(record.generation.0);
-            if recover_interrupted_polls {
-                if record.in_flight_poll.take().is_some() {
-                    record.state = GenerationState::Uncertain;
-                    record.zero_header_settled = false;
-                }
-                if record.in_flight_delete.take().is_some() {
-                    record.delete_uncertain = true;
-                }
-            }
-            if records.insert(record.identity.clone(), record).is_some() {
-                return Err(HeaderLedgerError::InvalidSnapshot);
-            }
-        }
-        if snapshot.next_generation <= largest_generation {
-            return Err(HeaderLedgerError::InvalidSnapshot);
-        }
-        let ledger = Self {
-            max_jobs: snapshot.max_jobs,
-            next_generation: snapshot.next_generation,
-            records,
-        };
-        if ledger.checked_charged_capacity()? > ledger.max_jobs
-            || ledger.has_multiple_live_sessions_per_scale_set()
-        {
-            return Err(HeaderLedgerError::InvalidSnapshot);
-        }
-        Ok(ledger)
-    }
-
     fn record_for_allocation_mut(
         &mut self,
         allocation: &HeaderAllocation,
@@ -443,61 +380,4 @@ impl HeaderLedger {
                     .ok_or(HeaderLedgerError::CapacityOverflow)
             })
     }
-}
-
-fn valid_record(record: &HeaderRecord) -> bool {
-    let sequence = record.attempt_sequence;
-    let in_flight = record.in_flight_poll;
-    let delete = record.in_flight_delete;
-    let sequence_valid = match record.state {
-        GenerationState::Pending => match in_flight {
-            Some(_) => sequence > 0,
-            None => sequence == 0,
-        },
-        GenerationState::Observed => sequence > 0,
-        GenerationState::Uncertain => sequence > 0 && in_flight.is_none(),
-        GenerationState::Released => {
-            sequence > 0 && in_flight.is_none() && record.zero_header_settled
-        }
-    };
-    let zero_poll_valid = !record.zero_header_settled
-        || matches!(
-            record.state,
-            GenerationState::Observed | GenerationState::Released
-        ) && in_flight.is_none();
-    let in_flight_valid = in_flight.is_none_or(|poll| {
-        poll.sequence == sequence
-            && poll.header_value <= MAX_HEADER_CAPACITY
-            && match poll.purpose {
-                PollPurpose::Advertise => poll.header_value == record.target,
-                PollPurpose::ZeroHeader => poll.header_value == 0 && !record.zero_header_settled,
-            }
-    });
-    let delete_valid = match (record.delete_sequence, delete, record.delete_uncertain) {
-        (0, None, false) => true,
-        (sequence, Some(attempt), false) => {
-            sequence > 0
-                && attempt.sequence == sequence
-                && record.state == GenerationState::Observed
-                && record.zero_header_settled
-                && in_flight.is_none()
-        }
-        (sequence, None, true) => {
-            sequence > 0 && record.state == GenerationState::Observed && record.zero_header_settled
-        }
-        (sequence, None, false) => {
-            sequence > 0 && record.state == GenerationState::Released && record.zero_header_settled
-        }
-        _ => false,
-    };
-    record.identity.scale_set_id > 0
-        && !record.identity.session_id.0.is_empty()
-        && record.identity.session_id.0.len() <= MAX_SESSION_ID_BYTES
-        && !record.identity.session_id.0.chars().any(char::is_control)
-        && record.target <= MAX_HEADER_CAPACITY
-        && record.generation.0 > 0
-        && sequence_valid
-        && zero_poll_valid
-        && in_flight_valid
-        && delete_valid
 }
