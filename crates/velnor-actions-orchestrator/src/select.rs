@@ -36,7 +36,10 @@ pub(crate) use checkout::{verify_checkout, verify_checkout_until};
 pub(crate) use mode::{SelectionMode, selection_mode};
 use mode::{event_token, resolved_edges, resolved_links};
 
-use paths::{head_sha, is_advisory_toolfile, tree_diff_names, untracked_files};
+use paths::{
+    PROJECT_TOOL_CONFIG_CHANGED, head_sha, is_advisory_toolfile, is_project_tool_source,
+    tree_diff_names, untracked_files,
+};
 
 /// Full obligation universe: every task with applicable targets.
 ///
@@ -325,6 +328,10 @@ fn change_sets(
             }
         }
     }
+    if changed.iter().any(|path| is_project_tool_source(path)) {
+        warnings.push(PROJECT_TOOL_CONFIG_CHANGED.to_owned());
+        return None;
+    }
     let toolfiles = changed.iter().any(|path| is_advisory_toolfile(path))
         || untracked.iter().any(|path| is_advisory_toolfile(path));
     if untracked
@@ -370,6 +377,10 @@ fn local_change_set(root: &Path, warnings: &mut Vec<String>) -> Option<(BTreeSet
         }
     };
     changed.extend(untracked);
+    if changed.iter().any(|path| is_project_tool_source(path)) {
+        warnings.push(PROJECT_TOOL_CONFIG_CHANGED.to_owned());
+        return None;
+    }
     let toolfiles = changed.iter().any(|path| is_advisory_toolfile(path));
     let changed = changed
         .into_iter()

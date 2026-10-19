@@ -2,9 +2,10 @@
 //!
 //! E2E proof for the mise-managed MBX wrapper pin: with the option set,
 //! the generated `Prepare pinned tools` install line must carry the
-//! repository's own `mr-boxington` pin (mise's exec-time wrapper
-//! dispatches cargo through it); without the option the install lines
-//! must stay free of `mr-boxington@` (action-owned only).
+//! repository's own `mr-boxington` declaration (mise's exec-time wrapper
+//! dispatches cargo through it) as a run-time reference to the project's
+//! config, never as a copied version (hard decision 5); without the option
+//! the install lines must stay free of `mr-boxington@` (action-owned only).
 
 use std::fs;
 
@@ -14,12 +15,14 @@ use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use crate::impl_common::{TestResult, config_with_branch, make_repo};
 
-/// Repo mise.toml opting cargo into the mise-managed MBX wrapper.
-const MISE_TOML_WITH_WRAPPER: &str = "\
-[tools]
-rust = { version = \"1.94.1\", mr_boxington = true }
-mr-boxington = \"1.24.0\"
-";
+/// Repo mise.toml opting cargo into the mise-managed MBX wrapper. Rust is
+/// the generator pin so generation-time inventory finds it installed.
+fn mise_toml_with_wrapper() -> String {
+    format!(
+        "[tools]\nrust = {{ version = \"{}\", mr_boxington = true }}\nmr-boxington = \"1.24.0\"\n",
+        velnor_actions_mise::RUST_VERSION
+    )
+}
 
 /// Staged `ci.yml` text for one prepared repository.
 fn staged_ci(prep: &GenerationPreparation) -> Result<String, Box<dyn std::error::Error>> {
@@ -30,35 +33,34 @@ fn staged_ci(prep: &GenerationPreparation) -> Result<String, Box<dyn std::error:
         .to_owned())
 }
 
-/// Every generated config-less `mise install` run line carries at most the
-/// exact repository pin, and at least one line (the crate jobs' preflight)
-/// carries it.
+/// Every generated config-less `mise install` run line installs MBX only
+/// through the project reference, at least one line (the crate jobs'
+/// preflight) does, and the declared version is never copied.
 fn assert_preflight_installs_the_repo_pin(yaml: &str) {
     let mut pinned_lines = 0;
     for line in yaml
         .lines()
         .filter(|line| line.contains("no-hooks install"))
     {
-        let pins: Vec<&str> = line
-            .split_whitespace()
-            .filter(|word| word.starts_with("mr-boxington@"))
-            .collect();
         assert!(
-            pins.iter().all(|pin| *pin == "mr-boxington@1.24.0"),
-            "only the repository mr-boxington pin may install: {line}"
+            !line.contains("mr-boxington@1"),
+            "a project-declared mr-boxington is never copied: {line}"
         );
-        pinned_lines += usize::from(!pins.is_empty());
+        pinned_lines +=
+            usize::from(line.contains("'mr-boxington@'\\\"${VELNOR_TOOL_MR_BOXINGTON}\\\""));
     }
     assert!(
         pinned_lines > 0,
-        "the crate preflight must install the repo mr-boxington pin: {yaml}"
+        "the crate preflight must install the repo mr-boxington declaration: {yaml}"
     );
+    assert!(!yaml.contains("1.24.0"), "declared version copied: {yaml}");
+    assert!(yaml.contains("Resolve project tool versions"), "{yaml}");
 }
 
 #[test]
 fn crate_preflight_installs_the_repo_mr_boxington_pin_for_the_wrapper_option() -> TestResult {
     let repo = make_repo(config_with_branch())?;
-    fs::write(repo.path().join("mise.toml"), MISE_TOML_WITH_WRAPPER)?;
+    fs::write(repo.path().join("mise.toml"), mise_toml_with_wrapper())?;
     let prep = prepare(repo.path())?;
     assert!(
         prep.catalog.rust_mr_boxington(),
@@ -104,7 +106,7 @@ fn make_tofu_only_wrapper_repo() -> Result<tempfile::TempDir, Box<dyn std::error
     )?;
     install_fixture_release_manifest(root)?;
     fs::write(root.join("main.tf"), "")?;
-    fs::write(root.join("mise.toml"), MISE_TOML_WITH_WRAPPER)?;
+    fs::write(root.join("mise.toml"), mise_toml_with_wrapper())?;
     Ok(dir)
 }
 

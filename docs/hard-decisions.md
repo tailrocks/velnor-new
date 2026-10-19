@@ -140,3 +140,90 @@ mode on `push`, `merge_group`, or `workflow_dispatch`, a `Required` rule that
 passes a skipped job the plan scheduled, a protected check a cancelled run can
 leave skipped, one stack's ownership hiding another stack's claims, or a forced
 package whose dependents do not run.
+
+## 5. Tool versions come from the project's Mise config
+
+**Decision.** Tool versions come from the project's `mise.toml` (and
+`mise.lock`). Generated workflows never copy a project-declared version;
+only tools absent from the project config are pinned by Velnor. A Rust
+toolchain file (`rust-toolchain.toml`, `rust-toolchain`) counts as a Rust
+declaration, because Mise (idiomatic version files) and rustup both read it.
+
+**Mechanism.**
+
+- Generation classifies every catalog tool (Rust, MBX, Nextest, actionlint,
+  shellcheck, zizmor, OpenTofu, release-plz) as project-declared
+  when the first parseable root `mise.toml`/`.mise.toml` `[tools]` table names
+  it under any backend spelling (for example
+  `"aqua:nextest-rs/nextest/cargo-nextest"` or `core:rust`), or, for Rust,
+  when a toolchain file exists. Generated text then carries
+  `${VELNOR_TOOL_<NAME>}` instead of the version: shell form in `run:` text
+  and task argv, `${{ env.VELNOR_TOOL_<NAME> }}` in `with:`, `env:`, and cache
+  keys.
+- Every job (or composite action) that reads such a reference gets one
+  generated **Resolve project tool versions** step right after its Mise
+  setup. It reads each declaring source with
+  `mise --no-config --no-env --no-hooks config get`, requires all sources to
+  agree on one exact `X.Y.Z`, and appends `VELNOR_TOOL_<NAME>=<version>` to
+  `$GITHUB_ENV` (plus `RUSTUP_TOOLCHAIN` where job env used to carry the
+  Rust pin). The generated task helper materializes the same variables in
+  task argv and env after the manifest and plan bindings match, and fails
+  closed on a missing or loose value.
+- Tools the project does not declare keep the exact Velnor catalog pin (or
+  a `.velnor/config.toml [tools]` override). A `.velnor/config.toml` pin
+  that disagrees with a project declaration fails generation.
+- Cache identities that bound a version now bind the project config: the
+  tools-cache `d` input appends `hashFiles` over `mise.toml`, `.mise.toml`,
+  `mise.lock`, `.mise.lock`, and both Rust toolchain files; Cargo-source and
+  MBX keys and MBX action inputs read the resolved `env` value. Plan
+  identities bind the concrete declared versions while the generated record
+  (task digests, argv) stays version-free.
+- A pull request that changes a root project tool source (`mise.toml`,
+  `.mise.toml`, `mise.lock`, `.mise.lock`, `rust-toolchain.toml`,
+  `rust-toolchain`) selects every crate job under hard decision 4, because CI
+  runs the versions those files declare.
+- Bumping a declared version in `mise.toml` therefore needs no regeneration.
+  Adding or removing a catalog tool from the project config still does (it
+  changes which commands carry a reference), as does an option change such
+  as `mr_boxington = true`.
+
+**Rationale.** The project's own Mise config is what developers run locally;
+copying its versions into generated workflows made every bump a
+regeneration and let the two drift (a consumer's CI ran Nextest 0.9.148
+while its `mise.toml` declared 0.9.146). One source of truth removes that
+whole class of drift.
+
+**Security.** CI keeps `--no-config --no-env --no-hooks` (and
+`MISE_NO_CONFIG=1`) on every install and exec. GitHub runners set `CI=true`,
+under which Mise auto-trusts repository config and evaluates templates such
+as `{{ exec(...) }}`; loading a fork's config would therefore run its code.
+`mise config get` reads stored TOML values without loading or expanding
+the config, so no template, hook, `[env]`, task, plugin, setting
+(`url_replacements`), or wrapper from the checkout is evaluated. A fork PR
+may change `mise.toml`: that tests its own toolchain, which is expected,
+and its only effect is a different exact version of the same tool through
+the same backend. The resolver accepts only `[0-9.]` values in exact
+`X.Y.Z` shape before writing `$GITHUB_ENV`, so no value can inject another
+variable or line; symlinked sources are refused. Composite actions carry
+`# zizmor: ignore[github-env]` on that one validated write. The GitHub CLI
+runs with a token in every generated use (plan baseline lookup, `Required`
+report fetch, release publication) and Cosign signs releases, so both keep
+their qualified fixed pins even when the project declares them: repository
+configuration never selects a credential-bearing executable. A job without a
+checkout cannot read the project config; such a job installs no Rust, so a
+hoisted `RUSTUP_TOOLCHAIN` reference is dropped there and any other
+reference fails generation.
+
+**Trade-offs.** `mise.lock` checksums are not enforced in CI: with
+`--no-config` Mise does not consult the lock (as before this decision). The
+lock audit stays generation-time hygiene, and the lock participates in the
+tools-cache identity. Project-declared catalog tools need an exact
+`X.Y.Z` pin; a loose or templated value is still referenced (never replaced
+by a Velnor pin) and the resolver fails the job with the project's value.
+A declared version bypasses Velnor's freshness qualification of its catalog
+pin.
+
+**Must not be reintroduced without owner approval:** copying a
+project-declared version into any generated file, loading the project's
+Mise config (or trusting it) in a generated step to resolve versions, or
+letting a Velnor pin override a project declaration.

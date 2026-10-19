@@ -13,6 +13,7 @@ pub(crate) const RESOLVE_ACTION_MBX_BIN: &str = "if ! mbx_bin=$(command -v mbx);
 pub(crate) const ACTION_MBX_BIN: &str = "$mbx_bin";
 
 const RUST_EXEC_PREFIX: &str = "mise --no-config --no-env --no-hooks exec rust@";
+const RUST_EXEC_QUOTED_PREFIX: &str = "mise --no-config --no-env --no-hooks exec 'rust@'\"";
 const VERSION_LINE_PREFIX: &str = "[ \"$version_line\" = 'mbx ";
 const VERSION_LINE_SUFFIX: &str = "' ] ||";
 const PRESEED_VERSION_PREFIX: &str = "grep -qxF \"mbx ";
@@ -134,13 +135,20 @@ fn role_uses_resolver(role: Option<StepRole>) -> bool {
 }
 
 fn rust_toolchain(script: &str) -> Result<&str, RenderError> {
+    // Project-declared Rust renders `'rust@'"${VELNOR_TOOL_RUST}"` (hard decision 5).
+    if let Some((_, after)) = script.split_once(RUST_EXEC_QUOTED_PREFIX)
+        && let Some((rust, _)) = after.split_once("\" -- ")
+        && velnor_actions_contract::config::project_tool_refs::is_project_tool_ref(rust)
+    {
+        return Ok(rust);
+    }
     let (_, after) = script
         .split_once(RUST_EXEC_PREFIX)
         .ok_or_else(|| bad_shape("rust_toolchain_missing"))?;
     let (rust, _) = after
         .split_once(" -- ")
         .ok_or_else(|| bad_shape("rust_toolchain_unclosed"))?;
-    if !is_exact_version(rust) {
+    if !crate::commands::is_exact_or_project_version(rust) {
         return Err(bad_shape("rust_toolchain_invalid"));
     }
     Ok(rust)
@@ -156,18 +164,10 @@ fn value_between<'a>(script: &'a str, prefix: &str, suffix: &str) -> Result<&'a 
     let (value, _) = after
         .split_once(suffix)
         .ok_or_else(|| bad_shape("dynamic_value_unclosed"))?;
-    if !is_exact_version(value) {
+    if !crate::commands::is_exact_or_project_version(value) {
         return Err(bad_shape("dynamic_value_invalid"));
     }
     Ok(value)
-}
-
-fn is_exact_version(version: &str) -> bool {
-    let parts: Vec<&str> = version.split('.').collect();
-    parts.len() == 3
-        && parts
-            .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
 }
 
 fn candidate_build_argv(rust: &str, with_toolchain: bool) -> Vec<String> {

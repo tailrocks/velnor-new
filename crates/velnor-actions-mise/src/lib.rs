@@ -54,12 +54,16 @@ pub use cache::{
     read_artifact_bytes, resolve_task_artifact_dir, task_artifact_dir_from_env,
     verify_artifact_digest,
 };
+pub use catalog::project::{
+    PROJECT_TOOL_ENV_PREFIX, has_project_tool_ref, is_project_tool_ref, project_tool_expression,
+    project_tool_refs_to_expressions, project_tool_shell_ref, without_project_tool_refs,
+};
 pub use catalog::{
     ACTIONLINT_VERSION, GH_VERSION, MISE_VERSION, MR_BOXINGTON_VERSION,
     OPENTOFU_SHA256_DARWIN_AMD64, OPENTOFU_SHA256_DARWIN_ARM64, OPENTOFU_SHA256_LINUX_AMD64,
     OPENTOFU_SHA256_LINUX_ARM64, OPENTOFU_VERSION, PinnedTool, RUST_TARGET_TRIPLE, RUST_VERSION,
     SHELLCHECK_VERSION, ToolCatalog, ZIZMOR_VERSION, check_freshness_requirements,
-    validate_exact_version,
+    validate_concrete_exact_version, validate_exact_version,
 };
 pub use check_deadline::CheckDeadline;
 pub use checks::{
