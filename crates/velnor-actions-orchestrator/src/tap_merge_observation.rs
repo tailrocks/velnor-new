@@ -127,6 +127,7 @@ pub(super) fn observe(
     candidate: &MergeCandidate,
     authority: &MergeAuthority,
     api: &TapMergeGitHub,
+    protection_reader: &impl super::protection_observer::ClassicProtectionReader,
 ) -> Result<Option<TapMergeObservation>, OrchestratorError> {
     let selection = candidate.selection();
     if selection.merged.is_some() {
@@ -136,6 +137,7 @@ pub(super) fn observe(
     let (current_base, current_head) = validate_pr_state(candidate, authority, api)?;
     let protection = resolve_protection(
         api,
+        protection_reader,
         &candidate.policy.repository,
         &candidate.plan.default_branch,
         &ProtectionAuthority {
@@ -318,7 +320,7 @@ pub(super) fn check_runs(
     Err(internal("tap_merge_check_page_limit"))
 }
 
-fn required_numeric(name: &str) -> Result<u64, OrchestratorError> {
+pub(super) fn required_numeric(name: &str) -> Result<u64, OrchestratorError> {
     env::var(name)
         .ok()
         .and_then(|value| value.parse::<u64>().ok())
@@ -326,14 +328,14 @@ fn required_numeric(name: &str) -> Result<u64, OrchestratorError> {
         .ok_or_else(|| internal("tap_merge_numeric_identity_missing"))
 }
 
-fn required_string(name: &str) -> Result<String, OrchestratorError> {
+pub(super) fn required_string(name: &str) -> Result<String, OrchestratorError> {
     env::var(name)
         .ok()
         .filter(|value| !value.is_empty() && value.len() <= 128)
         .ok_or_else(|| internal("tap_merge_identity_missing"))
 }
 
-fn valid_app_slug(value: &str) -> bool {
+pub(super) fn valid_app_slug(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 39
         && value

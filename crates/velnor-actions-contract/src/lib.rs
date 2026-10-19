@@ -30,8 +30,10 @@ pub mod package_release;
 pub mod package_release_plan;
 pub mod policy;
 pub mod preview_identity;
+pub mod preview_production;
 pub mod propose;
 pub mod publication_retry;
+mod release_reexports;
 pub mod secrets;
 pub mod strict_json;
 pub mod targets;
@@ -109,9 +111,6 @@ pub use graph::{
     CachePolicy, EdgeKind, ResourceClass, ResourceDemand, TaskEdge, TaskGraph, TaskNode,
     validate_plan_edges,
 };
-pub use homebrew_formula::{
-    HomebrewFormulaCandidate, VerifiedPreviewRelease, validate_homebrew_formula_candidate,
-};
 pub use ids::{
     artifact_id_for_baseline, artifact_id_for_crate_job, artifact_id_for_final,
     artifact_id_for_matrix, artifact_id_for_plan, is_valid_branch_name,
@@ -126,10 +125,6 @@ pub use manifest::{
     MiseBootstrap, ReleaseManifest, TargetRecord, require_release_version,
 };
 pub use marker::{MARKER_PREFIX, OLD_MARKER_PREFIX, is_generated_marker_line};
-pub use package_release_plan::{
-    PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlan, PackageReleasePlanProduct,
-    parse_package_release_plan,
-};
 pub use policy::{
     FreshnessEntry, FreshnessStatus, GithubRunnerImages, NightlyRecord, PolicyException,
     RunnerInventory, VersionPolicy, days_between,
@@ -138,6 +133,7 @@ pub use propose::{
     CandidateOutcome, IdentityInputs, ProposedTask, StackCandidate, check_candidate_outcomes,
     component_id_for_unit, project_root_for_unit_path,
 };
+pub use release_reexports::*;
 pub use secrets::is_secret_env_name;
 pub use strict_json::parse_strict_json;
 pub use targets::{
@@ -148,3 +144,5 @@ pub use targets::{
 pub use tooling::ToolIdentity;
 pub use vcs::VcsInputs;
 pub use workflow_reexports::*;
+
+pub mod review_completion;

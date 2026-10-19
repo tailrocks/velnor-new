@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::{JobConclusion, RequiredJobResult, WorkflowPolicy};
 use velnor_actions_rust::TaskKind;
 
-use crate::crate_job_ids::job_id_for_member;
+use crate::crate_job_ids::JobOwners;
 use crate::crate_jobs::crate_jobs_tests::{discovery, group};
 
 #[test]
@@ -153,10 +153,11 @@ fn assert_task_owners(
         proposals.len(),
         "no omitted or invented task"
     );
+    let owners = JobOwners::new(proposals).expect("owners");
     for task in proposals {
         assert_eq!(
             emitted.get(&task.task_id),
-            job_id_for_member(proposals, task).expect("owner").as_ref(),
+            owners.for_member(task).expect("owner").as_ref(),
             "plan and emitted execution must have the same sole owner"
         );
     }

@@ -67,6 +67,9 @@ pub struct WorkflowConfig {
     /// Optional protected post-merge `OpenTofu` apply workflow.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tofu_apply: Option<TofuApplyConfig>,
+    /// Optional source-free, fixed-provider review completion companion.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review_completion: Option<super::ReviewCompletionConfig>,
     /// Consumer-selected verification jobs; empty disables them all.
     #[serde(default, skip_serializing_if = "VerifyConfig::is_empty")]
     pub verify: VerifyConfig,
@@ -206,6 +209,9 @@ impl WorkflowConfig {
             ));
         }
         self.validate_tasks(file)?;
+        if let Some(completion) = &self.review_completion {
+            completion.validate(file)?;
+        }
         if let Some(tofu_apply) = &self.tofu_apply {
             tofu_apply.validate(file)?;
             if self.default_branch.is_none() {

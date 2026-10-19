@@ -5,7 +5,7 @@ use crate::check_evidence::reject_link_components;
 use crate::check_runtime::preparation::prepare_check;
 use crate::exclusive_write::create_dir_no_symlink;
 use crate::internal::internal;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::fs;
@@ -25,10 +25,21 @@ const MAX_TASK_OUTPUT: usize = 8 * 1024 * 1024;
 
 #[path = "preview_producer_entry.rs"]
 mod entry;
-pub use entry::{EXECUTE_PREVIEW_PRODUCER_OP, execute_preview_producer};
+pub use entry::{
+    ACQUIRE_PREVIEW_LEAVES_OP, ADMIT_PREVIEW_AGGREGATE_OP, EXECUTE_PREVIEW_PRODUCER_OP,
+    acquire_preview_leaves, admit_preview_aggregate, execute_preview_producer,
+};
+
+#[derive(Clone, Copy)]
+struct PreviewTaskSpec<'a> {
+    identity: &'a PreviewIdentity,
+    source_ref: &'a str,
+    preview: &'a RustBinaryPreviewConfig,
+    handoff: &'a Path,
+}
 
 /// Evidence retained after one isolated producer task succeeds.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct PreviewProducerProof {
     pub source_sha: String,
@@ -57,12 +68,16 @@ pub(crate) struct PreviewProducerProof {
 fn execute_preview_task(
     root: &Path,
     temp: &Path,
-    identity: &PreviewIdentity,
-    source_ref: &str,
-    preview: &RustBinaryPreviewConfig,
+    spec: PreviewTaskSpec<'_>,
     qualified_tools: &[velnor_actions_contract::config::QualifiedTool],
     deadline: CheckDeadline,
 ) -> Result<PreviewProducerProof, OrchestratorError> {
+    let PreviewTaskSpec {
+        identity,
+        source_ref,
+        preview,
+        handoff: _,
+    } = spec;
     checkpoint(deadline)?;
     preview.validate(".velnor/config.toml")?;
     if !preview.enabled || !valid_source_ref(source_ref) || !canonical_identity(identity) {
@@ -98,7 +113,7 @@ fn execute_preview_task(
 
     let started = Instant::now();
     let owned = prepare_check(&root, temp, &discovered, deadline)?;
-    let pairs = producer_handoff(&root, &output, preview, identity, source_ref)?;
+    let pairs = producer_handoff(&root, &output, &spec)?;
     let command = owned
         .command(deadline)
         .map_err(|error| internal(&error.to_string()))?
@@ -143,10 +158,17 @@ fn run_preview_task(
 fn producer_handoff(
     root: &Path,
     output: &Path,
-    preview: &RustBinaryPreviewConfig,
-    identity: &PreviewIdentity,
-    source_ref: &str,
+    spec: &PreviewTaskSpec<'_>,
 ) -> Result<Vec<(OsString, OsString)>, OrchestratorError> {
+    let PreviewTaskSpec {
+        identity,
+        source_ref,
+        preview,
+        handoff,
+    } = *spec;
+    let handoff = handoff
+        .to_str()
+        .ok_or_else(|| internal("preview_handoff_utf8"))?;
     let output_directory = output
         .to_str()
         .ok_or_else(|| internal("preview_output_utf8"))?;
@@ -160,6 +182,7 @@ fn producer_handoff(
         ("VELNOR_RELEASE_VERSION", identity.version.as_str()),
         ("VELNOR_RELEASE_OUTPUT_DIRECTORY", output_directory),
         ("VELNOR_RELEASE_OUTPUT_MANIFEST", output_manifest),
+        ("VELNOR_PREVIEW_REQUEST_FILE", handoff),
     ]
     .into_iter()
     .map(|(key, value)| (key.into(), value.into()))

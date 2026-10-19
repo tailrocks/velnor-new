@@ -102,17 +102,27 @@ fn irreducible_over_cap_workflow_still_fails_closed() {
 
 #[cfg(feature = "test-render-capture")]
 #[test]
-fn full_tree_capture_bypasses_only_the_intermediate_size_gate() -> Result<(), RenderError> {
+fn full_tree_capture_preserves_size_gate_and_retains_complete_diagnostics()
+-> Result<(), RenderError> {
     let command = "x".repeat(MAX_WORKFLOW_BYTES + 100);
     let document = workflow(&command, 1);
+    let canonical = marker::with_marker(VERSION, &render_yaml(&document))?;
     assert!(render_checked_workflow(".github/workflows/ci.yml", &document, VERSION).is_err());
 
-    let captured = crate::render::test_render_capture::with_full_tree_capture(|| {
+    crate::render::test_render_capture::clear();
+    let result = crate::render::test_render_capture::with_full_tree_capture(|| {
         render_checked_workflow(".github/workflows/ci.yml", &document, VERSION)
-    })?;
-    assert!(captured.len() > MAX_WORKFLOW_BYTES);
+    });
+    assert!(matches!(result, Err(RenderError::InvalidWorkflow(problem))
+        if problem.starts_with("workflow_too_large:.github/workflows/ci.yml:")));
+    let captured = crate::render::test_render_capture::take()
+        .expect("rejected render still retains its complete diagnostic documents");
+    assert_eq!(captured.canonical, canonical);
+    assert_eq!(captured.selected, canonical);
+    assert!(captured.selected.len() > MAX_WORKFLOW_BYTES);
     assert!(
-        crate::workflow_size::check_workflow_size(".github/workflows/ci.yml", &captured).is_err()
+        crate::workflow_size::check_workflow_size(".github/workflows/ci.yml", &captured.selected)
+            .is_err()
     );
     assert!(render_checked_workflow(".github/workflows/ci.yml", &document, VERSION).is_err());
     Ok(())

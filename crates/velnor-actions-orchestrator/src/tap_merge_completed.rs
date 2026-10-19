@@ -23,6 +23,7 @@ pub(super) fn verify_already_promoted(
     candidate: &MergeCandidate,
     authority: &MergeAuthority,
     api: &TapMergeGitHub,
+    protection_reader: &impl super::protection_observer::ClassicProtectionReader,
 ) -> Result<(), OrchestratorError> {
     let selection = candidate.selection();
     let Some((expected_merge_sha, expected_merged_at)) = selection.merged else {
@@ -59,6 +60,7 @@ pub(super) fn verify_already_promoted(
     )?;
     let protection = resolve_protection(
         api,
+        protection_reader,
         &candidate.policy.repository,
         &candidate.plan.default_branch,
         &ProtectionAuthority {

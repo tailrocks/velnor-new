@@ -74,13 +74,21 @@ fn exact_head_success_requires_trusted_independent_completion() {
 }
 
 #[test]
-fn app_bound_completion_must_be_server_protected() {
+fn dco_and_app_bound_completion_must_be_server_protected() {
     let (policy, mut observed) = fixture();
     observed.checks.retain(|check| check.name != "DCO");
     assert!(
-        validate_tap_merge_gate(&policy, &observed).is_ok(),
-        "no sign-off check is mandated"
+        validate_tap_merge_gate(&policy, &observed).is_err(),
+        "native tap promotion requires an exact protected DCO check"
     );
+    let (policy, mut renamed) = fixture();
+    renamed
+        .checks
+        .iter_mut()
+        .find(|check| check.name == "DCO")
+        .expect("DCO")
+        .name = "DCO validation".to_owned();
+    assert!(validate_tap_merge_gate(&policy, &renamed).is_err());
     for change in 0..3 {
         let (policy, mut observed) = fixture();
         match change {

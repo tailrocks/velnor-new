@@ -282,13 +282,14 @@ fn rejects_inventory_larger_than_canonical_receipt_limits() {
 }
 
 #[test]
-fn timeout_accepts_configured_budgets_and_rejects_above_github_limit() {
-    for minutes in [1, 5, 6, 30, 360] {
+fn native_timeout_stays_five_minutes_independent_of_general_job_limit() {
+    assert!(crate::workflow::timeout::JobTimeout::new(360).is_ok());
+    for minutes in [1, 5] {
         let mut value = enabled_preview();
         value.producer.timeout_minutes = minutes;
         assert!(value.validate("config.toml").is_ok(), "{minutes}");
     }
-    for minutes in [0, 361, u16::MAX] {
+    for minutes in [0, 6, 30, 360, 361, u16::MAX] {
         let mut value = enabled_preview();
         value.producer.timeout_minutes = minutes;
         assert!(value.validate("config.toml").is_err(), "{minutes}");

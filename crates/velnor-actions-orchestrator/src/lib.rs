@@ -32,6 +32,7 @@ mod evidence;
 mod exclusive_write;
 mod extension_schemas;
 mod external_data;
+mod filesystem_owner;
 mod finalized;
 mod freshness_emit;
 mod generate;
@@ -136,3 +137,5 @@ pub use qualification_candidate::qualify_tools;
 
 /// Version marker for the orchestrator shell.
 pub const ORCHESTRATOR_VERSION: u32 = 0;
+
+mod review_completion_workflow_emit;

@@ -85,3 +85,6 @@ pub use self::root_api::*;
 
 /// Renderer implementation version (typed Gate-2 renderer).
 pub const RENDERER_VERSION: u32 = 2;
+
+/// Source-free authenticated review completion companion.
+pub mod review_completion;

@@ -1,4 +1,6 @@
 //! Deadline-bound subprocess polling without blocking pipe-reader threads.
+#[cfg(unix)]
+use super::stream::Streams;
 use super::{CancelHandle, IsolatedCommand, ProcessOutput};
 use crate::CheckDeadline;
 use crate::error::MiseError;
@@ -66,6 +68,20 @@ impl IsolatedCommand {
         cancel: &CancelHandle,
         timeout_message: &str,
     ) -> Result<ProcessOutput, MiseError> {
+        let mut streams = Streams::memory(cap);
+        let mut output = self.run_streams(&mut streams, deadline, cancel, timeout_message)?;
+        output.stdout = streams.into_memory();
+        Ok(output)
+    }
+
+    #[cfg(unix)]
+    pub(super) fn run_streams(
+        &self,
+        streams: &mut Streams<'_>,
+        deadline: CheckDeadline,
+        cancel: &CancelHandle,
+        timeout_message: &str,
+    ) -> Result<ProcessOutput, MiseError> {
         let effective = deadline.effective();
         let timeout_message = if effective == deadline {
             timeout_message
@@ -105,7 +121,7 @@ impl IsolatedCommand {
             &mut child,
             stdout,
             stderr,
-            cap,
+            streams,
             deadline,
             cancel,
             timeout_message,
@@ -165,15 +181,14 @@ fn poll_child(
     child: &mut Child,
     stdout: std::process::ChildStdout,
     stderr: std::process::ChildStderr,
-    cap: usize,
+    streams: &mut Streams<'_>,
     deadline: CheckDeadline,
     cancel: &CancelHandle,
     timeout_message: &str,
 ) -> Result<ProcessOutput, String> {
     let mut stdout = Some(stdout);
     let mut stderr = Some(stderr);
-    let mut out = Vec::with_capacity(cap.min(64 * 1024));
-    let mut err = Vec::with_capacity(cap.min(64 * 1024));
+    let mut err = Vec::with_capacity(streams.stderr_cap.min(64 * 1024));
     let mut status = None;
     loop {
         if cancel.is_cancelled() {
@@ -185,22 +200,31 @@ fn poll_child(
         if remaining.is_zero() {
             return Err(timeout_message.to_owned());
         }
-        poll_pipe(&mut stdout, &mut out, cap, "stdout")?;
-        poll_pipe(&mut stderr, &mut err, cap, "stderr")?;
+        let progressed = streams.poll_stdout(&mut stdout)?;
+        let progressed =
+            super::stream::poll_stderr(&mut stderr, &mut err, streams.stderr_cap)? || progressed;
+        if cancel.is_cancelled() {
+            return Err(super::SPAWN_CANCELLED_MESSAGE.to_owned());
+        }
+        deadline
+            .remaining()
+            .map_err(|_| timeout_message.to_owned())?;
         status = child
             .try_wait()
             .map_err(|error| error.to_string())?
             .or(status);
         if let (Some(status), None, None) = (status, stdout.as_ref(), stderr.as_ref()) {
             return Ok(ProcessOutput {
-                stdout: out,
+                stdout: Vec::new(),
                 stderr: err,
                 code: status.code(),
                 signal: super::output::signal_of(status),
                 success: status.success(),
             });
         }
-        std::thread::sleep(Duration::from_millis(5).min(remaining));
+        if !progressed {
+            std::thread::sleep(Duration::from_millis(5).min(remaining));
+        }
     }
 }
 
@@ -209,39 +233,6 @@ fn set_nonblocking<Fd: std::os::fd::AsFd>(fd: Fd) -> Result<(), String> {
     let flags = rustix::fs::fcntl_getfl(&fd).map_err(|error| error.to_string())?;
     rustix::fs::fcntl_setfl(fd, flags | rustix::fs::OFlags::NONBLOCK)
         .map_err(|error| error.to_string())
-}
-
-#[cfg(unix)]
-fn poll_pipe<Fd: std::os::fd::AsFd>(
-    pipe: &mut Option<Fd>,
-    output: &mut Vec<u8>,
-    cap: usize,
-    stream: &str,
-) -> Result<bool, String> {
-    let Some(reader) = pipe.as_ref() else {
-        return Ok(true);
-    };
-    let mut buffer = [0_u8; 8192];
-    loop {
-        match rustix::io::read(reader, &mut buffer[..]) {
-            Ok(0) => {
-                pipe.take();
-                return Ok(true);
-            }
-            Ok(count) => {
-                let Some(next_len) = output.len().checked_add(count) else {
-                    return Err("output_limit_exceeded".to_owned());
-                };
-                if next_len > cap {
-                    return Err(format!("{stream}_limit_exceeded:{cap}"));
-                }
-                output.extend_from_slice(&buffer[..count]);
-            }
-            Err(error) if error == rustix::io::Errno::INTR => {}
-            Err(error) if error == rustix::io::Errno::AGAIN => return Ok(false),
-            Err(error) => return Err(error.to_string()),
-        }
-    }
 }
 
 #[cfg(unix)]

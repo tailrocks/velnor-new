@@ -26,7 +26,7 @@ pub(super) fn pull(
     base: &str,
     proof_digest: &str,
 ) -> Value {
-    json!({"number": number, "state": "closed", "draft": false,
+    json!({"number": number, "state": "closed", "draft": false, "commits": 1,
         "title": expected_pr_title(candidate),
         "body": expected_pr_body_for(candidate, base, proof_digest),
         "base": {"ref": "main", "sha": base, "repo": {"id": 41, "full_name": candidate.policy.repository}},
@@ -40,7 +40,7 @@ pub(super) fn checks(
     authority: &MergeAuthority,
     number: u64,
 ) -> Value {
-    let records = json!({"reviews": [], "opinionated_reviews": [], "review_comments": [], "issue_comments": [], "threads": []});
+    let records = json!({"reviews": [], "opinionated_reviews": [], "review_comments": [], "issue_comments": [], "commit_comments": [], "threads": []});
     let records_digest = digest_b3(
         &velnor_actions_contract::canonical_json_bytes(&records).expect("feedback records"),
     );

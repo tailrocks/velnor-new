@@ -5,6 +5,14 @@ use velnor_actions_contract::{
     package_release::PackageReleasePayloadFormat,
 };
 
+#[path = "schema2_consumer_preview_tap_admission_tests.rs"]
+mod tap_admission;
+
+#[path = "schema2_consumer_preview_reconcile_tests.rs"]
+mod reconcile_tests;
+
+#[path = "schema2_consumer_preview_payload_tests.rs"]
+mod payloads;
 #[path = "schema2_consumer_preview_source_tests.rs"]
 mod sources;
 
@@ -114,13 +122,13 @@ fn preview_has_isolated_privileges_and_exact_inventory_attestation() {
     assert!(triggers.contains("- CI"));
     assert!(triggers.contains("- completed"));
     assert!(!triggers.contains("  push:"));
-    let eligibility = job(yaml, "preview-eligibility", Some("preview-producer"));
+    let eligibility = job(yaml, "preview-eligibility", Some("preview-payload-000"));
     assert!(eligibility.contains("ref: ${{ github.sha }}"));
     assert_eq!(eligibility.matches("actions/checkout").count(), 1);
     assert!(eligibility.find("actions/checkout") < eligibility.find("Verify source and CI"));
     assert!(eligibility.contains("fetch-depth: 0"));
     assert!(eligibility.contains("persist-credentials: false"));
-    let producer = job(yaml, "preview-producer", Some("preview-signer"));
+    let producer = job(yaml, "preview-payload-000", Some("preview-payload-001"));
     assert!(producer.contains("fetch-depth: 0"));
     assert!(producer.contains("persist-credentials: false"));
     assert!(!producer.contains("environment:"));
@@ -172,7 +180,8 @@ fn manual_recovery_has_no_build_or_signing_authority() {
     assert!(!yaml.contains("Original push workflow run ID"));
     assert!(!yaml.contains("Original signer run attempt"));
     for (name, next) in [
-        ("preview-producer", "preview-signer"),
+        ("preview-payload-000", "preview-payload-001"),
+        ("preview-assemble", "preview-signer"),
         ("preview-signer", "preview-publisher"),
         ("preview-publisher", "preview-recovery"),
     ] {
@@ -226,6 +235,10 @@ fn with_tap() -> ConsumerPreviewSpec {
             environment: TapUpdateEnvironment::TapUpdate,
             app_id_variable: "TAP_APP_ID".to_owned(),
             app_private_key_secret: "TAP_APP_PRIVATE_KEY".to_owned(),
+            protection_observer: velnor_actions_contract::config::HomebrewTapProtectionObserver {
+                app_id_variable: "TAP_PROTECTION_APP_ID".to_owned(),
+                app_private_key_secret: "TAP_PROTECTION_APP_PRIVATE_KEY".to_owned(),
+            },
             merge: TapMergePolicy::SquashAfterGates,
             review_completion: ExactHeadReviewCheck {
                 check_name: "Review completion".to_owned(),
@@ -272,7 +285,17 @@ fn tap_jobs_separate_unprivileged_preparation_and_scoped_app_authority() {
     assert!(!writer.contains("VELNOR_TAP_MERGE_TOKEN:"));
     let merge = job(yaml, "preview-tap-merge", None);
     assert!(merge.contains("permission-administration: read"));
-    assert!(merge.contains("permission-checks: read"));
+    assert!(!merge.contains("permission-checks: read"));
+    assert!(merge.contains("VELNOR_TAP_PROTECTION_TOKEN"));
+    assert!(!writer.contains("VELNOR_TAP_PROTECTION_"));
+    assert!(!writer.contains("${{ secrets.TAP_PROTECTION_APP_PRIVATE_KEY }}"));
+    assert!(!prepare.contains("VELNOR_TAP_PROTECTION_"));
+    assert!(!prepare.contains("${{ secrets.TAP_PROTECTION_APP_PRIVATE_KEY }}"));
+    let observer = merge
+        .split("id: tap-protection-token")
+        .nth(1)
+        .expect("observer mint");
+    assert!(observer.contains("permission-administration: read"));
     assert!(merge.contains("VELNOR_TAP_MERGE_TOKEN:"));
     assert!(!merge.contains("VELNOR_TAP_TOKEN:"));
     assert!(merge.contains("VELNOR_TAP_COMPLETION_APP_ID:"));
@@ -313,7 +336,7 @@ fn tap_updater_rejects_self_hosted_execution_without_native_provisioning() {
 
 #[test]
 fn preview_rejects_unbounded_producer_limits_before_rendering() {
-    for minutes in [0, 361, u16::MAX] {
+    for minutes in [0, 6, 30, 360, 361, u16::MAX] {
         let mut spec = fixture();
         spec.producer_timeout_minutes = minutes;
         assert!(render_consumer_preview(&spec).is_err(), "{minutes}");

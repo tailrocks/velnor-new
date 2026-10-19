@@ -44,6 +44,7 @@ fn all_obligations_have_exactly_one_phase_owner() {
     .map(|kind| task("demo", kind))
     .collect();
     let groups = group_runnable(&tasks).expect("groups");
+    let owners = JobOwners::new(&tasks).expect("owners");
     assert_eq!(groups.len(), 3);
     let mut observed: Vec<_> = groups
         .values()
@@ -59,7 +60,7 @@ fn all_obligations_have_exactly_one_phase_owner() {
         .enumerate()
     {
         assert_eq!(
-            job_id_for_member(&tasks, &tasks[index]).expect("owner"),
+            owners.for_member(&tasks[index]).expect("owner"),
             Some(format!("rust-demo-{suffix}"))
         );
     }
@@ -111,12 +112,13 @@ fn configuration_is_not_overloaded_with_phase() {
     second.task_id = "stack/rust/demo/clippy/host".to_owned();
     let tasks = vec![first, second];
     let assigned = assign_group_ids(&group_runnable(&tasks).expect("groups"));
+    let owners = JobOwners::new(&tasks).expect("owners");
     assert_eq!(
-        job_id_for_member(&tasks, &tasks[0]).expect("default"),
+        owners.for_member(&tasks[0]).expect("default"),
         Some("rust-demo-lint".to_owned())
     );
     assert_eq!(
-        job_id_for_member(&tasks, &tasks[1]).expect("host"),
+        owners.for_member(&tasks[1]).expect("host"),
         Some("rust-demo-host-lint".to_owned())
     );
     assert_eq!(assigned.len(), 2);
@@ -132,17 +134,15 @@ fn workspace_no_targets_and_named_check_keep_their_authorities() {
     check.stack_id = Stack::Mise.id().to_owned();
     check.identity.unit_id = "ffi".to_owned();
     let tasks = vec![workspace, absent, check];
+    let owners = JobOwners::new(&tasks).expect("owners");
     assert!(group_runnable(&tasks).expect("empty").is_empty());
     assert_eq!(
-        job_id_for_member(&tasks, &tasks[0]).expect("workspace"),
+        owners.for_member(&tasks[0]).expect("workspace"),
         Some(PLAN_JOB_ID.to_owned())
     );
+    assert_eq!(owners.for_member(&tasks[1]).expect("no targets"), None);
     assert_eq!(
-        job_id_for_member(&tasks, &tasks[1]).expect("no targets"),
-        None
-    );
-    assert_eq!(
-        job_id_for_member(&tasks, &tasks[2]).expect("check"),
+        owners.for_member(&tasks[2]).expect("check"),
         Some("check-ffi".to_owned())
     );
 }
@@ -152,7 +152,7 @@ fn unknown_rust_kind_and_stack_fail_without_losing_tasks() {
     let mut unknown = task("demo", TaskKind::Clippy);
     unknown.task_kind = "archive".to_owned();
     assert!(group_runnable(&[unknown.clone()]).is_err());
-    assert!(job_id_for_member(&[unknown.clone()], &unknown).is_err());
+    assert!(JobOwners::new(&[unknown.clone()]).is_err());
     unknown.stack_id = "foreign".to_owned();
     assert!(group_runnable(&[unknown]).is_err());
 }
@@ -167,12 +167,13 @@ fn tofu_namespace_is_not_partitioned_by_rust_kind() {
     let groups = group_runnable(&tasks).expect("mixed source groups");
     assert_eq!(groups.len(), 2);
     assert!(groups.keys().any(|key| key.phase.is_none()));
+    let owners = JobOwners::new(&tasks).expect("owners");
     assert_eq!(
-        job_id_for_member(&tasks, &tasks[0]).expect("tofu"),
+        owners.for_member(&tasks[0]).expect("tofu"),
         Some("tofu-root".to_owned())
     );
     assert_eq!(
-        job_id_for_member(&tasks, &tasks[1]).expect("rust"),
+        owners.for_member(&tasks[1]).expect("rust"),
         Some("rust-root-lint".to_owned())
     );
 }
@@ -180,8 +181,30 @@ fn tofu_namespace_is_not_partitioned_by_rust_kind() {
 #[test]
 fn outsider_cannot_claim_a_missing_phase() {
     let tasks = vec![task("demo", TaskKind::Clippy)];
+    let owners = JobOwners::new(&tasks).expect("owners");
     assert_eq!(
-        job_id_for_member(&tasks, &task("demo", TaskKind::Doc)).expect("outsider"),
+        owners
+            .for_member(&task("demo", TaskKind::Doc))
+            .expect("outsider"),
         None
     );
+}
+
+#[test]
+fn shards_and_same_group_outsiders_reuse_the_complete_immutable_assignment() {
+    let mut first = task("demo", TaskKind::Nextest);
+    first.task_id.push_str("/shard-1-of-2");
+    let mut second = first.clone();
+    second.task_id = second.task_id.replace("shard-1-of-2", "shard-2-of-2");
+    let tasks = vec![first, second];
+    let owners = JobOwners::new(&tasks).expect("owners");
+    let outsider = task("demo", TaskKind::Test);
+    for member in tasks.iter().chain(std::iter::once(&outsider)) {
+        assert_eq!(
+            owners.for_member(member).expect("member"),
+            Some("rust-demo-tests".to_owned())
+        );
+    }
+    assert!(owners.runnable_member(&tasks[0].task_id).is_some());
+    assert!(owners.runnable_member("absent-gate").is_none());
 }

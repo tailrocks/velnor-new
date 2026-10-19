@@ -20,6 +20,7 @@ fn named(name: &str) -> WorkflowConfig {
         runner_label: None,
         tasks: Vec::new(),
         tofu_apply: None,
+        review_completion: None,
         verify: VerifyConfig::default(),
         dispatch: crate::config::WorkflowDispatchConfig::default(),
         preserve_workflows: Vec::new(),

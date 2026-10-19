@@ -200,6 +200,7 @@ fn render_all(
     extra.extend(crate::freshness_emit::freshness_files(prep)?);
     extra.extend(crate::owned_tool_publication::files(prep)?);
     extra.extend(crate::tofu_apply_emit::tofu_apply_files(prep)?);
+    extra.extend(crate::review_completion_workflow_emit::files(prep)?);
     extra.extend(crate::routing::extra_files(&prep.config, version)?);
     extra.extend(crate::rust_suites_emit::suite_workflow_files(prep)?);
     extra.extend(rendered.shared);

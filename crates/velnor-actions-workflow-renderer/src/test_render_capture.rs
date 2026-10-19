@@ -37,15 +37,17 @@ pub fn take() -> Option<RenderCapture> {
     CAPTURE.with(|capture| capture.borrow_mut().take())
 }
 
-/// Run diagnostic capture without the per-file size limit.
+/// Run diagnostic capture within a nested, unwind-safe capture scope.
 ///
-/// The caller must check the complete workflow tree after rendering.
+/// Production per-file size limits remain active. The caller must also check
+/// the complete workflow tree after rendering.
 pub fn with_full_tree_capture<T>(capture: impl FnOnce() -> T) -> T {
     let previous = FULL_TREE_CAPTURE.with(|enabled| enabled.replace(true));
     let _scope = FullTreeCaptureScope(previous);
     capture()
 }
 
+#[cfg(test)]
 pub(crate) fn full_tree_capture_enabled() -> bool {
     FULL_TREE_CAPTURE.with(Cell::get)
 }

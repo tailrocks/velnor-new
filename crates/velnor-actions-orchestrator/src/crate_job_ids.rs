@@ -38,33 +38,72 @@ impl CrateGroupKey {
     }
 }
 
-/// Owning job from the same complete assignment used by emission.
+/// Immutable ownership assignment for one complete proposal universe.
 ///
-/// No-target tasks have no execution owner. Workspace tasks belong to Plan;
-/// named checks retain their dedicated check job and do not enter Rust phases.
-/// Every other member resolves through the renderer's runnable grouping and
-/// complete collision assignment. `None` means no execution is emitted or the
-/// member is absent from those assignment inputs; a runnable plan member must
-/// have an owner. This lookup never manufactures an unsuffixed Rust fallback.
-///
-/// # Errors
-/// Rejects unknown stacks or Rust task kinds in the runnable universe.
-pub(crate) fn job_id_for_member(
-    tasks: &[ProposedTask],
-    member: &ProposedTask,
-) -> Result<Option<String>, ContractError> {
-    if member.no_targets {
-        return Ok(None);
+/// The planner and renderer construct this once per batch. Gate lookup also
+/// indexes runnable proposals once; no entry or edge rebuilds the universe.
+pub(crate) struct JobOwners<'a> {
+    assigned: BTreeMap<CrateGroupKey, String>,
+    runnable: BTreeMap<&'a str, &'a ProposedTask>,
+}
+impl<'a> JobOwners<'a> {
+    /// Group and assign the complete immutable inventory once.
+    pub(crate) fn new(tasks: &'a [ProposedTask]) -> Result<Self, ContractError> {
+        let grouped = group_runnable(tasks)?;
+        Ok(Self::from_grouped(tasks, &grouped))
     }
-    if Stack::require_known(&member.stack_id)? == Stack::Mise {
-        return Ok(Some(format!("check-{}", member.identity.unit_id)));
+    /// Reuse the renderer's already validated complete grouping.
+    pub(crate) fn from_grouped(
+        tasks: &'a [ProposedTask],
+        grouped: &BTreeMap<CrateGroupKey, Vec<&ProposedTask>>,
+    ) -> Self {
+        Self {
+            assigned: assign_group_ids(grouped),
+            runnable: tasks
+                .iter()
+                .filter(|task| crate::crate_jobs::is_runnable(task))
+                .map(|task| (task.task_id.as_str(), task))
+                .collect(),
+        }
     }
-    if member.identity.unit_id.is_empty() {
-        return Ok(Some(PLAN_JOB_ID.to_owned()));
+    /// Exact assigned ID for one emitted group.
+    pub(crate) fn group_id(&self, key: &CrateGroupKey) -> Option<&String> {
+        self.assigned.get(key)
     }
-    let grouped = group_runnable(tasks)?;
-    let assigned = assign_group_ids(&grouped);
-    Ok(assigned.get(&CrateGroupKey::for_member(member)?).cloned())
+    /// Runnable gate definitions only; no-target and absent gates remain vacuous.
+    pub(crate) fn runnable_member(&self, id: &str) -> Option<&ProposedTask> {
+        self.runnable.get(id).copied()
+    }
+    /// Owning job from the same complete assignment used by emission.
+    ///
+    /// No-target tasks have no execution owner. Workspace tasks belong to Plan;
+    /// named checks retain their dedicated check job and do not enter Rust phases.
+    /// Every other member resolves through the renderer's runnable grouping and
+    /// complete collision assignment. `None` means no execution is emitted or the
+    /// member is absent from those assignment inputs; a runnable plan member must
+    /// have an owner. This lookup never manufactures an unsuffixed Rust fallback.
+    ///
+    /// # Errors
+    /// Rejects an unknown member stack or Rust kind. Construction already
+    /// rejects invalid kinds anywhere in the complete runnable universe.
+    pub(crate) fn for_member(
+        &self,
+        member: &ProposedTask,
+    ) -> Result<Option<String>, ContractError> {
+        if member.no_targets {
+            return Ok(None);
+        }
+        if Stack::require_known(&member.stack_id)? == Stack::Mise {
+            return Ok(Some(format!("check-{}", member.identity.unit_id)));
+        }
+        if member.identity.unit_id.is_empty() {
+            return Ok(Some(PLAN_JOB_ID.to_owned()));
+        }
+        Ok(self
+            .assigned
+            .get(&CrateGroupKey::for_member(member)?)
+            .cloned())
+    }
 }
 
 /// Assign collision-safe package/configuration IDs once, then fixed phases.

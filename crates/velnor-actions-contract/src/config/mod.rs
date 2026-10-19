@@ -53,8 +53,8 @@ pub use check_receipt_budget::{
 };
 pub use discovery::DiscoveryConfig;
 pub use distribution::{
-    DistributionConfig, ExactHeadReviewCheck, HomebrewTapConfig, HomebrewTapSource,
-    ReviewAppIdentity, TapMergePolicy, TapUpdateEnvironment, TapUpdaterBinding,
+    DistributionConfig, ExactHeadReviewCheck, HomebrewTapConfig, HomebrewTapProtectionObserver,
+    HomebrewTapSource, ReviewAppIdentity, TapMergePolicy, TapUpdateEnvironment, TapUpdaterBinding,
 };
 pub use execution::{
     ExecutionConfig, ExecutionMode, ExecutionOverride, ExecutionParity, ExecutionProfile,
@@ -323,3 +323,10 @@ mod check_tool_reference_tests;
 
 #[cfg(test)]
 mod preview_policy_tests;
+
+mod review_completion;
+pub(crate) use distribution::valid_review_check_name;
+pub use review_completion::{ReviewCompletionConfig, ReviewCompletionProvider};
+
+/// Native release/source execution remains strictly bounded independently of general jobs.
+pub(crate) const NATIVE_PREVIEW_MAX_TIMEOUT_MINUTES: u16 = 5;

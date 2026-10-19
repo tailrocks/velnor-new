@@ -160,7 +160,7 @@ fn ruleset_writer_bypass_and_non_active_state_are_rejected_or_detected() {
     let value = serde_json::json!({
         "target": "branch",
         "enforcement": "active",
-        "bypass_actors": [{"actor_type": "Integration", "actor_id": 17}],
+        "current_user_can_bypass":"never", "bypass_actors": [{"actor_type": "Integration", "actor_id": 17}],
         "rules": [{"type": "required_status_checks", "parameters": {
             "strict_required_status_checks_policy": true,
             "required_status_checks": [{"context": "DCO", "integration_id": 18}]
@@ -176,13 +176,27 @@ fn ruleset_writer_bypass_and_non_active_state_are_rejected_or_detected() {
 }
 
 #[test]
-fn ruleset_bypass_rejects_unresolved_actors_and_detects_writer_user_id() {
-    for kind in ["Team", "OrganizationAdmin", "DeployKey"] {
-        let value = ruleset_with_bypass(&serde_json::json!({
-            "actor_type": kind,
-            "actor_id": 41
-        }));
-        assert!(parse_ruleset(&value, 17, 29).is_err(), "{kind}");
+fn ruleset_other_actors_preserve_writer_never_and_direct_writer_conflicts_are_detected() {
+    for actor in [
+        serde_json::json!({"actor_type":"Team","actor_id":41}),
+        serde_json::json!({"actor_type":"RepositoryRole","actor_id":5}),
+        serde_json::json!({"actor_type":"OrganizationAdmin","actor_id":null}),
+        serde_json::json!({"actor_type":"DeployKey","actor_id":null}),
+    ] {
+        let value = ruleset_with_bypass(&actor);
+        assert!(
+            !parse_ruleset(&value, 17, 29)
+                .expect("authoritative writer never")
+                .writer_bypass
+        );
+    }
+    for actor in [
+        serde_json::json!({"actor_type":"Team","actor_id":0}),
+        serde_json::json!({"actor_type":"RepositoryRole","actor_id":null}),
+        serde_json::json!({"actor_type":"DeployKey","actor_id":41}),
+        serde_json::json!({"actor_type":"Unknown","actor_id":41}),
+    ] {
+        assert!(parse_ruleset(&ruleset_with_bypass(&actor), 17, 29).is_err());
     }
 
     let writer_user = ruleset_with_bypass(&serde_json::json!({
@@ -210,7 +224,7 @@ fn ruleset_with_bypass(actor: &Value) -> Value {
     serde_json::json!({
         "target": "branch",
         "enforcement": "active",
-        "bypass_actors": [actor],
+        "current_user_can_bypass":"never", "bypass_actors": [actor],
         "rules": []
     })
 }
@@ -227,7 +241,7 @@ fn branch_rules_entry_is_resolved_to_the_documented_ruleset_detail_route() {
     assert_eq!(
         ruleset_detail_route("acme/homebrew-tap", 73, "Organization", "acme")
             .expect("organization ruleset route"),
-        "orgs/acme/rulesets/73"
+        "repos/acme/homebrew-tap/rulesets/73?includes_parents=true"
     );
     assert_eq!(
         ruleset_detail_route(
@@ -239,7 +253,7 @@ fn branch_rules_entry_is_resolved_to_the_documented_ruleset_detail_route() {
             effective_rule["ruleset_source"].as_str().expect("source"),
         )
         .expect("effective API rule route"),
-        "orgs/acme/rulesets/73"
+        "repos/acme/homebrew-tap/rulesets/73?includes_parents=true"
     );
     assert_eq!(
         ruleset_detail_route("acme/homebrew-tap", 42, "Repository", "acme/homebrew-tap")
@@ -250,8 +264,19 @@ fn branch_rules_entry_is_resolved_to_the_documented_ruleset_detail_route() {
 }
 
 #[test]
-fn promotion_requires_exact_completion_check_app_binding() {
+fn promotion_requires_exact_dco_and_completion_check_app_binding() {
     let valid = vec![("DCO".to_owned(), 19), ("Review complete".to_owned(), 23)];
+    assert!(
+        validate_required_check_bindings(
+            &[
+                ("DCO validation".to_owned(), 19),
+                ("Review complete".to_owned(), 23)
+            ],
+            "Review complete",
+            23
+        )
+        .is_err()
+    );
     assert!(validate_required_check_bindings(&valid, "Review complete", 23).is_ok());
     assert!(validate_required_check_bindings(&valid, "Review complete", 24).is_err());
     assert!(
@@ -260,8 +285,8 @@ fn promotion_requires_exact_completion_check_app_binding() {
             "Review complete",
             23
         )
-        .is_ok(),
-        "no sign-off check is mandated"
+        .is_err(),
+        "native promotion must retain protected DCO admission"
     );
     assert!(
         validate_required_check_bindings(
@@ -271,4 +296,67 @@ fn promotion_requires_exact_completion_check_app_binding() {
         )
         .is_err()
     );
+}
+
+#[test]
+fn writer_requester_never_is_required_even_without_bypass_actor_visibility() {
+    let baseline = serde_json::json!({"target":"branch","enforcement":"active","current_user_can_bypass":"never","rules":[]});
+    assert!(
+        !parse_ruleset(&baseline, 17, 29)
+            .expect("same writer cannot bypass")
+            .writer_bypass
+    );
+    for state in [
+        Value::Null,
+        serde_json::json!("always"),
+        serde_json::json!("pull_requests_only"),
+        serde_json::json!("exempt"),
+        serde_json::json!(false),
+        serde_json::json!("unknown"),
+    ] {
+        let mut value = baseline.clone();
+        value["current_user_can_bypass"] = state;
+        assert!(parse_ruleset(&value, 17, 29).is_err());
+    }
+    let mut missing = baseline;
+    missing
+        .as_object_mut()
+        .expect("object")
+        .remove("current_user_can_bypass");
+    assert!(parse_ruleset(&missing, 17, 29).is_err());
+}
+
+#[test]
+fn inherited_rulesets_use_target_repository_requester_state_and_retain_parent_identity() {
+    use crate::tap_merge::github::{ApiResponse, TapMergeGitHub};
+    for (kind, source) in [("Organization", "owner"), ("Enterprise", "enterprise")] {
+        for mismatch in [false, true] {
+            let api = TapMergeGitHub::with_test_transport(move |args| {
+                assert_eq!(args.len(), 1);
+                assert_eq!(args[0], "repos/owner/tap/rulesets/73?includes_parents=true");
+                let value = serde_json::json!({"id":73,"source_type":kind,
+                    "source":if mismatch {"foreign"} else {source},
+                    "target":"branch","enforcement":"active",
+                    "current_user_can_bypass":"never","rules":[]});
+                Ok(ApiResponse {
+                    status: 200,
+                    body: serde_json::to_vec(&value).expect("JSON"),
+                })
+            });
+            let effective = vec![
+                serde_json::json!({"ruleset_id":73,"ruleset_source_type":kind,"ruleset_source":source}),
+            ];
+            let result = load_effective_rulesets(&api, &effective, "owner/tap");
+            if mismatch {
+                assert!(result.is_err());
+            } else {
+                let rows = result.expect("authenticated parent identity");
+                assert!(
+                    !parse_ruleset(&rows[0], 17, 29)
+                        .expect("writer requester state")
+                        .writer_bypass
+                );
+            }
+        }
+    }
 }
