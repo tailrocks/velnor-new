@@ -127,6 +127,7 @@ ignore = []
 [stacks.rust]
 toolchain = "1.98.1" # optional exact X.Y.Z override; must agree with rust-toolchain.toml / rust-toolchain when present
 configurations = [{ name = "default", features = ["default"], target = "host" }]
+# seed_parallel_targets = true # default false; see ../implemented/parallel-target-seeding.md
 # [[stacks.rust.suites]] declares named Nextest suites (id, profile, run_ignored, partitions 1..=64,
 # build = "inline" | "archive", timeout_minutes 1..=360 (default 5), test_threads 1..=64, runner_label, workflow,
 # triggers, schedule, required, cancel_in_progress, allow_failure, filter, filter_input, dispatch_inputs,

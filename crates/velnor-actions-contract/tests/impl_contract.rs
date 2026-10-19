@@ -56,6 +56,7 @@ fn config_validation_reports_key_paths() {
                 compile_driver: None,
                 test_runner: None,
                 run_ignored: None,
+                seed_parallel_targets: false,
                 release: RustReleaseConfig::default(),
                 binary_release: RustBinaryReleaseConfig::default(),
                 suites: Vec::new(),

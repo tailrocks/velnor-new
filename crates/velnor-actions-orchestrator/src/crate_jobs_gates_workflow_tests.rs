@@ -175,3 +175,67 @@ fn assert_task_owners(
     }
     emitted
 }
+
+#[test]
+fn complete_workflow_seed_barrier_preserves_required_and_reports() {
+    let root = tempfile::tempdir().expect("repository");
+    std::fs::create_dir(root.path().join(".velnor")).expect("config");
+    let proposals = [
+        TaskKind::Build,
+        TaskKind::Clippy,
+        TaskKind::Nextest,
+        TaskKind::Doc,
+    ]
+    .into_iter()
+    .map(|kind| group("demo", kind, &[]))
+    .collect::<Vec<_>>();
+    let mut graphs = Vec::new();
+    for enabled in [false, true] {
+        std::fs::write(root.path().join(".velnor/config.toml"), format!(
+            "schema = 1\n[workflow]\npolicy = 'velnor-repository-v1'\n[stacks.rust]\nseed_parallel_targets = {enabled}\n"
+        )).expect("config");
+        let config = crate::config::load_config(root.path()).expect("load");
+        let mut workflow = crate::workflow::build_workflow(
+            root.path(),
+            &config,
+            "main",
+            "ubuntu-26.04",
+            &discovery(proposals.clone()),
+            &[],
+        )
+        .expect("native graph");
+        crate::attach::attach_lock_acquire(
+            &mut workflow.ir,
+            &fixture_generator_lock(),
+            "ubuntu-26.04",
+            env!("CARGO_PKG_VERSION"),
+        )
+        .expect("native acquisition");
+        let rendered = velnor_actions_workflow_renderer::render::render_workflow_ir(
+            &workflow.ir,
+            WorkflowPolicy::VelnorRepositoryV1,
+            workflow.support.as_ref(),
+            &workflow.context,
+        )
+        .expect("full rendered workflow");
+        assert_eq!(
+            rendered.contains("Seed independent parallel targets"),
+            enabled
+        );
+        assert_eq!(rendered.matches("background: true").count(), 3);
+        assert_eq!(rendered.matches("wait-all:").count(), 1);
+        if enabled {
+            let steps = &mut workflow.ir.jobs.get_mut("rust-demo").expect("owner").steps;
+            let index = steps
+                .iter()
+                .position(|step| step.name == "Seed independent parallel targets")
+                .expect("barrier");
+            steps.remove(index);
+        }
+        graphs.push(serde_json::to_value(&workflow.ir.jobs).expect("canonical job inventory"));
+    }
+    assert_eq!(
+        graphs[0], graphs[1],
+        "Required, reports, acquisition, commands and all remaining job structure stay exact"
+    );
+}

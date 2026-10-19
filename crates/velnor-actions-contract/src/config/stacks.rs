@@ -64,6 +64,10 @@ pub struct RustStackConfig {
     /// Ignored test execution mode ("all", "only", "ignored-only", "default").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_ignored: Option<String>,
+    /// Initialize missing parallel check targets from the completed test build.
+    /// Existing target lanes are preserved; disabled by default.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub seed_parallel_targets: bool,
     /// Rust release policy (`[stacks.rust.release]`); disabled by default.
     #[serde(default)]
     pub release: RustReleaseConfig,
@@ -73,6 +77,14 @@ pub struct RustStackConfig {
     /// Named Nextest suites (`[[stacks.rust.suites]]`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub suites: Vec<RustSuiteConfig>,
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if requires a borrowed boolean"
+)]
+fn is_false(value: &bool) -> bool {
+    !value
 }
 
 /// Documented default: one `default` configuration variant list.
@@ -139,6 +151,7 @@ impl RustStackConfig {
             compile_driver: None,
             test_runner: None,
             run_ignored: None,
+            seed_parallel_targets: false,
             release: RustReleaseConfig::default(),
             binary_release: RustBinaryReleaseConfig::default(),
             suites: Vec::new(),
@@ -269,6 +282,25 @@ impl RustStackConfig {
 mod tests {
     use super::{RustConfiguration, is_valid_rust_target};
     use crate::config::RustStackConfig;
+
+    #[test]
+    fn parallel_target_seeding_is_strict_default_off_and_omitted() {
+        let default = RustStackConfig::default_config();
+        assert!(!default.seed_parallel_targets);
+        let mut wire = serde_json::to_value(default).expect("Rust stack");
+        assert!(wire.get("seed_parallel_targets").is_none());
+        let absent: RustStackConfig = serde_json::from_value(wire.clone()).expect("absent flag");
+        assert!(!absent.seed_parallel_targets);
+        wire["seed_parallel_targets"] = serde_json::json!(true);
+        let enabled: RustStackConfig = serde_json::from_value(wire.clone()).expect("opt in");
+        assert!(enabled.seed_parallel_targets);
+        assert_eq!(
+            serde_json::to_value(enabled).expect("serialize")["seed_parallel_targets"],
+            true
+        );
+        wire["seed_parallel_targets"] = serde_json::json!("true");
+        assert!(serde_json::from_value::<RustStackConfig>(wire).is_err());
+    }
 
     #[test]
     fn target_grammar_accepts_host_and_triples_only() {

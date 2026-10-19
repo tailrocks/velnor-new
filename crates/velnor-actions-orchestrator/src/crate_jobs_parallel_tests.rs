@@ -23,6 +23,7 @@ fn one_job_per_crate_builds_first_then_runs_checks_in_parallel() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        seed_parallel_targets: false,
     })
     .expect("crate jobs");
     let ids: Vec<&str> = found.jobs.iter().map(|(id, _)| id.as_str()).collect();
@@ -86,6 +87,7 @@ fn nested_workspace_lanes_live_below_that_workspace_target() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        seed_parallel_targets: false,
     })
     .expect("crate jobs");
     let dirs: BTreeSet<&str> = found.jobs[0]
