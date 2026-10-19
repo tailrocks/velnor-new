@@ -127,12 +127,11 @@ fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
     if steps.iter().any(is_resolver_step) {
         return Ok(());
     }
-    let script = project_tool_resolver_script(&referenced, export_rustup);
     steps.insert(
         setup + 1,
         Yaml::Map(vec![
             ("name".to_owned(), Yaml::str(PROJECT_TOOLS_STEP_NAME)),
-            ("run".to_owned(), Yaml::str(script)),
+            ("run".to_owned(), resolver_run(&referenced, export_rustup)),
         ]),
     );
     Ok(())
@@ -169,18 +168,20 @@ fn bind_composite_steps(steps: &mut Vec<Yaml>) -> Result<(), RenderError> {
         Yaml::Map(vec![
             ("name".to_owned(), Yaml::str(PROJECT_TOOLS_STEP_NAME)),
             ("shell".to_owned(), Yaml::str("bash")),
-            // zizmor audits every composite `GITHUB_ENV` write; this one
-            // appends only digits-and-dots values the script validated.
-            (
-                "run".to_owned(),
-                Yaml::annotated(
-                    project_tool_resolver_script(&referenced, false),
-                    "zizmor: ignore[github-env]",
-                ),
-            ),
+            ("run".to_owned(), resolver_run(&referenced, false)),
         ]),
     );
     Ok(())
+}
+
+/// Job and composite resolvers share the same narrowly validated write.
+fn resolver_run(referenced: &BTreeSet<String>, export_rustup: bool) -> Yaml {
+    // zizmor audits every composite and privileged job `GITHUB_ENV` write;
+    // this one appends only digits-and-dots values the script validated.
+    Yaml::annotated(
+        project_tool_resolver_script(referenced, export_rustup),
+        "zizmor: ignore[github-env]",
+    )
 }
 
 /// Whether `step` is the generated resolver step.
