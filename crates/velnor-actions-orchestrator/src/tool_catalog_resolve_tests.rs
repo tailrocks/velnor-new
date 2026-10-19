@@ -64,7 +64,7 @@ fn resolves_config_only_rust_and_tool_overrides_with_rustup_export() {
 }
 
 #[test]
-fn resolves_target_qualified_exact_toolchain_and_rejects_non_exact_channels() {
+fn rejects_target_qualified_and_non_exact_toolchain_channels() {
     let dir = tempfile::tempdir().expect("tempdir");
     let cfg = config_with(BTreeMap::new());
     std::fs::write(
@@ -72,9 +72,15 @@ fn resolves_target_qualified_exact_toolchain_and_rejects_non_exact_channels() {
         "[toolchain]\nchannel = \"1.99.1-x86_64-unknown-linux-gnu\"\n",
     )
     .expect("write target-qualified toolchain");
-    let catalog = resolve_tool_catalog(dir.path(), &cfg).expect("resolve target-qualified");
-    assert_eq!(catalog.version(PinnedTool::Rust), "1.99.1");
-    assert!(!catalog.exports_rustup_toolchain());
+    // The toolchain file is valid for rustup, but the generated resolver
+    // accepts a bare X.Y.Z only, so generation says so instead of every job.
+    let unresolvable = resolve_tool_catalog(dir.path(), &cfg).expect_err("triple fails");
+    assert!(
+        unresolvable.to_string().contains(
+            "project_tool_version_not_exact:tool=rust,file=rust-toolchain.toml,key=toolchain.channel,value=1.99.1-x86_64-unknown-linux-gnu"
+        ),
+        "got {unresolvable}"
+    );
 
     std::fs::write(
         dir.path().join("rust-toolchain"),
@@ -246,57 +252,6 @@ fn dot_mise_toml_supplies_the_wrapper_option_when_mise_toml_is_absent() {
     let catalog = resolve_tool_catalog(dir.path(), &cfg).expect("resolve");
     assert!(catalog.rust_mr_boxington());
     assert_eq!(catalog.version(PinnedTool::MrBoxington), "1.24.0");
-}
-
-#[test]
-fn malformed_mise_toml_stays_a_finding_and_resolution_continues() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    std::fs::write(dir.path().join("mise.toml"), "[tools\nrust = \n").expect("write bad");
-    let cfg = config_with(BTreeMap::new());
-    let catalog = resolve_tool_catalog(dir.path(), &cfg).expect("resolve");
-    assert!(
-        !catalog.rust_mr_boxington(),
-        "malformed bytes contribute no option; the tooling-input finding reports them"
-    );
-    assert_eq!(
-        catalog.version(PinnedTool::MrBoxington),
-        velnor_actions_mise::catalog::MR_BOXINGTON_VERSION
-    );
-}
-
-#[test]
-fn malformed_mise_toml_does_not_hide_the_dot_spelling_option() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    std::fs::write(dir.path().join("mise.toml"), "[tools\nrust = \n").expect("write bad");
-    std::fs::write(
-        dir.path().join(".mise.toml"),
-        "[tools]\nrust = { mr_boxington = true }\nmr-boxington = \"1.24.0\"\n",
-    )
-    .expect("write .mise.toml");
-    let cfg = config_with(BTreeMap::new());
-    let catalog = resolve_tool_catalog(dir.path(), &cfg).expect("resolve");
-    assert!(catalog.rust_mr_boxington());
-    assert_eq!(catalog.version(PinnedTool::MrBoxington), "1.24.0");
-}
-
-#[test]
-fn malformed_mise_toml_selecting_the_wrapper_fails_closed_on_the_missing_pin() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    // Malformed TOML whose line-local bytes still select the wrapper —
-    // exactly what the P06 driver detector reads — must not degrade to a
-    // silent flag-off while detection picks the MBX driver.
-    std::fs::write(
-        dir.path().join("mise.toml"),
-        "[tools\nrust = \nmr_boxington = true # stray option line\n",
-    )
-    .expect("write bad");
-    let cfg = config_with(BTreeMap::new());
-    let err = resolve_tool_catalog(dir.path(), &cfg).expect_err("wrapper without pin must fail");
-    assert!(
-        err.to_string()
-            .contains("rust_mr_boxington_requires_mr_boxington_record"),
-        "got {err}"
-    );
 }
 
 #[test]

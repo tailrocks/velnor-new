@@ -20,6 +20,10 @@ use velnor_actions_contract::config::project_tool_resolver::project_tool_resolve
 
 use crate::{RenderError, setup::MISE_ACTION_NAME, yaml::Yaml};
 
+#[path = "project_tool_resolver_quote.rs"]
+mod quote;
+use quote::quote_run_refs;
+
 /// Apply the resolver contract to one rendered workflow document.
 ///
 /// # Errors
@@ -120,6 +124,9 @@ fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
     for step in steps.iter_mut() {
         rewrite_mappings(step, false)?;
     }
+    if steps.iter().any(is_resolver_step) {
+        return Ok(());
+    }
     let script = project_tool_resolver_script(&referenced, export_rustup);
     steps.insert(
         setup + 1,
@@ -132,12 +139,18 @@ fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
 }
 
 /// Bind one composite action's steps: insert the resolver after its own Mise
-/// setup when one exists; otherwise the calling job's resolver already ran.
+/// setup. This runs once per rendered document ([`bind_workflow`]); a
+/// composite that already carries the resolver step is left as it is.
+///
+/// A composite is a separate unit that a caller may use from any job, and a
+/// caller job binds only the references written in its own steps, so a
+/// composite that reads a project version must resolve it itself.
 ///
 /// # Errors
 ///
-/// Returns [`RenderError::InvalidWorkflow`] for unbalanced `run` quoting.
-pub(crate) fn bind_composite_steps(steps: &mut Vec<Yaml>) -> Result<(), RenderError> {
+/// Returns [`RenderError::InvalidWorkflow`] for unbalanced `run` quoting, or
+/// when the composite reads a project version without its own Mise setup.
+fn bind_composite_steps(steps: &mut Vec<Yaml>) -> Result<(), RenderError> {
     let referenced: BTreeSet<String> = steps.iter().flat_map(names).collect();
     if referenced.is_empty() {
         return Ok(());
@@ -145,25 +158,36 @@ pub(crate) fn bind_composite_steps(steps: &mut Vec<Yaml>) -> Result<(), RenderEr
     for step in steps.iter_mut() {
         rewrite_mappings(step, false)?;
     }
-    if let Some(setup) = steps.iter().position(is_mise_setup) {
-        steps.insert(
-            setup + 1,
-            Yaml::Map(vec![
-                ("name".to_owned(), Yaml::str(PROJECT_TOOLS_STEP_NAME)),
-                ("shell".to_owned(), Yaml::str("bash")),
-                // zizmor audits every composite `GITHUB_ENV` write; this one
-                // appends only digits-and-dots values the script validated.
-                (
-                    "run".to_owned(),
-                    Yaml::annotated(
-                        project_tool_resolver_script(&referenced, false),
-                        "zizmor: ignore[github-env]",
-                    ),
-                ),
-            ]),
-        );
+    let Some(setup) = steps.iter().position(is_mise_setup) else {
+        return Err(invalid("composite_no_mise_setup"));
+    };
+    if steps.iter().any(is_resolver_step) {
+        return Ok(());
     }
+    steps.insert(
+        setup + 1,
+        Yaml::Map(vec![
+            ("name".to_owned(), Yaml::str(PROJECT_TOOLS_STEP_NAME)),
+            ("shell".to_owned(), Yaml::str("bash")),
+            // zizmor audits every composite `GITHUB_ENV` write; this one
+            // appends only digits-and-dots values the script validated.
+            (
+                "run".to_owned(),
+                Yaml::annotated(
+                    project_tool_resolver_script(&referenced, false),
+                    "zizmor: ignore[github-env]",
+                ),
+            ),
+        ]),
+    );
     Ok(())
+}
+
+/// Whether `step` is the generated resolver step.
+fn is_resolver_step(step: &Yaml) -> bool {
+    matches!(step, Yaml::Map(fields) if fields.iter().any(|(key, value)| {
+        key == "name" && scalar(value) == Some(PROJECT_TOOLS_STEP_NAME)
+    }))
 }
 
 /// Remove a job-level `RUSTUP_TOOLCHAIN` reference; any other reference fails.
@@ -244,77 +268,6 @@ fn rewrite_mappings(node: &mut Yaml, in_run: bool) -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Quote each `${VELNOR_TOOL_<NAME>}` in shell text as its own expansion:
-/// unquoted becomes `"${..}"`, single-quoted becomes `'"${..}"'` (the
-/// outer shell expands it before any nested `sh -c` sees the literal
-/// version), double-quoted stays. Unbalanced quoting fails closed.
-fn quote_run_refs(text: &str) -> Result<String, RenderError> {
-    use velnor_actions_contract::config::project_tool_refs::PROJECT_TOOL_REF_PREFIX;
-    #[derive(Clone, Copy, PartialEq, Eq)]
-    enum Frame {
-        /// Unquoted text (top level or inside `$( )`).
-        Plain,
-        /// Inside `"..."`.
-        Double,
-        /// Inside `'...'`.
-        Single,
-    }
-    if project_tool_ref_names(text).is_empty() {
-        return Ok(text.to_owned());
-    }
-    let mut out = String::with_capacity(text.len() + 8);
-    // `$(` opens a fresh plain frame even inside double quotes.
-    let mut stack = vec![Frame::Plain];
-    let mut escaped = false;
-    let mut rest = text;
-    while let Some(ch) = rest.chars().next() {
-        let frame = *stack.last().unwrap_or(&Frame::Plain);
-        if !escaped && rest.starts_with(PROJECT_TOOL_REF_PREFIX) {
-            let end = rest.find('}').ok_or_else(|| invalid("run_ref_unclosed"))? + 1;
-            let reference = &rest[..end];
-            match frame {
-                Frame::Double => out.push_str(reference),
-                Frame::Plain => {
-                    for part in ["\"", reference, "\""] {
-                        out.push_str(part);
-                    }
-                }
-                Frame::Single => {
-                    for part in ["'\"", reference, "\"'"] {
-                        out.push_str(part);
-                    }
-                }
-            }
-            rest = &rest[end..];
-            continue;
-        }
-        let mut width = ch.len_utf8();
-        match (frame, ch) {
-            _ if escaped => escaped = false,
-            (Frame::Plain | Frame::Double, '\\') => escaped = true,
-            (Frame::Plain | Frame::Double, '$') if rest.starts_with("$(") => {
-                stack.push(Frame::Plain);
-                width = 2;
-            }
-            (Frame::Plain, ')') if stack.len() > 1 => {
-                stack.pop();
-            }
-            (Frame::Plain, '\'') => stack.push(Frame::Single),
-            (Frame::Single, '\'') | (Frame::Double, '"') => {
-                stack.pop();
-            }
-            (Frame::Plain, '"') => stack.push(Frame::Double),
-            _ => {}
-        }
-        out.push_str(&rest[..width]);
-        rest = &rest[width..];
-    }
-    if stack.len() != 1 || escaped {
-        return Err(invalid("run_quoting_unbalanced"));
-    }
-    Ok(out)
-}
-
 /// Project reference names anywhere under `node`.
 fn names(node: &Yaml) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
@@ -362,7 +315,7 @@ fn scalar(node: &Yaml) -> Option<&str> {
     }
 }
 
-fn invalid(context: &str) -> RenderError {
+pub(super) fn invalid(context: &str) -> RenderError {
     RenderError::InvalidWorkflow(format!("project_tool_ref_unbound:{context}"))
 }
 

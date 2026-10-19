@@ -153,18 +153,37 @@ declaration, because Mise (idiomatic version files) and rustup both read it.
 
 - Generation classifies every catalog tool (Rust, MBX, Nextest, actionlint,
   shellcheck, zizmor, OpenTofu, release-plz) as project-declared
-  when the first parseable root `mise.toml`/`.mise.toml` `[tools]` table names
-  it under any backend spelling (for example
-  `"aqua:nextest-rs/nextest/cargo-nextest"` or `core:rust`), or, for Rust,
-  when a toolchain file exists. Generated text then carries
+  when **any** project source names it under any backend spelling (for
+  example `"aqua:nextest-rs/nextest/cargo-nextest"` or `core:rust`). The
+  sources are every location Mise reads `[tools]` from at the project root:
+  `mise.toml`, `.mise.toml`, `mise.<env>.toml` and `mise.local.toml` (and
+  their dot-prefixed forms), `.config/mise.toml`, `.config/mise/config.toml`,
+  `.config/mise/conf.d/*.toml`, `mise/config.toml`, `.mise/config.toml`, and
+  `.tool-versions`; for Rust also `rust-toolchain.toml` and `rust-toolchain`
+  (plain channel or TOML form). One list
+  (`PROJECT_MISE_CONFIG_PATTERNS`) drives generation, the run-time resolver,
+  and change selection. Generated text then carries
   `${VELNOR_TOOL_<NAME>}` instead of the version: shell form in `run:` text
   and task argv, `${{ env.VELNOR_TOOL_<NAME> }}` in `with:`, `env:`, and cache
   keys.
+- Generation fails, naming the tool and the file, instead of guessing: a
+  declared version that is not an exact `X.Y.Z` (loose, `latest`, a range, a
+  template, an array, a target-triple channel, a leading zero:
+  `project_tool_version_not_exact`), two sources that disagree
+  (`conflicting_project_tool_versions`), a source that does not parse
+  (`malformed_project_tool_source`, including a malformed `mise.toml` next to
+  a valid `rust-toolchain.toml`), a symlinked source, and a Rust toolchain
+  file below the root that declares anything but the root version
+  (`nested_rust_toolchain_not_supported`: rustup would honor it for commands
+  run in that directory while the resolver reads root sources only). A Velnor
+  pin never replaces a declaration the generator cannot use.
 - Every job (or composite action) that reads such a reference gets one
   generated **Resolve project tool versions** step right after its Mise
-  setup. It reads each declaring source with
-  `mise --no-config --no-env --no-hooks config get`, requires all sources to
-  agree on one exact `X.Y.Z`, and appends `VELNOR_TOOL_<NAME>=<version>` to
+  setup. It reads every source above with
+  `mise --no-config --no-env --no-hooks config get` (`.tool-versions` and a
+  plain-text `rust-toolchain` are read as text, never executed), fails on an
+  unparseable or symlinked source, requires all declarations of a tool to
+  agree on one exact `X.Y.Z` (no leading zeros), and appends `VELNOR_TOOL_<NAME>=<version>` to
   `$GITHUB_ENV` (plus `RUSTUP_TOOLCHAIN` where job env used to carry the
   Rust pin). The generated task helper materializes the same variables in
   task argv and env after the manifest and plan bindings match, and fails
@@ -176,12 +195,17 @@ declaration, because Mise (idiomatic version files) and rustup both read it.
   tools-cache `d` input appends `hashFiles` over `mise.toml`, `.mise.toml`,
   `mise.lock`, `.mise.lock`, and both Rust toolchain files; Cargo-source and
   MBX keys and MBX action inputs read the resolved `env` value. Plan
-  identities bind the concrete declared versions while the generated record
-  (task digests, argv) stays version-free.
-- A pull request that changes a root project tool source (`mise.toml`,
-  `.mise.toml`, `mise.lock`, `.mise.lock`, `rust-toolchain.toml`,
-  `rust-toolchain`) selects every crate job under hard decision 4, because CI
-  runs the versions those files declare.
+  identities, including the MBX cache-format generation, bind the concrete
+  declared versions while the generated record (task digests, argv) stays
+  version-free. The tools-cache `hashFiles` list is the cache design's to
+  change and does not yet cover every source above.
+- A pull request selects every crate job when a project tool source changes
+  a **declared catalog version**: change selection parses each changed
+  source at base and head with the generator's own reader and compares the
+  declared versions, not the files. Editing a task, a Node pin, or a comment
+  in `mise.toml` selects nothing on its own. A lock file (`mise.lock`,
+  `.mise.lock`) always selects everything, and any doubt (a source that does
+  not parse, git unable to read either side) selects everything.
 - Bumping a declared version in `mise.toml` therefore needs no regeneration.
   Adding or removing a catalog tool from the project config still does (it
   changes which commands carry a reference), as does an option change such
@@ -204,7 +228,8 @@ may change `mise.toml`: that tests its own toolchain, which is expected,
 and its only effect is a different exact version of the same tool through
 the same backend. The resolver accepts only `[0-9.]` values in exact
 `X.Y.Z` shape before writing `$GITHUB_ENV`, so no value can inject another
-variable or line; symlinked sources are refused. Composite actions carry
+variable or line; symlinked sources are refused, and a value is never
+echoed raw into the log (control text such as `::error::` is replaced). Composite actions carry
 `# zizmor: ignore[github-env]` on that one validated write. The GitHub CLI
 runs with a token in every generated use (plan baseline lookup, `Required`
 report fetch, release publication) and Cosign signs releases, so both keep

@@ -332,7 +332,8 @@ fn complete_group(
         planned_platform,
     )
     .map_err(internal_contract)?;
-    let cache_ids = cache_ids_for(task, inputs.label, toolchain).map_err(internal_contract)?;
+    let cache_ids =
+        cache_ids_for(task, inputs.label, toolchain, inputs.catalog).map_err(internal_contract)?;
     record_lane_target_dir(&mut entry.adapter_metadata, cache_ids.lane_id());
     entry.cache_ids = Some(cache_ids);
     Ok((obligation, entry))

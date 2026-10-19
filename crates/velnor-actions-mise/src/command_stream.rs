@@ -33,6 +33,7 @@ impl IsolatedCommand {
                 stdout_cap,
                 stdout_bytes: 0,
                 stderr_cap,
+                progress: None,
             };
             let result = self.run_streams(
                 &mut streams,
@@ -71,17 +72,24 @@ pub(super) struct Streams<'a> {
     stdout_cap: u64,
     stdout_bytes: u64,
     pub(super) stderr_cap: usize,
+    progress: Option<super::progress::ProgressSink<'a>>,
 }
 
 #[cfg(unix)]
-impl Streams<'_> {
+impl<'a> Streams<'a> {
     pub(super) fn memory(cap: usize) -> Self {
         Self {
             stdout: Sink::Memory(Vec::with_capacity(cap.min(64 * 1024))),
             stdout_cap: u64::try_from(cap).unwrap_or(u64::MAX),
             stdout_bytes: 0,
             stderr_cap: cap,
+            progress: None,
         }
+    }
+
+    pub(super) fn observe(mut self, output: &'a mut dyn Write, deadline: CheckDeadline) -> Self {
+        self.progress = Some(super::progress::ProgressSink::new(output, deadline));
+        self
     }
 
     pub(super) fn into_memory(self) -> Vec<u8> {
@@ -110,28 +118,36 @@ impl Streams<'_> {
                     .map_err(|error| format!("stdout_sink_write_failed:{error}"))?,
             }
             self.stdout_bytes = next;
+            if let Some(progress) = &mut self.progress {
+                progress.chunk("stdout", bytes)?;
+            }
             Ok(())
         })
     }
 }
 
 #[cfg(unix)]
-pub(super) fn poll_stderr<Fd: std::os::fd::AsFd>(
-    pipe: &mut Option<Fd>,
-    output: &mut Vec<u8>,
-    cap: usize,
-) -> Result<bool, String> {
-    poll_chunk(pipe, |bytes| {
-        let next = output
-            .len()
-            .checked_add(bytes.len())
-            .ok_or_else(|| "output_limit_exceeded".to_owned())?;
-        if next > cap {
-            return Err(format!("stderr_limit_exceeded:{cap}"));
-        }
-        output.extend_from_slice(bytes);
-        Ok(())
-    })
+impl Streams<'_> {
+    pub(super) fn poll_stderr<Fd: std::os::fd::AsFd>(
+        &mut self,
+        pipe: &mut Option<Fd>,
+        output: &mut Vec<u8>,
+    ) -> Result<bool, String> {
+        poll_chunk(pipe, |bytes| {
+            let next = output
+                .len()
+                .checked_add(bytes.len())
+                .ok_or_else(|| "output_limit_exceeded".to_owned())?;
+            if next > self.stderr_cap {
+                return Err(format!("stderr_limit_exceeded:{}", self.stderr_cap));
+            }
+            output.extend_from_slice(bytes);
+            if let Some(progress) = &mut self.progress {
+                progress.chunk("stderr", bytes)?;
+            }
+            Ok(())
+        })
+    }
 }
 
 /// One chunk per turn keeps continuously readable pipes from starving the

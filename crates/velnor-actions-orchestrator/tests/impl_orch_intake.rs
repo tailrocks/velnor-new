@@ -150,7 +150,10 @@ fn intake_tool_changes_refresh_findings_not_tasks() -> TestResult {
     assert_eq!(task_ids_for(root)?, tasks_before);
     let recs_after = prepare(root)?.discovery.recommendations;
     assert_ne!(recs_after, recs_before);
-    fs::write(root.join("mise.toml"), "[tools]\nrust = \"1.2.3\"\n")?;
+    fs::write(
+        root.join("mise.toml"),
+        format!("[tools]\nrust = \"{RUST_VERSION}\"\nnode = \"20.1.0\"\n"),
+    )?;
     assert_eq!(task_ids_for(root)?, tasks_before);
     fs::write(root.join("mise.toml"), "!!! not toml {{{ \n")?;
     fs::write(root.join("rust-toolchain.toml"), "[[[ nope\n")?;
@@ -163,7 +166,7 @@ fn intake_tool_changes_refresh_findings_not_tasks() -> TestResult {
     fs::remove_file(root.join("rust-toolchain.toml"))?;
     let err = err_of(prepare(root).map(|_| ()), "garbage wrapper")?;
     assert!(
-        err.to_string().contains("wrapper_invalid"),
+        err.to_string().contains("malformed_project_tool_source"),
         "diagnostic: {err}"
     );
     fs::remove_file(root.join("mise.toml"))?;

@@ -21,6 +21,9 @@ use inputs::require_tracked_clean_input;
 #[cfg(test)]
 use inputs::valid_stage_zero_regular_file;
 
+#[path = "preview_producer_progress.rs"]
+mod progress;
+
 const MAX_TASK_OUTPUT: usize = 8 * 1024 * 1024;
 
 #[path = "preview_producer_entry.rs"]
@@ -78,6 +81,8 @@ fn execute_preview_task(
         preview,
         handoff: _,
     } = spec;
+    let progress = progress::Progress::producer();
+    progress.mark(progress::Phase::Discovery);
     checkpoint(deadline)?;
     preview.validate(".velnor/config.toml")?;
     if !preview.enabled || !valid_source_ref(source_ref) || !canonical_identity(identity) {
@@ -99,30 +104,25 @@ fn execute_preview_task(
     inputs.extend(discovered.config_inputs.iter().cloned());
     validate_inputs(&root, &inputs, false, deadline)?;
 
-    let output = root.join(&producer.output_directory);
-    reject_link_components(&root, &producer.output_directory)?;
-    if fs::symlink_metadata(&output).is_ok() {
-        return Err(internal("preview_output_preexisting"));
-    }
-    let parent = output
-        .parent()
-        .ok_or_else(|| internal("preview_output_path"))?;
-    create_dir_no_symlink(&root, parent)?;
-    fs::create_dir(&output).map_err(|_| internal("preview_output_create"))?;
-    reject_link_components(&root, &producer.output_directory)?;
+    let output = create_output(&root, &producer.output_directory)?;
 
     let started = Instant::now();
+    progress.mark(progress::Phase::Qualification);
     let owned = prepare_check(&root, temp, &discovered, deadline)?;
+    progress.mark(progress::Phase::QualificationComplete);
     let pairs = producer_handoff(&root, &output, &spec)?;
     let command = owned
         .command(deadline)
         .map_err(|error| internal(&error.to_string()))?
         .with_env(&pairs)
         .map_err(|error| internal(&error.to_string()))?;
+    progress.mark(progress::Phase::Task);
     let task_output = run_preview_task(&command, deadline)?;
+    progress.mark(progress::Phase::TaskComplete);
     validate_inputs(&root, &inputs, true, deadline)?;
     validate_preview_source(&root, identity, deadline)?;
     checkpoint(deadline)?;
+    progress.mark(progress::Phase::SourceRecheckComplete);
     let task_exit_code = task_output.code.unwrap_or(-1);
     Ok(PreviewProducerProof {
         source_sha: identity.source_sha.clone(),
@@ -142,16 +142,36 @@ fn execute_preview_task(
     })
 }
 
+fn create_output(root: &Path, directory: &str) -> Result<std::path::PathBuf, OrchestratorError> {
+    let output = root.join(directory);
+    reject_link_components(root, directory)?;
+    if fs::symlink_metadata(&output).is_ok() {
+        return Err(internal("preview_output_preexisting"));
+    }
+    let parent = output
+        .parent()
+        .ok_or_else(|| internal("preview_output_path"))?;
+    create_dir_no_symlink(root, parent)?;
+    fs::create_dir(&output).map_err(|_| internal("preview_output_create"))?;
+    reject_link_components(root, directory)?;
+    Ok(output)
+}
+
 fn run_preview_task(
     command: &IsolatedCommand,
     deadline: CheckDeadline,
 ) -> Result<ProcessOutput, OrchestratorError> {
     let output = command
-        .run_until(MAX_TASK_OUTPUT, deadline)
+        .run_until_with_progress(MAX_TASK_OUTPUT, deadline, &mut std::io::stderr().lock())
         .map_err(|error| internal(&error.to_string()))?;
-    output
-        .require_success("preview-producer")
-        .map_err(|error| internal(&error.to_string()))?;
+    // Live output has already been escaped. Never re-emit raw captured stderr
+    // through NonZeroExit's Display on a failed credential-free source task.
+    if !output.success {
+        return Err(internal(&format!(
+            "preview_producer_task_failed:code={:?}:signal={:?}",
+            output.code, output.signal
+        )));
+    }
     Ok(output)
 }
 
