@@ -219,6 +219,7 @@ mod tests {
                     cache_mode: Some(CacheMode::Read),
                     environment: None,
                     steps: vec![Step {
+                        parallel: false,
                         name: "Plan".to_owned(),
                         id: None,
                         role: None,

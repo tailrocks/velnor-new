@@ -21,16 +21,12 @@ Workflow to generate
     - plan (11 steps)
     - publish-baseline (5 steps)
     - required (8 steps)
-    - rust-app-docs (15 steps)
-    - rust-app-lint (15 steps)
-    - rust-app-tests (16 steps)
-    - 3 Rust phase jobs
+    - rust-app (20 steps)
+    - 1 Rust crate job
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
       Entries:
-        - rust-app-docs
-        - rust-app-lint
-        - rust-app-tests
+        - rust-app
       Obligations:
         - stack/rust/crates/app/build/default
         - stack/rust/crates/app/clippy/default
@@ -38,8 +34,8 @@ Workflow to generate
         - stack/rust/crates/app/doctest/default
         - stack/rust/crates/app/fmt/default
         - stack/rust/crates/app/nextest/default
-  Parallel: 3 execution jobs; dependencies preserved; no matrix fan-out
-  Critical path: stack/rust/crates/app/clippy/default -> stack/rust/crates/app/build/default -> stack/rust/crates/app/nextest/default (3 tasks)
+  Parallel: 1 execution job; dependencies preserved; no matrix fan-out
+  Critical path: stack/rust/crates/app/build/default -> stack/rust/crates/app/nextest/default (2 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, MBX compilation objects
   Actionlint: 1.7.12 pinned

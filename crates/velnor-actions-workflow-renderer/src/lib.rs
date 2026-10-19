@@ -38,6 +38,7 @@ mod mbx_gc_policy;
 pub mod msrv;
 pub mod overlap;
 pub mod owned_tool_publication;
+mod parallel_steps;
 pub mod plan_format;
 pub mod preseed;
 mod preseed_closure;

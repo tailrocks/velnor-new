@@ -10,6 +10,7 @@ fn obligation_step_skips_when_plan_covered_it() {
         &[],
         None,
         env!("CARGO_PKG_VERSION"),
+        None,
     )
     .expect("step");
     assert_eq!(
@@ -24,7 +25,8 @@ fn obligation_step_skips_when_plan_covered_it() {
             &ToolCatalog::pinned(),
             &[],
             None,
-            env!("CARGO_PKG_VERSION")
+            env!("CARGO_PKG_VERSION"),
+            None
         )
         .expect_err("malformed id")
         .to_string()
@@ -104,6 +106,7 @@ fn doc_obligation_step_carries_typed_rustdocflags() {
         &[],
         None,
         env!("CARGO_PKG_VERSION"),
+        None,
     )
     .expect("step");
     let velnor_actions_contract::StepKind::TaskExecution { env, .. } = &step.kind else {
@@ -154,6 +157,7 @@ fn assert_tofu_step_automation_environment() {
         &[],
         None,
         env!("CARGO_PKG_VERSION"),
+        None,
     )
     .expect("step");
     let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
@@ -206,6 +210,7 @@ fn assert_rust_step_owned_homes() {
         &[],
         None,
         env!("CARGO_PKG_VERSION"),
+        None,
     )
     .expect("step");
     let velnor_actions_contract::StepKind::TaskExecution { env, .. } = &step.kind else {
@@ -236,6 +241,7 @@ fn non_doc_obligation_steps_carry_no_rustdocflags() {
         &[],
         None,
         env!("CARGO_PKG_VERSION"),
+        None,
     )
     .expect("step");
     let velnor_actions_contract::StepKind::TaskExecution { env, .. } = &step.kind else {

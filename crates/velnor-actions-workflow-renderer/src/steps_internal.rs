@@ -54,6 +54,7 @@ pub fn internal_step(name: &str, operation: &str) -> Result<Step, RenderError> {
     split_internal_operation(operation)?;
     scan_for_private_subcommands(name)?;
     Ok(Step {
+        parallel: false,
         name: name.to_owned(),
         id: None,
         role: None,
@@ -74,6 +75,7 @@ pub fn write_request_step(target: &str) -> Result<Step, RenderError> {
         )));
     }
     Ok(Step {
+        parallel: false,
         name: "Write request".to_owned(),
         id: None,
         role: None,
@@ -89,6 +91,7 @@ pub fn write_request_step(target: &str) -> Result<Step, RenderError> {
 #[must_use]
 pub fn plan_step() -> Step {
     Step {
+        parallel: false,
         name: "Plan".to_owned(),
         id: Some(StepId::Plan),
         role: Some(StepRole::PlanProducer),
@@ -104,6 +107,7 @@ pub fn plan_step() -> Step {
 #[must_use]
 pub fn merge_step() -> Step {
     Step {
+        parallel: false,
         name: "Merge reports".to_owned(),
         id: None,
         role: None,
@@ -119,6 +123,7 @@ pub fn merge_step() -> Step {
 #[must_use]
 pub fn publish_step() -> Step {
     Step {
+        parallel: false,
         name: "Publish baseline".to_owned(),
         id: Some(StepId::PublishBaseline),
         role: Some(StepRole::BaselinePublisher),

@@ -98,6 +98,7 @@ fn scalar_validators_accept_and_reject() -> Result<(), RenderError> {
 #[test]
 fn release_job_shape_roundtrip() -> Result<(), RenderError> {
     let shell = Step {
+        parallel: false,
         name: "Check out".to_owned(),
         id: None,
         role: None,
@@ -121,6 +122,7 @@ fn release_job_shape_roundtrip() -> Result<(), RenderError> {
     job.validate_shape("preflight")?;
     let internal = ReleaseJobSpec {
         steps: vec![Step {
+            parallel: false,
             name: "Plan".to_owned(),
             id: None,
             role: None,

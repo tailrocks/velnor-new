@@ -160,10 +160,8 @@ fn mbx_evidence_keeps_plan_mise_free_and_uses_task_action() -> TestResult {
         "the non-compiling plan job must not install MBX:\n{}",
         steps[prepare_at].1
     );
-    for phase in ["lint", "tests", "docs"] {
-        let task_start = yaml
-            .find(&format!("  rust-demo-{phase}:"))
-            .ok_or("missing MBX task phase")?;
+    {
+        let task_start = yaml.find("  rust-demo:").ok_or("missing MBX task job")?;
         let task_tail = &yaml[task_start..];
         let mut task_end = 0;
         for line in task_tail.split_inclusive('\n') {

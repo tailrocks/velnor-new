@@ -84,6 +84,7 @@ fn shell_step_with_env_validation(
     let mut env_map = env;
     env_map.extend(crate::toolchain_env::credential_scrub());
     Ok(Step {
+        parallel: false,
         name: name.to_owned(),
         id: None,
         role: None,
@@ -111,6 +112,7 @@ pub fn ambient_shell_step(
     commands::validate_env(&env)?;
     steps::scan_for_private_subcommands(name)?;
     Ok(Step {
+        parallel: false,
         name: name.to_owned(),
         id: None,
         role: None,

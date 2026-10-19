@@ -41,7 +41,8 @@ impl ActionlintToolchain {
 
     /// Staged lint arguments for one pinned-binary invocation.
     ///
-    /// Returns `["-no-color", "-oneline", "-config-file", config, ...workflows]`
+    /// Returns `["-no-color", "-oneline", "-config-file", config,
+    /// ...step_parallelism_ignore_args(), ...workflows]`
     /// so the staged config and every staged workflow share a single
     /// invocation of the pinned binary. Pure data: the caller spawns via Mise.
     #[must_use]
@@ -52,9 +53,22 @@ impl ActionlintToolchain {
             "-config-file".to_owned(),
             config_path.to_owned(),
         ];
+        argv.extend(step_parallelism_ignore_args());
         argv.extend(workflows.iter().cloned());
         argv
     }
+}
+
+/// `-ignore` argument pairs required by the pinned release's capabilities.
+#[must_use]
+pub fn step_parallelism_ignore_args() -> Vec<String> {
+    if !crate::ActionlintCapabilities::for_pinned().requires_step_parallelism_bridge() {
+        return Vec::new();
+    }
+    crate::STEP_PARALLELISM_IGNORES
+        .iter()
+        .flat_map(|pattern| ["-ignore".to_owned(), (*pattern).to_owned()])
+        .collect()
 }
 
 impl Default for ActionlintToolchain {

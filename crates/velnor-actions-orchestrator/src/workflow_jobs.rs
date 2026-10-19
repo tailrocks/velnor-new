@@ -1,7 +1,7 @@
 //! Workflow job constructors: plan, lint, and final gate.
 //!
-//! Crate jobs live in [`crate::crate_jobs`]: each nonempty Rust phase owns
-//! ordered obligations for one crate and configuration. Every owner needs the
+//! Crate jobs live in [`crate::crate_jobs`]: one job per crate and
+//! configuration runs its checks as parallel steps. Every owner needs the
 //! plan and its external gate owners; the final gate below needs them all.
 
 use std::collections::BTreeMap;
@@ -129,10 +129,16 @@ pub(crate) fn plan_job(
 /// Always-on lint job: checkout, pinned installation, then actionlint.
 pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, OrchestratorError> {
     let program = OsString::from("actionlint");
+    let mut lint_args = vec![OsString::from("-color")];
+    lint_args.extend(
+        velnor_actions_actionlint::step_parallelism_ignore_args()
+            .into_iter()
+            .map(OsString::from),
+    );
     let exec = PinnedToolExec::new(
         vec![PinnedTool::Actionlint, PinnedTool::Shellcheck],
         &program,
-        vec![OsString::from("-color")],
+        lint_args,
     )
     .map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),

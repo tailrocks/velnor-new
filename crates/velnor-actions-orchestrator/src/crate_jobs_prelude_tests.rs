@@ -1,10 +1,10 @@
-//! Shared assertions for each closed phase prelude.
+//! Shared assertions for each crate-job prelude.
 
 use velnor_actions_contract::Job;
 
 use super::names;
 
-pub(super) fn assert_phase_preludes(jobs: &[(String, Job)]) {
+pub(super) fn assert_crate_preludes(jobs: &[(String, Job)]) {
     for (id, job) in jobs {
         assert!(!id.contains("velnor"), "unbranded {id}");
         let steps = names(job);

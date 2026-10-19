@@ -208,6 +208,32 @@ pub fn tool_needs(compile_driver: &str, test_runner: &str) -> ToolNeeds {
     }
 }
 
+/// Whether a task kind runs sequentially before a crate job's parallel checks.
+///
+/// Only the Nextest test-executable build is a same-job data producer; every
+/// other check runs in the parallel group, so its failure skips nothing else.
+#[must_use]
+pub fn runs_before_parallel_checks(kind: &str) -> bool {
+    TaskKind::parse(kind) == Ok(TaskKind::Build)
+}
+
+/// Cargo target-directory lane for checks that run beside test execution.
+///
+/// One crate job builds its test executables first and then runs every other
+/// check concurrently. Cargo locks a target directory for a whole build, so
+/// Clippy and documentation compile in their own lane below the workspace
+/// `target/` (inside the MBX target cache payload) instead of serializing
+/// test execution and doctests behind them. Formatting compiles nothing;
+/// tests and doctests reuse the executables in the workspace target.
+#[must_use]
+pub fn concurrent_target_lane(kind: &str) -> Option<&'static str> {
+    match TaskKind::parse(kind) {
+        Ok(TaskKind::Clippy) => Some("velnor-clippy"),
+        Ok(TaskKind::Doc) => Some("velnor-doc"),
+        _ => None,
+    }
+}
+
 /// Fixed payload env for one kind spelling; empty unless `doc`.
 #[must_use]
 pub fn payload_env_for_kind(kind: &str) -> Vec<(OsString, OsString)> {

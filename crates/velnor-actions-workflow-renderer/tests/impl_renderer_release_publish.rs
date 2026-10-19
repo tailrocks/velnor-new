@@ -310,6 +310,7 @@ fn reconcile_is_credential_free_and_internal_ops_rejected() -> Result<(), Render
             .starts_with("secret_outside_bootstrap:")
     );
     let internal = Step {
+        parallel: false,
         name: "Plan".to_owned(),
         id: None,
         role: None,

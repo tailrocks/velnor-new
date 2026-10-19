@@ -1,8 +1,9 @@
-//! Shared planner/renderer execution ownership for fixed Rust capacity phases.
+//! Shared planner/renderer execution ownership: one job per crate.
 //!
-//! Runnable obligations group by package, unchanged configuration and fixed
-//! execution responsibility. The contract assigns collision-safe unbranded
-//! package/configuration IDs before Rust phase suffixes are appended. Both
+//! Runnable obligations group by stack, package and unchanged configuration.
+//! Every Rust package/configuration owns exactly one job whose checks run as
+//! parallel steps (see `docs/hard-decisions.md`); there are no per-phase
+//! jobs. The contract assigns collision-safe package/configuration IDs. Both
 //! [`build_crate_jobs`](crate::crate_jobs::build_crate_jobs) and the planner
 //! resolve through this module, so emitted owners and per-entry job bindings
 //! cannot disagree about the complete runnable task universe.
@@ -13,27 +14,24 @@ use velnor_actions_contract::{
     CRATE_JOB_ID_PREFIX, ContractError, ProposedTask, Stack, TOFU_JOB_ID_PREFIX,
     assign_crate_job_ids,
 };
-use velnor_actions_rust::RustJobPhase;
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 
-/// One package/configuration and its closed execution responsibility.
+/// One stack's package/configuration execution owner.
+///
+/// The stack keeps collocated Rust and `OpenTofu` obligations in separate jobs.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct CrateGroupKey {
     pub(crate) package_id: String,
     pub(crate) configuration: String,
-    pub(crate) phase: Option<RustJobPhase>,
+    pub(crate) stack: Stack,
 }
 
 impl CrateGroupKey {
     fn for_member(member: &ProposedTask) -> Result<Self, ContractError> {
-        let phase = match Stack::require_known(&member.stack_id)? {
-            Stack::Rust => Some(RustJobPhase::from_task_kind(&member.task_kind)?),
-            Stack::Tofu | Stack::Mise => None,
-        };
         Ok(Self {
             package_id: member.identity.unit_id.clone(),
             configuration: member.configuration.clone(),
-            phase,
+            stack: Stack::require_known(&member.stack_id)?,
         })
     }
 }
@@ -77,15 +75,15 @@ impl<'a> JobOwners<'a> {
     /// Owning job from the same complete assignment used by emission.
     ///
     /// No-target tasks have no execution owner. Workspace tasks belong to Plan;
-    /// named checks retain their dedicated check job and do not enter Rust phases.
-    /// Every other member resolves through the renderer's runnable grouping and
-    /// complete collision assignment. `None` means no execution is emitted or the
-    /// member is absent from those assignment inputs; a runnable plan member must
-    /// have an owner. This lookup never manufactures an unsuffixed Rust fallback.
+    /// named checks retain their dedicated check job and do not enter crate
+    /// jobs. Every other member resolves through the renderer's runnable
+    /// grouping and complete collision assignment. `None` means no execution
+    /// is emitted or the member is absent from those assignment inputs; a
+    /// runnable plan member must have an owner.
     ///
     /// # Errors
-    /// Rejects an unknown member stack or Rust kind. Construction already
-    /// rejects invalid kinds anywhere in the complete runnable universe.
+    /// Rejects an unknown member stack. Construction already rejects unknown
+    /// stacks anywhere in the complete runnable universe.
     pub(crate) fn for_member(
         &self,
         member: &ProposedTask,
@@ -106,14 +104,13 @@ impl<'a> JobOwners<'a> {
     }
 }
 
-/// Assign collision-safe package/configuration IDs once, then fixed phases.
+/// Assign collision-safe package/configuration IDs once.
 ///
-/// Configuration identity is never overloaded with a phase. All-Tofu jobs keep
-/// their existing namespace and IDs; Rust groups have no legacy unsuffixed job.
-/// Collocated Rust and Tofu obligations occupy different execution groups.
-/// Prefixes separate their namespaces; the contract disambiguates colliding
-/// package/configuration slugs within each namespace before any phase suffix
-/// is applied. Planner and renderer use this same complete assignment rather
+/// All-Tofu jobs keep their namespace and IDs; each Rust package/configuration
+/// owns one `rust-<slug>` job. Collocated Rust and Tofu obligations occupy
+/// different execution groups. Prefixes separate their namespaces; the
+/// contract disambiguates colliding package/configuration slugs within each
+/// namespace. Planner and renderer use this same complete assignment rather
 /// than assigning independently from a selected subset of obligations.
 pub(crate) fn assign_group_ids(
     grouped: &BTreeMap<CrateGroupKey, Vec<&ProposedTask>>,
@@ -125,16 +122,12 @@ pub(crate) fn assign_group_ids(
         .iter()
         .filter_map(|(key, members)| {
             let base_key = (key.package_id.clone(), key.configuration.clone());
-            let base = if group_is_tofu(members) {
+            let id = if group_is_tofu(members) {
                 tofu_ids.get(&base_key)
             } else {
                 rust_ids.get(&base_key)
             }?;
-            let id = key.phase.map_or_else(
-                || base.clone(),
-                |phase| format!("{base}-{}", phase.as_str()),
-            );
-            Some((key.clone(), id))
+            Some((key.clone(), id.clone()))
         })
         .collect()
 }
@@ -147,7 +140,7 @@ pub(crate) fn group_is_tofu(members: &[&ProposedTask]) -> bool {
             .all(|task| Stack::from_id(&task.stack_id) == Some(Stack::Tofu))
 }
 
-/// Runnable proposals, each in exactly one package/configuration/phase group.
+/// Runnable proposals, each in exactly one stack/package/configuration group.
 ///
 /// Tasks without executable targets remain absent because no command is
 /// emitted for them. Package-less workspace tasks stay in Plan, and named
@@ -171,13 +164,12 @@ pub(crate) fn group_runnable(
     Ok(grouped)
 }
 
-/// Existing package/configuration collision input triples, independent of phase:
+/// Package/configuration collision input triples:
 /// `(package_id, package_name, configuration)`.
 type IdInputs = BTreeSet<(String, String, String)>;
 
-/// Collect one package/configuration identity per stack from each group's first
-/// member. Deduplication across Rust phases makes base collision assignment
-/// independent of which fixed responsibilities a package happens to contain.
+/// Collect one package/configuration identity per stack from each group's
+/// first member.
 fn id_inputs(grouped: &BTreeMap<CrateGroupKey, Vec<&ProposedTask>>) -> (IdInputs, IdInputs) {
     let mut rust = BTreeSet::new();
     let mut tofu = BTreeSet::new();

@@ -321,8 +321,8 @@ fn restore_precedes_init_precedes_validate() -> TestResult {
     let ids = sorted_crate_ids(&jobs);
     assert_eq!(
         ids.join(","),
-        "rust-demo-docs,rust-demo-lint,rust-demo-tests,tofu-stacks-a",
-        "three Rust phases and one unchanged Tofu root"
+        "rust-demo,tofu-stacks-a",
+        "one Rust crate job and one unchanged Tofu root"
     );
     for id in &ids {
         let job = jobs.get(id).ok_or("missing crate job")?;

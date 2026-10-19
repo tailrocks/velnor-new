@@ -136,9 +136,9 @@ fn crate_job_ids(jobs: &BTreeMap<String, Job>) -> Vec<&str> {
         .collect()
 }
 
-/// Phase/root job counts plus the complete obligation-kind list.
+/// Crate/root job counts plus the complete obligation-kind list.
 ///
-/// Counts finalized phase/root jobs, never task groups; otherwise the
+/// Counts finalized crate/root jobs, never task groups; otherwise the
 /// static no-work line keeps plan and YAML in agreement.
 fn crate_lines(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<String, Job>) {
     let crates = crate_job_ids(jobs);
@@ -151,7 +151,7 @@ fn crate_lines(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<S
         .filter(|id| id.starts_with(CRATE_JOB_ID_PREFIX))
         .count();
     let tofu = crates.len() - rust;
-    count_line(out, rust, "Rust phase job");
+    count_line(out, rust, "Rust crate job");
     count_line(out, tofu, "OpenTofu root job");
     if let Some(job) = crates.first().and_then(|id| jobs.get(*id)) {
         let minutes = job.timeout_minutes.minutes();
@@ -185,7 +185,7 @@ fn crate_lines(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<S
 
 /// One per-stack count line; zero-count stacks stay silent.
 ///
-/// Rust counts its closed execution phases; Tofu counts validation roots.
+/// Rust counts one job per crate; Tofu counts validation roots.
 /// Both derive from finalized jobs in fixed display order.
 fn count_line(out: &mut String, count: usize, label: &str) {
     if count == 1 {

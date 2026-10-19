@@ -71,6 +71,10 @@ fn gen_2_16_staged_argv_lints_config_and_workflows_together() {
             "-oneline".to_owned(),
             "-config-file".to_owned(),
             ".github/actionlint.yaml".to_owned(),
+            "-ignore".to_owned(),
+            velnor_actions_actionlint::STEP_PARALLELISM_IGNORES[0].to_owned(),
+            "-ignore".to_owned(),
+            velnor_actions_actionlint::STEP_PARALLELISM_IGNORES[1].to_owned(),
             ".github/workflows/a.yml".to_owned(),
             ".github/workflows/ci.yml".to_owned(),
         ]

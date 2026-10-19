@@ -191,6 +191,7 @@ fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
         cache_mode: None,
         environment: None,
         steps: vec![Step {
+            parallel: false,
             name: "Checkout".to_owned(),
             id: None,
             role: None,

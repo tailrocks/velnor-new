@@ -7,6 +7,7 @@ use velnor_actions_contract::{Step, StepKind};
 #[test]
 fn dispatch_denies_the_local_tool_seed_action() {
     let seed = Step {
+        parallel: false,
         name: crate::tool_seed::TOOL_SEED_NAME.to_owned(),
         id: None,
         role: Some(velnor_actions_contract::StepRole::ToolSeed),
