@@ -32,7 +32,7 @@ fn merge_gate_accepts_github_output_environment() -> Result<(), Box<dyn Error>> 
             ),
             ("RUNNER_TEMP", tmp.to_str().ok_or("temporary path")?),
             ("GITHUB_RUN_ID", "42"),
-            ("GITHUB_EVENT_NAME", "push"),
+            ("GITHUB_EVENT_NAME", "workflow_run"),
             ("GITHUB_OUTPUT", output_file.to_str().ok_or("output path")?),
             ("VELNOR_TAP_MERGE_TOKEN", "merge-token"),
             ("VELNOR_TAP_PROTECTION_TOKEN", "observer-token"),

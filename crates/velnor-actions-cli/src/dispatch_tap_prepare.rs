@@ -7,8 +7,8 @@ use std::{
     process::ExitCode,
 };
 use velnor_actions_orchestrator::{
-    OrchestratorError, TapPromotionOutcome, TapPromotionReceipt, prepare_homebrew_tap_from_env,
-    write_homebrew_tap_pr_from_env,
+    OrchestratorError, TapPromotionOutcome, TapPromotionReceipt, admit_homebrew_tap_from_env,
+    prepare_homebrew_tap_from_env, write_homebrew_tap_pr_from_env,
 };
 
 const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
@@ -19,7 +19,60 @@ const CANDIDATE_DIR: &str = "tap-candidate";
 
 /// Admit only the fixed package plan plus retained signed release assets.
 pub(super) fn gate_request(path: &Path) -> Option<PathBuf> {
+    if ["GH_TOKEN", "GITHUB_TOKEN"]
+        .iter()
+        .any(|key| env::var_os(key).is_some())
+        || env::var("GITHUB_JOB").as_deref() != Ok("preview-tap-prepare")
+        || !env::var("VELNOR_TAP_ADMISSION_DIGEST").is_ok_and(|value| valid_digest(&value))
+    {
+        return None;
+    }
+    let request = gate_common(path, false)?;
+    let record = path.parent()?.join("tap-admission.json");
+    is_regular_file(&record).then_some(request)
+}
+
+/// Authenticate before any source checkout or updater configuration is read.
+pub(super) fn gate_admission_request(path: &Path) -> Option<PathBuf> {
+    if env::var("GITHUB_JOB").as_deref() != Ok("preview-tap-prepare")
+        || !env::var("GH_TOKEN").is_ok_and(|value| !value.is_empty())
+        || !env::var_os("GITHUB_OUTPUT")
+            .map(PathBuf::from)
+            .is_some_and(|path| path.is_absolute() && is_regular_file(&path))
+    {
+        return None;
+    }
     gate_common(path, false)
+}
+
+fn valid_digest(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+/// Publish only the authenticated metadata digest to the runner-owned step output.
+pub(super) fn run_admission() -> ExitCode {
+    let digest = match admit_homebrew_tap_from_env() {
+        Ok(digest) if valid_digest(&digest) => digest,
+        Ok(_) => return super::fail_internal("tap_admission_output_digest"),
+        Err(error) => return fail_error(&error),
+    };
+    let Some(path) = env::var_os("GITHUB_OUTPUT")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute() && is_regular_file(path))
+    else {
+        return super::fail_internal("tap_admission_output_missing");
+    };
+    match fs::OpenOptions::new()
+        .append(true)
+        .open(path)
+        .and_then(|mut file| writeln!(file, "admission_digest={digest}"))
+    {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(_) => super::fail_internal("tap_admission_output_write"),
+    }
 }
 
 /// Admit only the fixed request, signed package handoff, candidate files, and App token.
@@ -81,15 +134,32 @@ fn gate_common(path: &Path, writer: bool) -> Option<PathBuf> {
 
 pub(crate) fn package_input_available(root: &Path) -> bool {
     match env::var("GITHUB_EVENT_NAME").as_deref() {
-        Ok("push") => is_real_directory(&root.join(PACKAGE_INPUT_DIR)),
-        Ok("workflow_dispatch") => {
-            env::var("VELNOR_RELEASE_ORIGINAL_RUN_ID")
-                .is_ok_and(|value| value.parse::<u64>().is_ok_and(|id| id > 0))
-                && env::var("VELNOR_RELEASE_ORIGINAL_RUN_ATTEMPT")
-                    .is_ok_and(|value| value.parse::<u32>().is_ok_and(|attempt| attempt > 0))
-        }
+        Ok("workflow_run") => is_real_directory(&root.join(PACKAGE_INPUT_DIR)),
+        Ok("workflow_dispatch") => original_run_available(),
+        Ok("schedule") => continuation_context() && original_run_available(),
         _ => false,
     }
+}
+
+fn original_run_available() -> bool {
+    env::var("VELNOR_RELEASE_ORIGINAL_RUN_ID")
+        .is_ok_and(|value| value.parse::<u64>().is_ok_and(|id| id > 0))
+        && env::var("VELNOR_RELEASE_ORIGINAL_RUN_ATTEMPT")
+            .is_ok_and(|value| value.parse::<u32>().is_ok_and(|attempt| attempt > 0))
+}
+
+fn continuation_context() -> bool {
+    let Ok(repository) = env::var("GITHUB_REPOSITORY") else {
+        return false;
+    };
+    !repository.is_empty()
+        && env::var("GITHUB_REF").as_deref() == Ok("refs/heads/main")
+        && env::var("GITHUB_WORKFLOW_REF").is_ok_and(|value| {
+            value
+                == format!(
+                    "{repository}/.github/workflows/preview-tap-reconcile.yml@refs/heads/main"
+                )
+        })
 }
 
 /// Run the unprivileged updater and literal-only validator.

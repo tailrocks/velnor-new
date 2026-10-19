@@ -1,23 +1,34 @@
 //! Fixed runner-temp handoff for the unprivileged tap updater.
 
-use super::{
-    HomebrewTapPreparationProof, OrchestratorError, VerifiedPreviewRelease, internal,
-    prepare_homebrew_tap,
-};
+use super::{HomebrewTapPreparationProof, OrchestratorError, internal, prepare_homebrew_tap};
 use std::{env, fs, path::PathBuf};
 use velnor_actions_contract::{canonical_json_bytes, config::HomebrewTapConfig, parse_strict_json};
+
+#[path = "tap_prepare_admission.rs"]
+mod admission;
+pub use admission::{ADMIT_HOMEBREW_TAP_OP, admit_homebrew_tap_from_env};
 
 /// Private CLI operation selecting native Homebrew tap preparation.
 pub const PREPARE_HOMEBREW_TAP_OP: &str = "prepare-homebrew-tap-v1";
 
 /// Execute tap preparation from the fixed, upstream-verified receipt handoff.
 ///
-/// The retained signer artifact is reauthenticated here against the fixed
-/// package-release plan and exact workflow identity. This boundary then checks
+/// A preceding source-free admission authenticates the retained signer artifact
+/// against the plan and workflow identity, then exits. This token-free boundary checks
 /// source configuration, captured tap main, task provenance, and formula bytes.
 /// # Errors
 /// Rejects missing or malformed request context and every preparation failure.
 pub fn prepare_homebrew_tap_from_env() -> Result<HomebrewTapPreparationProof, OrchestratorError> {
+    admission::reject_credentials()?;
+    let deadline = admission::deadline()?;
+    deadline
+        .scope(|| prepare_admitted(deadline))
+        .map_err(|error| internal(&error.to_string()))?
+}
+
+fn prepare_admitted(
+    deadline: velnor_actions_mise::CheckDeadline,
+) -> Result<HomebrewTapPreparationProof, OrchestratorError> {
     let workspace = absolute_env("GITHUB_WORKSPACE", "tap_workspace")?;
     let runner_temp = absolute_env("RUNNER_TEMP", "tap_runner_temp")?;
     let root = runner_temp.join("velnor");
@@ -25,9 +36,9 @@ pub fn prepare_homebrew_tap_from_env() -> Result<HomebrewTapPreparationProof, Or
     {
         return Err(internal("tap_runner_temp_untrusted"));
     }
-    let signed = crate::package_release_signer::verify_attested_signed_package_from_env()?;
-    let receipt = signed.receipt().clone();
-    let plan = signed.plan().clone();
+    let admitted = admission::load(&root, deadline)?;
+    let receipt = admitted.receipt;
+    let plan = admitted.plan;
     let receipt_digest = receipt
         .canonical_digest()
         .map_err(|_| internal("tap_prepare_receipt_digest"))?;
@@ -50,7 +61,7 @@ pub fn prepare_homebrew_tap_from_env() -> Result<HomebrewTapPreparationProof, Or
         .map(|rust| &rust.binary_release.preview)
         .ok_or_else(|| internal("tap_prepare_preview_policy_missing"))?;
     let source_repository = crate::release_identity::origin_repository(&workspace)?;
-    let release = VerifiedPreviewRelease {
+    let release = super::VerifiedPreviewRelease {
         receipt_digest,
         receipt,
     };
@@ -75,7 +86,7 @@ pub(super) fn static_tap_policy() -> Result<HomebrewTapConfig, OrchestratorError
     Ok(policy)
 }
 
-fn absolute_env(key: &str, problem: &str) -> Result<PathBuf, OrchestratorError> {
+pub(super) fn absolute_env(key: &str, problem: &str) -> Result<PathBuf, OrchestratorError> {
     let value = env::var_os(key)
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)

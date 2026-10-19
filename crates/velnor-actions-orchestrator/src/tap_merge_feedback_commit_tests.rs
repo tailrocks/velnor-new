@@ -24,7 +24,15 @@ fn api(comments: Vec<Value>, fail_second_page: bool) -> (TapMergeGitHub, Rc<Cell
             .iter()
             .map(|arg| arg.to_string_lossy())
             .collect::<Vec<_>>();
-        let body = if strings.iter().any(|arg| arg.contains("/commits/")) {
+        let route = strings
+            .iter()
+            .find(|arg| arg.starts_with("repos/"))
+            .map(AsRef::as_ref);
+        let body = if route == Some("repos/owner/tap/pulls/21") {
+            json!({"number":21,"commits":1,"head":{"sha":"a".repeat(40)}})
+        } else if route == Some("repos/owner/tap/pulls/21/commits?per_page=100&page=1") {
+            json!([{"sha":"a".repeat(40)}])
+        } else if strings.iter().any(|arg| arg.contains("/commits/")) {
             observed.set(observed.get() + 1);
             let route = strings
                 .iter()

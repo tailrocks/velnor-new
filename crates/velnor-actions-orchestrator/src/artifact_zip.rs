@@ -266,7 +266,7 @@ fn invalid(reason: &str) -> OrchestratorError {
 }
 
 /// One native recovery/promotion budget, intersected with any enclosing operation.
-pub(super) fn within_operation<T>(
+pub(crate) fn within_operation<T>(
     operation: impl FnOnce() -> Result<T, OrchestratorError>,
 ) -> Result<T, OrchestratorError> {
     let budget = std::time::Duration::from_secs(

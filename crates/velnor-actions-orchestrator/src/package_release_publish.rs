@@ -59,6 +59,14 @@ pub(crate) fn verify_tap_update_environment(
     github::verify_tap_update_environment(repository, branch)
 }
 
+#[path = "package_release_continuation.rs"]
+mod continuation;
+pub(crate) use continuation::verify_current_source;
+pub use continuation::{
+    PreviewTapContinuationSelection, SELECT_PREVIEW_TAP_CONTINUATION_OP,
+    select_preview_tap_continuation_from_env,
+};
+
 #[path = "package_release_publish_recovery.rs"]
 mod recovery;
 pub(crate) use recovery::verify_original_for_promotion;

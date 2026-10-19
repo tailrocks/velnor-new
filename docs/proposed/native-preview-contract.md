@@ -293,82 +293,8 @@ Distribution acceptance: updater executes without write credential; malicious fo
 
 These are specification acceptance requirements, not claims that the generator, publisher, App boundary, repository settings, or live upgrade pipeline already pass them. Official Velnor release and two real consecutive Jackin upgrades remain separate completion gates.
 
-### Exact-head merge admission
-
-The native merge gate consumes authenticated required-check and feedback
-observations. The configured completion App must be distinct from the writer
-App; every expected reviewer App must be distinct from the writer. Runtime
-compares numeric identities, not merely different variable names. Check metadata
-must come from GitHub's check-run API, never from a self-declared App ID in output.
-
-Completion binds the full normalized feedback snapshot: all paginated review,
-comment (including commit comments), reply, current and outdated thread, and
-justified-disposition records. Each authenticated tap PR contains exactly one
-commit above its validated base; capture therefore paginates comments on that
-exact head, including for historical same-receipt PRs. The REST endpoint is
-[`GET /repos/{owner}/{repo}/commits/{commit_sha}/comments`](https://docs.github.com/en/rest/commits/comments#list-commit-comments),
-checked against GitHub's documentation on 2026-10-19. The snapshot includes the exact PR head and a canonical digest of those records.
-A new comment or disposition change invalidates earlier completion. Unresolved
-threads, findings without an independently verified accepted/rejected disposition,
-and outstanding change requests block merge even if a trusted check says success.
-Every configured reviewer must have terminal completion for this exact head;
-missing comments or elapsed time do not establish completion.
-
-The final admission re-fetches tap main and PR head and requires both to equal
-the independently validated base and formula commit. Every active required check,
-including DCO, must complete successfully on that exact commit with any required
-App binding. The squash request must carry the validated head SHA as its API
-precondition. A changed base requires preparation again. This contract and its
-negative acceptance tests do not themselves deploy a trusted completion App or
-prove any existing review provider's terminal-completion semantics; unattended
-merge remains disabled until that provider is selected and verified on real PRs.
-
-The completion check's `output.text` is exact canonical UTF-8 JSON using
-`velnor.review-completion.v1`, without a Markdown wrapper. It contains
-`schema`, `repository`, `pull_request_number`, `head_sha`, `verdict` (only
-`complete`), `feedback_digest`, `has_unaddressed_findings` (false), and a sorted
-unique `reviewers` array. Each reviewer has `app_id`, `head_sha`,
-`evidence_digest`, `complete` (true), and `has_unaddressed_findings` (false).
-Digests use the canonical `b3-<64 lowercase hex>` form. Unknown schemas, states,
-fields, duplicate keys, noncanonical text, missing/duplicate reviewers, and a
-failed actual check reject. Numeric App identity, check name, actual head and
-actual result are fetched independently from GitHub; payload fields cannot
-replace those facts. Snapshot and payload bind both repository and PR number so
-completion cannot be replayed between PRs sharing a commit.
-
-This payload authenticates review completion for one exact PR head. It is not
-the complete merge authorization by itself: the runtime separately re-fetches
-and validates target/base, PR author and branch, formula blob/tree, and source
-receipt, then combines those authenticated facts with this completion signal,
-the exact-head checks, and current feedback before calling the pure merge
-admission contract.
-
-The [merge REST API](https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request)
-provides a head-SHA precondition, not a base-SHA precondition. Therefore tap main
-must require pull requests, resolved review threads, and strict up-to-date status
-checks, with no writer App bypass. GitHub documents that required status checks
-alone still allow commits to be pushed directly to the protected branch; strictness
-only requires branches to be current before merging. A PR-only promotion contract
-must therefore authenticate the server's PR rule separately. Force-pushes and
-deletion must also be blocked so tap history cannot be rewritten or removed to
-evade monotonic version checks. Otherwise tap main could advance between the final
-read and merge request, or be rewritten afterward, allowing an older formula to
-replace a newer preview. Native merge admission fails if any of these controls is
-absent or bypassable. Re-reading the base immediately before merge is necessary
-but does not replace server enforcement.
-If classic protection exempts administrators, native admission requires active
-effective rulesets to supply PR and resolved-thread protection, strict checks,
-force-push and deletion protection, DCO and completion bindings, and every
-required classic check binding, with no writer bypass.
-Strictness evidence requires a nonempty validated check list from that same
-source; an empty strict rule cannot qualify checks supplied only by a loose
-source. Absent classic protection does not invent an administrator exemption. This keeps
-complementary protection sources usable without treating an exempt classic check
-as server-enforced authority.
-Required-check contexts must also bind an explicit numeric integration/App ID in
-repository protection. An unbound context cannot establish trusted CI merely by
-matching a display name, so native merge admission rejects it. Duplicate matching
-checks are ambiguous and block promotion.
+The exact-head feedback, completion, and server-enforced protection requirements
+are defined in the [native Homebrew merge contract](native-homebrew-merge-contract.md).
 
 ## Implementation qualification status
 
@@ -400,3 +326,44 @@ The following acceptance work remains before the feature is complete:
   repository prerequisites, and prove two consecutive real prebuilt Homebrew
   upgrades, signature/capsule loading, immutable first-release availability, and
   the required negative scenarios.
+
+
+## Retained tap continuation
+
+When native tap distribution is enabled, generation also owns
+`.github/workflows/preview-tap-reconcile.yml`. Its fixed five-minute cron and
+input-free manual trigger run on the actual default-branch context. A source-free
+selector checks out the exact workflow commit only to run the fixed complete Git
+history counter; it executes no repository task or Cargo code. The native selector
+authenticates live main, latest exact-source CI, canonical version/count, immutable
+tag and published receipt hints. Hints only select a candidate: every later
+preparation, write and merge independently performs full retained signature and
+crypto verification before executing an updater or performing a write.
+
+The four literal jobs are selection, unprivileged tap preparation, independent
+writer, and one-shot merge, each bounded by five minutes. Their fixed
+reconciliation concurrency group is distinct from publication. With the workflows’
+default queue behavior, GitHub allows one running and one pending run per group. A new queued run
+replaces the existing pending run even with `cancel-in-progress: false`.
+Consequently a periodic reconciliation run must not share publication's group:
+it could otherwise discard the newest pending source publication. See GitHub's
+[workflow concurrency contract](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
+Independent remote verification and deterministic/CAS writer admission remain
+responsible for cross-workflow races. The closed invocation context binds all downstream
+source, original run/attempt and CI fields to native selector outputs. It downloads
+no current-run signed artifact and never invokes recovery publication, signing,
+producer builds or dispatch. Existing current-run candidate/PR handoffs and exact
+credential isolation remain unchanged. Pending review/check states leave the PR
+pending for a later independent invocation; no polling loop or gate waiver exists.
+
+
+Tap updater credential custody uses the same process boundary as production:
+`admit-homebrew-tap-v1` authenticates the full original signed release before
+checkout or source preparation, writes an exclusive canonical full-plan/receipt,
+policy and invocation binding, and emits its digest as a native step output.
+That authenticated process exits. `prepare-homebrew-tap-v1` starts with credentials
+scrubbed, rejects either token variable even when empty, admits the exact prior
+step digest and fixed record, and only then loads source configuration or starts
+an updater. It consumes the authenticated receipt without copying payloads or
+performing later authenticated operations in the source job. Independent writer
+and merge jobs continue their own full remote verification.

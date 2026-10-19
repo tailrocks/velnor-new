@@ -24,7 +24,10 @@ mod updater;
 #[path = "tap_writer.rs"]
 mod writer;
 pub(crate) use candidate::reconstruct_historical_candidate_proof;
-pub use execute::{PREPARE_HOMEBREW_TAP_OP, prepare_homebrew_tap_from_env};
+pub use execute::{
+    ADMIT_HOMEBREW_TAP_OP, PREPARE_HOMEBREW_TAP_OP, admit_homebrew_tap_from_env,
+    prepare_homebrew_tap_from_env,
+};
 pub use proof::{HomebrewTapPreparationProof, TapPreparationDisposition};
 pub(super) use snapshot::{
     read_formula, sha256, snapshot_tree, validate_formula_only_delta, validate_tree_snapshot,

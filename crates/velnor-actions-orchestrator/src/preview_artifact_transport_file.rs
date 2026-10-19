@@ -76,7 +76,7 @@ impl SealedArchive {
         })
     }
 
-    pub(super) fn output(&mut self) -> &mut File {
+    pub(super) fn destination_file(&mut self) -> &mut File {
         &mut self.file
     }
 

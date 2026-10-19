@@ -147,6 +147,11 @@ fn add_feedback_responses(
 ) {
     put(
         map,
+        format!("repos/{repository}/pulls/{number}/commits?per_page=100&page=1"),
+        json!([{"sha":head}]),
+    );
+    put(
+        map,
         format!("repos/{repository}/pulls/{number}/reviews?per_page=100&page=1"),
         json!([]),
     );

@@ -98,6 +98,7 @@ fn assert_contract_modules(root: &str) {
             "preview_production",
             "propose",
             "publication_retry",
+            "review_completion",
             "secrets",
             "strict_json",
             "targets",

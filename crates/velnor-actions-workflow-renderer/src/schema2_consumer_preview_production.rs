@@ -164,7 +164,12 @@ fn production_operation(
     op: &str,
     authenticated: bool,
 ) -> Result<(Yaml, Yaml), RenderError> {
-    let mut step = operation(spec, op, authenticated)?;
+    let mut step = operation(
+        spec,
+        op,
+        authenticated,
+        super::TapInvocationContext::Preview,
+    )?;
     let public_plan = take_plan_environment(&mut step)?;
     Ok((step, public_plan))
 }

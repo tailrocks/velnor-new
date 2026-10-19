@@ -141,7 +141,7 @@ fn acquire(
         api.download(
             reference.artifact_id,
             artifact.size_in_bytes,
-            archive.output(),
+            archive.destination_file(),
             deadline,
         )?;
         archive.seal(deadline)?;

@@ -3,6 +3,12 @@
 /// Private operation selected by the gate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum InternalOp {
+    /// Source-free authenticated selection of the retained tap candidate.
+    TapContinuation,
+    /// Read-only authenticated review proposal capture.
+    CaptureReviewCompletion,
+    /// Independent C-App exact-head check emission.
+    EmitReviewCompletion,
     /// Materialize the request file from the GitHub environment.
     WriteRequest,
     /// Execute one named hosted platform check.
@@ -39,6 +45,8 @@ pub(super) enum InternalOp {
     PackageRecovery,
     /// Credential-free updater prepared from captured public tap main.
     TapPrepare,
+    /// Source-free authentication before credential-free tap preparation.
+    TapAdmission,
     /// Isolated App-authenticated PR writer for a validated tap candidate.
     TapWriter,
     /// Isolated exact-head App-authenticated tap promotion merge.

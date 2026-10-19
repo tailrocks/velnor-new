@@ -6,7 +6,9 @@ use std::{
     process::ExitCode,
 };
 
-use velnor_actions_orchestrator::{OrchestratorError, merge_homebrew_tap_from_env};
+use velnor_actions_orchestrator::{
+    OrchestratorError, TapMergeOutcome, merge_homebrew_tap_from_env,
+};
 
 const PLAN_FILE: &str = "package-release-plan.json";
 const ROOT_DIR: &str = "velnor";
@@ -53,7 +55,15 @@ pub(super) fn gate_request(path: &Path) -> Option<PathBuf> {
 
 pub(super) fn run() -> ExitCode {
     match merge_homebrew_tap_from_env() {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(outcome) => {
+            let status = match outcome {
+                TapMergeOutcome::Pending => "pending",
+                TapMergeOutcome::Merged => "merged",
+                TapMergeOutcome::AlreadyPromoted => "already-promoted",
+            };
+            println!("tap_merge_status={status}");
+            ExitCode::SUCCESS
+        }
         Err(error) => fail_error(&error),
     }
 }

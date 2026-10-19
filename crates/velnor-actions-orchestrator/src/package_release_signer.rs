@@ -143,12 +143,10 @@ pub(crate) fn verify_attested_signed_package_from_env()
 }
 
 fn uses_retained_preview(event: Option<&str>, operation: Option<&str>) -> bool {
-    event == Some("workflow_dispatch")
+    matches!(event, Some("workflow_dispatch" | "schedule"))
         && matches!(
             operation,
-            Some(
-                "prepare-homebrew-tap-v1" | "write-homebrew-tap-pr-v1" | "merge-homebrew-tap-pr-v1"
-            )
+            Some("admit-homebrew-tap-v1" | "write-homebrew-tap-pr-v1" | "merge-homebrew-tap-pr-v1")
         )
 }
 

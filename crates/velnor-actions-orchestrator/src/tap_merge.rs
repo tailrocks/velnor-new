@@ -16,11 +16,13 @@ mod observation;
 mod protection;
 #[path = "tap_merge_protection_observer.rs"]
 mod protection_observer;
+#[path = "review_completion.rs"]
+pub(crate) mod review_completion;
 #[path = "tap_merge_tree.rs"]
 mod tree;
 
 use std::{
-    env, thread,
+    env,
     time::{Duration, Instant},
 };
 use velnor_actions_contract::{
@@ -29,64 +31,95 @@ use velnor_actions_contract::{
         TapMergeObservation, TapMergePolicy, TapServerMergeProtection, validate_tap_merge_gate,
     },
 };
+use velnor_actions_mise::CheckDeadline;
 
 use crate::{OrchestratorError, internal::internal};
 
 /// Fixed private operation selecting the independently credentialed tap merge.
 pub const MERGE_HOMEBREW_TAP_PR_OP: &str = "merge-homebrew-tap-pr-v1";
-const POLL_INTERVAL: Duration = Duration::from_secs(15);
-const MAX_WAIT: Duration = Duration::from_mins(45);
+/// Result of one bounded promotion observation; pending never claims a merge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TapMergeOutcome {
+    /// Checks or review completion have not yet admitted the exact head.
+    Pending,
+    /// The exact validated head was merged with the server SHA precondition.
+    Merged,
+    /// A previous merge was independently authenticated without another write.
+    AlreadyPromoted,
+}
 
 /// Reauthenticate candidate and PR, await exact-head gates, then squash with SHA precondition.
 /// # Errors
 /// Rejects stale or conflicting PRs, failed checks, incomplete feedback, and API errors.
-pub fn merge_homebrew_tap_from_env() -> Result<(), OrchestratorError> {
+pub fn merge_homebrew_tap_from_env() -> Result<TapMergeOutcome, OrchestratorError> {
+    crate::package_release_publish::artifact_zip::within_operation(merge_once)
+}
+
+fn merge_once() -> Result<TapMergeOutcome, OrchestratorError> {
     let candidate = candidate::load_candidate()?;
     let (api, authority, observer) = authenticate_merge(&candidate)?;
     if candidate.selection().merged.is_some() {
-        return completed::verify_already_promoted(&candidate, &authority, &api, &observer);
+        completed::verify_already_promoted(&candidate, &authority, &api, &observer)?;
+        return Ok(TapMergeOutcome::AlreadyPromoted);
     }
-    let prior = poll_until_ready(
+    attempt_once(
+        &authority.policy,
         || {
             crate::package_release_publish::verify_tap_update_environment(
                 &candidate.plan.repository,
                 &candidate.plan.default_branch,
             )?;
-            if let Some(observed) = observation::observe(&candidate, &authority, &api, &observer)?
-                && gate_ready_or_pending(&authority.policy, &observed)?
-            {
-                return Ok(Some(observed));
-            }
-            Ok(None)
+            observation::observe(&candidate, &authority, &api, &observer)
         },
-        thread::sleep,
-        || internal("tap_merge_gates_timeout"),
-        api.deadline(),
-        Instant::now,
-    )?;
-    crate::package_release_publish::verify_tap_update_environment(
-        &candidate.plan.repository,
-        &candidate.plan.default_branch,
-    )?;
-    crate::tap_source_freshness::verify_preview_source_is_current(
-        &candidate.plan.repository,
-        &candidate.plan.default_branch,
-        &candidate.release.receipt.source.commit_sha,
-    )?;
-    let final_observation = observation::observe(&candidate, &authority, &api, &observer)?
-        .ok_or_else(|| internal("tap_merge_final_gates_pending"))?;
-    validate_tap_merge_gate(&authority.policy, &final_observation)
-        .map_err(|_| internal("tap_merge_final_gate_rejected"))?;
+        || {
+            crate::tap_source_freshness::verify_preview_source_is_current(
+                &candidate.plan.repository,
+                &candidate.plan.default_branch,
+                &candidate.release.receipt.source.commit_sha,
+            )
+        },
+        |observed| merge_validated_head(&candidate, &api, observed),
+    )
+}
+
+fn attempt_once(
+    policy: &TapMergePolicy,
+    mut observe: impl FnMut() -> Result<Option<TapMergeObservation>, OrchestratorError>,
+    refresh_source: impl FnOnce() -> Result<(), OrchestratorError>,
+    merge: impl FnOnce(&TapMergeObservation) -> Result<(), OrchestratorError>,
+) -> Result<TapMergeOutcome, OrchestratorError> {
+    let Some(prior) = observe()? else {
+        return Ok(TapMergeOutcome::Pending);
+    };
+    if !gate_ready_or_pending(policy, &prior)? {
+        return Ok(TapMergeOutcome::Pending);
+    }
+    let Some(final_observation) = observe()? else {
+        return Ok(TapMergeOutcome::Pending);
+    };
+    if !gate_ready_or_pending(policy, &final_observation)? {
+        return Ok(TapMergeOutcome::Pending);
+    }
     if final_observation.current_head_sha != prior.current_head_sha
         || final_observation.current_base_sha != prior.current_base_sha
         || final_observation.server_protection != TapServerMergeProtection::PullRequestProtected
     {
         return Err(internal("tap_merge_final_state_changed"));
     }
+    refresh_source()?;
+    merge(&final_observation)?;
+    Ok(TapMergeOutcome::Merged)
+}
+
+fn merge_validated_head(
+    candidate: &candidate::MergeCandidate,
+    api: &github::TapMergeGitHub,
+    observed: &TapMergeObservation,
+) -> Result<(), OrchestratorError> {
     let merged: serde_json::Value = api.merge(
         &candidate.policy.repository,
         candidate.selection().pull_request,
-        &final_observation.current_head_sha,
+        &observed.current_head_sha,
     )?;
     if merged["merged"].as_bool() != Some(true)
         || !merged["sha"].as_str().is_some_and(|sha| {
@@ -121,7 +154,13 @@ fn authenticate_merge(
     {
         return Err(internal("tap_merge_credentials_reused"));
     }
-    let api = github::TapMergeGitHub::with_max_wait(merge_token, MAX_WAIT);
+    let budget = Duration::from_secs(
+        u64::from(velnor_actions_contract::workflow::JobTimeout::MAX_MINUTES) * 60,
+    );
+    let remaining = CheckDeadline::after(budget)
+        .and_then(CheckDeadline::remaining)
+        .map_err(|_| internal("tap_merge_deadline_elapsed"))?;
+    let api = github::TapMergeGitHub::with_deadline(merge_token, Instant::now() + remaining);
     let authority = observation::load_merge_authority(candidate, &api)?;
     let observer = protection_observer::ProtectionObserver::authenticate(
         candidate,
@@ -147,29 +186,6 @@ fn gate_ready_or_pending(
             Ok(false)
         }
         Err(_) => Err(internal("tap_merge_gate_rejected")),
-    }
-}
-
-fn poll_until_ready<T, E>(
-    mut poll: impl FnMut() -> Result<Option<T>, E>,
-    mut wait: impl FnMut(Duration),
-    timeout: impl FnOnce() -> E,
-    deadline: Instant,
-    mut now: impl FnMut() -> Instant,
-) -> Result<T, E> {
-    loop {
-        if now() >= deadline {
-            return Err(timeout());
-        }
-        let value = poll()?;
-        let remaining = deadline.saturating_duration_since(now());
-        if remaining.is_zero() {
-            return Err(timeout());
-        }
-        if let Some(value) = value {
-            return Ok(value);
-        }
-        wait(POLL_INTERVAL.min(remaining));
     }
 }
 

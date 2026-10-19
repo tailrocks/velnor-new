@@ -1,5 +1,4 @@
 use super::*;
-use std::cell::Cell;
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::{
@@ -21,50 +20,27 @@ use velnor_actions_contract::{
 };
 
 #[test]
-fn bounded_poll_returns_ready_value_without_waiting() {
-    let mut calls = 0;
-    let mut waits = 0;
-    let now = Instant::now();
-    let result = poll_until_ready(
+fn incomplete_observation_returns_pending_once_without_refresh_or_merge() {
+    let policy = TapMergePolicy {
+        repository: "owner/tap".to_owned(),
+        writer_app_id: 11,
+        completion_app_id: 12,
+        completion_check_name: "Review".to_owned(),
+        expected_reviewer_app_ids: BTreeSet::from([13]),
+    };
+    let mut observations = 0;
+    let outcome = attempt_once(
+        &policy,
         || {
-            calls += 1;
-            Ok::<_, ()>((calls == 3).then_some("ready"))
+            observations += 1;
+            Ok(None)
         },
-        |duration| {
-            waits += 1;
-            assert_eq!(duration, POLL_INTERVAL);
-        },
-        || (),
-        now + MAX_WAIT,
-        || now,
-    );
-    assert_eq!(result, Ok("ready"));
-    assert_eq!(calls, 3);
-    assert_eq!(waits, 2);
-}
-
-#[test]
-fn bounded_poll_returns_failure_after_fixed_attempt_count() {
-    let mut calls = 0;
-    let mut waits = 0;
-    let elapsed = Cell::new(Duration::ZERO);
-    let now = Instant::now();
-    let result = poll_until_ready(
-        || {
-            calls += 1;
-            Ok::<Option<()>, &'static str>(None)
-        },
-        |duration| {
-            waits += 1;
-            elapsed.set(elapsed.get() + duration);
-        },
-        || "timed out",
-        now + Duration::from_secs(30),
-        || now + elapsed.get(),
-    );
-    assert_eq!(result, Err("timed out"));
-    assert_eq!(calls, 2);
-    assert_eq!(waits, 2);
+        || panic!("pending must not run final source admission"),
+        |_| panic!("pending must not issue a merge"),
+    )
+    .expect("bounded pending observation");
+    assert_eq!(outcome, TapMergeOutcome::Pending);
+    assert_eq!(observations, 1);
 }
 
 #[test]
@@ -136,6 +112,15 @@ fn incomplete_feedback_waits_only_until_completion_and_terminal_findings_fail() 
 
 #[test]
 fn canonical_receipt_to_completion_to_merge_contract_uses_real_digest_formats() {
+    let (receipt_digest, policy, observation) = ready_gate_fixture();
+    validate_tap_merge_gate(&policy, &observation).expect("exact-head admission");
+    let mut blocked = observation;
+    blocked.feedback.unresolved_threads = 1;
+    assert!(validate_tap_merge_gate(&policy, &blocked).is_err());
+    assert!(receipt_digest.starts_with("b3-"));
+}
+
+fn ready_gate_fixture() -> (String, TapMergePolicy, TapMergeObservation) {
     let (receipt_digest, base_sha, promotion) = promotion_fixture();
     let feedback = TapFeedbackSnapshot {
         repository: "owner/tap".to_owned(),
@@ -184,11 +169,7 @@ fn canonical_receipt_to_completion_to_merge_contract_uses_real_digest_formats() 
         historical_feedback_complete: true,
         historical_feedback: Vec::new(),
     };
-    validate_tap_merge_gate(&policy, &observation).expect("exact-head admission");
-    let mut blocked = observation;
-    blocked.feedback.unresolved_threads = 1;
-    assert!(validate_tap_merge_gate(&policy, &blocked).is_err());
-    assert!(receipt_digest.starts_with("b3-"));
+    (receipt_digest, policy, observation)
 }
 
 #[test]
@@ -362,3 +343,6 @@ fn sha256(bytes: &[u8]) -> String {
             out
         })
 }
+
+#[path = "tap_merge_attempt_tests.rs"]
+mod attempts;

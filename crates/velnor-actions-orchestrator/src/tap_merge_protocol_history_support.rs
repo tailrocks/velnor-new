@@ -88,6 +88,11 @@ fn add_prior_git_responses(
     let blob_base = "5".repeat(40);
     let blob_head = "4".repeat(40);
     let repo = &candidate.policy.repository;
+    put(
+        responses,
+        format!("repos/{repo}/pulls/20/commits?per_page=100&page=1"),
+        json!([{"sha": head}]),
+    );
     let formula = &candidate.policy.formula;
     let message = format!(
         "Update preview formula to {}\n\nSource: {}@{}\nRelease receipt: {}\n\nSigned-off-by: {} <{}+{}@users.noreply.github.com>",

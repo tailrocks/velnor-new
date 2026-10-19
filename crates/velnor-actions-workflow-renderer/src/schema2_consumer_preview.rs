@@ -16,6 +16,13 @@ use velnor_actions_contract::{
     package_release_plan::PackageReleasePlan,
 };
 
+#[path = "schema2_consumer_preview_context.rs"]
+mod invocation;
+use invocation::TapInvocationContext;
+#[path = "schema2_consumer_preview_reconcile.rs"]
+mod reconcile;
+pub use reconcile::render_preview_tap_reconcile;
+
 #[path = "schema2_consumer_preview_production.rs"]
 mod production;
 #[path = "schema2_consumer_preview_steps.rs"]
@@ -88,7 +95,7 @@ pub fn render_consumer_preview(spec: &ConsumerPreviewSpec) -> Result<RenderedFil
     jobs.extend(production::jobs(spec)?);
     jobs.extend([signer(spec)?, publisher(spec)?, recovery(spec)?]);
     if let Some(tap) = &spec.homebrew_tap {
-        jobs.extend(tap::jobs(spec, tap)?);
+        jobs.extend(tap::jobs(spec, tap, TapInvocationContext::Preview)?);
     }
     let document = Yaml::Map(vec![
         (
@@ -186,7 +193,7 @@ fn eligibility(spec: &ConsumerPreviewSpec, gate: &str) -> Result<(String, Yaml),
                 &join_argv_for_run(&spec.install_gh_argv)?,
             ),
             step,
-            steps::history_count(),
+            steps::history_count(TapInvocationContext::Preview),
         ],
     ))
 }
@@ -226,7 +233,12 @@ fn signer(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
             ),
             acquire(&spec.linux_acquire, "preview-signer", "ubuntu-26.04")?,
             aggregate_admission(spec)?,
-            operation(spec, "sign-package-release-v1", true)?,
+            operation(
+                spec,
+                "sign-package-release-v1",
+                true,
+                TapInvocationContext::Preview,
+            )?,
             steps::attest(&spec.plan),
             transfer(false, Artifact::Signed),
         ],
@@ -234,7 +246,12 @@ fn signer(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
 }
 
 fn aggregate_admission(spec: &ConsumerPreviewSpec) -> Result<Yaml, RenderError> {
-    let mut step = operation(spec, "admit-preview-aggregate-v1", true)?;
+    let mut step = operation(
+        spec,
+        "admit-preview-aggregate-v1",
+        true,
+        TapInvocationContext::Preview,
+    )?;
     if let Yaml::Map(fields) = &mut step {
         let (_, id) = fields
             .iter_mut()
@@ -294,7 +311,12 @@ fn publisher(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> 
             ),
             acquire(&spec.linux_acquire, "preview-publisher", "ubuntu-26.04")?,
             transfer(true, Artifact::Signed),
-            operation(spec, "publish-package-release-v1", true)?,
+            operation(
+                spec,
+                "publish-package-release-v1",
+                true,
+                TapInvocationContext::Preview,
+            )?,
         ],
     ))
 }
@@ -329,7 +351,12 @@ fn recovery(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
                 &join_argv_for_run(&spec.install_gh_argv)?,
             ),
             acquire(&spec.linux_acquire, "preview-recovery", "ubuntu-26.04")?,
-            operation(spec, "recover-package-release-v1", true)?,
+            operation(
+                spec,
+                "recover-package-release-v1",
+                true,
+                TapInvocationContext::Preview,
+            )?,
         ],
     ))
 }

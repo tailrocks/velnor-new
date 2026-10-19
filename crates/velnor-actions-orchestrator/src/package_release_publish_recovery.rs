@@ -6,9 +6,7 @@ use std::{
 };
 
 use velnor_actions_contract::{
-    PackageReleasePlan,
-    package_release::{PackageReleaseChannel, PackageReleaseReceipt},
-    parse_package_release_plan,
+    PackageReleasePlan, package_release::PackageReleaseReceipt, parse_package_release_plan,
 };
 
 use crate::{
@@ -30,13 +28,17 @@ use super::{
     run_identity::{RunSource, run_matches},
 };
 
+#[path = "package_release_promotion_context.rs"]
+pub(super) mod promotion_context;
+use promotion_context::{Invocation, Purpose};
+
 const PLAN_FILE: &str = "package-release-plan.json";
 const INPUT_DIR: &str = "preview-recovery-input";
 const MAX_PLAN_BYTES: u64 = 1024 * 1024;
 const MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
 
 pub(super) fn recover() -> Result<super::PackagePublicationOutcome, OrchestratorError> {
-    let (signed, mode) = verified_original()?;
+    let (signed, mode) = verified_original(Purpose::PublicationRecovery)?;
     let current_ci = current_ci_from_env()?;
     let mut backend = GitHubPackagePublisher::new(signed, current_ci, mode)?;
     publish_package_release(&mut backend)
@@ -45,11 +47,18 @@ pub(super) fn recover() -> Result<super::PackagePublicationOutcome, Orchestrator
 /// Authenticate original bytes for promotion without release-write authority.
 pub(crate) fn verify_original_for_promotion()
 -> Result<VerifiedAttestedSignedPackage, OrchestratorError> {
-    super::artifact_zip::within_operation(|| verified_original().map(|(signed, _)| signed))
+    super::artifact_zip::within_operation(|| {
+        let (signed, _) = verified_original(Purpose::TapPromotion)?;
+        if Invocation::from_env()?.continuation(signed.plan()) {
+            super::continuation::verify_published_selection(&signed)?;
+        }
+        Ok(signed)
+    })
 }
 
-fn verified_original()
--> Result<(VerifiedAttestedSignedPackage, OriginalVerification), OrchestratorError> {
+fn verified_original(
+    purpose: Purpose,
+) -> Result<(VerifiedAttestedSignedPackage, OriginalVerification), OrchestratorError> {
     let root = runner_root()?;
     let plan_path = root.join(PLAN_FILE);
     if env_path("VELNOR_REQUEST_FILE")? != plan_path {
@@ -58,7 +67,7 @@ fn verified_original()
     let plan_bytes = read_regular_bounded(&plan_path, MAX_PLAN_BYTES)?;
     let plan = parse_package_release_plan(&plan_bytes)
         .map_err(|_| internal("package_recovery_plan_invalid"))?;
-    validate_recovery_context(&plan)?;
+    validate_recovery_context(&plan, purpose)?;
     let original_run_id = positive_env("VELNOR_RELEASE_ORIGINAL_RUN_ID")?;
     let original_attempt = positive_env_u32("VELNOR_RELEASE_ORIGINAL_RUN_ATTEMPT")?;
     let repository_id = positive_env("GITHUB_REPOSITORY_ID")?;
@@ -122,24 +131,11 @@ fn verified_original()
     Ok((signed, mode))
 }
 
-fn validate_recovery_context(plan: &PackageReleasePlan) -> Result<(), OrchestratorError> {
-    if plan.channel != PackageReleaseChannel::Preview
-        || env_text("GITHUB_EVENT_NAME")? != "workflow_dispatch"
-        || env_text("GITHUB_REPOSITORY")? != plan.repository
-        || env_text("GITHUB_REF")? != format!("refs/heads/{}", plan.default_branch)
-        || env_text("GITHUB_WORKFLOW_REF")?
-            != format!(
-                "{}/{}@refs/heads/{}",
-                plan.repository,
-                plan.channel.workflow_path(),
-                plan.default_branch
-            )
-        || !is_git_sha(&env_text("GITHUB_SHA")?)
-        || env_text("GITHUB_WORKFLOW_SHA")? != env_text("GITHUB_SHA")?
-    {
-        return Err(internal("package_recovery_context_mismatch"));
-    }
-    Ok(())
+fn validate_recovery_context(
+    plan: &PackageReleasePlan,
+    purpose: Purpose,
+) -> Result<(), OrchestratorError> {
+    Invocation::from_env()?.validate(plan, purpose)
 }
 
 fn validate_artifact(

@@ -19,15 +19,16 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
-    ACQUIRE_PREVIEW_LEAVES_OP, ADMIT_PREVIEW_AGGREGATE_OP, DYNAMIC_MATRIX_OUTPUT_MODE,
+    ACQUIRE_PREVIEW_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP, ADMIT_PREVIEW_AGGREGATE_OP,
+    CAPTURE_REVIEW_COMPLETION_OP, DYNAMIC_MATRIX_OUTPUT_MODE, EMIT_REVIEW_COMPLETION_OP,
     EXECUTE_CHECK_OP, EXECUTE_PREVIEW_PRODUCER_OP, FETCH_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP,
     OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PREPARE_HOMEBREW_TAP_OP,
     PRESEED_MANIFEST_OP, PUBLISH_OP, PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode,
-    RECOVER_PACKAGE_RELEASE_OP, REPORT_OP, REQUEST_FILE_ENV, SIGN_PACKAGE_RELEASE_OP,
-    TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, execute_check,
-    merge_internal, merge_passed, plan_internal, plan_outputs, publish_final_report,
-    publish_plan_files, resolve_task_execution, response_path_for, retrieve_reports,
-    write_preseed_manifest, write_request, write_task_report,
+    RECOVER_PACKAGE_RELEASE_OP, REPORT_OP, REQUEST_FILE_ENV, SELECT_PREVIEW_TAP_CONTINUATION_OP,
+    SIGN_PACKAGE_RELEASE_OP, TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP,
+    WRITE_REQUEST_OP, execute_check, merge_internal, merge_passed, plan_internal, plan_outputs,
+    publish_final_report, publish_plan_files, resolve_task_execution, response_path_for,
+    retrieve_reports, write_preseed_manifest, write_request, write_task_report,
 };
 
 use crate::dispatch_publish::run_publish_internal;
@@ -35,6 +36,10 @@ use crate::dispatch_publish::run_publish_internal;
 #[path = "dispatch_preview_production.rs"]
 mod preview_production;
 mod public;
+#[path = "dispatch_review_completion.rs"]
+mod review_completion;
+#[path = "dispatch_tap_continuation.rs"]
+mod tap_continuation;
 pub(crate) use public::run_public;
 #[path = "dispatch_owned_tool_publication.rs"]
 mod owned_publication;
@@ -84,6 +89,9 @@ pub(crate) fn try_internal() -> Option<ExitCode> {
 
 fn internal_op() -> Option<InternalOp> {
     Some(match env::var(OP_ENV).as_deref() {
+        Ok(tag) if tag == SELECT_PREVIEW_TAP_CONTINUATION_OP => InternalOp::TapContinuation,
+        Ok(tag) if tag == CAPTURE_REVIEW_COMPLETION_OP => InternalOp::CaptureReviewCompletion,
+        Ok(tag) if tag == EMIT_REVIEW_COMPLETION_OP => InternalOp::EmitReviewCompletion,
         Ok(tag) if tag == EXECUTE_CHECK_OP => InternalOp::ExecuteCheck,
         Ok(tag) if tag == ACQUIRE_PREVIEW_LEAVES_OP => InternalOp::AcquirePreviewLeaves,
         Ok(tag) if tag == EXECUTE_PREVIEW_PRODUCER_OP => InternalOp::ExecutePreviewProducer,
@@ -104,6 +112,7 @@ fn internal_op() -> Option<InternalOp> {
         Ok(tag) if tag == PUBLISH_PACKAGE_RELEASE_OP => InternalOp::PackagePublisher,
         Ok(tag) if tag == RECOVER_PACKAGE_RELEASE_OP => InternalOp::PackageRecovery,
         Ok(tag) if tag == PREPARE_HOMEBREW_TAP_OP => InternalOp::TapPrepare,
+        Ok(tag) if tag == ADMIT_HOMEBREW_TAP_OP => InternalOp::TapAdmission,
         Ok(tag) if tag == WRITE_HOMEBREW_TAP_PR_OP => InternalOp::TapWriter,
         Ok(tag) if tag == MERGE_HOMEBREW_TAP_PR_OP => InternalOp::TapMerge,
         _ => return None,
@@ -140,14 +149,14 @@ fn gate_request() -> Option<InternalRequest> {
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)?;
     match op {
+        InternalOp::TapContinuation => {
+            return tap_continuation::gate_request(&path).map(|path| InternalRequest { op, path });
+        }
+        InternalOp::CaptureReviewCompletion | InternalOp::EmitReviewCompletion => {
+            return review_completion::gate_request(&path).map(|path| InternalRequest { op, path });
+        }
         InternalOp::WriteRequest => {
-            if path.exists() {
-                return None;
-            }
-            if !env::var(GITHUB_EVENT_ENV).is_ok_and(|name| !name.is_empty()) {
-                return None;
-            }
-            if env::var_os(GITHUB_EVENT_PATH_ENV).is_none_or(|value| value.is_empty()) {
+            if !request_can_be_materialized(&path) {
                 return None;
             }
         }
@@ -171,6 +180,10 @@ fn gate_request() -> Option<InternalRequest> {
         | InternalOp::AcquirePreviewLeaves => {
             return package_release::gate_request(&path).map(|path| InternalRequest { op, path });
         }
+        InternalOp::TapAdmission => {
+            return tap_prepare::gate_admission_request(&path)
+                .map(|path| InternalRequest { op, path });
+        }
         InternalOp::TapPrepare => {
             return tap_prepare::gate_request(&path).map(|path| InternalRequest { op, path });
         }
@@ -189,6 +202,12 @@ fn gate_request() -> Option<InternalRequest> {
         | InternalOp::ResolveTaskExecution => {}
     }
     Some(InternalRequest { op, path })
+}
+
+fn request_can_be_materialized(path: &Path) -> bool {
+    !path.exists()
+        && env::var(GITHUB_EVENT_ENV).is_ok_and(|name| !name.is_empty())
+        && env::var_os(GITHUB_EVENT_PATH_ENV).is_some_and(|value| !value.is_empty())
 }
 
 /// Runner-temp velnor directory for file-less private operations.
@@ -211,6 +230,9 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         },
         InternalOp::ExecutePreviewProducer => preview_production::produce(),
         InternalOp::AcquirePreviewLeaves => preview_production::acquire(),
+        InternalOp::TapContinuation => tap_continuation::run(),
+        InternalOp::CaptureReviewCompletion => review_completion::capture(),
+        InternalOp::EmitReviewCompletion => review_completion::emit(),
         InternalOp::AdmitPreviewAggregate => preview_production::admit(),
         InternalOp::WriteRequest => match write_request() {
             Ok(_) => ExitCode::SUCCESS,
@@ -244,6 +266,7 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::PackagePublisher => package_release_publish::run(),
         InternalOp::PackageRecovery => package_release_recovery::run(),
         InternalOp::TapPrepare => tap_prepare::run(),
+        InternalOp::TapAdmission => tap_prepare::run_admission(),
         InternalOp::TapWriter => tap_prepare::run_writer(),
         InternalOp::TapMerge => tap_merge::run(),
     }

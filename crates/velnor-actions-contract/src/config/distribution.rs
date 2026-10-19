@@ -241,12 +241,7 @@ impl TapUpdaterBinding {
 
 impl ExactHeadReviewCheck {
     fn validate(&self, file: &str, parent: &str) -> Result<(), ContractError> {
-        if self.check_name.is_empty()
-            || self.check_name.len() > 200
-            || self.check_name.trim() != self.check_name
-            || self.check_name.contains("${{")
-            || self.check_name.chars().any(char::is_control)
-        {
+        if !valid_review_check_name(&self.check_name) {
             return Err(config_error(
                 file,
                 parent,
@@ -332,7 +327,15 @@ fn unique_names(values: &[String]) -> bool {
         })
 }
 
-fn valid_app_id_variable(value: &str) -> bool {
+pub(crate) fn valid_review_check_name(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 200
+        && value.trim() == value
+        && !value.contains("${{")
+        && !value.chars().any(char::is_control)
+}
+
+pub(super) fn valid_app_id_variable(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 128
         && value.as_bytes()[0].is_ascii_uppercase()
@@ -344,7 +347,7 @@ fn valid_app_id_variable(value: &str) -> bool {
         && !value.contains("KEY")
 }
 
-fn valid_secret_name(value: &str) -> bool {
+pub(super) fn valid_secret_name(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 128
         && value.as_bytes()[0].is_ascii_uppercase()

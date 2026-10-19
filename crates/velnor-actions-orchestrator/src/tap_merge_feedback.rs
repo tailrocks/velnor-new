@@ -18,18 +18,19 @@ const THREADS_QUERY: &str = "query($owner:String!,$name:String!,$number:Int!,$cu
 const OPINIONS_QUERY: &str = "query($owner:String!,$name:String!,$number:Int!,$cursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){latestOpinionatedReviews(first:100,after:$cursor){nodes{id state submittedAt author{__typename ... on User{databaseId} ... on Bot{databaseId}}} pageInfo{hasNextPage endCursor}}}}}";
 
 #[derive(serde::Serialize)]
-struct FeedbackRecords {
-    reviews: Vec<Value>,
-    opinionated_reviews: Vec<Value>,
-    review_comments: Vec<Value>,
-    issue_comments: Vec<Value>,
-    commit_comments: Vec<Value>,
-    threads: Vec<Value>,
+pub(super) struct FeedbackRecords {
+    pub(super) reviews: Vec<Value>,
+    pub(super) opinionated_reviews: Vec<Value>,
+    pub(super) review_comments: Vec<Value>,
+    pub(super) issue_comments: Vec<Value>,
+    pub(super) commit_comments: Vec<Value>,
+    pub(super) threads: Vec<Value>,
 }
 
 pub(super) struct CapturedFeedback {
     pub(super) snapshot: TapFeedbackSnapshot,
     pub(super) completion: Option<TapReviewCompletion>,
+    pub(super) records: FeedbackRecords,
 }
 
 pub(super) struct FeedbackContext<'a> {
@@ -46,6 +47,7 @@ pub(super) fn capture_feedback(
     context: &FeedbackContext<'_>,
     check_runs: &[Value],
 ) -> Result<CapturedFeedback, OrchestratorError> {
+    let commits = commit_inventory::inventory(api, context)?;
     let reviews = paged_values(
         api,
         &format!(
@@ -67,7 +69,7 @@ pub(super) fn capture_feedback(
             context.repository, context.pull_request_number
         ),
     )?;
-    let commit_comments = paged_commit_comments(api, context.repository, context.head_sha)?;
+    let commit_comments = commit_inventory::comments(api, context.repository, &commits)?;
     let threads = paged_threads(api, context.repository, context.pull_request_number)?;
     let opinionated_reviews =
         paged_opinionated_reviews(api, context.repository, context.pull_request_number)?;
@@ -100,15 +102,17 @@ pub(super) fn capture_feedback(
         unaddressed_findings: 0,
         outstanding_change_requests,
     };
+    commit_inventory::require_head(api, context, commits.len())?;
     let completion = completion_from_checks(check_runs, context, &snapshot)?;
     Ok(CapturedFeedback {
         snapshot,
         completion,
+        records,
     })
 }
 
-/// Every admitted tap PR has exactly one authenticated commit above its base.
-/// Historical receipt PRs pass through this same capture with their own head.
+/// Exact per-commit comment admission is shared by the complete PR collector.
+/// Native writer candidates still independently require one commit.
 fn paged_commit_comments(
     api: &TapMergeGitHub,
     repository: &str,
@@ -353,3 +357,6 @@ mod tests;
 #[cfg(test)]
 #[path = "tap_merge_feedback_commit_tests.rs"]
 mod commit_tests;
+
+#[path = "tap_merge_feedback_commits.rs"]
+mod commit_inventory;

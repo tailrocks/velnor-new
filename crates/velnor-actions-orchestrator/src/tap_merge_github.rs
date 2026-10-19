@@ -36,10 +36,6 @@ pub(super) struct ApiResponse {
 }
 
 impl TapMergeGitHub {
-    pub(super) fn with_max_wait(token: String, max_wait: Duration) -> Self {
-        Self::with_deadline(token, Instant::now() + max_wait)
-    }
-
     pub(super) fn with_deadline(token: String, deadline: Instant) -> Self {
         Self {
             catalog: ToolCatalog::pinned(),
@@ -128,6 +124,34 @@ impl TapMergeGitHub {
                 ("merge_method", "squash".to_owned()),
             ],
         )
+    }
+
+    /// Fixed Checks API write; only the independent completion emitter calls it.
+    pub(super) fn write_completion_check(
+        &self,
+        repository: &str,
+        id: Option<u64>,
+        fields: &[(&str, String)],
+    ) -> Result<serde_json::Value, OrchestratorError> {
+        let route = id.map_or_else(
+            || format!("repos/{repository}/check-runs"),
+            |id| format!("repos/{repository}/check-runs/{id}"),
+        );
+        let mut args = vec![
+            route.into(),
+            "--method".into(),
+            if id.is_some() { "PATCH" } else { "POST" }.into(),
+        ];
+        for (name, value) in fields {
+            args.push("--raw-field".into());
+            args.push(format!("{name}={value}").into());
+        }
+        let response = self.request(args)?;
+        let expected = if id.is_some() { 200 } else { 201 };
+        if response.status != expected {
+            return Err(internal("review_completion_check_status"));
+        }
+        serde_json::from_slice(&response.body).map_err(|_| internal("review_completion_check_json"))
     }
 
     fn request(&self, mut args: Vec<OsString>) -> Result<ApiResponse, OrchestratorError> {

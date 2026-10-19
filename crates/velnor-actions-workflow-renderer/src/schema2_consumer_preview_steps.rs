@@ -115,6 +115,7 @@ pub(super) fn operation(
     spec: &ConsumerPreviewSpec,
     op: &str,
     authenticated: bool,
+    context: super::TapInvocationContext,
 ) -> Result<Yaml, RenderError> {
     let plan = String::from_utf8(
         spec.plan
@@ -129,36 +130,17 @@ pub(super) fn operation(
             "VELNOR_REQUEST_FILE",
             "${{ runner.temp }}/velnor/package-release-plan.json",
         ),
-        (
-            "VELNOR_RELEASE_COMMIT_COUNT",
-            "${{ needs.preview-eligibility.outputs.commit_count }}",
-        ),
-        (
-            "VELNOR_RELEASE_CI_RUN_ID",
-            "${{ needs.preview-eligibility.outputs.ci_run_id }}",
-        ),
-        (
-            "VELNOR_RELEASE_CI_RUN_ATTEMPT",
-            "${{ needs.preview-eligibility.outputs.ci_attempt }}",
-        ),
     ];
+    env.extend(context.release_inputs());
     if matches!(
         op,
         "recover-package-release-v1"
+            | "admit-homebrew-tap-v1"
             | "prepare-homebrew-tap-v1"
             | "write-homebrew-tap-pr-v1"
             | "merge-homebrew-tap-pr-v1"
     ) {
-        env.extend([
-            (
-                "VELNOR_RELEASE_ORIGINAL_RUN_ID",
-                "${{ inputs.original_run_id }}",
-            ),
-            (
-                "VELNOR_RELEASE_ORIGINAL_RUN_ATTEMPT",
-                "${{ inputs.original_run_attempt }}",
-            ),
-        ]);
+        env.extend(context.original());
     }
     if authenticated {
         env.push(("GH_TOKEN", "${{ github.token }}"));
@@ -173,8 +155,8 @@ pub(super) fn operation(
         ));
     }
     // JSON is an environment value, never interpolated into the command source.
-    let materialize = if op == "sign-package-release-v1" {
-        // The preceding native aggregate admission already created and validated this file.
+    let materialize = if matches!(op, "sign-package-release-v1" | "prepare-homebrew-tap-v1") {
+        // The preceding native admission already created and validated this file.
         ""
     } else {
         "(set -C; printf '%s' \"$VELNOR_RELEASE_PLAN\" > \"$VELNOR_REQUEST_FILE\")\n"
@@ -193,7 +175,10 @@ pub(super) fn operation(
 }
 
 fn source_operation_script(op: &str, run: String) -> String {
-    if op == "execute-preview-producer-v1" {
+    if matches!(
+        op,
+        "execute-preview-producer-v1" | "prepare-homebrew-tap-v1"
+    ) {
         // Source preparation may have written runner environment files. Remove
         // credentials before the native source executor itself is spawned.
         crate::toolchain_env::with_credential_unset_script(&run)
@@ -306,7 +291,7 @@ pub(super) fn history_checkout() -> Yaml {
     checkout("${{ github.sha }}")
 }
 
-pub(super) fn history_count() -> Yaml {
+pub(super) fn history_count(context: super::TapInvocationContext) -> Yaml {
     script(
         "Count complete source history",
         "history",
@@ -319,7 +304,10 @@ printf 'commit_count=%s\n' "$count" >> "$GITHUB_OUTPUT"
 "#,
         &[(
             "EXPECTED_SOURCE_SHA",
-            "${{ steps.source.outputs.source_sha }}",
+            match context {
+                super::TapInvocationContext::Preview => "${{ steps.source.outputs.source_sha }}",
+                super::TapInvocationContext::Reconcile => "${{ github.sha }}",
+            },
         )],
     )
 }

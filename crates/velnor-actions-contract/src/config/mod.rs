@@ -322,3 +322,7 @@ mod check_tool_reference_tests;
 
 #[cfg(test)]
 mod preview_policy_tests;
+
+mod review_completion;
+pub(crate) use distribution::valid_review_check_name;
+pub use review_completion::{ReviewCompletionConfig, ReviewCompletionProvider};

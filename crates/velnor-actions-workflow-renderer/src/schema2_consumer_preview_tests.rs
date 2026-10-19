@@ -5,6 +5,12 @@ use velnor_actions_contract::{
     package_release::PackageReleasePayloadFormat,
 };
 
+#[path = "schema2_consumer_preview_tap_admission_tests.rs"]
+mod tap_admission;
+
+#[path = "schema2_consumer_preview_reconcile_tests.rs"]
+mod reconcile_tests;
+
 #[path = "schema2_consumer_preview_payload_tests.rs"]
 mod payloads;
 #[path = "schema2_consumer_preview_source_tests.rs"]

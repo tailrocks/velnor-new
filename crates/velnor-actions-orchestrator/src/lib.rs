@@ -137,3 +137,5 @@ pub use qualification_candidate::qualify_tools;
 
 /// Version marker for the orchestrator shell.
 pub const ORCHESTRATOR_VERSION: u32 = 0;
+
+mod review_completion_workflow_emit;
