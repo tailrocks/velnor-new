@@ -9,7 +9,9 @@ use std::time::{Duration, Instant};
 
 use velnor_runner_github::{Method, SessionRequest};
 
-use super::https::{CURL_ARGV, HttpsTransport, join_url, run_curl_in_home, trace_lines};
+use super::https::{
+    CURL_ARGV, HttpsTransport, join_url, request_deadline_at, run_curl_in_home, trace_lines,
+};
 use crate::error::HostError;
 
 #[test]
@@ -32,6 +34,31 @@ fn background_cleanup_client_has_a_short_deadline() {
             .map(|transport| transport.cleanup_client().timeout_seconds()),
         Ok(5)
     );
+}
+
+#[test]
+fn bounded_requests_share_the_original_absolute_deadline() {
+    let start = Instant::now();
+    let deadline = start + Duration::from_millis(120);
+    let first = request_deadline_at(Some(deadline), 60, start).expect("first deadline");
+    let later = start + Duration::from_millis(110);
+    let second = request_deadline_at(Some(deadline), 60, later).expect("second deadline");
+
+    assert_eq!(first, deadline);
+    assert_eq!(second, deadline);
+    assert_eq!(
+        deadline.saturating_duration_since(later),
+        Duration::from_millis(10)
+    );
+}
+
+#[test]
+fn expired_absolute_deadline_has_no_remaining_request_time() {
+    let now = Instant::now();
+    let deadline = now - Duration::from_millis(1);
+    let request = request_deadline_at(Some(deadline), 60, now).expect("deadline remains absolute");
+    assert_eq!(request, deadline);
+    assert!(deadline.checked_duration_since(now).is_none());
 }
 
 #[test]
