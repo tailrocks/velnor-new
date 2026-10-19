@@ -56,6 +56,7 @@ pub fn parse_dispatch_mode(text: &str) -> Result<ExecutionMode, OrchestratorErro
 /// Illegal selectors or a bad generator version fail.
 pub(crate) fn extra_files(
     config: &VelnorConfig,
+    catalog: &velnor_actions_mise::ToolCatalog,
     version: &str,
     routing: &WorkflowRoutingPolicy,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
@@ -68,7 +69,7 @@ pub(crate) fn extra_files(
     if execution.workflows.is_empty() {
         return Ok(Vec::new());
     }
-    let request = workflow_request(config, execution, version, routing)?;
+    let request = workflow_request(config, execution, catalog, version, routing)?;
     render_schema2_workflows(&request).map_err(|err| OrchestratorError::Render {
         problem: err.to_string(),
     })
@@ -150,6 +151,7 @@ fn with_trailing_newline(text: String) -> String {
 fn workflow_request(
     config: &VelnorConfig,
     execution: &ExecutionConfig,
+    catalog: &velnor_actions_mise::ToolCatalog,
     version: &str,
     routing: &WorkflowRoutingPolicy,
 ) -> Result<Schema2WorkflowRequest, OrchestratorError> {
@@ -171,7 +173,7 @@ fn workflow_request(
             velnor_actions_actionlint::actions::MR_BOXINGTON_ACTION_SHA,
             velnor_actions_actionlint::actions::MR_BOXINGTON_ACTION_VERSION,
         )?;
-        let tool_catalog = velnor_actions_mise::ToolCatalog::pinned();
+        let tool_catalog = catalog;
         Some(MbxQualificationPins {
             mise_setup: crate::pins::resolve_mise_setup(config, &hosted)?,
             candidate_action_uses: mbx_action.uses_value(),
@@ -198,7 +200,7 @@ fn workflow_request(
     .iter()
     .any(|workflow| execution.workflows.contains(workflow));
     let product_release = product_release_requested
-        .then(|| crate::product_release_pins::resolve(config))
+        .then(|| crate::product_release_pins::resolve(config, catalog))
         .transpose()?;
     Ok(Schema2WorkflowRequest {
         version: version.to_owned(),
@@ -215,6 +217,7 @@ fn workflow_request(
 /// Render the job image candidate with the configured runner policy.
 pub(crate) fn job_image_candidate_file(
     config: &VelnorConfig,
+    catalog: &velnor_actions_mise::ToolCatalog,
     version: &str,
     dispatch: Option<ExecutionMode>,
 ) -> Result<RenderedFile, OrchestratorError> {
@@ -223,7 +226,7 @@ pub(crate) fn job_image_candidate_file(
         .as_ref()
         .ok_or_else(|| OrchestratorError::config(CONFIG_REL, "execution", "missing"))?;
     let routing = workflow_routing_policy(config, dispatch)?;
-    let request = workflow_request(config, execution, version, &routing)?;
+    let request = workflow_request(config, execution, catalog, version, &routing)?;
     velnor_actions_workflow_renderer::schema2::schema2_job_image_candidate::render_candidate_workflow(
         &request,
     )

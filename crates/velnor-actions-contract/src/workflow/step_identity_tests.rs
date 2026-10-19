@@ -26,7 +26,7 @@ fn restore_step(id: Option<StepId>, role: Option<StepRole>, uses: &str) -> Step 
 #[test]
 fn tools_cache_restore_requires_typed_outer_id() {
     let step = restore_step(
-        Some(StepId::ToolsCacheRestore),
+        Some(StepId::ToolsRestore),
         Some(StepRole::ToolsCacheRestore),
         TOOLS_CACHE_RESTORE_USES,
     );
@@ -42,7 +42,7 @@ fn tools_cache_restore_rejects_missing_id_and_wrong_action() {
         TOOLS_CACHE_RESTORE_USES,
     );
     let wrong_action = restore_step(
-        Some(StepId::ToolsCacheRestore),
+        Some(StepId::ToolsRestore),
         Some(StepRole::ToolsCacheRestore),
         "./.github/actions/other",
     );
@@ -200,4 +200,26 @@ fn preseed_stage_digest_uses_the_fixed_step_output() {
         "${{ steps.preseed-stage.outputs.helper-sha256 }}"
     );
     assert!(validate_step_sequence(&[step], "preseed").is_ok());
+}
+
+#[test]
+fn cargo_source_reader_roles_do_not_require_plan_output_ids() {
+    let restore = restore_step(
+        None,
+        Some(StepRole::CargoSourcesRestore),
+        "actions/cache/restore@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    );
+    let fetch = Step {
+        name: "Fetch Cargo sources".to_owned(),
+        id: None,
+        role: Some(StepRole::CargoSourcesFetch),
+        condition: None,
+        parallel: false,
+        kind: StepKind::Shell {
+            run: vec!["cargo fetch --locked".to_owned()],
+            env: BTreeMap::new(),
+        },
+    };
+    assert!(validate_step_sequence(&[restore], "crate-reader").is_ok());
+    assert!(validate_step_sequence(&[fetch], "crate-reader").is_ok());
 }

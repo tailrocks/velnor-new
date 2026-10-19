@@ -47,7 +47,7 @@ pub const TOOLS_CACHE_PRELUDE_USES: [&str; 4] = [
 /// Static tool digest input for the runtime-qualified tools identity action.
 pub const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str = "d";
 /// Expression path for the job-private `OpenTofu` plugin cache.
-pub const TOFU_PROVIDER_CACHE_BASE_EXPR: &str = "${{ runner.temp }}/velnor/cache/tofu";
+pub const TOFU_PROVIDER_CACHE_BASE_EXPR: &str = super::cache_family::TOFU_PROVIDER_CACHE_BASE_EXPR;
 /// Exact-key layer identity shared by the restore and save protocol.
 pub const TOFU_PROVIDERS_KEY_PREFIX: &str = "velnor-v1-tofu-providers";
 /// Composite output expression for the exact configured provider key.
@@ -57,53 +57,7 @@ pub const TOFU_PROVIDERS_PATH_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outp
 /// Run MBX workspace cleanup only after the exact-version/store guard passed.
 pub const MBX_WORKSPACE_CLEAN_CONDITION: &str = "always() && steps.mbx-ready.outcome == 'success'";
 
-/// Stable GitHub Actions id for a step whose outputs or outcome have consumers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum StepId {
-    /// Planner output consumed by downstream jobs.
-    Plan,
-    /// Baseline publisher output consumed by the artifact uploader.
-    PublishBaseline,
-    /// V2 hosted tools-cache output consumed by restore and save.
-    ToolsCacheIdentity,
-    /// Exact cache-hit and matched-key outputs from the V2 restore wrapper.
-    ToolsCacheRestore,
-    /// Staging path output for the normal tools-cache payload.
-    NormalToolsCacheStage,
-    /// Import result and admission outputs for the normal tools-cache payload.
-    NormalToolsCacheImport,
-    /// Staged payload identity outputs for the normal tools-cache save.
-    NormalToolsCacheExport,
-    /// Action-local PATH containing verified cache tar aliases.
-    CacheTarLaunchers,
-    /// Verified staged helper digest used by the tar adapter installer.
-    PreseedStage,
-    /// `OpenTofu` provider-cache composite outputs consumed by the save step.
-    TofuProviders,
-    /// Successful MBX version/store guard that enables final workspace cleanup.
-    MbxReady,
-}
-
-impl StepId {
-    /// Fixed YAML spelling for this step output owner.
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Plan => "plan",
-            Self::PublishBaseline => "publish-baseline",
-            Self::ToolsCacheIdentity => "v2",
-            Self::ToolsCacheRestore => TOOLS_CACHE_RESTORE_ID,
-            Self::NormalToolsCacheStage => "normal-tools-cache-stage",
-            Self::NormalToolsCacheImport => "normal-tools-cache-import",
-            Self::NormalToolsCacheExport => "normal-tools-cache-export",
-            Self::CacheTarLaunchers => "cache-tar-launchers",
-            Self::PreseedStage => "preseed-stage",
-            Self::TofuProviders => "tofu-providers",
-            Self::MbxReady => "mbx-ready",
-        }
-    }
-}
+pub use super::step_id::StepId;
 
 /// Semantic step role used for workflow composition and validation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -183,6 +137,8 @@ pub enum StepRole {
     CargoSourcesSave,
     /// Fetch probe used to populate the Cargo source snapshot on a miss.
     CargoSourcesFetch,
+    /// Compute runtime cache trust and keys before cache restores.
+    CacheKeys,
     /// One elected `OpenTofu` provider-cache writer.
     TofuProvidersSave,
     /// `OpenTofu` provider-cache restore/admission composite before provider use.
@@ -283,6 +239,7 @@ impl StepRole {
             | Self::PlanFormat
             | Self::MsrvQualification
             | Self::CargoSourcesFetch
+            | Self::CacheKeys
             | Self::PreseedBuild
             | Self::PreseedManifest
             | Self::PreseedVerifyBuild
@@ -297,7 +254,7 @@ impl StepRole {
             Self::PlanProducer => Some(StepId::Plan),
             Self::BaselinePublisher => Some(StepId::PublishBaseline),
             Self::ToolsCacheIdentity => Some(StepId::ToolsCacheIdentity),
-            Self::ToolsCacheRestore => Some(StepId::ToolsCacheRestore),
+            Self::ToolsCacheRestore => Some(StepId::ToolsRestore),
             Self::NormalToolsCacheStage => Some(StepId::NormalToolsCacheStage),
             Self::NormalToolsCacheImport => Some(StepId::NormalToolsCacheImport),
             Self::NormalToolsCacheExport => Some(StepId::NormalToolsCacheExport),
@@ -305,6 +262,7 @@ impl StepRole {
             Self::PreseedStage => Some(StepId::PreseedStage),
             Self::TofuProvidersRestore => Some(StepId::TofuProviders),
             Self::MbxVersionCheck => Some(StepId::MbxReady),
+            Self::CacheKeys => Some(StepId::CacheKeys),
             _ => None,
         }
     }
@@ -315,7 +273,6 @@ impl StepRole {
             StepId::Plan => Self::PlanProducer,
             StepId::PublishBaseline => Self::BaselinePublisher,
             StepId::ToolsCacheIdentity => Self::ToolsCacheIdentity,
-            StepId::ToolsCacheRestore => Self::ToolsCacheRestore,
             StepId::NormalToolsCacheStage => Self::NormalToolsCacheStage,
             StepId::NormalToolsCacheImport => Self::NormalToolsCacheImport,
             StepId::NormalToolsCacheExport => Self::NormalToolsCacheExport,
@@ -323,6 +280,10 @@ impl StepRole {
             StepId::PreseedStage => Self::PreseedStage,
             StepId::TofuProviders => Self::TofuProvidersRestore,
             StepId::MbxReady => Self::MbxVersionCheck,
+            StepId::CacheKeys => Self::CacheKeys,
+            StepId::SourcesRestore => Self::CargoSourcesRestore,
+            StepId::SourcesFetch => Self::CargoSourcesFetch,
+            StepId::ToolsRestore => Self::ToolsCacheRestore,
         }
     }
 }

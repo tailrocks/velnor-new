@@ -285,7 +285,7 @@ fn obligations_carry_fixed_identity() -> TestResult {
     };
     let record = manifest.tasks.get(task_id).ok_or("missing Clippy record")?;
     assert_eq!(*task_id, TASK_ID);
-    assert!(task_digest.starts_with("b3-"));
+    assert!(task_digest.as_str().starts_with("b3-"));
     assert_eq!(record.task_id, *task_id);
     assert_eq!(record.task_digest, *task_digest);
     assert_eq!(record.argv, *argv);

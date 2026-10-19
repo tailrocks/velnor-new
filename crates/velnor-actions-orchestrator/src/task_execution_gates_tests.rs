@@ -28,7 +28,7 @@ fn fixture_with_prerequisite() -> Fixture {
         obligation.closure_digest = support::digest(byte + 20);
         obligation.decision = ObligationDecision::Execute;
         plan.obligations.push(obligation);
-        let entry = MatrixEntry::derive(
+        let mut entry = MatrixEntry::derive(
             "rust",
             task_id,
             "true",
@@ -46,6 +46,8 @@ fn fixture_with_prerequisite() -> Fixture {
             template.planned_platform.clone(),
         )
         .expect("prerequisite entry");
+        entry.toolchain_inputs = template.toolchain_inputs.clone();
+        entry.toolchain_id = template.toolchain_id.clone();
         plan.matrix.include.push(entry);
         plan.task_ids.push(task_id.to_owned());
     }
@@ -288,39 +290,7 @@ fn both_lanes_resolve_one_manifest_record_to_distinct_matrix_identities() {
         .expect("manifest record");
     let original = entry(&fixture, TASK_ID).clone();
     let mut plan = fixture.plan.clone();
-    let hosted = MatrixEntry::derive_for_lane(
-        &original.stack_id,
-        &original.task_id,
-        &original.run,
-        &original.task_digest,
-        original.adapter_metadata.clone(),
-        original.execute_task_ids.clone(),
-        &original.input_digest,
-        RUN_KEY,
-        "rust-demo__hosted",
-        Some(NamedCheckLaneVariant::Hosted),
-        original.planned_platform.clone(),
-    )
-    .expect("hosted lane");
-    let scale_set_platform = PlannedPlatform::new(
-        "scale-set:velnor+orbstack-linux",
-        &original.planned_platform.target,
-    )
-    .expect("Scale Set platform");
-    let scale_set = MatrixEntry::derive_for_lane(
-        &original.stack_id,
-        &original.task_id,
-        &original.run,
-        &original.task_digest,
-        original.adapter_metadata,
-        original.execute_task_ids,
-        &original.input_digest,
-        RUN_KEY,
-        "rust-demo__local",
-        Some(NamedCheckLaneVariant::ScaleSet),
-        scale_set_platform,
-    )
-    .expect("Scale Set lane");
+    let (hosted, scale_set) = paired_lanes(original);
     plan.matrix.include = vec![hosted.clone(), scale_set.clone()];
     for obligation in &mut plan.obligations {
         obligation.job_id = "rust-demo__hosted".to_owned();
@@ -358,4 +328,45 @@ fn both_lanes_resolve_one_manifest_record_to_distinct_matrix_identities() {
                 .expect("lane binds static manifest")
         );
     }
+}
+
+fn paired_lanes(original: MatrixEntry) -> (MatrixEntry, MatrixEntry) {
+    let mut hosted = MatrixEntry::derive_for_lane(
+        &original.stack_id,
+        &original.task_id,
+        &original.run,
+        &original.task_digest,
+        original.adapter_metadata.clone(),
+        original.execute_task_ids.clone(),
+        &original.input_digest,
+        RUN_KEY,
+        "rust-demo__hosted",
+        Some(NamedCheckLaneVariant::Hosted),
+        original.planned_platform.clone(),
+    )
+    .expect("hosted lane");
+    hosted.toolchain_inputs = original.toolchain_inputs.clone();
+    hosted.toolchain_id = original.toolchain_id.clone();
+    let scale_set_platform = PlannedPlatform::new(
+        "scale-set:velnor+orbstack-linux",
+        &original.planned_platform.target,
+    )
+    .expect("Scale Set platform");
+    let mut scale_set = MatrixEntry::derive_for_lane(
+        &original.stack_id,
+        &original.task_id,
+        &original.run,
+        &original.task_digest,
+        original.adapter_metadata,
+        original.execute_task_ids,
+        &original.input_digest,
+        RUN_KEY,
+        "rust-demo__local",
+        Some(NamedCheckLaneVariant::ScaleSet),
+        scale_set_platform,
+    )
+    .expect("Scale Set lane");
+    scale_set.toolchain_inputs = original.toolchain_inputs.clone();
+    scale_set.toolchain_id = original.toolchain_id.clone();
+    (hosted, scale_set)
 }

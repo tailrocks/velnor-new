@@ -20,12 +20,19 @@ fn assert_source_yaml(mbx: bool) -> TestResult {
         "${{ runner.temp }}/velnor/cargo/registry/index",
         "${{ runner.temp }}/velnor/cargo/registry/cache",
         "${{ runner.temp }}/velnor/cargo/git/db",
-        "velnor-v1-sources-",
-        "hashFiles('Cargo.lock')",
+        "velnor-v2-sources-",
+        "$GITHUB_WORKSPACE/Cargo.lock",
+        "${{steps.cache-keys.outputs.sources_key}}",
+        "${{needs.plan.outputs.sources_key}}",
     ] {
         assert!(yaml.contains(path), "missing {path} (mbx={mbx})");
     }
-    for excluded in ["credentials.toml", "registry/src", "Swatinem/rust-cache"] {
+    for excluded in [
+        "credentials.toml",
+        "registry/src",
+        "Swatinem/rust-cache",
+        "velnor-v1-sources-",
+    ] {
         assert!(
             !yaml.contains(excluded),
             "unexpected {excluded} (mbx={mbx})"
@@ -85,7 +92,7 @@ fn assert_elected_writer(mbx: bool) -> TestResult {
 
 #[test]
 fn c10_only_plan_saves_producer_successful_deltas() -> TestResult {
-    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
+    use velnor_actions_contract::workflow::cache_family::SOURCES_SAVE_CONDITION;
 
     let plan = job_names("plan", true)?;
     let fetch = plan
@@ -109,7 +116,17 @@ fn c10_only_plan_saves_producer_successful_deltas() -> TestResult {
         .iter()
         .find(|step| step.name == "Save Cargo sources")
         .ok_or("plan source save")?;
-    assert_eq!(step.condition.as_deref(), Some(CACHE_SAVE_CONDITION));
+    assert_eq!(step.condition.as_deref(), Some(SOURCES_SAVE_CONDITION));
+    let fetch_step = job
+        .steps
+        .iter()
+        .rfind(|step| step.role == Some(velnor_actions_contract::StepRole::CargoSourcesFetch))
+        .ok_or("plan fetch step")?;
+    assert_eq!(
+        fetch_step.id,
+        Some(velnor_actions_contract::StepId::SourcesFetch),
+        "the save gates on the last fetch step's outcome"
+    );
     assert_elected_writer(false)
 }
 

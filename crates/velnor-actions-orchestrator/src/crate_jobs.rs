@@ -312,6 +312,7 @@ fn build_job_for_members(
         &model,
         input.catalog,
         input.fetch_roots,
+        &crate::tofu_cache::tofu_cache_roots(input.discovery)?,
         use_rust,
         use_mbx,
         use_nextest,
@@ -350,16 +351,6 @@ pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
         && Stack::from_id(&task.stack_id) != Some(Stack::Mise)
 }
 
-/// Render one validated crate model to its fixed IR job.
-///
-/// P08 order: helper staging, plan download (report identities bind
-/// the plan), restore the exact shared Cargo sources subset, the
-/// per-root provider restore on opentofu roles, then MBX objects,
-/// then probe-and-fetch, then report-wrapped obligations, then one
-/// always-on crate-report upload carrying every entry. Readers never
-/// save. Rust setup (components, restore, fetch) emits only for rust
-/// roles; pure-tofu roles carry the opentofu driver with no Rust
-/// setup, mixed roles the union.
 #[cfg(test)]
 #[path = "crate_jobs_test_modules.rs"]
 mod test_modules;

@@ -219,6 +219,7 @@ pub fn finalize_jobs(
     crate::cache_tar_setup::insert_launcher_steps(&mut jobs)?;
     apply_affected_job_gates(&mut jobs)?;
     validate_final_jobs(ir, &mut jobs)?;
+    crate::cache_doctor::check(&jobs)?;
     Ok(jobs)
 }
 

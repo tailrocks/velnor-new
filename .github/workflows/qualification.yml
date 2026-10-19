@@ -872,7 +872,6 @@ jobs:
       MISE_NO_HOOKS: "1"
       MISE_RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
       RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
-      RUSTUP_TOOLCHAIN: 1.99.1
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -887,17 +886,19 @@ jobs:
           env: "false"
           cache: "false"
           cache_save: "false"
+      - name: Resolve project tool versions
+        run: "set -eu\n: \"${GITHUB_ENV:?missing GITHUB_ENV}\"\n: \"${RUNNER_TEMP:?missing RUNNER_TEMP}\"\nvelnor_scratch=\"$RUNNER_TEMP/velnor-project-tool\"\nvelnor_fail() { printf 'velnor: %s\\n' \"$1\" >&2; exit 1; }\nvelnor_get() { mise --no-config --no-env --no-hooks config get -f \"$1\" \"$2\" > \"$velnor_scratch\" 2>/dev/null; }\nvelnor_exact() {\n  IFS= read -r value < \"$velnor_scratch\" || value=\n  printf '%s\\n' \"$value\" | cmp -s - \"$velnor_scratch\" || velnor_fail \"$1 must declare one exact X.Y.Z version\"\n  case \"$value\" in\n    ''|*[!0-9.]*|.*|*.|*..*|*.*.*.*) velnor_fail \"$1 must declare one exact X.Y.Z version, not '$value'\" ;;\n    *.*.*) ;;\n    *) velnor_fail \"$1 must declare one exact X.Y.Z version, not '$value'\" ;;\n  esac\n}\nvelnor_tool() {\n  name=$1\n  shift\n  resolved=\n  for source in \"$@\"; do\n    file=${source%%#*}\n    key=${source#*#}\n    [ -e \"$file\" ] || continue\n    if [ -L \"$file\" ] || [ ! -f \"$file\" ]; then velnor_fail \"$file must be a regular file\"; fi\n    if [ \"$key\" = - ]; then\n      { tr -d ' \\t\\r\\n' < \"$file\" && echo; } > \"$velnor_scratch\"\n    else\n      velnor_get \"$file\" \"$key\" || continue\n      if grep -q '^[A-Za-z0-9_-]* = ' \"$velnor_scratch\"; then\n        velnor_get \"$file\" \"$key.version\" || velnor_fail \"$file $key declares no version\"\n      fi\n    fi\n    velnor_exact \"$file $key\"\n    if [ -n \"$resolved\" ] && [ \"$resolved\" != \"$value\" ]; then\n      velnor_fail \"$name: $file $key declares $value, another source declares $resolved\"\n    fi\n    resolved=$value\n  done\n  [ -n \"$resolved\" ] || velnor_fail \"$name: the project config no longer declares this tool; regenerate the workflow\"\n  printf '%s=%s\\n' \"$name\" \"$resolved\" >> \"$GITHUB_ENV\"\n  if [ \"$name\" = VELNOR_TOOL_RUST ] && [ \"${velnor_export_rustup-0}\" = 1 ]; then\n    printf 'RUSTUP_TOOLCHAIN=%s\\n' \"$resolved\" >> \"$GITHUB_ENV\"\n  fi\n  printf 'velnor: %s=%s\\n' \"$name\" \"$resolved\"\n}\nvelnor_export_rustup=1\nvelnor_tool VELNOR_TOOL_MR_BOXINGTON 'mise.toml#tools.mr-boxington' 'mise.toml#tools.mbx' 'mise.toml#tools.github:jdx/mr-boxington' 'mise.toml#tools.packslip:github.com/jdx/mr-boxington' '.mise.toml#tools.mr-boxington' '.mise.toml#tools.mbx' '.mise.toml#tools.github:jdx/mr-boxington' '.mise.toml#tools.packslip:github.com/jdx/mr-boxington'\nvelnor_tool VELNOR_TOOL_RUST 'mise.toml#tools.rust' 'mise.toml#tools.core:rust' '.mise.toml#tools.rust' '.mise.toml#tools.core:rust' 'rust-toolchain.toml#toolchain.channel' 'rust-toolchain#-'\nrm -f \"$velnor_scratch\"\n"
       - name: Install pinned Rust toolchain
-        run: "mise install rust@1.99.1 && printf '%s/bin\\n' \"$(mise exec rust@1.99.1 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
+        run: "mise install rust@\"${VELNOR_TOOL_RUST}\" && printf '%s/bin\\n' \"$(mise exec rust@\"${VELNOR_TOOL_RUST}\" -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
       - name: Restore MBX objects
         uses: jdx/mr-boxington-action@47ce49b32025d93a7a2f4570815afaa2b7092240
         id: mbx_cache
         with:
           github-cache-mode: objects
-          version: 1.24.1
-          toolchain: 1.99.1
+          version: ${{ env.VELNOR_TOOL_MR_BOXINGTON }}
+          toolchain: ${{ env.VELNOR_TOOL_RUST }}
           isolate-objects-cache: "true"
-          cache-generation: velnor-qualification-mbx-1.24.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-47ce49b32025d93a7a2f4570815afaa2b7092240-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          cache-generation: velnor-qualification-mbx-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-47ce49b32025d93a7a2f4570815afaa2b7092240-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           save-on-workflow-dispatch: "true"
       - name: Verify MBX action identity and write policy
         id: mbx-ready
@@ -906,12 +907,12 @@ jobs:
           CACHE_SAVE_ELIGIBLE: ${{ steps.mbx_cache.outputs.cache-save-eligible }}
           CACHE_SAVE_REASON: ${{ steps.mbx_cache.outputs.cache-save-reason }}
           CACHE_HIT: ${{ steps.mbx_cache.outputs.cache-hit }}
-        run: "test \"$MBX_VERSION\" = '1.24.1' && test \"$CACHE_SAVE_ELIGIBLE\" = 'true' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch'"
+        run: "test \"$MBX_VERSION\" = \"${VELNOR_TOOL_MR_BOXINGTON}\" && test \"$CACHE_SAVE_ELIGIBLE\" = 'true' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch'"
       - name: Compile MBX cache probe
         run: "set -eu\nroot=\"$GITHUB_WORKSPACE/.velnor-mbx-cache-qualification\"\nmkdir -p \"$root/src\"\ncat > \"$root/Cargo.toml\" <<'EOF'\n[package]\nname = \"mbx-cache-qualification\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\nmembers = [\".\"]\nresolver = \"3\"\n\n[lib]\npath = \"src/lib.rs\"\nEOF\ncat > \"$root/src/lib.rs\" <<'EOF'\npub fn cache_probe() -> u64 { 42 }\nEOF\nmbx build --manifest-path \"$root/Cargo.toml\"\n"
       - name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
-        run: mise --no-config --no-env --no-hooks exec rust@1.99.1 -- mbx clean
+        run: "mise --no-config --no-env --no-hooks exec rust@\"${VELNOR_TOOL_RUST}\" -- mbx clean"
       - name: Sample runner disk after cleanup
         run: "df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\""
   mbx-cache-read-hosted:
@@ -938,7 +939,6 @@ jobs:
       MISE_NO_HOOKS: "1"
       MISE_RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
       RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
-      RUSTUP_TOOLCHAIN: 1.99.1
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -953,17 +953,19 @@ jobs:
           env: "false"
           cache: "false"
           cache_save: "false"
+      - name: Resolve project tool versions
+        run: "set -eu\n: \"${GITHUB_ENV:?missing GITHUB_ENV}\"\n: \"${RUNNER_TEMP:?missing RUNNER_TEMP}\"\nvelnor_scratch=\"$RUNNER_TEMP/velnor-project-tool\"\nvelnor_fail() { printf 'velnor: %s\\n' \"$1\" >&2; exit 1; }\nvelnor_get() { mise --no-config --no-env --no-hooks config get -f \"$1\" \"$2\" > \"$velnor_scratch\" 2>/dev/null; }\nvelnor_exact() {\n  IFS= read -r value < \"$velnor_scratch\" || value=\n  printf '%s\\n' \"$value\" | cmp -s - \"$velnor_scratch\" || velnor_fail \"$1 must declare one exact X.Y.Z version\"\n  case \"$value\" in\n    ''|*[!0-9.]*|.*|*.|*..*|*.*.*.*) velnor_fail \"$1 must declare one exact X.Y.Z version, not '$value'\" ;;\n    *.*.*) ;;\n    *) velnor_fail \"$1 must declare one exact X.Y.Z version, not '$value'\" ;;\n  esac\n}\nvelnor_tool() {\n  name=$1\n  shift\n  resolved=\n  for source in \"$@\"; do\n    file=${source%%#*}\n    key=${source#*#}\n    [ -e \"$file\" ] || continue\n    if [ -L \"$file\" ] || [ ! -f \"$file\" ]; then velnor_fail \"$file must be a regular file\"; fi\n    if [ \"$key\" = - ]; then\n      { tr -d ' \\t\\r\\n' < \"$file\" && echo; } > \"$velnor_scratch\"\n    else\n      velnor_get \"$file\" \"$key\" || continue\n      if grep -q '^[A-Za-z0-9_-]* = ' \"$velnor_scratch\"; then\n        velnor_get \"$file\" \"$key.version\" || velnor_fail \"$file $key declares no version\"\n      fi\n    fi\n    velnor_exact \"$file $key\"\n    if [ -n \"$resolved\" ] && [ \"$resolved\" != \"$value\" ]; then\n      velnor_fail \"$name: $file $key declares $value, another source declares $resolved\"\n    fi\n    resolved=$value\n  done\n  [ -n \"$resolved\" ] || velnor_fail \"$name: the project config no longer declares this tool; regenerate the workflow\"\n  printf '%s=%s\\n' \"$name\" \"$resolved\" >> \"$GITHUB_ENV\"\n  if [ \"$name\" = VELNOR_TOOL_RUST ] && [ \"${velnor_export_rustup-0}\" = 1 ]; then\n    printf 'RUSTUP_TOOLCHAIN=%s\\n' \"$resolved\" >> \"$GITHUB_ENV\"\n  fi\n  printf 'velnor: %s=%s\\n' \"$name\" \"$resolved\"\n}\nvelnor_export_rustup=1\nvelnor_tool VELNOR_TOOL_MR_BOXINGTON 'mise.toml#tools.mr-boxington' 'mise.toml#tools.mbx' 'mise.toml#tools.github:jdx/mr-boxington' 'mise.toml#tools.packslip:github.com/jdx/mr-boxington' '.mise.toml#tools.mr-boxington' '.mise.toml#tools.mbx' '.mise.toml#tools.github:jdx/mr-boxington' '.mise.toml#tools.packslip:github.com/jdx/mr-boxington'\nvelnor_tool VELNOR_TOOL_RUST 'mise.toml#tools.rust' 'mise.toml#tools.core:rust' '.mise.toml#tools.rust' '.mise.toml#tools.core:rust' 'rust-toolchain.toml#toolchain.channel' 'rust-toolchain#-'\nrm -f \"$velnor_scratch\"\n"
       - name: Install pinned Rust toolchain
-        run: "mise install rust@1.99.1 && printf '%s/bin\\n' \"$(mise exec rust@1.99.1 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
+        run: "mise install rust@\"${VELNOR_TOOL_RUST}\" && printf '%s/bin\\n' \"$(mise exec rust@\"${VELNOR_TOOL_RUST}\" -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
       - name: Restore MBX objects
         uses: jdx/mr-boxington-action@47ce49b32025d93a7a2f4570815afaa2b7092240
         id: mbx_cache
         with:
           github-cache-mode: objects
-          version: 1.24.1
-          toolchain: 1.99.1
+          version: ${{ env.VELNOR_TOOL_MR_BOXINGTON }}
+          toolchain: ${{ env.VELNOR_TOOL_RUST }}
           isolate-objects-cache: "true"
-          cache-generation: velnor-qualification-mbx-1.24.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-47ce49b32025d93a7a2f4570815afaa2b7092240-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          cache-generation: velnor-qualification-mbx-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-47ce49b32025d93a7a2f4570815afaa2b7092240-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           save-on-workflow-dispatch: "false"
       - name: Verify MBX action identity and write policy
         id: mbx-ready
@@ -972,7 +974,7 @@ jobs:
           CACHE_SAVE_ELIGIBLE: ${{ steps.mbx_cache.outputs.cache-save-eligible }}
           CACHE_SAVE_REASON: ${{ steps.mbx_cache.outputs.cache-save-reason }}
           CACHE_HIT: ${{ steps.mbx_cache.outputs.cache-hit }}
-        run: "test \"$MBX_VERSION\" = '1.24.1' && test \"$CACHE_SAVE_ELIGIBLE\" = 'false' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch; save-on-workflow-dispatch is off' && test \"$CACHE_HIT\" = 'false'"
+        run: "test \"$MBX_VERSION\" = \"${VELNOR_TOOL_MR_BOXINGTON}\" && test \"$CACHE_SAVE_ELIGIBLE\" = 'false' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch; save-on-workflow-dispatch is off' && test \"$CACHE_HIT\" = 'false'"
       - name: Require imported MBX objects
         run: "set -e -o pipefail; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx cache stats --json | tee \"$RUNNER_TEMP/mbx-object-stats.json\"; jq -e '.objects > 0' \"$RUNNER_TEMP/mbx-object-stats.json\""
       - name: Compile MBX cache probe
@@ -981,7 +983,7 @@ jobs:
         run: "set -e -o pipefail; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx stats --json | tee \"$RUNNER_TEMP/mbx-reuse-stats.json\"; jq -e '.savings.cached_compilations > 0' \"$RUNNER_TEMP/mbx-reuse-stats.json\""
       - name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
-        run: mise --no-config --no-env --no-hooks exec rust@1.99.1 -- mbx clean
+        run: "mise --no-config --no-env --no-hooks exec rust@\"${VELNOR_TOOL_RUST}\" -- mbx clean"
   mise-pin-linux-x64:
     name: Mise pin / hosted / Linux x64
     if: inputs.mode == 'mise-pin'

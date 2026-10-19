@@ -215,7 +215,7 @@ fn assert_dogfood_cargo_warmup(
         .collect::<Vec<_>>()
         .join(" ");
     assert!(
-        normalized.contains(
+normalized.contains(
             r#"rust_version="$(awk -v key=rust -f "$repo/scripts/toml-tool-pin.awk" "$repo/.velnor/version-policy.toml")""#
         )
             && normalized.contains(

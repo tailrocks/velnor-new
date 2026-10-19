@@ -217,7 +217,12 @@ fn root_pair_wrapper_conflict_fails() -> TestResult {
 fn nested_workspace_detects_own_wrapper_and_config() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
-    write_file(root, "mise.toml", "[tools]\nrust = \"1.98.1\"\n")?;
+    // Generation inventory runs the declared Rust: use the generator pin.
+    let root_mise = format!(
+        "[tools]\nrust = \"{}\"\n",
+        velnor_actions_mise::RUST_VERSION
+    );
+    write_file(root, "mise.toml", &root_mise)?;
     write_file(
         root,
         "sub/Cargo.toml",
@@ -270,7 +275,10 @@ fn misleading_names_and_comments_not_evidence() -> TestResult {
     write_file(
         root,
         "mise.toml",
-        "# wrappers.cargo.command = \"mbx\"\n[tools]\nrust = \"1.98.1\"\n",
+        &format!(
+            "# wrappers.cargo.command = \"mbx\"\n[tools]\nrust = \"{}\"\n",
+            velnor_actions_mise::RUST_VERSION
+        ),
     )?;
     write_task(root, "nextest", "#!/bin/sh\necho hi\n")?;
     write_task(root, "mbx-test", "#!/bin/sh\necho hi\n")?;

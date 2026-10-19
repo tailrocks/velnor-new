@@ -149,12 +149,15 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
     assert_eq!(
         sh_files,
         std::collections::BTreeSet::from([
+            // cache_keys.rs: the fixed Plan `Compute cache keys` script
+            // (generator-owned digest commands over validated roots).
+            "cache_keys.rs".to_owned(),
             "matrix_step_reports.rs".to_owned(),
             "pins.rs".to_owned(),
             "qualify.rs".to_owned(),
             "source_prep.rs".to_owned(),
         ]),
-        "fixed sh wrappers live in matrix_step_reports/pins/qualify/source_prep only"
+        "fixed sh wrappers live in cache_keys/matrix_step_reports/pins/qualify/source_prep only"
     );
     Ok(())
 }

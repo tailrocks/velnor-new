@@ -4,6 +4,7 @@ use crate::{
     OrchestratorError,
     internal::{PlanResponse, internal, internal_contract},
 };
+use std::collections::BTreeSet;
 use velnor_actions_contract::{
     QualificationCacheAdmission, QualificationCacheDirective, canonical_json_str,
 };
@@ -72,10 +73,12 @@ pub fn plan_outputs_with_admission(
             .unwrap_or_default(),
         job_outputs_utf16_bytes: 0,
     };
+    let cache_output_reserve = cache_output_reserve(&response.plan.task_ids)?;
     let bytes = check_plan_outputs(
         mode,
         response.plan.matrix.include.len(),
         &outputs.promoted_job_outputs(mode),
+        cache_output_reserve,
     )?;
     Ok(PlanOutputs {
         job_outputs_utf16_bytes: bytes,
@@ -103,7 +106,6 @@ pub(crate) const MATRIX_JOB_LIMIT: usize = 256;
 /// Keeping 100,000 bytes in reserve avoids depending on service-side
 /// accounting details.
 pub const JOB_OUTPUTS_BUDGET_UTF16_BYTES: usize = 900_000;
-
 /// Which outputs the plan job promotes to downstream jobs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlanOutputMode {
@@ -187,6 +189,7 @@ pub(crate) fn check_plan_outputs(
     mode: PlanOutputMode,
     matrix_entries: usize,
     outputs: &[(&str, &str)],
+    cache_output_reserve: usize,
 ) -> Result<usize, OrchestratorError> {
     if mode == PlanOutputMode::DynamicMatrix && matrix_entries > MATRIX_JOB_LIMIT {
         return Err(internal(&format!(
@@ -199,12 +202,43 @@ pub(crate) fn check_plan_outputs(
     let Some(bytes) = bytes else {
         return Err(internal("job_outputs_size_overflow"));
     };
-    if bytes > JOB_OUTPUTS_BUDGET_UTF16_BYTES {
+    let Some(total_bytes) = bytes.checked_add(cache_output_reserve) else {
+        return Err(internal("job_outputs_size_overflow"));
+    };
+    if total_bytes > JOB_OUTPUTS_BUDGET_UTF16_BYTES {
         return Err(internal(&format!(
-            "job_outputs_budget_exceeded:{bytes}:reduce matrix entries"
+            "job_outputs_budget_exceeded:{total_bytes}:reduce matrix entries"
         )));
     }
-    Ok(bytes)
+    Ok(total_bytes)
+}
+
+/// Bound cache outputs from the task roots in this plan.
+///
+/// The renderer uses the same sorted roots to emit per-root outputs.
+fn cache_output_reserve(task_ids: &[String]) -> Result<usize, OrchestratorError> {
+    use velnor_actions_contract::workflow::cache_family::{
+        PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES, cache_output_reserve_utf16_bytes,
+    };
+
+    let mut roots = BTreeSet::new();
+    for task_id in task_ids {
+        if !task_id.starts_with("stack/tofu/") {
+            continue;
+        }
+        let key = task_id
+            .split('/')
+            .nth(2)
+            .ok_or_else(|| internal("tofu_unparsable_task_id"))?;
+        roots.insert(velnor_actions_tofu::root_for_key(key).map_err(internal_contract)?);
+    }
+    let reserve = cache_output_reserve_utf16_bytes(roots.len());
+    if reserve > PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES {
+        return Err(internal(&format!(
+            "plan_cache_outputs_exceed_reserve:{reserve}"
+        )));
+    }
+    Ok(reserve)
 }
 
 /// UTF-16 bytes for one `$GITHUB_OUTPUT` record, including syntax.

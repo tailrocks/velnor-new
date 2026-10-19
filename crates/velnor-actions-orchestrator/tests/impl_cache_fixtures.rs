@@ -177,16 +177,16 @@ fn per_job_sources_keys_identical_plan_and_crates() -> TestResult {
         .cloned();
     assert_eq!(plan_restore, plan_save, "writer restores what it saves");
     let key = plan_restore.ok_or("plan key")?;
-    assert!(
-        key.starts_with("velnor-v1-sources-"),
-        "shared prefix: {key}"
-    );
-    assert!(key.contains("hashFiles("), "lock-pinned: {key}");
+    assert_eq!(key, "${{steps.cache-keys.outputs.sources_key}}");
     for job in &crates {
         let got = action_inputs(job_steps(&prep, job)?, "Restore Cargo sources")?
             .get("key")
             .cloned();
-        assert_eq!(got.as_deref(), Some(key.as_str()), "{job} restores the key");
+        assert_eq!(
+            got.as_deref(),
+            Some("${{needs.plan.outputs.sources_key}}"),
+            "{job} restores the Plan key"
+        );
     }
     for banned in ["-plan-", "-demo", "rust-"] {
         assert!(!key.contains(banned), "no job id in key: {key}");

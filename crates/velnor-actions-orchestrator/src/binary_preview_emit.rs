@@ -70,8 +70,9 @@ pub(crate) fn files(
         Vec::<OsString>::new(),
     )
     .map_err(|error| internal(&error.to_string()))?;
+    let emission = prep.emission_catalog();
     let (producer_source_prep, producer_cargo_env) = source_preparation::for_roots(
-        &prep.catalog,
+        &emission,
         &crate::source_prep::lockful_roots(&prep.root, &prep.discovery.workspaces),
     )?;
     let spec = ConsumerPreviewSpec {
@@ -86,7 +87,7 @@ pub(crate) fn files(
             &prep.config,
             ReleaseTarget::LinuxX86_64,
         )?,
-        install_rust_argv: strings_of(rust_install.argv(&prep.catalog))
+        install_rust_argv: strings_of(rust_install.argv(&emission))
             .map_err(|error| internal(&error))?,
         producer_source_prep,
         producer_cargo_env,

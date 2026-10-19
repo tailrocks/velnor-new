@@ -1,4 +1,5 @@
 //! Schema-2 affected plan and generic matrix entries.
+use super::TaskBindingDigest;
 use super::lanes::NamedCheckLaneVariant;
 pub use super::matrix_entry::MatrixEntry;
 pub use super::plan_jobs::{JobDisposition, PlanJob};
@@ -130,6 +131,8 @@ pub struct PlanObligation {
     pub reason: String,
     /// Task digest.
     pub task_digest: String,
+    /// Digest for the generated task binding with project-tool references.
+    pub task_binding_digest: TaskBindingDigest,
     /// Input digest.
     pub input_digest: String,
     /// Canonical digest over the task's complete input closure.
@@ -280,6 +283,7 @@ impl PlanObligation {
     fn validate(&self) -> Result<(), ContractError> {
         validate_task_id(&self.task_id)?;
         validate_digest(&self.task_digest)?;
+        validate_digest(self.task_binding_digest.as_str())?;
         validate_digest(&self.input_digest)?;
         validate_digest(&self.closure_digest)?;
         validate_digest(&self.graph_digest)?;

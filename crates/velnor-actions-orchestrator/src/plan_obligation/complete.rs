@@ -3,20 +3,22 @@ use crate::internal_plan::snapshot::platform_target_for_group;
 use crate::internal_plan::{
     adapter_metadata, cache_ids_for, evidence_for_group, execute_ids, record_task_cache,
 };
+use velnor_actions_contract::workflow::TaskBindingDigest;
 use velnor_actions_contract::{
     MatrixEntry, NamedCheckLane, PlanObligation, PlannedPlatform, ProposedTask,
 };
 
-/// Digest the pinned MBX cache generation used by publication identity.
-fn mbx_identity_digest() -> String {
+/// Digest the selected MBX cache generation.
+fn mbx_identity_digest(catalog: &velnor_actions_mise::ToolCatalog) -> String {
     let generation = velnor_actions_contract::cachekey::mbx_cache_generation(
-        velnor_actions_mise::catalog::MR_BOXINGTON_VERSION,
+        catalog.version(velnor_actions_mise::PinnedTool::MrBoxington),
     );
     velnor_actions_contract::digest_b3(generation.as_bytes())
 }
 
 pub(super) struct GroupCompletion<'a> {
     pub(super) argv: &'a [String],
+    pub(super) task_binding_digest: TaskBindingDigest,
     pub(super) toolchain: &'a str,
     pub(super) toolchain_inputs: &'a velnor_actions_contract::cachekey::ToolchainInputs,
     pub(super) input_digest: &'a str,
@@ -49,10 +51,11 @@ pub(super) fn complete_group(
         decision: completion.reuse.decision,
         reason: completion.reuse.reason,
         task_digest: task_digest.clone(),
+        task_binding_digest: completion.task_binding_digest,
         input_digest: recorded,
         closure_digest: completion.closure_digest,
         graph_digest: completion.graph_digest,
-        mbx_digest: mbx_identity_digest(),
+        mbx_digest: mbx_identity_digest(inputs.catalog),
         profile: task.configuration.clone(),
         job_id: job_id.clone(),
     };
@@ -179,3 +182,7 @@ fn record_lane_target_dir(metadata: &mut serde_json::Value, lane_id: &str) {
         serde_json::Value::String(crate::internal_plan::target_dir_for_lane_id(lane_id)),
     );
 }
+
+#[cfg(test)]
+#[path = "complete_tests.rs"]
+mod tests;

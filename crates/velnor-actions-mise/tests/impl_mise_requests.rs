@@ -32,6 +32,7 @@ fn discovery_argv_is_byte_exact() -> Result<(), String> {
             "--format-version",
             "1",
             "--no-deps",
+            "--all-features",
             "--manifest-path",
             "/tmp/x y/Cargo.toml",
         ])

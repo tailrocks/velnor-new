@@ -30,7 +30,7 @@ pub(super) fn build_argv_for_action(build: &[String]) -> Result<Vec<String>, Ren
         return Err(malformed());
     }
     let rust = payload[5].strip_prefix("rust@").ok_or_else(malformed)?;
-    if !super::is_exact_version(rust) {
+    if !crate::commands::is_exact_or_project_version(rust) {
         return Err(malformed());
     }
     let rust_selector = format!("+{rust}");

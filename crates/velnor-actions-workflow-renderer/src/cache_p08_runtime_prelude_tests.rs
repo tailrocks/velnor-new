@@ -58,7 +58,10 @@ fn scale_set_prelude_threads_the_validated_image_source_pin() -> Result<(), Rend
     let source_sha = "a".repeat(40);
     let payload =
         payload_with_source("scale-set:velnor+ubuntu-26.04-scale-set", Some(&source_sha))?;
-    assert!(payload.runtime_identity_supported());
+    assert!(
+        !payload.runtime_identity_supported(),
+        "an expected source pin is not an observed runner image identity"
+    );
     let step = payload.runtime_prelude_step()?;
     assert_eq!(
         step.condition.as_deref(),

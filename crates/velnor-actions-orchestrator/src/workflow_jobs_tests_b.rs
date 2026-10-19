@@ -46,7 +46,7 @@ fn pure_tofu_plan_drops_all_rust_setup() {
             ..needs(PlanRustNeed::None)
         },
         &[],
-        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        &[],
     )
     .expect("plan job");
     let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();

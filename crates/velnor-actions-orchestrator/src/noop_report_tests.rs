@@ -71,6 +71,10 @@ fn fixture_plan() -> (Plan, String) {
             decision: ObligationDecision::Execute,
             reason: "selected".to_owned(),
             task_digest: task_digest.clone(),
+            task_binding_digest: velnor_actions_contract::TaskBindingDigest::new(
+                task_digest.clone(),
+            )
+            .expect("binding digest"),
             input_digest: digest(11),
             closure_digest: digest(21),
             graph_digest: "b3-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

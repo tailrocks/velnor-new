@@ -102,28 +102,17 @@ pub(crate) fn derive_lanes_until(
     let task_digest =
         crate::internal::plan_obligation::task_digest(&task.task_id, &argv, &toolchain)
             .map_err(internal_contract)?;
-    let obligation = PlanObligation {
-        task_id: task.task_id.clone(),
-        decision: ObligationDecision::Execute,
-        reason: "opaque_check_requires_execution".to_owned(),
+    let task_binding_digest = crate::tool_catalog_project::task_binding_digest(task, catalog)?;
+    let obligation = build_obligation(&BuildObligationInput {
+        item,
         task_digest: task_digest.clone(),
+        task_binding_digest,
         input_digest: input_digest.clone(),
         closure_digest,
-        graph_digest: graph.clone(),
-        mbx_digest: velnor_actions_contract::digest_b3(
-            velnor_actions_contract::cachekey::mbx_cache_generation(
-                velnor_actions_mise::catalog::MR_BOXINGTON_VERSION,
-            )
-            .as_bytes(),
-        ),
-        profile: task.configuration.clone(),
-        // Paired hosted/Scale Set lanes own one obligation; the first lane
-        // names it, and both lane jobs carry matrix entries (always `run`).
-        job_id: lanes
-            .first()
-            .map(|lane| lane.job_id.clone())
-            .ok_or_else(|| internal("named_check_lane_missing"))?,
-    };
+        graph_digest: graph,
+        catalog,
+        lanes,
+    })?;
     let run = velnor_actions_workflow_renderer::join_argv_for_run(&argv)
         .map_err(|e| internal(&e.to_string()))?;
     let entries = derive_entries(
@@ -140,6 +129,50 @@ pub(crate) fn derive_lanes_until(
         },
     )?;
     Ok((obligation, entries))
+}
+
+/// Build the shared obligation for one or more named-check lanes.
+///
+/// # Errors
+///
+/// Returns an error when no lane owns the obligation.
+struct BuildObligationInput<'a> {
+    item: &'a DiscoveredCheck,
+    task_digest: String,
+    task_binding_digest: velnor_actions_contract::workflow::TaskBindingDigest,
+    input_digest: String,
+    closure_digest: String,
+    graph_digest: String,
+    catalog: &'a ToolCatalog,
+    lanes: &'a [NamedCheckLane],
+}
+
+fn build_obligation(input: &BuildObligationInput<'_>) -> Result<PlanObligation, OrchestratorError> {
+    let task = &input.item.proposal;
+    Ok(PlanObligation {
+        task_id: task.task_id.clone(),
+        decision: ObligationDecision::Execute,
+        reason: "opaque_check_requires_execution".to_owned(),
+        task_digest: input.task_digest.clone(),
+        task_binding_digest: input.task_binding_digest.clone(),
+        input_digest: input.input_digest.clone(),
+        closure_digest: input.closure_digest.clone(),
+        graph_digest: input.graph_digest.clone(),
+        mbx_digest: velnor_actions_contract::digest_b3(
+            velnor_actions_contract::cachekey::mbx_cache_generation(
+                input
+                    .catalog
+                    .version(velnor_actions_mise::PinnedTool::MrBoxington),
+            )
+            .as_bytes(),
+        ),
+        profile: task.configuration.clone(),
+        job_id: input
+            .lanes
+            .first()
+            .map(|lane| lane.job_id.clone())
+            .ok_or_else(|| internal("named_check_lane_missing"))?,
+    })
 }
 
 struct NamedCheckEntryContext<'a> {

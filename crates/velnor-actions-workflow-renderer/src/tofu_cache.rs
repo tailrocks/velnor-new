@@ -6,9 +6,9 @@
 //! Both archive exactly one job-private plugin-cache dir, never the
 //! data dir beside it.
 
+pub use velnor_actions_contract::workflow::cache_family::TOFU_PROVIDER_CACHE_BASE_EXPR;
 pub use velnor_actions_contract::workflow::step_identity::{
-    TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDER_CACHE_BASE_EXPR, TOFU_PROVIDERS_KEY_OUTPUT_EXPR,
-    TOFU_PROVIDERS_KEY_PREFIX, TOFU_PROVIDERS_PATH_OUTPUT_EXPR,
+    TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDERS_KEY_OUTPUT_EXPR, TOFU_PROVIDERS_PATH_OUTPUT_EXPR,
 };
 use velnor_actions_contract::{Step, StepRole};
 
@@ -28,9 +28,8 @@ pub const TOFU_PROVIDER_ADMISSION_SCRIPT: &str = r#"set -eu
 cd -P "$RUNNER_TEMP"
 rt=$PWD
 v="$rt/velnor"
-c="$v/cache"
-p="$c/tofu"
-[ ! -L "$v" ] && [ ! -L "$c" ] && [ ! -L "$p" ] || exit 1
+p="$v/tofu-cache"
+[ ! -L "$v" ] && [ ! -L "$p" ] || exit 1
 mkdir -p "$p"
 cd -P "$p"
 [ "$PWD" = "$p" ] || exit 1

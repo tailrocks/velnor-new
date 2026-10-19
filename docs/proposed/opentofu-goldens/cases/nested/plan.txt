@@ -16,7 +16,7 @@ Workflow to generate
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
     - actionlint (9 steps)
-    - plan (15 steps)
+    - plan (16 steps)
     - publish-baseline (6 steps)
     - required (8 steps)
     - rust-a (18 steps)

@@ -41,7 +41,7 @@ fn c1_inventory_lists_every_runtime_path_with_one_owner() {
 
 #[test]
 fn tofu_provider_cache_base_matches_the_contract_path() {
-    let expected = "${{ runner.temp }}/velnor/cache/tofu";
+    let expected = "${{ runner.temp }}/velnor/tofu-cache";
     let contract = velnor_actions_contract::workflow::step_identity::TOFU_PROVIDER_CACHE_BASE_EXPR;
     assert_eq!(paths::TOFU_PROVIDER_CACHE_BASE_EXPR, expected);
     assert_eq!(paths::TOFU_PROVIDER_CACHE_BASE_EXPR, contract);

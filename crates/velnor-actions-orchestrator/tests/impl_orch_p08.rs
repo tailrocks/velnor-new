@@ -218,8 +218,8 @@ fn c8_crate_jobs_install_validators_for_test_spawns() -> TestResult {
 
 #[test]
 fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
-    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
-    // IR: exactly one save step (plan writer), carrying the push-only gate;
+    use velnor_actions_contract::workflow::cache_family::SOURCES_SAVE_CONDITION;
+    // IR: exactly one save step (plan writer), carrying the producer and trust gate;
     // every other plan step (restores, fetch, obligations) stays ungated.
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
@@ -238,8 +238,8 @@ fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
             saves += 1;
             assert_eq!(
                 step.condition.as_deref(),
-                Some(CACHE_SAVE_CONDITION),
-                "save must be push-gated"
+                Some(SOURCES_SAVE_CONDITION),
+                "save must be producer- and trust-gated"
             );
         } else {
             assert!(
@@ -256,8 +256,12 @@ fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
     let save_at = yaml.find("- name: Save Cargo sources").ok_or("save step")?;
     let save_condition = yaml[save_at..].lines().nth(1).ok_or("save condition")?;
     assert!(
-        save_condition.contains("success() && github.event_name == 'push'"),
-        "the canonical push-only save gate already denies dispatch:\n{yaml}"
+        save_condition.contains("steps.cache-keys.outputs.sources_save == 'true'"),
+        "the runtime trust gate already denies dispatch:\n{yaml}"
+    );
+    assert!(
+        !save_condition.contains("workflow_dispatch"),
+        "no redundant dispatch deny:\n{yaml}"
     );
     assert_tools_saves_push_gated_per_key(&yaml);
     Ok(())
@@ -279,8 +283,8 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
     assert_eq!(
         yaml.matches("if: success() && github.event_name == 'push'")
             .count(),
-        1 + saves.len(),
-        "cargo and tools saves stay push-gated:\n{yaml}"
+        saves.len(),
+        "tools saves stay push-gated:\n{yaml}"
     );
     assert_eq!(
         yaml.matches(

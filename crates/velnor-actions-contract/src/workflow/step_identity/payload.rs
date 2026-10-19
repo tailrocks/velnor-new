@@ -35,9 +35,9 @@ pub(in crate::workflow) fn valid_tools_cache_identity(kind: &StepKind) -> bool {
     matches!(kind, StepKind::Action { uses, with, env }
         if TOOLS_CACHE_PRELUDE_USES.contains(&uses.as_str())
             && with.len() == 1
-            && with.get(TOOLS_CACHE_IDENTITY_DIGEST_INPUT).is_some_and(|digest|
-                digest.len() == 64
-                    && digest.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()))
+            && with.get(TOOLS_CACHE_IDENTITY_DIGEST_INPUT).is_some_and(|digest| {
+                crate::config::project_tool_refs::is_tools_cache_identity_input(digest)
+            })
             && env.is_empty())
 }
 

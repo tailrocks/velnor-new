@@ -75,7 +75,10 @@ fn preview_generates_independently_with_sorted_static_inventory() -> TestResult 
         let repo = binary_repo(&preview_config(stable)?)?;
         std::fs::write(
             repo.path().join("mise.toml"),
-            "[tools]\nrust = '1.98.1'\n[tasks.release-preview]\nrun = 'true'\n",
+            format!(
+                "[tools]\nrust = '{}'\n[tasks.release-preview]\nrun = 'true'\n",
+                velnor_actions_mise::RUST_VERSION
+            ),
         )?;
         git(&["add", "mise.toml"], repo.path())?;
         let tree = render_staged_tree(&prepare(repo.path())?)?;
@@ -201,7 +204,10 @@ fn generator_emits_tap_jobs_from_native_distribution_config() -> TestResult {
     let repo = binary_repo(&tap_enabled_config(false)?)?;
     std::fs::write(
         repo.path().join("mise.toml"),
-        "[tools]\nrust = '1.98.1'\n[tasks.release-preview]\nrun = 'true'\n",
+        format!(
+            "[tools]\nrust = '{}'\n[tasks.release-preview]\nrun = 'true'\n",
+            velnor_actions_mise::RUST_VERSION
+        ),
     )?;
     git(&["add", "mise.toml"], repo.path())?;
     let tree = render_staged_tree(&prepare(repo.path())?)?;

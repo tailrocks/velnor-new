@@ -5,12 +5,19 @@
 //! `RUSTUP_TOOLCHAIN` from step environments when a repository toolchain
 //! file is present so rustup honors the repository file directly.
 //!
+//! Every catalog tool the project's Mise config declares (plus Rust from a
+//! toolchain file) takes the project's version and is recorded as
+//! project-declared (hard decision 5, [`crate::tool_catalog_project`]);
+//! `.velnor/config.toml` pins apply only to undeclared tools and must agree
+//! with a declaration otherwise.
+//!
 //! The repository `mise.toml` rust record's `mr_boxington` option is read
 //! too: when it selects mise's exec-time cargo→MBX wrapper, the resolved
 //! catalog carries the repository's `mr-boxington` pin so the pinned-tool
 //! preflight installs it (missing installs fall back to the action-owned
 //! PATH `mbx`, which may be a different version).
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use velnor_actions_contract::VelnorConfig;
@@ -30,6 +37,9 @@ use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
 use crate::native_tool_input::{NativeToolSelector, parse_native_tool_selector};
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
+use crate::tool_catalog_project::{
+    PinInputs, ToolchainFile, apply_declarations, contract, project_declarations,
+};
 
 /// Resolve the effective [`ToolCatalog`] for a repository root and parsed [`VelnorConfig`].
 ///
@@ -80,60 +90,58 @@ pub(crate) fn resolve_tool_catalog(
             ),
         ));
     }
-    let rust_version = file_tc
-        .as_ref()
-        .map(|(_, _, version)| version.as_str())
-        .or_else(|| config_tc.map(|(_, channel)| channel))
-        .unwrap_or(RUST_VERSION);
     let export_rustup_toolchain = file_tc.is_none();
     let repo_mise = read_repo_mise_tools(root)?;
     let rust_mr_boxington = repo_mise.as_ref().is_some_and(|tools| {
         tools.lenient_mbx_option
             || tools
-                .rust
-                .as_ref()
+                .tools
+                .get("rust")
                 .is_some_and(|rust| rust.mr_boxington == Some(true))
     });
-    let config_mbx_override = config.tools.get("mr-boxington");
-    let mr_boxington = if rust_mr_boxington {
-        resolve_wrapped_mr_boxington_pin(repo_mise.as_ref(), config_mbx_override)?
-    } else {
-        config_mbx_override
-            .unwrap_or(MR_BOXINGTON_VERSION)
-            .to_owned()
+    if rust_mr_boxington {
+        resolve_wrapped_mr_boxington_pin(repo_mise.as_ref(), config.tools.get("mr-boxington"))?;
+    }
+    let empty = BTreeMap::new();
+    let declared = project_declarations(
+        repo_mise.as_ref().map_or(&empty, |tools| &tools.tools),
+        file_tc.as_ref(),
+    );
+    let pins = PinInputs {
+        declared: &declared,
+        config,
+        config_tc,
     };
-    let gh = config.tools.get("gh").unwrap_or(GH_VERSION);
-    let actionlint = config.tools.get("actionlint").unwrap_or(ACTIONLINT_VERSION);
-    let shellcheck = config.tools.get("shellcheck").unwrap_or(SHELLCHECK_VERSION);
-    let zizmor = config.tools.get("zizmor").unwrap_or(ZIZMOR_VERSION);
-    let nextest = config.tools.get("cargo-nextest").unwrap_or(NEXTEST_VERSION);
-    let opentofu = config.tools.get("opentofu").unwrap_or(OPENTOFU_VERSION);
+    let pin = |tool, field, default| pins.version(tool, field, default);
     let catalog = ToolCatalog::new(
-        rust_version,
-        &mr_boxington,
-        gh,
-        actionlint,
-        shellcheck,
-        zizmor,
-        nextest,
-        opentofu,
+        &pin(PinnedTool::Rust, "rust", RUST_VERSION)?,
+        &pin(
+            PinnedTool::MrBoxington,
+            "mr-boxington",
+            MR_BOXINGTON_VERSION,
+        )?,
+        &pin(PinnedTool::Gh, "gh", GH_VERSION)?,
+        &pin(PinnedTool::Actionlint, "actionlint", ACTIONLINT_VERSION)?,
+        &pin(PinnedTool::Shellcheck, "shellcheck", SHELLCHECK_VERSION)?,
+        &pin(PinnedTool::Zizmor, "zizmor", ZIZMOR_VERSION)?,
+        &pin(PinnedTool::Nextest, "cargo-nextest", NEXTEST_VERSION)?,
+        &pin(PinnedTool::Opentofu, "opentofu", OPENTOFU_VERSION)?,
     )
-    .map_err(|err| OrchestratorError::Contract {
-        problem: err.to_string(),
-    })?;
-    Ok(catalog
-        .with_export_rustup_toolchain(export_rustup_toolchain)
-        .with_rust_mr_boxington(rust_mr_boxington))
+    .map_err(|err| contract(&err))?;
+    apply_declarations(
+        catalog
+            .with_export_rustup_toolchain(export_rustup_toolchain)
+            .with_rust_mr_boxington(rust_mr_boxington),
+        &declared,
+    )
 }
 
 /// Repository-root `mise.toml` tool records the catalog must agree with.
 struct RepoMiseTools {
     /// Repository-relative file the records were read from.
     file: &'static str,
-    /// `[tools] rust` record, when present.
-    rust: Option<NativeToolSelector>,
-    /// `[tools] mr-boxington` record, when present.
-    mr_boxington: Option<NativeToolSelector>,
+    /// Every `[tools]` record by key.
+    tools: BTreeMap<String, NativeToolSelector>,
     /// Line-local wrapper detection over bytes too malformed to parse as
     /// TOML — the exact predicate that feeds P06 driver evidence, so the
     /// two readers of the same file cannot disagree.
@@ -170,23 +178,25 @@ fn read_repo_mise_tools(root: &Path) -> Result<Option<RepoMiseTools>, Orchestrat
             lenient_mbx_option |= velnor_actions_rust::tool_config_selects_mbx(&text);
             continue;
         };
-        let tools = value.get("tools").and_then(toml::Value::as_table);
-        let select = |name: &str| {
-            tools
-                .and_then(|table| table.get(name))
-                .map(parse_native_tool_selector)
-        };
+        let tools = value
+            .get("tools")
+            .and_then(toml::Value::as_table)
+            .map(|table| {
+                table
+                    .iter()
+                    .map(|(key, value)| (key.clone(), parse_native_tool_selector(value)))
+                    .collect()
+            })
+            .unwrap_or_default();
         return Ok(Some(RepoMiseTools {
             file,
-            rust: select("rust"),
-            mr_boxington: select("mr-boxington"),
+            tools,
             lenient_mbx_option,
         }));
     }
     Ok((lenient_mbx_option).then_some(RepoMiseTools {
         file: MISE_TOML_FILE,
-        rust: None,
-        mr_boxington: None,
+        tools: BTreeMap::new(),
         lenient_mbx_option: true,
     }))
 }
@@ -212,7 +222,7 @@ fn resolve_wrapped_mr_boxington_pin(
     let Some(tools) = repo_mise else {
         return Err(missing_mr_boxington_record(MISE_TOML_FILE));
     };
-    let selector = tools.mr_boxington.as_ref();
+    let selector = tools.tools.get("mr-boxington");
     let Some(pin) = selector.and_then(|selector| selector.version.as_deref()) else {
         return Err(missing_mr_boxington_record(tools.file));
     };
@@ -261,7 +271,7 @@ fn missing_mr_boxington_record(file: &str) -> OrchestratorError {
 fn read_toolchain_file(
     root: &Path,
     rel: &'static str,
-) -> Result<Option<(&'static str, String, String)>, OrchestratorError> {
+) -> Result<Option<ToolchainFile>, OrchestratorError> {
     let RepoRead::Text(text) = read_repo_file(root, rel, MAX_REPO_FILE_BYTES)? else {
         return Ok(None);
     };

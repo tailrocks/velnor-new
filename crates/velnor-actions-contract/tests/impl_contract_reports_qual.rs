@@ -3,7 +3,8 @@ use crate::impl_contract_ids::{MANIFEST, TASK, sample_entry};
 use velnor_actions_contract::{
     ContractError, ObligationDecision, Plan, PlanGenerator, PlanMatrix, PlanObligation,
     PlanPackage, PlanRunner, QualificationDispatch, QualificationDispatchMode, QualificationPhase,
-    RunnerSelection, Trust, WorkflowEvent, digest_b3, plan_id_for_run, run_key_for_ci,
+    RunnerSelection, TaskBindingDigest, Trust, WorkflowEvent, digest_b3, plan_id_for_run,
+    run_key_for_ci,
 };
 
 #[test]
@@ -86,6 +87,7 @@ fn sample_qualification_plan() -> Result<Plan, ContractError> {
             decision: ObligationDecision::Execute,
             reason: "qualification_full".to_owned(),
             task_digest: digest_b3(b"task"),
+            task_binding_digest: TaskBindingDigest::new(digest_b3(b"task"))?,
             input_digest: digest_b3(b"inputs"),
             closure_digest: digest_b3(b"closure"),
             graph_digest: digest_b3(b"graph"),

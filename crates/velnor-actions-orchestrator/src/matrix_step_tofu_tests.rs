@@ -78,7 +78,10 @@ fn tofu_obligation() -> CrateObligation {
         step_name: "Init for validate".to_owned(),
         gated_by: Vec::new(),
         matrix_key: velnor_actions_contract::matrix_key_for_id(&matrix_id).expect("matrix key"),
-        task_digest: task_digest_for_execution(&task_id, &run, &toolchain).expect("task digest"),
+        task_digest: velnor_actions_contract::TaskBindingDigest::new(
+            task_digest_for_execution(&task_id, &run, &toolchain).expect("task digest"),
+        )
+        .expect("binding digest"),
         toolchain_inputs,
         run,
     }
@@ -142,12 +145,15 @@ fn tofu_validate_keeps_implicit_success_gate_after_init_failure() {
         step_name: "Validate".to_owned(),
         gated_by: vec![init.task_id],
         matrix_key: velnor_actions_contract::matrix_key_for_id(&matrix_id).expect("matrix key"),
-        task_digest: task_digest_for_execution(
-            &task_id,
-            &run,
-            &toolchain_id(&init.toolchain_inputs).expect("toolchain ID"),
+        task_digest: velnor_actions_contract::TaskBindingDigest::new(
+            task_digest_for_execution(
+                &task_id,
+                &run,
+                &toolchain_id(&init.toolchain_inputs).expect("toolchain ID"),
+            )
+            .expect("task digest"),
         )
-        .expect("task digest"),
+        .expect("binding digest"),
         toolchain_inputs: init.toolchain_inputs,
         run,
     };
@@ -186,7 +192,7 @@ fn tofu_obligation_step_carries_isolated_cache_dir() {
         "{data}"
     );
     assert!(
-        cache.starts_with("${{ runner.temp }}/velnor/cache/tofu/b3-"),
+        cache.starts_with("${{ runner.temp }}/velnor/tofu-cache/b3-"),
         "{cache}"
     );
     let data_locator = data.rsplit('/').next().expect("locator");

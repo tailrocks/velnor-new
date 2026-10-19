@@ -20,7 +20,7 @@ use velnor_actions_mise::restore::probe_tool_availability;
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::internal::{internal, internal_contract};
-use crate::internal_plan::identities::platform_id_for_group;
+use crate::internal_plan::identities::{platform_id_for_group, toolchain_inputs_for};
 use crate::internal_plan::snapshot::ExecutionSnapshot;
 use crate::internal_plan::wire_w2::{self, GroupWire};
 use crate::schedule::assign_lanes;
@@ -165,12 +165,12 @@ pub(crate) fn plan_group(
         );
     }
     let _ = inputs.lane;
-    let toolchain_inputs =
-        crate::internal_plan::identities::toolchain_inputs_for(task, inputs.catalog)
-            .map_err(internal_contract)?;
+    let toolchain_inputs = toolchain_inputs_for(task, inputs.catalog).map_err(internal_contract)?;
     let toolchain = velnor_actions_contract::cachekey::toolchain_id(&toolchain_inputs)
         .map_err(internal_contract)?;
     let argv = task_argv(task, inputs.catalog)?;
+    let task_binding_digest =
+        crate::tool_catalog_project::task_binding_digest(task, inputs.catalog)?;
     let platform_id = platform_id_for_group(inputs.label, task).map_err(internal_contract)?;
     let identity = planned_identity(inputs, &argv, &toolchain, &platform_id, &mut *reads)?;
     let reuse_eligible = identity.reuse_eligible;
@@ -210,6 +210,7 @@ pub(crate) fn plan_group(
         inputs,
         complete::GroupCompletion {
             argv: &argv,
+            task_binding_digest,
             toolchain: &toolchain,
             toolchain_inputs: &toolchain_inputs,
             input_digest: &input_digest,

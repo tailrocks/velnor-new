@@ -186,7 +186,7 @@ mod tests {
                         env: BTreeMap::from([
                             (
                                 "TF_PLUGIN_CACHE_DIR".to_owned(),
-                                "${{ runner.temp }}/velnor/cache/tofu/alpha".to_owned(),
+                                "${{ runner.temp }}/velnor/tofu-cache/alpha".to_owned(),
                             ),
                             ("TF_DATA_DIR".to_owned(), ".terraform".to_owned()),
                         ]),

@@ -212,6 +212,7 @@ fn valid_identity(step: &Step, runs_on: &str, needs_plan: bool) -> bool {
 
 fn valid_restore(step: &Step, needs_plan: bool) -> bool {
     step.role == Some(StepRole::ToolsCacheRestore)
+        && step.id == Some(velnor_actions_contract::StepId::ToolsRestore)
         && step.condition.as_deref()
             == Some(crate::cache_p08::tools_cache_restore_condition(needs_plan))
         && matches!(
@@ -257,7 +258,7 @@ pub(super) fn same_tools_cache_prelude_shape(
 }
 
 fn same_tools_step(hosted: &Step, local: &Step, hosted_runs_on: &str, local_runs_on: &str) -> bool {
-    if hosted.role != local.role || hosted.condition != local.condition {
+    if hosted.id != local.id || hosted.role != local.role || hosted.condition != local.condition {
         return false;
     }
     match (hosted.role, &hosted.kind, &local.kind) {

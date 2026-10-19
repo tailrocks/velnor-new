@@ -31,6 +31,13 @@ pub const STEP_CREDENTIAL_DENYLIST: [&str; 9] = [
     "NODE_AUTH_TOKEN",
 ];
 
+/// Job env disabling Cargo's automatic cache cleaning in Rust jobs.
+///
+/// Cargo's periodic auto-clean deletes unused `registry/cache` and
+/// `registry/src` entries; the sources family archives `registry/cache`,
+/// so a clean would shrink the shared snapshot nondeterministically.
+pub const CARGO_AUTO_CLEAN_ENV: (&str, &str) = ("CARGO_CACHE_AUTO_CLEAN_FREQUENCY", "never");
+
 /// Endpoint-selector keys forbidden in any rendered step env.
 ///
 /// `GH_HOST` would reroute `gh` — and any kept token — to an

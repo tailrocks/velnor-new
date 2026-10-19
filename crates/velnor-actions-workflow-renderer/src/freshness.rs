@@ -71,7 +71,7 @@ impl FreshnessSpec {
         guard::validate_runs_on(&self.runs_on)?;
         steps::validate_uses(&self.checkout_uses)?;
         self.mise_setup.validate()?;
-        if !valid_rust_version(&self.rust_version) {
+        if !crate::commands::is_exact_or_project_version(&self.rust_version) {
             return Err(RenderError::BadCommand("bad_rust_version".to_owned()));
         }
         if !self.checkout_uses.starts_with("actions/checkout@") {
@@ -82,24 +82,6 @@ impl FreshnessSpec {
         }
         Ok(())
     }
-}
-
-/// Accept one exact numeric Rust toolchain version, with no shell syntax.
-fn valid_rust_version(value: &str) -> bool {
-    let mut components = value.split('.');
-    let Some(major) = components.next() else {
-        return false;
-    };
-    let Some(minor) = components.next() else {
-        return false;
-    };
-    let Some(patch) = components.next() else {
-        return false;
-    };
-    components.next().is_none()
-        && [major, minor, patch]
-            .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
 }
 
 /// Render the freshness workflow document from a validated spec.

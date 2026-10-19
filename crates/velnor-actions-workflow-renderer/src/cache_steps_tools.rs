@@ -71,7 +71,7 @@ pub(super) fn cache_step(
                 ),
             ]),
         )?;
-        step.id = Some(StepId::ToolsCacheRestore);
+        step.id = Some(StepId::ToolsRestore);
         step.condition = condition;
         step.role = Some(StepRole::ToolsCacheRestore);
         return Ok(step);

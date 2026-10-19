@@ -16,6 +16,7 @@ use crate::canonical::{canonical_json_bytes, digest_b3};
 use crate::errors::ContractError;
 use crate::ids::{validate_matrix_key, validate_task_id};
 use crate::validate_digest;
+use crate::workflow::TaskBindingDigest;
 use crate::workflow::jobs::{
     TOFU_DISPLAY_PREFIX, TOFU_JOB_ID_PREFIX, is_safe_display_name, validate_job_id,
 };
@@ -36,7 +37,7 @@ pub struct CrateObligation {
     /// Matrix key locating this obligation's reports.
     pub matrix_key: String,
     /// Task digest binding argv plus toolchain.
-    pub task_digest: String,
+    pub task_digest: TaskBindingDigest,
     /// Exact toolchain identity inputs bound into the task digest.
     pub toolchain_inputs: ToolchainInputs,
     /// Fixed obligation argv.
@@ -117,9 +118,11 @@ impl CrateObligation {
     fn validate(&self, job_id: &str) -> Result<(), ContractError> {
         validate_task_id(&self.task_id)?;
         validate_matrix_key(&self.matrix_key)?;
-        validate_digest(&self.task_digest)?;
+        validate_digest(self.task_digest.as_str())?;
         let toolchain_id = toolchain_id(&self.toolchain_inputs)?;
-        if task_digest_for_execution(&self.task_id, &self.run, &toolchain_id)? != self.task_digest {
+        if task_digest_for_execution(&self.task_id, &self.run, &toolchain_id)?
+            != self.task_digest.as_str()
+        {
             return Err(ContractError::identity(
                 "crate_obligation.task_digest",
                 format!("task_digest_mismatch:{job_id}"),

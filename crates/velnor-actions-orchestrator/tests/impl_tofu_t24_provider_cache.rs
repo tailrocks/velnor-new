@@ -45,7 +45,7 @@ fn action_with<'a>(
 /// At most one init per root and one elected save over that restore's outputs.
 #[test]
 fn gate4_init_once_fmt_once_no_duplicate_uploads() -> TestResult {
-    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
+    use velnor_actions_contract::workflow::cache_family::TOFU_PROVIDERS_SAVE_CONDITION;
     use velnor_actions_contract::workflow::step_identity::{
         TOFU_PROVIDERS_KEY_OUTPUT_EXPR, TOFU_PROVIDERS_PATH_OUTPUT_EXPR,
     };
@@ -93,8 +93,8 @@ fn gate4_init_once_fmt_once_no_duplicate_uploads() -> TestResult {
             };
             assert_eq!(
                 save.condition.as_deref(),
-                Some(CACHE_SAVE_CONDITION),
-                "{id} saves under the push-only gate"
+                Some(TOFU_PROVIDERS_SAVE_CONDITION),
+                "{id} saves under the trusted-only gate"
             );
             assert_eq!(
                 with.get("key").map(String::as_str),

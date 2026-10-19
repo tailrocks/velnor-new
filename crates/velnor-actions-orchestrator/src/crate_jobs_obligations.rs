@@ -2,6 +2,7 @@
 
 use std::collections::BTreeSet;
 
+use velnor_actions_contract::workflow::TaskBindingDigest;
 use velnor_actions_contract::{
     CrateObligation, ProposedTask, matrix_id_for_task_group, matrix_key_for_id,
 };
@@ -64,7 +65,11 @@ fn obligation_for(
     let argv = crate::vectors::task_argv(task, catalog)?;
     let toolchain_inputs = crate::internal_plan::identities::toolchain_inputs_for(task, catalog)?;
     let toolchain = velnor_actions_contract::cachekey::toolchain_id(&toolchain_inputs)?;
-    let digest = crate::internal::plan_obligation::task_digest(&task.task_id, &argv, &toolchain)?;
+    let digest = TaskBindingDigest::new(crate::internal::plan_obligation::task_digest(
+        &task.task_id,
+        &argv,
+        &toolchain,
+    )?)?;
     let matrix_id = matrix_id_for_task_group(&task.stack_id, &task.task_id)?;
     let matrix_key = matrix_key_for_id(&matrix_id)?;
     Ok(CrateObligation {

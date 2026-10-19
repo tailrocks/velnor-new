@@ -1,6 +1,17 @@
 //! Request writer provenance tests for baseline publishing.
 
 use super::*;
+use std::fs;
+
+fn push_payload(head: &str) -> String {
+    serde_json::json!({
+        "before": "b".repeat(40),
+        "after": head,
+        "ref": "refs/heads/testmain",
+        "repository": {"full_name": "o/r", "default_branch": "testmain"}
+    })
+    .to_string()
+}
 
 #[test]
 fn publish_request_writer_records_push_refs() {

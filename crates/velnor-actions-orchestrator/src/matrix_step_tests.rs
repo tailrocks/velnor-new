@@ -49,7 +49,10 @@ fn obligation() -> CrateObligation {
         step_name: "Clippy".to_owned(),
         gated_by: Vec::new(),
         matrix_key,
-        task_digest: task_digest_for_execution(&task_id, &run, &toolchain).expect("task digest"),
+        task_digest: velnor_actions_contract::TaskBindingDigest::new(
+            task_digest_for_execution(&task_id, &run, &toolchain).expect("task digest"),
+        )
+        .expect("binding digest"),
         toolchain_inputs,
         run,
     }
@@ -86,9 +89,11 @@ fn refresh_task_identity(obligation: &mut CrateObligation) {
     obligation.matrix_key =
         velnor_actions_contract::matrix_key_for_id(&matrix_id).expect("matrix key");
     let toolchain = toolchain_id(&obligation.toolchain_inputs).expect("toolchain identity");
-    obligation.task_digest =
+    obligation.task_digest = velnor_actions_contract::TaskBindingDigest::new(
         task_digest_for_execution(&obligation.task_id, &obligation.run, &toolchain)
-            .expect("task digest");
+            .expect("task digest"),
+    )
+    .expect("binding digest");
 }
 
 #[test]
@@ -236,7 +241,8 @@ fn actual_nextest_producer_selector_passes_task_execution_contract() {
         step_name: "Nextest".to_owned(),
         gated_by: Vec::new(),
         matrix_key: velnor_actions_contract::matrix_key_for_id(&matrix_id).expect("matrix key"),
-        task_digest,
+        task_digest: velnor_actions_contract::TaskBindingDigest::new(task_digest)
+            .expect("binding digest"),
         toolchain_inputs,
         run,
     };

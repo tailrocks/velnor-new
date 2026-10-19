@@ -75,7 +75,7 @@ impl TofuApplySpec {
                 self.checkout_uses
             )));
         }
-        if !is_exact_version(&self.opentofu_version) {
+        if !crate::commands::is_exact_or_project_version(&self.opentofu_version) {
             return Err(RenderError::BadCommand(
                 "bad_tofu_apply_opentofu_version".to_owned(),
             ));
@@ -123,16 +123,6 @@ pub fn render_tofu_apply_workflow_with_routing(
 
 #[cfg(test)]
 pub(super) use crate::tofu_apply_policy::PLAN_REVIEW_JQ;
-
-fn is_exact_version(value: &str) -> bool {
-    let mut components = value.split('.');
-    components
-        .by_ref()
-        .take(3)
-        .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
-        && components.next().is_none()
-        && value.split('.').count() == 3
-}
 
 fn is_valid_default_branch(value: &str) -> bool {
     !value.is_empty()

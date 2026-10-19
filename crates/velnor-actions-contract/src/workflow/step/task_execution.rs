@@ -16,7 +16,7 @@ pub(in crate::workflow) struct TaskExecutionValidation<'a> {
     /// Stable task report lookup ID.
     pub(in crate::workflow) task_id: &'a str,
     /// Digest binding the task arguments and toolchain.
-    pub(in crate::workflow) task_digest: &'a str,
+    pub(in crate::workflow) task_digest: &'a super::TaskBindingDigest,
     /// Pinned toolchain selectors and compile/test-driver identities.
     pub(in crate::workflow) toolchain_inputs: &'a crate::cachekey::ToolchainInputs,
     /// Stable task matrix identity.
@@ -54,7 +54,11 @@ fn pinned_tool_selector(selector: &str) -> Option<(&'static str, &str)> {
     Some((canonical_tool, version))
 }
 
+/// Literal pin, or a project reference the runtime frame resolves (hard decision 5).
 fn valid_pinned_version(version: &str) -> bool {
+    if crate::config::project_tool_refs::is_project_tool_ref(version) {
+        return true;
+    }
     !version.is_empty()
         && version.bytes().any(|byte| byte.is_ascii_digit())
         && version

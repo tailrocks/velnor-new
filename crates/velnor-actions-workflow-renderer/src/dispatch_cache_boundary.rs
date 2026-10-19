@@ -105,9 +105,11 @@ fn suppress_dispatch(step: &mut Step) {
     step.condition = Some(format!("({prior}) && {DISPATCH_DENY}"));
 }
 
-/// Preserve the contract's canonical push-only writer gate.
+/// Preserve the contract's canonical trust-gated writer gates.
 ///
-/// This exact condition already excludes workflow dispatch. Conjoining the
+/// These exact conditions already exclude workflow dispatch (the runtime
+/// key step grants writes only to protected pushes and same-repository
+/// pull requests). Conjoining the
 /// general dispatch deny would change the typed `ToFu` save protocol while
 /// adding no further protection.
 fn is_push_only_cache_save(step: &Step) -> bool {
@@ -121,7 +123,9 @@ fn is_push_only_cache_save(step: &Step) -> bool {
     let condition_is_push_only = condition
         == Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION)
         || condition
-            == Some(velnor_actions_contract::workflow::ir::CARGO_SOURCES_PR_SCOPED_SAVE_CONDITION)
+            == Some(velnor_actions_contract::workflow::cache_family::SOURCES_SAVE_CONDITION)
+        || condition
+            == Some(velnor_actions_contract::workflow::cache_family::TOFU_PROVIDERS_SAVE_CONDITION)
         || (step.role == Some(velnor_actions_contract::StepRole::ToolsCacheSave)
             && (condition == Some(tools_save_readonly.as_str())
                 || condition == Some(tools_save_pr_scoped.as_str())));

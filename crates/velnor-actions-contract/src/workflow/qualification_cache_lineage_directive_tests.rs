@@ -12,7 +12,7 @@ use crate::workflow::{
     QualificationRuntimeIdentity, QualificationRuntimeIdentityRequirements,
     QualificationRuntimeImageDigests, QualificationRuntimeImageIdentity,
     QualificationRuntimePlatform, QualificationRuntimeScaleSet,
-    QualificationRuntimeToolObservation, WorkflowEvent,
+    QualificationRuntimeToolObservation, TaskBindingDigest, WorkflowEvent,
 };
 use crate::{RunnerSelection, Trust, digest_b3};
 
@@ -142,6 +142,8 @@ pub(super) fn qualification_plan(
             decision: ObligationDecision::Execute,
             reason: "qualification_full".to_owned(),
             task_digest: task_digest.clone(),
+            task_binding_digest: TaskBindingDigest::new(task_digest.clone())
+                .expect("binding digest"),
             input_digest,
             closure_digest: digest_b3(b"closure"),
             graph_digest: digest_b3(b"graph"),

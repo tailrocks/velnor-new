@@ -100,7 +100,9 @@ pub(super) fn obligation_for(
         task_id: task_id.to_owned(),
         decision: ObligationDecision::Execute,
         reason: "selected".to_owned(),
-        task_digest,
+        task_digest: task_digest.clone(),
+        task_binding_digest: velnor_actions_contract::TaskBindingDigest::new(task_digest)
+            .expect("binding digest"),
         input_digest: digest(seed + 10),
         closure_digest: digest(seed + 20),
         graph_digest: "b3-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

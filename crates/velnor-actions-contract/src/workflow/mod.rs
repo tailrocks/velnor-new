@@ -5,6 +5,7 @@ pub const QUALIFICATION_CACHE_FORMAT_VERSION: u8 = 3;
 
 pub mod artifacts;
 pub mod baseline_publication;
+pub mod cache_family;
 pub mod cache_ids;
 pub mod crate_job;
 pub mod dispatch;
@@ -26,9 +27,11 @@ pub mod qualification_phase;
 pub mod report;
 mod report_validate;
 pub mod step;
+mod step_id;
 pub mod step_identity;
 mod step_mbx_lifecycle;
 mod step_protocol;
+mod task_binding_digest;
 pub mod task_execution_manifest;
 pub mod timeout;
 pub mod trust;
@@ -114,6 +117,7 @@ pub use report::{
 };
 pub use step::{MAX_TASK_EXECUTION_ARGV, MAX_TASK_EXECUTION_ENV, Step, StepKind};
 pub use step_identity::{MBX_WORKSPACE_CLEAN_CONDITION, StepId, StepRole};
+pub use task_binding_digest::TaskBindingDigest;
 pub use task_execution_manifest::{
     MAX_TASK_EXECUTION_FRAME_BYTES, MAX_TASK_EXECUTION_RECORDS, TASK_EXECUTION_FRAME_MAGIC,
     TASK_EXECUTION_MANIFEST_PATH, TASK_EXECUTION_MANIFEST_SCHEMA, TaskExecutionManifestEntryV1,

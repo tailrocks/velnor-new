@@ -220,7 +220,9 @@ fn qualification_plan(
             task_id: "stack/rust/demo/test/default".to_owned(),
             decision: ObligationDecision::Execute,
             reason: "qualification_full".to_owned(),
-            task_digest,
+            task_digest: task_digest.clone(),
+            task_binding_digest: velnor_actions_contract::TaskBindingDigest::new(task_digest)
+                .expect("binding digest"),
             input_digest,
             closure_digest: digest_b3(b"cache runtime closure"),
             graph_digest: "b3-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

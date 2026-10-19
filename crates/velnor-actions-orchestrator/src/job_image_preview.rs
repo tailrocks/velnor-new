@@ -25,8 +25,13 @@ pub fn preview_job_image_candidate(
         });
     }
     check_velnor_identity(&root, &config)?;
-    let file =
-        crate::routing::job_image_candidate_file(&config, env!("CARGO_PKG_VERSION"), dispatch)?;
+    let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&root, &config)?;
+    let file = crate::routing::job_image_candidate_file(
+        &config,
+        &catalog.for_emission(),
+        env!("CARGO_PKG_VERSION"),
+        dispatch,
+    )?;
     let tree = RenderedTree {
         files: vec![file],
         symlinks: Vec::new(),

@@ -6,8 +6,9 @@ use velnor_actions_contract::{
     AGENTS_MD_PATH, CLAUDE_MD_PATH, ContractError, DECLARED_GITHUB_FORMATS, DiscoveryConfig,
     ObligationDecision, Plan, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner,
     PullRequestCachePolicy, ResourcesConfig, RunnerSelection, RustStackConfig, StacksConfig,
-    TestShardingConfig, Trust, VelnorConfig, WorkflowConfig, WorkflowEvent, WorkflowPolicy,
-    digest_b3, find_github_format, is_declared_github_format, plan_id_for_run, run_key_for_ci,
+    TaskBindingDigest, TestShardingConfig, Trust, VelnorConfig, WorkflowConfig, WorkflowEvent,
+    WorkflowPolicy, digest_b3, find_github_format, is_declared_github_format, plan_id_for_run,
+    run_key_for_ci,
 };
 
 /// Valid config shared by remediation cases.
@@ -92,6 +93,7 @@ pub(crate) fn sample_plan(run_key: &str) -> Result<Plan, ContractError> {
             decision: ObligationDecision::Execute,
             reason: "changed".to_owned(),
             task_digest: digest_b3(b"task"),
+            task_binding_digest: TaskBindingDigest::new(digest_b3(b"task"))?,
             input_digest: digest_b3(b"inputs"),
             closure_digest: digest_b3(b"closure"),
             graph_digest: digest_b3(b"graph"),

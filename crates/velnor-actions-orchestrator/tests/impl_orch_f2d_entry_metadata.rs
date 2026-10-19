@@ -1,6 +1,8 @@
 //! Plan matrix entries retain lane and adapter metadata.
 
-use super::*;
+use std::collections::BTreeSet;
+
+use crate::impl_common::{TestResult, plan_for_source_change};
 
 #[test]
 fn entry_cache_ids_recorded_per_lane() -> TestResult {

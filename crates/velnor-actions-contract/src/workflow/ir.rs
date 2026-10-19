@@ -174,19 +174,6 @@ pub struct Job {
 /// fork. The Mise adapter's trust predicates implement this same policy
 /// over runtime values; this string is its generation-time spelling.
 pub const CACHE_SAVE_CONDITION: &str = "success() && github.event_name == 'push'";
-/// Save condition for pull-request-scoped Cargo sources caching on the same repository.
-pub const CARGO_SOURCES_PR_SCOPED_SAVE_CONDITION: &str = "success() && (github.event_name == 'push' || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork))";
-
-/// Returns the cache save condition for Cargo sources based on the pull request cache policy.
-#[must_use]
-pub fn cargo_sources_save_condition(policy: crate::config::PullRequestCachePolicy) -> &'static str {
-    match policy {
-        crate::config::PullRequestCachePolicy::ReadOnly => CACHE_SAVE_CONDITION,
-        crate::config::PullRequestCachePolicy::SameRepositoryScoped => {
-            CARGO_SOURCES_PR_SCOPED_SAVE_CONDITION
-        }
-    }
-}
 /// `env:` spelling of the push-only writer policy for cache-mode inputs.
 ///
 /// Evaluates to `write` on push runs and `read` everywhere else, so a

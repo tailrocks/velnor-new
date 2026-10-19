@@ -12,7 +12,7 @@ use velnor_actions_workflow_renderer::tofu_cache::{
 fn provider_save_step_shape_and_pin_parity() -> Result<(), RenderError> {
     assert_eq!(
         TOFU_PROVIDER_CACHE_BASE_EXPR,
-        "${{ runner.temp }}/velnor/cache/tofu"
+        "${{ runner.temp }}/velnor/tofu-cache"
     );
     assert_eq!(TOFU_PROVIDERS_SAVE_USES, TOOLS_SAVE_USES);
     let save = tofu_providers_save_step()?;
@@ -48,21 +48,21 @@ fn provider_restore_and_admission_share_one_typed_composite() {
 #[test]
 fn provider_paths_stay_under_the_owned_base() {
     assert!(tofu_providers_path_ok(
-        "${{ runner.temp }}/velnor/cache/tofu/b3-0000000000000000000000000000000000000000000000000000000000000000"
+        "${{ runner.temp }}/velnor/tofu-cache/b3-0000000000000000000000000000000000000000000000000000000000000000"
     ));
     assert!(tofu_providers_path_ok(
-        "${{ runner.temp }}/velnor/cache/tofu/b3-1111111111111111111111111111111111111111111111111111111111111111"
+        "${{ runner.temp }}/velnor/tofu-cache/b3-1111111111111111111111111111111111111111111111111111111111111111"
     ));
     for bad in [
         TOFU_PROVIDER_CACHE_BASE_EXPR,
-        "${{ runner.temp }}/velnor/cache/tofu/",
-        "${{ runner.temp }}/velnor/cache/tofu/a/b",
-        "${{ runner.temp }}/velnor/cache/tofu/../evil",
-        "${{ runner.temp }}/velnor/cache/tofu/root-x credentials",
-        "${{ runner.temp }}/velnor/cache/tofu/credentials-b3-0000000000000000000000000000000000000000000000000000000000000000",
-        "${{ runner.temp }}/velnor/cache/tofu/root-*.hcl",
+        "${{ runner.temp }}/velnor/tofu-cache/",
+        "${{ runner.temp }}/velnor/tofu-cache/a/b",
+        "${{ runner.temp }}/velnor/tofu-cache/../evil",
+        "${{ runner.temp }}/velnor/tofu-cache/root-x credentials",
+        "${{ runner.temp }}/velnor/tofu-cache/credentials-b3-0000000000000000000000000000000000000000000000000000000000000000",
+        "${{ runner.temp }}/velnor/tofu-cache/root-*.hcl",
         "${{ runner.temp }}/velnor/tofu-data/b3-0000000000000000000000000000000000000000000000000000000000000000",
-        "$RUNNER_TEMP/velnor/cache/tofu/b3-0000000000000000000000000000000000000000000000000000000000000000",
+        "$RUNNER_TEMP/velnor/tofu-cache/b3-0000000000000000000000000000000000000000000000000000000000000000",
         "",
     ] {
         assert!(!tofu_providers_path_ok(bad), "{bad:?} must fail closed");

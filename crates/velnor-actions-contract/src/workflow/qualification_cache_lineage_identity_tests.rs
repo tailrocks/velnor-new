@@ -3,7 +3,8 @@ use super::*;
 use crate::workflow::{
     EntryCacheIds, ExecuteTaskIds, MatrixEntry, ObligationDecision, PlanGenerator, PlanMatrix,
     PlanObligation, PlanPackage, PlanRunner, PlannedPlatform, QualificationDispatch,
-    QualificationDispatchMode, QualificationPhase, QualificationRunRef, WorkflowEvent,
+    QualificationDispatchMode, QualificationPhase, QualificationRunRef, TaskBindingDigest,
+    WorkflowEvent,
 };
 use crate::{
     RunnerSelection, Trust,
@@ -99,6 +100,8 @@ fn plan_for_checkout(
             decision: ObligationDecision::Execute,
             reason: "qualification_full".to_owned(),
             task_digest: digest_b3(b"task configuration"),
+            task_binding_digest: TaskBindingDigest::new(digest_b3(b"task configuration"))
+                .expect("binding digest"),
             input_digest: digest_b3(input.as_bytes()),
             closure_digest: digest_b3(closure.as_bytes()),
             graph_digest: digest_b3(b"graph"),

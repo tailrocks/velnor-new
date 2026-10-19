@@ -74,6 +74,7 @@ pub(super) fn render_all(
     )?);
     extra.extend(crate::routing::extra_files(
         &prep.config,
+        &prep.emission_catalog(),
         version,
         &routing,
     )?);

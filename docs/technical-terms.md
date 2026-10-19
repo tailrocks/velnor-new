@@ -30,3 +30,5 @@
 | Database trigger | A database operation that starts automatically when specified data changes. |
 | Execution proof | A journal record used to check a job request and its worker pair. |
 | Proof guard | A database trigger that stops a change to an execution proof when the data is not correct. |
+| Digest | A value made from data that can show whether data changed. |
+| Probe lease | A journal record that tracks an active resource-probe operation. |

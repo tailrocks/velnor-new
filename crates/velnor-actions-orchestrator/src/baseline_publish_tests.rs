@@ -69,6 +69,10 @@ pub(super) fn fixture_plan(head: &str, run_key: &str) -> Plan {
             decision: ObligationDecision::Execute,
             reason: "affected_by_change".to_owned(),
             task_digest: task_digest.clone(),
+            task_binding_digest: velnor_actions_contract::TaskBindingDigest::new(
+                task_digest.clone(),
+            )
+            .expect("binding digest"),
             input_digest: digest(2),
             closure_digest: digest(3),
             graph_digest: digest(4),
@@ -274,3 +278,6 @@ fn publish_request_rejects_wrong_schema_and_operation() {
         assert!(publish_request(&request.to_string()).is_err());
     }
 }
+
+#[path = "baseline_publish_request_tests.rs"]
+mod request_tests;

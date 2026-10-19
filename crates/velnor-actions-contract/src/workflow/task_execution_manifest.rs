@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use super::TaskBindingDigest;
 use crate::canonical::{canonical_json_bytes, digest_b3};
 use crate::errors::ContractError;
 use crate::strict_json::MAX_UNTRUSTED_DOCUMENT_BYTES;
@@ -54,7 +55,7 @@ pub struct TaskExecutionManifestEntryV1 {
     /// Digest over every execution field below, including `task_digest`.
     pub execution_digest: String,
     /// Existing digest for the planner's task obligation.
-    pub task_digest: String,
+    pub task_digest: TaskBindingDigest,
     /// Canonical pinned tools and driver identity.
     pub toolchain_inputs: crate::cachekey::ToolchainInputs,
     /// Fixed, element-preserving argv.
@@ -226,15 +227,16 @@ impl TaskExecutionManifestEntryV1 {
     /// # Errors
     ///
     /// Returns a contract error for invalid records or oversized frames.
-    pub fn nul_frame(&self) -> Result<Vec<u8>, ContractError> {
+    pub fn nul_frame(&self, runtime_task_digest: &str) -> Result<Vec<u8>, ContractError> {
         self.validate()?;
+        validate_digest(runtime_task_digest)?;
         let mut fields =
             Vec::with_capacity(13 + self.argv.len() + self.env.len().saturating_mul(2));
         fields.extend([
             TASK_EXECUTION_FRAME_MAGIC.to_owned(),
             self.task_id.clone(),
             self.execution_digest.clone(),
-            self.task_digest.clone(),
+            runtime_task_digest.to_owned(),
             self.matrix_id.clone(),
             self.matrix_key.clone(),
             self.report_helper_version.clone(),
@@ -275,7 +277,7 @@ impl TaskExecutionManifestEntryV1 {
 #[derive(Serialize)]
 struct ExecutionDigestInputs<'a> {
     task_id: &'a str,
-    task_digest: &'a str,
+    task_digest: &'a TaskBindingDigest,
     toolchain_inputs: &'a crate::cachekey::ToolchainInputs,
     argv: &'a [String],
     env: &'a BTreeMap<String, String>,

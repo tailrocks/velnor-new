@@ -13,6 +13,7 @@ pub(super) fn render_job(
     model: &CrateJob,
     catalog: &ToolCatalog,
     fetch_roots: &[String],
+    tofu_roots: &[String],
     use_rust: bool,
     use_mbx: bool,
     use_nextest: bool,
@@ -42,15 +43,13 @@ pub(super) fn render_job(
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     }
     steps.extend(crate::source_cache::restore_step_for_crate(
-        label,
-        catalog,
         fetch_roots,
         use_rust,
     )?);
     if use_opentofu {
         let root = crate::tofu_cache::tofu_root_for_obligations(&model.obligations)?;
         steps.extend(crate::tofu_cache::provider_cache_step_for_tofu_root(
-            label, catalog, &root,
+            &root, tofu_roots,
         )?);
     }
     if use_mbx {

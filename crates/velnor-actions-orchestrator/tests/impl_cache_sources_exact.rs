@@ -30,11 +30,17 @@ fn assert_shared_source_archive(prep: &GenerationPreparation) -> TestResult {
         let steps = job_steps(prep, &job)?;
         let with = action_inputs(steps, "Restore Cargo sources")?;
         let key = with.get("key").cloned().ok_or("key")?;
-        assert!(key.starts_with("velnor-v1-sources-"), "{key}");
+        let expected = if job == "plan" {
+            "${{steps.cache-keys.outputs.sources_key}}"
+        } else {
+            "${{needs.plan.outputs.sources_key}}"
+        };
+        assert_eq!(key, expected, "{job} reads the Plan runtime sources key");
+        let path = with.get("path").cloned().ok_or("path")?;
         if shared.is_empty() {
-            shared.clone_from(&key);
+            shared.clone_from(&path);
         }
-        assert_eq!(key, shared, "{job} shares the sources key");
+        assert_eq!(path, shared, "{job} shares the sources path list");
         assert_source_paths(&job, with.get("path").ok_or("source paths")?);
         check_source_writer(&job, steps, &key)?;
     }

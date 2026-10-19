@@ -118,6 +118,27 @@ fn rendered_condition(step: &Step) -> String {
         .expect("rendered save condition")
 }
 
+#[test]
+fn project_tool_source_files_bind_the_cache_identity_input() {
+    let setup = pinned_mise();
+    let specs = vec!["rust@${VELNOR_TOOL_RUST}".to_owned()];
+    let payload = payload(inputs(
+        "ubuntu-26.04",
+        &setup,
+        &specs,
+        Some("${VELNOR_TOOL_RUST}"),
+        &[],
+    ));
+    assert_eq!(
+        payload.identity_input(),
+        format!(
+            "{}-{}",
+            payload.static_digest(),
+            velnor_actions_contract::config::project_tool_refs::project_tool_sources_hash()
+        )
+    );
+}
+
 #[path = "cache_p08_tool_payload_identity_tests.rs"]
 mod identity_tests;
 #[path = "cache_p08_tool_payload_step_tests.rs"]

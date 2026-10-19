@@ -3,9 +3,10 @@
 use super::step_identity::{
     MBX_WORKSPACE_CLEAN_CONDITION, NORMAL_TOOLS_CACHE_EXPORT_OPERATION,
     NORMAL_TOOLS_CACHE_IMPORT_OPERATION, NORMAL_TOOLS_CACHE_STAGE_OPERATION, StepId, StepRole,
-    TOFU_PROVIDER_ADMISSION_USES, TOOLS_CACHE_RESTORE_USES,
+    TOFU_PROVIDER_ADMISSION_USES,
 };
 use crate::errors::ContractError;
+use crate::workflow::TaskBindingDigest;
 use serde::{Deserialize, Serialize};
 
 mod task_execution;
@@ -82,7 +83,7 @@ pub enum StepKind {
         /// Stable task report lookup ID.
         task_id: String,
         /// Digest binding task argv and toolchain.
-        task_digest: String,
+        task_digest: TaskBindingDigest,
         /// Canonical pinned toolchain inputs bound by `task_digest`.
         toolchain_inputs: crate::cachekey::ToolchainInputs,
         /// Stable matrix identity for this task.
@@ -191,9 +192,6 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
             matches!(kind, StepKind::Internal { operation, .. } if operation == "publish-baseline-v1")
         }
         StepId::ToolsCacheIdentity => super::step_identity::valid_tools_cache_identity(kind),
-        StepId::ToolsCacheRestore => {
-            matches!(kind, StepKind::Action { uses, .. } if uses == TOOLS_CACHE_RESTORE_USES)
-        }
         StepId::NormalToolsCacheStage => matches!(
             kind,
             StepKind::Internal { operation, .. } if operation == NORMAL_TOOLS_CACHE_STAGE_OPERATION
@@ -211,7 +209,15 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
         StepId::TofuProviders => {
             matches!(kind, StepKind::Action { uses, .. } if uses == TOFU_PROVIDER_ADMISSION_USES)
         }
-        StepId::MbxReady => matches!(kind, StepKind::Shell { .. }),
+        StepId::MbxReady | StepId::CacheKeys | StepId::SourcesFetch => {
+            matches!(kind, StepKind::Shell { .. })
+        }
+        StepId::SourcesRestore => {
+            matches!(kind, StepKind::Action { uses, .. } if uses.starts_with("actions/cache/restore@"))
+        }
+        StepId::ToolsRestore => {
+            matches!(kind, StepKind::Action { uses, .. } if uses == super::step_identity::TOOLS_CACHE_RESTORE_USES)
+        }
     };
     if valid {
         Ok(())

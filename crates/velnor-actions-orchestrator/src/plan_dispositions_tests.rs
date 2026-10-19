@@ -20,6 +20,10 @@ fn obligation(task: &str, job: &str, decision: ObligationDecision) -> PlanObliga
         }
         .to_owned(),
         task_digest: digest_b3(task.as_bytes()),
+        task_binding_digest: velnor_actions_contract::TaskBindingDigest::new(digest_b3(
+            task.as_bytes(),
+        ))
+        .expect("binding digest"),
         input_digest: digest_b3(b"input"),
         closure_digest: digest_b3(b"closure"),
         graph_digest: "b3-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

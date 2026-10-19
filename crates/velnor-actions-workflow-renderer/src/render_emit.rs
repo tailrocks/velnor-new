@@ -38,15 +38,16 @@ pub(crate) fn emit_shared(
 ) -> Result<RenderedWorkflow, RenderError> {
     let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(jobs);
     let mut document = document::workflow_to_yaml(ir, shared, ctx, &mbx_jobs)?;
-    document = route_workflow_yaml_for_jobs(WORKFLOW_PATH, document, routing, jobs)?;
+    let cache_outputs = crate::cache_plan_outputs::consumed(jobs)?;
     if let Some((source, max_parallel)) = settings.matrix {
-        matrix::attach_task_matrix(&mut document, source, *max_parallel)?;
+        matrix::attach_task_matrix(&mut document, source, *max_parallel, &cache_outputs)?;
     } else {
-        matrix::attach_plan_outputs(&mut document)?;
+        matrix::attach_plan_outputs(&mut document, &cache_outputs)?;
     }
     matrix::attach_crate_job_caps(&mut document, settings.caps)?;
     matrix::suites::attach_suite_allow_failure(&mut document, &settings.suite_matrices.1)?;
     matrix::suites::attach_suite_matrices(&mut document, &settings.suite_matrices.0)?;
+    document = route_workflow_yaml_for_jobs(WORKFLOW_PATH, document, routing, jobs)?;
     let text = if settings.allow_step_aliases {
         fallback::render_checked_workflow(WORKFLOW_PATH, &document, &ctx.generator_version)?
     } else {

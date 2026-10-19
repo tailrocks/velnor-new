@@ -16,6 +16,10 @@ mod image_task;
 mod job_authority;
 mod mise;
 mod preview_policy;
+/// Run-time references to project-declared tool versions (hard decision 5).
+pub mod project_tool_refs;
+/// Generated run-time resolver for project-declared versions (hard decision 5).
+pub mod project_tool_resolver;
 mod qualified_tools;
 mod release;
 mod resources;

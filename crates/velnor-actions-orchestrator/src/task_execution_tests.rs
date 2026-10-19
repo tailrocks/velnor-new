@@ -41,7 +41,7 @@ fn resolver_emits_the_bound_record_without_altering_plan_data() {
     );
     assert_eq!(fields[1], TASK_ID);
     assert_eq!(fields[2], record.execution_digest);
-    assert_eq!(fields[3], record.task_digest);
+    assert_eq!(fields[3], fixture.plan.obligations[0].task_digest);
     assert_eq!(fields[4], record.matrix_id);
     assert_eq!(fields[5], record.matrix_key);
     assert_eq!(fields[6], record.report_helper_version);
@@ -173,6 +173,50 @@ fn resolver_rejects_execution_and_plan_identity_mismatches() {
 }
 
 #[test]
+fn resolver_rejects_a_static_binding_mismatch() {
+    let fixture = Fixture::new();
+    let mut plan = fixture.plan.clone();
+    plan.obligations[0].task_binding_digest =
+        velnor_actions_contract::TaskBindingDigest::new(digest(75)).expect("binding digest");
+    write_plan(fixture.runner_temp.path(), &plan);
+
+    let error = fixture
+        .resolve()
+        .expect_err("manifest binding must match the plan");
+    assert_error(&error, "task_execution_plan_binding_mismatch");
+}
+
+#[test]
+fn resolver_rejects_a_concrete_runtime_identity_mismatch() {
+    let fixture = Fixture::new();
+    let mut plan = fixture.plan.clone();
+    let changed = digest(76);
+    plan.obligations[0].task_digest = changed.clone();
+    plan.matrix.include[0].task_digest = changed;
+    plan.validate().expect("coherent alternate plan");
+    write_plan(fixture.runner_temp.path(), &plan);
+
+    let error = fixture
+        .resolve()
+        .expect_err("resolved tools must match the concrete plan identity");
+    assert_error(&error, "task_execution_runtime_toolchain_mismatch");
+}
+
+#[test]
+fn resolver_requires_exact_project_version_to_match_the_concrete_plan() {
+    let mut fixture = Fixture::new();
+    fixture.bind_project_rust_reference();
+
+    fixture
+        .resolve_with_project_rust("1.99.0")
+        .expect("the project version matches the concrete plan");
+    let error = fixture
+        .resolve_with_project_rust("1.99.1")
+        .expect_err("another exact version must not run against this plan");
+    assert_error(&error, "task_execution_runtime_toolchain_mismatch");
+}
+
+#[test]
 fn resolver_rejects_ambiguous_execution_digest_matches() {
     let fixture = Fixture::new();
     let record = fixture.manifest.tasks.get(TASK_ID).expect("record");
@@ -236,3 +280,22 @@ use support::*;
 
 #[path = "task_execution_gates_tests.rs"]
 mod gates;
+
+#[test]
+fn project_tool_refs_materialize_only_exact_resolved_versions() {
+    use super::resolve_project_tool_refs;
+    let lookup = |name: &str| (name == "VELNOR_TOOL_RUST").then(|| "1.42.7".to_owned());
+    assert_eq!(
+        resolve_project_tool_refs("rust@${VELNOR_TOOL_RUST}", lookup).expect("resolved"),
+        "rust@1.42.7"
+    );
+    assert!(resolve_project_tool_refs("mr-boxington@${VELNOR_TOOL_MR_BOXINGTON}", lookup).is_err());
+    let loose = |_: &str| Some("1.42".to_owned());
+    assert!(resolve_project_tool_refs("${VELNOR_TOOL_RUST}", loose).is_err());
+    let injected = |_: &str| Some("1.2.3 --evil".to_owned());
+    assert!(resolve_project_tool_refs("${VELNOR_TOOL_RUST}", injected).is_err());
+    assert_eq!(
+        resolve_project_tool_refs("plain", |_| None).expect("no refs"),
+        "plain"
+    );
+}

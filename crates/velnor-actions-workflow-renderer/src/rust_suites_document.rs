@@ -149,7 +149,8 @@ fn finalize_suite_workflow_jobs(
     }
     crate::cache_p08::elect_cache_writers_with_policy(jobs, spec.pull_request_cache_policy)?;
     crate::cache_tar_setup::insert_launcher_steps(jobs)?;
-    crate::cache_steps::append_workspace_cleanups(jobs)
+    crate::cache_steps::append_workspace_cleanups(jobs)?;
+    crate::cache_doctor::check(jobs)
 }
 
 fn insert_helper_after_checkout(

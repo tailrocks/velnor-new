@@ -168,7 +168,14 @@ fn prepare_task_execution<'a>(
         context.checkout_uses,
         context.report_helper_version,
     )?;
-    validate_task_fields(argv, env, task_id, task_digest, matrix_id, matrix_key)?;
+    validate_task_fields(
+        argv,
+        env,
+        task_id,
+        task_digest.as_str(),
+        matrix_id,
+        matrix_key,
+    )?;
     let mut record = TaskExecutionManifestEntryV1 {
         task_id: task_id.clone(),
         execution_digest: String::new(),

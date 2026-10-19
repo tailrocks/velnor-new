@@ -138,7 +138,7 @@ pub fn preseed_verify_step(
     env: &BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
     debug_assert!(PRESEED_VERIFY_NAME.ends_with(TRUST_MARK));
-    if !is_exact_version(mbx_version) {
+    if !crate::commands::is_exact_or_project_version(mbx_version) {
         return Err(RenderError::BadCommand(format!(
             "preseed_bad_mbx_version:{mbx_version}"
         )));
@@ -165,7 +165,11 @@ pub fn preseed_verify_step(
 fn check_probe_shape(probe: &[String]) -> Result<(), RenderError> {
     let malformed = || RenderError::BadCommand("preseed_bad_mbx_probe".to_owned());
     if probe.len() != 9
-        || probe.iter().any(|arg| !is_probe_token(arg))
+        || probe.iter().any(|arg| {
+            !is_probe_token(
+                &velnor_actions_contract::config::project_tool_refs::without_project_tool_refs(arg),
+            )
+        })
         || probe.iter().take(5).map(String::as_str).ne([
             "mise",
             "--no-config",
@@ -184,7 +188,7 @@ fn check_probe_shape(probe: &[String]) -> Result<(), RenderError> {
     let Some(rust_spec) = probe[5].strip_prefix("rust@") else {
         return Err(malformed());
     };
-    if !is_exact_version(rust_spec) {
+    if !crate::commands::is_exact_or_project_version(rust_spec) {
         return Err(malformed());
     }
     Ok(())
@@ -196,15 +200,6 @@ fn is_probe_token(arg: &str) -> bool {
         && arg.bytes().all(|b| {
             b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'@' | b':' | b'/' | b'+')
         })
-}
-
-/// Exact versions: three nonempty numeric dot parts, nothing else.
-fn is_exact_version(version: &str) -> bool {
-    let parts: Vec<&str> = version.split('.').collect();
-    parts.len() == 3
-        && parts
-            .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
 }
 
 /// Pre-seed manifest step: the fresh helper writes its own manifest.

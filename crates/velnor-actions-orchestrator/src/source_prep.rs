@@ -245,9 +245,11 @@ fn fetch_script(catalog: &ToolCatalog, root: &str, all_features: bool) -> String
     let feature_flag = if all_features { " --all-features" } else { "" };
     let probe =
         format!("{base} metadata --locked --offline{feature_flag}{manifest} >/dev/null 2>&1");
-    let fetch = format!("{base} fetch --locked{manifest}");
+    let log = "\"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\"";
+    let count = "\"$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads\"";
+    let fetch = format!("{base} fetch --locked{manifest} 2> {log}");
     format!(
-        "{}if {probe}; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; {fetch}; fi",
+        "{}if {probe}; then echo \"velnor: sources hit, skipping fetch\"; echo \"velnor: sources downloaded=0\"; else echo \"velnor: sources miss (source_missing), fetching\"; status=0; {fetch} || status=$?; cat {log} >&2; grep -Ec '^ *Downloaded [^ ]+ v[0-9]' {log} > {count} || true; n=; read -r n < {count} || true; echo \"velnor: sources downloaded=${{n:-0}}\"; exit $status; fi",
         cargo_isolation_prefix()
     )
 }

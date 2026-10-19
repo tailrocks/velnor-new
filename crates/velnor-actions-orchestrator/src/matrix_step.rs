@@ -254,7 +254,7 @@ pub(crate) fn obligation_step(
     } else {
         let mut identity = obligation_identity_env(
             &obligation.task_id,
-            &obligation.task_digest,
+            obligation.task_digest.as_str(),
             &matrix_id,
             &obligation.matrix_key,
             matrix_cap,

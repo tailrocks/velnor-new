@@ -77,6 +77,8 @@ pub(crate) const MBX_BUILD_SCRIPT_EXECUTION_VALUE: &str = "0";
 pub(crate) const MBX_CACHE_DIR_ENV: &str = "MBX_CACHE_DIR";
 pub(crate) const MBX_CACHE_DIR_VALUE: &str = "${{ runner.temp }}/velnor/mbx";
 
+#[path = "cache_steps_mbx_rustc.rs"]
+mod rustc_identity;
 #[path = "cache_steps_mbx_scripts.rs"]
 mod scripts;
 use self::scripts::{
@@ -93,7 +95,7 @@ pub(super) fn canonical_mbx_preflight_step(
     rust_toolchain: &str,
     action_env: &BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
-    if !is_exact_mbx_version(mbx_version) {
+    if !crate::commands::is_exact_or_project_version(mbx_version) {
         return Err(RenderError::BadCommand(format!(
             "bad_mbx_version:{mbx_version}"
         )));
@@ -178,7 +180,7 @@ pub(crate) fn mbx_version_check_step(
     rust_toolchain: &str,
     env: BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
-    if !is_exact_mbx_version(mbx_version) {
+    if !crate::commands::is_exact_or_project_version(mbx_version) {
         return Err(RenderError::BadCommand(format!(
             "bad_mbx_version:{mbx_version}"
         )));
@@ -197,7 +199,7 @@ pub(crate) fn mbx_version_check_step(
         "probe_dir=\"$RUNNER_TEMP/velnor-mbx-verify-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT\"".to_owned(),
         "[ ! -e \"$probe_dir\" ] && [ ! -L \"$probe_dir\" ] || { printf '%s\\n' 'verification scratch already exists' >&2; exit 1; }".to_owned(),
         "(umask 077 && mkdir -m 700 \"$probe_dir\") || { printf '%s\\n' 'could not reserve verification scratch' >&2; exit 1; }".to_owned(),
-        "cleanup() { rm -f \"$probe_dir/version\" \"$probe_dir/cache-dir\"; rmdir \"$probe_dir\"; }".to_owned(),
+        "cleanup() { rm -f \"$probe_dir/version\" \"$probe_dir/cache-dir\" \"$probe_dir/rustc-path\" \"$probe_dir/rustc-vv\" \"$probe_dir/mbx-rustc-vv\" \"$probe_dir/mbx-rustc\"; rmdir \"$probe_dir\"; }".to_owned(),
         "trap cleanup EXIT".to_owned(),
         "trap 'exit 1' HUP INT TERM".to_owned(),
         RESOLVE_ACTION_MBX_BIN.to_owned(),
@@ -213,8 +215,9 @@ pub(crate) fn mbx_version_check_step(
         "extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '%s\\n' 'MBX cache dir output has extra data' >&2; exit 1; fi".to_owned(),
         "exec 3<&-".to_owned(),
         "[ \"$cache_dir\" = \"$MBX_CACHE_DIR/actions\" ] || { printf '%s\\n' 'MBX reported an unexpected object store path' >&2; exit 1; }".to_owned(),
-        MBX_RESTORE_SOURCE_MTIMES_CMD.to_owned(),
     ];
+    script.extend(rustc_identity::mbx_rustc_identity_commands(rust_toolchain));
+    script.push(MBX_RESTORE_SOURCE_MTIMES_CMD.to_owned());
     script.extend(mbx_disk_sample_commands("after-cache-restore"));
     let script = script.join("; ");
     let mut step = action_owned_mbx_shell_step(
@@ -245,7 +248,7 @@ pub(crate) fn mbx_workspace_clean_step_for_action(action: &Step) -> Result<Step,
     let rust_toolchain = with
         .get("toolchain")
         .ok_or_else(|| RenderError::InvalidWorkflow("mbx_cleanup_toolchain_missing".to_owned()))?;
-    if !is_exact_mbx_version(version) {
+    if !crate::commands::is_exact_or_project_version(version) {
         return Err(RenderError::BadCommand(format!(
             "bad_mbx_version:{version}"
         )));
@@ -305,7 +308,7 @@ fn mbx_objects_action_step(
             "not_pinned_mbx_action:{uses}"
         )));
     }
-    if !is_exact_mbx_version(mbx_version) {
+    if !crate::commands::is_exact_or_project_version(mbx_version) {
         return Err(RenderError::BadCommand(format!(
             "bad_mbx_version:{mbx_version}"
         )));
@@ -367,16 +370,8 @@ fn with_rustup_process_homes(
     Ok(env)
 }
 
-fn is_exact_mbx_version(version: &str) -> bool {
-    let parts: Vec<&str> = version.split('.').collect();
-    parts.len() == 3
-        && parts
-            .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
-}
-
 fn validate_rust_toolchain(toolchain: &str) -> Result<(), RenderError> {
-    is_exact_mbx_version(toolchain)
+    crate::commands::is_exact_or_project_version(toolchain)
         .then_some(())
         .ok_or_else(|| RenderError::BadCommand(format!("bad_rust_toolchain:{toolchain}")))
 }

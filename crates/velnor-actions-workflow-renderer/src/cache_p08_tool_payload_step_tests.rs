@@ -25,7 +25,7 @@ fn payload_paths_and_restore_save_inputs_are_identical() {
     assert!(env.is_empty());
     assert_eq!(
         restore.id,
-        Some(velnor_actions_contract::StepId::ToolsCacheRestore)
+        Some(velnor_actions_contract::StepId::ToolsRestore)
     );
     assert_eq!(
         crate::cache_steps::validate_tools_restore_call(&restore).expect("registered wrapper call"),
@@ -130,7 +130,7 @@ fn save_step_renders_generic_protected_default_branch_policy() {
 
     assert_eq!(
         condition,
-        "success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'"
+        "success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'"
     );
     assert!(!condition.contains("github.repository"));
     assert!(!condition.contains("refs/heads/main"));

@@ -41,7 +41,7 @@ fn obligation() -> CrateObligation {
         step_name: "Validate".to_owned(),
         gated_by: Vec::new(),
         matrix_key: matrix_key_for_id(&matrix_id).expect("matrix key"),
-        task_digest,
+        task_digest: crate::workflow::TaskBindingDigest::new(task_digest).expect("binding digest"),
         toolchain_inputs,
         run,
     }
@@ -114,8 +114,10 @@ fn crate_job_accepts_only_strictly_prior_gates() {
     later.task_id =
         task_id_for_stack("tofu", "stacks/a", "plan", "default", None).expect("task id");
     let toolchain = toolchain_id(&later.toolchain_inputs).expect("toolchain identity");
-    later.task_digest =
-        task_digest_for_execution(&later.task_id, &later.run, &toolchain).expect("task identity");
+    later.task_digest = crate::workflow::TaskBindingDigest::new(
+        task_digest_for_execution(&later.task_id, &later.run, &toolchain).expect("task identity"),
+    )
+    .expect("binding digest");
     later.gated_by.push(job.obligations[0].task_id.clone());
     job.obligations.push(later);
     assert!(job.validate().is_ok(), "prior gate accepted");
@@ -133,9 +135,11 @@ fn one_job_keeps_obligation_configuration_identity() {
             .expect("configured task ID");
     configured.configuration = "checks".to_owned();
     let toolchain = toolchain_id(&configured.toolchain_inputs).expect("toolchain identity");
-    configured.task_digest =
+    configured.task_digest = crate::workflow::TaskBindingDigest::new(
         task_digest_for_execution(&configured.task_id, &configured.run, &toolchain)
-            .expect("configured task identity");
+            .expect("configured task identity"),
+    )
+    .expect("binding digest");
     configured.gated_by.push(job.obligations[0].task_id.clone());
     job.obligations.push(configured);
 

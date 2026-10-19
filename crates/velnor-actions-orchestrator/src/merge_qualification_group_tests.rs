@@ -197,8 +197,8 @@ fn shared_rust_plan() -> Plan {
     .expect("shared Rust entry");
     let mut plan = qualification_plan(context());
     plan.obligations = vec![
-        obligation(CLIPPY, clippy_digest, 1),
-        obligation(TEST, test_digest, 2),
+        obligation(CLIPPY, &clippy_digest, 1),
+        obligation(TEST, &test_digest, 2),
     ];
     plan.task_ids = vec![CLIPPY.to_owned(), TEST.to_owned()];
     plan.matrix.include = vec![entry];
@@ -214,12 +214,16 @@ fn digest(byte: u8) -> String {
     format!("b3-{}", format!("{byte:02x}").repeat(32))
 }
 
-fn obligation(task_id: &str, task_digest: String, seed: u8) -> PlanObligation {
+fn obligation(task_id: &str, task_digest: &str, seed: u8) -> PlanObligation {
     PlanObligation {
         task_id: task_id.to_owned(),
         decision: ObligationDecision::Execute,
         reason: "selected".to_owned(),
-        task_digest,
+        task_digest: task_digest.to_owned(),
+        task_binding_digest: velnor_actions_contract::TaskBindingDigest::new(
+            task_digest.to_owned(),
+        )
+        .expect("binding digest"),
         input_digest: digest(seed + 10),
         closure_digest: digest(seed + 20),
         graph_digest: "b3-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

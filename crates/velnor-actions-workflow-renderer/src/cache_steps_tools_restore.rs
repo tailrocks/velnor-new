@@ -17,7 +17,7 @@ pub(crate) fn validate_call(step: &Step) -> Result<&str, RenderError> {
     })?;
     let seed_admitted = with.get(super::TOOLS_SEED_ADMITTED_INPUT);
     if step.role != Some(StepRole::ToolsCacheRestore)
-        || step.id != Some(StepId::ToolsCacheRestore)
+        || step.id != Some(StepId::ToolsRestore)
         || uses != super::TOOLS_RESTORE_USES
         || !env.is_empty()
         || with.len() != 2

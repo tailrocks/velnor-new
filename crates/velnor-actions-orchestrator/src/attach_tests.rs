@@ -32,27 +32,10 @@ fn legacy_task_job() -> Job {
     }
 }
 
-/// Bare IR shell shared by the attach fixtures.
-pub(super) fn bare_ir(jobs: BTreeMap<String, velnor_actions_contract::Job>) -> WorkflowIr {
-    WorkflowIr {
-        name: "CI".to_owned(),
-        triggers: Trigger {
-            pull_request_types: Vec::new(),
-            push_branches: Vec::new(),
-            merge_group: false,
-            workflow_dispatch: None,
-            workflow_call: false,
-            schedule: None,
-        },
-        permissions: Permissions::default(),
-        concurrency: Concurrency {
-            group: "g".to_owned(),
-            cancel_in_progress: "c".to_owned(),
-        },
-        jobs,
-        cache_mode: None,
-    }
-}
+use support::bare_ir;
+
+#[path = "attach_test_support.rs"]
+mod support;
 
 #[test]
 fn lock_acquire_inserts_digest_verified_stage() {
@@ -80,15 +63,8 @@ fn lock_acquire_inserts_digest_verified_stage() {
     let mut ir = bare_ir(BTreeMap::from([
         (
             "plan".to_owned(),
-            plan_job(
-                "ubuntu-26.04",
-                None,
-                &catalog,
-                rust_plan_needs(),
-                &[],
-                velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-            )
-            .expect("plan job"),
+            plan_job("ubuntu-26.04", None, &catalog, rust_plan_needs(), &[], &[])
+                .expect("plan job"),
         ),
         (
             "required".to_owned(),
@@ -155,15 +131,7 @@ fn lock_acquire_records_source_commit() {
     let catalog = ToolCatalog::pinned();
     let mut ir = bare_ir(BTreeMap::from([(
         "plan".to_owned(),
-        plan_job(
-            "ubuntu-26.04",
-            None,
-            &catalog,
-            rust_plan_needs(),
-            &[],
-            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-        )
-        .expect("plan job"),
+        plan_job("ubuntu-26.04", None, &catalog, rust_plan_needs(), &[], &[]).expect("plan job"),
     )]));
     ir.jobs.insert(
         "required".to_owned(),
@@ -194,15 +162,8 @@ fn preseed_attach_plan(catalog: &ToolCatalog) -> WorkflowPlan {
         ir: bare_ir(BTreeMap::from([
             (
                 "plan".to_owned(),
-                plan_job(
-                    "ubuntu-26.04",
-                    None,
-                    catalog,
-                    rust_plan_needs(),
-                    &[],
-                    velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-                )
-                .expect("plan job"),
+                plan_job("ubuntu-26.04", None, catalog, rust_plan_needs(), &[], &[])
+                    .expect("plan job"),
             ),
             ("rust-demo".to_owned(), legacy_task_job()),
             (
@@ -344,7 +305,7 @@ fn preseed_fixture(fetch_roots: &[String]) -> WorkflowPlan {
                     &catalog,
                     rust_plan_needs(),
                     fetch_roots,
-                    velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+                    &[],
                 )
                 .expect("plan job"),
             ),

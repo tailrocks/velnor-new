@@ -1,4 +1,4 @@
-//! Merge gate cases: round-trip, precedence, no-work.
+//! Current merge outcomes and precedence cases.
 
 use super::*;
 
@@ -53,7 +53,16 @@ fn one_failed_crate_fails_required_with_counts() -> TestResult {
         set_task(report, TaskStatus::Failed, MatrixStatus::Failed)?;
         failed += 1;
     }
-    assert!(failed > 0 && failed < reports.len(), "one crate fails");
+    assert!(
+        failed > 0 && failed == reports.len(),
+        "only the changed crate runs and it fails"
+    );
+    assert!(
+        plan.obligations
+            .iter()
+            .any(|ob| ob.decision == velnor_actions_contract::ObligationDecision::NotAffected),
+        "the unchanged crate is not affected"
+    );
     let request = merge_request(
         &plan,
         &serde_json::to_value(&plan.matrix)?,

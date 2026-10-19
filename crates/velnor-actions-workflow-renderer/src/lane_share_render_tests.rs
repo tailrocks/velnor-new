@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use super::share_lanes;
 use super::tests::{ctx, echo_step, paired, render_jobs, workflow_ir};
 use crate::tofu_cache::{TOFU_PROVIDER_ADMISSION_USES, tofu_providers_save_step};
+use velnor_actions_contract::workflow::cache_family::TOFU_PROVIDERS_SAVE_CONDITION;
 use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
 const CAP: usize = 500_000;
@@ -80,8 +81,8 @@ fn shared_lanes_keep_ci_under_github_file_cap() {
 
 #[test]
 fn paired_tofu_restore_output_owner_stays_in_outer_job_scope() {
-    let cache_path = "${{ runner.temp }}/velnor/cache/tofu/root-0123456789ab";
-    let cache_key = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-root-0123456789ab-${{hashFiles('.terraform.lock.hcl')}}";
+    let cache_path = "${{ runner.temp }}/velnor/tofu-cache/root-0123456789ab";
+    let cache_key = "${{needs.plan.outputs.tofu_providers_key_0}}";
     let restore = Step {
         parallel: false,
         name: "Restore Tofu providers".to_owned(),
@@ -118,7 +119,7 @@ fn paired_tofu_restore_output_owner_stays_in_outer_job_scope() {
     };
     let mut jobs = paired(&[echo_step(0, "shared-prelude"), restore, consumer]);
     let mut save = tofu_providers_save_step().expect("provider save step");
-    save.condition = Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
+    save.condition = Some(TOFU_PROVIDERS_SAVE_CONDITION.to_owned());
     jobs.get_mut("rust-0__hosted")
         .expect("hosted owner")
         .steps

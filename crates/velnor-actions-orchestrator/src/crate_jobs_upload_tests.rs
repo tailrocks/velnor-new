@@ -159,7 +159,7 @@ fn assert_task_execution_matches(task: &ProposedTask, step: &Step, catalog: &Too
             task.task_id, step.kind
         );
     };
-    assert_task_command(task, argv, toolchain_inputs, task_digest, catalog);
+    assert_task_command(task, argv, toolchain_inputs, task_digest.as_str(), catalog);
     assert_task_report_identity(
         task,
         step,

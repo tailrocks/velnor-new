@@ -89,6 +89,26 @@ pub(crate) fn resolve_task_execution_to(
     expected_generator_version: &str,
     job_id: &str,
 ) -> Result<Vec<u8>, OrchestratorError> {
+    resolve_task_execution_to_with(
+        root,
+        runner_temp,
+        run_key,
+        expected_execution_digest,
+        expected_generator_version,
+        job_id,
+        |name| env::var(name).ok(),
+    )
+}
+
+fn resolve_task_execution_to_with(
+    root: &Path,
+    runner_temp: &Path,
+    run_key: &str,
+    expected_execution_digest: &str,
+    expected_generator_version: &str,
+    job_id: &str,
+    read_project_tool_version: impl Fn(&str) -> Option<String>,
+) -> Result<Vec<u8>, OrchestratorError> {
     if !root.is_absolute() {
         return Err(internal("runner_paths_must_be_absolute"));
     }
@@ -109,22 +129,49 @@ pub(crate) fn resolve_task_execution_to(
     }
     let (entry, plan_task_digest) =
         crate::task_report::entry_and_digest_for_job(&plan, task_id, job_id)?;
-    if record.task_digest != plan_task_digest
-        || entry.task_digest != plan_task_digest
+    if record.task_digest.as_str() != obligation.task_binding_digest.as_str()
+        || entry.task_digest != obligation.task_digest
         || !task_execution_gates::entry_matches_manifest(record, entry, job_id)?
     {
         return Err(internal("task_execution_plan_binding_mismatch"));
+    }
+
+    let resolved = task_execution_project_tools::resolve_with(record, read_project_tool_version)?;
+    let resolved_toolchain_id =
+        velnor_actions_contract::cachekey::toolchain_id(&resolved.toolchain_inputs)
+            .map_err(internal_contract)?;
+    if entry.toolchain_inputs.as_ref() != Some(&resolved.toolchain_inputs)
+        || entry.toolchain_id.as_deref() != Some(resolved_toolchain_id.as_str())
+        || crate::internal::plan_obligation::task_digest(
+            task_id,
+            &resolved.argv,
+            &resolved_toolchain_id,
+        )
+        .map_err(internal_contract)?
+            != plan_task_digest
+    {
+        return Err(internal("task_execution_runtime_toolchain_mismatch"));
     }
 
     task_execution_gates::validate_prerequisites(&plan, entry, task_id, job_id, runner_temp)?;
 
     // The manifest digest and existing plan digest bind the original literal
     // expression. Materialize it only after both bindings have been checked.
-    encode_runtime_frame(record, &entry.id, &entry.matrix_key, runner_temp)
+    encode_runtime_frame(
+        record,
+        &resolved.argv,
+        &resolved.env,
+        plan_task_digest,
+        &entry.id,
+        &entry.matrix_key,
+        runner_temp,
+    )
 }
 
 #[path = "task_execution_gates.rs"]
 mod task_execution_gates;
+#[path = "task_execution_project_tools.rs"]
+mod task_execution_project_tools;
 
 /// Select a single validated manifest record using its full execution digest.
 ///
@@ -178,22 +225,25 @@ fn validate_runner_temp_path(path: &Path) -> Result<&str, OrchestratorError> {
 
 fn encode_runtime_frame(
     record: &TaskExecutionManifestEntryV1,
+    argv: &[String],
+    env: &std::collections::BTreeMap<String, String>,
+    runtime_task_digest: &str,
     matrix_id: &str,
     matrix_key: &str,
     runner_temp: &Path,
 ) -> Result<Vec<u8>, OrchestratorError> {
     record.validate().map_err(internal_contract)?;
     let runner_temp = validate_runner_temp_path(runner_temp)?;
-    if record.argv.len() > MAX_TASK_EXECUTION_ARGV || record.env.len() > MAX_TASK_EXECUTION_ENV {
+    if argv.len() > MAX_TASK_EXECUTION_ARGV || env.len() > MAX_TASK_EXECUTION_ENV {
         return Err(internal("task_execution_frame_too_large"));
     }
 
-    let mut fields = Vec::with_capacity(13 + record.argv.len() + record.env.len() * 2);
+    let mut fields = Vec::with_capacity(13 + argv.len() + env.len() * 2);
     fields.extend([
         TASK_EXECUTION_FRAME_MAGIC.to_owned(),
         record.task_id.clone(),
         record.execution_digest.clone(),
-        record.task_digest.clone(),
+        runtime_task_digest.to_owned(),
         matrix_id.to_owned(),
         matrix_key.to_owned(),
         record.report_helper_version.clone(),
@@ -201,13 +251,13 @@ fn encode_runtime_frame(
         record
             .matrix_max_parallel
             .map_or_else(String::new, |cap| cap.to_string()),
-        record.argv.len().to_string(),
+        argv.len().to_string(),
     ]);
-    for value in &record.argv {
+    for value in argv {
         fields.push(resolve_runner_temp_expression(value, runner_temp)?);
     }
-    fields.push(record.env.len().to_string());
-    for (key, value) in &record.env {
+    fields.push(env.len().to_string());
+    for (key, value) in env {
         fields.push(key.clone());
         fields.push(resolve_runner_temp_expression(value, runner_temp)?);
     }
@@ -249,7 +299,29 @@ fn resolve_runner_temp_expression(
     if resolved.contains("${{") {
         return Err(internal("unresolved_task_execution_expression"));
     }
-    Ok(resolved)
+    resolve_project_tool_refs(&resolved, |name| env::var(name).ok())
+}
+
+/// Materialize `${VELNOR_TOOL_<NAME>}` references (hard decision 5) from
+/// the variables the generated resolver step exported, after the manifest
+/// and plan bindings have matched the literal record. Every value must be
+/// an exact `X.Y.Z` version; a missing or loose value fails closed.
+pub(crate) fn resolve_project_tool_refs(
+    value: &str,
+    lookup: impl Fn(&str) -> Option<String>,
+) -> Result<String, OrchestratorError> {
+    use velnor_actions_contract::config::project_tool_refs::{
+        map_project_tool_refs, project_tool_ref_names,
+    };
+    for name in project_tool_ref_names(value) {
+        let version = lookup(name).unwrap_or_default();
+        if velnor_actions_mise::validate_concrete_exact_version(name, &version).is_err() {
+            return Err(internal("unresolved_project_tool_version"));
+        }
+    }
+    Ok(map_project_tool_refs(value, |name| {
+        lookup(name).unwrap_or_default()
+    }))
 }
 
 fn read_manifest(
