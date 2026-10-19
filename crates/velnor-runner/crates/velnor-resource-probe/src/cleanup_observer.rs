@@ -14,18 +14,19 @@ pub use crate::cleanup_observer_wire::{
     CleanupObserverRequest, CleanupVolume, NamespaceIdentity, ProcessIdentity,
 };
 
-/// Bound the number of recorded volume mounts.
+/// Maximum number of recorded volume mounts.
 pub const MAX_CLEANUP_VOLUMES: usize = 5;
-/// Bound the number of owned temporary filesystem devices.
+/// Maximum number of temporary filesystem devices used by these workers.
 pub const OWNED_TMPFS_DEVICE_COUNT: usize = 8;
-/// Bound the canonical request size.
+/// Maximum size of the request bytes.
 pub const CLEANUP_REQUEST_LIMIT: usize = 32 * 1024;
 
-/// Validate the closed request and its canonical binding digest.
+/// Make sure that the request fields are correct.
+/// Make sure that the digest is equal to the digest of the binding data.
 ///
 /// # Errors
 ///
-/// Returns an error if the request fields or binding digest do not pass validation.
+/// Returns an error if a request field or the binding digest is incorrect.
 pub fn validate_request(request: &CleanupObserverRequest) -> Result<(), ProbeError> {
     request::validate(request)?;
     let bytes = serde_json::to_vec(&request.binding)
@@ -37,7 +38,7 @@ pub fn validate_request(request: &CleanupObserverRequest) -> Result<(), ProbeErr
     Ok(())
 }
 
-/// Inspect fixed Linux process and mount data for references to owned resources.
+/// Find identities of Velnor resources in process and mount data at the specified Linux paths.
 ///
 /// # Errors
 ///

@@ -307,8 +307,8 @@ mod tests {
         let mut candidate_root = selected.clone();
         candidate_root.mount_id = 99;
         let candidate = (witness(43), executable(50), candidate_root);
-        let chosen = unique_candidate(vec![candidate.clone()], &selected)
-            .expect("one exact root candidate is selected");
+        let chosen =
+            unique_candidate(vec![candidate.clone()], &selected).expect("Find one root candidate.");
         assert_eq!(chosen.0, candidate.0);
         assert_eq!(chosen.1, candidate.1);
         assert!(unique_candidate(vec![], &selected).is_err());

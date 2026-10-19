@@ -1,6 +1,7 @@
 //! Write one bounded version-3 guest measurement record to stdout.
 
 mod main_ack;
+mod main_commands;
 
 use std::{
     io::{self, Write},
@@ -9,17 +10,17 @@ use std::{
 };
 
 use velnor_resource_probe::{
-    MAX_OUTPUT_BYTES, ProbeError, ProbeRecord, sample,
-    worker_binding::{
-        OwnedCgroupRequest, SelfStorageRequest, WORKER_RECORD_LIMIT, WORKER_REQUEST_LIMIT,
-        observe_owned_cgroups, observe_self_storage,
-    },
+    MAX_OUTPUT_BYTES, ProbeError, ProbeRecord, sample, worker_binding::WORKER_RECORD_LIMIT,
 };
 
 #[cfg(target_os = "linux")]
 use velnor_resource_probe::worker_binding::read_compact_line;
 
-use main_ack::wait_for_ack;
+use main_commands::{
+    run_cleanup_observation, run_cleanup_observer, run_execution_channel,
+    run_execution_publication, run_execution_request, run_job_facts_publication, run_owned_cgroup,
+    run_self_storage,
+};
 
 #[cfg(test)]
 pub(crate) use main_ack::{AckRead, wait_for_ack_with};
@@ -55,132 +56,11 @@ fn run(arguments: &[String]) -> Result<(), ProbeError> {
     }
 }
 
-#[cfg(target_os = "linux")]
-fn run_execution_channel() -> Result<(), ProbeError> {
-    use velnor_resource_probe::execution_channel::{
-        ExecutionChannelContext, observe_execution_channel,
-    };
-
-    let request: ExecutionChannelContext = read_worker_request(WORKER_REQUEST_LIMIT)?;
-    let operation_id = request.operation_id.clone();
-    let record = observe_execution_channel(request)?;
-    write_worker_record(&record, &mut io::stdout().lock())?;
-    wait_for_ack(&operation_id)
-}
-
-#[cfg(target_os = "linux")]
-fn run_execution_request() -> Result<(), ProbeError> {
-    use velnor_resource_probe::execution_channel::{
-        ExecutionRequestContext, read_execution_request,
-    };
-
-    let request: ExecutionRequestContext = read_worker_request(WORKER_REQUEST_LIMIT)?;
-    let operation_id = request.operation_id.clone();
-    let outcome = read_execution_request(request)?;
-    write_worker_record(&outcome, &mut io::stdout().lock())?;
-    wait_for_ack(&operation_id)
-}
-
-#[cfg(target_os = "linux")]
-fn run_execution_publication() -> Result<(), ProbeError> {
-    use velnor_resource_probe::execution_publication::{
-        ExecutionPublicationContext, PUBLICATION_REQUEST_LIMIT, publish_execution_control,
-    };
-
-    let request: ExecutionPublicationContext = read_worker_request(PUBLICATION_REQUEST_LIMIT)?;
-    let operation_id = request.operation_id.clone();
-    let record = publish_execution_control(request)?;
-    write_worker_record(&record, &mut io::stdout().lock())?;
-    wait_for_ack(&operation_id)
-}
-
-#[cfg(target_os = "linux")]
-fn run_job_facts_publication() -> Result<(), ProbeError> {
-    use velnor_resource_probe::{
-        job_facts::{JOB_FACTS_RECORD_LIMIT, JOB_FACTS_REQUEST_LIMIT, publish_job_facts},
-        job_facts_wire::JobFactsPublicationContext,
-    };
-
-    let request: JobFactsPublicationContext = read_worker_request(JOB_FACTS_REQUEST_LIMIT)?;
-    let operation_id = request.operation_id.clone();
-    let record = publish_job_facts(request)?;
-    write_worker_record_limit(&record, &mut io::stdout().lock(), JOB_FACTS_RECORD_LIMIT)?;
-    wait_for_ack(&operation_id)
-}
-
-#[cfg(not(target_os = "linux"))]
-fn run_execution_channel() -> Result<(), ProbeError> {
-    Err(ProbeError::Invalid("linux_guest_required"))
-}
-
-#[cfg(not(target_os = "linux"))]
-fn run_execution_request() -> Result<(), ProbeError> {
-    Err(ProbeError::Invalid("linux_guest_required"))
-}
-
-#[cfg(not(target_os = "linux"))]
-fn run_execution_publication() -> Result<(), ProbeError> {
-    Err(ProbeError::Invalid("linux_guest_required"))
-}
-
-#[cfg(not(target_os = "linux"))]
-fn run_job_facts_publication() -> Result<(), ProbeError> {
-    Err(ProbeError::Invalid("linux_guest_required"))
-}
-
-#[cfg(target_os = "linux")]
-fn run_cleanup_observation() -> Result<(), ProbeError> {
-    use velnor_resource_probe::cleanup_observation::{CleanupObservationRequest, observe_cleanup};
-
-    let request: CleanupObservationRequest = read_worker_request(WORKER_REQUEST_LIMIT)?;
-    let operation_id = request.operation_id.clone();
-    let record = observe_cleanup(request)?;
-    write_worker_record(&record, &mut io::stdout().lock())?;
-    wait_for_ack(&operation_id)
-}
-
-#[cfg(target_os = "linux")]
-fn run_cleanup_observer() -> Result<(), ProbeError> {
-    use velnor_resource_probe::cleanup_observer::{
-        CLEANUP_REQUEST_LIMIT, CleanupObserverRequest, observe_cleanup,
-    };
-
-    let request: CleanupObserverRequest = read_worker_request(CLEANUP_REQUEST_LIMIT)?;
-    let operation_id = request.operation_id.clone();
-    let record = observe_cleanup(request)?;
-    write_worker_record(&record, &mut io::stdout().lock())?;
-    wait_for_ack(&operation_id)
-}
-
-#[cfg(not(target_os = "linux"))]
-fn run_cleanup_observer() -> Result<(), ProbeError> {
-    Err(ProbeError::Invalid("linux_guest_required"))
-}
-
-#[cfg(not(target_os = "linux"))]
-fn run_cleanup_observation() -> Result<(), ProbeError> {
-    Err(ProbeError::Invalid("linux_guest_required"))
-}
-
 fn run_capacity() -> Result<(), ProbeError> {
     let record = sample()?;
     // Keep the trusted process inspectable long enough to bind its NSpid host ID.
     thread::sleep(Duration::from_secs(1));
     write_record(&record, &mut io::stdout().lock())
-}
-
-fn run_self_storage() -> Result<(), ProbeError> {
-    let request: SelfStorageRequest = read_worker_request(WORKER_REQUEST_LIMIT)?;
-    let operation_id = request.operation_id.clone();
-    let record = observe_self_storage(request)?;
-    write_worker_record(&record, &mut io::stdout().lock())?;
-    wait_for_ack(&operation_id)
-}
-
-fn run_owned_cgroup() -> Result<(), ProbeError> {
-    let request: OwnedCgroupRequest = read_worker_request(WORKER_REQUEST_LIMIT)?;
-    let record = observe_owned_cgroups(&request)?;
-    write_worker_record(&record, &mut io::stdout().lock())
 }
 
 #[cfg(target_os = "linux")]

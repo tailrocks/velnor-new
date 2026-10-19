@@ -2,13 +2,13 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Trusted identities that bind one cleanup inventory to owned resources.
+/// Identity data from the controller, selected daemon, and worker containers for one cleanup inventory.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CleanupObserverBinding {
     /// Guest boot identity recorded by the controller.
     pub expected_guest_boot_id: String,
-    /// Selected Docker-root identity from the trusted worker binding.
+    /// Docker-root identity from the worker data recorded by the controller.
     pub docker_root: CleanupDockerRootIdentity,
     /// Docker daemon process identity.
     pub daemon: ProcessIdentity,
@@ -16,15 +16,15 @@ pub struct CleanupObserverBinding {
     pub runner: ProcessIdentity,
     /// `DinD` container process identity.
     pub dind: ProcessIdentity,
-    /// Exact worker cgroup leaves recorded by the controller.
+    /// Worker cgroup leaf paths recorded by the controller.
     pub cgroup_paths: [String; 2],
-    /// Actual Docker volume mountpoints from the selected daemon.
+    /// Docker volume mountpoints from the selected daemon.
     pub volume_mountpoints: Vec<CleanupVolume>,
-    /// Device identities for the eight owned tmpfs filesystems.
+    /// Device identities for the eight tmpfs filesystems used by these workers.
     pub owned_tmpfs_devices: [[u32; 2]; 8],
 }
 
-/// Request one bounded cleanup inventory.
+/// Input for one cleanup inventory.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CleanupObserverRequest {
@@ -32,19 +32,19 @@ pub struct CleanupObserverRequest {
     pub schema_version: u8,
     /// 32-character lower-case hexadecimal operation identity.
     pub operation_id: String,
-    /// Digest of the canonical binding.
+    /// Digest of the binding data.
     pub binding_sha256: String,
-    /// Trusted cleanup identities.
+    /// Identity data for the cleanup operation.
     pub binding: CleanupObserverBinding,
 }
 
-/// One actual Docker mountpoint and its volume role.
+/// One Docker mountpoint and its volume role.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CleanupVolume {
-    /// Fixed volume role name from the controller contract.
+    /// Volume role name from the controller contract.
     pub role: String,
-    /// Actual mountpoint from the selected Docker daemon.
+    /// Mountpoint from the selected Docker daemon.
     pub mountpoint: String,
     /// Mount device measured before the worker stopped.
     pub mount_device: [u32; 2],
@@ -54,7 +54,7 @@ pub struct CleanupVolume {
     pub inode: u64,
 }
 
-/// Process identity from a trusted Docker and journal observation.
+/// Process identity from Docker and journal records.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProcessIdentity {
@@ -92,21 +92,21 @@ pub struct CleanupDockerRootIdentity {
     pub read_only: bool,
 }
 
-/// Read-only result from one cleanup inventory pass.
+/// Data from one read-only cleanup inventory.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CleanupObserverRecord {
     /// Wire schema version.
     pub schema_version: u8,
-    /// Operation identity from the trusted request.
+    /// Operation identity from the request.
     pub operation_id: String,
-    /// Digest of the canonical trusted binding.
+    /// Digest of the binding data.
     pub binding_sha256: String,
     /// Guest boot identity measured by this process.
     pub guest_boot_id: Option<String>,
     /// Selected Docker-root identity measured before and after the inventory.
     pub docker_root: Option<CleanupDockerRootIdentity>,
-    /// True only when every bounded inventory completed.
+    /// True when the program read all inventory data within the specified limits.
     pub complete: bool,
     /// True only when all owned references were absent.
     pub owned_references_absent: bool,
