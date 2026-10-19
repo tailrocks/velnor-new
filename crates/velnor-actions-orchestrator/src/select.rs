@@ -309,3 +309,7 @@ fn local_change_set(root: &Path, warnings: &mut Vec<String>) -> Option<(BTreeSet
 #[cfg(test)]
 #[path = "group_selection_tests.rs"]
 mod group_selection_tests;
+
+#[cfg(test)]
+#[path = "select_pr_range_tests.rs"]
+mod select_pr_range_tests;
