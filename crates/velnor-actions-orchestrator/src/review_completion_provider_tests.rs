@@ -197,7 +197,7 @@ fn historical_finding() -> FeedbackRecords {
 }
 
 #[test]
-fn historical_findings_cannot_recover_with_stale_current_receipt_or_unknown_custody() {
+fn historical_findings_cannot_recover_with_stale_summary_or_unknown_custody() {
     let mut fixture = historical_finding();
     // A historical receipt is custody evidence; the current role clock must
     // follow the finding even when no new formal review is emitted.
@@ -252,7 +252,7 @@ fn historical_findings_cannot_recover_with_stale_current_receipt_or_unknown_cust
 }
 
 #[test]
-fn security_receipts_cannot_substitute_for_current_code_review_receipts() {
+fn security_receipts_cannot_substitute_for_current_code_role_completion() {
     let mut fixture = historical_finding();
     let security = fixture.reviews[1]["body"]
         .as_str()
