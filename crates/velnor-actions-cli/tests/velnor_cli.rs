@@ -94,3 +94,5 @@ mod impl_repo_test_registration;
 mod impl_cli_gate_source_evidence;
 #[path = "impl_cli_job_authority_inventory.rs"]
 mod impl_cli_job_authority_inventory;
+#[path = "impl_cli_job_image_preview.rs"]
+mod impl_cli_job_image_preview;

@@ -47,6 +47,7 @@ pub use super::job_authority_inventory::{
     InventoryCall, InventoryConcurrency, InventoryContext, InventoryJob, InventoryWorkflow,
     JobAuthorityInventory, generate_job_authority_inventory,
 };
+pub use super::job_image_preview::preview_job_image_candidate;
 pub use super::merge::merge_internal;
 pub use super::merge_request::assemble_merge_request;
 pub use super::owned_tool_preview::{SourceQualificationTrigger, preview_owned_tool_candidates};

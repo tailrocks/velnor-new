@@ -212,6 +212,26 @@ fn workflow_request(
     })
 }
 
+/// Render the job image candidate with the configured runner policy.
+pub(crate) fn job_image_candidate_file(
+    config: &VelnorConfig,
+    version: &str,
+    dispatch: Option<ExecutionMode>,
+) -> Result<RenderedFile, OrchestratorError> {
+    let execution = config
+        .execution
+        .as_ref()
+        .ok_or_else(|| OrchestratorError::config(CONFIG_REL, "execution", "missing"))?;
+    let routing = workflow_routing_policy(config, dispatch)?;
+    let request = workflow_request(config, execution, version, &routing)?;
+    velnor_actions_workflow_renderer::schema2::schema2_job_image_candidate::render_candidate_workflow(
+        &request,
+    )
+    .map_err(|err| OrchestratorError::Render {
+        problem: err.to_string(),
+    })
+}
+
 #[cfg(test)]
 #[path = "routing_tests.rs"]
 mod tests;

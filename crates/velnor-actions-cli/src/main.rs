@@ -8,6 +8,7 @@ mod dispatch;
 mod dispatch_config;
 mod dispatch_generate;
 mod dispatch_job_authority;
+mod dispatch_job_image_preview;
 mod dispatch_local_release;
 mod dispatch_publish;
 mod dispatch_qualification;

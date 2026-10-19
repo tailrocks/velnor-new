@@ -45,6 +45,7 @@ mod inventory;
 mod inventory_reuse;
 mod job_authority_inventory;
 mod job_authority_inventory_types;
+mod job_image_preview;
 pub mod local_release_manifest;
 mod lock_audit;
 mod matrix_step;
