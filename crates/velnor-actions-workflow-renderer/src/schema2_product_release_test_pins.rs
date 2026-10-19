@@ -67,7 +67,10 @@ pub(super) fn test_pins() -> ProductReleasePins {
         actionlint_argv: exec_argv(
             &[PinnedTool::Actionlint, PinnedTool::Shellcheck],
             "actionlint",
-            &["-color"],
+            &velnor_actions_actionlint::workflow_lint_args()
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
             &catalog,
         ),
         zizmor_argv: with_env_unset_argv(&exec_argv(

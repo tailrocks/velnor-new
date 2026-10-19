@@ -66,8 +66,10 @@ The contract admits `CARGO_TARGET_DIR` only as a workspace-relative
 Pinned actionlint 1.7.12 does not parse native step concurrency
 (rhysd/actionlint#693). Velnor emits the `background`/`wait-all` spelling, in
 which actionlint still validates every member, and passes exactly two anchored
-`-ignore` patterns (`STEP_PARALLELISM_IGNORES`) to both the staged generator
-validation and the generated `actionlint` job: the unknown `background` key on
+`-ignore` patterns (`STEP_PARALLELISM_IGNORES`) to the staged generator
+validation and to every generated repository-wide actionlint step (the CI
+`actionlint` job and both release eligibility gates share
+`workflow_lint_args`): the unknown `background` key on
 a `run`/`uses` step, and the body-less join step. The `parallel:` sugar is not
 used because actionlint skips its children entirely. Pinned zizmor (1.27+)
 parses the syntax. The bridge disappears when a pinned actionlint parses the

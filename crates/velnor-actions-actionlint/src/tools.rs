@@ -59,6 +59,18 @@ impl ActionlintToolchain {
     }
 }
 
+/// Arguments for every generated repository-wide actionlint step.
+///
+/// The CI `actionlint` job and the release eligibility gates all lint the
+/// committed workflows, so they share this one vector: colored output plus
+/// [`step_parallelism_ignore_args`].
+#[must_use]
+pub fn workflow_lint_args() -> Vec<String> {
+    let mut args = vec!["-color".to_owned()];
+    args.extend(step_parallelism_ignore_args());
+    args
+}
+
 /// `-ignore` argument pairs required by the pinned release's capabilities.
 #[must_use]
 pub fn step_parallelism_ignore_args() -> Vec<String> {
