@@ -5,7 +5,7 @@
 
 use super::ValidatorKind;
 use super::ir::{Job, WorkflowIr};
-use super::jobs::{PLAN_JOB_ID, REQUIRED_JOB_ID};
+use super::jobs::{PLAN_JOB_ID, REQUIRED_GATE_JOB_ID, REQUIRED_JOB_ID};
 use super::named_check_lanes::add_named_check_lanes;
 pub use super::named_check_lanes::{
     NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, NAMED_CHECK_LANES_ENV, NamedCheckLane,
@@ -56,7 +56,7 @@ pub fn lane_class(job_id: &str) -> LaneClass {
     if job_id == ValidatorKind::Actionlint.job_id()
         || matches!(
             job_id,
-            PLAN_JOB_ID | REQUIRED_JOB_ID | "compare" | "queue-monitor"
+            PLAN_JOB_ID | REQUIRED_JOB_ID | REQUIRED_GATE_JOB_ID | "compare" | "queue-monitor"
         )
     {
         LaneClass::Control

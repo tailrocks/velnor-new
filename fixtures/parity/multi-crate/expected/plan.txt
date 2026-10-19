@@ -20,6 +20,7 @@ Workflow to generate
     - actionlint (7 steps)
     - plan (15 steps)
     - required (8 steps)
+    - required-gate (1 steps)
     - rust-parity-app (23 steps)
     - rust-parity-tool (21 steps)
     - 2 Rust crate jobs

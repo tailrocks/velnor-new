@@ -55,6 +55,7 @@ pub mod release_spec;
 pub mod release_tree;
 pub mod render;
 mod render_cache_files;
+mod required_gate;
 mod runs_on;
 pub mod rust_suites;
 pub mod schema2;

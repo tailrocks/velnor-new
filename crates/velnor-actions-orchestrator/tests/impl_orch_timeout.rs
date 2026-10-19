@@ -63,6 +63,7 @@ fn generated_ci_bounds_every_job_per_kind() -> TestResult {
     for (id, want) in [
         ("plan", "5"),
         ("required", "5"),
+        ("required-gate", "5"),
         ("actionlint", "5"),
         ("rust-demo", "5"),
     ] {
@@ -72,7 +73,7 @@ fn generated_ci_bounds_every_job_per_kind() -> TestResult {
             "job {id} carries its per-kind bound"
         );
     }
-    assert_eq!(timeouts.len(), 4, "every job must be bounded: {timeouts:?}");
+    assert_eq!(timeouts.len(), 5, "every job must be bounded: {timeouts:?}");
     Ok(())
 }
 
@@ -92,7 +93,7 @@ fn configured_crate_timeout_reaches_every_crate_job_only() -> TestResult {
             "job {id} carries its configured bound"
         );
     }
-    assert_eq!(timeouts.len(), 4, "every job must be bounded: {timeouts:?}");
+    assert_eq!(timeouts.len(), 5, "every job must be bounded: {timeouts:?}");
     Ok(())
 }
 

@@ -22,7 +22,12 @@ fn strict_rejects_unstaged_internal() -> Result<(), RenderError> {
             .is_err_and(|err| format!("{err:?}").contains("internal_without_acquire")),
         "unstaged plan must fail closed"
     );
-    let bare_final = job("required", "Required", Vec::new(), vec![merge_step()]);
+    let bare_final = job(
+        "required",
+        "Required verdict",
+        Vec::new(),
+        vec![merge_step()],
+    );
     let mut final_job = bare_final.1;
     final_job.condition =
         Some(velnor_actions_workflow_renderer::render::FINAL_CONDITION.to_owned());

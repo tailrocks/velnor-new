@@ -71,6 +71,14 @@ fn fixture_config_sample(sample: &str) -> Result<String, Box<dyn std::error::Err
         "inputs".into(),
         toml::Value::Array(vec![toml::Value::String("mise.toml".into())]),
     );
+    // Declared Rust inputs name live packages the one-crate fixture lacks.
+    if let Some(rust) = table
+        .get_mut("stacks")
+        .and_then(|stacks| stacks.get_mut("rust"))
+        .and_then(toml::Value::as_table_mut)
+    {
+        rust.remove("inputs");
+    }
     Ok(toml::to_string(&table)?)
 }
 

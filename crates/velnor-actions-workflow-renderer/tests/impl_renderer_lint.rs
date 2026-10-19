@@ -92,7 +92,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
     jobs.insert(
         "required".to_owned(),
         Job {
-            display_name: "Required".to_owned(),
+            display_name: "Required verdict".to_owned(),
             runs_on: LABEL.to_owned(),
             check_runner: None,
             timeout_minutes: JobTimeout::REQUIRED,

@@ -53,7 +53,7 @@ fn matrix_upload_absent_without_task_job() -> Result<(), RenderError> {
 fn write_request_inserted_before_plan_and_merge() -> Result<(), RenderError> {
     let mut final_job = job(
         "required",
-        "Required",
+        "Required verdict",
         vec!["plan".to_owned()],
         vec![acquire_fixture()?, merge_step()],
     )

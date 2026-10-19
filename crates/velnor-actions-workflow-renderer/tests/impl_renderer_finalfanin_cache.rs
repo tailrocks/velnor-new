@@ -21,7 +21,7 @@ fn checkoutless_required_job_does_not_call_local_cache_action() -> Result<(), Re
     );
     let (required_id, mut required) = job(
         "required",
-        "Required",
+        "Required verdict",
         vec!["plan".to_owned()],
         vec![
             shell_step(

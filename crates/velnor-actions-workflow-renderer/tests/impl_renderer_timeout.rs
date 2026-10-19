@@ -41,7 +41,7 @@ fn consumer_ir() -> Result<velnor_actions_contract::WorkflowIr, RenderError> {
     lint.timeout_minutes = JobTimeout::VALIDATOR;
     let (gate_id, mut gate) = job(
         "required",
-        "Required",
+        "Required verdict",
         vec!["plan".to_owned()],
         vec![checkout_step(&checkout_pin())?, merge_step()],
     );
@@ -69,6 +69,7 @@ fn every_job_emits_its_per_kind_timeout() -> Result<(), RenderError> {
             ("plan".to_owned(), "5".to_owned()),
             ("actionlint".to_owned(), "5".to_owned()),
             ("required".to_owned(), "5".to_owned()),
+            ("required-gate".to_owned(), "5".to_owned()),
         ]),
         "{text}"
     );
@@ -84,7 +85,7 @@ fn support_candidate_release_and_msrv_jobs_carry_per_kind_timeouts() -> Result<(
     let plan = minimal_plan_job()?;
     let (gate_id, mut gate) = job(
         "required",
-        "Required",
+        "Required verdict",
         vec!["plan".to_owned()],
         vec![
             acquire_fixture()?,

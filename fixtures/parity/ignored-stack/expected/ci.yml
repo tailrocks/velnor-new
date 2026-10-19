@@ -166,7 +166,7 @@ jobs:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
           path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
   required:
-    name: Required
+    name: Required verdict
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     env:
@@ -235,3 +235,16 @@ jobs:
           name: velnor-final-r${{ github.run_id }}-a${{ github.run_attempt }}
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}/final-report.json
           retention-days: "30"
+  required-gate:
+    name: Required
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    env:
+      VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
+    needs:
+      - required
+    if: ${{ always() }}
+    steps:
+      - name: Fail unless the verdict passed
+        if: ${{ always() && needs.required.result != 'success' }}
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR false
