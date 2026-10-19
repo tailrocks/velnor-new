@@ -55,9 +55,12 @@ fire: there is nothing to read them from. `generate` proves no
 executable surface in these lanes because isolation leaves no surface
 to prove — there is no config gate to bypass when no config is loaded.
 
-Download bytes in CI trust upstream TLS plus exact catalog pins:
-explicit `tool@exact` specs from Velnor's locked version policy are
-the sole version authority. Generator-owned Rust-lane installs do not
+Download bytes in CI trust upstream TLS plus exact `tool@exact` specs:
+a version the project's Mise config declares is read at run time by the
+generated **Resolve project tool versions** step (`mise --no-config
+--no-env --no-hooks config get`, stored values only, exact `X.Y.Z` only;
+[hard decision 4](../hard-decisions.md)),
+and every other tool uses Velnor's locked catalog pin. Generator-owned Rust-lane installs do not
 consult the committed `mise.lock` — a lone lock is not enforced by mise
 (tampering is ignored), and config-visible verification would re-arm
 the code-execution paths those lanes avoid. The lock audit remains

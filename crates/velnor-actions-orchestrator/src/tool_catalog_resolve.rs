@@ -37,7 +37,9 @@ use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
 use crate::native_tool_input::{NativeToolSelector, parse_native_tool_selector};
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
-use crate::tool_catalog_project::{ToolchainFile, check_config_agrees, project_declarations};
+use crate::tool_catalog_project::{
+    PinInputs, ToolchainFile, apply_declarations, contract, project_declarations,
+};
 
 /// Resolve the effective [`ToolCatalog`] for a repository root and parsed [`VelnorConfig`].
 ///
@@ -57,7 +59,7 @@ pub(crate) fn resolve_tool_catalog(
 ) -> Result<ToolCatalog, OrchestratorError> {
     let toml_tc = read_toolchain_file(root, RUST_TOOLCHAIN_FILE)?;
     let legacy_tc = read_toolchain_file(root, RUST_TOOLCHAIN_LEGACY_FILE)?;
-    if let (Some((_, raw_toml, _, _)), Some((_, raw_legacy, _, _))) = (&toml_tc, &legacy_tc)
+    if let (Some((_, raw_toml, _)), Some((_, raw_legacy, _))) = (&toml_tc, &legacy_tc)
         && raw_toml != raw_legacy
     {
         return Err(OrchestratorError::config(
@@ -76,7 +78,7 @@ pub(crate) fn resolve_tool_catalog(
         .and_then(|rust| rust.toolchain.as_deref())
         .map(|tc| ("stacks.rust.toolchain", tc))
         .or_else(|| config.tools.get("rust").map(|tc| ("tools.rust", tc)));
-    if let (Some((file_path, _, file_version, _)), Some((cfg_field, cfg_channel))) =
+    if let (Some((file_path, _, file_version)), Some((cfg_field, cfg_channel))) =
         (&file_tc, config_tc)
         && file_version != cfg_channel
     {
@@ -105,24 +107,12 @@ pub(crate) fn resolve_tool_catalog(
         repo_mise.as_ref().map_or(&empty, |tools| &tools.tools),
         file_tc.as_ref(),
     );
-    let pin = |tool: PinnedTool, field: &str, default: &str| -> Result<String, OrchestratorError> {
-        let (config_field, config_pin) = if tool == PinnedTool::Rust {
-            config_tc.map_or((format!("tools.{field}"), None), |(cfg_field, channel)| {
-                (cfg_field.to_owned(), Some(channel))
-            })
-        } else {
-            (format!("tools.{field}"), config.tools.get(field))
-        };
-        match declared.get(&tool) {
-            Some(Some(version)) => {
-                check_config_agrees(version, &config_field, config_pin)?;
-                Ok(version.clone())
-            }
-            // Declared but unusable: generation executes on the fallback pin
-            // locally; emitted text still references the project's value.
-            Some(None) | None => Ok(config_pin.unwrap_or(default).to_owned()),
-        }
+    let pins = PinInputs {
+        declared: &declared,
+        config,
+        config_tc,
     };
+    let pin = |tool, field, default| pins.version(tool, field, default);
     let catalog = ToolCatalog::new(
         &pin(PinnedTool::Rust, "rust", RUST_VERSION)?,
         &pin(
@@ -137,23 +127,13 @@ pub(crate) fn resolve_tool_catalog(
         &pin(PinnedTool::Nextest, "cargo-nextest", NEXTEST_VERSION)?,
         &pin(PinnedTool::Opentofu, "opentofu", OPENTOFU_VERSION)?,
     )
-    .map_err(contract)?;
-    let mut catalog = catalog
-        .with_export_rustup_toolchain(export_rustup_toolchain)
-        .with_rust_mr_boxington(rust_mr_boxington);
-    for tool in declared.keys() {
-        let version = catalog.version(*tool).to_owned();
-        catalog = catalog
-            .with_project_tool(*tool, &version)
-            .map_err(contract)?;
-    }
-    Ok(catalog)
-}
-
-fn contract(err: velnor_actions_mise::MiseError) -> OrchestratorError {
-    OrchestratorError::Contract {
-        problem: err.to_string(),
-    }
+    .map_err(|err| contract(&err))?;
+    apply_declarations(
+        catalog
+            .with_export_rustup_toolchain(export_rustup_toolchain)
+            .with_rust_mr_boxington(rust_mr_boxington),
+        &declared,
+    )
 }
 
 /// Repository-root `mise.toml` tool records the catalog must agree with.
@@ -307,10 +287,7 @@ fn read_toolchain_file(
         .and_then(|insp| insp.spec)
         .and_then(|spec| spec.channel)
         .unwrap_or_else(|| version.clone());
-    let is_toml = toml::from_str::<toml::Value>(&text)
-        .ok()
-        .is_some_and(|value| value.get("toolchain").is_some());
-    Ok(Some((rel, raw_channel, version, is_toml)))
+    Ok(Some((rel, raw_channel, version)))
 }
 
 #[cfg(test)]

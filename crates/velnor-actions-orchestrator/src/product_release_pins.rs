@@ -26,12 +26,13 @@ fn resolve_setups(
 }
 
 /// `catalog` is the emission catalog: project-declared versions render as
-/// run-time references (hard decision 4).
+/// run-time references (hard decision 4). The credential-bearing GitHub CLI
+/// keeps its qualified fixed pin.
 pub(crate) fn resolve(
     config: &VelnorConfig,
     catalog: &ToolCatalog,
 ) -> Result<ProductReleasePins, OrchestratorError> {
-    let catalog = catalog.clone();
+    let catalog = catalog.clone().with_velnor_pin(PinnedTool::Gh);
     let (linux_x86_64_setup, macos_arm64_setup, macos_x86_64_setup) = resolve_setups(config)?;
     Ok(ProductReleasePins {
         linux_x86_64_setup,

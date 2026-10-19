@@ -22,8 +22,8 @@ use crate::native_tool_input::NativeToolSelector;
 /// reports it); generation never substitutes a Velnor pin for it.
 pub(crate) type ProjectDeclaration = Option<String>;
 
-/// Toolchain-file Rust channel: `(file, raw channel, exact version, is TOML)`.
-pub(crate) type ToolchainFile = (&'static str, String, String, bool);
+/// Toolchain-file Rust channel: `(file, raw channel, exact version)`.
+pub(crate) type ToolchainFile = (&'static str, String, String);
 
 /// Collect every catalog tool the project declares.
 ///
@@ -47,7 +47,7 @@ pub(crate) fn project_declarations(
             })
             .collect();
         if tool == PinnedTool::Rust
-            && let Some((_, _, exact, _)) = toolchain
+            && let Some((_, _, exact)) = toolchain
         {
             versions.push(Some(exact.clone()));
         }
@@ -60,12 +60,81 @@ pub(crate) fn project_declarations(
     out
 }
 
+/// Inputs choosing one catalog version: project declarations first, then a
+/// `.velnor/config.toml` pin, then the compiled-in Velnor pin.
+pub(crate) struct PinInputs<'a> {
+    /// Project declarations by tool.
+    pub(crate) declared: &'a BTreeMap<PinnedTool, ProjectDeclaration>,
+    /// Parsed Velnor config (`[tools]` overrides).
+    pub(crate) config: &'a velnor_actions_contract::VelnorConfig,
+    /// Rust channel from `[stacks.rust] toolchain` or `[tools] rust`.
+    pub(crate) config_tc: Option<(&'a str, &'a str)>,
+}
+
+impl PinInputs<'_> {
+    /// Exact version for one tool. A declared-but-unusable value runs on the
+    /// fallback pin locally while emitted text still references the
+    /// project's value.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`OrchestratorError::Config`] when a Velnor config pin
+    /// disagrees with an exact project declaration.
+    pub(crate) fn version(
+        &self,
+        tool: PinnedTool,
+        field: &str,
+        default: &str,
+    ) -> Result<String, OrchestratorError> {
+        let (config_field, config_pin) = match (tool, self.config_tc) {
+            (PinnedTool::Rust, Some((cfg_field, channel))) => (cfg_field.to_owned(), Some(channel)),
+            (PinnedTool::Rust, None) => (format!("tools.{field}"), None),
+            _ => (format!("tools.{field}"), self.config.tools.get(field)),
+        };
+        match self.declared.get(&tool) {
+            Some(Some(version)) => {
+                check_config_agrees(version, &config_field, config_pin)?;
+                Ok(version.clone())
+            }
+            Some(None) | None => Ok(config_pin.unwrap_or(default).to_owned()),
+        }
+    }
+}
+
+/// Mark every declared tool project-owned, at its exact declared version
+/// when usable (release-plz has no constructor slot), else its current pin.
+///
+/// # Errors
+///
+/// Returns a contract error for a non-exact version.
+pub(crate) fn apply_declarations(
+    mut catalog: velnor_actions_mise::ToolCatalog,
+    declared: &BTreeMap<PinnedTool, ProjectDeclaration>,
+) -> Result<velnor_actions_mise::ToolCatalog, OrchestratorError> {
+    for (tool, declaration) in declared {
+        let version = declaration
+            .clone()
+            .unwrap_or_else(|| catalog.version(*tool).to_owned());
+        catalog = catalog
+            .with_project_tool(*tool, &version)
+            .map_err(|err| contract(&err))?;
+    }
+    Ok(catalog)
+}
+
+/// Contract error for a catalog validation failure.
+pub(crate) fn contract(err: &velnor_actions_mise::MiseError) -> OrchestratorError {
+    OrchestratorError::Contract {
+        problem: err.to_string(),
+    }
+}
+
 /// Reject a `.velnor/config.toml` pin that disagrees with a project declaration.
 ///
 /// # Errors
 ///
 /// Returns [`OrchestratorError::Config`] naming both values.
-pub(crate) fn check_config_agrees(
+fn check_config_agrees(
     declared: &str,
     field: &str,
     config_pin: Option<&str>,

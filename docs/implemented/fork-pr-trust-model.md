@@ -61,6 +61,18 @@ protection on the stable `Required` check
 (`needs_channel.rs:13-16`). Reviewers treat inventory, condition, asset
 env, and trigger edits as security-sensitive.
 
+## Project tool versions
+
+A PR may change `mise.toml`, `mise.lock`, or a Rust toolchain file; its CI
+then runs that PR's declared tool versions
+([hard decision 4](../hard-decisions.md)).
+The generated resolver reads the declarations with `mise --no-config --no-env
+--no-hooks config get`, which loads no config and expands no template, so the
+PR gains no code execution beyond the build it already runs. It writes only
+validated exact `X.Y.Z` values to `$GITHUB_ENV`. The tools cache identity
+hashes those files, so a changed declaration restores and saves under a
+different key; saves keep the existing writer policy (fork PRs never save).
+
 ## Uncovered: base-pinned validator (future work)
 
 No base-pinned validator exists. Specified, not dropped:

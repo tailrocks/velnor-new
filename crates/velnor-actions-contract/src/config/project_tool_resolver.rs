@@ -128,7 +128,6 @@ velnor_tool() {
 /// `RUSTUP_TOOLCHAIN` (job env cannot read the `env` context).
 #[must_use]
 pub fn project_tool_resolver_script(names: &BTreeSet<String>, export_rustup: bool) -> String {
-    use std::fmt::Write as _;
     let mut script = PRELUDE.to_owned();
     if export_rustup {
         script.push_str("velnor_export_rustup=1\n");
@@ -138,8 +137,9 @@ pub fn project_tool_resolver_script(names: &BTreeSet<String>, export_rustup: boo
         script.push_str(name);
         for file in PROJECT_MISE_CONFIG_FILES {
             for key in project_tool_keys(name) {
-                // Writing to a String cannot fail.
-                let _ = write!(script, " '{file}#tools.{key}'");
+                for part in [" '", file, "#tools.", key, "'"] {
+                    script.push_str(part);
+                }
             }
         }
         if name == "VELNOR_TOOL_RUST" {

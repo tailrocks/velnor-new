@@ -242,8 +242,16 @@ fn quote_run_refs(text: &str) -> Result<String, RenderError> {
             let reference = &rest[..end];
             match frame {
                 Frame::Double => out.push_str(reference),
-                Frame::Plain => out.push_str(&format!("\"{reference}\"")),
-                Frame::Single => out.push_str(&format!("'\"{reference}\"'")),
+                Frame::Plain => {
+                    for part in ["\"", reference, "\""] {
+                        out.push_str(part);
+                    }
+                }
+                Frame::Single => {
+                    for part in ["'\"", reference, "\"'"] {
+                        out.push_str(part);
+                    }
+                }
             }
             rest = &rest[end..];
             continue;
@@ -290,11 +298,25 @@ fn collect(node: &Yaml, out: &mut BTreeSet<String>) {
     match node {
         Yaml::Str(text) | Yaml::Quoted(text) => add(out, text),
         Yaml::Annotated { value, .. } | Yaml::AnchoredScalar { value, .. } => add(out, value),
-        Yaml::Flow(items) => items.iter().for_each(|item| add(out, item)),
-        Yaml::FlowMap(pairs) => pairs.iter().for_each(|(_, value)| add(out, value)),
-        Yaml::Seq(items) => items.iter().for_each(|item| collect(item, out)),
+        Yaml::Flow(items) => {
+            for item in items {
+                add(out, item);
+            }
+        }
+        Yaml::FlowMap(pairs) => {
+            for (_, value) in pairs {
+                add(out, value);
+            }
+        }
+        Yaml::Seq(items) => {
+            for item in items {
+                collect(item, out);
+            }
+        }
         Yaml::Map(pairs) | Yaml::AnchoredMap { entries: pairs, .. } => {
-            pairs.iter().for_each(|(_, value)| collect(value, out));
+            for (_, value) in pairs {
+                collect(value, out);
+            }
         }
         Yaml::Null | Yaml::Bool(_) | Yaml::Int(_) | Yaml::Alias(_) => {}
     }

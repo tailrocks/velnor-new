@@ -68,7 +68,7 @@ impl ToolCatalog {
     /// Returns [`MiseError::InvalidToolVersion`] for a non-exact version.
     pub fn with_project_tool(mut self, tool: PinnedTool, version: &str) -> Result<Self, MiseError> {
         super::validate_concrete_exact_version(tool.tool_name(), version)?;
-        *self.version_slot(tool) = version.to_owned();
+        version.clone_into(self.version_slot(tool));
         self.project.insert(tool);
         Ok(self)
     }
@@ -101,6 +101,18 @@ impl ToolCatalog {
         }
         out.emission = true;
         out
+    }
+
+    /// Restore the Velnor catalog pin for `tool`, dropping any project
+    /// declaration. Only for credential-bearing native operations whose
+    /// executables repository configuration must never select.
+    #[must_use]
+    pub fn with_velnor_pin(mut self, tool: PinnedTool) -> Self {
+        Self::pinned()
+            .version(tool)
+            .clone_into(self.version_slot(tool));
+        self.project.remove(&tool);
+        self
     }
 
     /// Replace every project reference in `text` with this catalog's

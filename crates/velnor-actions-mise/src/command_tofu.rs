@@ -21,7 +21,7 @@ impl super::IsolatedCommand {
     /// data/config/cache paths arrive baked, since the reserved-key
     /// rule rejects them as caller extras. Verify policy plus the
     /// install-disable pair, exactly like [`Self::mise_exec`]:
-    /// explicit `opentofu@exact` specs are the sole version authority
+    /// explicit `opentofu@exact` specs carry the version
     /// and a missing tool fails as a preparation error. Ambient
     /// `TF_*`/`TOFU_*`/`CHECKPOINT_*` never reach the child (spawn
     /// strip); the baked values apply after it. Exits, signals, and
