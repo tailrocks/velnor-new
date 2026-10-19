@@ -1,0 +1,91 @@
+{
+  "result": "FAIL",
+  "source_head": "de2872d40354d065f415519d7009370fa3af3e3d",
+  "source_manifest_sha256": "a659a1c665690783917d829e202eb7403ad571203f28bd172a80447d27be9c8e",
+  "source_manifest_unchanged": true,
+  "author": "/root",
+  "root_nextest": {
+    "result": "PASS",
+    "command": "cargo nextest run --workspace --locked --profile ci --no-tests fail --no-fail-fast",
+    "run_id": "c47941c8-f185-4e5d-aec6-f49cc8eac5d7",
+    "passed": 5009,
+    "failed": 0,
+    "exit_status": 0,
+    "log": {
+      "file": "root-de287-full-nextest.log",
+      "sha256": "1feed967073ec365a3bddc2f20994fc50b2965d0d76f5f34ea3dbfed6f5ce450",
+      "created_at_utc": "2026-10-19T22:18:20.661614+00:00",
+      "modified_at_utc": "2026-10-19T22:21:06.743770+00:00"
+    }
+  },
+  "opt_in_tests": [
+    {
+      "name": "velnor-actions-mise::velnor_mise impl_mise_tofu_t27_realbin::live_tofu_registry_init_downloads_provider",
+      "result": "NOT_RUN"
+    },
+    {
+      "name": "velnor-actions-orchestrator package_release_artifacts::real_tests::inspect_real_jackin_preview_handoff",
+      "result": "NOT_RUN"
+    },
+    {
+      "name": "velnor-actions-orchestrator qualification_candidate::tests::real::official_archives_candidate_runtime_parity",
+      "result": "NOT_RUN"
+    },
+    {
+      "name": "velnor-actions-workflow-renderer yaml::share::tests::write_edge_corpus_for_external_psych_roundtrip",
+      "result": "NOT_RUN"
+    }
+  ],
+  "root_strict_clippy": {
+    "result": "PASS",
+    "command": "cargo clippy --workspace --all-targets --all-features --locked -- -D warnings",
+    "exit_status": 0,
+    "source_head": "9c2d45921f8737bf29f0827c833e547775e9dded",
+    "log": {
+      "file": "root-de287-strict-02.log",
+      "sha256": "632b290e373da54c74a8b9bd71ba4274ce00ce0e4278733faadf4723d61acbe9",
+      "created_at_utc": "2026-10-19T22:22:14.828138+00:00",
+      "modified_at_utc": "2026-10-19T22:22:20.475968+00:00"
+    },
+    "reviewer": "/root/execution_source_security_review"
+  },
+  "root_format": {
+    "result": "PASS",
+    "command": "cargo fmt --all --check",
+    "exit_status": 0,
+    "source_head": "9c2d45921f8737bf29f0827c833e547775e9dded"
+  },
+  "repository_structure": {
+    "configuration": "PASS",
+    "check": "FAIL",
+    "command": "alint check --fail-on-warning",
+    "exit_status": 1,
+    "errors_by_rule": {
+      "rust-max-lines": 57
+    },
+    "log": {
+      "file": "root-de287-alint-check.log",
+      "sha256": "56b9ab093e283f685be93802e0fbe6bbbe8ae2c0d32eeddeebe70304f049924b",
+      "created_at_utc": "2026-10-19T22:20:52.154616+00:00",
+      "modified_at_utc": "2026-10-19T22:20:52.362935+00:00"
+    }
+  },
+  "runner_workspace": {
+    "result": "FAIL",
+    "run_id": "d9740459-f803-4399-a9a9-eb23169e6365",
+    "passed": 1333,
+    "failed": 61,
+    "skipped": 0,
+    "exit_status": 100,
+    "source_manifest_sha256": "4409dfc657d7ff778c75501fb846900fdd91a6c4d5a8bbae169099189ab7c2f4",
+    "log_sha256": "3cbd1a08b5db7f736cdaa1824fd58d40e8777e1e17f84783c51681a633597b24",
+    "author": "/root/helper_language_review"
+  },
+  "release": "NOT_RUN",
+  "installations": {
+    "donbeave/essential-mac": "NOT_RUN",
+    "ChainArgos/java-monorepo": "NOT_RUN"
+  },
+  "next": "Complete the runner repairs. Run the remaining checks before release.",
+  "record_reviewer": "/root/helper_language_review"
+}
