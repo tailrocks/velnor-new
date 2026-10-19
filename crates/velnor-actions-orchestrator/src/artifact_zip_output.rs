@@ -21,7 +21,7 @@ impl Output {
         let identity = fs::symlink_metadata(path).map_err(|_| invalid("destination"))?;
         if !identity.is_dir()
             || identity.file_type().is_symlink()
-            || identity.uid() != rustix::process::geteuid().as_raw()
+            || identity.uid() != crate::filesystem_owner::effective_uid()
             || identity.mode() & 0o022 != 0
         {
             return Err(invalid("destination"));

@@ -234,7 +234,8 @@ fn normalize_upload_file(
 ) -> Result<(), OrchestratorError> {
     use std::os::unix::fs::MetadataExt;
     let mut pinned = PinnedAsset::new(path, proof, deadline)?;
-    if pinned.original.uid() != rustix::process::geteuid().as_raw() || pinned.original.nlink() != 1
+    if pinned.original.uid() != crate::filesystem_owner::effective_uid()
+        || pinned.original.nlink() != 1
     {
         return Err(internal("preview_upload_owner"));
     }
@@ -251,7 +252,7 @@ fn normalize_upload_file(
         .metadata()
         .map_err(|_| internal("preview_upload_stat"))?;
     if pinned.original.mode() & 0o7777 != 0o644
-        || pinned.original.uid() != rustix::process::geteuid().as_raw()
+        || pinned.original.uid() != crate::filesystem_owner::effective_uid()
         || pinned.original.nlink() != 1
     {
         return Err(internal("preview_upload_mode"));

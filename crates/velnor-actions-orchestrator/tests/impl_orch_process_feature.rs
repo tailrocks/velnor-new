@@ -1,4 +1,4 @@
-//! The sole orchestrator process-feature use is the read-only stage UID check.
+//! The sole orchestrator process-feature use is the read-only filesystem UID check.
 
 use std::error::Error;
 use std::path::{Path, PathBuf};
@@ -7,7 +7,7 @@ use proc_macro2::{TokenStream, TokenTree};
 use syn::visit::{self, Visit};
 use syn::{Expr, ExprCall, ExprPath, Path as RustPath, UseTree};
 
-const OWNER_CHECK_SOURCE: &str = "src/generate_stage_root_fs.rs";
+const OWNER_CHECK_SOURCE: &str = "src/filesystem_owner.rs";
 
 #[derive(Default)]
 struct ProcessFeatureAudit {
@@ -182,22 +182,29 @@ fn orchestrator_process_feature_is_limited_to_exact_stage_uid_check() -> Result<
             let relative_path = path.strip_prefix(&crate_root)?;
             assert!(
                 is_owner_check_source(relative_path),
-                "geteuid call outside stage owner check: {}",
+                "geteuid call outside filesystem owner check: {}",
                 path.display()
             );
             uid_calls += audit.uid_calls;
         }
     }
-    assert_eq!(uid_calls, 1, "exactly one caller UID lookup is required");
+    assert_eq!(
+        uid_calls, 1,
+        "exactly one filesystem UID lookup call site is required"
+    );
     Ok(())
 }
 
 #[test]
 fn process_feature_guard_requires_exact_owner_source_path() {
     assert!(is_owner_check_source(Path::new(OWNER_CHECK_SOURCE)));
-    assert!(!is_owner_check_source(Path::new(
-        "src/nested/generate_stage_root_fs.rs"
-    )));
+    for rejected in [
+        "src/generate_stage_root_fs.rs",
+        "src/nested/generate_stage_root_fs.rs",
+        "src/nested/filesystem_owner.rs",
+    ] {
+        assert!(!is_owner_check_source(Path::new(rejected)));
+    }
 }
 
 #[test]

@@ -32,6 +32,7 @@ mod evidence;
 mod exclusive_write;
 mod extension_schemas;
 mod external_data;
+mod filesystem_owner;
 mod finalized;
 mod freshness_emit;
 mod generate;

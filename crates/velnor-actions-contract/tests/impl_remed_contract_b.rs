@@ -95,6 +95,7 @@ fn assert_contract_modules(root: &str) {
             "package_release_plan",
             "policy",
             "preview_identity",
+            "preview_production",
             "propose",
             "publication_retry",
             "secrets",
