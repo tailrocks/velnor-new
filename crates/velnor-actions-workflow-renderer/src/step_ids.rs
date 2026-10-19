@@ -29,6 +29,7 @@ mod tests {
     fn runtime_cache_identity_has_one_renderer_owned_output_id() {
         let mut entries = Vec::new();
         let step = Step {
+            parallel: false,
             name: "presentation can vary".to_owned(),
             id: Some(StepId::PublishBaseline),
             role: Some(StepRole::BaselinePublisher),

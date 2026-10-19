@@ -114,13 +114,8 @@ fn orch_gen_plan_matches_generated_tree() -> TestResult {
             ".github/workflows/ci.yml"
         ]
     );
-    assert!(plan.contains("3 Rust phase jobs"), "crate wording:\n{plan}");
-    for phase in ["lint", "tests", "docs"] {
-        assert!(
-            yaml.contains(&format!("  rust-demo-{phase}:")),
-            "phase presence parity"
-        );
-    }
+    assert!(plan.contains("1 Rust crate job"), "crate wording:\n{plan}");
+    assert!(yaml.contains("  rust-demo:"), "crate job presence parity");
     Ok(())
 }
 

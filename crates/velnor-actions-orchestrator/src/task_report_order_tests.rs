@@ -1,7 +1,7 @@
 //! Task-report downstream ordering tests.
 
 use tempfile::TempDir;
-use velnor_actions_contract::{ExecuteTaskRef, Plan, TaskReport, TaskStatus};
+use velnor_actions_contract::{Plan, TaskReport, TaskStatus};
 
 use super::task_report_tests::{
     CLIPPY, TEST, entry_for, fixture_plan, obligation_for, read_entry, staged_run,
@@ -11,15 +11,19 @@ use super::*;
 const JOB: &str = "crate_demo";
 const DOCTEST: &str = "stack/rust/demo/doctest/default";
 const DOC: &str = "stack/rust/demo/doc/default";
+const BUILD: &str = "stack/rust/demo/build/default";
 
 /// Valid fixture whose matrix order differs from its crate-job order.
-fn order_fixture() -> Plan {
-    let tasks = [
+fn order_fixture(with_build: bool) -> Plan {
+    let mut tasks = vec![
         (CLIPPY, "clippy", 1),
         (TEST, "test", 2),
         (DOCTEST, "doctest", 3),
         (DOC, "doc", 4),
     ];
+    if with_build {
+        tasks.push((BUILD, "build", 5));
+    }
     let mut entries = Vec::new();
     let mut obligations = Vec::new();
     for (task_id, kind, seed) in tasks {
@@ -76,36 +80,9 @@ fn task_report(plan: &Plan, temp: &TempDir, task_id: &str) -> TaskReport {
     read_entry(temp, "local", &entry.matrix_key, &report_id).0
 }
 
-/// The task order that crate-job construction emits from these plan entries.
-fn emitted_order(plan: &Plan) -> Vec<String> {
-    let mut ordered = Vec::new();
-    for entry in &plan.matrix.include {
-        if entry.job_id != JOB {
-            continue;
-        }
-        for (kind, task_ref) in &entry.execute_task_ids.tasks {
-            match task_ref {
-                ExecuteTaskRef::Single(id) => ordered.push(
-                    crate::obligation_order::obligation_order_key(&entry.stack_id, kind, id),
-                ),
-                ExecuteTaskRef::Shards(ids) => {
-                    ordered.extend(ids.iter().map(|id| {
-                        crate::obligation_order::obligation_order_key(&entry.stack_id, kind, id)
-                    }));
-                }
-            }
-        }
-    }
-    ordered.sort_unstable();
-    ordered
-        .into_iter()
-        .map(|(_, task_id)| task_id.to_owned())
-        .collect()
-}
-
 #[test]
-fn empty_downstream_follows_execution_order_not_matrix_order() {
-    let plan = order_fixture();
+fn parallel_member_failure_skips_no_sibling() {
+    let plan = order_fixture(false);
     let matrix_order: Vec<&str> = plan
         .matrix
         .include
@@ -113,69 +90,54 @@ fn empty_downstream_follows_execution_order_not_matrix_order() {
         .map(|entry| entry.task_id.as_str())
         .collect();
     assert_eq!(matrix_order, [CLIPPY, DOC, DOCTEST, TEST]);
-    let emitted = emitted_order(&plan);
-    assert_eq!(
-        emitted,
-        vec![
-            CLIPPY.to_owned(),
-            TEST.to_owned(),
-            DOCTEST.to_owned(),
-            DOC.to_owned(),
-        ]
-    );
-    let test_position = emitted
-        .iter()
-        .position(|task_id| task_id == TEST)
-        .expect("test in emitted order");
-    assert_eq!(
-        super::task_report_order::derive_downstream(&plan, TEST, JOB),
-        emitted[test_position + 1..],
-        "test failure must report later emitted obligations"
-    );
-    let doc_position = emitted
-        .iter()
-        .position(|task_id| task_id == DOC)
-        .expect("doc in emitted order");
-    assert_eq!(
-        super::task_report_order::derive_downstream(&plan, DOC, JOB),
-        emitted[doc_position + 1..],
-        "the final emitted obligation has no downstream work"
-    );
-
+    for task_id in [CLIPPY, TEST, DOCTEST, DOC] {
+        assert_eq!(
+            super::task_report_order::derive_downstream(&plan, task_id, JOB),
+            [] as [String; 0],
+            "{task_id} runs beside its siblings"
+        );
+    }
     let failed = staged_run(&plan, "local");
     assert_eq!(
-        write_task_report_to("local", TEST, 1, None, &[], failed.path())
-            .expect("test failure writes its actual successors"),
-        3
+        write_task_report_to("local", CLIPPY, 1, None, &[], failed.path())
+            .expect("a failed member writes only its own report"),
+        1
     );
-    for task_id in [DOCTEST, DOC] {
+    for task_id in [TEST, DOCTEST, DOC] {
+        assert_eq!(
+            write_task_report_to("local", task_id, 0, None, &[], failed.path())
+                .expect("siblings still write their own reports"),
+            1
+        );
+        assert_eq!(
+            task_report(&plan, &failed, task_id).status,
+            TaskStatus::Executed,
+            "{task_id}"
+        );
+    }
+}
+
+#[test]
+fn failed_build_skips_every_parallel_check() {
+    let plan = order_fixture(true);
+    assert_eq!(
+        super::task_report_order::derive_downstream(&plan, BUILD, JOB),
+        [CLIPPY, TEST, DOCTEST, DOC].map(str::to_owned),
+        "the sequential build precedes the whole parallel group"
+    );
+    let failed = staged_run(&plan, "local");
+    assert_eq!(
+        write_task_report_to("local", BUILD, 1, None, &[], failed.path())
+            .expect("build failure writes the skipped group"),
+        5
+    );
+    for task_id in [CLIPPY, TEST, DOCTEST, DOC] {
         let task = task_report(&plan, &failed, task_id);
         assert_eq!(task.status, TaskStatus::NotSelected, "{task_id}");
         assert_eq!(
             task.not_selected_reason,
             Some(velnor_actions_contract::NotSelectedReason::UpstreamFailed),
             "{task_id}"
-        );
-    }
-
-    let doc_failure = staged_run(&plan, "local");
-    for task_id in [TEST, DOCTEST] {
-        assert_eq!(
-            write_task_report_to("local", task_id, 0, None, &[], doc_failure.path())
-                .expect("earlier task succeeds"),
-            1
-        );
-    }
-    assert_eq!(
-        write_task_report_to("local", DOC, 1, None, &[], doc_failure.path())
-            .expect("last task failure has no downstream skips"),
-        1
-    );
-    for task_id in [TEST, DOCTEST] {
-        assert_eq!(
-            task_report(&plan, &doc_failure, task_id).status,
-            TaskStatus::Executed,
-            "doc failure must preserve previously executed {task_id}"
         );
     }
 }

@@ -152,6 +152,7 @@ fn rejects_bad_spec_scalars() {
 #[test]
 fn rejects_internal_steps_fail_closed() {
     let internal = Step {
+        parallel: false,
         name: "Plan".to_owned(),
         id: None,
         role: None,

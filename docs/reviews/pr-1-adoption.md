@@ -58,6 +58,17 @@ publication/promotion boundary; this amendment does not widen their configuratio
 or operation deadlines. Control jobs keep the default. See
 [job timeout limits](../implemented/job-timeout-limits.md).
 
+### One job per crate amendment (2026-10-19)
+
+The repository owner made a [hard decision](../hard-decisions.md#1-one-job-per-crate-with-parallel-check-steps)
+that supersedes the lint, tests and docs phases above: each crate owns one
+`Rust / <crate>` job that prepares and builds once, then runs Format, Clippy,
+Documentation, tests and doctests as parallel GitHub steps. The phases
+repeated checkout, tool setup, cache restore and compilation per crate. The
+cross-phase Clippy and doctest gates are removed; each check must pass on its
+own and Required still admits every report. See
+[native Rust crate jobs](../implemented/native-rust-crate-jobs.md).
+
 ## 2. `ci.yml` vs `velnor.yml` — adopt pr-1
 
 - Old: emits `velnor.yml`, `velnor-release.yml`,

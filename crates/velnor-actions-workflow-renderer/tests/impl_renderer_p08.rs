@@ -170,6 +170,7 @@ fn retired_rust_cache_is_rejected_for_every_lane() {
     )
     .expect("mbx steps");
     let rust_cache = velnor_actions_contract::Step {
+        parallel: false,
         name: "Restore Cargo registry".to_owned(),
         id: None,
         role: None,
@@ -203,6 +204,7 @@ fn retired_rust_cache_is_rejected_for_every_lane() {
 #[test]
 fn mbx_restore_precedes_fetch() {
     let mut fetch = velnor_actions_contract::Step {
+        parallel: false,
         name: "Fetch Cargo sources".to_owned(),
         id: None,
         role: Some(velnor_actions_contract::StepRole::CargoSourcesFetch),
@@ -213,6 +215,7 @@ fn mbx_restore_precedes_fetch() {
         },
     };
     let mut mbx = velnor_actions_contract::Step {
+        parallel: false,
         name: "Restore MBX objects".to_owned(),
         id: None,
         role: Some(velnor_actions_contract::StepRole::MbxCache),

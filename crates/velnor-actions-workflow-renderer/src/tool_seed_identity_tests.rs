@@ -78,6 +78,7 @@ fn assert_full_history_checkout_is_seedable(setup: &crate::MiseSetup) {
 
 fn assert_display_name_does_not_authorize_seed(setup: &crate::MiseSetup) {
     let fake = Step {
+        parallel: false,
         name: "Checkout".to_owned(),
         id: None,
         role: None,
@@ -138,6 +139,7 @@ fn setup_config() -> crate::MiseSetup {
 
 fn mise_shell() -> Step {
     Step {
+        parallel: false,
         name: "Run Cargo".to_owned(),
         id: None,
         role: None,
@@ -191,6 +193,7 @@ fn malformed_seed_key_and_preexisting_v2_steps_are_rejected() {
         crate::steps::checkout_step(CHECKOUT).expect("checkout"),
         mise_shell(),
         Step {
+            parallel: false,
             name: TOOL_SEED_NAME.to_owned(),
             id: None,
             role: Some(StepRole::ToolSeed),

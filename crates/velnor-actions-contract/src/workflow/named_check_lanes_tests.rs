@@ -18,6 +18,7 @@ fn runner(label: &str, platform: CheckPlatform) -> CheckRunner {
 fn job(id: &str, check_runner: Option<CheckRunner>, needs: &[&str]) -> Job {
     let steps = if id == "plan" {
         vec![Step {
+            parallel: false,
             name: "Write request".to_owned(),
             id: None,
             role: None,
@@ -30,6 +31,7 @@ fn job(id: &str, check_runner: Option<CheckRunner>, needs: &[&str]) -> Job {
     } else if check_runner.is_some() {
         vec![
             Step {
+                parallel: false,
                 name: "Execute named check".to_owned(),
                 id: None,
                 role: None,
@@ -43,6 +45,7 @@ fn job(id: &str, check_runner: Option<CheckRunner>, needs: &[&str]) -> Job {
                 },
             },
             Step {
+                parallel: false,
                 name: "Upload reports".to_owned(),
                 id: None,
                 role: None,
@@ -62,6 +65,7 @@ fn job(id: &str, check_runner: Option<CheckRunner>, needs: &[&str]) -> Job {
         ]
     } else {
         vec![Step {
+            parallel: false,
             name: "ordinary".to_owned(),
             id: None,
             role: None,

@@ -29,7 +29,7 @@ pub use actions::{
     UPLOAD_ARTIFACT_ACTION_VERSION,
 };
 pub use capabilities::{
-    ACTIONLINT_VERSION, ActionlintCapabilities, NativeParallelismConcerns, StepSyntax,
+    ACTIONLINT_VERSION, ActionlintCapabilities, STEP_PARALLELISM_IGNORES, StepSyntax,
 };
 pub use config::{
     ActionlintConfigInput, ActionlintConfigOutput, IgnoreEntry, IgnorePolicy, RUNNER_LABEL_BRIDGE,
@@ -46,7 +46,7 @@ pub use overrides::{
 };
 pub use tools::{
     ActionlintToolchain, SHELLCHECK_VERSION, ShellcheckToolchain, WorkflowLintTools,
-    ZizmorToolchain,
+    ZizmorToolchain, step_parallelism_ignore_args,
 };
 
 /// Stable identifier for the actionlint tool metadata.

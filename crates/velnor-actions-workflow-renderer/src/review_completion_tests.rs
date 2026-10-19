@@ -25,6 +25,7 @@ fn spec() -> ReviewCompletionSpec {
             sha256: crate::setup::MISE_BINARY_SHA256_LINUX_X64.to_owned(),
         },
         acquire: Step {
+            parallel: false,
             name: "Acquire verified helper".to_owned(),
             id: None,
             role: None,

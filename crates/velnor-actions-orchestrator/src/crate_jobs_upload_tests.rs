@@ -7,20 +7,22 @@ use super::crate_jobs_tests::{discovery, group, names};
 use super::*;
 use velnor_actions_rust::{CompileDriver, TaskKind};
 
-/// Both demo phases keep clippy and test obligations on one selected driver.
-fn two_phase_jobs(driver: CompileDriver) -> (Vec<(String, Job)>, ProposedTask, ProposedTask) {
+/// The demo crate job keeps clippy and test obligations on one selected driver;
+/// a second crate owns its own job and report artifact.
+fn crate_jobs(driver: CompileDriver) -> (Vec<(String, Job)>, ProposedTask, ProposedTask) {
     let mut clippy = group("demo", TaskKind::Clippy, &[]);
     clippy.identity.compile_driver = driver.as_str().to_owned();
     clippy.validate().expect("clippy proposal");
-    let clippy_id = clippy.task_id.clone();
-    let mut test = group("demo", TaskKind::Test, &[clippy_id.as_str()]);
+    let mut test = group("demo", TaskKind::Test, &[]);
     test.identity.compile_driver = driver.as_str().to_owned();
     test.validate().expect("test proposal");
+    let mut other = group("nested", TaskKind::Clippy, &[]);
+    other.identity.compile_driver = driver.as_str().to_owned();
     let catalog = ToolCatalog::pinned();
     let found = build_crate_jobs(CrateJobInputs {
         label: "ubuntu-26.04",
         policy: WorkflowPolicy::ConsumerV1,
-        discovery: &discovery(vec![test.clone(), clippy.clone()]),
+        discovery: &discovery(vec![test.clone(), clippy.clone(), other]),
         catalog: &catalog,
         fetch_roots: &[],
         acquire: None,
@@ -31,7 +33,7 @@ fn two_phase_jobs(driver: CompileDriver) -> (Vec<(String, Job)>, ProposedTask, P
     })
     .expect("crate jobs");
     let ids: Vec<_> = found.jobs.iter().map(|(id, _)| id.as_str()).collect();
-    assert_eq!(ids, ["rust-demo-lint", "rust-demo-tests"]);
+    assert_eq!(ids, ["rust-demo", "rust-nested"]);
     (found.jobs, clippy, test)
 }
 
@@ -119,15 +121,19 @@ fn assert_task_environment(
     env: &BTreeMap<String, String>,
     catalog: &ToolCatalog,
 ) {
-    let payload_env = velnor_actions_rust::payload_env_for_kind(&task.task_kind)
-        .into_iter()
-        .map(|(key, value)| {
-            (
-                key.to_string_lossy().into_owned(),
-                value.to_string_lossy().into_owned(),
-            )
-        })
-        .collect();
+    let mut payload_env: BTreeMap<String, String> =
+        velnor_actions_rust::payload_env_for_kind(&task.task_kind)
+            .into_iter()
+            .map(|(key, value)| {
+                (
+                    key.to_string_lossy().into_owned(),
+                    value.to_string_lossy().into_owned(),
+                )
+            })
+            .collect();
+    if let Some(lane) = velnor_actions_rust::concurrent_target_lane(&task.task_kind) {
+        payload_env.insert("CARGO_TARGET_DIR".to_owned(), format!("target/{lane}"));
+    }
     let expected_env = crate::matrix_step::task_step_env(catalog, &payload_env, true)
         .expect("validated task environment");
     assert_eq!(env, &expected_env, "exact task environment");
@@ -172,13 +178,14 @@ fn assert_task_execution_matches(task: &ProposedTask, step: &Step, catalog: &Too
 
 #[test]
 fn obligations_wrap_report_capture() {
-    let (jobs, clippy, test) = two_phase_jobs(CompileDriver::Mbx);
+    let (jobs, clippy, test) = crate_jobs(CompileDriver::Mbx);
     let catalog = ToolCatalog::pinned();
-    for (task, owner) in [(&clippy, "rust-demo-lint"), (&test, "rust-demo-tests")] {
-        let (_, demo) = jobs
-            .iter()
-            .find(|(id, _)| id == owner)
-            .expect("phase owner");
+    let owner = "rust-demo";
+    let (_, demo) = jobs
+        .iter()
+        .find(|(id, _)| id == owner)
+        .expect("crate owner");
+    for task in [&clippy, &test] {
         let steps = names(demo);
         assert_eq!(&steps[..2], ["Checkout", "Download plan"], "{steps:?}");
         let name = crate::matrix_step::step_name_for(&task.task_kind, &task.task_id);
@@ -192,20 +199,24 @@ fn obligations_wrap_report_capture() {
                 )
             })
             .collect();
-        assert_eq!(executions.len(), 1, "one obligation in {owner}");
-        assert_eq!(executions[0].name, name);
-        assert_task_execution_matches(task, executions[0], &catalog);
+        assert_eq!(executions.len(), 2, "both obligations in {owner}");
+        let execution = executions
+            .iter()
+            .find(|step| step.name == name)
+            .expect("named obligation");
+        assert!(execution.parallel, "{name} runs in the parallel group");
+        assert_task_execution_matches(task, execution, &catalog);
     }
 }
 
-/// Validate the unique upload for the actual phase and all its preceding tasks.
+/// Validate the unique upload for one crate job and all its preceding tasks.
 fn assert_job_upload(job_id: &str, demo: &Job) -> String {
     let uploads: Vec<_> = demo
         .steps
         .iter()
         .filter(|step| step.name == velnor_actions_workflow_renderer::CRATE_REPORT_UPLOAD_NAME)
         .collect();
-    assert_eq!(uploads.len(), 1, "one upload for phase {job_id}");
+    assert_eq!(uploads.len(), 1, "one upload for job {job_id}");
     let step = uploads[0];
     let velnor_actions_contract::StepKind::Action { uses, with, .. } = &step.kind else {
         panic!("crate upload must be an action step");
@@ -236,7 +247,7 @@ fn assert_job_upload(job_id: &str, demo: &Job) -> String {
     let upload = steps
         .iter()
         .position(|name| *name == velnor_actions_workflow_renderer::CRATE_REPORT_UPLOAD_NAME)
-        .expect("phase upload");
+        .expect("job upload");
     let tasks: Vec<_> = demo
         .steps
         .iter()
@@ -248,17 +259,17 @@ fn assert_job_upload(job_id: &str, demo: &Job) -> String {
             )
         })
         .collect();
-    assert!(!tasks.is_empty(), "phase owns executed obligations");
+    assert!(!tasks.is_empty(), "job owns executed obligations");
     assert!(
         tasks.iter().all(|(at, _)| *at < upload),
-        "uploads close the phase: {steps:?}"
+        "uploads close the job: {steps:?}"
     );
     with["name"].clone()
 }
 
 #[test]
 fn obligations_upload_one_artifact_per_job() {
-    let (jobs, _, _) = two_phase_jobs(CompileDriver::Cargo);
+    let (jobs, _, _) = crate_jobs(CompileDriver::Cargo);
     let artifacts: BTreeSet<_> = jobs
         .iter()
         .map(|(id, job)| assert_job_upload(id, job))
@@ -266,6 +277,6 @@ fn obligations_upload_one_artifact_per_job() {
     assert_eq!(
         artifacts.len(),
         2,
-        "each actual phase has a distinct report artifact"
+        "each crate job has a distinct report artifact"
     );
 }

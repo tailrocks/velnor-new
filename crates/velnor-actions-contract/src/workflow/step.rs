@@ -43,6 +43,15 @@ pub struct Step {
     /// Run condition (`if`), serialized by the workflow renderer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub condition: Option<String>,
+    /// Member of a contiguous concurrent step group.
+    ///
+    /// Adjacent parallel steps form one group. The renderer emits each member
+    /// as a GitHub `background: true` step and joins the group with one
+    /// `wait-all` step before the next sequential step, so a failed member
+    /// fails the job at that join. Only workflow jobs may carry parallel
+    /// steps; composite actions reject them.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub parallel: bool,
     /// Step payload.
     #[serde(flatten)]
     pub kind: StepKind,
@@ -132,6 +141,19 @@ impl Step {
             return Err(ContractError::identity(
                 "step.task",
                 format!("task_execution_authority_mismatch:{job}"),
+            ));
+        }
+        // Concurrent members publish no outputs (none are visible before the
+        // join), own no typed role such as a cache save, and never run an
+        // internal planner operation.
+        if self.parallel
+            && (self.id.is_some()
+                || self.role.is_some()
+                || matches!(&self.kind, StepKind::Internal { .. }))
+        {
+            return Err(ContractError::identity(
+                "step.parallel",
+                format!("parallel_step_authority:{job}"),
             ));
         }
         if let StepKind::TaskExecution { task_id, .. } = &self.kind

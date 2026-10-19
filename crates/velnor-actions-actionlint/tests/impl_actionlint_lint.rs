@@ -306,8 +306,8 @@ fn action_input_codes_are_stable() {
 fn capability_gate_codes_are_stable() {
     let caps = ActionlintCapabilities::for_pinned();
     assert_eq!(caps.check_step_syntax(StepSyntax::JobMatrix), Ok(()));
-    let error = caps
-        .check_step_syntax(StepSyntax::NativeParallelism)
-        .expect_err("native syntax unqualified");
-    assert_eq!(error.to_string(), "unsupported_syntax: native_parallelism");
+    assert_eq!(
+        caps.check_step_syntax(StepSyntax::NativeParallelism),
+        Ok(())
+    );
 }

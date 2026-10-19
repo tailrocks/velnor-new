@@ -154,7 +154,7 @@ fn mise_crate_job_prepare_installs_opentofu() {
     assert_eq!(found.jobs.len(), 2);
     for (id, job) in &found.jobs {
         let run = prepare_run(job);
-        let spawning = id == "rust-velnor-actions-mise-tests";
+        let spawning = id == "rust-velnor-actions-mise";
         assert_eq!(
             run.contains(&opentofu),
             spawning,

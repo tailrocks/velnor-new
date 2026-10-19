@@ -36,12 +36,12 @@ pub(super) fn assert_crate_contract(
     yaml: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let workflow_env = window(yaml, "env:\n", "concurrency:")?;
-    let task = window(yaml, "  rust-demo-lint:", "  required:")?;
+    let task = window(yaml, "  rust-demo:", "  required:")?;
     let crate_job = prep
         .workflow
         .ir
         .jobs
-        .get("rust-demo-lint")
+        .get("rust-demo")
         .ok_or("missing rust-demo IR job")?;
     let clippy_step = crate_job
         .steps

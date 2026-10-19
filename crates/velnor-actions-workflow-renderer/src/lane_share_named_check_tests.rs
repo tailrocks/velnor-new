@@ -36,6 +36,7 @@ fn named_check_identity_and_report_upload_stay_on_their_exact_lane() {
     ] {
         let id = format!("check-demo{suffix}");
         let checkout = Step {
+            parallel: false,
             name: "Checkout".to_owned(),
             id: None,
             role: Some(velnor_actions_contract::StepRole::Checkout),
@@ -48,6 +49,7 @@ fn named_check_identity_and_report_upload_stay_on_their_exact_lane() {
         };
         let mut steps = vec![checkout, echo_step(0, "shared-preparation")];
         steps.push(Step {
+            parallel: false,
             name: "Execute named check".to_owned(),
             id: None,
             role: None,
@@ -61,6 +63,7 @@ fn named_check_identity_and_report_upload_stay_on_their_exact_lane() {
             },
         });
         steps.push(Step {
+            parallel: false,
             name: "Upload reports".to_owned(),
             id: None,
             role: Some(velnor_actions_contract::StepRole::MatrixReportUpload),

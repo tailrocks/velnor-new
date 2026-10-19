@@ -1,4 +1,4 @@
-//! Production workflow boundary: fixed owners, preserved gates and Required.
+//! Production workflow boundary: one crate job, parallel checks and Required.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -9,7 +9,7 @@ use crate::crate_job_ids::JobOwners;
 use crate::crate_jobs::crate_jobs_tests::{discovery, group};
 
 #[test]
-fn complete_workflow_keeps_all_phases_and_rejects_each_unsuccessful_owner() {
+fn complete_workflow_runs_one_crate_job_with_parallel_checks() {
     let root = tempfile::tempdir().expect("repository");
     std::fs::create_dir(root.path().join(".velnor")).expect("config directory");
     std::fs::write(
@@ -19,12 +19,11 @@ fn complete_workflow_keeps_all_phases_and_rejects_each_unsuccessful_owner() {
     .expect("repository config");
     let config = crate::config::load_config(root.path()).expect("default config");
     let lint = group("demo", TaskKind::Clippy, &[]);
-    let build = group("demo", TaskKind::Build, &[&lint.task_id]);
-    let mut tests = group("demo", TaskKind::Nextest, &[&lint.task_id]);
+    let build = group("demo", TaskKind::Build, &[]);
+    let mut tests = group("demo", TaskKind::Nextest, &[]);
     tests.depends_on.push(build.task_id.clone());
-    let doctest = group("demo", TaskKind::Doctest, &[&lint.task_id]);
-    let mut docs = group("demo", TaskKind::Doc, &[&lint.task_id]);
-    docs.depends_on.push(doctest.task_id.clone());
+    let doctest = group("demo", TaskKind::Doctest, &[]);
+    let docs = group("demo", TaskKind::Doc, &[]);
     let proposals = vec![lint, build, tests, doctest, docs];
     let mut workflow = crate::workflow::build_workflow(
         root.path(),
@@ -44,20 +43,37 @@ fn complete_workflow_keeps_all_phases_and_rejects_each_unsuccessful_owner() {
         "ubuntu-26.04",
         env!("CARGO_PKG_VERSION"),
     )
-    .expect("stage exact helper in every phase");
-    let phase_ids = ["rust-demo-lint", "rust-demo-tests", "rust-demo-docs"];
+    .expect("stage exact helper in the crate job");
+    let owner = "rust-demo";
     let jobs = &workflow.ir.jobs;
-    assert_eq!(jobs[phase_ids[0]].needs, ["plan"]);
-    assert_eq!(jobs[phase_ids[1]].needs, ["plan", phase_ids[0]]);
-    assert_eq!(
-        jobs[phase_ids[2]].needs,
-        ["plan", phase_ids[0], phase_ids[1]]
-    );
-    assert!(!jobs.contains_key("rust-demo"), "no obsolete combined job");
-    for id in phase_ids {
-        assert!(jobs["required"].needs.iter().any(|need| need == id));
-        assert_eq!(jobs[id].timeout_minutes.minutes(), 5);
+    assert_eq!(jobs[owner].needs, ["plan"]);
+    assert_eq!(jobs[owner].display_name, "Rust / demo");
+    for obsolete in ["rust-demo-lint", "rust-demo-tests", "rust-demo-docs"] {
+        assert!(!jobs.contains_key(obsolete), "no per-phase job {obsolete}");
     }
+    assert!(jobs["required"].needs.iter().any(|need| need == owner));
+    assert_eq!(jobs[owner].timeout_minutes.minutes(), 5);
+    let tasks: Vec<_> = jobs[owner]
+        .steps
+        .iter()
+        .filter(|step| {
+            matches!(
+                step.kind,
+                velnor_actions_contract::StepKind::TaskExecution { .. }
+            )
+        })
+        .map(|step| (step.name.as_str(), step.parallel))
+        .collect();
+    assert_eq!(
+        tasks,
+        [
+            ("Build test executables", false),
+            ("Clippy", true),
+            ("Unit and integration tests", true),
+            ("Doctests", true),
+            ("Documentation", true),
+        ]
+    );
     let emitted = assert_task_owners(jobs, &proposals);
     let rendered = velnor_actions_workflow_renderer::render::render_workflow_ir(
         &workflow.ir,
@@ -66,19 +82,15 @@ fn complete_workflow_keeps_all_phases_and_rejects_each_unsuccessful_owner() {
         &workflow.context,
     )
     .expect("render the production graph and final fan-in");
-    for id in phase_ids {
-        assert!(rendered.contains(id), "rendered phase {id}");
-    }
+    assert!(rendered.contains(owner), "rendered crate job");
+    assert_eq!(rendered.matches("background: true").count(), 4);
+    assert_eq!(rendered.matches("wait-all:").count(), 1);
     let inventory =
         velnor_actions_contract::NeedsConclusions::from_finalized_jobs("required", jobs)
             .expect("committed Required inventory");
-    assert!(
-        phase_ids
-            .iter()
-            .all(|id| inventory.inventory.iter().any(|job| job == id))
-    );
-    assert_unsuccessful_owners_fail(&inventory, phase_ids);
-    assert_eq!(emitted.values().collect::<BTreeSet<_>>().len(), 3);
+    assert!(inventory.inventory.iter().any(|job| job == owner));
+    assert_unsuccessful_owners_fail(&inventory, [owner]);
+    assert_eq!(emitted.values().collect::<BTreeSet<_>>().len(), 1);
 }
 
 fn fixture_generator_lock() -> velnor_actions_contract::GeneratorLock {
@@ -105,9 +117,9 @@ fn fixture_generator_lock() -> velnor_actions_contract::GeneratorLock {
 
 fn assert_unsuccessful_owners_fail(
     inventory: &velnor_actions_contract::NeedsConclusions,
-    phase_ids: [&str; 3],
+    owners: [&str; 1],
 ) {
-    for owner in phase_ids {
+    for owner in owners {
         for conclusion in [
             JobConclusion::Failure,
             JobConclusion::Cancelled,

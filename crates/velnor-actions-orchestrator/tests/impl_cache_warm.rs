@@ -166,12 +166,12 @@ fn fetch_carries_offline_skip_branch() -> TestResult {
         let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
         let driver = if mbx { "mbx" } else { "cargo" };
         let mut obligations = 0;
-        let mut phase_jobs = 0;
+        let mut crate_jobs = 0;
         for (job_id, job) in &prep.workflow.ir.jobs {
             if !job_id.starts_with("rust-") {
                 continue;
             }
-            phase_jobs += 1;
+            crate_jobs += 1;
             let mut captured = 0;
             for step in &job.steps {
                 if !matches!(step.kind, StepKind::TaskExecution { .. }) {
@@ -190,10 +190,7 @@ fn fetch_carries_offline_skip_branch() -> TestResult {
             }
             assert!(captured > 0, "{job_id} owns manifest-bound obligations");
         }
-        assert_eq!(
-            phase_jobs, 6,
-            "all phases of both fixture crates (mbx={mbx})"
-        );
+        assert_eq!(crate_jobs, 2, "both fixture crate jobs (mbx={mbx})");
         assert!(obligations >= 2, "obligations present (mbx={mbx})");
     }
     Ok(())

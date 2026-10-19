@@ -7,6 +7,7 @@ use velnor_actions_contract::{Step, StepKind, StepRole};
 
 fn seed_step() -> Step {
     Step {
+        parallel: false,
         name: "Restore Velnor tool seed".to_owned(),
         id: None,
         role: Some(StepRole::ToolSeed),

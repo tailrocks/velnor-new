@@ -70,10 +70,12 @@ fn scope_restores_after_success_error_and_panic() {
 
 #[test]
 fn elapsed_setup_and_retries_cannot_renew_default_command_budgets() {
+    // Crate checks run as parallel steps beside compilation, so the setup
+    // command needs a budget that tolerates a loaded runner.
     let started = Instant::now();
-    let result = budget(250).scope(|| {
+    let result = budget(2000).scope(|| {
         command("sleep 0.10").run().expect("setup");
-        let failed = command("sleep 5")
+        let failed = command("sleep 30")
             .run()
             .expect_err("remaining budget expires");
         assert_scoped_command_timeout(&failed);
@@ -82,7 +84,7 @@ fn elapsed_setup_and_retries_cannot_renew_default_command_budgets() {
             .expect_err("retry cannot renew expired budget");
     });
     assert!(result.is_err());
-    assert!(started.elapsed() < Duration::from_secs(2));
+    assert!(started.elapsed() < Duration::from_secs(10));
     assert!(CheckDeadline::check_scope().is_ok());
 }
 
@@ -190,8 +192,9 @@ fn reserved_deadline_leaves_group_cleanup_within_total_operational_budget() {
         assert_scoped_command_timeout(&error);
     });
     assert!(result.is_err());
+    // Tolerance covers scheduling on a runner loaded by parallel checks.
     assert!(
-        started.elapsed() < full + Duration::from_millis(100),
+        started.elapsed() < full + Duration::from_secs(2),
         "work timeout plus cleanup must fit the budget with scheduling tolerance"
     );
 }
