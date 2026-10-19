@@ -42,7 +42,7 @@ pub const CANDIDATE_JOB_ID: &str = "candidate";
 /// Baseline-publish job ID: runs after the final gate passes.
 pub const PUBLISH_JOB_ID: &str = "publish-baseline";
 /// Full-SHA Alint pin for the repository-policy `alint` job.
-pub const ALINT_USES: &str = "asamarts/alint@18e1a66db7444fed817c5d8c75292c7709fff32e";
+pub const ALINT_USES: &str = "asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87";
 
 /// Caller-supplied validated scalars the IR cannot carry.
 #[derive(Debug, Clone)]

@@ -25,7 +25,7 @@ pub(super) fn safe_path(value: &str) -> bool {
             .all(|part| safe_name(part) && part != "." && part != "..")
 }
 
-fn exact_version(value: &str) -> bool {
+pub(super) fn exact_version(value: &str) -> bool {
     let parts: Vec<_> = value.split('.').collect();
     parts.len() == 3
         && parts.iter().all(|part| {
@@ -80,13 +80,20 @@ pub(super) fn validate_recipe(
             {
                 return Err(bad("invalid_qualified_tool_executable"));
             }
-            super::probes::validate_recipe_probe(
-                &recipe.version,
-                platform.platform,
-                executable,
-                file,
-                key,
-            )?;
+            if matches!(
+                executable.probe,
+                super::QualifiedToolProbe::RustfmtVersion { .. }
+            ) {
+                super::rustfmt_probes::validate(recipe, platform, executable, file, key)?;
+            } else {
+                super::probes::validate_recipe_probe(
+                    &recipe.version,
+                    platform.platform,
+                    executable,
+                    file,
+                    key,
+                )?;
+            }
             validate_core_layout(recipe, executable, file, key)?;
         }
     }

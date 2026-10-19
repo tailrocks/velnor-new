@@ -340,7 +340,7 @@ pub(crate) fn cleanup(fixture: &Fixture) {
 }
 
 const PROBE_DATA: &[&str] = &[
-    "https://api.github.com/repos/jdx/mise/releases/latest\tmise.json\t{\"tag_name\": \"v2026.10.13\"}",
+    "https://api.github.com/repos/jdx/mise/releases/latest\tmise.json\t{\"tag_name\": \"v2026.10.14\"}",
     "https://static.rust-lang.org/dist/channel-rust-stable.toml\trust.toml\t[pkg.rust]\nversion = \"1.99.1 (48a229cea 2026-09-01)\"\n",
     "https://api.github.com/repos/jdx/mr-boxington/releases/latest\tmbx.json\t[{\"tag_name\": \"v1.20.0-beta\", \"prerelease\": true}, {\"tag_name\": \"v1.24.1\"}]",
     "https://api.github.com/repos/cli/cli/releases/latest\tgh.json\t{\"tag_name\": \"v2.102.0\"}",
@@ -356,7 +356,7 @@ const PROBE_DATA: &[&str] = &[
     "https://api.github.com/repos/actions/upload-artifact/releases/latest\tupload.json\t{\"tag_name\": \"v7.0.1\"}",
     "https://api.github.com/repos/actions/cache/releases/latest\tcache.json\t{\"tag_name\": \"v6.1.0\"}",
     "https://api.github.com/repos/jdx/mr-boxington-action/releases\tmbx-action.json\t[{\"tag_name\": \"v1.5.0\"}]",
-    "https://api.github.com/repos/asamarts/alint/releases/latest\talint.json\t{\"tag_name\": \"v0.18.4\"}",
+    "https://api.github.com/repos/asamarts/alint/releases/latest\talint.json\t{\"tag_name\": \"v0.19.0\"}",
     "https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest\taws-credentials.json\t{\"tag_name\": \"v6.3.0\"}",
     "https://api.github.com/repos/sigstore/cosign/releases/latest\tcosign.json\t{\"tag_name\": \"v3.1.3\"}",
     "https://api.github.com/repos/actions/attest-build-provenance/releases/latest\tattest-build-provenance.json\t{\"tag_name\": \"v4.2.2\"}",
@@ -378,3 +378,6 @@ pub(crate) fn probe_rows() -> Vec<(&'static str, &'static str, &'static str)> {
         })
         .collect()
 }
+
+#[path = "p12_harness_tests.rs"]
+mod tests;

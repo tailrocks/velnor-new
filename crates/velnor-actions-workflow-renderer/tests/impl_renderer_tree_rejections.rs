@@ -59,11 +59,11 @@ fn velnor_policy_emits_full_sha_alint_pin() -> Result<(), RenderError> {
     )?;
     assert_eq!(
         ALINT_USES,
-        "asamarts/alint@18e1a66db7444fed817c5d8c75292c7709fff32e"
+        "asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87"
     );
     assert!(text.contains("  alint:"), "alint job missing:\n{text}");
     assert!(
-        text.contains("uses: asamarts/alint@18e1a66db7444fed817c5d8c75292c7709fff32e"),
+        text.contains("uses: asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87"),
         "full-SHA pin missing:\n{text}"
     );
     assert!(

@@ -90,7 +90,7 @@ fn fixture() -> ConsumerPreviewSpec {
 fn setup_fixture() -> MiseSetup {
     MiseSetup {
         uses: "jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7".to_owned(),
-        version: "2026.10.13".to_owned(),
+        version: "2026.10.14".to_owned(),
         sha256: "a".repeat(64),
     }
 }
