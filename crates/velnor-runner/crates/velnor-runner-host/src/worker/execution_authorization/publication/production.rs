@@ -377,51 +377,9 @@ fn verify_record(
     Ok(file)
 }
 
-fn append_mount_root(root: &str, subpath: &str) -> String {
-    if root == "/" {
-        subpath.to_owned()
-    } else {
-        format!("{}{subpath}", root.trim_end_matches('/'))
-    }
-}
-
-fn valid_mount_root(value: &str) -> bool {
-    value.starts_with('/')
-        && !value.chars().any(char::is_control)
-        && (value == "/"
-            || (!value.ends_with('/')
-                && !value.contains("//")
-                && value
-                    .split('/')
-                    .skip(1)
-                    .all(|part| !part.is_empty() && part != "." && part != "..")))
-}
-
-fn valid_operation_id(value: &str) -> bool {
-    value.len() == 32
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
-
-fn lower_hex(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut output = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        output.push(char::from(HEX[usize::from(byte >> 4)]));
-        output.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
-    output
-}
-
-async fn within<T>(
-    deadline: Instant,
-    future: impl std::future::Future<Output = T>,
-) -> Result<T, HostError> {
-    tokio::time::timeout_at(deadline.into(), future)
-        .await
-        .map_err(|_| HostError::DockerTimeout)
-}
+#[path = "production/helpers.rs"]
+mod helpers;
+use helpers::{append_mount_root, lower_hex, valid_mount_root, valid_operation_id, within};
 
 #[cfg(test)]
 #[path = "production/tests.rs"]
