@@ -1,16 +1,9 @@
 use crate::error::HostError;
-use crate::journal::{
-    AssignmentKey, Journal, ReservationRequest, ReservationResult, ReservationState, StorageRole,
-    fixture_storage_provisioning_admission,
-};
-use crate::launch::StartPermit;
+use crate::journal::{AssignmentKey, Journal, ReservationState, StorageRole};
 
-use super::admission::JOB_LIMIT;
-use super::helpers::{Scratch, TEST_ENGINE_ID, binding, created_scope};
+use super::helpers::{Scratch, binding};
 
 const MEMORY_BYTES: u64 = 8_589_934_592;
-const SAMPLE_GENERATION: &str = "33333333333333333333333333333333";
-const ASSIGNMENT_NONCE: &str = "22222222222222222222222222222222";
 
 // Exact v18 source: frozen C27 `journal/schema/provisioning/ddl.rs` (SHA256
 // ccc94ccde7c4dca5da099e46f52361873d9d7b27f76bd1005649f670a890e29c), table entry
@@ -23,37 +16,27 @@ async fn version_eighteen_charged_hold_migrates_as_legacy_and_stays_closed() -> 
 {
     let scratch = Scratch::new()?;
     let path = scratch.file();
-    let journal = Journal::open(&path).await?;
-    journal.configure_capacity(JOB_LIMIT).await?;
+    install_v18_fixture(&path)?;
+    assert_version_eighteen_publication_key(&path).await?;
+    let fixture_database = turso::Builder::new_local(path.to_str().ok_or(HostError::Path)?)
+        .build()
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let fixture_connection = fixture_database.connect().map_err(|_| HostError::Journal)?;
+    let charged = query_storage_charge_totals(&fixture_connection, 1).await?;
+    drop(fixture_connection);
+    drop(fixture_database);
+
     let binding = binding("topology-migration", 303)?;
-    let scope = created_scope(&journal, &binding, 703).await?;
+    let journal = Journal::open(&path).await?;
+    let scope = journal.connection_scope(&binding).await?;
     let assignment = scope
         .assignment_identity(AssignmentKey::Remote {
             kind: "runner".to_owned(),
-            subject: ASSIGNMENT_NONCE.to_owned(),
+            subject: "22222222222222222222222222222222".to_owned(),
         })
         .await?;
-    let permit = StartPermit::test_fixture_with_engine_id(SAMPLE_GENERATION, TEST_ENGINE_ID);
-    let docker_root_digest = permit.docker_root_digest().to_owned();
-    let admission = fixture_storage_provisioning_admission(&permit)?;
-    let result = scope
-        .try_reserve_with_provisioning(
-            ReservationRequest {
-                assignment: &assignment,
-                engine_id: TEST_ENGINE_ID,
-                docker_root_digest: &docker_root_digest,
-                cpu_millicores: 2_000,
-                memory_bytes: MEMORY_BYTES,
-                sample_generation_id: SAMPLE_GENERATION,
-            },
-            permit,
-            admission,
-        )
-        .await?;
-    let ReservationResult::Reserved { reservation_id } = result else {
-        return Err(HostError::Journal);
-    };
-    let charged = storage_charge_totals(&journal, reservation_id).await?;
+    let reservation_id = 1;
     let before = scope
         .reservation(&assignment)
         .await?
@@ -63,9 +46,6 @@ async fn version_eighteen_charged_hold_migrates_as_legacy_and_stays_closed() -> 
     assert_eq!(before.memory_bytes, MEMORY_BYTES);
     drop(scope);
     drop(journal);
-
-    restore_version_eighteen_provisioning_shape(&path, reservation_id).await?;
-    assert_version_eighteen_publication_key(&path).await?;
 
     let migrated = Journal::open(&path).await?;
     assert_legacy_topology(&migrated, &binding, &assignment, reservation_id, charged).await?;
@@ -104,10 +84,7 @@ async fn version_eighteen_charged_hold_migrates_as_legacy_and_stays_closed() -> 
 async fn version_eighteen_unknown_publication_key_is_rejected() -> Result<(), HostError> {
     let scratch = Scratch::new()?;
     let path = scratch.file();
-    drop(Journal::open(&path).await.expect("initial open"));
-    restore_version_eighteen_provisioning_shape(&path, 0)
-        .await
-        .expect("restore v18");
+    install_v18_fixture(&path)?;
     replace_publication_key_with_unknown_shape(&path)
         .await
         .expect("replace key");
@@ -127,6 +104,11 @@ async fn version_eighteen_unknown_publication_key_is_rejected() -> Result<(), Ho
         Vec::<String>::new()
     );
     Ok(())
+}
+
+fn install_v18_fixture(path: &std::path::Path) -> Result<(), HostError> {
+    const FIXTURE: &[u8] = include_bytes!("v18_topology_migration/v18_fixture.sqlite");
+    std::fs::write(path, FIXTURE).map_err(|_| HostError::Journal)
 }
 
 async fn assert_legacy_topology(
@@ -213,8 +195,7 @@ async fn storage_charge_totals(
     query_storage_charge_totals(&connection, reservation_id).await
 }
 
-mod support;
-pub(super) use support::restore_version_eighteen_provisioning_shape;
+pub(super) mod support;
 use support::{
     assert_version_eighteen_publication_key, publication_primary_key, query_storage_charge_totals,
     read_user_version, replace_publication_key_with_unknown_shape, scalar_i64,

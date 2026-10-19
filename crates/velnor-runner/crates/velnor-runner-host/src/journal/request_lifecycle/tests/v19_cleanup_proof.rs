@@ -6,6 +6,7 @@ use crate::launch::bootstrap::test_verified_storage_cleanup;
 use crate::worker::{WorkerIdentityNames, WorkerVolumeRole};
 
 mod database;
+mod historical_v18;
 use database::{query_i64, query_optional_text};
 
 #[tokio::test]
@@ -219,114 +220,6 @@ async fn exact_five_object_cleanup_settles_only_after_all_owned_absence() -> Res
             .await?
             .map(|row| row.state),
         Some(ReservationState::Released)
-    );
-    Ok(())
-}
-
-#[tokio::test]
-async fn migrated_v18_cleanup_uses_four_owned_volumes_and_keeps_metadata_held_until_settlement()
--> Result<(), HostError> {
-    let fixture = ready().await?;
-    let reservation_id = fixture.provisioned.reservation_id;
-    let path = fixture.scratch.file();
-    let binding = fixture.binding.clone();
-    let physical = fixture.physical.clone();
-    let provisioned = fixture.provisioned.clone();
-    drop(fixture.scope);
-    drop(fixture.journal);
-
-    super::v18_topology_migration::restore_version_eighteen_provisioning_shape(
-        &path,
-        reservation_id,
-    )
-    .await?;
-    let migrated = Journal::open(&path).await?;
-    let scope = migrated.connection_scope(&binding).await?;
-    assert_eq!(
-        scope.reservation(&physical).await?.map(|row| row.state),
-        Some(ReservationState::Reserved)
-    );
-    assert_eq!(
-        query_i64(
-            &migrated,
-            "SELECT topology_version FROM capacity_reservation_provisioning_topology WHERE reservation_id = ?1",
-            reservation_id,
-        )
-        .await?,
-        1
-    );
-    assert_eq!(
-        query_i64(
-            &migrated,
-            "SELECT COUNT(*) FROM capacity_reservation_provisioning_objects WHERE reservation_id = ?1",
-            reservation_id,
-        )
-        .await?,
-        4
-    );
-
-    let names = WorkerIdentityNames::from_nonce(&provisioned.nonce)?;
-    let legacy_proof = test_verified_storage_cleanup(
-        reservation_id,
-        provisioned.intent_id,
-        TEST_ENGINE_ID.to_owned(),
-        provisioned.docker_root_digest.clone(),
-        provisioned.runner_container_id.clone(),
-        provisioned.dind_container_id.clone(),
-        vec![
-            names.volume_name(WorkerVolumeRole::Socket),
-            names.volume_name(WorkerVolumeRole::Home),
-            names.volume_name(WorkerVolumeRole::Work),
-            names.volume_name(WorkerVolumeRole::DindData),
-        ],
-        provisioned.instance_binding_digest.clone(),
-        StorageRole::PHYSICAL.to_vec(),
-        true,
-        true,
-        true,
-        true,
-    )?;
-    scope.record_storage_cleanup(legacy_proof).await?;
-    scope.record_remote_cleanup(reservation_id).await?;
-    scope.record_local_cleanup(reservation_id).await?;
-    assert_eq!(
-        super::helpers::settle_storage_metadata(&scope, &provisioned, '8').await?,
-        crate::journal::MetadataSettlementResult::Settled
-    );
-    assert_eq!(
-        scope.reservation(&physical).await?.map(|row| row.state),
-        Some(ReservationState::Released)
-    );
-    assert_eq!(
-        query_optional_text(
-            &migrated,
-            "SELECT metadata_volume FROM capacity_reservation_provisioning_cleanups WHERE reservation_id = ?1",
-            reservation_id,
-        )
-        .await?,
-        None
-    );
-    drop(scope);
-    drop(migrated);
-
-    let reopened = Journal::open(&path).await?;
-    let reopened_scope = reopened.connection_scope(&binding).await?;
-    assert_eq!(
-        reopened_scope
-            .reservation(&physical)
-            .await?
-            .map(|row| row.state),
-        Some(ReservationState::Released)
-    );
-    assert_eq!(
-        query_optional_text(
-            &reopened,
-            "SELECT metadata_volume FROM capacity_reservation_provisioning_cleanups WHERE reservation_id = ?1",
-            reservation_id,
-        )
-        .await?,
-        None,
-        "After Journal::open, v18 cleanup keeps its historical four-object proof."
     );
     Ok(())
 }
