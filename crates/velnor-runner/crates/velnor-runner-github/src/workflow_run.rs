@@ -10,6 +10,7 @@ mod nonce_commit;
 mod reference;
 mod source;
 mod timeline;
+mod workflow_content;
 mod workflow_ref;
 
 use source::{verify_repository_identity, verify_repository_scope};
@@ -49,6 +50,7 @@ pub use timeline::{
     BaseRefChangedEvent, PullRequestBaseHistory, get_pull_request_base_history, new_retarget_event,
     ordered_base_changes, retarget_event_after_acknowledgement,
 };
+pub use workflow_content::{VerifiedWorkflowContent, get_workflow_content};
 pub use workflow_ref::{VerifiedJobWorkflowRef, WorkflowRefKind};
 
 /// GitHub REST API version used by source lookups.
