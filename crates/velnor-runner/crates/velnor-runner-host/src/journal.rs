@@ -104,7 +104,6 @@ pub(crate) use request_lifecycle::{
 };
 #[cfg(test)]
 pub(crate) use resource_probe::ProbeLeaseState;
-#[cfg(test)]
 pub(crate) use resource_probe::capacity_request_sha256;
 pub(crate) use resource_probe::{
     ExecutionPublicationContext, ExecutionPublicationParent, ExecutionPublicationRecoveryRecord,

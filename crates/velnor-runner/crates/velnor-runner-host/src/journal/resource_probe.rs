@@ -4,7 +4,6 @@ pub(crate) mod execution_publication;
 pub(super) mod lease;
 mod newrole;
 pub(super) mod operations;
-#[cfg(test)]
 pub(crate) use operations::capacity_request_sha256;
 mod phase;
 pub(crate) use execution_publication::{

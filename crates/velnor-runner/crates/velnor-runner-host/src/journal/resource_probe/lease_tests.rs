@@ -8,6 +8,11 @@ use crate::journal::{
 };
 use crate::launch::VerifiedProbeCleanup;
 
+#[path = "lease_tests/v11_fixture.rs"]
+mod v11_fixture;
+#[path = "lease_tests/v11_migration.rs"]
+mod v11_migration;
+
 struct Scratch(PathBuf);
 
 impl Scratch {
@@ -71,8 +76,7 @@ async fn seed(journal: &Journal, id: &str) -> Result<ProbeSeed, HostError> {
         operation_name: format!("velnor-resource-probe-{}", id.repeat(32)),
         projection_digest: "e".repeat(64),
         purpose: crate::journal::ResourceProbePurpose::Capacity,
-        request_sha256: "5d76d86293261804706a16a73e0491cf4caa859f1b876cda706e568592b85cdf"
-            .to_owned(),
+        request_sha256: crate::journal::capacity_request_sha256(),
     })
 }
 
@@ -300,87 +304,5 @@ async fn queued_doctor_does_not_hide_generic_cleanup_or_allow_new_generic_probe(
     };
     assert_eq!(row.operation_id, doctor_child.operation_id);
     assert!(journal.active_probe().await?.is_none());
-    Ok(())
-}
-
-#[tokio::test]
-async fn version_eleven_migration_backfills_an_uncertain_probe_lease() -> Result<(), HostError> {
-    let scratch = Scratch::new();
-    let path = scratch.file();
-    let journal = Journal::open(&path).await?;
-    setup(&journal, 1_000, 256 * 1024 * 1024).await?;
-    journal.prepare_probe(seed(&journal, "d").await?).await?;
-    journal
-        .transition_probe(
-            &"d".repeat(32),
-            ProbePhase::Prepared,
-            ProbePhase::CreateRequested,
-        )
-        .await?;
-    drop(journal);
-
-    let database = turso::Builder::new_local(path.to_str().ok_or(HostError::Journal)?)
-        .build()
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let connection = database.connect().map_err(|_| HostError::Journal)?;
-    for trigger in [
-        "doctor_probe_link_guard",
-        "doctor_probe_transition_guard",
-        "doctor_probe_terminal_guard",
-        "doctor_probe_no_delete",
-    ] {
-        connection
-            .execute(&format!("DROP TRIGGER IF EXISTS {trigger}"), ())
-            .await
-            .map_err(|_| HostError::Journal)?;
-    }
-    connection
-        .execute("DROP TABLE doctor_probe_requests", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    connection
-        .execute("DROP TRIGGER metadata_settlement_claim_insert_guard", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    connection
-        .execute("DROP TRIGGER metadata_probe_cleanup_insert_guard", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    connection
-        .execute("DROP TABLE host_operation_leases", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    connection
-        .execute(
-            "ALTER TABLE host_capacity_policy DROP COLUMN operational_cpu_millicores",
-            (),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    connection
-        .execute(
-            "ALTER TABLE host_capacity_policy DROP COLUMN operational_memory_bytes",
-            (),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    connection
-        .execute("PRAGMA user_version = 11", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    drop(connection);
-    drop(database);
-
-    let migrated = Journal::open(&path).await?;
-    let row = migrated.active_probe().await?.ok_or(HostError::Journal)?;
-    assert_eq!(row.phase, ProbePhase::CreateRequested);
-    assert_eq!(row.lease_state, ProbeLeaseState::Uncertain);
-    assert!(
-        migrated
-            .prepare_probe(seed(&migrated, "e").await?)
-            .await
-            .is_err()
-    );
     Ok(())
 }

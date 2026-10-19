@@ -208,10 +208,11 @@ pub(super) async fn bootstrap(connection: &turso::Connection) -> Result<(), Host
     ensure_column(connection, "probe_purpose", PROBE_PURPOSE_COLUMN).await?;
     ensure_column(connection, "request_sha256", REQUEST_SHA256_COLUMN).await?;
     ensure_column(connection, "request_context", REQUEST_CONTEXT_COLUMN).await?;
+    let capacity_request_sha256 = crate::journal::capacity_request_sha256();
     connection
         .execute(
-            "UPDATE resource_probe_operations SET request_sha256 = '5d76d86293261804706a16a73e0491cf4caa859f1b876cda706e568592b85cdf' WHERE helper_role = 'resource-probe' AND probe_purpose = 'capacity' AND request_sha256 IS NULL",
-            (),
+            "UPDATE resource_probe_operations SET request_sha256 = ?1 WHERE helper_role = 'resource-probe' AND probe_purpose = 'capacity' AND request_context IS NULL AND (request_sha256 IS NULL OR request_sha256 = '5d76d86293261804706a16a73e0491cf4caa859f1b876cda706e568592b85cdf')",
+            (capacity_request_sha256.as_str(),),
         )
         .await
         .map_err(|_| HostError::Journal)?;
