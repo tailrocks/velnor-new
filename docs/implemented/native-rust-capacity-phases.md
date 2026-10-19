@@ -44,7 +44,7 @@ depth, node and byte bounds. Job identities, dependencies, permissions, outputs
 and execution scopes remain literal; generated composite actions do not use
 this projection. The staged shell validator expands supported aliases before
 checking scripts under each use site's effective shell. Neither the size limit
-nor the five-minute execution limit is relaxed.
+nor the five-minute execution limit was relaxed at that time.
 
 The focused 0.1.20 qualification ran 64 tests successfully, including the
 150-member fixture with 453 literal Rust phase jobs, exact task inventory,

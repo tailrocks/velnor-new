@@ -46,7 +46,12 @@ fn every_schema2_family_renders_only_bounded_executable_jobs() {
         assert!(!timeouts.is_empty(), "{}", workflow.path);
         for timeout in timeouts {
             let minutes: u16 = timeout.parse().expect("literal timeout");
-            assert!((1..=5).contains(&minutes), "{}: {minutes}", workflow.path);
+            assert_eq!(
+                minutes,
+                velnor_actions_contract::JobTimeout::DEFAULT_MINUTES,
+                "{}",
+                workflow.path
+            );
         }
     }
 }
