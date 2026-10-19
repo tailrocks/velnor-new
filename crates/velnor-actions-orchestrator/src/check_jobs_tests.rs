@@ -138,10 +138,10 @@ fn no_cargo_checks_gate_required_without_becoming_rust_jobs() {
             .any(|id| id == "check-ffi")
     );
     assert!(!workflow.ir.jobs.keys().any(|id| id.starts_with("rust-")));
-    assert_eq!(
-        crate::crate_job_ids::job_id_for_member(&discovery.proposals, &discovery.proposals[0]),
-        Some("check-ffi".to_owned())
-    );
+    let proposal = &discovery.proposals[0];
+    let owner = crate::crate_job_ids::job_id_for_member(&discovery.proposals, proposal)
+        .expect("check owner");
+    assert_eq!(owner, Some("check-ffi".to_owned()));
     assert_eq!(workflow.ir.jobs["plan"].runs_on, "ubuntu-26.04");
     assert!(
         !workflow.ir.jobs["plan"]

@@ -49,6 +49,34 @@ the host's `xcode-select` setting.
 
 ## Compatibility Rules and Verification Procedures
 
+### Workflow YAML sharing (checked 2026-10-19)
+
+GitHub's official [workflow reuse reference](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#yaml-anchors-and-aliases)
+documents same-document environment mapping aliases and an entire job alias
+containing a steps sequence. These are YAML node substitution, not a reusable
+workflow or composite-action call: expressions and environment values retain
+their use-site job and step context. The [official announcement](https://github.blog/changelog/2025-09-18-actions-yaml-anchors-and-non-public-workflow-templates/)
+records workflow anchor/alias support.
+
+Velnor uses a narrower grammar only when a workflow exceeds its unchanged
+500,000-byte transport limit: exact job `env`, step `env`/`with`, whole step
+mapping, and existing `run` scalar reuse. It never moves execution, credentials,
+permissions, dependencies, caches or outputs into a different scope. Definitions
+precede uses in one globally unique document namespace. Staged shell validation
+normalizes only those emitted forms before its existing ancestry, effective-shell
+and ShellCheck checks. Input is bounded to 500,000 bytes, nesting to 32 levels,
+and normalization work to 262,144 nodes and 16 MiB; merge keys, tags on shared
+nodes, forward/cyclic references and other alias scopes fail closed.
+
+This Velnor admission does **not** extend to local action manifests. The original
+runner's [legacy `YamlObjectReader.EvaluateCurrent`](https://github.com/actions/runner/blob/main/src/Sdk/DTPipelines/Pipelines/ObjectTemplating/YamlObjectReader.cs)
+rejects scalar/mapping/sequence anchors and alias events, but
+[`ActionManifestManager` at runner v2.337.0](https://github.com/actions/runner/blob/v2.337.0/src/Runner.Worker/ActionManifestManager.cs)
+loads action manifests through the separate `GitHub.Actions.WorkflowParser`
+reader. The legacy implementation alone does not prove that package's behavior.
+Action-manifest alias compatibility is not qualified by this workflow-only
+change; Velnor emits no new aliases into composite `action.yml` files.
+
 1. **Protocol Fidelity Over Assumptions**:
    - `actions/runner` and `actions/scaleset` define the exact wire protocols, message shapes, and validation behaviors.
    - Any runner implementation or generator assumption must be verified against the official C#/Go source code in these repositories.

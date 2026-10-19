@@ -40,6 +40,14 @@ Classes: **D** = accepted design change · **B** = confirmed bug · **V** = pend
 | G02 | Thread 4119057286 (workflow-contract:251, P1) replied (V) | contract | replied; impl pending | PR head 8ccc60c; 0 unresolved threads |
 | G03 | Thread 4119057292 (cli-contract:34, P2) replied (V) | contract | replied; impl pending | PR head 8ccc60c; 0 unresolved threads |
 
+R16 above preserves the original review requirement and its recorded status.
+Its single-job topology is superseded by the [2026-10-19 five-minute capacity
+amendment](pr-1-adoption.md#five-minute-capacity-amendment-2026-10-19): fixed
+lint/tests/docs owners replace the serial crate job while preserving every
+logical obligation, declared quality/data dependency and Required proof.
+This amendment does not establish successful cold execution or change the
+original review history.
+
 ## Package evidence
 
 - P01+P02 (`6d142e4`, pushed): closed required-evidence contract

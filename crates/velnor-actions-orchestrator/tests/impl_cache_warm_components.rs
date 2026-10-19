@@ -28,7 +28,10 @@ fn assert_ir_component_order(mbx: bool) -> TestResult {
             assert_job_components(id, job, mbx)?;
         }
     }
-    assert_eq!(rust_jobs, 2, "both fixture crates are watched (mbx={mbx})");
+    assert_eq!(
+        rust_jobs, 6,
+        "all phases of both crates are watched (mbx={mbx})"
+    );
     Ok(())
 }
 
@@ -80,7 +83,14 @@ fn assert_yaml_component_order(mbx: bool) -> TestResult {
         .get(WORKFLOW_PATH)
         .ok_or_else(|| std::io::Error::other("missing workflow"))?;
     let emitted = yaml_steps(yaml);
-    for id in ["rust-a", "rust-b"] {
+    for id in [
+        "rust-a-docs",
+        "rust-a-lint",
+        "rust-a-tests",
+        "rust-b-docs",
+        "rust-b-lint",
+        "rust-b-tests",
+    ] {
         let names = emitted
             .get(id)
             .ok_or_else(|| std::io::Error::other(format!("missing {id}")))?;
@@ -95,9 +105,16 @@ fn assert_yaml_component_order(mbx: bool) -> TestResult {
 fn assert_crate_yaml_order(names: &[String], id: &str) -> TestResult {
     let setup = step_index(names, SETUP_MISE_NAME, id)?;
     let components = step_index(names, PREPARE_RUST_COMPONENTS_STEP, id)?;
-    let clippy = step_index(names, "Clippy", id)?;
+    let obligation = if id.ends_with("-lint") {
+        "Clippy"
+    } else if id.ends_with("-tests") {
+        "Unit and integration tests"
+    } else {
+        "Documentation"
+    };
+    let obligation = step_index(names, obligation, id)?;
     assert!(
-        setup < components && components < clippy,
+        setup < components && components < obligation,
         "{id} emitted order"
     );
     Ok(())

@@ -1,4 +1,4 @@
-//! Crate-job graph regressions: one ordered job per crate.
+//! Crate-job graph regressions: closed ordered capacity phases per crate.
 //!
 //! Split from `impl_wire_w1`: generated-YAML shape, per-crate drivers,
 //! obligation ordering, toolchain sharing, and cache silence.
@@ -43,44 +43,83 @@ fn with_mbx(repo: &TempDir) -> Result<(), Box<dyn std::error::Error>> {
 fn window<'a>(text: &'a str, start: &str, end: &str) -> Result<&'a str, &'static str> {
     let from = text.find(start).ok_or("window start")?;
     let tail = &text[from..];
-    match tail.find(end) {
-        Some(at) => Ok(&tail[..at]),
-        None => Ok(tail),
+    let mut limit = tail.find(end).unwrap_or(tail.len());
+    let mut offset = 0;
+    for (index, line) in tail.split_inclusive('\n').enumerate() {
+        if index > 0
+            && line.starts_with("  ")
+            && !line.starts_with("   ")
+            && line.trim_end().ends_with(':')
+        {
+            limit = limit.min(offset);
+            break;
+        }
+        offset += line.len();
     }
+    Ok(&tail[..limit])
 }
 
 #[test]
 fn w1_crate_jobs_group_obligations_per_crate() -> TestResult {
-    let (_repo, yaml) = preview_yaml(config_with_branch())?;
-    assert!(yaml.contains("  rust-demo:"), "one job per crate:\n{yaml}");
-    assert!(
-        yaml.contains("name: Rust / demo"),
-        "crate display name:\n{yaml}"
-    );
+    let (repo, yaml) = preview_yaml(config_with_branch())?;
+    assert!(!yaml.contains("  rust-demo:"), "no legacy combined job");
     assert!(!yaml.contains("velnor-task"), "no task job:\n{yaml}");
     assert!(!yaml.contains("strategy:"), "no matrix:\n{yaml}");
     assert!(!yaml.contains("fromJSON"), "no matrix ref:\n{yaml}");
-    let job = window(&yaml, "  rust-demo:", "  required:")?;
-    for step in [
-        "Checkout",
-        "Prepare pinned tools",
-        "Prepare Rust components",
-        "Clippy",
-        "Unit and integration tests",
-        "Doctests",
-        "Documentation",
+    let prep = prepare(repo.path())?;
+    for (phase, label, obligations, needs) in [
+        ("lint", "Lint", vec!["Format", "Clippy"], vec!["plan"]),
+        (
+            "tests",
+            "Tests",
+            vec!["Unit and integration tests", "Doctests"],
+            vec!["plan", "rust-demo-lint"],
+        ),
+        (
+            "docs",
+            "Documentation",
+            vec!["Documentation"],
+            vec!["plan", "rust-demo-lint", "rust-demo-tests"],
+        ),
     ] {
-        assert!(job.contains(&format!("- name: {step}")), "{step}:\n{job}");
+        let id = format!("rust-demo-{phase}");
+        let job = window(&yaml, &format!("  {id}:"), "  required:")?;
+        assert!(
+            job.contains(&format!("name: Rust / demo / {label}")),
+            "{job}"
+        );
+        for step in [
+            "Checkout",
+            "Prepare pinned tools",
+            "Prepare Rust components",
+        ] {
+            assert!(job.contains(&format!("- name: {step}")), "{step}: {job}");
+        }
+        for step in &obligations {
+            assert!(job.contains(&format!("- name: {step}")), "{step}: {job}");
+        }
+        let model = prep.workflow.ir.jobs.get(&id).ok_or("phase IR")?;
+        assert_eq!(model.needs, needs, "exact gate owners: {id}");
+        let expected: Vec<_> = model
+            .steps
+            .iter()
+            .filter_map(|step| {
+                matches!(&step.kind, StepKind::TaskExecution { .. }).then_some(step.name.as_str())
+            })
+            .collect();
+        assert_eq!(expected, obligations, "one phase owns each obligation");
+        assert!(
+            prep.workflow.ir.jobs["required"].needs.contains(&id),
+            "Required owns {id}"
+        );
     }
-    let lint_at = job.find("- name: Clippy").ok_or("clippy")?;
-    let run_at = job
-        .find("- name: Unit and integration tests")
-        .ok_or("run")?;
-    assert!(lint_at < run_at, "clippy blocks tests:\n{job}");
-    let final_gate = window(&yaml, "  required:", "  plan:")?;
+    let tests = window(&yaml, "  rust-demo-tests:", "  required:")?;
     assert!(
-        final_gate.contains("- rust-demo"),
-        "final needs the crate:\n{final_gate}"
+        tests
+            .find("- name: Unit and integration tests")
+            .ok_or("tests")?
+            < tests.find("- name: Doctests").ok_or("doctests")?,
+        "test order"
     );
     Ok(())
 }
@@ -88,7 +127,7 @@ fn w1_crate_jobs_group_obligations_per_crate() -> TestResult {
 #[test]
 fn w1_crate_job_prepares_pinned_tools() -> TestResult {
     let (_repo, yaml) = preview_yaml(config_with_branch())?;
-    let task = window(&yaml, "  rust-demo:", "  required:")?;
+    let task = window(&yaml, "  rust-demo-lint:", "  required:")?;
     let checkout = task.find("- name: Checkout").ok_or("task checkout")?;
     let prepare = task
         .find("- name: Prepare pinned tools")
@@ -114,30 +153,33 @@ fn w1_crate_prepare_adds_mbx_driver() -> TestResult {
     let prep = prepare(repo.path())?;
     let tree = render_staged_tree(&prep)?;
     let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
-    let task = window(yaml, "  rust-demo:", "  required:")?;
-    let catalog = ToolCatalog::pinned();
-    assert!(
-        !task.contains(&catalog.tool_spec(PinnedTool::MrBoxington)),
-        "the native action, not Mise, owns MBX installation:\n{task}"
-    );
-    assert!(
-        task.contains("uses: jdx/mr-boxington-action@")
-            && task.contains(&format!(
-                "version: {}",
-                catalog.version(PinnedTool::MrBoxington)
-            )),
-        "MBX action uses the exact catalog version:\n{task}"
-    );
-    assert_eq!(
-        task.matches("Restore MBX objects").count(),
-        1,
-        "one objects step:\n{task}"
-    );
-    assert!(
-        task.contains("github-cache-mode: target")
-            || task.contains("github-cache-mode: \"target\""),
-        "{task}"
-    );
+    for phase in ["lint", "tests", "docs"] {
+        let header = format!("  rust-demo-{phase}:");
+        let task = window(yaml, &header, "  required:")?;
+        let catalog = ToolCatalog::pinned();
+        assert!(
+            !task.contains(&catalog.tool_spec(PinnedTool::MrBoxington)),
+            "the native action, not Mise, owns MBX installation:\n{task}"
+        );
+        assert!(
+            task.contains("uses: jdx/mr-boxington-action@")
+                && task.contains(&format!(
+                    "version: {}",
+                    catalog.version(PinnedTool::MrBoxington)
+                )),
+            "MBX action uses the exact catalog version:\n{task}"
+        );
+        assert_eq!(
+            task.matches("Restore MBX objects").count(),
+            1,
+            "one objects step:\n{task}"
+        );
+        assert!(
+            task.contains("github-cache-mode: target")
+                || task.contains("github-cache-mode: \"target\""),
+            "{task}"
+        );
+    }
     Ok(())
 }
 
@@ -147,7 +189,7 @@ fn w1_crate_prepare_and_obligations_share_toolchain_union() -> TestResult {
     let prep = prepare(repo.path())?;
     let tree = render_staged_tree(&prep)?;
     let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
-    let task = window(yaml, "  rust-demo:", "  required:")?;
+    let task = window(yaml, "  rust-demo-lint:", "  required:")?;
     assert_crate_job_prepares_required_tools(task)?;
     assert_clippy_task_uses_toolchain_union(&prep, &tree, task)?;
     Ok(())
@@ -192,8 +234,8 @@ fn assert_clippy_task_uses_toolchain_union(
         .workflow
         .ir
         .jobs
-        .get("rust-demo")
-        .ok_or("missing rust-demo IR job")?;
+        .get("rust-demo-lint")
+        .ok_or("missing rust-demo-lint IR job")?;
     let clippy = crate_job
         .steps
         .iter()
@@ -276,11 +318,14 @@ fn assert_clippy_uses_pinned_rust(record: &TaskExecutionManifestEntryV1) {
 #[test]
 fn w1_crate_cache_v1_emits_no_cache_steps() -> TestResult {
     let (_repo, yaml) = preview_yaml(config_with_branch())?;
-    let task = window(&yaml, "  rust-demo:", "  required:")?;
-    assert!(
-        !task.contains("- name: Restore cache"),
-        "v1 no restore:\n{task}"
-    );
-    assert!(!task.contains("- name: Save cache"), "v1 no save:\n{task}");
+    for phase in ["lint", "tests", "docs"] {
+        let header = format!("  rust-demo-{phase}:");
+        let task = window(&yaml, &header, "  required:")?;
+        assert!(
+            !task.contains("- name: Restore cache"),
+            "v1 no restore:\n{task}"
+        );
+        assert!(!task.contains("- name: Save cache"), "v1 no save:\n{task}");
+    }
     Ok(())
 }

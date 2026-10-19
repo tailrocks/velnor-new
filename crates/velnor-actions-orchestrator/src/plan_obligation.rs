@@ -315,7 +315,7 @@ fn complete_group(
     );
     let run = velnor_actions_workflow_renderer::join_argv_for_run(argv)
         .map_err(|err| internal(&err.to_string()))?;
-    let job_id = crate::crate_job_ids::job_id_for_member(&inputs.discovery.proposals, task)
+    let job_id = crate::crate_job_ids::job_id_for_member(&inputs.discovery.proposals, task)?
         .ok_or_else(|| internal("crate_job_id_missing"))?;
     let planned_platform = planned_platform_for_group(inputs.label, task)?;
     let mut entry = MatrixEntry::derive(
