@@ -162,7 +162,7 @@ fn publisher_creates_one_fixed_file_and_accepts_same_bytes_on_replay() {
         &mount,
         &mountinfo,
     )
-    .expect("accept identical replay");
+    .expect("accept the same request");
     assert_eq!(replay, first);
     assert!(directory.0.join("challenge.json").is_file());
     assert!(!directory.0.join("decision.json").exists());
@@ -207,7 +207,8 @@ fn publisher_rejects_symlink_destination() {
     let (mount, mountinfo) = mount_fixture(&fd);
     let outside = directory.0.join("outside.json");
     fs::write(&outside, br#"{"nonce":"a"}"#).expect("write outside file");
-    symlink(&outside, directory.0.join("challenge.json")).expect("make destination symlink");
+    symlink(&outside, directory.0.join("challenge.json"))
+        .expect("make the specified symbolic link");
 
     assert!(matches!(
         publish_or_read(
