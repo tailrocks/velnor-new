@@ -9,10 +9,12 @@ use crate::error::HostError;
 use crate::worker::{ResourceBudget, ResourceBudgetConfig};
 
 mod connection;
+mod job_authority;
 mod release_read;
 mod source_policy;
 
 pub use connection::{ConnectionId, RepositoryConnection, ScaleSetSelector};
+pub(crate) use job_authority::ApprovedJobAuthorityPolicy;
 use release_read::{ReleaseReadConfig, validate_release_read};
 pub use source_policy::{PullRequestRule, SourcePolicy, SourcePolicyMode, WorkflowEvent};
 
@@ -24,6 +26,9 @@ pub struct HostConfig {
     pub schema: u32,
     /// Repository bindings that share this host.
     connections: Vec<RepositoryConnection>,
+    /// Optional reviewed workflow authority. Absence denies job authority lookup.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    job_authority_policies: Vec<ApprovedJobAuthorityPolicy>,
     /// Optional host-level credential for verified release artifacts.
     #[serde(default)]
     release_read: Option<ReleaseReadConfig>,
@@ -148,6 +153,12 @@ impl HostConfig {
         for connection in &mut config.connections {
             connection.canonicalize()?;
         }
+        for policy in &mut config.job_authority_policies {
+            policy.canonicalize();
+        }
+        config
+            .job_authority_policies
+            .sort_by(|left, right| left.connection_id().cmp(right.connection_id()));
         config.validate()?;
         Ok(config)
     }
@@ -160,6 +171,7 @@ impl HostConfig {
             .pair()
             .docker_limits(self.host.max_jobs)?;
         validate_connections(&self.connections)?;
+        job_authority::validate_policies(&self.job_authority_policies, &self.connections)?;
         validate_release_read(
             self.release_read.as_ref(),
             self.connections
@@ -250,28 +262,6 @@ impl HostConfig {
         Ok(())
     }
 
-    /// Remove one repository binding and keep the shared host settings.
-    ///
-    /// An empty connection list is a disconnected state. Callers must not start
-    /// repository listeners until the list contains a connection.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Config`] when the current config is invalid.
-    pub fn remove_connection(&mut self, id: &ConnectionId) -> Result<bool, HostError> {
-        self.validate()?;
-        let Some(index) = self
-            .connections
-            .iter()
-            .position(|connection| &connection.connection_id == id)
-        else {
-            return Ok(false);
-        };
-        self.connections.remove(index);
-        self.validate()?;
-        Ok(true)
-    }
-
     /// Serialize the complete, validated host configuration.
     ///
     /// # Errors
@@ -282,6 +272,7 @@ impl HostConfig {
         let document = HostToml {
             schema: self.schema,
             connections: &self.connections,
+            job_authority_policies: &self.job_authority_policies,
             release_read: self.release_read.as_ref(),
             host: HostTomlLimits {
                 max_jobs: self.host.max_jobs,
@@ -306,6 +297,7 @@ impl HostConfig {
 struct HostToml<'a> {
     schema: u32,
     connections: &'a [RepositoryConnection],
+    job_authority_policies: &'a [ApprovedJobAuthorityPolicy],
     #[serde(skip_serializing_if = "Option::is_none")]
     release_read: Option<&'a ReleaseReadConfig>,
     host: HostTomlLimits,
