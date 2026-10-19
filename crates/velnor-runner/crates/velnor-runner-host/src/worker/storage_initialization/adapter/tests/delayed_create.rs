@@ -3,7 +3,13 @@ use super::*;
 #[tokio::test]
 async fn delayed_create_cleans_late_owned_helper_before_response() -> Result<(), HostError> {
     let (_scratch, scope, reservation_id, image, home, work) = delayed_fixture().await?;
-    let mut api = InitializationDockerApi::open_held_create(&home, &work, image.runtime_id())?;
+    let volume_identity = test_support::volume_identity(&scope, reservation_id).await?;
+    let mut api = InitializationDockerApi::open_held_create(
+        volume_identity.clone(),
+        &home,
+        &work,
+        image.runtime_id(),
+    )?;
     let limits = StorageInitializationLimits::from_reserved_budget(
         test_resource_budget()?,
         100,
@@ -37,7 +43,15 @@ async fn delayed_create_cleans_late_owned_helper_before_response() -> Result<(),
         .create_name
         .clone()
         .ok_or(HostError::Identity)?;
-    assert_first_absence_keeps_hold(&scope, reservation_id, &home, &work, &helper_name).await?;
+    assert_first_absence_keeps_hold(
+        &scope,
+        reservation_id,
+        &volume_identity,
+        &home,
+        &work,
+        &helper_name,
+    )
+    .await?;
 
     api.release_create();
     api.wait_for_create_response().await?;
@@ -117,11 +131,18 @@ async fn delayed_fixture() -> Result<
 async fn assert_first_absence_keeps_hold(
     scope: &crate::journal::ConnectionJournal,
     reservation_id: i64,
+    identity: &test_support::VolumeIdentity,
     home: &str,
     work: &str,
     helper_name: &str,
 ) -> Result<(), HostError> {
-    let probe = InitializationDockerApi::open_recovery(home, work, helpers::TEST_ENGINE_ID, None)?;
+    let probe = InitializationDockerApi::open_recovery(
+        identity.clone(),
+        home,
+        work,
+        helpers::TEST_ENGINE_ID,
+        None,
+    )?;
     assert!(matches!(
         probe.docker.inspect_container(helper_name, None).await,
         Err(bollard::errors::Error::DockerResponseServerError {

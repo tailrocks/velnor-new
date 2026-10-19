@@ -61,7 +61,9 @@ async fn precreate_validation_failure_reconciles_only_after_owned_absence() -> R
     let names = WorkerIdentityNames::from_nonce(&"f".repeat(32))?;
     let home_volume = names.volume_name(WorkerVolumeRole::Home);
     let work_volume = names.volume_name(WorkerVolumeRole::Work);
+    let volume_identity = test_support::volume_identity(&scope, reservation_id).await?;
     let api = InitializationDockerApi::open(
+        volume_identity,
         &home_volume,
         &work_volume,
         "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
@@ -135,8 +137,13 @@ async fn inspect_timeout_keeps_owned_initializer_charged_until_recovery() -> Res
     let names = WorkerIdentityNames::from_nonce(&"d".repeat(32))?;
     let home = names.volume_name(WorkerVolumeRole::Home);
     let work = names.volume_name(WorkerVolumeRole::Work);
-    let mut api =
-        InitializationDockerApi::open_lost_create_held_inspect(&home, &work, image.runtime_id())?;
+    let volume_identity = test_support::volume_identity(&scope, reservation_id).await?;
+    let mut api = InitializationDockerApi::open_lost_create_held_inspect(
+        volume_identity,
+        &home,
+        &work,
+        image.runtime_id(),
+    )?;
     let limits = StorageInitializationLimits::from_reserved_budget(
         test_resource_budget()?,
         100,
@@ -231,7 +238,9 @@ async fn recovery_does_not_remove_a_replacement_for_a_persisted_helper_id() -> R
     let home = names.volume_name(WorkerVolumeRole::Home);
     let work = names.volume_name(WorkerVolumeRole::Work);
     let replacement_id = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+    let volume_identity = test_support::volume_identity(&scope, reservation_id).await?;
     let api = InitializationDockerApi::open_mismatched_helper_id(
+        volume_identity,
         &home,
         &work,
         image.runtime_id(),
@@ -300,7 +309,13 @@ async fn recovery_stops_an_uncertain_started_helper_before_removal() -> Result<(
     let names = WorkerIdentityNames::from_nonce(&"c".repeat(32))?;
     let home = names.volume_name(WorkerVolumeRole::Home);
     let work = names.volume_name(WorkerVolumeRole::Work);
-    let api = InitializationDockerApi::open_lost_start(&home, &work, image.runtime_id())?;
+    let volume_identity = test_support::volume_identity(&scope, reservation_id).await?;
+    let api = InitializationDockerApi::open_lost_start(
+        volume_identity,
+        &home,
+        &work,
+        image.runtime_id(),
+    )?;
     let limits = StorageInitializationLimits::from_reserved_budget(
         test_resource_budget()?,
         100,

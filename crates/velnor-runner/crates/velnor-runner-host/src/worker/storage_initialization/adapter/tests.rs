@@ -66,7 +66,13 @@ async fn initialize_keeps_helper_and_mount_backing_until_pair_handoff() -> Resul
     let names = WorkerIdentityNames::from_nonce(&"d".repeat(32))?;
     let home_volume = names.volume_name(WorkerVolumeRole::Home);
     let work_volume = names.volume_name(WorkerVolumeRole::Work);
-    let api = InitializationDockerApi::open(&home_volume, &work_volume, image.runtime_id())?;
+    let volume_identity = test_support::volume_identity(&scope, reservation_id).await?;
+    let api = InitializationDockerApi::open(
+        volume_identity,
+        &home_volume,
+        &work_volume,
+        image.runtime_id(),
+    )?;
     let metadata = test_support::metadata_object(&scope, reservation_id, 'd').await?;
     let initialization = initialize(
         &api.docker,

@@ -15,6 +15,7 @@ async fn dispatched_create_restart_marks_hold_uncertain_and_keeps_it_charged()
         .await?;
     let scope = helpers::created_scope(&journal, &binding, 1923).await?;
     let reservation_id = helpers::prepare_physical_initializer(&scope, '9').await?;
+    let volume_identity = test_support::volume_identity(&scope, reservation_id).await?;
     let image = specification::test_verified_image()?;
     let metadata = test_support::metadata_object(&scope, reservation_id, '9').await?;
     let claim = scope
@@ -37,7 +38,13 @@ async fn dispatched_create_restart_marks_hold_uncertain_and_keeps_it_charged()
     let names = WorkerIdentityNames::from_nonce(&"9".repeat(32))?;
     let home = names.volume_name(WorkerVolumeRole::Home);
     let work = names.volume_name(WorkerVolumeRole::Work);
-    let api = InitializationDockerApi::open_recovery(&home, &work, helpers::TEST_ENGINE_ID, None)?;
+    let api = InitializationDockerApi::open_recovery(
+        volume_identity,
+        &home,
+        &work,
+        helpers::TEST_ENGINE_ID,
+        None,
+    )?;
 
     assert_eq!(
         recover_absent(&api.docker, &scope, reservation_id, Duration::from_secs(10)).await,
@@ -94,8 +101,13 @@ async fn delete_before_absence_commit_survives_journal_reopen() -> Result<(), Ho
     let names = WorkerIdentityNames::from_nonce(&"a".repeat(32))?;
     let home = names.volume_name(WorkerVolumeRole::Home);
     let work = names.volume_name(WorkerVolumeRole::Work);
-    let api =
-        InitializationDockerApi::open_lost_start_held_delete(&home, &work, image.runtime_id())?;
+    let volume_identity = test_support::volume_identity(&scope, reservation_id).await?;
+    let api = InitializationDockerApi::open_lost_start_held_delete(
+        volume_identity,
+        &home,
+        &work,
+        image.runtime_id(),
+    )?;
     let limits = StorageInitializationLimits::from_reserved_budget(
         test_resource_budget()?,
         100,

@@ -63,11 +63,13 @@ pub(super) fn assert_runtime_component_lock(lock: &toml::Value) {
 }
 
 pub(super) fn assert_pinned_base_image(lock: &toml::Value) {
-    let base = format!(
-        "FROM {}@{}",
-        lock_str(lock, "base_image"),
+    let image = format!(
+        "{}@{}",
+        lock_str(lock, "base_image_name"),
         lock_str(lock, "base_image_digest")
     );
+    assert_eq!(lock_str(lock, "base_image"), image);
+    let base = format!("FROM {image}");
     assert!(RUNNER_DOCKERFILE.lines().any(|line| {
         line == base.as_str()
             || line

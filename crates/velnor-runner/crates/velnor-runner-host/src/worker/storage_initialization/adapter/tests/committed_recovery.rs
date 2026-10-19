@@ -148,7 +148,8 @@ async fn run_committed_result_recovery(nonce: char) -> Result<(), HostError> {
     let names = WorkerIdentityNames::from_nonce(&nonce.to_string().repeat(32))?;
     let home = names.volume_name(WorkerVolumeRole::Home);
     let work = names.volume_name(WorkerVolumeRole::Work);
-    let api = InitializationDockerApi::open(&home, &work, image.runtime_id())?;
+    let volume_identity = test_support::volume_identity(&scope, reservation_id).await?;
+    let api = InitializationDockerApi::open(volume_identity, &home, &work, image.runtime_id())?;
     let (committed, _release) = crate::journal::arm_create_commit_gate(
         reservation_id,
         crate::journal::CreateCommitStage::Result,

@@ -150,11 +150,13 @@ impl ApiOptions {
 
 impl InitializationDockerApi {
     pub(crate) fn open(
+        volume_identity: super::VolumeIdentity,
         home_volume: &str,
         work_volume: &str,
         image_id: &str,
     ) -> Result<Self, HostError> {
         Self::open_with_options(
+            volume_identity,
             home_volume,
             work_volume,
             ApiOptions::new(image_id, helpers::TEST_ENGINE_ID),
@@ -162,12 +164,14 @@ impl InitializationDockerApi {
     }
 
     pub(crate) fn open_recovery(
+        volume_identity: super::VolumeIdentity,
         home_volume: &str,
         work_volume: &str,
         engine_id: &str,
         inspect_status: Option<u16>,
     ) -> Result<Self, HostError> {
         Self::open_with_options(
+            volume_identity,
             home_volume,
             work_volume,
             ApiOptions {
@@ -178,6 +182,7 @@ impl InitializationDockerApi {
     }
 
     pub(crate) fn open_lost_create(
+        volume_identity: super::VolumeIdentity,
         home_volume: &str,
         work_volume: &str,
         image_id: &str,
@@ -185,6 +190,7 @@ impl InitializationDockerApi {
         remove_status: Option<u16>,
     ) -> Result<Self, HostError> {
         Self::open_with_options(
+            volume_identity,
             home_volume,
             work_volume,
             ApiOptions {
@@ -197,11 +203,13 @@ impl InitializationDockerApi {
     }
 
     pub(crate) fn open_lost_create_held_inspect(
+        volume_identity: super::VolumeIdentity,
         home_volume: &str,
         work_volume: &str,
         image_id: &str,
     ) -> Result<Self, HostError> {
         Self::open_with_options(
+            volume_identity,
             home_volume,
             work_volume,
             ApiOptions {
@@ -213,11 +221,13 @@ impl InitializationDockerApi {
     }
 
     pub(crate) fn open_held_create(
+        volume_identity: super::VolumeIdentity,
         home_volume: &str,
         work_volume: &str,
         image_id: &str,
     ) -> Result<Self, HostError> {
         Self::open_with_options(
+            volume_identity,
             home_volume,
             work_volume,
             ApiOptions {
@@ -228,12 +238,14 @@ impl InitializationDockerApi {
     }
 
     pub(crate) fn open_mismatched_helper_id(
+        volume_identity: super::VolumeIdentity,
         home_volume: &str,
         work_volume: &str,
         image_id: &str,
         observed_helper_id: &str,
     ) -> Result<Self, HostError> {
         Self::open_with_options(
+            volume_identity,
             home_volume,
             work_volume,
             ApiOptions {
@@ -244,11 +256,13 @@ impl InitializationDockerApi {
     }
 
     pub(crate) fn open_lost_start(
+        volume_identity: super::VolumeIdentity,
         home_volume: &str,
         work_volume: &str,
         image_id: &str,
     ) -> Result<Self, HostError> {
         Self::open_with_options(
+            volume_identity,
             home_volume,
             work_volume,
             ApiOptions {
@@ -259,11 +273,13 @@ impl InitializationDockerApi {
     }
 
     pub(crate) fn open_lost_start_held_delete(
+        volume_identity: super::VolumeIdentity,
         home_volume: &str,
         work_volume: &str,
         image_id: &str,
     ) -> Result<Self, HostError> {
         Self::open_with_options(
+            volume_identity,
             home_volume,
             work_volume,
             ApiOptions {
@@ -275,6 +291,7 @@ impl InitializationDockerApi {
     }
 
     fn open_with_options(
+        volume_identity: super::VolumeIdentity,
         home_volume: &str,
         work_volume: &str,
         options: ApiOptions,
@@ -308,6 +325,7 @@ impl InitializationDockerApi {
             serve_initialization_api(
                 listener,
                 ApiState {
+                    volume_identity,
                     home_volume,
                     work_volume,
                     metadata_volume,

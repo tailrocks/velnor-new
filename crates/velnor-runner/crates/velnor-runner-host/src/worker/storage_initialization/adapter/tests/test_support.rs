@@ -1,5 +1,27 @@
 use super::*;
 
+#[derive(Clone)]
+pub(super) struct VolumeIdentity {
+    pub(super) connection_id: String,
+    pub(super) reservation_id: i64,
+    pub(super) operation_id: i64,
+}
+
+pub(super) async fn volume_identity(
+    scope: &crate::journal::ConnectionJournal,
+    reservation_id: i64,
+) -> Result<VolumeIdentity, HostError> {
+    let plan = scope
+        .storage_provisioning_plan(reservation_id)
+        .await?
+        .ok_or(HostError::Journal)?;
+    Ok(VolumeIdentity {
+        connection_id: scope.connection_id().as_str().to_owned(),
+        reservation_id,
+        operation_id: plan.operation_id(),
+    })
+}
+
 pub(super) struct ApiCapture {
     pub(super) requests: Vec<String>,
     pub(super) stdin: Vec<u8>,

@@ -5,6 +5,8 @@ use super::{
 use crate::error::HostError;
 use crate::launch::bootstrap::BootstrapContainerRole;
 use crate::worker::{WorkerIdentityNames, WorkerVolumeRole};
+use std::io::ErrorKind;
+use std::os::unix::net::UnixListener;
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use velnor_runner_github::EncodedJit;
@@ -242,14 +244,32 @@ async fn mismatched_container_identity_rejects_delivery_before_write() {
     assert!(observed.is_empty());
 }
 
-#[tokio::test]
-async fn failed_start_keeps_claim_and_runner_attach_until_recovery() -> Result<(), HostError> {
+fn expired_start_docker(
+    scratch: &crate::journal::request_lifecycle::tests::helpers::Scratch,
+) -> Result<(bollard::Docker, UnixListener), HostError> {
+    let socket_path = scratch.file().with_file_name("s.sock");
+    let listener = UnixListener::bind(&socket_path).map_err(|_| HostError::Docker)?;
+    listener
+        .set_nonblocking(true)
+        .map_err(|_| HostError::Docker)?;
+    let socket = socket_path.to_str().ok_or(HostError::Path)?;
+    let docker = bollard::Docker::connect_with_unix(socket, 120, bollard::API_DEFAULT_VERSION)
+        .map_err(|_| HostError::Docker)?;
+    Ok((docker, listener))
+}
+
+async fn expired_start_state() -> Result<
+    (
+        crate::journal::request_lifecycle::tests::helpers::Scratch,
+        crate::journal::ConnectionJournal,
+        crate::journal::request_lifecycle::tests::helpers::BootstrapStartClaimFixture,
+    ),
+    HostError,
+> {
     use crate::journal::request_lifecycle::tests::helpers::{
-        Scratch, binding, bootstrap_start_state, created_scope,
-        prepare_bootstrap_start_claim_for_nonce,
+        Scratch, binding, created_scope, prepare_bootstrap_start_claim_for_nonce,
     };
-    use crate::journal::{CapacityLimits, EngineContext, Journal};
-    use crate::launch::{SelectedEngineContext, verified_images::test_worker_images_for};
+    use crate::journal::{CapacityLimits, Journal};
 
     let scratch = Scratch::new()?;
     let journal = Journal::open(&scratch.file()).await?;
@@ -262,7 +282,17 @@ async fn failed_start_keeps_claim_and_runner_attach_until_recovery() -> Result<(
         .await?;
     let repository = binding("pair-start-retain", 9_901)?;
     let scope = created_scope(&journal, &repository, 9_902).await?;
-    let fixture = prepare_bootstrap_start_claim_for_nonce(&scope, 'f').await?;
+    let claim = prepare_bootstrap_start_claim_for_nonce(&scope, 'f').await?;
+    Ok((scratch, scope, claim))
+}
+
+#[tokio::test]
+async fn failed_start_keeps_claim_and_runner_attach_until_recovery() -> Result<(), HostError> {
+    use crate::journal::EngineContext;
+    use crate::journal::request_lifecycle::tests::helpers::bootstrap_start_state;
+    use crate::launch::{SelectedEngineContext, verified_images::test_worker_images_for};
+
+    let (scratch, scope, fixture) = expired_start_state().await?;
     let reservation_id = fixture.reservation_id;
     let crate::journal::request_lifecycle::tests::helpers::BootstrapStartClaimFixture {
         claim,
@@ -280,12 +310,7 @@ async fn failed_start_keeps_claim_and_runner_attach_until_recovery() -> Result<(
         },
         &images,
     )?;
-    let docker = bollard::Docker::connect_with_unix(
-        "/tmp/velnor-expired-start-test.sock",
-        120,
-        bollard::API_DEFAULT_VERSION,
-    )
-    .map_err(|_| HostError::Docker)?;
+    let (docker, listener) = expired_start_docker(&scratch)?;
     let (writer, mut reader) = tokio::io::duplex(64);
     let attached = bollard::container::AttachContainerResults {
         output: Box::pin(futures_util::stream::empty()),
@@ -309,6 +334,10 @@ async fn failed_start_keeps_claim_and_runner_attach_until_recovery() -> Result<(
     .await;
     assert!(result.is_err(), "expired start deadline must fail closed");
     let failure = result.err().ok_or(HostError::Docker)?;
+    assert!(
+        matches!(listener.accept(), Err(error) if error.kind() == ErrorKind::WouldBlock),
+        "expired start deadline must not send a Docker request"
+    );
     let (error, pending) = failure.into_parts();
     assert!(matches!(error, HostError::Docker));
     let mut pending = pending.expect("attached pair must remain owned");

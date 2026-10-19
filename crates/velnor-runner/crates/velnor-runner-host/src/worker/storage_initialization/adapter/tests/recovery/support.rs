@@ -86,7 +86,9 @@ pub(super) async fn run_lost_create(
     let names = WorkerIdentityNames::from_nonce(&"9".repeat(32))?;
     let home_volume = names.volume_name(WorkerVolumeRole::Home);
     let work_volume = names.volume_name(WorkerVolumeRole::Work);
+    let volume_identity = test_support::volume_identity(&scope, reservation_id).await?;
     let api = InitializationDockerApi::open_lost_create(
+        volume_identity,
         &home_volume,
         &work_volume,
         image.runtime_id(),
@@ -142,6 +144,7 @@ pub(super) async fn run_recovery(
     let binding = helpers::binding("initializer-recovery", 916)?;
     let scope = helpers::created_scope(&journal, &binding, 1916).await?;
     let reservation_id = helpers::prepare_physical_initializer(&scope, 'e').await?;
+    let volume_identity = test_support::volume_identity(&scope, reservation_id).await?;
     let image = specification::test_verified_image()?;
     let claim = scope
         .claim_storage_initialization_v2(
@@ -164,6 +167,7 @@ pub(super) async fn run_recovery(
     let home_volume = names.volume_name(WorkerVolumeRole::Home);
     let work_volume = names.volume_name(WorkerVolumeRole::Work);
     let api = InitializationDockerApi::open_recovery(
+        volume_identity,
         &home_volume,
         &work_volume,
         engine_id,

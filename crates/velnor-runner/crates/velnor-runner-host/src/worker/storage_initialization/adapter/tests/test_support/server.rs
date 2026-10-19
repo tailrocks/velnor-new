@@ -2,6 +2,7 @@ use super::http::{CapturedRequest, normalized_route, read_http_request, write_ht
 use super::*;
 
 pub(super) struct ApiState {
+    pub(super) volume_identity: super::VolumeIdentity,
     pub(super) home_volume: String,
     pub(super) work_volume: String,
     pub(super) metadata_volume: String,
@@ -239,9 +240,9 @@ fn image_response(image_id: &str) -> String {
 fn volume_response(state: &ApiState, path: &str) -> Result<(u16, String), String> {
     let name = path.trim_start_matches("/volumes/");
     let (role, suffix) = if name == state.home_volume {
-        ("home", "-home")
+        ("runner-home", "-home")
     } else if name == state.work_volume {
-        ("work", "-work")
+        ("runner-work", "-work")
     } else if name == state.metadata_volume {
         ("engine-metadata", "-metadata")
     } else {
@@ -250,7 +251,7 @@ fn volume_response(state: &ApiState, path: &str) -> Result<(u16, String), String
     let worker = name
         .strip_suffix(suffix)
         .ok_or_else(|| "Volume name is invalid".to_owned())?;
-    Ok((200, json!({"Name": name, "Driver": "local", "Mountpoint": format!("/var/lib/docker/volumes/{name}/_data"), "Labels": {"velnor.worker": worker, "velnor.role": role}, "Options": {}, "Scope": "local"}).to_string()))
+    Ok((200, json!({"Name": name, "Driver": "local", "Mountpoint": format!("/var/lib/docker/volumes/{name}/_data"), "Labels": {"velnor.worker": worker, "velnor.connection": state.volume_identity.connection_id, "velnor.reservation": state.volume_identity.reservation_id.to_string(), "velnor.operation": state.volume_identity.operation_id.to_string(), "velnor.role": role}, "Options": {}, "Scope": "local"}).to_string()))
 }
 
 fn create_response(state: &mut ApiState, body: &[u8]) -> Result<(u16, String), String> {
