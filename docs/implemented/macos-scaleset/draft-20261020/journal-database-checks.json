@@ -1,0 +1,18 @@
+{
+  "source_head": "e61ef453003461aee008af6619a7c7738293f49d",
+  "database_retention": {
+    "result": "PASS",
+    "passed": 3,
+    "run_id": "50315365-b512-4ca9-8043-be2dd9f28029",
+    "log_sha256": "1c3395e2a137f6fd5dc6a21de98e4145b99156b1628faa9c5458dd1cc8ceb8d8",
+    "stack_override": false,
+    "independent_review": "PASS"
+  },
+  "checks": [
+    "Fresh connections keep transactions separate.",
+    "All handles close before the populated schema opens again.",
+    "A changed inode or an initial symbolic link stops access."
+  ],
+  "native_preparation": "FAIL",
+  "live_installation": "NOT_RUN"
+}
