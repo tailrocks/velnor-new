@@ -1,0 +1,10 @@
+{
+  "base": "a9ea3bc30505506d5c6d308ed47248fb445dc3a4",
+  "result": "PASS",
+  "count": 1,
+  "run_id": "074b93f4-688c-4ed5-b188-aaa3d7ce1dea",
+  "log": "/Users/donbeave/Downloads/velnor-goal/evidence/v8-fixture-shipping-nextest-20261020.log",
+  "sha256": "80c313574c103eae7b055c7e3ed1f64ef13f1b0ce84a00e3fa10eca56cc9e715",
+  "historical_source": "ded1add8d",
+  "full_gates": "NOT_RUN"
+}

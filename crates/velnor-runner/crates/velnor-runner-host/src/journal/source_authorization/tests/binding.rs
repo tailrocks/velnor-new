@@ -4,6 +4,9 @@ use super::*;
 
 use std::path::Path;
 
+#[path = "v8_fixture.rs"]
+mod v8_fixture;
+
 #[tokio::test]
 async fn a_receipt_cannot_cross_connection_policy_or_scale_set_scope() -> Result<(), HostError> {
     let (_scratch, _journal, [broad, narrow, other]) = policy_scopes().await?;
@@ -129,100 +132,56 @@ async fn version_eight_receipts_remain_unbound_after_migration() -> Result<(), H
     )
     .await?;
     let source_json = crate::journal::source_authorization::encode_source_receipt(&receipt, 101)?;
+    let identity = String::from_utf8(
+        binding
+            .canonical_identity_bytes()
+            .map_err(|_| HostError::Journal)?,
+    )
+    .map_err(|_| HostError::Journal)?;
+    let assignment_key = assignment.storage_key();
+    let selector_labels =
+        serde_json::to_string(binding.scale_set.labels()).map_err(|_| HostError::Journal)?;
     let payload = LegacyAuthorization {
         connection_id: binding.connection_id.as_str(),
+        identity,
         binding_digest: scope.binding_digest().to_owned(),
         source_digest: digest(source_json.as_bytes()),
         source_json,
         intent_id,
+        assignment_key,
+        repository_id: 101,
+        repository: binding.repository.clone(),
+        selector_name: binding.scale_set.name().to_owned(),
+        selector_labels,
+        runner_group_id: 7,
+        scale_set_id: 501,
+        request_id: 89,
         message_id: 122,
     };
     drop(scope);
     drop(journal);
 
-    write_v8_authorization_schema(&path, &payload).await?;
-    assert_migrated_receipt_stays_closed(&path, &binding, &assignment, intent_id).await
+    let legacy_path = scratch.0.join("legacy-v8.db");
+    v8_fixture::write(&legacy_path, &payload).await?;
+    assert_migrated_receipt_stays_closed(&legacy_path, &binding, &assignment, intent_id).await
 }
 
-struct LegacyAuthorization<'a> {
-    connection_id: &'a str,
-    binding_digest: String,
-    source_digest: String,
-    source_json: String,
-    intent_id: i64,
-    message_id: i64,
-}
-
-async fn write_v8_authorization_schema(
-    path: &Path,
-    payload: &LegacyAuthorization<'_>,
-) -> Result<(), HostError> {
-    let database = turso::Builder::new_local(path.to_str().ok_or(HostError::Journal)?)
-        .build()
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let connection = database.connect().map_err(|_| HostError::Journal)?;
-    remove_v9_authorization_tables(&connection).await?;
-    insert_v8_authorization_row(&connection, payload).await?;
-    connection
-        .execute("PRAGMA user_version = 8", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    Ok(())
-}
-
-async fn remove_v9_authorization_tables(connection: &turso::Connection) -> Result<(), HostError> {
-    connection
-        .execute(
-            "DROP TRIGGER IF EXISTS connection_request_reservations_insert_guard",
-            (),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    connection
-        .execute("DROP TABLE IF EXISTS connection_request_reservations", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    for table in [
-        "connection_runner_jits",
-        "connection_request_authorizations",
-    ] {
-        connection
-            .execute(&format!("DROP TABLE {table}"), ())
-            .await
-            .map_err(|_| HostError::Journal)?;
-    }
-    Ok(())
-}
-
-async fn insert_v8_authorization_row(
-    connection: &turso::Connection,
-    payload: &LegacyAuthorization<'_>,
-) -> Result<(), HostError> {
-    connection
-        .execute(
-            "ALTER TABLE connection_source_authorizations DROP COLUMN receipt_binding_digest",
-            (),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    connection
-        .execute(
-            "INSERT INTO connection_source_authorizations (connection_id, scale_set_id, request_id, intent_id, message_id, policy_mode, authority_model, binding_digest, source_digest, source_json) VALUES (?1, ?2, ?3, ?4, ?5, 'repository', 'created_empty_exclusive_admin_session_v1', ?6, ?7, ?8)",
-            (
-                payload.connection_id,
-                501,
-                89,
-                payload.intent_id,
-                payload.message_id,
-                payload.binding_digest.as_str(),
-                payload.source_digest.as_str(),
-                payload.source_json.as_str(),
-            ),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    Ok(())
+pub(super) struct LegacyAuthorization<'a> {
+    pub(super) connection_id: &'a str,
+    pub(super) identity: String,
+    pub(super) binding_digest: String,
+    pub(super) source_digest: String,
+    pub(super) source_json: String,
+    pub(super) intent_id: i64,
+    pub(super) assignment_key: String,
+    pub(super) repository_id: i64,
+    pub(super) repository: String,
+    pub(super) selector_name: String,
+    pub(super) selector_labels: String,
+    pub(super) runner_group_id: i64,
+    pub(super) scale_set_id: i64,
+    pub(super) request_id: i64,
+    pub(super) message_id: i64,
 }
 
 async fn assert_migrated_receipt_stays_closed(
