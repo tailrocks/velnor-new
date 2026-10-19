@@ -17,6 +17,12 @@ pub(super) struct ResultRecord {
     pub(super) operation_id: String,
     pub(super) home: DirectoryRecord,
     pub(super) work: DirectoryRecord,
+    pub(super) metadata: DirectoryRecord,
+    pub(super) runtime_identity: DirectoryRecord,
+    pub(super) job_facts: DirectoryRecord,
+    pub(super) source_proof: DirectoryRecord,
+    pub(super) control: DirectoryRecord,
+    pub(super) inbox: DirectoryRecord,
 }
 
 #[derive(Debug, Serialize)]
@@ -102,167 +108,31 @@ fn validate_distinct_roots(home: MountIdentity, work: MountIdentity) -> Result<(
     Ok(())
 }
 
-#[cfg(target_os = "linux")]
-mod linux {
-    use super::{
-        DirectoryRecord, MountIdentity, ResultRecord, validate_distinct_roots,
-        validate_initial_root, validate_mount_identity,
-    };
-    use rustix::{
-        fs::{
-            AtFlags, FileType, Gid, Mode, OFlags, StatxFlags, Uid, fchmod, fchown, fstat, open,
-            openat, statx,
-        },
-        process::geteuid,
-    };
-    use std::{
-        fs,
-        os::fd::{AsFd, OwnedFd},
-    };
-
-    const HOME: &str = "/velnor/init/home";
-    const WORK: &str = "/velnor/init/work";
-
-    struct OpenDirectory {
-        descriptor: OwnedFd,
-        target: &'static str,
-        identity: MountIdentity,
+#[cfg(any(target_os = "linux", test))]
+fn validate_child_mount(parent_mount_id: u64, child_mount_id: u64) -> Result<(), &'static str> {
+    if parent_mount_id == 0 || child_mount_id != parent_mount_id {
+        return Err("child_mount_changed");
     }
-
-    pub(super) fn initialize(operation_id: String) -> Result<ResultRecord, &'static str> {
-        if geteuid().as_raw() != 0 {
-            return Err("root_required");
-        }
-        let home = open_directory(HOME)?;
-        let work = open_directory(WORK)?;
-        validate_distinct_roots(home.identity, work.identity)?;
-        validate_empty_root(&home)?;
-        validate_empty_root(&work)?;
-        set_runner_owner(&home)?;
-        set_runner_owner(&work)?;
-        Ok(ResultRecord {
-            schema: 1,
-            operation_id,
-            home: verify_result(&home)?,
-            work: verify_result(&work)?,
-        })
-    }
-
-    fn open_directory(path: &'static str) -> Result<OpenDirectory, &'static str> {
-        let (parent_path, name) = path.rsplit_once('/').ok_or("target_path")?;
-        let parent = open_directory_path(parent_path)?;
-        let descriptor = openat(
-            &parent,
-            name,
-            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
-            Mode::empty(),
-        )
-        .map_err(|_| "target_open")?;
-        let parent_identity = statx(
-            &parent,
-            "",
-            AtFlags::EMPTY_PATH | AtFlags::SYMLINK_NOFOLLOW,
-            StatxFlags::BASIC_STATS | StatxFlags::MNT_ID,
-        )
-        .map_err(|_| "parent_mount")?;
-        let identity = statx(
-            &descriptor,
-            "",
-            AtFlags::EMPTY_PATH | AtFlags::SYMLINK_NOFOLLOW,
-            StatxFlags::BASIC_STATS | StatxFlags::MNT_ID,
-        )
-        .map_err(|_| "target_mount")?;
-        let required = StatxFlags::BASIC_STATS | StatxFlags::MNT_ID;
-        if parent_identity.stx_mask & required.bits() != required.bits()
-            || identity.stx_mask & required.bits() != required.bits()
-        {
-            return Err("target_mount_fields");
-        }
-        let mount_identity = MountIdentity {
-            mount_id: identity.stx_mnt_id,
-            parent_mount_id: parent_identity.stx_mnt_id,
-            device_major: identity.stx_dev_major,
-            device_minor: identity.stx_dev_minor,
-            inode: identity.stx_ino,
-        };
-        validate_mount_identity(mount_identity)?;
-        if FileType::from_raw_mode(fstat(&descriptor).map_err(|_| "target_stat")?.st_mode)
-            != FileType::Directory
-        {
-            return Err("target_type");
-        }
-        Ok(OpenDirectory {
-            descriptor,
-            target: path,
-            identity: mount_identity,
-        })
-    }
-
-    fn open_directory_path(path: &str) -> Result<OwnedFd, &'static str> {
-        let root = open(
-            "/",
-            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
-            Mode::empty(),
-        )
-        .map_err(|_| "root_open")?;
-        let mut descriptor = root;
-        for component in path.split('/').skip(1) {
-            descriptor = openat(
-                &descriptor,
-                component,
-                OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
-                Mode::empty(),
-            )
-            .map_err(|_| "parent_open")?;
-        }
-        Ok(descriptor)
-    }
-
-    fn validate_empty_root(directory: &OpenDirectory) -> Result<(), &'static str> {
-        let status = fstat(&directory.descriptor).map_err(|_| "target_stat")?;
-        let entries = fs::read_dir(format!(
-            "/proc/self/fd/{}",
-            directory.descriptor.as_fd().as_raw_fd()
-        ))
-        .map_err(|_| "target_read")?;
-        validate_initial_root(
-            status.st_uid,
-            status.st_gid,
-            entries.into_iter().next().is_none(),
-        )
-    }
-
-    fn set_runner_owner(directory: &OpenDirectory) -> Result<(), &'static str> {
-        fchown(
-            &directory.descriptor,
-            Some(Uid::from_raw(1000)),
-            Some(Gid::from_raw(1000)),
-        )
-        .map_err(|_| "target_chown")?;
-        fchmod(&directory.descriptor, Mode::from_raw_mode(0o755)).map_err(|_| "target_chmod")
-    }
-
-    fn verify_result(directory: &OpenDirectory) -> Result<DirectoryRecord, &'static str> {
-        let status = fstat(&directory.descriptor).map_err(|_| "target_verify")?;
-        let mode = status.st_mode & 0o7777;
-        if status.st_uid != 1000 || status.st_gid != 1000 || mode != 0o755 {
-            return Err("target_verify");
-        }
-        Ok(DirectoryRecord {
-            target: directory.target,
-            mount_id: directory.identity.mount_id,
-            parent_mount_id: directory.identity.parent_mount_id,
-            device_major: directory.identity.device_major,
-            device_minor: directory.identity.device_minor,
-            inode: directory.identity.inode,
-            uid: status.st_uid,
-            gid: status.st_gid,
-            mode,
-        })
-    }
-
-    use std::os::fd::AsRawFd;
+    Ok(())
 }
+
+#[cfg(any(target_os = "linux", test))]
+fn validate_directory_state(
+    uid: u32,
+    gid: u32,
+    mode: u32,
+    required_user: u32,
+    required_group: u32,
+    expected_mode: u32,
+) -> Result<(), &'static str> {
+    if uid != required_user || gid != required_group || mode != expected_mode {
+        return Err("target_verify");
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+mod linux;
 
 #[cfg(target_os = "linux")]
 pub(super) fn initialize(operation_id: String) -> Result<ResultRecord, &'static str> {
@@ -272,8 +142,9 @@ pub(super) fn initialize(operation_id: String) -> Result<ResultRecord, &'static 
 #[cfg(test)]
 mod tests {
     use super::{
-        MountIdentity, Request, valid_operation_id, validate_distinct_roots, validate_initial_root,
-        validate_mount_identity, validate_mount_pair,
+        MountIdentity, Request, valid_operation_id, validate_child_mount, validate_directory_state,
+        validate_distinct_roots, validate_initial_root, validate_mount_identity,
+        validate_mount_pair,
     };
 
     #[test]
@@ -369,6 +240,30 @@ mod tests {
         assert_eq!(
             validate_distinct_roots(root, other_mount),
             Err("mount_roots_not_distinct")
+        );
+    }
+
+    #[test]
+    fn metadata_children_must_remain_on_the_metadata_mount() {
+        assert_eq!(validate_child_mount(41, 41), Ok(()));
+        assert_eq!(validate_child_mount(41, 42), Err("child_mount_changed"));
+        assert_eq!(validate_child_mount(0, 0), Err("child_mount_changed"));
+    }
+
+    #[test]
+    fn metadata_child_directory_state_is_fixed() {
+        assert_eq!(validate_directory_state(0, 0, 0o555, 0, 0, 0o555), Ok(()));
+        assert_eq!(
+            validate_directory_state(1000, 1000, 0o700, 1000, 1000, 0o700),
+            Ok(())
+        );
+        assert_eq!(
+            validate_directory_state(0, 1000, 0o555, 0, 0, 0o555),
+            Err("target_verify")
+        );
+        assert_eq!(
+            validate_directory_state(0, 0, 0o755, 0, 0, 0o555),
+            Err("target_verify")
         );
     }
 }

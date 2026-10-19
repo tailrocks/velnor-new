@@ -1,4 +1,4 @@
-//! This utility sets the owner and mode of the Runner home volume and Work volume for one job.
+//! This program sets the owner and mode of specified volumes and directories for one job.
 
 mod storage_init;
 
@@ -40,7 +40,7 @@ fn run() -> Result<(), &'static str> {
             Ok(record) => record,
             Err(error) => {
                 let failure = storage_init::FailureRecord {
-                    schema: 1,
+                    schema: 2,
                     operation_id,
                     status: "failed",
                     error,
