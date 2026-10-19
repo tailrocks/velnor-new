@@ -7,6 +7,92 @@ use crate::scale_set::EnsureError;
 use super::support::*;
 use crate::launch::turn::completion_intake::{IntakeDecision, intake_and_ack_if_only_scoped};
 use crate::launch::turn::finish_scoped_poll_response;
+use crate::launch::turn::scoped::deferred_batch_ackable;
+
+#[test]
+fn deferred_zero_header_ack_accepts_assigned_and_rejects_unknown_kinds() {
+    let available = InnerJob {
+        kind: InnerKind::Available,
+        request_id: Some(88),
+        runner_id: None,
+        runner_name: None,
+        result: None,
+        job_id: Some("opaque-job".to_owned()),
+        labels: Vec::new(),
+        fields: Vec::new(),
+        source: Default::default(),
+    };
+    for (kind, expected) in [
+        (InnerKind::Assigned, true),
+        (InnerKind::Unsupported("future".to_owned()), false),
+    ] {
+        let polled = Poll::Batch(ParsedBatch {
+            message_id: 73,
+            raw_body: "[]".to_owned(),
+            statistics: None,
+            jobs: vec![
+                available.clone(),
+                InnerJob {
+                    kind,
+                    request_id: Some(89),
+                    runner_id: None,
+                    runner_name: None,
+                    result: None,
+                    job_id: Some("unhandled-job".to_owned()),
+                    labels: Vec::new(),
+                    fields: Vec::new(),
+                    source: Default::default(),
+                },
+            ],
+        });
+        assert_eq!(deferred_batch_ackable(&polled), expected);
+    }
+}
+
+#[test]
+fn deferred_zero_header_ack_allows_only_available_and_lifecycle_kinds() {
+    let polled = Poll::Batch(ParsedBatch {
+        message_id: 74,
+        raw_body: "[]".to_owned(),
+        statistics: None,
+        jobs: vec![
+            InnerJob {
+                kind: InnerKind::Available,
+                request_id: Some(90),
+                runner_id: None,
+                runner_name: None,
+                result: None,
+                job_id: Some("available-job".to_owned()),
+                labels: Vec::new(),
+                fields: Vec::new(),
+                source: Default::default(),
+            },
+            InnerJob {
+                kind: InnerKind::Started,
+                request_id: Some(91),
+                runner_id: Some(902),
+                runner_name: Some("v0".to_owned()),
+                result: None,
+                job_id: Some("started-job".to_owned()),
+                labels: Vec::new(),
+                fields: Vec::new(),
+                source: Default::default(),
+            },
+            InnerJob {
+                kind: InnerKind::Completed,
+                request_id: Some(92),
+                runner_id: Some(903),
+                runner_name: Some("v1".to_owned()),
+                result: Some("Succeeded".to_owned()),
+                job_id: Some("completed-job".to_owned()),
+                labels: Vec::new(),
+                fields: Vec::new(),
+                source: Default::default(),
+            },
+        ],
+    });
+    assert!(deferred_batch_ackable(&polled));
+}
 
 #[tokio::test]
 async fn handled_zero_header_response_settles_exact_poll_attempt() -> Result<(), String> {
@@ -27,12 +113,15 @@ async fn handled_zero_header_response_settles_exact_poll_attempt() -> Result<(),
         &Poll::Empty,
         attempt,
         async {
-            Ok(IntakeDecision {
-                completion_only: true,
-                wake_cleanup: true,
-                session_delete_candidate: true,
-                started_request_ids: Vec::new(),
-            })
+            Ok((
+                IntakeDecision {
+                    completion_only: true,
+                    wake_cleanup: true,
+                    session_delete_candidate: true,
+                    started_request_ids: Vec::new(),
+                },
+                true,
+            ))
         },
         0,
     )
@@ -68,12 +157,15 @@ async fn filtered_empty_keeps_deferred_cursor_and_blocks_session_delete() -> Res
         &Poll::Empty,
         attempt,
         async {
-            Ok(IntakeDecision {
-                completion_only: false,
-                wake_cleanup: false,
-                session_delete_candidate: true,
-                started_request_ids: Vec::new(),
-            })
+            Ok((
+                IntakeDecision {
+                    completion_only: false,
+                    wake_cleanup: false,
+                    session_delete_candidate: true,
+                    started_request_ids: Vec::new(),
+                },
+                false,
+            ))
         },
         72,
     )
@@ -141,15 +233,19 @@ async fn failed_queue_ack_after_inbox_write_holds_the_header_attempt() -> Result
     });
     let ack_attempted = Cell::new(false);
     let inbox_stored_at_ack = Cell::new(false);
-    let handling = intake_and_ack_if_only_scoped(&scope, 10_101, &polled, || async {
-        let pending = scope
-            .pending_completion_inbox(4_102_444_800, 10)
-            .await
-            .map_err(|_| EnsureError::AdmissionClosed)?;
-        inbox_stored_at_ack.set(pending.iter().any(|entry| entry.message_id == 77));
-        ack_attempted.set(true);
-        Err(EnsureError::AdmissionClosed)
-    });
+    let handling = async {
+        intake_and_ack_if_only_scoped(&scope, 10_101, &polled, || async {
+            let pending = scope
+                .pending_completion_inbox(4_102_444_800, 10)
+                .await
+                .map_err(|_| EnsureError::AdmissionClosed)?;
+            inbox_stored_at_ack.set(pending.iter().any(|entry| entry.message_id == 77));
+            ack_attempted.set(true);
+            Err(EnsureError::AdmissionClosed)
+        })
+        .await
+        .map(|decision| (decision, false))
+    };
 
     assert!(matches!(
         finish_scoped_poll_response(

@@ -35,6 +35,14 @@
       "run_id": "7a380322-2a1b-4ed5-838f-a22e652a21d4",
       "log_sha256": "b5f236292930c6d3e6516694e3f2a59b37396a8eb948354cb60ebc5a708ac81e",
       "review_sha256": "0ca85f4bf65db5473b93910e18f82d359e8050cc00f7d887d71c5ae401e98155"
+    },
+    {
+      "gate": "native_assigned_and_zero_header",
+      "result": "PASS",
+      "tests": 24,
+      "run_id": "5318fdec-0193-4dd4-bbdf-9a5c96696a02",
+      "log_sha256": "3e70f2d7d5a7e3ba4d64825642cd2241d2c55c206d51e0e7e39bfa032361f10b",
+      "review_sha256": "6686f7b4a263b90d671e1fa1b9d4cb628fd4b23f556b8c0a8a7556a230d5c1a6"
     }
   ],
   "last_full_runner_suite": {
@@ -45,5 +53,17 @@
     "skipped": 0,
     "source_manifest_sha256": "fbed1749b1cf63fd7dbe04197bf4e6a6af3a131952066491571063119ba47a97"
   },
-  "external_limit": null
+  "external_limit": null,
+  "broader_assigned_diagnostic": {
+    "result": "FAIL",
+    "tests": 29,
+    "passed": 24,
+    "failed": 5,
+    "log_sha256": "0376f5a78c75f042a0a4c3c51f0eaa2560a4003be7b82c0e8e114c44f953363d",
+    "corrected_helper_test": "deferred_zero_header_ack_accepts_assigned_and_rejects_unknown_kinds",
+    "remaining_categories": [
+      "source_admission_fixtures",
+      "request_recovery"
+    ]
+  }
 }

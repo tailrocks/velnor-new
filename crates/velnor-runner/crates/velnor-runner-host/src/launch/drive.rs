@@ -4,7 +4,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use bollard::Docker;
-use velnor_runner_github::Poll;
+use velnor_runner_github::{InnerKind, Poll};
 
 use crate::config::{ApprovedJobAuthorityPolicy, RepositoryConnection};
 use crate::journal::{ConnectionJournal, Journal};
@@ -17,7 +17,7 @@ use crate::scale_set::EnsureError;
 use crate::worker::ResourceBudget;
 
 mod deferred_offer;
-pub(crate) use deferred_offer::DeferredAuthorizedOffer;
+pub(crate) use deferred_offer::{DeferredAuthorizedOffer, DeferredAuthorizedOffers};
 
 /// Call context. Tokens are redacted in `Debug` and zeroized on drop.
 pub(crate) struct Drive {
@@ -213,9 +213,61 @@ pub(crate) async fn authorize_deferred_offer(
         scoped_journal,
         set_id,
         polled,
+        request_id,
         source_receipt,
     )
     .await
+}
+
+/// Save source approval for each Available request when capacity is zero.
+pub(crate) async fn authorize_deferred_offers(
+    connection: &RepositoryConnection,
+    scoped_journal: &ConnectionJournal,
+    pat: &str,
+    set_id: i64,
+    polled: &Poll,
+) -> Result<DeferredAuthorizedOffers, EnsureError> {
+    let Poll::Batch(batch) = polled else {
+        return DeferredAuthorizedOffers::from_receipts(
+            connection,
+            scoped_journal,
+            set_id,
+            polled,
+            Vec::new(),
+        )
+        .await;
+    };
+    if batch.jobs.len() > velnor_runner_github::MAX_POLL_MESSAGES {
+        return Err(EnsureError::Uncertain);
+    }
+    let mut request_ids = std::collections::BTreeSet::new();
+    for job in batch
+        .jobs
+        .iter()
+        .filter(|job| job.kind == InnerKind::Available)
+    {
+        let Some(request_id) = job.request_id.filter(|request_id| *request_id > 0) else {
+            return Err(EnsureError::Uncertain);
+        };
+        if !request_ids.insert(request_id) {
+            return Err(EnsureError::Uncertain);
+        }
+    }
+    let mut receipts = Vec::with_capacity(request_ids.len());
+    for request_id in request_ids {
+        let receipt = super::steps::authorize_offer(
+            Some(connection),
+            Some(scoped_journal),
+            pat,
+            batch,
+            request_id,
+        )
+        .await?
+        .ok_or(EnsureError::Uncertain)?;
+        receipts.push((request_id, receipt));
+    }
+    DeferredAuthorizedOffers::from_receipts(connection, scoped_journal, set_id, polled, receipts)
+        .await
 }
 
 /// Authorize one available request, obtain a fresh permit, then acquire it.

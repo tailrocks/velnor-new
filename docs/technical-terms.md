@@ -13,3 +13,9 @@
 | Recursion | A function call that starts the same function directly or through other function calls. |
 | Test fixture | Test data and code for a specified check. |
 | Database | A set of related data that software keeps for later use. |
+| Assigned job count | The value of Statistics.TotalAssignedJobs in a Scale Set response. |
+| Available request | A job request in a JobAvailable message from GitHub. |
+| Source approval | A checked decision that permits a specified source to use a runner. |
+| Source receipt | A journal value that identifies one source approval. |
+| Lifecycle event | A GitHub message about a job that starts or completes. |
+| ACK | A reply that confirms receipt of a message. |

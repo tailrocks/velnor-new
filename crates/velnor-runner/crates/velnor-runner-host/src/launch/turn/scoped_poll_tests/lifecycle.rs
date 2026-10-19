@@ -11,7 +11,7 @@ use crate::launch::turn::finish_scoped_poll_response;
 #[tokio::test]
 async fn started_only_event_is_stored_before_ack_and_replay_is_idempotent() -> Result<(), String> {
     let scratch = Scratch::new()?;
-    let (scope, session_intent, _) = session_scope(&scratch).await?;
+    let (scope, session_intent, allocation) = session_scope(&scratch).await?;
     let polled = Poll::Batch(ParsedBatch {
         message_id: 73,
         raw_body:
@@ -46,7 +46,7 @@ async fn started_only_event_is_stored_before_ack_and_replay_is_idempotent() -> R
     .map_err(|error| error.to_string())?;
 
     assert!(decision.completion_only);
-    assert!(decision.session_delete_candidate);
+    assert!(!decision.session_delete_candidate);
     assert!(decision.started_request_ids.is_empty());
     assert!(acknowledged.get());
     assert!(inbox_stored_before_ack.get());
@@ -71,6 +71,28 @@ async fn started_only_event_is_stored_before_ack_and_replay_is_idempotent() -> R
     .await
     .map_err(|error| error.to_string())?;
     assert!(replay_acknowledged.get());
+    let attempt = scope
+        .begin_zero_header_poll(session_intent, &allocation)
+        .await
+        .map_err(|error| error.to_string())?;
+    let outcome = finish_scoped_poll_response(
+        &scope,
+        session_intent,
+        10_101,
+        "session-scoped-poll",
+        &allocation,
+        &polled,
+        attempt,
+        async { Ok((decision, true)) },
+        0,
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+    assert_eq!(
+        outcome.cursor_disposition,
+        crate::launch::CursorDisposition::ResetToHead
+    );
+    assert!(!outcome.session_delete_candidate);
     let replayed = scope
         .pending_completion_inbox(4_102_444_800, 10)
         .await
@@ -181,12 +203,15 @@ async fn empty_poll_is_delete_candidate_but_has_no_event_ack() -> Result<(), Str
         &Poll::Empty,
         attempt,
         async {
-            Ok(IntakeDecision {
-                completion_only: false,
-                wake_cleanup: false,
-                session_delete_candidate: true,
-                started_request_ids: Vec::new(),
-            })
+            Ok((
+                IntakeDecision {
+                    completion_only: false,
+                    wake_cleanup: false,
+                    session_delete_candidate: true,
+                    started_request_ids: Vec::new(),
+                },
+                false,
+            ))
         },
         0,
     )

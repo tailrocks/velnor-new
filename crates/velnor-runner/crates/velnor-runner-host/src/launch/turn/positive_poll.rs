@@ -26,6 +26,8 @@ pub(crate) enum PositiveAdmission {
 
 /// Queue and journal outcome for one positive-capacity poll.
 pub(crate) struct PositivePollOutcome<A = PositiveAdmission> {
+    /// Assigned job count from this response, if present.
+    pub(crate) assigned_total: Option<i64>,
     /// Message id from the native response. Empty responses have no id.
     pub(crate) message_id: Option<i64>,
     /// Cursor action for an acknowledged response or an unacknowledged queue head.
@@ -462,6 +464,7 @@ fn make_outcome<A>(
     let message_id = super::super::steady::response_message_id(polled);
     let cursor_disposition = cursor_disposition(message_id, acknowledgement, polled);
     PositivePollOutcome {
+        assigned_total: super::super::steady::assigned_total(polled),
         message_id,
         cursor_disposition,
         started_request_ids: decision.started_request_ids,

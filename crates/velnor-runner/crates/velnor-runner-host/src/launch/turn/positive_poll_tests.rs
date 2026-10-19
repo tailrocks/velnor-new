@@ -235,10 +235,16 @@ async fn failed_ack_settles_known_get_and_retains_durable_offer() -> Result<(), 
     );
     let polled = available_poll();
     let connection = repository_connection()?;
-    let durable_offer =
-        DeferredAuthorizedOffer::from_poll_receipt(&connection, &scope, 10_101, &polled, receipt)
-            .await
-            .map_err(|error| format!("{error:?}"))?;
+    let durable_offer = DeferredAuthorizedOffer::from_poll_receipt(
+        &connection,
+        &scope,
+        10_101,
+        &polled,
+        request_id,
+        receipt,
+    )
+    .await
+    .map_err(|error| format!("{error:?}"))?;
     assert!(authorized_deferred_matches(&durable_offer, &polled, &scope, 10_101).await);
 
     let attempt = scope
@@ -530,3 +536,6 @@ fn intake_decision() -> IntakeDecision {
         started_request_ids: vec![91],
     }
 }
+
+#[path = "positive_poll_tests/assigned_total.rs"]
+mod assigned_total;

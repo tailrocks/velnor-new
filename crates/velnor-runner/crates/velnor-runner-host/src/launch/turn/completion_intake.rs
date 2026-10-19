@@ -103,8 +103,8 @@ where
         acknowledge().await?;
     }
     Ok(IntakeDecision {
-        // Started and Completed messages cannot start another worker. Their
-        // exact event or a durable quarantine row is committed before ACK.
+        // Assigned does not change job state.
+        // Save Started and Completed events before ACK.
         completion_only: lifecycle_only,
         wake_cleanup: retried || has_completion(polled),
         session_delete_candidate: session_delete_candidate(polled),
@@ -112,10 +112,10 @@ where
     })
 }
 
-/// Only an empty response or an acknowledged lifecycle-only response permits a delete attempt.
+/// Try session deletion only after an empty response.
 /// The journal still checks for outstanding durable work before it claims DELETE.
 pub(super) fn session_delete_candidate(polled: &Poll) -> bool {
-    matches!(polled, Poll::Empty) || scoped_lifecycle_only(polled)
+    matches!(polled, Poll::Empty)
 }
 
 fn scoped_lifecycle_only(polled: &Poll) -> bool {
@@ -131,9 +131,12 @@ fn scoped_lifecycle_only(polled: &Poll) -> bool {
 fn lifecycle_jobs_only(message_id: i64, jobs: &[InnerJob]) -> bool {
     message_id >= 0
         && !jobs.is_empty()
-        && jobs
-            .iter()
-            .all(|job| matches!(job.kind, InnerKind::Started | InnerKind::Completed))
+        && jobs.iter().all(|job| {
+            matches!(
+                job.kind,
+                InnerKind::Assigned | InnerKind::Started | InnerKind::Completed
+            )
+        })
 }
 
 async fn record_scoped_events(

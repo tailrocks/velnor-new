@@ -11,6 +11,17 @@ use velnor_runner_github::Poll;
 /// Delay before the skipped head is read again.
 pub(crate) const RETRY: Duration = Duration::from_secs(5);
 
+/// Assigned job count from this response, if present.
+pub(crate) fn assigned_total(polled: &Poll) -> Option<i64> {
+    match polled {
+        Poll::Batch(batch) => batch
+            .statistics
+            .as_ref()
+            .map(velnor_runner_github::Statistics::assigned_population),
+        Poll::Empty | Poll::Quarantined(_) => None,
+    }
+}
+
 /// Cursor for this poll. A due retry reads the head.
 pub(crate) fn poll_cursor(cursor: i64, retry_at: Option<Instant>, now: Instant) -> i64 {
     match retry_at {

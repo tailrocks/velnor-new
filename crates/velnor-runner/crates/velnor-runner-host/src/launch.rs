@@ -40,8 +40,8 @@ pub(crate) use admission_gate::lock_connection;
 #[cfg(test)]
 pub(crate) use drive::acquire_scoped_offer;
 pub(crate) use drive::{
-    DeferredAuthorizedOffer, Drive, GuestAdmission, Lane, Rest, ScopedAdmissionInput,
-    acquire_authorized_scoped_offer, authorize_deferred_offer,
+    DeferredAuthorizedOffer, DeferredAuthorizedOffers, Drive, GuestAdmission, Lane, Rest,
+    ScopedAdmissionInput, acquire_authorized_scoped_offer, authorize_deferred_offer,
 };
 pub(crate) use engine_context::SelectedEngineContext;
 pub(crate) use inspect::classify_inspect;

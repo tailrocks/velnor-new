@@ -1,6 +1,7 @@
 use std::future::Future;
+use std::ops::AsyncFnMut;
 
-use velnor_runner_github::{Poll, QueueSession};
+use velnor_runner_github::{InnerKind, Poll, QueueSession};
 
 use crate::journal::{ConnectionJournal, HeaderAllocation, HeaderPollAttempt};
 use crate::listen::{Link, PollPathResult, point_at_queue, poll_path, restore_base};
@@ -9,6 +10,16 @@ use crate::scale_set::EnsureError;
 use super::super::ack_ready;
 use super::completion_intake::{IntakeDecision, completion_error, intake_and_ack_if_only_scoped};
 use super::positive_poll::CursorDisposition;
+use crate::launch::DeferredAuthorizedOffers;
+
+/// Rules for zero capacity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ZeroHeaderMode {
+    /// Save lifecycle events before you acknowledge the response.
+    LifecycleOnly,
+    /// Approve each Available request before you acknowledge the response.
+    DeferAuthorizedOffers,
+}
 
 /// Poll one scoped session at a zero header and persist lifecycle events before ACK.
 ///
@@ -16,6 +27,8 @@ use super::positive_poll::CursorDisposition;
 /// capacity requires the separate fresh-permit admission path.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ScopedPollOutcome {
+    /// Assigned job count from this response, if present.
+    pub(crate) assigned_total: Option<i64>,
     /// Message id from the native response. Empty responses have no id.
     pub(crate) message_id: Option<i64>,
     /// Cursor action for this response.
@@ -35,6 +48,34 @@ pub(crate) async fn poll_scoped_connection_once(
     allocation: &HeaderAllocation,
     cursor: i64,
 ) -> Result<ScopedPollOutcome, EnsureError> {
+    poll_scoped_connection_once_with_mode(
+        link,
+        set_id,
+        session,
+        scoped,
+        session_intent_id,
+        allocation,
+        cursor,
+        ZeroHeaderMode::LifecycleOnly,
+        async |_| Ok(DeferredAuthorizedOffers::empty()),
+    )
+    .await
+}
+
+pub(crate) async fn poll_scoped_connection_once_with_mode<F>(
+    link: &mut Link,
+    set_id: i64,
+    session: &mut QueueSession,
+    scoped: &ConnectionJournal,
+    session_intent_id: i64,
+    allocation: &HeaderAllocation,
+    cursor: i64,
+    mode: ZeroHeaderMode,
+    mut authorize: F,
+) -> Result<ScopedPollOutcome, EnsureError>
+where
+    F: AsyncFnMut(&Poll) -> Result<DeferredAuthorizedOffers, EnsureError>,
+{
     if !allocation.matches_session(scoped.connection_id(), set_id, &session.session_id) {
         return Err(EnsureError::AdmissionClosed);
     }
@@ -48,7 +89,7 @@ pub(crate) async fn poll_scoped_connection_once(
         scoped,
         session_intent_id,
         set_id,
-        0,
+        attempt.header_value(),
         cursor,
     )
     .await
@@ -62,10 +103,32 @@ pub(crate) async fn poll_scoped_connection_once(
             return Err(error);
         }
     };
-    let intake = intake_and_ack_if_only_scoped(scoped, set_id, &polled, || async {
-        ack_ready(link, session, path, queue, &polled)
-    });
-    let handled = intake;
+    if attempt.header_value() != 0 {
+        scoped
+            .mark_session_poll_uncertain(session_intent_id, attempt)
+            .await
+            .map_err(|_| completion_error())?;
+        return Err(EnsureError::AdmissionClosed);
+    }
+    let handled = async {
+        if mode == ZeroHeaderMode::DeferAuthorizedOffers {
+            process_deferred_scoped_response(
+                scoped,
+                set_id,
+                &polled,
+                async |response| authorize(response).await,
+                async || ack_ready(link, session, path.clone(), queue.clone(), &polled),
+            )
+            .await
+        } else {
+            let decision = intake_and_ack_if_only_scoped(scoped, set_id, &polled, || async {
+                ack_ready(link, session, path.clone(), queue.clone(), &polled)
+            })
+            .await?;
+            let acknowledged = decision.completion_only;
+            Ok((decision, acknowledged))
+        }
+    };
     finish_scoped_poll_response(
         scoped,
         session_intent_id,
@@ -78,6 +141,64 @@ pub(crate) async fn poll_scoped_connection_once(
         cursor,
     )
     .await
+}
+
+pub(super) fn deferred_batch_ackable(polled: &Poll) -> bool {
+    let Poll::Batch(batch) = polled else {
+        return false;
+    };
+    batch.message_id >= 0
+        && !batch.jobs.is_empty()
+        && batch.jobs.len() <= velnor_runner_github::MAX_POLL_MESSAGES
+        && batch.jobs.iter().all(|job| {
+            matches!(
+                job.kind,
+                InnerKind::Available
+                    | InnerKind::Assigned
+                    | InnerKind::Started
+                    | InnerKind::Completed
+            )
+        })
+}
+
+pub(super) async fn process_deferred_scoped_response<F, A>(
+    scoped: &ConnectionJournal,
+    set_id: i64,
+    polled: &Poll,
+    mut authorize: F,
+    mut acknowledge: A,
+) -> Result<(IntakeDecision, bool), EnsureError>
+where
+    F: AsyncFnMut(&Poll) -> Result<DeferredAuthorizedOffers, EnsureError>,
+    A: AsyncFnMut() -> Result<(), EnsureError>,
+{
+    let mut acknowledged = false;
+    let decision = intake_and_ack_if_only_scoped(scoped, set_id, polled, || async {
+        if acknowledge().await.is_ok() {
+            acknowledged = true;
+        }
+        Ok(())
+    })
+    .await?;
+
+    if acknowledged || !has_available_offer(polled) || !deferred_batch_ackable(polled) {
+        return Ok((decision, acknowledged));
+    }
+
+    let Ok(receipts) = authorize(polled).await else {
+        return Ok((decision, false));
+    };
+    if !receipts.matches_current_poll(polled, scoped, set_id).await {
+        return Ok((decision, false));
+    }
+    if acknowledge().await.is_ok() {
+        acknowledged = true;
+    }
+    Ok((decision, acknowledged))
+}
+
+fn has_available_offer(polled: &Poll) -> bool {
+    matches!(polled, Poll::Batch(batch) if batch.jobs.iter().any(|job| job.kind == InnerKind::Available))
 }
 
 pub(super) async fn poll_scoped_queue(
@@ -132,9 +253,9 @@ pub(super) async fn finish_scoped_poll_response<F>(
     cursor: i64,
 ) -> Result<ScopedPollOutcome, EnsureError>
 where
-    F: Future<Output = Result<IntakeDecision, EnsureError>>,
+    F: Future<Output = Result<(IntakeDecision, bool), EnsureError>>,
 {
-    let mut decision = match handled.await {
+    let (mut decision, response_acknowledged) = match handled.await {
         Ok(decision) => decision,
         Err(error) => {
             scoped
@@ -147,6 +268,9 @@ where
     if cursor > 0 && matches!(polled, Poll::Empty) {
         decision.session_delete_candidate = false;
     }
+    if decision.completion_only && !response_acknowledged {
+        decision.session_delete_candidate = false;
+    }
     let completed = super::super::session::CompletedHeaderPoll::after_response(
         attempt, allocation, scoped, set_id, session_id,
     )?;
@@ -155,19 +279,20 @@ where
         .await
         .map_err(|_| completion_error())?;
     Ok(ScopedPollOutcome {
+        assigned_total: super::super::steady::assigned_total(polled),
         message_id: super::super::steady::response_message_id(polled),
-        cursor_disposition: scoped_cursor_disposition(polled, &decision),
+        cursor_disposition: scoped_cursor_disposition(polled, response_acknowledged),
         wake_cleanup: decision.wake_cleanup,
         session_delete_candidate: decision.session_delete_candidate,
         started_request_ids: decision.started_request_ids,
     })
 }
 
-fn scoped_cursor_disposition(polled: &Poll, decision: &IntakeDecision) -> CursorDisposition {
+fn scoped_cursor_disposition(polled: &Poll, acknowledged: bool) -> CursorDisposition {
     let message_id = super::super::steady::response_message_id(polled);
     if matches!(polled, Poll::Empty) {
         CursorDisposition::Unchanged
-    } else if decision.completion_only {
+    } else if acknowledged {
         CursorDisposition::ResetToHead
     } else {
         match message_id.filter(|message_id| *message_id > 0) {
