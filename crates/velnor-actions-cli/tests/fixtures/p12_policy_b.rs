@@ -203,7 +203,7 @@ fn blessed_standing_exception_passes() -> Result<(), Box<dyn Error>> {
         &fixture.dir,
         INVENTORY,
         "\"exceptions\":[]",
-        &format!("\"exceptions\":[{}]", blessed("v0.18.4")),
+        &format!("\"exceptions\":[{}]", blessed("v0.19.0")),
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_clean(&run);
@@ -231,7 +231,7 @@ fn blessed_standing_wrong_tag_fails() -> Result<(), Box<dyn Error>> {
 fn blessed_standing_missing_attribution_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-blessed-attr")?;
     let partial = "{\"key\":\"asamarts/alint\",\"kind\":\"mutable-tag\",\
-        \"tag\":\"v0.18.4\",\"expires\":null}";
+        \"tag\":\"v0.19.0\",\"expires\":null}";
     harness::mutate(
         &fixture.dir,
         INVENTORY,
@@ -285,8 +285,8 @@ fn dated_exception_missing_field_fails() -> Result<(), Box<dyn Error>> {
 #[test]
 fn non_object_entries_fail() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-shapes")?;
-    let row = "{\"name\":\"mise\",\"pinned\":\"2026.10.13\",\
-        \"qualified\":\"2026.10.13\",\
+    let row = "{\"name\":\"mise\",\"pinned\":\"2026.10.14\",\
+        \"qualified\":\"2026.10.14\",\
         \"source\":\"https://api.github.com/repos/jdx/mise/releases/latest\",\
         \"status\":\"current\"}";
     harness::mutate(

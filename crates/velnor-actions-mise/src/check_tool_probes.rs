@@ -88,7 +88,9 @@ pub fn verify_qualified_executable(
         return Err(invalid("executable_path_not_canonical"));
     }
     let args = match declared.probe {
-        QualifiedToolProbe::Version { .. } | QualifiedToolProbe::CargoNextestVersion { .. } => {
+        QualifiedToolProbe::Version { .. }
+        | QualifiedToolProbe::CargoNextestVersion { .. }
+        | QualifiedToolProbe::RustfmtVersion { .. } => {
             vec![OsString::from("--version")]
         }
         QualifiedToolProbe::VersionSubcommand { .. } => vec![OsString::from("version")],
@@ -272,8 +274,22 @@ fn validate_output(
         QualifiedToolProbe::Version { expected }
         | QualifiedToolProbe::VersionSubcommand { expected }
         | QualifiedToolProbe::CargoNextestVersion { expected }
+        | QualifiedToolProbe::RustfmtVersion { expected }
         | QualifiedToolProbe::RustcVerbose { expected } => expected,
     };
+    if matches!(probe, QualifiedToolProbe::RustfmtVersion { .. }) {
+        // Shared tool admission already binds this component to its compiler.
+        // Unlike ordinary version probes, no additional stdout lines are valid.
+        let actual = stdout
+            .strip_suffix("\r\n")
+            .or_else(|| stdout.strip_suffix('\n'))
+            .unwrap_or(stdout);
+        return if actual == expected {
+            Ok(())
+        } else {
+            Err(invalid("exact_version_output_mismatch"))
+        };
+    }
     let actual = if matches!(probe, QualifiedToolProbe::RustcVerbose { .. }) {
         stdout.trim_end_matches(['\r', '\n'])
     } else {

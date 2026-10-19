@@ -7,10 +7,10 @@ fn source() -> ApprovedOwnedSource {
     let base = "https://github.com/tailrocks/velnor-new/releases/download/fixture-owned-source";
     ApprovedOwnedSource {
         tool: "mise".to_owned(),
-        version: "2026.10.13-owned-cargo-wrapper".to_owned(),
+        version: "2026.10.14-owned-cargo-wrapper".to_owned(),
         source_commit: "1".repeat(40),
         source_tree: "2".repeat(40),
-        upstream_base_commit: "580a418ed8ce379669a1a98e9aa405aa6a860996".to_owned(),
+        upstream_base_commit: "d7131a7d69a2bdb2cfc84a66a5ff97329dd740e9".to_owned(),
         archive_url: format!("{base}/source.tar"),
         archive_sha256: "4".repeat(64),
         receipt_url: format!("{base}/source-receipt.json"),
@@ -26,7 +26,7 @@ fn source() -> ApprovedOwnedSource {
 fn admits_complete_owned_source_and_rejects_nonportable_license_aliases() {
     let mut value = source();
     assert!(value.validate().is_ok());
-    value.version = "2026.10.13-velnor.1".to_owned();
+    value.version = "2026.10.14-velnor.1".to_owned();
     assert!(value.validate().is_ok());
     for path in [".Git/config", "LICENSE-λ", "dir//LICENSE", "dir/./LICENSE"] {
         let mut value = source();
@@ -37,11 +37,14 @@ fn admits_complete_owned_source_and_rejects_nonportable_license_aliases() {
 
 #[test]
 fn source_approval_rejects_dispatch_injection_and_partial_transport() {
-    let mutations: [fn(&mut ApprovedOwnedSource); 8] = [
+    let mutations: [fn(&mut ApprovedOwnedSource); 9] = [
         |value: &mut ApprovedOwnedSource| value.archive_sha256 = "0".repeat(64),
         |value: &mut ApprovedOwnedSource| value.tool = "sh".to_owned(),
         |value: &mut ApprovedOwnedSource| value.version = "${{ inputs.version }}".to_owned(),
         |value: &mut ApprovedOwnedSource| value.source_commit = value.upstream_base_commit.clone(),
+        |value: &mut ApprovedOwnedSource| {
+            value.upstream_base_commit = "580a418ed8ce379669a1a98e9aa405aa6a860996".to_owned();
+        },
         |value: &mut ApprovedOwnedSource| {
             value.upstream_base_commit = "6be3cbdc639a66c03651479428e4c5f60b00485f".to_owned();
         },

@@ -247,9 +247,10 @@ fn write_lock(repo: &tempfile::TempDir) -> Result<(), Box<dyn std::error::Error>
         )?;
     }
     let lock = format!(
-        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.10.13\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
+        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"{mise_version}\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
         "e".repeat(40),
-        "b".repeat(64)
+        "b".repeat(64),
+        mise_version = velnor_actions_mise::MISE_VERSION,
     );
     std::fs::write(repo.path().join(".velnor/generator.lock"), lock)?;
     Ok(())

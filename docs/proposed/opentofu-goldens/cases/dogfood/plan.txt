@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.18
+Velnor Actions plan 0.1.19
 Repository: <repo>
 
 Detected stacks
@@ -167,7 +167,7 @@ Workflow to generate
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
     - actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
     - actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-    - asamarts/alint@18e1a66db7444fed817c5d8c75292c7709fff32e
+    - asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87
     - jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
     - jdx/mr-boxington-action@47ce49b32025d93a7a2f4570815afaa2b7092240
   Ineligible: stack/rust/crates/velnor-actions-cli/doctest/default has no test targets; no test command emitted

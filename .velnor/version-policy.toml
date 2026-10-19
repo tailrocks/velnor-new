@@ -6,7 +6,7 @@
 # fixed Velnor-owned signer helper and is checked by the release-tools
 # pin validator, not installed as a Mise consumer tool. The [[actions]]
 # mirror MUST equal the action pins in .velnor/freshness-inventory.json
-# (checked 2026-10-18; checked by scripts/check-freshness.sh).
+# (checked 2026-10-19; checked by scripts/check-freshness.sh).
 # [validation-tools] pins repo-local verification tools activated for
 # manual risk-triggered runs (cargo-mutants; NOT wired into CI).
 # Consumer repositories do not need this file; the generator never
@@ -18,7 +18,7 @@ check_interval_hours = 24
 max_exception_days = 14
 
 [tools]
-mise = "2026.10.13"
+mise = "2026.10.14"
 rust = "1.99.1"
 mr-boxington = "1.24.1"
 gh = "2.102.0"
@@ -78,9 +78,9 @@ reviewed = "2026-10-18"
 
 [[actions]]
 name = "asamarts/alint"
-version = "v0.18.4"
-sha = "18e1a66db7444fed817c5d8c75292c7709fff32e"
-reviewed = "2026-10-17"
+version = "v0.19.0"
+sha = "f39a25a7e061bb8738a87372561d8b9a6a29ca87"
+reviewed = "2026-10-19"
 
 [[actions]]
 name = "aws-actions/configure-aws-credentials"

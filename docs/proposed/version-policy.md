@@ -1,6 +1,9 @@
 # Velnor version freshness and locking policy
 
-**Status:** Proposed. No version-freshness checker is implemented.
+**Status:** This document defines the repository version policy. Repository
+freshness checking and policy-mirror validation are implemented in
+`velnor-actions-freshness` and `scripts/check-freshness.sh`. Implementation
+coverage and verification evidence are recorded in `docs/implemented/`.
 
 This policy defines what “latest versions” means for Velnor and how strict
 freshness coexists with reproducible builds. Exact locks make a run repeatable;
@@ -29,8 +32,9 @@ non-yanked release that supports the selected platform and required feature
 set. Prereleases, nightly builds, moving Git refs, wildcards, and floating
 `latest` selectors are forbidden in normal builds. Resolve the newest allowed
 release, then record its exact version, immutable revision, or digest in the
-generator's compiled-in release catalog, `Cargo.lock` for crates, and
-`.velnor/generator.lock` for Velnor's own bootstrap binary. The Velnor-only
+generator's compiled-in release catalog and `Cargo.lock` for crates. Velnor
+dogfood validates an optional `.velnor/generator.lock`; when absent, it builds
+and verifies a same-source pre-seed helper. The Velnor-only
 `.velnor/version-policy.toml` mirrors the compiled catalog for freshness and
 release checks; consumer generation MUST NOT require it. Local development,
 CI, releases, and agents MUST consume the same committed pins; no job may
@@ -61,19 +65,18 @@ tool. Generated workflows embed these exact values and pass them as explicit
 Mise tool arguments; they never read a consumer version-policy file or resolve
 `latest` independently. Velnor's `.velnor/version-policy.toml` MUST mirror
 every catalog entry and is checked for equality during dogfood CI and release
-qualification. Mise bootstrap itself is pinned by `.velnor/generator.lock`
-inside Velnor's own workflow and by the compiled-in Mise release record in
-consumer workflow output.
+qualification. Mise bootstrap itself is pinned by `.mise-version` and the
+compiled-in Mise release record in generated workflow output.
 
 | Versioned input | Authority | Freshness requirement |
 |---|---|---|
 | Rust compiler and components | Compiled-in generator catalog; embedded in generated workflows and run through Mise | Latest stable Rust and matching current components |
-| Mise bootstrap | `.mise-version`, `.velnor/generator.lock` | Both equal the latest qualified stable Mise release; exact artifact digest |
+| Mise bootstrap | `.mise-version` and compiled-in Mise release record | Latest qualified stable Mise release; exact artifact digest |
 | MBX, Nextest, `gh`, and policy/CI tools | Compiled-in generator catalog; embedded in generated workflows and run through Mise | Latest stable releases; includes cargo-deny, cargo-machete, actionlint, ShellCheck, and zizmor |
 | Direct and transitive Rust crates | Workspace manifests, `Cargo.lock` | Newest stable graph; major updates included; all changed versions pass the full locked gate |
-| Velnor workflow bootstrap | Consumer output embeds the exact generating release version, immutable target asset URL, and binary SHA-256; Velnor dogfood also checks `.velnor/generator.lock` | Latest qualified stable Velnor release for each supported target |
+| Velnor workflow bootstrap | Consumer output embeds the exact generating release version, immutable target asset URL, and binary SHA-256; Velnor dogfood validates an optional `.velnor/generator.lock`; when absent, it builds and verifies a same-source pre-seed helper | Latest qualified stable Velnor release for each supported target |
 | GitHub Actions | Compiled-in Velnor action registry; optional exact overrides in `.velnor/config.toml` | Default record is the latest reviewed stable release; workflow uses immutable full commit SHA |
-| Alint GitHub Action | Compiled-in Velnor action registry; emitted as a full-SHA pin like every other action | `v0.18.4` (`18e1a66db7444fed817c5d8c75292c7709fff32e`) is the current reviewed default as of 2026-10-17. No tag exception exists; changing the pin requires a reviewed Velnor version-policy update |
+| Alint GitHub Action | Compiled-in Velnor action registry; emitted as a full-SHA pin like every other action | `v0.19.0` (`f39a25a7e061bb8738a87372561d8b9a6a29ca87`) is the current reviewed default as of 2026-10-19. No tag exception exists; changing the pin requires a reviewed Velnor version-policy update |
 | GitHub-hosted OS image | Generated `runs-on` label and recorded runner metadata | Latest stable supported Ubuntu image family after host qualification; exact versioned label is the pin. GitHub may update its image contents in place, so record `ImageOS` and `ImageVersion` as runtime evidence and cache identity, not as immutable pins |
 | Runner runtime inputs | `.velnor/runner.lock` | Latest qualified Docker Desktop/Engine, official runner, base-image digest, GitHub API version, protocol revision, and runner dependencies including Turso |
 
@@ -82,9 +85,12 @@ labels, and the bootstrap binary identity are embedded in generated output.
 They MUST run after `velnor-actions init` and `generate` without requiring
 `.velnor/version-policy.toml` or `.velnor/generator.lock`. The generator MUST
 fail generation when its executable lacks verified release provenance needed
-to embed a real immutable bootstrap asset and digest. Velnor's own workflow is
-the sole exception because its protected lock supplies and verifies its
-bootstrapping identity.
+to embed a real immutable bootstrap asset and digest. Velnor's own workflow
+instead validates its optional protected lock or builds and verifies a
+same-source pre-seed helper when that lock is absent.
+The pre-seed check binds helper bytes to the checked-out source and this run's
+artifact transport; it does not review that source or establish immutable
+official-release provenance.
 
 `rust-toolchain.toml`, `mise.toml`, and `mise.lock` are optional,
 repository-owned inspection inputs. They do not define Velnor's generated
@@ -104,25 +110,26 @@ input/output metadata. Generation emits the exact SHA and a matching version
 comment; it never queries a floating `latest` ref. No tag exception
 exists: `asamarts/alint` pins a full SHA like every other action.
 
-Verified defaults on 2026-10-03 (Mr. Boxington action; other pins were last checked 2026-09-28):
+Verified current defaults on 2026-10-19:
 
 ```yaml
-uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # v5.1.2
+uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7 # v5.2.0
 uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
 uses: jdx/mr-boxington-action@47ce49b32025d93a7a2f4570815afaa2b7092240 # v1.7.2
 uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
 uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
 uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-uses: asamarts/alint@b02109b84dd59f3f96f33ad98b829b4d2fcd4b0a # v0.18.3
+uses: asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87 # v0.19.0
 ```
 
-Release records: [mise-action v4.3.0](https://github.com/jdx/mise-action/releases/tag/v4.3.0),
+Release records: [mise-action v5.2.0](https://github.com/jdx/mise-action/releases/tag/v5.2.0),
 [checkout v7.0.1](https://github.com/actions/checkout/releases/tag/v7.0.1),
 [download-artifact v8.0.2](https://github.com/actions/download-artifact/releases/tag/v8.0.2),
 [mr-boxington-action v1.7.2](https://github.com/jdx/mr-boxington-action/releases/tag/v1.7.2),
 [cache v6.1.0](https://github.com/actions/cache/releases/tag/v6.1.0),
-[upload-artifact v7.0.2](https://github.com/actions/upload-artifact/releases/tag/v7.0.2).
+[upload-artifact v7.0.2](https://github.com/actions/upload-artifact/releases/tag/v7.0.2),
+[Alint v0.19.0](https://github.com/asamarts/alint/releases/tag/v0.19.0).
 
 Checkout, Mise setup, cache restore/save, and artifact transfer are emitted
 where required by the workflow graph. The Mr. Boxington action is emitted only
@@ -143,7 +150,8 @@ and its matching stable version. Keys must be exact allowlisted action
 repositories, and the pair must appear in that action's bundled approved-pin
 catalog (latest release plus maintained compatibility pins). The Alint action
 is not a per-project override: Velnor emits exactly
-`asamarts/alint@18e1a66db7444fed817c5d8c75292c7709fff32e` (`# v0.18.4`).
+`asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87` with the binary input
+`version: v0.19.0`.
 Changing that pin is a Velnor version-policy change,
 not a consumer configuration change. Velnor validates every ordinary pair and
 the action's input/output schema before replacing generated output. Unknown
@@ -175,10 +183,12 @@ compatibility override, recorded as `config_override`. No config means the
 generator emits `default` and records `latest_default`. Unsupported or unversioned runner labels MUST block generation.
 
 Alint runs as a separate job only in Velnor's `velnor-repository-v1` profile,
-using this exact generated step (current pin as of 2026-10-17):
+using the following action and binary pins (current as of 2026-10-19):
 
 ```yaml
-- uses: asamarts/alint@18e1a66db7444fed817c5d8c75292c7709fff32e # v0.18.4
+- uses: asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87 # v0.19.0
+  with:
+    version: v0.19.0
 ```
 
 It reads `.alint.yml` and enforces only the rules supported and explicitly

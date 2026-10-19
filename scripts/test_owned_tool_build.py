@@ -63,9 +63,12 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(source.BASES["mise"], stager.UPSTREAM["mise"])
         candidate = fixture()
         source.descriptor(json.dumps(candidate), "f" * 40)
-        candidate["upstream_base_commit"] = "6be3cbdc639a66c03651479428e4c5f60b00485f"
-        with self.assertRaisesRegex(ValueError, "unapproved upstream base"):
-            source.descriptor(json.dumps(candidate), "f" * 40)
+        for superseded in ("580a418ed8ce379669a1a98e9aa405aa6a860996",
+                           "6be3cbdc639a66c03651479428e4c5f60b00485f"):
+            with self.subTest(superseded=superseded):
+                candidate["upstream_base_commit"] = superseded
+                with self.assertRaisesRegex(ValueError, "unapproved upstream base"):
+                    source.descriptor(json.dumps(candidate), "f" * 40)
 
     def test_all_official_bootstrap_rows_have_complete_native_authority(self):
         self.assertGreaterEqual(source.MAX_BOOTSTRAP_DOWNLOAD, 161_267_824)

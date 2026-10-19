@@ -313,3 +313,6 @@ fn test_deadline() -> TestResult<velnor_actions_mise::CheckDeadline> {
 
 #[path = "impl_mise_tool_probe_rust_tests.rs"]
 mod rust_tests;
+
+#[path = "impl_mise_tool_probe_rustfmt_tests.rs"]
+mod rustfmt_tests;

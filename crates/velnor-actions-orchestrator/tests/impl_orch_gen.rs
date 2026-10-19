@@ -58,9 +58,10 @@ fn lock_text() -> Result<String, Box<dyn std::error::Error>> {
         )?;
     }
     Ok(format!(
-        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.10.13\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
+        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"{mise_version}\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
         "e".repeat(40),
-        "b".repeat(64)
+        "b".repeat(64),
+        mise_version = velnor_actions_mise::MISE_VERSION,
     ))
 }
 

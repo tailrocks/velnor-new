@@ -341,7 +341,7 @@ full-SHA pin (repository-structure alint, distinct
 from workflow-syntax actionlint):
 
 ```yaml
-- uses: asamarts/alint@b02109b84dd59f3f96f33ad98b829b4d2fcd4b0a # v0.18.3
+- uses: asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87 # v0.19.0
 ```
 
 It runs only the generic rules configured in `.alint.yml`: file/path rules,

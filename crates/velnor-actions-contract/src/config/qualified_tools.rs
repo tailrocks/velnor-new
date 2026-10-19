@@ -9,6 +9,8 @@ pub(super) mod probes;
 mod recipe;
 #[path = "qualified_tool_recipe_validation.rs"]
 mod recipe_validation;
+#[path = "qualified_tool_rustfmt_probes.rs"]
+mod rustfmt_probes;
 #[path = "qualified_tool_sources.rs"]
 pub(super) mod sources;
 #[path = "qualified_tool_validation.rs"]
@@ -200,6 +202,11 @@ pub enum QualifiedToolProbe {
     /// Fixed `rustc -vV`; exact complete stdout (trailing newline excluded).
     RustcVerbose {
         /// Exact expected complete stdout.
+        expected: String,
+    },
+    /// Fixed formatter `--version`, bound to its qualified Rust compiler.
+    RustfmtVersion {
+        /// Exact formatter banner, including its own version and compiler identity.
         expected: String,
     },
     /// Fixed `cargo-nextest --version`; exact first stdout line.

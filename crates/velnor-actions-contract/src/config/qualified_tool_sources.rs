@@ -184,7 +184,7 @@ fn python_platform_triple(platform: CheckPlatform) -> &'static str {
     }
 }
 
-fn valid_release_date(value: &str) -> bool {
+pub(super) fn valid_release_date(value: &str) -> bool {
     if value.len() != 8 || !value.bytes().all(|byte| byte.is_ascii_digit()) {
         return false;
     }

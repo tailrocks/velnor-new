@@ -10,6 +10,7 @@
 
 use std::error::Error;
 
+use crate::impl_cli_tmp::{cleanup, code, fresh_tempdir, git_fixture, git_init, spawn};
 use crate::impl_repo_policy::read;
 use crate::impl_repo_size::physical_lines;
 
@@ -31,7 +32,7 @@ const ORIGINAL_ANCHORS: [&str; 13] = [
     "unsafe_code = \"forbid\"",
     "unwrap_used = \"deny\"",
     "too-many-lines-threshold = 80",
-    "asamarts/alint@b02109b84dd59f3f96f33ad98b829b4d2fcd4b0a",
+    "full-SHA pin (repository-structure alint, distinct",
     "MISE_RUSTUP_HOME",
     "RUSTUP_TOOLCHAIN",
     "400 physical lines",
@@ -69,6 +70,99 @@ const AGENTS_DETAIL_DENYLIST: [&str; 6] = [
 /// True when `body` reads as pointer-only agent instructions.
 fn is_pointer_only(body: &str) -> bool {
     body.contains("docs/proposed") && !AGENTS_DETAIL_DENYLIST.iter().any(|t| body.contains(t))
+}
+
+/// Read the current pin through the public generator's repository-policy output.
+fn generated_alint_pin() -> Result<String, Box<dyn Error>> {
+    let tmp = fresh_tempdir("quality-alint-pin")?;
+    let result = (|| {
+        let repo = tmp.join("repo");
+        std::fs::create_dir(&repo)?;
+        git_init(&repo)?;
+        std::fs::create_dir(repo.join(".velnor"))?;
+        std::fs::write(
+            repo.join(".velnor/config.toml"),
+            "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"main\"\n",
+        )?;
+        let remote = git_fixture::command(&repo)?
+            .args([
+                "remote",
+                "add",
+                "origin",
+                "https://github.com/tailrocks/velnor-new.git",
+            ])
+            .output()?;
+        assert!(remote.status.success(), "remote fixture failed: {remote:?}");
+        let preview = tmp.join("preview");
+        let generated = spawn(
+            &[
+                "generate",
+                "--output-dir",
+                preview.to_str().ok_or("preview path")?,
+            ],
+            &[],
+            &repo,
+        )?;
+        assert_eq!(code(&generated), 0, "generation failed: {generated:?}");
+        let yaml = std::fs::read_to_string(preview.join(".github/workflows/ci.yml"))?;
+        alint_pin(&yaml)
+    })();
+    cleanup(&tmp);
+    result
+}
+
+/// Keep the ref and version bound to the same uniquely emitted action step.
+fn alint_pin(yaml: &str) -> Result<String, Box<dyn Error>> {
+    let lines: Vec<_> = yaml.lines().collect();
+    let matches: Vec<_> = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| line.starts_with("        uses: asamarts/alint@"))
+        .collect();
+    let [(index, uses)] = matches.as_slice() else {
+        return Err("expected exactly one generated Alint step".into());
+    };
+    let sha = uses
+        .trim()
+        .strip_prefix("uses: asamarts/alint@")
+        .ok_or("Alint ref")?;
+    assert!(
+        sha.len() == 40
+            && sha
+                .bytes()
+                .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+    );
+    let step: Vec<_> = lines
+        .iter()
+        .skip(*index + 1)
+        .take_while(|line| line.is_empty() || line.starts_with("        "))
+        .collect();
+    let mappings: Vec<_> = step
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| line.as_bytes() == b"        with:")
+        .map(|(index, _)| index)
+        .collect();
+    let [with] = mappings.as_slice() else {
+        return Err("expected exactly one with mapping in the generated Alint step".into());
+    };
+    let versions: Vec<_> = step
+        .iter()
+        .skip(*with + 1)
+        .take_while(|line| line.is_empty() || line.starts_with("          "))
+        .filter_map(|line| line.strip_prefix("          version: v"))
+        .collect();
+    let [version] = versions.as_slice() else {
+        return Err("expected exactly one version in the generated Alint step".into());
+    };
+    let parts: Vec<_> = version.split('.').collect();
+    assert!(
+        parts.len() == 3
+            && parts
+                .iter()
+                .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
+    );
+    Ok(format!("- {} # v{version}", uses.trim()))
 }
 
 #[test]
@@ -125,6 +219,26 @@ fn qc_disambiguates_homonyms() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn qc_keeps_original_normatives() -> Result<(), Box<dyn Error>> {
+    let fixture = format!(
+        "        uses: asamarts/alint@{}\n        with:\n          version: v1.2.3\n",
+        "a".repeat(40)
+    );
+    assert!(alint_pin(&fixture).is_ok());
+    for invalid in [
+        fixture.replace("        with:", "        env:"),
+        fixture.replace("        with:\n", ""),
+        format!("{fixture}          version: v1.2.3\n"),
+        format!("{fixture}        with:\n          version: v1.2.3\n"),
+        fixture.replace(
+            "        with:\n          version: v1.2.3",
+            "        with:\n          path: .\n        env:\n          version: v1.2.3",
+        ),
+    ] {
+        assert!(
+            alint_pin(&invalid).is_err(),
+            "accepted invalid Alint step: {invalid}"
+        );
+    }
     let qc = read("docs/proposed/rust-quality-contract.md")?;
     let verification = read("docs/proposed/rust-verification-contract.md")?;
     for anchor in ORIGINAL_ANCHORS {
@@ -133,6 +247,17 @@ fn qc_keeps_original_normatives() -> Result<(), Box<dyn Error>> {
             "condensation orphaned {anchor}"
         );
     }
+    let alint = generated_alint_pin()?;
+    assert!(
+        qc.lines()
+            .chain(verification.lines())
+            .any(|line| line == alint),
+        "QC must document the exact current reviewed action: {alint}"
+    );
+    assert!(
+        qc.contains("Alint MUST run as its own job"),
+        "QC must retain the dedicated Alint job requirement"
+    );
     let policy = qc.matches("version-policy.md").count();
     assert!(policy >= 2, "version-policy cited only {policy}x (need 2)");
     // Split companions keep their moved MUSTs verbatim; stubs point at them.
