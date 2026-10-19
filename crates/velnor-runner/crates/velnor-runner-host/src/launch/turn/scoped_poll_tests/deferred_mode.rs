@@ -116,3 +116,7 @@ async fn durable_offer_set(
 #[cfg(test)]
 #[path = "deferred_mode/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "deferred_mode/inbox_replay.rs"]
+mod inbox_replay;
