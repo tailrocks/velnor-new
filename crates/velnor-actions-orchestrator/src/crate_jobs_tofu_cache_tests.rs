@@ -61,6 +61,7 @@ fn provider_restore_precedes_init_obligation() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
@@ -106,6 +107,7 @@ fn provider_restore_keys_are_per_root() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
@@ -149,6 +151,7 @@ fn rust_jobs_carry_no_provider_restore() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
@@ -178,6 +181,7 @@ fn mixed_job_restores_both_sources_and_providers() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");

@@ -43,25 +43,51 @@ pub(super) fn target_cache_keys(
     rust_toolchain: &str,
     working_directory: Option<&str>,
 ) -> (String, String) {
-    let working_dir = working_directory.filter(|dir| !dir.is_empty() && *dir != ".");
-    let (lock_hash, source_hash) = if let Some(dir) = working_dir {
-        (
-            format!(
-                "${{{{ hashFiles('{dir}/Cargo.lock','{dir}/Cargo.toml','{dir}/**/Cargo.toml','rust-toolchain.toml','rust-toolchain','{dir}/.config/nextest.toml') }}}}"
-            ),
-            format!(
-                "${{{{ hashFiles('{dir}/**/*.rs','{dir}/**/Cargo.toml','{dir}/Cargo.lock') }}}}"
-            ),
-        )
-    } else {
-        (
-            "${{ hashFiles('Cargo.lock','Cargo.toml','crates/*/Cargo.toml','rust-toolchain.toml','rust-toolchain','.config/nextest.toml') }}".to_owned(),
-            "${{ hashFiles('Cargo.lock','Cargo.toml','crates/*/Cargo.toml','src/**/*.rs','crates/*/src/**/*.rs','crates/*/tests/**/*.rs','crates/*/benches/**/*.rs','crates/*/examples/**/*.rs','crates/*/build.rs','tests/**/*.rs','benches/**/*.rs','examples/**/*.rs','build.rs') }}".to_owned(),
-        )
-    };
+    let (manifest_inputs, source_inputs) = target_cache_inputs(working_directory);
+    let lock_hash = hash_files(&manifest_inputs);
+    let source_hash = hash_files(&source_inputs);
     let cache_key = format!("{generation}-target-rust-{rust_toolchain}-{lock_hash}-{source_hash}");
     let restore_keys = format!(
         "{generation}-target-rust-{rust_toolchain}-{lock_hash}-\n{generation}-target-rust-{rust_toolchain}-"
     );
     (cache_key, restore_keys)
 }
+
+/// Recursive input patterns for the selected workspace, independent of member layout.
+/// Only that workspace's actual mutable target is excluded: a member directory
+/// named `target` elsewhere is still source, not an output-directory alias.
+fn target_cache_inputs(working_directory: Option<&str>) -> (Vec<String>, Vec<String>) {
+    let prefix = working_directory
+        .filter(|dir| !dir.is_empty() && *dir != ".")
+        .map_or_else(String::new, |dir| format!("{dir}/"));
+    let exclude_target = format!("!{prefix}target/**");
+    let manifests = vec![
+        format!("{prefix}Cargo.lock"),
+        format!("{prefix}Cargo.toml"),
+        format!("{prefix}**/Cargo.toml"),
+        "rust-toolchain.toml".to_owned(),
+        "rust-toolchain".to_owned(),
+        format!("{prefix}.config/nextest.toml"),
+        exclude_target.clone(),
+    ];
+    let sources = vec![
+        format!("{prefix}Cargo.lock"),
+        format!("{prefix}Cargo.toml"),
+        format!("{prefix}**/Cargo.toml"),
+        format!("{prefix}**/*.rs"),
+        exclude_target,
+    ];
+    (manifests, sources)
+}
+
+fn hash_files(patterns: &[String]) -> String {
+    let args = patterns
+        .iter()
+        .map(|pattern| format!("'{pattern}'"))
+        .collect::<Vec<_>>();
+    format!("${{{{ hashFiles({}) }}}}", args.join(","))
+}
+
+#[cfg(test)]
+#[path = "cache_steps_mbx_scripts_tests.rs"]
+mod tests;

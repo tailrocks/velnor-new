@@ -272,3 +272,38 @@ fn unwind_after_publication_cleans_owned_proof() {
     assert!(result.is_err());
     assert!(!path.exists());
 }
+
+#[test]
+fn configured_producer_deadline_keeps_original_clock_and_outer_intersection() {
+    let started = Instant::now()
+        .checked_sub(Duration::from_secs(301))
+        .expect("fixture start");
+    let maximum = producer_deadline(started, 10).expect("ten-minute ceiling");
+    assert!(maximum.remaining().expect("remaining") < Duration::from_secs(299));
+    assert!(
+        producer_deadline(started, 5)
+            .expect("default budget")
+            .remaining()
+            .is_err(),
+        "configuration reads cannot reset five elapsed minutes"
+    );
+    for minutes in [1, 5, 6, 10] {
+        assert!(
+            producer_deadline(Instant::now(), minutes).is_ok(),
+            "{minutes}"
+        );
+    }
+    for minutes in [0, 11, u16::MAX] {
+        assert!(
+            producer_deadline(Instant::now(), minutes).is_err(),
+            "{minutes}"
+        );
+    }
+    let parent = CheckDeadline::from_start(Instant::now(), Duration::from_secs(1)).expect("outer");
+    parent
+        .scope(|| {
+            let configured = producer_deadline(Instant::now(), 10).expect("configured");
+            assert!(configured.remaining().expect("intersected") <= Duration::from_secs(1));
+        })
+        .expect("outer ceiling retained");
+}

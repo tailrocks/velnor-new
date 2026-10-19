@@ -13,7 +13,9 @@ use std::{
     time::{Duration, Instant},
 };
 use velnor_actions_contract::{
-    PackageReleasePlan, config::RustBinaryPreviewConfig, package_release::PackageReleaseChannel,
+    PackageReleasePlan,
+    config::{RustBinaryPreviewConfig, RustBinaryPreviewProducer},
+    package_release::PackageReleaseChannel,
     parse_package_release_plan,
 };
 use velnor_actions_mise::CheckDeadline;
@@ -50,13 +52,9 @@ const PLAN_NAME: &str = "package-release-plan.json";
 pub fn execute_preview_producer() -> Result<(), OrchestratorError> {
     acquisition::reject_credentials()?;
     let started = Instant::now();
-    // Absolute ceiling (GitHub's job limit) until the configured producer
-    // budget is read; the nested scope below can only shorten it.
-    let maximum = CheckDeadline::from_start_with_cleanup_reserve(
-        started,
-        Duration::from_secs(u64::from(velnor_actions_contract::JobTimeout::DEFAULT_MINUTES) * 60),
-    )
-    .map_err(|error| internal(&error.to_string()))?;
+    // Independent native producer ceiling until its configuration is read;
+    // the configured scope shares this original start and can only shorten it.
+    let maximum = producer_deadline(started, RustBinaryPreviewProducer::MAX_TIMEOUT_MINUTES)?;
     with_proof_ownership(|guard| {
         maximum
             .scope(|| {
@@ -71,11 +69,7 @@ pub fn execute_preview_producer() -> Result<(), OrchestratorError> {
                     .preview
                     .producer
                     .timeout_minutes;
-                let deadline = CheckDeadline::from_start_with_cleanup_reserve(
-                    started,
-                    Duration::from_secs(u64::from(minutes) * 60),
-                )
-                .map_err(|error| internal(&error.to_string()))?;
+                let deadline = producer_deadline(started, minutes)?;
                 deadline
                     .scope(|| {
                         let plan = read_plan(&temp, deadline)?;
@@ -88,6 +82,18 @@ pub fn execute_preview_producer() -> Result<(), OrchestratorError> {
             })
             .map_err(|error| internal(&error.to_string()))?
     })
+}
+
+/// Preserve the execution entry's original clock and reserve cleanup within it.
+fn producer_deadline(started: Instant, minutes: u16) -> Result<CheckDeadline, OrchestratorError> {
+    if !(1..=RustBinaryPreviewProducer::MAX_TIMEOUT_MINUTES).contains(&minutes) {
+        return Err(internal("preview_producer_timeout"));
+    }
+    CheckDeadline::from_start_with_cleanup_reserve(
+        started,
+        Duration::from_secs(u64::from(minutes) * 60),
+    )
+    .map_err(|error| internal(&error.to_string()))
 }
 
 fn read_plan(
