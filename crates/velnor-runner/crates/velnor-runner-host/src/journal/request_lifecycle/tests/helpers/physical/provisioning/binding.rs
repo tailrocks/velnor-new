@@ -184,7 +184,7 @@ impl ProvisioningFixture<'_> {
             test_observed_container_cgroup(
                 BootstrapContainerRole::Runner,
                 runner_id.to_owned(),
-                "/test/runner".to_owned(),
+                format!("/test/runner/{runner_id}"),
                 (Some(6_u64 << 30), 1_u64 << 20),
                 (Some(100_000), 100_000),
                 Some(2_048),
@@ -192,7 +192,7 @@ impl ProvisioningFixture<'_> {
             test_observed_container_cgroup(
                 BootstrapContainerRole::Dind,
                 dind_id.to_owned(),
-                "/test/dind".to_owned(),
+                format!("/test/dind/{dind_id}"),
                 (Some(2_u64 << 30), 1_u64 << 20),
                 (Some(100_000), 100_000),
                 Some(2_048),

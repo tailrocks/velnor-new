@@ -5,6 +5,7 @@ mod acquired_recovery;
 mod admission;
 mod authorized_offers;
 mod cleanup_identity;
+mod cleanup_independence;
 mod correlation;
 mod disk_capacity;
 mod event_source;
