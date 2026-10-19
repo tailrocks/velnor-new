@@ -161,9 +161,17 @@ fn unbounded_manifest_dir_reads_run_until_inputs_are_declared() -> TestResult {
         "{:?}",
         plan.warnings
     );
-    let declared = "\n[[stacks.rust.inputs]]\nglobs = [\"libs/util/**\"]\npackages = [\"a7\"]\n";
-    let plan = plan_with(declared, reader, edit)?;
+    // An input rule alone is not a statement that the inputs are complete.
+    let partial = "\n[[stacks.rust.inputs]]\nglobs = [\"libs/util/**\"]\npackages = [\"a7\"]\n";
+    let plan = plan_with(partial, reader, edit)?;
+    assert_runs(&plan, &["a1", "a7"]);
+    let complete = "\n[[stacks.rust.inputs]]\nglobs = [\"libs/util/**\"]\npackages = [\"a7\"]\ncomplete = true\n";
+    let plan = plan_with(complete, reader, edit)?;
     assert_runs(&plan, &["a1"]);
+    let plan = plan_with(complete, reader, |root| {
+        put(root, "libs/util/src/lib.rs", "pub fn g() {}\n")
+    })?;
+    assert_runs(&plan, &["a2", "a7", "util"]);
     Ok(())
 }
 

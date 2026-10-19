@@ -105,7 +105,8 @@ job to skip steps inside it.
   claims (`include_str!`/`include_bytes!`/`include!`/`#[path]`, a
   `CARGO_MANIFEST_DIR` path with a `..` component or `parent()`, a relative
   `..` file-system read), counts as changed on every pull request until it
-  declares those inputs, and its dependents run with it. An unchanged sharded
+  declares those inputs (an unbounded read only through a rule with
+  `complete = true`), and its dependents run with it. An unchanged sharded
   archive whose source is not content-bound fails the plan instead of running
   alone (unreachable today: the closure digest always binds it).
 - Residual risk, named: the read scan is static. A read through a computed

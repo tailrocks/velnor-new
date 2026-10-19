@@ -115,9 +115,11 @@ packages = ["lightdash-csv-delivery-app"]
 ```
 
 Globs support `**`, `*`, `?`, `[...]`, and `{a,b}`. Packages are exact Cargo
-package names.
+package names. `complete = true` on a rule states that the named packages'
+rules list all their out-of-directory inputs (see the read scan below).
 
-velnor-new declares `crates/**` for `velnor-actions-cli`: its repository-policy
+velnor-new declares `crates/**` with `complete = true` for
+`velnor-actions-cli`: its repository-policy
 tests read every crate's manifests, sources, and tests in both workspaces (for
 example MSRV parity with `crates/velnor-runner/Cargo.toml`). Its other crates
 whose tests read the repository through `CARGO_MANIFEST_DIR` stay forced until
@@ -141,9 +143,10 @@ file and attribute it to its deepest package. Detected reads:
 is covered when the package claims the target (rules 1-5 above) or when no
 package claims it (a change there is unowned and runs everything already). A
 read outside the repository can never change with a pull request and is
-ignored. An unbounded read is covered once the package has at least one
-`[[stacks.rust.inputs]]` rule: the declaration is the owner's statement of what
-it reads. Every uncovered package records
+ignored. An unbounded read is covered only once a `[[stacks.rust.inputs]]`
+rule naming the package sets `complete = true`: the owner's statement that the
+package's rules, together, list every path it reads outside its directory. A
+rule without `complete` adds claims but never silences an unbounded read. Every uncovered package records
 `undeclared_reads:<package>:<file>:<reason>` and counts as changed.
 
 Limits, by construction of a static scan: a read through a computed path with

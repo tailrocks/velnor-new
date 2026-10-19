@@ -103,13 +103,13 @@ impl<'a> Ownership<'a> {
         })
     }
 
-    /// True when some declared input rule names package `id`.
-    pub(crate) fn declares_inputs(&self, id: &str) -> bool {
+    /// True when a declared input rule names package `id` as complete.
+    pub(crate) fn declares_complete_inputs(&self, id: &str) -> bool {
         self.discovery
             .affected
             .rules
             .iter()
-            .any(|rule| rule.package_ids.contains(id))
+            .any(|rule| rule.complete && rule.package_ids.contains(id))
     }
 
     /// Attach resolved links; each link's owners come from the other rules.

@@ -15,10 +15,10 @@
 //!   `[[stacks.rust.inputs]]` rule, or a tracked symlink), or when no
 //!   package claims it at all: a change there is unowned and already
 //!   selects everything. An unbounded
-//!   read (`CARGO_MANIFEST_DIR` plus `..`, a computed include) is covered only once the package declares its inputs
-//!   with at least one `[[stacks.rust.inputs]]` rule: the declaration is
-//!   the owner's statement of what it reads, which Velnor cannot verify
-//!   statically. A read outside the repository can never change with a
+//!   read (`CARGO_MANIFEST_DIR` plus `..`, a computed include) is covered only
+//!   once a `[[stacks.rust.inputs]]` rule naming the package sets
+//!   `complete = true`: the owner's statement that its declared inputs list
+//!   every read, which Velnor cannot verify statically. A read outside the repository can never change with a
 //!   pull request and is ignored.
 //!
 //! A forced package seeds the reverse closure like a changed one, so its
@@ -88,7 +88,7 @@ fn covered(ownership: &Ownership<'_>, id: &str, target: &ReadTarget) -> bool {
     match target {
         ReadTarget::Path(path) => !ownership.is_owned(path) || ownership.claim(path).contains(id),
         ReadTarget::Outside => true,
-        ReadTarget::Unbounded(_) => ownership.declares_inputs(id),
+        ReadTarget::Unbounded(_) => ownership.declares_complete_inputs(id),
     }
 }
 

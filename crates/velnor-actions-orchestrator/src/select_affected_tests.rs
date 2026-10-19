@@ -142,6 +142,7 @@ fn declared_input_inside_another_package_selects_both() {
     discovery.affected.rules = vec![crate::affected_inputs::InputRule {
         globs: vec!["b/proto/**".to_owned()],
         package_ids: set(&["a"]),
+        complete: false,
     }];
     let ownership = Ownership::new(&discovery);
     let selected = affected_packages(
@@ -159,6 +160,7 @@ fn declared_input_outside_packages_is_owned() {
     discovery.affected.rules = vec![crate::affected_inputs::InputRule {
         globs: vec!["protos/**/*.proto".to_owned()],
         package_ids: set(&["a"]),
+        complete: false,
     }];
     let ownership = Ownership::new(&discovery);
     let changed = set(&["protos/v1/x.proto"]);
@@ -329,6 +331,7 @@ fn native_parallel_target_helper_changes_select_the_declared_renderer_owner() {
     let owner = "velnor-actions-workflow-renderer";
     let mut discovery = discovery_with(&[
         (owner, "crates/velnor-actions-workflow-renderer/Cargo.toml"),
+        ("velnor-actions-cli", "crates/velnor-actions-cli/Cargo.toml"),
         ("unrelated", "crates/unrelated/Cargo.toml"),
     ]);
     discovery.affected.rules =
@@ -344,7 +347,10 @@ fn native_parallel_target_helper_changes_select_the_declared_renderer_owner() {
             !has_unowned_file(&ownership, &changed),
             "declared native input: {file}"
         );
-        assert_eq!(affected_packages(&ownership, &changed, &[]), set(&[owner]));
+        assert_eq!(
+            affected_packages(&ownership, &changed, &BTreeSet::new(), &[]),
+            set(&[owner])
+        );
     }
     assert!(
         has_unowned_file(&ownership, &set(&["scripts/unrelated.py"])),

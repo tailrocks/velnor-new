@@ -32,6 +32,8 @@ pub(crate) struct InputRule {
     pub(crate) globs: Vec<String>,
     /// Every workspace-member package ID carrying a named package.
     pub(crate) package_ids: BTreeSet<String>,
+    /// The named packages declare their out-of-directory inputs complete.
+    pub(crate) complete: bool,
 }
 
 impl InputRule {
@@ -79,6 +81,7 @@ pub(crate) fn resolve_input_rules(
         rules.push(InputRule {
             globs: rule.globs.clone(),
             package_ids,
+            complete: rule.complete,
         });
     }
     Ok(rules)
