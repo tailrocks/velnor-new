@@ -248,11 +248,66 @@ class PublisherTests(unittest.TestCase):
         redirect = FakeTransport([publish._Response(302, {"Location": "https://evil.test/"}, b"")])
         with self.assertRaisesRegex(publish.PublishError, "redirects"):
             publish._request(redirect, "secret-token-value-123456", "GET", "https://ghcr.io/v2/", {})
-        for location in ("https://evil.test/v2/tailrocks/velnor-job/blobs/uploads/x",
-                         "http://ghcr.io/v2/tailrocks/velnor-job/blobs/uploads/x",
-                         "https://ghcr.io/v2/tailrocks/other/blobs/uploads/x"):
+        for location in ("https://evil.test/v2/tailrocks/velnor-job/blobs/upload/x",
+                         "http://ghcr.io/v2/tailrocks/velnor-job/blobs/upload/x",
+                         "https://ghcr.io/v2/tailrocks/other/blobs/upload/x",
+                         "https://ghcr.io/v2/tailrocks/velnor-job/blobs/upload/../other",
+                         "https://ghcr.io/v2/tailrocks/velnor-job/blobs/upload/%2e%2e/other",
+                         "https://ghcr.io/v2/tailrocks/velnor-job/blobs/upload/%5cother",
+                         "https://ghcr.io/v2/tailrocks/velnor-job/blobs/upload/x%7f",
+                         "https://[invalid/v2/tailrocks/velnor-job/blobs/upload/x",
+                         "https://user@ghcr.io/v2/tailrocks/velnor-job/blobs/upload/x",
+                         "https://ghcr.io:444/v2/tailrocks/velnor-job/blobs/upload/x"):
             with self.subTest(location=location), self.assertRaises(publish.PublishError):
                 publish._validate_location("https://ghcr.io/v2/tailrocks/velnor-job/blobs/uploads/", location)
+        for location in (
+            "/v2/tailrocks/velnor-job/blobs/upload/session\t-id",
+            "/v2/tailrocks/velnor-job/blobs/upload/session?_state=%09x",
+            "/v2/tailrocks/velnor-job/blobs/upload/session?_state=%00x",
+        ):
+            with self.subTest(location=location), self.assertRaises(publish.PublishError):
+                publish._validate_location("https://ghcr.io/v2/tailrocks/velnor-job/blobs/uploads/", location)
+
+    def test_ghcr_upload_location_uses_singular_upload_path(self):
+        base = "https://ghcr.io/v2/tailrocks/velnor-job/blobs/uploads/"
+        relative = "/v2/tailrocks/velnor-job/blobs/upload/session-id?_state=opaque-value"
+        self.assertEqual(publish._validate_location(base, relative),
+                         "https://ghcr.io/v2/tailrocks/velnor-job/blobs/upload/session-id?_state=opaque-value")
+        absolute = "https://ghcr.io/v2/tailrocks/velnor-job/blobs/upload/session-id"
+        self.assertEqual(publish._validate_location(base, absolute), absolute)
+        plural = "/v2/tailrocks/velnor-job/blobs/uploads/session-id?_state=opaque-value"
+        self.assertEqual(publish._validate_location(base, plural),
+                         "https://ghcr.io/v2/tailrocks/velnor-job/blobs/uploads/session-id?_state=opaque-value")
+
+    def test_blob_upload_keeps_ghcr_session_query(self):
+        blob = b"verified upload body"
+        blob_digest = digest(blob)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "blob"
+            path.write_bytes(blob)
+            transport = FakeTransport([
+                publish._Response(404, {}, b""),
+                publish._Response(202, {
+                    "Location": "/v2/tailrocks/velnor-job/blobs/upload/session-id?_state=a%2Fb%3D%2B",
+                }, b""),
+                publish._Response(201, {}, b""),
+                publish._Response(200, {
+                    "Docker-Content-Digest": blob_digest,
+                    "Content-Length": str(len(blob)),
+                }, b""),
+            ])
+            publish._upload_blob(transport, "registry-token-value-1234567890", blob_digest, path)
+        method, url, headers, _, length = transport.requests[2]
+        self.assertEqual(method, "PUT")
+        self.assertEqual(urlsplit(url).path,
+                         "/v2/tailrocks/velnor-job/blobs/upload/session-id")
+        self.assertEqual(parse_qs(urlsplit(url).query), {
+            "_state": ["a/b=+"],
+            "digest": [blob_digest],
+        })
+        self.assertIn("_state=a%2Fb%3D%2B", urlsplit(url).query)
+        self.assertEqual(headers["Authorization"], "Bearer registry-token-value-1234567890")
+        self.assertEqual(length, len(blob))
 
     def test_registry_digest_and_manifest_byte_mismatch_fail(self):
         content = b"exact manifest"
@@ -297,7 +352,7 @@ class PublisherTests(unittest.TestCase):
             path.write_bytes(blob)
             missing = FakeTransport([
                 publish._Response(404, {}, b""),
-                publish._Response(202, {"Location": "/v2/tailrocks/velnor-job/blobs/uploads/session"}, b""),
+                publish._Response(202, {"Location": "/v2/tailrocks/velnor-job/blobs/upload/session"}, b""),
                 publish.PublishError("request failed"),
                 publish._Response(404, {}, b""),
             ])
@@ -305,7 +360,7 @@ class PublisherTests(unittest.TestCase):
                 publish._upload_blob(missing, "secret-token-value-123456", blob_digest, path)
             already_uploaded = FakeTransport([
                 publish._Response(404, {}, b""),
-                publish._Response(202, {"Location": "/v2/tailrocks/velnor-job/blobs/uploads/session"}, b""),
+                publish._Response(202, {"Location": "/v2/tailrocks/velnor-job/blobs/upload/session"}, b""),
                 publish.PublishError("request failed"),
                 publish._Response(200, {
                     "Docker-Content-Digest": blob_digest, "Content-Length": str(len(blob)),
