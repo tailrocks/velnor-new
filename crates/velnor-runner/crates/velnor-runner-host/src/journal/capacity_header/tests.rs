@@ -35,6 +35,48 @@ fn exact_reservation_is_idempotent_and_zero_is_a_valid_header() -> TestResult {
 }
 
 #[test]
+fn fairness_cursor_uses_latest_positive_generation_including_released_records() -> TestResult {
+    let mut ledger = HeaderLedger::new(2)?;
+    assert_eq!(ledger.fairness_cursor(), None);
+
+    let first = reserve(&mut ledger, connection("alpha")?, 10, "session-a", 1)?;
+    assert_eq!(ledger.fairness_cursor(), Some(connection("alpha")?));
+    let zero = reserve(&mut ledger, connection("beta")?, 20, "session-b", 0)?;
+    assert_eq!(ledger.fairness_cursor(), Some(connection("alpha")?));
+
+    let zero_poll = ledger.begin_zero_poll(&zero)?;
+    ledger.finish_poll(&zero_poll, PollOutcome::Response)?;
+    let zero_delete = ledger.begin_delete(&zero)?;
+    ledger.finish_delete(&zero_delete)?;
+    assert_eq!(ledger.fairness_cursor(), Some(connection("alpha")?));
+
+    let positive_poll = ledger.begin_poll(&first)?;
+    ledger.finish_poll(&positive_poll, PollOutcome::Response)?;
+    let zero_poll = ledger.begin_zero_poll(&first)?;
+    ledger.finish_poll(&zero_poll, PollOutcome::Response)?;
+    let deletion = ledger.begin_delete(&first)?;
+    ledger.finish_delete(&deletion)?;
+    assert_eq!(ledger.fairness_cursor(), Some(connection("alpha")?));
+
+    let mut restored = HeaderLedger::restore(ledger.snapshot())?;
+    let newer_zero = reserve(&mut restored, connection("beta")?, 20, "session-c", 0)?;
+    assert_eq!(restored.fairness_cursor(), Some(connection("alpha")?));
+    let zero_poll = restored.begin_zero_poll(&newer_zero)?;
+    restored.finish_poll(&zero_poll, PollOutcome::Response)?;
+    let zero_delete = restored.begin_delete(&newer_zero)?;
+    restored.finish_delete(&zero_delete)?;
+    assert_eq!(restored.fairness_cursor(), Some(connection("alpha")?));
+    let newer_positive = reserve(&mut restored, connection("beta")?, 20, "session-d", 1)?;
+    assert_eq!(restored.fairness_cursor(), Some(connection("beta")?));
+
+    let round_trip = HeaderLedger::restore(restored.snapshot())?;
+    assert_eq!(round_trip.fairness_cursor(), Some(connection("beta")?));
+    assert_eq!(newer_zero.target(), 0);
+    assert_eq!(newer_positive.target(), 1);
+    Ok(())
+}
+
+#[test]
 fn aggregate_capacity_is_reserved_before_a_second_connection_can_poll() -> TestResult {
     let mut ledger = HeaderLedger::new(3)?;
     reserve(&mut ledger, connection("essential")?, 10, "session-a", 2)?;

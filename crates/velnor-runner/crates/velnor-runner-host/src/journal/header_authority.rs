@@ -116,6 +116,15 @@ impl Journal {
         })
         .await
     }
+
+    /// Give the durable cursor for oversubscribed connection scheduling.
+    pub(crate) async fn header_fairness_cursor(&self) -> Result<Option<ConnectionId>, HostError> {
+        read_transaction(self, async |connection| {
+            let ledger = load(connection).await?;
+            Ok(ledger.fairness_cursor())
+        })
+        .await
+    }
 }
 
 /// Validate an updated host capacity policy in its caller's write transaction.

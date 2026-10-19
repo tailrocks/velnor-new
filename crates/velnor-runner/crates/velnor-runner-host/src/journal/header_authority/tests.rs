@@ -79,6 +79,63 @@ async fn reservations_from_multiple_connections_share_one_durable_limit() -> Tes
 }
 
 #[tokio::test]
+async fn fairness_cursor_uses_positive_generation_after_reopen() -> TestResult {
+    let scratch = Scratch::new()?;
+    let journal = open_journal(&scratch, 2).await?;
+    let positive = journal
+        .reserve_header_allocation(connection("alpha")?, 10, "session-a", 1)
+        .await?;
+    assert_eq!(
+        journal.header_fairness_cursor().await?,
+        Some(connection("alpha")?)
+    );
+
+    let zero = journal
+        .reserve_header_allocation(connection("beta")?, 20, "session-b", 0)
+        .await?;
+    assert_eq!(
+        journal.header_fairness_cursor().await?,
+        Some(connection("alpha")?)
+    );
+    let attempt = journal.begin_zero_header_poll(&zero).await?;
+    journal
+        .settle_header_poll(CompletedHeaderPoll::test_only(attempt))
+        .await?;
+    let deletion = journal.begin_header_session_delete(&zero).await?;
+    journal
+        .retire_header_allocation(DeletedSession204::test_only(deletion))
+        .await?;
+
+    let attempt = journal.begin_zero_header_poll(&positive).await?;
+    journal
+        .settle_header_poll(CompletedHeaderPoll::test_only(attempt))
+        .await?;
+    let deletion = journal.begin_header_session_delete(&positive).await?;
+    journal
+        .retire_header_allocation(DeletedSession204::test_only(deletion))
+        .await?;
+    assert_eq!(
+        journal.header_fairness_cursor().await?,
+        Some(connection("alpha")?)
+    );
+    drop(journal);
+
+    let reopened = open_journal(&scratch, 2).await?;
+    assert_eq!(
+        reopened.header_fairness_cursor().await?,
+        Some(connection("alpha")?)
+    );
+    reopened
+        .reserve_header_allocation(connection("beta")?, 20, "session-c", 1)
+        .await?;
+    assert_eq!(
+        reopened.header_fairness_cursor().await?,
+        Some(connection("beta")?)
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn committed_poll_intent_becomes_uncertain_after_reopen() -> TestResult {
     let scratch = Scratch::new()?;
     let journal = open_journal(&scratch, 3).await?;

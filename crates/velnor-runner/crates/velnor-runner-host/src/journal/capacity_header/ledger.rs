@@ -287,6 +287,16 @@ impl HeaderLedger {
             .collect()
     }
 
+    /// Return the connection with the newest positive allocation generation.
+    #[must_use]
+    pub(crate) fn fairness_cursor(&self) -> Option<ConnectionId> {
+        self.records
+            .values()
+            .filter(|record| record.target > 0)
+            .max_by_key(|record| record.generation)
+            .map(|record| record.identity.connection_id.clone())
+    }
+
     /// Change the host ceiling only when every existing header still fits.
     pub(crate) fn set_max_jobs(&mut self, max_jobs: u32) -> Result<(), HeaderLedgerError> {
         if max_jobs == 0 {
