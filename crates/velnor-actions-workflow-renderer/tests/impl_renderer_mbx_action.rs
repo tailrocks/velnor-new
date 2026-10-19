@@ -118,8 +118,9 @@ fn assert_root_target_cache_keys(with: &std::collections::BTreeMap<String, Strin
         mbx_cache_generation(TEST_MBX_VERSION),
         "a".repeat(40)
     );
-    let expected_lock_hash = "${{ hashFiles('Cargo.lock','Cargo.toml','crates/*/Cargo.toml','rust-toolchain.toml','rust-toolchain','.config/nextest.toml') }}";
-    let expected_source_hash = "${{ hashFiles('Cargo.lock','Cargo.toml','crates/*/Cargo.toml','src/**/*.rs','crates/*/src/**/*.rs','crates/*/tests/**/*.rs','crates/*/benches/**/*.rs','crates/*/examples/**/*.rs','crates/*/build.rs','tests/**/*.rs','benches/**/*.rs','examples/**/*.rs','build.rs') }}";
+    let expected_lock_hash = "${{ hashFiles('Cargo.lock','Cargo.toml','**/Cargo.toml','rust-toolchain.toml','rust-toolchain','.config/nextest.toml','!target/**') }}";
+    let expected_source_hash =
+        "${{ hashFiles('Cargo.lock','Cargo.toml','**/Cargo.toml','**/*.rs','!target/**') }}";
     let expected_cache_key = format!(
         "{expected_generation}-target-rust-{TEST_RUST_TOOLCHAIN}-{expected_lock_hash}-{expected_source_hash}"
     );
@@ -288,6 +289,27 @@ fn same_repo_scoped_pr_cache_policy_enables_pr_cache_writes() {
     );
 }
 
+fn assert_nested_target_cache_keys(
+    with: &std::collections::BTreeMap<String, String>,
+    generation: &str,
+) {
+    let manifest_hash = "${{ hashFiles('crates/velnor-runner/Cargo.lock','crates/velnor-runner/Cargo.toml','crates/velnor-runner/**/Cargo.toml','rust-toolchain.toml','rust-toolchain','crates/velnor-runner/.config/nextest.toml','!crates/velnor-runner/target/**') }}";
+    let source_hash = "${{ hashFiles('crates/velnor-runner/Cargo.lock','crates/velnor-runner/Cargo.toml','crates/velnor-runner/**/Cargo.toml','crates/velnor-runner/**/*.rs','!crates/velnor-runner/target/**') }}";
+    assert_eq!(
+        with.get("cache-key"),
+        Some(&format!(
+            "{generation}-target-rust-{TEST_RUST_TOOLCHAIN}-{manifest_hash}-{source_hash}"
+        )),
+        "nested workspace recursively hashes its inputs and excludes only its actual target"
+    );
+    assert_eq!(
+        with.get("restore-keys"),
+        Some(&format!(
+            "{generation}-target-rust-{TEST_RUST_TOOLCHAIN}-{manifest_hash}-\n{generation}-target-rust-{TEST_RUST_TOOLCHAIN}-"
+        ))
+    );
+}
+
 #[test]
 fn mbx_objects_step_sets_working_directory_for_nested_workspaces() {
     let [_, action, _] = mbx_steps_for_driver(
@@ -309,12 +331,8 @@ fn mbx_objects_step_sets_working_directory_for_nested_workspaces() {
         Some("crates/velnor-runner"),
         "nested workspace must configure working-directory for target cache"
     );
-    assert!(
-        with.get("cache-key").is_some_and(|key| key
-            .contains("hashFiles('crates/velnor-runner/Cargo.lock'")
-            && key.contains("hashFiles('crates/velnor-runner/**/*.rs'")),
-        "nested workspace cache-key must scope hashFiles to working-directory"
-    );
+    let generation = with.get("cache-generation").expect("generation");
+    assert_nested_target_cache_keys(&with, generation);
 
     let [_, root_action, _] = mbx_steps_for_driver(
         MBX_ACTION,
