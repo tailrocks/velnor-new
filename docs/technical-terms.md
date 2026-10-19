@@ -8,3 +8,8 @@
 | Task owner | A Cargo metadata value that selects the policy for the task list. |
 | Runner selector | A configuration value that selects the runner for a job. |
 | Named check | A task with its own name and workflow job. |
+| Journal | A database that keeps data about Velnor operations. |
+| Migration | A change from one specified database structure to another. |
+| Recursion | A function call that starts the same function directly or through other function calls. |
+| Test fixture | Test data and code for a specified check. |
+| Database | A set of related data that software keeps for later use. |

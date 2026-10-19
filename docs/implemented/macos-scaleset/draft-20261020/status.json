@@ -1,0 +1,49 @@
+{
+  "source": "5cd303adea7a51c5ab82bb55aa5b97a8bd7a4ac0",
+  "result": "FAIL",
+  "installation": {
+    "donbeave/essential-mac": "NOT_RUN",
+    "ChainArgos/java-monorepo": "NOT_RUN"
+  },
+  "changes": [
+    {
+      "source": "9e6b524e5955e1bd11f679dc7fa179943da3b3f9",
+      "gate": "bounded_provisioning_queries",
+      "result": "PASS",
+      "tests": 1,
+      "independent_comparisons": 4992
+    },
+    {
+      "source": "fdd7be9c8df05a55e493bcadf6a493af56485203",
+      "gate": "probe_positive_fixtures",
+      "result": "PASS",
+      "tests": 6
+    },
+    {
+      "source": "5cd303adea7a51c5ab82bb55aa5b97a8bd7a4ac0",
+      "gate": "iterative_migration_driver",
+      "result": "PASS",
+      "tests": 2,
+      "run_id": "000fed4c-4235-4ef3-a9b6-64ac4c0b83d3",
+      "log_sha256": "5ec5265b0c7c2b5701499f8ed14526a2281383c9714bb2f7373e647586084d2c",
+      "review_sha256": "ccf33565dafd760445418f4a99822743a7c86e1ef83878afd664d28f4d0a2400"
+    },
+    {
+      "gate": "v6_migration_fixture",
+      "result": "PASS",
+      "tests": 1,
+      "run_id": "7a380322-2a1b-4ed5-838f-a22e652a21d4",
+      "log_sha256": "b5f236292930c6d3e6516694e3f2a59b37396a8eb948354cb60ebc5a708ac81e",
+      "review_sha256": "0ca85f4bf65db5473b93910e18f82d359e8050cc00f7d887d71c5ae401e98155"
+    }
+  ],
+  "last_full_runner_suite": {
+    "result": "FAIL",
+    "run_id": "c57eb12e-d2ac-43e4-bad0-c68b20b8be9c",
+    "passed": 1226,
+    "failed": 107,
+    "skipped": 0,
+    "source_manifest_sha256": "fbed1749b1cf63fd7dbe04197bf4e6a6af3a131952066491571063119ba47a97"
+  },
+  "external_limit": null
+}
