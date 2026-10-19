@@ -25,6 +25,7 @@ fn two_phase_jobs(driver: CompileDriver) -> (Vec<(String, Job)>, ProposedTask, P
         fetch_roots: &[],
         acquire: None,
         max_parallel_jobs: 2,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })

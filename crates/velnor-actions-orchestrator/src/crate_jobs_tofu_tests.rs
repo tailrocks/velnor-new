@@ -88,6 +88,7 @@ fn pure_tofu_group_renders_without_rust_setup() {
         fetch_roots: &[String::new()],
         acquire: None,
         max_parallel_jobs: 2,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
@@ -155,18 +156,7 @@ fn mixed_group_keeps_the_rust_union() {
     let tofu = tofu_group("stacks/a", TofuTaskKind::Validate);
     rust.identity.unit_id.clone_from(&tofu.identity.unit_id);
     rust.configuration.clone_from(&tofu.configuration);
-    let found = build_crate_jobs(CrateJobInputs {
-        label: "ubuntu-26.04",
-        policy: WorkflowPolicy::ConsumerV1,
-        discovery: &crate_jobs_tests::discovery(vec![rust, tofu]),
-        catalog: &ToolCatalog::pinned(),
-        fetch_roots: &[],
-        acquire: None,
-        max_parallel_jobs: 2,
-        helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-    })
-    .expect("crate jobs");
+    let found = build_staged(vec![rust, tofu], 2);
     assert_eq!(found.jobs.len(), 2, "each stack owns its tools");
     let catalog = ToolCatalog::pinned();
     for (id, job) in &found.jobs {
@@ -195,6 +185,23 @@ fn mixed_group_keeps_the_rust_union() {
             assert_eq!(env.contains_key(key), rust, "{id} owned homes: {env:?}");
         }
     }
+}
+
+/// Build crate jobs with default inputs and the given lane width.
+fn build_staged(tasks: Vec<ProposedTask>, max_parallel_jobs: u32) -> CrateBuild {
+    build_crate_jobs(CrateJobInputs {
+        label: "ubuntu-26.04",
+        policy: WorkflowPolicy::ConsumerV1,
+        discovery: &crate_jobs_tests::discovery(tasks),
+        catalog: &ToolCatalog::pinned(),
+        fetch_roots: &[],
+        acquire: None,
+        max_parallel_jobs,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
+        helper_version: env!("CARGO_PKG_VERSION"),
+        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+    })
+    .expect("crate jobs")
 }
 
 /// One fmt/init/validate triple per root, all runnable.
@@ -232,18 +239,7 @@ fn step_env<'a>(
 #[test]
 fn tofu_root_jobs_stage_lanes_by_max_parallel() {
     let tasks = tofu_triples(&["stacks/a", "stacks/b", "stacks/c"]);
-    let found = build_crate_jobs(CrateJobInputs {
-        label: "ubuntu-26.04",
-        policy: WorkflowPolicy::ConsumerV1,
-        discovery: &crate_jobs_tests::discovery(tasks),
-        catalog: &ToolCatalog::pinned(),
-        fetch_roots: &[],
-        acquire: None,
-        max_parallel_jobs: 2,
-        helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-    })
-    .expect("crate jobs");
+    let found = build_staged(tasks, 2);
     assert_eq!(found.jobs.len(), 3, "one job per root");
     let (first, second, third) = (&found.jobs[0], &found.jobs[1], &found.jobs[2]);
     assert_eq!(first.1.needs, vec![PLAN_JOB_ID.to_owned()]);
@@ -258,18 +254,7 @@ fn tofu_root_jobs_stage_lanes_by_max_parallel() {
 #[test]
 fn wide_cap_stages_nothing() {
     let tasks = tofu_triples(&["stacks/a", "stacks/b"]);
-    let found = build_crate_jobs(CrateJobInputs {
-        label: "ubuntu-26.04",
-        policy: WorkflowPolicy::ConsumerV1,
-        discovery: &crate_jobs_tests::discovery(tasks),
-        catalog: &ToolCatalog::pinned(),
-        fetch_roots: &[],
-        acquire: None,
-        max_parallel_jobs: 5,
-        helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-    })
-    .expect("crate jobs");
+    let found = build_staged(tasks, 5);
     assert_eq!(found.jobs.len(), 2);
     for (id, job) in &found.jobs {
         assert_eq!(job.needs, vec![PLAN_JOB_ID.to_owned()], "{id} runs free");
@@ -280,18 +265,7 @@ fn wide_cap_stages_nothing() {
 fn rust_jobs_never_stage() {
     let clippy = crate_jobs_tests::group("demo", TaskKind::Clippy, &[]);
     let nested = crate_jobs_tests::group("nested", TaskKind::Clippy, &[]);
-    let found = build_crate_jobs(CrateJobInputs {
-        label: "ubuntu-26.04",
-        policy: WorkflowPolicy::ConsumerV1,
-        discovery: &crate_jobs_tests::discovery(vec![clippy, nested]),
-        catalog: &ToolCatalog::pinned(),
-        fetch_roots: &[],
-        acquire: None,
-        max_parallel_jobs: 1,
-        helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-    })
-    .expect("crate jobs");
+    let found = build_staged(vec![clippy, nested], 1);
     assert_eq!(found.jobs.len(), 2);
     for (id, job) in &found.jobs {
         assert_eq!(
@@ -319,18 +293,7 @@ fn first_tofu_obligation_declares_the_cap() {
         COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
     };
     let tasks = tofu_triples(&["stacks/a"]);
-    let found = build_crate_jobs(CrateJobInputs {
-        label: "ubuntu-26.04",
-        policy: WorkflowPolicy::ConsumerV1,
-        discovery: &crate_jobs_tests::discovery(tasks),
-        catalog: &ToolCatalog::pinned(),
-        fetch_roots: &[],
-        acquire: None,
-        max_parallel_jobs: 3,
-        helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-    })
-    .expect("crate jobs");
+    let found = build_staged(tasks, 3);
     assert_eq!(found.jobs.len(), 1);
     let job = &found.jobs[0].1;
     let first = step_env(job, "Format");
@@ -363,22 +326,10 @@ fn all_tofu_groups_take_tofu_ids_mixed_keep_rust() {
     let tofu = tofu_group("stacks/a", TofuTaskKind::Validate);
     rust.identity.unit_id.clone_from(&tofu.identity.unit_id);
     rust.configuration.clone_from(&tofu.configuration);
-    let found = build_crate_jobs(CrateJobInputs {
-        label: "ubuntu-26.04",
-        policy: WorkflowPolicy::ConsumerV1,
-        discovery: &crate_jobs_tests::discovery(vec![
-            rust,
-            tofu,
-            tofu_group("stacks/b", TofuTaskKind::Validate),
-        ]),
-        catalog: &ToolCatalog::pinned(),
-        fetch_roots: &[],
-        acquire: None,
-        max_parallel_jobs: 2,
-        helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-    })
-    .expect("crate jobs");
+    let found = build_staged(
+        vec![rust, tofu, tofu_group("stacks/b", TofuTaskKind::Validate)],
+        2,
+    );
     assert_eq!(found.jobs.len(), 3);
     let ids: Vec<&str> = found.jobs.iter().map(|(id, _)| id.as_str()).collect();
     assert_eq!(

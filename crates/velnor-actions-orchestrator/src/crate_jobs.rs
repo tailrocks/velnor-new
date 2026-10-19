@@ -3,7 +3,7 @@
 //! The P05 migration removed arbitrary per-task matrix fan-out by grouping
 //! obligations into ordered package/configuration jobs. Cold Jackin CI later
 //! demonstrated that serial Clippy, test compilation and documentation can
-//! exhaust the mandatory five-minute budget before all obligations execute.
+//! exhaust the default five-minute budget before all obligations execute.
 //! Rust now groups by package/configuration and the adapter's fixed lint,
 //! tests and docs phases. Test builds and consumers remain on one runner;
 //! logical task identities, argument vectors and report authorities stay intact.
@@ -72,6 +72,7 @@ pub(crate) fn build_for_workflow(
         fetch_roots,
         acquire,
         max_parallel_jobs: config.workflow.max_parallel_jobs,
+        timeout: JobTimeout::new(config.workflow.crate_timeout_minutes)?,
         helper_version,
         cache_policy: config.workflow.pull_request_cache_policy,
     })
@@ -87,6 +88,8 @@ pub(crate) struct CrateJobInputs<'a> {
     pub(crate) fetch_roots: &'a [String],
     pub(crate) acquire: Option<&'a Step>,
     pub(crate) max_parallel_jobs: u32,
+    /// Literal timeout for every emitted crate job.
+    pub(crate) timeout: JobTimeout,
     pub(crate) helper_version: &'a str,
     pub(crate) cache_policy: velnor_actions_contract::PullRequestCachePolicy,
 }
@@ -106,15 +109,10 @@ pub(crate) struct CrateJobInputs<'a> {
 /// Returns contract, render-context, or tool-request errors.
 pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, OrchestratorError> {
     let CrateJobInputs {
-        label,
-        policy,
         discovery,
         catalog,
-        fetch_roots,
-        acquire,
         max_parallel_jobs,
-        helper_version,
-        cache_policy,
+        ..
     } = input;
     let grouped = group_runnable(&discovery.proposals)?;
     let assigned = assign_group_ids(&grouped);
@@ -158,19 +156,12 @@ pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, 
         model.validate()?;
         let needs = phase::external_needs(tasks, &discovery.proposals, &job_id)?;
         let job = render_job(
-            label,
-            policy,
+            &input,
             &model,
-            catalog,
-            fetch_roots,
             use_rust,
             use_mbx,
             use_nextest,
             use_opentofu,
-            acquire,
-            max_parallel_jobs,
-            helper_version,
-            cache_policy,
             needs,
         )?;
         drivers.insert(job_id.clone(), driver);
@@ -273,28 +264,27 @@ fn gates_for(task: &ProposedTask, executed: &BTreeSet<&str>) -> Vec<String> {
 /// roles; pure-tofu roles carry the opentofu driver with no Rust
 /// setup, mixed roles the union.
 #[expect(
-    clippy::too_many_arguments,
     clippy::fn_params_excessive_bools,
     reason = "one call site threads job scope plus driver selection"
 )]
 fn render_job(
-    label: &str,
-    policy: WorkflowPolicy,
+    input: &CrateJobInputs<'_>,
     model: &CrateJob,
-    catalog: &ToolCatalog,
-    fetch_roots: &[String],
     use_rust: bool,
     use_mbx: bool,
     use_nextest: bool,
     use_opentofu: bool,
-    acquire: Option<&Step>,
-    max_parallel_jobs: u32,
-    helper_version: &str,
-    cache_policy: velnor_actions_contract::PullRequestCachePolicy,
     needs: Vec<String>,
 ) -> Result<Job, OrchestratorError> {
+    let &CrateJobInputs {
+        label,
+        policy,
+        catalog,
+        fetch_roots,
+        ..
+    } = input;
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
-    steps.extend(acquire.cloned());
+    steps.extend(input.acquire.cloned());
     steps.push(crate::matrix_step::download_plan_step()?);
     let suite: Option<crate::matrix_step::CrateSuite> =
         crate::matrix_step::suite_for_package(&model.package_name);
@@ -326,7 +316,7 @@ fn render_job(
         let working_dir = (!root.is_empty()).then_some(root);
         steps.extend(crate::mbx_preflight::steps_for_catalog(
             catalog,
-            cache_policy,
+            input.cache_policy,
             working_dir,
         )?);
     }
@@ -346,28 +336,13 @@ fn render_job(
         TaskCacheMode::Off,
         "",
     )?);
-    for (index, obligation) in model.obligations.iter().enumerate() {
-        let downstream: Vec<String> = model.obligations[index + 1..]
-            .iter()
-            .map(|later| later.task_id.clone())
-            .collect();
-        // The first obligation declares the root job's concurrency cap;
-        // the renderer turns the marker into `strategy.max-parallel`.
-        let cap = (index == 0 && use_opentofu).then_some(max_parallel_jobs);
-        steps.push(crate::matrix_step::obligation_step(
-            obligation,
-            catalog,
-            &downstream,
-            cap,
-            helper_version,
-        )?);
-    }
+    steps.extend(obligation_steps(input, model, use_opentofu)?);
     steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);
     Ok(Job {
         display_name: model.display_name.clone(),
         runs_on: label.to_owned(),
         check_runner: None,
-        timeout_minutes: JobTimeout::CRATE,
+        timeout_minutes: input.timeout,
         needs,
         condition: None,
         permissions: None,
@@ -375,6 +350,32 @@ fn render_job(
         steps,
         cache_mode: None,
     })
+}
+
+/// Report-wrapped obligation steps in validated order.
+fn obligation_steps(
+    input: &CrateJobInputs<'_>,
+    model: &CrateJob,
+    use_opentofu: bool,
+) -> Result<Vec<Step>, OrchestratorError> {
+    let mut steps = Vec::with_capacity(model.obligations.len());
+    for (index, obligation) in model.obligations.iter().enumerate() {
+        let downstream: Vec<String> = model.obligations[index + 1..]
+            .iter()
+            .map(|later| later.task_id.clone())
+            .collect();
+        // The first obligation declares the root job's concurrency cap;
+        // the renderer turns the marker into `strategy.max-parallel`.
+        let cap = (index == 0 && use_opentofu).then_some(input.max_parallel_jobs);
+        steps.push(crate::matrix_step::obligation_step(
+            obligation,
+            input.catalog,
+            &downstream,
+            cap,
+            input.helper_version,
+        )?);
+    }
+    Ok(steps)
 }
 
 #[cfg(test)]

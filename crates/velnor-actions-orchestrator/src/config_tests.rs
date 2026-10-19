@@ -80,6 +80,29 @@ fn mise_quiet_rejects_non_boolean_with_structured_config_error() {
     }
 }
 
+#[test]
+fn crate_timeout_defaults_to_five_and_follows_explicit_values() -> Result<(), Box<dyn Error>> {
+    let default = parse_config("schema = 1\n[workflow]\nname = \"CI\"\n")?;
+    assert_eq!(default.workflow.crate_timeout_minutes, 5);
+    for minutes in [1_u16, 30, 360] {
+        let config = parse_config(&format!(
+            "schema = 1\n[workflow]\nname = \"CI\"\ncrate_timeout_minutes = {minutes}\n"
+        ))?;
+        assert_eq!(config.workflow.crate_timeout_minutes, minutes);
+    }
+    for minutes in [0_u16, 361] {
+        let error = parse_config(&format!(
+            "schema = 1\n[workflow]\nname = \"CI\"\ncrate_timeout_minutes = {minutes}\n"
+        ))
+        .expect_err("out-of-range crate timeout must fail");
+        assert!(
+            error.to_string().contains("workflow.crate_timeout_minutes"),
+            "{error}"
+        );
+    }
+    Ok(())
+}
+
 fn mise_quiet_source(mise_quiet: Option<&str>) -> String {
     let value = mise_quiet.map_or_else(String::new, |value| format!("mise_quiet = {value}\n"));
     format!("schema = 1\n[workflow]\nname = \"CI\"\n{value}")

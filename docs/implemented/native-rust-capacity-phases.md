@@ -2,7 +2,9 @@
 
 This change replaces the combined Rust crate job with fixed lint, tests and
 docs execution responsibilities. It does not establish cold capacity or preview
-publication. Every concrete job retains the existing five-minute ceiling.
+publication. Every concrete job retains the existing five-minute default;
+`workflow.crate_timeout_minutes` later made the crate-job bound configurable
+(see [job timeout limits](job-timeout-limits.md)).
 
 The enabling condition was serial grouping, not an absent timeout. Jackin main
 [CI run 39214070421](https://github.com/jackin-project/jackin/actions/runs/39214070421),

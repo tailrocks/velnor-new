@@ -1,4 +1,4 @@
-//! Fixed Rust execution ownership under the five-minute job ceiling.
+//! Fixed Rust execution ownership under each crate job's literal timeout.
 
 use velnor_actions_contract::ContractError;
 

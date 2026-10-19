@@ -186,7 +186,7 @@ mod tests {
                 "{id:?}"
             );
         }
-        for timeout in [0, 6, 60, u16::MAX] {
+        for timeout in [0, 361, u16::MAX] {
             assert!(
                 task(
                     "architect-arm64-image",

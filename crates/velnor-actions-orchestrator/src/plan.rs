@@ -197,6 +197,13 @@ fn crate_lines(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<S
     let tofu = crates.len() - rust;
     count_line(out, rust, "Rust phase job");
     count_line(out, tofu, "OpenTofu root job");
+    if let Some(job) = crates.first().and_then(|id| jobs.get(*id)) {
+        let minutes = job.timeout_minutes.minutes();
+        push(
+            out,
+            &format!("      Timeout: {minutes} minutes per crate job"),
+        );
+    }
     let kinds = present_kinds(&prep.discovery.proposals);
     if !kinds.is_empty() {
         push(out, &format!("      Obligations: {}", kinds.join(" -> ")));
