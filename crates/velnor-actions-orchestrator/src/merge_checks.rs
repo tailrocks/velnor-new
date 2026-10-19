@@ -14,7 +14,6 @@ use velnor_actions_contract::{
 use super::MergeRequest;
 use crate::OrchestratorError;
 use crate::cover::Signals;
-use crate::cover::revalidate_coverage;
 use crate::cover::shard::{check_entry_shards, validate_budgets};
 use crate::internal::{SCHEMA, internal_contract};
 
@@ -151,8 +150,8 @@ pub(crate) fn check_candidate_binding(
 /// Every Execute obligation needs a matrix leg; hollow plans fail closed.
 ///
 /// Coverage walks `matrix.include`, so an Execute obligation without a
-/// leg would pass with zero task evidence. Baseline-covered and
-/// cache-reused dispositions need no leg. The match stays exhaustive so
+/// leg would pass with zero task evidence. Cache-reused dispositions
+/// need no leg. The match stays exhaustive so
 /// a future decision variant fails to compile here instead of slipping
 /// through unchecked.
 pub(crate) fn check_execute_inventory(
@@ -180,8 +179,7 @@ pub(crate) fn check_execute_inventory(
             ObligationDecision::Execute => {
                 hollow = hollow || !leg_tasks.contains(obligation.task_id.as_str());
             }
-            ObligationDecision::ReusedFromTaskCache
-            | ObligationDecision::CoveredByTrustedBaseline => {}
+            ObligationDecision::ReusedFromTaskCache | ObligationDecision::NotAffected => {}
         }
     }
     if hollow {
@@ -208,19 +206,13 @@ fn reference_matches(reference: &[String], planned: &[String]) -> bool {
     left == right
 }
 
-/// Revalidate planner coverage, limits, and reference obligations.
+/// Revalidate planner limits and reference obligations.
 pub(crate) fn check_plan_evidence(
     plan: &Plan,
     request: &MergeRequest,
     signals: &mut Signals,
     miss_reasons: &mut BTreeSet<String>,
 ) {
-    revalidate_coverage(
-        plan,
-        request.baseline_manifest.as_ref(),
-        signals,
-        miss_reasons,
-    );
     if request
         .limits
         .as_ref()

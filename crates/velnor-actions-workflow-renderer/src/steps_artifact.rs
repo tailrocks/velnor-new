@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Step, StepId, StepRole};
+use velnor_actions_contract::{Step, StepRole};
 
 use super::steps::{
     ARTIFACT_RETENTION_DAYS, CRATE_REPORT_UPLOAD_NAME, DOWNLOAD_ARTIFACT_USES,
@@ -87,6 +87,10 @@ pub fn crate_job_report_upload_step(job_id: &str) -> Result<Step, RenderError> {
                 format!("${{{{ runner.temp }}}}/velnor/{RUN_KEY_EXPR}"),
             ),
             ("if-no-files-found".to_owned(), "error".to_owned()),
+            // The name binds the plan's attempt: a re-run of this job in a
+            // later attempt replaces the earlier report instead of failing
+            // on the existing name (hard decision 4, re-run case).
+            ("overwrite".to_owned(), "true".to_owned()),
             (
                 "retention-days".to_owned(),
                 ARTIFACT_RETENTION_DAYS.to_string(),
@@ -95,53 +99,6 @@ pub fn crate_job_report_upload_step(job_id: &str) -> Result<Step, RenderError> {
     )?;
     step.role = Some(StepRole::MatrixReportUpload);
     Ok(step)
-}
-
-/// Baseline-publish upload step display name.
-pub const BASELINE_PUBLISH_UPLOAD_NAME: &str = "Upload baseline";
-/// Step ID of the baseline-publishing internal step.
-pub const PUBLISH_STEP_ID: &str = StepId::PublishBaseline.as_str();
-/// Step-output name carrying the derived baseline artifact name.
-pub const ARTIFACT_NAME_OUTPUT: &str = "artifact_name";
-/// Retention for published baseline artifacts, in days.
-///
-/// Baselines are cross-run evidence consumed by later runs, so they
-/// keep the platform maximum instead of the run-scoped evidence
-/// retention; expiry only broadens later lookups to full execution.
-pub const BASELINE_RETENTION_DAYS: u32 = 90;
-
-/// Baseline-publish upload step over the derived artifact name.
-///
-/// Uploads the single `baseline.json` the publish step staged under
-/// the exact `velnor-baseline-<commit>-<compat>` name it derived;
-/// `if-no-files-found: error` fails closed when the op staged
-/// nothing. `if: always()` attaches at render, like every upload.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] for invalid action inputs.
-pub fn baseline_publish_upload_step() -> Result<Step, RenderError> {
-    action_step(
-        BASELINE_PUBLISH_UPLOAD_NAME,
-        UPLOAD_ARTIFACT_USES,
-        BTreeMap::from([
-            (
-                "name".to_owned(),
-                format!("${{{{ steps.{PUBLISH_STEP_ID}.outputs.{ARTIFACT_NAME_OUTPUT} }}}}"),
-            ),
-            (
-                "path".to_owned(),
-                format!(
-                    "${{{{ runner.temp }}}}/velnor/{RUN_KEY_EXPR}/published-baseline/baseline.json"
-                ),
-            ),
-            ("if-no-files-found".to_owned(), "error".to_owned()),
-            (
-                "retention-days".to_owned(),
-                BASELINE_RETENTION_DAYS.to_string(),
-            ),
-        ]),
-    )
 }
 
 /// Matrix-report upload over one key expression plus step name.
@@ -159,6 +116,7 @@ fn matrix_report_upload_raw(key: &str, name: &str) -> Result<Step, RenderError> 
                 format!("${{{{ runner.temp }}}}/velnor/{RUN_KEY_EXPR}/{key}"),
             ),
             ("if-no-files-found".to_owned(), "error".to_owned()),
+            ("overwrite".to_owned(), "true".to_owned()),
             (
                 "retention-days".to_owned(),
                 ARTIFACT_RETENTION_DAYS.to_string(),

@@ -35,11 +35,13 @@ pub enum SelectionBroadening {
 
 /// Broadening class for one changed path, if it invalidates selection.
 ///
-/// Only the root lockfile and root Cargo configuration broaden; nested
-/// paths resolve through ownership and edges instead.
+/// Every `Cargo.lock` broadens (no lock-entry diff yet: any resolved
+/// version change could reach any package), as does the root Cargo
+/// configuration; other nested paths resolve through ownership and
+/// edges instead.
 #[must_use]
 pub fn selection_broadening(path: &str) -> Option<SelectionBroadening> {
-    if path == "Cargo.lock" {
+    if path == "Cargo.lock" || path.ends_with("/Cargo.lock") {
         return Some(SelectionBroadening::Lockfile);
     }
     if path == "Cargo.toml" || path == ".cargo/config.toml" || path == ".cargo/config" {

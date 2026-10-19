@@ -26,8 +26,7 @@ pub(crate) const PUBLISH_FINAL_NAME: &str = "Publish final report";
 pub(crate) const FINAL_ARTIFACT_NAME: &str =
     "velnor-final-r${{ github.run_id }}-a${{ github.run_attempt }}";
 /// Final verdict file the merge step writes (contract §3).
-pub(crate) const FINAL_ARTIFACT_PATH: &str =
-    "${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/final-report.json";
+pub(crate) const FINAL_ARTIFACT_PATH: &str = "${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}/final-report.json";
 
 /// Matrix fan-in fetch step (fixed internal `fetch-reports-v1` op).
 ///

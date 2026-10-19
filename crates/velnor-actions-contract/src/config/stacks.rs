@@ -1,6 +1,7 @@
 //! Stack selection and per-stack options.
 use super::binary_release::RustBinaryReleaseConfig;
 use super::release::RustReleaseConfig;
+use super::rust_inputs::RustInputRule;
 use super::rust_suites::RustSuiteConfig;
 use super::rust_suites_validate::validate_rust_suites;
 use super::tofu::TofuStackConfig;
@@ -80,6 +81,10 @@ pub struct RustStackConfig {
     /// Per-package options (`[stacks.rust.crates.<package>]`), keyed by Cargo package name.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub crates: BTreeMap<String, RustCrateConfig>,
+    /// Declared inputs outside each package's own directory
+    /// (`[[stacks.rust.inputs]]`), consumed by affected-work selection.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub inputs: Vec<RustInputRule>,
 }
 
 /// Largest accepted per-crate `build_jobs`.
@@ -177,6 +182,7 @@ impl RustStackConfig {
             binary_release: RustBinaryReleaseConfig::default(),
             suites: Vec::new(),
             crates: BTreeMap::new(),
+            inputs: Vec::new(),
         }
     }
 }
@@ -296,6 +302,7 @@ impl RustStackConfig {
         self.release.validate(file)?;
         self.binary_release.validate(file)?;
         validate_rust_suites(&self.suites, file)?;
+        super::rust_inputs::validate_rust_inputs(&self.inputs, file)?;
         self.validate_crates(file)
     }
 

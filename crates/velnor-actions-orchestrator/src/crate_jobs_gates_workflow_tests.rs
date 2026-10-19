@@ -139,7 +139,12 @@ fn assert_unsuccessful_owners_fail(
                 })
                 .collect::<Vec<_>>();
             let mut signals = crate::cover::Signals::default();
-            crate::merge::required_evidence::fold_jobs(&results, &mut signals);
+            crate::required_dispositions::fold_planned_jobs(
+                &[],
+                &results,
+                &mut signals,
+                &mut std::collections::BTreeSet::new(),
+            );
             assert!(
                 signals.failed || signals.cancelled || signals.not_run,
                 "{owner}: {conclusion:?}"
@@ -224,6 +229,7 @@ fn complete_workflow_seed_barrier_preserves_required_and_reports() {
         );
         assert_eq!(rendered.matches("background: true").count(), 3);
         assert_eq!(rendered.matches("wait-all:").count(), 1);
+        assert_seed_job_dispositions(&workflow.ir.jobs);
         if enabled {
             let steps = &mut workflow.ir.jobs.get_mut("rust-demo").expect("owner").steps;
             let index = steps
@@ -238,4 +244,58 @@ fn complete_workflow_seed_barrier_preserves_required_and_reports() {
         graphs[0], graphs[1],
         "Required, reports, acquisition, commands and all remaining job structure stay exact"
     );
+}
+
+/// Whole-job selection remains the only skip path when seeding is enabled.
+fn assert_seed_job_dispositions(jobs: &BTreeMap<String, velnor_actions_contract::Job>) {
+    use velnor_actions_contract::{JobDisposition, PlanJob, StepKind};
+    let id = "rust-demo";
+    assert_eq!(
+        jobs[id].condition.as_deref(),
+        Some(crate::plan_dispositions::not_affected_gate(id).as_str())
+    );
+    assert!(jobs["required"].needs.iter().any(|need| need == id));
+    for step in &jobs[id].steps {
+        if matches!(step.kind, StepKind::TaskExecution { .. }) {
+            assert!(
+                step.condition.is_none(),
+                "no removed covered-task step gates"
+            );
+        }
+    }
+    for (disposition, conclusion, expected) in [
+        (JobDisposition::Run, JobConclusion::Success, None),
+        (
+            JobDisposition::Run,
+            JobConclusion::Skipped,
+            Some("planned_job_skipped"),
+        ),
+        (JobDisposition::NotAffected, JobConclusion::Skipped, None),
+        (
+            JobDisposition::NotAffected,
+            JobConclusion::Success,
+            Some("gate_mismatch"),
+        ),
+    ] {
+        let mut signals = crate::cover::Signals::default();
+        let mut reasons = BTreeSet::new();
+        crate::required_dispositions::fold_planned_jobs(
+            &[PlanJob {
+                job_id: id.to_owned(),
+                disposition,
+            }],
+            &[RequiredJobResult {
+                job_id: id.to_owned(),
+                conclusion,
+            }],
+            &mut signals,
+            &mut reasons,
+        );
+        assert_eq!(
+            signals.failed || signals.cancelled || signals.not_run || signals.planning_failed,
+            expected.is_some(),
+            "{disposition:?}: {conclusion:?}"
+        );
+        assert_eq!(reasons, expected.into_iter().map(str::to_owned).collect());
+    }
 }

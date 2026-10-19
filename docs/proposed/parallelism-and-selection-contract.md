@@ -14,15 +14,15 @@ For each plan, Velnor MUST enumerate the complete set of required validation obl
 ```text
 executed successfully
 reused from a qualified task-result cache
-covered by a trusted successful baseline
+not affected by the change (crate job skipped by plan)
 failed
 cancelled
 blocked by a failed prerequisite
 ```
 
-The final gate succeeds only when each obligation is executed successfully, validly reused, or covered by a trusted baseline. Parallel scheduling MUST NOT remove an obligation. A missing plan entry, task report, test shard, or baseline proof is a failure or causes conservative execution; it is never implicit success.
+The final gate succeeds only when each obligation is executed successfully, validly reused, or `not_affected` with its crate job skipped exactly as the plan decided ([hard decision 4](../hard-decisions.md#4-pull-requests-test-only-what-they-affect)). Parallel scheduling MUST NOT remove an obligation. A missing plan entry, task report, or test shard is a failure or causes conservative execution; it is never implicit success.
 
-Use `executed`, `reused`, and `covered` as distinct evidence. MBX compilation reuse is not a task-result hit. `unaffected` is a planner explanation for why a task is `covered`; it is not a fourth cache layer.
+Use `executed`, `reused`, and `not_affected` as distinct states. MBX compilation reuse is not a task-result hit. `not_affected` is a plan-time decision proven by the plan itself in the same run; it never depends on a historical run. Pushes, merge groups, and qualification runs never produce it.
 
 Velnor Actions is a stack-generic generator with a deterministic detector
 registry. V1 registers `velnor-actions-rust` under stack ID `rust`; a stack
@@ -115,7 +115,7 @@ identity in `RustTaskIdentityExtension`. Changes to advisory
 generated execution uses Velnor's exact pins; a task that actually consumes
 one of them MUST declare its digest and broaden selection.
 
-`build.rs` and its `rerun-if-changed` inputs are task inputs. If a build script reads undeclared files, directories, environment variables, network state, or ambient host state, exact reuse and baseline coverage are disabled for that package and relevant dependents; execute them conservatively. A Markdown or non-Rust file is not irrelevant when a task declares it as a source or fixture.
+`build.rs` and its `rerun-if-changed` inputs are task inputs. If a build script reads undeclared files, directories, environment variables, network state, or ambient host state, exact reuse is disabled and the package is never `not_affected` (until in-job read verification exists); execute it conservatively. A Markdown or non-Rust file is not irrelevant when a task declares it as a source or fixture.
 
 If a task reads Git commit/ref, submodule state, or generated version metadata,
 those values are explicit inputs and participate in its digest. Do not reuse a
@@ -133,103 +133,37 @@ an input is static or captured.
 
 ```text
 parser / test-run: execute; foundation/src/token.rs changed via parser → foundation
-storage / test-run: covered; exact trusted baseline task and input digests match
+storage / test-run: not_affected; no changed input reaches storage
 cli / clippy: execute; Cargo.lock changed
 ```
 
 The generated matrix MUST be derived from this exact plan; matrix jobs MUST NOT rediscover packages or independently filter tests.
 
-## 5. Trusted baseline coverage
+## 5. Not-affected crate jobs
 
-Affected selection needs evidence for omitted obligations. Velnor MUST use an immutable `baseline.json` uploaded as a run-scoped artifact only after the protected default-branch `push` passes the required final gate. Pull requests, forks, merge groups, other branch pushes, failed runs, and cancelled runs MUST NOT publish trusted baseline evidence.
+Implemented; see [affected selection](../implemented/affected-selection.md) and
+[hard decision 4](../hard-decisions.md#4-pull-requests-test-only-what-they-affect).
+The trusted-baseline coverage path (`baseline.json`, `publish-baseline`,
+`covered_tasks` step gates) was removed completely; it is not a second skip
+mechanism.
 
-The manifest MUST bind repository identity, exact source commit, protected workflow path/ref/event, run ID/attempt, successful final result, generator version/digest/schema, compatibility identity, and a task entry for each covered obligation. Each task proof MUST bind task ID, task digest, input digest, Cargo graph identity, toolchain/components, MBX format, platform/target, profile/features, and the direct successful execution run. When a later baseline carries a prior proof forward, retain the original proof run ID and record the carrying run separately. Schema 2 requires `parent` on every manifest and `carried_from` on every task entry; direct publications set both to `null`. A carried manifest includes the complete immediate parent manifest, and each carried task binds that parent by its source commit, run ID, artifact ID/name, and canonical manifest digest. Validation walks the full chain, requires the same repository, ref, workflow, generator version/digest, and compatibility identity at every node, rejects non-prior or repeated run IDs, and checks expiry. The full canonical JSON is limited to 1 MiB and 32 manifests; invalid or oversized lineage fails closed to execute-all.
-
-The artifact contains one UTF-8 `baseline.json` and no other payload. Its minimum shape is:
-
-```json
-{
-  "schema": 2,
-  "repository_id": "b3-...",
-  "source_commit": "<40 lowercase hex>",
-  "ref": "refs/heads/main",
-  "event": "push",
-  "workflow_ref": "owner/repo/.github/workflows/ci.yml@refs/heads/main",
-  "run_id": 12345,
-  "run_attempt": 1,
-  "final_status": "passed",
-  "generator_version": "<semver>",
-  "generator_sha256": "<64 lowercase hex>",
-  "compatibility_id": "b3-...",
-  "artifact_id": 12345,
-  "artifact_name": "velnor-baseline-<source-commit>-<compatibility-id>",
-  "tasks": [{
-    "task_id": "stack/rust/crates/parser/test-run/default",
-    "task_digest": "b3-...",
-    "input_digest": "b3-...",
-    "closure_digest": "b3-...",
-    "proof_run_id": 12345,
-    "carried_from": null,
-    "observed_run_id": 12345
-  }],
-  "parent": null
-}
-```
-
-The artifact name is `velnor-baseline-<source-commit>-<compatibility-id>`, with full IDs. Its bytes are hashed and that digest is recorded by the current plan. The planner obtains a run ID only from a completed successful run of the exact generated workflow on the protected default-branch ref at the exact base commit; then it requests that run's exact artifact ID. It validates artifact metadata and the manifest before comparison. It MUST NOT select the newest successful run from another commit and treat it as the base proof. A previous proof may be carried forward only when the current trusted run revalidates the same exact task and input identity.
-
-For PR, merge-group, and protected default-branch push planning, resolve the
-baseline after inventory and obligation identities are known. The base is the
-PR base SHA, merge-group base SHA, or push event's `before` SHA, respectively.
-The pinned `gh` CLI MUST be a Mise-managed tool. The orchestrator asks the Mise
-adapter to execute fixed `gh run list`/`gh run download` arguments through the
-pinned Mise environment, passing only the full base SHA, generated workflow
-path, protected default-branch name, and expected artifact name. It filters
-results again for exact `headSha`, `refs/heads/<default>`, `event=push`, and
-successful conclusion; it then downloads by exact run ID and artifact name
-into a fresh temporary directory. It accepts no arbitrary URL, run ID, shell
-fragment, or artifact wildcard from project config. After reading and
-validating `baseline.json`, it removes the downloaded archive and extracted
-temporary files. This avoids a second GitHub HTTP client and reuses Mise as the
-tool installer.
-
-Generated workflows set workflow-level `contents: read` and omit `actions`.
-Repository-policy `plan` and `required` receive job-level `contents: read` and
-`actions: read` for authenticated artifact lookup; job permissions replace
-workflow permissions. `plan` binds `GH_TOKEN` and `GH_REPO` only to its
-internal baseline-lookup step, while `required` binds them only to the exact
-report-fetch step. Consumer plans do not request Actions access; a lookup miss
-records `baseline_unavailable` and schedules affected obligations.
-Before any repository task starts, Velnor removes `GH_TOKEN`, `GITHUB_TOKEN`,
-`ACTIONS_RUNTIME_TOKEN`, and other undeclared action credential variables from
-the child environment. No `pull_request_target`, PR write token, wildcard
-artifact download, executable in the baseline, or PR-produced proof is allowed.
-The published baseline contains evidence only: no source, executable,
-credentials, or task-cache directories. If `gh` is missing, API access fails,
-or download fails, planning records `baseline_unavailable` and schedules
-affected obligations normally; it still fails if the Rust inventory itself
-is incomplete.
-
-A task is `covered` only when the baseline entry’s entire compatibility and input identity matches the current obligation. Baseline lookup failure is an optimization miss: missing, expired, inaccessible, malformed, wrong-ref, wrong-commit, stale-schema, or incomplete evidence causes all otherwise-unproven obligations to execute. Record the precise reason. An incomplete task inventory is a planning failure, not a baseline miss.
-
-Repository-wide policy, generated-file freshness, workflow security, and
-dependency-advisory checks run on every candidate by default; baseline
-coverage applies to package validation obligations. A check backed by changing
-external data, such as an advisory database, may be skipped only when the
-exact external-data identity/freshness window is part of its obligation and
-the baseline satisfies the policy's maximum age. Otherwise it runs again.
-
-The planner MUST classify every obligation before emitting the matrix:
+On an affected-mode event (`pull_request`, fork pull requests, local), the
+planner MUST classify every obligation before emitting the matrix:
 
 ```text
 execute
 reused_from_task_cache
-covered_by_trusted_baseline
+not_affected
 ```
 
-The matrix contains only `execute` obligations. The plan and final report contain all obligations. `required` validates direct reports for executed work, complete outputs for task-cache reuse, and exact manifest entries for baseline coverage. A plan with obligations all covered is `passed`, not `no_work`; `no_work` means there are no obligations.
-
-Baseline trust is separate from the semantic task digest. Trust controls who may read/write/promote evidence; it is not source content. PR/merge jobs may read trusted baseline evidence but cannot publish trusted baseline or cache state. Mise task-result caching remains a separate, later-qualified layer. MBX hits never count as task reuse or baseline coverage.
+A Rust crate job is `not_affected` only when every obligation it owns is, and no
+running job needs it; the generated job-level `if:` skips it as a whole job.
+The matrix contains only `execute` obligations. The plan and final report
+contain all obligations. `required` validates direct reports for executed work,
+fails closed on task-cache reuse until restore proofs exist, and pairs each
+planned crate job's observed result with its plan disposition. A plan whose
+obligations are all `not_affected` is `passed`, not `no_work`; `no_work` means
+there are no obligations.
 
 ## 6. Parallel GitHub workflow generation
 
@@ -349,7 +283,7 @@ Use Nextest’s supported archive, list, partition, resource-group, and JUnit in
 
 ## 9. Result and performance accounting
 
-The final report MUST include counts of obligations executed, task-result reused, baseline covered, failed, cancelled, blocked, and not run. For each task record input/compatibility identity, lane/resource assignment, queue/start/finish time, process exit, cache outcomes, report/artifact IDs, test partition inventory when applicable, and reason for selection or coverage. Do not store secret values.
+The final report MUST include counts of obligations executed, task-result reused, not affected, failed, cancelled, blocked, and not run. For each task record input/compatibility identity, lane/resource assignment, queue/start/finish time, process exit, cache outcomes, report/artifact IDs, test partition inventory when applicable, and reason for selection or coverage. Do not store secret values.
 
 Measure queue time, critical-path wall time, runner time, task durations, cache restore/export/transfer, tool preparation, origin downloads, compiler work, MBX outcomes, test time, resource/lock wait, and selected/reused/covered counts separately. Parallel child durations overlap; never add both child durations and group wall time. Compare the same required obligation set and runner class for sequential and parallel measurements. Report an overlap ratio as descriptive only, not as a speedup claim.
 
@@ -361,7 +295,7 @@ detected workspaces/crates, local dependency edges, planned job groups and
 steps, parallel groups, and ignored-work reasons in stable human-readable
 order. It reports the full configured crate matrix; event-time affected
 selection happens in generated CI. It MUST NOT execute checks, query cache
-contents, claim cache/baseline hits, or expose internal `plan.json`. Tests MUST
+contents, claim cache hits or not-affected skips, or expose internal `plan.json`. Tests MUST
 compare plan facts with the workflow generated from the same fixture and verify
 the command leaves the repository byte-identical.
 
@@ -373,7 +307,7 @@ Before enabling affected-work omission or parallel groups in production generati
 - matrix `fail-fast: false` preserves independent package results;
 - concurrent Cargo tasks receive separate target dirs and bounded resource slots;
 - cache restore/export never overlaps a writer;
-- exact trusted baseline covers an unchanged task, but missing/expired/malformed/wrong-commit baseline schedules it;
+- an unaffected crate job is skipped on a pull request and passes `Required` only when the plan marks it `not_affected`; a push runs it;
 - changed leaf, shared dependency, dependency diamond, deleted/renamed package, `build.rs` input, fixture, Velnor's pinned toolchain, `Cargo.lock`, and generated workflow/task policy invalidate the correct closure; edits to optional `rust-toolchain.toml`, `mise.toml`, or `mise.lock` change inspection findings only;
 - unknown/dynamic inputs broaden execution and never produce false `covered`;
 - test archive identity mismatch, missing shard, duplicate test, omitted test, and extra test all fail final aggregation;

@@ -54,6 +54,9 @@ pub(crate) struct PartialRustStack {
     /// Per-package options (`[stacks.rust.crates.<package>]`).
     #[serde(default)]
     crates: std::collections::BTreeMap<String, velnor_actions_contract::RustCrateConfig>,
+    /// Declared inputs outside package directories (`[[stacks.rust.inputs]]`).
+    #[serde(default)]
+    inputs: Vec<velnor_actions_contract::RustInputRule>,
 }
 
 /// Tofu stack section: `roots` required when the table is present.
@@ -80,6 +83,7 @@ impl PartialStacks {
                 suites: stack.suites,
                 toolchain: stack.toolchain,
                 crates: stack.crates,
+                inputs: stack.inputs,
             }
         });
         let tofu = self

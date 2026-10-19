@@ -33,15 +33,13 @@ use std::fs;
 
 use velnor_actions_contract::Job;
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
-use velnor_actions_workflow_renderer::render::{
-    FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID, WORKFLOW_PATH,
-};
+use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, WORKFLOW_PATH};
 
 use crate::impl_common::{TestResult, config_with_branch, make_repo};
 
 /// True for generated crate jobs (neither plan, lint, gate, nor publish).
 fn is_crate_job(id: &str) -> bool {
-    id != PLAN_JOB_ID && id != "actionlint" && id != FINAL_JOB_ID && id != PUBLISH_JOB_ID
+    id != PLAN_JOB_ID && id != "actionlint" && id != FINAL_JOB_ID
 }
 
 #[test]

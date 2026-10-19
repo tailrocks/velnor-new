@@ -6,10 +6,9 @@ use std::fs;
 use crate::impl_common::{TestResult, config_with_branch, err_of, make_repo, plan_for};
 use velnor_actions_mise::catalog::RUST_VERSION;
 use velnor_actions_orchestrator::{
-    CONFLICTING_TOOL_VALUES, DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS, ExternalDataFreshness, ToolParse,
-    UNSUPPORTED_TOOL_VALUE, check_tool_inputs, coverage_schema_known, critical_path_for_groups,
-    external_data_kind, may_skip_external_data, prepare, render_critical_path,
-    reuse_eligible_for_schema, tool_conflicts,
+    CONFLICTING_TOOL_VALUES, ToolParse, UNSUPPORTED_TOOL_VALUE, check_tool_inputs,
+    critical_path_for_groups, prepare, render_critical_path, reuse_eligible_for_schema,
+    tool_conflicts,
 };
 
 /// Config with default plus all-features Rust configurations.
@@ -153,9 +152,7 @@ fn unsupported_tool_values_yield_findings() -> TestResult {
 }
 
 #[test]
-fn unknown_extension_schema_disables_reuse_and_coverage() -> TestResult {
-    assert!(coverage_schema_known("stack/rust/root/clippy/default"));
-    assert!(!coverage_schema_known("stack/unknown/root/test/default"));
+fn unknown_extension_schema_disables_reuse() -> TestResult {
     assert!(reuse_eligible_for_schema("rust-task-identity-v1"));
     assert!(!reuse_eligible_for_schema("rust-task-v2"));
     let known = velnor_actions_contract::StackExtension {
@@ -239,46 +236,6 @@ fn critical_path_reports_task_durations() -> TestResult {
         lines.iter().any(|line| line.contains("500 ms")),
         "{lines:?}"
     );
-    Ok(())
-}
-
-#[test]
-fn external_data_skip_needs_declared_fresh_identity() -> TestResult {
-    let fresh = ExternalDataFreshness {
-        source: "advisory-db".to_owned(),
-        identity: velnor_actions_contract::digest_b3(b"snapshot"),
-        age_secs: 60,
-    };
-    fresh.validate()?;
-    assert!(may_skip_external_data(
-        true,
-        Some(&fresh),
-        DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS
-    ));
-    assert!(!may_skip_external_data(
-        false,
-        Some(&fresh),
-        DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS
-    ));
-    assert!(!may_skip_external_data(
-        true,
-        None,
-        DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS
-    ));
-    let stale = ExternalDataFreshness {
-        age_secs: DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS + 1,
-        ..fresh
-    };
-    assert!(!may_skip_external_data(
-        true,
-        Some(&stale),
-        DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS
-    ));
-    assert_eq!(
-        external_data_kind("stack/rust/root/advisory/default"),
-        Some("advisory")
-    );
-    assert_eq!(external_data_kind("stack/rust/root/clippy/default"), None);
     Ok(())
 }
 

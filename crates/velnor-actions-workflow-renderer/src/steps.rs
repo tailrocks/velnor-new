@@ -32,15 +32,12 @@ pub use crate::steps_shell::{ambient_shell_step, shell_step};
 
 pub use crate::action_ref::validate_uses;
 pub use crate::steps_artifact::{
-    ARTIFACT_NAME_OUTPUT, BASELINE_PUBLISH_UPLOAD_NAME, BASELINE_RETENTION_DAYS, PUBLISH_STEP_ID,
-    baseline_publish_upload_step, crate_job_report_upload_step, download_artifact_step,
-    download_suite_archive_step, matrix_report_upload_step, upload_artifact_step,
-    upload_suite_archive_step, upload_suite_artifact_step,
+    crate_job_report_upload_step, download_artifact_step, download_suite_archive_step,
+    matrix_report_upload_step, upload_artifact_step, upload_suite_archive_step,
+    upload_suite_artifact_step,
 };
 pub(crate) use crate::steps_internal::split_internal_operation;
-pub use crate::steps_internal::{
-    internal_step, merge_step, plan_step, publish_step, write_request_step,
-};
+pub use crate::steps_internal::{internal_step, merge_step, plan_step, write_request_step};
 
 /// Env key selecting the staged-binary internal operation.
 pub const INTERNAL_OP_ENV: &str = "VELNOR_INTERNAL_OP";
@@ -52,8 +49,6 @@ pub const PLAN_OPERATION: &str = "plan-v1";
 pub const WRITE_PRESEED_MANIFEST_OPERATION: &str = "write-preseed-manifest-v1";
 /// Report-merge operation name.
 pub const MERGE_OPERATION: &str = "merge-v1";
-/// Baseline-publish operation: `publish-baseline-v1`.
-pub const PUBLISH_OPERATION: &str = "publish-baseline-v1";
 /// Matrix-report fetch operation name.
 pub const FETCH_OPERATION: &str = "fetch-reports-v1";
 /// Write-request operation name.
@@ -113,7 +108,7 @@ pub const ACQUIRE_NAME: &str = "Acquire Velnor";
 /// job timeout during a GitHub outage.
 pub const ACQUIRE_TIMEOUT_MINUTES: i64 = 6;
 /// Run-key expression (`r<run-id>-a<run-attempt>`, workflow-contract §3).
-pub const RUN_KEY_EXPR: &str = "r${{ github.run_id }}-a${{ github.run_attempt }}";
+pub const RUN_KEY_EXPR: &str = "r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}";
 /// Display name of the matrix-report upload step.
 pub const MATRIX_REPORT_UPLOAD_NAME: &str = "Upload matrix report";
 /// Display name of the per-job crate-report upload step.
@@ -233,7 +228,8 @@ pub fn candidate_manifest_script(target: &str, toolchain: &str) -> String {
 }
 
 /// Shell spelling of the run-key dir holding the downloaded plan.
-pub const RUN_DIR_SHELL: &str = "$RUNNER_TEMP/velnor/r$GITHUB_RUN_ID-a$GITHUB_RUN_ATTEMPT";
+pub const RUN_DIR_SHELL: &str =
+    "$RUNNER_TEMP/velnor/r$GITHUB_RUN_ID-a${VELNOR_RUN_KEY_ATTEMPT:-$GITHUB_RUN_ATTEMPT}";
 
 /// Head-bound candidate attestation writer: `commit` is the plan head.
 ///

@@ -41,9 +41,6 @@ pub(crate) struct PlanRequest {
     /// Repository root override; defaults to the resolved root.
     #[serde(default)]
     pub(crate) root: Option<PathBuf>,
-    /// Trusted baseline evidence for coverage classification.
-    #[serde(default)]
-    pub(crate) baseline_manifest: Option<serde_json::Value>,
     /// Runner-owned repository slug (`owner/repo`) for provenance.
     ///
     /// The request writer captures this from `GITHUB_REPOSITORY`; the

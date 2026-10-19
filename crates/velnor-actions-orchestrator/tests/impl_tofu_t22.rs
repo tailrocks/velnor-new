@@ -378,7 +378,7 @@ fn fork_event_plans_pr_trust_and_generates_restore_only_roundtrip() -> TestResul
     git(&["commit", "--allow-empty", "-m", "two"], root)?;
     let base = git_line(&["rev-parse", "HEAD~1"], root)?;
     let head = git_line(&["rev-parse", "HEAD"], root)?;
-    let value = plan_value(root, "fork", Some(&base), &head, None)?;
+    let value = plan_value(root, "fork", Some(&base), &head)?;
     assert_eq!(value["plan"]["trust"], "pr", "fork plans distrust");
     let jobs = finalized_jobs(&prepare(root)?)?;
     let mut seen = 0;

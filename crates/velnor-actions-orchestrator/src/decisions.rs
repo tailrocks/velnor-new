@@ -1,11 +1,10 @@
 //! Planner decisions: classification, selection, and artifact paths.
 //!
 //! Pure coordination policy shared by plan and merge: metadata-failure
-//! classification, three-way obligation decisions, `not_selected`
+//! classification, two-way obligation decisions, `not_selected`
 //! report creation, broaden-path classification, the omission ledger,
-//! the detector registry, plan-artifact paths, baseline expiry, and
-//! duplicate detection. Exact-base run selection lives in
-//! [`crate::run_select`]. The restore-ownership gate is test-only;
+//! the detector registry, plan-artifact paths, and duplicate detection.
+//! The restore-ownership gate is test-only;
 //! production reuse verifies ownership through the staged pipeline
 //! instead.
 
@@ -73,11 +72,11 @@ pub enum CacheHit {
     Verified,
 }
 
-/// Inputs for one three-way obligation decision (par §5).
+/// Inputs for one two-way obligation decision (par §5).
 #[derive(Debug, Clone)]
 #[expect(
     clippy::struct_excessive_bools,
-    reason = "five independent decision signals read clearest as named bools"
+    reason = "four independent decision signals read clearest as named bools"
 )]
 pub struct ObligationInputs {
     /// Task carries a known adapter extension schema.
@@ -90,17 +89,15 @@ pub struct ObligationInputs {
     pub inputs_controlled: bool,
     /// Verified task-cache hit evidence, or execution.
     pub cache_hit: CacheHit,
-    /// Trusted-baseline proof covers the obligation.
-    pub baseline_covered: bool,
     /// Precise restore miss reason, if a restore was attempted.
     pub restore_miss_reason: Option<&'static str>,
 }
 
-/// Classify one obligation `execute`/`reused`/`covered` (par §5).
+/// Classify one obligation `execute`/`reused` (par §5).
 ///
 /// Unknown schemas, undeclared inputs, and uncontrolled dynamic effects
-/// always execute; a verified hit reuses; a baseline proof covers; a
-/// restore miss executes with its precise reason.
+/// always execute; a verified hit reuses; a restore miss executes with
+/// its precise reason.
 #[must_use]
 pub fn classify_obligation(inputs: &ObligationInputs) -> (ObligationDecision, &'static str) {
     if !inputs.schema_known {
@@ -116,12 +113,6 @@ pub fn classify_obligation(inputs: &ObligationInputs) -> (ObligationDecision, &'
         return (
             ObligationDecision::ReusedFromTaskCache,
             "reused_from_task_cache",
-        );
-    }
-    if inputs.baseline_covered {
-        return (
-            ObligationDecision::CoveredByTrustedBaseline,
-            "covered_by_trusted_baseline",
         );
     }
     if let Some(reason) = inputs.restore_miss_reason {
@@ -355,12 +346,6 @@ pub fn plan_artifact_dir(velnor_dir: &Path, run_key: &str) -> Result<PathBuf, Or
 /// Returns an internal error when the run key is invalid.
 pub fn plan_json_path(velnor_dir: &Path, run_key: &str) -> Result<PathBuf, OrchestratorError> {
     Ok(plan_artifact_dir(velnor_dir, run_key)?.join(PLAN_JSON_NAME))
-}
-
-/// True when a baseline expired at or before `now_unix` (par §10).
-#[must_use]
-pub fn baseline_expired(expires_at_unix: Option<u64>, now_unix: u64) -> bool {
-    expires_at_unix.is_some_and(|expiry| now_unix >= expiry)
 }
 
 /// Sorted unique IDs plus sorted duplicates (par §3 dedupe stage).

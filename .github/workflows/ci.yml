@@ -4,6 +4,7 @@ name: CI
   pull_request:
     types:
       - opened
+      - edited
       - synchronize
       - reopened
       - ready_for_review
@@ -60,6 +61,8 @@ jobs:
     name: Actionlint
     runs-on: ubuntu-26.04
     timeout-minutes: 5
+    env:
+      VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -99,6 +102,8 @@ jobs:
     name: Alint
     runs-on: ubuntu-26.04
     timeout-minutes: 5
+    env:
+      VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -116,6 +121,8 @@ jobs:
     name: Cargo Deny
     runs-on: ubuntu-26.04
     timeout-minutes: 5
+    env:
+      VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -153,6 +160,8 @@ jobs:
     name: Cargo Machete
     runs-on: ubuntu-26.04
     timeout-minutes: 5
+    env:
+      VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -192,6 +201,8 @@ jobs:
     name: Check / maintenance-helpers
     runs-on: ubuntu-26.04
     timeout-minutes: 5
+    env:
+      VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     permissions:
       contents: read
     needs:
@@ -223,8 +234,8 @@ jobs:
       - name: Download plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
       - name: Execute named check
         env:
           VELNOR_CHECK_ID: maintenance-helpers
@@ -238,8 +249,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
-          name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-check-maintenance-helpers
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-crate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-check-maintenance-helpers
+          overwrite: "true"
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
   plan:
     name: Plan
@@ -251,16 +263,18 @@ jobs:
       MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "0"
       RUSTUP_TOOLCHAIN: 1.99.1
+      VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
     permissions:
       contents: read
       actions: read
     outputs:
-      covered_tasks: ${{ steps.plan.outputs.covered_tasks }}
+      not_affected_jobs: ${{ steps.plan.outputs.not_affected_jobs }}
       qualification_campaign: ${{ steps.plan.outputs.qualification_campaign }}
       qualification_phase: ${{ steps.plan.outputs.qualification_phase }}
       qualification_cache_enabled: ${{ steps.plan.outputs.qualification_cache_enabled }}
       qualification_cache_write: ${{ steps.plan.outputs.qualification_cache_write }}
       qualification_cache_directives: ${{ steps.plan.outputs.qualification_cache_directives }}
+      plan_attempt: ${{ github.run_attempt }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -402,8 +416,6 @@ jobs:
       - name: Plan
         id: plan
         env:
-          GH_REPO: ${{ github.repository }}
-          GH_TOKEN: ${{ github.token }}
           VELNOR_INTERNAL_OP: plan-v1
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/plan-v1-request.json
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -414,8 +426,8 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
-          name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
       - name: Save Mise tools
         if: success() && ((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && steps.v2.outputs.enabled == 'true'
@@ -432,53 +444,13 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; [ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be a real directory'\\'' >&2; exit 1; }; [ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] && [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] && check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '\\''%s\\n'\\'' '\\''MBX store path changed before cleanup'\\'' >&2; exit 1; }; mbx_disk_sample() { boundary=$1; case \"${RUNNER_TEMP:-}\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute'\\'' >&2; return 0 ;; esac; if [ -d \"$RUNNER_TEMP\" ] && [ ! -L \"$RUNNER_TEMP\" ]; then printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\\n'\\'' \"$boundary\"; if df -Pk \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\\n'\\'' \"$boundary\" >&2; fi; printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\\n'\\'' \"$boundary\"; if df -Pi \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\\n'\\'' \"$boundary\" >&2; return 0; fi; store_path=\"$RUNNER_TEMP/velnor/mbx\"; if [ \"${MBX_CACHE_DIR:-}\" = \"$store_path\" ] && [ -d \"$store_path\" ] && [ ! -L \"$store_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\\n'\\'' \"$boundary\"; if du -sk \"$store_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\\n'\\'' \"$boundary\" >&2; fi; target_path=\"${target_dir:-target}\"; if [ ! -d \"$target_path\" ]; then for candidate in */target crates/*/target \"$RUNNER_TEMP/velnor/target\"; do if [ -d \"$candidate\" ]; then target_path=\"$candidate\"; break; fi; done; fi; if [ -L \"$target_path\" ]; then printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\\n'\\'' \"$boundary\" >&2; elif [ -d \"$target_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target\\n'\\'' \"$boundary\"; if du -sk \"$target_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\\n'\\'' \"$boundary\"; fi; }; target_dir=\"target\"; mbx_disk_sample before-final-clean; if ! mbx_bin=$(command -v mbx); then printf '\\''%s\\n'\\'' '\\''action-owned MBX is not on PATH'\\'' >&2; exit 1; fi; case \"$mbx_bin\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be absolute'\\'' >&2; exit 1 ;; esac; if [ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]; then printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be an executable file'\\'' >&2; exit 1; fi; clean_status=0; if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- \"$mbx_bin\" cache dir >/dev/null 2>&1; then clean_status=0; else clean_status=$?; fi; if [ -d \"$target_dir\" ] && [ ! -L \"$target_dir\" ]; then rm -rf \"$target_dir/velnor-cli-nested-cargo\" \"$target_dir/tmp\" \"$target_dir/debug/examples\" \"$target_dir/debug/incremental\"; python3 -c '\\''exec(\"import os, pathlib, shutil, subprocess, sys\\ntd = pathlib.Path(sys.argv[1])\\ndbg = td / \\\"debug\\\"\\nif dbg.is_dir() and not dbg.is_symlink():\\n    shims = dbg / \\\".mbx-build-script-shims\\\"\\n    os.makedirs(shims, exist_ok=True)\\n    for base in [td] + sorted(c for c in td.iterdir() if c.name.startswith(\\\"velnor-\\\") and c.is_dir() and not c.is_symlink()):\\n        bdbg = base / \\\"debug\\\"\\n        if not bdbg.is_dir() or bdbg.is_symlink():\\n            continue\\n        bshims = bdbg / \\\".mbx-build-script-shims\\\"\\n        os.makedirs(bshims, exist_ok=True)\\n        vdoc = bshims / \\\".velnor-doc\\\"\\n        shutil.rmtree(vdoc, ignore_errors=True)\\n        doc = base / \\\"doc\\\"\\n        if doc.is_dir() and not doc.is_symlink():\\n            shutil.move(str(doc), str(vdoc))\\n    ws = os.environ.get(\\\"GITHUB_WORKSPACE\\\", \\\"\\\")\\n    if ws and os.path.exists(os.path.join(ws, \\\".git\\\")):\\n        out = subprocess.check_output([\\\"git\\\", \\\"-C\\\", ws, \\\"ls-files\\\", \\\"-s\\\", \\\"-z\\\"])\\n        lines = []\\n        for entry in out.split(b\\\"\\\\0\\\"):\\n            if not entry:\\n                continue\\n            meta, rel_b = entry.split(b\\\"\\\\t\\\", 1)\\n            oid = meta.split()[1].decode()\\n            rel = rel_b.decode()\\n            full = os.path.join(ws, rel)\\n            if os.path.isfile(full) and not os.path.islink(full):\\n                lines.append(f\\\"{oid}\\\\t{os.stat(full).st_mtime_ns}\\\\t{rel}\\\\n\\\")\\n        (shims / \\\".velnor-source-oids\\\").write_text(\\\"\\\".join(lines))\\n\")'\\'' \"$target_dir\"; fi; mbx_disk_sample after-final-clean; exit \"$clean_status\"'"
-  publish-baseline:
-    name: Publish baseline
-    runs-on: ubuntu-26.04
-    timeout-minutes: 5
-    needs:
-      - required
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - name: Download helper (pre-seed trust-on-review)
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
-        with:
-          name: velnor-preseed-helper
-          path: ${{ runner.temp }}/velnor/preseed
-      - name: Verify helper manifest (pre-seed trust-on-review)
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; line=; rest=; m=\"$RUNNER_TEMP/velnor/preseed/preseed-manifest.json\" && b=\"$RUNNER_TEMP/velnor/preseed/velnor-actions\" && test -f \"$m\" && test -f \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${line#*\\\"schema\\\":} && v=${v%%,*} && [ \"$v\" = 1 ] && c=${line#*\\\"commit\\\":\\\"} && c=${c%%\\\"*} && [ \"${#c}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${line#*\\\"target\\\":\\\"} && t=${t%%\\\"*} && [ \"$t\" = \"x86_64-unknown-linux-gnu\" ] && tc=${line#*\\\"toolchain\\\":\\\"} && tc=${tc%%\\\"*} && [ -n \"$tc\" ] && s=${line#*\\\"sha256\\\":\\\"} && s=${s%%\\\"*} && [ \"${#s}\" = 64 ] && sha256sum \"$b\" > \"$RUNNER_TEMP/velnor/preseed/got.txt\" && read got rest < \"$RUNNER_TEMP/velnor/preseed/got.txt\" && [ \"$got\" = \"$s\" ]'"
-      - name: Stage helper (pre-seed trust-on-review)
-        run: sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p $RUNNER_TEMP/velnor/bin && cp $RUNNER_TEMP/velnor/preseed/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.25 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.25'
-      - name: Download plan
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
-        with:
-          name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
-      - name: Write request
-        env:
-          VELNOR_INTERNAL_OP: write-request-v1
-          VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/publish-baseline-v1-request.json
-        run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.25'"
-      - name: Publish baseline
-        id: publish-baseline
-        env:
-          VELNOR_INTERNAL_OP: publish-baseline-v1
-          VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/publish-baseline-v1-request.json
-        run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.25'"
-      - name: Upload baseline
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          if-no-files-found: error
-          name: ${{ steps.publish-baseline.outputs.artifact_name }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/published-baseline/baseline.json
-          retention-days: "90"
   required:
     name: Required
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     env:
       RUSTUP_TOOLCHAIN: 1.99.1
+      VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     permissions:
       contents: read
       actions: read
@@ -532,8 +504,8 @@ jobs:
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
       - name: Download every expected matrix artifact
         env:
           GH_REPO: ${{ github.repository }}
@@ -560,7 +532,7 @@ jobs:
         with:
           if-no-files-found: error
           name: velnor-final-r${{ github.run_id }}-a${{ github.run_attempt }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/final-report.json
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}/final-report.json
           retention-days: "30"
   rust-velnor-actions-actionlint:
     name: Rust / velnor-actions-actionlint
@@ -572,8 +544,10 @@ jobs:
       MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "0"
       RUSTUP_TOOLCHAIN: 1.99.1
+      VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     needs:
       - plan
+    if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-actionlint,')"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -611,8 +585,8 @@ jobs:
       - name: Download plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -676,32 +650,26 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"; fi'"
       - name: Build test executables
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-actionlint/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-5885714d7c1e9c4956d0794596f815c2e9c54dc35eaac562d1daf359cc48b469"}
       - name: Format
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-actionlint/fmt/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-d49955d187704ce48c4e8bb976bc2da6f6c385ad144de7667a82972b595a8ab1"}
       - name: Clippy
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-actionlint/clippy/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-a39cbdb0c1dce0b6297c00a7cf1ccfa75804cfa3997711f283010a50c9fc63e5"}
       - name: Unit and integration tests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-actionlint/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-9f2a80ce04d6bb43c78a80af1e2ecc29c82ae0245a92332778db522a8d126b68"}
       - name: Doctests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-actionlint/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-d4542b4a0bfdeeb3cdec733d7a2afd5825cc54255c67c0e6790c7aaa79f6813a"}
       - name: Documentation
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-actionlint/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-884bfceca31d4992d7149512e3337dba48fd7f4dd184cfadd9968dce993ce89a"}
       - name: Wait for parallel checks
@@ -711,8 +679,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
-          name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-actionlint
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-crate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-rust-velnor-actions-actionlint
+          overwrite: "true"
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
       - name: Save Mise tools
         if: success() && ((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && steps.v2.outputs.enabled == 'true'
@@ -739,8 +708,10 @@ jobs:
       MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "0"
       RUSTUP_TOOLCHAIN: 1.99.1
+      VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     needs:
       - plan
+    if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-cli,')"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -778,8 +749,8 @@ jobs:
       - name: Download plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -848,27 +819,22 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\"; fi'"
       - name: Build test executables
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-cli/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-34b32019c9a9e7df5fc612cf716289da7c462e45eeb9fa7b14e3378a16608921"}
       - name: Format
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-cli/fmt/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-ef002768d23e46d3894cbce0e38326b29a86c2cd677e778b9268c40ccb517c3b"}
       - name: Clippy
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-cli/clippy/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-14a9e33ec6c53b99a7b0e2db22032c0ff5950c60b1e26198e6f4048b716b63ac"}
       - name: Unit and integration tests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-cli/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-64b38cca5eb5d764f77ece3251aca4d62531bfc9f286291917f76433aafc5f84"}
       - name: Documentation
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-cli/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-fff1968f50fa327fa370ab346dbdc04a22b6876104a0c8cb3edc3dc21507c34e"}
       - name: Wait for parallel checks
@@ -878,8 +844,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
-          name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-cli
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-crate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-rust-velnor-actions-cli
+          overwrite: "true"
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
       - name: Save Mise tools
         if: success() && ((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && steps.v2.outputs.enabled == 'true'
@@ -906,8 +873,10 @@ jobs:
       MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "0"
       RUSTUP_TOOLCHAIN: 1.99.1
+      VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     needs:
       - plan
+    if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-contract,')"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -945,8 +914,8 @@ jobs:
       - name: Download plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -1010,32 +979,26 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"; fi'"
       - name: Build test executables
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-contract/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-d0ba48d8044710a9a5e6649243a7426142a3afe2b6de90c5c7aeb77ba43715a1"}
       - name: Format
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-contract/fmt/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-122c7e510b6e5d802e5ea81e401d00d232cfc209b48395dcb0abea9cfdd93bd3"}
       - name: Clippy
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-contract/clippy/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-d385fef35a0a22c4d9bf0d664580d2e97d156dd4b1355fd63479209c183550a0"}
       - name: Unit and integration tests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-contract/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-41f5b2d76f5dfe66a25d4d377156cf93eec3d95a6ebd491bf54d0237c0fe88ee"}
       - name: Doctests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-contract/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-470223099c08c37e0321ae61eef8771df74f74ea3a275ddbd8229b419fdae4c0"}
       - name: Documentation
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-contract/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-30b9bb9c3f8191626915f4102057984c2c41c35e43f11215261803c69e146787"}
       - name: Wait for parallel checks
@@ -1045,8 +1008,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
-          name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-contract
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-crate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-rust-velnor-actions-contract
+          overwrite: "true"
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
       - name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
@@ -1067,8 +1031,10 @@ jobs:
       MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "0"
       RUSTUP_TOOLCHAIN: 1.99.1
+      VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     needs:
       - plan
+    if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-mise,')"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -1106,8 +1072,8 @@ jobs:
       - name: Download plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -1171,32 +1137,26 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"; fi'"
       - name: Build test executables
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-mise/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-13e3c978738e75dd354fe718ccedab28998efb30e64a932a8247bd936d5458c6"}
       - name: Format
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-mise/fmt/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-b82a4cc66b0971877da88de13d13e65ecaa712dda9208825c76a9829832b880b"}
       - name: Clippy
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-mise/clippy/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-6010e2d3b63ec973a9671771ad719b2d49e6e24213e32c8f8dada07b5e41ab00"}
       - name: Unit and integration tests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-mise/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-acf19ea3171ae35c2fa48498477fe8ddee6209b58f1ee5cdc81f6923f64ee08f"}
       - name: Doctests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-mise/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-699bdc1de8bbe3150d8a1cd86d2b816d4a5a96683cc70d55dee47bc5e072f8c3"}
       - name: Documentation
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-mise/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-d49a18738c506a436d83dc938acd43ea2a6bdaa366dd571119ac750cfee87f84"}
       - name: Wait for parallel checks
@@ -1206,8 +1166,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
-          name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-mise
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-crate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-rust-velnor-actions-mise
+          overwrite: "true"
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
       - name: Save Mise tools
         if: success() && ((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && steps.v2.outputs.enabled == 'true'
@@ -1234,8 +1195,10 @@ jobs:
       MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "0"
       RUSTUP_TOOLCHAIN: 1.99.1
+      VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     needs:
       - plan
+    if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-orchestrator,')"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -1273,8 +1236,8 @@ jobs:
       - name: Download plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -1343,32 +1306,26 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\"; fi'"
       - name: Build test executables
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-orchestrator/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-00cd846d7f884445a95d7de7d5d3dadad73c333bffc99ea46bb268c81a6327c3"}
       - name: Format
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-orchestrator/fmt/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-faa59c432653ac667cf7ea38a5a154748137f82544928c1d8360202e042618a1"}
       - name: Clippy
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-orchestrator/clippy/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-806304d616924e61a548caabf7fb84df1acde61c3b0caa086745787d65505782"}
       - name: Unit and integration tests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-orchestrator/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-7d2f6d28ae815a43f975e8e2d9e14e2c15fec5f586e25f6c2bb8e65a9bade275"}
       - name: Doctests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-orchestrator/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-5293f341dabe3e76cde03bec5e7488f7efccaf2f8bf753750dbbdd193f078596"}
       - name: Documentation
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-orchestrator/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-f85b46461e9cd8892eeb2d41353585dc5a399cc60f9a7f40ddcbb9c2719b332a"}
       - name: Wait for parallel checks
@@ -1378,8 +1335,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
-          name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-orchestrator
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-crate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-rust-velnor-actions-orchestrator
+          overwrite: "true"
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
       - name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
@@ -1400,8 +1358,10 @@ jobs:
       MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "0"
       RUSTUP_TOOLCHAIN: 1.99.1
+      VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     needs:
       - plan
+    if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-rust,')"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -1439,8 +1399,8 @@ jobs:
       - name: Download plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -1504,32 +1464,26 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"; fi'"
       - name: Build test executables
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-rust/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-21c2eb132b4f029c045a8db68a60c22b4d4900984329b8ab3d73430f7f2c2c7c"}
       - name: Format
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-rust/fmt/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-90281ddfb256e82c170f3ff0fb1a782281e53d75ed617e19947bec7f55e47919"}
       - name: Clippy
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-rust/clippy/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-5dd07cb64d0e3095bc0466d8cd8729776f911b2410bde9b99ecbe1e5a7444856"}
       - name: Unit and integration tests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-rust/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-49ff60c7e490cd5d30d44fd2af2678dd787fb357d18dadea14dfeb9cb6c5d030"}
       - name: Doctests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-rust/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-3072e741b42698c6e5a4c255cee413057d454bd4630fd645634f3d41dbc1b1d3"}
       - name: Documentation
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-rust/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-38a4f19c5a68939dcbe2f9c6614d83b72be33e334808a1b9fb8b63c4336a726a"}
       - name: Wait for parallel checks
@@ -1539,8 +1493,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
-          name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-rust
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-crate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-rust-velnor-actions-rust
+          overwrite: "true"
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
       - name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
@@ -1561,8 +1516,10 @@ jobs:
       MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "0"
       RUSTUP_TOOLCHAIN: 1.99.1
+      VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     needs:
       - plan
+    if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-tofu,')"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -1600,8 +1557,8 @@ jobs:
       - name: Download plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -1665,32 +1622,26 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"; fi'"
       - name: Build test executables
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-tofu/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-de9d5b27f611e5c8e251421c49f0520e225fc9a04a1da274aa390b836dc49d80"}
       - name: Format
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-tofu/fmt/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-06a47249d0e677bc8c554629f59913eca12e23d739e3ee6756c18be2d660459c"}
       - name: Clippy
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-tofu/clippy/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-34151f4018a789b73d4fb2ba59b71b07411e0bbb6f8da79915206ca6e55b6241"}
       - name: Unit and integration tests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-tofu/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-da023ea9383b32814043b2f9eae7531f280b30968faff947970176f311f813ae"}
       - name: Doctests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-tofu/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-84eceed5d7444a075a10cd6f5475cdd2e78c2a54bea61c0a1ae67166f7dba6d9"}
       - name: Documentation
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-tofu/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-d9c152a30541829bbbd06aecb7abdcc163229f1f10d46aa5e89e8f85542fac52"}
       - name: Wait for parallel checks
@@ -1700,8 +1651,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
-          name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-tofu
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-crate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-rust-velnor-actions-tofu
+          overwrite: "true"
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
       - name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
@@ -1722,8 +1674,10 @@ jobs:
       MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "0"
       RUSTUP_TOOLCHAIN: 1.99.1
+      VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     needs:
       - plan
+    if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-workflow-renderer,')"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -1761,8 +1715,8 @@ jobs:
       - name: Download plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -1826,32 +1780,26 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"; fi'"
       - name: Build test executables
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-workflow-renderer/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-e6ff95a745ee89857302ec6277475aa0d724ceda32335de7b97e7d8d4598536d"}
       - name: Format
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-workflow-renderer/fmt/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-e454dc80c8f24c2089fea33de62a2d268688d0559abfc1daec4ba2c626cf01be"}
       - name: Clippy
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-workflow-renderer/clippy/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-798da3033978696832776ad21e69b3d94fb944f447e842c5663b1c5a951f9d3e"}
       - name: Unit and integration tests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-workflow-renderer/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-9522f7ba26b2c34566fd229797ed24648757a0c5f51ac49febfbbf6dd9fb5a69"}
       - name: Doctests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-workflow-renderer/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-7e0afa1ea1179b704c34011b4254d933c41ac4dea9f126676c178e0028c83031"}
       - name: Documentation
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-workflow-renderer/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-706ebb673da9f32e82f7986ffa6599209540bd5481b7ec65fc3f9c0c939b37a0"}
       - name: Wait for parallel checks
@@ -1861,8 +1809,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
-          name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-workflow-renderer
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-crate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-rust-velnor-actions-workflow-renderer
+          overwrite: "true"
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
       - name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
@@ -1883,8 +1832,10 @@ jobs:
       MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "0"
       RUSTUP_TOOLCHAIN: 1.99.1
+      VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     needs:
       - plan
+    if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-resource-probe,')"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -1922,8 +1873,8 @@ jobs:
       - name: Download plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -1988,32 +1939,26 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\"; fi'"
       - name: Build test executables
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-resource-probe/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-07412df792008f1302285e6b204e43efa8562f5228176819c6b66357067750af"}
       - name: Format
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-resource-probe/fmt/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-21a45c6b2b8157a3273947086ba987c6a76d95b9eb3a50282e4baf4393b62f29"}
       - name: Clippy
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-resource-probe/clippy/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-ee97bea248f1d2a803a6f6f37dec83e722b5ea17698ba543f29428a2b37560bf"}
       - name: Unit and integration tests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-resource-probe/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-25ed2b23305745ae14acfd96572484bf14e52eac835b77ad3a88abeb3d73fbd0"}
       - name: Doctests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-resource-probe/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-8cb68c19b2d62462e2ab6da2274370868c799e0a995c91e526682aeca4da3605"}
       - name: Documentation
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-resource-probe/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-03fa584c81ec391c255c1d3e4d21344724112131be3c713fbaf8d1eef70b18a7"}
       - name: Wait for parallel checks
@@ -2023,8 +1968,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
-          name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-resource-probe
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-crate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-rust-velnor-resource-probe
+          overwrite: "true"
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
       - name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
@@ -2045,8 +1991,10 @@ jobs:
       MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "0"
       RUSTUP_TOOLCHAIN: 1.99.1
+      VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     needs:
       - plan
+    if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-runner-cli,')"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -2084,8 +2032,8 @@ jobs:
       - name: Download plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -2150,32 +2098,26 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\"; fi'"
       - name: Build test executables
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-cli/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-2d47e3f32994487b6de93bc3339060e646ff2860880f0213b10d99aedb8be1de"}
       - name: Format
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-cli/fmt/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-55509ab449eec61e0fa493b0c60cbe98193fe154e51b8531f1e89eb54a44dc5a"}
       - name: Clippy
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-cli/clippy/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-1187c452bfb630c760fca2e557762bc6218f79bf61b04d390c5faef30c599c97"}
       - name: Unit and integration tests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-cli/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-8dd495787c7c2c0099157e0fe3eec630c5121b3d9dcb72895f16a30085cb5d45"}
       - name: Doctests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-cli/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-ad10dbf0ad8e7ffdef990ec79b57802b1f5430d205edef835ae79ee8f4d28cfc"}
       - name: Documentation
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-cli/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-e6cbbd3850b8ea1e9b6093c34caa9ee29a47507c4fbc4b05902d7199202f52af"}
       - name: Wait for parallel checks
@@ -2185,8 +2127,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
-          name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-runner-cli
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-crate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-rust-velnor-runner-cli
+          overwrite: "true"
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
       - name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
@@ -2207,8 +2150,10 @@ jobs:
       MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "0"
       RUSTUP_TOOLCHAIN: 1.99.1
+      VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     needs:
       - plan
+    if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-runner-core,')"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -2246,8 +2191,8 @@ jobs:
       - name: Download plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -2312,32 +2257,26 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\"; fi'"
       - name: Build test executables
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-core/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-da15f40c96696fcd7b40b83e12271ce02167a31ed9ef6c5e4c0e5dda51120171"}
       - name: Format
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-core/fmt/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-bae80604feb65388661f667797890ba029d884bebea3ab1d37084b1e8c95cb16"}
       - name: Clippy
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-core/clippy/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-1292657de7b4a0c93247817c05e7d060b84fab962e63ba7d711bbfbd6a4710ee"}
       - name: Unit and integration tests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-core/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-d6b3bd8e3223bbb6832a6cda6a548bfc699d021ba526b2cbf7b20ad47c0feda3"}
       - name: Doctests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-core/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-2ef8ce2ce747086b501fbdc044afb3b6967cbf23e7226a05056464c4ba145d5b"}
       - name: Documentation
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-core/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-f1b4b9c4b9f9e5c1af92374d0b401d8f3c1998a4c27e60622be7fa9e7fdea1f0"}
       - name: Wait for parallel checks
@@ -2347,8 +2286,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
-          name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-runner-core
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-crate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-rust-velnor-runner-core
+          overwrite: "true"
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
       - name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
@@ -2369,8 +2309,10 @@ jobs:
       MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "0"
       RUSTUP_TOOLCHAIN: 1.99.1
+      VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     needs:
       - plan
+    if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-runner-github,')"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -2408,8 +2350,8 @@ jobs:
       - name: Download plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -2474,32 +2416,26 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\"; fi'"
       - name: Build test executables
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-github/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-1ea89cd5f3287d7ccf3547ea19b2902b618a3667de831287499856b063209c30"}
       - name: Format
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-github/fmt/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-ad767b8aa8bace40c10b177fef40ab96803a56ec0b3461c11192bd3f632c09b3"}
       - name: Clippy
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-github/clippy/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-4f7b07e02e7b6a23511cd91053317313cabfb18bb41b5c8949db0a73a3f7ef00"}
       - name: Unit and integration tests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-github/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-c1dc7080fb34fd8c31deef7f32b611737ef2f524699630801eb5dee175b6f9f5"}
       - name: Doctests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-github/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-b904ecf2b8e3807dfec67eaf0c7f4be830f0c4eb210dc1b13cef2e98216fdf8f"}
       - name: Documentation
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-github/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-634e60969f6743b957ca88660cbd081020c633a1228d96b88b515dfa8e274930"}
       - name: Wait for parallel checks
@@ -2509,8 +2445,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
-          name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-runner-github
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-crate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-rust-velnor-runner-github
+          overwrite: "true"
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
       - name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
@@ -2531,8 +2468,10 @@ jobs:
       MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "0"
       RUSTUP_TOOLCHAIN: 1.99.1
+      VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
     needs:
       - plan
+    if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-runner-host,')"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -2570,8 +2509,8 @@ jobs:
       - name: Download plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -2636,32 +2575,26 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\"; fi'"
       - name: Build test executables
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-host/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-a62c189ca633e2267c6b1cd31a40fb4f726c09e1e2286983d5bf8ea5227c25b1"}
       - name: Format
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-9731c1f940fd9268668fac76d68ca25139362a0d765dbc69675fcadd44c0ad8a"}
       - name: Clippy
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-host/clippy/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-e4069c8f551b50b3c35c547adbae5a01be16dd9cc5643cc1445396daa448083d"}
       - name: Unit and integration tests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-8b053e70e4f3527cf6b6610290ebcb83e6c2652f8df73693b36101a5d8b7f52f"}
       - name: Doctests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-host/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-9ba9cb59d6d9972d5a44389adc3a49b41cbe0304e8e2b14f85782dde15168c30"}
       - name: Documentation
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-host/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-4fa7d615de37c41e1cf2965c7817a26f892ee713cc47d80d40f125031cda6770"}
       - name: Wait for parallel checks
@@ -2671,8 +2604,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
-          name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-runner-host
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
+          name: velnor-crate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-rust-velnor-runner-host
+          overwrite: "true"
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
       - name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
@@ -2687,6 +2621,8 @@ jobs:
     name: Zizmor
     runs-on: ubuntu-26.04
     timeout-minutes: 5
+    env:
+      VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

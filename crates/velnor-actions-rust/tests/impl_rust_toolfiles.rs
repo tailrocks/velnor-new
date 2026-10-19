@@ -156,10 +156,13 @@ fn every_finding_names_supplying_file() {
 #[test]
 fn broadening_and_known_toolfiles_cover_own_and_foreign() {
     use velnor_actions_rust::{SelectionBroadening, is_known_toolfile, selection_broadening};
-    assert_eq!(
-        selection_broadening("Cargo.lock"),
-        Some(SelectionBroadening::Lockfile)
-    );
+    for path in ["Cargo.lock", "crates/a/Cargo.lock"] {
+        assert_eq!(
+            selection_broadening(path),
+            Some(SelectionBroadening::Lockfile),
+            "every lockfile broadens: {path:?}"
+        );
+    }
     for path in ["Cargo.toml", ".cargo/config.toml", ".cargo/config"] {
         assert_eq!(
             selection_broadening(path),
@@ -168,7 +171,7 @@ fn broadening_and_known_toolfiles_cover_own_and_foreign() {
         );
     }
     for path in [
-        "crates/a/Cargo.lock",
+        "crates/a/NotCargo.lock",
         "crates/a/Cargo.toml",
         "src/lib.rs",
         ".mise.toml",

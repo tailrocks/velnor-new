@@ -1,7 +1,7 @@
 //! Schema-2 affected plan and generic matrix entries.
-use super::baseline::{BaselineProof, PlanBaseline};
 use super::lanes::NamedCheckLaneVariant;
 pub use super::matrix_entry::MatrixEntry;
+pub use super::plan_jobs::{JobDisposition, PlanJob};
 use super::qualification_dispatch::QualificationDispatch;
 use super::trust::Trust;
 use crate::canonical::validate_digest;
@@ -45,8 +45,6 @@ pub struct Plan {
     pub runner: PlanRunner,
     /// Trust scope.
     pub trust: Trust,
-    /// Baseline evidence.
-    pub baseline: PlanBaseline,
     /// Generator identity.
     pub generator: PlanGenerator,
     /// Complete package inventory (sorted).
@@ -57,6 +55,8 @@ pub struct Plan {
     pub matrix: PlanMatrix,
     /// Every obligation ID (sorted unique).
     pub task_ids: Vec<String>,
+    /// Every job owning obligations with its disposition (sorted by job ID).
+    pub jobs: Vec<PlanJob>,
     /// Plan warnings.
     #[serde(default)]
     pub warnings: Vec<String>,
@@ -135,13 +135,10 @@ pub struct PlanObligation {
     /// Canonical digest over the task's complete input closure.
     ///
     /// The plan path resolves the closure against the checkout and binds
-    /// this digest into `input_digest`; baseline publishers copy it into
-    /// their entries so coverage can compare closures explicitly instead
-    /// of trusting the changed-work hint.
+    /// this digest into `input_digest`.
     pub closure_digest: String,
-    /// Baseline proof (required when covered).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub baseline_proof: Option<BaselineProof>,
+    /// Generated job owning this obligation (`rust-<crate>`, `check-<id>`, ...).
+    pub job_id: String,
 }
 /// Obligation coverage decision.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -151,8 +148,8 @@ pub enum ObligationDecision {
     Execute,
     /// Reused from the task cache.
     ReusedFromTaskCache,
-    /// Covered by the trusted baseline.
-    CoveredByTrustedBaseline,
+    /// The change cannot affect it; its crate job is skipped (hard decision 4).
+    NotAffected,
 }
 /// Bounded matrix payload.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -221,6 +218,7 @@ impl Plan {
             obligation.validate()?;
         }
         validate_plan_edges(&self.edges, &self.task_ids)?;
+        super::plan_jobs::validate_plan_jobs(self)?;
         Ok(())
     }
 }
@@ -278,21 +276,17 @@ impl PlanObligation {
         validate_digest(&self.task_digest)?;
         validate_digest(&self.input_digest)?;
         validate_digest(&self.closure_digest)?;
+        if self.job_id.trim().is_empty() {
+            return Err(ContractError::identity(
+                "obligations.job_id",
+                "empty_job_id",
+            ));
+        }
         if self.reason.trim().is_empty() {
             return Err(ContractError::identity(
                 "obligations.reason",
                 "empty_reason",
             ));
-        }
-        let covered = self.decision == ObligationDecision::CoveredByTrustedBaseline;
-        if covered && self.baseline_proof.is_none() {
-            return Err(ContractError::identity(
-                "obligations.baseline_proof",
-                "missing_proof",
-            ));
-        }
-        if let Some(proof) = &self.baseline_proof {
-            proof.validate()?;
         }
         Ok(())
     }

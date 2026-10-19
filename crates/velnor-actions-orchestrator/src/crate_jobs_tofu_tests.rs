@@ -294,7 +294,7 @@ fn rust_jobs_never_stage() {
 #[test]
 fn first_tofu_obligation_declares_the_cap() {
     use velnor_actions_workflow_renderer::{
-        COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
+        MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV, PLAN_ID_OUTPUT,
     };
     let tasks = tofu_triples(&["stacks/a"]);
     let found = build_staged(tasks, 3);
@@ -307,7 +307,7 @@ fn first_tofu_obligation_declares_the_cap() {
     );
     assert_eq!(
         first.get(MATRIX_OUTPUT_ENV).map(String::as_str),
-        Some(COVERED_TASKS_OUTPUT)
+        Some(PLAN_ID_OUTPUT)
     );
     assert_eq!(
         first.get(MATRIX_MAX_PARALLEL_ENV).map(String::as_str),

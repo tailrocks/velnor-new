@@ -15,7 +15,9 @@
 // Wired here so the shared reader compiles without touching `lib.rs`.
 #[path = "staged_reads.rs"]
 pub(crate) mod staged_reads;
-pub(crate) use self::staged_reads::{path_is_symlink, read_staged_bytes, read_staged_text};
+#[cfg(test)]
+pub(crate) use self::staged_reads::read_staged_bytes;
+pub(crate) use self::staged_reads::{path_is_symlink, read_staged_text};
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
@@ -64,8 +66,6 @@ pub fn retrieve_reports() -> Result<usize, OrchestratorError> {
 /// A missing or unparsable plan means zero downloads (the merge still
 /// runs and reports `planning_failed`). Malformed artifact IDs are
 /// skipped without spawning; failed downloads are skipped per leg.
-/// Afterwards the plan's exact baseline is best-effort fetched beside
-/// them; the merge judges its absence as `source_missing` itself.
 pub(crate) fn retrieve_reports_to(run_id: u64, run_dir: &Path) -> usize {
     let plan = read_plan(run_dir);
     let Some(plan) = plan else {
@@ -93,13 +93,12 @@ pub(crate) fn retrieve_reports_to(run_id: u64, run_dir: &Path) -> usize {
             continue;
         };
         let (downloaded, _) = download_with_retry(|| {
-            crate::cover::shard::BaselineLookup::run(&catalog, run_dir, args.clone()).is_ok()
+            crate::gh_download::GhDownload::run(&catalog, run_dir, args.clone()).is_ok()
         });
         if downloaded {
             retrieved += 1;
         }
     }
-    crate::retrieve_baseline::retrieve_baseline_to(&catalog, run_dir, &plan, &repo);
     retrieved
 }
 

@@ -185,7 +185,7 @@ fn verify_ci_yaml(ci_yaml: &str, manifest_json: &str) -> Result<(), Box<dyn Erro
         "--no-tests warn --partition \\\"hash:$VELNOR_SUITE_SHARD/2\\\" --profile smoke --run-ignored only",
         "VELNOR_SUITE_SHARD: ${{ matrix.shard }}",
         "NEXTEST_TEST_THREADS: \"4\"",
-        "name: velnor-suite-r${{ github.run_id }}-a${{ github.run_attempt }}-smoke-diff-${{ matrix.shard }}",
+        "name: velnor-suite-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-smoke-diff-${{ matrix.shard }}",
         "test -L .github/CLAUDE.md",
         "readlink .github/CLAUDE.md | grep -qxF AGENTS.md",
     ] {
@@ -250,8 +250,8 @@ fn verify_suites_yaml(suites_yaml: &str) {
         "--archive-file \\\"$RUNNER_TEMP/velnor/suite-archive-full/archive.tar.zst\\\" --workspace-remap . --extract-to . --extract-overwrite --no-tests warn --partition \\\"hash:$VELNOR_SUITE_SHARD/12\\\" --profile full --run-ignored only",
         "VELNOR_SUITE_FILTERSET: ${{ inputs.filter }}",
         "VELNOR_SUITE_SHARD: ${{ matrix.shard }}",
-        "name: velnor-suite-r${{ github.run_id }}-a${{ github.run_attempt }}-full-diff-${{ matrix.shard }}",
-        "name: velnor-suite-r${{ github.run_id }}-a${{ github.run_attempt }}-capture-${{ matrix.shard }}",
+        "name: velnor-suite-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-full-diff-${{ matrix.shard }}",
+        "name: velnor-suite-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-capture-${{ matrix.shard }}",
     ] {
         assert!(
             suites_yaml.contains(needle),

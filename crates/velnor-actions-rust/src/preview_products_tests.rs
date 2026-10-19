@@ -72,6 +72,7 @@ fn workspace(packages: Vec<PackageRecord>) -> WorkspaceRecord {
         packages,
         edges: Vec::new(),
         skipped_edges: Vec::new(),
+        has_external_dependencies: false,
     }
 }
 
@@ -221,6 +222,7 @@ fn feature_gated_and_nonworkspace_products_fail_closed() {
         packages: vec![outside],
         edges: Vec::new(),
         skipped_edges: Vec::new(),
+        has_external_dependencies: false,
     };
     assert!(workspace.members.iter().all(|id| id != &outside_id));
     assert!(resolve_preview_products(&config, &workspace).is_err());

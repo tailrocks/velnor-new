@@ -1,7 +1,7 @@
 //! Own a declaration-bound local container socket and Docker context.
 use crate::OrchestratorError;
-use crate::cover_identity::generator::sha256_hex;
 use crate::exclusive_write;
+use crate::generator::sha256_hex;
 use crate::internal::internal;
 use std::fs;
 use std::path::{Component, Path, PathBuf};

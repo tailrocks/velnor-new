@@ -277,7 +277,7 @@ fn single_shard_and_sharded_archive_and_inline_suites_render() -> TestResult {
     };
     assert_eq!(
         art_with.get("name").map(String::as_str),
-        Some("velnor-suite-r${{ github.run_id }}-a${{ github.run_attempt }}-smoke-logs")
+        Some("velnor-suite-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-smoke-logs")
     );
 
     let yaml = render_suites_workflow(&spec)?.ok_or("suites.yml absent")?;

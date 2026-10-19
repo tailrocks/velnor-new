@@ -1,15 +1,12 @@
-//! Nextest sharding proofs, budgets, and exact-base baseline lookup.
+//! Nextest sharding proofs and budgets.
 //!
-//! Shard proofs bind each partition to its plan obligation; the lookup finds
-//! the exact-base successful run through pinned `gh`. Cargo-test profiles
-//! never shard and never receive archives.
+//! Shard proofs bind each partition to its plan obligation. Cargo-test
+//! profiles never shard and never receive archives.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{canonical_json_bytes, digest_b3, validate_digest};
-
-pub(crate) use super::shard_baseline::{BaselineLookup, resolve_manifests};
 
 /// V1 retry budget: retries are always zero.
 pub(crate) const MAX_RETRIES: u32 = 0;
@@ -214,7 +211,3 @@ pub(crate) fn validate_budgets(limits: &ResourceLimits) -> Result<(), String> {
     }
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "shard_tests.rs"]
-mod tests;

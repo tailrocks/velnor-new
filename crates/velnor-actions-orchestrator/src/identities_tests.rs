@@ -165,6 +165,7 @@ fn formats_stay_single_and_graphs_relocate() {
             target: None,
         }],
         skipped_edges: Vec::new(),
+        has_external_dependencies: false,
     };
     let digest_of = |id: &str| {
         super::snapshot::canonical_digest(&snapshot_graph_for(&record(id))).expect("digest")
@@ -289,6 +290,7 @@ fn empty_discovery() -> crate::discover::Discovery {
         skipped_non_utf8: false,
         tofu_note: None,
         tofu_units: Vec::new(),
+        affected: crate::affected_inputs::AffectedInputs::default(),
     }
 }
 

@@ -109,9 +109,9 @@ head, plan failed closed past 40 roots on the then-current 320 KiB matrix budget
 One `velnor-actions-tofu::FileCache` per top-level phase, hoisted
 (not per call): `discover` owns the prepare-phase instance across
 detection, inventory, and diagnostics; `build_plan` owns the
-plan-phase instance across every task; cover owns one across its
-closure plus extension check. A construction-site scan pins exactly
-these three (`cover_identity.rs`, `discover.rs`, `internal.rs`)
+plan-phase instance across every task. (The former baseline-coverage
+instance was removed with trusted-baseline coverage.) A construction-site
+scan pins exactly these two (`discover.rs`, `internal.rs`)
 and zero constructions in tofu product code.
 
 Per-root reads per `plan_internal` (single-file root), before →
