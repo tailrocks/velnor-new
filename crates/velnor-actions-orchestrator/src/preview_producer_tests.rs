@@ -6,7 +6,7 @@ use std::{ffi::OsString, time::Duration};
 use velnor_actions_contract::preview_identity::PreviewIdentity;
 use velnor_actions_mise::{CheckDeadline, IsolatedCommand};
 
-use crate::git_fixture;
+use crate::{git_fixture, preview_producer::PreviewTaskSpec};
 
 fn fixture_git(root: &std::path::Path, args: &[&str]) -> std::process::Output {
     git_fixture::command(root)
@@ -205,9 +205,18 @@ fn isolated_producer_task_receives_fixed_handoff_without_credentials() {
     };
     preview.producer.build_jobs = 3;
     let output = temp.path().join("dist/preview");
-    let pairs =
-        super::producer_handoff(temp.path(), &output, &preview, &identity, "refs/heads/main")
-            .expect("fixed producer handoff");
+    let handoff = temp.path().join("preview-task-request.json");
+    let pairs = super::producer_handoff(
+        temp.path(),
+        &output,
+        &PreviewTaskSpec {
+            preview: &preview,
+            identity: &identity,
+            source_ref: "refs/heads/main",
+            handoff: &handoff,
+        },
+    )
+    .expect("fixed producer handoff");
     let script = concat!(
         "printf '%s\\n' ",
         "\"$VELNOR_RELEASE_SOURCE_COMMIT\" ",
@@ -217,7 +226,8 @@ fn isolated_producer_task_receives_fixed_handoff_without_credentials() {
         "\"$VELNOR_RELEASE_OUTPUT_MANIFEST\" ",
         "\"$VELNOR_RELEASE_COMMIT_COUNT\" ",
         "\"$CARGO_BUILD_JOBS\" ",
-        "\"$JACKIN_VERSION_OVERRIDE\"; ",
+        "\"$JACKIN_VERSION_OVERRIDE\" ",
+        "\"$VELNOR_PREVIEW_REQUEST_FILE\"; ",
         "test -z \"${GH_TOKEN+x}${GITHUB_TOKEN+x}${AWS_SECRET_ACCESS_KEY+x}\""
     );
     let command = IsolatedCommand::repo_task(
@@ -241,6 +251,7 @@ fn isolated_producer_task_receives_fixed_handoff_without_credentials() {
     assert!(stdout.contains(output.to_str().expect("output path")));
     assert!(stdout.contains("dist/preview/package-output.json"));
     assert!(stdout.contains("42\n3\n"));
+    assert!(stdout.contains(handoff.to_str().expect("handoff path")));
     assert!(stdout.contains(&identity.version));
 }
 

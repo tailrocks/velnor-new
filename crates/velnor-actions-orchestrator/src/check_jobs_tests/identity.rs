@@ -1,5 +1,12 @@
 use super::*;
 
+fn named_step(job: &Job) -> &Step {
+    job.steps
+        .iter()
+        .find(|step| step.name == "Execute named check")
+        .expect("named check execution")
+}
+
 #[test]
 fn qualification_named_check_reuses_the_same_job_and_report_identity() {
     let (_root, discovery) = fixture(&[check(

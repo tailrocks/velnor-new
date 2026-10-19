@@ -157,7 +157,7 @@ fn verify_source(
 fn validate_source_stat(stat: &rustix::fs::Stat) -> Result<(), StageError> {
     let mode = stat.st_mode & 0o7777;
     if FileType::from_raw_mode(stat.st_mode) != FileType::RegularFile
-        || stat.st_uid != crate::process_owner::effective_uid()
+        || stat.st_uid != crate::filesystem_owner::effective_uid()
         || mode & 0o111 == 0
         || mode & 0o7022 != 0
         || mode & 0o7000 != 0

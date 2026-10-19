@@ -2,7 +2,6 @@ use super::StageError;
 use super::checked_stat_u64;
 use super::context::StageContext;
 use rustix::fs::{AtFlags, Mode, OFlags, mkdirat, open, openat, statat};
-use rustix::io::Errno;
 use std::cmp::Ordering;
 use std::ffi::CString;
 use std::os::fd::{AsFd, OwnedFd};
@@ -125,11 +124,11 @@ pub(super) fn open_stage_parent(
     for component in context.stage_directory_components()? {
         let name = CString::new(component).map_err(|_| "cache_stage_path_invalid")?;
         let parent = last_directory(&directories)?;
-        if create {
-            match mkdirat(parent, name.as_c_str(), PRIVATE_DIRECTORY_MODE) {
-                Ok(()) | Err(Errno::EXIST) => {}
-                Err(_) => return Err("cache_stage_directory_create_failed"),
-            }
+        if create
+            && let Err(error) = mkdirat(parent, name.as_c_str(), PRIVATE_DIRECTORY_MODE)
+            && error != rustix::io::Errno::EXIST
+        {
+            return Err("cache_stage_parent_create_failed");
         }
         let child = open_child(parent, &name)?;
         validate_stage_directory(&child, filesystem_device, filesystem_mount_id)?;
@@ -278,7 +277,7 @@ fn directory_mount_id(fd: &OwnedFd) -> Result<u64, StageError> {
 fn validate_private_directory(fd: &OwnedFd) -> Result<(), StageError> {
     let stat = rustix::fs::fstat(fd.as_fd()).map_err(|_| "cache_stage_parent_stat_failed")?;
     if rustix::fs::FileType::from_raw_mode(stat.st_mode) != rustix::fs::FileType::Directory
-        || stat.st_uid != crate::process_owner::effective_uid()
+        || stat.st_uid != crate::filesystem_owner::effective_uid()
         || stat.st_mode & 0o7022 != 0
     {
         return Err("cache_stage_parent_owner_or_mode_invalid");
@@ -292,7 +291,7 @@ fn validate_ancestor(fd: &OwnedFd) -> Result<(), StageError> {
     let writable_by_others = mode & 0o0022 != 0;
     let protected_by_sticky_bit = mode & 0o1000 != 0;
     if rustix::fs::FileType::from_raw_mode(stat.st_mode) != rustix::fs::FileType::Directory
-        || (stat.st_uid != ROOT_UID && stat.st_uid != crate::process_owner::effective_uid())
+        || (stat.st_uid != ROOT_UID && stat.st_uid != crate::filesystem_owner::effective_uid())
         || mode & 0o6000 != 0
         || (writable_by_others && !protected_by_sticky_bit)
     {

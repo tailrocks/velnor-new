@@ -52,6 +52,7 @@ formula = "Formula/demo-preview.rb"
 environment = "tap-update"
 app_id_variable = "TAP_APP_ID"
 app_private_key_secret = "TAP_APP_PRIVATE_KEY"
+protection_observer = { app_id_variable = "TAP_PROTECTION_APP_ID", app_private_key_secret = "TAP_PROTECTION_APP_PRIVATE_KEY" }
 merge = "squash-after-gates"
 [distribution.homebrew_tap.updater]
 task = "package:update-preview"
@@ -221,8 +222,22 @@ fn generator_emits_tap_jobs_from_native_distribution_config() -> TestResult {
     assert!(!writer.contains("permission-administration"));
     assert!(merge.contains("merge-homebrew-tap-pr-v1"));
     assert!(merge.contains("environment: tap-update"));
-    assert!(merge.contains("permission-checks: read"));
-    assert!(merge.contains("permission-administration: read"));
+    let (_, writer_mint) = merge
+        .split_once("id: tap-token\n")
+        .ok_or("writer mint missing")?;
+    let (writer_mint, observer_mint) = writer_mint
+        .split_once("id: tap-protection-token\n")
+        .ok_or("observer mint missing")?;
+    assert!(writer_mint.contains("permission-contents: write"));
+    assert!(writer_mint.contains("permission-pull-requests: write"));
+    assert!(!writer_mint.contains("permission-administration"));
+    assert!(!writer_mint.contains("permission-checks"));
+    assert!(observer_mint.contains("permission-administration: read"));
+    assert!(!observer_mint.contains("permission-contents"));
+    assert!(!observer_mint.contains("permission-pull-requests"));
+    assert!(observer_mint.contains("permission-checks: read"));
+    assert!(!writer.contains("permission-checks"));
+    assert!(!prepare.contains("VELNOR_TAP_PROTECTION_TOKEN"));
     assert!(merge.contains("VELNOR_TAP_COMPLETION_APP_ID"));
     Ok(())
 }

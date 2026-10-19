@@ -5,6 +5,10 @@ use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
+#[path = "distribution_protection_observer.rs"]
+mod protection_observer;
+pub use protection_observer::HomebrewTapProtectionObserver;
+
 /// Optional distribution destinations outside `[stacks.rust]`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -55,6 +59,8 @@ pub struct HomebrewTapConfig {
     pub app_id_variable: String,
     /// Repository/environment secret containing the GitHub App private key.
     pub app_private_key_secret: String,
+    /// Independently scoped read-only authority for classic branch protection.
+    pub protection_observer: HomebrewTapProtectionObserver,
     /// Closed merge policy; arbitrary merge modes and conditions are forbidden.
     pub merge: TapMergePolicy,
     /// Trusted App check that must complete against the exact PR head SHA.
@@ -87,7 +93,7 @@ pub struct TapUpdaterBinding {
     /// Runtime qualification must verify the exact pinned declarations there;
     /// these IDs never resolve through Velnor's own tool catalog.
     pub tools: Vec<String>,
-    /// Bounded task runtime.
+    /// Native promotion task runtime, bounded to one through five minutes.
     #[serde(default = "default_updater_timeout")]
     pub timeout_minutes: u32,
 }
@@ -182,6 +188,7 @@ impl HomebrewTapConfig {
                 "bad_app_private_key_secret",
             ));
         }
+        self.protection_observer.validate(file, key, self)?;
         self.review_completion.validate(file, key)?;
         if self.app_id_variable == self.review_completion.app_id_variable
             || self
@@ -225,7 +232,9 @@ impl TapUpdaterBinding {
         if self.tools.is_empty() || !unique_names(&self.tools) {
             return Err(bad("updater.tools", "invalid_task_tools"));
         }
-        if !crate::workflow::timeout::JobTimeout::is_valid_minutes(self.timeout_minutes) {
+        if !(1..=u32::from(crate::config::NATIVE_PREVIEW_MAX_TIMEOUT_MINUTES))
+            .contains(&self.timeout_minutes)
+        {
             return Err(bad("updater.timeout_minutes", "bad_task_timeout"));
         }
         Ok(())
@@ -234,12 +243,7 @@ impl TapUpdaterBinding {
 
 impl ExactHeadReviewCheck {
     fn validate(&self, file: &str, parent: &str) -> Result<(), ContractError> {
-        if self.check_name.is_empty()
-            || self.check_name.len() > 200
-            || self.check_name.trim() != self.check_name
-            || self.check_name.contains("${{")
-            || self.check_name.chars().any(char::is_control)
-        {
+        if !valid_review_check_name(&self.check_name) {
             return Err(config_error(
                 file,
                 parent,
@@ -325,7 +329,15 @@ fn unique_names(values: &[String]) -> bool {
         })
 }
 
-fn valid_app_id_variable(value: &str) -> bool {
+pub(crate) fn valid_review_check_name(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 200
+        && value.trim() == value
+        && !value.contains("${{")
+        && !value.chars().any(char::is_control)
+}
+
+pub(super) fn valid_app_id_variable(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 128
         && value.as_bytes()[0].is_ascii_uppercase()
@@ -337,7 +349,7 @@ fn valid_app_id_variable(value: &str) -> bool {
         && !value.contains("KEY")
 }
 
-fn valid_secret_name(value: &str) -> bool {
+pub(super) fn valid_secret_name(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 128
         && value.as_bytes()[0].is_ascii_uppercase()

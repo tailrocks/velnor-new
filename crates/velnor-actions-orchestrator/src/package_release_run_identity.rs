@@ -100,7 +100,7 @@ impl GitHubApi {
         Ok(())
     }
 
-    fn latest_source_ci(
+    pub(super) fn latest_source_ci(
         &self,
         workflow: &WorkflowMetadata,
         source: RunSource<'_>,

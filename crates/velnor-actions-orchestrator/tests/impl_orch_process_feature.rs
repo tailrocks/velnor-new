@@ -1,4 +1,4 @@
-//! The orchestrator uses one process owner lookup.
+//! The sole orchestrator process-feature use is the read-only filesystem UID check.
 
 use std::error::Error;
 use std::path::{Path, PathBuf};
@@ -7,7 +7,7 @@ use proc_macro2::{TokenStream, TokenTree};
 use syn::visit::{self, Visit};
 use syn::{Expr, ExprCall, ExprPath, Path as RustPath, UseTree};
 
-const OWNER_CHECK_SOURCE: &str = "src/process_owner.rs";
+const OWNER_CHECK_SOURCE: &str = "src/filesystem_owner.rs";
 
 #[derive(Default)]
 struct ProcessFeatureAudit {
@@ -40,7 +40,7 @@ impl<'ast> Visit<'ast> for ProcessFeatureAudit {
     }
 
     fn visit_item_use(&mut self, item: &'ast syn::ItemUse) {
-        if forbidden_rustix_import(&item.tree, &[]) && !is_errno_import(&item.tree) {
+        if forbidden_rustix_import(&item.tree, &[]) {
             self.violations += 1;
         }
         visit::visit_item_use(self, item);
@@ -168,26 +168,6 @@ fn is_owner_check_source(path: &Path) -> bool {
     path == Path::new(OWNER_CHECK_SOURCE)
 }
 
-fn is_errno_import(tree: &UseTree) -> bool {
-    let UseTree::Path(root) = tree else {
-        return false;
-    };
-    if root.ident != "rustix" {
-        return false;
-    }
-    let UseTree::Path(io) = &*root.tree else {
-        return false;
-    };
-    if io.ident != "io" {
-        return false;
-    }
-    match &*io.tree {
-        UseTree::Name(errno) => errno.ident == "Errno",
-        UseTree::Rename(errno) => errno.ident == "Errno",
-        UseTree::Path(_) | UseTree::Group(_) | UseTree::Glob(_) => false,
-    }
-}
-
 #[test]
 fn orchestrator_process_feature_is_limited_to_exact_stage_uid_check() -> Result<(), Box<dyn Error>>
 {
@@ -202,22 +182,29 @@ fn orchestrator_process_feature_is_limited_to_exact_stage_uid_check() -> Result<
             let relative_path = path.strip_prefix(&crate_root)?;
             assert!(
                 is_owner_check_source(relative_path),
-                "geteuid call outside process owner check: {}",
+                "geteuid call outside filesystem owner check: {}",
                 path.display()
             );
             uid_calls += audit.uid_calls;
         }
     }
-    assert_eq!(uid_calls, 1, "exactly one caller UID lookup is required");
+    assert_eq!(
+        uid_calls, 1,
+        "exactly one filesystem UID lookup call site is required"
+    );
     Ok(())
 }
 
 #[test]
 fn process_feature_guard_requires_exact_owner_source_path() {
     assert!(is_owner_check_source(Path::new(OWNER_CHECK_SOURCE)));
-    assert!(!is_owner_check_source(Path::new(
-        "src/nested/process_owner.rs"
-    )));
+    for rejected in [
+        "src/generate_stage_root_fs.rs",
+        "src/nested/generate_stage_root_fs.rs",
+        "src/nested/filesystem_owner.rs",
+    ] {
+        assert!(!is_owner_check_source(Path::new(rejected)));
+    }
 }
 
 #[test]
@@ -230,23 +217,12 @@ fn process_feature_guard_rejects_import_aliases_and_other_apis() -> Result<(), B
         "use rustix::process::geteuid; fn owner() { geteuid(); }",
         "use rustix as rx; fn owner() { rx::process::geteuid(); }",
         "fn owner() { rustix::process::getuid(); }",
-        "use rustix::io::{Errno, dup};",
-        "use rustix::io::*;",
-        "use rustix::io as io;",
     ] {
         let audit = audit_source(source)?;
         assert!(
             audit.violations > 0,
             "accepted process-feature source: {source}"
         );
-    }
-
-    for source in [
-        "use rustix::io::Errno;",
-        "use rustix::io::Errno as IoError;",
-    ] {
-        let audit = audit_source(source)?;
-        assert_eq!(audit.violations, 0, "rejected typed errno import: {source}");
     }
     Ok(())
 }

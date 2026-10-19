@@ -31,24 +31,25 @@ fn step_mapping_aliases_require_prior_valid_step_definitions() {
     for (workflow, expected_error) in [
         (
             "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - *s1\n",
-            "step_mapping_alias_unresolved",
+            "workflow_mapping_alias_unresolved",
         ),
         (
             "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - &bad.name\n        name: shared\n        run: echo safe\n",
-            "step_mapping_anchor_malformed",
+            "workflow_mapping_name_invalid",
         ),
         (
             "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - &s1\n        run: echo safe\n        name: shared\n",
-            "step_mapping_name_must_be_first",
+            "workflow_mapping_step_name_must_be_first",
         ),
         (
             "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - &s1\n        name: first\n        run: echo safe\n      - &s1\n        name: second\n        run: echo safe\n",
-            "step_mapping_anchor_duplicate",
+            "workflow_mapping_duplicate_anchor",
         ),
     ] {
+        let error = scan_workflow(workflow).expect_err("invalid step anchor must fail");
         assert!(
-            scan_workflow(workflow).is_err_and(|error| error.to_string().contains(expected_error)),
-            "expected {expected_error}"
+            error.to_string().contains(expected_error),
+            "expected {expected_error}, got {error}"
         );
     }
 }

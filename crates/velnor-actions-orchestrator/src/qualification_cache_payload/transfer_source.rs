@@ -254,7 +254,7 @@ fn validate_component(stat: &Stat, final_component: bool) -> Result<(), &'static
         return Err("qualification_cache_payload_root_invalid");
     }
     if final_component {
-        if stat.st_uid != crate::process_owner::effective_uid() {
+        if stat.st_uid != crate::filesystem_owner::effective_uid() {
             return Err("qualification_cache_payload_owner_or_mode_invalid");
         }
         super::payload::validate_payload_root_mode(stat)
@@ -264,7 +264,7 @@ fn validate_component(stat: &Stat, final_component: bool) -> Result<(), &'static
 }
 
 fn validate_ancestor(stat: &Stat) -> Result<(), &'static str> {
-    let owner = crate::process_owner::effective_uid();
+    let owner = crate::filesystem_owner::effective_uid();
     let root_owned_sticky = stat.st_uid == 0 && stat.st_mode & 0o1000 != 0;
     if FileType::from_raw_mode(stat.st_mode) != FileType::Directory
         || (stat.st_uid != 0 && stat.st_uid != owner)

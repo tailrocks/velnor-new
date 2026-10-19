@@ -1,7 +1,7 @@
 //! Proof ownership survives every enclosing operation deadline check.
 
 use super::checkpoint;
-use crate::{OrchestratorError, exclusive_write::write_exclusive_until, internal::internal};
+use crate::{OrchestratorError, internal::internal};
 use std::{
     fs,
     os::unix::fs::MetadataExt,
@@ -68,7 +68,7 @@ pub(super) fn publish_proof(
 ) -> Result<(), OrchestratorError> {
     checkpoint(deadline)?;
     let pending = path.with_extension("pending");
-    write_exclusive_until(&pending, bytes, "preview_proof", || checkpoint(deadline))?;
+    super::handoff::write_upload(&pending, bytes, deadline)?;
     let file = fs::File::from(
         rustix::fs::open(
             &pending,

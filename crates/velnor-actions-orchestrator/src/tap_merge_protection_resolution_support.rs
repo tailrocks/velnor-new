@@ -202,7 +202,7 @@ fn ruleset_response(fixture: &ProtectionFixture) -> Value {
         "source":"owner/tap",
         "target":"branch",
         "enforcement":"active",
-        "bypass_actors":[],
+        "current_user_can_bypass":"never", "bypass_actors":[],
         "rules":rules
     })
 }

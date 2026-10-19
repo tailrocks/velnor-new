@@ -36,6 +36,14 @@ use github::{
 mod run_identity;
 use run_identity::RunSource;
 
+#[path = "artifact_zip.rs"]
+pub(crate) mod artifact_zip;
+#[path = "preview_artifact_transport.rs"]
+mod preview_artifacts;
+pub(crate) use preview_artifacts::{
+    AdmittedPreviewArtifact, acquire_preview_aggregate, acquire_preview_artifacts,
+};
+
 /// Private operation that publishes one authenticated native release.
 pub const PUBLISH_PACKAGE_RELEASE_OP: &str = "publish-package-release-v1";
 /// Private operation that resumes publication from the exact retained signed preview artifact.
@@ -50,6 +58,14 @@ pub(crate) fn verify_tap_update_environment(
 ) -> Result<(), OrchestratorError> {
     github::verify_tap_update_environment(repository, branch)
 }
+
+#[path = "package_release_continuation.rs"]
+mod continuation;
+pub(crate) use continuation::verify_current_source;
+pub use continuation::{
+    PreviewTapContinuationSelection, SELECT_PREVIEW_TAP_CONTINUATION_OP,
+    select_preview_tap_continuation_from_env,
+};
 
 #[path = "package_release_publish_recovery.rs"]
 mod recovery;
@@ -70,7 +86,7 @@ pub fn publish_package_release_from_env() -> Result<PackagePublicationOutcome, O
 /// # Errors
 /// Rejects an invalid retained run/artifact, stale candidate, or conflicting remote state.
 pub fn recover_package_release_from_env() -> Result<PackagePublicationOutcome, OrchestratorError> {
-    recovery::recover()
+    artifact_zip::within_operation(recovery::recover)
 }
 
 #[derive(Clone)]

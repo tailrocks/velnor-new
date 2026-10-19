@@ -23,7 +23,10 @@ use velnor_actions_mise::{MiseInstall, PinnedTool, PinnedToolExec, ToolCatalog};
 use velnor_actions_rust::resolve_preview_products;
 use velnor_actions_workflow_renderer::{
     RenderedFile,
-    schema2::{ConsumerPreviewSpec, ConsumerPreviewTapSpec, render_consumer_preview},
+    schema2::{
+        ConsumerPreviewSpec, ConsumerPreviewTapSpec, render_consumer_preview,
+        render_preview_tap_reconcile,
+    },
 };
 
 #[path = "preview_source_prep.rs"]
@@ -92,7 +95,11 @@ pub(crate) fn files(
         gh_argv: strings_of(exec.argv(&native_catalog)).map_err(|error| internal(&error))?,
         homebrew_tap: tap_spec(prep)?,
     };
-    Ok(vec![render_consumer_preview(&spec, routing)?])
+    let mut files = vec![render_consumer_preview(&spec, routing)?];
+    if spec.homebrew_tap.is_some() {
+        files.push(render_preview_tap_reconcile(&spec, routing)?);
+    }
+    Ok(files)
 }
 
 fn tap_spec(

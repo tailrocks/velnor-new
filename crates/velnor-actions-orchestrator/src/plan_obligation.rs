@@ -40,6 +40,8 @@ mod tests;
 pub(crate) struct GroupInputs<'a> {
     /// Validated discovery inventory.
     pub(crate) discovery: &'a Discovery,
+    /// Complete job-owner index for this plan.
+    pub(crate) job_owners: &'a crate::crate_job_ids::JobOwners<'a>,
     /// Universe member to plan.
     pub(crate) task: &'a ProposedTask,
     /// Run key.
@@ -248,13 +250,11 @@ fn complete_group(
     );
     let run = velnor_actions_workflow_renderer::join_argv_for_run(argv)
         .map_err(|err| internal(&err.to_string()))?;
-    let job_id = crate::crate_job_ids::job_id_for_member(
-        &inputs.discovery.proposals,
-        task,
-        inputs.wire.event,
-    )
-    .map_err(internal_contract)?
-    .ok_or_else(|| internal("crate_job_id_missing"))?;
+    let job_id = inputs
+        .job_owners
+        .for_member(task, inputs.wire.event)
+        .map_err(internal_contract)?
+        .ok_or_else(|| internal("crate_job_id_missing"))?;
     let lanes = inputs
         .named_check_lanes
         .get(&job_id)

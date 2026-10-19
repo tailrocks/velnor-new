@@ -27,6 +27,7 @@ pub(crate) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> Vel
             runner_label: None,
             tasks: Vec::new(),
             tofu_apply: None,
+            review_completion: None,
             verify: VerifyConfig::default(),
             dispatch: velnor_actions_contract::WorkflowDispatchConfig::default(),
             preserve_workflows: Vec::new(),

@@ -1,5 +1,21 @@
 use super::*;
 
+fn rust_proposal() -> velnor_actions_contract::ProposedTask {
+    crate::crate_jobs::crate_jobs_tests::group("demo", velnor_actions_rust::TaskKind::Clippy, &[])
+}
+
+fn tofu_proposal() -> velnor_actions_contract::ProposedTask {
+    let task = velnor_actions_tofu::propose_task(&velnor_actions_tofu::TofuTaskGroup {
+        root: "stacks/demo".to_owned(),
+        kind: velnor_actions_tofu::TofuTaskKind::Validate,
+        configuration: "default".to_owned(),
+        no_targets: false,
+    })
+    .expect("Tofu proposal");
+    task.validate().expect("valid Tofu proposal");
+    task
+}
+
 #[test]
 fn no_cargo_checks_gate_required_without_becoming_rust_jobs() {
     let (root, discovery) = fixture(&[check("ffi", hosted("macos-15", CheckPlatform::MacosArm64))]);
@@ -24,7 +40,8 @@ fn no_cargo_checks_gate_required_without_becoming_rust_jobs() {
             &discovery.proposals,
             &discovery.proposals[0],
             velnor_actions_contract::WorkflowEvent::Push,
-        ),
+        )
+        .expect("valid check owner"),
         Some("check-ffi".to_owned())
     );
     assert_eq!(workflow.ir.jobs["plan"].runs_on, "ubuntu-26.04");
@@ -123,11 +140,10 @@ fn mixed_platform_checks_keep_exact_tools_and_unconditional_reports() {
 
 #[test]
 fn mixed_rust_tofu_and_named_checks_share_required_job_ids() {
-    let mut java = check("java", hosted("ubuntu-26.04", CheckPlatform::LinuxX64));
-    java.task = "check:java".to_owned();
-    let mut frontend = check("frontend", hosted("ubuntu-26.04", CheckPlatform::LinuxX64));
-    frontend.task = "check:frontend".to_owned();
-    let (root, mut discovery) = fixture(&[java, frontend]);
+    let (root, mut discovery) = fixture(&[
+        check("java", hosted("ubuntu-26.04", CheckPlatform::LinuxX64)),
+        check("frontend", hosted("ubuntu-26.04", CheckPlatform::LinuxX64)),
+    ]);
     discovery
         .proposals
         .extend([rust_proposal(), tofu_proposal()]);
@@ -152,7 +168,8 @@ fn mixed_rust_tofu_and_named_checks_share_required_job_ids() {
             task,
             WorkflowEvent::Qualification,
         )
-        .expect("Qualification plan owner");
+        .expect("valid Qualification owner")
+        .expect("runnable task owner");
         assert!(workflow.ir.jobs.contains_key(&job_id), "{job_id}");
         assert!(
             required.contains(job_id.as_str()),
@@ -186,5 +203,19 @@ fn mixed_rust_tofu_and_named_checks_share_required_job_ids() {
         assert!(workflow.ir.jobs.contains_key(id), "missing {id}");
     }
 
-    assert_named_check_plan_entries(root.path(), &discovery, &required);
+    let generator = crate::internal_plan::default_generator();
+    for item in &discovery.mise_checks {
+        let (obligation, entry) = crate::internal_plan::named_checks::plan::derive(
+            root.path(),
+            item,
+            "local",
+            &generator,
+            &ToolCatalog::pinned(),
+        )
+        .expect("derive named check plan entry");
+        assert_eq!(obligation.task_id, item.proposal.task_id);
+        assert_eq!(entry.task_id, item.proposal.task_id);
+        assert_eq!(entry.job_id, format!("check-{}", item.check.id));
+        assert!(required.contains(entry.job_id.as_str()));
+    }
 }

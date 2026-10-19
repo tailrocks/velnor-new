@@ -1,5 +1,6 @@
 use super::super::crate_jobs_tests::group;
 use super::external_needs;
+use crate::crate_job_ids::JobOwners;
 use velnor_actions_contract::WorkflowEvent;
 use velnor_actions_rust::TaskKind;
 
@@ -10,13 +11,9 @@ fn cross_package_gate_names_the_external_owner() {
     second.depends_on.push(first.task_id.clone());
     let proposals = vec![first.clone(), second.clone()];
 
-    let needs = external_needs(
-        &[&second],
-        &proposals,
-        "rust-app",
-        WorkflowEvent::PullRequest,
-    )
-    .expect("valid cross-package gate");
+    let owners = JobOwners::new(&proposals).expect("owners");
+    let needs = external_needs(&[&second], &owners, "rust-app", WorkflowEvent::PullRequest)
+        .expect("valid cross-package gate");
 
     assert_eq!(needs, ["plan", "rust-core"]);
 }
@@ -27,13 +24,24 @@ fn same_package_gate_stays_inside_one_job() {
     let second = group("core", TaskKind::Test, &[first.task_id.as_str()]);
     let proposals = vec![first, second.clone()];
 
-    let needs = external_needs(
-        &[&second],
-        &proposals,
-        "rust-core",
-        WorkflowEvent::PullRequest,
-    )
-    .expect("valid same-package gate");
+    let owners = JobOwners::new(&proposals).expect("owners");
+    let needs = external_needs(&[&second], &owners, "rust-core", WorkflowEvent::PullRequest)
+        .expect("valid same-package gate");
 
     assert_eq!(needs, ["plan"]);
+}
+
+#[test]
+fn repeated_external_gates_add_one_owner_dependency() {
+    let first = group("core", TaskKind::Clippy, &[]);
+    let second = group("core", TaskKind::Test, &[]);
+    let mut app = group("app", TaskKind::Test, &[first.task_id.as_str()]);
+    app.gated_by.push(second.task_id.clone());
+    let proposals = vec![first, second, app.clone()];
+
+    let owners = JobOwners::new(&proposals).expect("owners");
+    let needs = external_needs(&[&app], &owners, "rust-app", WorkflowEvent::PullRequest)
+        .expect("valid repeated gates");
+
+    assert_eq!(needs, ["plan", "rust-core"]);
 }

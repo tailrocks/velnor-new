@@ -1,0 +1,84 @@
+# Native Homebrew merge contract
+
+This document defines the exact-head merge admission boundary of the
+[native preview release and Homebrew contract](native-preview-contract.md).
+Release production, receipt, retry, and credential-custody requirements remain
+in that parent contract; this boundary does not authorize publication or merge
+by itself.
+
+### Exact-head merge admission
+
+The native merge gate consumes authenticated required-check and feedback
+observations. The configured completion App must be distinct from the writer
+App; every expected reviewer App must be distinct from the writer. Runtime
+compares numeric identities, not merely different variable names. Check metadata
+must come from GitHub's check-run API, never from a self-declared App ID in output.
+
+Completion binds the full normalized feedback snapshot: all paginated review,
+comment (including commit comments), reply, current and outdated thread, and
+justified-disposition records. Each authenticated tap PR contains exactly one
+commit above its validated base; capture therefore paginates comments on that
+exact head, including for historical same-receipt PRs. The REST endpoint is
+[`GET /repos/{owner}/{repo}/commits/{commit_sha}/comments`](https://docs.github.com/en/rest/commits/comments#list-commit-comments),
+checked against GitHub's documentation on 2026-10-19. The snapshot includes the exact PR head and a canonical digest of those records.
+A new comment or disposition change invalidates earlier completion. Unresolved
+threads, findings without an independently verified accepted/rejected disposition,
+and outstanding change requests block merge even if a trusted check says success.
+Every configured reviewer must have terminal completion for this exact head;
+missing comments or elapsed time do not establish completion.
+
+The final admission re-fetches tap main and PR head and requires both to equal
+the independently validated base and formula commit. Every active required check,
+including DCO, must complete successfully on that exact commit with any required
+App binding. The squash request must carry the validated head SHA as its API
+precondition. A changed base requires preparation again. This contract and its
+negative acceptance tests do not themselves deploy a trusted completion App or
+prove any existing review provider's terminal-completion semantics; unattended
+merge remains disabled until that provider is selected and verified on real PRs.
+
+The completion check's `output.text` is exact canonical UTF-8 JSON using
+`velnor.review-completion.v1`, without a Markdown wrapper. It contains
+`schema`, `repository`, `pull_request_number`, `head_sha`, `verdict` (only
+`complete`), `feedback_digest`, `has_unaddressed_findings` (false), and a sorted
+unique `reviewers` array. Each reviewer has `app_id`, `head_sha`,
+`evidence_digest`, `complete` (true), and `has_unaddressed_findings` (false).
+Digests use the canonical `b3-<64 lowercase hex>` form. Unknown schemas, states,
+fields, duplicate keys, noncanonical text, missing/duplicate reviewers, and a
+failed actual check reject. Numeric App identity, check name, actual head and
+actual result are fetched independently from GitHub; payload fields cannot
+replace those facts. Snapshot and payload bind both repository and PR number so
+completion cannot be replayed between PRs sharing a commit.
+
+This payload authenticates review completion for one exact PR head. It is not
+the complete merge authorization by itself: the runtime separately re-fetches
+and validates target/base, PR author and branch, formula blob/tree, and source
+receipt, then combines those authenticated facts with this completion signal,
+the exact-head checks, and current feedback before calling the pure merge
+admission contract.
+
+The [merge REST API](https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request)
+provides a head-SHA precondition, not a base-SHA precondition. Therefore tap main
+must require pull requests, resolved review threads, and strict up-to-date status
+checks, with no writer App bypass. GitHub documents that required status checks
+alone still allow commits to be pushed directly to the protected branch; strictness
+only requires branches to be current before merging. A PR-only promotion contract
+must therefore authenticate the server's PR rule separately. Force-pushes and
+deletion must also be blocked so tap history cannot be rewritten or removed to
+evade monotonic version checks. Otherwise tap main could advance between the final
+read and merge request, or be rewritten afterward, allowing an older formula to
+replace a newer preview. Native merge admission fails if any of these controls is
+absent or bypassable. Re-reading the base immediately before merge is necessary
+but does not replace server enforcement.
+If classic protection exempts administrators, native admission requires active
+effective rulesets to supply PR and resolved-thread protection, strict checks,
+force-push and deletion protection, DCO and completion bindings, and every
+required classic check binding, with no writer bypass.
+Strictness evidence requires a nonempty validated check list from that same
+source; an empty strict rule cannot qualify checks supplied only by a loose
+source. Absent classic protection does not invent an administrator exemption. This keeps
+complementary protection sources usable without treating an exempt classic check
+as server-enforced authority.
+Required-check contexts must also bind an explicit numeric integration/App ID in
+repository protection. An unbound context cannot establish trusted CI merely by
+matching a display name, so native merge admission rejects it. Duplicate matching
+checks are ambiguous and block promotion.

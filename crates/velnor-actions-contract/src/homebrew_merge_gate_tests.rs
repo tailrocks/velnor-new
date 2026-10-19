@@ -74,23 +74,28 @@ fn exact_head_success_requires_trusted_independent_completion() {
 }
 
 #[test]
-fn exact_dco_and_app_bound_completion_must_be_server_protected() {
-    for change in 0..5 {
+fn dco_and_app_bound_completion_must_be_server_protected() {
+    let (policy, mut observed) = fixture();
+    observed.checks.retain(|check| check.name != "DCO");
+    assert!(
+        validate_tap_merge_gate(&policy, &observed).is_err(),
+        "native tap promotion requires an exact protected DCO check"
+    );
+    let (policy, mut renamed) = fixture();
+    renamed
+        .checks
+        .iter_mut()
+        .find(|check| check.name == "DCO")
+        .expect("DCO")
+        .name = "DCO validation".to_owned();
+    assert!(validate_tap_merge_gate(&policy, &renamed).is_err());
+    for change in 0..3 {
         let (policy, mut observed) = fixture();
         match change {
-            0 => observed.checks.retain(|check| check.name != "DCO"),
-            1 => {
-                observed
-                    .checks
-                    .iter_mut()
-                    .find(|check| check.name == "DCO")
-                    .expect("DCO")
-                    .name = "DCO validation".to_owned();
-            }
-            2 => observed
+            0 => observed
                 .checks
                 .retain(|check| check.name != "Review Complete"),
-            3 => {
+            1 => {
                 let check = observed
                     .checks
                     .iter_mut()

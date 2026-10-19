@@ -69,6 +69,9 @@ pub(super) fn render_all(
         prep, &routing,
     )?);
     extra.extend(crate::tofu_apply_emit::tofu_apply_files(prep, &routing)?);
+    extra.extend(crate::review_completion_workflow_emit::files(
+        prep, &routing,
+    )?);
     extra.extend(crate::routing::extra_files(
         &prep.config,
         version,

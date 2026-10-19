@@ -115,6 +115,7 @@ pub(super) fn operation(
     spec: &ConsumerPreviewSpec,
     op: &str,
     authenticated: bool,
+    context: super::TapInvocationContext,
 ) -> Result<Yaml, RenderError> {
     let plan = String::from_utf8(
         spec.plan
@@ -129,36 +130,17 @@ pub(super) fn operation(
             "VELNOR_REQUEST_FILE",
             "${{ runner.temp }}/velnor/package-release-plan.json",
         ),
-        (
-            "VELNOR_RELEASE_COMMIT_COUNT",
-            "${{ needs.preview-eligibility.outputs.commit_count }}",
-        ),
-        (
-            "VELNOR_RELEASE_CI_RUN_ID",
-            "${{ needs.preview-eligibility.outputs.ci_run_id }}",
-        ),
-        (
-            "VELNOR_RELEASE_CI_RUN_ATTEMPT",
-            "${{ needs.preview-eligibility.outputs.ci_attempt }}",
-        ),
     ];
+    env.extend(context.release_inputs());
     if matches!(
         op,
         "recover-package-release-v1"
+            | "admit-homebrew-tap-v1"
             | "prepare-homebrew-tap-v1"
             | "write-homebrew-tap-pr-v1"
             | "merge-homebrew-tap-pr-v1"
     ) {
-        env.extend([
-            (
-                "VELNOR_RELEASE_ORIGINAL_RUN_ID",
-                "${{ inputs.original_run_id }}",
-            ),
-            (
-                "VELNOR_RELEASE_ORIGINAL_RUN_ATTEMPT",
-                "${{ inputs.original_run_attempt }}",
-            ),
-        ]);
+        env.extend(context.original());
     }
     if authenticated {
         env.push(("GH_TOKEN", "${{ github.token }}"));
@@ -173,10 +155,17 @@ pub(super) fn operation(
         ));
     }
     // JSON is an environment value, never interpolated into the command source.
+    let materialize = if matches!(op, "sign-package-release-v1" | "prepare-homebrew-tap-v1") {
+        // The preceding native admission already created and validated this file.
+        ""
+    } else {
+        "(set -C; printf '%s' \"$VELNOR_RELEASE_PLAN\" > \"$VELNOR_REQUEST_FILE\")\n"
+    };
     let run = format!(
-        "set -euo pipefail\numask 077\nmkdir -p \"$RUNNER_TEMP/velnor\"\n(set -C; printf '%s' \"$VELNOR_RELEASE_PLAN\" > \"$VELNOR_REQUEST_FILE\")\n\"$RUNNER_TEMP/velnor/bin/velnor-actions-{}\"\n",
+        "set -euo pipefail\numask 077\nmkdir -p \"$RUNNER_TEMP/velnor\"\n{materialize}\"$RUNNER_TEMP/velnor/bin/velnor-actions-{}\"\n",
         spec.generator_version
     );
+    let run = source_operation_script(op, run);
     Ok(script(
         "Execute native release operation",
         "release",
@@ -185,9 +174,21 @@ pub(super) fn operation(
     ))
 }
 
+fn source_operation_script(op: &str, run: String) -> String {
+    if matches!(
+        op,
+        "execute-preview-producer-v1" | "prepare-homebrew-tap-v1"
+    ) {
+        // Source preparation may have written runner environment files. Remove
+        // credentials before the native source executor itself is spawned.
+        crate::toolchain_env::with_credential_unset_script(&run)
+    } else {
+        run
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(super) enum Artifact {
-    Producer,
     Signed,
     TapCandidate,
     TapPr,
@@ -195,8 +196,6 @@ pub(super) enum Artifact {
 
 pub(super) fn transfer(download: bool, artifact: Artifact) -> Yaml {
     let (suffix, directory) = match (download, artifact) {
-        (true, Artifact::Producer) => ("producer", "preview-input"),
-        (false, Artifact::Producer) => ("producer", "preview-output"),
         (true, Artifact::Signed) => ("signed", "preview-publish-input"),
         (false, Artifact::Signed) => ("signed", "preview-signed"),
         (_, Artifact::TapCandidate) => ("tap-candidate", "tap-candidate"),
@@ -292,7 +291,7 @@ pub(super) fn history_checkout() -> Yaml {
     checkout("${{ github.sha }}")
 }
 
-pub(super) fn history_count() -> Yaml {
+pub(super) fn history_count(context: super::TapInvocationContext) -> Yaml {
     script(
         "Count complete source history",
         "history",
@@ -305,7 +304,10 @@ printf 'commit_count=%s\n' "$count" >> "$GITHUB_OUTPUT"
 "#,
         &[(
             "EXPECTED_SOURCE_SHA",
-            "${{ steps.source.outputs.source_sha }}",
+            match context {
+                super::TapInvocationContext::Preview => "${{ steps.source.outputs.source_sha }}",
+                super::TapInvocationContext::Reconcile => "${{ github.sha }}",
+            },
         )],
     )
 }

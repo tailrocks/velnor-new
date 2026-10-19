@@ -31,7 +31,10 @@ mod runner_spec;
 use runner_spec::RunnerSpec;
 #[path = "schema2_consumer_preview.rs"]
 mod consumer_preview;
-pub use consumer_preview::{ConsumerPreviewSpec, ConsumerPreviewTapSpec, render_consumer_preview};
+pub use consumer_preview::{
+    ConsumerPreviewSpec, ConsumerPreviewTapSpec, render_consumer_preview,
+    render_preview_tap_reconcile,
+};
 #[path = "schema2_basic_workflows.rs"]
 mod basic_workflows;
 #[path = "schema2_consumer_binary_release.rs"]

@@ -83,14 +83,20 @@ pub(super) fn ruleset_detail_route(
     source_type: &str,
     source: &str,
 ) -> Result<String, OrchestratorError> {
-    match source_type {
-        "Repository" if source == repository => Ok(format!(
-            "repos/{repository}/rulesets/{id}?includes_parents=true"
-        )),
-        "Organization" if safe_owner(source) => Ok(format!("orgs/{source}/rulesets/{id}")),
-        "Enterprise" if safe_owner(source) => Ok(format!("enterprises/{source}/rulesets/{id}")),
-        _ => Err(internal("tap_merge_ruleset_source_untrusted")),
+    let admitted = match source_type {
+        "Repository" => source == repository,
+        "Organization" | "Enterprise" => safe_owner(source),
+        _ => false,
+    };
+    if !admitted {
+        return Err(internal("tap_merge_ruleset_source_untrusted"));
     }
+    // Repository detail includes inherited rules and the authenticated writer's
+    // requester-specific bypass state. Parent endpoints do not promise that field.
+    // The caller still requires exact returned ID, source type and source equality.
+    Ok(format!(
+        "repos/{repository}/rulesets/{id}?includes_parents=true"
+    ))
 }
 
 fn safe_owner(value: &str) -> bool {
@@ -112,37 +118,7 @@ pub(super) fn parse_ruleset(
     {
         return Err(internal("tap_merge_ruleset_not_active"));
     }
-    let bypass = ruleset["bypass_actors"]
-        .as_array()
-        .ok_or_else(|| internal("tap_merge_ruleset_bypass_unreadable"))?;
-    let mut writer_bypass = false;
-    for actor in bypass {
-        let kind = actor["actor_type"]
-            .as_str()
-            .ok_or_else(|| internal("tap_merge_ruleset_bypass_invalid"))?;
-        match kind {
-            "Integration" => {
-                let id = actor["actor_id"]
-                    .as_u64()
-                    .filter(|id| *id > 0)
-                    .ok_or_else(|| internal("tap_merge_ruleset_bypass_invalid"))?;
-                writer_bypass |= id == writer_app_id;
-            }
-            "User" => {
-                let id = actor["actor_id"]
-                    .as_u64()
-                    .filter(|id| *id > 0)
-                    .ok_or_else(|| internal("tap_merge_ruleset_bypass_invalid"))?;
-                writer_bypass |= id == writer_bot_user_id;
-            }
-            // These identities cannot be proved distinct from the writer with the
-            // available token and response fields. Fail closed rather than assuming.
-            "Team" | "OrganizationAdmin" | "DeployKey" => {
-                return Err(internal("tap_merge_ruleset_bypass_identity_unresolved"));
-            }
-            _ => return Err(internal("tap_merge_ruleset_bypass_invalid")),
-        }
-    }
+    let writer_bypass = writer_bypass(ruleset, writer_app_id, writer_bot_user_id)?;
     let mut checks = Vec::new();
     let mut strict_checks = false;
     let mut controls = BranchControls::default();
@@ -174,6 +150,59 @@ pub(super) fn parse_ruleset(
         strict: strict_checks,
         controls,
     })
+}
+
+fn writer_bypass(
+    ruleset: &Value,
+    writer_app_id: u64,
+    writer_bot_user_id: u64,
+) -> Result<bool, OrchestratorError> {
+    // This record is fetched under the actual writer token. An observer's
+    // requester state or an omitted actor inventory cannot establish this fact.
+    if ruleset["current_user_can_bypass"].as_str() != Some("never") {
+        return Err(internal("tap_merge_ruleset_writer_bypass_unproven"));
+    }
+    let bypass = match ruleset.get("bypass_actors") {
+        None => &[][..],
+        Some(value) => value
+            .as_array()
+            .map(Vec::as_slice)
+            .ok_or_else(|| internal("tap_merge_ruleset_bypass_unreadable"))?,
+    };
+    let mut writer_bypass = false;
+    for actor in bypass {
+        let kind = actor["actor_type"]
+            .as_str()
+            .ok_or_else(|| internal("tap_merge_ruleset_bypass_invalid"))?;
+        match kind {
+            "Integration" => {
+                let id = actor["actor_id"]
+                    .as_u64()
+                    .filter(|id| *id > 0)
+                    .ok_or_else(|| internal("tap_merge_ruleset_bypass_invalid"))?;
+                writer_bypass |= id == writer_app_id;
+            }
+            "User" => {
+                let id = actor["actor_id"]
+                    .as_u64()
+                    .filter(|id| *id > 0)
+                    .ok_or_else(|| internal("tap_merge_ruleset_bypass_invalid"))?;
+                writer_bypass |= id == writer_bot_user_id;
+            }
+            // Other actor membership does not contradict the authenticated
+            // writer's explicit never state; no membership lookup is needed.
+            "Team" | "RepositoryRole" => {
+                actor["actor_id"]
+                    .as_u64()
+                    .filter(|id| *id > 0)
+                    .ok_or_else(|| internal("tap_merge_ruleset_bypass_invalid"))?;
+            }
+            "OrganizationAdmin" => {} // GitHub ignores this actor's ID.
+            "DeployKey" if actor["actor_id"].is_null() => {}
+            _ => return Err(internal("tap_merge_ruleset_bypass_invalid")),
+        }
+    }
+    Ok(writer_bypass)
 }
 
 fn valid_pull_request_rule(rule: &Value) -> Result<(bool, bool), OrchestratorError> {

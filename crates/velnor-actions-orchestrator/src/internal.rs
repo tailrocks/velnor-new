@@ -255,6 +255,7 @@ fn build_plan(
     )]
     let generator = default_generator_with_phase_timings(timings.as_deref_mut());
     let snapshot = ExecutionSnapshot::build(discovery);
+    let job_owners = crate::crate_job_ids::JobOwners::new(&discovery.proposals)?;
     let mut reads = velnor_actions_tofu::FileCache::new();
     for task in universe {
         let wire = GroupWire {
@@ -264,6 +265,7 @@ fn build_plan(
         let (obligation, entry) = plan_group(
             &GroupInputs {
                 discovery,
+                job_owners: &job_owners,
                 task,
                 run_key: &request.run_key,
                 label,

@@ -62,7 +62,8 @@ pub struct TapFeedbackSnapshot {
     /// Exact proposed commit to which review completion must apply.
     pub head_sha: String,
     /// Digest of all paginated review, comment, reply, thread, and disposition
-    /// records, including outdated threads and general PR comments.
+    /// records, including outdated threads, general PR comments and comments on
+    /// the authenticated single commit belonging to each tap PR.
     pub records_digest: String,
     /// Number of unresolved threads, whether current or outdated.
     pub unresolved_threads: u64,

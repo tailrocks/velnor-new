@@ -13,6 +13,8 @@ fn bounded_file_filter_exceptions_are_exact_and_local() -> Result<(), String> {
     let path_open_alias = "use std::fs::File as Stage; fn bad(path: &std::path::Path) { let mut output = Stage::options().create(true).write(true).truncate(true).open(path)?; output.write_all(&buffer[..count])?; }";
     let options_alias = "use std::fs::OpenOptions as StageOptions; fn bad(path: &std::path::Path) { let mut output = StageOptions::new().write(true).open(path)?; output.write_all(&buffer[..count])?; }";
     let rustix_open_alias = "use rustix::fs::open as stage_open; fn bad(path: &std::path::Path) { let output = stage_open(path, flags, mode)?; output.write_all(&buffer[..count])?; }";
+    let allowed_stream = "use std::io::Write; fn sink(output: &mut std::fs::File, bytes: &[u8]) -> std::io::Result<()> { output\n.write_all(bytes)\n.map_err(std::io::Error::other)?;\nOk(()) }";
+    let altered_stream = "use std::io::Write; fn sink(other: &mut std::fs::File, bytes: &[u8]) -> std::io::Result<()> { other\n.write_all(bytes) }";
 
     let mut violations = Vec::new();
     check_source_fixture(
@@ -42,6 +44,19 @@ fn bounded_file_filter_exceptions_are_exact_and_local() -> Result<(), String> {
         violations.clear();
         check_source_fixture("bounded_file_filter_process.rs", path_open, &mut violations)?;
         assert!(!violations.is_empty(), "path opener passed: {path_open}");
+    }
+
+    violations.clear();
+    check_source_fixture("command_stream.rs", allowed_stream, &mut violations)?;
+    assert!(violations.is_empty(), "{violations:?}");
+
+    for source in [
+        altered_stream,
+        "use std::io::Write; fn sink(output: &mut std::fs::File, bytes: &[u8]) -> std::io::Result<()> { output.write_all(bytes)?; output.write_all(b\"extra\") }",
+    ] {
+        violations.clear();
+        check_source_fixture("command_stream.rs", source, &mut violations)?;
+        assert!(!violations.is_empty(), "unapproved stream write passed");
     }
 
     violations.clear();

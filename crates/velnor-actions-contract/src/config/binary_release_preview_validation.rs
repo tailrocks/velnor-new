@@ -126,7 +126,7 @@ fn validate_producer_limits(
     producer: &RustBinaryPreviewProducer,
     key: &str,
 ) -> Result<(), ContractError> {
-    if !crate::workflow::timeout::JobTimeout::is_valid_minutes(u32::from(producer.timeout_minutes))
+    if !(1..=crate::config::NATIVE_PREVIEW_MAX_TIMEOUT_MINUTES).contains(&producer.timeout_minutes)
     {
         return Err(config_error(
             file,

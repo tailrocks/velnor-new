@@ -19,7 +19,7 @@ use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 
 use crate::OrchestratorError;
 use crate::crate_job_ids::{
-    assign_group_ids, group_is_tofu, group_runnable, qualification_job_id_for_member,
+    JobOwners, group_is_tofu, group_runnable, qualification_job_id_for_member,
 };
 use crate::discover::Discovery;
 use crate::internal::internal;
@@ -151,6 +151,8 @@ pub(crate) fn build_qualification_crate_jobs(
         .filter(|task| is_runnable(task) && Stack::from_id(&task.stack_id) == Some(Stack::Tofu))
         .collect();
     tasks.sort_by(|left, right| left.task_id.cmp(&right.task_id));
+    let grouped = group_runnable(&input.discovery.proposals)?;
+    let owners = JobOwners::from_grouped(&input.discovery.proposals, &grouped);
     let mut jobs = Vec::with_capacity(tasks.len());
     let mut drivers = BTreeMap::new();
     let mut tofu_ids = Vec::new();
@@ -159,7 +161,7 @@ pub(crate) fn build_qualification_crate_jobs(
             qualification_job_id_for_member(task).map_err(crate::internal::internal_contract)?;
         let needs = crate_jobs_dependencies::external_needs(
             std::slice::from_ref(&task),
-            &input.discovery.proposals,
+            &owners,
             &job_id,
             velnor_actions_contract::WorkflowEvent::Qualification,
         )?;
@@ -210,14 +212,14 @@ fn build_crate_jobs_inner(
     qualification: bool,
 ) -> Result<CrateBuild, OrchestratorError> {
     let grouped = group_runnable(&input.discovery.proposals)?;
-    let assigned = assign_group_ids(&grouped);
+    let owners = JobOwners::from_grouped(&input.discovery.proposals, &grouped);
     let mut jobs = Vec::with_capacity(grouped.len());
     let mut drivers = BTreeMap::new();
     let mut tofu_ids = Vec::new();
     let mut manifests = BTreeMap::new();
     for (key, tasks) in &grouped {
-        let job_id = assigned
-            .get(key)
+        let job_id = owners
+            .group_id(key)
             .ok_or_else(|| internal("crate_job_id_missing"))?
             .clone();
         let is_tofu = group_is_tofu(tasks);
@@ -226,7 +228,7 @@ fn build_crate_jobs_inner(
         }
         let needs = crate_jobs_dependencies::external_needs(
             tasks,
-            &input.discovery.proposals,
+            &owners,
             &job_id,
             velnor_actions_contract::WorkflowEvent::PullRequest,
         )?;

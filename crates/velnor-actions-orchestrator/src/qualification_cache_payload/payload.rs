@@ -91,7 +91,7 @@ fn validate_directory(stat: &Stat) -> Result<(), &'static str> {
 }
 
 fn validate_entry_owner_mode(stat: &Stat) -> Result<(), &'static str> {
-    if stat.st_mode & 0o7000 != 0 || stat.st_uid != crate::process_owner::effective_uid() {
+    if stat.st_mode & 0o7000 != 0 || stat.st_uid != crate::filesystem_owner::effective_uid() {
         return Err("qualification_cache_payload_owner_or_mode_invalid");
     }
     Ok(())

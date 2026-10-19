@@ -1,4 +1,8 @@
 use super::*;
+use crate::package_release_artifacts::{PackageOutputIdentity, verify_package_output};
+use std::fs;
+const PROOF_NAME: &str = handoff::AGGREGATE_MANIFEST;
+
 use velnor_actions_contract::{
     PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlanProduct,
     package_release::{PackageReleaseChannel, PackageReleasePayloadFormat},
@@ -42,7 +46,7 @@ fn preview_entry_rejects_mismatched_workflow_authority() {
     let sha = "0123456789abcdef0123456789abcdef01234567";
     let reference = "refs/heads/main";
     let workflow_ref = format!("OWNER/REPO/.github/workflows/binary-preview.yml@{reference}");
-    assert!(workflow_identity_matches(
+    assert!(context::workflow_identity_matches(
         &plan,
         "OWNER/REPO",
         reference,
@@ -74,7 +78,7 @@ fn preview_entry_rejects_mismatched_workflow_authority() {
             "owner/repo/.github/workflows/other.yml@refs/heads/main",
         ),
     ] {
-        assert!(!workflow_identity_matches(
+        assert!(!context::workflow_identity_matches(
             &plan,
             repository,
             branch_ref,
@@ -98,24 +102,13 @@ fn expired_deadline() -> CheckDeadline {
 #[test]
 fn expired_producer_cannot_stage_a_success_handoff_or_write_proof() {
     let root = tempfile::tempdir().expect("root");
-    let verified = crate::package_release_artifacts::VerifiedPackageOutput {
-        source_commit: "a".repeat(40),
-        source_ref: "refs/heads/main".to_owned(),
-        version: "1.2.3-preview.1+aaaaaaa".to_owned(),
-        artifacts: Vec::new(),
-    };
-    assert!(
-        stage_raw_output(
-            root.path(),
-            root.path(),
-            "handoff.json",
-            verified,
-            expired_deadline()
-        )
-        .is_err()
-    );
+    assert!(execution::fresh_raw_output(root.path(), expired_deadline()).is_err());
     assert!(!root.path().join("preview-output").exists());
-    let proof = root.path().join(PROOF_NAME);
+    let proof = root
+        .path()
+        .canonicalize()
+        .expect("canonical fixture")
+        .join(PROOF_NAME);
     assert!(write_proof(&proof, b"{}", expired_deadline()).is_err());
     assert!(!proof.exists());
 }
@@ -123,7 +116,11 @@ fn expired_producer_cannot_stage_a_success_handoff_or_write_proof() {
 #[test]
 fn proof_write_reuses_outer_deadline_and_preserves_existing_evidence() {
     let root = tempfile::tempdir().expect("root");
-    let proof = root.path().join(PROOF_NAME);
+    let proof = root
+        .path()
+        .canonicalize()
+        .expect("canonical fixture")
+        .join(PROOF_NAME);
     let deadline = CheckDeadline::after(Duration::from_secs(5)).expect("deadline");
     write_proof(&proof, b"original", deadline).expect("positive proof write");
     assert!(!proof.with_extension("pending").exists());
@@ -146,7 +143,11 @@ fn proof_write_reuses_outer_deadline_and_preserves_existing_evidence() {
 #[test]
 fn incomplete_pending_proof_is_never_admitted_or_overwritten() {
     let root = tempfile::tempdir().expect("root");
-    let proof = root.path().join(PROOF_NAME);
+    let proof = root
+        .path()
+        .canonicalize()
+        .expect("canonical fixture")
+        .join(PROOF_NAME);
     let pending = proof.with_extension("pending");
     fs::write(&pending, b"incomplete").expect("retained pending bytes");
     assert!(
@@ -203,7 +204,11 @@ fn write_proof(
 #[test]
 fn post_publication_outer_deadline_failure_removes_only_owned_proof() {
     let root = tempfile::tempdir().expect("root");
-    let path = root.path().join(PROOF_NAME);
+    let path = root
+        .path()
+        .canonicalize()
+        .expect("canonical fixture")
+        .join(PROOF_NAME);
     let live = CheckDeadline::after(Duration::from_secs(5)).expect("live deadline");
     let result = with_proof_ownership(|guard| {
         live.scope(|| publish_proof(&path, b"{}", live, guard))
@@ -227,7 +232,11 @@ fn post_publication_outer_deadline_failure_removes_only_owned_proof() {
 #[test]
 fn outer_failure_preserves_a_replaced_foreign_proof_identity() {
     let root = tempfile::tempdir().expect("root");
-    let path = root.path().join(PROOF_NAME);
+    let path = root
+        .path()
+        .canonicalize()
+        .expect("canonical fixture")
+        .join(PROOF_NAME);
     let retained = root.path().join("retained-original");
     let deadline = CheckDeadline::after(Duration::from_secs(5)).expect("deadline");
     let result = with_proof_ownership(|guard| {
@@ -244,7 +253,11 @@ fn outer_failure_preserves_a_replaced_foreign_proof_identity() {
 #[test]
 fn unwind_after_publication_cleans_owned_proof() {
     let root = tempfile::tempdir().expect("root");
-    let path = root.path().join(PROOF_NAME);
+    let path = root
+        .path()
+        .canonicalize()
+        .expect("canonical fixture")
+        .join(PROOF_NAME);
     let result = std::panic::catch_unwind(|| {
         drop(with_proof_ownership(|guard| {
             publish_proof(

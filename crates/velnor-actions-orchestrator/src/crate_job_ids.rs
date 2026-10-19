@@ -38,6 +38,69 @@ impl CrateGroupKey {
     }
 }
 
+/// One immutable owner index for a complete proposal inventory.
+pub(crate) struct JobOwners<'a> {
+    assigned: BTreeMap<CrateGroupKey, String>,
+    runnable: BTreeMap<&'a str, &'a ProposedTask>,
+}
+
+impl<'a> JobOwners<'a> {
+    /// Group all runnable tasks and assign their owners once.
+    pub(crate) fn new(tasks: &'a [ProposedTask]) -> Result<Self, ContractError> {
+        let grouped = group_runnable(tasks)?;
+        Ok(Self::from_grouped(tasks, &grouped))
+    }
+
+    /// Reuse the renderer's validated grouping.
+    pub(crate) fn from_grouped(
+        tasks: &'a [ProposedTask],
+        grouped: &BTreeMap<CrateGroupKey, Vec<&ProposedTask>>,
+    ) -> Self {
+        let assigned = assign_group_ids(grouped);
+        let runnable = tasks
+            .iter()
+            .filter(|task| crate::crate_jobs::is_runnable(task))
+            .map(|task| (task.task_id.as_str(), task))
+            .collect();
+        Self { assigned, runnable }
+    }
+
+    /// Return one emitted group's stable owner.
+    pub(crate) fn group_id(&self, key: &CrateGroupKey) -> Option<&String> {
+        self.assigned.get(key)
+    }
+
+    /// Return a runnable proposal by its task identity.
+    pub(crate) fn runnable_member(&self, task_id: &str) -> Option<&'a ProposedTask> {
+        self.runnable.get(task_id).copied()
+    }
+
+    /// Resolve one task through the complete assignment.
+    pub(crate) fn for_member(
+        &self,
+        member: &ProposedTask,
+        event: WorkflowEvent,
+    ) -> Result<Option<String>, ContractError> {
+        if member.no_targets {
+            return Ok(None);
+        }
+        let stack = Stack::require_known(&member.stack_id)?;
+        if stack == Stack::Mise {
+            return Ok(Some(format!("check-{}", member.identity.unit_id)));
+        }
+        if event == WorkflowEvent::Qualification && stack == Stack::Tofu {
+            return Ok(Some(qualification_job_id_for_member(member)?));
+        }
+        if member.identity.unit_id.is_empty() {
+            return Ok(Some(PLAN_JOB_ID.to_owned()));
+        }
+        Ok(self
+            .assigned
+            .get(&CrateGroupKey::for_member(member)?)
+            .cloned())
+    }
+}
+
 /// Owning job from the same complete assignment used by emission.
 ///
 /// No-target tasks have no execution owner. Workspace tasks belong to Plan;
@@ -49,28 +112,13 @@ impl CrateGroupKey {
 ///
 /// # Errors
 /// Rejects unknown stacks or Rust task kinds in the runnable universe.
+#[cfg(test)]
 pub(crate) fn job_id_for_member(
     tasks: &[ProposedTask],
     member: &ProposedTask,
     event: WorkflowEvent,
 ) -> Result<Option<String>, ContractError> {
-    if member.no_targets {
-        return Ok(None);
-    }
-    if Stack::require_known(&member.stack_id)? == Stack::Mise {
-        return Ok(Some(format!("check-{}", member.identity.unit_id)));
-    }
-    if event == WorkflowEvent::Qualification
-        && Stack::from_id(&member.stack_id) == Some(Stack::Tofu)
-    {
-        return Ok(Some(qualification_job_id_for_member(member)?));
-    }
-    if member.identity.unit_id.is_empty() {
-        return Ok(Some(PLAN_JOB_ID.to_owned()));
-    }
-    let grouped = group_runnable(tasks)?;
-    let assigned = assign_group_ids(&grouped);
-    Ok(assigned.get(&CrateGroupKey::for_member(member)?).cloned())
+    JobOwners::new(tasks)?.for_member(member, event)
 }
 
 /// Stable job ID for one `ToFu` Qualification entry.

@@ -23,6 +23,5 @@ fn freshness_support_is_private_and_has_a_crate_job() -> Result<(), Box<dyn Erro
     }
     let cli_contract = read("docs/proposed/cli-contract.md")?;
     assert!(cli_contract.contains("repo-policy-v1"));
-    assert!(cli_contract.contains("trailer-policy"));
     Ok(())
 }

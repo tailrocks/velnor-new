@@ -1,14 +1,16 @@
 //! Unprivileged tap preparation and independently authenticated PR write/merge jobs.
 
 use super::{
-    ConsumerPreviewSpec, MiseSetup, RenderError, Step, Yaml, acquire, base, finish, run_step, steps,
+    ConsumerPreviewSpec, MiseSetup, RenderError, Step, TapInvocationContext, Yaml, acquire, base,
+    finish, run_step, steps,
 };
 use crate::commands::join_argv_for_run;
 use velnor_actions_contract::JobTimeout;
-use velnor_actions_contract::{
-    canonical_json_bytes,
-    config::{CheckExecutor, HomebrewTapConfig},
-};
+use velnor_actions_contract::config::{CheckExecutor, HomebrewTapConfig};
+
+#[path = "schema2_consumer_preview_tap_operation.rs"]
+mod native_operation;
+use native_operation::operation;
 
 /// Static downstream policy and official helper placement for the updater.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,6 +26,7 @@ pub struct ConsumerPreviewTapSpec {
 pub(super) fn jobs(
     spec: &ConsumerPreviewSpec,
     tap: &ConsumerPreviewTapSpec,
+    context: TapInvocationContext,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
     tap.policy
         .validate("workflow")
@@ -35,15 +38,16 @@ pub(super) fn jobs(
         ));
     }
     Ok(vec![
-        prepare(spec, tap)?,
-        writer(spec, tap, false)?,
-        writer(spec, tap, true)?,
+        prepare(spec, tap, context)?,
+        writer(spec, tap, false, context)?,
+        writer(spec, tap, true, context)?,
     ])
 }
 
 fn prepare(
     spec: &ConsumerPreviewSpec,
     tap: &ConsumerPreviewTapSpec,
+    context: TapInvocationContext,
 ) -> Result<(String, Yaml), RenderError> {
     let id = "preview-tap-prepare";
     let runner = &tap.policy.updater.runner.label;
@@ -52,34 +56,42 @@ fn prepare(
         Yaml::str(runner),
         JobTimeout::try_from(tap.policy.updater.timeout_minutes).map_err(RenderError::Contract)?,
     );
-    fields.extend([
-        ("needs".to_owned(), steps::needs(&["preview-eligibility", "preview-publisher", "preview-recovery"])),
-        ("if".to_owned(), Yaml::str("${{ always() && !cancelled() && needs.preview-eligibility.result == 'success' && ((github.event_name == 'workflow_run' && needs.preview-publisher.result == 'success') || (github.event_name == 'workflow_dispatch' && needs.preview-recovery.result == 'success')) }}")),
-        ("permissions".to_owned(), source_permissions()),
-    ]);
-    let download = push_download();
-    Ok(finish(
-        id,
-        fields,
-        vec![
-            steps::checkout("${{ needs.preview-eligibility.outputs.source_sha }}"),
-            steps::setup(&tap.updater_setup),
-            run_step(
-                "Install pinned GitHub CLI",
-                &join_argv_for_run(&spec.install_gh_argv)?,
-            ),
-            acquire(&tap.updater_acquire, id, runner)?,
-            download,
-            operation(spec, tap, "prepare-homebrew-tap-v1", false)?,
-            steps::transfer(false, steps::Artifact::TapCandidate),
-        ],
-    ))
+    fields.extend(prepare_bindings(context));
+    let mut job_steps = vec![
+        steps::setup(&tap.updater_setup),
+        run_step(
+            "Install pinned GitHub CLI",
+            &join_argv_for_run(&spec.install_gh_argv)?,
+        ),
+        acquire(&tap.updater_acquire, id, runner)?,
+    ];
+    if matches!(context, TapInvocationContext::Preview) {
+        job_steps.push(push_download());
+    }
+    job_steps.push(operation(
+        spec,
+        tap,
+        "admit-homebrew-tap-v1",
+        false,
+        context,
+    )?);
+    job_steps.push(steps::checkout(context.source()));
+    job_steps.push(operation(
+        spec,
+        tap,
+        "prepare-homebrew-tap-v1",
+        false,
+        context,
+    )?);
+    job_steps.push(steps::transfer(false, steps::Artifact::TapCandidate));
+    Ok(finish(id, fields, job_steps))
 }
 
 fn writer(
     spec: &ConsumerPreviewSpec,
     tap: &ConsumerPreviewTapSpec,
     merge: bool,
+    context: TapInvocationContext,
 ) -> Result<(String, Yaml), RenderError> {
     let (id, name, dependency, op, timeout) = if merge {
         (
@@ -102,7 +114,7 @@ fn writer(
     fields.extend([
         (
             "needs".to_owned(),
-            steps::needs(&["preview-eligibility", dependency]),
+            steps::needs(&[context.selection(), dependency]),
         ),
         ("permissions".to_owned(), source_permissions()),
         ("environment".to_owned(), Yaml::str("tap-update")),
@@ -114,14 +126,19 @@ fn writer(
             &join_argv_for_run(&spec.install_gh_argv)?,
         ),
         acquire(&spec.linux_acquire, id, "ubuntu-26.04")?,
-        push_download(),
         steps::transfer(true, steps::Artifact::TapCandidate),
     ];
+    if matches!(context, TapInvocationContext::Preview) {
+        job_steps.insert(3, push_download());
+    }
     if merge {
         job_steps.push(steps::transfer(true, steps::Artifact::TapPr));
     }
-    job_steps.push(mint(tap, merge)?);
-    job_steps.push(operation(spec, tap, op, merge)?);
+    job_steps.push(mint(tap)?);
+    if merge {
+        job_steps.push(mint_observer(tap)?);
+    }
+    job_steps.push(operation(spec, tap, op, merge, context)?);
     if !merge {
         job_steps.push(steps::transfer(false, steps::Artifact::TapPr));
     }
@@ -147,13 +164,13 @@ fn push_download() -> Yaml {
     step
 }
 
-fn mint(tap: &ConsumerPreviewTapSpec, merge: bool) -> Result<Yaml, RenderError> {
+fn mint(tap: &ConsumerPreviewTapSpec) -> Result<Yaml, RenderError> {
     let (owner, repository) = tap
         .policy
         .repository
         .split_once('/')
         .ok_or_else(|| RenderError::InvalidWorkflow("tap_repository_invalid".to_owned()))?;
-    let mut inputs = vec![
+    let inputs = vec![
         (
             "client-id".to_owned(),
             variable(&tap.policy.app_id_variable),
@@ -171,12 +188,6 @@ fn mint(tap: &ConsumerPreviewTapSpec, merge: bool) -> Result<Yaml, RenderError> 
         ("permission-pull-requests".to_owned(), Yaml::str("write")),
         ("skip-token-revoke".to_owned(), Yaml::Bool(false)),
     ];
-    if merge {
-        inputs.extend([
-            ("permission-checks".to_owned(), Yaml::str("read")),
-            ("permission-administration".to_owned(), Yaml::str("read")),
-        ]);
-    }
     Ok(Yaml::Map(vec![
         (
             "name".to_owned(),
@@ -191,71 +202,66 @@ fn mint(tap: &ConsumerPreviewTapSpec, merge: bool) -> Result<Yaml, RenderError> 
     ]))
 }
 
-fn operation(
-    spec: &ConsumerPreviewSpec,
-    tap: &ConsumerPreviewTapSpec,
-    op: &str,
-    merge: bool,
-) -> Result<Yaml, RenderError> {
-    let mut step = steps::operation(spec, op, true)?;
-    let policy = String::from_utf8(
-        canonical_json_bytes(&tap.policy)
-            .map_err(|error| RenderError::InvalidWorkflow(error.to_string()))?,
-    )
-    .map_err(|error| RenderError::InvalidWorkflow(error.to_string()))?;
-    let mut values = vec![("VELNOR_TAP_POLICY".to_owned(), Yaml::str(policy))];
-    if op != "prepare-homebrew-tap-v1" {
-        values.extend([
-            (
-                "VELNOR_TAP_APP_ID".to_owned(),
-                variable(&tap.policy.app_id_variable),
-            ),
-            (
-                "VELNOR_TAP_APP_SLUG".to_owned(),
-                Yaml::str("${{ steps.tap-token.outputs.app-slug }}"),
-            ),
-            (
-                "VELNOR_TAP_INSTALLATION_ID".to_owned(),
-                Yaml::str("${{ steps.tap-token.outputs.installation-id }}"),
-            ),
-            (
-                (if merge {
-                    "VELNOR_TAP_MERGE_TOKEN"
-                } else {
-                    "VELNOR_TAP_TOKEN"
-                })
-                .to_owned(),
-                Yaml::str("${{ steps.tap-token.outputs.token }}"),
-            ),
-        ]);
-    }
-    if merge {
-        values.push((
-            "VELNOR_TAP_COMPLETION_APP_ID".to_owned(),
-            variable(&tap.policy.review_completion.app_id_variable),
-        ));
-        values.extend(
-            tap.policy
-                .review_completion
-                .expected_reviewers
-                .iter()
-                .enumerate()
-                .map(|(index, reviewer)| {
-                    (
-                        format!("VELNOR_TAP_REVIEWER_APP_ID_{index}"),
-                        variable(&reviewer.app_id_variable),
-                    )
-                }),
-        );
-    }
-    if let Yaml::Map(fields) = &mut step
-        && let Some((_, Yaml::Map(env))) = fields.iter_mut().find(|(key, _)| key == "env")
-    {
-        env.extend(values);
-    }
-    Ok(step)
+fn mint_observer(tap: &ConsumerPreviewTapSpec) -> Result<Yaml, RenderError> {
+    let (owner, repository) = tap
+        .policy
+        .repository
+        .split_once('/')
+        .ok_or_else(|| RenderError::InvalidWorkflow("tap_repository_invalid".to_owned()))?;
+    let observer = &tap.policy.protection_observer;
+    Ok(Yaml::Map(vec![
+        (
+            "name".to_owned(),
+            Yaml::str("Mint a separate read-only tap protection observer"),
+        ),
+        ("id".to_owned(), Yaml::str("tap-protection-token")),
+        (
+            "uses".to_owned(),
+            Yaml::str(crate::steps::CREATE_GITHUB_APP_TOKEN_USES),
+        ),
+        (
+            "with".to_owned(),
+            Yaml::Map(vec![
+                ("client-id".to_owned(), variable(&observer.app_id_variable)),
+                (
+                    "private-key".to_owned(),
+                    Yaml::str(format!(
+                        "${{{{ secrets.{} }}}}",
+                        observer.app_private_key_secret
+                    )),
+                ),
+                ("owner".to_owned(), Yaml::str(owner)),
+                ("repositories".to_owned(), Yaml::str(repository)),
+                ("permission-checks".to_owned(), Yaml::str("read")),
+                ("permission-administration".to_owned(), Yaml::str("read")),
+                ("skip-token-revoke".to_owned(), Yaml::Bool(false)),
+            ]),
+        ),
+    ]))
 }
 
 fn variable(name: &str) -> Yaml {
     Yaml::str(format!("${{{{ vars.{name} }}}}"))
+}
+
+fn prepare_bindings(context: TapInvocationContext) -> Vec<(String, Yaml)> {
+    let (needs, condition) = match context {
+        TapInvocationContext::Preview => (
+            steps::needs(&[
+                "preview-eligibility",
+                "preview-publisher",
+                "preview-recovery",
+            ]),
+            "${{ always() && !cancelled() && needs.preview-eligibility.result == 'success' && ((github.event_name == 'workflow_run' && needs.preview-publisher.result == 'success') || (github.event_name == 'workflow_dispatch' && needs.preview-recovery.result == 'success')) }}",
+        ),
+        TapInvocationContext::Reconcile => (
+            steps::needs(&["preview-tap-selection"]),
+            "${{ needs.preview-tap-selection.outputs.eligible == 'true' }}",
+        ),
+    };
+    vec![
+        ("needs".to_owned(), needs),
+        ("if".to_owned(), Yaml::str(condition)),
+        ("permissions".to_owned(), source_permissions()),
+    ]
 }

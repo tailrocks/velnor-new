@@ -394,3 +394,7 @@ mod tests;
 #[cfg(test)]
 #[path = "validate_shell_yaml_runner_tests.rs"]
 mod runner_tests;
+
+#[cfg(test)]
+#[path = "validate_shell_yaml_step_anchor_tests.rs"]
+mod step_anchor_tests;

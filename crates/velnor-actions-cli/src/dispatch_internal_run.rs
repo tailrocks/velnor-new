@@ -17,12 +17,18 @@ use velnor_actions_orchestrator::{
 use super::{
     GITHUB_OUTPUT_ENV, InternalOp, InternalRequest, RUNNER_TEMP_ENV, cache_bind, cache_observe,
     cache_tar_launcher, fail_internal, package_release, package_release_publish,
-    package_release_recovery, run_publish_internal, tap_merge, tap_prepare,
+    package_release_recovery, preview_production, review_completion, run_publish_internal,
+    tap_continuation, tap_merge, tap_prepare,
 };
 
 /// Run one validated private operation.
 pub(super) fn run_internal(request: &InternalRequest) -> ExitCode {
     match request.op {
+        InternalOp::TapContinuation => tap_continuation::run(),
+        InternalOp::CaptureReviewCompletion => review_completion::capture(),
+        InternalOp::EmitReviewCompletion => review_completion::emit(),
+        InternalOp::AcquirePreviewLeaves => preview_production::acquire(),
+        InternalOp::AdmitPreviewAggregate => preview_production::admit(),
         InternalOp::ExecuteCheck => match execute_check() {
             Ok(_) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
@@ -77,6 +83,7 @@ pub(super) fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::PackagePublisher => package_release_publish::run(),
         InternalOp::PackageRecovery => package_release_recovery::run(),
         InternalOp::TapPrepare => tap_prepare::run(),
+        InternalOp::TapAdmission => tap_prepare::run_admission(),
         InternalOp::TapWriter => tap_prepare::run_writer(),
         InternalOp::TapMerge => tap_merge::run(),
     }

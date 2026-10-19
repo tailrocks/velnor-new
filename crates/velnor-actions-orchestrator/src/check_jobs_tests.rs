@@ -367,3 +367,9 @@ fn native_check_without_catalog_tools_adds_no_rust_install() {
 
 #[path = "check_jobs_ignored_candidate_tests.rs"]
 mod ignored_candidate_tests;
+
+#[path = "check_jobs_tests/identity.rs"]
+mod identity;
+
+#[path = "check_jobs_tests/topology.rs"]
+mod topology;

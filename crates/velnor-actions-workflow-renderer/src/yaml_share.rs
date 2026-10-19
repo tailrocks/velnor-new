@@ -191,3 +191,7 @@ mod tests;
 #[cfg(test)]
 #[path = "yaml_share_workflow_tests.rs"]
 mod workflow_tests;
+
+#[cfg(test)]
+#[path = "yaml_share_mappings_tests.rs"]
+mod mappings_tests;

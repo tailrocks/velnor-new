@@ -46,6 +46,7 @@ fn replacement_pr_requires_exhaustive_disposed_historical_feedback() {
                 candidate.historical_feedback[0] = prior(&candidate, candidate.pull_request_number);
             }
             10 => candidate.historical_feedback[0].feedback.repository = "attacker/tap".to_owned(),
+            14 => candidate.checks.retain(|check| check.name != "DCO"),
             _ => unreachable!(),
         }
         assert!(
@@ -86,7 +87,7 @@ fn completed_fixture() -> (TapMergePolicy, TapCompletedPromotionObservation) {
 fn completed_promotion_requires_actual_merge_ancestry_formula_and_exact_head_gates() {
     let (policy, observed) = completed_fixture();
     assert!(validate_tap_completed_promotion_gate(&policy, &observed).is_ok());
-    for change in 0..14 {
+    for change in 0..15 {
         let mut candidate = observed.clone();
         match change {
             0 => candidate.expected_merged_pull_request = false,
@@ -98,7 +99,7 @@ fn completed_promotion_requires_actual_merge_ancestry_formula_and_exact_head_gat
             6 => candidate.main.current_sha.clear(),
             7 => candidate.server_protection = TapServerMergeProtection::MissingOrBypassable,
             8 => candidate.required_checks_complete = false,
-            9 => candidate.checks.retain(|check| check.name != "DCO"),
+            9 => candidate.checks[0].completed_successfully = false,
             10 => candidate.pull_request.completion = None,
             11 => candidate.pull_request.feedback.unresolved_threads = 1,
             12 => candidate.historical_feedback_complete = false,
@@ -107,6 +108,7 @@ fn completed_promotion_requires_actual_merge_ancestry_formula_and_exact_head_gat
                     .feedback
                     .outstanding_change_requests = 1;
             }
+            14 => candidate.checks.retain(|check| check.name != "DCO"),
             _ => unreachable!(),
         }
         assert!(

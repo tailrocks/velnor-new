@@ -56,6 +56,7 @@ const EXPECTED_MODULES: &[&str] = &[
     "command_output.rs",
     "command_release_signer.rs",
     "command_release_signer_tests.rs",
+    "command_stream.rs",
     "command_tofu.rs",
     "custom_run.rs",
     "error.rs",
@@ -196,6 +197,8 @@ const ALWAYS_BANNED: &[&str] = &[
     "apply_fix",
 ];
 
+const STREAM_FILE_WRITE: &str = "output.write_all(bytes)";
+
 /// Tool-file names allowed only in `toolfiles.rs` (read-only routing and
 /// inspection): owned Mise files plus foreign Rust files for routing.
 const TOOLFILES_ONLY: &[&str] = &[
@@ -224,6 +227,7 @@ fn check_source(name: &str, source: &str, violations: &mut Vec<String>) {
         .replace(" .", ".");
     let is_filter_process = name == "bounded_file_filter_process.rs";
     let is_filter = name == "bounded_file_filter.rs";
+    let is_command_stream = name == "command_stream.rs";
     let write_expression = "output.write_all(&buffer[..count])";
     let metadata_expression = "std::fs::symlink_metadata(program)";
     path_policy::check_path_openers(name, source, violations);
@@ -235,6 +239,16 @@ fn check_source(name: &str, source: &str, violations: &mut Vec<String>) {
     if is_filter && compact.matches(metadata_expression).count() != 1 {
         violations.push(format!(
             "{name}: expected exactly one read-only program metadata check `{metadata_expression}`"
+        ));
+    }
+    if is_command_stream && compact.matches(STREAM_FILE_WRITE).count() != 1 {
+        violations.push(format!(
+            "{name}: expected exactly one caller-owned bounded stream write `{STREAM_FILE_WRITE}`"
+        ));
+    }
+    if !is_command_stream && compact.contains(STREAM_FILE_WRITE) {
+        violations.push(format!(
+            "{name}: caller-owned stream write is outside its approved module"
         ));
     }
     if !is_filter_process && compact.contains(write_expression) {
@@ -249,6 +263,9 @@ fn check_source(name: &str, source: &str, violations: &mut Vec<String>) {
     }
     for (line, mut code) in code_of(source) {
         if is_filter_process && code.trim() == ".write_all(&buffer[..count])" {
+            code = code.replace("write_all", "");
+        }
+        if is_command_stream && code.trim() == ".write_all(bytes)" {
             code = code.replace("write_all", "");
         }
         if is_filter && code.contains(metadata_expression) {

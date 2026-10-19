@@ -17,6 +17,8 @@ mod output;
 mod qualified_acquisition;
 #[path = "command_release_signer.rs"]
 mod release_signer;
+#[path = "command_stream.rs"]
+mod stream;
 #[path = "command_tofu.rs"]
 mod tofu;
 pub use check::resolve_program as resolve_check_program;
@@ -32,8 +34,8 @@ pub use self::env::{
 use self::env::{pairs_of, redact_env_for_debug, strip_credentials};
 pub(crate) use self::output::redact_argv_for_debug;
 pub use self::output::{
-    CancelHandle, ProcessOutput, SPAWN_CANCELLED_MESSAGE, SPAWN_DEADLINE_MESSAGE,
-    SPAWN_TIMEOUT_MESSAGE_PREFIX, is_cancel_or_timeout,
+    CancelHandle, ProcessFileOutput, ProcessOutput, SPAWN_CANCELLED_MESSAGE,
+    SPAWN_DEADLINE_MESSAGE, SPAWN_TIMEOUT_MESSAGE_PREFIX, is_cancel_or_timeout,
 };
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;

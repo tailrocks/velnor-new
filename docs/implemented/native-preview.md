@@ -26,8 +26,10 @@ noncanonical bytes, missing/extra assets, and inconsistent subject bindings.
 The unprivileged producer entrypoint and CLI operation now bind the canonical
 static plan to a push on the default branch, exact repository/workflow/SHA
 context, source Cargo inventory, and full-history commit count. It executes only
-the isolated declared task, verifies its output manifest and bytes, and stages
-the raw upload inventory under runner temp. This is producer-side runtime code;
+the isolated declared task in one literal product/target job or complete-union
+assembly job, verifies partial/full manifests and bytes, and stages the exact
+raw upload inventory under runner temp. Native request and artifact contracts
+are described in [native-preview-production.md](../proposed/native-preview-production.md). This is producer-side runtime code;
 it does not establish that the generated workflow, signer, or publisher works.
 
 The retry planner has explicit non-overwriting transitions for absent identities,
@@ -58,8 +60,9 @@ concatenated streams, trailing tar data, extended headers, unexpected members,
 and unsafe executable modes. The Homebrew preparation and App writer boundaries
 capture tap main, qualify its updater without write credentials, independently
 validate literal formula changes, and reconcile an exact deterministic PR.
-These implementations still require full integration and executable-workflow
-verification. Homebrew job generation and the merge runtime remain unfinished.
+These implementations include generated Homebrew preparation/writer/merge jobs
+and exact-head feedback/check gates. They still require full integration, actual
+review-completion credentials, and executable-workflow verification.
 Stable publication still uses its existing runtime receipt until the common
 publisher migration is implemented. No preview release or unattended tap merge
 is authorized merely by decoding configuration.

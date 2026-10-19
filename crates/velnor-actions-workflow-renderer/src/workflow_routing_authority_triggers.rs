@@ -69,7 +69,8 @@ fn map_triggers<'a>(
         }
         let branches = exact_filter(get(options, "branches"), path, event, "branches")?;
         let tags = exact_filter(get(options, "tags"), path, event, "tags")?;
-        let bases = if event == "pull_request" {
+        let is_pull_request = matches!(event, "pull_request" | "pull_request_target");
+        let bases = if is_pull_request {
             exact_filter(
                 get(options, "branches"),
                 path,
@@ -81,7 +82,7 @@ fn map_triggers<'a>(
         };
         output.push(AuthorityTrigger {
             event: event.to_owned(),
-            branch_filters: if event == "pull_request" {
+            branch_filters: if is_pull_request {
                 Vec::new()
             } else {
                 branches
@@ -117,7 +118,14 @@ fn validate_event(event: &str, path: &str) -> Result<(), RenderError> {
 fn supported_event(event: &str) -> bool {
     matches!(
         event,
-        "push" | "pull_request" | "merge_group" | "schedule" | "workflow_dispatch" | "release"
+        "push"
+            | "pull_request"
+            | "pull_request_target"
+            | "issue_comment"
+            | "merge_group"
+            | "schedule"
+            | "workflow_dispatch"
+            | "release"
     )
 }
 
@@ -163,3 +171,7 @@ fn has(value: &Yaml<'_>, name: &str) -> bool {
         .as_mapping()
         .is_some_and(|entries| entries.iter().any(|(key, _)| scalar(key) == Some(name)))
 }
+
+#[cfg(test)]
+#[path = "workflow_routing_authority_triggers_tests.rs"]
+mod tests;

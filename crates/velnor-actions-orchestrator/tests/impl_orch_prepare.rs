@@ -134,13 +134,13 @@ fn preview_budget_admission_passes_one_validated_config_to_shared_preparation() 
             .count(),
         1
     );
-    assert!(entry.contains("prepare_with_config(workspace, config)?"));
+    assert!(entry.contains("prepare_with_config(&workspace, config)?"));
+    assert_eq!(entry.matches("prepare_with_config(").count(), 1);
     let compact = entry.split_whitespace().collect::<String>();
-    assert!(
-        compact.contains(
-            "execute_preview_producer_until(&workspace,&temp_root,deadline,proof,config,)"
-        )
-    );
+    assert!(compact.contains(
+        "deadline.scope(||{letplan=read_plan(&temp,deadline)?;letprep=prepare_with_config(&workspace,config)?;"
+    ));
+    assert!(compact.contains("execution::execute(&prep,&temp,&preview,&request,deadline,guard)"));
     assert!(!entry.contains("let mut config"));
     let prepare = std::fs::read_to_string(orch_src().join("prepare.rs"))?;
     assert!(prepare.contains("prepare_inner(root, None, None)"));

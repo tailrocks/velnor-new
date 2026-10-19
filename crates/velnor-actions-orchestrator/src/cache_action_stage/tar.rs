@@ -280,7 +280,7 @@ fn open_archive(runner_temp: &Path, input: &OsStr) -> Result<File, StageError> {
     let path_stat = statat(&parent, name.as_c_str(), AtFlags::SYMLINK_NOFOLLOW)
         .map_err(|_| "cache_tar_archive_open_failed")?;
     if rustix::fs::FileType::from_raw_mode(stat.st_mode) != rustix::fs::FileType::RegularFile
-        || stat.st_uid != crate::process_owner::effective_uid()
+        || stat.st_uid != crate::filesystem_owner::effective_uid()
         || stat.st_nlink != 1
         || stat.st_mode & 0o7000 != 0
         || u64::try_from(stat.st_size).unwrap_or(u64::MAX) > MAX_ARCHIVE_BYTES

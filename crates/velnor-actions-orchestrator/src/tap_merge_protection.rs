@@ -96,14 +96,13 @@ impl BranchControls {
 
 pub(super) fn resolve_protection(
     api: &TapMergeGitHub,
+    observer: &impl super::protection_observer::ClassicProtectionReader,
     repository: &str,
     branch: &str,
     authority: &ProtectionAuthority<'_>,
 ) -> Result<ProtectionFacts, OrchestratorError> {
     let encoded_branch = encode_segment(branch);
-    let branch_protection: Option<Value> = api.get_optional(&format!(
-        "repos/{repository}/branches/{encoded_branch}/protection"
-    ))?;
+    let branch_protection = observer.classic_protection(repository, &encoded_branch)?;
     let classic_present = branch_protection.is_some();
     let legacy = branch_protection
         .as_ref()

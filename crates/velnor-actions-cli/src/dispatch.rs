@@ -17,14 +17,25 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
-    EXECUTE_CHECK_OP, EXECUTE_PREVIEW_PRODUCER_OP, FETCH_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP,
-    OrchestratorError, PLAN_OP, PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PUBLISH_OP,
-    PUBLISH_PACKAGE_RELEASE_OP, RECOVER_PACKAGE_RELEASE_OP, REPORT_OP, REQUEST_FILE_ENV,
+    ACQUIRE_PREVIEW_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP, ADMIT_PREVIEW_AGGREGATE_OP,
+    CAPTURE_REVIEW_COMPLETION_OP, EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP,
+    EXECUTE_PREVIEW_PRODUCER_OP, FETCH_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, PLAN_OP,
+    PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PUBLISH_PACKAGE_RELEASE_OP,
+    RECOVER_PACKAGE_RELEASE_OP, REPORT_OP, REQUEST_FILE_ENV, SELECT_PREVIEW_TAP_CONTINUATION_OP,
     SIGN_PACKAGE_RELEASE_OP, SOURCE_EVIDENCE_OP, TASK_EXECUTION_RESOLVER_OP,
     WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP,
 };
 
 use crate::dispatch_publish::run_publish_internal;
+#[path = "dispatch/diagnostics.rs"]
+mod diagnostics;
+pub(crate) use diagnostics::{fail_internal, fail_public, working_dir};
+#[path = "dispatch_preview_production.rs"]
+mod preview_production;
+#[path = "dispatch_review_completion.rs"]
+mod review_completion;
+#[path = "dispatch_tap_continuation.rs"]
+mod tap_continuation;
 
 mod public;
 pub(crate) use public::run_public;
@@ -71,6 +82,18 @@ const GITHUB_EVENT_PATH_ENV: &str = "GITHUB_EVENT_PATH";
 /// Private operation selected by the gate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InternalOp {
+    /// Select the retained preview candidate for tap continuation.
+    TapContinuation,
+    /// Capture the independent review proposal.
+    CaptureReviewCompletion,
+    /// Publish the independent review result.
+    EmitReviewCompletion,
+    /// Admit immutable preview leaf artifacts.
+    AcquirePreviewLeaves,
+    /// Admit the complete preview aggregate.
+    AdmitPreviewAggregate,
+    /// Authenticate tap promotion inputs.
+    TapAdmission,
     /// Materialize the request file from the GitHub environment.
     WriteRequest,
     /// Execute one named hosted platform check.
@@ -176,6 +199,12 @@ pub(crate) fn try_cache_tar_entrypoint() -> Option<ExitCode> {
 
 fn internal_op() -> Option<InternalOp> {
     Some(match env::var(OP_ENV).as_deref() {
+        Ok(tag) if tag == SELECT_PREVIEW_TAP_CONTINUATION_OP => InternalOp::TapContinuation,
+        Ok(tag) if tag == CAPTURE_REVIEW_COMPLETION_OP => InternalOp::CaptureReviewCompletion,
+        Ok(tag) if tag == EMIT_REVIEW_COMPLETION_OP => InternalOp::EmitReviewCompletion,
+        Ok(tag) if tag == ACQUIRE_PREVIEW_LEAVES_OP => InternalOp::AcquirePreviewLeaves,
+        Ok(tag) if tag == ADMIT_PREVIEW_AGGREGATE_OP => InternalOp::AdmitPreviewAggregate,
+        Ok(tag) if tag == ADMIT_HOMEBREW_TAP_OP => InternalOp::TapAdmission,
         Ok(tag) if tag == EXECUTE_CHECK_OP => InternalOp::ExecuteCheck,
         Ok(tag) if tag == EXECUTE_PREVIEW_PRODUCER_OP => InternalOp::ExecutePreviewProducer,
         Ok(tag) if tag == WRITE_REQUEST_OP => InternalOp::WriteRequest,
@@ -271,6 +300,19 @@ fn gate_request_file(op: InternalOp) -> Option<InternalRequest> {
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)?;
     match op {
+        InternalOp::TapContinuation => {
+            return tap_continuation::gate_request(&path).map(|path| InternalRequest { op, path });
+        }
+        InternalOp::CaptureReviewCompletion | InternalOp::EmitReviewCompletion => {
+            return review_completion::gate_request(&path).map(|path| InternalRequest { op, path });
+        }
+        InternalOp::AcquirePreviewLeaves | InternalOp::AdmitPreviewAggregate => {
+            return package_release::gate_request(&path).map(|path| InternalRequest { op, path });
+        }
+        InternalOp::TapAdmission => {
+            return tap_prepare::gate_admission_request(&path)
+                .map(|path| InternalRequest { op, path });
+        }
         InternalOp::WriteRequest => {
             if path.exists() {
                 return None;
@@ -352,33 +394,4 @@ fn runner_velnor_dir() -> Option<PathBuf> {
     env::var_os(RUNNER_TEMP_ENV)
         .filter(|value| !value.is_empty())
         .map(|temp| Path::new(&temp).join("velnor"))
-}
-
-/// Report a private failure without printing the private operation.
-pub(crate) fn fail_internal(problem: &str) -> ExitCode {
-    eprintln!("velnor-actions: internal request failed: {problem}");
-    ExitCode::from(1)
-}
-
-/// Read the working directory, reporting failures as exit 1.
-pub(crate) fn working_dir() -> Option<PathBuf> {
-    match env::current_dir() {
-        Ok(dir) => Some(dir),
-        Err(error) => {
-            eprintln!("velnor-actions: working directory: {error}");
-            None
-        }
-    }
-}
-
-/// Report an orchestrator failure as exit 1.
-pub(crate) fn fail_public(error: &OrchestratorError) -> ExitCode {
-    eprintln!("velnor-actions: {}", single_line(&error.to_string()));
-    ExitCode::from(1)
-}
-
-/// Collapse error values to one log line so untrusted input cannot inject
-/// additional stderr records.
-fn single_line(text: &str) -> String {
-    text.replace(['\n', '\r'], " ")
 }

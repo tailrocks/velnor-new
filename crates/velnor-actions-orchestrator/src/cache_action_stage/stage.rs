@@ -339,7 +339,7 @@ fn digest_file(file: &mut File) -> Result<[u8; 32], StageError> {
 
 fn validate_stat(stat: &rustix::fs::Stat) -> Result<(), StageError> {
     if rustix::fs::FileType::from_raw_mode(stat.st_mode) != rustix::fs::FileType::RegularFile
-        || stat.st_uid != crate::process_owner::effective_uid()
+        || stat.st_uid != crate::filesystem_owner::effective_uid()
         || stat.st_mode & 0o7777 != STAGE_MODE.bits()
         || stat.st_nlink != 1
         || stat.st_size < 0

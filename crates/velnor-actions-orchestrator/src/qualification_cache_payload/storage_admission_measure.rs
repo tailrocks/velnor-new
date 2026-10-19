@@ -260,7 +260,7 @@ fn measure_regular_file(
     stat: &Stat,
     state: &mut MeasureState,
 ) -> Result<(), &'static str> {
-    if stat.st_uid != crate::process_owner::effective_uid() || stat.st_nlink == 0 {
+    if stat.st_uid != crate::filesystem_owner::effective_uid() || stat.st_nlink == 0 {
         return Err("cache_storage_tree_entry_invalid");
     }
     let descriptor = openat(
@@ -285,7 +285,7 @@ fn measure_symlink(
     stat: &Stat,
     state: &mut MeasureState,
 ) -> Result<(), &'static str> {
-    if stat.st_uid != crate::process_owner::effective_uid() || stat.st_nlink != 1 {
+    if stat.st_uid != crate::filesystem_owner::effective_uid() || stat.st_nlink != 1 {
         return Err("cache_storage_tree_entry_invalid");
     }
     let target = rustix::fs::readlinkat(directory, name, Vec::new())
@@ -300,7 +300,7 @@ fn measure_symlink(
 #[cfg(target_os = "linux")]
 fn validate_directory(stat: &Stat) -> Result<(), &'static str> {
     if FileType::from_raw_mode(stat.st_mode) != FileType::Directory
-        || stat.st_uid != crate::process_owner::effective_uid()
+        || stat.st_uid != crate::filesystem_owner::effective_uid()
         || stat.st_mode & 0o7000_u32 != 0
     {
         return Err("cache_storage_tree_entry_invalid");

@@ -22,6 +22,8 @@ mod impl_mise_catalog;
 mod impl_mise_catalog_identity_sources;
 #[path = "impl_mise_command.rs"]
 mod impl_mise_command;
+#[path = "impl_mise_command_stream.rs"]
+mod impl_mise_command_stream;
 #[path = "impl_mise_env.rs"]
 mod impl_mise_env;
 #[path = "impl_mise_env_policy.rs"]

@@ -164,6 +164,8 @@ struct PartialWorkflow {
     tasks: Vec<WorkflowTask>,
     /// Optional protected post-merge `OpenTofu` apply declaration.
     tofu_apply: Option<velnor_actions_contract::TofuApplyConfig>,
+    /// Optional closed review completion emitter.
+    review_completion: Option<velnor_actions_contract::config::ReviewCompletionConfig>,
     /// Consumer-selected verification jobs.
     #[serde(default)]
     verify: VerifyConfig,
@@ -259,6 +261,7 @@ impl PartialWorkflow {
             runner_label: self.runner_label,
             tasks: self.tasks,
             tofu_apply: self.tofu_apply,
+            review_completion: self.review_completion,
             verify: self.verify,
             dispatch: self.dispatch,
             preserve_workflows: self.preserve_workflows,
