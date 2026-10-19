@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.20
+Velnor Actions plan 0.1.21
 Repository: <repo>
 
 Detected stacks
@@ -23,6 +23,7 @@ Workflow to generate
     - rust-empty-suite-lint (11 steps)
     - rust-empty-suite-tests (10 steps)
     - 3 Rust phase jobs
+      Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> doc build -> format check
       Entries:
         - rust-empty-suite-docs

@@ -2,7 +2,9 @@
 
 This change replaces the combined Rust crate job with fixed lint, tests and
 docs execution responsibilities. It does not establish cold capacity or preview
-publication. Every concrete job retains the existing five-minute ceiling.
+publication. Every concrete job retains the existing five-minute default;
+`workflow.crate_timeout_minutes` later made the crate-job bound configurable
+(see [job timeout limits](job-timeout-limits.md)).
 
 The enabling condition was serial grouping, not an absent timeout. Jackin main
 [CI run 39214070421](https://github.com/jackin-project/jackin/actions/runs/39214070421),
@@ -42,7 +44,7 @@ depth, node and byte bounds. Job identities, dependencies, permissions, outputs
 and execution scopes remain literal; generated composite actions do not use
 this projection. The staged shell validator expands supported aliases before
 checking scripts under each use site's effective shell. Neither the size limit
-nor the five-minute execution limit is relaxed.
+nor the five-minute execution limit was relaxed at that time.
 
 The focused 0.1.20 qualification ran 64 tests successfully, including the
 150-member fixture with 453 literal Rust phase jobs, exact task inventory,

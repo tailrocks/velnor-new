@@ -108,6 +108,7 @@ name = "CI"
 default_branch = "main"
 generator_validation = "bootstrap"
 max_parallel_jobs = 2
+crate_timeout_minutes = 5 # default; bounded 1..=360; applies to every Rust phase and OpenTofu root job
 mise_quiet = true # default; `false` drops MISE_QUIET so the mise wrapper-dispatch trace stays visible
 preserve_workflows = [] # optional [".github/workflows/<slug>.yml"] allowlist
 
@@ -127,7 +128,7 @@ ignore = []
 toolchain = "1.98.1" # optional exact X.Y.Z override; must agree with rust-toolchain.toml / rust-toolchain when present
 configurations = [{ name = "default", features = ["default"], target = "host" }]
 # [[stacks.rust.suites]] declares named Nextest suites (id, profile, run_ignored, partitions 1..=64,
-# build = "inline" | "archive", timeout_minutes 1..=5, test_threads 1..=64, runner_label, workflow,
+# build = "inline" | "archive", timeout_minutes 1..=360 (default 5), test_threads 1..=64, runner_label, workflow,
 # triggers, schedule, required, cancel_in_progress, allow_failure, filter, filter_input, dispatch_inputs,
 # package, manifest_path, env, artifacts); see task-execution-contract.md.
 
@@ -194,7 +195,7 @@ Under `workflow.policy = "velnor-repository-v1"`, the `cargo-deny`, `cargo-mache
 
 The final job MUST have stable display name `Required`; branch protection requires that exact check. Every generated job MUST use a single literal, versioned runner label in `runs-on`. Default jobs share the repository's configured `workflow.runner_label` (with no override, Velnor MUST use the latest pinned x64 label from [version policy](version-policy.md); the current snapshot selects `ubuntu-26.04`), while `[[stacks.rust.suites]]` (`runner_label`), `[[workflow.tasks]]` (`runner`), and `[[checks]]` (`runner.label`) may select their own supported versioned runner label from the catalog. An explicit non-default label is allowed only when listed in the policy's supported-label set and named in `.velnor/config.toml`. Velnor MUST reject `ubuntu-latest`, every `*-latest` alias, unversioned labels, unsupported labels, expressions, matrices, and aliases in every generated `runs-on` field. V1 emits no self-hosted labels. The plan records the selected default label and whether it came from `latest_default` or `config_override`.
 
-Every concrete generated job MUST carry a literal per-job `timeout-minutes` from one through five minutes, rendered right after `runs-on`. Five minutes is the canonical default and maximum for every job category. Oversized configuration is rejected rather than clamped. Reusable callers cannot declare this field; every exact generated local callee is admitted with bounded executable jobs. A timeout is a failure, including when cold preparation or compilation cannot finish. GitHub cancellation has additional grace; queueing, approvals, and multiple DAG jobs do not form a five-minute workflow-wide promise. See [the implementation record](../implemented/five-minute-execution-limit.md).
+Every concrete generated job MUST carry a literal per-job `timeout-minutes` from one through 360 minutes (GitHub's per-job execution limit), rendered right after `runs-on`. Five minutes is the canonical default for every job category. `workflow.crate_timeout_minutes` (default `5`) sets the literal bound of every crate job: each Rust lint/tests/docs phase job and each OpenTofu root job. Explicit task, check, suite, preview-producer and tap-updater `timeout_minutes` fields accept the same range. Control jobs (plan, required, validators, candidate, release and publish) keep the default. Out-of-range configuration is rejected rather than clamped. Reusable callers cannot declare this field; every exact generated local callee is admitted with bounded executable jobs. A timeout is a failure, including when cold preparation or compilation cannot finish. GitHub cancellation has additional grace; queueing, approvals, and multiple DAG jobs do not form a workflow-wide promise. See [the implementation record](../implemented/job-timeout-limits.md).
 
 `plan` MUST upload its plan report with `if: always()` and fail above a 4 MiB canonical `matrix.json` artifact or, when the workflow promotes an output-fed matrix, above 256 expanded jobs or 900,000 aggregate UTF-16 bytes across promoted job outputs. The artifact cap is independent of job outputs; count actual `matrix.include` entries only on the dynamic path because static artifact rows are not matrix jobs. GitHub documents a 1 MB per-job output limit approximated in UTF-16 and a 256-job matrix maximum in its [workflow syntax reference](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax).
 `plan` MUST report a clear planning error and request a broadened or reduced plan instead of truncating entries.

@@ -19,14 +19,14 @@ fn document(fields: Vec<(&str, Yaml)>) -> Yaml {
 
 #[test]
 fn every_admitted_concrete_job_has_a_literal_bounded_timeout() {
-    for minutes in 1..=5 {
+    for minutes in [1, 5, 6, 30, 75, 360] {
         let workflow = document(vec![
             ("runs-on", Yaml::str("ubuntu-26.04")),
             ("timeout-minutes", Yaml::Int(minutes)),
         ]);
         assert!(validate(PATH, &workflow).is_ok());
     }
-    for minutes in [-1, 0, 6, 30, 75, 360, i64::MAX] {
+    for minutes in [-1, 0, 361, i64::MAX] {
         let workflow = document(vec![("timeout-minutes", Yaml::Int(minutes))]);
         assert!(validate(PATH, &workflow).is_err(), "{minutes}");
     }
@@ -66,7 +66,7 @@ fn reusable_inventory_requires_every_bounded_callee_and_unique_paths() {
     let path = ".github/workflows/release.yml";
     assert!(validate_tree(&[(PATH, &caller), (path, &release_workflow)]).is_ok());
     assert!(validate_tree(&[(PATH, &caller)]).is_err());
-    let unbounded = document(vec![("timeout-minutes", Yaml::Int(6))]);
+    let unbounded = document(vec![("timeout-minutes", Yaml::Int(361))]);
     assert!(validate_tree(&[(PATH, &caller), (path, &unbounded)]).is_err());
     assert!(validate_tree(&[(path, &release_workflow), (path, &release_workflow)]).is_err());
     for reference in [

@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.20
+Velnor Actions plan 0.1.21
 Repository: <repo>
 
 Detected stacks
@@ -25,6 +25,7 @@ Workflow to generate
     - rust-app-lint (15 steps)
     - rust-app-tests (16 steps)
     - 3 Rust phase jobs
+      Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
       Entries:
         - rust-app-docs

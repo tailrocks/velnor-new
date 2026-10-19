@@ -146,7 +146,7 @@ pub struct RustBinaryPreviewProducer {
     /// Fixed supported runner placement.
     #[serde(default = "default_preview_runner")]
     pub runner: VerificationRunner,
-    /// Per-job timeout, bounded to one through five minutes.
+    /// Per-job timeout, bounded to one through 360 minutes (default five).
     #[serde(default = "default_preview_timeout")]
     pub timeout_minutes: u16,
     /// Maximum concurrent build processes.
