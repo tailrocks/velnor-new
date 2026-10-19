@@ -75,6 +75,24 @@ fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
     let Some((_, Yaml::Seq(steps))) = fields.iter_mut().find(|(key, _)| key == "steps") else {
         return Err(invalid(id));
     };
+    if !steps.iter().any(is_checkout) {
+        // Without a checkout the project config is unreadable. Such a job
+        // installs no Rust, so a hoisted `RUSTUP_TOOLCHAIN` is inert there and
+        // is dropped; any other reference fails closed.
+        for step in steps.iter_mut() {
+            if let Yaml::Map(step_fields) = step
+                && let Some((_, env)) = step_fields.iter_mut().find(|(key, _)| key == "env")
+            {
+                take_job_rustup(id, env)?;
+            }
+            drop_empty_env(step);
+        }
+        return if steps.iter().all(|step| names(step).is_empty()) {
+            Ok(())
+        } else {
+            Err(invalid(&format!("{id}:no_checkout")))
+        };
+    }
     let Some(setup) = steps.iter().position(is_mise_setup) else {
         return Err(invalid(&format!("{id}:no_mise_setup")));
     };
@@ -85,10 +103,8 @@ fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
             && let Some((_, env)) = fields.iter_mut().find(|(key, _)| key == "env")
         {
             export_rustup |= take_job_rustup(id, env).unwrap_or(false);
-            fields.retain(|(key, value)| {
-                key != "env" || !matches!(value, Yaml::Map(pairs) if pairs.is_empty())
-            });
         }
+        drop_empty_env(step);
     }
     if let Some(early) = steps[..=setup].iter().find(|step| !names(step).is_empty()) {
         let name = match early {
@@ -163,13 +179,29 @@ fn take_job_rustup(id: &str, env: &mut Yaml) -> Result<bool, RenderError> {
     Ok(pairs.len() != before)
 }
 
+/// Remove a step's `env` mapping once it is empty (actionlint rejects it).
+fn drop_empty_env(step: &mut Yaml) {
+    if let Yaml::Map(fields) = step {
+        fields.retain(|(key, value)| {
+            key != "env" || !matches!(value, Yaml::Map(pairs) if pairs.is_empty())
+        });
+    }
+}
+
+fn is_checkout(step: &Yaml) -> bool {
+    uses_starts_with(step, "actions/checkout@")
+}
+
 fn is_mise_setup(step: &Yaml) -> bool {
+    uses_starts_with(step, &format!("{MISE_ACTION_NAME}@"))
+}
+
+fn uses_starts_with(step: &Yaml, prefix: &str) -> bool {
     let Yaml::Map(fields) = step else {
         return false;
     };
     fields.iter().any(|(key, value)| {
-        key == "uses"
-            && scalar(value).is_some_and(|uses| uses.starts_with(&format!("{MISE_ACTION_NAME}@")))
+        key == "uses" && scalar(value).is_some_and(|uses| uses.starts_with(prefix))
     })
 }
 

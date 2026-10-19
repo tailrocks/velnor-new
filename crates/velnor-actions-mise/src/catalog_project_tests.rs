@@ -93,13 +93,3 @@ fn every_tool_has_a_distinct_project_env_and_keys() {
         "aqua:nextest-rs/nextest/cargo-nextest"
     );
 }
-
-#[test]
-fn velnor_pin_overrides_a_project_declaration_only_on_request() {
-    let catalog = ToolCatalog::pinned()
-        .with_project_tool(PinnedTool::Gh, "2.0.1")
-        .expect("exact")
-        .with_velnor_pin(PinnedTool::Gh);
-    assert!(!catalog.is_project_declared(PinnedTool::Gh));
-    assert_eq!(catalog.version(PinnedTool::Gh), crate::catalog::GH_VERSION);
-}

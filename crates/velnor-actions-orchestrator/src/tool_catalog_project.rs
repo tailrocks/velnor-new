@@ -35,7 +35,13 @@ pub(crate) fn project_declarations(
     toolchain: Option<&ToolchainFile>,
 ) -> BTreeMap<PinnedTool, ProjectDeclaration> {
     let mut out = BTreeMap::new();
-    for tool in PinnedTool::ALL {
+    // The GitHub CLI runs with a token in every generated use (plan baseline
+    // lookup, Required report fetch, release publication), so repository
+    // configuration never selects it: it keeps its qualified pin.
+    for tool in PinnedTool::ALL
+        .into_iter()
+        .filter(|tool| *tool != PinnedTool::Gh)
+    {
         let mut versions: Vec<Option<String>> = tool
             .mise_config_keys()
             .iter()

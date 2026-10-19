@@ -126,8 +126,8 @@ declaration, because Mise (idiomatic version files) and rustup both read it.
 
 **Mechanism.**
 
-- Generation classifies every catalog tool (Rust, MBX, Nextest, GitHub CLI,
-  actionlint, shellcheck, zizmor, OpenTofu, release-plz) as project-declared
+- Generation classifies every catalog tool (Rust, MBX, Nextest, actionlint,
+  shellcheck, zizmor, OpenTofu, release-plz) as project-declared
   when the first parseable root `mise.toml`/`.mise.toml` `[tools]` table names
   it under any backend spelling (for example
   `"aqua:nextest-rs/nextest/cargo-nextest"` or `core:rust`), or, for Rust,
@@ -180,10 +180,14 @@ and its only effect is a different exact version of the same tool through
 the same backend. The resolver accepts only `[0-9.]` values in exact
 `X.Y.Z` shape before writing `$GITHUB_ENV`, so no value can inject another
 variable or line; symlinked sources are refused. Composite actions carry
-`# zizmor: ignore[github-env]` on that one validated write. Credential-bearing
-native security operations keep their qualified fixed pins (GitHub CLI and
-Cosign in release publication and preview promotion), so repository config
-cannot select those executables.
+`# zizmor: ignore[github-env]` on that one validated write. The GitHub CLI
+runs with a token in every generated use (plan baseline lookup, `Required`
+report fetch, release publication) and Cosign signs releases, so both keep
+their qualified fixed pins even when the project declares them: repository
+configuration never selects a credential-bearing executable. A job without a
+checkout cannot read the project config; such a job installs no Rust, so a
+hoisted `RUSTUP_TOOLCHAIN` reference is dropped there and any other
+reference fails generation.
 
 **Trade-offs.** `mise.lock` checksums are not enforced in CI: with
 `--no-config` Mise does not consult the lock (as before this decision). The
