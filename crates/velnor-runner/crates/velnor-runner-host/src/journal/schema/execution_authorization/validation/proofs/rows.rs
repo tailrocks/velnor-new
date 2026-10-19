@@ -271,8 +271,11 @@ async fn validate_source(
     connection: &turso::Connection,
     proof: &ProofRow,
 ) -> Result<(), HostError> {
+    if !source_fields_are_paired(proof.source_digest.as_deref(), proof.source_json.as_deref()) {
+        return Err(HostError::Journal);
+    }
     match (proof.source_digest.as_deref(), proof.source_json.as_deref()) {
-        (None, None) if proof.proof_state == "denied" && proof.actual_request_id.is_none() => {
+        (None, None) if source_absence_is_valid(&proof.proof_state, proof.actual_request_id) => {
             Ok(())
         }
         (Some(expected), Some(json)) => {
@@ -348,4 +351,34 @@ async fn validate_approved_source(
         return Err(HostError::Journal);
     }
     Ok(())
+}
+
+fn source_absence_is_valid(proof_state: &str, actual_request_id: Option<i64>) -> bool {
+    matches!(proof_state, "pending" | "denied") && actual_request_id.is_none()
+}
+
+fn source_fields_are_paired(digest: Option<&str>, json: Option<&str>) -> bool {
+    digest.is_some() == json.is_some()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{source_absence_is_valid, source_fields_are_paired};
+
+    #[test]
+    fn absent_source_is_allowed_only_before_request_or_after_denial() {
+        assert!(source_absence_is_valid("pending", None));
+        assert!(source_absence_is_valid("denied", None));
+        assert!(!source_absence_is_valid("approved", None));
+        assert!(!source_absence_is_valid("pending", Some(7)));
+        assert!(!source_absence_is_valid("denied", Some(7)));
+    }
+
+    #[test]
+    fn source_digest_and_json_must_be_present_together() {
+        assert!(source_fields_are_paired(None, None));
+        assert!(source_fields_are_paired(Some("digest"), Some("json")));
+        assert!(!source_fields_are_paired(Some("digest"), None));
+        assert!(!source_fields_are_paired(None, Some("json")));
+    }
 }

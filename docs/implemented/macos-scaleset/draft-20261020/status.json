@@ -43,6 +43,14 @@
       "run_id": "5318fdec-0193-4dd4-bbdf-9a5c96696a02",
       "log_sha256": "3e70f2d7d5a7e3ba4d64825642cd2241d2c55c206d51e0e7e39bfa032361f10b",
       "review_sha256": "6686f7b4a263b90d671e1fa1b9d4cb628fd4b23f556b8c0a8a7556a230d5c1a6"
+    },
+    {
+      "gate": "pending_proof_reopen",
+      "result": "PASS",
+      "tests": 4,
+      "run_id": "ccf3a583-fed4-48f4-8d85-d2bf3c42210f",
+      "log_sha256": "ec7df4fda1c8aa4c156629338667adffb6029d2e178fe4f8754154364d47db8a",
+      "review_sha256": "d8d737b145b9c812a4ca94f0c1c05b7eebc55dd2af829aec2be75c525b3143e8"
     }
   ],
   "last_full_runner_suite": {
@@ -65,5 +73,12 @@
       "source_admission_fixtures",
       "request_recovery"
     ]
+  },
+  "completion_restart_fixture_diagnostic": {
+    "result": "FAIL",
+    "tests": 3,
+    "passed": 2,
+    "failed": 1,
+    "run_id": "d9bb713c-58e9-42ab-b799-40713fb70252"
   }
 }

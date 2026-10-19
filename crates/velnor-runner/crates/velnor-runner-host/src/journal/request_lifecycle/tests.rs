@@ -56,6 +56,81 @@ impl NativeStartedIntakeFixture {
     }
 }
 
+/// Test fixture for source checks.
+pub(crate) struct NativePreChallengeFixture {
+    pub(crate) _scratch: helpers::Scratch,
+    pub(crate) _journal: crate::journal::Journal,
+    pub(crate) database_path: std::path::PathBuf,
+    pub(crate) scope: crate::journal::ConnectionJournal,
+    pub(crate) initialized: helpers::JobFactsReaderFixture,
+    pub(crate) runner: velnor_runner_github::RunnerReference,
+    pub(crate) source: velnor_runner_github::SourceMetadata,
+    pub(crate) channel: crate::worker::execution_authorization::VerifiedProofChannelBinding,
+}
+
+/// Prepare the test fixture before the source check.
+pub(crate) async fn native_pre_challenge_fixture()
+-> Result<NativePreChallengeFixture, crate::error::HostError> {
+    use crate::journal::{CapacityLimits, Journal};
+
+    const REQUEST_ID: i64 = 101;
+    const SET_ID: i64 = 501;
+    const REPOSITORY_ID: i64 = 101;
+    const RUN_ID: i64 = REQUEST_ID + 1_000;
+
+    let scratch = helpers::Scratch::new()?;
+    let journal = Journal::open(&scratch.file()).await?;
+    journal
+        .configure_capacity(CapacityLimits {
+            jobs: 1,
+            cpu_millicores: 2_000,
+            memory_bytes: 25_769_803_776,
+        })
+        .await?;
+    let binding = helpers::binding("native-started-intake", REPOSITORY_ID)?;
+    let scope = helpers::created_scope(&journal, &binding, SET_ID).await?;
+    let initialized =
+        helpers::provision_acquired_request_with_initialization(&scope, REQUEST_ID, 'a', 'a')
+            .await?;
+    let provisioned = &initialized.provisioned;
+    let runner = velnor_runner_github::RunnerReference {
+        id: 701,
+        name: helpers::runner_name('a'),
+        runner_scale_set_id: SET_ID,
+    };
+    helpers::prepare_jit_and_job_facts(&scope, provisioned, &runner).await?;
+    let channel = crate::worker::execution_authorization::test_channel_for_ready_job_facts(
+        initialized.reservation_id,
+        initialized.intent_id,
+        scope.connection_id().as_str().to_owned(),
+        SET_ID,
+        REQUEST_ID,
+        helpers::TEST_ENGINE_ID.to_owned(),
+        initialized.docker_root_digest.clone(),
+        runner.id,
+        runner.name.clone(),
+        initialized.runner_container_id.clone(),
+        initialized.dind_container_id.clone(),
+        initialized.instance_binding_digest.clone(),
+        &initialized.ready,
+    )?;
+    let config = crate::config::HostConfig::test_with_job_authority_policy(&binding)?;
+    scope.install_job_authority_policy(&config).await?;
+    let source = helpers::event_source(REPOSITORY_ID, RUN_ID);
+    let database_path = scratch.file();
+
+    Ok(NativePreChallengeFixture {
+        _scratch: scratch,
+        _journal: journal,
+        database_path,
+        scope,
+        initialized,
+        runner,
+        source,
+        channel,
+    })
+}
+
 /// Build the durable state required for a native Started message.
 pub(crate) async fn native_started_intake_fixture()
 -> Result<NativeStartedIntakeFixture, crate::error::HostError> {
@@ -125,4 +200,65 @@ pub(crate) async fn native_started_intake_fixture()
         source,
         channel,
     })
+}
+
+#[tokio::test]
+async fn published_challenge_without_source_survives_journal_reopen()
+-> Result<(), crate::error::HostError> {
+    let fixture = native_pre_challenge_fixture().await?;
+    helpers::publish_test_execution_challenge(&fixture.scope, &fixture.channel).await?;
+    let NativePreChallengeFixture {
+        _scratch,
+        _journal,
+        database_path,
+        scope,
+        initialized,
+        runner,
+        source,
+        channel,
+    } = fixture;
+    drop(scope);
+    drop(_journal);
+    drop(initialized);
+    drop(channel);
+    drop(runner);
+    drop(source);
+    let reopened = crate::journal::Journal::open(&database_path).await?;
+    let mut rows = reopened
+        .connection()
+        .await?
+        .query(
+            "SELECT proof_state, challenge_state, actual_request_id, source_digest, source_json FROM connection_execution_proofs",
+            (),
+        )
+        .await
+        .map_err(|_| crate::error::HostError::Journal)?;
+    let row = rows
+        .next()
+        .await
+        .map_err(|_| crate::error::HostError::Journal)?
+        .ok_or(crate::error::HostError::Journal)?;
+    assert_eq!(
+        row.get::<String>(0)
+            .map_err(|_| crate::error::HostError::Journal)?,
+        "pending"
+    );
+    assert_eq!(
+        row.get::<String>(1)
+            .map_err(|_| crate::error::HostError::Journal)?,
+        "published"
+    );
+    assert!(
+        row.get::<Option<i64>>(2)
+            .map_err(|_| crate::error::HostError::Journal)?
+            .is_none()
+    );
+    for column in [3, 4] {
+        assert!(
+            row.get::<Option<String>>(column)
+                .map_err(|_| crate::error::HostError::Journal)?
+                .is_none()
+        );
+    }
+    Ok(())
 }

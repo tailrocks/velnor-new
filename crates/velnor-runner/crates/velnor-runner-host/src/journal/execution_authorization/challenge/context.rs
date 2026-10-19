@@ -526,13 +526,24 @@ mod tests {
     #[tokio::test]
     async fn challenge_context_rejects_publication_runner_mismatch() -> Result<(), HostError> {
         let fixture =
-            crate::journal::request_lifecycle::tests::native_started_intake_fixture().await?;
+            crate::journal::request_lifecycle::tests::native_pre_challenge_fixture().await?;
+        let reservation_id = fixture.initialized.reservation_id;
         let path = fixture.database_path.to_str().ok_or(HostError::Journal)?;
         let database = turso::Builder::new_local(path)
             .build()
             .await
             .map_err(|_| HostError::Journal)?;
         let connection = database.connect().map_err(|_| HostError::Journal)?;
+        assert!(
+            challenge_context(
+                &connection,
+                reservation_id,
+                fixture.scope.connection_id().as_str(),
+            )
+            .await?
+            .is_some(),
+            "The test fixture must permit the source check."
+        );
         connection
             .execute("DROP TRIGGER provisioning_publication_no_update", ())
             .await
@@ -540,7 +551,7 @@ mod tests {
         connection
             .execute(
                 "UPDATE capacity_reservation_provisioning_publications SET runner_id = runner_id + 1 WHERE reservation_id = ?1",
-                [fixture.reservation_id],
+                [reservation_id],
             )
             .await
             .map_err(|_| HostError::Journal)?;
@@ -548,7 +559,7 @@ mod tests {
         assert!(
             challenge_context(
                 &connection,
-                fixture.reservation_id,
+                reservation_id,
                 fixture.scope.connection_id().as_str(),
             )
             .await?
