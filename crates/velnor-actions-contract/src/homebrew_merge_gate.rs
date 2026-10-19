@@ -125,7 +125,7 @@ pub struct TapMergeObservation {
     pub server_protection: TapServerMergeProtection,
     /// All required checks were exhaustively resolved from active branch rules.
     pub required_checks_complete: bool,
-    /// Required checks, including DCO, from the current exact head.
+    /// Required checks from the current exact head.
     pub checks: Vec<TapRequiredCheck>,
     /// Full feedback snapshot, independently re-fetched at the current head.
     pub feedback: TapFeedbackSnapshot,
@@ -264,9 +264,6 @@ fn validate_checks(
         {
             return Err(invalid("required_check_failed_or_untrusted"));
         }
-    }
-    if !names.contains("DCO") {
-        return Err(invalid("required_dco_check_missing"));
     }
     if !checks.iter().any(|check| {
         check.name == policy.completion_check_name

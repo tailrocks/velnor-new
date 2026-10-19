@@ -98,7 +98,7 @@ fn completed_promotion_requires_actual_merge_ancestry_formula_and_exact_head_gat
             6 => candidate.main.current_sha.clear(),
             7 => candidate.server_protection = TapServerMergeProtection::MissingOrBypassable,
             8 => candidate.required_checks_complete = false,
-            9 => candidate.checks.retain(|check| check.name != "DCO"),
+            9 => candidate.checks[0].completed_successfully = false,
             10 => candidate.pull_request.completion = None,
             11 => candidate.pull_request.feedback.unresolved_threads = 1,
             12 => candidate.historical_feedback_complete = false,

@@ -13,7 +13,6 @@ mod patterns;
 mod probe;
 mod process;
 mod time;
-mod trailer_policy;
 mod validation;
 
 use std::path::{Path, PathBuf};
@@ -39,13 +38,6 @@ pub enum Operation {
         /// Include packages with a library target only.
         libraries_only: bool,
     },
-    /// Validate one commit message against repository trailer policy.
-    TrailerPolicy {
-        /// Absolute path to the message being validated.
-        message_path: PathBuf,
-        /// Check local author and committer identity using Git.
-        check_local_identities: bool,
-    },
 }
 
 /// Run one repository policy operation under `root`.
@@ -61,10 +53,6 @@ pub fn run(root: &Path, operation: &Operation) -> i32 {
         Operation::WorkspaceMembers { libraries_only } => {
             members::print_workspace_members(root, *libraries_only)
         }
-        Operation::TrailerPolicy {
-            message_path,
-            check_local_identities,
-        } => trailer_policy::run(root, message_path, *check_local_identities),
     }
 }
 

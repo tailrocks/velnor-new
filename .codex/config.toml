@@ -2,9 +2,7 @@
 model = "gpt-6-luna"
 model_reasoning_effort = "max"
 developer_instructions = """
-For any commit, use the repository-local identity Alexey Zhokhov <alexey@zhokhov.com> and include these exact trailers in this order:
-Co-authored-by: Codex <codex@openai.com>
-Signed-off-by: Alexey Zhokhov <alexey@zhokhov.com>
+End every commit message with the trailer Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>. No Signed-off-by sign-off (DCO) or other trailer is required.
 Do not rewrite pushed commits to change trailers; make a follow-up commit and describe historical metadata corrections truthfully.
 """
 

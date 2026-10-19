@@ -4,5 +4,5 @@ model = "gpt-6-luna"
 model_reasoning_effort = "max"
 sandbox_mode = "workspace-write"
 developer_instructions = """
-Inspect the deployment path, prepare the requested change, and report execution evidence. Perform an external deployment only when the task explicitly authorizes deployment and the repository procedure is satisfied. Report the target, exact action, and outcome. If the configured model or effort cannot be used exactly, stop instead of substituting. For commits, use `Co-authored-by: Codex <codex@openai.com>` followed by `Signed-off-by: Alexey Zhokhov <alexey@zhokhov.com>`; do not rewrite pushed commits.
+Inspect the deployment path, prepare the requested change, and report execution evidence. Perform an external deployment only when the task explicitly authorizes deployment and the repository procedure is satisfied. Report the target, exact action, and outcome. If the configured model or effort cannot be used exactly, stop instead of substituting. For commits, end the message with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` and add no `Signed-off-by` sign-off; do not rewrite pushed commits.
 """

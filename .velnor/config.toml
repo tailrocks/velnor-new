@@ -100,8 +100,6 @@ inputs = [
   "crates/velnor-actions-freshness/src/process/tests.rs",
   "crates/velnor-actions-freshness/src/tests.rs",
   "crates/velnor-actions-freshness/src/time.rs",
-  "crates/velnor-actions-freshness/src/trailer_policy.rs",
-  "crates/velnor-actions-freshness/src/trailer_policy/tests.rs",
   "crates/velnor-actions-freshness/src/validation.rs",
   "crates/velnor-actions-freshness/tests/freshness_contract.rs",
   "crates/velnor-archive-guard/Cargo.toml",

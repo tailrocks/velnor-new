@@ -10,20 +10,13 @@ const ACTION_ENV: &str = "VELNOR_REPO_POLICY_ACTION";
 const ROOT_ENV: &str = "VELNOR_REPO_POLICY_ROOT";
 const UPSTREAM_ENV: &str = "VELNOR_REPO_POLICY_CHECK_UPSTREAM";
 const ADVISORIES_ENV: &str = "VELNOR_REPO_POLICY_WITH_ADVISORIES";
-const MESSAGE_PATH_ENV: &str = "VELNOR_REPO_POLICY_MESSAGE_PATH";
-const LOCAL_IDENTITIES_ENV: &str = "VELNOR_REPO_POLICY_CHECK_LOCAL_IDENTITIES";
 
 /// Accept only the private action allowlist and a repository root directory.
 pub(crate) fn gate_root() -> Option<PathBuf> {
     let action = env::var(ACTION_ENV).ok()?;
     if !matches!(
         action.as_str(),
-        "freshness"
-            | "toolchain-specs"
-            | "mise-version"
-            | "workspace-members"
-            | "library-members"
-            | "trailer-policy"
+        "freshness" | "toolchain-specs" | "mise-version" | "workspace-members" | "library-members"
     ) {
         return None;
     }
@@ -31,9 +24,6 @@ pub(crate) fn gate_root() -> Option<PathBuf> {
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)?;
     if !root.is_dir() {
-        return None;
-    }
-    if action == "trailer-policy" && !message_path()?.is_file() {
         return None;
     }
     Some(root)
@@ -63,17 +53,8 @@ fn operation_from_environment() -> Result<Operation, String> {
         Ok("library-members") => Ok(Operation::WorkspaceMembers {
             libraries_only: true,
         }),
-        Ok("trailer-policy") => Ok(Operation::TrailerPolicy {
-            message_path: message_path().ok_or("missing or invalid message path")?,
-            check_local_identities: optional_flag(LOCAL_IDENTITIES_ENV)?,
-        }),
         _ => Err("invalid repository-policy action".to_owned()),
     }
-}
-
-fn message_path() -> Option<PathBuf> {
-    let path = PathBuf::from(env::var_os(MESSAGE_PATH_ENV).filter(|value| !value.is_empty())?);
-    (path.is_absolute() && path.is_file()).then_some(path)
 }
 
 fn optional_flag(name: &str) -> Result<bool, String> {

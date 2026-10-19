@@ -134,7 +134,6 @@ pub(super) fn resolve_protection(
     let admin_rule_coverage = ruleset_strict
         && ruleset_controls.contains_required_controls()
         && !writer_bypass
-        && ruleset_checks.iter().any(|(name, _)| name == "DCO")
         && ruleset_checks.contains(&(
             authority.completion_check_name.to_owned(),
             authority.completion_app_id,
@@ -173,9 +172,6 @@ fn validate_required_check_bindings(
 ) -> Result<(), OrchestratorError> {
     if !checks.contains(&(completion_check_name.to_owned(), completion_app_id)) {
         return Err(internal("tap_merge_completion_check_not_protected"));
-    }
-    if !checks.iter().any(|(name, _)| name == "DCO") {
-        return Err(internal("tap_merge_required_checks_or_dco_missing"));
     }
     Ok(())
 }

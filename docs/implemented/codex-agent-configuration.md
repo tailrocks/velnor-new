@@ -37,38 +37,12 @@ For the installed CLI, strictly validate project configuration with `codex app-s
 
 The configuration follows the official [Codex subagent documentation](https://learn.chatgpt.com/docs/agent-configuration/subagents) and [config precedence](https://learn.chatgpt.com/docs/config-file/config-basic).
 
-## Commit identity and trailers
+## Commit trailers
 
-The primary project session and every implementation or coordination role that prepares commits use the repository-local identity `Alexey Zhokhov <alexey@zhokhov.com>`. The project `developer_instructions` and each productive agent file require these exact trailers on every new commit, in this order. Configure the identity with `git config --local user.name "Alexey Zhokhov"` and `git config --local user.email "alexey@zhokhov.com"`:
+Every commit message ends with the Claude co-author trailer:
 
 ```text
-Co-authored-by: Codex <codex@openai.com>
-Signed-off-by: Alexey Zhokhov <alexey@zhokhov.com>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
 
-Pass both trailers to `git commit` in that order, for example:
-
-```sh
-git commit \
-  --trailer "Co-authored-by: Codex <codex@openai.com>" \
-  --trailer "Signed-off-by: Alexey Zhokhov <alexey@zhokhov.com>" \
-  -m "docs: explain repository agent roles"
-```
-
-Inspect the resulting message with `git show -s --format=%B HEAD`. Review-only agents must not edit or commit. Never rewrite a commit already pushed to a shared branch to correct its trailers; make a new follow-up commit and describe any historical metadata correction truthfully.
-
-Before any local commit or API-submitted squash message, validate the message file from the repository root. The command requires an absolute path to an existing file:
-
-```sh
-MESSAGE_FILE="$(realpath path/to/message.txt)"
-env \
-  VELNOR_INTERNAL_OP=repo-policy-v1 \
-  VELNOR_REPO_POLICY_ACTION=trailer-policy \
-  VELNOR_REPO_POLICY_ROOT="$PWD" \
-  VELNOR_REPO_POLICY_MESSAGE_PATH="$MESSAGE_FILE" \
-  cargo run --quiet --locked -p velnor-actions-cli --bin velnor-actions
-```
-
-For every local commit, add `VELNOR_REPO_POLICY_CHECK_LOCAL_IDENTITIES=1` to the `env` assignments. This required check also verifies that the effective Git author and committer identities match the repository-local identity above. API-submitted message validation may omit this setting. After an API merge, independently verify the actual remote commit message and author metadata.
-
-For manual checks, `cargo run --locked -p velnor-actions-cli --example validate_commit_trailers -- MESSAGE_FILE` (add `--check-local-identities` after the message path for local commits) runs the same trailer rules without the internal-op envelope.
+No `Signed-off-by` sign-off (DCO), `Co-authored-by: Codex` trailer, or other trailer is required, and the repository has no commit-trailer checker. Review-only agents must not edit or commit. Never rewrite a commit already pushed to a shared branch to correct its trailers; make a new follow-up commit and describe any historical metadata correction truthfully.
