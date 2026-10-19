@@ -99,3 +99,21 @@ fn irreducible_over_cap_workflow_still_fails_closed() {
     assert!(matches!(error, RenderError::InvalidWorkflow(problem)
         if problem.starts_with("workflow_too_large:.github/workflows/ci.yml:")));
 }
+
+#[cfg(feature = "test-render-capture")]
+#[test]
+fn full_tree_capture_bypasses_only_the_intermediate_size_gate() -> Result<(), RenderError> {
+    let command = "x".repeat(MAX_WORKFLOW_BYTES + 100);
+    let document = workflow(&command, 1);
+    assert!(render_checked_workflow(".github/workflows/ci.yml", &document, VERSION).is_err());
+
+    let captured = crate::render::test_render_capture::with_full_tree_capture(|| {
+        render_checked_workflow(".github/workflows/ci.yml", &document, VERSION)
+    })?;
+    assert!(captured.len() > MAX_WORKFLOW_BYTES);
+    assert!(
+        crate::workflow_size::check_workflow_size(".github/workflows/ci.yml", &captured).is_err()
+    );
+    assert!(render_checked_workflow(".github/workflows/ci.yml", &document, VERSION).is_err());
+    Ok(())
+}

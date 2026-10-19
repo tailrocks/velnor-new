@@ -2,7 +2,7 @@
 //!
 //! This module is available only through the `test-render-capture` feature.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 /// Canonical and selected marked YAML captured at the render boundary.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -15,6 +15,15 @@ pub struct RenderCapture {
 
 thread_local! {
     static CAPTURE: RefCell<Option<RenderCapture>> = const { RefCell::new(None) };
+    static FULL_TREE_CAPTURE: Cell<bool> = const { Cell::new(false) };
+}
+
+struct FullTreeCaptureScope(bool);
+
+impl Drop for FullTreeCaptureScope {
+    fn drop(&mut self) {
+        FULL_TREE_CAPTURE.with(|enabled| enabled.set(self.0));
+    }
 }
 
 /// Clear the current thread's previous render capture.
@@ -28,6 +37,19 @@ pub fn take() -> Option<RenderCapture> {
     CAPTURE.with(|capture| capture.borrow_mut().take())
 }
 
+/// Run diagnostic capture without the per-file size limit.
+///
+/// The caller must check the complete workflow tree after rendering.
+pub fn with_full_tree_capture<T>(capture: impl FnOnce() -> T) -> T {
+    let previous = FULL_TREE_CAPTURE.with(|enabled| enabled.replace(true));
+    let _scope = FullTreeCaptureScope(previous);
+    capture()
+}
+
+pub(crate) fn full_tree_capture_enabled() -> bool {
+    FULL_TREE_CAPTURE.with(Cell::get)
+}
+
 pub(crate) fn record(path: &str, canonical: String, selected: String) {
     if path != ".github/workflows/ci.yml" {
         return;
@@ -38,4 +60,38 @@ pub(crate) fn record(path: &str, canonical: String, selected: String) {
             selected,
         });
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    use super::{full_tree_capture_enabled, with_full_tree_capture};
+
+    #[test]
+    fn full_tree_capture_scope_restores_nested_state() {
+        assert!(!full_tree_capture_enabled());
+
+        let result = with_full_tree_capture(|| {
+            assert!(full_tree_capture_enabled());
+            with_full_tree_capture(|| assert!(full_tree_capture_enabled()));
+            assert!(full_tree_capture_enabled());
+            7
+        });
+
+        assert_eq!(result, 7);
+        assert!(!full_tree_capture_enabled());
+    }
+
+    #[test]
+    fn full_tree_capture_scope_restores_state_after_panic() {
+        assert!(!full_tree_capture_enabled());
+
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            with_full_tree_capture(|| panic!("test unwind"));
+        }));
+
+        assert!(result.is_err());
+        assert!(!full_tree_capture_enabled());
+    }
 }

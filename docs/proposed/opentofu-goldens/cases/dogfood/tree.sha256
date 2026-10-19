@@ -22,6 +22,7 @@ bf039972688aca65caa2a8ca5b17f4db4ec50ef0cdb9f62482d3c6c5109b6c02  ./.github/scri
 f96d2e1ace94ea7210422080cf95e5ffbccfd2f8ac2137ced5e635322eca6255  ./.github/velnor/task-execution-manifest-v1.json
 e5bd6cd83a16201fbcf67d11a62dc24c1ea0fd8c4120b3f303f559c7fc1c1587  ./.github/workflows/ci.yml
 918944337fd41ef2a030915660699674c4fc2b95cb619c4204cad7d9c84d67cf  ./.github/workflows/freshness.yml
+7f4b30f9f867eba53332d5b2afa54111af20d625c2a4d5560d7122014db99432  ./.github/workflows/job-image-candidate.yml
 70786ed9e5514a024458e5ae6847bd6742587c54c05b71aad8dd55a0ca8876d9  ./.github/workflows/product-release-binary.yml
 fe8e2afb1da91f42557c7ccdc969840b00bffb7d1e531450c18147badc6501bd  ./.github/workflows/product-release-generator.yml
 9fb7186aaa5be4d5bc6517cb8c4f39eafc95213f161d74279401ac39da7f8d84  ./.github/workflows/product-release-images.yml
