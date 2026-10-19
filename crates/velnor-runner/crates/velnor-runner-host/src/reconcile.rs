@@ -2,7 +2,7 @@
 
 use crate::journal::IntentState;
 
-/// Last external-effect boundary durably reached by one launch.
+/// Last external effect the journal recorded for one launch.
 ///
 /// `None` on an intent row is a legacy or incomplete record and must remain
 /// unknown; it does not prove that no effect was attempted.
@@ -16,7 +16,7 @@ pub enum LaunchPhase {
     AcquireRejected,
     /// Acquire was proven to have no effect.
     AcquireNoEffect,
-    /// Acquire may have completed; no replay is authorized.
+    /// Acquire may have ended; no replay is authorized.
     AcquireUncertain,
     /// The acquire response confirmed the requested job.
     Acquired,
@@ -24,17 +24,27 @@ pub enum LaunchPhase {
     JitRequested,
     /// JIT returned a runner identity that was recorded before Docker work.
     JitBound,
-    /// JIT may have completed but its runner identity is unknown.
+    /// The JIT operation may have ended, but its runner identity is unknown.
     JitUncertain,
     /// JIT returned an encoded configuration, which is never journaled.
     JitReceived,
     /// Docker volume or container provisioning may have begun.
     DockerProvisioning,
-    /// Docker provisioning was durably claimed before the request.
+    /// The journal recorded permission before the Docker request.
     DockerRequested,
-    /// Docker provisioning may have completed without a complete response.
+    /// Docker provisioning may have ended before Docker returned a full response.
     DockerUncertain,
-    /// The runner pair was created and bound in the journal.
+    /// The controller records full storage role charges before Docker provisioning.
+    ProvisioningHeld,
+    /// The controller started both bootstrap containers without JIT data and recorded their start results.
+    BootstrapStarted,
+    /// The journal records the actual storage and cgroup identities for the capacity reservation.
+    ResourcesBound,
+    /// The journal records publication of the cache and job-facts projection.
+    JobFactsPublished,
+    /// The controller wrote the JIT bytes to listener stdin and then closed the input stream.
+    ListenerDelivered,
+    /// The journal records the runner pair.
     WorkerReady,
     /// A matching `JobStarted` event was recorded for the runner.
     RunnerStarted,
@@ -42,7 +52,7 @@ pub enum LaunchPhase {
     RunnerCompleted,
     /// Queue acknowledgement was committed before the request was sent.
     AcknowledgementRequested,
-    /// All effects for this launch completed.
+    /// All launch effects reached their recorded end state.
     Complete,
 }
 
@@ -62,6 +72,11 @@ impl LaunchPhase {
             "docker_provisioning" => Ok(Self::DockerProvisioning),
             "docker_requested" => Ok(Self::DockerRequested),
             "docker_uncertain" => Ok(Self::DockerUncertain),
+            "provisioning_held" => Ok(Self::ProvisioningHeld),
+            "bootstrap_started" => Ok(Self::BootstrapStarted),
+            "resources_bound" => Ok(Self::ResourcesBound),
+            "job_facts_published" => Ok(Self::JobFactsPublished),
+            "listener_delivered" => Ok(Self::ListenerDelivered),
             "worker_ready" => Ok(Self::WorkerReady),
             "runner_started" => Ok(Self::RunnerStarted),
             "runner_completed" => Ok(Self::RunnerCompleted),
@@ -86,6 +101,11 @@ impl LaunchPhase {
             Self::DockerProvisioning => "docker_provisioning",
             Self::DockerRequested => "docker_requested",
             Self::DockerUncertain => "docker_uncertain",
+            Self::ProvisioningHeld => "provisioning_held",
+            Self::BootstrapStarted => "bootstrap_started",
+            Self::ResourcesBound => "resources_bound",
+            Self::JobFactsPublished => "job_facts_published",
+            Self::ListenerDelivered => "listener_delivered",
             Self::WorkerReady => "worker_ready",
             Self::RunnerStarted => "runner_started",
             Self::RunnerCompleted => "runner_completed",
@@ -115,6 +135,11 @@ mod launch_phase_tests {
             ("docker_provisioning", LaunchPhase::DockerProvisioning),
             ("docker_requested", LaunchPhase::DockerRequested),
             ("docker_uncertain", LaunchPhase::DockerUncertain),
+            ("provisioning_held", LaunchPhase::ProvisioningHeld),
+            ("bootstrap_started", LaunchPhase::BootstrapStarted),
+            ("resources_bound", LaunchPhase::ResourcesBound),
+            ("job_facts_published", LaunchPhase::JobFactsPublished),
+            ("listener_delivered", LaunchPhase::ListenerDelivered),
             ("worker_ready", LaunchPhase::WorkerReady),
             ("runner_started", LaunchPhase::RunnerStarted),
             ("runner_completed", LaunchPhase::RunnerCompleted),
@@ -133,7 +158,7 @@ mod launch_phase_tests {
     }
 }
 
-/// One durable intent loaded for reconcile.
+/// One journal intent loaded for reconciliation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[expect(
     clippy::struct_excessive_bools,
@@ -146,13 +171,13 @@ pub struct IntentRow {
     pub kind: String,
     /// Job or request id. Replay key with `kind`.
     pub subject: String,
-    /// Durable state.
+    /// Journal state.
     pub state: IntentState,
     /// Runner container id. Not a name.
     pub docker_id: Option<String>,
     /// Private `DinD` container id. Not a name.
     pub dind_id: Option<String>,
-    /// Worker volume base durably recorded before volume creation.
+    /// The journal recorded the worker volume base before volume creation.
     pub worker_volume: Option<String>,
     /// Scale set used for this launch, when its identity is known.
     pub scale_set_id: Option<i64>,
@@ -231,7 +256,7 @@ pub fn occupies(row: &IntentRow) -> bool {
     !(row.state == IntentState::Failed && row.kind == "acquire")
 }
 
-/// Decide advertise or hold before publishing free slots.
+/// Decide whether to advertise or keep the slot occupied before publishing free slots.
 ///
 /// Owned docker ids with no journal row are returned for adoption, never deletion.
 #[must_use]

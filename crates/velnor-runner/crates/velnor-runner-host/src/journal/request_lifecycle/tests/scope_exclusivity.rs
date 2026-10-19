@@ -1,6 +1,8 @@
 use super::admission::{JOB_LIMIT, physical_intent};
-use super::helpers::{Scratch, binding, created_scope, record_acquired, runner_name};
-use crate::connect::SetOwnership;
+use super::helpers::{
+    Scratch, binding, created_scope, provision_physical_intent_with_sample, record_acquired,
+    runner_name,
+};
 use crate::error::HostError;
 use crate::journal::{
     AssignedAcquireResult, AssignmentKey, CapacityLimits, Journal, ReservationState,
@@ -25,7 +27,7 @@ async fn duplicate_scale_set_scope_blocks_jit_for_both_connections() -> Result<(
     let second_binding = binding("chain", 202)?;
     let second = journal.connection_scope(&second_binding).await?;
     second
-        .bind_scale_set(501, "integration", SetOwnership::Adopted)
+        .bind_scale_set(501, "integration", crate::connect::SetOwnership::Adopted)
         .await?;
     let (second_physical, second_intent) = physical_intent(&second, '5').await?;
 
@@ -60,79 +62,140 @@ async fn duplicate_scale_set_scope_blocks_jit_for_both_connections() -> Result<(
     Ok(())
 }
 
+struct DuplicateNameWinner {
+    binding: crate::config::RepositoryConnection,
+    losing_binding: crate::config::RepositoryConnection,
+    assignment: crate::journal::AssignmentIdentity,
+    intent_id: i64,
+}
+
 #[tokio::test]
-async fn a_claimed_runner_name_is_host_wide_and_stays_exclusive_after_restart()
--> Result<(), HostError> {
+async fn a_duplicate_worker_name_is_rejected_before_jit_across_connections() -> Result<(), HostError>
+{
     let scratch = Scratch::new()?;
     let path = scratch.file();
     let journal = Journal::open(&path).await?;
+    configure_two_job_capacity(&journal).await?;
+    let (first_binding, first, second_binding, second) =
+        prepare_duplicate_name_scopes(&journal).await?;
+    let winner = claim_one_duplicate_name(&first, &second, &first_binding, &second_binding).await?;
+    drop(first);
+    drop(second);
+    drop(journal);
+    assert_reopened_duplicate_name_is_held(&path, winner).await?;
+    Ok(())
+}
+
+async fn configure_two_job_capacity(journal: &Journal) -> Result<(), HostError> {
     journal
         .configure_capacity(CapacityLimits {
             jobs: 2,
             cpu_millicores: JOB_LIMIT.cpu_millicores * 2,
             memory_bytes: JOB_LIMIT.memory_bytes * 2,
         })
-        .await?;
+        .await
+}
+
+async fn prepare_duplicate_name_scopes(
+    journal: &Journal,
+) -> Result<
+    (
+        crate::config::RepositoryConnection,
+        crate::journal::ConnectionJournal,
+        crate::config::RepositoryConnection,
+        crate::journal::ConnectionJournal,
+    ),
+    HostError,
+> {
     let first_binding = binding("essential", 101)?;
-    let first_scope = created_scope(&journal, &first_binding, 501).await?;
-    record_acquired(&first_scope, 65).await?;
+    let first = created_scope(journal, &first_binding, 501).await?;
+    record_acquired(&first, 65).await?;
     let second_binding = binding("chain", 202)?;
-    let second_scope = created_scope(&journal, &second_binding, 502).await?;
-    let second_request = second_scope
+    let second = created_scope(journal, &second_binding, 502).await?;
+    let request = second
         .assignment_identity(AssignmentKey::AssignedRequest { request_id: 66 })
         .await?;
-    let second_receipt = super::helpers::receipt(&second_scope, 66, 166, 202).await?;
-    second_scope
-        .record_source_authorization(&second_request, &second_receipt)
+    let receipt = super::helpers::receipt(&second, 66, 166, 202).await?;
+    second
+        .record_source_authorization(&request, &receipt)
         .await?;
-    assert!(second_scope.claim_request_acquire(&second_request).await?);
-    second_scope
-        .record_request_acquire(&second_request, AssignedAcquireResult::Returned(vec![66]))
+    assert!(second.claim_request_acquire(&request).await?);
+    second
+        .record_request_acquire(&request, AssignedAcquireResult::Returned(vec![66]))
         .await?;
-    let (first_physical, first_intent) = physical_intent(&first_scope, 'a').await?;
-    let (second_physical, second_intent) = physical_intent(&second_scope, 'a').await?;
-    let requested_name = runner_name('a');
-    let (first_claim, second_claim) = tokio::join!(
-        first_scope.claim_runner_jit(first_intent, &requested_name),
-        second_scope.claim_runner_jit(second_intent, &requested_name),
-    );
-    match (first_claim?, second_claim?) {
-        (Some(claim), None) => first_scope.mark_runner_jit_uncertain(claim).await?,
-        (None, Some(claim)) => second_scope.mark_runner_jit_uncertain(claim).await?,
-        _ => return Err(HostError::Journal),
-    }
-    drop(first_scope);
-    drop(second_scope);
-    drop(journal);
+    Ok((first_binding, first, second_binding, second))
+}
 
-    let journal = Journal::open(&path).await?;
-    let first_scope = journal.connection_scope(&first_binding).await?;
-    let second_scope = journal.connection_scope(&second_binding).await?;
-    assert!(
-        second_scope
-            .claim_runner_jit(second_intent, &requested_name)
-            .await?
-            .is_none()
+async fn claim_one_duplicate_name(
+    first: &crate::journal::ConnectionJournal,
+    second: &crate::journal::ConnectionJournal,
+    first_binding: &crate::config::RepositoryConnection,
+    second_binding: &crate::config::RepositoryConnection,
+) -> Result<DuplicateNameWinner, HostError> {
+    let (first_attempt, second_attempt) = tokio::join!(
+        provision_physical_intent_with_sample(first, 'a', 'a'),
+        provision_physical_intent_with_sample(second, 'a', 'b'),
     );
+    let (winner, binding, losing_binding, winner_scope) = match (first_attempt, second_attempt) {
+        (Ok(provisioned), Err(_)) => (
+            provisioned,
+            first_binding.clone(),
+            second_binding.clone(),
+            first,
+        ),
+        (Err(_), Ok(provisioned)) => (
+            provisioned,
+            second_binding.clone(),
+            first_binding.clone(),
+            second,
+        ),
+        _ => return Err(HostError::Journal),
+    };
+    let intent_id = winner.intent_id;
+    let jit = winner_scope
+        .claim_runner_jit(intent_id, &runner_name('a'))
+        .await?
+        .ok_or(HostError::Journal)?;
+    winner_scope.mark_runner_jit_uncertain(jit).await?;
+    Ok(DuplicateNameWinner {
+        binding,
+        losing_binding,
+        assignment: winner.assignment,
+        intent_id,
+    })
+}
+
+async fn assert_reopened_duplicate_name_is_held(
+    path: &std::path::Path,
+    winner: DuplicateNameWinner,
+) -> Result<(), HostError> {
+    let journal = Journal::open(path).await?;
+    let winning_scope = journal.connection_scope(&winner.binding).await?;
+    let losing_scope = journal.connection_scope(&winner.losing_binding).await?;
     assert!(
-        first_scope
-            .claim_runner_jit(first_intent, &requested_name)
+        winning_scope
+            .claim_runner_jit(winner.intent_id, &runner_name('a'))
             .await?
             .is_none()
     );
     assert_eq!(
-        first_scope
-            .reservation(&first_physical)
+        winning_scope
+            .reservation(&winner.assignment)
             .await?
             .map(|row| row.state),
-        Some(ReservationState::Reserved)
+        Some(ReservationState::Uncertain)
     );
-    assert_eq!(
-        second_scope
-            .reservation(&second_physical)
+    let losing_assignment = losing_scope
+        .assignment_identity(AssignmentKey::Remote {
+            kind: "runner".to_owned(),
+            subject: "a".repeat(32),
+        })
+        .await?;
+    assert!(
+        losing_scope
+            .reservation(&losing_assignment)
             .await?
-            .map(|row| row.state),
-        Some(ReservationState::Reserved)
+            .is_none()
     );
     Ok(())
 }

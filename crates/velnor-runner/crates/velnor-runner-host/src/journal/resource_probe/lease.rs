@@ -13,7 +13,7 @@ pub(crate) enum ProbeLeaseState {
 }
 
 impl ProbeLeaseState {
-    pub(super) fn parse(value: &str) -> Result<Self, HostError> {
+    pub(in crate::journal) fn parse(value: &str) -> Result<Self, HostError> {
         match value {
             "reserved" => Ok(Self::Reserved),
             "active" => Ok(Self::Active),
@@ -35,7 +35,7 @@ impl ProbeLeaseState {
     }
 }
 
-pub(super) async fn prepare(
+pub(in crate::journal) async fn prepare(
     connection: &turso::Connection,
     seed: &ProbeSeed,
 ) -> Result<(), HostError> {
@@ -97,7 +97,7 @@ pub(super) async fn prepare(
     Ok(())
 }
 
-pub(super) async fn transition(
+pub(in crate::journal) async fn transition(
     connection: &turso::Connection,
     operation_id: &str,
     next: ProbeLeaseState,
@@ -144,7 +144,7 @@ pub(super) async fn bind_container(
     Ok(())
 }
 
-pub(super) async fn mark_recovering(
+pub(in crate::journal) async fn mark_recovering(
     connection: &turso::Connection,
     operation_id: &str,
 ) -> Result<(), HostError> {

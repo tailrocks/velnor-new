@@ -7,14 +7,14 @@ use super::Journal;
 use super::connection::storage::in_transaction;
 
 impl Journal {
-    /// Mark every outstanding request as abandoned by the prior exclusive owner.
+    /// After the controller obtains exclusive startup ownership, reconcile local host work.
     ///
-    /// This changes refresh credentials only. It does not settle polls, headers,
-    /// reservations, cursors, or any remote effect.
-    pub(crate) async fn recover_interrupted_session_refreshes(
+    /// One database transaction changes credential refreshes, Doctor probe requests, and probe leases.
+    /// This operation does not complete polls, headers, capacity reservations, cursors, or remote effects.
+    pub(crate) async fn recover_interrupted_host_work(
         &self,
         authority: SessionRefreshStartupAuthority<'_>,
-    ) -> Result<u64, HostError> {
+    ) -> Result<(), HostError> {
         authority.validate_lock_and_lineage(self).await?;
         let expected_path = authority.canonical_journal_path().to_path_buf();
         let expected_instance = authority.instance_id().to_owned();
@@ -28,14 +28,14 @@ impl Journal {
             {
                 return Err(HostError::Journal);
             }
-            let changed = connection
+            connection
                 .execute(
                     "UPDATE connection_session_refreshes SET state = 'abandoned_uncertain' WHERE state = 'requested'",
                     (),
                 )
                 .await
                 .map_err(|_| HostError::Journal)?;
-            Ok(changed)
+            super::doctor_probe::recover_at_startup(connection).await
         })
         .await
     }

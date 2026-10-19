@@ -1,12 +1,12 @@
 //! Durable intent and phase transitions for guest resource probes.
 
-mod lease;
-mod operations;
+pub(super) mod lease;
+pub(super) mod operations;
 mod phase;
 pub(crate) use lease::ProbeLeaseState;
 pub(crate) use phase::ProbePhase;
 
-/// Complete safe-to-persist identity, excluding the raw Docker root path.
+/// Full identity record that can be stored without the raw Docker root path.
 #[derive(Debug, Clone)]
 pub(crate) struct ProbeSeed {
     /// Random 128-bit lowercase hexadecimal operation ID.

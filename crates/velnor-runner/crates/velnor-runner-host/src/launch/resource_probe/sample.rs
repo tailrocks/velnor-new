@@ -176,9 +176,30 @@ impl StartPermit {
             memory_bytes: 8 * 1024 * 1024 * 1024,
         }
     }
+
+    #[cfg(test)]
+    pub(crate) fn test_fixture_with_engine_id(generation: &str, engine_id: &str) -> Self {
+        assert!(valid_generation_id(generation));
+        assert!(!engine_id.is_empty() && engine_id.len() <= 128);
+        let docker_root_digest = super::projection::DockerRoot::parse("/var/lib/docker")
+            .map(|root| root.digest().to_owned())
+            .unwrap_or_default();
+        StartPermit {
+            observation: Observation {
+                record: super::record::fixture_record(),
+                cpus: 1,
+                engine_id: engine_id.to_owned(),
+                docker_root_digest,
+                sample_generation_id: generation.to_owned(),
+                observed_at: Instant::now(),
+            },
+            cpu_millicores: 2_000,
+            memory_bytes: 8 * 1024 * 1024 * 1024,
+        }
+    }
 }
 
-/// Freshness evidence for an already charged reservation; it cannot reserve capacity.
+/// Freshness evidence for a charged capacity reservation; it cannot reserve more capacity.
 #[derive(Debug, Clone)]
 pub(crate) struct StartObservationWitness {
     engine_id: String,

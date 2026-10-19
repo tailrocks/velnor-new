@@ -1,11 +1,15 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::admission::physical_intent;
-use super::helpers::{event_source, record_acquired, runner_name};
+use super::helpers::{
+    TEST_ENGINE_ID, event_source, record_acquired, record_owned_storage_cleanup, runner_name,
+    settle_storage_metadata,
+};
 use super::review_counterexamples::ready;
 use crate::error::HostError;
 use crate::journal::{
     AssignmentKey, Journal, ReservationRequest, ReservationResult, ReservationState,
+    fixture_storage_provisioning_admission,
 };
 use crate::launch::StartPermit;
 
@@ -54,62 +58,113 @@ async fn version_ten_known_cleaned_runner_states_allow_replacement_jit() -> Resu
     .into_iter()
     .enumerate()
     {
-        let fixture = ready().await?;
-        if legacy_state == "started" {
-            fixture
-                .scope
-                .record_job_started(
-                    &fixture.request,
-                    701,
-                    &event_source(101, 1070),
-                    &fixture.runner,
-                    None,
-                )
-                .await?;
-        }
-        let reservation = fixture
-            .scope
-            .reservation(&fixture.physical)
-            .await?
-            .ok_or(HostError::Journal)?;
-        fixture
-            .scope
-            .record_remote_cleanup(reservation.reservation_id)
-            .await?;
-        fixture
-            .scope
-            .record_local_cleanup(reservation.reservation_id)
-            .await?;
-        let path = fixture.scratch.file();
-        let intent = fixture.intent;
-        let physical = fixture.physical.clone();
-        let binding = fixture.binding.clone();
-        drop(fixture.scope);
-        drop(fixture.journal);
-
-        restore_legacy_runner_state(&path, intent, legacy_state).await?;
-        make_version_ten_jit_schema(&path).await?;
-
-        let journal = Journal::open(&path).await?;
-        let scope = journal.connection_scope(&binding).await?;
-        assert_eq!(
-            scope.reservation(&physical).await?.map(|row| row.state),
-            Some(ReservationState::Released)
-        );
-        if legacy_state == "started" {
-            record_acquired(&scope, 72).await?;
-        }
-        let nonce = char::from(b'a' + u8::try_from(index).map_err(|_| HostError::Journal)?);
-        let (_replacement, replacement_intent) = physical_intent(&scope, nonce).await?;
-        assert!(
-            scope
-                .claim_runner_jit(replacement_intent, &runner_name(nonce))
-                .await?
-                .is_some(),
-            "known runner in {legacy_state} with exact released cleanup proof blocked replacement"
-        );
+        assert_known_cleaned_state_allows_replacement(legacy_state, index).await?;
     }
     Ok(())
+}
+
+async fn assert_known_cleaned_state_allows_replacement(
+    legacy_state: &str,
+    index: usize,
+) -> Result<(), HostError> {
+    let fixture = ready().await?;
+    let (_scratch, journal, scope) =
+        close_and_reopen_legacy_fixture(fixture, legacy_state, index).await?;
+    if legacy_state == "started" {
+        record_acquired(&scope, 72).await?;
+    }
+    let nonce = char::from(b'a' + u8::try_from(index).map_err(|_| HostError::Journal)?);
+    let (_replacement, replacement_intent) = physical_intent(&scope, nonce).await?;
+    assert!(
+        scope
+            .claim_runner_jit(replacement_intent, &runner_name(nonce))
+            .await?
+            .is_some(),
+        "known runner in {legacy_state} with exact released cleanup proof blocked replacement"
+    );
+    drop(scope);
+    drop(journal);
+    Ok(())
+}
+
+async fn close_and_reopen_legacy_fixture(
+    fixture: super::review_counterexamples::Ready,
+    legacy_state: &str,
+    index: usize,
+) -> Result<
+    (
+        super::helpers::Scratch,
+        Journal,
+        crate::journal::ConnectionJournal,
+    ),
+    HostError,
+> {
+    if legacy_state == "started" {
+        fixture
+            .scope
+            .record_job_started(
+                &fixture.request,
+                701,
+                &event_source(101, 1070),
+                &fixture.runner,
+                None,
+            )
+            .await?;
+    }
+    let reservation = fixture
+        .scope
+        .reservation(&fixture.physical)
+        .await?
+        .ok_or(HostError::Journal)?;
+    record_owned_storage_cleanup(&fixture.scope, &fixture.provisioned).await?;
+    fixture
+        .scope
+        .record_remote_cleanup(reservation.reservation_id)
+        .await?;
+    fixture
+        .scope
+        .record_local_cleanup(reservation.reservation_id)
+        .await?;
+    assert_eq!(
+        settle_storage_metadata(
+            &fixture.scope,
+            &fixture.provisioned,
+            char::from(b'0' + u8::try_from(index).map_err(|_| HostError::Journal)?),
+        )
+        .await?,
+        crate::journal::MetadataSettlementResult::Settled
+    );
+    let path = fixture.scratch.file();
+    let intent = fixture.intent;
+    let physical = fixture.physical.clone();
+    let binding = fixture.binding.clone();
+    let provisioned = fixture.provisioned.clone();
+    let scratch = fixture.scratch;
+    drop(fixture.scope);
+    drop(fixture.journal);
+    restore_legacy_runner_state(&path, intent, legacy_state).await?;
+    make_version_ten_jit_schema(&path).await?;
+
+    let journal = Journal::open(&path).await?;
+    let scope = journal.connection_scope(&binding).await?;
+    assert_eq!(
+        scope.reservation(&physical).await?.map(|row| row.state),
+        Some(ReservationState::Uncertain)
+    );
+    assert_eq!(
+        settle_storage_metadata(
+            &scope,
+            &provisioned,
+            char::from(b'5' + u8::try_from(index).map_err(|_| HostError::Journal)?),
+        )
+        .await?,
+        crate::journal::MetadataSettlementResult::Settled
+    );
+    assert_eq!(
+        scope.reservation(&physical).await?.map(|row| row.state),
+        Some(ReservationState::Released)
+    );
+    Ok((scratch, journal, scope))
 }
 
 #[tokio::test]
@@ -143,19 +198,19 @@ async fn version_ten_partial_cleanup_keeps_capacity_held() -> Result<(), HostErr
             subject: "f".repeat(32),
         })
         .await?;
-    let permit = StartPermit::test_fixture();
+    let permit = StartPermit::test_fixture_with_engine_id(&"f".repeat(32), TEST_ENGINE_ID);
     let generation = permit.sample_generation_id().to_owned();
     let root_digest = permit.docker_root_digest().to_owned();
-    let storage = crate::journal::fixture_admission(&permit)?;
+    let storage = fixture_storage_provisioning_admission(&permit)?;
     assert_eq!(
         scope
-            .try_reserve_with_storage(
+            .try_reserve_with_provisioning(
                 ReservationRequest {
                     assignment: &assignment,
-                    engine_id: "test-engine",
+                    engine_id: TEST_ENGINE_ID,
                     docker_root_digest: &root_digest,
                     cpu_millicores: super::admission::JOB_LIMIT.cpu_millicores,
-                    memory_bytes: super::admission::JOB_LIMIT.memory_bytes,
+                    memory_bytes: 8_589_934_592,
                     sample_generation_id: &generation,
                 },
                 permit,
@@ -167,9 +222,66 @@ async fn version_ten_partial_cleanup_keeps_capacity_held() -> Result<(), HostErr
     Ok(())
 }
 
+struct CompletedLegacyFixture {
+    path: PathBuf,
+    binding: crate::config::RepositoryConnection,
+    physical: crate::journal::AssignmentIdentity,
+    provisioned: super::helpers::ProvisionedRunner,
+    request: crate::journal::AssignmentIdentity,
+    runner: velnor_runner_github::RunnerReference,
+    intent: i64,
+}
+
 #[tokio::test]
 async fn version_ten_cleaned_runner_migrates_and_allows_new_jit() -> Result<(), HostError> {
-    let fixture = ready().await?;
+    let (_scratch, migrated) = prepare_completed_legacy_fixture(ready().await?).await?;
+    let journal = Journal::open(&migrated.path).await?;
+    let scope = journal.connection_scope(&migrated.binding).await?;
+    assert_eq!(
+        scope
+            .reservation(&migrated.physical)
+            .await?
+            .map(|row| row.state),
+        Some(ReservationState::Uncertain)
+    );
+    assert_eq!(
+        settle_storage_metadata(&scope, &migrated.provisioned, '6').await?,
+        crate::journal::MetadataSettlementResult::Settled
+    );
+    assert_eq!(
+        scope
+            .reservation(&migrated.physical)
+            .await?
+            .map(|row| row.state),
+        Some(ReservationState::Released)
+    );
+    assert_eq!(
+        scope
+            .record_job_completed(
+                &migrated.request,
+                703,
+                &event_source(101, 1070),
+                Some("success"),
+                Some(&migrated.runner),
+                None,
+            )
+            .await?,
+        Some(migrated.intent)
+    );
+    record_acquired(&scope, 72).await?;
+    let (_physical, intent) = physical_intent(&scope, 'f').await?;
+    assert!(
+        scope
+            .claim_runner_jit(intent, &runner_name('f'))
+            .await?
+            .is_some()
+    );
+    Ok(())
+}
+
+async fn prepare_completed_legacy_fixture(
+    fixture: super::review_counterexamples::Ready,
+) -> Result<(super::helpers::Scratch, CompletedLegacyFixture), HostError> {
     fixture
         .scope
         .record_job_started(
@@ -191,6 +303,7 @@ async fn version_ten_cleaned_runner_migrates_and_allows_new_jit() -> Result<(), 
             None,
         )
         .await?;
+    record_owned_storage_cleanup(&fixture.scope, &fixture.provisioned).await?;
     let reservation = fixture
         .scope
         .reservation(&fixture.physical)
@@ -204,42 +317,25 @@ async fn version_ten_cleaned_runner_migrates_and_allows_new_jit() -> Result<(), 
         .scope
         .record_local_cleanup(reservation.reservation_id)
         .await?;
+    assert_eq!(
+        settle_storage_metadata(&fixture.scope, &fixture.provisioned, '5').await?,
+        crate::journal::MetadataSettlementResult::Settled
+    );
     let path = fixture.scratch.file();
+    let migrated = CompletedLegacyFixture {
+        path: path.clone(),
+        binding: fixture.binding.clone(),
+        physical: fixture.physical.clone(),
+        provisioned: fixture.provisioned.clone(),
+        request: fixture.request.clone(),
+        runner: fixture.runner.clone(),
+        intent: fixture.intent,
+    };
+    let scratch = fixture.scratch;
     drop(fixture.scope);
     drop(fixture.journal);
     make_version_ten_jit_schema(&path).await?;
-
-    let journal = Journal::open(&path).await?;
-    let scope = journal.connection_scope(&fixture.binding).await?;
-    assert_eq!(
-        scope
-            .reservation(&fixture.physical)
-            .await?
-            .map(|row| row.state),
-        Some(ReservationState::Released)
-    );
-    assert_eq!(
-        scope
-            .record_job_completed(
-                &fixture.request,
-                703,
-                &event_source(101, 1070),
-                Some("success"),
-                Some(&fixture.runner),
-                None,
-            )
-            .await?,
-        Some(fixture.intent)
-    );
-    record_acquired(&scope, 72).await?;
-    let (_physical, intent) = physical_intent(&scope, 'f').await?;
-    assert!(
-        scope
-            .claim_runner_jit(intent, &runner_name('f'))
-            .await?
-            .is_some()
-    );
-    Ok(())
+    Ok((scratch, migrated))
 }
 
 async fn make_version_ten_jit_schema(path: &Path) -> Result<(), HostError> {

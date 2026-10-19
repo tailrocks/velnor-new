@@ -18,7 +18,7 @@ use support::{
 };
 
 impl ConnectionJournal {
-    /// Claim one runner JIT and choose an acquired request as its audit witness.
+    /// Record one runner JIT permission with the acquired request selected for its audit record.
     pub(crate) async fn claim_runner_jit(
         &self,
         intent_id: i64,
@@ -59,19 +59,27 @@ impl ConnectionJournal {
             let Some(witness_request_id) = acquired_witness(connection, &connection_id, set_id, &binding_digest).await? else {
                 return Ok(None);
             };
-            let inserted = connection
+            connection
                 .execute(
                     "INSERT INTO connection_runner_jits (intent_id, connection_id, scale_set_id, witness_request_id, requested_name, state) VALUES (?1, ?2, ?3, ?4, ?5, 'claimed')",
                     (intent_id, connection_id.as_str(), set_id, witness_request_id, requested_name.as_str()),
                 )
-                .await;
-            if inserted.is_err() {
+                .await
+                .map_err(|_| HostError::Journal)?;
+            let changed = connection
+                .execute(
+                    "UPDATE connection_intents SET jit_requested = 1, launch_phase = 'jit_requested' WHERE id = ?1 AND connection_id = ?2 AND scale_set_id = ?3 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND jit_requested = 0 AND acquire_attempted = 0 AND runner_name = ?4 AND launch_phase = 'resources_bound' AND worker_volume IS NULL AND docker_id = (SELECT s.runner_container_id FROM capacity_reservations AS r JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = r.id WHERE r.intent_id = ?1 AND r.connection_id = ?2 AND r.state = 'reserved' AND s.resources_bound = 1) AND dind_id = (SELECT s.dind_container_id FROM capacity_reservations AS r JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = r.id WHERE r.intent_id = ?1 AND r.connection_id = ?2 AND r.state = 'reserved' AND s.resources_bound = 1)",
+                    (intent_id, connection_id.as_str(), set_id, requested_name.as_str()),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            if changed != 1 {
                 return Err(HostError::Journal);
             }
             let changed = connection
                 .execute(
-                    "UPDATE connection_intents SET jit_requested = 1, launch_phase = 'jit_requested' WHERE id = ?1 AND connection_id = ?2 AND scale_set_id = ?3 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND jit_requested = 0 AND acquire_attempted = 0 AND docker_id IS NULL AND dind_id IS NULL AND worker_volume IS NULL",
-                    (intent_id, connection_id.as_str(), set_id),
+                    "UPDATE capacity_reservation_provisioning_state SET jit_state = 'requested' WHERE reservation_id = (SELECT id FROM capacity_reservations WHERE intent_id = ?1 AND connection_id = ?2 AND state = 'reserved') AND resources_bound = 1 AND bootstrap_start_state = 'started' AND jit_state = 'not_requested' AND publication_state = 'not_requested' AND delivery_state = 'not_requested' AND storage_cleanup_proven = 0",
+                    (intent_id, connection_id.as_str()),
                 )
                 .await
                 .map_err(|_| HostError::Journal)?;
@@ -121,21 +129,27 @@ impl ConnectionJournal {
             }
             let changed = connection
                 .execute(
-                    "UPDATE connection_intents SET github_runner_id = ?1, runner_name = ?2, launch_phase = 'jit_bound' WHERE id = ?3 AND connection_id = ?4 AND scale_set_id = ?5 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND jit_requested = 1 AND github_runner_id IS NULL AND runner_name IS NULL AND docker_id IS NULL AND dind_id IS NULL AND worker_volume IS NULL",
+                    "UPDATE connection_intents SET github_runner_id = ?1, launch_phase = 'jit_bound' WHERE id = ?3 AND connection_id = ?4 AND scale_set_id = ?5 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND jit_requested = 1 AND github_runner_id IS NULL AND runner_name = ?2 AND launch_phase = 'jit_requested' AND worker_volume IS NULL AND docker_id = (SELECT s.runner_container_id FROM capacity_reservations AS r JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = r.id WHERE r.intent_id = ?3 AND r.connection_id = ?4 AND r.state = 'reserved' AND s.resources_bound = 1) AND dind_id = (SELECT s.dind_container_id FROM capacity_reservations AS r JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = r.id WHERE r.intent_id = ?3 AND r.connection_id = ?4 AND r.state = 'reserved' AND s.resources_bound = 1)",
                     (runner.id.to_string(), runner.name.as_str(), claim.intent_id, self.connection_id().as_str(), claim.scale_set_id),
                 )
                 .await
                 .map_err(|_| HostError::Journal)?;
-            if changed == 1 {
-                Ok(())
-            } else {
-                Err(HostError::Journal)
+            if changed != 1 {
+                return Err(HostError::Journal);
             }
+            let changed = connection
+                .execute(
+                    "UPDATE capacity_reservation_provisioning_state SET jit_state = 'bound', runner_id = ?1, runner_name = ?2, runner_scale_set_id = ?3 WHERE reservation_id = (SELECT id FROM capacity_reservations WHERE intent_id = ?4 AND connection_id = ?5 AND state = 'reserved') AND jit_state = 'requested' AND resources_bound = 1 AND publication_state = 'not_requested' AND delivery_state = 'not_requested' AND runner_id IS NULL AND runner_name IS NULL AND runner_scale_set_id IS NULL",
+                    (runner.id, runner.name.as_str(), runner.runner_scale_set_id, claim.intent_id, self.connection_id().as_str()),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            if changed == 1 { Ok(()) } else { Err(HostError::Journal) }
         })
         .await
     }
 
-    /// Keep an interrupted JIT claim charged and unavailable for replay.
+    /// Keep an interrupted JIT operation claim and its capacity reservation unavailable for replay.
     pub(crate) async fn mark_runner_jit_uncertain(
         &self,
         claim: RunnerJitClaim,
@@ -147,6 +161,26 @@ impl ConnectionJournal {
                 .execute(
                     "UPDATE connection_runner_jits SET state = 'uncertain' WHERE intent_id = ?1 AND connection_id = ?2 AND scale_set_id = ?3 AND witness_request_id = ?4 AND requested_name = ?5 AND state = 'claimed' AND runner_id IS NULL AND runner_name IS NULL",
                     (claim.intent_id, self.connection_id().as_str(), claim.scale_set_id, claim.witness_request_id, claim.requested_name.as_str()),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            if changed != 1 {
+                return Err(HostError::Journal);
+            }
+            let changed = connection
+                .execute(
+                    "UPDATE capacity_reservation_provisioning_state SET jit_state = 'uncertain' WHERE reservation_id = (SELECT id FROM capacity_reservations WHERE intent_id = ?1 AND connection_id = ?2 AND state = 'reserved') AND jit_state = 'requested' AND resources_bound = 1",
+                    (claim.intent_id, self.connection_id().as_str()),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            if changed != 1 {
+                return Err(HostError::Journal);
+            }
+            let changed = connection
+                .execute(
+                    "UPDATE capacity_reservations SET state = 'uncertain' WHERE intent_id = ?1 AND connection_id = ?2 AND state = 'reserved'",
+                    (claim.intent_id, self.connection_id().as_str()),
                 )
                 .await
                 .map_err(|_| HostError::Journal)?;
@@ -165,7 +199,7 @@ impl ConnectionJournal {
         .await
     }
 
-    /// Persist the unique worker volume and one-shot Docker start claim.
+    /// Record the unique worker volume and permission for one Docker start.
     pub(crate) async fn claim_physical_runner_start(
         &self,
         intent_id: i64,
@@ -214,7 +248,7 @@ impl ConnectionJournal {
         }))
     }
 
-    /// Mark a Docker start with no complete response uncertain and keep its charge.
+    /// If Docker returns no full response, mark the Docker start uncertain. Keep its capacity reservation.
     pub(crate) async fn mark_physical_runner_start_uncertain(
         &self,
         claim: PhysicalRunnerStartClaim,
@@ -244,7 +278,7 @@ impl ConnectionJournal {
         .await
     }
 
-    /// Bind a fully created and inspected worker pair to its one-shot start claim.
+    /// Record the created and inspected worker pair for the one-time start permission.
     pub(crate) async fn record_physical_worker_ready(
         &self,
         claim: PhysicalRunnerStartClaim,

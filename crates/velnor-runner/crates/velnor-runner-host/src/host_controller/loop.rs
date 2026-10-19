@@ -121,7 +121,7 @@ async fn run_controller(
     )
     .await?;
     journal
-        .recover_interrupted_session_refreshes(startup_authority)
+        .recover_interrupted_host_work(startup_authority)
         .await?;
     let worker_images =
         prepare_worker_images(&docker, &journal, &selected_engine, &release_read_secret).await?;
@@ -251,7 +251,7 @@ async fn poll_active_connections(
             }
         };
         // A removed binding must pass the read-only drain check before its
-        // final zero poll. The delete claim repeats this check atomically.
+        // final zero poll. The delete permission operation does this check again in the same transaction.
         let drained_before_poll = if is_removed {
             match prepared
                 .scope
@@ -325,8 +325,8 @@ async fn poll_active_connections(
                     remove_prepared = true;
                 }
                 SessionDeleteOutcome::Held => {
-                    // The DELETE may have completed without a durable 204
-                    // acknowledgement. Keep its allocation and stop all use
+                    // DELETE may have taken effect without a returned 204
+                    // response. Keep its capacity reservation. Stop all use
                     // of this session credential.
                     prepared.credentials.take();
                     if let Some(completion) = prepared.completion.take()

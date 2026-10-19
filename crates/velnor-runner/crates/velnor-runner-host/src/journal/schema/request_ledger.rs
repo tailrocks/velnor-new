@@ -20,7 +20,7 @@ pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError>
             .await
             .map_err(|_| HostError::Journal)?;
     }
-    validation::validate(conn).await
+    validation::validate_bootstrap(conn).await
 }
 
 pub(super) async fn upgrade_cleaned_runner_state(
@@ -70,7 +70,7 @@ pub(super) async fn upgrade_cleaned_runner_state(
             .await
             .map_err(|_| HostError::Journal)?;
     }
-    validation::validate(conn).await
+    validation::validate_bootstrap(conn).await
 }
 
 async fn jit_table_sql(conn: &turso::Connection) -> Result<String, HostError> {

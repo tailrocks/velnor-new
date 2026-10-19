@@ -115,7 +115,63 @@ pub(crate) enum StorageRole {
     EngineMetadata,
 }
 
+/// Fixed mount requirements for one storage role.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct StorageRoleContract {
+    /// Backing medium selected by the host policy.
+    pub(crate) medium: StorageMedium,
+    /// Path inside the observing container, or the probe bind target.
+    pub(crate) target: &'static str,
+    /// Whether the mount must be read-only.
+    pub(crate) read_only: bool,
+    /// Observer that supplies mount-namespace evidence.
+    pub(crate) observer: StorageObserver,
+    /// Host-side source path for the probe-only `EngineMetadata` role.
+    pub(crate) source_target: Option<&'static str>,
+}
+
+/// Mount namespace that supplies one mount record for inspection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum StorageObserver {
+    /// Runner container.
+    Runner,
+    /// `DinD` container.
+    Dind,
+    /// Trusted host resource probe.
+    Probe,
+}
+
+/// One required mount location for a physical storage role.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct StorageAttachmentContract {
+    /// Charged physical role.
+    pub(crate) role: StorageRole,
+    /// Namespace that reports the mount.
+    pub(crate) observer: StorageObserver,
+    /// Exact mount target in that namespace.
+    pub(crate) target: &'static str,
+    /// Required mount access mode.
+    pub(crate) read_only: bool,
+    /// Host source for a probe-only attachment.
+    pub(crate) source_target: Option<&'static str>,
+}
+
 impl StorageRole {
+    /// The eleven charged filesystem roles. Cache roles are aliases.
+    pub(crate) const PHYSICAL: [Self; 11] = [
+        Self::RunnerRoot,
+        Self::RunnerHome,
+        Self::RunnerWork,
+        Self::RunnerTmp,
+        Self::RunnerShm,
+        Self::SharedRun,
+        Self::DindRoot,
+        Self::DindData,
+        Self::DindTmp,
+        Self::DindShm,
+        Self::EngineMetadata,
+    ];
+
     pub(crate) const ALL: [Self; 13] = [
         Self::RunnerRoot,
         Self::RunnerHome,
@@ -167,5 +223,186 @@ impl StorageRole {
             "engine-metadata" => Ok(Self::EngineMetadata),
             _ => Err(HostError::Journal),
         }
+    }
+
+    /// Return the fixed production topology for one physical attachment.
+    pub(crate) const fn contract(self) -> Option<StorageRoleContract> {
+        use StorageMedium::{Disk, Tmpfs};
+        use StorageObserver::{Dind, Probe, Runner};
+
+        match self {
+            Self::RunnerRoot => Some(storage_role_contract(Disk, "/", true, Runner, None)),
+            Self::RunnerHome => Some(storage_role_contract(
+                Tmpfs,
+                "/home/runner",
+                false,
+                Runner,
+                None,
+            )),
+            Self::RunnerWork => Some(storage_role_contract(
+                Tmpfs,
+                "/home/runner/_work",
+                false,
+                Runner,
+                None,
+            )),
+            Self::RunnerTmp => Some(storage_role_contract(Tmpfs, "/tmp", false, Runner, None)),
+            Self::RunnerShm => Some(storage_role_contract(
+                Tmpfs, "/dev/shm", false, Runner, None,
+            )),
+            Self::SharedRun => Some(storage_role_contract(Tmpfs, "/run", false, Runner, None)),
+            Self::DindRoot => Some(storage_role_contract(Disk, "/", true, Dind, None)),
+            Self::DindData => Some(storage_role_contract(
+                Tmpfs,
+                "/var/lib/docker",
+                false,
+                Dind,
+                None,
+            )),
+            Self::DindTmp => Some(storage_role_contract(Tmpfs, "/tmp", false, Dind, None)),
+            Self::DindShm => Some(storage_role_contract(Tmpfs, "/dev/shm", false, Dind, None)),
+            Self::EngineMetadata => Some(storage_role_contract(
+                Disk,
+                "/velnor/docker-root",
+                true,
+                Probe,
+                Some("/var/lib/docker"),
+            )),
+            Self::CacheLive | Self::CacheStage => None,
+        }
+    }
+
+    /// Return every namespace attachment required by this role.
+    pub(crate) const fn attachments(self) -> &'static [StorageAttachmentContract] {
+        use StorageObserver::{Dind, Probe, Runner};
+
+        const RUNNER_ROOT: [StorageAttachmentContract; 1] =
+            [attachment(StorageRole::RunnerRoot, Runner, "/", true, None)];
+        const RUNNER_HOME: [StorageAttachmentContract; 2] = [
+            attachment(StorageRole::RunnerHome, Runner, "/home/runner", false, None),
+            attachment(StorageRole::RunnerHome, Dind, "/home/runner", false, None),
+        ];
+        const RUNNER_WORK: [StorageAttachmentContract; 2] = [
+            attachment(
+                StorageRole::RunnerWork,
+                Runner,
+                "/home/runner/_work",
+                false,
+                None,
+            ),
+            attachment(
+                StorageRole::RunnerWork,
+                Dind,
+                "/home/runner/_work",
+                false,
+                None,
+            ),
+        ];
+        const RUNNER_TMP: [StorageAttachmentContract; 1] = [attachment(
+            StorageRole::RunnerTmp,
+            Runner,
+            "/tmp",
+            false,
+            None,
+        )];
+        const RUNNER_SHM: [StorageAttachmentContract; 1] = [attachment(
+            StorageRole::RunnerShm,
+            Runner,
+            "/dev/shm",
+            false,
+            None,
+        )];
+        const SHARED_RUN: [StorageAttachmentContract; 2] = [
+            attachment(StorageRole::SharedRun, Runner, "/run", false, None),
+            attachment(StorageRole::SharedRun, Dind, "/run", false, None),
+        ];
+        const DIND_ROOT: [StorageAttachmentContract; 1] =
+            [attachment(StorageRole::DindRoot, Dind, "/", true, None)];
+        const DIND_DATA: [StorageAttachmentContract; 1] = [attachment(
+            StorageRole::DindData,
+            Dind,
+            "/var/lib/docker",
+            false,
+            None,
+        )];
+        const DIND_TMP: [StorageAttachmentContract; 1] =
+            [attachment(StorageRole::DindTmp, Dind, "/tmp", false, None)];
+        const DIND_SHM: [StorageAttachmentContract; 1] = [attachment(
+            StorageRole::DindShm,
+            Dind,
+            "/dev/shm",
+            false,
+            None,
+        )];
+        const ENGINE_METADATA: [StorageAttachmentContract; 3] = [
+            attachment(
+                StorageRole::EngineMetadata,
+                Probe,
+                "/velnor/docker-root",
+                true,
+                Some("/var/lib/docker"),
+            ),
+            attachment(
+                StorageRole::EngineMetadata,
+                Runner,
+                "/.velnor-runtime-identity",
+                true,
+                None,
+            ),
+            attachment(
+                StorageRole::EngineMetadata,
+                Runner,
+                "/opt/velnor/job-facts",
+                true,
+                None,
+            ),
+        ];
+
+        match self {
+            Self::RunnerRoot => &RUNNER_ROOT,
+            Self::RunnerHome => &RUNNER_HOME,
+            Self::RunnerWork => &RUNNER_WORK,
+            Self::RunnerTmp => &RUNNER_TMP,
+            Self::RunnerShm => &RUNNER_SHM,
+            Self::SharedRun => &SHARED_RUN,
+            Self::DindRoot => &DIND_ROOT,
+            Self::DindData => &DIND_DATA,
+            Self::DindTmp => &DIND_TMP,
+            Self::DindShm => &DIND_SHM,
+            Self::EngineMetadata => &ENGINE_METADATA,
+            Self::CacheLive | Self::CacheStage => &[],
+        }
+    }
+}
+
+const fn storage_role_contract(
+    medium: StorageMedium,
+    target: &'static str,
+    read_only: bool,
+    observer: StorageObserver,
+    source_target: Option<&'static str>,
+) -> StorageRoleContract {
+    StorageRoleContract {
+        medium,
+        target,
+        read_only,
+        observer,
+        source_target,
+    }
+}
+
+const fn attachment(
+    role: StorageRole,
+    observer: StorageObserver,
+    target: &'static str,
+    read_only: bool,
+    source_target: Option<&'static str>,
+) -> StorageAttachmentContract {
+    StorageAttachmentContract {
+        role,
+        observer,
+        target,
+        read_only,
+        source_target,
     }
 }

@@ -10,19 +10,39 @@ const AUTH_TABLE: &str = "connection_request_authorizations";
 const JIT_TABLE: &str = "connection_runner_jits";
 
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
-    validate_schema(conn, false).await
+    validate_schema(conn, false, ValidationPhase::Current).await
+}
+
+pub(super) async fn validate_bootstrap(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_schema(conn, false, ValidationPhase::LegacyBootstrap).await
 }
 
 pub(super) async fn validate_v10(conn: &turso::Connection) -> Result<(), HostError> {
-    validate_schema(conn, true).await
+    validate_schema(conn, true, ValidationPhase::VersionTenMigration).await
 }
 
-async fn validate_schema(conn: &turso::Connection, version_ten: bool) -> Result<(), HostError> {
+#[derive(Clone, Copy)]
+enum ValidationPhase {
+    LegacyBootstrap,
+    VersionTenMigration,
+    Current,
+}
+
+async fn validate_schema(
+    conn: &turso::Connection,
+    version_ten: bool,
+    phase: ValidationPhase,
+) -> Result<(), HostError> {
     validate_auth_table(conn).await?;
     validate_jit_table(conn, version_ten).await?;
     validate_indexes(conn).await?;
     rows::validate_auth_rows(conn).await?;
-    rows::validate_jit_rows(conn).await
+    match phase {
+        ValidationPhase::LegacyBootstrap | ValidationPhase::VersionTenMigration => {
+            rows::validate_legacy_jit_rows(conn).await
+        }
+        ValidationPhase::Current => rows::validate_jit_rows(conn).await,
+    }
 }
 
 async fn validate_auth_table(conn: &turso::Connection) -> Result<(), HostError> {

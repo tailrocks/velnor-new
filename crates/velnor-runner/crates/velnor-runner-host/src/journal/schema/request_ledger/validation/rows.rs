@@ -253,10 +253,25 @@ async fn validate_completed_jit(
     }
 }
 
+pub(super) async fn validate_legacy_jit_rows(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_jit_rows_with_storage_cleanup(conn, "0").await
+}
+
 pub(super) async fn validate_jit_rows(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_jit_rows_with_storage_cleanup(
+        conn,
+        "(SELECT COUNT(*) FROM capacity_reservations AS capacity JOIN capacity_reservation_provisioning_state AS state ON state.reservation_id = capacity.id JOIN capacity_reservation_provisioning_cleanups AS cleanup ON cleanup.reservation_id = capacity.id WHERE capacity.intent_id = j.intent_id AND capacity.connection_id = j.connection_id AND capacity.state != 'released' AND capacity.remote_cleanup_proven = 1 AND capacity.local_cleanup_proven = 1 AND state.storage_cleanup_proven = 1 AND cleanup.instance_binding_digest = state.instance_binding_digest)",
+    )
+    .await
+}
+
+async fn validate_jit_rows_with_storage_cleanup(
+    conn: &turso::Connection,
+    pending_storage_cleanup_proofs: &str,
+) -> Result<(), HostError> {
     let mut rows = conn
         .query(
-            "SELECT j.intent_id, j.connection_id, j.scale_set_id, j.witness_request_id, j.requested_name, j.state, j.runner_id, j.runner_name, j.started_request_id, j.completed_request_id, i.assignment_key, i.github_runner_id, i.runner_name, i.jit_requested, i.cleanup_proven, r.acquire_state, j.witness_request_id, j.started_request_id, j.completed_request_id, (SELECT COUNT(*) FROM capacity_reservations AS capacity WHERE capacity.intent_id = j.intent_id AND capacity.connection_id = j.connection_id AND capacity.state = 'released' AND capacity.remote_cleanup_proven = 1 AND capacity.local_cleanup_proven = 1) FROM connection_runner_jits AS j JOIN connection_intents AS i ON i.id = j.intent_id AND i.connection_id = j.connection_id JOIN connection_request_authorizations AS r ON r.connection_id = j.connection_id AND r.scale_set_id = j.scale_set_id AND r.request_id = j.witness_request_id",
+            &format!("SELECT j.intent_id, j.connection_id, j.scale_set_id, j.witness_request_id, j.requested_name, j.state, j.runner_id, j.runner_name, j.started_request_id, j.completed_request_id, i.assignment_key, i.github_runner_id, i.runner_name, i.jit_requested, i.cleanup_proven, r.acquire_state, j.witness_request_id, j.started_request_id, j.completed_request_id, (SELECT COUNT(*) FROM capacity_reservations AS capacity WHERE capacity.intent_id = j.intent_id AND capacity.connection_id = j.connection_id AND capacity.state = 'released' AND capacity.remote_cleanup_proven = 1 AND capacity.local_cleanup_proven = 1), {pending_storage_cleanup_proofs} FROM connection_runner_jits AS j JOIN connection_intents AS i ON i.id = j.intent_id AND i.connection_id = j.connection_id JOIN connection_request_authorizations AS r ON r.connection_id = j.connection_id AND r.scale_set_id = j.scale_set_id AND r.request_id = j.witness_request_id"),
             (),
         )
         .await
@@ -280,6 +295,7 @@ pub(super) async fn validate_jit_rows(conn: &turso::Connection) -> Result<(), Ho
         let started_request: Option<i64> = row.get(17).map_err(|_| HostError::Journal)?;
         let completed_request: Option<i64> = row.get(18).map_err(|_| HostError::Journal)?;
         let released_cleanup_proofs: i64 = row.get(19).map_err(|_| HostError::Journal)?;
+        let pending_storage_cleanup_proofs: i64 = row.get(20).map_err(|_| HostError::Journal)?;
         if id <= 0
             || connection_id.is_empty()
             || set_id <= 0
@@ -299,13 +315,13 @@ pub(super) async fn validate_jit_rows(conn: &turso::Connection) -> Result<(), Ho
                     | "cleaned"
             )
             || !jit_requested
-            || (state == "cleaned" && !cleaned)
             || (cleaned && completed_request.is_some() && state != "cleaned")
             || witness_state != "acquired"
             || stored_witness != witness
             || !assignment_key.starts_with(&format!("v1|{connection_id}|{set_id}|remote|6:runner|"))
             || runner_id.map(|value| value.to_string()) != stored_id
-            || runner_name != stored_name
+            || (runner_id.is_some() && runner_name != stored_name)
+            || (runner_id.is_none() && stored_name.as_deref() != Some(requested.as_str()))
             || runner_name
                 .as_deref()
                 .is_some_and(|value| value != requested)
@@ -322,7 +338,9 @@ pub(super) async fn validate_jit_rows(conn: &turso::Connection) -> Result<(), Ho
             ) && runner_id.is_none())
             || (state == "started" && started_request.is_none())
             || (state == "completed" && completed_request.is_none())
-            || (state == "cleaned" && completed_request.is_none() && released_cleanup_proofs != 1)
+            || (state == "cleaned"
+                && !((released_cleanup_proofs == 1 && pending_storage_cleanup_proofs == 0)
+                    || (released_cleanup_proofs == 0 && pending_storage_cleanup_proofs == 1)))
             || (matches!(
                 state.as_str(),
                 "claimed" | "uncertain" | "bound" | "start_requested" | "start_uncertain" | "ready"

@@ -47,13 +47,13 @@ async fn only_exactly_owned_volumes_are_removed() -> Result<(), String> {
     let requests = owned.finish().await?;
 
     assert_eq!(removed, Ok(true));
-    assert_eq!(requests.len(), 12);
+    assert_eq!(requests.len(), 15);
     assert_eq!(
         requests
             .iter()
             .filter(|line| line.starts_with("DELETE "))
             .count(),
-        4
+        5
     );
     Ok(())
 }
@@ -121,6 +121,44 @@ async fn created_volumes_have_exact_worker_and_role_labels() -> Result<(), Strin
 }
 
 #[tokio::test]
+async fn metadata_volume_is_inventory_only_and_cannot_be_mounted_directly() -> Result<(), String> {
+    let stub = DockerStub::open(Vec::new())?;
+    let mut mounts = crate::worker::dind_mounts(WORKER).map_err(|error| error.to_string())?;
+    mounts.push(crate::docker_spec::Mount {
+        source: format!("volume:{WORKER}-metadata"),
+        target: "/opt/velnor/job-facts".to_owned(),
+    });
+
+    let result = create_named_volumes(&stub.docker, WORKER, &mounts, || async { Ok(()) }).await;
+    let requests = stub.finish().await?;
+
+    assert_eq!(result, Err(crate::HostError::ForbiddenMount));
+    assert!(requests.is_empty());
+    Ok(())
+}
+
+#[tokio::test]
+async fn malformed_home_or_work_mount_plan_is_rejected_before_docker() -> Result<(), String> {
+    let work_path = velnor_runner_core::runner_work_path();
+    let mut invalid_plans = vec![Vec::new()];
+    for target in ["/home/runner", work_path.as_str()] {
+        let mut mounts = crate::worker::dind_mounts(WORKER).map_err(|error| error.to_string())?;
+        mounts.retain(|mount| mount.target != target);
+        invalid_plans.push(mounts);
+    }
+    for mounts in invalid_plans {
+        let stub = DockerStub::open(Vec::new())?;
+
+        let result = create_named_volumes(&stub.docker, WORKER, &mounts, || async { Ok(()) }).await;
+        let requests = stub.finish().await?;
+
+        assert_eq!(result, Err(crate::HostError::ForbiddenMount));
+        assert!(requests.is_empty());
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn volume_delete_error_fails_closed() -> Result<(), String> {
     let stub = DockerStub::open(vec![
         http(200, &volume_json("wtransport", WORKER, "socket")),
@@ -172,12 +210,13 @@ async fn container_identity_requires_id_and_exact_labels() -> Result<(), String>
     Ok(())
 }
 
-fn volume_names() -> [(&'static str, &'static str); 4] {
+fn volume_names() -> [(&'static str, &'static str); 5] {
     [
         ("wtransport", "socket"),
         ("wtransport-home", "home"),
         ("wtransport-work", "work"),
         ("wtransport-docker", "dind-data"),
+        ("wtransport-metadata", "engine-metadata"),
     ]
 }
 

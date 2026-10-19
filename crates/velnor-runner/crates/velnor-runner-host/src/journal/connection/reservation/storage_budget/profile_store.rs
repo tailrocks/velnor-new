@@ -2,9 +2,10 @@
 
 use crate::error::HostError;
 use crate::journal::Journal;
-use crate::journal::connection::storage::in_transaction;
+use crate::journal::connection::storage::{in_transaction, read_transaction};
 
 use super::profile::{StoragePoolLimit, StorageProfile, StorageRoleLimit};
+use super::publication::ControllerPublicationBound;
 use super::role::{StorageInodePolicy, StorageMedium, StorageRole};
 
 impl Journal {
@@ -17,6 +18,13 @@ impl Journal {
             configure(connection, &profile).await
         })
         .await
+    }
+
+    /// Read the selected storage profile after its format and policy checks.
+    pub(crate) async fn current_storage_profile(
+        &self,
+    ) -> Result<Option<StorageProfile>, HostError> {
+        read_transaction(self, async |connection| current(connection).await).await
     }
 }
 
@@ -32,8 +40,67 @@ pub(super) async fn configure(
         }
         return Ok(());
     }
+    let current = current_generation(connection).await?;
+    if current.as_deref() != Some(profile.generation_id()) {
+        match current {
+            Some(_) => require_no_charged_reservations(connection).await?,
+            None => validate_initial_profile_install(connection).await?,
+        }
+    }
     insert_profile(connection, profile).await?;
     set_current_generation(connection, profile.generation_id()).await
+}
+
+async fn require_no_charged_reservations(connection: &turso::Connection) -> Result<(), HostError> {
+    if scalar_count(
+        connection,
+        "SELECT COUNT(*) FROM capacity_reservations WHERE state != 'released'",
+    )
+    .await?
+        == 0
+    {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
+    }
+}
+
+async fn validate_initial_profile_install(connection: &turso::Connection) -> Result<(), HostError> {
+    if scalar_count(connection, "SELECT COUNT(*) FROM host_storage_profiles").await? != 0 {
+        return Err(HostError::Journal);
+    }
+    let charged = scalar_count(
+        connection,
+        "SELECT COUNT(*) FROM capacity_reservations WHERE state != 'released'",
+    )
+    .await?;
+    let unknown_legacy = scalar_count(
+        connection,
+        "SELECT COUNT(*) FROM capacity_reservations AS reservation WHERE reservation.state != 'released' AND NOT EXISTS (SELECT 1 FROM capacity_reservation_storage AS storage WHERE storage.reservation_id = reservation.id) AND NOT EXISTS (SELECT 1 FROM capacity_reservation_provisioning AS provisioning WHERE provisioning.reservation_id = reservation.id)",
+    )
+    .await?;
+    if charged == unknown_legacy {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
+    }
+}
+
+async fn scalar_count(connection: &turso::Connection, query: &str) -> Result<i64, HostError> {
+    let mut rows = connection
+        .query(query, ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let row = rows
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?;
+    let count = row.get::<i64>(0).map_err(|_| HostError::Journal)?;
+    if rows.next().await.map_err(|_| HostError::Journal)?.is_some() || count < 0 {
+        return Err(HostError::Journal);
+    }
+    Ok(count)
 }
 
 pub(super) async fn current(
@@ -54,11 +121,40 @@ pub(super) async fn load(
     };
     let pools = load_pools(connection, generation).await?;
     let roles = load_roles(connection, generation).await?;
-    let profile = StorageProfile::new(generation.to_owned(), pools, roles)?;
+    let publication_digest = publication_policy_digest(connection, generation).await?;
+    let profile = match publication_digest {
+        Some(digest) => {
+            let publication = ControllerPublicationBound::fixed();
+            if publication.digest() != digest {
+                return Err(HostError::Journal);
+            }
+            StorageProfile::new(generation.to_owned(), pools, roles)?
+        }
+        None => StorageProfile::new_legacy(generation.to_owned(), pools, roles)?,
+    };
     if profile.profile_digest() != digest {
         return Err(HostError::Journal);
     }
     Ok(Some(profile))
+}
+
+pub(super) async fn validate_publication_policies(
+    connection: &turso::Connection,
+) -> Result<(), HostError> {
+    let expected = ControllerPublicationBound::fixed().digest();
+    let mut rows = connection
+        .query(
+            "SELECT policy_digest FROM host_storage_profile_publication ORDER BY generation_id",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
+        if row.get::<String>(0).map_err(|_| HostError::Journal)? != expected {
+            return Err(HostError::Journal);
+        }
+    }
+    Ok(())
 }
 
 async fn insert_profile(
@@ -121,7 +217,37 @@ async fn insert_profile(
             .await
             .map_err(|_| HostError::Journal)?;
     }
+    if let Some(publication) = profile.controller_publication() {
+        connection
+            .execute(
+                "INSERT INTO host_storage_profile_publication (generation_id, policy_digest) VALUES (?1, ?2)",
+                (profile.generation_id.as_str(), publication.digest()),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+    }
     Ok(())
+}
+
+async fn publication_policy_digest(
+    connection: &turso::Connection,
+    generation: &str,
+) -> Result<Option<String>, HostError> {
+    let mut rows = connection
+        .query(
+            "SELECT policy_digest FROM host_storage_profile_publication WHERE generation_id = ?1",
+            [generation],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
+        return Ok(None);
+    };
+    let digest = row.get::<String>(0).map_err(|_| HostError::Journal)?;
+    if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
+        return Err(HostError::Journal);
+    }
+    Ok(Some(digest))
 }
 
 async fn load_pools(

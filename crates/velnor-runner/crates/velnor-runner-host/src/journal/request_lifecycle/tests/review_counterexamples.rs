@@ -1,6 +1,7 @@
 use super::admission::{JOB_LIMIT, physical_intent};
 use super::helpers::{
-    Scratch, binding, created_scope, event_source, receipt, record_acquired, runner_name,
+    ProvisionedRunner, Scratch, binding, created_scope, event_source, provision_physical_intent,
+    receipt, record_acquired, record_owned_storage_cleanup, runner_name, settle_storage_metadata,
 };
 use crate::error::HostError;
 use crate::journal::{AssignmentIdentity, AssignmentKey, ConnectionJournal, Journal};
@@ -15,6 +16,7 @@ pub(super) struct Ready {
     pub(super) intent: i64,
     pub(super) request: AssignmentIdentity,
     pub(super) runner: RunnerReference,
+    pub(super) provisioned: ProvisionedRunner,
 }
 
 pub(super) async fn ready() -> Result<Ready, HostError> {
@@ -24,24 +26,15 @@ pub(super) async fn ready() -> Result<Ready, HostError> {
     let binding = binding("essential", 101)?;
     let scope = created_scope(&journal, &binding, 501).await?;
     record_acquired(&scope, 70).await?;
-    let (physical, intent) = physical_intent(&scope, '8').await?;
-    let jit = scope
-        .claim_runner_jit(intent, &runner_name('8'))
-        .await?
-        .ok_or(HostError::Journal)?;
+    let provisioned = provision_physical_intent(&scope, '8').await?;
+    let physical = provisioned.assignment.clone();
+    let intent = provisioned.intent_id;
     let runner = RunnerReference {
         id: 770,
         name: runner_name('8'),
         runner_scale_set_id: 501,
     };
-    scope.bind_jit_runner(jit, &runner).await?;
-    let start = scope
-        .claim_physical_runner_start(intent, &format!("w{}", "9".repeat(32)))
-        .await?
-        .ok_or(HostError::Journal)?;
-    scope
-        .record_physical_worker_ready(start, "runner-container", "dind-container")
-        .await?;
+    super::helpers::finish_listener_delivery(&scope, &provisioned, &runner).await?;
     let request = scope
         .assignment_identity(AssignmentKey::AssignedRequest { request_id: 70 })
         .await?;
@@ -54,6 +47,7 @@ pub(super) async fn ready() -> Result<Ready, HostError> {
         intent,
         request,
         runner,
+        provisioned,
     })
 }
 
@@ -164,13 +158,18 @@ async fn review_completed_runner_cleanup_remains_reopenable() -> Result<(), Host
         .reservation(&f.physical)
         .await?
         .ok_or(HostError::Journal)?;
+    record_owned_storage_cleanup(&f.scope, &f.provisioned).await?;
     f.scope
         .record_remote_cleanup(reservation.reservation_id)
         .await?;
     f.scope
         .record_local_cleanup(reservation.reservation_id)
         .await?;
-    assert!(f.scope.intent(f.intent).await?.cleanup_proven);
+    assert!(!f.scope.intent(f.intent).await?.cleanup_proven);
+    assert_eq!(
+        f.scope.reservation(&f.physical).await?.map(|row| row.state),
+        Some(crate::journal::ReservationState::Reserved)
+    );
     let path = f.scratch.file();
     drop(f.scope);
     drop(f.journal);
@@ -191,13 +190,18 @@ async fn independent_recovered_unassigned_runner_allows_replacement_for_same_req
         .await?
         .ok_or(HostError::Journal)?;
     f.scope.mark_recovering(reservation.reservation_id).await?;
+    record_owned_storage_cleanup(&f.scope, &f.provisioned).await?;
     f.scope
         .record_remote_cleanup(reservation.reservation_id)
         .await?;
     f.scope
         .record_local_cleanup(reservation.reservation_id)
         .await?;
-    assert!(f.scope.intent(f.intent).await?.cleanup_proven);
+    assert!(!f.scope.intent(f.intent).await?.cleanup_proven);
+    assert_eq!(
+        settle_storage_metadata(&f.scope, &f.provisioned, 'd').await?,
+        crate::journal::MetadataSettlementResult::Settled
+    );
     let path = f.scratch.file();
     let binding = f.binding.clone();
     drop(f.scope);
@@ -242,12 +246,17 @@ async fn independent_completed_cleanup_allows_new_demand_after_restart() -> Resu
         .reservation(&f.physical)
         .await?
         .ok_or(HostError::Journal)?;
+    record_owned_storage_cleanup(&f.scope, &f.provisioned).await?;
     f.scope
         .record_remote_cleanup(reservation.reservation_id)
         .await?;
     f.scope
         .record_local_cleanup(reservation.reservation_id)
         .await?;
+    assert_eq!(
+        settle_storage_metadata(&f.scope, &f.provisioned, 'd').await?,
+        crate::journal::MetadataSettlementResult::Settled
+    );
     let path = f.scratch.file();
     let binding = f.binding.clone();
     drop(f.scope);

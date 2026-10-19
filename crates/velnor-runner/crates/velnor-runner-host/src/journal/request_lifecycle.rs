@@ -1,6 +1,6 @@
 //! Independent request authorization and charged physical runner lifecycle.
 
-mod acquire;
+pub(in crate::journal) mod acquire;
 pub(in crate::journal) mod events;
 mod helpers;
 pub(in crate::journal) mod physical;
@@ -32,7 +32,7 @@ pub(crate) enum RequestAcquireState {
     Uncertain,
 }
 
-/// Durable witness selected by the one-shot physical runner JIT claim.
+/// Record of the request selected for one physical runner JIT operation.
 ///
 /// The token is linear: binding or marking uncertainty consumes it.
 pub(crate) struct RunnerJitClaim {
@@ -50,7 +50,7 @@ impl RunnerJitClaim {
         self.intent_id
     }
 
-    /// Give the acquired request selected as the JIT audit witness.
+    /// Give the acquired request selected for the JIT audit record.
     #[must_use]
     pub(crate) fn witness_request(&self) -> Result<AssignmentIdentity, HostError> {
         AssignmentIdentity::new(
@@ -69,7 +69,7 @@ impl RunnerJitClaim {
     }
 }
 
-/// One-shot authorization to start Docker for a bound physical runner.
+/// One-time permission to start Docker for a recorded physical runner.
 pub(crate) struct PhysicalRunnerStartClaim {
     connection_id: ConnectionId,
     scale_set_id: i64,

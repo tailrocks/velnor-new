@@ -17,6 +17,7 @@ use crate::worker::Started;
 
 mod admission_gate;
 mod bind;
+pub(crate) mod bootstrap;
 #[cfg(all(test, unix))]
 mod busy_slot_tests;
 mod capacity;

@@ -1,4 +1,4 @@
-//! Source receipts stay bound to their exact immutable scope.
+//! Source receipts keep their exact, unchanged scope.
 
 use super::*;
 
@@ -172,6 +172,17 @@ async fn write_v8_authorization_schema(
 }
 
 async fn remove_v9_authorization_tables(connection: &turso::Connection) -> Result<(), HostError> {
+    connection
+        .execute(
+            "DROP TRIGGER IF EXISTS connection_request_reservations_insert_guard",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute("DROP TABLE IF EXISTS connection_request_reservations", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
     for table in [
         "connection_runner_jits",
         "connection_request_authorizations",

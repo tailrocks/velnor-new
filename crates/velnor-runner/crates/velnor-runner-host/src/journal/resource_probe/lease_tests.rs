@@ -3,7 +3,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::error::HostError;
 use crate::journal::{
-    CapacityLimits, Journal, OperationalCapacityLimits, ProbeLeaseState, ProbePhase, ProbeSeed,
+    CapacityLimits, DoctorProbePrepareResult, DoctorProbeStartResult, DoctorProbeState, Journal,
+    OperationalCapacityLimits, ProbeLeaseState, ProbePhase, ProbeSeed,
 };
 use crate::launch::VerifiedProbeCleanup;
 
@@ -216,6 +217,90 @@ async fn only_exact_cleanup_proof_retires_probe_and_lease_together() -> Result<(
 }
 
 #[tokio::test]
+async fn queued_doctor_does_not_hide_generic_cleanup_or_allow_new_generic_probe()
+-> Result<(), HostError> {
+    let scratch = Scratch::new();
+    let journal = Journal::open(&scratch.file()).await?;
+    setup(&journal, 100, 128 * 1024 * 1024).await?;
+
+    let generic = seed(&journal, "a").await?;
+    journal.prepare_probe(generic.clone()).await?;
+    let ticket = match journal
+        .start_doctor_probe_request(&"1".repeat(32), "probe-engine", &"a".repeat(64))
+        .await?
+    {
+        DoctorProbeStartResult::Created(ticket) => ticket,
+        DoctorProbeStartResult::Replayed(_) | DoctorProbeStartResult::Busy { .. } => {
+            return Err(HostError::Journal);
+        }
+    };
+
+    assert_eq!(
+        journal.active_probe().await?.map(|row| row.operation_id),
+        Some(generic.operation_id.clone())
+    );
+    assert!(
+        journal
+            .prepare_probe(seed(&journal, "b").await?)
+            .await
+            .is_err()
+    );
+
+    journal
+        .transition_probe(
+            &generic.operation_id,
+            ProbePhase::Prepared,
+            ProbePhase::CreateRequested,
+        )
+        .await?;
+    let container_id = "f".repeat(64);
+    journal
+        .bind_probe_container(&generic.operation_id, &container_id)
+        .await?;
+    journal
+        .transition_probe(
+            &generic.operation_id,
+            ProbePhase::ContainerCreated,
+            ProbePhase::RemoveRequested,
+        )
+        .await?;
+    journal
+        .retire_probe(VerifiedProbeCleanup::test_only(
+            generic.operation_id.clone(),
+            "probe-engine".to_owned(),
+            "a".repeat(64),
+            ProbePhase::RemoveRequested,
+            generic.operation_name,
+            Some(container_id),
+        ))
+        .await?;
+
+    assert!(journal.active_probe().await?.is_none());
+    assert!(
+        journal
+            .prepare_probe(seed(&journal, "c").await?)
+            .await
+            .is_err()
+    );
+    let status = journal
+        .doctor_probe_request_by_nonce(&"1".repeat(32))
+        .await?
+        .ok_or(HostError::Journal)?;
+    assert_eq!(status.state(), DoctorProbeState::Queued);
+
+    let doctor_child = seed(&journal, "d").await?;
+    let prepared = journal
+        .prepare_probe_for_doctor_request(&ticket, doctor_child.clone())
+        .await?;
+    let DoctorProbePrepareResult::Prepared(row) = prepared else {
+        return Err(HostError::Journal);
+    };
+    assert_eq!(row.operation_id, doctor_child.operation_id);
+    assert!(journal.active_probe().await?.is_none());
+    Ok(())
+}
+
+#[tokio::test]
 async fn version_eleven_migration_backfills_an_uncertain_probe_lease() -> Result<(), HostError> {
     let scratch = Scratch::new();
     let path = scratch.file();
@@ -236,6 +321,29 @@ async fn version_eleven_migration_backfills_an_uncertain_probe_lease() -> Result
         .await
         .map_err(|_| HostError::Journal)?;
     let connection = database.connect().map_err(|_| HostError::Journal)?;
+    for trigger in [
+        "doctor_probe_link_guard",
+        "doctor_probe_transition_guard",
+        "doctor_probe_terminal_guard",
+        "doctor_probe_no_delete",
+    ] {
+        connection
+            .execute(&format!("DROP TRIGGER IF EXISTS {trigger}"), ())
+            .await
+            .map_err(|_| HostError::Journal)?;
+    }
+    connection
+        .execute("DROP TABLE doctor_probe_requests", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute("DROP TRIGGER metadata_settlement_claim_insert_guard", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute("DROP TRIGGER metadata_probe_cleanup_insert_guard", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
     connection
         .execute("DROP TABLE host_operation_leases", ())
         .await

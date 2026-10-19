@@ -37,13 +37,13 @@ async fn uncertain_jit_is_not_reclaimed_after_restart() -> Result<(), HostError>
     );
     assert_eq!(
         scope.reservation(&physical).await?.map(|row| row.state),
-        Some(ReservationState::Reserved)
+        Some(ReservationState::Uncertain)
     );
     Ok(())
 }
 
 #[tokio::test]
-async fn uncertain_docker_start_cannot_replay_and_keeps_charge() -> Result<(), HostError> {
+async fn uncertain_listener_delivery_cannot_replay_and_keeps_charge() -> Result<(), HostError> {
     let scratch = Scratch::new()?;
     let path = scratch.file();
     let journal = Journal::open(&path).await?;
@@ -51,22 +51,15 @@ async fn uncertain_docker_start_cannot_replay_and_keeps_charge() -> Result<(), H
     let binding = binding("essential", 101)?;
     let scope = created_scope(&journal, &binding, 501).await?;
     record_acquired(&scope, 82).await?;
-    let (physical, intent_id) = physical_intent(&scope, '7').await?;
-    let claim = scope
-        .claim_runner_jit(intent_id, &runner_name('7'))
-        .await?
-        .ok_or(HostError::Journal)?;
+    let provisioned = super::helpers::provision_physical_intent(&scope, '7').await?;
+    let intent_id = provisioned.intent_id;
     let runner = RunnerReference {
         id: 782,
         name: runner_name('7'),
         runner_scale_set_id: 501,
     };
-    scope.bind_jit_runner(claim, &runner).await?;
-    let start = scope
-        .claim_physical_runner_start(intent_id, &format!("w{}", "c".repeat(32)))
-        .await?
-        .ok_or(HostError::Journal)?;
-    scope.mark_physical_runner_start_uncertain(start).await?;
+    let delivery = super::helpers::prepare_listener_delivery(&scope, &provisioned, &runner).await?;
+    scope.mark_listener_delivery_uncertain(&delivery).await?;
     drop(scope);
     drop(journal);
 
@@ -74,17 +67,20 @@ async fn uncertain_docker_start_cannot_replay_and_keeps_charge() -> Result<(), H
     let scope = journal.connection_scope(&binding).await?;
     assert!(
         scope
-            .claim_physical_runner_start(intent_id, &format!("w{}", "c".repeat(32)))
+            .claim_listener_delivery(provisioned.reservation_id)
             .await?
             .is_none()
     );
     assert_eq!(
         scope.intent(intent_id).await?.launch_phase,
-        Some(LaunchPhase::DockerUncertain)
+        Some(LaunchPhase::JobFactsPublished)
     );
     assert_eq!(
-        scope.reservation(&physical).await?.map(|row| row.state),
-        Some(ReservationState::Reserved)
+        scope
+            .reservation(&provisioned.assignment)
+            .await?
+            .map(|row| row.state),
+        Some(ReservationState::Uncertain)
     );
     assert!(!journal.is_drained().await?);
     Ok(())

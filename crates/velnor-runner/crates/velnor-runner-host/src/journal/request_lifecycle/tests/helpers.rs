@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
 
 use crate::config::{
     ConnectionId, KeychainReference, RepositoryConnection, ScaleSetSelector, SourcePolicy,
@@ -8,12 +9,20 @@ use crate::config::{
 use crate::error::HostError;
 use crate::journal::connection::ConnectionJournal;
 use crate::journal::scale_set_create::{CreatedScaleSetResponse, ScaleSetCreateRequest};
-use crate::journal::{Journal, SourceAuthorizationResult, fixture_profile};
+use crate::journal::{Journal, SourceAuthorizationResult, fixture_provisioning_profile};
 use crate::launch::steps::source::{AuthorizedSourceReceipt, test_receipt};
 use velnor_runner_github::SourceMetadata;
 use velnor_runner_github::workflow_run::{
     VerifiedJobWorkflowRef, VerifiedWorkflowSource, WorkflowRefKind,
 };
+
+macro_rules! trace_test_stage {
+    ($_label:literal, $stage:expr) => {
+        $stage.await?
+    };
+}
+
+pub(super) const TEST_ENGINE_ID: &str = "11111111-1111-4111-8111-111111111111";
 
 pub(super) struct Scratch(PathBuf);
 
@@ -63,8 +72,10 @@ pub(super) async fn created_scope(
     binding: &RepositoryConnection,
     set_id: i64,
 ) -> Result<ConnectionJournal, HostError> {
-    journal.configure_storage_profile(fixture_profile()).await?;
-    journal.bind_engine("test-engine").await?;
+    journal
+        .configure_storage_profile(fixture_provisioning_profile())
+        .await?;
+    journal.bind_engine(TEST_ENGINE_ID).await?;
     let scope = journal.connection_scope(binding).await?;
     let request = ScaleSetCreateRequest::new(binding, 7)?;
     let prepared = scope.prepare_scale_set_create(&request).await?;
@@ -81,7 +92,7 @@ pub(super) async fn created_scope(
     )?;
     scope.record_scale_set_created(claim, response).await?;
     scope
-        .bind_engine_context("test-engine", "unix:///var/run/docker.sock", "linux/amd64")
+        .bind_engine_context(TEST_ENGINE_ID, "unix:///var/run/docker.sock", "linux/amd64")
         .await?;
     Ok(scope)
 }
@@ -169,3 +180,7 @@ pub(super) async fn record_acquired(
         )
         .await
 }
+
+include!("helpers/physical.rs");
+include!("helpers/cleanup.rs");
+include!("helpers/delivery.rs");

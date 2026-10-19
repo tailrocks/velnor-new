@@ -1,4 +1,4 @@
-//! Migration paths reject corrupted persisted tables without keeping partial upgrades.
+//! Migration paths reject corrupt stored tables without keeping partial upgrades.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -147,6 +147,45 @@ async fn version_eight_migration_rejects_a_broken_source_index_atomically() {
         table_count(&connection, "connection_source_authorization_intent").await,
         0
     );
+}
+
+#[tokio::test]
+async fn version_seventeen_requires_complete_provisioning_cleanup_schema() {
+    let required_tables = [
+        "capacity_reservation_provisioning_state",
+        "capacity_reservation_provisioning_cleanups",
+    ];
+    for missing_tables in [
+        required_tables.as_slice(),
+        &required_tables[..1],
+        &required_tables[1..],
+    ] {
+        let scratch = Scratch::new();
+        let path = scratch.file();
+        drop(Journal::open(&path).await.expect("fresh v17 schema"));
+        let database = turso::Builder::new_local(path.to_str().expect("UTF-8 temp path"))
+            .build()
+            .await
+            .expect("open SQLite");
+        let connection = database.connect().expect("connect SQLite");
+        assert_eq!(
+            read_version(&connection).await,
+            super::schema::JOURNAL_VERSION
+        );
+        for table in missing_tables {
+            connection
+                .execute(&format!("DROP TABLE {table}"), ())
+                .await
+                .expect("remove provisioning table");
+        }
+        drop(connection);
+        drop(database);
+
+        assert!(
+            Journal::open(&path).await.is_err(),
+            "missing {missing_tables:?}"
+        );
+    }
 }
 
 #[tokio::test]

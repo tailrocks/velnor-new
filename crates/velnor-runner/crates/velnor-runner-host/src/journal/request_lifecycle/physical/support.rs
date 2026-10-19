@@ -15,7 +15,14 @@ pub(in crate::journal) async fn mark_runner_cleaned_after_cleanup(
     }
     connection
         .execute(
-            "UPDATE connection_runner_jits SET state = 'cleaned' WHERE intent_id = ?1 AND connection_id = ?2 AND state IN ('bound', 'start_requested', 'start_uncertain', 'ready', 'started', 'completed') AND runner_id IS NOT NULL AND runner_name IS NOT NULL AND EXISTS (SELECT 1 FROM connection_intents WHERE id = ?1 AND connection_id = ?2 AND cleanup_proven = 1) AND (completed_request_id IS NOT NULL OR EXISTS (SELECT 1 FROM capacity_reservations AS r WHERE r.intent_id = ?1 AND r.connection_id = ?2 AND r.state = 'released' AND r.remote_cleanup_proven = 1 AND r.local_cleanup_proven = 1))",
+            "UPDATE connection_runner_jits SET state = 'cleaned' WHERE intent_id = ?1 AND connection_id = ?2 AND state IN ('bound', 'start_requested', 'start_uncertain', 'ready', 'started', 'completed') AND runner_id IS NOT NULL AND runner_name IS NOT NULL AND EXISTS (SELECT 1 FROM capacity_reservations AS r WHERE r.intent_id = ?1 AND r.connection_id = ?2 AND r.remote_cleanup_proven = 1 AND r.local_cleanup_proven = 1 AND (NOT EXISTS (SELECT 1 FROM capacity_reservation_provisioning AS p WHERE p.reservation_id = r.id) OR EXISTS (SELECT 1 FROM capacity_reservation_provisioning_state AS s WHERE s.reservation_id = r.id AND s.storage_cleanup_proven = 1)))",
+            (intent_id, connection_id),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(
+            "UPDATE capacity_reservation_provisioning_state SET jit_state = 'cleaned' WHERE jit_state = 'bound' AND EXISTS (SELECT 1 FROM capacity_reservation_provisioning AS p JOIN capacity_reservations AS r ON r.id = p.reservation_id WHERE p.operation_id = ?1 AND r.connection_id = ?2 AND r.remote_cleanup_proven = 1 AND r.local_cleanup_proven = 1) AND storage_cleanup_proven = 1 AND EXISTS (SELECT 1 FROM connection_runner_jits AS j WHERE j.intent_id = ?1 AND j.connection_id = ?2 AND j.state = 'cleaned' AND j.runner_id = capacity_reservation_provisioning_state.runner_id AND j.runner_name = capacity_reservation_provisioning_state.runner_name AND j.scale_set_id = capacity_reservation_provisioning_state.runner_scale_set_id)",
             (intent_id, connection_id),
         )
         .await
@@ -60,7 +67,7 @@ pub(super) async fn physical_intent_is_fresh(
 ) -> Result<bool, HostError> {
     let mut rows = connection
         .query(
-            "SELECT i.assignment_key FROM connection_intents AS i JOIN capacity_reservations AS r ON r.intent_id = i.id AND r.connection_id = i.connection_id WHERE i.id = ?1 AND i.connection_id = ?2 AND i.scale_set_id = ?3 AND i.kind = 'launch' AND i.state = 'pending' AND i.cleanup_proven = 0 AND i.jit_requested = 0 AND i.acquire_attempted = 0 AND i.github_runner_id IS NULL AND i.runner_name IS NULL AND i.worker_volume IS NULL AND i.docker_id IS NULL AND i.dind_id IS NULL AND i.launch_phase IS NULL AND r.state = 'reserved' AND NOT EXISTS (SELECT 1 FROM connection_runner_jits WHERE intent_id = ?1) AND NOT EXISTS (SELECT 1 FROM connection_intents WHERE runner_name = ?4 AND cleanup_proven = 0) AND NOT EXISTS (SELECT 1 FROM connection_runner_jits WHERE requested_name = ?4 AND state != 'cleaned')",
+            "SELECT i.assignment_key FROM connection_intents AS i JOIN capacity_reservations AS r ON r.intent_id = i.id AND r.connection_id = i.connection_id JOIN capacity_reservation_provisioning AS p ON p.reservation_id = r.id AND p.operation_id = i.id JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id WHERE i.id = ?1 AND i.connection_id = ?2 AND i.scale_set_id = ?3 AND i.kind = 'launch' AND i.state = 'pending' AND i.cleanup_proven = 0 AND i.jit_requested = 0 AND i.acquire_attempted = 0 AND i.github_runner_id IS NULL AND i.runner_name = ?4 AND i.worker_volume IS NULL AND i.docker_id = s.runner_container_id AND i.dind_id = s.dind_container_id AND i.launch_phase = 'resources_bound' AND r.state = 'reserved' AND s.bootstrap_start_state = 'started' AND s.resources_bound = 1 AND s.instance_binding_digest IS NOT NULL AND s.jit_state = 'not_requested' AND s.publication_state = 'not_requested' AND s.delivery_state = 'not_requested' AND s.storage_cleanup_proven = 0 AND NOT EXISTS (SELECT 1 FROM connection_runner_jits WHERE intent_id = ?1) AND NOT EXISTS (SELECT 1 FROM connection_intents WHERE runner_name = ?4 AND cleanup_proven = 0 AND id != ?1) AND NOT EXISTS (SELECT 1 FROM connection_runner_jits WHERE requested_name = ?4 AND state != 'cleaned')",
             (intent_id, connection_id, set_id, requested_name),
         )
         .await

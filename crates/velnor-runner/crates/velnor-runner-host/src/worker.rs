@@ -12,8 +12,10 @@ use crate::docker_client::docker_deadline;
 use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_mounts, runner_plan};
 use crate::error::HostError;
 
+mod names;
 pub(crate) mod resources;
 mod volumes;
+pub(crate) use names::{WorkerContainerRole, WorkerIdentityNames};
 #[cfg(test)]
 pub(crate) use volumes::remove_verified_worker_volume;
 pub(crate) use volumes::{
@@ -172,7 +174,7 @@ fn dind_container_id(id: &str) -> bool {
 ///
 /// # Errors
 ///
-/// Gives [`HostError::ForbiddenMount`] when `private_volume` does not name one valid private volume.
+/// Gives [`HostError::ForbiddenMount`] when `private_volume` does not name one correct private volume.
 pub fn dind_create(
     private_volume: &str,
     resource_budget: ResourceBudget,

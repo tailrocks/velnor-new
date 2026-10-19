@@ -1,56 +1,26 @@
 use super::helpers::{
-    Scratch, binding, created_scope, event_source, receipt, record_acquired, runner_name,
+    Scratch, binding, created_scope, event_source, finish_listener_delivery,
+    provision_physical_intent, receipt, record_acquired, runner_name,
 };
 use crate::error::HostError;
 use crate::journal::{
     AssignedAcquireResult, AssignmentIdentity, AssignmentKey, CapacityLimits, ConnectionJournal,
-    Journal, RequestAcquireState, ReservationRequest, ReservationResult, SourceAuthorizationResult,
+    Journal, RequestAcquireState, SourceAuthorizationResult,
 };
-use crate::launch::StartPermit;
 use velnor_runner_github::RunnerReference;
 
 pub(super) const JOB_LIMIT: CapacityLimits = CapacityLimits {
     jobs: 1,
     cpu_millicores: 2_000,
-    memory_bytes: 8_589_934_592,
+    memory_bytes: 25_769_803_776,
 };
 
 pub(super) async fn physical_intent(
     scope: &ConnectionJournal,
     nonce: char,
 ) -> Result<(AssignmentIdentity, i64), HostError> {
-    let assignment = scope
-        .assignment_identity(AssignmentKey::Remote {
-            kind: "runner".to_owned(),
-            subject: nonce.to_string().repeat(32),
-        })
-        .await?;
-    let permit = StartPermit::test_fixture();
-    let generation = permit.sample_generation_id().to_owned();
-    let root_digest = permit.docker_root_digest().to_owned();
-    let storage = crate::journal::fixture_admission(&permit)?;
-    let result = scope
-        .try_reserve_with_storage(
-            ReservationRequest {
-                assignment: &assignment,
-                engine_id: "test-engine",
-                docker_root_digest: &root_digest,
-                cpu_millicores: JOB_LIMIT.cpu_millicores,
-                memory_bytes: JOB_LIMIT.memory_bytes,
-                sample_generation_id: &generation,
-            },
-            permit,
-            storage,
-        )
-        .await?;
-    if !matches!(result, ReservationResult::Reserved { .. }) {
-        return Err(HostError::Journal);
-    }
-    let (intent_id, fresh) = scope.begin_launch(&assignment).await?;
-    if !fresh {
-        return Err(HostError::Journal);
-    }
-    Ok((assignment, intent_id))
+    let setup = super::helpers::provision_physical_intent(scope, nonce).await?;
+    Ok((setup.assignment, setup.intent_id))
 }
 
 #[tokio::test]
@@ -320,24 +290,15 @@ async fn completion_for_request_b_does_not_release_runner_a_and_cancel_is_reques
     record_acquired(&scope, 61).await?;
     record_acquired(&scope, 62).await?;
     let cancel = acquire_request_for_cancellation(&scope, 63).await?;
-    let (physical, intent_id) = physical_intent(&scope, 'd').await?;
-    let claim = scope
-        .claim_runner_jit(intent_id, &runner_name('d'))
-        .await?
-        .ok_or(HostError::Journal)?;
+    let provisioned = provision_physical_intent(&scope, 'd').await?;
+    let physical = provisioned.assignment.clone();
+    let intent_id = provisioned.intent_id;
     let runner = RunnerReference {
         id: 761,
         name: runner_name('d'),
         runner_scale_set_id: 501,
     };
-    scope.bind_jit_runner(claim, &runner).await?;
-    let start = scope
-        .claim_physical_runner_start(intent_id, &format!("w{}", "e".repeat(32)))
-        .await?
-        .ok_or(HostError::Journal)?;
-    scope
-        .record_physical_worker_ready(start, "runner-a", "dind-a")
-        .await?;
+    finish_listener_delivery(&scope, &provisioned, &runner).await?;
 
     assert_eq!(
         scope

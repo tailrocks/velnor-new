@@ -8,6 +8,8 @@ use bollard::errors::Error as DockerError;
 use bollard::models::{Volume, VolumeCreateRequest};
 use bollard::query_parameters::RemoveVolumeOptions;
 
+use super::names::WorkerIdentityNames;
+pub(crate) use super::names::WorkerVolumeRole;
 use crate::docker_client::docker_deadline;
 use crate::docker_spec::Mount as PlannedMount;
 use crate::error::HostError;
@@ -20,7 +22,7 @@ struct WorkerVolume {
     role: WorkerVolumeRole,
 }
 
-/// Opaque proof that one exact volume was verified for its worker and role.
+/// Private proof that one exact volume passed checks for its worker and role.
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) struct VerifiedWorkerVolume {
     volume: WorkerVolume,
@@ -47,41 +49,6 @@ impl VerifiedWorkerVolume {
     }
 }
 
-/// One of the fixed volumes attached to a worker pair.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum WorkerVolumeRole {
-    /// Runner socket directory mounted at `/run`.
-    Socket,
-    /// The Runner container mounts the Runner home volume at `/home/runner`.
-    Home,
-    /// Actions runner workspace mounted at `_work`.
-    Work,
-    /// Private Docker-in-Docker data mounted at `/var/lib/docker`.
-    DindData,
-}
-
-impl WorkerVolumeRole {
-    pub(crate) const ALL: [Self; 4] = [Self::Socket, Self::Home, Self::Work, Self::DindData];
-
-    fn label(self) -> &'static str {
-        match self {
-            Self::Socket => "socket",
-            Self::Home => "home",
-            Self::Work => "work",
-            Self::DindData => "dind-data",
-        }
-    }
-
-    fn suffix(self) -> &'static str {
-        match self {
-            Self::Socket => "",
-            Self::Home => "-home",
-            Self::Work => "-work",
-            Self::DindData => "-docker",
-        }
-    }
-}
-
 /// Result of verifying one exact worker volume.
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) enum WorkerVolumeVerification {
@@ -89,7 +56,7 @@ pub(crate) enum WorkerVolumeVerification {
     Absent,
     /// The named volume exists but does not match the expected worker or role.
     OwnershipMismatch,
-    /// Opaque token for the exact verified worker volume.
+    /// Private token for the exact worker volume that passed checks.
     Verified(VerifiedWorkerVolume),
 }
 
@@ -113,11 +80,11 @@ where
     Fut: Future<Output = Result<(), HostError>>,
 {
     let volumes = volumes(worker)?;
-    let expected = mounts_for_dind(worker)?;
-    if volumes.iter().any(|volume| {
-        target(volume.role, ContainerKind::Runner).is_none()
-            && target(volume.role, ContainerKind::Dind).is_none()
-    }) || mounts != expected
+    let expected_mounts = mounts_for_dind(worker)?;
+    if mounts != expected_mounts
+        || volumes
+            .iter()
+            .any(|volume| !has_mount_contract(volume.role))
     {
         return Err(HostError::ForbiddenMount);
     }
@@ -174,7 +141,7 @@ pub(crate) async fn verify_worker_volume(
     if !valid_worker(worker) {
         return Err(HostError::ForbiddenMount);
     }
-    let volume = worker_volume(worker, role);
+    let volume = worker_volume(worker, role)?;
     let Some(observed) = inspect_volume(docker, &volume.name).await? else {
         return Ok(WorkerVolumeVerification::Absent);
     };
@@ -212,10 +179,10 @@ fn volumes(worker: &str) -> Result<Vec<WorkerVolume>, HostError> {
     if !valid_worker(worker) {
         return Err(HostError::ForbiddenMount);
     }
-    Ok(WorkerVolumeRole::ALL
+    WorkerVolumeRole::ALL
         .into_iter()
         .map(|role| worker_volume(worker, role))
-        .collect())
+        .collect()
 }
 
 fn valid_worker(worker: &str) -> bool {
@@ -225,12 +192,20 @@ fn valid_worker(worker: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'-'))
 }
 
-fn worker_volume(worker: &str, role: WorkerVolumeRole) -> WorkerVolume {
-    WorkerVolume {
+fn worker_volume(worker: &str, role: WorkerVolumeRole) -> Result<WorkerVolume, HostError> {
+    let names = WorkerIdentityNames::from_private_volume(worker)?;
+    Ok(WorkerVolume {
         worker: worker.to_owned(),
-        name: format!("{worker}{}", role.suffix()),
+        name: names.volume_name(role),
         role,
-    }
+    })
+}
+
+fn labels(worker: &str, role: &str) -> HashMap<String, String> {
+    HashMap::from([
+        ("velnor.role".to_owned(), role.to_owned()),
+        ("velnor.worker".to_owned(), worker.to_owned()),
+    ])
 }
 
 #[derive(Clone, Copy)]
@@ -259,25 +234,20 @@ fn mounts_for(
     if !valid_worker(worker) {
         return Err(HostError::ForbiddenMount);
     }
-    Ok(WorkerVolumeRole::ALL
-        .into_iter()
-        .filter_map(|role| {
-            if runner_plan && role == WorkerVolumeRole::Home {
-                return None;
-            }
-            target(role, container).map(|target| PlannedMount {
-                source: format!("volume:{}", worker_volume(worker, role).name),
+    let mut mounts = Vec::new();
+    for role in WorkerVolumeRole::ALL {
+        if runner_plan && role == WorkerVolumeRole::Home {
+            continue;
+        }
+        if let Some(target) = target(role, container) {
+            let volume = worker_volume(worker, role)?;
+            mounts.push(PlannedMount {
+                source: format!("volume:{}", volume.name),
                 target,
-            })
-        })
-        .collect())
-}
-
-fn labels(worker: &str, role: &str) -> HashMap<String, String> {
-    HashMap::from([
-        ("velnor.role".to_owned(), role.to_owned()),
-        ("velnor.worker".to_owned(), worker.to_owned()),
-    ])
+            });
+        }
+    }
+    Ok(mounts)
 }
 
 fn target(role: WorkerVolumeRole, container: ContainerKind) -> Option<String> {
@@ -286,7 +256,29 @@ fn target(role: WorkerVolumeRole, container: ContainerKind) -> Option<String> {
         (WorkerVolumeRole::Home, _) => Some("/home/runner".to_owned()),
         (WorkerVolumeRole::Work, _) => Some(runner_work_path()),
         (WorkerVolumeRole::DindData, ContainerKind::Dind) => Some("/var/lib/docker".to_owned()),
-        (WorkerVolumeRole::DindData, ContainerKind::Runner) => None,
+        (WorkerVolumeRole::DindData | WorkerVolumeRole::RunnerMetadata, ContainerKind::Runner) => {
+            None
+        }
+        (WorkerVolumeRole::RunnerMetadata, ContainerKind::Dind) => None,
+    }
+}
+
+fn has_mount_contract(role: WorkerVolumeRole) -> bool {
+    // The ownership inventory includes volumes with no guest mount. A typed publisher
+    // must supply metadata through approved subpath mounts.
+    match role {
+        WorkerVolumeRole::Socket | WorkerVolumeRole::Home | WorkerVolumeRole::Work => {
+            target(role, ContainerKind::Runner).is_some()
+                && target(role, ContainerKind::Dind).is_some()
+        }
+        WorkerVolumeRole::DindData => {
+            target(role, ContainerKind::Runner).is_none()
+                && target(role, ContainerKind::Dind).is_some()
+        }
+        WorkerVolumeRole::RunnerMetadata => {
+            target(role, ContainerKind::Runner).is_none()
+                && target(role, ContainerKind::Dind).is_none()
+        }
     }
 }
 
@@ -310,6 +302,7 @@ mod tests {
     use std::collections::HashMap;
 
     use bollard::models::Volume;
+    use velnor_runner_core::runner_work_path;
 
     use super::{WorkerVolume, WorkerVolumeRole, owns};
 
@@ -352,6 +345,62 @@ mod tests {
             &[("velnor.worker", "w135"), ("velnor.role", "work")],
         );
         assert!(owns(&expected(), &volume));
+    }
+
+    #[test]
+    fn metadata_volume_has_engine_metadata_role_and_no_container_target() {
+        let role = WorkerVolumeRole::RunnerMetadata;
+        let volume = super::worker_volume("w135", role).expect("correct worker identity");
+        assert_eq!(volume.name, "w135-metadata");
+        assert_eq!(role.label(), "engine-metadata");
+        assert_eq!(super::target(role, super::ContainerKind::Runner), None);
+        assert_eq!(super::target(role, super::ContainerKind::Dind), None);
+    }
+
+    #[test]
+    fn runner_and_dind_keep_home_and_work_as_distinct_shared_volumes() {
+        let runner = super::mounts_for_runner("w135").expect("runner mounts");
+        let runner_plan = super::mounts_for_runner_plan("w135").expect("runner plan mounts");
+        let dind = super::mounts_for_dind("w135").expect("dind mounts");
+
+        assert_eq!(
+            runner
+                .iter()
+                .map(|mount| mount.source.as_str())
+                .collect::<Vec<_>>(),
+            ["volume:w135", "volume:w135-home", "volume:w135-work"]
+        );
+        assert_eq!(
+            runner
+                .iter()
+                .map(|mount| mount.target.as_str())
+                .collect::<Vec<_>>(),
+            ["/run", "/home/runner", runner_work_path().as_str()]
+        );
+        assert_eq!(
+            runner_plan
+                .iter()
+                .map(|mount| mount.target.as_str())
+                .collect::<Vec<_>>(),
+            ["/run", runner_work_path().as_str()]
+        );
+        assert_eq!(
+            dind.iter()
+                .map(|mount| mount.source.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "volume:w135",
+                "volume:w135-home",
+                "volume:w135-work",
+                "volume:w135-docker"
+            ]
+        );
+        assert!(
+            !runner
+                .iter()
+                .any(|mount| mount.source.ends_with("-metadata"))
+        );
+        assert!(!dind.iter().any(|mount| mount.source.ends_with("-metadata")));
     }
 
     #[test]

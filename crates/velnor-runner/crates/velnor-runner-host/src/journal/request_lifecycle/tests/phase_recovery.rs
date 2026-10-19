@@ -1,5 +1,8 @@
-use super::admission::{JOB_LIMIT, physical_intent};
-use super::helpers::{Scratch, binding, created_scope, event_source, record_acquired, runner_name};
+use super::admission::JOB_LIMIT;
+use super::helpers::{
+    Scratch, binding, created_scope, event_source, provision_physical_intent, record_acquired,
+    runner_name,
+};
 use crate::error::HostError;
 use crate::journal::{CapacityLimits, Journal, ReservationState};
 use crate::reconcile::LaunchPhase;
@@ -20,25 +23,15 @@ async fn runner_started_phase_and_capacity_survive_restart() -> Result<(), HostE
     let binding = binding("essential", 101)?;
     let scope = created_scope(&journal, &binding, 501).await?;
     record_acquired(&scope, 70).await?;
-    let (physical, intent_id) = physical_intent(&scope, '8').await?;
-    let jit = scope
-        .claim_runner_jit(intent_id, &runner_name('8'))
-        .await?
-        .ok_or(HostError::Journal)?;
+    let provisioned = provision_physical_intent(&scope, '8').await?;
+    let physical = provisioned.assignment.clone();
+    let intent_id = provisioned.intent_id;
     let runner = RunnerReference {
         id: 770,
         name: runner_name('8'),
         runner_scale_set_id: 501,
     };
-    scope.bind_jit_runner(jit, &runner).await?;
-    let volume = format!("w{}", "9".repeat(32));
-    let start = scope
-        .claim_physical_runner_start(intent_id, &volume)
-        .await?
-        .ok_or(HostError::Journal)?;
-    scope
-        .record_physical_worker_ready(start, "runner-container", "dind-container")
-        .await?;
+    super::helpers::finish_listener_delivery(&scope, &provisioned, &runner).await?;
     let request = scope
         .assignment_identity(crate::journal::AssignmentKey::AssignedRequest { request_id: 70 })
         .await?;

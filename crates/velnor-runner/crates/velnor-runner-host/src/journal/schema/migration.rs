@@ -3,8 +3,9 @@
 use crate::error::HostError;
 
 use super::{
-    connection, image_import, remote, request_ledger, scale_set_create, session, session_refresh,
-    source_authorization, storage_budget,
+    connection, doctor_probe, image_import, provisioning, remote, request_ledger,
+    request_reservations, scale_set_create, session, session_refresh, source_authorization,
+    storage_budget,
 };
 
 pub(super) async fn from_version_zero(conn: &turso::Connection) -> Result<(), HostError> {
@@ -165,6 +166,44 @@ pub(super) async fn from_version_fourteen(conn: &turso::Connection) -> Result<()
         .await
         .map(|_| ())
         .map_err(|_| HostError::Journal)?;
+    from_version_fifteen(conn).await
+}
+
+pub(super) async fn from_version_fifteen(conn: &turso::Connection) -> Result<(), HostError> {
+    provisioning::bootstrap(conn).await?;
+    conn.execute("PRAGMA user_version = 16", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    from_version_sixteen(conn).await
+}
+
+pub(super) async fn from_version_sixteen(conn: &turso::Connection) -> Result<(), HostError> {
+    provisioning::upgrade_from_version_sixteen(conn).await?;
+    conn.execute("PRAGMA user_version = 17", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    super::validate_persisted_schema_v17(conn).await?;
+    from_version_seventeen(conn).await
+}
+
+pub(super) async fn from_version_seventeen(conn: &turso::Connection) -> Result<(), HostError> {
+    request_reservations::bootstrap(conn).await?;
+    doctor_probe::bootstrap(conn).await?;
+    conn.execute("PRAGMA user_version = 18", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    crate::journal_schema::install_revision_triggers(conn).await?;
+    crate::journal_schema::install_v18_revision_triggers(conn).await?;
+    from_version_eighteen(conn).await
+}
+
+pub(super) async fn from_version_eighteen(conn: &turso::Connection) -> Result<(), HostError> {
+    provisioning::upgrade_from_version_eighteen(conn).await?;
+    conn.execute("PRAGMA user_version = 19", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    crate::journal_schema::install_revision_triggers(conn).await?;
+    crate::journal_schema::install_v18_revision_triggers(conn).await?;
     super::validate_persisted_schema(conn).await
 }
 

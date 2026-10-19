@@ -31,35 +31,8 @@ impl ConnectionJournal {
         &self,
         identity: &AssignmentIdentity,
     ) -> Result<bool, HostError> {
-        let request_id = request_id(identity, self)?;
-        let connection_id = self.connection_id().as_str().to_owned();
-        let binding_digest = self.binding_digest().to_owned();
         in_transaction(self.journal_ref(), async |connection| {
-            validate_scope_identity(self, connection, identity).await?;
-            if !created_set_matches(
-                connection,
-                &connection_id,
-                identity.scale_set_id(),
-                &binding_digest,
-            )
-            .await?
-            {
-                return Ok(false);
-            }
-            let changed = connection
-                .execute(
-                    "UPDATE connection_request_authorizations SET acquire_state = 'requested' WHERE connection_id = ?1 AND scale_set_id = ?2 AND request_id = ?3 AND binding_digest = ?4 AND authority_model = ?5 AND acquire_state = 'authorized' AND started_event_digest IS NULL AND completed_event_digest IS NULL",
-                    (
-                        connection_id.as_str(),
-                        identity.scale_set_id(),
-                        request_id,
-                        binding_digest.as_str(),
-                        AUTHORITY_MODEL,
-                    ),
-                )
-                .await
-                .map_err(|_| HostError::Journal)?;
-            Ok(changed == 1)
+            claim_request_acquire_in_transaction(connection, self, identity).await
         })
         .await
     }
@@ -141,7 +114,7 @@ impl ConnectionJournal {
         .await
     }
 
-    /// Give acquired, authorized requests that have not started or completed.
+    /// Give acquired, authorized requests with no start or completion event.
     pub(crate) async fn acquired_authorized_requests(
         &self,
         limit: u32,
@@ -180,6 +153,42 @@ impl ConnectionJournal {
         })
         .await
     }
+}
+
+/// Record permission for one `AcquireJobs` call in the caller's database transaction.
+pub(in crate::journal) async fn claim_request_acquire_in_transaction(
+    connection: &turso::Connection,
+    scope: &ConnectionJournal,
+    identity: &AssignmentIdentity,
+) -> Result<bool, HostError> {
+    let request_id = request_id(identity, scope)?;
+    let connection_id = scope.connection_id().as_str();
+    let binding_digest = scope.binding_digest();
+    validate_scope_identity(scope, connection, identity).await?;
+    if !created_set_matches(
+        connection,
+        connection_id,
+        identity.scale_set_id(),
+        binding_digest,
+    )
+    .await?
+    {
+        return Ok(false);
+    }
+    let changed = connection
+        .execute(
+            "UPDATE connection_request_authorizations SET acquire_state = 'requested' WHERE connection_id = ?1 AND scale_set_id = ?2 AND request_id = ?3 AND binding_digest = ?4 AND authority_model = ?5 AND acquire_state = 'authorized' AND started_event_digest IS NULL AND completed_event_digest IS NULL",
+            (
+                connection_id,
+                identity.scale_set_id(),
+                request_id,
+                binding_digest,
+                AUTHORITY_MODEL,
+            ),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(changed == 1)
 }
 
 fn response_record(
@@ -335,7 +344,7 @@ async fn acquire_result_matches(
     Ok(stored_state == state && stored_digest.as_deref() == Some(response_digest))
 }
 
-fn parse_state(value: &str) -> Result<RequestAcquireState, HostError> {
+pub(in crate::journal) fn parse_state(value: &str) -> Result<RequestAcquireState, HostError> {
     match value {
         "authorized" => Ok(RequestAcquireState::Authorized),
         "requested" => Ok(RequestAcquireState::Requested),

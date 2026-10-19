@@ -100,6 +100,10 @@ impl StorageAdmissionSample {
         &self.identity
     }
 
+    pub(crate) fn observed_at(&self) -> Instant {
+        self.observed_at
+    }
+
     pub(crate) fn observed_at_unix_ms(&self) -> u64 {
         self.observed_at_unix_ms
     }
@@ -110,6 +114,247 @@ impl StorageAdmissionSample {
 
     pub(crate) fn memory(&self) -> Option<&StorageMemoryObservation> {
         self.memory.as_ref()
+    }
+
+    pub(super) fn validate_provisioning_for(
+        &self,
+        profile: &StorageProfile,
+        sample_generation_id: &str,
+        engine_id: &str,
+        docker_root_digest: &str,
+        base_memory_charge: u64,
+        memory: &StorageProvisioningMemoryObservation,
+        now: Instant,
+    ) -> Result<(), HostError> {
+        validate_sample_identity(
+            self,
+            profile,
+            sample_generation_id,
+            engine_id,
+            docker_root_digest,
+            now,
+        )?;
+        let disk_pools = profile
+            .pools()
+            .iter()
+            .filter(|pool| pool.medium() == StorageMedium::Disk)
+            .collect::<Vec<_>>();
+        if disk_pools.is_empty() || self.pools.len() != disk_pools.len() {
+            return Err(HostError::Journal);
+        }
+        for limit in disk_pools {
+            let observation = self
+                .pools
+                .iter()
+                .find(|pool| pool.pool_id == limit.pool_id())
+                .ok_or(HostError::Journal)?;
+            validate_provisioning_pool_identity(limit, observation)?;
+        }
+        let retained_memory = profile
+            .roles()
+            .iter()
+            .filter(|role| role.alias_of().is_none())
+            .try_fold(0_u64, |sum, role| {
+                sum.checked_add(role.retained_memory_bytes())
+                    .ok_or(HostError::Journal)
+            })?;
+        let required_memory = base_memory_charge
+            .checked_add(retained_memory)
+            .ok_or(HostError::Journal)?;
+        validate_provisioning_memory(profile, memory, required_memory)
+    }
+
+    pub(crate) fn validate_metadata_settlement_for(
+        &self,
+        profile: &StorageProfile,
+        sample_generation_id: &str,
+        engine_id: &str,
+        docker_root_digest: &str,
+        now: Instant,
+    ) -> Result<(), HostError> {
+        validate_sample_identity(
+            self,
+            profile,
+            sample_generation_id,
+            engine_id,
+            docker_root_digest,
+            now,
+        )?;
+        let disk_pools = profile
+            .pools()
+            .iter()
+            .filter(|pool| pool.medium() == StorageMedium::Disk)
+            .collect::<Vec<_>>();
+        if disk_pools.is_empty() || self.pools.len() != disk_pools.len() {
+            return Err(HostError::Journal);
+        }
+        for limit in disk_pools {
+            let observation = self
+                .pools
+                .iter()
+                .find(|pool| pool.pool_id() == limit.pool_id())
+                .ok_or(HostError::Journal)?;
+            validate_metadata_pool_identity(limit, observation)?;
+        }
+        Ok(())
+    }
+}
+
+/// Fresh shared-pool and memory evidence for a capacity reservation created before job filesystems exist.
+#[derive(Debug, Clone)]
+pub(crate) struct StorageProvisioningAdmission {
+    sample: StorageAdmissionSample,
+    memory: StorageProvisioningMemoryObservation,
+}
+
+impl StorageProvisioningAdmission {
+    pub(crate) fn new(
+        sample: StorageAdmissionSample,
+        memory: StorageProvisioningMemoryObservation,
+    ) -> Self {
+        Self { sample, memory }
+    }
+
+    pub(crate) fn sample(&self) -> &StorageAdmissionSample {
+        &self.sample
+    }
+
+    pub(crate) fn memory(&self) -> &StorageProvisioningMemoryObservation {
+        &self.memory
+    }
+
+    pub(crate) fn validate_for(
+        &self,
+        profile: &StorageProfile,
+        sample_generation_id: &str,
+        engine_id: &str,
+        docker_root_digest: &str,
+        base_memory_charge: u64,
+        now: Instant,
+    ) -> Result<(), HostError> {
+        self.sample.validate_provisioning_for(
+            profile,
+            sample_generation_id,
+            engine_id,
+            docker_root_digest,
+            base_memory_charge,
+            &self.memory,
+            now,
+        )
+    }
+}
+
+/// Selected-guest memory facts from Docker Info and the trusted host probe.
+/// Worker ancestor cgroup limits are collected after bootstrap, not inferred here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct StorageProvisioningMemoryObservation {
+    guest_total_bytes: u64,
+    guest_available_bytes: u64,
+}
+
+impl StorageProvisioningMemoryObservation {
+    pub(crate) fn new(
+        guest_total_bytes: u64,
+        guest_available_bytes: u64,
+    ) -> Result<Self, HostError> {
+        if guest_total_bytes == 0
+            || guest_available_bytes == 0
+            || guest_available_bytes > guest_total_bytes
+            || i64::try_from(guest_total_bytes).is_err()
+            || i64::try_from(guest_available_bytes).is_err()
+        {
+            return Err(HostError::Journal);
+        }
+        Ok(Self {
+            guest_total_bytes,
+            guest_available_bytes,
+        })
+    }
+
+    pub(crate) const fn guest_total_bytes(&self) -> u64 {
+        self.guest_total_bytes
+    }
+
+    pub(crate) const fn guest_available_bytes(&self) -> u64 {
+        self.guest_available_bytes
+    }
+}
+
+fn validate_provisioning_pool_identity(
+    limit: &StoragePoolLimit,
+    observation: &StoragePoolObservation,
+) -> Result<(), HostError> {
+    if observation.medium() != limit.medium()
+        || observation.total_bytes() < limit.max_bytes()
+        || observation.available_bytes() < limit.reserve_bytes()
+    {
+        return Err(HostError::Journal);
+    }
+    let inode_policy_matches = match limit.inode_policy() {
+        StorageInodePolicy::Finite => {
+            observation.filesystem_kind() != StorageFilesystemKind::Tmpfs
+                && observation.total_inodes() >= limit.max_inodes()
+                && observation.total_inodes() > 0
+                && observation.available_inodes() >= limit.reserve_inodes()
+        }
+        StorageInodePolicy::DynamicBtrfs => {
+            observation.filesystem_kind() == StorageFilesystemKind::Btrfs
+                && observation.total_inodes() == 0
+                && observation.available_inodes() == 0
+        }
+        StorageInodePolicy::Unknown => false,
+    };
+    if observation.medium() == StorageMedium::Disk && inode_policy_matches {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
+    }
+}
+
+fn validate_metadata_pool_identity(
+    limit: &StoragePoolLimit,
+    observation: &StoragePoolObservation,
+) -> Result<(), HostError> {
+    if observation.medium() != StorageMedium::Disk {
+        return Err(HostError::Journal);
+    }
+    let matches = match limit.inode_policy() {
+        StorageInodePolicy::Finite => {
+            observation.filesystem_kind() != StorageFilesystemKind::Tmpfs
+                && observation.total_inodes() > 0
+        }
+        StorageInodePolicy::DynamicBtrfs => {
+            observation.filesystem_kind() == StorageFilesystemKind::Btrfs
+                && observation.total_inodes() == 0
+                && observation.available_inodes() == 0
+        }
+        StorageInodePolicy::Unknown => false,
+    };
+    if matches {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
+    }
+}
+
+fn validate_provisioning_memory(
+    profile: &StorageProfile,
+    memory: &StorageProvisioningMemoryObservation,
+    required_memory_bytes: u64,
+) -> Result<(), HostError> {
+    let has_tmpfs = profile
+        .roles()
+        .iter()
+        .any(|role| role.alias_of().is_none() && role.medium() == StorageMedium::Tmpfs);
+    if !has_tmpfs {
+        return Ok(());
+    }
+    if memory.guest_total_bytes() >= required_memory_bytes
+        && memory.guest_available_bytes() >= required_memory_bytes
+    {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
     }
 }
 

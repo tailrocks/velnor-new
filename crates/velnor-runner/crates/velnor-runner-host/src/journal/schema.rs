@@ -5,17 +5,20 @@ use std::collections::HashMap;
 use crate::error::HostError;
 
 mod connection;
+mod doctor_probe;
 mod image_import;
 mod migration;
+mod provisioning;
 mod remote;
 mod request_ledger;
+mod request_reservations;
 mod scale_set_create;
 mod session;
 mod session_refresh;
 mod source_authorization;
 mod storage_budget;
 
-pub(super) const JOURNAL_VERSION: i64 = 15;
+pub(super) const JOURNAL_VERSION: i64 = 19;
 const CURRENT_COLUMNS: [ColumnShape; 23] = [
     ColumnShape::new("id", "INTEGER", false, None),
     ColumnShape::new("kind", "TEXT", true, None),
@@ -111,6 +114,10 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
             12 => migration::from_version_twelve(conn).await?,
             13 => migration::from_version_thirteen(conn).await?,
             14 => migration::from_version_fourteen(conn).await?,
+            15 => migration::from_version_fifteen(conn).await?,
+            16 => migration::from_version_sixteen(conn).await?,
+            17 => migration::from_version_seventeen(conn).await?,
+            18 => migration::from_version_eighteen(conn).await?,
             _ => return Err(HostError::Journal),
         }
     }
@@ -118,18 +125,43 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
 }
 
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
-    validate_current_schema(conn).await?;
-    connection::validate_connection_schema(conn).await?;
-    remote::validate(conn).await?;
-    image_import::validate(conn).await?;
-    scale_set_create::validate(conn).await?;
-    source_authorization::validate(conn).await?;
-    request_ledger::validate(conn).await?;
-    crate::journal_schema::validate_probe_lease(conn).await?;
-    crate::journal::capacity_header::validate_connection(conn).await?;
-    session::validate(conn).await?;
-    session_refresh::validate(conn).await?;
-    storage_budget::validate(conn).await
+    validate_persisted_schema_v17(conn).await?;
+    doctor_probe::validate(conn).await?;
+    request_reservations::validate(conn).await
+}
+
+async fn validate_persisted_schema_v17(conn: &turso::Connection) -> Result<(), HostError> {
+    let validations = [
+        ("current", validate_current_schema(conn).await),
+        (
+            "connection",
+            connection::validate_connection_schema(conn).await,
+        ),
+        ("remote", remote::validate(conn).await),
+        ("image_import", image_import::validate(conn).await),
+        ("scale_set_create", scale_set_create::validate(conn).await),
+        (
+            "source_authorization",
+            source_authorization::validate(conn).await,
+        ),
+        ("request_ledger", request_ledger::validate(conn).await),
+        (
+            "probe_lease",
+            crate::journal_schema::validate_probe_lease(conn).await,
+        ),
+        (
+            "capacity_header",
+            crate::journal::capacity_header::validate_connection(conn).await,
+        ),
+        ("provisioning", provisioning::validate(conn).await),
+        ("session", session::validate(conn).await),
+        ("session_refresh", session_refresh::validate(conn).await),
+        ("storage_budget", storage_budget::validate(conn).await),
+    ];
+    for (_, result) in validations {
+        result?;
+    }
+    Ok(())
 }
 
 async fn journal_version(conn: &turso::Connection) -> Result<i64, HostError> {

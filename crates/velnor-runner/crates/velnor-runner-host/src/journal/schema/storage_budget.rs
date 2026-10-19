@@ -6,8 +6,9 @@ use crate::error::HostError;
 
 use super::{ColumnInfo, read_table_columns};
 
-const TABLES: [&str; 8] = [
+const TABLES: [&str; 9] = [
     "host_storage_profiles",
+    "host_storage_profile_publication",
     "host_storage_profile_pools",
     "host_storage_profile_roles",
     "host_storage_profile_current",
@@ -38,7 +39,8 @@ pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> 
         validate_table(conn, table, &expected[index], &constraints[index]).await?;
     }
     validate_triggers(conn).await?;
-    crate::journal::connection::validate_storage_budget_schema(conn).await
+    crate::journal::connection::validate_storage_budget_schema(conn).await?;
+    Ok(())
 }
 
 async fn validate_triggers(conn: &turso::Connection) -> Result<(), HostError> {
@@ -85,7 +87,7 @@ async fn validate_triggers(conn: &turso::Connection) -> Result<(), HostError> {
     }
 }
 
-fn profile_trigger_contracts() -> [(&'static str, &'static str, &'static str, &'static str); 7] {
+fn profile_trigger_contracts() -> [(&'static str, &'static str, &'static str, &'static str); 9] {
     [
         (
             "host_storage_profiles_no_update",
@@ -97,6 +99,18 @@ fn profile_trigger_contracts() -> [(&'static str, &'static str, &'static str, &'
             "host_storage_profiles_no_delete",
             "host_storage_profiles",
             "before delete on host_storage_profiles",
+            "raise(abort,'immutable storage evidence')",
+        ),
+        (
+            "host_storage_profile_publication_no_update",
+            "host_storage_profile_publication",
+            "before update on host_storage_profile_publication",
+            "raise(abort,'immutable storage evidence')",
+        ),
+        (
+            "host_storage_profile_publication_no_delete",
+            "host_storage_profile_publication",
+            "before delete on host_storage_profile_publication",
             "raise(abort,'immutable storage evidence')",
         ),
         (
@@ -192,10 +206,12 @@ fn reservation_trigger_contracts() -> [(&'static str, &'static str, &'static str
     ]
 }
 
-fn triggers() -> [&'static str; 16] {
+fn triggers() -> [&'static str; 18] {
     [
         "CREATE TRIGGER IF NOT EXISTS host_storage_profiles_no_update BEFORE UPDATE ON host_storage_profiles BEGIN SELECT RAISE(ABORT, 'immutable storage evidence'); END",
         "CREATE TRIGGER IF NOT EXISTS host_storage_profiles_no_delete BEFORE DELETE ON host_storage_profiles BEGIN SELECT RAISE(ABORT, 'immutable storage evidence'); END",
+        "CREATE TRIGGER IF NOT EXISTS host_storage_profile_publication_no_update BEFORE UPDATE ON host_storage_profile_publication BEGIN SELECT RAISE(ABORT, 'immutable storage evidence'); END",
+        "CREATE TRIGGER IF NOT EXISTS host_storage_profile_publication_no_delete BEFORE DELETE ON host_storage_profile_publication BEGIN SELECT RAISE(ABORT, 'immutable storage evidence'); END",
         "CREATE TRIGGER IF NOT EXISTS host_storage_profile_pools_no_update BEFORE UPDATE ON host_storage_profile_pools BEGIN SELECT RAISE(ABORT, 'immutable storage evidence'); END",
         "CREATE TRIGGER IF NOT EXISTS host_storage_profile_pools_no_delete BEFORE DELETE ON host_storage_profile_pools BEGIN SELECT RAISE(ABORT, 'immutable storage evidence'); END",
         "CREATE TRIGGER IF NOT EXISTS host_storage_profile_roles_no_update BEFORE UPDATE ON host_storage_profile_roles BEGIN SELECT RAISE(ABORT, 'immutable storage evidence'); END",
@@ -273,9 +289,10 @@ async fn validate_sql(
     Ok(())
 }
 
-fn statements() -> [&'static str; 10] {
+fn statements() -> [&'static str; 11] {
     [
         "CREATE TABLE IF NOT EXISTS host_storage_profiles (generation_id TEXT NOT NULL PRIMARY KEY CHECK (length(generation_id) = 32 AND generation_id NOT GLOB '*[^0-9a-f]*'), profile_digest TEXT NOT NULL CHECK (length(profile_digest) = 64 AND profile_digest NOT GLOB '*[^0-9a-f]*'))",
+        "CREATE TABLE IF NOT EXISTS host_storage_profile_publication (generation_id TEXT NOT NULL PRIMARY KEY REFERENCES host_storage_profiles(generation_id), policy_digest TEXT NOT NULL CHECK (length(policy_digest) = 64 AND policy_digest NOT GLOB '*[^0-9a-f]*'))",
         "CREATE TABLE IF NOT EXISTS host_storage_profile_pools (generation_id TEXT NOT NULL REFERENCES host_storage_profiles(generation_id), pool_id TEXT NOT NULL CHECK (length(pool_id) = 64 AND pool_id NOT GLOB '*[^0-9a-f]*'), medium TEXT NOT NULL CHECK (medium IN ('disk', 'tmpfs')), inode_policy TEXT NOT NULL CHECK (inode_policy IN ('finite', 'dynamic-btrfs', 'unknown')), max_bytes INTEGER NOT NULL CHECK (max_bytes > 0), max_inodes INTEGER NOT NULL CHECK (max_inodes >= 0), reserve_bytes INTEGER NOT NULL CHECK (reserve_bytes >= 0 AND reserve_bytes <= max_bytes), reserve_inodes INTEGER NOT NULL CHECK (reserve_inodes >= 0 AND reserve_inodes <= max_inodes), CHECK ((inode_policy = 'finite' AND max_inodes > 0) OR (inode_policy IN ('dynamic-btrfs', 'unknown') AND medium = 'disk' AND max_inodes = 0 AND reserve_inodes = 0)), PRIMARY KEY (generation_id, pool_id))",
         "CREATE TABLE IF NOT EXISTS host_storage_profile_roles (generation_id TEXT NOT NULL REFERENCES host_storage_profiles(generation_id), role TEXT NOT NULL CHECK (role IN ('runner-root', 'runner-home', 'runner-work', 'runner-tmp', 'runner-shm', 'shared-run', 'dind-root', 'dind-data', 'dind-tmp', 'dind-shm', 'cache-live', 'cache-stage', 'engine-metadata')), pool_id TEXT NOT NULL CHECK (length(pool_id) = 64 AND pool_id NOT GLOB '*[^0-9a-f]*'), medium TEXT NOT NULL CHECK (medium IN ('disk', 'tmpfs')), max_bytes INTEGER NOT NULL CHECK (max_bytes >= 0), max_inodes INTEGER NOT NULL CHECK (max_inodes >= 0), retained_memory_bytes INTEGER NOT NULL CHECK (retained_memory_bytes >= 0), alias_of TEXT CHECK (alias_of IS NULL OR (alias_of IN ('runner-root', 'runner-home', 'runner-work', 'runner-tmp', 'runner-shm', 'shared-run', 'dind-root', 'dind-data', 'dind-tmp', 'dind-shm', 'cache-live', 'cache-stage', 'engine-metadata') AND alias_of != role)), CHECK ((alias_of IS NULL AND role NOT IN ('cache-live', 'cache-stage') AND max_bytes > 0 AND max_inodes > 0 AND ((medium = 'disk' AND retained_memory_bytes = 0) OR (medium = 'tmpfs' AND retained_memory_bytes = max_bytes))) OR (alias_of = 'runner-work' AND role IN ('cache-live', 'cache-stage') AND max_bytes > 0 AND max_inodes > 0 AND retained_memory_bytes = 0)), PRIMARY KEY (generation_id, role), FOREIGN KEY (generation_id, pool_id) REFERENCES host_storage_profile_pools(generation_id, pool_id), FOREIGN KEY (generation_id, alias_of) REFERENCES host_storage_profile_roles(generation_id, role))",
         "CREATE TABLE IF NOT EXISTS host_storage_profile_current (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), generation_id TEXT NOT NULL REFERENCES host_storage_profiles(generation_id))",
@@ -288,11 +305,15 @@ fn statements() -> [&'static str; 10] {
     ]
 }
 
-fn expected_columns() -> [Vec<Shape>; 8] {
+fn expected_columns() -> [Vec<Shape>; 9] {
     [
         vec![
             Shape::new("generation_id", "TEXT", true, None, 1),
             Shape::new("profile_digest", "TEXT", true, None, 0),
+        ],
+        vec![
+            Shape::new("generation_id", "TEXT", true, None, 1),
+            Shape::new("policy_digest", "TEXT", true, None, 0),
         ],
         vec![
             Shape::new("generation_id", "TEXT", true, None, 1),
@@ -367,9 +388,14 @@ fn expected_columns() -> [Vec<Shape>; 8] {
     ]
 }
 
-fn required_sql() -> [Vec<&'static str>; 8] {
+fn required_sql() -> [Vec<&'static str>; 9] {
     [
         vec!["primary key", "profile_digest text not null"],
+        vec![
+            "references host_storage_profiles",
+            "policy_digest text not null",
+            "primary key",
+        ],
         vec![
             "references host_storage_profiles",
             "inode_policy in ('finite', 'dynamic-btrfs', 'unknown')",

@@ -5,6 +5,7 @@ mod observations;
 mod plan;
 mod profile;
 mod profile_store;
+mod publication;
 mod reservation_store;
 mod role;
 mod sample;
@@ -14,18 +15,25 @@ pub(crate) use observations::{
     StorageMemoryObservation, StoragePoolObservation, StorageSampleIdentity,
 };
 #[cfg(test)]
-pub(crate) use plan::{StorageCacheProjection, StorageReservationPlan, StorageRoleCharge};
+pub(crate) use plan::StorageCacheProjection;
+#[cfg(test)]
+pub(crate) use plan::{StorageReservationPlan, StorageRoleCharge};
+pub(crate) use profile::StoragePoolLimit;
 pub(crate) use profile::StorageProfile;
 #[cfg(test)]
-pub(crate) use profile::{StoragePoolLimit, StorageRoleLimit};
-#[cfg(test)]
-pub(crate) use role::{StorageFilesystemKind, StorageInodePolicy, StorageMedium, StorageRole};
-
-pub(crate) use sample::{StorageAdmission, StorageAdmissionSample};
+pub(crate) use profile::StorageRoleLimit;
+pub(crate) use role::{
+    StorageFilesystemKind, StorageInodePolicy, StorageMedium, StorageObserver, StorageRole,
+};
+pub(crate) use sample::{
+    StorageAdmission, StorageAdmissionSample, StorageProvisioningAdmission,
+    StorageProvisioningMemoryObservation,
+};
 
 pub(super) async fn validate_schema(
     conn: &turso::Connection,
 ) -> Result<(), crate::error::HostError> {
+    profile_store::validate_publication_policies(conn).await?;
     super::storage_budget::reservation_store::validate_rows(conn).await
 }
 
@@ -33,6 +41,13 @@ pub(super) async fn current_profile(
     conn: &turso::Connection,
 ) -> Result<Option<StorageProfile>, crate::error::HostError> {
     profile_store::current(conn).await
+}
+
+pub(super) async fn profile_generation(
+    conn: &turso::Connection,
+    generation_id: &str,
+) -> Result<Option<StorageProfile>, crate::error::HostError> {
+    profile_store::load(conn, generation_id).await
 }
 
 pub(super) async fn admission_fits(

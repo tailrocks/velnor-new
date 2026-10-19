@@ -11,6 +11,7 @@ pub(crate) mod capacity_header;
 #[path = "journal_completion.rs"]
 mod completion;
 mod connection;
+mod doctor_probe;
 mod file_identity;
 pub(crate) mod header_authority;
 mod image_import;
@@ -43,17 +44,25 @@ pub(crate) use connection::{
     AssignmentIdentity, AssignmentKey, CapacityLimits, ConnectionCompletionInboxEntry,
     ConnectionJournal, EngineContext, OperationalCapacityLimits, ReservationRequest,
     ReservationResult, SessionCreateState, SessionRefreshClaim, SourceAuthorizationBinding,
-    StorageAdmission,
+    StorageAdmission, StorageFilesystemKind, StorageInodePolicy, StorageMedium,
+    StorageMetadataSettlementClaim, StorageObserver, StorageRole,
 };
 #[cfg(test)]
 pub(crate) use connection::{
-    ReservationState, SessionRefreshState, StorageAdmissionSample, StorageCacheProjection,
-    StorageMedium, StoragePoolLimit, StoragePoolObservation, StorageProfile,
-    StorageReservationPlan, StorageRole, StorageRoleCharge, StorageRoleLimit,
-    StorageSampleIdentity,
+    ListenerDeliveryClaim, MetadataSettlementResult, RequestPhysicalReservationResult,
+    ReservationState, StorageAdmissionSample, StorageCacheProjection, StoragePoolLimit,
+    StoragePoolObservation, StorageProfile, StorageProvisioningPlan, StorageReservationPlan,
+    StorageRoleCharge, StorageRoleLimit, StorageSampleIdentity,
 };
 #[cfg(test)]
-pub(crate) use connection::{fixture_admission, fixture_profile};
+pub(crate) use connection::{
+    SessionRefreshState, fixture_admission, fixture_profile, fixture_provisioning_profile,
+    fixture_storage_provisioning_admission,
+};
+#[cfg(test)]
+pub(crate) use doctor_probe::{
+    DoctorProbeOutcome, DoctorProbePrepareResult, DoctorProbeStartResult, DoctorProbeState,
+};
 pub(crate) use image_import::{
     ImageImportDescriptor, ImageImportIdentity, ImageImportInspection, ImageImportObservation,
     ImageImportRequest, ImageImportState,
@@ -67,8 +76,6 @@ pub(crate) use source_authorization::AssignedAcquireResult;
 pub(crate) use source_authorization::SourceAuthorizationResult;
 use sql::{intent_row, one_row, same_ids, token_rejected};
 
-#[cfg(test)]
-pub(crate) use request_lifecycle::PhysicalRunnerStartClaim;
 pub(crate) use request_lifecycle::RequestAcquireState;
 #[cfg(test)]
 pub(crate) use resource_probe::ProbeLeaseState;
@@ -108,7 +115,7 @@ impl IntentState {
     }
 }
 
-/// Outcome of an effect that already ran.
+/// Outcome after an effect ran.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Outcome {
     /// The effect finished.

@@ -292,12 +292,7 @@ async fn startup_authority_marks_interrupted_refresh_before_new_generation() -> 
         revision,
         &guard,
     )?;
-    assert_eq!(
-        journal
-            .recover_interrupted_session_refreshes(authority)
-            .await?,
-        1
-    );
+    journal.recover_interrupted_host_work(authority).await?;
 
     let scope = journal
         .connection_scope(&binding("essential", 101)?)

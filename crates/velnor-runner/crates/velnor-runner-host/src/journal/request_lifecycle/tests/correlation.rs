@@ -1,11 +1,9 @@
 use super::helpers::{
-    Scratch, binding, created_scope, event_source, receipt, record_acquired, runner_name,
+    Scratch, binding, created_scope, event_source, provision_physical_intent, receipt,
+    record_acquired, runner_name,
 };
 use crate::error::HostError;
-use crate::journal::{
-    AssignmentKey, CapacityLimits, Journal, ReservationRequest, ReservationResult, ReservationState,
-};
-use crate::launch::StartPermit;
+use crate::journal::{AssignmentKey, CapacityLimits, Journal, ReservationState};
 use crate::reconcile::LaunchPhase;
 use velnor_runner_github::RunnerReference;
 
@@ -126,7 +124,7 @@ async fn prepare_correlation_fixture() -> Result<CorrelationFixture, HostError> 
         .configure_capacity(CapacityLimits {
             jobs: 1,
             cpu_millicores: 2_000,
-            memory_bytes: 8_589_934_592,
+            memory_bytes: 25_769_803_776,
         })
         .await?;
     let binding = binding("essential", 101)?;
@@ -150,34 +148,15 @@ async fn prepare_correlation_fixture() -> Result<CorrelationFixture, HostError> 
         )
         .await?;
 
-    let physical = scope
-        .assignment_identity(AssignmentKey::Remote {
-            kind: "runner".to_owned(),
-            subject: "a".repeat(32),
-        })
-        .await?;
-    reserve_physical_runner(&scope, &physical).await?;
-    let (intent_id, fresh) = scope.begin_launch(&physical).await?;
-    if !fresh {
-        return Err(HostError::Journal);
-    }
-    let claim = scope
-        .claim_runner_jit(intent_id, &runner_name('a'))
-        .await?
-        .ok_or(HostError::Journal)?;
+    let provisioned = provision_physical_intent(&scope, 'a').await?;
+    let physical = provisioned.assignment.clone();
+    let intent_id = provisioned.intent_id;
     let runner = RunnerReference {
         id: 701,
         name: runner_name('a'),
         runner_scale_set_id: 501,
     };
-    scope.bind_jit_runner(claim, &runner).await?;
-    let start = scope
-        .claim_physical_runner_start(intent_id, &format!("w{}", "b".repeat(32)))
-        .await?
-        .ok_or(HostError::Journal)?;
-    scope
-        .record_physical_worker_ready(start, "runner-container", "dind-container")
-        .await?;
+    super::helpers::finish_listener_delivery(&scope, &provisioned, &runner).await?;
     Ok(CorrelationFixture {
         _scratch: scratch,
         _journal: journal,
@@ -187,35 +166,6 @@ async fn prepare_correlation_fixture() -> Result<CorrelationFixture, HostError> 
         intent_id,
         runner,
     })
-}
-
-async fn reserve_physical_runner(
-    scope: &crate::journal::ConnectionJournal,
-    assignment: &crate::journal::AssignmentIdentity,
-) -> Result<(), HostError> {
-    let permit = StartPermit::test_fixture();
-    let generation = permit.sample_generation_id().to_owned();
-    let root_digest = permit.docker_root_digest().to_owned();
-    let storage = crate::journal::fixture_admission(&permit)?;
-    let result = scope
-        .try_reserve_with_storage(
-            ReservationRequest {
-                assignment,
-                engine_id: "test-engine",
-                docker_root_digest: &root_digest,
-                cpu_millicores: 2_000,
-                memory_bytes: 8_589_934_592,
-                sample_generation_id: &generation,
-            },
-            permit,
-            storage,
-        )
-        .await?;
-    if matches!(result, ReservationResult::Reserved { .. }) {
-        Ok(())
-    } else {
-        Err(HostError::Journal)
-    }
 }
 
 #[tokio::test]
@@ -258,42 +208,16 @@ async fn active_legacy_acquire_blocks_new_jit_without_releasing_capacity() -> Re
         .configure_capacity(CapacityLimits {
             jobs: 1,
             cpu_millicores: 2_000,
-            memory_bytes: 8_589_934_592,
+            memory_bytes: 25_769_803_776,
         })
         .await?;
     let binding = binding("essential", 101)?;
     let scope = created_scope(&journal, &binding, 501).await?;
     record_acquired(&scope, 100).await?;
 
-    let physical = scope
-        .assignment_identity(AssignmentKey::Remote {
-            kind: "runner".to_owned(),
-            subject: "c".repeat(32),
-        })
-        .await?;
-    let permit = StartPermit::test_fixture();
-    let generation = permit.sample_generation_id().to_owned();
-    let root_digest = permit.docker_root_digest().to_owned();
-    let storage = crate::journal::fixture_admission(&permit)?;
-    assert!(matches!(
-        scope
-            .try_reserve_with_storage(
-                ReservationRequest {
-                    assignment: &physical,
-                    engine_id: "test-engine",
-                    docker_root_digest: &root_digest,
-                    cpu_millicores: 2_000,
-                    memory_bytes: 8_589_934_592,
-                    sample_generation_id: &generation,
-                },
-                permit,
-                storage,
-            )
-            .await?,
-        ReservationResult::Reserved { .. }
-    ));
-    let (intent_id, fresh) = scope.begin_launch(&physical).await?;
-    assert!(fresh);
+    let provisioned = provision_physical_intent(&scope, 'c').await?;
+    let physical = provisioned.assignment;
+    let intent_id = provisioned.intent_id;
 
     let legacy_id = journal.begin("launch", "legacy-acquired").await?;
     let connection = journal.connection().await?;
@@ -326,41 +250,16 @@ async fn every_acquired_request_must_match_the_bound_source_receipt() -> Result<
         .configure_capacity(CapacityLimits {
             jobs: 1,
             cpu_millicores: 2_000,
-            memory_bytes: 8_589_934_592,
+            memory_bytes: 25_769_803_776,
         })
         .await?;
     let binding = binding("essential", 101)?;
     let scope = created_scope(&journal, &binding, 501).await?;
     record_acquired(&scope, 100).await?;
     record_acquired(&scope, 101).await?;
-    let physical = scope
-        .assignment_identity(AssignmentKey::Remote {
-            kind: "runner".to_owned(),
-            subject: "d".repeat(32),
-        })
-        .await?;
-    let permit = StartPermit::test_fixture();
-    let generation = permit.sample_generation_id().to_owned();
-    let root_digest = permit.docker_root_digest().to_owned();
-    let storage = crate::journal::fixture_admission(&permit)?;
-    assert!(matches!(
-        scope
-            .try_reserve_with_storage(
-                ReservationRequest {
-                    assignment: &physical,
-                    engine_id: "test-engine",
-                    docker_root_digest: &root_digest,
-                    cpu_millicores: 2_000,
-                    memory_bytes: 8_589_934_592,
-                    sample_generation_id: &generation,
-                },
-                permit,
-                storage,
-            )
-            .await?,
-        ReservationResult::Reserved { .. }
-    ));
-    let (intent_id, _) = scope.begin_launch(&physical).await?;
+    let provisioned = provision_physical_intent(&scope, 'd').await?;
+    let physical = provisioned.assignment;
+    let intent_id = provisioned.intent_id;
     journal
         .connection()
         .await?
@@ -393,41 +292,15 @@ async fn claimed_jit_stays_one_shot_and_holds_capacity_after_restart() -> Result
         .configure_capacity(CapacityLimits {
             jobs: 1,
             cpu_millicores: 2_000,
-            memory_bytes: 8_589_934_592,
+            memory_bytes: 25_769_803_776,
         })
         .await?;
     let binding = binding("essential", 101)?;
     let scope = created_scope(&journal, &binding, 501).await?;
     record_acquired(&scope, 100).await?;
-    let physical = scope
-        .assignment_identity(AssignmentKey::Remote {
-            kind: "runner".to_owned(),
-            subject: "f".repeat(32),
-        })
-        .await?;
-    let permit = StartPermit::test_fixture();
-    let generation = permit.sample_generation_id().to_owned();
-    let root_digest = permit.docker_root_digest().to_owned();
-    let storage = crate::journal::fixture_admission(&permit)?;
-    assert!(matches!(
-        scope
-            .try_reserve_with_storage(
-                ReservationRequest {
-                    assignment: &physical,
-                    engine_id: "test-engine",
-                    docker_root_digest: &root_digest,
-                    cpu_millicores: 2_000,
-                    memory_bytes: 8_589_934_592,
-                    sample_generation_id: &generation,
-                },
-                permit,
-                storage,
-            )
-            .await?,
-        ReservationResult::Reserved { .. }
-    ));
-    let (intent_id, fresh) = scope.begin_launch(&physical).await?;
-    assert!(fresh);
+    let provisioned = provision_physical_intent(&scope, 'f').await?;
+    let physical = provisioned.assignment;
+    let intent_id = provisioned.intent_id;
     assert!(
         scope
             .claim_runner_jit(intent_id, &runner_name('f'))

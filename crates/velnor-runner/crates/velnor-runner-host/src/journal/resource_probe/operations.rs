@@ -2,13 +2,15 @@
 
 use crate::error::HostError;
 use crate::journal::Journal;
+use crate::journal::StorageMetadataSettlementClaim;
+use crate::journal::connection::ConnectionJournal;
 use crate::journal::connection::storage::{in_transaction, read_transaction};
 use crate::launch::VerifiedProbeCleanup;
 
 use super::{ProbeLeaseState, ProbePhase, ProbeRow, ProbeSeed, lease};
 
 impl Journal {
-    /// Persist `Prepared` and its host lease before any Docker effect.
+    /// Record the Prepared phase and host lease before any Docker effect.
     pub(crate) async fn prepare_probe(&self, seed: ProbeSeed) -> Result<(), HostError> {
         if !seed_valid(&seed) {
             return Err(HostError::Journal);
@@ -29,12 +31,45 @@ impl Journal {
         .await
     }
 
-    /// Read the one charged probe operation without exposing output or root paths.
+    /// Prepare a probe under a cleaned worker reservation's metadata capacity reservation.
+    pub(crate) async fn prepare_probe_for_storage_settlement(
+        &self,
+        scope: &ConnectionJournal,
+        reservation_id: i64,
+        seed: ProbeSeed,
+    ) -> Result<StorageMetadataSettlementClaim, HostError> {
+        if !seed_valid(&seed) || scope.journal_ref() != self {
+            return Err(HostError::Journal);
+        }
+        in_transaction(self, async |connection| {
+            scope.validate_scope(connection).await?;
+            validate_binding(connection, &seed).await?;
+            ensure_no_active(connection).await?;
+            lease::prepare(connection, &seed).await?;
+            connection
+                .execute(
+                    "INSERT INTO resource_probe_operations (operation_id, instance_id, engine_id, docker_root_digest, source_revision, runtime_image_id, image_binding_digest, operation_name, role, projection_digest, phase) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'resource-probe', ?9, 'prepared')",
+                    (seed.operation_id.as_str(), seed.instance_id.as_str(), seed.engine_id.as_str(), seed.docker_root_digest.as_str(), seed.source_revision.as_str(), seed.runtime_image_id.as_str(), seed.image_binding_digest.as_str(), seed.operation_name.as_str(), seed.projection_digest.as_str()),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            crate::journal::connection::insert_metadata_settlement_claim(
+                connection,
+                scope,
+                reservation_id,
+                &seed,
+            )
+            .await
+        })
+        .await
+    }
+
+    /// Read the unresolved non-Doctor probe without output data or root paths.
     pub(crate) async fn active_probe(&self) -> Result<Option<ProbeRow>, HostError> {
         read_transaction(self, async |connection| {
             let mut rows = connection
                 .query(
-                    "SELECT p.operation_id, p.instance_id, p.engine_id, p.docker_root_digest, p.source_revision, p.runtime_image_id, p.image_binding_digest, p.operation_name, p.role, p.projection_digest, p.phase, p.container_id, l.state FROM resource_probe_operations AS p JOIN host_operation_leases AS l ON l.operation_id = p.operation_id WHERE p.phase NOT IN ('removed', 'aborted') AND l.state != 'released' LIMIT 2",
+                    "SELECT p.operation_id, p.instance_id, p.engine_id, p.docker_root_digest, p.source_revision, p.runtime_image_id, p.image_binding_digest, p.operation_name, p.role, p.projection_digest, p.phase, p.container_id, l.state FROM resource_probe_operations AS p JOIN host_operation_leases AS l ON l.operation_id = p.operation_id WHERE p.phase NOT IN ('removed', 'aborted') AND l.state != 'released' AND NOT EXISTS (SELECT 1 FROM doctor_probe_requests AS request WHERE request.child_operation_id = p.operation_id) LIMIT 2",
                     (),
                 )
                 .await
@@ -67,7 +102,7 @@ impl Journal {
         update_probe_phase(self, operation_id, expected, next).await
     }
 
-    /// Bind one immutable container ID after a completed create or exact recovery.
+    /// Record one permanent container ID after a returned create result or exact recovery.
     pub(crate) async fn bind_probe_container(
         &self,
         operation_id: &str,
@@ -151,6 +186,15 @@ impl Journal {
                 operation_name,
                 container_id,
             )
+            .await?;
+            crate::journal::connection::record_metadata_probe_cleanup(
+                connection,
+                operation_id,
+                engine_id,
+                root_digest,
+                operation_name,
+                container_id,
+            )
             .await
         })
         .await
@@ -174,7 +218,7 @@ impl Journal {
         in_transaction(self, async |connection| {
             let mut rows = connection
                 .query(
-                    "SELECT 1 FROM resource_probe_operations WHERE operation_id = ?1 AND phase NOT IN ('removed', 'aborted')",
+                    "SELECT 1 FROM resource_probe_operations WHERE operation_id = ?1 AND phase NOT IN ('removed', 'aborted') AND NOT EXISTS (SELECT 1 FROM doctor_probe_requests WHERE child_operation_id = ?1 AND state IN ('queued', 'running', 'recovering', 'uncertain'))",
                     [operation_id],
                 )
                 .await
@@ -238,7 +282,7 @@ fn lease_state_for_phase(phase: ProbePhase) -> ProbeLeaseState {
     }
 }
 
-async fn validate_binding(
+pub(in crate::journal) async fn validate_binding(
     connection: &turso::Connection,
     seed: &ProbeSeed,
 ) -> Result<(), HostError> {
@@ -250,10 +294,10 @@ async fn validate_binding(
     Ok(())
 }
 
-async fn ensure_no_active(connection: &turso::Connection) -> Result<(), HostError> {
+pub(super) async fn ensure_no_active(connection: &turso::Connection) -> Result<(), HostError> {
     let mut rows = connection
         .query(
-            "SELECT operation_id FROM resource_probe_operations WHERE phase NOT IN ('removed', 'aborted') LIMIT 1",
+            "SELECT operation_id FROM resource_probe_operations WHERE phase NOT IN ('removed', 'aborted') UNION ALL SELECT CAST(request_id AS TEXT) FROM doctor_probe_requests WHERE state IN ('queued', 'running', 'recovering', 'uncertain') LIMIT 1",
             (),
         )
         .await
@@ -265,7 +309,13 @@ async fn ensure_no_active(connection: &turso::Connection) -> Result<(), HostErro
     }
 }
 
-fn decode_row(row: &turso::Row) -> Result<ProbeRow, HostError> {
+pub(super) async fn ensure_no_active_probe(
+    connection: &turso::Connection,
+) -> Result<(), HostError> {
+    ensure_no_active(connection).await
+}
+
+pub(in crate::journal) fn decode_row(row: &turso::Row) -> Result<ProbeRow, HostError> {
     Ok(ProbeRow {
         operation_id: row.get(0).map_err(|_| HostError::Journal)?,
         instance_id: row.get(1).map_err(|_| HostError::Journal)?,
@@ -285,7 +335,7 @@ fn decode_row(row: &turso::Row) -> Result<ProbeRow, HostError> {
     })
 }
 
-fn seed_valid(seed: &ProbeSeed) -> bool {
+pub(in crate::journal) fn seed_valid(seed: &ProbeSeed) -> bool {
     hex_string(&seed.operation_id, 32)
         && hex_string(&seed.instance_id, 32)
         && !seed.engine_id.is_empty()

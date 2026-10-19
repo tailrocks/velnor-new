@@ -45,7 +45,7 @@ pub(crate) enum ReservationResult {
         /// Durable reservation identity.
         reservation_id: i64,
     },
-    /// This assignment already completed exact cleanup.
+    /// Exact cleanup for this assignment has ended.
     Released {
         /// Durable reservation identity.
         reservation_id: i64,
@@ -337,7 +337,10 @@ async fn insert_capacity_reservation(
     Ok(connection.last_insert_rowid())
 }
 
-fn validate_permit(request: ReservationRequest<'_>, permit: &StartPermit) -> Result<(), HostError> {
+pub(super) fn validate_permit(
+    request: ReservationRequest<'_>,
+    permit: &StartPermit,
+) -> Result<(), HostError> {
     if permit.engine_id() != request.engine_id
         || permit.docker_root_digest() != request.docker_root_digest
         || permit.charge() != (request.cpu_millicores, request.memory_bytes)
@@ -348,7 +351,7 @@ fn validate_permit(request: ReservationRequest<'_>, permit: &StartPermit) -> Res
     Ok(())
 }
 
-async fn ensure_sample_is_new(
+pub(super) async fn ensure_sample_is_new(
     connection: &turso::Connection,
     generation_id: &str,
 ) -> Result<(), HostError> {
@@ -366,7 +369,7 @@ async fn ensure_sample_is_new(
     }
 }
 
-async fn record_sample_use(
+pub(super) async fn record_sample_use(
     connection: &turso::Connection,
     reservation_id: i64,
     generation_id: &str,
