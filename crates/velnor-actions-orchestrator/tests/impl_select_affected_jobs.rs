@@ -18,12 +18,12 @@ use crate::impl_common::{TestResult, config_with_branch, fixture_manifest_json, 
 use crate::impl_select::{commit, plan_pr, plan_push};
 
 /// Every crate job of the fixture, by package name.
-const PACKAGES: [&str; 10] = [
+pub(crate) const PACKAGES: [&str; 10] = [
     "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "core", "util",
 ];
 
 /// Write `body` to `root/path`, creating parents.
-fn put(root: &Path, path: &str, body: &str) -> TestResult {
+pub(crate) fn put(root: &Path, path: &str, body: &str) -> TestResult {
     let file = root.join(path);
     if let Some(parent) = file.parent() {
         fs::create_dir_all(parent)?;
@@ -33,7 +33,7 @@ fn put(root: &Path, path: &str, body: &str) -> TestResult {
 }
 
 /// Committed fixture repository plus its base commit.
-fn fixture(
+pub(crate) fn fixture(
     extra_config: &str,
     build_script: bool,
 ) -> Result<(TempDir, String), Box<dyn std::error::Error>> {
@@ -116,7 +116,7 @@ fn fixture(
 }
 
 /// Crate jobs the plan schedules (`run`), by package name.
-fn running(plan: &Plan) -> BTreeSet<String> {
+pub(crate) fn running(plan: &Plan) -> BTreeSet<String> {
     let mut running = BTreeSet::new();
     for job in &plan.jobs {
         let Some(name) = job.job_id.strip_prefix("rust-") else {
@@ -130,7 +130,7 @@ fn running(plan: &Plan) -> BTreeSet<String> {
 }
 
 /// Assert the exact running crate jobs; everything else is skipped.
-fn assert_runs(plan: &Plan, expected: &[&str]) {
+pub(crate) fn assert_runs(plan: &Plan, expected: &[&str]) {
     let expected: BTreeSet<String> = expected.iter().map(|name| (*name).to_owned()).collect();
     assert_eq!(running(plan), expected, "{:?}", plan.jobs);
     for job in &plan.jobs {
@@ -245,12 +245,11 @@ fn build_script_packages_always_run() -> TestResult {
     let plan = plan_pr(dir.path(), Some(&base), &head)?.0;
     assert_runs(&plan, &["a1", "a7"]);
     assert!(
-        plan.obligations
+        plan.warnings
             .iter()
-            .filter(|ob| ob.job_id == "rust-a7")
-            .all(|ob| ob.reason == "undeclared_reads"),
+            .any(|w| w == "undeclared_reads:a7:build_script"),
         "{:?}",
-        plan.obligations
+        plan.warnings
     );
     Ok(())
 }

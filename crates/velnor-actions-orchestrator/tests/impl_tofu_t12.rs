@@ -71,8 +71,12 @@ fn module_target_change_selects_calling_root_only() -> TestResult {
     let head = commit(root, "head")?;
     let (plan, warnings) = plan_pr(root, Some(&base), &head)?;
     assert_narrow(&plan, "stacks/a", "stacks/b");
-    for reason in reasons_for(&plan, "stack/rust") {
-        assert_ne!(reason, "affected_by_change", "rust stays unselected");
+    // Rust ownership sees the full change set: the root crate owns every
+    // path by prefix (it can `include_str!` the module), so it runs too.
+    let rust = reasons_for(&plan, "stack/rust");
+    assert!(!rust.is_empty(), "the root crate proposes tasks");
+    for reason in rust {
+        assert_eq!(reason, "affected_by_change", "root crate owns the module path");
     }
     assert!(
         !warnings

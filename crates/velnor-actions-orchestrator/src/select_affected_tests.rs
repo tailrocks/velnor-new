@@ -119,7 +119,7 @@ fn lone_root_package_classifies_everything() {
         !has_unowned_file(&ownership, &changed),
         "one package selects itself either way"
     );
-    let selected = affected_packages(&ownership, &changed, &[]);
+    let selected = affected_packages(&ownership, &changed, &BTreeSet::new(), &[]);
     assert_eq!(selected, set(&["root"]));
 }
 
@@ -127,7 +127,7 @@ fn lone_root_package_classifies_everything() {
 fn nested_change_selects_deepest_beside_root() {
     let discovery = discovery_with(&[("root", "Cargo.toml"), ("a", "crates/a/Cargo.toml")]);
     let ownership = Ownership::new(&discovery);
-    let selected = affected_packages(&ownership, &set(&["crates/a/src/lib.rs"]), &[]);
+    let selected = affected_packages(&ownership, &set(&["crates/a/src/lib.rs"]), &BTreeSet::new(), &[]);
     assert_eq!(selected, set(&["a"]));
 }
 
@@ -139,7 +139,7 @@ fn declared_input_inside_another_package_selects_both() {
         package_ids: set(&["a"]),
     }];
     let ownership = Ownership::new(&discovery);
-    let selected = affected_packages(&ownership, &set(&["b/proto/x.proto"]), &[]);
+    let selected = affected_packages(&ownership, &set(&["b/proto/x.proto"]), &BTreeSet::new(), &[]);
     assert_eq!(selected, set(&["a", "b"]), "owner and declarer both run");
 }
 
@@ -153,7 +153,7 @@ fn declared_input_outside_packages_is_owned() {
     let ownership = Ownership::new(&discovery);
     let changed = set(&["protos/v1/x.proto"]);
     assert!(!has_unowned_file(&ownership, &changed));
-    assert_eq!(affected_packages(&ownership, &changed, &[]), set(&["a"]));
+    assert_eq!(affected_packages(&ownership, &changed, &BTreeSet::new(), &[]), set(&["a"]));
     assert!(
         has_unowned_file(&ownership, &set(&["protos/README.md"])),
         "only matching paths are claimed"
@@ -167,13 +167,13 @@ fn union_of_graphs_selects_removed_consumers() {
     let changed = set(&["b/src/lib.rs"]);
     let base = vec![edge("a", "b")];
     let head: Vec<(String, String)> = Vec::new();
-    let selected = affected_packages(&ownership, &changed, &[&base, &head]);
+    let selected = affected_packages(&ownership, &changed, &BTreeSet::new(), &[&base, &head]);
     assert_eq!(
         selected,
         set(&["a", "b"]),
         "base-only edge selects its consumer"
     );
-    let selected = affected_packages(&ownership, &changed, &[&head]);
+    let selected = affected_packages(&ownership, &changed, &BTreeSet::new(), &[&head]);
     assert_eq!(
         selected,
         set(&["b"]),
@@ -195,14 +195,14 @@ fn scoped_tool_configs_select_every_member_below() {
         "crates/outer/.cargo/config.toml",
     ] {
         assert_eq!(
-            affected_packages(&ownership, &set(&[path]), &[]),
+            affected_packages(&ownership, &set(&[path]), &BTreeSet::new(), &[]),
             set(&["inner", "outer"]),
             "{path} applies to nested members too"
         );
     }
     assert!(!has_unowned_file(&ownership, &set(&["crates/clippy.toml"])));
     assert_eq!(
-        affected_packages(&ownership, &set(&["crates/clippy.toml"]), &[]),
+        affected_packages(&ownership, &set(&["crates/clippy.toml"]), &BTreeSet::new(), &[]),
         set(&["inner", "outer"])
     );
 }
@@ -218,7 +218,7 @@ fn workspace_root_manifest_and_nextest_config_select_the_workspace() {
     let ownership = Ownership::new(&discovery);
     for path in ["ws/Cargo.toml", "ws/.config/nextest.toml"] {
         assert_eq!(
-            affected_packages(&ownership, &set(&[path]), &[]),
+            affected_packages(&ownership, &set(&[path]), &BTreeSet::new(), &[]),
             set(&["a", "root", "x"]),
             "{path}"
         );
@@ -235,16 +235,16 @@ fn symlink_targets_select_the_link_owner() {
     };
     let ownership = Ownership::new(&discovery).with_links(vec![link]);
     assert_eq!(
-        affected_packages(&ownership, &set(&["b/data/real/x.sql"]), &[]),
+        affected_packages(&ownership, &set(&["b/data/real/x.sql"]), &BTreeSet::new(), &[]),
         set(&["a", "b"])
     );
     assert_eq!(
-        affected_packages(&ownership, &set(&["b/data/link"]), &[]),
+        affected_packages(&ownership, &set(&["b/data/link"]), &BTreeSet::new(), &[]),
         set(&["a", "b"]),
         "retargeting an intermediate hop selects the reader"
     );
     assert_eq!(
-        affected_packages(&ownership, &set(&["b/src/lib.rs"]), &[]),
+        affected_packages(&ownership, &set(&["b/src/lib.rs"]), &BTreeSet::new(), &[]),
         set(&["b"])
     );
 }
@@ -266,7 +266,7 @@ fn resolved_path_packages_own_their_directory() {
     let changed = set(&["vendor/patched/src/lib.rs"]);
     assert!(!has_unowned_file(&ownership, &changed));
     let graph = vec![edge("a", "lapin"), edge("lapin", "patched")];
-    let selected = affected_packages(&ownership, &changed, &[&graph]);
+    let selected = affected_packages(&ownership, &changed, &BTreeSet::new(), &[&graph]);
     assert!(
         selected.contains("a"),
         "registry edge reaches the app: {selected:?}"

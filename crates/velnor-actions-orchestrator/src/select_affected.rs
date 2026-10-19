@@ -18,7 +18,7 @@
 //! declared as an input of package Y selects both. A path no rule claims
 //! is unowned, and the caller then selects everything.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::reverse_closure;
 
@@ -45,6 +45,8 @@ pub(crate) struct Ownership<'a> {
     discovery: &'a Discovery,
     /// Resolved tracked symlinks with the packages that own each link.
     links: Vec<(ResolvedLink, BTreeSet<String>)>,
+    /// Package name per workspace-member ID, for stable warnings.
+    names: BTreeMap<String, String>,
 }
 
 impl<'a> Ownership<'a> {
@@ -53,6 +55,7 @@ impl<'a> Ownership<'a> {
         let mut owners = Vec::new();
         let mut members = Vec::new();
         let mut workspaces = Vec::new();
+        let mut names = BTreeMap::new();
         for workspace in &discovery.workspaces {
             let mut ids = Vec::new();
             for package in &workspace.record.packages {
@@ -61,6 +64,7 @@ impl<'a> Ownership<'a> {
                     owners.push((dir.clone(), package.id.clone()));
                     members.push((dir, package.id.clone()));
                     ids.push(package.id.clone());
+                    names.insert(package.id.clone(), package.name.clone());
                 }
             }
             workspaces.push((workspace.record.workspace_root.clone(), ids));
@@ -80,7 +84,32 @@ impl<'a> Ownership<'a> {
             workspaces,
             discovery,
             links: Vec::new(),
+            names,
         }
+    }
+
+    /// The deepest package owning `path`, with its directory.
+    pub(crate) fn package_of(&self, path: &str) -> Option<&(String, String)> {
+        deepest(&self.owners, path)
+    }
+
+    /// Stable display name for a package ID: its Cargo name, else its directory.
+    pub(crate) fn name_of(&self, id: &str) -> String {
+        self.names.get(id).cloned().unwrap_or_else(|| {
+            self.owners
+                .iter()
+                .find(|(_, owner)| owner == id)
+                .map_or_else(|| id.to_owned(), |(dir, _)| dir.clone())
+        })
+    }
+
+    /// True when some declared input rule names package `id`.
+    pub(crate) fn declares_inputs(&self, id: &str) -> bool {
+        self.discovery
+            .affected
+            .rules
+            .iter()
+            .any(|rule| rule.package_ids.contains(id))
     }
 
     /// Attach resolved links; each link's owners come from the other rules.
@@ -150,17 +179,20 @@ impl<'a> Ownership<'a> {
     }
 }
 
-/// Packages claiming changed files plus their reverse closure.
+/// Packages claiming changed files, plus forced packages, plus their reverse closure.
 ///
-/// The closure runs over every supplied graph (base and head path edges
-/// plus the resolved graph), so edges removed at head and edges through
-/// registry crates still select their consumers.
+/// Forced packages (fail-safe signals: unverified reads) seed the closure
+/// exactly like changed ones, so their dependents run too. The closure
+/// runs over every supplied graph (base and head path edges plus the
+/// resolved graph), so edges removed at head and edges through registry
+/// crates still select their consumers.
 pub(crate) fn affected_packages(
     ownership: &Ownership<'_>,
     changed: &BTreeSet<String>,
+    forced: &BTreeSet<String>,
     graphs: &[&[(String, String)]],
 ) -> BTreeSet<String> {
-    let mut owned = BTreeSet::new();
+    let mut owned = forced.clone();
     for path in changed {
         owned.extend(ownership.claim(path));
     }
@@ -209,13 +241,18 @@ fn owns(dir: &str, path: &str) -> bool {
 
 /// Deepest manifest directory owning `path`; the root package owns the rest.
 fn deepest_owner(owners: &[(String, String)], path: &str) -> Option<String> {
+    deepest(owners, path).map(|owner| owner.1.clone())
+}
+
+/// Deepest `(dir, id)` owning `path`.
+fn deepest<'o>(owners: &'o [(String, String)], path: &str) -> Option<&'o (String, String)> {
     let mut best: Option<&(String, String)> = None;
     for owner in owners {
         if owns(&owner.0, path) && best.is_none_or(|current| owner.0.len() > current.0.len()) {
             best = Some(owner);
         }
     }
-    best.map(|owner| owner.1.clone())
+    best
 }
 
 /// Directory of a manifest path; empty for the repository root.

@@ -55,9 +55,15 @@ pub const MISS_REASONS: [&str; 13] = [
 /// Final-gate job-disposition reasons beyond the cache set (hard decision 4).
 ///
 /// `planned_job_skipped` marks a job the plan scheduled that never ran;
-/// `gate_mismatch` marks a `not_affected` job that ran anyway. Only the
-/// final report carries them; task reports keep the cache set.
-pub const FINAL_GATE_REASONS: [&str; 2] = ["planned_job_skipped", "gate_mismatch"];
+/// `gate_mismatch` marks a `not_affected` job that ran anyway;
+/// `not_affected_on_full_event` marks a plan that skips work on a push,
+/// merge group, or qualification run. Only the final report carries
+/// them; task reports keep the cache set.
+pub const FINAL_GATE_REASONS: [&str; 3] = [
+    "planned_job_skipped",
+    "gate_mismatch",
+    "not_affected_on_full_event",
+];
 
 /// Validate one final-report `miss_reason`: cache or final-gate reason.
 /// # Errors

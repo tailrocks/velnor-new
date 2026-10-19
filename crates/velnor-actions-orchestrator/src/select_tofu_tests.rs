@@ -233,11 +233,11 @@ fn rust_kind_predicates_and_tool_needs_stay_false_for_tofu() {
 }
 
 #[test]
-fn no_tofu_roots_passes_through_without_git() {
+fn no_tofu_roots_selects_no_keys_without_git() {
     let discovery = discovery_with(Vec::new(), Vec::new());
     let changed: BTreeSet<String> = ["crates/a/src/lib.rs".to_owned()].into_iter().collect();
     let mut warnings = Vec::new();
-    let (rust, tofu) = split_and_select(
+    let tofu = select_tofu_keys(
         Path::new("/nonexistent"),
         "base",
         "head",
@@ -245,8 +245,7 @@ fn no_tofu_roots_passes_through_without_git() {
         &changed,
         &mut warnings,
     )
-    .expect("passthrough");
-    assert_eq!(rust, changed);
+    .expect("no tofu roots");
     assert_eq!(tofu, std::collections::BTreeSet::<String>::new());
     assert_eq!(warnings, Vec::<String>::new());
 }

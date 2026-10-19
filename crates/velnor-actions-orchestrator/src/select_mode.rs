@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use velnor_actions_contract::WorkflowEvent;
+use velnor_actions_contract::{WorkflowEvent, selects_affected_work};
 
 use crate::discover::Discovery;
 use crate::select_affected::Ownership;
@@ -19,19 +19,14 @@ pub(crate) enum SelectionMode {
 
 /// Selection mode per event (hard decision 4).
 ///
-/// Pull requests, fork pull requests included, and local pre-push runs
-/// test what they affect. Pushes, merge groups, and dispatched
-/// qualification runs test everything: the merge queue and the default
-/// branch are the full backstop. Exhaustive on purpose: a new event must
-/// choose a mode here.
+/// The contract's [`selects_affected_work`] is the single event policy;
+/// `Plan::validate` and `Required` enforce the same predicate, so a
+/// planner bug cannot skip work on a full-run event.
 pub(crate) fn selection_mode(event: WorkflowEvent) -> SelectionMode {
-    match event {
-        WorkflowEvent::PullRequest | WorkflowEvent::Fork | WorkflowEvent::Local => {
-            SelectionMode::Affected
-        }
-        WorkflowEvent::Push | WorkflowEvent::MergeGroup | WorkflowEvent::Qualification => {
-            SelectionMode::Full
-        }
+    if selects_affected_work(event) {
+        SelectionMode::Affected
+    } else {
+        SelectionMode::Full
     }
 }
 
