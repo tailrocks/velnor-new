@@ -140,7 +140,7 @@ fn action_step_to_yaml(
     } else if uses == steps::UPLOAD_ARTIFACT_USES {
         entries.push((
             "if".to_owned(),
-            Yaml::str(crate::render::FINAL_CONDITION.to_owned()),
+            Yaml::str(crate::render::UPLOAD_STEP_CONDITION.to_owned()),
         ));
     }
     if job_id == FINAL_JOB_ID && is_verdict_download(step) {
@@ -209,6 +209,12 @@ fn shell_step_to_yaml(
     if let Some(condition) = &step.condition {
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
+    }
+    if !composite && step.role == Some(velnor_actions_contract::StepRole::AcquireVelnor) {
+        entries.push((
+            "timeout-minutes".to_owned(),
+            Yaml::Int(steps::ACQUIRE_TIMEOUT_MINUTES),
+        ));
     }
     let filtered_env: BTreeMap<String, String> = env
         .iter()

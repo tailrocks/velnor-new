@@ -46,7 +46,7 @@ fn consumer_ir() -> Result<velnor_actions_contract::WorkflowIr, RenderError> {
         vec![checkout_step(&checkout_pin())?, merge_step()],
     );
     gate.timeout_minutes = JobTimeout::REQUIRED;
-    gate.condition = Some("always()".to_owned());
+    gate.condition = Some(velnor_actions_workflow_renderer::render::FINAL_CONDITION.to_owned());
     Ok(fixture_ir(vec![
         (plan_id, plan),
         (lint_id, lint),
@@ -92,7 +92,7 @@ fn support_candidate_release_and_msrv_jobs_carry_per_kind_timeouts() -> Result<(
             merge_step(),
         ],
     );
-    gate.condition = Some("always()".to_owned());
+    gate.condition = Some(velnor_actions_workflow_renderer::render::FINAL_CONDITION.to_owned());
     let support =
         WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Candidate);
     let text = render_workflow_ir(

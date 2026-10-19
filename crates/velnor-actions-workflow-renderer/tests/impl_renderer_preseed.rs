@@ -117,7 +117,8 @@ pub(crate) fn preseed_final() -> Result<(String, Job), RenderError> {
             merge_step(),
         ],
     );
-    final_job.1.condition = Some("always()".to_owned());
+    final_job.1.condition =
+        Some(velnor_actions_workflow_renderer::render::FINAL_CONDITION.to_owned());
     Ok(final_job)
 }
 

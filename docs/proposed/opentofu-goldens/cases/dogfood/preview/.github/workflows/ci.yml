@@ -503,7 +503,7 @@ jobs:
       - cargo-deny
       - cargo-machete
       - zizmor
-    if: always()
+    if: ${{ !cancelled() }}
     steps:
       - name: Setup Mise
         uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7

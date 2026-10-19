@@ -97,7 +97,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
             check_runner: None,
             timeout_minutes: JobTimeout::REQUIRED,
             needs: vec!["plan".to_owned(), LINT_ID.to_owned()],
-            condition: Some("always()".to_owned()),
+            condition: Some(velnor_actions_workflow_renderer::render::FINAL_CONDITION.to_owned()),
             permissions: Some(Permissions {
                 contents: PermissionLevel::Read,
                 actions: PermissionLevel::Read,

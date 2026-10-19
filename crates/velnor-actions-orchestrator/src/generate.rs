@@ -203,6 +203,11 @@ fn render_all(
     extra.extend(crate::review_completion_workflow_emit::files(prep)?);
     extra.extend(crate::routing::extra_files(&prep.config, version)?);
     extra.extend(crate::rust_suites_emit::suite_workflow_files(prep)?);
+    if let Some(dco) = &prep.config.dco {
+        extra.push(velnor_actions_workflow_renderer::dco::render_dco_yml(
+            dco, version,
+        )?);
+    }
     extra.extend(rendered.shared);
     let tree = render_tree_with_claude_mode(
         &workflow,

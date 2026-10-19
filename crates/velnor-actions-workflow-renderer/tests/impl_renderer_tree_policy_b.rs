@@ -53,7 +53,7 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
             check_runner: None,
             timeout_minutes: JobTimeout::REQUIRED,
             needs: vec!["plan".to_owned()],
-            condition: Some("always()".to_owned()),
+            condition: Some(velnor_actions_workflow_renderer::render::FINAL_CONDITION.to_owned()),
             permissions: Some(Permissions {
                 contents: velnor_actions_contract::workflow::permissions::PermissionLevel::Read,
                 actions: velnor_actions_contract::workflow::permissions::PermissionLevel::Read,
@@ -68,7 +68,7 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
     );
     let text = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)?;
     assert!(text.contains("name: Required"));
-    assert!(text.contains("if: always()"));
+    assert!(text.contains("if: ${{ !cancelled() }}"));
     Ok(())
 }
 

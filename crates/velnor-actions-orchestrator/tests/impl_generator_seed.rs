@@ -62,8 +62,11 @@ fn generator_seed_hit_skips_curl_and_a_bad_hash_does_not_copy()
     let curl_args = read_log(&bin);
     assert!(curl_args.contains("https://example.invalid/generator"));
     for option in [
+        "--connect-timeout 15",
+        "--max-time 120",
         "--retry 5",
         "--retry-all-errors",
+        "--retry-max-time 180",
         "--proto =https",
         "--tlsv1.2",
     ] {

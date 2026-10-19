@@ -56,7 +56,8 @@ fn every_emitted_step_has_name() -> Result<(), RenderError> {
         vec![acquire_fixture()?, merge_step()],
     )
     .1;
-    final_job.condition = Some("always()".to_owned());
+    final_job.condition =
+        Some(velnor_actions_workflow_renderer::render::FINAL_CONDITION.to_owned());
     let ir = fixture_ir(vec![plan, task, lint, ("required".to_owned(), final_job)]);
     let support =
         WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Candidate);
@@ -95,7 +96,8 @@ fn final_gate_needs_plan_lint_and_support() -> Result<(), RenderError> {
         vec![merge_step()],
     )
     .1;
-    final_job.condition = Some("always()".to_owned());
+    final_job.condition =
+        Some(velnor_actions_workflow_renderer::render::FINAL_CONDITION.to_owned());
     let support =
         WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Candidate);
     let lint = job(

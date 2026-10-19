@@ -9,6 +9,8 @@ mod impl_alint_negative;
 mod impl_contract;
 #[path = "impl_contract_conclusions.rs"]
 mod impl_contract_conclusions;
+#[path = "impl_contract_crates.rs"]
+mod impl_contract_crates;
 #[path = "impl_contract_ids.rs"]
 mod impl_contract_ids;
 #[path = "impl_contract_ids_b.rs"]

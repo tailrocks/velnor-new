@@ -149,6 +149,7 @@ fn mise_crate_job_prepare_installs_opentofu() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 2);

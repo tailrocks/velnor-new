@@ -219,6 +219,7 @@ fn repo_config_sample_covers_schema_keys() -> TestResult {
                 "execution",
                 "checks",
                 "qualified_tools",
+                "dco",
             ]
             .contains(&key.as_str()),
             "sample key outside schema: {key}"

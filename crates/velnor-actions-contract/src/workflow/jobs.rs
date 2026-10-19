@@ -43,8 +43,14 @@ pub const PLAN_DISPLAY_NAME: &str = "Plan";
 /// Display name of the required gate.
 pub const REQUIRED_DISPLAY_NAME: &str = "Required";
 
-/// Required-gate run condition: always runs, judges every conclusion.
-pub const REQUIRED_CONDITION: &str = "always()";
+/// Required-gate run condition: runs after any needed job failed or was
+/// skipped (it judges every conclusion) but not after cancellation.
+///
+/// `always()` also ran after cancellation and held the concurrency group
+/// for 20+ minutes. `!cancelled()` is a status function, so the implicit
+/// `success()` is not added and the gate still evaluates failed or skipped
+/// needs; a cancelled run skips it instead of hanging.
+pub const REQUIRED_CONDITION: &str = "${{ !cancelled() }}";
 
 /// Weekly upstream-freshness schedule (Mondays 06:00 UTC).
 pub const FRESHNESS_CRON_WEEKLY: &str = "0 6 * * 1";
