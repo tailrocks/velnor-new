@@ -44,9 +44,64 @@ fn run(arguments: &[String]) -> Result<(), ProbeError> {
     }
     match mode.as_str() {
         "self_storage" => run_self_storage(),
+        "execution_channel" => run_execution_channel(),
+        "execution_request" => run_execution_request(),
+        "cleanup_observation" => run_cleanup_observation(),
         "owned_container_cgroup" => run_owned_cgroup(),
         _ => Err(ProbeError::Invalid("worker_mode")),
     }
+}
+
+#[cfg(target_os = "linux")]
+fn run_execution_channel() -> Result<(), ProbeError> {
+    use velnor_resource_probe::execution_channel::{
+        ExecutionChannelContext, observe_execution_channel,
+    };
+
+    let request: ExecutionChannelContext = read_worker_request(WORKER_REQUEST_LIMIT)?;
+    let operation_id = request.operation_id.clone();
+    let record = observe_execution_channel(request)?;
+    write_worker_record(&record, &mut io::stdout().lock())?;
+    wait_for_ack(&operation_id)
+}
+
+#[cfg(target_os = "linux")]
+fn run_execution_request() -> Result<(), ProbeError> {
+    use velnor_resource_probe::execution_channel::{
+        ExecutionRequestContext, read_execution_request,
+    };
+
+    let request: ExecutionRequestContext = read_worker_request(WORKER_REQUEST_LIMIT)?;
+    let operation_id = request.operation_id.clone();
+    let record = read_execution_request(request)?;
+    write_worker_record(&record, &mut io::stdout().lock())?;
+    wait_for_ack(&operation_id)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn run_execution_channel() -> Result<(), ProbeError> {
+    Err(ProbeError::Invalid("linux_guest_required"))
+}
+
+#[cfg(not(target_os = "linux"))]
+fn run_execution_request() -> Result<(), ProbeError> {
+    Err(ProbeError::Invalid("linux_guest_required"))
+}
+
+#[cfg(target_os = "linux")]
+fn run_cleanup_observation() -> Result<(), ProbeError> {
+    use velnor_resource_probe::cleanup_observation::{CleanupObservationRequest, observe_cleanup};
+
+    let request: CleanupObservationRequest = read_worker_request(WORKER_REQUEST_LIMIT)?;
+    let operation_id = request.operation_id.clone();
+    let record = observe_cleanup(request)?;
+    write_worker_record(&record, &mut io::stdout().lock())?;
+    wait_for_ack(&operation_id)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn run_cleanup_observation() -> Result<(), ProbeError> {
+    Err(ProbeError::Invalid("linux_guest_required"))
 }
 
 fn run_capacity() -> Result<(), ProbeError> {
