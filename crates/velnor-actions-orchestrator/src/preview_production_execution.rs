@@ -40,6 +40,7 @@ pub(super) fn execute(
     deadline: CheckDeadline,
     guard: &mut ProofGuard,
 ) -> Result<(), OrchestratorError> {
+    let progress = crate::preview_producer::progress::Progress::artifacts();
     let admitted = match request.stage {
         PreviewProductionStage::Payload { .. } => None,
         PreviewProductionStage::Assemble { .. } => {
@@ -88,10 +89,13 @@ pub(super) fn execute(
         request,
         deadline,
     };
+    progress.mark(crate::preview_producer::progress::Phase::Artifacts);
     match admitted {
         None => publish_leaf(&operation, producer, guard),
         Some(leaves) => publish_aggregate(&operation, producer, preview, &leaves, guard),
-    }
+    }?;
+    progress.mark(crate::preview_producer::progress::Phase::ArtifactsComplete);
+    Ok(())
 }
 
 fn publish_leaf(

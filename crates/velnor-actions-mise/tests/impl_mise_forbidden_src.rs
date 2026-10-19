@@ -53,6 +53,8 @@ const EXPECTED_MODULES: &[&str] = &[
     "command_env.rs",
     "command_git.rs",
     "command_output.rs",
+    "command_progress.rs",
+    "command_progress_tests.rs",
     "command_release_signer.rs",
     "command_release_signer_tests.rs",
     "command_stream.rs",
@@ -211,6 +213,7 @@ fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
         .map(|name| name.to_string_lossy())
         .ok_or_else(|| format!("nameless file: {}", path.display()))?;
     let mut borrowed_file_writes = 0;
+    let mut diagnostic_writes = 0;
     for (line, code) in code_of(path)? {
         let at = format!("{name}:{line}");
         for token in ALWAYS_BANNED {
@@ -220,6 +223,14 @@ fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
                 && code.trim() == ".write_all(bytes)"
             {
                 borrowed_file_writes += 1;
+                continue;
+            }
+            // Diagnostics borrow a responsive sink, never a filesystem path.
+            if name == "command_progress.rs"
+                && *token == "write_all"
+                && code.trim() == ".write_all(bytes)"
+            {
+                diagnostic_writes += 1;
                 continue;
             }
             // Only this cfg(test) module constructs owned temporary stream fixtures.
@@ -246,6 +257,44 @@ fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
     }
     if name == "command_stream.rs" && borrowed_file_writes != 1 {
         violations.push(format!("{name}: expected exactly one borrowed-file write"));
+    }
+    if name == "command_progress.rs" && diagnostic_writes != 1 {
+        violations.push(format!(
+            "{name}: expected exactly one borrowed-diagnostic write"
+        ));
+    }
+    Ok(())
+}
+
+#[test]
+fn diagnostic_write_admission_is_exactly_one_borrowed_sink_expression() -> Result<(), String> {
+    let root = crate::test_temp_dir::TestTempDir::new("mise-diagnostic-policy")
+        .map_err(|error| error.to_string())?;
+    for (name, source, admitted) in [
+        ("command_progress.rs", ".write_all(bytes)\n", true),
+        ("command_progress.rs", "", false),
+        (
+            "command_progress.rs",
+            ".write_all(bytes)\n.write_all(bytes)\n",
+            false,
+        ),
+        ("command_progress.rs", ".write_all(other)\n", false),
+        ("different.rs", ".write_all(bytes)\n", false),
+        (
+            "command_progress.rs",
+            ".write_all(bytes)\nstd::fs::write(path, bytes)\n",
+            false,
+        ),
+    ] {
+        let path = root.path().join(name);
+        std::fs::write(&path, source).map_err(|error| error.to_string())?;
+        let mut violations = Vec::new();
+        check_file(&path, &mut violations)?;
+        assert_eq!(
+            violations.is_empty(),
+            admitted,
+            "{name}: {source:?}: {violations:?}"
+        );
     }
     Ok(())
 }
