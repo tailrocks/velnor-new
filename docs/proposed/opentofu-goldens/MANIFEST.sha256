@@ -5,7 +5,7 @@ fef53de8e9478d29ab2c7fe80733045edcd2b83477f4d097e911b117ed52732a  ./dogfood/gene
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./dogfood/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/plan.stderr.txt
-9aae8edb5c92c944ca2b1862595054eb035decab386375c8cd123f27ffa9525e  ./dogfood/plan.txt
+64f63747457e194dffb78baaabbe3a6cb67eb5d75b1eafcae32c3bbf50cf44be  ./dogfood/plan.txt
 db41b52789ab1f7820dca39c72484e31e1bd6b998341100fc5fe13baeb088395  ./dogfood/preview/.github/AGENTS.md
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./dogfood/preview/.github/CLAUDE.md
 952c78c7e8f944dc89ae7733a76f912e2c6b7f7e6013bb2bad00ae85e5ceed3a  ./dogfood/preview/.github/PULL_REQUEST_TEMPLATE.md
@@ -26,6 +26,7 @@ e9b95dc80a4f548c0f00bdabd5cc886e63e659e9767e8068c5eba1475797cc4f  ./dogfood/prev
 05a1ebab2d34800d5cff47abf97b7b05df1c8fc01a3438b8c392ca44ad2b6fbe  ./dogfood/preview/.github/actions/velnor-tool-seed/action.yml
 d8fbeb08cb91f58fc775b7a989064e8c44310a21e9d26e3c9a6b4ade81c6d466  ./dogfood/preview/.github/actions/velnor-tools-cache-restore/action.yml
 0c286b3c12f439a76fa9d70ee820cb9286dddece12921e2266c5379116d2773d  ./dogfood/preview/.github/actions/velnor-tools-prelude-u26/action.yml
+24175ce3b8c0784e4b55a1cf3d5adb7e72bf28b602555c99de1dfa7b250d46ca  ./dogfood/preview/.github/dco.yml
 5c8c01d2c0dfea2d95dd2c17f72f661a51d8109c2049b2e635065431704e45e7  ./dogfood/preview/.github/scripts/velnor-tools-cache-identity.sh
 a365141e104fe70335fcc32912633a5452a861af2f1c4e2d2a7ff9fb09a72016  ./dogfood/preview/.github/velnor/task-execution-manifest-v1.json
 462199fd4180c6a6aa44bb18bdd48e90847e99ef90eb72c077bdcb00cd39008b  ./dogfood/preview/.github/workflows/ci.yml
@@ -36,7 +37,7 @@ ae65da950f6f8836435474c2a08d116c938feffded7186e9a482bb2635ea0220  ./dogfood/prev
 c6f28b1abf979ee5dcff156802821a7c87228968c746793c9a7447f24b401d5e  ./dogfood/preview/.github/workflows/product-release-images.yml
 1335c8921ec3d4049ac18f28578d3a8769c8693e3e780e909f739953e7a319a6  ./dogfood/preview/.github/workflows/product-release.yml
 8d5c7ab82c4b8b0ff3dda03ac86dfb64d3fc70112988bc79fd3d8cb353835088  ./dogfood/preview/.github/workflows/qualification.yml
-277777bb11a4723f41a185975649a5912db902768a686eb0b836c8510329a7a9  ./dogfood/tree.sha256
+7617b853d17919e890cf29035f2435d68af18d0a71d6e8159e809a1633dc5107  ./dogfood/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./empty-suite/generate.exit
 2ede4c2309e96a495b97ced76260e9172fa74d5e483ae635361518909ce5afb0  ./empty-suite/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./empty-suite/generate.stdout.txt
