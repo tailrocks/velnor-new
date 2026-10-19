@@ -260,17 +260,23 @@ fn isolated_producer_task_receives_fixed_handoff_without_credentials() {
 fn isolated_producer_task_rejects_failure_and_enforces_deadline() {
     let failing = IsolatedCommand::repo_task(
         "sh",
-        vec![OsString::from("-c"), OsString::from("exit 17")],
+        vec![
+            OsString::from("-c"),
+            OsString::from(r"printf '##[error]raw\n::error::raw\n\033[31m' >&2; exit 17"),
+        ],
         &[],
     )
     .expect("task command");
-    assert!(
-        super::run_preview_task(
-            &failing,
-            CheckDeadline::after(Duration::from_secs(5)).expect("deadline")
-        )
-        .is_err()
-    );
+    let error = super::run_preview_task(
+        &failing,
+        CheckDeadline::after(Duration::from_secs(5)).expect("deadline"),
+    )
+    .expect_err("nonzero source task");
+    let diagnostic = error.to_string();
+    assert!(diagnostic.contains("preview_producer_task_failed:code=Some(17)"));
+    assert!(!diagnostic.contains("##["));
+    assert!(!diagnostic.contains("::error::"));
+    assert!(!diagnostic.contains('\u{1b}'));
 
     let sleeping = IsolatedCommand::repo_task(
         "sh",

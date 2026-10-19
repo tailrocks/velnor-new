@@ -201,8 +201,7 @@ fn poll_child(
             return Err(timeout_message.to_owned());
         }
         let progressed = streams.poll_stdout(&mut stdout)?;
-        let progressed =
-            super::stream::poll_stderr(&mut stderr, &mut err, streams.stderr_cap)? || progressed;
+        let progressed = streams.poll_stderr(&mut stderr, &mut err)? || progressed;
         if cancel.is_cancelled() {
             return Err(super::SPAWN_CANCELLED_MESSAGE.to_owned());
         }
