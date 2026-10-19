@@ -222,7 +222,7 @@ fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
     Ok(())
 }
 
-fn check_source(name: &str, source: &str, violations: &mut Vec<String>) {
+fn check_source_sites(name: &str, source: &str, violations: &mut Vec<String>) {
     let compact = source
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -276,6 +276,14 @@ fn check_source(name: &str, source: &str, violations: &mut Vec<String>) {
             "{name}: program metadata check is outside its approved module"
         ));
     }
+}
+
+fn check_source(name: &str, source: &str, violations: &mut Vec<String>) {
+    check_source_sites(name, source, violations);
+    let is_filter_process = name == "bounded_file_filter_process.rs";
+    let is_filter = name == "bounded_file_filter.rs";
+    let is_command_stream = name == "command_stream.rs";
+    let metadata_expression = "std::fs::symlink_metadata(program)";
     let mut borrowed_file_writes = 0;
     let mut diagnostic_writes = 0;
     for (line, mut code) in code_of(source) {
