@@ -14,6 +14,8 @@ mod history;
 mod observation;
 #[path = "tap_merge_protection.rs"]
 mod protection;
+#[path = "tap_merge_protection_observer.rs"]
+mod protection_observer;
 #[path = "tap_merge_tree.rs"]
 mod tree;
 
@@ -40,17 +42,9 @@ const MAX_WAIT: Duration = Duration::from_mins(45);
 /// Rejects stale or conflicting PRs, failed checks, incomplete feedback, and API errors.
 pub fn merge_homebrew_tap_from_env() -> Result<(), OrchestratorError> {
     let candidate = candidate::load_candidate()?;
-    let merge_token = required_token("VELNOR_TAP_MERGE_TOKEN")?;
-    let source_token = required_token("GH_TOKEN")?;
-    if merge_token == source_token
-        || env::var("VELNOR_TAP_TOKEN").is_ok_and(|writer| writer == merge_token)
-    {
-        return Err(internal("tap_merge_credentials_reused"));
-    }
-    let api = github::TapMergeGitHub::with_max_wait(merge_token, MAX_WAIT);
-    let authority = observation::load_merge_authority(&candidate, &api)?;
+    let (api, authority, observer) = authenticate_merge(&candidate)?;
     if candidate.selection().merged.is_some() {
-        return completed::verify_already_promoted(&candidate, &authority, &api);
+        return completed::verify_already_promoted(&candidate, &authority, &api, &observer);
     }
     let prior = poll_until_ready(
         || {
@@ -58,7 +52,7 @@ pub fn merge_homebrew_tap_from_env() -> Result<(), OrchestratorError> {
                 &candidate.plan.repository,
                 &candidate.plan.default_branch,
             )?;
-            if let Some(observed) = observation::observe(&candidate, &authority, &api)?
+            if let Some(observed) = observation::observe(&candidate, &authority, &api, &observer)?
                 && gate_ready_or_pending(&authority.policy, &observed)?
             {
                 return Ok(Some(observed));
@@ -79,7 +73,7 @@ pub fn merge_homebrew_tap_from_env() -> Result<(), OrchestratorError> {
         &candidate.plan.default_branch,
         &candidate.release.receipt.source.commit_sha,
     )?;
-    let final_observation = observation::observe(&candidate, &authority, &api)?
+    let final_observation = observation::observe(&candidate, &authority, &api, &observer)?
         .ok_or_else(|| internal("tap_merge_final_gates_pending"))?;
     validate_tap_merge_gate(&authority.policy, &final_observation)
         .map_err(|_| internal("tap_merge_final_gate_rejected"))?;
@@ -105,6 +99,37 @@ pub fn merge_homebrew_tap_from_env() -> Result<(), OrchestratorError> {
         return Err(internal("tap_merge_response_mismatch"));
     }
     Ok(())
+}
+
+/// Admit both distinct installation capabilities under one operation deadline.
+fn authenticate_merge(
+    candidate: &candidate::MergeCandidate,
+) -> Result<
+    (
+        github::TapMergeGitHub,
+        observation::MergeAuthority,
+        protection_observer::ProtectionObserver,
+    ),
+    OrchestratorError,
+> {
+    let merge_token = required_token("VELNOR_TAP_MERGE_TOKEN")?;
+    let source_token = required_token("GH_TOKEN")?;
+    let observer_token = required_token("VELNOR_TAP_PROTECTION_TOKEN")?;
+    protection_observer::validate_distinct_tokens(&observer_token, &merge_token, &source_token)?;
+    if merge_token == source_token
+        || env::var("VELNOR_TAP_TOKEN").is_ok_and(|writer| writer == merge_token)
+    {
+        return Err(internal("tap_merge_credentials_reused"));
+    }
+    let api = github::TapMergeGitHub::with_max_wait(merge_token, MAX_WAIT);
+    let authority = observation::load_merge_authority(candidate, &api)?;
+    let observer = protection_observer::ProtectionObserver::authenticate(
+        candidate,
+        &authority,
+        observer_token,
+        api.deadline(),
+    )?;
+    Ok((api, authority, observer))
 }
 
 fn gate_ready_or_pending(

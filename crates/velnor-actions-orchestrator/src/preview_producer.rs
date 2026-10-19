@@ -26,8 +26,8 @@ const MAX_TASK_OUTPUT: usize = 8 * 1024 * 1024;
 #[path = "preview_producer_entry.rs"]
 mod entry;
 pub use entry::{
-    ADMIT_PREVIEW_AGGREGATE_OP, EXECUTE_PREVIEW_PRODUCER_OP, admit_preview_aggregate,
-    execute_preview_producer,
+    ACQUIRE_PREVIEW_LEAVES_OP, ADMIT_PREVIEW_AGGREGATE_OP, EXECUTE_PREVIEW_PRODUCER_OP,
+    acquire_preview_leaves, admit_preview_aggregate, execute_preview_producer,
 };
 
 #[derive(Clone, Copy)]

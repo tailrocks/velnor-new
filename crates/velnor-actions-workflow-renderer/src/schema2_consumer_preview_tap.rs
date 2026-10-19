@@ -120,7 +120,10 @@ fn writer(
     if merge {
         job_steps.push(steps::transfer(true, steps::Artifact::TapPr));
     }
-    job_steps.push(mint(tap, merge)?);
+    job_steps.push(mint(tap)?);
+    if merge {
+        job_steps.push(mint_observer(tap)?);
+    }
     job_steps.push(operation(spec, tap, op, merge)?);
     if !merge {
         job_steps.push(steps::transfer(false, steps::Artifact::TapPr));
@@ -147,13 +150,13 @@ fn push_download() -> Yaml {
     step
 }
 
-fn mint(tap: &ConsumerPreviewTapSpec, merge: bool) -> Result<Yaml, RenderError> {
+fn mint(tap: &ConsumerPreviewTapSpec) -> Result<Yaml, RenderError> {
     let (owner, repository) = tap
         .policy
         .repository
         .split_once('/')
         .ok_or_else(|| RenderError::InvalidWorkflow("tap_repository_invalid".to_owned()))?;
-    let mut inputs = vec![
+    let inputs = vec![
         (
             "client-id".to_owned(),
             variable(&tap.policy.app_id_variable),
@@ -171,12 +174,6 @@ fn mint(tap: &ConsumerPreviewTapSpec, merge: bool) -> Result<Yaml, RenderError> 
         ("permission-pull-requests".to_owned(), Yaml::str("write")),
         ("skip-token-revoke".to_owned(), Yaml::Bool(false)),
     ];
-    if merge {
-        inputs.extend([
-            ("permission-checks".to_owned(), Yaml::str("read")),
-            ("permission-administration".to_owned(), Yaml::str("read")),
-        ]);
-    }
     Ok(Yaml::Map(vec![
         (
             "name".to_owned(),
@@ -188,6 +185,43 @@ fn mint(tap: &ConsumerPreviewTapSpec, merge: bool) -> Result<Yaml, RenderError> 
             Yaml::str(crate::steps::CREATE_GITHUB_APP_TOKEN_USES),
         ),
         ("with".to_owned(), Yaml::Map(inputs)),
+    ]))
+}
+
+fn mint_observer(tap: &ConsumerPreviewTapSpec) -> Result<Yaml, RenderError> {
+    let (owner, repository) = tap
+        .policy
+        .repository
+        .split_once('/')
+        .ok_or_else(|| RenderError::InvalidWorkflow("tap_repository_invalid".to_owned()))?;
+    let observer = &tap.policy.protection_observer;
+    Ok(Yaml::Map(vec![
+        (
+            "name".to_owned(),
+            Yaml::str("Mint a separate read-only tap protection observer"),
+        ),
+        ("id".to_owned(), Yaml::str("tap-protection-token")),
+        (
+            "uses".to_owned(),
+            Yaml::str(crate::steps::CREATE_GITHUB_APP_TOKEN_USES),
+        ),
+        (
+            "with".to_owned(),
+            Yaml::Map(vec![
+                ("client-id".to_owned(), variable(&observer.app_id_variable)),
+                (
+                    "private-key".to_owned(),
+                    Yaml::str(format!(
+                        "${{{{ secrets.{} }}}}",
+                        observer.app_private_key_secret
+                    )),
+                ),
+                ("owner".to_owned(), Yaml::str(owner)),
+                ("repositories".to_owned(), Yaml::str(repository)),
+                ("permission-administration".to_owned(), Yaml::str("read")),
+                ("skip-token-revoke".to_owned(), Yaml::Bool(false)),
+            ]),
+        ),
     ]))
 }
 
@@ -230,6 +264,24 @@ fn operation(
         ]);
     }
     if merge {
+        values.extend([
+            (
+                "VELNOR_TAP_PROTECTION_TOKEN".to_owned(),
+                Yaml::str("${{ steps.tap-protection-token.outputs.token }}"),
+            ),
+            (
+                "VELNOR_TAP_PROTECTION_APP_ID".to_owned(),
+                variable(&tap.policy.protection_observer.app_id_variable),
+            ),
+            (
+                "VELNOR_TAP_PROTECTION_APP_SLUG".to_owned(),
+                Yaml::str("${{ steps.tap-protection-token.outputs.app-slug }}"),
+            ),
+            (
+                "VELNOR_TAP_PROTECTION_INSTALLATION_ID".to_owned(),
+                Yaml::str("${{ steps.tap-protection-token.outputs.installation-id }}"),
+            ),
+        ]);
         values.push((
             "VELNOR_TAP_COMPLETION_APP_ID".to_owned(),
             variable(&tap.policy.review_completion.app_id_variable),

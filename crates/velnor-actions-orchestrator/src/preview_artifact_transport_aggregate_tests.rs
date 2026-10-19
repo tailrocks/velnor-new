@@ -1,7 +1,9 @@
+use super::super::super::github::sha256;
 use super::super::fixture::{record, request};
-use super::super::{ArtifactPage, ArtifactRecord, MAX_ARCHIVE_BYTES};
+use super::super::{ArtifactPage, ArtifactRecord};
 use super::*;
 use std::cell::{Cell, RefCell};
+use std::io::{Read, Write};
 use std::time::Duration;
 
 struct SignerApi {
@@ -47,10 +49,18 @@ impl ArtifactReadApi for SignerApi {
             artifacts: vec![self.artifact.borrow_mut().take().expect("single inventory")],
         })
     }
-    fn download(&self, id: u64, size: u64) -> Result<Vec<u8>, OrchestratorError> {
+    fn download(
+        &self,
+        id: u64,
+        size: u64,
+        output: &mut std::fs::File,
+        _: CheckDeadline,
+    ) -> Result<(), OrchestratorError> {
         assert_eq!((id, size), (303, 16));
         self.downloads.set(self.downloads.get() + 1);
-        Ok(self.bytes.clone())
+        output
+            .write_all(&self.bytes)
+            .map_err(|_| internal("fixture_write"))
     }
 }
 fn digest() -> String {
@@ -59,13 +69,29 @@ fn digest() -> String {
 fn deadline() -> CheckDeadline {
     CheckDeadline::after(Duration::from_secs(2)).expect("deadline")
 }
-fn invoke(
-    api: &SignerApi,
-    id: u64,
-    digest: &str,
-) -> Result<AdmittedPreviewAggregate, OrchestratorError> {
+struct TestAggregate {
+    bytes: Vec<u8>,
+}
+fn invoke(api: &SignerApi, id: u64, digest: &str) -> Result<TestAggregate, OrchestratorError> {
     let request = request();
-    acquire(api, &request.plan, &request.context, id, digest, deadline())
+    let root = tempfile::tempdir().expect("archive directory");
+    let mut actual = acquire(
+        api,
+        &request.plan,
+        &request.context,
+        id,
+        digest,
+        &root.path().canonicalize().expect("canonical"),
+        deadline(),
+    )?;
+    let mut bytes = Vec::new();
+    actual
+        .archive
+        .reader()?
+        .read_to_end(&mut bytes)
+        .map_err(|_| internal("fixture_read"))?;
+    actual.archive.verify(deadline())?;
+    Ok(TestAggregate { bytes })
 }
 
 #[test]
@@ -88,7 +114,7 @@ fn aggregate_locator_digest_old_attempt_and_wrong_metadata_fail_before_download(
         |a: &mut ArtifactRecord| a.digest = None,
         |a: &mut ArtifactRecord| a.digest = Some(format!("sha256:{}", "b".repeat(64))),
         |a: &mut ArtifactRecord| a.workflow_run.as_mut().expect("run").head_repository_id = 102,
-        |a: &mut ArtifactRecord| a.size_in_bytes = MAX_ARCHIVE_BYTES + 1,
+        |a: &mut ArtifactRecord| a.size_in_bytes = ZipProfile::PreviewAggregate.compressed() + 1,
     ] {
         let api = SignerApi::new();
         mutate(api.artifact.borrow_mut().as_mut().expect("record"));

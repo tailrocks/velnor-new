@@ -1,7 +1,7 @@
 //! Source-free signer acquisition of the exact current-attempt aggregate ZIP.
 use super::{
-    ArtifactReadApi, PreviewArtifactApi, PreviewConsumer, checkpoint, inventory,
-    require_consumer_environment, sha256, validate_metadata,
+    ArtifactReadApi, PreviewArtifactApi, PreviewConsumer, ZipProfile, archive_file::SealedArchive,
+    checkpoint, inventory, require_consumer_environment, validate_metadata,
 };
 use crate::{OrchestratorError, internal::internal};
 use velnor_actions_contract::PackageReleasePlan;
@@ -12,7 +12,7 @@ use velnor_actions_mise::CheckDeadline;
 
 /// Service-authenticated aggregate bytes; native manifest/full-package admission follows.
 pub(crate) struct AdmittedPreviewAggregate {
-    pub bytes: Vec<u8>,
+    pub archive: SealedArchive,
 }
 
 /// Acquire a numeric aggregate upload output for the fixed source-free signer.
@@ -22,12 +22,23 @@ pub(crate) fn acquire_preview_aggregate(
     context: &PreviewProductionContext,
     artifact_id: u64,
     sha256: &str,
+    directory: &std::path::Path,
     deadline: CheckDeadline,
 ) -> Result<AdmittedPreviewAggregate, OrchestratorError> {
     require_consumer_environment(PreviewConsumer::Signer)?;
     let api = PreviewArtifactApi::new(&plan.repository);
     deadline
-        .scope(|| acquire(&api, plan, context, artifact_id, sha256, deadline))
+        .scope(|| {
+            acquire(
+                &api,
+                plan,
+                context,
+                artifact_id,
+                sha256,
+                directory,
+                deadline,
+            )
+        })
         .map_err(|_| internal("preview_artifact_deadline"))?
 }
 
@@ -37,6 +48,7 @@ fn acquire(
     context: &PreviewProductionContext,
     artifact_id: u64,
     digest: &str,
+    directory: &std::path::Path,
     deadline: CheckDeadline,
 ) -> Result<AdmittedPreviewAggregate, OrchestratorError> {
     validate_preview_production_context(plan, context)
@@ -58,14 +70,21 @@ fn acquire(
     let name = preview_aggregate_artifact_name(plan, context)
         .map_err(|_| internal("preview_aggregate_context"))?;
     validate_metadata(artifact, artifact_id, digest, &name, plan, context)?;
-    let bytes = api.download(artifact_id, artifact.size_in_bytes)?;
-    checkpoint(deadline)?;
-    if u64::try_from(bytes.len()).ok() != Some(artifact.size_in_bytes) || sha256(&bytes) != digest {
-        return Err(internal("preview_artifact_download_identity"));
+    if artifact.size_in_bytes > ZipProfile::PreviewAggregate.compressed() {
+        return Err(internal("preview_artifact_metadata_identity"));
     }
+    let mut archive =
+        SealedArchive::create(directory, artifact_id, artifact.size_in_bytes, digest)?;
+    api.download(
+        artifact_id,
+        artifact.size_in_bytes,
+        archive.output(),
+        deadline,
+    )?;
+    archive.seal(deadline)?;
     api.authenticate(plan, context, PreviewConsumer::Signer)?;
     checkpoint(deadline)?;
-    Ok(AdmittedPreviewAggregate { bytes })
+    Ok(AdmittedPreviewAggregate { archive })
 }
 
 #[cfg(test)]

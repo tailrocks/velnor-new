@@ -60,7 +60,7 @@ fn lost_merge_response_is_reconciled_by_authenticated_read_only_retry() {
             body: serde_json::to_vec(&value).expect("JSON response"),
         })
     });
-    verify_already_promoted(&candidate, &authority, &api)
+    verify_already_promoted(&candidate, &authority, &api, &api)
         .expect("authenticated completed promotion retry");
     assert!(
         requests
@@ -135,7 +135,7 @@ fn completed_retry_rejects_mutated_authority_and_receipt_evidence_without_writes
                 body: serde_json::to_vec(&value).expect("JSON response"),
             })
         });
-        assert!(verify_already_promoted(&candidate, &authority, &api).is_err());
+        assert!(verify_already_promoted(&candidate, &authority, &api, &api).is_err());
         assert!(
             requests
                 .borrow()

@@ -7,7 +7,7 @@ use crate::{OrchestratorError, internal::internal};
 use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    io::{Read, Write},
+    io::{Cursor, Read, Seek, Write},
     path::Path,
 };
 use velnor_actions_mise::CheckDeadline;
@@ -17,8 +17,10 @@ mod output;
 #[path = "artifact_zip_reader.rs"]
 mod reader;
 use reader::Archive;
+#[path = "artifact_zip_limits.rs"]
+mod limits;
+pub(crate) use limits::{NATIVE_MANIFEST_BYTES, ZipProfile, leaf_union_compressed_bound};
 const MAX_ENTRIES: usize = 4096;
-const MAX_UNPACKED_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 
 /// One exact flat file, with optional historical signature-bundle byte identity.
 pub(crate) struct ExpectedZipEntry {
@@ -29,22 +31,23 @@ pub(crate) struct ExpectedZipEntry {
     pub unix_permissions: Option<u32>,
 }
 
-/// Read one fixed manifest only after validating the complete archive headers.
-pub(crate) fn read_manifest(
-    bytes: &[u8],
+/// Read a bounded native manifest from an authenticated, descriptor-held ZIP.
+pub(crate) fn read_manifest_file(
+    file: &mut std::fs::File,
+    profile: ZipProfile,
     name: &str,
     max_bytes: u64,
     deadline: CheckDeadline,
 ) -> Result<Vec<u8>, OrchestratorError> {
     deadline
-        .scope(|| read_manifest_in_scope(bytes, name, max_bytes))
+        .scope(|| read_manifest_reader(file, profile, name, max_bytes))
         .map_err(|_| invalid("deadline"))?
 }
 
-/// Extract an exact inventory into an existing empty directory owned by the caller.
-/// The directory is never removed. Failed work removes only pinned files created here.
-pub(crate) fn extract(
-    bytes: &[u8],
+/// Stream a native ZIP from its held descriptor; historical slice callers keep their bounds.
+pub(crate) fn extract_file(
+    file: &mut std::fs::File,
+    profile: ZipProfile,
     destination: &Path,
     expected: &[ExpectedZipEntry],
     deadline: CheckDeadline,
@@ -52,22 +55,32 @@ pub(crate) fn extract(
     check()?;
     let mut output = output::Output::open(destination)?;
     let result = deadline
-        .scope(|| extract_into(bytes, &mut output, expected))
+        .scope(|| extract_reader(file, profile, &mut output, expected))
         .map_err(|_| invalid("deadline"))
-        .and_then(|result| result);
+        .and_then(|r| r);
     finish(result, &mut output)
 }
 
+/// Read one fixed manifest only after validating the complete archive headers.
 pub(super) fn read_manifest_in_scope(
     bytes: &[u8],
     name: &str,
     max_bytes: u64,
 ) -> Result<Vec<u8>, OrchestratorError> {
+    read_manifest_reader(Cursor::new(bytes), ZipProfile::Recovery, name, max_bytes)
+}
+
+fn read_manifest_reader<R: Read + Seek>(
+    input: R,
+    profile: ZipProfile,
+    name: &str,
+    max_bytes: u64,
+) -> Result<Vec<u8>, OrchestratorError> {
     check()?;
-    if !safe_name(name) || max_bytes == 0 || max_bytes > MAX_UNPACKED_BYTES {
+    if !safe_name(name) || max_bytes == 0 || max_bytes > profile.unpacked() {
         return Err(invalid("manifest_bound"));
     }
-    let mut archive = reader::open(bytes)?;
+    let mut archive = reader::open(input, profile)?;
     let mut file = archive
         .by_name(name)
         .map_err(|_| invalid("manifest_missing"))?;
@@ -84,6 +97,8 @@ pub(super) fn read_manifest_in_scope(
     Ok(output)
 }
 
+/// Extract an exact inventory into an existing empty directory owned by the caller.
+/// The directory is never removed. Failed work removes only pinned files created here.
 pub(super) fn extract_in_scope(
     bytes: &[u8],
     destination: &Path,
@@ -116,8 +131,17 @@ fn extract_into(
     output: &mut output::Output,
     expected: &[ExpectedZipEntry],
 ) -> Result<(), OrchestratorError> {
-    let mut archive = reader::open(bytes)?;
-    let entries = admit(&mut archive, expected)?;
+    extract_reader(Cursor::new(bytes), ZipProfile::Recovery, output, expected)
+}
+
+fn extract_reader<R: Read + Seek>(
+    input: R,
+    profile: ZipProfile,
+    output: &mut output::Output,
+    expected: &[ExpectedZipEntry],
+) -> Result<(), OrchestratorError> {
+    let mut archive = reader::open(input, profile)?;
+    let entries = admit(&mut archive, expected, profile)?;
     for (index, expected) in entries {
         check()?;
         let mut file = archive.by_index(index).map_err(|_| invalid("entry"))?;
@@ -134,11 +158,13 @@ fn extract_into(
     check()
 }
 
-fn admit<'a>(
-    archive: &mut Archive<'_>,
+fn admit<'a, R: Read + Seek>(
+    archive: &mut Archive<R>,
     expected: &'a [ExpectedZipEntry],
+    profile: ZipProfile,
 ) -> Result<Vec<(usize, &'a ExpectedZipEntry)>, OrchestratorError> {
-    if expected.is_empty() || expected.len() > MAX_ENTRIES || expected.len() != archive.len() {
+    if expected.is_empty() || expected.len() > profile.entries() || expected.len() != archive.len()
+    {
         return Err(invalid("inventory"));
     }
     let mut by_name = BTreeMap::new();
@@ -147,7 +173,7 @@ fn admit<'a>(
         if !safe_name(&entry.name)
             || by_name.insert(entry.name.as_str(), entry).is_some()
             || entry.max_bytes == 0
-            || entry.max_bytes > MAX_UNPACKED_BYTES
+            || entry.max_bytes > profile.unpacked()
             || entry.size.is_some_and(|n| n > entry.max_bytes)
             || entry.unix_permissions.is_some_and(|mode| mode > 0o7777)
             || entry.sha256.as_ref().is_some_and(|h| {
@@ -183,7 +209,7 @@ fn admit<'a>(
         }
         total = total
             .checked_add(file.size())
-            .filter(|n| *n <= MAX_UNPACKED_BYTES)
+            .filter(|n| *n <= profile.unpacked())
             .ok_or_else(|| invalid("unpacked_limit"))?;
         admitted.push((index, *expected));
     }
@@ -220,7 +246,7 @@ fn copy(
     Ok((copied, hex_digest(hasher.finalize())))
 }
 
-fn hex_digest(digest: impl AsRef<[u8]>) -> String {
+pub(super) fn hex_digest(digest: impl AsRef<[u8]>) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut out = String::with_capacity(64);
     for byte in digest.as_ref() {
@@ -255,3 +281,7 @@ pub(super) fn within_operation<T>(
 #[cfg(test)]
 #[path = "artifact_zip_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "artifact_zip_stream_tests.rs"]
+mod stream_tests;

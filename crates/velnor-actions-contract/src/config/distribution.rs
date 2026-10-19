@@ -5,6 +5,10 @@ use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
+#[path = "distribution_protection_observer.rs"]
+mod protection_observer;
+pub use protection_observer::HomebrewTapProtectionObserver;
+
 /// Optional distribution destinations outside `[stacks.rust]`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -55,6 +59,8 @@ pub struct HomebrewTapConfig {
     pub app_id_variable: String,
     /// Repository/environment secret containing the GitHub App private key.
     pub app_private_key_secret: String,
+    /// Independently scoped read-only authority for classic branch protection.
+    pub protection_observer: HomebrewTapProtectionObserver,
     /// Closed merge policy; arbitrary merge modes and conditions are forbidden.
     pub merge: TapMergePolicy,
     /// Trusted App check that must complete against the exact PR head SHA.
@@ -182,6 +188,7 @@ impl HomebrewTapConfig {
                 "bad_app_private_key_secret",
             ));
         }
+        self.protection_observer.validate(file, key, self)?;
         self.review_completion.validate(file, key)?;
         if self.app_id_variable == self.review_completion.app_id_variable
             || self

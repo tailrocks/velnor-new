@@ -90,14 +90,18 @@ impl ArtifactReadApi for PreviewArtifactApi {
         )))
     }
 
-    fn download(&self, id: u64, size: u64) -> Result<Vec<u8>, OrchestratorError> {
-        let limit = usize::try_from(size).map_err(|_| internal("preview_artifact_size"))?;
-        self.api.request_accept(
-            vec![std::ffi::OsString::from(
-                self.api.route(&format!("actions/artifacts/{id}/zip")),
-            )],
-            limit,
-            "application/vnd.github+json",
+    fn download(
+        &self,
+        id: u64,
+        size: u64,
+        output: &mut std::fs::File,
+        deadline: velnor_actions_mise::CheckDeadline,
+    ) -> Result<(), OrchestratorError> {
+        self.api.request_to_file(
+            self.api.route(&format!("actions/artifacts/{id}/zip")),
+            output,
+            size,
+            deadline,
         )
     }
 }

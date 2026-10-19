@@ -17,3 +17,23 @@ fn result(value: Result<(), velnor_actions_orchestrator::OrchestratorError>) -> 
         Err(error) => super::fail_internal(&error.to_string()),
     }
 }
+
+/// Append only the canonical native digest; no credential is handed to source.
+pub(super) fn acquire() -> ExitCode {
+    use std::io::Write;
+    let digest = match velnor_actions_orchestrator::acquire_preview_leaves() {
+        Ok(digest) => digest,
+        Err(error) => return super::fail_internal(&error.to_string()),
+    };
+    let Some(path) = std::env::var_os("GITHUB_OUTPUT") else {
+        return super::fail_internal("missing github output");
+    };
+    match std::fs::OpenOptions::new()
+        .append(true)
+        .open(path)
+        .and_then(|mut file| writeln!(file, "admission_digest={digest}"))
+    {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => super::fail_internal(&error.to_string()),
+    }
+}

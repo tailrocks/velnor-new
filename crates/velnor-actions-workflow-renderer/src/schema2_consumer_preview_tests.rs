@@ -229,6 +229,10 @@ fn with_tap() -> ConsumerPreviewSpec {
             environment: TapUpdateEnvironment::TapUpdate,
             app_id_variable: "TAP_APP_ID".to_owned(),
             app_private_key_secret: "TAP_APP_PRIVATE_KEY".to_owned(),
+            protection_observer: velnor_actions_contract::config::HomebrewTapProtectionObserver {
+                app_id_variable: "TAP_PROTECTION_APP_ID".to_owned(),
+                app_private_key_secret: "TAP_PROTECTION_APP_PRIVATE_KEY".to_owned(),
+            },
             merge: TapMergePolicy::SquashAfterGates,
             review_completion: ExactHeadReviewCheck {
                 check_name: "Review completion".to_owned(),
@@ -275,7 +279,17 @@ fn tap_jobs_separate_unprivileged_preparation_and_scoped_app_authority() {
     assert!(!writer.contains("VELNOR_TAP_MERGE_TOKEN:"));
     let merge = job(yaml, "preview-tap-merge", None);
     assert!(merge.contains("permission-administration: read"));
-    assert!(merge.contains("permission-checks: read"));
+    assert!(!merge.contains("permission-checks: read"));
+    assert!(merge.contains("VELNOR_TAP_PROTECTION_TOKEN"));
+    assert!(!writer.contains("VELNOR_TAP_PROTECTION_"));
+    assert!(!writer.contains("${{ secrets.TAP_PROTECTION_APP_PRIVATE_KEY }}"));
+    assert!(!prepare.contains("VELNOR_TAP_PROTECTION_"));
+    assert!(!prepare.contains("${{ secrets.TAP_PROTECTION_APP_PRIVATE_KEY }}"));
+    let observer = merge
+        .split("id: tap-protection-token")
+        .nth(1)
+        .expect("observer mint");
+    assert!(observer.contains("permission-administration: read"));
     assert!(merge.contains("VELNOR_TAP_MERGE_TOKEN:"));
     assert!(!merge.contains("VELNOR_TAP_TOKEN:"));
     assert!(merge.contains("VELNOR_TAP_COMPLETION_APP_ID:"));

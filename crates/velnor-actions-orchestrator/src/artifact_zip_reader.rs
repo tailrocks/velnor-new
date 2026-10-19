@@ -1,20 +1,20 @@
 //! Deadline-aware ZIP metadata admission, including duplicate/overlap rejection.
-use super::{MAX_ENTRIES, MAX_UNPACKED_BYTES, check, invalid, safe_name};
+use super::{ZipProfile, check, invalid, safe_name};
 use crate::OrchestratorError;
 use std::{
     cell::Cell,
-    io::{Cursor, Read, Seek, SeekFrom},
+    io::{Read, Seek, SeekFrom},
     rc::Rc,
 };
 
-pub(super) type Archive<'a> = zip::ZipArchive<CheckedCursor<'a>>;
-pub(super) struct CheckedCursor<'a> {
-    cursor: Cursor<&'a [u8]>,
+pub(super) type Archive<R> = zip::ZipArchive<CheckedCursor<R>>;
+pub(super) struct CheckedCursor<R> {
+    cursor: R,
     // Prevent malformed central-directory candidates from growing metadata without
     // bound before ZipArchive exposes its decoded entry count. Disabled for bodies.
     metadata_ops: Rc<Cell<Option<usize>>>,
 }
-impl CheckedCursor<'_> {
+impl<R> CheckedCursor<R> {
     fn checkpoint(&self) -> std::io::Result<()> {
         check().map_err(std::io::Error::other)?;
         if let Some(left) = self.metadata_ops.get() {
@@ -26,31 +26,35 @@ impl CheckedCursor<'_> {
         Ok(())
     }
 }
-impl Read for CheckedCursor<'_> {
+impl<R: Read> Read for CheckedCursor<R> {
     fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
         self.checkpoint()?;
         self.cursor.read(buffer)
     }
 }
-impl Seek for CheckedCursor<'_> {
+impl<R: Seek> Seek for CheckedCursor<R> {
     fn seek(&mut self, position: SeekFrom) -> std::io::Result<u64> {
         self.checkpoint()?;
         self.cursor.seek(position)
     }
 }
 
-pub(super) fn open(bytes: &[u8]) -> Result<Archive<'_>, OrchestratorError> {
+pub(super) fn open<R: Read + Seek>(
+    mut input: R,
+    profile: ZipProfile,
+) -> Result<Archive<R>, OrchestratorError> {
     check()?;
-    if bytes.len() > 1024 * 1024 * 1024 {
+    if input.seek(SeekFrom::End(0)).map_err(|_| invalid("seek"))? > profile.compressed() {
         return Err(invalid("compressed_limit"));
     }
-    let operations = Rc::new(Cell::new(Some(MAX_ENTRIES * 32)));
+    input.rewind().map_err(|_| invalid("seek"))?;
+    let operations = Rc::new(Cell::new(Some(profile.entries() * 32)));
     let cursor = CheckedCursor {
-        cursor: Cursor::new(bytes),
+        cursor: input,
         metadata_ops: Rc::clone(&operations),
     };
     let mut archive = zip::ZipArchive::new(cursor).map_err(|_| invalid("invalid"))?;
-    if archive.is_empty() || archive.len() > MAX_ENTRIES {
+    if archive.is_empty() || archive.len() > profile.entries() {
         return Err(invalid("entry_limit"));
     }
     // zip 9 stores names in an IndexMap: the default by_index/by_name path can
@@ -76,7 +80,7 @@ pub(super) fn open(bytes: &[u8]) -> Result<Archive<'_>, OrchestratorError> {
         }
         total = total
             .checked_add(file.size())
-            .filter(|n| *n <= MAX_UNPACKED_BYTES)
+            .filter(|n| *n <= profile.unpacked())
             .ok_or_else(|| invalid("unpacked_limit"))?;
     }
     operations.set(None);

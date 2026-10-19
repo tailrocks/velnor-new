@@ -53,8 +53,8 @@ pub use check_receipt_budget::{
 };
 pub use discovery::DiscoveryConfig;
 pub use distribution::{
-    DistributionConfig, ExactHeadReviewCheck, HomebrewTapConfig, HomebrewTapSource,
-    ReviewAppIdentity, TapMergePolicy, TapUpdateEnvironment, TapUpdaterBinding,
+    DistributionConfig, ExactHeadReviewCheck, HomebrewTapConfig, HomebrewTapProtectionObserver,
+    HomebrewTapSource, ReviewAppIdentity, TapMergePolicy, TapUpdateEnvironment, TapUpdaterBinding,
 };
 pub use execution::{
     ExecutionConfig, ExecutionMode, ExecutionOverride, ExecutionParity, ExecutionProfile,

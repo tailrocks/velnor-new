@@ -37,10 +37,14 @@ pub(super) struct ApiResponse {
 
 impl TapMergeGitHub {
     pub(super) fn with_max_wait(token: String, max_wait: Duration) -> Self {
+        Self::with_deadline(token, Instant::now() + max_wait)
+    }
+
+    pub(super) fn with_deadline(token: String, deadline: Instant) -> Self {
         Self {
             catalog: ToolCatalog::pinned(),
             token,
-            deadline: Instant::now() + max_wait,
+            deadline,
             #[cfg(test)]
             test_transport: None,
         }

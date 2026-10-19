@@ -52,7 +52,7 @@ fn admission_refuses_changed_verified_bytes_and_never_creates_success_asset() {
     let (path, proof) = asset(root.path());
     let out = fresh_directory(root.path(), "output").expect("output");
     fs::write(&path, b"bad").expect("mutation");
-    assert!(read_verified(&path, &proof, deadline()).is_err());
+    assert!(copy_verified(&path, &out.join(&proof.name), &proof, deadline()).is_err());
     assert!(!out.join(proof.name).exists());
 }
 
@@ -69,7 +69,7 @@ fn expired_staging_does_not_publish_asset_and_fresh_directory_never_reuses() {
         Duration::from_millis(1),
     )
     .expect("expired");
-    assert!(read_verified(&path, &proof, expired).is_err());
+    assert!(copy_verified(&path, &out.join(&proof.name), &proof, expired).is_err());
     assert!(!out.join(proof.name).exists());
 }
 

@@ -64,6 +64,7 @@ updater = { task = "package:update-preview", source = { mise_config = "mise.toml
 environment = "tap-update"
 app_id_variable = "HOMEBREW_TAP_APP_ID"
 app_private_key_secret = "HOMEBREW_TAP_APP_PRIVATE_KEY"
+protection_observer = { app_id_variable = "TAP_PROTECTION_APP_ID", app_private_key_secret = "TAP_PROTECTION_APP_PRIVATE_KEY" }
 merge = "squash-after-gates"
 review_completion = { check_name = "Review completion", app_id_variable = "REVIEW_APP_ID", expected_reviewers = [{ app_id_variable = "SECURITY_REVIEW_APP_ID" }] }
 ```
@@ -79,6 +80,8 @@ Producer and updater bindings are typed named Mise task projections. Each binds 
 The producer receives the fixed `VELNOR_PREVIEW_REQUEST_FILE` native task-handoff path in addition to fixed `VELNOR_RELEASE_SOURCE_COMMIT`, `VELNOR_RELEASE_SOURCE_REF`, `VELNOR_RELEASE_VERSION`, `VELNOR_RELEASE_COMMIT_COUNT`, `VELNOR_RELEASE_OUTPUT_DIRECTORY`, `VELNOR_RELEASE_OUTPUT_MANIFEST`, `CARGO_BUILD_JOBS`, and configured application version variables. The two output-path variables are absolute paths for task convenience; the executor resolves them beneath the canonical checkout and requires them to correspond to the repository-relative configured output root and manifest. They do not grant path authority. The producer-side verifier receives the configured manifest path relative to the output root; any safe descendant path is valid. After verification, Velnor copies that manifest to the fixed `package-output.json` name in the uploaded handoff, which the isolated signer independently verifies. CI run identity is supplied independently to signer and publisher by the eligibility job; producer output never chooses that authority.
 
 The static request remains canonical `velnor.package-release-plan.v1` at `$RUNNER_TEMP/velnor/package-release-plan.json`. The private `execute-preview-producer-v1` operation requires a literal `payload` or `assemble` stage; no implicit serial route remains. Every product/target pair has one literal job, followed by a complete-union assembly job. Native producer-side code re-derives source policy, full history and execution identity before running the declared isolated task. Each leaf emits a distinct partial output schema; assembly preserves every admitted archive and SBOM and creates the complete handoff and opaque companions. The source-free signer independently acquires the aggregate by immutable artifact ID and mandatory service ZIP digest, validates native evidence and the complete raw inventory, and then signs. It never loads source configuration, discovers Cargo, checks out source, or runs a repository task. The full request, native proof, artifact admission and task-input contracts are specified in [native-preview-production.md](native-preview-production.md). Capsule companion semantics remain application-level validation owned by Jackin's producer and tap tests; Velnor binds exact companion bytes and digest only.
+
+Before any checkout or repository preparation, assembly runs the source-free `acquire-preview-leaves-v1` operation with a read-only Actions token. Only pinned, source-free Mise setup, fixed pinned GitHub CLI installation, and checksum-bound official-generator acquisition may precede it. The authenticated process exits before source code runs. Its canonical full request, every leaf proof, and exact admitted input inventory are bound by a SHA-256 digest published through the native step output. The credential-free executor receives that exact output through its explicit step environment, validates the complete closure and reopens/pins every input after source preparation, and rejects either ambient GitHub token. No token-bearing operation runs later in this source job, including after the task; background source descendants must never gain a later credential. The separate source-free signer performs fresh remote run/source/CI and aggregate-ID/digest authentication.
 
 The closed producer handoff discriminator is `velnor.package-output.v1`. Its
 top-level fields are exactly `schema`, `source_commit`, `source_ref`, `version`,
@@ -104,6 +107,21 @@ The `preview-publish` environment must contain `PREVIEW_IMMUTABILITY_READ_TOKEN`
 Before promotion, runtime checks the source default branch is protected and that effective protections include a pull-request rule (zero required approvals is valid), resolved review threads, nonempty required status checks, force-push prevention, and deletion prevention. It reads GitHub's effective active-rules endpoint for repository/organization rulesets and the classic branch-protection endpoint, combining protections from both. A classic branch-protection 404 counts only as an absent classic rule; ruleset protections must still satisfy any requirements the classic endpoint does not. The fixed `preview-publish` and `tap-update` environments must each have no approval/custom protection rule and must use custom deployment branch policies with the single exact `main` branch pattern; `protected_branches=true` alone is not an exact main-only restriction. The preview publisher checks `preview-publish`; the App writer and merge gate recheck `tap-update` immediately before their write/merge boundary. Stable publication retains its existing human-reviewed `consumer-binary-release` environment contract, including at least one reviewer and self-review prevention.
 
 These checks use GitHub's documented [branch protection](https://docs.github.com/en/rest/branches/branch-protection), [effective branch rules](https://docs.github.com/en/rest/repos/rules), [deployment environments](https://docs.github.com/en/rest/deployments/environments?apiVersion=2026-03-10), [deployment branch policies](https://docs.github.com/en/rest/deployments/branch-policies), and [immutable releases](https://docs.github.com/en/rest/repos/repos?piVersion=2022-11-28) endpoints. The status credential needs source repository Administration:read (also Metadata:read for effective rules); `GH_TOKEN` needs Actions:read for environment settings and retained workflow evidence, Contents:read for source identity, and Attestations:read for artifact verification.
+
+The tap merge job mints two separately scoped installation tokens. The writer
+requests only Contents/PR write and automatic Metadata read. The mandatory
+`protection_observer` App requests Administration read and automatic Metadata
+read for exactly the same single tap repository; its App and installation must
+be distinct from the writer, and its token must differ from writer/source tokens.
+Only the native merge operation receives it. No updater or source task does.
+Classic protection is read through this observer; effective rules and full
+ruleset records remain authenticated under the actual merge writer. Each active
+ruleset must report `current_user_can_bypass: "never"` for that writer. Missing,
+null, unknown or bypass-capable requester states reject promotion. An observer's
+requester state cannot substitute for the writer's. Current, final and completed
+promotion verification use the same separated read boundaries. The observer
+capability exposes no merge or write operation. These source contracts do not
+claim that external Apps, secrets or the completion check are already configured.
 
 ## 2. Selection, version, and immutable identity
 

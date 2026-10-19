@@ -32,6 +32,10 @@ pub(super) fn gate_request(path: &Path) -> Option<PathBuf> {
     }
     for key in [
         "VELNOR_TAP_MERGE_TOKEN",
+        "VELNOR_TAP_PROTECTION_TOKEN",
+        "VELNOR_TAP_PROTECTION_APP_ID",
+        "VELNOR_TAP_PROTECTION_APP_SLUG",
+        "VELNOR_TAP_PROTECTION_INSTALLATION_ID",
         "VELNOR_TAP_APP_ID",
         "VELNOR_TAP_APP_SLUG",
         "VELNOR_TAP_INSTALLATION_ID",

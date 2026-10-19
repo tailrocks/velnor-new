@@ -44,8 +44,8 @@ pub use super::plan_output_limits::{JOB_OUTPUTS_BUDGET_UTF16_BYTES, PlanOutputMo
 pub use super::prepare::{GenerationPreparation, prepare};
 pub use super::preseed_manifest::{PRESEED_MANIFEST_OP, write_preseed_manifest};
 pub use super::preview_producer::{
-    ADMIT_PREVIEW_AGGREGATE_OP, EXECUTE_PREVIEW_PRODUCER_OP, admit_preview_aggregate,
-    execute_preview_producer,
+    ACQUIRE_PREVIEW_LEAVES_OP, ADMIT_PREVIEW_AGGREGATE_OP, EXECUTE_PREVIEW_PRODUCER_OP,
+    acquire_preview_leaves, admit_preview_aggregate, execute_preview_producer,
 };
 pub use super::provenance::{EvidenceProvenance, ProfileProvenance};
 pub use super::qualification_resolver::{

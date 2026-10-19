@@ -41,7 +41,7 @@ pub(crate) mod artifact_zip;
 #[path = "preview_artifact_transport.rs"]
 mod preview_artifacts;
 pub(crate) use preview_artifacts::{
-    acquire_preview_aggregate, acquire_preview_artifacts, authenticate_preview_assembly,
+    AdmittedPreviewArtifact, acquire_preview_aggregate, acquire_preview_artifacts,
 };
 
 /// Private operation that publishes one authenticated native release.

@@ -35,14 +35,14 @@ mod real_tests;
 #[path = "package_release_artifacts_tests.rs"]
 mod tests;
 const HANDOFF_SCHEMA: &str = "velnor.package-output.v1";
-const MAX_HANDOFF_BYTES: u64 = 4 * 1024 * 1024;
-const MAX_SBOM_BYTES: u64 = 32 * 1024 * 1024;
-const MAX_PAYLOAD_BYTES: u64 = 1024 * 1024 * 1024;
+pub(crate) const MAX_HANDOFF_BYTES: u64 = 4 * 1024 * 1024;
+pub(crate) const MAX_SBOM_BYTES: u64 = 32 * 1024 * 1024;
+pub(crate) const MAX_PAYLOAD_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_ARTIFACT_BYTES: u64 = 1024 * 1024 * 1024;
-const MAX_FILE_COUNT: usize = 4096;
+pub(crate) const MAX_FILE_COUNT: usize = 4096;
 const MAX_PATH_BYTES: usize = 4096;
 const MAX_PATH_DEPTH: usize = 64;
-const MAX_TOTAL_BYTES: u64 = 6 * 1024 * 1024 * 1024;
+pub(crate) const MAX_TOTAL_BYTES: u64 = 6 * 1024 * 1024 * 1024;
 const MAX_TOTAL_DECOMPRESSED_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const VERIFY_TIMEOUT: Duration = Duration::from_secs(120);
 

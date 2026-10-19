@@ -183,12 +183,23 @@ pub(super) fn operation(
         "set -euo pipefail\numask 077\nmkdir -p \"$RUNNER_TEMP/velnor\"\n{materialize}\"$RUNNER_TEMP/velnor/bin/velnor-actions-{}\"\n",
         spec.generator_version
     );
+    let run = source_operation_script(op, run);
     Ok(script(
         "Execute native release operation",
         "release",
         &run,
         &env,
     ))
+}
+
+fn source_operation_script(op: &str, run: String) -> String {
+    if op == "execute-preview-producer-v1" {
+        // Source preparation may have written runner environment files. Remove
+        // credentials before the native source executor itself is spawned.
+        crate::toolchain_env::with_credential_unset_script(&run)
+    } else {
+        run
+    }
 }
 
 #[derive(Clone, Copy)]

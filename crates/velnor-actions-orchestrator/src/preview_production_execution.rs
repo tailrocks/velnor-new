@@ -1,7 +1,7 @@
 //! Stage-specific execution with receipt-last native evidence.
 
 use super::{
-    aggregate,
+    aggregate::AdmittedLeaves,
     handoff::{self, AssetProof},
     leaf_manifest::{self, PreviewAggregateManifest, PreviewLeafManifest},
     proof::{ProofGuard, publish_proof},
@@ -43,7 +43,7 @@ pub(super) fn execute(
     let admitted = match request.stage {
         PreviewProductionStage::Payload { .. } => None,
         PreviewProductionStage::Assemble { .. } => {
-            Some(aggregate::acquire(temp, request, preview, deadline)?)
+            Some(super::acquisition::load(temp, request, preview, deadline)?)
         }
     };
     let task = handoff::write_task_request(
@@ -134,7 +134,7 @@ fn publish_aggregate(
     operation: &Publication<'_>,
     producer: crate::preview_producer::PreviewProducerProof,
     preview: &RustBinaryPreviewConfig,
-    leaves: &aggregate::AdmittedLeaves,
+    leaves: &AdmittedLeaves,
     guard: &mut ProofGuard,
 ) -> Result<(), OrchestratorError> {
     let Publication {
@@ -170,7 +170,6 @@ fn publish_aggregate(
     leaves.require_unchanged_output(&assets)?;
     leaves.recheck(deadline)?;
     handoff::write_upload(&raw.join("package-output.json"), &manifest_bytes, deadline)?;
-    crate::package_release_publish::authenticate_preview_assembly(request, deadline)?;
     let proof = PreviewAggregateManifest {
         schema: leaf_manifest::AGGREGATE_SCHEMA.to_owned(),
         request: request.clone(),

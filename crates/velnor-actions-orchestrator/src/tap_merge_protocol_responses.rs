@@ -230,7 +230,7 @@ fn add_protection_responses(
         format!("repos/{repository}/rulesets/5?includes_parents=true"),
         json!({
             "id": 5, "source_type": "Repository", "source": repository, "target": "branch",
-            "enforcement": "active", "bypass_actors": [], "rules": [
+            "enforcement": "active", "current_user_can_bypass":"never", "bypass_actors": [], "rules": [
                 {"type": "pull_request", "parameters": {
                     "required_approving_review_count": 0,
                     "required_review_thread_resolution": true

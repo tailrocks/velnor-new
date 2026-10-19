@@ -14,7 +14,7 @@ use crate::{
     },
     package_release_publish::{
         acquire_preview_artifacts,
-        artifact_zip::{self, ExpectedZipEntry},
+        artifact_zip::{self, ExpectedZipEntry, ZipProfile},
     },
 };
 use std::path::Path;
@@ -28,7 +28,9 @@ use velnor_actions_mise::CheckDeadline;
 pub(super) struct AdmittedLeaves {
     pub(super) manifests: Vec<PreviewLeafManifest>,
     pub(super) inputs: Vec<TaskInput>,
-    pinned: Vec<PinnedAsset>,
+    pub(super) pinned: Vec<PinnedAsset>,
+    pub(super) manifest_bytes: u64,
+    pub(super) asset_bytes: u64,
 }
 
 impl AdmittedLeaves {
@@ -57,71 +59,113 @@ impl AdmittedLeaves {
 pub(super) fn acquire(
     temp: &Path,
     request: &PreviewProductionRequest,
-    preview: &velnor_actions_contract::config::RustBinaryPreviewConfig,
     deadline: CheckDeadline,
 ) -> Result<AdmittedLeaves, OrchestratorError> {
-    let artifacts = acquire_preview_artifacts(request, deadline)?;
     let root = handoff::fresh_directory(temp, "preview-leaves")?;
     let mut admitted = AdmittedLeaves {
         manifests: Vec::new(),
         inputs: Vec::new(),
         pinned: Vec::new(),
+        manifest_bytes: 0,
+        asset_bytes: 0,
     };
-    for (index, artifact) in artifacts.into_iter().enumerate() {
-        handoff::checkpoint(deadline)?;
-        let mut expected = request.clone();
-        expected.stage = PreviewProductionStage::Payload {
-            pair: artifact.reference.pair,
-        };
-        let bytes = artifact_zip::read_manifest(
-            &artifact.bytes,
-            handoff::LEAF_MANIFEST,
-            handoff::MAX_NATIVE_MANIFEST,
-            deadline,
-        )?;
-        let leaf = PreviewLeafManifest::parse(&bytes, &expected)?;
-        leaf.validate_source(preview)?;
-        let raw = handoff::fresh_directory(&root, &format!("raw-{index:03}"))?;
-        let entries = leaf_entries(&leaf, &bytes);
-        artifact_zip::extract(&artifact.bytes, &raw, &entries, deadline)?;
-        let input = handoff::fresh_directory(&root, &format!("input-{index:03}"))?;
-        reconstruct_input(&raw, &input, &leaf, deadline)?;
-        let verified = verify_payload_output(
-            &input,
-            "package-output.json",
-            &root.join(format!("verified-{index:03}")),
-            &expected,
-            deadline,
-        )?;
-        for asset in [verified.archive, verified.sbom] {
-            let proof = AssetProof {
-                name: asset.name.clone(),
-                sha256: asset.sha256.clone(),
-                size: asset.size,
-            };
-            admitted
-                .pinned
-                .push(PinnedAsset::new(&asset.path, &proof, deadline)?);
-            let PreviewProductionStage::Payload { pair } = &expected.stage else {
-                return Err(internal("preview_leaf_stage"));
-            };
-            admitted.inputs.push(TaskInput {
-                pair: pair.clone(),
-                name: proof.name,
-                sha256: proof.sha256,
-                size: proof.size,
-                path: asset
-                    .path
-                    .to_str()
-                    .ok_or_else(|| internal("preview_input_utf8"))?
-                    .to_owned(),
-            });
-        }
-        admitted.manifests.push(leaf);
-    }
+    acquire_preview_artifacts(request, &root, deadline, |artifact| {
+        admit_leaf(&root, request, deadline, artifact, &mut admitted)
+    })?;
     admitted.inputs.sort_by(|a, b| a.name.cmp(&b.name));
     admitted.recheck(deadline)?;
     Ok(admitted)
+}
+
+fn admit_leaf(
+    root: &Path,
+    request: &PreviewProductionRequest,
+    deadline: CheckDeadline,
+    mut artifact: crate::package_release_publish::AdmittedPreviewArtifact,
+    admitted: &mut AdmittedLeaves,
+) -> Result<(), OrchestratorError> {
+    let index = admitted.manifests.len();
+
+    handoff::checkpoint(deadline)?;
+    let mut expected = request.clone();
+    expected.stage = PreviewProductionStage::Payload {
+        pair: artifact.reference.pair,
+    };
+    let bytes = artifact_zip::read_manifest_file(
+        artifact.archive.reader()?,
+        ZipProfile::PreviewLeaf,
+        handoff::LEAF_MANIFEST,
+        handoff::MAX_NATIVE_MANIFEST,
+        deadline,
+    )?;
+    admitted.manifest_bytes = admitted
+        .manifest_bytes
+        .checked_add(bytes.len() as u64)
+        .filter(|n| *n <= handoff::MAX_NATIVE_MANIFEST)
+        .ok_or_else(|| internal("preview_leaf_metadata_total"))?;
+    let leaf = PreviewLeafManifest::parse(&bytes, &expected)?;
+    let raw = handoff::fresh_directory(root, &format!("raw-{index:03}"))?;
+    let entries = leaf_entries(&leaf, &bytes);
+    artifact_zip::extract_file(
+        artifact.archive.reader()?,
+        ZipProfile::PreviewLeaf,
+        &raw,
+        &entries,
+        deadline,
+    )?;
+    artifact.archive.verify(deadline)?;
+    let input = handoff::fresh_directory(root, &format!("input-{index:03}"))?;
+    reconstruct_input(&raw, &input, &leaf, deadline)?;
+    let verified = verify_payload_output(
+        &input,
+        "package-output.json",
+        &root.join(format!("verified-{index:03}")),
+        &expected,
+        deadline,
+    )?;
+    retain_verified(admitted, &expected, verified, deadline)?;
+    admitted.manifests.push(leaf);
+
+    Ok(())
+}
+
+fn retain_verified(
+    admitted: &mut AdmittedLeaves,
+    expected: &PreviewProductionRequest,
+    verified: crate::package_release_artifacts::preview_payload::VerifiedPayload,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    for asset in [verified.archive, verified.sbom] {
+        admitted.asset_bytes = admitted
+            .asset_bytes
+            .checked_add(asset.size)
+            .filter(|n| *n <= crate::package_release_artifacts::MAX_TOTAL_BYTES)
+            .ok_or_else(|| internal("preview_leaf_asset_total"))?;
+        let proof = AssetProof {
+            name: asset.name.clone(),
+            sha256: asset.sha256.clone(),
+            size: asset.size,
+        };
+        admitted
+            .pinned
+            .push(PinnedAsset::new(&asset.path, &proof, deadline)?);
+        let PreviewProductionStage::Payload { pair } = &expected.stage else {
+            return Err(internal("preview_leaf_stage"));
+        };
+        admitted.inputs.push(TaskInput {
+            pair: pair.clone(),
+            name: proof.name,
+            sha256: proof.sha256,
+            size: proof.size,
+            path: asset
+                .path
+                .to_str()
+                .ok_or_else(|| internal("preview_input_utf8"))?
+                .to_owned(),
+        });
+    }
+
+    Ok(())
 }
 
 fn leaf_entries(leaf: &PreviewLeafManifest, manifest: &[u8]) -> Vec<ExpectedZipEntry> {
@@ -153,12 +197,11 @@ fn reconstruct_input(
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     for asset in &leaf.assets {
-        let bytes = handoff::read_verified(&raw.join(&asset.name), asset, deadline)?;
-        write_exclusive_until(
+        handoff::copy_verified(
+            &raw.join(&asset.name),
             &input.join(&asset.name),
-            &bytes,
-            "preview_leaf_input",
-            || handoff::checkpoint(deadline),
+            asset,
+            deadline,
         )?;
     }
     let manifest = source_manifest(leaf)?;

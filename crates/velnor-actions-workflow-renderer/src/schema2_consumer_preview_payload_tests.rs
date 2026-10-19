@@ -43,9 +43,25 @@ fn every_literal_pair_has_exact_owner_and_complete_assembly_dependencies() {
         );
         expected.push(Yaml::str(id));
         let rendered = crate::yaml::render_yaml(job);
-        assert!(rendered.contains(&format!("VELNOR_PREVIEW_PRODUCT_ID: {}", pair.product_id)));
-        assert!(rendered.contains(&format!("VELNOR_PREVIEW_TARGET: {}", pair.target)));
-        assert!(rendered.contains("VELNOR_PREVIEW_STAGE: payload"));
+        let Yaml::Seq(steps) = field(job, "steps") else {
+            panic!("steps")
+        };
+        let executor = steps
+            .iter()
+            .find(|step| has_operation(step, "execute-preview-producer-v1"))
+            .expect("payload executor");
+        assert_eq!(
+            env_value(executor, "VELNOR_PREVIEW_PRODUCT_ID"),
+            Some(&Yaml::str(&pair.product_id))
+        );
+        assert_eq!(
+            env_value(executor, "VELNOR_PREVIEW_TARGET"),
+            Some(&Yaml::str(&pair.target))
+        );
+        assert_eq!(
+            env_value(executor, "VELNOR_PREVIEW_STAGE"),
+            Some(&Yaml::str("payload"))
+        );
         assert!(!rendered.contains("GH_TOKEN: \"${{ github.token }}\""));
         assert!(!rendered.contains("matrix:"));
     }
@@ -111,7 +127,7 @@ fn generated_leaf_names_match_native_admission_without_name_downloads() {
 fn production_plan_is_exact_job_environment_and_not_repeated_in_operation() {
     let spec = fixture();
     let plan = String::from_utf8(spec.plan.canonical_bytes().expect("full plan")).expect("utf8");
-    for (_, job) in production::jobs(&spec).expect("production") {
+    for (id, job) in production::jobs(&spec).expect("production") {
         assert_eq!(
             field(&job, "env"),
             &Yaml::Map(vec![("VELNOR_RELEASE_PLAN".to_owned(), Yaml::str(&plan))])
@@ -119,21 +135,26 @@ fn production_plan_is_exact_job_environment_and_not_repeated_in_operation() {
         let Yaml::Seq(steps) = field(&job, "steps") else {
             panic!("steps")
         };
-        let operation = steps
+        let operations = steps
             .iter()
-            .find(|step| {
+            .filter(|step| {
                 fields(step).iter().any(|(key, value)| {
-                    key == "env"
-                        && crate::yaml::render_yaml(value).contains("VELNOR_PREVIEW_STAGE:")
+                    key == "env" && crate::yaml::render_yaml(value).contains("VELNOR_INTERNAL_OP:")
                 })
             })
-            .expect("operation");
-        assert!(
-            !fields(field(operation, "env"))
-                .iter()
-                .any(|(key, _)| key == "VELNOR_RELEASE_PLAN")
+            .collect::<Vec<_>>();
+        assert_eq!(
+            operations.len(),
+            if id == "preview-assemble" { 2 } else { 1 }
         );
-        assert!(crate::yaml::render_yaml(operation).contains("$VELNOR_RELEASE_PLAN"));
+        for operation in operations {
+            assert!(
+                !fields(field(operation, "env"))
+                    .iter()
+                    .any(|(key, _)| key == "VELNOR_RELEASE_PLAN")
+            );
+            assert!(crate::yaml::render_yaml(operation).contains("VELNOR_REQUEST_FILE:"));
+        }
     }
 }
 
@@ -187,4 +208,111 @@ fn irreducible_preview_workflow_still_fails_the_unchanged_byte_limit() {
     assert!(
         matches!(error, RenderError::InvalidWorkflow(problem) if problem.starts_with("workflow_too_large:") && problem.ends_with(":500000"))
     );
+}
+
+#[test]
+fn assembly_acquisition_exits_before_any_checkout_or_source_preparation() {
+    let spec = fixture();
+    let jobs = production::jobs(&spec).expect("jobs");
+    let (_, assembly) = jobs.last().expect("assembly");
+    let Yaml::Seq(steps) = field(assembly, "steps") else {
+        panic!("steps")
+    };
+    let admission = steps
+        .iter()
+        .position(|step| {
+            fields(step)
+                .iter()
+                .any(|(key, value)| key == "id" && *value == Yaml::str("acquire"))
+        })
+        .expect("acquisition");
+    assert_eq!(
+        admission, 3,
+        "only pinned Mise/GitHub setup and generator bootstrap precede acquisition"
+    );
+    assert_eq!(
+        field(&steps[1], "run"),
+        &Yaml::str(join_argv_for_run(&spec.install_gh_argv).expect("pinned GitHub install"))
+    );
+    for step in &steps[..admission] {
+        let rendered = crate::yaml::render_yaml(step);
+        assert!(!rendered.contains("checkout"));
+        assert_token_free_environment(step);
+        assert!(!rendered.contains("mise run"));
+    }
+    let acquired = &steps[admission];
+    assert!(has_operation(acquired, "acquire-preview-leaves-v1"));
+    assert_assembly_bindings(acquired);
+    assert_eq!(
+        env_value(acquired, "GH_TOKEN"),
+        Some(&Yaml::str("${{ github.token }}"))
+    );
+    let checkout = steps
+        .iter()
+        .position(|step| {
+            fields(step).iter().any(|(key, value)| {
+                key == "uses" && *value == Yaml::str(crate::steps::CHECKOUT_USES)
+            })
+        })
+        .expect("checkout");
+    assert!(checkout > admission);
+    for step in &steps[admission + 1..] {
+        assert_token_free_environment(step);
+        assert!(!has_operation(step, "acquire-preview-leaves-v1"));
+        assert!(!has_operation(step, "admit-preview-aggregate-v1"));
+    }
+    let executor = steps
+        .iter()
+        .find(|step| has_operation(step, "execute-preview-producer-v1"))
+        .expect("executor");
+    assert_assembly_bindings(executor);
+    assert_eq!(
+        env_value(executor, "VELNOR_PREVIEW_ADMISSION_DIGEST"),
+        Some(&Yaml::str("${{ steps.acquire.outputs.admission_digest }}"))
+    );
+    let Yaml::Str(run) = field(executor, "run") else {
+        panic!("executor run")
+    };
+    assert!(run.starts_with(&crate::toolchain_env::credential_unset_prelude()));
+    assert!(
+        !run.contains("printf '%s'"),
+        "executor must retain acquired plan"
+    );
+}
+
+fn assert_token_free_environment(step: &Yaml) {
+    if let Some((_, Yaml::Map(environment))) = fields(step).iter().find(|(key, _)| key == "env") {
+        for (key, value) in environment {
+            if matches!(key.as_str(), "GH_TOKEN" | "GITHUB_TOKEN") {
+                assert_eq!(value, &Yaml::str(""), "nonempty credential in {step:?}");
+            }
+        }
+    }
+}
+
+fn env_value<'a>(step: &'a Yaml, key: &str) -> Option<&'a Yaml> {
+    let (_, Yaml::Map(environment)) = fields(step).iter().find(|(name, _)| name == "env")? else {
+        return None;
+    };
+    environment
+        .iter()
+        .find(|(name, _)| name == key)
+        .map(|(_, value)| value)
+}
+
+fn has_operation(step: &Yaml, operation: &str) -> bool {
+    env_value(step, "VELNOR_INTERNAL_OP") == Some(&Yaml::str(operation))
+}
+
+fn assert_assembly_bindings(step: &Yaml) {
+    assert_eq!(
+        env_value(step, "VELNOR_PREVIEW_STAGE"),
+        Some(&Yaml::str("assemble"))
+    );
+    assert_eq!(
+        env_value(step, "VELNOR_PREVIEW_NEEDS_JSON"),
+        Some(&Yaml::str("${{ toJSON(needs) }}"))
+    );
+    assert!(env_value(step, "VELNOR_PREVIEW_PRODUCT_ID").is_none());
+    assert!(env_value(step, "VELNOR_PREVIEW_TARGET").is_none());
 }

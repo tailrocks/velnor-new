@@ -33,6 +33,10 @@ pub(super) fn valid() -> HomebrewTapConfig {
         environment: TapUpdateEnvironment::TapUpdate,
         app_id_variable: "HOMEBREW_TAP_APP_ID".to_owned(),
         app_private_key_secret: "HOMEBREW_TAP_APP_PRIVATE_KEY".to_owned(),
+        protection_observer: super::HomebrewTapProtectionObserver {
+            app_id_variable: "TAP_PROTECTION_APP_ID".to_owned(),
+            app_private_key_secret: "TAP_PROTECTION_APP_PRIVATE_KEY".to_owned(),
+        },
         merge: TapMergePolicy::SquashAfterGates,
         review_completion: ExactHeadReviewCheck {
             check_name: "Review completion".to_owned(),
@@ -180,4 +184,28 @@ fn omitted_timeout_uses_the_shared_five_minute_default() {
         .remove("timeout_minutes");
     let value: TapUpdaterBinding = serde_json::from_value(json).expect("default timeout");
     assert_eq!(value.timeout_minutes, 5);
+}
+
+#[test]
+fn protection_observer_is_mandatory_closed_and_separate_from_writer() {
+    let mut value = serde_json::to_value(valid()).expect("policy");
+    value
+        .as_object_mut()
+        .expect("object")
+        .remove("protection_observer");
+    assert!(serde_json::from_value::<HomebrewTapConfig>(value).is_err());
+    for (variable, secret) in [
+        ("bad-variable", "KEY"),
+        ("APP_ID", "bad-key"),
+        ("HOMEBREW_TAP_APP_ID", "OBSERVER_KEY"),
+        ("OBSERVER_ID", "HOMEBREW_TAP_APP_PRIVATE_KEY"),
+    ] {
+        let mut policy = valid();
+        policy.protection_observer.app_id_variable = variable.to_owned();
+        policy.protection_observer.app_private_key_secret = secret.to_owned();
+        assert!(policy.validate("config.toml").is_err());
+    }
+    let mut value = serde_json::to_value(valid()).expect("policy");
+    value["protection_observer"]["write"] = serde_json::json!(true);
+    assert!(serde_json::from_value::<HomebrewTapConfig>(value).is_err());
 }

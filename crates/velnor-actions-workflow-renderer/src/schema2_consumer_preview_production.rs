@@ -64,12 +64,14 @@ fn producer(
             ),
         ]),
     ));
-    let mut steps = source_steps(spec, id)?;
-    let mut operation = operation(spec, "execute-preview-producer-v1", pair.is_none())?;
+    let mut steps = acquisition_steps(spec, id, pair.is_none())?;
+    steps.extend(source_steps(spec, id, pair.is_some())?);
+    let (mut operation, public_plan) =
+        production_operation(spec, "execute-preview-producer-v1", false)?;
     // The public full plan is identical for every production owner. Keeping it
     // at job scope lets existing workflow mapping sharing represent it once,
     // without changing the literal stage/pair or per-operation source bindings.
-    fields.push(("env".to_owned(), take_plan_environment(&mut operation)?));
+    fields.push(("env".to_owned(), public_plan));
     let env = if let Some(pair) = pair {
         vec![
             ("VELNOR_PREVIEW_STAGE", "payload"),
@@ -83,12 +85,88 @@ fn producer(
         ]
     };
     operation_env(&mut operation, &env)?;
+    if pair.is_none() {
+        reuse_admission_plan(&mut operation)?;
+        operation_env(
+            &mut operation,
+            &[(
+                "VELNOR_PREVIEW_ADMISSION_DIGEST",
+                "${{ steps.acquire.outputs.admission_digest }}",
+            )],
+        )?;
+    }
     steps.push(operation);
     steps.push(upload(pair));
     for step in &mut steps {
         super::steps::with_producer_homes(step, &spec.producer_cargo_env)?;
     }
     Ok(finish(id, fields, steps))
+}
+
+fn acquisition_steps(
+    spec: &ConsumerPreviewSpec,
+    id: &str,
+    needed: bool,
+) -> Result<Vec<Yaml>, RenderError> {
+    if !needed {
+        return Ok(Vec::new());
+    }
+    // Only pinned source-free bootstrap precedes acquisition; no checkout,
+    // Mise task or repository preparation runs with this credential.
+    let (mut admission, _) = production_operation(spec, "acquire-preview-leaves-v1", true)?;
+    if let Yaml::Map(fields) = &mut admission {
+        for (key, value) in fields {
+            if key == "id" {
+                *value = Yaml::str("acquire");
+            }
+        }
+    }
+    operation_env(
+        &mut admission,
+        &[
+            ("VELNOR_PREVIEW_STAGE", "assemble"),
+            ("VELNOR_PREVIEW_NEEDS_JSON", "${{ toJSON(needs) }}"),
+        ],
+    )?;
+    Ok(vec![
+        setup(&spec.producer_setup),
+        run_step(
+            "Install pinned GitHub CLI",
+            &join_argv_for_run(&spec.install_gh_argv)?,
+        ),
+        acquire(&spec.producer_acquire, id, spec.producer_runner.runs_on())?,
+        admission,
+    ])
+}
+
+fn reuse_admission_plan(operation: &mut Yaml) -> Result<(), RenderError> {
+    let materialize = "(set -C; printf '%s' \"$VELNOR_RELEASE_PLAN\" > \"$VELNOR_REQUEST_FILE\")\n";
+    if let Yaml::Map(fields) = operation {
+        for (key, value) in fields {
+            if key == "run"
+                && let Yaml::Str(run) = value
+                && run.matches(materialize).count() == 1
+            {
+                *run = run.replace(materialize, "");
+                return Ok(());
+            }
+        }
+    }
+    Err(RenderError::InvalidWorkflow(
+        "preview_admission_plan_materialization".to_owned(),
+    ))
+}
+
+/// Every native production operation inherits the identical public job plan.
+/// Credentials and admission outputs stay in their existing step-local boundary.
+fn production_operation(
+    spec: &ConsumerPreviewSpec,
+    op: &str,
+    authenticated: bool,
+) -> Result<(Yaml, Yaml), RenderError> {
+    let mut step = operation(spec, op, authenticated)?;
+    let public_plan = take_plan_environment(&mut step)?;
+    Ok((step, public_plan))
 }
 
 fn take_plan_environment(step: &mut Yaml) -> Result<Yaml, RenderError> {
@@ -179,14 +257,17 @@ pub(super) fn upload(pair: Option<&PreviewPayloadPair>) -> Yaml {
     ])
 }
 
-fn source_steps(spec: &ConsumerPreviewSpec, id: &str) -> Result<Vec<Yaml>, RenderError> {
+fn source_steps(
+    spec: &ConsumerPreviewSpec,
+    id: &str,
+    acquire_generator: bool,
+) -> Result<Vec<Yaml>, RenderError> {
     let runner = spec.producer_runner.runs_on();
     crate::toolchain_env::check_toolchain_homes(&spec.producer_cargo_env)?;
     crate::toolchain_env::reject_denied_step_keys(&spec.producer_cargo_env)?;
     let checkout = steps::checkout("${{ needs.preview-eligibility.outputs.source_sha }}");
     let mut producer_steps = vec![
         checkout,
-        setup(&spec.producer_setup),
         run_step(
             "Create owned Cargo metadata homes",
             "mkdir -p \"$MISE_CARGO_HOME\" \"$MISE_RUSTUP_HOME\"",
@@ -196,6 +277,9 @@ fn source_steps(spec: &ConsumerPreviewSpec, id: &str) -> Result<Vec<Yaml>, Rende
             &join_argv_for_run(&spec.install_rust_argv)?,
         ),
     ];
+    if acquire_generator {
+        producer_steps.insert(1, setup(&spec.producer_setup));
+    }
     for step in &spec.producer_source_prep {
         let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
             return Err(RenderError::InvalidWorkflow(
@@ -214,6 +298,8 @@ fn source_steps(spec: &ConsumerPreviewSpec, id: &str) -> Result<Vec<Yaml>, Rende
             runner,
         )?);
     }
-    producer_steps.push(acquire(&spec.producer_acquire, id, runner)?);
+    if acquire_generator {
+        producer_steps.push(acquire(&spec.producer_acquire, id, runner)?);
+    }
     Ok(producer_steps)
 }

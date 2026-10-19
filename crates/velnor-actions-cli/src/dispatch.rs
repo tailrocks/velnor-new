@@ -19,14 +19,15 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
-    ADMIT_PREVIEW_AGGREGATE_OP, DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP,
-    EXECUTE_PREVIEW_PRODUCER_OP, FETCH_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OrchestratorError,
-    PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PUBLISH_OP,
-    PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP, REPORT_OP,
-    REQUEST_FILE_ENV, SIGN_PACKAGE_RELEASE_OP, TASK_EXECUTION_RESOLVER_OP,
-    WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, execute_check, merge_internal, merge_passed,
-    plan_internal, plan_outputs, publish_final_report, publish_plan_files, resolve_task_execution,
-    response_path_for, retrieve_reports, write_preseed_manifest, write_request, write_task_report,
+    ACQUIRE_PREVIEW_LEAVES_OP, ADMIT_PREVIEW_AGGREGATE_OP, DYNAMIC_MATRIX_OUTPUT_MODE,
+    EXECUTE_CHECK_OP, EXECUTE_PREVIEW_PRODUCER_OP, FETCH_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP,
+    OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PREPARE_HOMEBREW_TAP_OP,
+    PRESEED_MANIFEST_OP, PUBLISH_OP, PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode,
+    RECOVER_PACKAGE_RELEASE_OP, REPORT_OP, REQUEST_FILE_ENV, SIGN_PACKAGE_RELEASE_OP,
+    TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, execute_check,
+    merge_internal, merge_passed, plan_internal, plan_outputs, publish_final_report,
+    publish_plan_files, resolve_task_execution, response_path_for, retrieve_reports,
+    write_preseed_manifest, write_request, write_task_report,
 };
 
 use crate::dispatch_publish::run_publish_internal;
@@ -59,48 +60,8 @@ const GITHUB_EVENT_ENV: &str = "GITHUB_EVENT_NAME";
 /// Environment variable carrying the event payload path. Never printed.
 const GITHUB_EVENT_PATH_ENV: &str = "GITHUB_EVENT_PATH";
 
-/// Private operation selected by the gate.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum InternalOp {
-    /// Materialize the request file from the GitHub environment.
-    WriteRequest,
-    /// Execute one named hosted platform check.
-    ExecuteCheck,
-    /// Run the credential-free native preview producer.
-    ExecutePreviewProducer,
-    /// Source-free authentication of the complete native preview union.
-    AdmitPreviewAggregate,
-    /// Plan operation.
-    Plan,
-    /// Merge operation.
-    Merge,
-    /// Matrix-report fetch operation.
-    Fetch,
-    /// Task-report production operation.
-    Report,
-    /// Pre-seed manifest-writing operation.
-    PreseedManifest,
-    /// Baseline-publish operation.
-    Publish,
-    /// Repository-maintenance operation behind its separate private gate.
-    RepoPolicy,
-    /// Read-only predecessor resolution for hosted qualification.
-    ResolveQualification,
-    /// Data-only task execution record resolution for a generated wrapper.
-    ResolveTaskExecution,
-    /// Isolated, credentialed signing of a plan-bound package release.
-    PackageSigner,
-    /// Isolated publisher for an authenticated signed native package.
-    PackagePublisher,
-    /// Authenticated replay of a retained signed preview candidate.
-    PackageRecovery,
-    /// Credential-free updater prepared from captured public tap main.
-    TapPrepare,
-    /// Isolated App-authenticated PR writer for a validated tap candidate.
-    TapWriter,
-    /// Isolated exact-head App-authenticated tap promotion merge.
-    TapMerge,
-}
+mod operation;
+use operation::InternalOp;
 
 /// Validated private request: operation plus exact request-file path.
 #[derive(Debug)]
@@ -124,6 +85,7 @@ pub(crate) fn try_internal() -> Option<ExitCode> {
 fn internal_op() -> Option<InternalOp> {
     Some(match env::var(OP_ENV).as_deref() {
         Ok(tag) if tag == EXECUTE_CHECK_OP => InternalOp::ExecuteCheck,
+        Ok(tag) if tag == ACQUIRE_PREVIEW_LEAVES_OP => InternalOp::AcquirePreviewLeaves,
         Ok(tag) if tag == EXECUTE_PREVIEW_PRODUCER_OP => InternalOp::ExecutePreviewProducer,
         Ok(tag) if tag == ADMIT_PREVIEW_AGGREGATE_OP => InternalOp::AdmitPreviewAggregate,
         Ok(tag) if tag == WRITE_REQUEST_OP => InternalOp::WriteRequest,
@@ -205,7 +167,8 @@ fn gate_request() -> Option<InternalRequest> {
         InternalOp::PackageSigner
         | InternalOp::PackagePublisher
         | InternalOp::PackageRecovery
-        | InternalOp::AdmitPreviewAggregate => {
+        | InternalOp::AdmitPreviewAggregate
+        | InternalOp::AcquirePreviewLeaves => {
             return package_release::gate_request(&path).map(|path| InternalRequest { op, path });
         }
         InternalOp::TapPrepare => {
@@ -247,6 +210,7 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
             Err(error) => fail_internal(&error.to_string()),
         },
         InternalOp::ExecutePreviewProducer => preview_production::produce(),
+        InternalOp::AcquirePreviewLeaves => preview_production::acquire(),
         InternalOp::AdmitPreviewAggregate => preview_production::admit(),
         InternalOp::WriteRequest => match write_request() {
             Ok(_) => ExitCode::SUCCESS,

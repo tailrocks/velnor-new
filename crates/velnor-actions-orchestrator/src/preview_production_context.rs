@@ -46,6 +46,13 @@ pub(super) fn derive(
     deadline: CheckDeadline,
 ) -> Result<PreviewProductionRequest, OrchestratorError> {
     let context = derive_context(root, &plan, deadline)?;
+    from_context(plan, context)
+}
+
+pub(super) fn from_context(
+    plan: PackageReleasePlan,
+    context: PreviewProductionContext,
+) -> Result<PreviewProductionRequest, OrchestratorError> {
     let stage = stage(&plan, &context)?;
     let request = PreviewProductionRequest {
         schema: PREVIEW_PRODUCTION_SCHEMA_V1.to_owned(),

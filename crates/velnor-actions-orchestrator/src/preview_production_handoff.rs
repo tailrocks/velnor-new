@@ -5,7 +5,6 @@ use crate::{
     exclusive_write::{create_dir_no_symlink, write_exclusive_until},
     internal::internal,
     package_release_artifacts::VerifiedPackageArtifact,
-    retrieve_reports::staged_reads::read_staged_bytes_until,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -24,7 +23,11 @@ pub(super) const TASK_REQUEST: &str = "preview-task-request.json";
 pub(super) const PRODUCTION_REQUEST: &str = "preview-production-request.json";
 pub(crate) const LEAF_MANIFEST: &str = "preview-payload.json";
 pub(crate) const AGGREGATE_MANIFEST: &str = "preview-aggregate.json";
-pub(crate) const MAX_NATIVE_MANIFEST: u64 = 32 * 1024 * 1024;
+pub(crate) const MAX_NATIVE_MANIFEST: u64 =
+    crate::package_release_publish::artifact_zip::NATIVE_MANIFEST_BYTES;
+#[path = "preview_production_handoff_copy.rs"]
+mod copy;
+pub(super) use copy::copy_verified;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -108,7 +111,7 @@ impl PinnedAsset {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub(super) struct TaskInput {
     pub pair: PreviewPayloadPair,
@@ -203,8 +206,9 @@ pub(super) fn stage_asset(
         size: artifact.size,
     };
     validate_asset_name(&proof.name)?;
-    let bytes = read_verified(&artifact.path, &proof, deadline)?;
-    write_upload(&output.join(&proof.name), &bytes, deadline)?;
+    let target = output.join(&proof.name);
+    copy_verified(&artifact.path, &target, &proof, deadline)?;
+    normalize_upload_file(&target, &proof, deadline)?;
     Ok(proof)
 }
 
@@ -258,24 +262,6 @@ fn normalize_upload_file(
         return Err(internal("preview_upload_mode"));
     }
     pinned.verify(deadline)
-}
-
-pub(super) fn read_verified(
-    path: &Path,
-    proof: &AssetProof,
-    deadline: CheckDeadline,
-) -> Result<Vec<u8>, OrchestratorError> {
-    let bytes = read_staged_bytes_until(path, proof.size, || {
-        deadline
-            .remaining()
-            .map(|_| ())
-            .map_err(|_| "preview_deadline")
-    })
-    .map_err(|_| internal("preview_asset_read"))?;
-    if bytes.len() as u64 != proof.size || sha256(&bytes) != proof.sha256 {
-        return Err(internal("preview_asset_identity_changed"));
-    }
-    Ok(bytes)
 }
 
 pub(super) fn recheck(

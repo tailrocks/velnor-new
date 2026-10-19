@@ -5,8 +5,13 @@
 //! these bytes; timestamps never serve as attempt evidence. ZIP admission follows
 //! in a separate owner, and these bytes alone are not an admitted payload.
 
-use super::github::{PreviewArtifactApi, sha256};
+use super::artifact_zip::{ZipProfile, leaf_union_compressed_bound};
+use super::github::PreviewArtifactApi;
+use std::{fs::File, path::Path};
+#[path = "preview_artifact_transport_file.rs"]
+mod archive_file;
 use crate::{OrchestratorError, internal::internal};
+use archive_file::SealedArchive;
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::PackageReleasePlan;
@@ -21,13 +26,11 @@ mod aggregate;
 pub(crate) use aggregate::acquire_preview_aggregate;
 
 const MAX_ARTIFACTS: usize = 1000;
-const MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
-const MAX_TOTAL_BYTES: u64 = MAX_ARCHIVE_BYTES;
 
 /// Authenticated service archive bytes, still requiring closed ZIP/leaf admission.
 pub(crate) struct AdmittedPreviewArtifact {
     pub reference: PayloadArtifactRef,
-    pub bytes: Vec<u8>,
+    pub archive: SealedArchive,
 }
 
 /// Acquire exactly the literal assembly references under one cumulative budget.
@@ -35,30 +38,14 @@ pub(crate) struct AdmittedPreviewArtifact {
 /// authenticated job context; this function independently reauthenticates GitHub.
 pub(crate) fn acquire_preview_artifacts(
     request: &PreviewProductionRequest,
+    directory: &Path,
     deadline: CheckDeadline,
-) -> Result<Vec<AdmittedPreviewArtifact>, OrchestratorError> {
-    require_consumer_environment(PreviewConsumer::Assembler)?;
-    let api = PreviewArtifactApi::new(&request.plan.repository);
-    deadline
-        .scope(|| acquire(&api, request, deadline))
-        .map_err(|_| internal("preview_artifact_deadline"))?
-}
-
-/// Reauthenticate after source assembly and byte rehash, without reusing ZIP bytes as authority.
-pub(crate) fn authenticate_preview_assembly(
-    request: &PreviewProductionRequest,
-    deadline: CheckDeadline,
+    mut consume: impl FnMut(AdmittedPreviewArtifact) -> Result<(), OrchestratorError>,
 ) -> Result<(), OrchestratorError> {
-    request
-        .validate()
-        .map_err(|_| internal("preview_artifact_request"))?;
-    if !matches!(request.stage, PreviewProductionStage::Assemble { .. }) {
-        return Err(internal("preview_artifact_assembly_required"));
-    }
     require_consumer_environment(PreviewConsumer::Assembler)?;
     let api = PreviewArtifactApi::new(&request.plan.repository);
     deadline
-        .scope(|| api.authenticate(&request.plan, &request.context, PreviewConsumer::Assembler))
+        .scope(|| acquire(&api, request, directory, deadline, &mut consume))
         .map_err(|_| internal("preview_artifact_deadline"))?
 }
 
@@ -105,14 +92,22 @@ pub(super) trait ArtifactReadApi {
         consumer: PreviewConsumer,
     ) -> Result<(), OrchestratorError>;
     fn page(&self, run: u64, page: usize) -> Result<ArtifactPage, OrchestratorError>;
-    fn download(&self, id: u64, size: u64) -> Result<Vec<u8>, OrchestratorError>;
+    fn download(
+        &self,
+        id: u64,
+        size: u64,
+        output: &mut File,
+        deadline: CheckDeadline,
+    ) -> Result<(), OrchestratorError>;
 }
 
 fn acquire(
     api: &impl ArtifactReadApi,
     request: &PreviewProductionRequest,
+    directory: &Path,
     deadline: CheckDeadline,
-) -> Result<Vec<AdmittedPreviewArtifact>, OrchestratorError> {
+    consume: &mut impl FnMut(AdmittedPreviewArtifact) -> Result<(), OrchestratorError>,
+) -> Result<(), OrchestratorError> {
     request
         .validate()
         .map_err(|_| internal("preview_artifact_request"))?;
@@ -131,29 +126,34 @@ fn acquire(
         validate_selected(artifact, reference, request)?;
         total = total
             .checked_add(artifact.size_in_bytes)
-            .filter(|size| *size <= MAX_TOTAL_BYTES)
+            .filter(|size| *size <= leaf_union_compressed_bound(inputs.len()))
             .ok_or_else(|| internal("preview_artifact_total_size"))?;
     }
-    let mut output = Vec::with_capacity(inputs.len());
     for reference in inputs {
         checkpoint(deadline)?;
         let artifact = &inventory[&reference.artifact_id];
-        let bytes = api.download(reference.artifact_id, artifact.size_in_bytes)?;
-        checkpoint(deadline)?;
-        if u64::try_from(bytes.len()).ok() != Some(artifact.size_in_bytes)
-            || sha256(&bytes) != reference.sha256
-        {
-            return Err(internal("preview_artifact_download_identity"));
-        }
-        checkpoint(deadline)?;
-        output.push(AdmittedPreviewArtifact {
+        let mut archive = SealedArchive::create(
+            directory,
+            reference.artifact_id,
+            artifact.size_in_bytes,
+            &reference.sha256,
+        )?;
+        api.download(
+            reference.artifact_id,
+            artifact.size_in_bytes,
+            archive.output(),
+            deadline,
+        )?;
+        archive.seal(deadline)?;
+        consume(AdmittedPreviewArtifact {
             reference: reference.clone(),
-            bytes,
-        });
+            archive,
+        })?;
+        checkpoint(deadline)?;
     }
     api.authenticate(&request.plan, &request.context, PreviewConsumer::Assembler)?;
     checkpoint(deadline)?;
-    Ok(output)
+    Ok(())
 }
 
 fn inventory(
@@ -202,6 +202,9 @@ fn validate_selected(
     let expected_name =
         preview_payload_artifact_name(&request.plan, &reference.pair, &request.context)
             .map_err(|_| internal("preview_artifact_name"))?;
+    if artifact.size_in_bytes > ZipProfile::PreviewLeaf.compressed() {
+        return Err(internal("preview_artifact_metadata_identity"));
+    }
     validate_metadata(
         artifact,
         reference.artifact_id,
@@ -231,7 +234,6 @@ fn validate_metadata(
         || artifact.name != expected_name
         || artifact.expired
         || artifact.size_in_bytes == 0
-        || artifact.size_in_bytes > MAX_ARCHIVE_BYTES
         || !valid_run
         || artifact.digest.as_deref() != Some(format!("sha256:{digest}").as_str())
     {

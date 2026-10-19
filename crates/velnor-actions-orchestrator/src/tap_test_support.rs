@@ -86,6 +86,10 @@ pub(crate) fn policy() -> HomebrewTapConfig {
         environment: TapUpdateEnvironment::TapUpdate,
         app_id_variable: "TAP_APP_ID".to_owned(),
         app_private_key_secret: "TAP_APP_PRIVATE_KEY".to_owned(),
+        protection_observer: velnor_actions_contract::config::HomebrewTapProtectionObserver {
+            app_id_variable: "TAP_PROTECTION_APP_ID".to_owned(),
+            app_private_key_secret: "TAP_PROTECTION_APP_PRIVATE_KEY".to_owned(),
+        },
         merge: TapMergePolicy::SquashAfterGates,
         review_completion: ExactHeadReviewCheck {
             check_name: "Review completion".to_owned(),

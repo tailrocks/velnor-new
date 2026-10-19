@@ -1,4 +1,5 @@
 //! Pure native-transport fixtures; no source task, process or network access.
+use super::super::github::sha256;
 use super::*;
 use velnor_actions_contract::{
     PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlan, PackageReleasePlanProduct,

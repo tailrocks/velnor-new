@@ -5,6 +5,27 @@ use zip::{ZipArchive, write::SimpleFileOptions};
 fn deadline() -> CheckDeadline {
     CheckDeadline::after(Duration::from_secs(2)).expect("deadline")
 }
+fn read_fixture_manifest(
+    bytes: &[u8],
+    name: &str,
+    max_bytes: u64,
+    deadline: CheckDeadline,
+) -> Result<Vec<u8>, OrchestratorError> {
+    deadline
+        .scope(|| read_manifest_in_scope(bytes, name, max_bytes))
+        .map_err(|_| invalid("deadline"))?
+}
+fn extract_fixture(
+    bytes: &[u8],
+    destination: &Path,
+    expected: &[ExpectedZipEntry],
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    deadline
+        .scope(|| extract_in_scope(bytes, destination, expected))
+        .map_err(|_| invalid("deadline"))?
+}
+
 fn zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
     let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
     for (name, body) in entries {
@@ -20,7 +41,7 @@ fn zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
     }
     writer.finish().expect("ZIP").into_inner()
 }
-fn expected() -> Vec<ExpectedZipEntry> {
+pub(super) fn expected() -> Vec<ExpectedZipEntry> {
     [
         ("proof.json", b"native-proof".as_slice()),
         ("payload", b"payload-body".as_slice()),
@@ -35,7 +56,7 @@ fn expected() -> Vec<ExpectedZipEntry> {
     })
     .collect()
 }
-fn bytes() -> Vec<u8> {
+pub(super) fn bytes() -> Vec<u8> {
     zip(&[
         ("proof.json", b"native-proof"),
         ("payload", b"payload-body"),
@@ -43,7 +64,7 @@ fn bytes() -> Vec<u8> {
 }
 fn assert_clean_failure(bytes: &[u8], expected: &[ExpectedZipEntry]) {
     let dir = tempfile::tempdir().expect("output");
-    assert!(extract(bytes, dir.path(), expected, deadline()).is_err());
+    assert!(extract_fixture(bytes, dir.path(), expected, deadline()).is_err());
     assert!(dir.path().is_dir(), "caller-owned directory survives");
     assert_eq!(
         fs::read_dir(dir.path()).expect("output").count(),
@@ -57,10 +78,10 @@ fn exact_closed_inventory_reads_manifest_and_streams_bytes_through_crc_eof() {
     let dir = tempfile::tempdir().expect("output");
     let bytes = bytes();
     assert_eq!(
-        read_manifest(&bytes, "proof.json", 1024, deadline()).expect("proof"),
+        read_fixture_manifest(&bytes, "proof.json", 1024, deadline()).expect("proof"),
         b"native-proof"
     );
-    extract(&bytes, dir.path(), &expected(), deadline()).expect("exact files");
+    extract_fixture(&bytes, dir.path(), &expected(), deadline()).expect("exact files");
     assert_eq!(
         fs::read(dir.path().join("payload")).expect("payload"),
         b"payload-body"
@@ -80,7 +101,7 @@ fn manifest_read_checks_later_duplicate_names_before_returning_any_manifest() {
             bytes[i + 6..i + 9].copy_from_slice(b"one");
         }
     }
-    assert!(read_manifest(&bytes, "proof.json", 1024, deadline()).is_err());
+    assert!(read_fixture_manifest(&bytes, "proof.json", 1024, deadline()).is_err());
 }
 
 #[test]
@@ -94,7 +115,7 @@ fn flat_paths_exact_members_permissions_sizes_and_hashes_fail_closed() {
         "..",
     ] {
         let bad = zip(&[("proof.json", b"native-proof"), (path, b"payload-body")]);
-        assert!(read_manifest(&bad, "proof.json", 1024, deadline()).is_err());
+        assert!(read_fixture_manifest(&bad, "proof.json", 1024, deadline()).is_err());
         assert_clean_failure(&bad, &expected());
     }
     for mutate in [
@@ -120,7 +141,7 @@ fn nonregular_modes_and_crc_corruption_cannot_leave_partial_output() {
             .position(|b| b == b"PK\x01\x02")
             .expect("central");
         bytes[at + 38..at + 42].copy_from_slice(&(mode << 16).to_le_bytes());
-        assert!(read_manifest(&bytes, "proof.json", 1024, deadline()).is_err());
+        assert!(read_fixture_manifest(&bytes, "proof.json", 1024, deadline()).is_err());
         assert_clean_failure(&bytes, &expected());
     }
     let mut corrupt = bytes();
@@ -143,7 +164,7 @@ fn header_size_lies_and_total_inflation_bounds_are_checked_before_publication() 
             bytes[at + 24..at + 28].copy_from_slice(&1_u32.to_le_bytes());
         }
     }
-    assert!(read_manifest(&bytes, "proof.json", 1024, deadline()).is_err());
+    assert!(read_fixture_manifest(&bytes, "proof.json", 1024, deadline()).is_err());
     assert_clean_failure(&bytes, &expected());
     let mut huge = super::tests::bytes();
     for at in 0..huge.len().saturating_sub(30) {
@@ -154,7 +175,7 @@ fn header_size_lies_and_total_inflation_bounds_are_checked_before_publication() 
             huge[at + 24..at + 28].copy_from_slice(&0xffff_fffe_u32.to_le_bytes());
         }
     }
-    assert!(read_manifest(&huge, "proof.json", 1024, deadline()).is_err());
+    assert!(read_fixture_manifest(&huge, "proof.json", 1024, deadline()).is_err());
 }
 
 #[test]
@@ -197,7 +218,7 @@ fn individually_consistent_nested_local_headers_still_reject_overlapping_ranges(
         .expect("individual headers match");
     }
     assert!(raw.has_overlapping_entries().expect("ranges"));
-    assert!(read_manifest(&bytes, "proof.json", 1024, deadline()).is_err());
+    assert!(read_fixture_manifest(&bytes, "proof.json", 1024, deadline()).is_err());
 }
 
 #[test]
@@ -216,7 +237,7 @@ fn expired_outer_operation_blocks_nested_recovery_and_zip_without_new_clock() {
     assert!(result.is_err());
     assert!(!executed.get());
     let dir = tempfile::tempdir().expect("output");
-    assert!(extract(&bytes(), dir.path(), &expected(), outer).is_err());
+    assert!(extract_fixture(&bytes(), dir.path(), &expected(), outer).is_err());
     assert_eq!(fs::read_dir(dir.path()).expect("empty").count(), 0);
 }
 
@@ -229,7 +250,7 @@ fn excessive_entry_inventory_is_rejected_before_manifest_read() {
         .iter()
         .map(|name| (name.as_str(), b"x".as_slice()))
         .collect::<Vec<_>>();
-    assert!(read_manifest(&zip(&entries), "entry-0000", 1024, deadline()).is_err());
+    assert!(read_fixture_manifest(&zip(&entries), "entry-0000", 1024, deadline()).is_err());
 }
 
 const PINNED_UPLOAD_ZIP: &[u8] = include_bytes!(concat!(
@@ -288,12 +309,12 @@ fn pinned_upload_streaming_zip_preserves_modes_and_admits_exact_data_and_headers
         assert_eq!(file.compression(), zip::CompressionMethod::Deflated);
         assert_eq!(file.crc32(), 0x4a47_7490);
         assert_eq!(
-            read_manifest(PINNED_UPLOAD_ZIP, name, 1024, deadline()).expect("CRC EOF"),
+            read_fixture_manifest(PINNED_UPLOAD_ZIP, name, 1024, deadline()).expect("CRC EOF"),
             PINNED_UPLOAD_BODY
         );
     }
     let dir = tempfile::tempdir().expect("output");
-    extract(
+    extract_fixture(
         PINNED_UPLOAD_ZIP,
         dir.path(),
         &pinned_upload_expectations(),
@@ -317,7 +338,7 @@ fn pinned_upload_rejects_private_mode_for_native_upload_and_detects_crc_corrupti
     let mut expected = pinned_upload_expectations();
     expected[0].unix_permissions = Some(0o644);
     let dir = tempfile::tempdir().expect("output");
-    let error = extract(PINNED_UPLOAD_ZIP, dir.path(), &expected, deadline())
+    let error = extract_fixture(PINNED_UPLOAD_ZIP, dir.path(), &expected, deadline())
         .expect_err("0600 cannot satisfy native 0644 upload contract");
     assert!(error.to_string().contains("file_type_size_mode"), "{error}");
     assert!(dir.path().is_dir());
@@ -338,6 +359,6 @@ fn pinned_upload_rejects_private_mode_for_native_upload_and_detects_crc_corrupti
     // Both metadata copies agree with one another, but not with actual data.
     corrupt[central + 16] ^= 1;
     corrupt[descriptor + 4] ^= 1;
-    assert!(read_manifest(&corrupt, "mode-600.txt", 1024, deadline()).is_err());
+    assert!(read_fixture_manifest(&corrupt, "mode-600.txt", 1024, deadline()).is_err());
     assert_clean_failure(&corrupt, &pinned_upload_expectations());
 }

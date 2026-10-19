@@ -14,6 +14,8 @@ use crate::{OrchestratorError, internal::internal};
 #[path = "package_release_publish_github_types.rs"]
 mod types;
 pub(super) use types::*;
+#[path = "preview_artifact_transport_download.rs"]
+mod preview_download;
 #[path = "preview_artifact_transport_api.rs"]
 mod preview_reads;
 pub(super) use preview_reads::PreviewArtifactApi;

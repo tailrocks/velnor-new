@@ -18,6 +18,9 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::CheckDeadline;
 
+#[path = "preview_production_acquisition.rs"]
+mod acquisition;
+pub use acquisition::{ACQUIRE_PREVIEW_LEAVES_OP, acquire_preview_leaves};
 #[path = "preview_aggregate_admission.rs"]
 mod admission;
 #[path = "preview_aggregate.rs"]
@@ -45,6 +48,7 @@ const PLAN_NAME: &str = "package-release-plan.json";
 /// # Errors
 /// Rejects context, source, role, request, task, artifact or deadline drift.
 pub fn execute_preview_producer() -> Result<(), OrchestratorError> {
+    acquisition::reject_credentials()?;
     let started = Instant::now();
     let maximum = CheckDeadline::from_start_with_cleanup_reserve(
         started,
