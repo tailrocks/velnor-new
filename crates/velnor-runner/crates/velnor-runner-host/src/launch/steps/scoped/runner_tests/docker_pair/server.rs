@@ -117,7 +117,7 @@ impl PairDockerApi {
         let server_error = match tokio::time::timeout(TIMEOUT, &mut task).await {
             Ok(Ok(Ok(()))) => None,
             Ok(Ok(Err(error))) => Some(error),
-            Ok(Err(error)) => Some(format!("Docker API task failed: {error}")),
+            Ok(Err(error)) => Some(format!("Docker API task error: {error}")),
             Err(_) => Some("Docker API test server timed out".to_owned()),
         };
         std::fs::remove_file(&self.path).map_err(|error| error.to_string())?;

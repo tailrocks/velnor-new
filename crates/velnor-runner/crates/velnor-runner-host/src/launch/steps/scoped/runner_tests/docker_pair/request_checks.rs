@@ -38,7 +38,7 @@ pub(super) fn verify_pair_requests(
     let (runner_index, runner, runner_id) = created_role(&creates, "runner")?;
     let initializer_id = initializer_create_id(&creates)?;
     if dind_id != DIND_ID || runner_id != RUNNER_ID {
-        return Err("The pair create replies did not bind their role identities.".to_owned());
+        return Err("The pair create replies contain incorrect role identities.".to_owned());
     }
     assert_container_limits(&dind, budget.dind(), 2_048, true);
     assert_container_limits(&runner, budget.runner(), 1_024, false);
@@ -76,7 +76,7 @@ fn created_role(
         })
         .collect::<Vec<_>>();
     if found.len() != 1 {
-        return Err(format!("Expected one {role} bootstrap create."));
+        return Err(format!("There must be one {role} bootstrap create."));
     }
     let (index, request, config) = &found[0];
     let id = serde_json::from_slice::<Value>(&request.response_body)
@@ -98,7 +98,7 @@ fn initializer_create_id(creates: &[(usize, &CapturedRequest)]) -> Result<String
         })
         .collect::<Vec<_>>();
     if matches.len() != 1 {
-        return Err("Expected one storage-initializer bootstrap create.".to_owned());
+        return Err("There must be one storage-initializer bootstrap create.".to_owned());
     }
     serde_json::from_slice::<Value>(&matches[0].1.response_body)
         .ok()
@@ -118,7 +118,7 @@ fn assert_pair_event_order(
         .filter(|(_, request)| route(request).ends_with("/attach"))
         .collect::<Vec<_>>();
     if attaches.len() != 2 {
-        return Err("Expected one Runner attach and one initializer attach.".to_owned());
+        return Err("There must be one Runner attach and one initializer attach.".to_owned());
     }
     let runner_attaches = attaches
         .iter()
@@ -132,7 +132,7 @@ fn assert_pair_event_order(
         })
         .count();
     if runner_attaches != 1 || initializer_attaches != 1 {
-        return Err("The attach targets do not match the Runner and initializer.".to_owned());
+        return Err("The Runner or initializer attach target is incorrect.".to_owned());
     }
     let runner_attach = attaches
         .iter()
@@ -161,7 +161,7 @@ fn event_index(requests: &[CapturedRequest], path: &str) -> Result<usize, String
     if matches.len() == 1 {
         Ok(matches[0])
     } else {
-        Err(format!("Expected one Docker event for {path}."))
+        Err(format!("There must be one Docker event for {path}."))
     }
 }
 

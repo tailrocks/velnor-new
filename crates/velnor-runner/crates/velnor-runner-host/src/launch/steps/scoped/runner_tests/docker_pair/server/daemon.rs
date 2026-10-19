@@ -82,7 +82,7 @@ impl ServerState {
     async fn finish(self) -> Result<(), String> {
         for task in self.attach_tasks {
             task.await
-                .map_err(|error| format!("Docker attach task failed: {error}"))??;
+                .map_err(|error| format!("Docker attach task error: {error}"))??;
         }
         Ok(())
     }
@@ -128,12 +128,12 @@ impl ServerState {
                 attachment
                     .attach(stream)
                     .await
-                    .map_err(|error| format!("Initializer attach failed: {error}"))
+                    .map_err(|error| format!("Initializer attach error: {error}"))
             }));
         } else {
             if !super::super::request_checks::valid_runner_attach(request) {
                 return Err(format!(
-                    "Unexpected non-initializer Docker attach {} {}",
+                    "The Docker attach target is incorrect: {} {}",
                     request.method, request.target
                 ));
             }
@@ -141,7 +141,7 @@ impl ServerState {
             self.attach_tasks.push(tokio::spawn(async move {
                 record_jit_input(&mut stream, &jit_input)
                     .await
-                    .map_err(|error| format!("Runner attach failed: {error}"))
+                    .map_err(|error| format!("Runner attach error: {error}"))
             }));
         }
         Ok(())
@@ -293,7 +293,7 @@ impl ServerState {
     > {
         self.initializer
             .as_ref()
-            .ok_or_else(|| "Initializer API is not configured".to_owned())
+            .ok_or_else(|| "The initializer API configuration is absent".to_owned())
     }
 }
 

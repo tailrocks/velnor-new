@@ -71,10 +71,10 @@ job. The baseline-coverage skip path (trusted-baseline artifacts and
 mechanism. See [affected selection](implemented/affected-selection.md).
 Approved by the human owner on 2026-10-19, together with the decision 1
 amendment ("every crate job the plan schedules").
-The `complete = true` input rule, which lets a package with an unbounded
-read be selected only by its declared inputs, was approved by the human owner
-on 2026-10-20 (PR #192 review question; the alternative, running every such
-package on every pull request, was declined).
+On 2026-10-20, the human owner gave approval for the `complete = true` input rule.
+For unbounded reads, declared inputs alone can select the package.
+The owner did not select the alternative that runs every such package on every pull request.
+See the PR #192 review question.
 
 **Rationale.** In a monorepo most pull requests touch one or two crates, but
 every crate job paid runner start, checkout, tool setup, cache restore, and a

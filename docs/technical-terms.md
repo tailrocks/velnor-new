@@ -41,3 +41,4 @@
 | Plan output limit | The maximum size of output values that one job can send to other jobs. |
 | Task binding digest | A digest that identifies a generated task command with project tool references. |
 | Catalog tool | A tool that Velnor can set in generated workflows. |
+| Mount handoff | The transfer of volume and directory identity records from the storage initializer to the controller. |

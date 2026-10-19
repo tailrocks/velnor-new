@@ -151,7 +151,7 @@ impl BootstrapSetup {
             prepared.acquired().reservation_id(),
         )
         .await
-        .map_err(|error| format!("Private network preparation failed: {error}"))?;
+        .map_err(|error| format!("Private network preparation error: {error}"))?;
         Ok(Self {
             fixture,
             api,
@@ -167,7 +167,9 @@ impl BootstrapSetup {
             .prepared
             .storage()
             .pending_initialization()
-            .ok_or_else(|| "Storage initialization is not pending handoff.".to_owned())?;
+            .ok_or_else(|| {
+                "The storage initializer is not ready for the mount handoff.".to_owned()
+            })?;
         crate::launch::bootstrap::start_bootstrap_pair(
             &self.prepared,
             &self.network,
@@ -181,7 +183,7 @@ impl BootstrapSetup {
         .await
         .map_err(|failure| {
             let (error, _) = failure.into_parts();
-            format!("Production bootstrap pair start failed: {error}")
+            format!("Production bootstrap pair start error: {error}")
         })
     }
 }
@@ -201,12 +203,12 @@ async fn configure_capacity(fixture: &Fixture) -> Result<(), String> {
             },
         )
         .await
-        .map_err(|error| format!("Capacity setup failed: {error}"))?;
+        .map_err(|error| format!("Capacity setup error: {error}"))?;
     fixture
         .journal
         .configure_storage_profile(crate::journal::fixture_provisioning_profile())
         .await
-        .map_err(|error| format!("Storage profile setup failed: {error}"))
+        .map_err(|error| format!("Storage profile setup error: {error}"))
 }
 
 async fn acquire_source_authorized(
@@ -218,7 +220,7 @@ async fn acquire_source_authorized(
     let mut lane = FakeLane::new([Ok(exchange(200, r#"{"count":1,"value":[41]}"#))]);
     let outcome = crate::launch::steps::acquire_scoped(&mut lane, drive, &poll, permit, engine)
         .await
-        .map_err(|error| format!("Source-authorized Acquire failed: {error}"))?;
+        .map_err(|error| format!("Source-authorized Acquire error: {error}"))?;
     assert_eq!(lane.paths.len(), 1);
     assert!(lane.paths[0].ends_with("/acquirejobs"));
     Ok(outcome)
@@ -238,10 +240,10 @@ async fn initializer_for(
     let acquired = match outcome {
         crate::launch::steps::ScopedProvisioningOutcome::Acquired(acquired) => acquired,
         crate::launch::steps::ScopedProvisioningOutcome::Recovered(_) => {
-            return Err("Acquire returned a recovery outcome.".to_owned());
+            return Err("The Acquire result is recovery.".to_owned());
         }
         crate::launch::steps::ScopedProvisioningOutcome::NoStart => {
-            return Err("Acquire returned no start.".to_owned());
+            return Err("The Acquire result has no start.".to_owned());
         }
     };
     let nonce = acquired
@@ -284,8 +286,8 @@ async fn prepare_acquired(
         images,
     )
     .await
-    .map_err(|error| format!("Production storage preparation failed: {error}"))?
-    .ok_or_else(|| "Production storage preparation returned no start.".to_owned())
+    .map_err(|error| format!("Production storage preparation error: {error}"))?
+    .ok_or_else(|| "The production storage preparation result has no start.".to_owned())
 }
 
 async fn verify_retained_charge(

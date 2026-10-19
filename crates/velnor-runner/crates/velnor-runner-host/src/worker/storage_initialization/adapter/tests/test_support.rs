@@ -28,7 +28,7 @@ pub(super) struct ApiCapture {
     pub(super) create_name: Option<String>,
 }
 
-/// Reuse the initializer test responder in a combined Docker API fixture.
+/// Use the initializer test responder in a combined Docker API fixture.
 pub(crate) struct InitializationTestResponder {
     state: server::ApiState,
     capture: Arc<Mutex<ApiCapture>>,
