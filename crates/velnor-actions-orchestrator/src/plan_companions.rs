@@ -5,6 +5,7 @@ use velnor_actions_workflow_renderer::release_tree::RELEASE_TREE_PATHS;
 
 pub(super) fn file_lines(out: &mut String, prep: &GenerationPreparation) {
     release_file_lines(out, prep);
+    publish_file_lines(out, prep);
     freshness_file_lines(out, prep);
     owned_tool_file_lines(out, prep);
     tofu_apply_file_lines(out, prep);
@@ -53,6 +54,19 @@ fn release_file_lines(out: &mut String, prep: &GenerationPreparation) {
         for path in RELEASE_TREE_PATHS {
             push(out, &format!("  {path}"));
         }
+    }
+}
+
+/// Publication workflow path, exactly when `generate` emits it.
+fn publish_file_lines(out: &mut String, prep: &GenerationPreparation) {
+    if !prep.config.publish.bundles.is_empty() {
+        push(
+            out,
+            &format!(
+                "  {}",
+                velnor_actions_workflow_renderer::publish_render::PUBLISH_WORKFLOW_PATH
+            ),
+        );
     }
 }
 
