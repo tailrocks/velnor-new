@@ -150,7 +150,7 @@ async fn run_committed_result_recovery(nonce: char) -> Result<(), HostError> {
     let work = names.volume_name(WorkerVolumeRole::Work);
     let volume_identity = test_support::volume_identity(&scope, reservation_id).await?;
     let api = InitializationDockerApi::open(volume_identity, &home, &work, image.runtime_id())?;
-    let (committed, _release) = crate::journal::arm_create_commit_gate(
+    let (committed, release) = crate::journal::arm_create_commit_gate(
         reservation_id,
         crate::journal::CreateCommitStage::Result,
     )?;
@@ -162,7 +162,7 @@ async fn run_committed_result_recovery(nonce: char) -> Result<(), HostError> {
         16,
     )?;
     let metadata = test_support::metadata_object(&scope, reservation_id, nonce).await?;
-    let initialize = tokio::spawn(async move {
+    let mut initialize = tokio::spawn(async move {
         Box::pin(initialize(
             &docker,
             &scope,
@@ -185,10 +185,19 @@ async fn run_committed_result_recovery(nonce: char) -> Result<(), HostError> {
     let phase = helpers::storage_initializer_phase(&observer, reservation_id).await?;
     assert_eq!(phase.result, "confirmed");
 
-    let initialize_result = tokio::time::timeout(Duration::from_secs(5), initialize)
-        .await
-        .map_err(|_| HostError::DockerTimeout)?
-        .map_err(|_| HostError::Journal)?;
+    let initialize_result =
+        match tokio::time::timeout(Duration::from_secs(5), &mut initialize).await {
+            Ok(join_result) => join_result.map_err(|_| HostError::Journal)?,
+            Err(_) => {
+                initialize.abort();
+                let join_result = initialize.await;
+                if !join_result.is_err_and(|error| error.is_cancelled()) {
+                    return Err(HostError::Journal);
+                }
+                Err(HostError::DockerTimeout)
+            }
+        };
+    drop(release);
     assert_eq!(initialize_result.err(), Some(HostError::DockerTimeout));
     assert_eq!(
         recover_absent(
