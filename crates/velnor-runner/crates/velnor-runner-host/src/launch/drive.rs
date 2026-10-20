@@ -26,6 +26,8 @@ mod deferred_offer;
 pub(crate) use deferred_offer::{DeferredAuthorizedOffer, DeferredAuthorizedOffers};
 mod recovery;
 pub(crate) use recovery::recover_acquired_scoped_offer;
+#[cfg(test)]
+pub(crate) use recovery::recover_acquired_scoped_offer_with_test_observation;
 
 /// Call context. Tokens are redacted in `Debug` and zeroized on drop.
 pub(crate) struct Drive {

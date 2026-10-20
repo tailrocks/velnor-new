@@ -778,6 +778,21 @@
       "author": "/root/native_intake_composition",
       "reviewer": "/root/execution_source_security_review",
       "scope": "These fixture tests do not prove live job execution."
+    },
+    {
+      "result": "PASS",
+      "source_base_commit": "7270441ed059b633971658fd8ff18637bf05bd9b",
+      "source_delta": "The ACK recovery fixture uses the production recovery core. It tests the current policy generation.",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 rustup run 1.99.1 mbx nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host -E 'test(acknowledged_acquire_reopens_and_rechecks_before_jit)' --no-tests fail",
+      "exit_status": 0,
+      "nextest_run": "9a4cb114-64a6-4c3b-99d9-ee109514d4c7",
+      "passed": 1,
+      "log": "native-ack-recovery-parent-integrated-20261020.log",
+      "log_sha256": "e60dbb83cc581956e3101d2609cd8af8191e78ff7cc0f2cefbdc254f744ad30b",
+      "manifest_sha256": "4082d81ff0fa4fdef33c3438eb136442b25a119f00dbd3c84741bd9e48c7b8bf",
+      "author": "/root/obsolete_capacity_cleanup",
+      "reviewer": "/root/execution_source_security_review",
+      "scope": "The fixture does not test the production image provider or a policy that revokes source access."
     }
   ],
   "broader_pair_check": {

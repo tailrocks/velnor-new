@@ -317,6 +317,12 @@ pub(super) struct CompositionSetup {
     _state: BootstrapAdmissionState,
 }
 
+impl CompositionSetup {
+    pub(super) fn admission_state_path(&self) -> &Path {
+        &self._state.path
+    }
+}
+
 pub(super) use native_intake::authorize_actual_started_request;
 
 pub(super) async fn open_composition() -> Result<CompositionSetup, String> {

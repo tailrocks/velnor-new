@@ -41,6 +41,8 @@ pub(crate) use admission_gate::lock_connection;
 pub(crate) use drive::acquire_scoped_offer;
 #[cfg(test)]
 pub(crate) use drive::authorize_positive_offer_with;
+#[cfg(test)]
+pub(crate) use drive::recover_acquired_scoped_offer_with_test_observation;
 pub(crate) use drive::{
     DeferredAuthorizedOffer, DeferredAuthorizedOffers, Drive, GuestAdmission, Lane,
     PositiveOfferAuthorization, Rest, ScopedAdmissionInput, acquire_authorized_scoped_offer,

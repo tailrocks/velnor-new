@@ -110,6 +110,7 @@ async fn acquire_through_positive_poll(
             .map_err(|error| error.to_string())?;
     let mut permit = Some(permit);
     let acquire_calls = poll_session.acquire_calls.clone();
+    let acknowledgement_calls = poll_session.acknowledgement_calls.clone();
     let mut lane = FakeLane::new([Ok(exchange(200, r#"{"count":1,"value":[41]}"#))]);
     let outcome = crate::launch::test_positive_poll_once_with_response(
         &mut link,
@@ -122,7 +123,10 @@ async fn acquire_through_positive_poll(
         polled.clone(),
         "https://queue.example.invalid/messages".to_owned(),
         Some("queue-token".to_owned()),
-        async |_link, _session, _path, _queue, _polled| Ok(()),
+        async |_link, _session, _path, _queue, _polled| {
+            acknowledgement_calls.set(acknowledgement_calls.get() + 1);
+            Ok(())
+        },
         async |_link, poll, _queue, _path, _queue_token, _admin_token| {
             acquire_calls.set(acquire_calls.get() + 1);
             let permit = permit
@@ -204,6 +208,7 @@ async fn create_poll_session(fixture: &Fixture) -> Result<PollSession, String> {
         intent_id: bound.intent_id(),
         allocation: bound.allocation().clone(),
         acquire_calls: std::rc::Rc::new(std::cell::Cell::new(0)),
+        acknowledgement_calls: std::rc::Rc::new(std::cell::Cell::new(0)),
     })
 }
 

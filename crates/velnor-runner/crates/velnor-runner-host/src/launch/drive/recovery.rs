@@ -1,5 +1,7 @@
 //! Continue one acquired request from its existing reservation.
 
+use std::future::Future;
+
 use bollard::Docker;
 
 use crate::{
@@ -28,6 +30,33 @@ pub(crate) async fn recover_acquired_scoped_offer(
     release_secret: &ReleaseReadSecret,
     engine: &SelectedEngineContext,
 ) -> Result<ScopedProvisioningOutcome, EnsureError> {
+    recover_acquired_scoped_offer_with_observation(
+        connection,
+        authority_policy,
+        admission_state,
+        scoped,
+        request,
+        reservation_id,
+        engine,
+        |charge| recovery_observation(docker, host, budget, charge, engine, release_secret),
+    )
+    .await
+}
+
+async fn recover_acquired_scoped_offer_with_observation<F, Fut>(
+    connection: &RepositoryConnection,
+    authority_policy: &ApprovedJobAuthorityPolicy,
+    admission_state: &std::path::Path,
+    scoped: &ConnectionJournal,
+    request: &AssignmentIdentity,
+    reservation_id: i64,
+    engine: &SelectedEngineContext,
+    observe: F,
+) -> Result<ScopedProvisioningOutcome, EnsureError>
+where
+    F: FnOnce((u64, u64)) -> Fut,
+    Fut: Future<Output = Option<crate::launch::RecoveryObservation>>,
+{
     authority_policy
         .validate_for(connection)
         .map_err(|_| EnsureError::Uncertain)?;
@@ -68,16 +97,7 @@ pub(crate) async fn recover_acquired_scoped_offer(
     {
         return Ok(ScopedProvisioningOutcome::NoStart);
     }
-    let Some(observation) = recovery_observation(
-        docker,
-        host,
-        budget,
-        candidate.charge(),
-        engine,
-        release_secret,
-    )
-    .await
-    else {
+    let Some(observation) = observe(candidate.charge()).await else {
         return Ok(ScopedProvisioningOutcome::NoStart);
     };
     if observation
@@ -89,4 +109,28 @@ pub(crate) async fn recover_acquired_scoped_offer(
     let checked = CheckedAcquiredRecovery::after_verified_recovery(candidate, observation, engine)
         .map_err(|_| EnsureError::Uncertain)?;
     Ok(ScopedProvisioningOutcome::Recovered(checked))
+}
+
+#[cfg(test)]
+pub(crate) async fn recover_acquired_scoped_offer_with_test_observation(
+    connection: &RepositoryConnection,
+    authority_policy: &ApprovedJobAuthorityPolicy,
+    admission_state: &std::path::Path,
+    scoped: &ConnectionJournal,
+    request: &AssignmentIdentity,
+    reservation_id: i64,
+    engine: &SelectedEngineContext,
+    observation: Option<crate::launch::RecoveryObservation>,
+) -> Result<ScopedProvisioningOutcome, EnsureError> {
+    recover_acquired_scoped_offer_with_observation(
+        connection,
+        authority_policy,
+        admission_state,
+        scoped,
+        request,
+        reservation_id,
+        engine,
+        |_| async move { observation },
+    )
+    .await
 }

@@ -20,6 +20,8 @@ use quarantine_inbox::verify_quarantined_inbox;
 #[path = "native_intake_composition/pre_delivery.rs"]
 mod pre_delivery;
 use pre_delivery::assert_pre_delivery_snapshot;
+#[path = "native_intake_composition/ack_recovery.rs"]
+mod ack_recovery;
 
 #[test]
 fn acquired_request_reaches_measured_storage_bound() -> Result<(), String> {
