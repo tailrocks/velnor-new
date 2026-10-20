@@ -17,9 +17,9 @@ struct MiseBinaryPin {
 
 fn mise_binary_pin(platform: CheckPlatform) -> MiseBinaryPin {
     let (sha256, max_bytes) = match platform {
-        CheckPlatform::LinuxX64 => (MISE_BINARY_SHA256_LINUX_X64, 168_325_296),
-        CheckPlatform::MacosArm64 => (MISE_BINARY_SHA256_MACOS_ARM64, 134_961_808),
-        CheckPlatform::MacosX64 => (MISE_BINARY_SHA256_MACOS_X64, 163_172_496),
+        CheckPlatform::LinuxX64 => (MISE_BINARY_SHA256_LINUX_X64, 168_019_312),
+        CheckPlatform::MacosArm64 => (MISE_BINARY_SHA256_MACOS_ARM64, 135_143_184),
+        CheckPlatform::MacosX64 => (MISE_BINARY_SHA256_MACOS_X64, 164_421_392),
     };
     MiseBinaryPin { sha256, max_bytes }
 }

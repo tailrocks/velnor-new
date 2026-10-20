@@ -106,8 +106,13 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
     let report_helper_version = input.consumer_release_version.to_owned();
     let generator_version = env!("CARGO_PKG_VERSION");
     let policy = input.config.workflow.policy;
-    let workflow_tasks =
-        crate::workflow_task_jobs::policies(input.root, input.config, input.discovery)?;
+    let workflow_tasks = crate::workflow_task_jobs::policies(
+        input.root,
+        input.config,
+        input.discovery,
+        catalog,
+        input.fetch_roots,
+    )?;
     let validation = input.config.workflow.generator_validation;
     let verify = crate::verify::verify_kinds(&input.config.workflow.verify.jobs)?;
     let support = support_workflow(policy, validation, input.discovery, &verify);

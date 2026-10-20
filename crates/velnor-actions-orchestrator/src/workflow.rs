@@ -207,7 +207,7 @@ fn insert_gate_jobs(
     );
     jobs.insert(
         PUBLISH_JOB_ID.to_owned(),
-        crate::publish_job::baseline_publish_job(label, branch, acquire)?,
+        crate::publish_emit::baseline::baseline_publish_job(label, branch, acquire)?,
     );
     Ok(())
 }

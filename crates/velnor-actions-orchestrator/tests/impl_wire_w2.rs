@@ -186,7 +186,6 @@ fn committed_drift_warns_never_fails() -> TestResult {
     let prep = prepare(root)?;
     assert!(prep.runner_image.is_unobserved());
     assert_eq!(prep.runner_image.image_os.as_str(), "unknown");
-    assert_eq!(prep.runner_image.image_version.as_str(), "unknown");
     assert_ne!(prep.runner_label, "");
     Ok(())
 }

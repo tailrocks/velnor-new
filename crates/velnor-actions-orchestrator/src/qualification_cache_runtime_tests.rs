@@ -125,7 +125,6 @@ impl Fixture {
             runner_os: "Linux",
             runner_arch: "X64",
             image_os: Some("ubuntu26"),
-            image_version: Some("2026.10.18"),
             matrix_key: &self.matrix_key,
             layer: &self.layer,
             runtime_identity_json: &self.runtime_identity_json,
@@ -338,7 +337,6 @@ fn runtime_identity(
             runs_on: requirements.runs_on.clone(),
             image_identity: QualificationRuntimeImageIdentity::Hosted {
                 image_os: "ubuntu26".to_owned(),
-                image_version: "2026.10.18".to_owned(),
             },
             target: requirements.target.clone(),
         },

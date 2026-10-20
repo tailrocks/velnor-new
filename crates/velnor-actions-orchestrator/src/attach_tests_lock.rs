@@ -1,7 +1,7 @@
 //! Lock-acquisition workflow tests.
 
 use super::*;
-use crate::publish_job::baseline_publish_job;
+use crate::publish_emit::baseline::baseline_publish_job;
 
 #[test]
 fn lock_acquire_inserts_digest_verified_stage() {

@@ -60,7 +60,7 @@ jobs:
         with:
           helper-sha256: 1348ee5540acde19a4502b096a0f824dcd0c6a31988a70004e9d6e15e4ae7ec4
       - name: Setup Mise
-        uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
+        uses: jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde
         with:
           cache: "false"
           cache_save: "false"
@@ -73,7 +73,7 @@ jobs:
         if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: bdeac23f09522b013f150f477b687d9baf503ed775b92278f1501f2694acd1b7
+          d: 4bbc210f5c9874ba0237d2cd76fc58fbbf4ed689ee63e93ffd39f6df75332e16
       - name: Restore Mise tools
         id: tools-restore
         if: github.event_name != 'workflow_dispatch' && steps.v2.outputs.enabled == 'true'
@@ -130,7 +130,7 @@ jobs:
         with:
           helper-sha256: 1348ee5540acde19a4502b096a0f824dcd0c6a31988a70004e9d6e15e4ae7ec4
       - name: Setup Mise
-        uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
+        uses: jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde
         with:
           cache: "false"
           cache_save: "false"
@@ -143,7 +143,7 @@ jobs:
         if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 169a95f2b3445fa80e15d0188490b92b0ba4ba8d116b626f40386645ad085cc4
+          d: 34922110fcff4c30afa8bcb0ca6cb2ade338a72459ee282a518d1026815ecb54
       - name: Restore Mise tools
         id: tools-restore
         if: github.event_name != 'workflow_dispatch' && steps.v2.outputs.enabled == 'true'
@@ -257,7 +257,7 @@ jobs:
     if: ${{ !cancelled() }}
     steps:
       - name: Setup Mise
-        uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
+        uses: jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde
         with:
           cache: "false"
           cache_save: "false"

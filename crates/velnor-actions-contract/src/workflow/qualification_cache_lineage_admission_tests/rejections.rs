@@ -66,8 +66,8 @@ fn full_admission_rejects_mutated_artifact_link_runtime_and_layer_state() -> Tes
     assert!(rejects_admission(&wrong_link, &useful_plan, Some(&delta)));
 
     let mut wrong_runtime = third.value.clone();
-    wrong_runtime["receipt"]["lanes"][0]["layers"][1]["runtime_identity"]["platform"]["image_version"] =
-        serde_json::json!("27.04");
+    wrong_runtime["receipt"]["lanes"][0]["layers"][1]["runtime_identity"]["platform"]["image_identity"]
+        ["image_os"] = serde_json::json!("ubuntu27");
     assert!(rejects_admission(
         &wrong_runtime,
         &useful_plan,

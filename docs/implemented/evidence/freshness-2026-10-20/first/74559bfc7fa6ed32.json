@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+    "api",
+    "--method",
+    "GET",
+    "https://api.github.com/repos/actions/download-artifact/git/ref/tags/v8.0.2"
+  ],
+  "body_file": "74559bfc7fa6ed32.body",
+  "checked_at": "2026-10-20T07:01:35.722313+00:00",
+  "exit_code": 0,
+  "rust_prefix_only": false,
+  "sha256": "019b77a68374d41e7f5b3c56f42a048e3ff6f0b179896eb98fc79a9cf6b05364",
+  "size": 359,
+  "url": "https://api.github.com/repos/actions/download-artifact/git/ref/tags/v8.0.2"
+}

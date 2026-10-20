@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+    "api",
+    "--method",
+    "GET",
+    "https://api.github.com/repos/actions/attest-build-provenance/releases/latest"
+  ],
+  "body_file": "035fc4486c0e2b8c.body",
+  "checked_at": "2026-10-20T07:02:57.577418+00:00",
+  "exit_code": 0,
+  "rust_prefix_only": false,
+  "sha256": "6c8a2cddbabf63c4034ee023330703fa0da67d976f3d18cd741cafcf4edea923",
+  "size": 2414,
+  "url": "https://api.github.com/repos/actions/attest-build-provenance/releases/latest"
+}

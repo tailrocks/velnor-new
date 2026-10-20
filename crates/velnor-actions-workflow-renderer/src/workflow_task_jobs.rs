@@ -4,7 +4,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{Job, WORKFLOW_TASK_JOB_PREFIX};
 
-use super::{build_task_jobs::BuildTaskPolicy, native_image_jobs::NativeImageTaskPolicy};
+use super::{
+    build_task_jobs::BuildTaskPolicy, image_build_jobs::ImageBuildPolicy,
+    native_image_jobs::NativeImageTaskPolicy,
+};
 use crate::{RenderError, VerificationTaskPolicy};
 
 #[cfg(test)]
@@ -20,6 +23,8 @@ pub enum WorkflowTaskPolicy {
     Build(BuildTaskPolicy),
     /// Native-platform image validation task, hosted-only on matching hardware.
     NativeImage(NativeImageTaskPolicy),
+    /// Container image build jobs, one per native platform, hosted-only.
+    Image(ImageBuildPolicy),
 }
 
 impl WorkflowTaskPolicy {
@@ -30,17 +35,27 @@ impl WorkflowTaskPolicy {
             Self::Verification(policy) => &policy.task.id,
             Self::Build(policy) => &policy.task.id,
             Self::NativeImage(policy) => &policy.task.id,
+            Self::Image(policy) => &policy.image.id,
         }
     }
 
-    /// Exact runner label selected for the task variant.
+    /// Exact runner label the task variant selects for one of its jobs.
     #[must_use]
-    pub fn runner_label(&self) -> &str {
+    pub fn runner_label_for_job(&self, job_id: &str) -> Option<&str> {
         match self {
-            Self::Verification(policy) => &policy.runner_label,
-            Self::Build(policy) => &policy.runner_label,
-            Self::NativeImage(policy) => &policy.runner_label,
+            Self::Verification(policy) => Some(&policy.runner_label),
+            Self::Build(policy) => Some(&policy.runner_label),
+            Self::NativeImage(policy) => Some(&policy.runner_label),
+            Self::Image(policy) => policy
+                .platform_for_job(job_id)
+                .map(velnor_actions_contract::ImagePlatform::runs_on),
         }
+    }
+
+    /// Whether the task's job runs pinned tools and needs the shared Mise prelude.
+    #[must_use]
+    pub fn uses_pinned_tools(&self) -> bool {
+        matches!(self, Self::Image(policy) if policy.uses_pinned_tools())
     }
 
     /// Whether a job belongs to this task's permitted placement set.
@@ -50,6 +65,7 @@ impl WorkflowTaskPolicy {
             Self::Verification(policy) => policy.owns_job_id(job_id),
             Self::Build(policy) => policy.job_id() == job_id,
             Self::NativeImage(policy) => policy.job_id() == job_id,
+            Self::Image(policy) => policy.platform_for_job(job_id).is_some(),
         }
     }
 }
@@ -60,6 +76,7 @@ pub(crate) fn validate_workflow_task_jobs(
     jobs: &BTreeMap<String, Job>,
     policies: &[WorkflowTaskPolicy],
     checkout_uses: &str,
+    routing: &crate::workflow_routing::WorkflowRoutingPolicy,
 ) -> Result<Vec<String>, RenderError> {
     let mut previous = None;
     let mut seen = BTreeSet::new();
@@ -84,6 +101,14 @@ pub(crate) fn validate_workflow_task_jobs(
                     jobs,
                     std::slice::from_ref(task),
                     checkout_uses,
+                )?,
+            ),
+            WorkflowTaskPolicy::Image(task) => job_ids.extend(
+                crate::verification_jobs::image_build_jobs::validate_image_build_jobs(
+                    jobs,
+                    task,
+                    checkout_uses,
+                    routing,
                 )?,
             ),
             WorkflowTaskPolicy::NativeImage(task) => job_ids.extend(

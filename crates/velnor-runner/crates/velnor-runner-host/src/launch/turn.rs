@@ -66,5 +66,9 @@ mod completion_intake_tests;
 mod completion_quarantine_tests;
 
 #[cfg(test)]
+#[path = "turn/progress_tests.rs"]
+mod progress_tests;
+
+#[cfg(test)]
 #[path = "turn/scoped_poll_tests.rs"]
 pub(super) mod scoped_poll_tests;

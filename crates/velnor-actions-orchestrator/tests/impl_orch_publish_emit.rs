@@ -150,20 +150,20 @@ fn publication_jobs_follow_the_configured_execution_mode() -> TestResult {
             if routed {
                 assert!(
                     block.contains("runs-on: [velnor, ubuntu-26.04-scale-set]"),
-                    "Execution mode \"{mode}\" must route job {id}. Details follow:\n{block}"
+                    "Job {id} must use the configured Scale Set runner in execution mode \"{mode}\". The job details follow:\n{block}"
                 );
                 assert!(
                     block.contains("ghcr.io/team/job@sha256:aaaaaaaa"),
-                    "Execution mode \"{mode}\" must set the immutable job image for job {id}. Details follow:\n{block}"
+                    "Job {id} must use the immutable job image in execution mode \"{mode}\". The job details follow:\n{block}"
                 );
             } else {
                 assert!(
                     block.contains("runs-on: ubuntu-26.04"),
-                    "Execution mode \"{mode}\" must preserve the hosted runner for job {id}. Details follow:\n{block}"
+                    "Job {id} must use the hosted runner in execution mode \"{mode}\". The job details follow:\n{block}"
                 );
                 assert!(
                     !block.contains("container:"),
-                    "Execution mode \"{mode}\" must not add a job container for {id}. Details follow:\n{block}"
+                    "Job {id} must not use a job container in execution mode \"{mode}\". The job details follow:\n{block}"
                 );
             }
         }

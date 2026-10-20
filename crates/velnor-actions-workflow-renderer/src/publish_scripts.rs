@@ -148,3 +148,35 @@ pub fn upload_script(gh: &str, id: &str) -> String {
          --title \"$GITHUB_REF_NAME\" --notes 'Release asset bundle' {files}; fi"
     )
 }
+
+/// Require a push of the default branch in the generation-time repository.
+#[must_use]
+pub fn branch_push_script(repository: &str, branch: &str) -> String {
+    format!(
+        "set -eu; [ \"$GITHUB_EVENT_NAME\" = push ]; [ \"$GITHUB_REF_TYPE\" = branch ]; \
+         [ \"$GITHUB_REPOSITORY\" = '{repository}' ]; [ \"$GITHUB_REF\" = 'refs/heads/{branch}' ]"
+    )
+}
+
+/// Poll the newest `Required` check run at the commit until it settles.
+///
+/// The default-branch push starts CI and this workflow together, so the
+/// verdict may not exist yet: pending (absent or incomplete) sleeps and
+/// retries, a settled non-success fails at once, and exhausting the budget
+/// fails closed. `attempts` and `pause_seconds` are literals chosen by the
+/// caller; the job timeout must exceed their product.
+#[must_use]
+pub fn required_wait_script(gh: &str, attempts: u16, pause_seconds: u16) -> String {
+    let rounds: Vec<String> = (1..=attempts).map(|n| n.to_string()).collect();
+    let rounds = rounds.join(" ");
+    let program = r#"[.check_runs[] | select(.name == "Required" and .app.slug == "github-actions")] | sort_by(.id) | last | if . == null or .status != "completed" then "pending" elif .conclusion == "success" then "success" else "failure" end"#;
+    format!(
+        "set -eu; {gh}; state_file=\"$RUNNER_TEMP/required.state\"; \
+         for round in {rounds}; do \
+         gh api \"repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?check_name=Required\" \
+         --jq '{program}' > \"$state_file\"; read -r state < \"$state_file\"; \
+         case \"$state\" in success) exit 0 ;; pending) sleep {pause_seconds} ;; \
+         *) printf 'Required concluded %s\\n' \"$state\" >&2; exit 1 ;; esac; done; \
+         printf 'Required did not settle\\n' >&2; exit 1"
+    )
+}

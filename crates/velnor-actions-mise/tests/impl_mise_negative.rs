@@ -197,7 +197,7 @@ fn candidate_build_vector_pins_implemented_trio_form() -> Result<(), String> {
             "--no-hooks",
             "exec",
             "rust@1.99.1",
-            "mr-boxington@1.24.1",
+            "mr-boxington@1.25.0",
             "--",
             "mbx",
             "build",

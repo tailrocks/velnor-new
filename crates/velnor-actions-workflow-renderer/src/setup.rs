@@ -99,7 +99,7 @@ impl MiseSetup {
 /// replaces with explicit V2 tools-cache steps for the owned paths. This
 /// action installs Mise itself and loads no repository environment.
 /// The `with` map is exactly these six keys. In the pinned
-/// `jdx/mise-action` v5.2.0, `persist_github_token` defaults to false; leave
+/// `jdx/mise-action` v5.2.1, `persist_github_token` defaults to false; leave
 /// it unset so the action's token cannot be carried into later workflow steps.
 /// # Errors
 pub fn mise_setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {

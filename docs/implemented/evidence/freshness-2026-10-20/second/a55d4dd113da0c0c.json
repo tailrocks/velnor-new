@@ -1,0 +1,23 @@
+{
+  "argv": [
+    "/usr/bin/curl",
+    "--fail",
+    "--silent",
+    "--show-error",
+    "--location",
+    "--max-time",
+    "25",
+    "--max-filesize",
+    "8388608",
+    "--user-agent",
+    "velnor-freshness-qualification/0.1 (https://github.com/tailrocks/velnor-new)",
+    "https://crates.io/api/v1/crates/cargo-nextest"
+  ],
+  "body_file": "a55d4dd113da0c0c.body",
+  "checked_at": "2026-10-20T07:03:00.208948+00:00",
+  "exit_code": 0,
+  "rust_prefix_only": false,
+  "sha256": "2aa25fda965a1bf311e5c007fa66adeac46994d16fa5e338d422cf935d82a1c4",
+  "size": 309841,
+  "url": "https://crates.io/api/v1/crates/cargo-nextest"
+}

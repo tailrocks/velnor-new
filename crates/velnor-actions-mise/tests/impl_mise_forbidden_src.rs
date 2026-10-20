@@ -56,6 +56,7 @@ const EXPECTED_MODULES: &[&str] = &[
     "command_env.rs",
     "command_git.rs",
     "command_output.rs",
+    "command_private_fetch.rs",
     "command_progress.rs",
     "command_progress_tests.rs",
     "command_release_signer.rs",

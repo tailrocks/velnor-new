@@ -69,8 +69,6 @@ pub struct QualificationCacheBindingRequest<'a> {
     pub runner_arch: &'a str,
     /// Verified runner image family.
     pub image_os: Option<&'a str>,
-    /// Verified runner image version.
-    pub image_version: Option<&'a str>,
     /// Selected plan matrix key.
     pub matrix_key: &'a str,
     /// Closed layer wire name.

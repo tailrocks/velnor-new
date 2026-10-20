@@ -90,3 +90,16 @@ No base-pinned validator exists. Specified, not dropped:
   regen errors; (3) intentional deltas pass via a reviewed allowlist,
   not silence; (4) wired as a required check alongside `Required`.
 - Until then, consistent-malicious regen is caught by human review only.
+
+## Private sources (HD-7)
+
+Generated jobs that consume private sibling repositories mint a GitHub App
+installation token (`contents: read`, exact repository allowlist) and revoke
+it before any repository-controlled step. Fork pull requests receive no
+secrets, so the mint step fails and `Required` fails closed;
+`pull_request_target` is never used to work around that. A same-repository
+writer who edits the generated workflow can mint the same read-only token for
+the installed repositories: this is the self-attestation limit above, with
+review and CODEOWNERS on `.github/**` and `.velnor/**` as the trust root.
+The credential boundary and the threat model live in the
+[private sources contract](../proposed/private-sources-contract.md).

@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+    "api",
+    "--method",
+    "GET",
+    "https://api.github.com/repos/zizmorcore/zizmor/releases/latest"
+  ],
+  "body_file": "edb59db018f13a3c.body",
+  "checked_at": "2026-10-20T07:01:34.725056+00:00",
+  "exit_code": 0,
+  "rust_prefix_only": false,
+  "sha256": "f382d32010d273a3afdb01df1434931d793030e2210f4797c5be953bebb51741",
+  "size": 10700,
+  "url": "https://api.github.com/repos/zizmorcore/zizmor/releases/latest"
+}

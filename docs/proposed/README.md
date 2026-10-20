@@ -61,6 +61,7 @@ The generator crates MUST NOT implement a runner, a Scale Set client, or an Acti
 5. [Workflow contract](workflow-contract.md) defines triggers, jobs, and matrix data.
 6. [Task execution contract](task-execution-contract.md) defines task steps, Mise invocation, execution, and reports.
 7. [Cache and report contract](cache-contract.md) defines task identities, cache ownership/trust, reports, and final status aggregation.
+   See also [cache decisions](cache-decisions.md): the owner-adopted cache redesign (producer-scoped saves, dependency seed, opaque MBX bundles, family pruning, PR-scoped sources, no ImageVersion).
 8. [Host-image seed admission contract](host-seed-contract.md) defines trusted preinstalled seed inputs and fail-cold admission.
 9. [Parallelism and affected-work contract](parallelism-and-selection-contract.md) defines dependency-aware selection, not-affected crate jobs (hard decision 4), native background/wait steps, bounded concurrency, and complete test partitioning.
 10. [Rust quality contract](rust-quality-contract.md) defines crate ownership, lints, file limits, dependencies, and repository-policy protection.
@@ -81,5 +82,6 @@ The generator crates MUST NOT implement a runner, a Scale Set client, or an Acti
 25. [Runner resource admission](runner-resource-admission.md) defines candidate job admission and resource enforcement.
 26. [GitHub Actions reference](github-actions-reference.md) defines source repository requirements and fidelity contracts.
 27. [Image publication contract](image-publication-contract.md) defines `[[images]]`, Dockerfile pinning rules, and the build, publish and promote jobs.
+28. [Private sources contract](private-sources-contract.md) defines private cross-repository dependency credentials (HD-7): the `[private_sources]` config, `.velnor/deps.lock`, the mint, fetch and revoke steps, and the credential boundary.
 
 The listed documents are intended to be implementable without inventing behavior. If a behavior is not specified, fail with a clear error and add a decision to the spec before implementing it. Do not silently broaden V1.

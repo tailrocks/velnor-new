@@ -77,6 +77,7 @@ fn assert_contract_modules(root: &str) {
             "canonical",
             "closure",
             "config",
+            "deps_lock",
             "discover",
             "errors",
             "extension_schemas",

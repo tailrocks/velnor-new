@@ -1,9 +1,20 @@
 use super::{HOSTED_RUNS, TestResult, job_body};
 
+const RUNNER_IMAGE_BUILD: &str =
+    include_str!("../../../images/resource-probe/build-runner-images.sh");
+
 pub(super) fn assert_image_producer(body: &str) -> TestResult {
-    assert!(body.contains("bash images/resource-probe/build-image.sh"));
     assert!(body.contains("bash images/resource-probe/build-runner-images.sh"));
-    assert!(body.contains("docker image inspect --format '{{.Architecture}}'"));
+    assert!(body.contains("docker save"));
+    assert!(body.contains("sha256sum"));
+    assert!(body.contains("velnor-resource-probe-linux-amd64.tar"));
+    assert!(body.contains("RESOURCE_PROBE_MANIFEST.json"));
+    assert!(RUNNER_IMAGE_BUILD.contains("images/runner/ubuntu-26.04"));
+    assert!(RUNNER_IMAGE_BUILD.contains("images/dind"));
+    assert!(RUNNER_IMAGE_BUILD.contains("docker buildx build"));
+    assert!(RUNNER_IMAGE_BUILD.contains("--platform linux/amd64"));
+    assert!(RUNNER_IMAGE_BUILD.contains("docker image inspect --format '{{.Architecture}}'"));
+    assert!(RUNNER_IMAGE_BUILD.contains("[[ \"$architecture\" == amd64 ]]"));
     assert!(body.contains("test \\\"$runner\\\" = amd64"));
     assert!(body.contains("test \\\"$dind\\\" = amd64"));
     assert!(body.contains("docker save"));
@@ -28,7 +39,7 @@ pub(super) fn assert_image_producer(body: &str) -> TestResult {
 pub(super) fn assert_macos_producer(body: &str) -> TestResult {
     let build = job_body(body, "build-binary")?;
     assert!(build.contains("runs-on: macos-15"), "{build}");
-    assert!(build.contains("jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7"));
+    assert!(build.contains("jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde"));
     assert!(
         build.contains(&format!(
             "rust@{}",

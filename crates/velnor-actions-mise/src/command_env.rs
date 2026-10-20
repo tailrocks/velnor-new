@@ -7,6 +7,8 @@
 use std::ffi::OsString;
 use std::process::Command;
 
+use super::private_fetch::{CREDENTIAL_ALLOWLIST_PRIVATE_FETCH, is_fetch_redirect_key};
+
 /// Isolation environment applied to every spawned process.
 pub const ISOLATION_ENV: [(&str, &str); 4] = [
     ("MISE_NO_CONFIG", "1"),
@@ -236,6 +238,13 @@ pub enum EnvPolicy {
     QualifiedProbe,
     /// Qualified acquisition: owned environment, proxy passthrough, and fixed overlay.
     QualifiedAcquisition,
+    /// Private-source fetch (HD-7): cleared environment plus proxy passthrough.
+    ///
+    /// The only policy that may carry `VELNOR_PRIVATE_FETCH_TOKEN` or
+    /// `VELNOR_NPM_READ_TOKEN`. Constructible only through
+    /// [`crate::command::IsolatedCommand::private_fetch`], whose callers are the
+    /// orchestrator's `private_fetch` and `bun_registry_install` builders.
+    PrivateFetch,
 }
 
 impl EnvPolicy {
@@ -246,6 +255,7 @@ impl EnvPolicy {
         match self {
             Self::Bootstrap => &CREDENTIAL_ALLOWLIST_BOOTSTRAP,
             Self::GhApi => &CREDENTIAL_ALLOWLIST_GH_API,
+            Self::PrivateFetch => &CREDENTIAL_ALLOWLIST_PRIVATE_FETCH,
             Self::Verify
             | Self::Discovery
             | Self::GitHubToken
@@ -269,6 +279,7 @@ impl EnvPolicy {
                 | Self::QualifiedCheck
                 | Self::QualifiedProbe
                 | Self::QualifiedAcquisition
+                | Self::PrivateFetch
         )
     }
 
@@ -281,6 +292,7 @@ impl EnvPolicy {
                 | Self::ReleaseSigner
                 | Self::QualifiedCheck
                 | Self::QualifiedAcquisition
+                | Self::PrivateFetch
         )
     }
 
@@ -305,6 +317,7 @@ impl EnvPolicy {
                 let stripped = (is_denied_credential_key(&name)
                     && !allowed.contains(&name.as_ref()))
                     || ENDPOINT_ENV_KEYS.contains(&name.as_ref())
+                    || is_fetch_redirect_key(&name)
                     || is_stripped_ambient_key(&name);
                 if !stripped {
                     env.push((key.clone(), value.clone()));
@@ -351,6 +364,7 @@ pub(crate) fn strip_credentials(command: &mut Command, policy: EnvPolicy) {
     for (key, _) in std::env::vars_os() {
         let name = key.to_string_lossy();
         if is_stripped_ambient_key(&name)
+            || is_fetch_redirect_key(&name)
             || (is_denied_credential_key(&name)
                 && !CREDENTIAL_ENV_KEYS.contains(&name.as_ref())
                 && !allowed.contains(&name.as_ref()))

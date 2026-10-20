@@ -23,8 +23,9 @@ fn mbx_wrapper_reconciles_scalar_and_tool_table_pins() {
         ),
     ];
     for (content, form) in cases {
+        let content = content.replace("1.24.1", MR_BOXINGTON_VERSION);
         assert_eq!(
-            mbx_wrapper_pin_status(content),
+            mbx_wrapper_pin_status(&content),
             MbxWrapperStatus::Pinned {
                 version: MR_BOXINGTON_VERSION.to_owned(),
             },

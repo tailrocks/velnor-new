@@ -13,8 +13,8 @@ pub use super::named_check_lanes::{
 };
 use crate::config::{
     CheckExecutor, CheckPlatform, EPHEMERAL_CHECK_ADMISSION_CONDITION, ExecutionConfig,
-    ExecutionMode, ExecutionRole, RUNNER_LABEL_CATALOG, RunsOn, VelnorConfig, VerificationRunner,
-    WORKFLOW_TASK_JOB_PREFIX, WorkflowTask,
+    ExecutionMode, ExecutionRole, RUNNER_LABEL_CATALOG, RunnerPlatform, RunsOn, VelnorConfig,
+    VerificationRunner, WORKFLOW_TASK_JOB_PREFIX, WorkflowTask, runner_platform,
 };
 use crate::errors::ContractError;
 use std::collections::BTreeMap;
@@ -224,7 +224,16 @@ pub(super) fn placement_for_source(
             "role_not_eligible",
         ));
     }
-    let supports_scale_set = job_supports_scale_set(job_id, job, config)?;
+    let (is_image_job, supports_scale_set) =
+        if let Some(checked) = config.check_image_job_runner(job_id, &job.runs_on) {
+            checked?;
+            (
+                true,
+                runner_platform(&job.runs_on) == Some(RunnerPlatform::LinuxAmd64),
+            )
+        } else {
+            (false, job_supports_scale_set(job_id, job, config)?)
+        };
     if let Some(mode) = dispatch.or(execution.mode) {
         return Ok(match mode {
             ExecutionMode::Hosted => Placement::HostedOnly,
@@ -233,7 +242,8 @@ pub(super) fn placement_for_source(
                 Placement::ScaleSetOnly
             }
             ExecutionMode::Both => {
-                if class == LaneClass::Verification
+                if !is_image_job
+                    && class == LaneClass::Verification
                     && supports_scale_set
                     && supports_hosted_scale_set_pair(job)
                 {

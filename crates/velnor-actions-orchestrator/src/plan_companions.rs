@@ -1,7 +1,8 @@
 //! Optional generated companion file ownership in deterministic plan order.
 use super::{GenerationPreparation, push};
+use velnor_actions_contract::config::ReleaseRegistry;
 use velnor_actions_contract::{FRESHNESS_WORKFLOW_PATH, TOFU_APPLY_WORKFLOW_PATH};
-use velnor_actions_workflow_renderer::release_tree::RELEASE_TREE_PATHS;
+use velnor_actions_workflow_renderer::release_tree::{RELEASE_CONFIG_PATH, RELEASE_TREE_PATHS};
 
 pub(super) fn file_lines(out: &mut String, prep: &GenerationPreparation) {
     release_file_lines(out, prep);
@@ -49,7 +50,7 @@ fn release_file_lines(out: &mut String, prep: &GenerationPreparation) {
     let enabled = crate::release_emit::enabled_release(prep)
         .ok()
         .flatten()
-        .is_some();
+        .is_some_and(|release| release.registry == ReleaseRegistry::CratesIo);
     if enabled {
         for path in RELEASE_TREE_PATHS {
             push(out, &format!("  {path}"));
@@ -59,7 +60,14 @@ fn release_file_lines(out: &mut String, prep: &GenerationPreparation) {
 
 /// Publication workflow path, exactly when `generate` emits it.
 fn publish_file_lines(out: &mut String, prep: &GenerationPreparation) {
-    if !prep.config.publish.bundles.is_empty() {
+    let git_tag = crate::release_emit::git_tag_release(prep)
+        .ok()
+        .flatten()
+        .is_some();
+    if git_tag {
+        push(out, &format!("  {RELEASE_CONFIG_PATH}"));
+    }
+    if git_tag || !prep.config.publish.bundles.is_empty() {
         push(
             out,
             &format!(

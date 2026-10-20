@@ -15,7 +15,7 @@ runs:
   using: composite
   steps:
     - name: Setup Mise
-      uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
+      uses: jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde
       with:
         version: 2026.10.15
         sha256: ea45cc6e787d412deb8e069eec57875c71863e33a36acf69dd59791c27c9c073

@@ -41,7 +41,7 @@ fn exec_argv(tool: &str, program: &str, args: &[&str]) -> Vec<String> {
 
 fn spec() -> ConsumerBinaryReleaseSpec {
     let linux_setup = MiseSetup {
-        uses: "jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7".to_owned(),
+        uses: "jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde".to_owned(),
         version: "2026.10.15".to_owned(),
         sha256: "e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9".to_owned(),
     };
@@ -69,7 +69,7 @@ fn spec() -> ConsumerBinaryReleaseSpec {
         bin: "repo-scan".to_owned(),
         linux_setup,
         macos_setup: MiseSetup {
-            uses: "jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7".to_owned(),
+            uses: "jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde".to_owned(),
             version: "2026.10.15".to_owned(),
             sha256: "826c4833fa7437a63f6027b86bc10c8b61b1163dc793c03ecde92f68ad167890".to_owned(),
         },

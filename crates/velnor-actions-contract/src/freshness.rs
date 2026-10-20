@@ -1,7 +1,7 @@
 //! Freshness input classes and runner-image evidence (ver §2, §4).
 //!
 //! Freshness requirements apply per input class; the hosted-image record
-//! carries `ImageOS`/`ImageVersion` evidence so family changes qualify as
+//! carries `ImageOS` evidence so family changes qualify as
 //! new platform identities. Labels never fix package sets: evidence
 //! records exactly the observed image, nothing more.
 
@@ -38,8 +38,6 @@ pub struct FreshnessRequirement {
 pub struct RunnerImageEvidence {
     /// Runner `ImageOS` value; `unknown` when unobserved.
     pub image_os: String,
-    /// Runner `ImageVersion` value; `unknown` when unobserved.
-    pub image_version: String,
 }
 
 /// Marker for image fields the generator could not observe.
@@ -68,20 +66,18 @@ impl FreshnessRequirement {
 impl RunnerImageEvidence {
     /// Record genuinely observed provisioner facts.
     ///
-    /// Both values must be semantic and neither may be the
-    /// [`UNOBSERVED_IMAGE_VALUE`] marker, so observed and unobserved
-    /// records are disjoint by construction (P03-4).
+    /// The value must be semantic and not the [`UNOBSERVED_IMAGE_VALUE`]
+    /// marker, so observed and unobserved records are disjoint by
+    /// construction (P03-4). The runner `ImageVersion` is deliberately not
+    /// part of any cache identity.
     /// # Errors
-    pub fn observed(os: &str, version: &str) -> Result<Self, ContractError> {
-        for (field, value) in [("image_os", os), ("image_version", version)] {
-            crate::cachekey::validate_semantic_text(field, value)?;
-            if value == UNOBSERVED_IMAGE_VALUE {
-                return Err(ContractError::identity(field, "unobserved_marker"));
-            }
+    pub fn observed(os: &str) -> Result<Self, ContractError> {
+        crate::cachekey::validate_semantic_text("image_os", os)?;
+        if os == UNOBSERVED_IMAGE_VALUE {
+            return Err(ContractError::identity("image_os", "unobserved_marker"));
         }
         Ok(Self {
             image_os: os.to_owned(),
-            image_version: version.to_owned(),
         })
     }
 
@@ -90,26 +86,19 @@ impl RunnerImageEvidence {
     pub fn unobserved() -> Self {
         Self {
             image_os: UNOBSERVED_IMAGE_VALUE.to_owned(),
-            image_version: UNOBSERVED_IMAGE_VALUE.to_owned(),
         }
     }
 
-    /// True when both fields carry the unobserved marker.
+    /// True when the field carries the unobserved marker.
     #[must_use]
     pub fn is_unobserved(&self) -> bool {
-        self.image_os == UNOBSERVED_IMAGE_VALUE && self.image_version == UNOBSERVED_IMAGE_VALUE
+        self.image_os == UNOBSERVED_IMAGE_VALUE
     }
 
-    /// Validate observed image values are present and semantic.
+    /// Validate the observed image value is present and semantic.
     /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
-        for (field, value) in [
-            ("image_os", self.image_os.as_str()),
-            ("image_version", self.image_version.as_str()),
-        ] {
-            crate::cachekey::validate_semantic_text(field, value)?;
-        }
-        Ok(())
+        crate::cachekey::validate_semantic_text("image_os", &self.image_os)
     }
 }
 

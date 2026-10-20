@@ -159,7 +159,7 @@ fn pinned_exec_selects_exact_tools() -> Result<(), String> {
             "--no-hooks",
             "exec",
             "rust@1.99.1",
-            "mr-boxington@1.24.1",
+            "mr-boxington@1.25.0",
             "--",
             "mbx",
             "clippy",
@@ -189,7 +189,7 @@ fn pinned_exec_accepts_all_catalog_tools() -> Result<(), String> {
     let argv = request.argv(&pinned());
     for spec in [
         "rust@1.99.1",
-        "mr-boxington@1.24.1",
+        "mr-boxington@1.25.0",
         "gh@2.102.0",
         "actionlint@1.7.12",
         "shellcheck@0.11.0",

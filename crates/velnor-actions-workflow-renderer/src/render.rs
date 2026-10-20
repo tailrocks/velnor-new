@@ -78,7 +78,13 @@ fn render_workflow_parts(
     support: Option<&VelnorSupportWorkflow>,
     ctx: &RenderContext,
 ) -> Result<RenderedWorkflow, RenderError> {
-    let mut jobs = merged_jobs(ir, policy, support, ctx)?;
+    let mut jobs = merged_jobs(
+        ir,
+        policy,
+        support,
+        ctx,
+        &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only(),
+    )?;
     closure::insert_plan_closure(&mut jobs, ctx)?;
     closure::insert_request_closure(&mut jobs)?;
     closure::insert_task_closure(&mut jobs)?;
@@ -156,14 +162,18 @@ pub fn finalize_jobs(
     routing: &crate::workflow_routing::WorkflowRoutingPolicy,
 ) -> Result<BTreeMap<String, Job>, RenderError> {
     mise.validate()?;
-    let mut jobs = merged_jobs(ir, policy, support, ctx)?;
+    let mut jobs = merged_jobs(ir, policy, support, ctx, routing)?;
     crate::workflow_routing::route_jobs(&mut jobs, routing)?;
     for (id, job) in &mut jobs {
         let bootstrap_plan = ctx.preseed && id == PLAN_JOB_ID;
         if bootstrap_plan {
             crate::cache_tar_setup::strip_preseed_bootstrap_cache(job);
         }
-        if ctx.workflow_tasks.iter().any(|task| task.owns_job_id(id)) {
+        if ctx
+            .workflow_tasks
+            .iter()
+            .any(|task| task.owns_job_id(id) && !task.uses_pinned_tools())
+        {
             closure::check_internal_staged(id, job, ctx.preseed)?;
             continue;
         }
@@ -270,6 +280,7 @@ fn merged_jobs(
     policy: WorkflowPolicy,
     support: Option<&VelnorSupportWorkflow>,
     ctx: &RenderContext,
+    routing: &crate::workflow_routing::WorkflowRoutingPolicy,
 ) -> Result<BTreeMap<String, Job>, RenderError> {
     ctx.validate()?;
     if ctx.preseed && policy != WorkflowPolicy::VelnorRepositoryV1 {
@@ -294,6 +305,7 @@ fn merged_jobs(
             &jobs,
             &ctx.workflow_tasks,
             &ctx.checkout_uses,
+            routing,
         )?;
     crate::verification_jobs::workflow_task_jobs::extend_required_needs(
         &mut jobs,

@@ -18,7 +18,7 @@ preserves other repository-owned entries as specified in §3:
 └── workflows/
     ├── binary-release.yml         # consumer-v1 only, Rust binary release enabled
     ├── ci.yml                      # both policies; Velnor policy adds campaign inputs
-    ├── publish.yml                 # consumer-v1 only, at least one `[[publish.bundles]]`
+    ├── publish.yml                 # consumer-v1 only, `[[publish.bundles]]` or `registry = "git-tag"`
     ├── qualification.yml           # optional schema 2 workflow selected by configuration
     ├── release.yml               # velnor-repository-v1, or consumer-v1 with release enabled
     └── suites.yml                  # optional standalone Nextest suite workflow (or `<slug>.yml`)
@@ -33,7 +33,9 @@ under `velnor-repository-v1`, not a separate workflow file.
 
 `publish.yml` is the tag-driven publication workflow (see the
 [package publication contract](package-publication-contract.md)); it is absent
-unless `[[publish.bundles]]` declares an artifact.
+unless `[[publish.bundles]]` declares an artifact or the Rust release uses
+`registry = "git-tag"`; the latter also emits `release-plz.toml` and no
+`release.yml` or bootstrap config.
 
 `release.yml` is emitted for `velnor-repository-v1` (keeping
 its existing Velnor-internal meaning) and for `consumer-v1` when
