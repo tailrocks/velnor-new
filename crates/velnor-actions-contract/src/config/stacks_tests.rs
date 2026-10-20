@@ -116,6 +116,7 @@ fn ignore_admission_uses_typed_stack_eligibility() {
             ignore: ids,
             rust: None,
             tofu: None,
+            bun: None,
         };
         assert!(config.validate("config.toml").is_ok());
     }
@@ -123,6 +124,7 @@ fn ignore_admission_uses_typed_stack_eligibility() {
         ignore: vec!["mise".to_owned()],
         rust: None,
         tofu: None,
+        bun: None,
     };
     let error = explicit
         .validate("config.toml")
@@ -132,6 +134,7 @@ fn ignore_admission_uses_typed_stack_eligibility() {
         ignore: vec!["unknown".to_owned()],
         rust: None,
         tofu: None,
+        bun: None,
     };
     let error = unknown.validate("config.toml").expect_err("unknown stack");
     assert!(error.to_string().contains("unknown_stack_id:unknown"));

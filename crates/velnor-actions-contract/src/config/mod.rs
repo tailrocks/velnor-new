@@ -6,6 +6,7 @@ mod actions;
 mod agents;
 mod binary_release;
 mod build_task;
+mod bun;
 mod check_receipt_budget;
 mod dco;
 mod discovery;
@@ -34,6 +35,7 @@ mod runs_on;
 mod rust_inputs;
 mod rust_suites;
 mod rust_suites_validate;
+mod schema;
 mod stacks;
 mod task_source;
 mod tofu;
@@ -41,6 +43,7 @@ mod tofu_apply;
 mod tools;
 mod verification;
 mod workflow;
+mod workflow_flags;
 mod workflow_task;
 
 pub(crate) use binary_release::validate_static_release_inventory;
@@ -55,6 +58,10 @@ pub use binary_release::{
 };
 pub use build_task::{
     BuildTask, BuildTaskRunner, BuildTaskXcodeCapability, is_valid_build_tool_key,
+};
+pub use bun::{
+    BUN_JOB_PREFIX, BunBrowser, BunInputRule, BunMemberConfig, BunStackConfig, DEFAULT_BUN_SCRIPTS,
+    MAX_BUN_TIMEOUT_MINUTES, is_valid_member_name, is_valid_script_name,
 };
 pub use check_receipt_budget::{
     MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES, MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,
@@ -321,34 +328,6 @@ impl VelnorConfig {
             }
         }
         Ok(())
-    }
-
-    /// Schema 1 rejects routing. Schema 2 requires `[execution]`.
-    fn check_schema(&self, file: &str) -> Result<(), ContractError> {
-        match self.schema {
-            1 => {
-                if self.execution.is_some() {
-                    return Err(ContractError::config(
-                        file,
-                        "execution",
-                        "schema1_rejects_execution",
-                    ));
-                }
-                Ok(())
-            }
-            2 => {
-                let execution = self
-                    .execution
-                    .as_ref()
-                    .ok_or_else(|| ContractError::config(file, "execution", "missing_execution"))?;
-                execution.validate(file)
-            }
-            _ => Err(ContractError::UnsupportedSchema {
-                field: "schema",
-                found: self.schema.to_string(),
-                expected: "1 or 2",
-            }),
-        }
     }
 
     /// Reject shard counts beyond the test-process budget (par §8).

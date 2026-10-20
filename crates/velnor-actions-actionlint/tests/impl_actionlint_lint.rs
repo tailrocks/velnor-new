@@ -254,6 +254,7 @@ fn checkout_schema_matches_lint_job_inputs() {
             "persist-credentials".to_owned(),
             "ref".to_owned(),
             "fetch-depth".to_owned(),
+            "lfs".to_owned(),
         ])
     );
     let inputs = BTreeMap::from([("persist-credentials".to_owned(), "false".to_owned())]);

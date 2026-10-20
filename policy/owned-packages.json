@@ -2,6 +2,7 @@
   "version": 1,
   "packages": [
     "velnor-actions-actionlint",
+    "velnor-actions-bun",
     "velnor-actions-cli",
     "velnor-actions-contract",
     "velnor-actions-mise",

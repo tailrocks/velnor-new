@@ -87,6 +87,22 @@ pub(crate) fn checkout_step() -> Result<Step, OrchestratorError> {
     })
 }
 
+/// Add `lfs: true` to every generated checkout (`[workflow] checkout_lfs`).
+///
+/// One pass over the finished job map keeps the flag in a single place: each
+/// checkout builder stays unchanged, and the shape validators accept exactly
+/// the added input.
+pub(crate) fn apply_checkout_lfs(jobs: &mut BTreeMap<String, Job>) {
+    for step in jobs.values_mut().flat_map(|job| job.steps.iter_mut()) {
+        if step.role != Some(StepRole::Checkout) {
+            continue;
+        }
+        if let StepKind::Action { with, .. } = &mut step.kind {
+            with.insert("lfs".to_owned(), "true".to_owned());
+        }
+    }
+}
+
 /// Checkout with full history for git-archaeology jobs (plan only).
 ///
 /// Plan verifies the checkout against the PR head through the merge
@@ -300,6 +316,9 @@ pub(crate) fn check_crate_mbx_gating(
     check_mbx_gating(jobs, drivers).map_err(OrchestratorError::from)
 }
 
+#[cfg(test)]
+#[path = "wire_w1_lfs_tests.rs"]
+mod wire_w1_lfs_tests;
 #[cfg(test)]
 #[path = "wire_w1_tests.rs"]
 mod wire_w1_tests;

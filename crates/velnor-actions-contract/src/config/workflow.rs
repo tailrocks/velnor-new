@@ -1,6 +1,7 @@
 //! Workflow section of `.velnor/config.toml`: naming, policy, runner labels.
 use super::rust_suites::WorkflowDispatchConfig;
 use super::rust_suites_validate::validate_preserve_workflows;
+use super::workflow_flags::{default_true, is_false, is_true};
 use crate::config::{TofuApplyConfig, WorkflowTask};
 use crate::errors::ContractError;
 use crate::workflow::ValidatorKind;
@@ -61,6 +62,9 @@ pub struct WorkflowConfig {
     /// `MISE_QUIET` regardless of this flag.
     #[serde(default = "default_true", skip_serializing_if = "is_true")]
     pub mise_quiet: bool,
+    /// Add `lfs: "true"` to every generated checkout (default false).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub checkout_lfs: bool,
     /// Cache writes from pull requests; same-repository scope requires explicit opt-in.
     #[serde(default)]
     pub pull_request_cache_policy: PullRequestCachePolicy,
@@ -306,23 +310,6 @@ pub const fn default_crate_timeout_minutes() -> u16 {
 )]
 fn is_default_crate_timeout(value: &u16) -> bool {
     *value == default_crate_timeout_minutes()
-}
-
-/// Default `mise_quiet` value: silence stays on.
-fn default_true() -> bool {
-    true
-}
-
-/// Serialization predicate keeping the `mise_quiet` default out of emitted config.
-///
-/// Serde's `skip_serializing_if` requires `fn(&bool) -> bool`, so the
-/// small-`Copy` by-value clippy lint does not apply here.
-#[expect(
-    clippy::trivially_copy_pass_by_ref,
-    reason = "serde skip_serializing_if requires fn(&bool) -> bool"
-)]
-fn is_true(value: &bool) -> bool {
-    *value
 }
 
 #[cfg(test)]

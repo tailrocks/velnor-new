@@ -57,7 +57,10 @@ pub(crate) fn build_workflow_for_consumer_release(
 ) -> Result<WorkflowPlan, OrchestratorError> {
     let mut prepared = prepare_workflow(input)?;
     let plan = build_workflow_plan(input, &mut prepared)?;
-    let jobs = build_workflow_jobs(input, &mut prepared, plan)?;
+    let mut jobs = build_workflow_jobs(input, &mut prepared, plan)?;
+    if input.config.workflow.checkout_lfs {
+        wire_w1::apply_checkout_lfs(&mut jobs);
+    }
     let mut ir = workflow_ir(input.config, input.branch, jobs, prepared.policy);
     let context = workflow_context::render_context(workflow_context::RenderContextInputs {
         config: input.config,

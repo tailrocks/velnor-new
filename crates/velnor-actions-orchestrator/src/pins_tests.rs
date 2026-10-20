@@ -24,6 +24,7 @@ pub(crate) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> Vel
             verification_branch: None,
             generator_validation: GeneratorValidation::Bootstrap,
             mise_quiet: true,
+            checkout_lfs: false,
             max_parallel_jobs: 2,
             crate_timeout_minutes: 5,
             pull_request_cache_policy: PullRequestCachePolicy::default(),
@@ -47,6 +48,7 @@ pub(crate) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> Vel
             ignore: Vec::new(),
             rust: None,
             tofu: None,
+            bun: None,
         },
         discovery: DiscoveryConfig {
             exclude: Vec::new(),
