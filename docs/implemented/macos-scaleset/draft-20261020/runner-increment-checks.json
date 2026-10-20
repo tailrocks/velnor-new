@@ -1455,5 +1455,19 @@
     "scope": "The change removes an unused projection. The active job facts and resource admission remain.",
     "text_change": "After the test run, one assertion message uses change instead of mutate.",
     "remaining": "Strict runner checks and live installation remain necessary."
+  },
+  "native_completion_finalization": {
+    "result": "PASS",
+    "tests": 6,
+    "run_id": "5016d522-4ab4-45c7-b5ce-c1c04d2b9602",
+    "log": "shipping-native-completion-finalization-20261020.log",
+    "log_sha256": "6d5453809019c1872b852f6e2463037e2aa59492dca247ce96c253cb8e7abe5f",
+    "manifest_sha256": "a79229402e7e3123f74d613a8a4bf17304afbaa02bf92ed0929769a26d679bc0",
+    "review_sha256": "71ee674102a8e5212bf87b9320970f851400001761df1ea188c79c9753a843ca",
+    "author": "obsolete_capacity_cleanup",
+    "reviewer": "execution_source_security_review",
+    "language_reviewer": "helper_language_review",
+    "scope": "The settlement transaction retires its completion lease after the terminal proof and capacity release. Replay requires the exact stored identities.",
+    "remaining": "The full runner gates and live tests remain necessary."
   }
 }
