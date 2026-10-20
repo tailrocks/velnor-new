@@ -1,4 +1,7 @@
 use super::super::ir::Job;
+use super::super::step_identity::{
+    QualificationCacheCompositeId, QualificationCacheStepId, StepId,
+};
 use super::{
     EPHEMERAL_CHECK_ADMISSION_CONDITION, EmitLane, HOSTED_SUFFIX, LaneClass,
     NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, Placement, SCALE_SUFFIX,
@@ -6,6 +9,15 @@ use super::{
 use crate::config::ExecutionConfig;
 use crate::errors::ContractError;
 use std::collections::BTreeMap;
+
+const QUALIFICATION_CACHE_OWNER_ID_ENV: &str = "VELNOR_QUALIFICATION_CACHE_OWNER_ID";
+
+#[path = "emit/cache_references.rs"]
+mod cache_references;
+use cache_references::{
+    cache_owner_references, retarget_owner_env, rewrite_condition_references,
+    rewrite_expression_map, rewrite_expression_references,
+};
 
 pub(super) fn emit_job(
     jobs: &mut std::collections::BTreeMap<String, Job>,
@@ -21,12 +33,12 @@ pub(super) fn emit_job(
             insert_job(
                 jobs,
                 id.to_owned(),
-                retarget(job, None, id, id, class, EmitLane::Single, map),
+                retarget(job, None, id, id, class, EmitLane::Single, map)?,
             )?;
         }
         Placement::ScaleSetOnly => {
             let token = execution.scale_selector()?.token();
-            let mut next = retarget(job, Some(&token), id, id, class, EmitLane::Single, map);
+            let mut next = retarget(job, Some(&token), id, id, class, EmitLane::Single, map)?;
             if class == LaneClass::Verification {
                 next.display_name = scale_name(&job.display_name);
             }
@@ -36,7 +48,7 @@ pub(super) fn emit_job(
             let token = execution.scale_selector()?.token();
             let hosted_id = format!("{id}{HOSTED_SUFFIX}");
             let scale_id = format!("{id}{SCALE_SUFFIX}");
-            let mut hosted = retarget(job, None, id, &hosted_id, class, EmitLane::Hosted, map);
+            let mut hosted = retarget(job, None, id, &hosted_id, class, EmitLane::Hosted, map)?;
             hosted.display_name = hosted_name(&job.display_name);
             insert_job(jobs, hosted_id, hosted)?;
             let mut scale = retarget(
@@ -47,7 +59,7 @@ pub(super) fn emit_job(
                 class,
                 EmitLane::Scale,
                 map,
-            );
+            )?;
             scale.display_name = scale_name(&job.display_name);
             insert_job(jobs, scale_id, scale)?;
         }
@@ -71,7 +83,8 @@ fn retarget(
     class: LaneClass,
     lane: EmitLane,
     map: &std::collections::BTreeMap<String, Vec<String>>,
-) -> Job {
+) -> Result<Job, ContractError> {
+    let references = cache_owner_references(job, source_id, output_id)?;
     let mut next = job.clone();
     if let Some(token) = runs_on {
         token.clone_into(&mut next.runs_on);
@@ -79,15 +92,50 @@ fn retarget(
             next.condition = Some(EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned());
         }
     }
-    retarget_check_identity(&mut next, source_id, output_id, lane);
+    retarget_check_identity(&mut next, source_id, output_id, lane, &references)?;
     next.needs = expand_needs(&job.needs, map, class, lane);
-    next
+    Ok(next)
 }
 
-fn retarget_check_identity(job: &mut Job, source_id: &str, output_id: &str, lane: EmitLane) {
+fn retarget_check_identity(
+    job: &mut Job,
+    source_id: &str,
+    output_id: &str,
+    lane: EmitLane,
+    references: &BTreeMap<String, String>,
+) -> Result<(), ContractError> {
     for step in &mut job.steps {
+        let is_cache_step = matches!(
+            step.id,
+            Some(StepId::QualificationCache(_) | StepId::QualificationCacheComposite(_))
+        );
+        if let Some(id) = step.id.as_mut() {
+            match id {
+                StepId::QualificationCache(identity) => {
+                    *identity = QualificationCacheStepId::new(
+                        identity.stage(),
+                        identity.layer(),
+                        output_id,
+                    )?;
+                }
+                StepId::QualificationCacheComposite(identity) => {
+                    *identity = match identity.layer() {
+                        Some(layer) => QualificationCacheCompositeId::for_layer(
+                            identity.phase(),
+                            layer,
+                            output_id,
+                        )?,
+                        None => QualificationCacheCompositeId::new(identity.phase(), output_id)?,
+                    };
+                }
+                _ => {}
+            }
+        }
+        if let Some(condition) = &mut step.condition {
+            rewrite_condition_references(condition, references)?;
+        }
         match &mut step.kind {
-            super::super::step::StepKind::Shell { env, .. } => {
+            super::super::step::StepKind::Shell { run, env } => {
                 if let Some(job_id) = env.get_mut(NAMED_CHECK_JOB_ID_ENV)
                     && job_id == source_id
                 {
@@ -100,8 +148,15 @@ fn retarget_check_identity(job: &mut Job, source_id: &str, output_id: &str, lane
                         EmitLane::Single => {}
                     }
                 }
+                for argument in run {
+                    rewrite_expression_references(argument, references)?;
+                }
+                if is_cache_step {
+                    retarget_owner_env(env, source_id, output_id);
+                }
+                rewrite_expression_map(env, references)?;
             }
-            super::super::step::StepKind::Action { with, .. } => {
+            super::super::step::StepKind::Action { with, env, .. } => {
                 if let Some(name) = with.get_mut("name")
                     && name.starts_with("velnor-crate-")
                     && name.ends_with(&format!("-{source_id}"))
@@ -110,11 +165,24 @@ fn retarget_check_identity(job: &mut Job, source_id: &str, output_id: &str, lane
                     name.truncate(prefix_len);
                     name.push_str(output_id);
                 }
+                if is_cache_step {
+                    retarget_owner_env(env, source_id, output_id);
+                }
+                rewrite_expression_map(with, references)?;
+                rewrite_expression_map(env, references)?;
             }
-            super::super::step::StepKind::TaskExecution { .. }
-            | super::super::step::StepKind::Internal { .. } => {}
+            super::super::step::StepKind::Internal { env, .. } => {
+                if is_cache_step {
+                    retarget_owner_env(env, source_id, output_id);
+                }
+                rewrite_expression_map(env, references)?;
+            }
+            // Lane expansion must not change the task execution arguments,
+            // environment, or binding digest.
+            super::super::step::StepKind::TaskExecution { .. } => {}
         }
     }
+    Ok(())
 }
 
 fn expand_needs(
@@ -151,3 +219,7 @@ fn hosted_name(name: &str) -> String {
 fn scale_name(name: &str) -> String {
     format!("{name} / Velnor Scale Set / Linux x64")
 }
+
+#[cfg(test)]
+#[path = "emit_tests.rs"]
+mod tests;
