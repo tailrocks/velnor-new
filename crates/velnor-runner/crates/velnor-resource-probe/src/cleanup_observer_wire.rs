@@ -2,6 +2,10 @@
 
 use serde::{Deserialize, Serialize};
 
+mod request_validation;
+
+pub use request_validation::validate_request;
+
 /// Identity data from the controller, selected daemon, and worker containers for one cleanup inventory.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

@@ -1,9 +1,6 @@
 //! Measure owned process, mount, and descriptor references before cleanup.
 
-use sha2::{Digest, Sha256};
-
 use crate::ProbeError;
-mod request;
 #[cfg(target_os = "linux")]
 mod scan;
 #[cfg(test)]
@@ -28,14 +25,7 @@ pub const CLEANUP_REQUEST_LIMIT: usize = 32 * 1024;
 ///
 /// Returns an error if a request field or the binding digest is incorrect.
 pub fn validate_request(request: &CleanupObserverRequest) -> Result<(), ProbeError> {
-    request::validate(request)?;
-    let bytes = serde_json::to_vec(&request.binding)
-        .map_err(|_| ProbeError::Invalid("cleanup_binding_encode"))?;
-    let digest = lower_hex(&Sha256::digest(bytes));
-    if digest != request.binding_sha256 {
-        return Err(ProbeError::Invalid("cleanup_binding_digest"));
-    }
-    Ok(())
+    crate::cleanup_observer_wire::validate_request(request).map_err(ProbeError::Invalid)
 }
 
 /// Find identities of Velnor resources in process and mount data at the specified Linux paths.
@@ -51,6 +41,7 @@ pub fn observe_cleanup(
     scan::observe(request)
 }
 
+#[cfg(test)]
 fn lower_hex(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut output = String::with_capacity(bytes.len() * 2);
