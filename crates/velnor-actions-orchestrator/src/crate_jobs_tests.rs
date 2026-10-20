@@ -53,6 +53,7 @@ fn group_with_all_features(
 /// Discovery shell carrying only task proposals.
 pub(crate) fn discovery(groups: Vec<ProposedTask>) -> Discovery {
     Discovery {
+        gradle_roots: Vec::new(),
         mise_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),

@@ -43,6 +43,7 @@ fn spec() -> PublishWorkflowSpec {
     PublishWorkflowSpec {
         name: "Publish".to_owned(),
         repository: "acme/widgets".to_owned(),
+        staged_binary: None,
         triggers: PublishTriggers {
             branches: Vec::new(),
             tag_glob: Some("*-v[0-9]*.[0-9]*.[0-9]*".to_owned()),

@@ -29,6 +29,7 @@ pub(crate) struct PartialStacks {
     tofu: Option<PartialTofuStack>,
     /// Bun stack options (strict: `roots` is required).
     bun: Option<BunStackConfig>,
+    gradle: Option<velnor_actions_contract::config::gradle::GradleStackConfig>,
     /// dbt stack options (strict: `projects` is required).
     dbt: Option<DbtStackConfig>,
     /// Ansible stack options (strict: `roots` is required).
@@ -117,6 +118,7 @@ impl PartialStacks {
             rust,
             tofu,
             bun: self.bun,
+            gradle: self.gradle,
             dbt: self.dbt,
             ansible: self.ansible,
         })

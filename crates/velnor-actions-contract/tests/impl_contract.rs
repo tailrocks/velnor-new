@@ -73,6 +73,7 @@ fn config_validation_reports_key_paths() {
             }),
             tofu: None,
             bun: None,
+            gradle: None,
             dbt: None,
             ansible: None,
         },

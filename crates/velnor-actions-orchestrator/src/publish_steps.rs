@@ -28,6 +28,9 @@ use image_steps::{crane_function, promote_job, publish_job as image_publish_job,
 
 #[path = "publish_bundle_steps.rs"]
 mod bundle_steps;
+#[path = "publish_maven_steps.rs"]
+mod maven_steps;
+pub(crate) use maven_steps::MavenPlan;
 #[path = "publish_npm_steps.rs"]
 mod npm_steps;
 pub(crate) use npm_steps::NpmPlan;
@@ -75,6 +78,8 @@ pub(crate) struct Inputs<'a> {
     pub(crate) bundles: &'a [BundlePlan<'a>],
     /// Resolved npm entries, sorted by id.
     pub(crate) npm: &'a [NpmPlan<'a>],
+    /// Resolved Maven bundle entries, sorted by id.
+    pub(crate) maven: &'a [MavenPlan<'a>],
     /// Manifest for the `git-tag` release job; `None` without that mode.
     pub(crate) git_tag_manifest: Option<&'a str>,
     /// Declared container images, sorted by id.
@@ -103,6 +108,11 @@ impl Inputs<'_> {
                     .map(|plan| (plan.entry.id.as_str(), &plan.check)),
             )
             .chain(
+                self.maven
+                    .iter()
+                    .map(|plan| (plan.entry.id.as_str(), &plan.check)),
+            )
+            .chain(
                 self.promotions
                     .iter()
                     .map(|plan| (plan.image.id.as_str(), &plan.check)),
@@ -122,8 +132,10 @@ pub(crate) fn assemble_jobs(
     let gh = gh_function(inputs.catalog)?;
     let mut jobs = BTreeMap::new();
     let branch_side = inputs.git_tag_manifest.is_some() || !inputs.images.is_empty();
-    let tag_side =
-        !inputs.bundles.is_empty() || !inputs.npm.is_empty() || !inputs.promotions.is_empty();
+    let tag_side = !inputs.bundles.is_empty()
+        || !inputs.npm.is_empty()
+        || !inputs.maven.is_empty()
+        || !inputs.promotions.is_empty();
     let mixed = tag_side && branch_side;
     if tag_side {
         let mut authority = authority_job(inputs, &gh)?;
@@ -132,33 +144,7 @@ pub(crate) fn assemble_jobs(
         }
         jobs.insert(AUTHORITY_JOB.to_owned(), authority);
     }
-    for plan in inputs.bundles {
-        let id = plan.bundle.id.as_str();
-        jobs.insert(
-            format!("bundle-build-{id}"),
-            build_job(inputs, plan.bundle)?,
-        );
-        jobs.insert(format!("bundle-attest-{id}"), attest_job(inputs, id)?);
-        jobs.insert(
-            format!("bundle-publish-{id}"),
-            publish_job(inputs, id, &gh)?,
-        );
-    }
-    for plan in inputs.npm {
-        let id = plan.entry.id.as_str();
-        jobs.insert(
-            format!("npm-build-{id}"),
-            npm_steps::build_job(inputs, plan)?,
-        );
-        jobs.insert(
-            format!("npm-attest-{id}"),
-            npm_steps::attest_job(inputs, plan.entry)?,
-        );
-        jobs.insert(
-            format!("npm-publish-{id}"),
-            npm_steps::publish_job(inputs, plan.entry)?,
-        );
-    }
+    insert_tag_chains(inputs, &gh, &mut jobs)?;
     if branch_side {
         let mut authority = branch_authority_job(inputs, &gh)?;
         if mixed {
@@ -185,6 +171,54 @@ pub(crate) fn assemble_jobs(
         }
     }
     Ok(jobs)
+}
+
+/// The build, attest and publish chain of every tag-driven artifact kind.
+fn insert_tag_chains(
+    inputs: &Inputs<'_>,
+    gh: &str,
+    jobs: &mut BTreeMap<String, PublishJobSpec>,
+) -> Result<(), OrchestratorError> {
+    for plan in inputs.bundles {
+        let id = plan.bundle.id.as_str();
+        jobs.insert(
+            format!("bundle-build-{id}"),
+            build_job(inputs, plan.bundle)?,
+        );
+        jobs.insert(format!("bundle-attest-{id}"), attest_job(inputs, id)?);
+        jobs.insert(format!("bundle-publish-{id}"), publish_job(inputs, id, gh)?);
+    }
+    for plan in inputs.npm {
+        let id = plan.entry.id.as_str();
+        jobs.insert(
+            format!("npm-build-{id}"),
+            npm_steps::build_job(inputs, plan)?,
+        );
+        jobs.insert(
+            format!("npm-attest-{id}"),
+            npm_steps::attest_job(inputs, plan.entry)?,
+        );
+        jobs.insert(
+            format!("npm-publish-{id}"),
+            npm_steps::publish_job(inputs, plan.entry)?,
+        );
+    }
+    for plan in inputs.maven {
+        let id = plan.entry.id.as_str();
+        jobs.insert(
+            format!("maven-build-{id}"),
+            maven_steps::build_job(inputs, plan)?,
+        );
+        jobs.insert(
+            format!("maven-attest-{id}"),
+            maven_steps::attest_job(inputs, plan.entry)?,
+        );
+        jobs.insert(
+            format!("maven-publish-{id}"),
+            maven_steps::publish_job(inputs, plan.entry, gh)?,
+        );
+    }
+    Ok(())
 }
 
 /// `gh` shell function body through the pinned Mise tool.

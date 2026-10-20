@@ -24,6 +24,7 @@ use velnor_actions_workflow_renderer::{MiseSetup, WorkflowRoutingPolicy, render:
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
+use crate::config::private_wiring::PrivateWiring;
 use crate::prepare::GenerationPreparation;
 use crate::publish_steps::{BundlePlan, Inputs, PromotionPlan, VersionCheck, assemble_jobs};
 use crate::release_identity::origin_repository;
@@ -33,6 +34,8 @@ pub(crate) mod baseline;
 #[path = "publish_release_steps.rs"]
 pub(crate) mod release;
 
+#[path = "publish_maven_emit.rs"]
+mod maven_emit;
 #[path = "publish_npm_emit.rs"]
 mod npm_emit;
 #[cfg(test)]
@@ -59,27 +62,18 @@ pub(crate) fn publish_files(
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
     let bundles = &prep.config.publish.bundles;
     let npm = &prep.config.publish.npm;
+    let maven = &prep.config.publish.maven;
     let images = &prep.config.images;
     let git_tag = crate::release_emit::git_tag_release(prep)?;
-    if bundles.is_empty() && npm.is_empty() && git_tag.is_none() && images.is_empty() {
+    if bundles.is_empty()
+        && npm.is_empty()
+        && maven.is_empty()
+        && git_tag.is_none()
+        && images.is_empty()
+    {
         return Ok(Vec::new());
     }
-    if (!bundles.is_empty() || !npm.is_empty() || !images.is_empty())
-        && prep.config.workflow.policy != WorkflowPolicy::ConsumerV1
-    {
-        let key = if !bundles.is_empty() {
-            "publish.bundles"
-        } else if !npm.is_empty() {
-            "publish.npm"
-        } else {
-            "images"
-        };
-        return Err(OrchestratorError::config(
-            CONFIG_REL,
-            key,
-            "publish_requires_consumer_policy",
-        ));
-    }
+    require_consumer_policy(prep)?;
     let plans = bundles
         .iter()
         .enumerate()
@@ -97,6 +91,12 @@ pub(crate) fn publish_files(
         .enumerate()
         .map(|(index, entry)| npm_emit::resolve(prep, index, entry, &catalog))
         .collect::<Result<Vec<_>, _>>()?;
+    let private = PrivateWiring::load(&prep.root, &prep.config, &catalog)?;
+    let maven_plans = maven
+        .iter()
+        .enumerate()
+        .map(|(index, entry)| maven_emit::resolve(prep, private.as_ref(), index, entry))
+        .collect::<Result<Vec<_>, _>>()?;
     let jobs = assemble_jobs(&Inputs {
         repository: &repository,
         branch: &prep.default_branch,
@@ -106,6 +106,7 @@ pub(crate) fn publish_files(
         catalog: &catalog,
         bundles: &plans,
         npm: &npm_plans,
+        maven: &maven_plans,
         git_tag_manifest: git_tag.map(|release| release.manifest_path.as_str()),
         images,
         promotions: &promotions,
@@ -119,10 +120,15 @@ pub(crate) fn publish_files(
             } else {
                 Vec::new()
             },
-            tag_glob: (!plans.is_empty() || !npm_plans.is_empty() || !promotions.is_empty())
-                .then(|| RELEASE_TAG_GLOB.to_owned()),
+            tag_glob: (!plans.is_empty()
+                || !npm_plans.is_empty()
+                || !maven_plans.is_empty()
+                || !promotions.is_empty())
+            .then(|| RELEASE_TAG_GLOB.to_owned()),
         },
         jobs,
+        staged_binary: (!maven_plans.is_empty())
+            .then(|| prep.workflow.context.staged_binary.clone()),
     };
     let ctx = ReleaseRenderContext {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
@@ -131,6 +137,30 @@ pub(crate) fn publish_files(
     let mut files = vec![render_publish_workflow_with_routing(&spec, &ctx, routing)?];
     files.extend(tag_config);
     Ok(files)
+}
+
+/// Tag-driven artifacts and images publish only under the consumer policy.
+fn require_consumer_policy(prep: &GenerationPreparation) -> Result<(), OrchestratorError> {
+    let publish = &prep.config.publish;
+    let key = if !publish.bundles.is_empty() {
+        "publish.bundles"
+    } else if !publish.npm.is_empty() {
+        "publish.npm"
+    } else if !publish.maven.is_empty() {
+        "publish.maven"
+    } else if !prep.config.images.is_empty() {
+        "images"
+    } else {
+        return Ok(());
+    };
+    if prep.config.workflow.policy == WorkflowPolicy::ConsumerV1 {
+        return Ok(());
+    }
+    Err(OrchestratorError::config(
+        CONFIG_REL,
+        key,
+        "publish_requires_consumer_policy",
+    ))
 }
 
 /// Select the `git-tag` packages and render their release-plz config.
@@ -306,13 +336,19 @@ fn check_tag_collisions(prep: &GenerationPreparation) -> Result<(), Orchestrator
         .npm
         .iter()
         .map(|e| ("publish.npm", &e.id));
+    let maven = prep
+        .config
+        .publish
+        .maven
+        .iter()
+        .map(|e| ("publish.maven", &e.id));
     let images = prep
         .config
         .images
         .iter()
         .filter(|image| image.version_file.is_some())
         .map(|image| ("images", &image.id));
-    for (key, id) in bundles.chain(npm).chain(images) {
+    for (key, id) in bundles.chain(npm).chain(maven).chain(images) {
         if packages.contains(id.as_str()) {
             return Err(OrchestratorError::config(
                 CONFIG_REL,

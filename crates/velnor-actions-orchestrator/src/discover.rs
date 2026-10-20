@@ -20,6 +20,7 @@ use velnor_actions_rust::{
 
 use crate::OrchestratorError;
 use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
+use crate::config::gradle_jobs;
 use crate::discover_index::build_file_index;
 use crate::internal::phase_timing::PlanPhaseTimings;
 use crate::inventory::{
@@ -31,6 +32,10 @@ use crate::recommendations::collect_recommendations;
 mod consumer_manifest;
 use crate::toolcheck::{ToolInputCheck, check_tool_inputs_with_paths};
 use crate::{discover_tofu::qualify_tofu_step, evidence::profile_for_workspace};
+
+#[path = "discover_manifest_paths.rs"]
+mod manifest_paths;
+pub(crate) use manifest_paths::{workspace_lock, workspace_manifest};
 
 /// One workspace with its inventory, profile, and recommendations.
 #[derive(Debug, Clone)]
@@ -48,6 +53,8 @@ pub struct PlannedWorkspace {
 /// Full detection output feeding planning and rendering.
 #[derive(Debug, Clone, Default)]
 pub struct Discovery {
+    /// Analysed Gradle roots (stack contract: findings fail generation).
+    pub(crate) gradle_roots: Vec<crate::config::gradle_jobs::GradleRoot>,
     /// Explicit repository-owned checks, independent of detected workspaces.
     pub mise_checks: Vec<velnor_actions_mise::DiscoveredCheck>,
     /// Per-project selection states.
@@ -114,6 +121,20 @@ pub(crate) fn discover_with_phase_timings(
     discover_inner(root, config, catalog, Some(phases))
 }
 
+/// Bun member inventory for the configured `[stacks.bun]` (empty without it).
+fn bun_inventory(
+    root: &Path,
+    index: &FileIndex,
+    config: &VelnorConfig,
+) -> Result<crate::workflow_task_jobs::bun_inventory::BunInventory, OrchestratorError> {
+    match &config.stacks.bun {
+        Some(stack) => {
+            crate::workflow_task_jobs::bun_inventory::BunInventory::load(root, index, stack)
+        }
+        None => Ok(crate::workflow_task_jobs::bun_inventory::BunInventory::default()),
+    }
+}
+
 fn discover_inner(
     root: &Path,
     config: &VelnorConfig,
@@ -170,13 +191,10 @@ fn discover_inner(
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
     let (consumer_manifest_json, consumer_manifest_stand_in) =
         consumer_manifest::for_policy(root, config.workflow.policy)?;
-    let bun = match &config.stacks.bun {
-        Some(stack) => {
-            crate::workflow_task_jobs::bun_inventory::BunInventory::load(root, &index, stack)?
-        }
-        None => crate::workflow_task_jobs::bun_inventory::BunInventory::default(),
-    };
+    let bun = bun_inventory(root, &index, config)?;
+    let gradle_roots = gradle_jobs::analyze_roots(root, &index, config)?;
     Ok(Discovery {
+        gradle_roots,
         mise_checks,
         statuses,
         workspaces,
@@ -364,24 +382,6 @@ fn derive_all(
     proposals.extend(crate::select_tofu::derive_tofu(statuses, index.files())?);
     proposals.sort_by(|left, right| left.task_id.cmp(&right.task_id));
     Ok((proposals, fallbacks))
-}
-
-/// Workspace-root manifest path for a workspace root.
-pub(crate) fn workspace_manifest(workspace_root: &str) -> String {
-    if workspace_root.is_empty() {
-        "Cargo.toml".to_owned()
-    } else {
-        format!("{workspace_root}/Cargo.toml")
-    }
-}
-
-/// Workspace-root lockfile path for a workspace root.
-pub(crate) fn workspace_lock(workspace_root: &str) -> String {
-    if workspace_root.is_empty() {
-        "Cargo.lock".to_owned()
-    } else {
-        format!("{workspace_root}/Cargo.lock")
-    }
 }
 
 #[cfg(test)]

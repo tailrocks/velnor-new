@@ -31,6 +31,7 @@ fn generator() -> PlanGenerator {
 fn discovery_with_proposals(proposals: Vec<ProposedTask>) -> Discovery {
     Discovery {
         affected: crate::affected_inputs::AffectedInputs::default(),
+        gradle_roots: Vec::new(),
         mise_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),

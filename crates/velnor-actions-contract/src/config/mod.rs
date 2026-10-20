@@ -15,6 +15,7 @@ mod discovery;
 mod distribution;
 mod dockerfile;
 mod execution;
+pub mod gradle;
 mod host_container;
 mod image_grammar;
 mod image_jobs;
@@ -31,6 +32,7 @@ mod project_tool_grammar;
 pub mod project_tool_refs;
 pub mod project_tool_resolver;
 mod publish;
+mod publish_maven;
 mod publish_npm;
 mod qualified_tools;
 mod release;
@@ -71,15 +73,7 @@ pub use bun::{
     BUN_JOB_PREFIX, BunBrowser, BunInputRule, BunMemberConfig, BunStackConfig, DEFAULT_BUN_SCRIPTS,
     MAX_BUN_TIMEOUT_MINUTES, is_valid_member_name, is_valid_script_name,
 };
-pub use check_receipt_budget::{
-    MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES, MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,
-    MAX_CHECK_CONTAINER_DAEMON_CAPTURE_BYTES, MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES,
-    MAX_CHECK_CONTAINER_PATH_BYTES, MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
-    MAX_CHECK_CONTAINER_RUNTIME_ENTRIES, MAX_CHECK_CONTAINER_RUNTIME_ENTRY_PATH_BYTES,
-    MAX_CHECK_EXECUTION_RECEIPT_BYTES, MAX_CHECK_QUALIFIED_PROBE_CAPTURE_BYTES,
-    MAX_CHECK_QUALIFIED_PROBE_EXPECTED_BYTES, MAX_CHECK_SOURCE_BYTES,
-    MAX_CHECK_SYSTEM_VERSION_BYTES, check_execution_receipt_upper_bound,
-};
+pub use check_receipt_budget::*;
 pub use dbt::{DBT_JOB_PREFIX, DbtCheck, DbtService, DbtStackConfig};
 pub use dco::{DCO_CONFIG_PATH, DcoConfig, DcoRemediationCommits, DcoRequire};
 pub use discovery::DiscoveryConfig;
@@ -117,6 +111,9 @@ pub use private_sources::{
 pub use publish::{
     PublishBundle, PublishConfig, RELEASE_TAG_GLOB, ReleaseTag, VersionSource, is_artifact_id,
     is_strict_semver,
+};
+pub use publish_maven::{
+    MAVEN_BUNDLE_OUTPUT_DIR, MAVEN_BUNDLE_TASK, MAVEN_VERSION_FILE, PublishMaven,
 };
 pub use publish_npm::{NPM_PUBLISH_REGISTRY_URL, NpmRegistry, PublishNpm};
 pub use qualified_tools::{

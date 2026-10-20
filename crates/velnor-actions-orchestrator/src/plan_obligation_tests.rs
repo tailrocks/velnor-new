@@ -14,6 +14,7 @@ const SCALE_SET_RUNNER: &str = "scale-set:velnor+orbstack-linux";
 /// Minimal discovery with no workspaces or tool checks.
 fn empty_discovery() -> Discovery {
     Discovery {
+        gradle_roots: Vec::new(),
         mise_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),

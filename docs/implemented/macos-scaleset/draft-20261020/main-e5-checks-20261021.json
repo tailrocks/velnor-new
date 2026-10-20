@@ -1,0 +1,106 @@
+{
+  "result": "PASS",
+  "source_head": "950891a35ea4347409333bd34685c06bdb21c5ac",
+  "merge_source": "e5a3812841a2c788255eaf2bb6b6c052c88cfe3b",
+  "purpose": "Keep Gradle and Maven jobs under the configured Scale Set routing policy.",
+  "checks": {
+    "main-e5-check-v2": {
+      "result": "PASS",
+      "log_sha256": "4d728daddf70788a77bb05255b39e392efc124234692721d0d1f9e3d8d75ed95"
+    },
+    "main-e5-clippy-v3": {
+      "result": "PASS",
+      "log_sha256": "b480dfb55162d59f380ff7e1ebbcc45d5979ee93603742075752eb4f805f2a29"
+    },
+    "main-e5-nextest": {
+      "result": "FAIL",
+      "log_sha256": "3f532b8e9f02aa080d1c3f871867c86e83f148ae37345e9d1b6d7799c4b7cd33"
+    },
+    "main-e5-nextest-v2": {
+      "result": "PASS",
+      "log_sha256": "9f174f718d36a2beedab0d8594df91c9538c9e4958389b9c77eefc828b3881d3"
+    },
+    "main-e5-build": {
+      "result": "PASS",
+      "log_sha256": "41379040106d3416c165f7a58d54863d0ae192dc49871fbdc54a6a6a1e2146f2"
+    },
+    "main-e5-final-nextest": {
+      "result": "PASS",
+      "exit_status": 0,
+      "log_sha256": "1628fd3442693294364454f893bc539ff22dee8bafaf626c792c68a8ae70d168",
+      "completed_at": "2026-10-20T23:31:08.219220+00:00"
+    },
+    "main-e5-final-clippy": {
+      "result": "PASS",
+      "exit_status": 0,
+      "log_sha256": "d4193c1fc43dde725e186925f58cad51ad9db103e824b26b5fd96e56fc769cf2",
+      "completed_at": "2026-10-20T23:31:37.876674+00:00"
+    },
+    "main-e5-final-alint": {
+      "result": "PASS",
+      "exit_status": 0,
+      "log_sha256": "c5957a5cc162f430bc9bb1b8dad09fe6fda2d5b5cd59e2c62f4b4b64051f1ccb",
+      "completed_at": "2026-10-20T23:30:35.514789+00:00"
+    }
+  },
+  "nextest": {
+    "first_run": "5b43ed17-2913-431a-a7b7-98b7686ef728",
+    "first_result": "435 passed. One new Maven test failed.",
+    "cause": "The exact authority parser rejected the valid release tag pattern.",
+    "repair": "Compare the original headers. Replace the known pattern once for the authority comparison.",
+    "final_run": "2f4d25a1-c876-4ec3-a2fc-509a5d2b2a9e",
+    "final_result": "36 passed."
+  },
+  "generation": {
+    "result": "PASS",
+    "entries": 252,
+    "binary_sha256": "c68ac52019fdd7a39e6e6d0590a0b3ff6ed112e897ef36cb0a3b05e0d188ad04",
+    "current_tree": "PASS",
+    "scope": "This development binary is not a published release."
+  },
+  "review": {
+    "reviewer": "/root/runtime_stack_architecture",
+    "result": "PASS",
+    "sha256": "747e1240c149ca613537701936a4523d71c7b53098d3d7423a98e1d38dbaa5aa",
+    "sequence": "The source review preceded the successful corrected test sequence."
+  },
+  "parity": "PASS",
+  "supplemental_goldens": {
+    "result": "PASS",
+    "cases": 5,
+    "log_sha256": "f9f7d45211fe7c6caa15ae755fa743666289054d857f8937a2c263a8fa537d54"
+  },
+  "consumer_activation": "NOT_RUN",
+  "full_runner_gate": "FAIL",
+  "scope": "This result covers the source integration checks. It does not prove a release or a live installation.",
+  "language_review": {
+    "result": "PASS",
+    "reviewer": "/root/execution_source_security_review",
+    "sha256": "808b52828c8245847ea58434f027de67b49515c423a429dd45af7b5977167287"
+  },
+  "parity_before_extraction": {
+    "result": "PASS",
+    "run_id": "9aeb3725-54e5-4d5e-a3e8-babecdd74193",
+    "log_sha256": "6ed2b9a96f2f41f068b0ece876b4f6e7c42260821f43a85c932b182b1c189808"
+  },
+  "structure": {
+    "result": "PASS",
+    "log_sha256": "c5957a5cc162f430bc9bb1b8dad09fe6fda2d5b5cd59e2c62f4b4b64051f1ccb",
+    "note": "Four existing information messages remain.",
+    "repair": "Move the two path functions into a private module. Keep their bodies and comments unchanged.",
+    "review_sha256": "9e72176079a853dca30625769f457442009b5da1079f03724e916a40570cc2b9"
+  },
+  "final_extraction_checks": "PASS",
+  "final_nextest": {
+    "result": "PASS",
+    "count": 12,
+    "run_id": "074a9b44-310a-45cb-88eb-d84ca9b7328b"
+  },
+  "source_files": {
+    "crates/velnor-actions-orchestrator/src/discover.rs": "cfb7b1515a8da85982d6e35872fd42a46e048e3a606ff13e6cc0c81476156a58",
+    "crates/velnor-actions-orchestrator/src/discover_manifest_paths.rs": "6e6e1c8a65423a10e5bc51f62dad758f4a16f3e44698d7804df103c67b3b7ed1",
+    "crates/velnor-actions-orchestrator/src/workflow_build.rs": "24ddf2568946521806de6a5ff9df4872a2e7a4736d11950aeb921f1121d98ee1",
+    "crates/velnor-actions-orchestrator/tests/impl_orch_gradle.rs": "5d571187dde7de398a81e39c90e32cc714d0b232dad4a08bbdf8c7063b538a77",
+    "crates/velnor-actions-orchestrator/tests/impl_orch_publish_maven.rs": "47e3a93f77a4015f5e88b3ca7b1dbb328c8d279088c0f67c02d79e7a170b9ec1"
+  }
+}

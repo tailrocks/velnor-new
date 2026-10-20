@@ -117,6 +117,7 @@ fn ignore_admission_uses_typed_stack_eligibility() {
             rust: None,
             tofu: None,
             bun: None,
+            gradle: None,
             dbt: None,
             ansible: None,
         };
@@ -127,6 +128,7 @@ fn ignore_admission_uses_typed_stack_eligibility() {
         rust: None,
         tofu: None,
         bun: None,
+        gradle: None,
         dbt: None,
         ansible: None,
     };
@@ -139,6 +141,7 @@ fn ignore_admission_uses_typed_stack_eligibility() {
         rust: None,
         tofu: None,
         bun: None,
+        gradle: None,
         dbt: None,
         ansible: None,
     };

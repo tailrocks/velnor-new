@@ -250,20 +250,8 @@ fn build_workflow_jobs(
         prepared,
         qualification_jobs_enabled,
     )?);
-    let (suite_jobs, suite_required_ids) = crate::rust_suites_emit::build_ci_jobs(
-        input.root,
-        input.config,
-        input.label,
-        input.discovery,
-        &prepared.catalog,
-    )?;
-    for (id, mut job) in suite_jobs {
-        if !job.needs.iter().any(|dependency| dependency == PLAN_JOB_ID) {
-            job.needs.push(PLAN_JOB_ID.to_owned());
-        }
-        jobs.insert(id, job);
-    }
-    required_ids.extend(suite_required_ids);
+    required_ids.extend(insert_gradle_jobs(&mut jobs, input, prepared)?);
+    required_ids.extend(insert_suite_jobs(&mut jobs, input, prepared)?);
     crate::workflow_task_jobs::insert_jobs(&mut jobs, &prepared.workflow_tasks)?;
     insert_gate_jobs(
         &mut jobs,
@@ -281,6 +269,45 @@ fn build_workflow_jobs(
     }
     wire_w1::check_crate_mbx_gating(&jobs, &drivers)?;
     Ok(jobs)
+}
+
+fn insert_suite_jobs(
+    jobs: &mut BTreeMap<String, Job>,
+    input: &WorkflowBuildInput<'_>,
+    prepared: &PreparedWorkflow,
+) -> Result<Vec<String>, OrchestratorError> {
+    let (suite_jobs, suite_required_ids) = crate::rust_suites_emit::build_ci_jobs(
+        input.root,
+        input.config,
+        input.label,
+        input.discovery,
+        &prepared.catalog,
+    )?;
+    for (id, mut job) in suite_jobs {
+        if !job.needs.iter().any(|dependency| dependency == PLAN_JOB_ID) {
+            job.needs.push(PLAN_JOB_ID.to_owned());
+        }
+        jobs.insert(id, job);
+    }
+    Ok(suite_required_ids)
+}
+
+fn insert_gradle_jobs(
+    jobs: &mut BTreeMap<String, Job>,
+    input: &WorkflowBuildInput<'_>,
+    prepared: &PreparedWorkflow,
+) -> Result<Vec<String>, OrchestratorError> {
+    let mut required_ids = Vec::new();
+    for (id, job) in crate::config::gradle_jobs::build_jobs(
+        input.config,
+        &input.discovery.gradle_roots,
+        prepared.acquire.as_ref(),
+        prepared.private.as_ref(),
+    )? {
+        required_ids.push(id.clone());
+        insert_job(jobs, id, job)?;
+    }
+    Ok(required_ids)
 }
 
 fn insert_check_jobs(
