@@ -291,3 +291,28 @@ fn both_qualification_lanes_persist_distinct_rust_and_tofu_matrix_entries() {
         }
     }
 }
+
+#[test]
+fn project_rust_versions_change_runtime_identity_with_one_static_binding() {
+    use velnor_actions_mise::PinnedTool;
+
+    let task = rust_proposal();
+    let identities = ["1.96.1", "1.97.0"].map(|version| {
+        let catalog = ToolCatalog::pinned()
+            .with_project_tool(PinnedTool::Rust, version)
+            .expect("project Rust version");
+        let inputs = crate::internal_plan::identities::toolchain_inputs_for(&task, &catalog)
+            .expect("toolchain inputs");
+        assert!(inputs.tools.contains(&format!("rust@{version}")));
+        let toolchain =
+            velnor_actions_contract::cachekey::toolchain_id(&inputs).expect("toolchain identity");
+        let argv = crate::vectors::task_argv(&task, &catalog).expect("task arguments");
+        let runtime = task_digest(&task.task_id, &argv, &toolchain).expect("runtime identity");
+        let binding = crate::tool_catalog_project::task_binding_digest(&task, &catalog)
+            .expect("task binding");
+        (toolchain, runtime, binding)
+    });
+    assert_ne!(identities[0].0, identities[1].0);
+    assert_ne!(identities[0].1, identities[1].1);
+    assert_eq!(identities[0].2, identities[1].2);
+}

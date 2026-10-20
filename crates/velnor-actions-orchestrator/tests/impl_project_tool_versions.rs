@@ -131,8 +131,8 @@ fn plan_and_manifest(
 
 #[test]
 fn project_tool_bumps_keep_static_manifest_binding_and_change_plan_identity() -> TestResult {
-    let (first_plan, first_manifest) = plan_and_manifest("1.96.1", "1.30.7")?;
-    let (next_plan, next_manifest) = plan_and_manifest("1.97.0", "1.31.0")?;
+    let (first_plan, first_manifest) = plan_and_manifest(RUST_VERSION, "1.30.7")?;
+    let (next_plan, next_manifest) = plan_and_manifest(RUST_VERSION, "1.31.0")?;
     let task_id = "stack/rust/root/nextest/default";
     let first_obligation = first_plan["obligations"]
         .as_array()
