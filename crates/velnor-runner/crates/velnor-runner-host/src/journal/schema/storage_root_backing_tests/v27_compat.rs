@@ -35,6 +35,155 @@ async fn v27_validator_rejects_v30_schema_with_inode_guard() -> Result<(), HostE
     Ok(())
 }
 
+#[tokio::test]
+async fn v27_migration_preserves_v29_attachment_rows_with_current_paths() -> Result<(), HostError> {
+    let scratch = crate::journal::request_lifecycle::tests::helpers::Scratch::new()?;
+    let database = turso::Builder::new_local(scratch.file().to_str().ok_or(HostError::Path)?)
+        .build()
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let connection = database.connect().map_err(|_| HostError::Journal)?;
+    install_v29_attachments_with_current_paths(&connection).await?;
+
+    super::super::upgrade_v27(&connection).await?;
+
+    assert_eq!(
+        table_rows(
+            &connection,
+            "capacity_reservation_bound_storage_attachments"
+        )
+        .await?,
+        1
+    );
+    assert_eq!(
+        table_rows(&connection, "capacity_reservation_bound_storage_paths").await?,
+        1
+    );
+    assert_eq!(
+        super::super::super::sql_normalization::normalize(
+            &table_sql_by_name(
+                &connection,
+                "capacity_reservation_bound_storage_attachments"
+            )
+            .await?
+        ),
+        super::super::super::sql_normalization::normalize(
+            super::super::super::provisioning::BOUND_STORAGE_ATTACHMENTS
+        )
+    );
+    assert!(connection
+        .execute(
+            "UPDATE capacity_reservation_bound_storage_attachments SET mount_id = 2 WHERE reservation_id = 1",
+            (),
+        )
+        .await
+        .is_err());
+    assert!(connection
+        .execute(
+            "UPDATE capacity_reservation_bound_storage_paths SET mount_root = '/changed' WHERE reservation_id = 1",
+            (),
+        )
+        .await
+        .is_err());
+    Ok(())
+}
+
+async fn install_v29_attachments_with_current_paths(
+    connection: &turso::Connection,
+) -> Result<(), HostError> {
+    connection
+        .execute(
+            "CREATE TABLE capacity_reservation_provisioning (reservation_id INTEGER PRIMARY KEY)",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(
+            "CREATE TABLE capacity_reservation_provisioning_state (reservation_id INTEGER PRIMARY KEY, resources_bound INTEGER NOT NULL)",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(
+            "CREATE TABLE capacity_reservation_root_backing_mappings (reservation_id INTEGER NOT NULL, role TEXT NOT NULL)",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(
+            "INSERT INTO capacity_reservation_provisioning VALUES (1)",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(
+            "INSERT INTO capacity_reservation_provisioning_state VALUES (1, 0)",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let attachment_v29 = super::super::super::provisioning::V29_BOUND_STORAGE_ATTACHMENTS;
+    connection
+        .execute(attachment_v29, ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(
+            "INSERT INTO capacity_reservation_bound_storage_attachments VALUES (1, 'engine-metadata', 'probe', NULL, '/velnor/docker-root', '/var/lib/docker', 1, 1, 0, 1, 0, 1, 0, NULL, NULL, '0123456789abcdef', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(super::super::ATTACHMENT_PATHS, ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(
+            "INSERT INTO capacity_reservation_bound_storage_paths VALUES (1, 'engine-metadata', 'probe', '/velnor/docker-root', '/var/lib/docker', NULL)",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(())
+}
+
+async fn table_sql_by_name(
+    connection: &turso::Connection,
+    table: &str,
+) -> Result<String, HostError> {
+    let mut rows = connection
+        .query(
+            "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?1",
+            [table],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    rows.next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?
+        .get(0)
+        .map_err(|_| HostError::Journal)
+}
+
+async fn table_rows(connection: &turso::Connection, table: &str) -> Result<i64, HostError> {
+    let mut rows = connection
+        .query(&format!("SELECT COUNT(*) FROM {table}"), ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    rows.next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?
+        .get(0)
+        .map_err(|_| HostError::Journal)
+}
+
 async fn v30_connection() -> Result<
     (
         crate::journal::request_lifecycle::tests::helpers::Scratch,
