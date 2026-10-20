@@ -1,0 +1,21 @@
+{
+  "base_commit": "e43497a86",
+  "scope": "Typed runner registration absence API.",
+  "security_review_sha256": "5109e75e8933ca69cf4322cdc678abf64f8a1ce5c2779cbd1a79618946fec3df",
+  "documentation_review_sha256": "ebafb81da38c8d58c99c36387c917e138088151bf6d282f49ce9b8a13cffc116",
+  "checks": {
+    "nextest": {
+      "result": "PASS",
+      "sha256": "eca079d61c9d10b1fa5f0053cc31ed5c0f0504e279b7c3450f0d92cae2d02fd0"
+    },
+    "clippy": {
+      "result": "PASS",
+      "sha256": "eaee9e484c0b252d0c7498eb769b46dbefb4a0abf07b7a0428ba5390abcca40b"
+    }
+  },
+  "tests_passed": 145,
+  "format": "PASS",
+  "host_adapter": "NOT_RUN",
+  "live_test": "NOT_RUN",
+  "limit": "Registration absence does not prove job assignment absence."
+}

@@ -9,7 +9,10 @@ mod token;
 
 pub use admin::{AdminConnection, AdminConnectionCall, admin_connection, admin_token_is_fresh};
 pub use groups::{RunnerGroup, list_runner_groups};
-pub use runners::{get_runner_by_name, remove_runner};
+pub use runners::{
+    RunnerAbsenceReceipt, RunnerObservationOperation, RunnerRemovalStatus, RunnerResponseReceipt,
+    ensure_runner_absent, get_runner_by_name, remove_runner,
+};
 pub use scale_set::{
     ScaleSetById, ScaleSetByName, ScaleSetCreate, ScaleSetFound, create_runner_scale_set,
     get_runner_scale_set, get_runner_scale_set_by_id,
