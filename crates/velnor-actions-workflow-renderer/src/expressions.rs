@@ -264,6 +264,15 @@ fn is_task_execution_input(name: &str) -> bool {
     name == "digest"
 }
 
+/// True for the fixed digest outputs of the image-assembly step when used
+/// as an attestation subject digest.
+fn is_image_publish_subject_digest(key: &str, inner: &str) -> bool {
+    key == "subject-digest"
+        && inner
+            .strip_prefix("steps.image.outputs.")
+            .is_some_and(|name| matches!(name, "digest" | "digest_amd64" | "digest_arm64"))
+}
+
 /// True for a validated `inputs.<name>` workflow-dispatch input reference.
 fn is_workflow_input(inner: &str) -> bool {
     inner.strip_prefix("inputs.").is_some_and(|name| {
@@ -329,6 +338,7 @@ fn check_with_value_scoped(key: &str, value: &str, composite: bool) -> Result<()
             && !is_hash_files(inner)
             && !is_tofu_providers_plan_key(inner)
             && !is_private_mint_input(key, inner)
+            && !is_image_publish_subject_digest(key, inner)
             && !qualification_cache::is_action_output(key, inner)
             && !(composite && qualification_cache::is_composite_with_input(key, inner))
             && !(key.starts_with("cache_")

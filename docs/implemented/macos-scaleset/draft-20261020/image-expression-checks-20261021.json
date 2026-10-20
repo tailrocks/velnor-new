@@ -1,0 +1,9 @@
+{
+  "base_commit": "9177208b6ebeae371abb53e51c5e41dec0d3b207",
+  "result": "PASS",
+  "tests": 26,
+  "log_sha256": "dc0e0aaf05b468998394aa2b65671b4f0bbaa1f4f1d9635a50e0fe7770188552",
+  "source_manifest_sha256": "f8e9af04649ed601269f0bf70ab6833ffb5855a401dcdcf4f04244e07af9dd8a",
+  "independent_review_sha256": "d144c6ff9e31f93014bfc4ff222591a58d41dacb02bed9aa115f08ad583b1157",
+  "live_test": "NOT_RUN"
+}

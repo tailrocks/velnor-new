@@ -99,6 +99,31 @@ fn check_with_value_rejects_nonliteral_hash_file_arguments() {
 }
 
 #[test]
+fn attestation_subject_digest_accepts_only_fixed_image_assembly_outputs() {
+    for output in ["digest", "digest_amd64", "digest_arm64"] {
+        let expression = format!("${{{{ steps.image.outputs.{output} }}}}");
+        assert!(
+            check_with_value("subject-digest", &expression).is_ok(),
+            "{expression}"
+        );
+    }
+
+    for (key, expression) in [
+        ("subject-name", "${{ steps.image.outputs.digest }}"),
+        ("subject-digest", "${{ steps.other.outputs.digest }}"),
+        (
+            "subject-digest",
+            "${{ steps.image.outputs.digest_linux_amd64 }}",
+        ),
+    ] {
+        assert!(
+            check_with_value(key, expression).is_err(),
+            "{key}: {expression}"
+        );
+    }
+}
+
+#[test]
 fn qualification_cache_operation_expressions_are_typed_and_closed() {
     let check = super::check_qualification_cache_env_value;
     assert!(check(
