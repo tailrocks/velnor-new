@@ -50,7 +50,9 @@ fn config_validation_reports_key_paths() {
         stacks: StacksConfig {
             ignore: vec![],
             rust: Some(RustStackConfig {
+                clippy_all_features: false,
                 configurations: vec![RustConfiguration {
+                    all_features: false,
                     name: "default".to_owned(),
                     features: vec!["default".to_owned()],
                     target: "host".to_owned(),
@@ -187,6 +189,7 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
     let mut config = crate::impl_remed_contract::valid_config();
     config.stacks.rust = Some(RustStackConfig {
         configurations: vec![RustConfiguration {
+            all_features: false,
             name: "Default".to_owned(),
             features: vec![],
             target: "host".to_owned(),

@@ -128,6 +128,9 @@ ignore = []
 toolchain = "1.98.1" # optional exact X.Y.Z override; must agree with rust-toolchain.toml / rust-toolchain when present
 configurations = [{ name = "default", features = ["default"], target = "host" }]
 # seed_parallel_targets = true # default false; see ../implemented/parallel-target-seeding.md
+# clippy_all_features = true # default false; Clippy alone runs --all-features
+# each [[stacks.rust.configurations]] entry accepts all_features = true (default false; features must be
+# empty or ["default"]): every compiling task of that configuration runs --all-features.
 # [[stacks.rust.suites]] declares named Nextest suites (id, profile, run_ignored, partitions 1..=64,
 # build = "inline" | "archive", timeout_minutes 1..=360 (default 5), test_threads 1..=64, runner_label, workflow,
 # triggers, schedule, required, cancel_in_progress, allow_failure, filter, filter_input, dispatch_inputs,
@@ -324,7 +327,8 @@ only the derived values above.
 The default matrix policy emits one entry per selected stack task-group/configuration with an `execute`
 obligation. Its `execute_task_ids` contains only work to run; `test_run` lists shard IDs, including
 `shard-1-of-1` when unsharded, while the plan retains covered/reused work separately. V1 MUST NOT generate
-`--all-features` configurations. Cross-package integration tasks need explicit entries, and empty test targets
+`--all-features` configurations on its own; only an explicit `all_features` configuration or
+`clippy_all_features` opt-in emits `--all-features`. Cross-package integration tasks need explicit entries, and empty test targets
 remain visible in the plan.
 
 The plan file written by `plan` MUST be `$RUNNER_TEMP/velnor/<run-key>/plan.json` and contain the same

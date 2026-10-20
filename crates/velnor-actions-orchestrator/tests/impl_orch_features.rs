@@ -55,6 +55,9 @@ fn feature_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Error>> {
     Ok(dir)
 }
 
+#[path = "impl_orch_features/all_features.rs"]
+mod all_features;
+
 /// Sorted features of every `kind` task for `package`.
 fn features_of(
     prep: &velnor_actions_orchestrator::GenerationPreparation,

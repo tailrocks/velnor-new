@@ -245,7 +245,9 @@ fn release_version_groups_are_non_lockstep_and_allowlist_bound() {
 fn release_wired_into_stack_validation_with_key_paths() {
     use velnor_actions_contract::{RustConfiguration, RustStackConfig};
     let stack = RustStackConfig {
+        clippy_all_features: false,
         configurations: vec![RustConfiguration {
+            all_features: false,
             name: "default".to_owned(),
             features: vec!["default".to_owned()],
             target: "host".to_owned(),

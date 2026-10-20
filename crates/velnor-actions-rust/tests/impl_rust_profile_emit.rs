@@ -9,6 +9,7 @@ use crate::impl_rust_p06::{ci_config, default_config};
 
 fn profile_group(kind: TaskKind, runner: TestRunner) -> TaskGroup {
     TaskGroup {
+        all_features: false,
         task_id: "t".to_owned(),
         package_id: "p".to_owned(),
         package_name: "demo".to_owned(),

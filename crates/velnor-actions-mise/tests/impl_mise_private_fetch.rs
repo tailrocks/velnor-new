@@ -24,7 +24,10 @@ fn value<'a>(env: &'a [(OsString, OsString)], key: &str) -> Option<&'a OsString>
 }
 
 fn hostile_parent() -> Vec<(OsString, OsString)> {
-    let mut parent = vec![pair("PATH", "/usr/bin:/bin")];
+    let mut parent = vec![
+        pair("PATH", "/usr/bin:/bin"),
+        pair("VELNOR_OTHER_AMBIENT", "x"),
+    ];
     for key in CREDENTIAL_ENV_KEYS {
         parent.push(pair(key, "ambient"));
     }
@@ -59,6 +62,7 @@ fn fetch(credential: Option<(PrivateFetchCredential, &str)>) -> Result<IsolatedC
         vec![OsString::from("ls-remote")],
         PathBuf::from("/work"),
         Path::new("/runner/velnor/deps/gitconfig"),
+        &[("MISE_CARGO_HOME".to_owned(), "/runner/cargo".to_owned())],
         credential,
     )
     .map_err(|err| err.to_string())
@@ -104,7 +108,16 @@ fn private_fetch_child_gets_one_credential_and_baked_git_isolation() -> Result<(
         !has(&env, "VELNOR_NPM_READ_TOKEN"),
         "ambient npm token must not leak: {env:?}"
     );
-    assert!(!has(&env, "PATH"), "environment is cleared: {env:?}");
+    assert_eq!(
+        value(&env, "PATH"),
+        std::env::var_os("PATH").as_ref(),
+        "only the parent's own lookup path survives the clear: {env:?}"
+    );
+    assert!(!has(&env, "VELNOR_OTHER_AMBIENT"), "{env:?}");
+    assert_eq!(
+        value(&env, "MISE_CARGO_HOME"),
+        Some(&OsString::from("/runner/cargo"))
+    );
     for key in PROXY_ENV_KEYS {
         assert!(has(&env, key), "{key} proxy passthrough");
     }
@@ -148,9 +161,19 @@ fn private_fetch_rejects_relative_config_and_unsafe_credentials() {
         Vec::new(),
         PathBuf::from("/work"),
         Path::new("relative/gitconfig"),
+        &[],
         None,
     );
     assert!(relative.is_err());
+    let foreign = IsolatedCommand::private_fetch(
+        "git",
+        Vec::new(),
+        PathBuf::from("/work"),
+        Path::new("/runner/gitconfig"),
+        &[("GIT_ASKPASS".to_owned(), "/evil".to_owned())],
+        None,
+    );
+    assert!(foreign.is_err(), "only owned toolchain keys are accepted");
     for bad in ["", "a b", "x\ny", "a;b", "$(x)", "\"q\""] {
         assert!(
             fetch(Some((PrivateFetchCredential::AppInstallation, bad))).is_err(),

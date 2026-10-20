@@ -20,13 +20,27 @@ fn repositories() -> Vec<String> {
     ]
 }
 
+fn toolchain() -> BTreeMap<String, String> {
+    BTreeMap::from([
+        (
+            "MISE_CARGO_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/cargo".to_owned(),
+        ),
+        ("MISE_NO_CONFIG".to_owned(), "1".to_owned()),
+    ])
+}
+
 fn block() -> Result<[Step; 3], RenderError> {
     let repositories = repositories();
+    let roots = vec![".".to_owned(), "tools/cli".to_owned()];
     private_source_steps(&PrivateSourcesSpec {
         owner: "ChainArgos",
         app_id_variable: "VELNOR_DEPS_APP_ID",
         app_private_key_secret: "VELNOR_DEPS_APP_PRIVATE_KEY",
         repositories: &repositories,
+        kinds: &["cargo", "git-trees", "release-assets"],
+        roots: &roots,
+        toolchain_env: &toolchain(),
     })
 }
 
@@ -62,6 +76,9 @@ fn the_block_renders_mint_fetch_revoke_with_literal_allowlist() -> Result<(), Re
         "VELNOR_INTERNAL_OP: private-fetch-v1",
         "VELNOR_INTERNAL_OP: private-revoke-v1",
         "VELNOR_PRIVATE_REPOSITORIES: eth-processor-java,processor-shared",
+        "VELNOR_PRIVATE_SOURCES: cargo,git-trees,release-assets",
+        "VELNOR_PRIVATE_FETCH_ROOTS: .,tools/cli",
+        "MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo",
         "if: always() && steps.deps-token.outcome == 'success'",
     ] {
         assert!(
@@ -96,6 +113,9 @@ fn constructors_reject_malformed_specs() {
             app_id_variable: "VELNOR_DEPS_APP_ID",
             app_private_key_secret: "VELNOR_DEPS_APP_PRIVATE_KEY",
             repositories: repos,
+            kinds: &["cargo"],
+            roots: &[],
+            toolchain_env: &BTreeMap::new(),
         };
         assert!(private_source_steps(&spec).is_err(), "{repos:?}");
     }
@@ -110,10 +130,15 @@ fn constructors_reject_malformed_specs() {
             app_id_variable: id,
             app_private_key_secret: key,
             repositories: &repos,
+            kinds: &["cargo"],
+            roots: &[],
+            toolchain_env: &BTreeMap::new(),
         };
         assert!(private_source_steps(&spec).is_err(), "{owner} {id} {key}");
     }
 }
+
+type KindCase<'a> = (&'a [&'a str], Vec<String>, &'a BTreeMap<String, String>);
 
 type MintEdit = (&'static str, Box<dyn Fn(&mut BTreeMap<String, String>)>);
 
@@ -128,6 +153,38 @@ fn token_step(name: &str, role: Option<StepRole>, key: &str, value: &str) -> Ste
             run: vec!["true".to_owned()],
             env: BTreeMap::from([(key.to_owned(), value.to_owned())]),
         },
+    }
+}
+
+#[test]
+fn malformed_kinds_roots_and_toolchain_env_are_rejected() {
+    let repos = repositories();
+    let credential = BTreeMap::from([("GH_TOKEN".to_owned(), "x".to_owned())]);
+    let redirect = BTreeMap::from([("GIT_ASKPASS".to_owned(), "/x".to_owned())]);
+    let velnor = BTreeMap::from([("VELNOR_PRIVATE_FETCH_TOKEN".to_owned(), "x".to_owned())]);
+    let ok = BTreeMap::new();
+    let cases: Vec<KindCase<'_>> = vec![
+        (&[], vec![], &ok),
+        (&["nope"], vec![], &ok),
+        (&["git-trees", "cargo"], vec![], &ok),
+        (&["cargo"], vec!["../up".to_owned()], &ok),
+        (&["cargo"], vec!["/abs".to_owned()], &ok),
+        (&["cargo"], vec!["b".to_owned(), "a".to_owned()], &ok),
+        (&["cargo"], vec![], &credential),
+        (&["cargo"], vec![], &redirect),
+        (&["cargo"], vec![], &velnor),
+    ];
+    for (kinds, roots, env) in cases {
+        let spec = PrivateSourcesSpec {
+            owner: "ChainArgos",
+            app_id_variable: "VELNOR_DEPS_APP_ID",
+            app_private_key_secret: "VELNOR_DEPS_APP_PRIVATE_KEY",
+            repositories: &repos,
+            kinds,
+            roots: &roots,
+            toolchain_env: env,
+        };
+        assert!(private_source_steps(&spec).is_err(), "{kinds:?} {roots:?}");
     }
 }
 

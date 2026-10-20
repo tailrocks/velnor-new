@@ -27,6 +27,8 @@ mod impl_cli_parity;
 mod impl_cli_parity_golden;
 #[path = "impl_cli_parity_golden_normalize.rs"]
 mod impl_cli_parity_golden_normalize;
+#[path = "impl_cli_private.rs"]
+mod impl_cli_private;
 #[path = "impl_cli_protocol.rs"]
 mod impl_cli_protocol;
 #[path = "impl_cli_release_manifest.rs"]

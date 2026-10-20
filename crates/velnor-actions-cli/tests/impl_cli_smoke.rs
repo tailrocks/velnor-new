@@ -370,23 +370,3 @@ fn help_is_identical_with_and_without_env() -> Result<(), Box<dyn Error>> {
     cleanup(&tmp);
     Ok(())
 }
-
-#[test]
-fn deps_lock_without_private_sources_exits_one_and_writes_nothing() -> Result<(), Box<dyn Error>> {
-    let tmp = fresh_tempdir("smoke-deps-lock")?;
-    git_init(&tmp)?;
-    assert_eq!(code(&spawn(&["init"], &[], &tmp)?), 0);
-    let output = spawn(&["deps", "lock"], &[], &tmp)?;
-    assert_eq!(code(&output), 1);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("private_sources") && stderr.contains("missing_private_sources"),
-        "names the missing table: {stderr}"
-    );
-    assert!(!tmp.join(".velnor").join("deps.lock").exists());
-    let help = spawn(&["deps", "--help"], &[], &tmp)?;
-    assert_eq!(code(&help), 0);
-    assert!(String::from_utf8_lossy(&help.stdout).contains("lock"));
-    cleanup(&tmp);
-    Ok(())
-}

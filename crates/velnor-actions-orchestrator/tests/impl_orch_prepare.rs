@@ -54,12 +54,13 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
             "owned_tool_preview.rs",
             "prepare.rs",
             "preview_producer_entry.rs",
+            "private_fetch.rs",
             "qualification_resolver.rs",
             "routing.rs",
             "tap_prepare.rs",
             "tap_prepare_execute.rs",
         ],
-        "preparation, execution, preview budget admission, routing, owned preview, qualification admission, captured tap preparation, and the private dependency lock load configuration at their boundaries"
+        "preparation, execution, preview budget admission, routing, owned preview, qualification admission, captured tap preparation, the private dependency lock, and the private fetch load configuration at their boundaries"
     );
     Ok(())
 }

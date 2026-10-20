@@ -25,6 +25,13 @@ pub const PRIVATE_REVOKE_NAME: &str = "Revoke private-source token";
 pub const PRIVATE_REPOSITORIES_ENV: &str = "VELNOR_PRIVATE_REPOSITORIES";
 /// Env key naming the owner of the allowlisted repositories.
 pub const PRIVATE_OWNER_ENV: &str = "VELNOR_PRIVATE_OWNER";
+/// Env key listing the source kinds the fetch step retrieves.
+pub const PRIVATE_SOURCES_ENV: &str = "VELNOR_PRIVATE_SOURCES";
+/// Env key listing the Cargo workspace roots the fetch step covers (`.` is the repository root).
+pub const PRIVATE_ROOTS_ENV: &str = "VELNOR_PRIVATE_FETCH_ROOTS";
+/// Source kinds a fetch step may name, in canonical order.
+pub const PRIVATE_SOURCE_KINDS: [&str; 4] =
+    ["cargo", "git-trees", "maven-bundles", "release-assets"];
 /// Condition of the revoke step: runs after any outcome once a token exists.
 pub const PRIVATE_REVOKE_CONDITION: &str = "always() && steps.deps-token.outcome == 'success'";
 
@@ -39,6 +46,12 @@ pub struct PrivateSourcesSpec<'a> {
     pub app_private_key_secret: &'a str,
     /// Sorted, de-duplicated repository names under `owner`; never empty.
     pub repositories: &'a [String],
+    /// Source kinds to fetch: a sorted, de-duplicated subset of [`PRIVATE_SOURCE_KINDS`].
+    pub kinds: &'a [&'a str],
+    /// Cargo workspace roots the fetch covers (`.` is the repository root).
+    pub roots: &'a [String],
+    /// Owned toolchain env the fetch's Cargo run needs (Mise isolation, tool homes).
+    pub toolchain_env: &'a BTreeMap<String, String>,
 }
 
 fn bad(detail: &str) -> RenderError {
@@ -75,8 +88,44 @@ impl PrivateSourcesSpec<'_> {
         {
             return Err(bad("repositories"));
         }
+        if self.kinds.is_empty()
+            || !self.kinds.windows(2).all(|pair| pair[0] < pair[1])
+            || !self
+                .kinds
+                .iter()
+                .all(|kind| PRIVATE_SOURCE_KINDS.contains(kind))
+        {
+            return Err(bad("kinds"));
+        }
+        if !self.roots.windows(2).all(|pair| pair[0] < pair[1])
+            || !self.roots.iter().all(|root| is_root(root))
+        {
+            return Err(bad("roots"));
+        }
+        if self.toolchain_env.keys().any(|key| {
+            crate::toolchain_env::is_denied_credential_key(key)
+                || crate::toolchain_env::is_denied_endpoint_key(key)
+                || crate::toolchain_env::is_fetch_redirect_key(key)
+                || key.starts_with("VELNOR_")
+        }) {
+            return Err(bad("toolchain_env"));
+        }
         Ok(())
     }
+}
+
+/// True for `.` or a normalized relative directory of safe segments.
+fn is_root(value: &str) -> bool {
+    value == "."
+        || (!value.is_empty()
+            && value.split('/').all(|segment| {
+                !segment.is_empty()
+                    && segment != "."
+                    && segment != ".."
+                    && segment
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
+            }))
 }
 
 /// The mint, fetch and revoke steps, in execution order.
@@ -120,17 +169,23 @@ pub fn private_source_steps(spec: &PrivateSourcesSpec<'_>) -> Result<[Step; 3], 
         condition: None,
         kind: StepKind::Internal {
             operation: PRIVATE_FETCH_OPERATION.to_owned(),
-            env: BTreeMap::from([
-                (
-                    PRIVATE_FETCH_TOKEN_ENV.to_owned(),
-                    PRIVATE_TOKEN_OUTPUT_EXPR.to_owned(),
-                ),
-                (PRIVATE_OWNER_ENV.to_owned(), spec.owner.to_owned()),
-                (
-                    PRIVATE_REPOSITORIES_ENV.to_owned(),
-                    spec.repositories.join(","),
-                ),
-            ]),
+            env: {
+                let mut env = spec.toolchain_env.clone();
+                env.extend([
+                    (
+                        PRIVATE_FETCH_TOKEN_ENV.to_owned(),
+                        PRIVATE_TOKEN_OUTPUT_EXPR.to_owned(),
+                    ),
+                    (PRIVATE_OWNER_ENV.to_owned(), spec.owner.to_owned()),
+                    (
+                        PRIVATE_REPOSITORIES_ENV.to_owned(),
+                        spec.repositories.join(","),
+                    ),
+                    (PRIVATE_SOURCES_ENV.to_owned(), spec.kinds.join(",")),
+                    (PRIVATE_ROOTS_ENV.to_owned(), spec.roots.join(",")),
+                ]);
+                env
+            },
         },
     };
     let revoke = Step {

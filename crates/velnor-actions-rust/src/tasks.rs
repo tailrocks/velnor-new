@@ -69,6 +69,8 @@ pub struct TaskGroup {
     pub configuration: String,
     /// Sorted enabled features.
     pub features: Vec<String>,
+    /// Cargo all-features mode: every package feature is active.
+    pub all_features: bool,
     /// Execution target (`host` or triple).
     pub target: String,
     /// Quality gates that must pass first (task ids).
@@ -137,6 +139,10 @@ pub struct DeriveInputs<'a> {
     pub configuration: &'a str,
     /// Enabled features.
     pub features: &'a [String],
+    /// Activate every package feature for every compiling task.
+    pub all_features: bool,
+    /// Activate every package feature for the Clippy task only.
+    pub clippy_all_features: bool,
     /// Execution target.
     pub target: &'a str,
     /// Whether the package has explicit formatting configuration.
@@ -148,6 +154,8 @@ struct GroupBase<'a> {
     key: &'a str,
     configuration: &'a str,
     features: &'a [String],
+    all_features: bool,
+    clippy_all_features: bool,
     target: &'a str,
     driver: CompileDriver,
     runner: TestRunner,
@@ -176,6 +184,8 @@ pub fn derive_task_groups(inputs: &DeriveInputs<'_>) -> Result<Vec<TaskGroup>, C
         key: &manifest_key,
         configuration: inputs.configuration,
         features: &features,
+        all_features: inputs.all_features,
+        clippy_all_features: inputs.clippy_all_features,
         target: inputs.target,
         driver: inputs.profile.compile_driver,
         runner: inputs.profile.test_runner,
@@ -232,6 +242,7 @@ pub fn derive_workspace_fmt(
         kind: TaskKind::Fmt,
         configuration: configuration.to_owned(),
         features: Vec::new(),
+        all_features: false,
         target: target.to_owned(),
         gated_by: Vec::new(),
         depends_on: Vec::new(),
@@ -293,6 +304,7 @@ fn plain_group(base: &GroupBase<'_>, kind: TaskKind, id: &str) -> TaskGroup {
         kind,
         configuration: base.configuration.to_owned(),
         features: base.features.to_vec(),
+        all_features: base.all_features,
         target: base.target.to_owned(),
         gated_by: Vec::new(),
         depends_on: Vec::new(),
@@ -314,6 +326,7 @@ fn plain_group(base: &GroupBase<'_>, kind: TaskKind, id: &str) -> TaskGroup {
 /// Build the Clippy gate naming exactly one package.
 fn clippy_group(base: &GroupBase<'_>, id: &str) -> TaskGroup {
     let mut group = plain_group(base, TaskKind::Clippy, id);
+    group.all_features |= base.clippy_all_features;
     group.package_arg = Some(base.package.name.clone());
     group
 }

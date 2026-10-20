@@ -129,6 +129,37 @@ descriptor into `git`; this is the recorded deviation from the design text).
 points elsewhere receives no credential. Later steps run
 `--locked --offline` against `$CARGO_HOME/git/db`.
 
+## Fetch and revoke operations
+
+The fetch step carries, as literal non-secret env, the owner, the sorted
+allowlist (`VELNOR_PRIVATE_REPOSITORIES`), the source kinds to retrieve
+(`VELNOR_PRIVATE_SOURCES`: `cargo`, `git-trees`, `maven-bundles`,
+`release-assets`), the Cargo workspace roots (`VELNOR_PRIVATE_FETCH_ROOTS`, `.`
+is the repository root) and the owned toolchain env. `private-fetch-v1`:
+
+1. refuses an empty or malformed token (`private_source_credential_unavailable`);
+2. loads config and `.velnor/deps.lock` from the checkout as data, requires the
+   lock to match the declarations, recomputes the allowlist from the roots'
+   `Cargo.lock` git sources and the locked sources of the requested kinds, and
+   stops with `private_allowlist_drift` on any difference, before a single
+   credentialed call (a pull request that adds a private source to a lock cannot
+   widen what the minted token can reach);
+3. runs `cargo fetch --locked` per root from the runner-owned isolation
+   directory (no repository `.cargo/config.toml`), under the private-fetch policy;
+4. for each locked asset: checks the tag still resolves to the locked commit
+   (`private_tag_moved`), the published digest equals the locked SHA-256, the
+   downloaded bytes hash to it (`private_asset_sha256_mismatch`), then extracts
+   through the bounded archive reader (no absolute or `..` paths, no links) into
+   `$RUNNER_TEMP/velnor/deps/<extract_to>`, `.../maven/<id>` or `.../git/<id>`;
+5. downloads git trees by locked commit.
+
+`private-revoke-v1` runs `always()` after a successful mint: it removes any
+leftover credential directory, sends `DELETE /installation/token` (204, or 401
+for an already dead token), then calls the API with the same token and requires
+401 (`private_token_still_valid` otherwise). Requests use `curl` under the
+private-fetch policy with an `https`-only, API-origin-only configuration file;
+curl drops the `Authorization` header when a redirect leaves the API host.
+
 ## Credential boundary
 
 `EnvPolicy::PrivateFetch` (`crates/velnor-actions-mise/src/command_env.rs`)
