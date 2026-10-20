@@ -883,6 +883,23 @@
       "reviewer": "/root/execution_source_security_review",
       "review": "genuine-v32-v33-independent-review-20261020.md",
       "note": "The hook removed two imports that the tests use. Explicit test-only imports keep the tests available."
+    },
+    {
+      "result": "PASS",
+      "source_parent": "b516151e5145257e357283a9232d6cab6f60ebf8",
+      "scope": "Open genuine V32 database files with V33. Preserve the charge and acquired request across restart.",
+      "passed": 2,
+      "exit_status": 0,
+      "nextest_run": "aac95ba8-64bb-45d8-ab4b-135db37b04a6",
+      "log": "shipping-genuine-v32-migration-20261020.log",
+      "log_sha256": "40a15c48d1f14b9ffec1609c398ca3203209ccd6366b0e92285fb5ab58c30eb5",
+      "fixture_source": "021677c413a99e768f4f099b18805c8b21b90f87",
+      "empty_fixture_sha256": "e704c26eda632141f0b559099b64a6b8395a0ba6b448dfc96f251f79c7264174",
+      "charged_fixture_sha256": "84253e8da2ae20a1a4c0d878e6f8f0ee32964e2f5caf585404f9fb43a12e5dff",
+      "author": "/root/obsolete_capacity_cleanup",
+      "reviewer": "/root/execution_source_security_review",
+      "review": "genuine-v32-v33-independent-review-20261020.md",
+      "live_installation": "NOT_RUN"
     }
   ],
   "broader_pair_check": {

@@ -26,6 +26,7 @@ mod uncertain_effects;
 mod v16_settlement_liveness;
 mod v18_topology_migration;
 mod v19_cleanup_proof;
+mod v32_v33_migration;
 mod worker_ready;
 
 /// A source-authorized request with a durable acquired state and JIT-ready runner.
