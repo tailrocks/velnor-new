@@ -103,12 +103,23 @@ fn uses_staged_helper(step: &StepText) -> bool {
         && step.body.contains("$RUNNER_TEMP/velnor/bin")
 }
 
-/// Setup Mise precedes tool use and follows restore when the cache path is present.
+/// Setup Mise runs before tool use and both cache steps.
 fn check_setup_first(job: &JobText) -> Result<(), String> {
-    let setup = job.steps.iter().position(|s| s.name == "Setup Mise");
+    let setups: Vec<usize> = job
+        .steps
+        .iter()
+        .enumerate()
+        .filter_map(|(at, step)| (step.name == "Setup Mise").then_some(at))
+        .collect();
     let first_mise = job.steps.iter().position(uses_mise);
-    match (setup, first_mise) {
-        (Some(at), Some(first)) if at < first && setup_is_early(job, at) => Ok(()),
+    if setups.len() > 1 {
+        return Err(format!(
+            "{}: The job has more than one Setup Mise step.",
+            job.id
+        ));
+    }
+    match (setups.first().copied(), first_mise) {
+        (Some(at), Some(first)) if at < first && setup_order_is_valid(job, at) => Ok(()),
         (Some(_) | None, None) => Ok(()),
         (None, Some(_)) => Err(format!("{}: mise use without Setup Mise", job.id)),
         (Some(at), Some(first)) => Err(format!(
@@ -118,19 +129,21 @@ fn check_setup_first(job: &JobText) -> Result<(), String> {
     }
 }
 
-/// Setup is early on cold paths and follows the checked identity/restore path otherwise.
-fn setup_is_early(job: &JobText, at: usize) -> bool {
-    if at <= 1 {
-        return true;
-    }
+/// Setup follows checkout and precedes the identity and restore steps when present.
+fn setup_order_is_valid(job: &JobText, setup: usize) -> bool {
     let checkout = job.steps.iter().position(|step| step.name == "Checkout");
     let identity = job.steps.iter().position(|step| step.name == "V2 identity");
     let restore = job
         .steps
         .iter()
         .position(|step| step.name == velnor_actions_workflow_renderer::steps::TOOLS_RESTORE_NAME);
-    matches!((checkout, identity, restore), (Some(checkout), Some(identity), Some(restore))
-        if checkout < identity && identity < restore && restore < at)
+    let checkout_precedes_setup = checkout.is_none_or(|checkout| checkout < setup);
+    let setup_precedes_cache_steps = match (identity, restore) {
+        (None, None) => true,
+        (Some(identity), Some(restore)) => setup < identity && identity < restore,
+        _ => false,
+    };
+    checkout_precedes_setup && setup_precedes_cache_steps
 }
 
 /// Setup Mise must leave restore and save ownership to the explicit V2 layer.

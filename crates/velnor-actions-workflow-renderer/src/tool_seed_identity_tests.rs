@@ -61,7 +61,7 @@ fn assert_configured_checkout_prelude(setup: &crate::MiseSetup) {
         .iter()
         .position(|step| step.role == Some(StepRole::MiseSetup))
         .expect("Mise setup step");
-    assert!(identity_index + 1 < setup_index);
+    assert_eq!(identity_index, setup_index + 1);
     let action = crate::cache_p08::runtime_prelude_action_file(TARGET_RUNS, "0.1.0")
         .expect("prelude action file");
     assert!(action.bytes.contains(&cache_key()));

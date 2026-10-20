@@ -14,9 +14,31 @@ fn scratch(name: &str) -> PathBuf {
     path
 }
 
+/// Bytes of the binary Setup Mise installed before the restore runs.
+const SETUP_MISE: &str = "verified-mise-binary";
+
+fn sha256(bytes: &str) -> String {
+    let root = scratch("sha256");
+    let file = root.join("bytes");
+    fs::write(&file, bytes).expect("digest input");
+    let output = Command::new("sha256sum")
+        .arg(&file)
+        .output()
+        .expect("sha256sum");
+    fs::remove_dir_all(root).expect("cleanup digest");
+    String::from_utf8(output.stdout).expect("utf-8")[..64].to_owned()
+}
+
+fn install_setup_mise(home: &Path) {
+    let bin = home.join(".local/share/mise/bin");
+    fs::create_dir_all(&bin).expect("Setup Mise bin");
+    fs::write(bin.join("mise"), SETUP_MISE).expect("Setup Mise binary");
+}
+
 fn populate_cache_paths(root: &Path) -> (PathBuf, PathBuf) {
     let home = root.join("home");
     let runner_temp = root.join("runner-temp");
+    install_setup_mise(&home);
     let paths = [
         home.join(".local/share/mise"),
         runner_temp.join("velnor/rustup"),
@@ -47,6 +69,7 @@ fn run_script(
         .arg("-c")
         .arg(TOOLS_CACHE_ADMISSION_SCRIPT)
         .env("HOME", home)
+        .env("TOOLS_MISE_SHA256", sha256(SETUP_MISE))
         .env("RUNNER_TEMP", runner_temp);
     for (name, value) in [
         ("TOOLS_CACHE_HIT", cache_hit),
@@ -77,7 +100,15 @@ fn assert_paths_kept(home: &Path, runner_temp: &Path) {
 }
 
 fn assert_paths_removed(home: &Path, runner_temp: &Path) {
-    assert!(!home.join(".local/share/mise").exists());
+    let mise_root = fs::read_dir(home.join(".local/share/mise"))
+        .expect("Setup Mise root survives")
+        .map(|entry| entry.expect("entry").file_name())
+        .collect::<Vec<_>>();
+    assert_eq!(mise_root, ["bin"]);
+    assert_eq!(
+        fs::read_to_string(home.join(".local/share/mise/bin/mise")).expect("Setup Mise binary"),
+        SETUP_MISE
+    );
     assert!(!runner_temp.join("velnor/rustup").exists());
     assert!(!runner_temp.join("velnor/cargo/bin").exists());
     assert!(!runner_temp.join("velnor/cargo/.crates.toml").exists());
@@ -264,6 +295,7 @@ fn one_tree_seed_admission_preserves_only_the_imported_payload_on_miss() {
     let runner_temp = root.join("runner-temp");
     let seed = root.join("seed");
     let key = format!("mise-tools-v2-payload-v3-{}", "b".repeat(64));
+    install_setup_mise(&home);
     let mise_marker = seed.join("mise/tree/installs/marker");
     fs::create_dir_all(mise_marker.parent().expect("Mise tree parent")).expect("Mise seed tree");
     fs::write(&mise_marker, "mise-seed-bytes").expect("Mise seed payload");
@@ -319,79 +351,30 @@ fn one_tree_seed_admission_preserves_only_the_imported_payload_on_miss() {
 }
 
 #[test]
-fn rendered_action_wires_seed_admission_and_unset_miss_outputs() {
-    let file = super::action_file("0.1.0").expect("restore action");
-    for expected in [
-        "seed-admitted:",
-        "default: \"false\"",
-        "TOOLS_SEED_ADMITTED: ${{ inputs.seed-admitted }}",
-        "cache_hit=\\\"${TOOLS_CACHE_HIT-}\\\"",
-        "matched_key=\\\"${TOOLS_MATCHED_KEY-}\\\"",
-        "elif [ -z \\\"$cache_hit\\\" ]",
-        "[ \\\"$seed_admitted\\\" = true ]",
+fn restored_or_missing_mise_binary_must_match_the_pinned_digest() {
+    let expected_key = format!("mise-tools-v2-payload-v3-{}", "a".repeat(64));
+    for (name, hit, matched) in [
+        ("tampered-hit", Some("true"), Some(expected_key.as_str())),
+        ("tampered-miss", None, None),
     ] {
-        assert!(file.bytes.contains(expected), "missing {expected}");
+        let root = scratch(name);
+        let (home, runner_temp) = populate_cache_paths(&root);
+        fs::write(
+            home.join(".local/share/mise/bin/mise"),
+            "restored-other-bytes",
+        )
+        .expect("tampered binary");
+        let output = run_script(&home, &runner_temp, hit, Some(&expected_key), matched, None);
+        assert!(!output.status.success(), "{name}: {output:?}");
+        fs::remove_file(home.join(".local/share/mise/bin/mise")).expect("remove binary");
+        let output = run_script(&home, &runner_temp, hit, Some(&expected_key), matched, None);
+        assert!(!output.status.success(), "{name} missing: {output:?}");
+        fs::remove_dir_all(root).expect("cleanup");
     }
 }
 
-#[test]
-fn generated_action_tree_scopes_seed_input_to_the_restore_composite() {
-    use crate::yaml::Yaml;
+#[path = "cache_steps_tools_restore_contract_tests.rs"]
+mod contract_tests;
 
-    fn field<'a>(node: &'a Yaml, key: &str) -> &'a Yaml {
-        let Yaml::Map(entries) = node else {
-            panic!("expected mapping containing {key}");
-        };
-        entries
-            .iter()
-            .find_map(|(name, value)| (name == key).then_some(value))
-            .unwrap_or_else(|| panic!("missing mapping field {key}"))
-    }
-
-    let body = super::action_body().expect("restore action tree");
-    let seed_input = field(field(&body, "inputs"), "seed-admitted");
-    assert_eq!(field(seed_input, "required"), &Yaml::Bool(false));
-    assert_eq!(
-        field(seed_input, "default"),
-        &Yaml::Quoted("false".to_owned())
-    );
-
-    let Yaml::Seq(steps) = field(field(&body, "runs"), "steps") else {
-        panic!("composite steps are a sequence");
-    };
-    assert_eq!(field(&steps[0], "id"), &Yaml::Str("restore".to_owned()));
-    let admission_env = field(&steps[1], "env");
-    assert_eq!(
-        field(admission_env, "TOOLS_SEED_ADMITTED"),
-        &Yaml::Str("${{ inputs.seed-admitted }}".to_owned())
-    );
-}
-
-#[test]
-fn restore_call_requires_the_exact_prelude_output_input() {
-    let mut wrong = restore_step();
-    let velnor_actions_contract::StepKind::Action { with, .. } = &mut wrong.kind else {
-        panic!("restore is an action");
-    };
-    with.insert(
-        crate::cache_steps::TOOLS_SEED_ADMITTED_INPUT.to_owned(),
-        "caller-value".to_owned(),
-    );
-    assert!(super::validate_call(&wrong).is_err());
-
-    let mut missing = restore_step();
-    let velnor_actions_contract::StepKind::Action { with, .. } = &mut missing.kind else {
-        panic!("restore is an action");
-    };
-    with.remove(crate::cache_steps::TOOLS_SEED_ADMITTED_INPUT);
-    assert!(super::validate_call(&missing).is_err());
-}
-
-fn restore_step() -> velnor_actions_contract::Step {
-    crate::cache_steps::tools_cache_step(
-        true,
-        crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION,
-        Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION.to_owned()),
-    )
-    .expect("typed restore step")
-}
+#[path = "cache_steps_tools_restore_seed_tests.rs"]
+mod seed_tests;

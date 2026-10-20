@@ -287,8 +287,7 @@ fn elected_save_stays_on_the_winner_job() {
         .first()
         .expect("checkout")
         .clone();
-    let save = crate::cache_steps::tools_cache_step(
-        false,
+    let save = crate::cache_steps::tools_cache_save_step(
         crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION,
         Some(crate::cache_p08::tools_cache_save_condition(
             velnor_actions_contract::PullRequestCachePolicy::ReadOnly,

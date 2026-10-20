@@ -50,6 +50,9 @@ pub mod preseed;
 mod preseed_closure;
 /// Project tool-version resolver binding (hard decision 5).
 mod project_tool_resolver;
+pub mod publish_render;
+pub mod publish_scripts;
+pub mod publish_spec;
 pub mod release_checkout_gates;
 pub mod release_config;
 pub mod release_gates;

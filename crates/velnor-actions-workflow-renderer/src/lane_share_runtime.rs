@@ -143,36 +143,42 @@ pub(super) fn same_cache_helper_prefix_shape(
         && matches!(RunsOn::parse(local_runs_on), Ok(RunsOn::ScaleSet(_)))
 }
 
-/// Keep tools-cache identity and restore steps outside the steps shared by runner lanes.
+/// Peel the shared Setup Mise and typed V2 cache steps before lane sharing.
+///
+/// The project-version resolver is inserted after Setup Mise during document
+/// rendering, before the identity step consumes its exported values.
 pub(super) fn peel_tools_cache_prelude(
     steps: &[Step],
     runs_on: &str,
     needs_plan: bool,
 ) -> Option<(Vec<Step>, Vec<Step>)> {
-    let mut prelude = Vec::new();
-    let mut common = Vec::new();
-    for step in steps {
-        if is_tools_prelude_step(step.role) {
-            prelude.push(step.clone());
-        } else {
-            common.push(step.clone());
-        }
-    }
+    let prelude: Vec<Step> = steps
+        .iter()
+        .filter(|step| is_tools_prelude_step(step.role))
+        .cloned()
+        .collect();
     if !valid_tools_cache_prelude(&prelude, runs_on, needs_plan) {
         return None;
     }
-    let setup = steps
-        .iter()
-        .position(|step| step.role == Some(StepRole::MiseSetup));
-    if setup.is_some_and(|setup| {
-        steps
-            .iter()
-            .enumerate()
-            .any(|(index, step)| is_tools_prelude_step(step.role) && index > setup)
-    }) {
+    if prelude.is_empty() {
+        return Some((prelude, steps.to_vec()));
+    }
+    let (setup, rest) = steps.split_first()?;
+    let (head, common) = rest.split_at_checked(prelude.len())?;
+    if setup.role != Some(StepRole::MiseSetup) || head != prelude.as_slice() {
         return None;
     }
-    Some((prelude, common))
+    let mut lane = vec![setup.clone()];
+    lane.extend(prelude);
+    Some((lane, common.to_vec()))
+}
+
+/// Split Setup Mise off a lane without a V2 prelude when its paired lane
+/// keeps one, so both lanes render Setup Mise before their lane steps.
+pub(super) fn peel_setup(steps: Vec<Step>) -> Option<(Step, Vec<Step>)> {
+    let mut steps = steps.into_iter();
+    let setup = steps.next()?;
+    (setup.role == Some(StepRole::MiseSetup)).then(|| (setup, steps.collect()))
 }
 
 fn is_tools_prelude_step(role: Option<StepRole>) -> bool {
@@ -190,6 +196,24 @@ fn valid_tools_cache_prelude(steps: &[Step], runs_on: &str, needs_plan: bool) ->
         }
         _ => false,
     }
+}
+
+/// The V2 steps of a peeled lane prelude, without its leading Setup Mise.
+fn tools_steps(steps: &[Step]) -> &[Step] {
+    match steps.split_first() {
+        Some((setup, rest)) if setup.role == Some(StepRole::MiseSetup) => rest,
+        _ => steps,
+    }
+}
+
+/// Whether the lane has the V2 identity and restore steps, apart from Setup Mise.
+pub(super) fn has_tools_cache_prelude(steps: &[Step]) -> bool {
+    tools_steps(steps).iter().any(|step| {
+        matches!(
+            step.role,
+            Some(StepRole::ToolsCacheIdentity | StepRole::ToolsCacheRestore)
+        )
+    })
 }
 
 fn valid_identity(step: &Step, runs_on: &str, needs_plan: bool) -> bool {
@@ -215,16 +239,7 @@ fn valid_restore(step: &Step, needs_plan: bool) -> bool {
         && step.id == Some(velnor_actions_contract::StepId::ToolsRestore)
         && step.condition.as_deref()
             == Some(crate::cache_p08::tools_cache_restore_condition(needs_plan))
-        && matches!(
-            &step.kind,
-            StepKind::Action { uses, with, env }
-                if uses == crate::cache_steps::TOOLS_RESTORE_USES
-                    && env.is_empty()
-                    && with.len() == 2
-                    && with.get("key").is_some_and(|key| is_tools_cache_key(key))
-                    && with.get(crate::cache_steps::TOOLS_SEED_ADMITTED_INPUT)
-                        == Some(&crate::cache_steps::TOOLS_SEED_ADMITTED_EXPRESSION.to_owned())
-        )
+        && crate::cache_steps::validate_tools_restore_call(step).is_ok()
 }
 
 /// Ensure the lane-specific preludes have the same action and key structure.
@@ -236,6 +251,7 @@ pub(super) fn same_tools_cache_prelude_shape(
     hosted_needs_plan: bool,
     local_needs_plan: bool,
 ) -> bool {
+    let (hosted, local) = (tools_steps(hosted), tools_steps(local));
     if !valid_tools_cache_prelude(hosted, hosted_runs_on, hosted_needs_plan)
         || !valid_tools_cache_prelude(local, local_runs_on, local_needs_plan)
     {

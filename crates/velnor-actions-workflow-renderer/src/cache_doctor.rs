@@ -10,6 +10,9 @@
 //! - I2: every restore and save of one family uses the family's one path list.
 //! - I3: no path is owned by two families; sources paths stay in sources.
 //! - I7: every save is trust-gated; no save can run on forks or merge groups.
+//! - The V2 tools identity's `d` input, which the tools key binds, is the
+//!   exact static-digest-plus-resolved-versions shape and never hashes a
+//!   repository file.
 //! - Keys fit GitHub's 512-byte cap.
 
 use std::collections::BTreeMap;
@@ -53,6 +56,7 @@ pub(crate) fn check(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
     let mut owners: BTreeMap<String, Family> = BTreeMap::new();
     for (id, job) in jobs {
         for step in &job.steps {
+            check_tools_identity(id, step)?;
             let Some((key, path, save)) = classify(id, step)? else {
                 continue;
             };
@@ -130,15 +134,42 @@ fn is_tofu_plan_key(key: &str) -> bool {
         .is_some_and(|name| name.starts_with("tofu_providers_key_") && is_plan_cache_output(name))
 }
 
+/// The tools key path: the identity `d` input binds only the static digest
+/// and the resolver's `env` exports, never `hashFiles` or run metadata.
+fn check_tools_identity(job: &str, step: &Step) -> Result<(), RenderError> {
+    use velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_IDENTITY_DIGEST_INPUT;
+    if step.role != Some(velnor_actions_contract::StepRole::ToolsCacheIdentity) {
+        return Ok(());
+    }
+    let StepKind::Action { with, .. } = &step.kind else {
+        return Err(doctor(job, "tools_identity_not_action"));
+    };
+    let input = with
+        .get(TOOLS_CACHE_IDENTITY_DIGEST_INPUT)
+        .map_or("", String::as_str);
+    for banned in BANNED_KEY_PARTS {
+        if input.contains(banned) {
+            return Err(doctor(job, &format!("i1_tools_identity_contains:{banned}")));
+        }
+    }
+    if !velnor_actions_contract::config::project_tool_refs::is_tools_identity_input(input) {
+        return Err(doctor(job, "i1_tools_identity_shape"));
+    }
+    Ok(())
+}
+
+/// Key fragments that make a cache identity unstable or file-bound.
+const BANNED_KEY_PARTS: [&str; 5] = [
+    "github.job",
+    "github.workflow",
+    "github.run_",
+    "ImageVersion",
+    "hashFiles(",
+];
+
 /// I1 plus the key length bound.
 fn check_key(job: &str, key: &str) -> Result<(), RenderError> {
-    for banned in [
-        "github.job",
-        "github.workflow",
-        "github.run_",
-        "ImageVersion",
-        "hashFiles(",
-    ] {
+    for banned in BANNED_KEY_PARTS {
         if key.contains(banned) {
             return Err(doctor(job, &format!("i1_key_contains:{banned}")));
         }

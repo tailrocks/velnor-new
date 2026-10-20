@@ -7,14 +7,17 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
-use velnor_actions_contract::{Job, Step, StepKind, StepRole};
+use velnor_actions_contract::{Job, Step, StepRole};
 
 use crate::RenderError;
 use crate::render::RenderContext;
 use crate::tree::RenderedFile;
 
+#[path = "lane_share_checkout.rs"]
+mod checkout;
 #[path = "lane_share_runtime.rs"]
 mod runtime;
+use checkout::peel_checkout;
 
 /// CI workflow plus composite actions for duplicated lanes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -241,25 +244,42 @@ fn split_pair(
         .needs
         .iter()
         .any(|dependency| dependency == crate::render::PLAN_JOB_ID);
-    let (hosted_runtime_prelude, hosted_steps) =
+    let (mut hosted_runtime_prelude, mut hosted_steps) =
         runtime::peel_tools_cache_prelude(hosted_steps, &hosted.runs_on, hosted_needs_plan)?;
-    let (local_runtime_prelude, local_steps) =
+    let (mut local_runtime_prelude, mut local_steps) =
         runtime::peel_tools_cache_prelude(local_steps, &local.runs_on, local_needs_plan)?;
-    if !runtime::same_tools_cache_prelude_shape(
+    // A lane prelude carries Setup Mise first; its pair renders the same
+    // Setup Mise outside the shared body too.
+    if hosted_runtime_prelude.is_empty() != local_runtime_prelude.is_empty() {
+        let (empty, steps) = if hosted_runtime_prelude.is_empty() {
+            (&mut hosted_runtime_prelude, &mut hosted_steps)
+        } else {
+            (&mut local_runtime_prelude, &mut local_steps)
+        };
+        let (setup, rest) = runtime::peel_setup(std::mem::take(steps))?;
+        empty.push(setup);
+        *steps = rest;
+    }
+    if hosted_runtime_prelude.first() != local_runtime_prelude.first() {
+        return None;
+    }
+    let tools_shape = runtime::same_tools_cache_prelude_shape(
         &hosted_runtime_prelude,
         &local_runtime_prelude,
         &hosted.runs_on,
         &local.runs_on,
         hosted_needs_plan,
         local_needs_plan,
-    ) || !runtime::same_cache_helper_prefix_shape(
+    );
+    let helper_shape = runtime::same_cache_helper_prefix_shape(
         &hosted_helper,
         &local_helper,
         &hosted.runs_on,
         &local.runs_on,
-        !hosted_runtime_prelude.is_empty(),
-        !local_runtime_prelude.is_empty(),
-    ) {
+        runtime::has_tools_cache_prelude(&hosted_runtime_prelude),
+        runtime::has_tools_cache_prelude(&local_runtime_prelude),
+    );
+    if !tools_shape || !helper_shape {
         return None;
     }
     let mut parts = split_shared_steps(hosted_checkout, &hosted_steps, &local_steps)?;
@@ -344,27 +364,6 @@ fn split_shared_steps(
         hosted_postlude,
         local_postlude,
     })
-}
-
-fn peel_checkout<'a>(steps: &'a [Step], checkout_uses: &str) -> Option<(&'a Step, &'a [Step])> {
-    let (checkout, remaining) = steps.split_first()?;
-    if !velnor_actions_contract::workflow::step_identity::is_configured_checkout(
-        checkout,
-        checkout_uses,
-    ) || remaining.iter().any(is_checkout_step)
-    {
-        return None;
-    }
-    Some((checkout, remaining))
-}
-
-fn is_checkout_step(step: &Step) -> bool {
-    step.role == Some(StepRole::Checkout)
-        || matches!(
-            &step.kind,
-            StepKind::Action { uses, .. }
-                if uses.starts_with("actions/checkout@")
-        )
 }
 
 fn set_steps(jobs: &mut BTreeMap<String, Job>, id: &str, steps: Vec<Step>) {

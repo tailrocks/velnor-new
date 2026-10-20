@@ -119,7 +119,7 @@ fn rendered_condition(step: &Step) -> String {
 }
 
 #[test]
-fn project_tool_source_files_bind_the_cache_identity_input() {
+fn project_tool_versions_and_lock_digest_bind_cache_identity() {
     let setup = pinned_mise();
     let specs = vec!["rust@${VELNOR_TOOL_RUST}".to_owned()];
     let payload = payload(inputs(
@@ -132,9 +132,8 @@ fn project_tool_source_files_bind_the_cache_identity_input() {
     assert_eq!(
         payload.identity_input(),
         format!(
-            "{}-{}",
-            payload.static_digest(),
-            velnor_actions_contract::config::project_tool_refs::project_tool_sources_hash()
+            "{}-${{VELNOR_TOOL_RUST}}-${{VELNOR_TOOL_RUST_LOCK}}",
+            payload.static_digest()
         )
     );
 }

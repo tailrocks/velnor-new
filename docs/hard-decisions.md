@@ -170,8 +170,9 @@ declare Rust versions. Mise and rustup read these files.
   a Rust toolchain file below the root has another version. Rustup would use
   that file for commands in its directory. The resolver reads root sources.
   A Velnor pin never replaces a declaration that the generator cannot use.
-- Each job or composite action that uses a project version gets one
-  **Resolve project tool versions** step after Mise setup. It reads each
+- Each job or composite action that uses a project version gets one **Resolve project tool versions** step.
+  The step runs after Mise setup and before cache identity and restore.
+  A shared composite action runs this step first when its caller completed Mise setup. It reads each
   source with `mise --no-config --no-env --no-hooks config get`. It reads
   `.tool-versions` and plain-text `rust-toolchain` as text. It does not run
   these files. The step rejects unparseable and symlinked sources. It requires
@@ -184,13 +185,17 @@ declare Rust versions. Mise and rustup read these files.
 - Tools that the project does not declare keep the exact Velnor catalog pin or
   a `.velnor/config.toml [tools]` override. Generation fails if that override
   disagrees with a project declaration.
-- Cache identities that bind a version also bind project config. The
-  tools-cache `d` input hashes `mise.toml`, `.mise.toml`, `mise.lock`,
-  `.mise.lock`, and both Rust toolchain files. This list does not yet include
-  every source listed above. The cache design owns this list. Cargo-source and
-  MBX keys and MBX action inputs use the resolved value. Plan identities,
-  including the MBX cache-format generation, bind declared versions. Generated
-  records (task digests and arguments) do not include those versions.
+- Cache identities use resolved versions for tools that the job installs.
+  The tools-cache `d` input includes `${{ env.VELNOR_TOOL_<NAME> }}` and
+  `${{ env.VELNOR_TOOL_<NAME>_LOCK }}` for each such tool.
+  The lock value is a SHA-256 digest of the tool's runner-platform rows.
+  These rows contain `checksum` and `url` values from `mise.lock` or `.mise.lock`.
+  A fixed text parser reads these rows. The value is `unlocked` when matching lock data is absent.
+  The key does not hash whole configuration files. A tool version change affects the key.
+  A comment, task, or unrelated tool change does not affect the key.
+  Cargo-source keys, MBX keys, and MBX action inputs use the resolved version.
+  Plan identities include declared versions and the MBX cache-format generation.
+  Generated records do not include those versions.
 - A pull request selects every crate job when a project source changes a
   declared catalog version. Change selection parses each changed source at
   base and head with the generator's reader. It compares declared versions,
@@ -220,9 +225,11 @@ settings such as `url_replacements`, or wrappers from the checkout. A fork
 pull request can change `mise.toml`. CI then tests the declared version of
 the same tool through the same backend.
 
-The resolver accepts only `[0-9.]` values in exact `X.Y.Z` form. It checks
-each value before it writes to `$GITHUB_ENV`. This prevents a value from
-adding a variable or line. The resolver also rejects symlinked source files.
+The resolver accepts only `[0-9.]` values in exact `X.Y.Z` form.
+It accepts lock digests only as 64 hexadecimal characters or `unlocked`.
+It checks each value before it writes to `$GITHUB_ENV`.
+This prevents a value from adding a variable or line.
+The resolver rejects symlinked source files and lock files.
 It does not write raw values to logs. It replaces control text, such as
 `::error::`, before it reports an error. Composite actions use
 `# zizmor: ignore[github-env]` only on the validated write.
@@ -237,8 +244,8 @@ The generator removes its hoisted `RUSTUP_TOOLCHAIN` reference from that job.
 Any other project version reference without checkout fails generation.
 
 **Trade-offs.** CI does not check `mise.lock` checksums. Mise does not read
-the lock with `--no-config`. The lock audit runs during generation. The lock
-still affects the tools-cache identity.
+the lock with `--no-config`. The lock audit runs during generation.
+Lock entries for each installed tool affect the tools-cache identity.
 
 Project-declared catalog tools need an exact `X.Y.Z` version. The generated
 text keeps a loose or templated value as a project reference. The resolver
@@ -250,3 +257,53 @@ Velnor's freshness check for the matching catalog pin.
 - Do not copy a project-declared version into a generated file.
 - Do not load or trust project Mise config in a generated resolver step.
 - Do not let a Velnor pin override a project declaration.
+
+## 8. Publication only from the default branch or a release tag
+
+**Decision.** Container images (and later packages) are published only from a
+`push` to the default branch or from a release tag, after `Required` succeeded
+for that SHA, by jobs that check out and execute no repository code. Tags
+promote the digest built and attested on the default branch; a tag never
+rebuilds an image. Pull requests build and validate images but hold neither
+`packages: write` nor `id-token: write`.
+
+**Rationale.** Publication is a new authority boundary. Keeping every
+repository-controlled step (Dockerfile `RUN`, prebuilt compilation) in
+unprivileged jobs, and consuming only same-run artifacts with verified digests
+in the privileged ones, keeps provenance bound to one source SHA and workflow.
+
+**Status.** Adopted per the split brief; owner may revisit. Specification:
+[image publication contract](proposed/image-publication-contract.md) and
+[package publication contract](proposed/package-publication-contract.md).
+
+**Tag flow and release-asset bundles.** The same boundary covers release
+assets. The trigger set is closed in the typed IR: tag pushes only for
+`publish.yml`, with no `pull_request`, `pull_request_target`,
+`workflow_run`, `workflow_dispatch` or `schedule` variant, so no config field
+can add one. Every publication job transitively needs one authority job
+(`contents: read`, `checks: read`, no checkout) that verifies the tag is
+annotated, targets the pushed commit, is reachable from the default branch,
+has a green `Required` check run from GitHub Actions at that SHA, names a
+declared artifact and carries the manifest version the tag claims. Release
+bundles are the one tag-time build: a deterministic archive (sorted entries,
+zero mtimes, root owner) of files at a commit reachable from the default
+branch, built by a read-only job that runs no repository code. Roles are
+fixed (build, attest with OIDC and attestations, publish with
+`contents: write` in the protected environment, the last two without
+checkout) and permissions equal the role matrix exactly. Release assets are
+immutable: an existing asset fails the job. The concurrency group is one
+never-cancelled queue per pushed ref, because GitHub keeps one pending run
+per group and a per-artifact group would silently drop a queued release.
+
+**Release-asset Maven bundle choice.** Adopted per the split brief; owner may
+revisit. GitHub Packages Maven is repository-scoped and cannot serve private
+cross-repository consumers with a scoped CI credential, so Java libraries
+ship as release-asset Maven bundles consumed through the same App-token fetch
+as Cargo git dependencies. Rejected: a machine-user classic PAT in every
+consumer.
+
+**Must not be reintroduced without owner approval:** publishing from a pull
+request or fork event, a privileged job that checks out or runs repository
+code, a release tag that rebuilds instead of promoting, BuildKit cache
+backends and mounts that hand a credential to the build, or overwriting or
+deleting a published release asset or moving a published tag.

@@ -132,6 +132,12 @@ struct PartialConfig {
     /// Reviewed job roles for explicit authority inventory generation.
     #[serde(default)]
     job_authority: Vec<velnor_actions_contract::config::JobAuthorityBinding>,
+    /// Container images built on every run and published from the default branch.
+    #[serde(default)]
+    images: Vec<velnor_actions_contract::config::ImageConfig>,
+    /// Tag-driven publication.
+    #[serde(default)]
+    publish: velnor_actions_contract::config::PublishConfig,
     /// Optional exact `X.Y.Z` version overrides for generator-managed tools.
     #[serde(default)]
     tools: velnor_actions_contract::ToolsConfig,
@@ -240,6 +246,8 @@ impl PartialConfig {
             qualified_tools: self.qualified_tools,
             distribution: self.distribution,
             job_authority: self.job_authority,
+            images: self.images,
+            publish: self.publish,
             tools: self.tools,
         })
     }

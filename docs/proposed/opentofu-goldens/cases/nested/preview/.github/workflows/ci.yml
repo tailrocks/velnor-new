@@ -59,6 +59,15 @@ jobs:
         uses: ./.github/actions/velnor-cache-tar-launchers # zizmor: ignore[self-repository]
         with:
           helper-sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      - name: Setup Mise
+        uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
+        with:
+          cache: "false"
+          cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
+          version: 2026.10.15
       - name: V2 identity
         id: v2
         if: github.event_name != 'workflow_dispatch'
@@ -71,18 +80,10 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
+          mise-sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
         env:
           PATH: ${{ steps.cache-tar-launchers.outputs.path }}
-      - name: Setup Mise
-        uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
-        with:
-          cache: "false"
-          cache_save: "false"
-          env: "false"
-          install: "false"
-          sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
-          version: 2026.10.15
       - name: Prepare pinned tools
         run: mise --no-config --no-env --no-hooks install actionlint@1.7.12 shellcheck@0.11.0
       - name: Run actionlint
@@ -131,6 +132,15 @@ jobs:
         uses: ./.github/actions/velnor-cache-tar-launchers # zizmor: ignore[self-repository]
         with:
           helper-sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      - name: Setup Mise
+        uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
+        with:
+          cache: "false"
+          cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
+          version: 2026.10.15
       - name: V2 identity
         id: v2
         if: github.event_name != 'workflow_dispatch'
@@ -143,18 +153,10 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
+          mise-sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
         env:
           PATH: ${{ steps.cache-tar-launchers.outputs.path }}
-      - name: Setup Mise
-        uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
-        with:
-          cache: "false"
-          cache_save: "false"
-          env: "false"
-          install: "false"
-          sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
-          version: 2026.10.15
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -380,6 +382,15 @@ jobs:
         uses: ./.github/actions/velnor-cache-tar-launchers # zizmor: ignore[self-repository]
         with:
           helper-sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      - name: Setup Mise
+        uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
+        with:
+          cache: "false"
+          cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
+          version: 2026.10.15
       - name: V2 identity
         id: v2
         if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
@@ -392,18 +403,10 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
+          mise-sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
         env:
           PATH: ${{ steps.cache-tar-launchers.outputs.path }}
-      - name: Setup Mise
-        uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
-        with:
-          cache: "false"
-          cache_save: "false"
-          env: "false"
-          install: "false"
-          sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
-          version: 2026.10.15
       - name: Download plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
@@ -501,6 +504,15 @@ jobs:
         uses: ./.github/actions/velnor-cache-tar-launchers # zizmor: ignore[self-repository]
         with:
           helper-sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      - name: Setup Mise
+        uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
+        with:
+          cache: "false"
+          cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
+          version: 2026.10.15
       - name: V2 identity
         id: v2
         if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
@@ -513,18 +525,10 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
+          mise-sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
         env:
           PATH: ${{ steps.cache-tar-launchers.outputs.path }}
-      - name: Setup Mise
-        uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
-        with:
-          cache: "false"
-          cache_save: "false"
-          env: "false"
-          install: "false"
-          sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
-          version: 2026.10.15
       - name: Download plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
