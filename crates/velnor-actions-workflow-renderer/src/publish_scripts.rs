@@ -11,6 +11,9 @@
 
 use velnor_actions_contract::config::VersionSource;
 
+/// Maven bundle publication scripts (hard decision 8).
+#[path = "publish_maven_scripts.rs"]
+pub mod maven;
 /// npm publication scripts (hard decision 8).
 #[path = "publish_npm_scripts.rs"]
 pub mod npm;
@@ -132,18 +135,31 @@ pub fn pack_script(id: &str, paths: &[String]) -> String {
 /// Re-verify the checksum sidecar against the downloaded tarball.
 #[must_use]
 pub fn verify_checksum_script(id: &str) -> String {
+    verify_sidecar_script(&format!("{id}-$ver.tar.gz"))
+}
+
+/// Re-verify `file`'s `.sha256` sidecar; the directory holds exactly the two files.
+///
+/// `file` may use the shell variable `$ver` (the tag's version).
+#[must_use]
+pub fn verify_sidecar_script(file: &str) -> String {
     format!(
         "set -eu; ver=${{GITHUB_REF_NAME##*-v}}; cd \"$RUNNER_TEMP/bundle\"; \
-         ls | wc -l | grep -Eqx ' *2'; sha256sum -c -- \"{id}-$ver.tar.gz.sha256\""
+         ls | wc -l | grep -Eqx ' *2'; sha256sum -c -- \"{file}.sha256\""
     )
 }
 
 /// Upload the bundle as immutable assets of the tag's GitHub release.
 #[must_use]
 pub fn upload_script(gh: &str, id: &str) -> String {
-    let files = format!(
-        "\"$RUNNER_TEMP/bundle/{id}-$ver.tar.gz\" \"$RUNNER_TEMP/bundle/{id}-$ver.tar.gz.sha256\""
-    );
+    upload_assets_script(gh, &format!("{id}-$ver.tar.gz"))
+}
+
+/// Upload `file` and its `.sha256` from the bundle directory as immutable
+/// assets: an existing asset fails the job (`gh release upload` without `--clobber`).
+#[must_use]
+pub fn upload_assets_script(gh: &str, file: &str) -> String {
+    let files = format!("\"$RUNNER_TEMP/bundle/{file}\" \"$RUNNER_TEMP/bundle/{file}.sha256\"");
     format!(
         "set -eu; {gh}; ver=${{GITHUB_REF_NAME##*-v}}; \
          if gh release view \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" > /dev/null 2>&1; \
