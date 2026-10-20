@@ -26,6 +26,7 @@ fn final_job() -> Result<(String, velnor_actions_contract::Job), RenderError> {
         pull_requests: PermissionLevel::None,
         id_token: PermissionLevel::None,
         actions: PermissionLevel::Read,
+        packages: PermissionLevel::None,
     });
     Ok((id, job))
 }

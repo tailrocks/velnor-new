@@ -28,15 +28,10 @@ fn plan() -> PackageReleasePlan {
 
 #[test]
 fn preview_producer_accepts_only_actual_workflow_run_event() {
-    assert!(is_preview_event("workflow_run"));
-    for event in [
-        "push",
-        "workflow_dispatch",
-        "pull_request",
-        "workflow_run ",
-        "",
-    ] {
-        assert!(!is_preview_event(event), "accepted {event}");
+    assert!(is_release_event("workflow_run"));
+    assert!(is_release_event("workflow_dispatch"));
+    for event in ["push", "pull_request", "workflow_run ", ""] {
+        assert!(!is_release_event(event), "accepted {event}");
     }
 }
 
@@ -103,7 +98,7 @@ fn expired_deadline() -> CheckDeadline {
 fn expired_producer_cannot_stage_a_success_handoff_or_write_proof() {
     let root = tempfile::tempdir().expect("root");
     assert!(execution::fresh_raw_output(root.path(), expired_deadline()).is_err());
-    assert!(!root.path().join("preview-output").exists());
+    assert!(!root.path().join("release-output").exists());
     let proof = root
         .path()
         .canonicalize()

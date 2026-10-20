@@ -1,7 +1,7 @@
 //! Product, companion, and closed release asset inventory validation.
 
 use super::{
-    RustBinaryPreviewCompanion, RustBinaryPreviewConfig, RustBinaryPreviewProduct, config_error,
+    RustBinaryReleaseCompanion, RustBinaryReleaseConfig, RustBinaryReleaseProduct, config_error,
     unique, valid_asset_name, valid_identifier, valid_repo_path,
 };
 use crate::errors::ContractError;
@@ -12,9 +12,9 @@ use std::collections::BTreeSet;
 
 pub(super) fn validate_inventory(
     file: &str,
-    config: &RustBinaryPreviewConfig,
+    config: &RustBinaryReleaseConfig,
 ) -> Result<(), ContractError> {
-    if !config.enabled {
+    if !config.enabled() {
         return Ok(());
     }
     let manifest_prefix = format!("{}/", config.producer.output_directory);
@@ -25,8 +25,8 @@ pub(super) fn validate_inventory(
         .ok_or_else(|| {
             config_error(
                 file,
-                "stacks.rust.binary_release.preview.producer.manifest",
-                "preview_manifest_outside_output_directory",
+                "stacks.rust.binary_release.producer.manifest",
+                "release_manifest_outside_output_directory",
             )
         })?;
     validate_static_release_inventory(file, &config.products, &config.companions, Some(manifest))
@@ -39,11 +39,11 @@ pub(super) fn validate_inventory(
 /// source configuration while remaining unable to carry executable tasks.
 pub(crate) fn validate_static_release_inventory(
     file: &str,
-    products: &[RustBinaryPreviewProduct],
-    companions: &[RustBinaryPreviewCompanion],
+    products: &[RustBinaryReleaseProduct],
+    companions: &[RustBinaryReleaseCompanion],
     manifest_path: Option<&str>,
 ) -> Result<(), ContractError> {
-    let prefix = "stacks.rust.binary_release.preview";
+    let prefix = "stacks.rust.binary_release";
     if products.is_empty() {
         return Err(ContractError::config(
             file,
@@ -67,7 +67,7 @@ pub(crate) fn validate_static_release_inventory(
     {
         return Err(config_error(
             file,
-            "stacks.rust.binary_release.preview",
+            "stacks.rust.binary_release",
             "release_inventory_exceeds_receipt_limits",
         ));
     }
@@ -78,7 +78,7 @@ pub(crate) fn validate_static_release_inventory(
 
 fn validate_products(
     file: &str,
-    products: &[RustBinaryPreviewProduct],
+    products: &[RustBinaryReleaseProduct],
 ) -> Result<(), ContractError> {
     let mut ids = BTreeSet::new();
     let mut packages = BTreeSet::new();
@@ -91,11 +91,11 @@ fn validate_products(
 
 fn validate_product_identity(
     file: &str,
-    product: &RustBinaryPreviewProduct,
+    product: &RustBinaryReleaseProduct,
     ids: &mut BTreeSet<String>,
     packages: &mut BTreeSet<String>,
 ) -> Result<(), ContractError> {
-    let prefix = "stacks.rust.binary_release.preview.products";
+    let prefix = "stacks.rust.binary_release.products";
     if !valid_identifier(&product.id) || !ids.insert(product.id.clone()) {
         return Err(config_error(
             file,
@@ -115,9 +115,9 @@ fn validate_product_identity(
 
 fn validate_product_outputs(
     file: &str,
-    product: &RustBinaryPreviewProduct,
+    product: &RustBinaryReleaseProduct,
 ) -> Result<(), ContractError> {
-    let prefix = "stacks.rust.binary_release.preview.products";
+    let prefix = "stacks.rust.binary_release.products";
     if product.bins.is_empty()
         || product.bins.iter().any(|name| !valid_identifier(name))
         || !unique(&product.bins)
@@ -150,8 +150,8 @@ fn supported_target(target: &str) -> bool {
 
 fn validate_companions(
     file: &str,
-    products: &[RustBinaryPreviewProduct],
-    companions: &[RustBinaryPreviewCompanion],
+    products: &[RustBinaryReleaseProduct],
+    companions: &[RustBinaryReleaseCompanion],
 ) -> Result<(), ContractError> {
     let mut ids = products
         .iter()
@@ -173,7 +173,7 @@ fn validate_companions(
                 if !expected_assets.insert(asset) {
                     return Err(config_error(
                         file,
-                        "stacks.rust.binary_release.preview.products",
+                        "stacks.rust.binary_release.products",
                         "duplicate_or_reserved_release_asset_name",
                     ));
                 }
@@ -188,7 +188,7 @@ fn validate_companions(
             if !expected_assets.insert(asset) {
                 return Err(config_error(
                     file,
-                    "stacks.rust.binary_release.preview.companions",
+                    "stacks.rust.binary_release.companions",
                     "duplicate_or_reserved_release_asset_name",
                 ));
             }
@@ -198,7 +198,7 @@ fn validate_companions(
         if !expected_assets.insert(asset.to_owned()) {
             return Err(config_error(
                 file,
-                "stacks.rust.binary_release.preview.companions",
+                "stacks.rust.binary_release.companions",
                 "duplicate_or_reserved_release_asset_name",
             ));
         }
@@ -214,7 +214,7 @@ fn validate_companions(
     {
         return Err(config_error(
             file,
-            "stacks.rust.binary_release.preview.companions",
+            "stacks.rust.binary_release.companions",
             "duplicate_or_reserved_release_asset_name",
         ));
     }
@@ -223,10 +223,10 @@ fn validate_companions(
 
 fn validate_companion(
     file: &str,
-    companion: &RustBinaryPreviewCompanion,
+    companion: &RustBinaryReleaseCompanion,
     ids: &mut BTreeSet<String>,
 ) -> Result<(), ContractError> {
-    let prefix = "stacks.rust.binary_release.preview.companions";
+    let prefix = "stacks.rust.binary_release.companions";
     if !valid_identifier(&companion.id) || !ids.insert(companion.id.clone()) {
         return Err(config_error(
             file,
@@ -242,11 +242,11 @@ fn validate_companion(
 
 fn validate_companion_paths(
     file: &str,
-    products: &[RustBinaryPreviewProduct],
-    companions: &[RustBinaryPreviewCompanion],
+    products: &[RustBinaryReleaseProduct],
+    companions: &[RustBinaryReleaseCompanion],
     manifest_path: Option<&str>,
 ) -> Result<(), ContractError> {
-    let prefix = "stacks.rust.binary_release.preview";
+    let prefix = "stacks.rust.binary_release";
     let companion_paths = companions
         .iter()
         .map(|asset| asset.path.as_str())

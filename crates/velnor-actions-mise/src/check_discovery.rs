@@ -11,7 +11,7 @@ use std::ffi::OsString;
 use std::path::Path;
 use velnor_actions_contract::config::{
     CheckExecutor, CheckPlatform, CheckRunner, MiseCheck, MiseTaskSource, QualifiedTool,
-    RustBinaryPreviewProducer, VerificationRunner,
+    RustBinaryReleaseProducer, VerificationRunner,
 };
 use velnor_actions_contract::graph::{CachePolicy, ResourceClass, ResourceDemand};
 use velnor_actions_contract::propose::{IdentityInputs, ProposedTask};
@@ -77,7 +77,7 @@ pub fn discover_checks_until(
 /// incomplete qualified-tool closure.
 pub fn discover_preview_producer(
     root: &Path,
-    producer: &RustBinaryPreviewProducer,
+    producer: &RustBinaryReleaseProducer,
     qualified_tools: &[QualifiedTool],
     deadline: crate::CheckDeadline,
 ) -> Result<DiscoveredCheck, MiseError> {

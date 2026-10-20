@@ -278,3 +278,18 @@ tool_version_not_latest: mise.toml [tools].rust
 Recommendations are advisory output. Velnor MUST NOT create a patch, apply a
 fix, run `mise use`, `mise lock`, `mise upgrade`, or `rustup` on behalf of the
 repository. A later explicit user-authored change is checked on the next run.
+
+## JDK declarations (HD-4a)
+
+`VELNOR_TOOL_JAVA` resolves a project's `java` (or `core:java`) `[tools]`
+entry through the same Mise-config readers as every other project tool, with
+the adapter-specific exact grammar
+`<vendor>-<X.Y.Z>[+<build>[.<n>]*][.LTS]` (vendor one of `temurin`,
+`oracle-graalvm`, `graalvm-community`, `corretto`, `zulu`) over
+`[A-Za-z0-9.+-]`. The generated resolver defines `velnor_exact_java` only for
+jobs that reference the JDK, so every other job's resolver text is unchanged.
+Bare majors, `lts`, `latest`, ranges, templates, leading zeros and anything that
+could add a `$GITHUB_ENV` line fail with the usual named finding. The
+`impl_contract_java_resolver` test executes the generated function over an
+accept and a hostile-reject corpus. Adopted per the split brief; owner may
+revisit.

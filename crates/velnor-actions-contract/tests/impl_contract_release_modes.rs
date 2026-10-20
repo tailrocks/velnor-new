@@ -1,13 +1,14 @@
 //! Publishable-workspace scope mode for the typed release section.
 use std::collections::BTreeMap;
 use velnor_actions_contract::ContractError;
-use velnor_actions_contract::config::RustReleaseConfig;
+use velnor_actions_contract::config::{ReleaseRegistry, RustReleaseConfig};
 
 const FILE: &str = ".velnor/config.toml";
 
 fn enabled_publishable() -> RustReleaseConfig {
     RustReleaseConfig {
         enabled: true,
+        registry: ReleaseRegistry::CratesIo,
         publishable_workspace: true,
         ..RustReleaseConfig::default()
     }
@@ -67,7 +68,7 @@ fn publishable_opt_in_defers_group_membership_to_emission() {
 
 #[test]
 fn publishable_opt_in_decodes_and_roundtrips() {
-    let document = r#"{"enabled":true,"publishable_workspace":true}"#;
+    let document = r#"{"enabled":true,"registry":"crates-io","publishable_workspace":true}"#;
     let config: RustReleaseConfig = serde_json::from_str(document).expect("decode");
     assert!(config.publishable_workspace);
     assert_eq!(config.validate(FILE), Ok(()));

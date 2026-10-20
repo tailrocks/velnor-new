@@ -88,31 +88,6 @@ pub(super) fn draft_receipt_digest(
     }
 }
 
-pub(super) fn tag_receipt_digest(
-    message: Option<&str>,
-    expected_message: &str,
-    receipt_digest: &str,
-) -> Option<String> {
-    message.map(|message| {
-        if message == expected_message {
-            receipt_digest.to_owned()
-        } else {
-            "untrusted-tag-envelope".to_owned()
-        }
-    })
-}
-
-pub(super) fn combine_origin_identities(
-    draft: Option<String>,
-    tag: Option<String>,
-) -> Option<String> {
-    match (draft, tag) {
-        (Some(draft), Some(tag)) if draft == tag => Some(draft),
-        (None, None) => None,
-        _ => Some("conflicting-origin-envelope".to_owned()),
-    }
-}
-
 pub(super) fn is_git_sha(value: &str) -> bool {
     value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }

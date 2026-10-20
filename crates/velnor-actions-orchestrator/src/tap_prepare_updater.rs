@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use velnor_actions_contract::{VerifiedPreviewRelease, canonical_json_bytes};
+use velnor_actions_contract::{PackageReleasePlan, VerifiedPackageRelease, canonical_json_bytes};
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck};
 
 use super::{OrchestratorError, TASK_OUTPUT_LIMIT, internal, sha256};
@@ -29,15 +29,36 @@ pub(super) fn prepare_receipt_handoff(
     Ok(path)
 }
 
+pub(super) fn prepare_plan_handoff(
+    temp: &Path,
+    plan: &PackageReleasePlan,
+) -> Result<PathBuf, OrchestratorError> {
+    let directory = temp.join("tap-release-handoff");
+    crate::exclusive_write::create_dir_no_symlink(temp, &directory)?;
+    let path = directory.join("plan.json");
+    let bytes = plan
+        .canonical_bytes()
+        .map_err(|_| internal("tap_plan_handoff_encode"))?;
+    crate::exclusive_write::write_exclusive(&path, &bytes, "tap_plan_handoff")?;
+    let mut permissions = fs::metadata(&path)
+        .map_err(|_| internal("tap_plan_handoff_metadata"))?
+        .permissions();
+    permissions.set_readonly(true);
+    fs::set_permissions(&path, permissions)
+        .map_err(|_| internal("tap_plan_handoff_permissions"))?;
+    Ok(path)
+}
+
 pub(super) struct UpdaterRun<'a> {
     pub(super) root: &'a Path,
     pub(super) temp: &'a Path,
     pub(super) discovered: &'a DiscoveredCheck,
     pub(super) deadline: CheckDeadline,
     pub(super) receipt_path: &'a Path,
+    pub(super) plan_path: &'a Path,
     pub(super) base_sha: &'a str,
     pub(super) formula: &'a str,
-    pub(super) release: &'a VerifiedPreviewRelease,
+    pub(super) release: &'a VerifiedPackageRelease,
 }
 
 pub(super) fn run_updater(run: &UpdaterRun<'_>) -> Result<(), OrchestratorError> {
@@ -47,6 +68,7 @@ pub(super) fn run_updater(run: &UpdaterRun<'_>) -> Result<(), OrchestratorError>
         discovered,
         deadline,
         receipt_path,
+        plan_path,
         base_sha,
         formula,
         release,
@@ -57,7 +79,7 @@ pub(super) fn run_updater(run: &UpdaterRun<'_>) -> Result<(), OrchestratorError>
         return Err(internal("tap_updater_host_platform"));
     }
     let owned = prepare_check(root, temp, discovered, *deadline)?;
-    let handoff = updater_environment(base_sha, formula, receipt_path, release)?;
+    let handoff = updater_environment(base_sha, formula, receipt_path, plan_path, release)?;
     let pairs: Vec<(OsString, OsString)> = handoff
         .into_iter()
         .map(|(key, value)| (key.into(), value.into()))
@@ -79,8 +101,9 @@ fn updater_environment(
     base_sha: &str,
     formula: &str,
     receipt_path: &Path,
-    release: &VerifiedPreviewRelease,
-) -> Result<[(&'static str, String); 7], OrchestratorError> {
+    plan_path: &Path,
+    release: &VerifiedPackageRelease,
+) -> Result<[(&'static str, String); 9], OrchestratorError> {
     Ok([
         ("VELNOR_TAP_BASE_SHA", base_sha.to_owned()),
         ("VELNOR_TAP_FORMULA_PATH", formula.to_owned()),
@@ -97,6 +120,17 @@ fn updater_environment(
                 &canonical_json_bytes(&release.receipt)
                     .map_err(|_| internal("tap_receipt_encode"))?,
             ),
+        ),
+        (
+            "VELNOR_TAP_RELEASE_PLAN",
+            plan_path
+                .to_str()
+                .ok_or_else(|| internal("tap_plan_path_utf8"))?
+                .to_owned(),
+        ),
+        (
+            "VELNOR_TAP_RELEASE_PLAN_SHA256",
+            sha256(&fs::read(plan_path).map_err(|_| internal("tap_plan_handoff_read"))?),
         ),
         (
             "VELNOR_TAP_RELEASE_VERSION",

@@ -165,7 +165,9 @@ fn jobs_for(policies: &[WorkflowTaskPolicy]) -> BTreeMap<String, Job> {
                 task.job_id(),
                 build_native_image_job(task, CHECKOUT).expect("image job"),
             ),
-            WorkflowTaskPolicy::Image(_) => unreachable!("not part of this fixture"),
+            WorkflowTaskPolicy::Image(_) | WorkflowTaskPolicy::Bun(_) => {
+                unreachable!("not part of this fixture")
+            }
         };
         jobs.insert(id, job);
     }

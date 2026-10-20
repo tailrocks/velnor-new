@@ -52,6 +52,13 @@ fn both_tap_routes_end_authenticated_admission_before_checkout_and_token_free_pr
             field(field(&steps[admission], "env"), "GH_TOKEN"),
             &Yaml::str("${{ github.token }}")
         );
+        assert_eq!(
+            field(
+                field(&steps[admission], "env"),
+                "VELNOR_RELEASE_STATUS_TOKEN"
+            ),
+            &Yaml::str("${{ secrets.RELEASE_STATUS_READ_TOKEN }}")
+        );
         assert_eq!(field(&steps[admission], "id"), &Yaml::str("tap-admission"));
         let env = field(&steps[prepare], "env");
         let text = crate::yaml::render_yaml(env);
@@ -81,6 +88,7 @@ fn both_tap_routes_end_authenticated_admission_before_checkout_and_token_free_pr
             script.contains(&crate::toolchain_env::credential_unset_prelude()),
             "{script}"
         );
+        assert!(script.contains("unset VELNOR_RELEASE_STATUS_TOKEN;"));
         assert!(!crate::yaml::render_yaml(&steps[prepare]).contains("set -C"));
         for (_, job) in &jobs[1..] {
             assert!(crate::yaml::render_yaml(job).contains("GH_TOKEN"));

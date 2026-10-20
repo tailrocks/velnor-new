@@ -20,10 +20,12 @@ pub use bunfig::{NPM_REGISTRY_URL, NPM_TOKEN_ENV, velnor_bunfig};
 pub use error::BunError;
 pub use lockfile::{BUN_LOCK, check_js_lockfiles, parse_lock};
 pub use package_json::{PackageJson, parse_package_json};
-pub use reads::outside_reads;
+pub use reads::{is_config_file, outside_reads};
 pub use select::{affected_members, forced_members};
 pub use tools::check_package_manager;
-pub use workspace::{Member, Workspace, job_id, job_name, member_scripts, resolve, slug};
+pub use workspace::{
+    Member, Workspace, job_id, job_name, member_scripts, resolve, resolve_member_dir, slug,
+};
 
 /// Stable identifier of the Bun stack.
 pub const STACK_ID: &str = "bun";

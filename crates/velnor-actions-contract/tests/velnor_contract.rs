@@ -15,6 +15,8 @@ mod impl_contract_crates;
 mod impl_contract_ids;
 #[path = "impl_contract_ids_b.rs"]
 mod impl_contract_ids_b;
+#[path = "impl_contract_java_resolver.rs"]
+mod impl_contract_java_resolver;
 #[path = "impl_contract_job_ids.rs"]
 mod impl_contract_job_ids;
 #[path = "impl_contract_manifest_targets.rs"]

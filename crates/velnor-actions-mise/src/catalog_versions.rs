@@ -82,6 +82,7 @@ pub(crate) fn tool_source(tool: PinnedTool, version: &str) -> String {
         PinnedTool::Crane => {
             format!("https://github.com/google/go-containerregistry/releases/tag/v{version}")
         }
+        PinnedTool::Bun => format!("https://github.com/oven-sh/bun/releases/tag/bun-v{version}"),
     }
 }
 

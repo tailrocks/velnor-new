@@ -1,119 +1,151 @@
-# Consumer Rust binary release contract
+# Manual stable binary release contract
 
-**Status:** Implemented as a disabled-by-default consumer workflow. This adds
-one generated workflow and does not change crates.io release-plz behavior.
+**Status:** revised for the human owner's 2026-10-20 manual stable requirement.
+This extends the shared [native channel contract](native-preview-contract.md);
+implementation and actual hosted qualification are separate acceptance gates.
+The old single-bin Apple-only stable workflow is removed, not retained as fallback.
 
-The independently enabled preview policy and downstream Homebrew promotion
-contract are specified in [native-preview-contract.md](native-preview-contract.md).
-That extension preserves the stable authorization requirements below; its runtime
-publisher must pass the separate acceptance gates before release.
+## Configuration and release-plz ownership
 
-## Configuration and selection
+Stable uses the shared `stacks.rust.binary_release` product, target, producer,
+companion, evidence and version-owner fields. Its independently enabled `stable`
+block selects the protected `release` environment. The existing
+`stacks.rust.release` must also be enabled, select `registry = "git-tag"`, select
+only `version_package`, use the same manifest and stable environment, and use the
+literal version tag template `v{{ version }}`. Mismatches fail generation.
+`release_pr` may enable manual version-PR preparation; it is not a stable publish
+trigger. There is no implicit Cargo-registry publication.
 
-The optional setting belongs to the consumer's `.velnor/config.toml`:
+The default release registry is `git-tag`; crates.io publication requires an
+explicit `registry = "crates-io"` policy and its independent existing registry
+authentication contract. Git-tag mode admits neither registry credentials nor
+bootstrap authorization. An application with two native channels does not gain a
+second version manager or a shell replacement for release-plz.
 
-```toml
-[workflow]
-policy = "consumer-v1"
+## One manual coordinator
 
-[stacks.rust.binary_release]
-enabled = true
-manifest_path = "Cargo.toml"
-package = "repo-scan"
-bin = "repo-scan"
-```
+The stable coordinator owns `.github/workflows/binary-release.yml` and starts only
+by `workflow_dispatch`. Its closed operation is `prepare` or `release`. When release-PR preparation
+is enabled, the default is `prepare`; otherwise the caller must explicitly select
+`release` and preparation is unavailable. There is no automatic
+stable publication on main push, CI completion, preview publication, a schedule,
+or an arbitrary user-supplied tag/version input. Existing unrelated image and
+package publication trigger families are unchanged.
 
-Omitted configuration defaults to disabled and emits no
-`.github/workflows/binary-release.yml`. Enabling it under
-`velnor-repository-v1` is an error. The selected manifest must be a discovered
-workspace-root manifest with a tracked `Cargo.lock`; the exact package must be
-a member and the exact `bin` target must exist once. Targets with
-`required-features` are rejected until the feature set has an explicit typed
-contract. This first version builds one target only:
-`aarch64-apple-darwin`.
+`prepare` invokes the pinned release-plz `release-pr` command with the effective
+native config. It may propose the selected package's version/changelog change,
+but creates no stable tag, binary publication or Homebrew promotion. Its normal
+PR gates and complete feedback disposition still apply.
 
-At workflow runtime, every identity check runs after checkout of the same
-source SHA. Pinned `cargo metadata --locked --no-deps` must find one matching
-workspace package and binary, confirm that package's workspace membership,
-including packages in a virtual workspace, and return its Cargo version. The
-build uses `cargo build --release --locked`
-with the same manifest, package, binary, and target. The workflow compares the
-runtime version and tag again before publication. Its receipt records the
-repository, source SHA, package, Cargo version, binary, target, and tag.
-Each consumer workflow pins Mise 2026.10.8 for its Linux eligibility/publish
-jobs and Apple Silicon build job using the verified platform checksums. This
-consumer pin does not update Velnor's own generator, bootstrap, or release
-runtime pins.
+`release` authenticates the actual manual default-branch workflow authority and
+source, the selected Cargo package version, and successful full CI/Required for
+that exact source. The protected stable environment must enforce a required
+human reviewer, prevented self-review and protected-branch restrictions before
+permanent tag authority is used. Configuration or a dispatch actor is not proof
+that those protections exist. Missing authority fails before any tag mutation.
 
-## Eligibility and job boundaries
+Release-plz owns version/changelog PR preparation, not permanent tag mutation.
+Its native effective preparation config sets `git_only = true`, `publish = false`,
+`git_tag_enable = false` and `git_release_enable = false`, selecting only the
+version package. It cannot create an empty GitHub release. The qualified
+metadata phase disables repository hooks and Git signing commands; no application
+task or build receives its PR-writing token.
 
-The workflow has `workflow_dispatch` with no inputs. Its read-only eligibility
-job requires the live repository default branch, workflow ref, workflow
-authority SHA, event SHA, and checked-out SHA to agree. It waits for the
-latest successful push run of `.github/workflows/ci.yml` on that exact source
-and verifies exactly one successful `Required` job in the same run attempt.
-The eligibility wait is bounded by 240 15-second polls and its job allows 75
-minutes. The publish job's initial gate can wait for CI; its rechecks before
-tag and release mutations make one poll and fail closed if the latest run
-changed while publication was in progress. The publish job also allows 75
-minutes for its initial wait and publication steps.
+The release tag job is entirely source-free. It resolves authenticated source
+version data, independently confirms the exact `v<P>` tag is absent, and retains
+a native intent artifact bound to repository, version package/version, source/full
+CI, static inventory policy and original protected manual workflow/run attempt.
+Before upload, the native writer creates a detached annotated tag object with
+no permanent ref. The annotation binds the canonical authorization hash; the
+intent retains that exact object SHA, target and message. Permanent ref creation
+starts only after the immutable intent artifact ID and ZIP digest are available.
 
-Build, attestation, and publish are separate jobs because GitHub's
-`id-token: write` applies to every step in its job. Build can upload a
-run-scoped artifact but has no repository write permission. Attestation can
-write artifact metadata and provenance, but cannot write repository contents.
-Only the final job has `contents: write`; it does not build or execute the
-selected program. Checkout credentials are disabled in build and publish.
+The native existing GitHub tag/ref API creates only that exact authorized tag and
+source; it never retargets or deletes a permanent tag. Its origin record binds the
+actual object type/object/peeled target to the retained intent identity. The tag
+annotation binds the original authorization, not an artifact digest or future
+receipt. The ref must point to the exact detached object retained in the intent;
+a copied annotation at another object SHA is not equivalent. Retain the
+closed origin evidence before building. Neither record claims who created a tag
+merely because its name matches; the prior intent authorizes exactly one target.
 
-The final job runs in the protected `consumer-binary-release` environment.
-Repository owners must create that environment, restrict deployment to
-protected branches, and configure at least one required reviewer with
-self-review prevented. The publisher checks this environment configuration
-through GitHub's environment API before creating a tag and again before
-publishing; an absent or insufficiently protected environment fails closed.
-The workflow's source gate still limits a release to the exact default branch.
-Repositories whose GitHub plan cannot configure required reviewers cannot use
-this release path. Owners must also create the environment's
-`IMMUTABILITY_READ_TOKEN` secret as a fine-grained PAT or GitHub App token
-scoped to this repository with **Administration: read** only. This token is
-used only to call GitHub's `GET /repos/{owner}/{repo}/immutable-releases`
-preflight; the separate `GITHUB_TOKEN` has only the workflow's
-`contents: write`, `actions: read`, and `attestations: read` permissions.
-The workflow fails before creating a tag if the secret is absent, the API call
-fails, immutable releases are disabled, or the environment lacks reviewer and
-branch protection. It repeats both setup checks immediately before publishing
-the draft. Missing admin-read access returns an error and is fail-closed. The
-immutable-release setting and protected environment are required repository
-prerequisites; generated YAML cannot configure either one. GitHub's API
-requires Administration: read for immutable-release status and Actions: read
-for environment configuration.
+A tag existing before initial intent admission is a conflict. After interruption,
+rerun all jobs of the original workflow at the same source with a later attempt. Authenticate
+the original pre-tag intent and exact authorized tag/annotation, then record a new
+completion context for that same run and source. Reuse the original intent
+artifact instead of inventing new authorization. A failed-jobs-only rerun is not
+a recovery path: it can reuse an earlier origin while new producer attempts need
+a new completion context. Missing intent or a different
+target fails closed. A new-main dispatch cannot rebuild that old transaction;
+without retained signed evidence it directs the operator to rerun the original.
 
-The release tag is `<Cargo package>-v<Cargo version>`. The publisher creates a
-tag ref at the exact source SHA with the non-forcing GitHub API operation,
-creates a draft release only after checking for an existing tag or release,
-uploads the binary, `SHA256SUMS`, and `release.json` without overwrite flags,
-then publishes and verifies the exact asset set. A pre-existing tag, release,
-unavailable absence check, disabled immutable-release setting, mismatched
-source, changed CI attempt, or partial release fails closed; the workflow
-never moves a version tag or clobbers an asset. After publication it requires
-GitHub to report the release as immutable and downloads the assets again to
-compare their exact bytes, receipt, and checksums.
+The same coordinator then builds the exact tagged commit, not whatever main
+points to later. It uses the shared product/bin/target and companion inventory,
+read-only qualified leaf builds, independent complete-union assembly, isolated
+signer and native immutable publisher. Do not rely on a second workflow firing
+when a token creates the tag. Source and workflow authority remain separately
+bound even though they identify the same approved manual release transaction.
+A later main advance cannot rewrite the tag or turn stable into rolling.
 
-## Verification and limits
+The fixed release-plz preparation phase is a qualified version-management tool
+boundary. It is not an application producer, arbitrary command or an exception
+allowing credentials into repository tasks/builds. Native tag, signer and
+publisher jobs stay source-free. No repository-supplied release-plz config or
+pre/post-release hook is execution authority.
 
-Tests cover disabled output, enabled generated rendering, invalid package/bin
-selection, targets with required features, generic non-`main` branch
-eligibility, exact target/tag rendering, and publisher permission separation.
-Bounded script tests also exercise a virtual workspace member, nested package
-manifest, fresh explicit Cargo target directory, required-feature rejection,
-identity mismatches, immutable-setting and protected-environment preflights,
-stale CI before tag and publish mutations, existing or partially colliding
-identities, and non-404 absence-check failures.
-Preview output is produced only by the regular renderer/generator path; the
-workflow namespace remains generated-file-owned.
+Version-PR updates do not require a privileged regeneration hook. Generated
+workflows carry static package/manifest ownership and inventory policy, not a
+Cargo base-version literal. Native admission resolves the version as data from
+that exact source, and signer/publisher independently verify the same binding.
+Changes to paths, inventory or version ownership still require regeneration.
 
-This feature does not attest a reproducible rebuild, establish branch
-protection or environment rules, perform a seed release, sign platform
-packages, or support Linux/Windows targets. Repository owners must review the
-generated workflow, protect the default branch and `Required` CI gate, and
-qualify the first release before depending on its assets.
+## Permanent publication and recovery
+
+Repository immutable releases stay enabled. The native publisher keeps the
+existing independent Administration-read immutability preflight, exact source
+CI/tag-origin checks, protected human-approval environment and no-bypass policy.
+No preview token, mutable release or rolling journal can satisfy stable admission.
+
+After the exact tagged source is built, the isolated signer verifies the full
+shared inventory and signs the canonical stable `PackageReleaseReceipt`, all
+required archives and companions. Native publication creates a matching draft,
+uploads the exact closed signed inventory, verifies it, then publishes once and
+requires the API to report the final release as immutable. Permanent `v<P>` tags
+and assets are never moved, replaced or deleted. An existing release can only be
+reconciled as the same exact authenticated original publication, never adopted
+because its version string matches.
+
+Recovery reauthenticates the original pre-tag intent and tag-origin record,
+original run attempts and, once signing occurred, retained signed artifact and
+receipt/signatures. The exact authorized tag-only transaction may finish origin
+admission before the first build; signed recovery never rebuilds. Matching draft
+states can finish missing work; an already published exact immutable release can
+continue Homebrew promotion. Unknown origin, altered asset IDs/digests, different
+receipt bytes or a conflicting tag fails closed. Recovery does not rebuild or
+relabel the original producer/signer identities. The existing bounded publication
+and cleanup clocks are retained.
+
+## Stable Homebrew and qualification
+
+The signed stable channel selects only
+`distribution.homebrew_tap.destinations.stable.formula`. It uses the same captured
+base, credential-free updater, independent literal-byte validation, isolated W/O
+and exact-head C/R/check/feedback merge boundaries as preview. Stable URLs name
+the permanent `v<P>` release; a preview receipt or mutable URL cannot substitute.
+The stable formula must already implement its intended prebuilt installation
+behavior before unattended metadata updates are enabled. Enabling a Cask or
+changing executable Ruby is a separately reviewed source change.
+
+Acceptance includes manual-only triggers, default no-registry publication,
+native exact-source tag origin before the first build, exact-tag builds after main
+advances, complete shared inventory and signatures, empty-release prevention,
+protected human approval, every interruption/retry state, both-channel formula
+separation and actual prebuilt installation. See the
+[channel acceptance matrix](native-release-channel-acceptance.md). A local test
+or a generated workflow is not evidence of a real stable release.
+
+Release-plz's documented `git_only`, tag selection, optional release-PR and
+`git_release_enable = false` behavior is the intended existing mechanism:
+[configuration](https://release-plz.dev/docs/config),
+[single tag](https://release-plz.dev/docs/extra/single-tag), and
+[release output](https://release-plz.dev/docs/usage/release).

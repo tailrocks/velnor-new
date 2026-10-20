@@ -13,8 +13,8 @@ use velnor_actions_contract::{
     PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlan, PackageReleasePlanProduct,
     package_release::{PackageReleaseChannel, PackageReleasePayloadFormat},
     preview_production::{
-        PREVIEW_PRODUCTION_SCHEMA_V1, PreviewPayloadPair, PreviewProductionContext,
-        PreviewProductionRequest, PreviewProductionStage, preview_plan_sha256,
+        RELEASE_PRODUCTION_SCHEMA_V1, ReleasePayloadPair, ReleaseProductionContext,
+        ReleaseProductionRequest, ReleaseProductionStage, release_plan_sha256,
     },
 };
 use velnor_actions_mise::CheckDeadline;
@@ -27,7 +27,7 @@ pub(super) struct Fixture {
     pub root: tempfile::TempDir,
     pub producer: PathBuf,
     pub staging: PathBuf,
-    pub request: PreviewProductionRequest,
+    pub request: ReleaseProductionRequest,
 }
 
 pub(super) fn fixture() -> Fixture {
@@ -52,11 +52,12 @@ pub(super) fn fixture() -> Fixture {
         }],
         companions: Vec::new(),
     };
-    let request = PreviewProductionRequest {
-        schema: PREVIEW_PRODUCTION_SCHEMA_V1.to_owned(),
-        plan_sha256: preview_plan_sha256(&plan).expect("plan digest"),
+    let request = ReleaseProductionRequest {
+        policy_sha256: "d".repeat(64),
+        schema: RELEASE_PRODUCTION_SCHEMA_V1.to_owned(),
+        plan_sha256: release_plan_sha256(&plan).expect("plan digest"),
         plan,
-        context: PreviewProductionContext {
+        context: ReleaseProductionContext {
             repository_id: 10,
             head_repository_id: 10,
             source_sha: "a".repeat(40),
@@ -69,8 +70,8 @@ pub(super) fn fixture() -> Fixture {
             commit_count: 7,
             version: "1.2.3-preview.7+aaaaaaa".to_owned(),
         },
-        stage: PreviewProductionStage::Payload {
-            pair: PreviewPayloadPair {
+        stage: ReleaseProductionStage::Payload {
+            pair: ReleasePayloadPair {
                 product_id: "cli".to_owned(),
                 target: "x86_64-unknown-linux-gnu".to_owned(),
             },

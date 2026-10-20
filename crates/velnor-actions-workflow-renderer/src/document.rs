@@ -157,6 +157,12 @@ fn permissions_to_yaml(permissions: &Permissions) -> Yaml {
             Yaml::str(level_str(permissions.id_token).to_owned()),
         ));
     }
+    if !matches!(permissions.packages, PermissionLevel::None) {
+        entries.push((
+            "packages".to_owned(),
+            Yaml::str(level_str(permissions.packages).to_owned()),
+        ));
+    }
     Yaml::Map(entries)
 }
 

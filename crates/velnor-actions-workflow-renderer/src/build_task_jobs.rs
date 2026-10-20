@@ -230,6 +230,7 @@ fn build_task_permissions() -> Permissions {
         pull_requests: PermissionLevel::None,
         id_token: PermissionLevel::None,
         actions: PermissionLevel::None,
+        packages: PermissionLevel::None,
     }
 }
 

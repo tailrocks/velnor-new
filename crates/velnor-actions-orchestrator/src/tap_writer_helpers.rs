@@ -2,13 +2,74 @@
 
 use std::{env, fs, path::Path};
 
+use base64::{Engine as _, engine::general_purpose::STANDARD};
+use velnor_actions_contract::config::HomebrewTapConfig;
+
+use super::github::{BlobResponse, CommitResponse, RefResponse, TapGitHubApi, TreeResponse};
+
 use sha2::{Digest, Sha256};
 
-use crate::{OrchestratorError, internal::internal};
+use crate::{OrchestratorError, internal::internal, tap_prepare::HomebrewTapPreparationProof};
+
+pub(super) fn verify_repository_base(
+    api: &TapGitHubApi,
+    policy: &HomebrewTapConfig,
+    proof: &HomebrewTapPreparationProof,
+) -> Result<String, OrchestratorError> {
+    if policy.repository != proof.tap_repository {
+        return Err(internal("tap_writer_target_mismatch"));
+    }
+    let current: RefResponse = api.get_json(&api.repo_route("git/ref/heads/main"))?;
+    if current.object.object_type != "commit" || current.object.sha != proof.base_sha {
+        return Err(internal("tap_writer_stale_tap_main"));
+    }
+    Ok(current.object.sha)
+}
+
+pub(super) struct FormulaBase {
+    pub(super) bytes: Vec<u8>,
+    pub(super) tree_sha: String,
+}
+
+pub(super) fn read_formula_base(
+    api: &TapGitHubApi,
+    formula: &str,
+    base_sha: &str,
+) -> Result<FormulaBase, OrchestratorError> {
+    let commit: CommitResponse =
+        api.get_json(&api.repo_route(&format!("git/commits/{base_sha}")))?;
+    if commit.sha != base_sha || !is_full_sha(&commit.tree.sha) {
+        return Err(internal("tap_writer_base_commit_invalid"));
+    }
+    let tree: TreeResponse =
+        api.get_json(&api.repo_route(&format!("git/trees/{}?recursive=1", commit.tree.sha)))?;
+    if tree.truncated || tree.sha != commit.tree.sha {
+        return Err(internal("tap_writer_tree_truncated"));
+    }
+    let mut entries = tree.tree.iter().filter(|entry| entry.path == formula);
+    let entry = entries
+        .next()
+        .ok_or_else(|| internal("tap_writer_formula_missing"))?;
+    if entries.next().is_some() || entry.mode != "100644" || entry.object_type != "blob" {
+        return Err(internal("tap_writer_formula_mode_invalid"));
+    }
+    let blob: BlobResponse = api.get_json(&api.repo_route(&format!("git/blobs/{}", entry.sha)))?;
+    if blob.sha != entry.sha || blob.encoding != "base64" {
+        return Err(internal("tap_writer_formula_blob_invalid"));
+    }
+    let bytes = STANDARD
+        .decode(blob.content.replace('\n', ""))
+        .map_err(|_| internal("tap_writer_formula_blob_encoding"))?;
+    Ok(FormulaBase {
+        bytes,
+        tree_sha: tree.sha,
+    })
+}
 
 pub(super) fn branch_name(
     receipt_digest: &str,
     base_sha: &str,
+    channel: velnor_actions_contract::package_release::PackageReleaseChannel,
 ) -> Result<String, OrchestratorError> {
     let digest = receipt_digest
         .strip_prefix("b3-")
@@ -17,7 +78,11 @@ pub(super) fn branch_name(
     if !is_full_sha(base_sha) {
         return Err(internal("tap_writer_branch_identity_invalid"));
     }
-    Ok(format!("velnor/preview/{digest}-{base_sha}"))
+    let channel = match channel {
+        velnor_actions_contract::package_release::PackageReleaseChannel::Preview => "preview",
+        velnor_actions_contract::package_release::PackageReleaseChannel::Stable => "stable",
+    };
+    Ok(format!("velnor/{channel}/{digest}-{base_sha}"))
 }
 
 pub(super) fn is_full_sha(value: &str) -> bool {

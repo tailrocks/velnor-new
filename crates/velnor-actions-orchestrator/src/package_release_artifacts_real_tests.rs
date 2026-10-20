@@ -120,7 +120,7 @@ fn validate_jackin_policy(plan: &PackageReleasePlan) {
     );
     assert_eq!(
         plan.companions,
-        [RustBinaryPreviewCompanion {
+        [RustBinaryReleaseCompanion {
             id: "capsule-manifest".into(),
             path: "capsule-manifest.json".into(),
             asset_name: "capsule-manifest.json".into(),

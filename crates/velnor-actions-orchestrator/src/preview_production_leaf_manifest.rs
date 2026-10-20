@@ -8,18 +8,18 @@ use crate::{OrchestratorError, internal::internal};
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
     canonical_json_bytes,
-    config::RustBinaryPreviewConfig,
-    preview_production::{PreviewProductionRequest, PreviewProductionStage},
+    config::RustBinaryReleaseConfig,
+    preview_production::{ReleaseProductionRequest, ReleaseProductionStage},
 };
 
-pub(crate) const LEAF_SCHEMA: &str = "velnor.preview-payload.v1";
-pub(crate) const AGGREGATE_SCHEMA: &str = "velnor.preview-aggregate.v1";
+pub(crate) const LEAF_SCHEMA: &str = "velnor.release-payload.v1";
+pub(crate) const AGGREGATE_SCHEMA: &str = "velnor.release-aggregate.v1";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct PreviewLeafManifest {
     pub schema: String,
-    pub request: PreviewProductionRequest,
+    pub request: ReleaseProductionRequest,
     pub producer: PreviewProducerProof,
     pub assets: Vec<AssetProof>,
 }
@@ -28,7 +28,7 @@ pub(crate) struct PreviewLeafManifest {
 #[serde(deny_unknown_fields)]
 pub(crate) struct PreviewAggregateManifest {
     pub schema: String,
-    pub request: PreviewProductionRequest,
+    pub request: ReleaseProductionRequest,
     pub producer: PreviewProducerProof,
     pub leaves: Vec<PreviewLeafManifest>,
     pub assets: Vec<AssetProof>,
@@ -37,7 +37,7 @@ pub(crate) struct PreviewAggregateManifest {
 impl PreviewLeafManifest {
     pub(crate) fn parse(
         bytes: &[u8],
-        expected: &PreviewProductionRequest,
+        expected: &ReleaseProductionRequest,
     ) -> Result<Self, OrchestratorError> {
         let manifest: Self = parse(bytes)?;
         if manifest.schema != LEAF_SCHEMA || manifest.request != *expected {
@@ -47,7 +47,7 @@ impl PreviewLeafManifest {
             .request
             .validate()
             .map_err(|_| internal("preview_leaf_request"))?;
-        let PreviewProductionStage::Payload { pair } = &manifest.request.stage else {
+        let ReleaseProductionStage::Payload { pair } = &manifest.request.stage else {
             return Err(internal("preview_leaf_stage"));
         };
         let archive = format!("{}-{}.tar.gz", pair.product_id, pair.target);
@@ -72,7 +72,7 @@ impl PreviewLeafManifest {
 
     pub(super) fn validate_source(
         &self,
-        preview: &RustBinaryPreviewConfig,
+        preview: &RustBinaryReleaseConfig,
     ) -> Result<(), OrchestratorError> {
         if self.producer.task != preview.producer.task
             || self.producer.output_directory != preview.producer.output_directory
@@ -87,7 +87,7 @@ impl PreviewLeafManifest {
 impl PreviewAggregateManifest {
     pub(crate) fn validate_source(
         &self,
-        preview: &RustBinaryPreviewConfig,
+        preview: &RustBinaryReleaseConfig,
     ) -> Result<(), OrchestratorError> {
         for leaf in &self.leaves {
             leaf.validate_source(preview)?;
@@ -102,15 +102,22 @@ impl PreviewAggregateManifest {
     }
     pub(crate) fn parse(
         bytes: &[u8],
+        policy_sha256: &str,
         plan: &velnor_actions_contract::PackageReleasePlan,
-        context: &velnor_actions_contract::preview_production::PreviewProductionContext,
+        context: &velnor_actions_contract::preview_production::ReleaseProductionContext,
     ) -> Result<Self, OrchestratorError> {
         let manifest: Self = parse(bytes)?;
         manifest
             .request
-            .validate_against(plan, context)
+            .validate()
             .map_err(|_| internal("preview_aggregate_request_mismatch"))?;
-        let PreviewProductionStage::Assemble { inputs } = &manifest.request.stage else {
+        if manifest.request.policy_sha256 != policy_sha256
+            || &manifest.request.plan != plan
+            || &manifest.request.context != context
+        {
+            return Err(internal("release_aggregate_policy_plan_context_mismatch"));
+        }
+        let ReleaseProductionStage::Assemble { inputs } = &manifest.request.stage else {
             return Err(internal("preview_aggregate_stage"));
         };
         if manifest.schema != AGGREGATE_SCHEMA || manifest.leaves.len() != inputs.len() {
@@ -125,7 +132,7 @@ impl PreviewAggregateManifest {
             .collect::<Vec<_>>();
         for (leaf, input) in manifest.leaves.iter().zip(inputs) {
             let mut expected = manifest.request.clone();
-            expected.stage = PreviewProductionStage::Payload {
+            expected.stage = ReleaseProductionStage::Payload {
                 pair: input.pair.clone(),
             };
             PreviewLeafManifest::parse(&encode(leaf)?, &expected)?;
@@ -192,7 +199,7 @@ pub(super) fn validate_assets(assets: &[AssetProof]) -> Result<(), OrchestratorE
 
 fn validate_producer(
     producer: &PreviewProducerProof,
-    request: &PreviewProductionRequest,
+    request: &ReleaseProductionRequest,
 ) -> Result<(), OrchestratorError> {
     let context = &request.context;
     if producer.source_sha != context.source_sha

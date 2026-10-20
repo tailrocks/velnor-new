@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use velnor_actions_contract::{
-    PackageReleasePlan, VerifiedPreviewRelease, canonical_json_bytes,
+    PackageReleasePlan, VerifiedPackageRelease, canonical_json_bytes,
     config::HomebrewTapConfig,
     homebrew_formula::{HomebrewFormulaCandidate, validate_homebrew_formula_candidate},
 };
@@ -18,11 +18,12 @@ const CANDIDATE_DIRECTORY: &str = "tap-candidate";
 pub(super) struct CandidateIdentity<'a> {
     pub(super) source_repository: &'a str,
     pub(super) tap: &'a HomebrewTapConfig,
-    pub(super) release: &'a VerifiedPreviewRelease,
+    pub(super) release: &'a VerifiedPackageRelease,
     pub(super) base_sha: &'a str,
     pub(super) old_sha: &'a str,
     pub(super) formula: &'a [u8],
     pub(super) plan: &'a PackageReleasePlan,
+    pub(super) formula_path: &'a str,
     pub(super) disposition: TapPreparationDisposition,
 }
 
@@ -54,15 +55,16 @@ pub(crate) fn reconstruct_historical_candidate_proof(
     source_repository: &str,
     tap: &HomebrewTapConfig,
     plan: &PackageReleasePlan,
-    release: &VerifiedPreviewRelease,
+    release: &VerifiedPackageRelease,
     base_sha: &str,
     base_formula: &[u8],
     proposed_formula: &[u8],
 ) -> Result<HomebrewTapPreparationProof, OrchestratorError> {
+    let formula_path = super::formula_path(tap, plan.channel)?;
     let canonical = validate_homebrew_formula_candidate(&HomebrewFormulaCandidate {
         source_repository,
         tap_repository: &tap.repository,
-        formula_path: &tap.formula,
+        formula_path,
         captured_base_sha: base_sha,
         base_bytes: base_formula,
         proposed_bytes: proposed_formula,
@@ -78,6 +80,7 @@ pub(crate) fn reconstruct_historical_candidate_proof(
         old_sha: &sha256(base_formula),
         formula: &canonical,
         plan,
+        formula_path,
         disposition: TapPreparationDisposition::Changed,
     })
 }
@@ -93,13 +96,15 @@ fn candidate_proof(
         old_sha,
         formula,
         plan,
+        formula_path,
         disposition,
     } = candidate;
     Ok(HomebrewTapPreparationProof {
-        schema: "velnor.homebrew-candidate.v2".to_owned(),
+        schema: "velnor.homebrew-candidate.v3".to_owned(),
+        channel: release.receipt.channel,
         disposition: *disposition,
         base_sha: (*base_sha).to_owned(),
-        formula_path: tap.formula.clone(),
+        formula_path: (*formula_path).to_owned(),
         old_formula_sha256: (*old_sha).to_owned(),
         new_formula_sha256: sha256(formula),
         receipt_digest: release.receipt_digest.clone(),

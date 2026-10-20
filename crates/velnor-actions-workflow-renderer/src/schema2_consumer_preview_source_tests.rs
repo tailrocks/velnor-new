@@ -1,7 +1,7 @@
 use super::*;
 use velnor_actions_contract::StepKind;
 
-fn with_sources() -> ConsumerPreviewSpec {
+fn with_sources() -> ConsumerReleaseSpec {
     let mut spec = fixture();
     for root in ["", "nested/"] {
         let step = crate::ambient_shell_step(
@@ -30,7 +30,7 @@ fn preview_prepares_every_workspace_before_dispatch_with_shared_homes() {
         "Install pinned Cargo metadata toolchain",
         "prepare-Cargo.toml",
         "prepare-nested/Cargo.toml",
-        "execute-preview-producer-v1",
+        "execute-release-producer-v1",
     ];
     let mut previous = 0;
     for needle in ordered {
@@ -69,14 +69,14 @@ fn preview_owned_homes_are_on_every_producer_step_not_job_scope() {
     let (_, Yaml::Map(fields)) = production::jobs(&spec).expect("producer").remove(0) else {
         unreachable!()
     };
-    let plan = String::from_utf8(spec.plan.canonical_bytes().expect("full plan")).expect("utf8");
+    let plan = String::from_utf8(spec.policy.canonical_bytes().expect("full plan")).expect("utf8");
     let job_env = fields
         .iter()
         .find(|(key, _)| key == "env")
         .expect("public plan env");
     assert_eq!(
         job_env.1,
-        Yaml::Map(vec![("VELNOR_RELEASE_PLAN".to_owned(), Yaml::str(plan))])
+        Yaml::Map(vec![("VELNOR_RELEASE_POLICY".to_owned(), Yaml::str(plan))])
     );
     let Some((_, Yaml::Seq(steps))) = fields.iter().find(|(key, _)| key == "steps") else {
         unreachable!()
@@ -140,7 +140,7 @@ fn symbolic_project_rust_assembly_resolves_only_after_authenticated_acquisition_
         .find("Resolve project tool versions")
         .expect("resolver");
     let admission = assembly
-        .find("acquire-preview-leaves-v1")
+        .find("acquire-release-leaves-v1")
         .expect("authenticated admission");
     let setup = assembly.find("jdx/mise-action@").expect("Mise bootstrap");
     let metadata = assembly
@@ -150,7 +150,7 @@ fn symbolic_project_rust_assembly_resolves_only_after_authenticated_acquisition_
         .find("prepare-Cargo.toml")
         .expect("source preparation");
     let execute = assembly
-        .find("execute-preview-producer-v1")
+        .find("execute-release-producer-v1")
         .expect("credential-free execution");
     assert!(
         setup < admission

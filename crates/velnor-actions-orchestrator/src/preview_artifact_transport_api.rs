@@ -1,23 +1,23 @@
 //! Read-only capability over the existing pinned GitHub transport.
 
 use super::super::{
-    preview_artifacts::{ArtifactPage, ArtifactReadApi, PreviewConsumer},
+    preview_artifacts::{ArtifactPage, ArtifactReadApi, ReleaseConsumer},
     run_identity::{RunSource, run_matches},
 };
 use super::{GitHubApi, GitRefResponse, RepositoryResponse, WorkflowRunResponse};
 use crate::{OrchestratorError, internal::internal};
 use velnor_actions_contract::{
     PackageReleasePlan, package_release::PackageReleaseChannel,
-    preview_production::PreviewProductionContext,
+    preview_production::ReleaseProductionContext,
 };
 
 /// No mutation method or underlying publisher API escapes this capability.
-pub(in crate::package_release_publish) struct PreviewArtifactApi {
+pub(in crate::package_release_publish) struct ReleaseArtifactApi {
     api: GitHubApi,
     repository: String,
 }
 
-impl PreviewArtifactApi {
+impl ReleaseArtifactApi {
     pub(in crate::package_release_publish) fn new(repository: &str) -> Self {
         Self {
             api: GitHubApi::new(repository.into()),
@@ -26,12 +26,12 @@ impl PreviewArtifactApi {
     }
 }
 
-impl ArtifactReadApi for PreviewArtifactApi {
+impl ArtifactReadApi for ReleaseArtifactApi {
     fn authenticate(
         &self,
         plan: &PackageReleasePlan,
-        context: &PreviewProductionContext,
-        consumer: PreviewConsumer,
+        context: &ReleaseProductionContext,
+        consumer: ReleaseConsumer,
     ) -> Result<(), OrchestratorError> {
         let api = &self.api;
         if self.repository != plan.repository {
@@ -43,7 +43,7 @@ impl ArtifactReadApi for PreviewArtifactApi {
         {
             return Err(internal("preview_artifact_repository"));
         }
-        let channel = PackageReleaseChannel::Preview;
+        let channel = plan.channel;
         let workflow = api.admitted_workflow(channel.workflow_path(), channel.workflow_name())?;
         let source = RunSource {
             repository_id: context.repository_id,
@@ -70,18 +70,25 @@ impl ArtifactReadApi for PreviewArtifactApi {
                 return Err(internal("preview_artifact_current_run"));
             }
         }
-        self.require_active_consumer(context, consumer)?;
-        let head: GitRefResponse = api.get_json(&api.route(&format!(
-            "git/ref/heads/{}",
-            super::encode_segment(&plan.default_branch)
-        )))?;
-        if head.ref_name != context.source_ref
-            || head.object.object_type != "commit"
-            || head.object.sha != context.source_sha
-        {
-            return Err(internal("preview_artifact_live_source"));
+        self.require_active_consumer(plan.channel, context, consumer)?;
+        if channel == PackageReleaseChannel::Preview {
+            let head: GitRefResponse = api.get_json(&api.route(&format!(
+                "git/ref/heads/{}",
+                super::encode_segment(&plan.default_branch)
+            )))?;
+            if head.ref_name != context.source_ref
+                || head.object.object_type != "commit"
+                || head.object.sha != context.source_sha
+            {
+                return Err(internal("preview_artifact_live_source"));
+            }
         }
-        api.verify_ci_identity(context.ci_run_id, context.ci_run_attempt, source, true)
+        api.verify_ci_identity(
+            context.ci_run_id,
+            context.ci_run_attempt,
+            source,
+            channel == PackageReleaseChannel::Preview,
+        )
     }
 
     fn page(&self, run: u64, page: usize) -> Result<ArtifactPage, OrchestratorError> {
@@ -125,11 +132,12 @@ struct ConsumerJob {
     conclusion: Option<String>,
 }
 
-impl PreviewArtifactApi {
+impl ReleaseArtifactApi {
     fn require_active_consumer(
         &self,
-        context: &PreviewProductionContext,
-        consumer: PreviewConsumer,
+        channel: velnor_actions_contract::package_release::PackageReleaseChannel,
+        context: &ReleaseProductionContext,
+        consumer: ReleaseConsumer,
     ) -> Result<(), OrchestratorError> {
         let mut total = None;
         let mut ids = std::collections::BTreeSet::new();
@@ -154,7 +162,7 @@ impl PreviewArtifactApi {
                 if job.id == 0 || !ids.insert(job.id) {
                     return Err(internal("preview_artifact_job_inventory"));
                 }
-                if job.name == consumer.job_name() {
+                if job.name == consumer.job_name(channel) {
                     consumers.push(job);
                 }
             }

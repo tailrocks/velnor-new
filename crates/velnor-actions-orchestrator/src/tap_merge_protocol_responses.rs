@@ -48,7 +48,11 @@ fn history_identity_responses(
         ..
     } = refs;
     let commit_message = format!(
-        "Update preview formula to {}\n\nSource: {}@{}\nRelease receipt: {}\n\nSigned-off-by: {} <{}+{}@users.noreply.github.com>",
+        "Update {} formula to {}\n\nSource: {}@{}\nRelease receipt: {}\n\nSigned-off-by: {} <{}+{}@users.noreply.github.com>",
+        match candidate.release.receipt.channel {
+            velnor_actions_contract::package_release::PackageReleaseChannel::Preview => "preview",
+            velnor_actions_contract::package_release::PackageReleaseChannel::Stable => "stable",
+        },
         candidate.release.receipt.version.value,
         candidate.plan.repository,
         candidate.release.receipt.source.commit_sha,
@@ -96,7 +100,7 @@ fn history_git_responses(
 ) -> BTreeMap<String, Value> {
     let mut map = BTreeMap::new();
     let repository = &candidate.policy.repository;
-    let formula = &candidate.policy.formula;
+    let formula = &candidate.formula_path;
     let HistoryRefs {
         base,
         head,
@@ -180,7 +184,7 @@ fn add_current_main_responses(
     refs: &HistoryRefs,
 ) {
     let repository = &candidate.policy.repository;
-    let formula = &candidate.policy.formula;
+    let formula = &candidate.formula_path;
     let merge = &refs.merge;
     put(
         map,

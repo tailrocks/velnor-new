@@ -7,7 +7,8 @@ use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::{
     build_verification_task_job,
     verification_jobs::{
-        WorkflowTaskPolicy, build_build_task_job, build_image_build_job, build_native_image_job,
+        WorkflowTaskPolicy, build_build_task_job, build_bun_member_job, build_image_build_job,
+        build_native_image_job,
     },
 };
 
@@ -15,6 +16,13 @@ use crate::OrchestratorError;
 use crate::config::private_wiring::PrivateWiring;
 use crate::discover::Discovery;
 use crate::workflow::CHECKOUT_USES;
+
+#[path = "bun_inventory.rs"]
+pub(crate) mod bun_inventory;
+#[path = "bun_steps.rs"]
+pub(crate) mod bun_steps;
+#[path = "bun_tasks.rs"]
+mod bun_tasks;
 
 /// Resolve every declared task variant into one sorted policy inventory.
 pub(crate) fn policies(
@@ -40,6 +48,7 @@ pub(crate) fn policies(
             private,
         },
     )?;
+    let bun_policies = bun_tasks::policies(root, config, discovery, catalog, acquire, private)?;
     let mut workflow_tasks = verification_policies
         .iter()
         .cloned()
@@ -57,6 +66,7 @@ pub(crate) fn policies(
                 .map(WorkflowTaskPolicy::NativeImage),
         )
         .chain(image_policies.into_iter().map(WorkflowTaskPolicy::Image))
+        .chain(bun_policies.into_iter().map(WorkflowTaskPolicy::Bun))
         .collect::<Vec<_>>();
     workflow_tasks.sort_by(|left, right| left.id().cmp(right.id()));
     Ok(workflow_tasks)
@@ -80,6 +90,10 @@ pub(crate) fn insert_jobs(
             WorkflowTaskPolicy::NativeImage(policy) => vec![(
                 policy.job_id(),
                 build_native_image_job(policy, CHECKOUT_USES)?,
+            )],
+            WorkflowTaskPolicy::Bun(policy) => vec![(
+                policy.id.clone(),
+                build_bun_member_job(policy, CHECKOUT_USES)?,
             )],
             WorkflowTaskPolicy::Image(policy) => policy
                 .image

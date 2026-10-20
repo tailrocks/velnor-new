@@ -69,7 +69,6 @@ fn continuation_missing_ci_is_pending_without_release_or_mutation_reads() {
 fn continuation_success_reauthenticates_required_and_latest_attempt() {
     let mut responses = discovery(&run());
     responses.extend([
-        (route("actions/workflows/ci.yml"), metadata()),
         (route("actions/runs/22/attempts/3"), run()),
         (route("actions/runs/22/attempts/3/jobs?per_page=100&page=1"),
          json!({"jobs":[{"run_id":22,"name":"Required","head_sha":SHA,"status":"completed","conclusion":"success"}]})),
@@ -81,7 +80,7 @@ fn continuation_success_reauthenticates_required_and_latest_attempt() {
         Some((22, 3))
     );
     fixture.assert_drained();
-    assert_eq!(fixture.observed().len(), 8);
+    assert_eq!(fixture.observed().len(), 7);
 }
 #[test]
 fn continuation_main_ref_must_be_exact_commit_identity() {
@@ -151,7 +150,6 @@ fn continuation_newer_attempt_invalidates_success_before_candidate_selection() {
     newer["status"] = json!("in_progress");
     newer["conclusion"] = Value::Null;
     responses.extend([
-        (route("actions/workflows/ci.yml"), metadata()),
         (route("actions/runs/22/attempts/3"), run()),
         (route("actions/runs/22/attempts/3/jobs?per_page=100&page=1"),
          json!({"jobs":[{"run_id":22,"name":"Required","head_sha":SHA,"status":"completed","conclusion":"success"}]})),

@@ -234,6 +234,7 @@ fn policy_file_is_complete() -> Result<(), Box<dyn Error>> {
         "zizmor = \"1.31.1\"",
         "nextest = \"0.9.148\"",
         "crane = \"0.22.1\"",
+        "bun = \"1.4.3\"",
         "cosign = \"3.1.3\"",
     ] {
         assert!(policy.contains(marker), "policy misses {marker}");

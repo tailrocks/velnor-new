@@ -17,6 +17,10 @@ pub(crate) mod build_task_jobs;
 pub(crate) mod build_task_mise;
 #[path = "build_task_mise_tools.rs"]
 pub(crate) mod build_task_mise_tools;
+#[path = "bun_member_jobs.rs"]
+pub(crate) mod bun_member_jobs;
+#[path = "bun_registry_step.rs"]
+pub(crate) mod bun_registry_step;
 #[path = "image_build_jobs.rs"]
 pub(crate) mod image_build_jobs;
 #[path = "native_image_jobs.rs"]
@@ -30,6 +34,10 @@ pub(crate) mod workflow_task_jobs;
 
 pub use build_task_jobs::{
     BuildTaskArtifact, BuildTaskPolicy, BuildTaskTool, build_build_task_job,
+};
+pub use bun_member_jobs::{BUN_RUNNER, BunMemberPolicy, build_bun_member_job};
+pub use bun_registry_step::{
+    BUN_REGISTRY_STEP_NAME, BUN_ROOT_ENV, BUN_SCOPES_ENV, bun_registry_step,
 };
 pub use image_build_jobs::{
     BUILDKIT_IMAGE, ImageBuildPolicy, artifact_name, artifact_path, build_image_build_job,
@@ -277,6 +285,7 @@ fn verification_permissions() -> Permissions {
         pull_requests: PermissionLevel::None,
         id_token: PermissionLevel::None,
         actions: PermissionLevel::None,
+        packages: PermissionLevel::None,
     }
 }
 

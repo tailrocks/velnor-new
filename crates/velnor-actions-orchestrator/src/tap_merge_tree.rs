@@ -27,7 +27,7 @@ pub(super) fn verify_formula_delta_at_base(
     if base_entries.len() != head_entries.len() {
         return Err(internal("tap_merge_tree_inventory_changed"));
     }
-    let formula = candidate.policy.formula.as_str();
+    let formula = candidate.formula_path.as_str();
     for (path, before) in &base_entries {
         let after = head_entries
             .get(path)

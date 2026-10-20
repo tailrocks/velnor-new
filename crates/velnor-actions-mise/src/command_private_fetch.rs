@@ -78,7 +78,7 @@ const PARENT_PASSTHROUGH: [&str; 3] = ["PATH", "HOME", "TMPDIR"];
 
 /// Owned toolchain keys the generated step env supplies to the child: the
 /// Mise isolation overlay, the install-disable pair and the owned tool homes.
-const OWNED_ENV_KEYS: [&str; 9] = [
+const OWNED_ENV_KEYS: [&str; 10] = [
     "MISE_NO_CONFIG",
     "MISE_NO_ENV",
     "MISE_NO_HOOKS",
@@ -88,6 +88,7 @@ const OWNED_ENV_KEYS: [&str; 9] = [
     "MISE_RUSTUP_HOME",
     "MISE_CARGO_HOME",
     "RUSTUP_TOOLCHAIN",
+    "BUN_INSTALL_CACHE_DIR",
 ];
 
 /// Fixed environment baked into every private-fetch child, apart from the

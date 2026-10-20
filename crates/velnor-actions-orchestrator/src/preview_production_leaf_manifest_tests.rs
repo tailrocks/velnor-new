@@ -4,12 +4,12 @@ use velnor_actions_contract::{
     PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlan, PackageReleasePlanProduct,
     package_release::{PackageReleaseChannel, PackageReleasePayloadFormat},
     preview_production::{
-        PREVIEW_PRODUCTION_SCHEMA_V1, PayloadArtifactRef, PreviewProductionContext,
-        expected_preview_payload_pairs, preview_plan_sha256,
+        PayloadArtifactRef, RELEASE_PRODUCTION_SCHEMA_V1, ReleaseProductionContext,
+        expected_release_payload_pairs, release_plan_sha256,
     },
 };
 
-fn request() -> PreviewProductionRequest {
+fn request() -> ReleaseProductionRequest {
     let plan = PackageReleasePlan {
         schema: PACKAGE_RELEASE_PLAN_SCHEMA_V1.into(),
         channel: PackageReleaseChannel::Preview,
@@ -25,7 +25,7 @@ fn request() -> PreviewProductionRequest {
         }],
         companions: vec![],
     };
-    let inputs = expected_preview_payload_pairs(&plan)
+    let inputs = expected_release_payload_pairs(&plan)
         .expect("pairs")
         .into_iter()
         .enumerate()
@@ -35,11 +35,12 @@ fn request() -> PreviewProductionRequest {
             sha256: "b".repeat(64),
         })
         .collect();
-    PreviewProductionRequest {
-        schema: PREVIEW_PRODUCTION_SCHEMA_V1.into(),
-        plan_sha256: preview_plan_sha256(&plan).expect("digest"),
+    ReleaseProductionRequest {
+        schema: RELEASE_PRODUCTION_SCHEMA_V1.into(),
+        policy_sha256: "d".repeat(64),
+        plan_sha256: release_plan_sha256(&plan).expect("digest"),
         plan,
-        context: PreviewProductionContext {
+        context: ReleaseProductionContext {
             repository_id: 1,
             head_repository_id: 1,
             source_sha: "a".repeat(40),
@@ -52,11 +53,11 @@ fn request() -> PreviewProductionRequest {
             commit_count: 10,
             version: "1.2.3-preview.10+aaaaaaa".into(),
         },
-        stage: PreviewProductionStage::Assemble { inputs },
+        stage: ReleaseProductionStage::Assemble { inputs },
     }
 }
 
-fn producer(request: &PreviewProductionRequest) -> PreviewProducerProof {
+fn producer(request: &ReleaseProductionRequest) -> PreviewProducerProof {
     PreviewProducerProof {
         source_sha: request.context.source_sha.clone(),
         source_ref: request.context.source_ref.clone(),
@@ -75,14 +76,14 @@ fn producer(request: &PreviewProductionRequest) -> PreviewProducerProof {
 
 fn aggregate() -> PreviewAggregateManifest {
     let request = request();
-    let PreviewProductionStage::Assemble { inputs } = &request.stage else {
+    let ReleaseProductionStage::Assemble { inputs } = &request.stage else {
         panic!("assembly")
     };
     let leaves = inputs
         .iter()
         .map(|input| {
             let mut leaf_request = request.clone();
-            leaf_request.stage = PreviewProductionStage::Payload {
+            leaf_request.stage = ReleaseProductionStage::Payload {
                 pair: input.pair.clone(),
             };
             let archive = format!("{}-{}.tar.gz", input.pair.product_id, input.pair.target);
@@ -124,10 +125,34 @@ fn aggregate() -> PreviewAggregateManifest {
 fn accepted(proof: &PreviewAggregateManifest) -> bool {
     PreviewAggregateManifest::parse(
         &encode(proof).expect("canonical"),
+        &proof.request.policy_sha256,
         &proof.request.plan,
         &proof.request.context,
     )
     .is_ok()
+}
+
+#[test]
+fn aggregate_rejects_self_consistent_request_with_untrusted_policy_digest() {
+    let mut proof = aggregate();
+    let trusted_policy_sha256 = proof.request.policy_sha256.clone();
+    proof.request.policy_sha256 = "e".repeat(64);
+    for leaf in &mut proof.leaves {
+        leaf.request.policy_sha256 = proof.request.policy_sha256.clone();
+    }
+    let bytes = encode(&proof).expect("self-consistent canonical aggregate");
+    assert!(
+        PreviewAggregateManifest::parse(
+            &bytes,
+            &trusted_policy_sha256,
+            &proof.request.plan,
+            &proof.request.context,
+        )
+        .is_err()
+    );
+    // Internal consistency is insufficient: only the independently admitted
+    // source-policy digest can authorize the aggregate at the privileged seam.
+    assert!(accepted(&proof));
 }
 
 #[test]
@@ -158,7 +183,7 @@ fn native_leaf_rejects_subset_plan_context_role_and_failed_task_evidence() {
     let leaf = &mut proof.leaves[0];
     PreviewLeafManifest::parse(&encode(leaf).expect("encode"), &expected).expect("leaf");
     leaf.request.plan.products[0].targets.pop();
-    leaf.request.plan_sha256 = preview_plan_sha256(&leaf.request.plan).expect("subset digest");
+    leaf.request.plan_sha256 = release_plan_sha256(&leaf.request.plan).expect("subset digest");
     assert!(PreviewLeafManifest::parse(&encode(leaf).expect("encode"), &expected).is_err());
     let mut failed = aggregate().leaves.remove(0);
     failed.producer.task_exit_code = 17;
@@ -175,17 +200,48 @@ fn native_metadata_is_canonical_and_rejects_unknown_fields() {
     let mut noncanonical = bytes.clone();
     noncanonical.push(b'\n');
     assert!(
-        PreviewAggregateManifest::parse(&noncanonical, &proof.request.plan, &proof.request.context)
-            .is_err()
+        PreviewAggregateManifest::parse(
+            &noncanonical,
+            &proof.request.policy_sha256,
+            &proof.request.plan,
+            &proof.request.context
+        )
+        .is_err()
     );
     let mut value: serde_json::Value = serde_json::from_slice(&bytes).expect("json");
     value["verified"] = serde_json::json!(true);
     assert!(
         PreviewAggregateManifest::parse(
             &velnor_actions_contract::canonical_json_bytes(&value).expect("canonical"),
+            &proof.request.policy_sha256,
             &proof.request.plan,
             &proof.request.context
         )
         .is_err()
     );
+}
+
+#[test]
+fn task_handoff_emits_channel_neutral_schema_and_exact_bound_request() {
+    let root = tempfile::tempdir().expect("owned handoff");
+    let path = root.path().canonicalize().expect("canonical owned handoff");
+    let request = request();
+    let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(5))
+        .expect("deadline");
+    let handoff = super::super::handoff::write_task_request(&path, &request, &[], deadline)
+        .expect("write actual handoff");
+    assert_eq!(
+        handoff.path.file_name().expect("filename"),
+        "release-task-request.json"
+    );
+    let bytes = std::fs::read(&handoff.path).expect("handoff bytes");
+    let value: serde_json::Value = serde_json::from_slice(&bytes).expect("task JSON");
+    assert_eq!(value["schema"], "velnor.release-task.v1");
+    assert_eq!(
+        value["request"],
+        serde_json::to_value(&request).expect("request")
+    );
+    assert_eq!(value["inputs"], serde_json::json!([]));
+    assert_eq!(bytes, canonical_json_bytes(&value).expect("canonical task"));
+    handoff.verify(deadline).expect("unchanged held task files");
 }

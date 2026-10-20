@@ -10,6 +10,16 @@ pub(in crate::package_release_publish) const CONTINUATION_PATH: &str =
     ".github/workflows/preview-tap-reconcile.yml";
 pub(in crate::package_release_publish) const CONTINUATION_NAME: &str = "Preview tap reconciliation";
 
+fn continuation_identity(channel: PackageReleaseChannel) -> (&'static str, &'static str) {
+    match channel {
+        PackageReleaseChannel::Preview => (CONTINUATION_PATH, CONTINUATION_NAME),
+        PackageReleaseChannel::Stable => (
+            ".github/workflows/stable-tap-reconcile.yml",
+            "Stable tap reconciliation",
+        ),
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(in crate::package_release_publish) enum Purpose {
     PublicationRecovery,
@@ -42,7 +52,8 @@ impl Invocation {
         plan: &PackageReleasePlan,
     ) -> bool {
         matches!(self.event.as_str(), "schedule" | "workflow_dispatch")
-            && self.workflow_ref == Self::expected_workflow(plan, CONTINUATION_PATH)
+            && self.workflow_ref
+                == Self::expected_workflow(plan, continuation_identity(plan.channel).0)
     }
 
     pub(in crate::package_release_publish) fn validate(
@@ -54,8 +65,7 @@ impl Invocation {
             && self.workflow_ref == Self::expected_workflow(plan, plan.channel.workflow_path());
         let permitted =
             manual || matches!(purpose, Purpose::TapPromotion) && self.continuation(plan);
-        if plan.channel != PackageReleaseChannel::Preview
-            || !permitted
+        if !permitted
             || self.repository != plan.repository
             || self.source_ref != format!("refs/heads/{}", plan.default_branch)
             || !super::is_git_sha(&self.source_sha)
@@ -76,7 +86,8 @@ impl Invocation {
         if !self.continuation(plan) {
             return Err(internal("tap_continuation_context"));
         }
-        let workflow = api.admitted_workflow(CONTINUATION_PATH, CONTINUATION_NAME)?;
+        let (path, name) = continuation_identity(plan.channel);
+        let workflow = api.admitted_workflow(path, name)?;
         let id = super::positive_env("GITHUB_RUN_ID")?;
         let attempt = super::positive_env_u32("GITHUB_RUN_ATTEMPT")?;
         for run in [

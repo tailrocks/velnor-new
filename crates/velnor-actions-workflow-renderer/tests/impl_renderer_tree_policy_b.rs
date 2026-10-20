@@ -63,6 +63,7 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
                 pull_requests:
                     velnor_actions_contract::workflow::permissions::PermissionLevel::None,
                 id_token: velnor_actions_contract::workflow::permissions::PermissionLevel::None,
+                packages: velnor_actions_contract::workflow::permissions::PermissionLevel::None,
             }),
             environment: None,
             steps: vec![checkout_step(&checkout_pin())?, merge_step()],

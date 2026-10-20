@@ -52,6 +52,25 @@ fn private_operations_fail_closed_without_a_token_and_print_no_secret() -> Resul
             "{op}: {stderr}"
         );
     }
+    // The Bun registry phase fails closed on an empty job token the same way.
+    let bun = spawn_isolated(
+        &[],
+        &[
+            ("VELNOR_INTERNAL_OP", "bun-registry-install-v1"),
+            ("RUNNER_TEMP", &runner_temp),
+            ("VELNOR_NPM_READ_TOKEN", ""),
+            ("VELNOR_BUN_ROOT", "."),
+            ("VELNOR_BUN_SCOPES", "@chainargos"),
+            ("GITHUB_WORKSPACE", &runner_temp),
+        ],
+        &tmp,
+    )?;
+    assert_eq!(code(&bun), 1);
+    assert!(
+        String::from_utf8_lossy(&bun.stderr).contains("private_source_credential_unavailable"),
+        "{}",
+        String::from_utf8_lossy(&bun.stderr)
+    );
     assert!(
         !tmp.join("velnor").exists(),
         "no credential directory is created"
@@ -63,7 +82,11 @@ fn private_operations_fail_closed_without_a_token_and_print_no_secret() -> Resul
 #[test]
 fn private_operations_without_runner_temp_fall_through_to_usage() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("smoke-private-gate")?;
-    for op in ["private-fetch-v1", "private-revoke-v1"] {
+    for op in [
+        "private-fetch-v1",
+        "private-revoke-v1",
+        "bun-registry-install-v1",
+    ] {
         let gated = spawn_isolated(&[], &[("VELNOR_INTERNAL_OP", op)], &tmp)?;
         let bare = spawn_isolated(&[], &[], &tmp)?;
         assert_eq!(code(&gated), 2, "{op}");

@@ -7,7 +7,7 @@ use std::{io::Read, path::Path, time::Instant};
 
 use sha2::{Digest, Sha256};
 use velnor_actions_contract::preview_production::{
-    PreviewProductionRequest, PreviewProductionStage,
+    ReleaseProductionRequest, ReleaseProductionStage,
 };
 use velnor_actions_mise::CheckDeadline;
 
@@ -31,7 +31,7 @@ pub(crate) const PAYLOAD_OUTPUT_SCHEMA_V1: &str = "velnor.package-payload-output
 pub(crate) struct VerifiedPayload {
     /// Full plan and exact execution context structurally bound to these bytes.
     /// The caller remains responsible for authenticating its remote authority.
-    pub request: PreviewProductionRequest,
+    pub request: ReleaseProductionRequest,
     /// The complete selected bin inventory, retained as its original archive.
     pub archive: VerifiedPackageArtifact,
     /// One `CycloneDX` document bound to the actual archive name and digest.
@@ -45,7 +45,7 @@ pub(crate) fn verify_payload_output(
     producer_dir: &Path,
     manifest_relative: &str,
     fresh_staging: &Path,
-    request: &PreviewProductionRequest,
+    request: &ReleaseProductionRequest,
     deadline: CheckDeadline,
 ) -> Result<VerifiedPayload, OrchestratorError> {
     #[cfg(test)]
@@ -75,7 +75,7 @@ fn verify_with_hook(
     producer_dir: &Path,
     manifest_relative: &str,
     fresh_staging: &Path,
-    request: &PreviewProductionRequest,
+    request: &ReleaseProductionRequest,
     deadline: CheckDeadline,
     #[cfg(test)] after_copy: impl FnOnce(&Path),
 ) -> Result<VerifiedPayload, OrchestratorError> {
@@ -126,13 +126,13 @@ fn verify_with_hook(
 }
 
 fn leaf_files(
-    request: &PreviewProductionRequest,
+    request: &ReleaseProductionRequest,
     manifest_relative: &str,
 ) -> Result<Vec<ExpectedFile>, OrchestratorError> {
     request
         .validate()
         .map_err(|error| invalid(&error.to_string()))?;
-    let PreviewProductionStage::Payload { pair } = &request.stage else {
+    let ReleaseProductionStage::Payload { pair } = &request.stage else {
         return Err(invalid("preview_payload_stage_required"));
     };
     let manifest = validate_relative_path(manifest_relative)?;
@@ -154,7 +154,7 @@ fn leaf_files(
 fn read_manifest(
     producer: &Path,
     manifest_relative: &str,
-    request: &PreviewProductionRequest,
+    request: &ReleaseProductionRequest,
     started: Instant,
 ) -> Result<PackageOutputManifest, OrchestratorError> {
     let relative = validate_relative_path(manifest_relative)?;
@@ -177,7 +177,7 @@ fn read_manifest(
 
 fn into_verified(
     copied: Vec<VerifiedPackageArtifact>,
-    request: &PreviewProductionRequest,
+    request: &ReleaseProductionRequest,
 ) -> Result<VerifiedPayload, OrchestratorError> {
     use velnor_actions_contract::package_release::PackageReleaseAssetKind;
     let mut archive = None;

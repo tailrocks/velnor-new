@@ -3,57 +3,41 @@ use super::{ENABLED, binary_repo};
 use crate::impl_common::{TestResult, git};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 
-fn preview_config(stable: bool) -> Result<String, Box<dyn std::error::Error>> {
-    let tool = serde_json::json!({"qualified_tools":[{
-        "id":"rust","version":"1.98.1","backend":{"kind":"core","tool":"rust"},
-        "options":{"kind":"rust","components":[],"targets":[]},"depends_on":[],
-        "platforms":[{"platform":"linux_x64","artifacts":[{"url":"https://static.rust-lang.org/dist/rust-1.98.1-x86_64-unknown-linux-gnu.tar.xz","sha256":"a".repeat(64)}],"dependency_artifacts":[],"install_tree_sha256":"b".repeat(64),
-            "executables":[{"name":"rustc","path":"bin/rustc","sha256":"c".repeat(64),"probe":{"kind":"version","expected":"rustc 1.98.1"}}]}]
-    }]});
+fn preview_config(stable: bool) -> String {
     let stable_config = if stable {
         ENABLED.to_owned()
     } else {
-        ENABLED.replacen("enabled = true", "enabled = false", 1)
+        ENABLED
+            .replace(
+                "[stacks.rust.binary_release.stable]\nenabled = true",
+                "[stacks.rust.binary_release.stable]\nenabled = false",
+            )
+            .replace(
+                "[stacks.rust.release]\nenabled = true",
+                "[stacks.rust.release]\nenabled = false",
+            )
     }
     .replace("default_branch = \"testmain\"", "default_branch = \"main\"");
-    Ok(format!(
-        "{stable_config}\n{}\n{}",
-        r#"
-[stacks.rust.binary_release.preview]
-enabled = true
-version_env = "DEMO_VERSION_OVERRIDE"
-[stacks.rust.binary_release.preview.evidence]
-profile = "signed-sbom-v1"
-[stacks.rust.binary_release.preview.producer]
-task = "release-preview"
-tools = ["rust"]
-inputs = ["mise.toml", "Cargo.toml", "Cargo.lock", "src/main.rs"]
-[[stacks.rust.binary_release.preview.products]]
-id = "demo"
-package = "demo"
-bins = ["demo"]
-targets = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin"]
-archive = "tar.gz"
-"#,
-        toml::to_string(&tool)?
-    ))
+    format!(
+        "{stable_config}\n[stacks.rust.binary_release.preview]\nenabled = true\nrelease_id = 123\n"
+    )
 }
 
-fn tap_enabled_config(stable: bool) -> Result<String, Box<dyn std::error::Error>> {
-    Ok(format!(
+fn tap_enabled_config(stable: bool) -> String {
+    format!(
         "{}\n{}",
-        preview_config(stable)?,
+        preview_config(stable),
         r#"
 [distribution.homebrew_tap]
 enabled = true
-source = "rust.binary_release.preview"
 repository = "example/homebrew-tap"
-formula = "Formula/demo-preview.rb"
 environment = "tap-update"
 app_id_variable = "TAP_APP_ID"
 app_private_key_secret = "TAP_APP_PRIVATE_KEY"
 protection_observer = { app_id_variable = "TAP_PROTECTION_APP_ID", app_private_key_secret = "TAP_PROTECTION_APP_PRIVATE_KEY" }
 merge = "squash-after-gates"
+[distribution.homebrew_tap.destinations.preview]
+formula = "Formula/demo-preview.rb"
 [distribution.homebrew_tap.updater]
 task = "package:update-preview"
 source = { mise_config = "mise.toml", working_directory = "." }
@@ -66,13 +50,13 @@ check_name = "Review completion"
 app_id_variable = "REVIEW_COMPLETION_APP_ID"
 expected_reviewers = [{ app_id_variable = "SECURITY_REVIEW_APP_ID" }]
 "#
-    ))
+    )
 }
 
 #[test]
 fn preview_generates_independently_with_sorted_static_inventory() -> TestResult {
     for stable in [false, true] {
-        let repo = binary_repo(&preview_config(stable)?)?;
+        let repo = binary_repo(&preview_config(stable))?;
         std::fs::write(
             repo.path().join("mise.toml"),
             format!(
@@ -85,7 +69,7 @@ fn preview_generates_independently_with_sorted_static_inventory() -> TestResult 
         let preview = tree
             .get(".github/workflows/binary-preview.yml")
             .ok_or("preview workflow missing")?;
-        assert!(preview.contains("execute-preview-producer-v1"));
+        assert!(preview.contains("execute-release-producer-v1"));
         assert!(preview.contains("sign-package-release-v1"));
         assert!(preview.contains("publish-package-release-v1"));
         assert!(preview.contains("preview-publish"));
@@ -93,7 +77,7 @@ fn preview_generates_independently_with_sorted_static_inventory() -> TestResult 
             .find("Fetch Cargo sources")
             .ok_or("P08 source preparation missing")?;
         let dispatch = preview
-            .find("execute-preview-producer-v1")
+            .find("execute-release-producer-v1")
             .ok_or("producer missing")?;
         assert!(fetch < dispatch);
         assert!(preview.contains("metadata --locked --offline"));
@@ -112,11 +96,39 @@ fn preview_generates_independently_with_sorted_static_inventory() -> TestResult 
 }
 
 #[test]
+fn version_only_change_preserves_both_generated_channel_policies() -> TestResult {
+    let repo = binary_repo(&preview_config(true))?;
+    let before = render_staged_tree(&prepare(repo.path())?)?;
+    for file in ["Cargo.toml", "Cargo.lock"] {
+        let path = repo.path().join(file);
+        let bytes = std::fs::read_to_string(&path)?.replace("0.1.0", "0.2.0");
+        std::fs::write(path, bytes)?;
+    }
+    let after = render_staged_tree(&prepare(repo.path())?)?;
+    for path in [
+        ".github/workflows/binary-preview.yml",
+        ".github/workflows/binary-release.yml",
+    ] {
+        let original = before
+            .get(path)
+            .ok_or("original channel workflow missing")?;
+        let updated = after.get(path).ok_or("updated channel workflow missing")?;
+        assert!(original.contains("VELNOR_RELEASE_POLICY:"));
+        assert!(!original.contains("base_version"));
+        assert_eq!(
+            original, updated,
+            "version data must resolve at runtime: {path}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn xcode_preview_and_macos26_named_check_pass_real_staged_validators() -> TestResult {
-    let config = preview_config(false)?
+    let config = preview_config(false)
         .replace(
-            "[stacks.rust.binary_release.preview.producer]",
-            "[stacks.rust.binary_release.preview.producer]\nrunner = \"xcode-27-arm64\"",
+            "[stacks.rust.binary_release.producer]",
+            "[stacks.rust.binary_release.producer]\nrunner = \"xcode-27-arm64\"",
         )
         .replace("platform = \"linux_x64\"", "platform = \"macos_arm64\"")
         .replace(
@@ -220,19 +232,19 @@ fn unrelated_privileged_environment_write_still_fails_real_zizmor() -> TestResul
 
 #[test]
 fn preview_refuses_unknown_binary_before_emitting_publication_workflow() -> TestResult {
-    let config = preview_config(false)?.replace("bins = [\"demo\"]", "bins = [\"missing\"]");
+    let config = preview_config(false).replace("bins = [\"demo\"]", "bins = [\"missing\"]");
     let repo = binary_repo(&config)?;
     let error = render_staged_tree(&prepare(repo.path())?)
         .err()
         .ok_or("missing binary accepted")?;
-    assert!(error.to_string().contains("preview"));
+    assert!(error.to_string().contains("missing_binary_target"));
     Ok(())
 }
 
 #[test]
 fn preview_rejects_a_branch_that_cannot_pass_its_fixed_environment_policy() -> TestResult {
     let config =
-        preview_config(false)?.replace("default_branch = \"main\"", "default_branch = \"develop\"");
+        preview_config(false).replace("default_branch = \"main\"", "default_branch = \"develop\"");
     let repo = binary_repo(&config)?;
     let error = render_staged_tree(&prepare(repo.path())?)
         .err()
@@ -247,7 +259,7 @@ fn preview_rejects_a_branch_that_cannot_pass_its_fixed_environment_policy() -> T
 
 #[test]
 fn generator_emits_tap_jobs_from_native_distribution_config() -> TestResult {
-    let repo = binary_repo(&tap_enabled_config(false)?)?;
+    let repo = binary_repo(&tap_enabled_config(false))?;
     std::fs::write(
         repo.path().join("mise.toml"),
         format!(
@@ -325,7 +337,7 @@ fn job<'a>(
 fn privileged_preview_gh_pin_cannot_come_from_consumer_catalog() -> TestResult {
     use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
-    let repo = binary_repo(&preview_config(false)?)?;
+    let repo = binary_repo(&preview_config(false))?;
     let mut prep = prepare(repo.path())?;
     let pinned = ToolCatalog::pinned();
     prep.catalog = ToolCatalog::new(
@@ -351,8 +363,8 @@ fn privileged_preview_gh_pin_cannot_come_from_consumer_catalog() -> TestResult {
 fn native_binary_generation_rejects_noncanonical_ci_names_before_discovery() -> TestResult {
     for config in [
         ENABLED.to_owned(),
-        preview_config(false)?,
-        preview_config(true)?,
+        preview_config(false),
+        preview_config(true),
     ] {
         let custom = config.replace("[workflow]", "[workflow]\nname = \"Custom CI\"");
         let repo = binary_repo(&custom)?;
@@ -378,3 +390,6 @@ fn native_binary_generation_rejects_noncanonical_ci_names_before_discovery() -> 
     }
     Ok(())
 }
+
+#[path = "impl_schema2_binary_lfs.rs"]
+mod lfs;

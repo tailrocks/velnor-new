@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::{Job, WORKFLOW_TASK_JOB_PREFIX};
 
 use super::{
-    build_task_jobs::BuildTaskPolicy, image_build_jobs::ImageBuildPolicy,
-    native_image_jobs::NativeImageTaskPolicy,
+    build_task_jobs::BuildTaskPolicy, bun_member_jobs::BunMemberPolicy,
+    image_build_jobs::ImageBuildPolicy, native_image_jobs::NativeImageTaskPolicy,
 };
 use crate::{RenderError, VerificationTaskPolicy};
 
@@ -25,6 +25,8 @@ pub enum WorkflowTaskPolicy {
     NativeImage(NativeImageTaskPolicy),
     /// Container image build jobs, one per native platform, hosted-only.
     Image(ImageBuildPolicy),
+    /// One Bun workspace member job (hard decision 6), hosted-only.
+    Bun(BunMemberPolicy),
 }
 
 impl WorkflowTaskPolicy {
@@ -36,6 +38,7 @@ impl WorkflowTaskPolicy {
             Self::Build(policy) => &policy.task.id,
             Self::NativeImage(policy) => &policy.task.id,
             Self::Image(policy) => &policy.image.id,
+            Self::Bun(policy) => &policy.id,
         }
     }
 
@@ -49,13 +52,20 @@ impl WorkflowTaskPolicy {
             Self::Image(policy) => policy
                 .platform_for_job(job_id)
                 .map(velnor_actions_contract::ImagePlatform::runs_on),
+            Self::Bun(policy) => {
+                (policy.id == job_id).then_some(super::bun_member_jobs::BUN_RUNNER)
+            }
         }
     }
 
     /// Whether the task's job runs pinned tools and needs the shared Mise prelude.
     #[must_use]
     pub fn uses_pinned_tools(&self) -> bool {
-        matches!(self, Self::Image(policy) if policy.uses_pinned_tools())
+        match self {
+            Self::Image(policy) => policy.uses_pinned_tools(),
+            Self::Bun(_) => true,
+            _ => false,
+        }
     }
 
     /// Whether a job belongs to this task's permitted placement set.
@@ -66,6 +76,7 @@ impl WorkflowTaskPolicy {
             Self::Build(policy) => policy.job_id() == job_id,
             Self::NativeImage(policy) => policy.job_id() == job_id,
             Self::Image(policy) => policy.platform_for_job(job_id).is_some(),
+            Self::Bun(policy) => policy.id == job_id,
         }
     }
 }
@@ -104,6 +115,13 @@ pub(crate) fn validate_workflow_task_jobs(
             ),
             WorkflowTaskPolicy::Image(task) => job_ids.extend(
                 crate::verification_jobs::image_build_jobs::validate_image_build_jobs(
+                    jobs,
+                    task,
+                    checkout_uses,
+                )?,
+            ),
+            WorkflowTaskPolicy::Bun(task) => job_ids.extend(
+                crate::verification_jobs::bun_member_jobs::validate_bun_member_job(
                     jobs,
                     task,
                     checkout_uses,

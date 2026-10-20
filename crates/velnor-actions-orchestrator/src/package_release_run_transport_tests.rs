@@ -112,17 +112,191 @@ fn real_api_reads_required_from_second_job_page_and_preserves_original_ci() {
 }
 
 #[test]
-fn queued_fixture_rejects_mutation_transport_without_any_process_or_network() {
+fn unconfigured_mutation_is_rejected_without_any_process_or_network() {
     let (api, fixture) = GitHubApi::with_fixture("example/app", vec![]);
     let error = api
         .post_fields(&route("releases"), &[])
         .expect_err("fixture must never fall through to gh");
     assert!(
-        error
-            .to_string()
-            .contains("unexpected_fixture_transport_request"),
+        error.to_string().contains("unexpected_fixture_api_call"),
         "got {error}"
     );
-    assert_eq!(fixture.observed(), Vec::<String>::new());
+    assert_eq!(
+        fixture.observed(),
+        vec![format!("POST {}", route("releases"))]
+    );
+    fixture.assert_drained();
+}
+
+#[test]
+fn warm_completed_evidence_keeps_latest_list_and_current_run_fresh() {
+    let mut responses = first_three(json!({"jobs":[required()]}));
+    for _ in 0..2 {
+        responses.extend([
+            (list_route(), json!({"workflow_runs":[run_json()]})),
+            (route("actions/runs/22"), run_json()),
+        ]);
+    }
+    let (api, fixture) = GitHubApi::with_fixture("example/app", responses);
+    for _ in 0..2 {
+        api.verify_ci_identity(22, 3, source(), true)
+            .expect("fresh latest CI");
+    }
+    fixture.assert_drained();
+    assert_eq!(
+        fixture.observed().len(),
+        7,
+        "immutable evidence read only once"
+    );
+}
+
+#[test]
+fn warm_completed_cache_never_accepts_new_attempt_pending_or_failed_current_ci() {
+    for (field, value) in [
+        ("run_attempt", json!(4)),
+        ("status", json!("in_progress")),
+        ("conclusion", json!("failure")),
+        ("head_sha", json!("b".repeat(40))),
+    ] {
+        let mut changed = run_json();
+        changed[field] = value;
+        let mut responses = first_three(json!({"jobs":[required()]}));
+        responses.extend([
+            (list_route(), json!({"workflow_runs":[run_json()]})),
+            (route("actions/runs/22"), changed),
+        ]);
+        let (api, fixture) = GitHubApi::with_fixture("example/app", responses);
+        api.verify_ci_identity(22, 3, source(), false)
+            .expect("original evidence");
+        assert!(
+            api.verify_ci_identity(22, 3, source(), true).is_err(),
+            "accepted {field}"
+        );
+        fixture.assert_drained();
+    }
+}
+
+#[test]
+fn failed_required_evidence_is_not_cached_as_success() {
+    let mut responses = first_three(json!({"jobs":[]}));
+    responses.extend([
+        (route("actions/runs/22/attempts/3"), run_json()),
+        (
+            route("actions/runs/22/attempts/3/jobs?per_page=100&page=1"),
+            json!({"jobs":[required()]}),
+        ),
+    ]);
+    let (api, fixture) = GitHubApi::with_fixture("example/app", responses);
+    assert!(api.verify_ci_identity(22, 3, source(), false).is_err());
+    api.verify_ci_identity(22, 3, source(), false)
+        .expect("new actual success");
+    api.verify_ci_identity(22, 3, source(), false)
+        .expect("cached exact success");
+    fixture.assert_drained();
+    assert_eq!(fixture.observed().len(), 5);
+}
+
+#[test]
+fn warm_completed_cache_still_rejects_a_newer_source_ci_run() {
+    let mut newer = run_json();
+    newer["id"] = json!(23);
+    newer["run_number"] = json!(13);
+    let mut responses = first_three(json!({"jobs":[required()]}));
+    responses.push((list_route(), json!({"workflow_runs":[newer]})));
+    let (api, fixture) = GitHubApi::with_fixture("example/app", responses);
+    api.verify_ci_identity(22, 3, source(), false)
+        .expect("original success");
+    assert!(api.verify_ci_identity(22, 3, source(), true).is_err());
+    fixture.assert_drained();
+}
+
+fn release_receipt() -> PackageReleaseReceipt {
+    serde_json::from_value(json!({
+        "schema":"velnor.package-release.v1","channel":"preview",
+        "repository":{"id":9,"slug":"example/app"},
+        "source":{"commit_sha":source().sha,"ref":"refs/heads/main","default_branch":"main","event":"workflow_run","ci_run_id":22,"ci_run_attempt":3},
+        "workflow":{"path":".github/workflows/binary-preview.yml","ref":"example/app/.github/workflows/binary-preview.yml@refs/heads/main","authority_sha":source().sha,"run_id":22,"run_attempt":3,"producer_run_id":22,"producer_run_attempt":3,"signer_job_id":"preview-signer","signer_workflow":".github/workflows/binary-preview.yml"},
+        "version":{"base":"1.0.0","value":"1.0.0-preview.1+aaaaaaa","commit_count":1,"source_sha7":"aaaaaaa"},
+        "tag":"preview","products":[],"companions":[],"assets":[],
+        "evidence":{"profile":"signed-sbom-v1","sbom_format":"CycloneDX-JSON","signer_issuer":"https://token.actions.githubusercontent.com","signer_workflow_ref":"example/app/.github/workflows/binary-preview.yml@refs/heads/main","attestation_predicate":"https://slsa.dev/provenance/v1","attested_subject_names":[]}
+    })).expect("typed run identity fixture")
+}
+
+fn producing_metadata() -> Value {
+    json!({"id":8,"name":"Rust binary preview","path":".github/workflows/binary-preview.yml","state":"active"})
+}
+
+fn producing_run() -> Value {
+    let mut run = run_json();
+    run["workflow_id"] = json!(8);
+    run["name"] = json!("Rust binary preview");
+    run["path"] = json!(".github/workflows/binary-preview.yml");
+    run["event"] = json!("workflow_run");
+    run["status"] = json!("in_progress");
+    run["conclusion"] = Value::Null;
+    run
+}
+
+#[test]
+fn mutation_guard_reads_current_producing_run_and_rejects_rerun_or_inactive_status() {
+    for (pointer, value) in [
+        ("/run_attempt", json!(4)),
+        ("/status", json!("cancelled")),
+        ("/status", json!("queued")),
+        ("/status", json!("waiting")),
+        ("/status", json!("completed")),
+        ("/conclusion", json!("failure")),
+        ("/repository/id", json!(10)),
+        ("/workflow_id", json!(9)),
+        ("/head_sha", json!("b".repeat(40))),
+    ] {
+        let mut run = producing_run();
+        *run.pointer_mut(pointer).expect("fixture field") = value;
+        let (api, fixture) = GitHubApi::with_fixture(
+            "example/app",
+            vec![
+                (
+                    route("actions/workflows/binary-preview.yml"),
+                    producing_metadata(),
+                ),
+                (route("actions/runs/22"), run),
+            ],
+        );
+        assert!(
+            api.verify_current_release_run(&release_receipt(), false)
+                .is_err(),
+            "{pointer}"
+        );
+        fixture.assert_drained();
+    }
+}
+
+#[test]
+fn historical_signed_attempt_remains_valid_while_new_mutation_rejects_rerun() {
+    let mut original = producing_run();
+    original["status"] = json!("completed");
+    original["conclusion"] = json!("failure");
+    let mut rerun = producing_run();
+    rerun["run_attempt"] = json!(4);
+    let (api, fixture) = GitHubApi::with_fixture(
+        "example/app",
+        vec![
+            (
+                route("actions/workflows/binary-preview.yml"),
+                producing_metadata(),
+            ),
+            (route("actions/runs/22/attempts/3"), original.clone()),
+            (route("actions/runs/22"), rerun),
+            (route("actions/runs/22/attempts/3"), original),
+        ],
+    );
+    api.verify_release_run(&release_receipt(), true)
+        .expect("historical signed attempt");
+    assert!(
+        api.verify_current_release_run(&release_receipt(), true)
+            .is_err()
+    );
+    api.verify_release_run(&release_receipt(), true)
+        .expect("historical publication still valid");
     fixture.assert_drained();
 }

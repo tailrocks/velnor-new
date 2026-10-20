@@ -191,3 +191,59 @@ fn completed_immutable_release_only_resumes_distribution() {
         PublicationAction::Reject(PublicationRejection::ConflictingIdentity)
     );
 }
+
+#[test]
+fn stable_tag_intent_bridge_never_claims_future_receipt_in_tag_message() {
+    let expected = identity();
+    let available = expected.assets.keys().cloned().collect();
+    let observed = PublicationState::AuthorizedStableTag {
+        identity: expected.clone(),
+    };
+    assert_eq!(
+        publication_action(&expected, &observed, true, &available),
+        PublicationAction::CreateDraft
+    );
+    assert_eq!(
+        publication_action(&expected, &observed, false, &available),
+        PublicationAction::Reject(PublicationRejection::StaleCandidate)
+    );
+    assert_eq!(
+        publication_action(&expected, &observed, true, &BTreeSet::new()),
+        PublicationAction::Reject(PublicationRejection::UnavailableOriginalAssets)
+    );
+    let mut conflicting_source = expected.clone();
+    conflicting_source.source_sha = "f".repeat(40);
+    assert_eq!(
+        publication_action(
+            &expected,
+            &PublicationState::AuthorizedStableTag {
+                identity: conflicting_source
+            },
+            true,
+            &available
+        ),
+        PublicationAction::Reject(PublicationRejection::ConflictingIdentity)
+    );
+    let mut conflicting_assets = expected.clone();
+    conflicting_assets.assets.remove("release.json.bundle");
+    assert_eq!(
+        publication_action(
+            &expected,
+            &PublicationState::AuthorizedStableTag {
+                identity: conflicting_assets
+            },
+            true,
+            &available
+        ),
+        PublicationAction::Reject(PublicationRejection::ConflictingIdentity)
+    );
+    let mut conflicting = expected.clone();
+    conflicting.receipt_digest = "f".repeat(64);
+    let observed = PublicationState::AuthorizedStableTag {
+        identity: conflicting,
+    };
+    assert_eq!(
+        publication_action(&expected, &observed, true, &available),
+        PublicationAction::Reject(PublicationRejection::ConflictingIdentity)
+    );
+}

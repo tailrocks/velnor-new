@@ -1,5 +1,6 @@
 //! Fixed source handoff and identity-checked native staging.
 
+use crate::filesystem_owner::held_file::HeldFile;
 use crate::{
     OrchestratorError,
     exclusive_write::{create_dir_no_symlink, write_exclusive_until},
@@ -10,19 +11,18 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     fs,
-    io::Read,
     path::{Path, PathBuf},
 };
 use velnor_actions_contract::{
     canonical_json_bytes,
-    preview_production::{PreviewPayloadPair, PreviewProductionRequest},
+    preview_production::{ReleasePayloadPair, ReleaseProductionRequest},
 };
 use velnor_actions_mise::CheckDeadline;
 
-pub(super) const TASK_REQUEST: &str = "preview-task-request.json";
-pub(super) const PRODUCTION_REQUEST: &str = "preview-production-request.json";
-pub(crate) const LEAF_MANIFEST: &str = "preview-payload.json";
-pub(crate) const AGGREGATE_MANIFEST: &str = "preview-aggregate.json";
+pub(super) const TASK_REQUEST: &str = "release-task-request.json";
+pub(super) const PRODUCTION_REQUEST: &str = "release-production-request.json";
+pub(crate) const LEAF_MANIFEST: &str = "release-payload.json";
+pub(crate) const AGGREGATE_MANIFEST: &str = "release-aggregate.json";
 pub(crate) const MAX_NATIVE_MANIFEST: u64 =
     crate::package_release_publish::artifact_zip::NATIVE_MANIFEST_BYTES;
 #[path = "preview_production_handoff_copy.rs"]
@@ -37,84 +37,10 @@ pub(crate) struct AssetProof {
     pub size: u64,
 }
 
-pub(super) struct PinnedAsset {
-    path: PathBuf,
-    proof: AssetProof,
-    file: fs::File,
-    original: fs::Metadata,
-}
-
-impl PinnedAsset {
-    pub(super) fn new(
-        path: &Path,
-        proof: &AssetProof,
-        deadline: CheckDeadline,
-    ) -> Result<Self, OrchestratorError> {
-        recheck(path, proof, deadline)?;
-        let fd = rustix::fs::open(
-            path,
-            rustix::fs::OFlags::RDONLY
-                | rustix::fs::OFlags::NOFOLLOW
-                | rustix::fs::OFlags::NONBLOCK
-                | rustix::fs::OFlags::CLOEXEC,
-            rustix::fs::Mode::empty(),
-        )
-        .map_err(|_| internal("preview_asset_open"))?;
-        let file = fs::File::from(fd);
-        let original = file
-            .metadata()
-            .map_err(|_| internal("preview_asset_stat"))?;
-        let pinned = Self {
-            path: path.to_owned(),
-            proof: proof.clone(),
-            file,
-            original,
-        };
-        pinned.verify(deadline)?;
-        Ok(pinned)
-    }
-
-    pub(super) fn verify(&self, deadline: CheckDeadline) -> Result<(), OrchestratorError> {
-        self.verify_identity()?;
-        recheck(&self.path, &self.proof, deadline)?;
-        self.verify_identity()
-    }
-
-    fn verify_identity(&self) -> Result<(), OrchestratorError> {
-        use std::os::unix::fs::MetadataExt;
-        let now = self
-            .file
-            .metadata()
-            .map_err(|_| internal("preview_asset_stat"))?;
-        let named = fs::symlink_metadata(&self.path).map_err(|_| internal("preview_asset_stat"))?;
-        let before = &self.original;
-        if !named.is_file()
-            || before.dev() != named.dev()
-            || before.ino() != named.ino()
-            || before.len() != now.len()
-            || before.mode() != now.mode()
-            || before.uid() != now.uid()
-            || before.gid() != now.gid()
-            || before.uid() != named.uid()
-            || before.gid() != named.gid()
-            || before.nlink() != 1
-            || now.nlink() != 1
-            || named.nlink() != 1
-            || before.mtime() != now.mtime()
-            || before.mtime_nsec() != now.mtime_nsec()
-            || before.ctime() != now.ctime()
-            || before.ctime_nsec() != now.ctime_nsec()
-        {
-            return Err(internal("preview_admitted_input_replaced"));
-        }
-        Ok(())
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub(super) struct TaskInput {
-    pub pair: PreviewPayloadPair,
+    pub pair: ReleasePayloadPair,
     pub name: String,
     pub sha256: String,
     pub size: u64,
@@ -125,13 +51,13 @@ pub(super) struct TaskInput {
 #[serde(deny_unknown_fields)]
 struct TaskRequest<'a> {
     schema: &'static str,
-    request: &'a PreviewProductionRequest,
+    request: &'a ReleaseProductionRequest,
     inputs: &'a [TaskInput],
 }
 
 pub(super) struct TaskHandoff {
     pub(super) path: PathBuf,
-    pinned: Vec<PinnedAsset>,
+    pinned: Vec<HeldFile>,
 }
 
 impl TaskHandoff {
@@ -145,7 +71,7 @@ impl TaskHandoff {
 
 pub(super) fn write_task_request(
     temp: &Path,
-    request: &PreviewProductionRequest,
+    request: &ReleaseProductionRequest,
     inputs: &[TaskInput],
     deadline: CheckDeadline,
 ) -> Result<TaskHandoff, OrchestratorError> {
@@ -159,7 +85,7 @@ pub(super) fn write_task_request(
         || checkpoint(deadline),
     )?;
     let bytes = canonical_json_bytes(&TaskRequest {
-        schema: "velnor.preview-task.v1",
+        schema: "velnor.release-task.v1",
         request,
         inputs,
     })
@@ -181,7 +107,12 @@ pub(super) fn write_task_request(
             sha256: sha256(value),
             size: value.len() as u64,
         };
-        pinned.push(PinnedAsset::new(&temp.join(name), &proof, deadline)?);
+        pinned.push(HeldFile::new(
+            &temp.join(name),
+            &proof.sha256,
+            proof.size,
+            deadline,
+        )?);
     }
     Ok(TaskHandoff { path, pinned })
 }
@@ -237,31 +168,38 @@ fn normalize_upload_file(
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     use std::os::unix::fs::MetadataExt;
-    let mut pinned = PinnedAsset::new(path, proof, deadline)?;
-    if pinned.original.uid() != crate::filesystem_owner::effective_uid()
-        || pinned.original.nlink() != 1
-    {
+    let pinned = HeldFile::new(path, &proof.sha256, proof.size, deadline)?;
+    let original = pinned
+        .file()
+        .metadata()
+        .map_err(|_| internal("preview_upload_stat"))?;
+    if original.uid() != crate::filesystem_owner::effective_uid() || original.nlink() != 1 {
         return Err(internal("preview_upload_owner"));
     }
     rustix::fs::fchmod(
-        &pinned.file,
+        pinned.file(),
         rustix::fs::Mode::RUSR
             | rustix::fs::Mode::WUSR
             | rustix::fs::Mode::RGRP
             | rustix::fs::Mode::ROTH,
     )
     .map_err(|_| internal("preview_upload_mode"))?;
-    pinned.original = pinned
-        .file
+    // Mode normalization is an explicit producer mutation, never a refreshed admission.
+    let normalized = HeldFile::new(path, &proof.sha256, proof.size, deadline)?;
+    let after = normalized
+        .file()
         .metadata()
         .map_err(|_| internal("preview_upload_stat"))?;
-    if pinned.original.mode() & 0o7777 != 0o644
-        || pinned.original.uid() != crate::filesystem_owner::effective_uid()
-        || pinned.original.nlink() != 1
+    if after.mode() & 0o7777 != 0o644
+        || after.dev() != original.dev()
+        || after.ino() != original.ino()
+        || after.uid() != original.uid()
+        || after.gid() != original.gid()
     {
         return Err(internal("preview_upload_mode"));
     }
-    pinned.verify(deadline)
+    drop(pinned);
+    normalized.verify(deadline)
 }
 
 pub(super) fn recheck(
@@ -269,65 +207,7 @@ pub(super) fn recheck(
     proof: &AssetProof,
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
-    use std::os::unix::fs::MetadataExt;
-    crate::check_evidence::reject_link_components(
-        Path::new("/"),
-        path.strip_prefix("/")
-            .map_err(|_| internal("preview_asset_path"))?
-            .to_str()
-            .ok_or_else(|| internal("preview_asset_path"))?,
-    )?;
-    let fd = rustix::fs::open(
-        path,
-        rustix::fs::OFlags::RDONLY
-            | rustix::fs::OFlags::NOFOLLOW
-            | rustix::fs::OFlags::NONBLOCK
-            | rustix::fs::OFlags::CLOEXEC,
-        rustix::fs::Mode::empty(),
-    )
-    .map_err(|_| internal("preview_asset_open"))?;
-    let mut file = fs::File::from(fd);
-    let before = file
-        .metadata()
-        .map_err(|_| internal("preview_asset_stat"))?;
-    if !before.is_file() || before.len() != proof.size {
-        return Err(internal("preview_asset_identity_changed"));
-    }
-    let mut hash = Sha256::new();
-    let mut total = 0u64;
-    let mut buffer = vec![0_u8; 64 * 1024].into_boxed_slice();
-    loop {
-        checkpoint(deadline)?;
-        let count = file
-            .read(&mut buffer)
-            .map_err(|_| internal("preview_asset_read"))?;
-        if count == 0 {
-            break;
-        }
-        total = total
-            .checked_add(count as u64)
-            .filter(|size| *size <= proof.size)
-            .ok_or_else(|| internal("preview_asset_identity_changed"))?;
-        hash.update(&buffer[..count]);
-    }
-    let after = file
-        .metadata()
-        .map_err(|_| internal("preview_asset_stat"))?;
-    let named = fs::symlink_metadata(path).map_err(|_| internal("preview_asset_stat"))?;
-    if total != proof.size
-        || hex(&hash.finalize()) != proof.sha256
-        || before.dev() != named.dev()
-        || before.ino() != named.ino()
-        || !named.is_file()
-        || before.len() != after.len()
-        || before.mtime() != after.mtime()
-        || before.mtime_nsec() != after.mtime_nsec()
-        || before.ctime() != after.ctime()
-        || before.ctime_nsec() != after.ctime_nsec()
-    {
-        return Err(internal("preview_asset_identity_changed"));
-    }
-    checkpoint(deadline)
+    HeldFile::new(path, &proof.sha256, proof.size, deadline).map(|_| ())
 }
 
 pub(super) fn sha256(bytes: &[u8]) -> String {

@@ -179,6 +179,11 @@ fn the_block_lands_before_cargo_fetch_and_pulls_the_helper_up() {
         .insert_into_job(&mut empty_closure, &["elsewhere".to_owned()])
         .expect("noop");
     assert_eq!(empty_closure.steps.len(), 1);
+    let mut bun_only = job(vec![shell("Plan", None)]);
+    wiring
+        .insert_into_job(&mut bun_only, &[])
+        .expect("a job without Cargo roots takes no block");
+    assert_eq!(bun_only.steps.len(), 1);
     let mut no_fetch = job(vec![shell("Plan", None)]);
     assert!(
         wiring

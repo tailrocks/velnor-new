@@ -232,6 +232,7 @@ fn native_image_permissions() -> Permissions {
         pull_requests: PermissionLevel::None,
         id_token: PermissionLevel::None,
         actions: PermissionLevel::None,
+        packages: PermissionLevel::None,
     }
 }
 

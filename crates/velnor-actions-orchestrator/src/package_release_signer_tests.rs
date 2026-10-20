@@ -16,11 +16,7 @@ fn plan(channel: PackageReleaseChannel) -> PackageReleasePlan {
             package: "jackin".to_owned(),
             bins: vec!["jackin".to_owned()],
             targets: vec!["x86_64-unknown-linux-gnu".to_owned()],
-            format: if channel == PackageReleaseChannel::Stable {
-                PackageReleasePayloadFormat::RawBinary
-            } else {
-                PackageReleasePayloadFormat::TarGz
-            },
+            format: PackageReleasePayloadFormat::TarGz,
         }],
         companions: Vec::new(),
     }
@@ -93,7 +89,7 @@ fn version_identity_uses_full_commit_count_and_preview_tag() {
         release_version(&preview, &facts).expect("preview identity"),
         (
             "1.2.3-preview.7+a12e73a".to_owned(),
-            "v1.2.3-preview.7+a12e73a".to_owned(),
+            "preview".to_owned(),
             Some(7),
             Some("a12e73a".to_owned()),
         )
@@ -101,13 +97,13 @@ fn version_identity_uses_full_commit_count_and_preview_tag() {
 }
 
 #[test]
-fn stable_identity_keeps_dispatch_and_package_prefixed_tag() {
+fn stable_identity_keeps_dispatch_and_permanent_version_tag() {
     let stable = plan(PackageReleaseChannel::Stable);
     let facts = identity(&stable);
     assert!(validate_identity(&stable, &facts).is_ok());
     assert_eq!(
         release_version(&stable, &facts).expect("stable identity"),
-        ("1.2.3".to_owned(), "jackin-v1.2.3".to_owned(), None, None)
+        ("1.2.3".to_owned(), "v1.2.3".to_owned(), None, None)
     );
 }
 #[test]
@@ -146,5 +142,43 @@ fn retained_preview_verification_is_closed_to_generated_tap_operations() {
             Some("workflow_dispatch"),
             operation
         ));
+    }
+}
+
+#[test]
+fn stable_signer_requires_exact_authenticated_production_context() {
+    use velnor_actions_contract::preview_production::ReleaseProductionContext;
+    let plan = plan(PackageReleaseChannel::Stable);
+    let identity = identity(&plan);
+    let context = ReleaseProductionContext {
+        repository_id: identity.repository_id,
+        head_repository_id: identity.repository_id,
+        source_sha: identity.source_sha.clone(),
+        source_ref: identity.source_ref.clone(),
+        workflow_authority_sha: identity.workflow_sha.clone(),
+        run_id: identity.run_id,
+        run_attempt: identity.run_attempt,
+        ci_run_id: identity.ci_run_id,
+        ci_run_attempt: identity.ci_run_attempt,
+        commit_count: 0,
+        version: plan.base_version.clone(),
+    };
+    runtime::require_stable_context(&plan, &identity, &context).expect("exact origin");
+    for mutate in [
+        |context: &mut ReleaseProductionContext| context.repository_id += 1,
+        |context: &mut ReleaseProductionContext| context.head_repository_id += 1,
+        |context: &mut ReleaseProductionContext| context.source_sha = "b".repeat(40),
+        |context: &mut ReleaseProductionContext| context.source_ref = "refs/heads/other".into(),
+        |context: &mut ReleaseProductionContext| context.workflow_authority_sha = "b".repeat(40),
+        |context: &mut ReleaseProductionContext| context.run_id += 1,
+        |context: &mut ReleaseProductionContext| context.run_attempt += 1,
+        |context: &mut ReleaseProductionContext| context.ci_run_id += 1,
+        |context: &mut ReleaseProductionContext| context.ci_run_attempt += 1,
+        |context: &mut ReleaseProductionContext| context.commit_count = 1,
+        |context: &mut ReleaseProductionContext| context.version = "9.9.9".into(),
+    ] {
+        let mut changed = context.clone();
+        mutate(&mut changed);
+        assert!(runtime::require_stable_context(&plan, &identity, &changed).is_err());
     }
 }

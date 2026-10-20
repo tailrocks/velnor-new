@@ -14,6 +14,7 @@ pub use event::{NativePreviewEvent, PackageReleaseEvent};
 pub(crate) mod tests;
 #[path = "package_release_validation.rs"]
 mod validation;
+pub(crate) use validation::valid_asset_name;
 
 /// Receipt schema discriminator.
 pub const PACKAGE_RELEASE_SCHEMA_V2: &str = "velnor.package-release.v2";
@@ -60,7 +61,7 @@ pub struct PackageReleaseReceipt {
     pub workflow: PackageReleaseWorkflow,
     /// Base package version and deterministic channel version.
     pub version: PackageReleaseVersion,
-    /// Immutable channel tag: preview `v<version.value>`, stable `<package>-v<base>`.
+    /// Channel tag: rolling preview `preview`, permanent stable `v<base>`.
     pub tag: String,
     /// Product inventories sorted by product ID.
     pub products: Vec<PackageReleaseProduct>,
@@ -92,12 +93,21 @@ impl PackageReleaseChannel {
         }
     }
 
+    /// Canonical generated job that assembles the channel's complete inventory.
+    #[must_use]
+    pub const fn assemble_job_id(self) -> &'static str {
+        match self {
+            Self::Preview => "preview-assemble",
+            Self::Stable => "stable-assemble",
+        }
+    }
+
     /// Canonical generated job that holds the channel's signing authority.
     #[must_use]
     pub const fn signer_job_id(self) -> &'static str {
         match self {
             Self::Preview => "preview-signer",
-            Self::Stable => "attest-binary",
+            Self::Stable => "stable-signer",
         }
     }
 }
@@ -192,8 +202,7 @@ pub struct PackageReleaseProduct {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PackageReleasePayload {
-    /// Closed payload representation. Stable may publish its historical raw
-    /// single-binary asset; preview packages use deterministic tarballs.
+    /// Shared deterministic archive representation for both release channels.
     pub format: PackageReleasePayloadFormat,
     /// Supported Rust target triple.
     pub target: String,
@@ -207,8 +216,6 @@ pub struct PackageReleasePayload {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum PackageReleasePayloadFormat {
-    /// One raw executable, retained for the existing stable binary interface.
-    RawBinary,
     /// A gzip-compressed tar archive containing the declared executables.
     TarGz,
 }
@@ -300,17 +307,17 @@ impl PackageReleaseReceipt {
         validation::validate(self)
     }
 
-    /// Validate receipt inventories against the enabled preview configuration.
+    /// Validate receipt inventories against the enabled channel and shared configuration.
     ///
     /// # Errors
     ///
     /// Returns an identity error when product, target, companion, or asset
     /// inventory differs from policy.
-    pub fn validate_against_preview(
+    pub fn validate_against_config(
         &self,
-        preview: &crate::config::RustBinaryPreviewConfig,
+        config: &crate::config::RustBinaryReleaseConfig,
     ) -> Result<(), ContractError> {
-        validation::validate_against_preview(self, preview)
+        validation::validate_against_config(self, config)
     }
 
     /// Validate a preview receipt against the static signed release plan.
