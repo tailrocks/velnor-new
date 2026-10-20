@@ -1,0 +1,34 @@
+{
+  "base_commit": "2ac751ff406df81cd3d66571c0cec2c3f37ef185",
+  "scope": "Cache descriptions, source comments, and technical terms.",
+  "manifest_sha256": "83313e1fbc719a9df714795a534f78971d60e7dccc64b4d1ff0aaa16d5ae5fd6",
+  "amendment_sha256": "97be76bc1c7037bf50d2b160994c4458ef6af2f9d872388d51c01daeccb7652a",
+  "reviewer": "/root/runner_context_review",
+  "review": "PASS",
+  "checks": {
+    "cache_nextest": {
+      "result": "PASS",
+      "passed": 195,
+      "run_id": "efd86b50-da83-41a9-bee6-24b59aea3bc0"
+    },
+    "root_clippy": {
+      "result": "PASS",
+      "scope": "Workspace and all targets.",
+      "all_features": false
+    },
+    "format": "PASS",
+    "generation_twice": "PASS",
+    "golden_files": "PASS",
+    "parity": "PASS",
+    "alint": {
+      "result": "FAIL",
+      "remaining_files": [
+        "crates/velnor-actions-orchestrator/src/lib.rs",
+        "crates/velnor-actions-workflow-renderer/src/schema2_consumer_preview.rs",
+        "crates/velnor-actions-workflow-renderer/src/schema2_consumer_preview_tests.rs"
+      ]
+    }
+  },
+  "release_gate": "NOT_RUN",
+  "consumer_activation": "NOT_RUN"
+}

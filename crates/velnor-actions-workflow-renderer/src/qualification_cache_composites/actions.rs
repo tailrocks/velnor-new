@@ -171,7 +171,7 @@ fn input_declarations(input_names: Vec<String>) -> Vec<(String, yaml::Yaml)> {
                 yaml::Yaml::Map(vec![
                     (
                         "description".to_owned(),
-                        yaml::Yaml::str("Validated cache workflow value"),
+                        yaml::Yaml::str("Cache value for this workflow"),
                     ),
                     ("required".to_owned(), yaml::Yaml::Bool(true)),
                 ]),
@@ -206,7 +206,7 @@ fn output_declarations(outputs: &[Output]) -> Vec<(String, yaml::Yaml)> {
                 yaml::Yaml::Map(vec![
                     (
                         "description".to_owned(),
-                        yaml::Yaml::str("Prepared cache lifecycle output"),
+                        yaml::Yaml::str("Cache output from this composite action"),
                     ),
                     (
                         "value".to_owned(),

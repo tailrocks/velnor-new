@@ -3,20 +3,20 @@ name: qualification-cache-after-save-tofu_providers-rust-velnor-actions-freshnes
 description: Shared steps for qualification-cache-after-save-tofu_providers-rust-velnor-actions-freshness
 inputs:
   before_outputs:
-    description: Validated cache workflow value
+    description: Cache value for this workflow
     required: true
   cache_tofu_providers_save_action_outcome:
-    description: Validated cache workflow value
+    description: Cache value for this workflow
     required: true
   prepare_outputs:
-    description: Validated cache workflow value
+    description: Cache value for this workflow
     required: true
   qualification_campaign:
-    description: Validated cache workflow value
+    description: Cache value for this workflow
     required: true
 outputs:
   cache_tofu_providers_owner_evidence_path:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-owner-layer-evidence-tofu_providers-619fe82dfa03f1e2.outputs.owner_layer_evidence_path }}
 runs:
   using: composite

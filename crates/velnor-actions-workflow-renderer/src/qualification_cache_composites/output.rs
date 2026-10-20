@@ -24,7 +24,7 @@ pub(super) struct LayerTail {
     pub(super) record_id: QualificationCacheStepId,
 }
 
-/// Replace one job's contiguous cache prelude and tail with local actions.
+/// Map step output references to the specified composite action input fields.
 pub(super) fn output_map(outputs: &[Output], input: &str) -> BTreeMap<String, String> {
     outputs
         .iter()

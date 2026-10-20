@@ -36,6 +36,8 @@
 | Worker pair | The runner container and its private Docker-in-Docker container for one job. |
 | Recovery observation | A guest resource sample used to check an existing reservation during recovery. |
 | Field | An item with a name in software data, such as a TOML value or a database column. |
+| Accessor | A function that returns a stored or fixed software value. |
+| Length-prefixed field | A byte sequence preceded by its length as an unsigned 64-bit integer with the most significant byte first. |
 | Schema | The structure of a database, with its tables, columns, and checks. |
 | Database trigger | A database operation that starts automatically when specified data changes. |
 | Execution proof | A journal record used to check a job request and its worker pair. |
@@ -87,6 +89,9 @@
 | ABI | Rules that software uses to communicate across a program boundary. |
 
 | Runtime identity | A record of the runner, image, tools, and ABI facts used to bind cache keys. |
+| Composite action | A GitHub Actions file that groups steps and declares inputs and outputs. |
+| Typed identity | A Rust value whose type and fields identify one permitted software item. |
+| Workflow phase | One specified group of operations in a workflow. |
 
 | Future | A Rust value for an operation that can finish later. |
 
@@ -97,4 +102,6 @@
 | Retirement phase | One recorded step in physical retirement. |
 | Retirement proof | A journal record that links runner absence, resource cleanup, and capacity checks for one physical retirement. |
 | Retirement fence | A database rule that prevents a normal completion record while a retirement claim exists. |
-| Runner absence receipt | A journal record that confirms a GitHub lookup returned no runner for the specified identity. |
+| Runner registration | A GitHub service record that identifies one runner. |
+| Runner response receipt | A record of one lookup or removal attempt that contains metadata and digests. |
+| Runner absence receipt | A record of an exact lookup that reports no matching runner registration. |

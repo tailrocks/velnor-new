@@ -162,7 +162,7 @@ pub struct QualificationCacheCompositeId {
     owner_tag: u64,
 }
 
-/// Closed outputs passed from the prepare composite to the finish composite.
+/// Specified output names from the prepare composite action.
 #[must_use]
 pub fn qualification_cache_composite_output_names() -> Vec<String> {
     let layers = [
@@ -207,7 +207,7 @@ pub fn qualification_cache_composite_output_names() -> Vec<String> {
     names
 }
 
-/// Closed inputs passed to one layer's before-save composite.
+/// Specified output names from one cache layer's before-save composite action.
 #[must_use]
 pub fn qualification_cache_before_save_output_names(layer: QualificationCacheLayer) -> Vec<String> {
     let prefix = format!("cache_{}", layer.as_str());
@@ -233,7 +233,7 @@ pub fn qualification_cache_before_save_output_names(layer: QualificationCacheLay
     names
 }
 
-/// Closed prelude values needed by one layer's before-save composite.
+/// Specified input names for one cache layer's before-save composite action.
 #[must_use]
 pub fn qualification_cache_layer_prepare_input_names(
     _layer: QualificationCacheLayer,
@@ -241,7 +241,7 @@ pub fn qualification_cache_layer_prepare_input_names(
     vec!["prepare_outputs".to_owned()]
 }
 
-/// Closed inputs passed to one layer's after-save composite.
+/// Specified input names for one cache layer's after-save composite action.
 #[must_use]
 pub fn qualification_cache_after_save_input_names(layer: QualificationCacheLayer) -> Vec<String> {
     vec![
@@ -251,7 +251,7 @@ pub fn qualification_cache_after_save_input_names(layer: QualificationCacheLayer
     ]
 }
 
-/// Closed output exposed by one layer's after-save composite.
+/// Specified output name from one cache layer's after-save composite action.
 #[must_use]
 pub fn qualification_cache_after_save_output_names(layer: QualificationCacheLayer) -> Vec<String> {
     vec![format!("cache_{}_owner_evidence_path", layer.as_str())]
@@ -277,7 +277,7 @@ impl QualificationCacheCompositeId {
         Ok(Self::new_inner(phase, None, owner_id))
     }
 
-    /// Build one layer-scoped boundary identity for a generated job.
+    /// Create an ID for one cache layer and workflow phase.
     ///
     /// # Errors
     ///
@@ -342,7 +342,7 @@ impl QualificationCacheCompositeId {
         self.layer
     }
 
-    /// Check whether a prepare and finish identity belong to the same owner.
+    /// Check whether two composite action IDs have the same cache owner.
     #[must_use]
     pub const fn same_owner(self, other: Self) -> bool {
         self.owner_tag == other.owner_tag

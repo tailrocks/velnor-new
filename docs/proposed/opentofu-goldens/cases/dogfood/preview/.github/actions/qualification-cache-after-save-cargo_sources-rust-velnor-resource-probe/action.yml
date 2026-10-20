@@ -3,20 +3,20 @@ name: qualification-cache-after-save-cargo_sources-rust-velnor-resource-probe
 description: Shared steps for qualification-cache-after-save-cargo_sources-rust-velnor-resource-probe
 inputs:
   before_outputs:
-    description: Validated cache workflow value
+    description: Cache value for this workflow
     required: true
   cache_cargo_sources_save_action_outcome:
-    description: Validated cache workflow value
+    description: Cache value for this workflow
     required: true
   prepare_outputs:
-    description: Validated cache workflow value
+    description: Cache value for this workflow
     required: true
   qualification_campaign:
-    description: Validated cache workflow value
+    description: Cache value for this workflow
     required: true
 outputs:
   cache_cargo_sources_owner_evidence_path:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-owner-layer-evidence-cargo_sources-ee21ace0475c499e.outputs.owner_layer_evidence_path }}
 runs:
   using: composite

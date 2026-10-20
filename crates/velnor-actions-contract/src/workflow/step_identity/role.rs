@@ -147,7 +147,7 @@ pub enum StepRole {
     QualificationCacheExport,
     /// Save action for one emitted job owner and cache layer.
     QualificationCacheSave,
-    /// Save action whose exact key and path are passed to the Finish composite.
+    /// Record the cache receipt produced by the required job.
     /// Qualification cache receipt writer in the required aggregation job.
     QualificationCacheReceipt,
     /// Upload of the completed qualification cache receipt artifact.

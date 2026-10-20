@@ -3,47 +3,47 @@ name: qualification-cache-before-save-cargo_sources-rust-velnor-runner-cli
 description: Shared steps for qualification-cache-before-save-cargo_sources-rust-velnor-runner-cli
 inputs:
   prepare_outputs:
-    description: Validated cache workflow value
+    description: Cache value for this workflow
     required: true
   qualification_campaign:
-    description: Validated cache workflow value
+    description: Cache value for this workflow
     required: true
 outputs:
   cache_cargo_sources_export_result:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-export-cargo_sources-24cac170a5e9f13e.outputs.export_result }}
   cache_cargo_sources_save_before_census_admitted:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-save-before-census-cargo_sources-24cac170a5e9f13e.outputs.backend_admitted }}
   cache_cargo_sources_save_before_census_cache_id:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-save-before-census-cargo_sources-24cac170a5e9f13e.outputs.backend_cache_id }}
   cache_cargo_sources_save_before_census_cache_key:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-save-before-census-cargo_sources-24cac170a5e9f13e.outputs.backend_cache_key }}
   cache_cargo_sources_save_before_census_cache_ref:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-save-before-census-cargo_sources-24cac170a5e9f13e.outputs.backend_cache_ref }}
   cache_cargo_sources_save_before_census_cache_size:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-save-before-census-cargo_sources-24cac170a5e9f13e.outputs.backend_cache_size }}
   cache_cargo_sources_save_before_census_cache_version:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-save-before-census-cargo_sources-24cac170a5e9f13e.outputs.backend_cache_version }}
   cache_cargo_sources_save_before_census_key:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-save-before-census-cargo_sources-24cac170a5e9f13e.outputs.census_key }}
   cache_cargo_sources_save_before_census_phase:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-save-before-census-cargo_sources-24cac170a5e9f13e.outputs.census_phase }}
   cache_cargo_sources_save_before_census_status:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-save-before-census-cargo_sources-24cac170a5e9f13e.outputs.backend_status }}
   cache_cargo_sources_save_requested:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-export-cargo_sources-24cac170a5e9f13e.outputs.save_requested }}
   cache_cargo_sources_state_digest:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-export-cargo_sources-24cac170a5e9f13e.outputs.state_digest }}
 runs:
   using: composite

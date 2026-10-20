@@ -1,4 +1,4 @@
-//! Size fallback that keeps one owner's cache lifecycle in typed local actions.
+//! Group one cache owner's operations in local composite actions to reduce workflow size.
 
 use std::collections::{BTreeMap, BTreeSet};
 

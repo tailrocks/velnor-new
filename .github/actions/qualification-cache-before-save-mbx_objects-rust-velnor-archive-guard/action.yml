@@ -3,47 +3,47 @@ name: qualification-cache-before-save-mbx_objects-rust-velnor-archive-guard
 description: Shared steps for qualification-cache-before-save-mbx_objects-rust-velnor-archive-guard
 inputs:
   prepare_outputs:
-    description: Validated cache workflow value
+    description: Cache value for this workflow
     required: true
   qualification_campaign:
-    description: Validated cache workflow value
+    description: Cache value for this workflow
     required: true
 outputs:
   cache_mbx_objects_export_result:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-export-mbx_objects-4b8713f5acc1c10c.outputs.export_result }}
   cache_mbx_objects_save_before_census_admitted:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-save-before-census-mbx_objects-4b8713f5acc1c10c.outputs.backend_admitted }}
   cache_mbx_objects_save_before_census_cache_id:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-save-before-census-mbx_objects-4b8713f5acc1c10c.outputs.backend_cache_id }}
   cache_mbx_objects_save_before_census_cache_key:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-save-before-census-mbx_objects-4b8713f5acc1c10c.outputs.backend_cache_key }}
   cache_mbx_objects_save_before_census_cache_ref:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-save-before-census-mbx_objects-4b8713f5acc1c10c.outputs.backend_cache_ref }}
   cache_mbx_objects_save_before_census_cache_size:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-save-before-census-mbx_objects-4b8713f5acc1c10c.outputs.backend_cache_size }}
   cache_mbx_objects_save_before_census_cache_version:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-save-before-census-mbx_objects-4b8713f5acc1c10c.outputs.backend_cache_version }}
   cache_mbx_objects_save_before_census_key:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-save-before-census-mbx_objects-4b8713f5acc1c10c.outputs.census_key }}
   cache_mbx_objects_save_before_census_phase:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-save-before-census-mbx_objects-4b8713f5acc1c10c.outputs.census_phase }}
   cache_mbx_objects_save_before_census_status:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-save-before-census-mbx_objects-4b8713f5acc1c10c.outputs.backend_status }}
   cache_mbx_objects_save_requested:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-export-mbx_objects-4b8713f5acc1c10c.outputs.save_requested }}
   cache_mbx_objects_state_digest:
-    description: Prepared cache lifecycle output
+    description: Cache output from this composite action
     value: ${{ steps.qualification-cache-export-mbx_objects-4b8713f5acc1c10c.outputs.state_digest }}
 runs:
   using: composite
