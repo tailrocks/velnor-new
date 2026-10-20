@@ -30,6 +30,9 @@ jobs:
         run: echo qualification-scale-set
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   compare:
     name: Compare hosted and Velnor execution
     if: inputs.mode == 'both'
@@ -74,6 +77,9 @@ jobs:
         run: "node -e 'console.log(\"js-action-ok\")'"
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   services-hosted:
     name: Services / GitHub hosted
     if: inputs.mode == 'features' || inputs.mode == 'services'
@@ -107,6 +113,9 @@ jobs:
         run: timeout 20 bash -c 'until echo >/dev/tcp/redis/6379; do sleep 1; done'
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   artifacts-hosted:
     name: Artifacts / GitHub hosted
     if: inputs.mode == 'features' || inputs.mode == 'artifacts'
@@ -146,6 +155,9 @@ jobs:
           if-no-files-found: error
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   buildx-hosted:
     name: Buildx / GitHub hosted
     if: inputs.mode == 'features' || inputs.mode == 'buildx'
@@ -167,6 +179,9 @@ jobs:
         run: docker buildx version && printf 'FROM scratch\n' > Dockerfile && docker buildx build --progress=plain -t velnor-g4:probe .
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   expect-fail-hosted:
     name: Expected negative / GitHub hosted
     if: inputs.mode == 'negative'
@@ -188,6 +203,9 @@ jobs:
         run: echo expected-negative && exit 1
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   composite-hosted:
     name: Composite / GitHub hosted
     if: inputs.mode == 'composite'
@@ -217,6 +235,9 @@ jobs:
         uses: ./qualification/actions/composite # zizmor: ignore[self-repository]
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   js-pin-hosted:
     name: Pinned JavaScript / GitHub hosted
     if: inputs.mode == 'js-pin'
@@ -242,6 +263,9 @@ jobs:
           script: console.log('js-pin-ok')
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   docker-action-hosted:
     name: Docker action / GitHub hosted
     if: inputs.mode == 'docker-action'
@@ -271,6 +295,9 @@ jobs:
         uses: ./qualification/actions/docker # zizmor: ignore[self-repository]
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   container-hosted:
     name: Container / GitHub hosted
     if: inputs.mode == 'container'
@@ -298,7 +325,11 @@ jobs:
     defaults:
       run:
         shell: sh -e {0}
-    container: alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395
+    container:
+      image: alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
     services:
       redis:
         image: redis:8.10.2-alpine@sha256:2d3814be5e9b06a30a0be54770b7e12052e7e79ec85271aefd34875c1f393b23
@@ -327,6 +358,9 @@ jobs:
         run: "test \"$G4_ENV\" = outputs-ok && g4-path-ok | grep -qx path-ok"
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   outputs-hosted:
     name: Outputs / GitHub hosted
     if: inputs.mode == 'outputs'
@@ -360,6 +394,9 @@ jobs:
         run: "echo \"::add-mask::g4-mask-canary\" && echo g4-mask-canary"
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   cache-scale-set:
     name: Cache / Velnor Scale Set
     if: inputs.mode == 'cache'
@@ -381,6 +418,9 @@ jobs:
           key: g4-cache-${{ github.run_id }}
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   cache-hosted:
     name: Cache / GitHub hosted
     if: inputs.mode == 'cache'
@@ -485,6 +525,9 @@ jobs:
         run: "grep -qx cache-ok \"g4 cache/note.txt\" && test \"$HIT\" = true"
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   oidc-hosted:
     name: OIDC / GitHub hosted
     if: inputs.mode == 'oidc'
@@ -512,6 +555,9 @@ jobs:
         run: "test -n \"$ACTIONS_ID_TOKEN_REQUEST_URL\""
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   post-fail-hosted:
     name: Post failure / GitHub hosted
     if: inputs.mode == 'post-fail'
@@ -541,6 +587,9 @@ jobs:
         uses: ./qualification/actions/post-fail # zizmor: ignore[self-repository]
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   cancel-hosted:
     name: Cancel / GitHub hosted
     if: inputs.mode == 'cancel'
@@ -562,6 +611,9 @@ jobs:
         run: sleep 180
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   compose-hosted:
     name: Compose / GitHub hosted
     if: inputs.mode == 'compose'
@@ -603,6 +655,9 @@ jobs:
         run: echo compose-ok
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   bind-hosted:
     name: Bind / GitHub hosted
     if: inputs.mode == 'bind'
@@ -624,6 +679,9 @@ jobs:
         run: "printf '%s\\n' bind-ok > \"$GITHUB_WORKSPACE/g4-bind.txt\" && docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395 cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\" && grep -qx bind-ok \"$RUNNER_TEMP/g4-bind-out\""
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   cancel-service-hosted:
     name: Cancel service / GitHub hosted
     if: inputs.mode == 'cancel-service'
@@ -657,6 +715,9 @@ jobs:
         run: "i=0; while [ \"$i\" -lt 30 ]; do nc -z -w 1 redis 6379 && break; i=$((i+1)); sleep 1; done; nc -z -w 1 redis 6379 && echo service-up && sleep 900"
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   testcontainers-hosted:
     name: Testcontainers / GitHub hosted
     if: inputs.mode == 'testcontainers'
@@ -686,6 +747,9 @@ jobs:
         run: npm ci --prefix qualification/testcontainers && node qualification/testcontainers/reap.mjs
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   submodule-hosted:
     name: Submodule / GitHub hosted
     if: inputs.mode == 'submodule'
@@ -719,6 +783,9 @@ jobs:
         run: "git rev-parse HEAD > \"$RUNNER_TEMP/g4-head\" && grep -qx \"$GITHUB_SHA\" \"$RUNNER_TEMP/g4-head\" && grep -qx submodule-ok qualification/fixtures/submodule/MARKER && grep -qx lfs-ok qualification/fixtures/lfs-marker.txt"
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   ports-a-hosted:
     name: Ports A / GitHub hosted
     if: inputs.mode == 'ports'
@@ -748,6 +815,9 @@ jobs:
         run: "docker run -d --name g4-hold -p 8080:80 alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   ports-b-scale-set:
     name: Ports B / Velnor Scale Set
     if: inputs.mode == 'ports'
@@ -761,6 +831,9 @@ jobs:
         run: "docker run -d --name g4-hold -p 8080:80 alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   pressure-a-hosted:
     name: Pressure A / GitHub hosted
     if: inputs.mode == 'pressure'
@@ -798,6 +871,9 @@ jobs:
         run: echo pressure-start && sleep 150 && echo pressure-ok
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   pressure-b-scale-set:
     name: Pressure B / Velnor Scale Set
     if: inputs.mode == 'pressure'
@@ -811,6 +887,9 @@ jobs:
         run: echo pressure-start && sleep 150 && echo pressure-ok
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   pressure-c-scale-set:
     name: Pressure C / Velnor Scale Set
     if: inputs.mode == 'pressure'
@@ -824,6 +903,9 @@ jobs:
         run: echo pressure-start && sleep 150 && echo pressure-ok
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   secret-hosted:
     name: Secret / GitHub hosted
     if: inputs.mode == 'secret'
@@ -849,6 +931,9 @@ jobs:
         run: "test -n \"$G3_CANARY\" && sleep 180"
     container:
       image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      volumes:
+        - /opt/velnor/job-facts:/opt/velnor/job-facts:ro
+        - /.velnor-runtime-identity:/.velnor-runtime-identity:ro
   mbx-cache-write-hosted:
     name: MBX objects cache / protected-main writer
     if: inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true
