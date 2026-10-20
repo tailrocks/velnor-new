@@ -9,7 +9,7 @@ mod completion;
 mod identity;
 mod intents;
 mod launch;
-mod reservation;
+pub(in crate::journal) mod reservation;
 mod runtime;
 mod scope;
 mod session;

@@ -1,0 +1,29 @@
+{
+  "base_commit": "8f947ba313d1ff197a0cb0f4ec0a4ffa08cd47a8",
+  "source_manifest_sha256": "25f0c2d420886192a644c49e9061fa2d19cb8e69b4a5fec8b380f18f237eeca9",
+  "language_amendment_sha256": "2adf17098302cb7bc288e010d7bfe72a7a275cc06490d2bfdeac41f26a776443",
+  "architecture_reviewer": "/root/runtime_stack_architecture",
+  "language_reviewer": "/root/runner_context_review",
+  "review": "PASS",
+  "nextest": {
+    "result": "PASS",
+    "passed": 19,
+    "run_id": "2eda8a42-5a9e-41ef-8842-bd8532b30c94",
+    "log_sha256": "86ea2c69664d323640f507ffc6da19a94c106e41f00f8a51713455baea9cd789",
+    "source_note": "The test started before the comment change. Executable source bytes are equal."
+  },
+  "format": "PASS",
+  "direct_retired_disposition": "NOT_RUN",
+  "schema36_effects": "NOT_RUN",
+  "host_orchestration": "NOT_RUN",
+  "live_test": "NOT_RUN",
+  "final_nextest": {
+    "result": "PASS",
+    "passed": 19,
+    "run_id": "73cff33c-494d-4ade-b6c3-73d4d8a16e53",
+    "log_sha256": "445503e7cb86b0fb934def467e8513f56e438703ff189c3136bd805523d83340"
+  },
+  "hook_change": "Remove the unused status re-export. The test reads the enum from its module.",
+  "hook_change_reviewer": "/root/runtime_stack_architecture",
+  "previous_hook_test": "FAIL. The removed re-export was used by one test."
+}

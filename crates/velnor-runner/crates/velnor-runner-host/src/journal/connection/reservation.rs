@@ -5,6 +5,7 @@ mod enumerate;
 mod lifecycle;
 mod limits;
 mod physical_attempt;
+pub(in crate::journal) mod post_jit_retirement;
 mod provisioning;
 
 pub(in crate::journal) use provisioning::validate_retirement_digest;
