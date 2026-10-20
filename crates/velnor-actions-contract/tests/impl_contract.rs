@@ -73,6 +73,7 @@ fn config_validation_reports_key_paths() {
             bun: None,
             gradle: None,
             dbt: None,
+            ansible: None,
         },
         discovery: DiscoveryConfig {
             exclude: vec!["vendor/**".to_owned()],
@@ -149,14 +150,7 @@ fn runner_label_uses_exact_catalog_match() {
             default_shards: 1,
             by_manifest: BTreeMap::new(),
         },
-        stacks: StacksConfig {
-            ignore: vec![],
-            rust: None,
-            tofu: None,
-            bun: None,
-            gradle: None,
-            dbt: None,
-        },
+        stacks: StacksConfig::default(),
         discovery: DiscoveryConfig { exclude: vec![] },
         actions: ActionsConfig::default(),
         tools: velnor_actions_contract::ToolsConfig::default(),

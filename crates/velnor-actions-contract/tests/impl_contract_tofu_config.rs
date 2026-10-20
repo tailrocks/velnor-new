@@ -139,6 +139,7 @@ fn absent_tofu_table_stays_valid_and_schema_stable() {
         bun: None,
         gradle: None,
         dbt: None,
+        ansible: None,
     };
     assert!(stacks.validate("config.toml").is_ok());
     let rendered = serde_json::to_string(&stacks).expect("serializes");
@@ -176,6 +177,7 @@ fn tofu_is_a_registered_ignorable_stack() {
         bun: None,
         gradle: None,
         dbt: None,
+        ansible: None,
     };
     assert!(stacks.validate("config.toml").is_ok());
     let stacks = StacksConfig {
@@ -185,6 +187,7 @@ fn tofu_is_a_registered_ignorable_stack() {
         bun: None,
         gradle: None,
         dbt: None,
+        ansible: None,
     };
     let err = stacks.validate("config.toml").expect_err("bogus id fails");
     assert!(err.to_string().contains("unknown_stack_id"), "{err}");

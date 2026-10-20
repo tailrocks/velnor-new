@@ -118,6 +118,7 @@ fn ignore_admission_uses_typed_stack_eligibility() {
             bun: None,
             gradle: None,
             dbt: None,
+            ansible: None,
         };
         assert!(config.validate("config.toml").is_ok());
     }
@@ -128,6 +129,7 @@ fn ignore_admission_uses_typed_stack_eligibility() {
         bun: None,
         gradle: None,
         dbt: None,
+        ansible: None,
     };
     let error = explicit
         .validate("config.toml")
@@ -140,6 +142,7 @@ fn ignore_admission_uses_typed_stack_eligibility() {
         bun: None,
         gradle: None,
         dbt: None,
+        ansible: None,
     };
     let error = unknown.validate("config.toml").expect_err("unknown stack");
     assert!(error.to_string().contains("unknown_stack_id:unknown"));
