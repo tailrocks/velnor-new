@@ -376,6 +376,20 @@
       "log_sha256": "cb73472ea5966bf25df82938a805cb0247dc6e5fac1a90f27f396c47b273ab06",
       "author": "/root/obsolete_capacity_cleanup",
       "reviewer": "/root/helper_language_review"
+    },
+    {
+      "result": "FAIL",
+      "source_commit": "538f20ec83e44bea9241dd96e44135bd9436b416",
+      "head_after_check": "8a50a857a49034009cdbba69d813e5a417efff12",
+      "rust_inputs_changed": false,
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 rustup run 1.99.1 cargo clippy --manifest-path crates/velnor-runner/Cargo.toml --locked --offline --workspace --all-targets --all-features -- -D warnings",
+      "exit_status": 101,
+      "host_library_errors": 634,
+      "host_library_test_errors": 598,
+      "log": "build/nested-clippy-538f20ec-20261020.log",
+      "log_sha256": "a82bb316da8fde2fa885eda67189f3c21e97794347a7c02f211eb138ddb6426a",
+      "author": "/root/obsolete_capacity_cleanup",
+      "reviewer": null
     }
   ],
   "broader_pair_check": {
