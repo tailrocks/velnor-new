@@ -4,11 +4,12 @@ Repository: <repo>
 Detected stacks
   Rust: selected
   Mise check maintenance-helpers: test-maintenance-helpers (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
-  Workspace crates: 18
+  Workspace crates: 19
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-bun (crates/velnor-actions-bun/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin, test; depends on velnor-actions-freshness, velnor-actions-orchestrator]
     - velnor-actions-contract (crates/velnor-actions-contract/Cargo.toml) [lib, test]
+    - velnor-actions-dbt (crates/velnor-actions-dbt/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-freshness (crates/velnor-actions-freshness/Cargo.toml) [lib, test]
     - velnor-actions-gradle (crates/velnor-actions-gradle/Cargo.toml) [lib, test]
     - velnor-actions-mise (crates/velnor-actions-mise/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-tofu]
@@ -56,6 +57,7 @@ Workflow to generate
     - rust-velnor-actions-bun (23 steps)
     - rust-velnor-actions-cli (24 steps)
     - rust-velnor-actions-contract (23 steps)
+    - rust-velnor-actions-dbt (23 steps)
     - rust-velnor-actions-gradle (23 steps)
     - rust-velnor-actions-mise (24 steps)
     - rust-velnor-actions-orchestrator (24 steps)
@@ -69,7 +71,7 @@ Workflow to generate
     - rust-velnor-runner-github (23 steps)
     - rust-velnor-runner-host (23 steps)
     - zizmor (7 steps)
-    - 16 Rust crate jobs
+    - 17 Rust crate jobs
       Timeout: 8 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
       Entries:
@@ -77,6 +79,7 @@ Workflow to generate
         - rust-velnor-actions-bun
         - rust-velnor-actions-cli
         - rust-velnor-actions-contract
+        - rust-velnor-actions-dbt
         - rust-velnor-actions-gradle
         - rust-velnor-actions-mise
         - rust-velnor-actions-orchestrator
@@ -113,6 +116,12 @@ Workflow to generate
         - stack/rust/crates/velnor-actions-contract/doctest/default
         - stack/rust/crates/velnor-actions-contract/fmt/default
         - stack/rust/crates/velnor-actions-contract/nextest/default
+        - stack/rust/crates/velnor-actions-dbt/build/default
+        - stack/rust/crates/velnor-actions-dbt/clippy/default
+        - stack/rust/crates/velnor-actions-dbt/doc/default
+        - stack/rust/crates/velnor-actions-dbt/doctest/default
+        - stack/rust/crates/velnor-actions-dbt/fmt/default
+        - stack/rust/crates/velnor-actions-dbt/nextest/default
         - stack/rust/crates/velnor-actions-gradle/build/default
         - stack/rust/crates/velnor-actions-gradle/clippy/default
         - stack/rust/crates/velnor-actions-gradle/doc/default
@@ -184,7 +193,7 @@ Workflow to generate
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/doctest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/default
-  Parallel: 16 execution jobs; dependencies preserved; no matrix fan-out
+  Parallel: 17 execution jobs; dependencies preserved; no matrix fan-out
   Critical path: stack/rust/crates/velnor-actions-actionlint/build/default -> stack/rust/crates/velnor-actions-actionlint/nextest/default (2 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects

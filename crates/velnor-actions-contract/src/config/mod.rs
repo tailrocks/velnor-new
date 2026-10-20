@@ -8,6 +8,7 @@ mod binary_release;
 mod build_task;
 mod bun;
 mod check_receipt_budget;
+mod dbt;
 mod dco;
 mod discovery;
 mod distribution;
@@ -73,6 +74,7 @@ pub use check_receipt_budget::{
     MAX_CHECK_QUALIFIED_PROBE_EXPECTED_BYTES, MAX_CHECK_SOURCE_BYTES,
     MAX_CHECK_SYSTEM_VERSION_BYTES, check_execution_receipt_upper_bound,
 };
+pub use dbt::{DBT_JOB_PREFIX, DbtCheck, DbtService, DbtStackConfig};
 pub use dco::{DCO_CONFIG_PATH, DcoConfig, DcoRemediationCommits, DcoRequire};
 pub use discovery::DiscoveryConfig;
 pub use distribution::{
@@ -384,13 +386,11 @@ impl VelnorConfig {
 mod check_tool_reference_tests;
 
 #[cfg(test)]
-mod preview_policy_tests;
-
+mod dockerfile_tests;
 #[cfg(test)]
 mod images_tests;
-
 #[cfg(test)]
-mod dockerfile_tests;
+mod preview_policy_tests;
 
 mod review_completion;
 pub(crate) use distribution::valid_review_check_name;

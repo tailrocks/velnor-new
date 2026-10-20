@@ -23,6 +23,7 @@ use crate::OrchestratorError;
 use crate::check_runtime::preparation::acquisition::archive::{ArchiveBudget, extract_archive};
 use crate::config::deps_lock::{FoundAsset, parse_commit, parse_release_asset, read_deps_lock};
 use crate::config::load_config;
+use crate::config::private_fetch_root::prepare_deps_root;
 use crate::config::private_fetch_session::{Session, Token, scrub_dir};
 use crate::config::private_sources::{SourceKind, job_allowlist};
 use crate::discover::workspace_manifest;
@@ -162,7 +163,7 @@ pub(crate) fn execute(
     if expected != request.repositories {
         return Err(internal("private_allowlist_drift"));
     }
-    let deps = request.runner_temp.join("velnor").join("deps");
+    let deps = prepare_deps_root(&request.workspace)?;
     let downloads = request.runner_temp.join("velnor").join("private-downloads");
     scrub_dir(&downloads)?;
     std::fs::create_dir_all(&downloads)
