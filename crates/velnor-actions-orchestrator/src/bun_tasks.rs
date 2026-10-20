@@ -10,6 +10,7 @@ use velnor_actions_workflow_renderer::verification_jobs::BunMemberPolicy;
 use super::bun_steps::{MemberInputs, member_steps};
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
+use crate::config::private_wiring::PrivateWiring;
 use crate::discover::Discovery;
 
 /// Policies for every member, sorted by job id. `catalog` is the emission
@@ -20,6 +21,7 @@ pub(crate) fn policies(
     discovery: &Discovery,
     catalog: &ToolCatalog,
     acquire: Option<&Step>,
+    private: Option<&PrivateWiring>,
 ) -> Result<Vec<BunMemberPolicy>, OrchestratorError> {
     let Some(bun) = &config.stacks.bun else {
         return Ok(Vec::new());
@@ -47,6 +49,10 @@ pub(crate) fn policies(
             concrete.version(PinnedTool::Bun),
         )
         .map_err(|err| failure(err.code()))?;
+        let block = match private {
+            Some(wiring) => wiring.steps_for_bun(&workspace.root)?,
+            None => Vec::new(),
+        };
         for member in &workspace.members {
             out.push(policy(
                 member,
@@ -58,6 +64,7 @@ pub(crate) fn policies(
                     bunfig: bun_root.bunfig.as_deref(),
                     scopes: &scopes,
                     acquire,
+                    private: &block,
                 },
                 timeout,
             )?);
