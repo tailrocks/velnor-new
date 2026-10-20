@@ -13,7 +13,7 @@
       "source_files": {
         "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema.rs": "d7c9552d65951ba0d3c8f795882841d8827e82a5ed28d0e661f23578bd5949b9"
       },
-      "generation": "The historical host Journal::open created this schema and the fixture retained a pending legacy intent row."
+      "generation": "The historical host Journal::open created this schema. The fixture kept a pending legacy intent row."
     },
     {
       "file": "version_three_intermediate.sql",
@@ -29,7 +29,7 @@
         "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/remote.rs": "5a9d04162e01e298db91cf27b271f58845ab6535da0ff4ed22f569fa6737f6f1",
         "crates/velnor-runner/crates/velnor-runner-host/src/journal_schema.rs": "471036dacc4a4e7955e455f7a7fa4a985e535cc9eeb1d9be09e3de8b43220dbb"
       },
-      "generation": "The fixture records the output after the historical from_version_two step writes user_version 3. A temporary generator copy returned at that exact boundary before from_version_three ran. The repository never persisted a standalone version-3 schema."
+      "generation": "The fixture records the output after the historical from_version_two step writes user_version 3. A temporary generator copy returned at this boundary before from_version_three ran. The repository did not record a separate version-3 schema."
     },
     {
       "file": "version_four.sql",
@@ -44,7 +44,7 @@
         "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/remote.rs": "5a9d04162e01e298db91cf27b271f58845ab6535da0ff4ed22f569fa6737f6f1",
         "crates/velnor-runner/crates/velnor-runner-host/src/journal_schema.rs": "471036dacc4a4e7955e455f7a7fa4a985e535cc9eeb1d9be09e3de8b43220dbb"
       },
-      "generation": "A standalone harness invoked schema::bootstrap from source files whose bytes match the historical v4 source. A complete historical host-package build was blocked by unrelated cross-branch imports."
+      "generation": "A separate test program called schema::bootstrap with source files identical to the historical v4 source files. The full historical host package could not be built because of imports from other branches."
     },
     {
       "file": "version_five.sql",
@@ -60,7 +60,7 @@
         "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/remote.rs": "5a9d04162e01e298db91cf27b271f58845ab6535da0ff4ed22f569fa6737f6f1",
         "crates/velnor-runner/crates/velnor-runner-host/src/journal_schema.rs": "471036dacc4a4e7955e455f7a7fa4a985e535cc9eeb1d9be09e3de8b43220dbb"
       },
-      "generation": "The historical v5 schema::bootstrap migrated the v4 fixture to version 5. The complete historical host package could not be compiled because of unrelated cross-branch API mismatches."
+      "generation": "The historical v5 schema::bootstrap migrated the v4 fixture to version 5. The full historical host package could not be built because of API differences between branches."
     }
   ]
 }
