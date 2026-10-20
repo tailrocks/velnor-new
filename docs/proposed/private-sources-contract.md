@@ -2,7 +2,8 @@
 
 Status: adopted per the split brief; the owner may revisit. Hard decision:
 [HD-7](../hard-decisions.md). Origin: private cross-repository dependency
-credentials (H1) of the stacks design.
+credentials (H1) of the stacks design. Implementation record:
+[private sources](../implemented/private-sources.md).
 
 A generated job that consumes dependencies from private sibling repositories
 gets a read-only credential for exactly the repositories its locks name,

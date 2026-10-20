@@ -5,6 +5,7 @@ acceptance checks. It is not a proposal or a list of work in progress.
 
 - [macOS Scale Set ledger](macos-scaleset/checklist.md) — G0–G8 for the Scale Set controller. Status lives in that directory, not in the V1 gate records below.
 
+- [Private sources](private-sources.md) — GitHub App token minted, used and revoked before any repository-controlled step (hard decision 7).
 - [Affected selection](affected-selection.md) — pull requests run only the crate jobs their change can affect (hard decision 4).
 
 ## Implementation records (Velnor Actions V1, Gates 0–8)
