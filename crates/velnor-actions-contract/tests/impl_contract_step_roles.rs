@@ -7,6 +7,9 @@ use velnor_actions_contract::workflow::cache_family::TOFU_PROVIDERS_SAVE_CONDITI
 use velnor_actions_contract::workflow::step_identity::validate_step_sequence;
 use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
+#[path = "impl_contract_step_roles_lfs.rs"]
+mod lfs_tests;
+
 const TOFU_KEY: &str = "${{needs.plan.outputs.tofu_providers_key_0}}";
 const TOFU_PATH: &str = "${{ runner.temp }}/velnor/tofu-cache/root-0123456789ab";
 const STATIC_TOFU_KEY: &str = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-root-0123456789ab-${{hashFiles('.terraform.lock.hcl')}}";
@@ -26,7 +29,6 @@ fn plan_step(name: &str) -> Step {
         },
     }
 }
-
 #[test]
 fn display_name_does_not_change_typed_output_identity() {
     let mut step = plan_step("Plan");
@@ -37,7 +39,6 @@ fn display_name_does_not_change_typed_output_identity() {
     assert_eq!(step.id, Some(StepId::Plan));
     assert_eq!(step.role, Some(StepRole::PlanProducer));
 }
-
 #[test]
 fn final_serialized_scope_rejects_duplicate_typed_ids() {
     let steps = [plan_step("Plan"), plan_step("Renamed Plan")];
@@ -339,60 +340,4 @@ fn tofu_provider_save_must_match_restore_gate_and_order() {
             .to_string()
             .contains("tofu_provider_save_before_use")
     );
-}
-
-#[test]
-fn configured_checkout_authority_is_typed_exact_and_name_independent() {
-    use velnor_actions_contract::workflow::step_identity::is_configured_checkout;
-
-    const CHECKOUT_USES: &str = "actions/checkout@0123456789abcdef0123456789abcdef01234567";
-    let mut checkout = Step {
-        parallel: false,
-        name: "Checkout".to_owned(),
-        id: None,
-        role: Some(StepRole::Checkout),
-        condition: None,
-        kind: StepKind::Action {
-            uses: CHECKOUT_USES.to_owned(),
-            with: BTreeMap::from([("persist-credentials".to_owned(), "false".to_owned())]),
-            env: BTreeMap::new(),
-        },
-    };
-    assert!(is_configured_checkout(&checkout, CHECKOUT_USES));
-
-    checkout.name = "Presentation label only".to_owned();
-    assert!(is_configured_checkout(&checkout, CHECKOUT_USES));
-
-    checkout.role = None;
-    assert!(!is_configured_checkout(&checkout, CHECKOUT_USES));
-    checkout.role = Some(StepRole::Checkout);
-
-    assert!(!is_configured_checkout(
-        &checkout,
-        "actions/checkout@fedcba9876543210fedcba9876543210fedcba98"
-    ));
-
-    checkout.condition = Some("success()".to_owned());
-    assert!(!is_configured_checkout(&checkout, CHECKOUT_USES));
-    checkout.condition = None;
-
-    if let StepKind::Action { with, .. } = &mut checkout.kind {
-        with.insert("fetch-depth".to_owned(), "0".to_owned());
-    }
-    assert!(is_configured_checkout(&checkout, CHECKOUT_USES));
-    validate_step_sequence(std::slice::from_ref(&checkout), "checkout")
-        .expect("general checkout role supports workflow-specific inputs");
-    if let StepKind::Action { with, .. } = &mut checkout.kind {
-        with.insert("fetch-depth".to_owned(), "1".to_owned());
-    }
-    assert!(!is_configured_checkout(&checkout, CHECKOUT_USES));
-    validate_step_sequence(std::slice::from_ref(&checkout), "checkout")
-        .expect("general checkout role supports workflow-specific inputs");
-    if let StepKind::Action { with, env, .. } = &mut checkout.kind {
-        with.remove("fetch-depth");
-        env.insert("GIT_CONFIG_COUNT".to_owned(), "1".to_owned());
-    }
-    assert!(!is_configured_checkout(&checkout, CHECKOUT_USES));
-    validate_step_sequence(std::slice::from_ref(&checkout), "checkout")
-        .expect("general checkout role supports workflow-specific environment");
 }

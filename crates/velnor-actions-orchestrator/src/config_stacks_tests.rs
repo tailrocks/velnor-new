@@ -330,3 +330,26 @@ fn clippy_all_features_rejects_non_boolean_values() {
     let root = rooted("schema = 1\n[stacks.rust]\nclippy_all_features = \"true\"\n");
     assert!(load_config(root.path()).is_err());
 }
+
+#[test]
+fn bun_stack_loads_strictly_and_requires_roots() {
+    let root = rooted(
+        "schema = 1\n[stacks.bun]\nroots = [\"frontend\"]\nscripts = [\"test\"]\n[stacks.bun.members.\"@chainargos/ui\"]\nbrowsers = [\"chromium\"]\n",
+    );
+    let bun = load_config(root.path())
+        .expect("Bun stack")
+        .stacks
+        .bun
+        .expect("Bun");
+    assert_eq!(bun.roots[0].as_str(), "frontend");
+    assert_eq!(bun.scripts, ["test"]);
+    assert_eq!(bun.members["@chainargos/ui"].browsers.len(), 1);
+    for body in [
+        "schema = 1\n[stacks.bun]\n",
+        "schema = 1\n[stacks.bun]\nroots = []\n",
+        "schema = 1\n[stacks.bun]\nroots = [\".\"]\nrun = \"bun test\"\n",
+        "schema = 1\n[stacks.bun]\nroots = [\"../escape\"]\n",
+    ] {
+        assert!(load_config(rooted(body).path()).is_err(), "{body}");
+    }
+}

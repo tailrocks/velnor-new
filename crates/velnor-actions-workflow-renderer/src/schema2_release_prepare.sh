@@ -40,7 +40,24 @@ assert_tag_target() {
     object_sha="$(jq -er '.object.sha' <<<"$tag_object")" \
       || fail 'annotated release tag response is invalid'
   fi
-  [[ "$object_type" == commit && "$object_sha" == "$source_sha" ]] || fail 'tag does not resolve to the exact source commit'
+  [[ "$object_type" == commit && "$object_sha" == "$release_commit" ]] || fail 'tag does not resolve to the exact source commit'
+}
+
+# A fixed version tag is immutable and keeps the commit it was published from.
+# A later dispatch on an unchanged version therefore finds that release at an
+# earlier commit. Print `exact` or `earlier`; refuse any other relationship.
+classify_release_commit() {
+  local relation
+  [[ "$release_commit" =~ ^[0-9a-f]{40}$ ]] || fail 'existing release target is not an exact commit'
+  if [[ "$release_commit" == "$source_sha" ]]; then
+    printf 'exact\n'
+    return 0
+  fi
+  [[ -n "$fixed_tag" ]] || fail 'existing release target differs from the exact source commit'
+  relation="$(gh api "repos/$repository/compare/$release_commit...$source_sha" --jq '.status')" \
+    || fail 'release commit comparison failed'
+  [[ "$relation" == ahead ]] || fail "published release commit is not an ancestor of the source (status: $relation)"
+  printf 'earlier\n'
 }
 
 releases="$(gh api --paginate --slurp "repos/$repository/releases?per_page=100")" \
@@ -62,9 +79,13 @@ case "$count" in
   *) fail 'multiple releases use the exact source tag' ;;
 esac
 
+release_commit="$(jq -r '.[0].target_commitish' <<<"$matches")" \
+  || fail 'release target response is invalid'
+release_scope="$(classify_release_commit)"
+
 jq -e \
   --arg tag "$prepare_tag" \
-  --arg sha "$source_sha" \
+  --arg sha "$release_commit" \
   --argjson expected "$prepare_expected_assets" \
   '.[0] as $release
    | $release.tag_name == $tag
@@ -79,6 +100,17 @@ jq -e \
        and (.digest | type == "string" and test("^sha256:[0-9a-f]{64}$")))' \
   <<<"$matches" >/dev/null || fail 'existing release metadata, immutability, or asset set does not match'
 assert_tag_target
+
+if [[ "$release_scope" == earlier ]]; then
+  gh release verify "$prepare_tag" --repo "$repository" >/dev/null \
+    || fail 'release signature verification failed'
+  printf '::warning title=Release %s already published::%s is immutable at %s; source %s is NOT released. Bump the version to publish it.\n' \
+    "$prepare_tag" "$prepare_tag" "$release_commit" "$source_sha"
+  printf 'Release %s already published at %s; source %s was not released (no-op). Bump the version to release it.\n' \
+    "$prepare_tag" "$release_commit" "$source_sha" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+  printf 'action=complete\n' >> "$GITHUB_OUTPUT"
+  exit 0
+fi
 
 temp_dir="$(mktemp -d)" || fail 'could not create release verification directory'
 trap 'rm -rf "$temp_dir"' EXIT

@@ -1,0 +1,59 @@
+{
+  "scope": "These checks are for the integration of main. They do not prove a live installation.",
+  "parents": [
+    "901fddb8fa6dfa41b6b7a7c2e8a24c582db4ef7b",
+    "16c7c3f11ea80dd941405f4a09b4244289fe0e41"
+  ],
+  "source_reviewer": "/root/execution_source_security_review",
+  "source_review": "main-16c7-seven-path-independent-source-20261020.json",
+  "source_review_sha256": "8fe97be7730bd57120c079c404052465452acc301d989fa3b0b939a2d367d14b",
+  "checks": [
+    {
+      "result": "PASS",
+      "description": "The root strict check used all targets and all features.",
+      "log": "main-16c7-root-strict-20261020.log",
+      "log_sha256": "c2d891ce5d7cb592dd4afa2117e2d4aac0a1b272fc8df8ce93aaa003faba7ca3"
+    },
+    {
+      "result": "FAIL",
+      "description": "The full root run has 5337 PASS results and five FAIL results.",
+      "log": "main-16c7-root-nextest-20261020.log",
+      "log_sha256": "1f36dd234993b97a85573dab596d93055e696e1eeb4efb18650537891dfc21cd",
+      "nextest_run": "a9143cdd-b3ad-45c7-9171-fb653c74bc15"
+    },
+    {
+      "result": "PASS",
+      "description": "The generated reference files match.",
+      "log": "main-16c7-goldens-check-20261020.log",
+      "log_sha256": "f9f7d45211fe7c6caa15ae755fa743666289054d857f8937a2c263a8fa537d54"
+    },
+    {
+      "result": "PASS",
+      "description": "Both release snapshot tests have PASS results.",
+      "log": "main-16c7-snapshot-final-focused-20261020.log",
+      "log_sha256": "1f165cd49407aee6574e987690f431f6e63d03aa9fa266ceb78b0173c5325d25",
+      "nextest_run": "364dd4fc-b8ce-44e8-b222-553dca4b9bf6"
+    },
+    {
+      "result": "PASS",
+      "description": "The release harness has one PASS result for the staged source tree.",
+      "log": "main-16c7-staged-harness-20261020.log",
+      "log_sha256": "a50552afa52cc9168a6cb406094176fccd19e1e2ae4126df9cb7592befc955a1",
+      "nextest_run": "6bb6aa03-7ecd-4a16-ae8b-2c143b7e5f36"
+    },
+    {
+      "result": "PASS",
+      "description": "The final root strict check used all targets and all features.",
+      "log": "main-16c7-root-strict-final-20261020.log",
+      "log_sha256": "56095d00c7a52c1e139cf84379962d478fdde03e988f4424445a6fa87c172634"
+    }
+  ],
+  "remaining": "The cache owner protocol repair needs integration. The final full test gates need a new run.",
+  "source_changes": [
+    "Keep the LFS option in the extracted checkout validator.",
+    "Keep the Bun configuration and tests.",
+    "Keep the release repeat-run checks.",
+    "Extract schema validation to satisfy the source limit.",
+    "Refresh release snapshots from the exact rendered fixture."
+  ]
+}
