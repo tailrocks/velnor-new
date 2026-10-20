@@ -102,6 +102,7 @@ mod impl_prepare_generate;
 mod impl_prepare_generate_outputs;
 mod impl_preseed_cold;
 mod impl_preseed_manifest;
+mod impl_private_sources_generate;
 mod impl_private_sources_parity;
 mod impl_project_tool_resolver_exec;
 mod impl_project_tool_resolver_exec_sources;

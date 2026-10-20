@@ -186,7 +186,8 @@ is the repository root) and the owned toolchain env. `private-fetch-v1`:
    (`private_tag_moved`), the published digest equals the locked SHA-256, the
    downloaded bytes hash to it (`private_asset_sha256_mismatch`), then extracts
    through the bounded archive reader (no absolute or `..` paths, no links) into
-   `$RUNNER_TEMP/velnor/deps/<extract_to>`, `.../maven/<id>` or `.../git/<id>`;
+   `<workspace>/.velnor/deps/<extract_to>`, `.../maven/<id>` or `.../git/<id>`
+   (see "Bundle location");
 5. downloads git trees by locked commit.
 
 `private-revoke-v1` runs `always()` after a successful mint: it removes any
@@ -195,6 +196,26 @@ for an already dead token), then calls the API with the same token and requires
 401 (`private_token_still_valid` otherwise). Requests use `curl` under the
 private-fetch policy with an `https`-only, API-origin-only configuration file;
 curl drops the `Authorization` header when a redirect leaves the API host.
+
+## Bundle location
+
+Bundles land under `<workspace>/.velnor/deps/`, the path a consumer's local
+fetch script (for example `mise run fetch-deps`) already uses, so one
+`.cargo/config.toml` (`[env]` entries with `relative = true` that point
+`build.rs` at `.velnor/deps/<id>/...`) works locally and in CI. Consumers
+gitignore `.velnor/deps/`. A bundle holds no credential: the token is revoked
+before any repository step runs, so a repository build script reading the
+bundle gains nothing it could not read from the locked, digest-verified
+download. The workspace is repository-controlled, so before extracting, the
+fetch resolves the workspace path, requires `.velnor` to be a real directory
+and removes whatever occupies `.velnor/deps` (planted files, stale content or a
+symlink) without following links. The archive reader then refuses symlinked
+ancestors, so extraction cannot leave the workspace. Downloads, the credential
+directory and the revoke state stay under `$RUNNER_TEMP/velnor/`.
+
+Every `vars.*` the generator emits for private sources is declared:
+`config-variables` in the generated `actionlint.yaml` lists
+`private_sources.app_id_variable` next to the review and tap variables.
 
 ## Credential boundary
 
