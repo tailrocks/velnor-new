@@ -4,6 +4,7 @@
 
 mod actions;
 mod agents;
+mod ansible;
 mod binary_release;
 mod build_task;
 mod bun;
@@ -53,6 +54,9 @@ pub(crate) use binary_release::validate_static_release_inventory;
 
 pub use actions::{ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
 pub use agents::{AgentsConfig, ClaudeMdMode};
+pub use ansible::{
+    ANSIBLE_JOB_PREFIX, AnsibleCheck, AnsibleCollection, AnsibleStackConfig, LintProfile,
+};
 pub use binary_release::{
     RustBinaryPreviewConfig, RustBinaryPreviewVersioning, RustBinaryReleaseArchive,
     RustBinaryReleaseCompanion, RustBinaryReleaseConfig, RustBinaryReleaseEvidence,
@@ -379,11 +383,7 @@ impl VelnorConfig {
 mod check_tool_reference_tests;
 
 #[cfg(test)]
-mod dockerfile_tests;
-#[cfg(test)]
-mod images_tests;
-#[cfg(test)]
-mod preview_policy_tests;
+mod unit_tests;
 
 mod review_completion;
 pub(crate) use distribution::valid_review_check_name;

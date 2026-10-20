@@ -6,7 +6,7 @@
 
 use serde::Deserialize;
 use velnor_actions_contract::config::{
-    BunStackConfig, DbtStackConfig, RustBinaryReleaseConfig, RustReleaseConfig,
+    AnsibleStackConfig, BunStackConfig, DbtStackConfig, RustBinaryReleaseConfig, RustReleaseConfig,
 };
 use velnor_actions_contract::{
     DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig, StacksConfig,
@@ -32,6 +32,8 @@ pub(crate) struct PartialStacks {
     gradle: Option<velnor_actions_contract::config::gradle::GradleStackConfig>,
     /// dbt stack options (strict: `projects` is required).
     dbt: Option<DbtStackConfig>,
+    /// Ansible stack options (strict: `roots` is required).
+    ansible: Option<AnsibleStackConfig>,
 }
 
 /// Rust stack section with every value optional.
@@ -118,6 +120,7 @@ impl PartialStacks {
             bun: self.bun,
             gradle: self.gradle,
             dbt: self.dbt,
+            ansible: self.ansible,
         })
     }
 }
@@ -125,3 +128,7 @@ impl PartialStacks {
 #[cfg(test)]
 #[path = "config_stacks_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "config_stacks_adapter_tests.rs"]
+mod adapter_tests;
