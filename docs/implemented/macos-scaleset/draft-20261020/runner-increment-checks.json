@@ -1453,8 +1453,9 @@
     "reviewer": "runner_context_review",
     "language_reviewer": "helper_language_review",
     "scope": "The change removes an unused projection. The active job facts and resource admission remain.",
-    "text_change": "After the test run, one assertion message uses change instead of mutate.",
-    "remaining": "Strict runner checks and live installation remain necessary."
+    "text_change": "One assertion message now says that snapshot reads must not change the reservation journal.",
+    "remaining": "Strict runner checks and live installation remain necessary.",
+    "text_change_time": "after_test_run"
   },
   "native_completion_finalization": {
     "result": "PASS",
@@ -1493,7 +1494,7 @@
     "review_sha256": "1f3b1018eb158b96ef37a83df95af032833670d735e7330654114e850c0d35e2",
     "author": "replay_context_refactor",
     "reviewer": "execution_source_security_review",
-    "scope": "The provider trait and opaque candidate type have crate visibility. Their data and verification methods keep their restricted visibility.",
+    "scope": "The provider trait and candidate type are available in the Rust crate. Candidate data and evidence methods stay within the resource probe module.",
     "remaining": "The strict runner gate and live tests remain necessary."
   },
   "image_import_row_validation": {
@@ -1505,6 +1506,16 @@
     "log_sha256": "1e42ad7a312d854634516b9a39a235173957e171dd2ea3013f86dd3ae8577dfb",
     "final_sha256": "b0ad4e0e6c580e9d484109fe1e83a23c83f035465aca1679351fd83364a6933c",
     "scope": "The private row validator has no asynchronous operation. Its body and database operation order stay the same.",
+    "remaining": "The strict runner gate still has other failures."
+  },
+  "fixture_numeric_literals": {
+    "result": "PASS",
+    "tests": 1,
+    "run_id": "3f144bf9-00df-4277-abeb-11a7570e8864",
+    "test_log_sha256": "fb72027f7a009015539984c1920f3471fa2194a47d7e9321547283fa5ddd0805",
+    "author": "replay_context_refactor",
+    "scope": "The two fixtures use numeric separators. Their numeric values and JSON text stay the same.",
+    "numeric_tokens_checked": 124,
     "remaining": "The strict runner gate still has other failures."
   }
 }

@@ -34,12 +34,12 @@ pub(crate) fn self_storage_record(
         "cgroup_path_in_self_namespace": format!("/worker/{role}/helper"),
         "self_leaf_limits": {
             "cgroup_path": format!("/worker/{role}/helper"),
-            "memory_max_bytes": 4294967296_u64,
-            "memory_current_bytes": 67108864_u64,
+            "memory_max_bytes": 4_294_967_296_u64,
+            "memory_current_bytes": 67_108_864_u64,
             "swap_max_bytes": 0_u64,
             "swap_current_bytes": 0_u64,
-            "cpu_quota_micros": 100000_u64,
-            "cpu_period_micros": 100000_u64,
+            "cpu_quota_micros": 100_000_u64,
+            "cpu_period_micros": 100_000_u64,
             "cpuset_cpus": [0],
             "pids_max": 128_u64,
             "pids_current": 2_u64
@@ -200,14 +200,14 @@ fn attachment_record(
         "mount_device_minor": device_minor,
         "statx_device_major": 0,
         "statx_device_minor": statx_device_minor,
-        "filesystem_type_magic": if tmpfs { 0x01021994_u64 } else { 0x9123683e_u64 },
+        "filesystem_type_magic": if tmpfs { 0x0102_1994_u64 } else { 0x9123_683e_u64 },
         "filesystem_type_name": if tmpfs { "tmpfs" } else { "btrfs" },
         "filesystem_id": fixture_filesystem_id(source, index),
         "block_size": 4096_u64,
         "total_bytes": fixture_total_bytes(tmpfs, source, tmpfs_bytes),
         "free_bytes": fixture_free_bytes(tmpfs, source, tmpfs_bytes),
         "available_bytes": fixture_free_bytes(tmpfs, source, tmpfs_bytes),
-        "inode_total": if tmpfs { tmpfs_inodes } else { 1000000_u64 },
+        "inode_total": if tmpfs { tmpfs_inodes } else { 1_000_000_u64 },
         "inode_free": fixture_free_inodes(tmpfs, source, tmpfs_inodes),
         "inode_available": fixture_free_inodes(tmpfs, source, tmpfs_inodes),
         "inode_policy": "finite"
@@ -263,21 +263,21 @@ fn fixture_total_bytes(tmpfs: bool, source: &str, tmpfs_bytes: u64) -> u64 {
     if tmpfs {
         tmpfs_bytes
     } else if source == "runner-work" {
-        4294967296
+        4_294_967_296
     } else {
-        2147483648
+        2_147_483_648
     }
 }
 
 fn fixture_free_bytes(tmpfs: bool, source: &str, tmpfs_bytes: u64) -> u64 {
     if tmpfs && source == "runner-work" {
-        tmpfs_bytes - 294967296
+        tmpfs_bytes - 294_967_296
     } else if tmpfs {
         tmpfs_bytes
     } else if source == "runner-work" {
-        4000000000
+        4_000_000_000
     } else {
-        2147483648
+        2_147_483_648
     }
 }
 
@@ -287,7 +287,7 @@ fn fixture_free_inodes(tmpfs: bool, source: &str, tmpfs_inodes: u64) -> u64 {
     } else if tmpfs {
         tmpfs_inodes
     } else {
-        1000000
+        1_000_000
     }
 }
 
