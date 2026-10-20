@@ -2,11 +2,11 @@ use std::path::{Path, PathBuf};
 
 use crate::error::HostError;
 use crate::journal::Journal;
+use crate::journal::schema::JOURNAL_VERSION;
 
 use super::helpers::Scratch;
 
 const V32: i64 = 32;
-const V33: i64 = 33;
 
 #[derive(Debug, PartialEq, Eq)]
 struct ChargedState {
@@ -51,7 +51,7 @@ async fn v33_opens_empty_v32_database_and_reopen_is_idempotent() -> Result<(), H
     let (scratch, path, _source_bytes) = copied_fixture("empty-v32.db")?;
     assert_eq!(read_version(&path).await?, V32);
     migrate_and_reopen(&path).await?;
-    assert_eq!(read_version(&path).await?, V33);
+    assert_eq!(read_version(&path).await?, JOURNAL_VERSION);
     assert_eq!(table_count(&path, "physical_attempt_lineages").await?, 0);
     assert_eq!(table_count(&path, "physical_attempts").await?, 0);
     assert_eq!(table_count(&path, "physical_attempt_current").await?, 0);
@@ -72,7 +72,7 @@ async fn v33_preserves_charged_started_v32_attempt_and_reopen_is_idempotent()
     assert_eq!(before.jit_state, "started");
 
     migrate_and_reopen(&path).await?;
-    assert_eq!(read_version(&path).await?, V33);
+    assert_eq!(read_version(&path).await?, JOURNAL_VERSION);
     assert_eq!(read_charged_state(&path).await?, before);
     let migrated_attempt = read_attempt_state(&path).await?;
     assert_eq!(migrated_attempt.lineages, 1);
@@ -87,7 +87,7 @@ async fn v33_preserves_charged_started_v32_attempt_and_reopen_is_idempotent()
     );
 
     migrate_and_reopen(&path).await?;
-    assert_eq!(read_version(&path).await?, V33);
+    assert_eq!(read_version(&path).await?, JOURNAL_VERSION);
     assert_eq!(read_charged_state(&path).await?, before);
     assert_eq!(read_attempt_state(&path).await?, migrated_attempt);
     drop(scratch);
@@ -118,10 +118,10 @@ fn copied_fixture(name: &str) -> Result<(Scratch, PathBuf, Vec<u8>), HostError> 
 
 async fn migrate_and_reopen(path: &Path) -> Result<(), HostError> {
     let journal = Journal::open(path).await?;
-    assert_eq!(journal_version(&journal).await?, V33);
+    assert_eq!(journal_version(&journal).await?, JOURNAL_VERSION);
     drop(journal);
     let reopened = Journal::open(path).await?;
-    assert_eq!(journal_version(&reopened).await?, V33);
+    assert_eq!(journal_version(&reopened).await?, JOURNAL_VERSION);
     drop(reopened);
     Ok(())
 }

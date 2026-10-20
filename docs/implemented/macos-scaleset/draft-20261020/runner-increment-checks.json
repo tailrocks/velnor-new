@@ -1700,5 +1700,16 @@
     "author": "grouped_source_evidence",
     "reviewer": "replay_context_refactor",
     "scope": "The messages describe the accepted environment values and storage checks. Code identifiers and behavior stay the same."
+  },
+  "fixture_clock_and_version_20261021": {
+    "status": "PASS",
+    "source_parent": "fa2323ba305472f978fc3282ab566accbd615609",
+    "result": "5 tests passed. Other tests were outside this test filter.",
+    "run_id": "0804162f-caad-4aba-ae12-048dce0d51cf",
+    "log_sha256": "128fd3522f28e310f7d890d05943afdb1003cd8c4fc4fdffafac050c33746adc",
+    "log": "/Users/donbeave/Downloads/velnor-goal/evidence/shipping-fixture-clock-version-nextest-20261021.log",
+    "scope": "Test fixtures use the current schema version and the production clock. Production rules remain unchanged.",
+    "full_runner_gate": "FAIL",
+    "full_runner_reason": "The earlier full test run has five failures. This test run does not replace that record."
   }
 }
