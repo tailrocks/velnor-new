@@ -4,7 +4,7 @@ use crate::launch::bootstrap::test_verified_storage_cleanup;
 use crate::worker::{WorkerIdentityNames, WorkerVolumeRole};
 
 use super::super::helpers::TEST_ENGINE_ID;
-use super::database::{query_i64, query_optional_text};
+use super::database::query_i64;
 #[tokio::test]
 async fn migrated_v18_cleanup_uses_four_owned_volumes_and_keeps_metadata_held_until_settlement()
 -> Result<(), HostError> {
@@ -67,36 +67,37 @@ async fn migrated_v18_cleanup_uses_four_owned_volumes_and_keeps_metadata_held_un
         true,
         true,
     )?;
-    scope.record_storage_cleanup(legacy_proof).await?;
+    let cleanup_result = scope.record_storage_cleanup(legacy_proof).await;
+    assert!(matches!(cleanup_result, Err(HostError::Journal)));
     assert_eq!(
         scope.reservation(&physical).await?.map(|row| row.state),
         Some(ReservationState::Reserved),
-        "the four-object cleanup proof leaves the metadata charge held"
-    );
-    scope.record_remote_cleanup(reservation_id).await?;
-    scope.record_local_cleanup(reservation_id).await?;
-    let settlement =
-        historical_settlement_probe(&scope, reservation_id, &identity.docker_root_digest, '8')
-            .await?;
-    let sample = super::super::helpers::settlement_sample(&scope, &settlement).await?;
-    assert_eq!(
-        scope
-            .record_storage_metadata_settlement(&settlement, sample)
-            .await?,
-        crate::journal::MetadataSettlementResult::Settled
+        "The v18 record has no cleanup observer witness. The storage reservation stays reserved."
     );
     assert_eq!(
-        scope.reservation(&physical).await?.map(|row| row.state),
-        Some(ReservationState::Released)
-    );
-    assert_eq!(
-        query_optional_text(
+        query_i64(
             &migrated,
-            "SELECT metadata_volume FROM capacity_reservation_provisioning_cleanups WHERE reservation_id = ?1",
+            "SELECT COUNT(*) FROM capacity_reservation_provisioning_cleanups WHERE reservation_id = ?1",
             reservation_id,
         )
         .await?,
-        None
+        0,
+        "The failed transaction must not create a cleanup receipt."
+    );
+    assert_eq!(
+        query_i64(
+            &migrated,
+            "SELECT storage_cleanup_proven FROM capacity_reservation_provisioning_state WHERE reservation_id = ?1",
+            reservation_id,
+        )
+        .await?,
+        0,
+        "The failed transaction must not record cleanup proof."
+    );
+    assert_eq!(
+        scope.reservation(&physical).await?.map(|row| row.state),
+        Some(ReservationState::Reserved),
+        "The storage reservation remains reserved."
     );
     drop(scope);
     drop(migrated);
@@ -108,17 +109,26 @@ async fn migrated_v18_cleanup_uses_four_owned_volumes_and_keeps_metadata_held_un
             .reservation(&physical)
             .await?
             .map(|row| row.state),
-        Some(ReservationState::Released)
+        Some(ReservationState::Reserved)
     );
     assert_eq!(
-        query_optional_text(
+        query_i64(
             &reopened,
-            "SELECT metadata_volume FROM capacity_reservation_provisioning_cleanups WHERE reservation_id = ?1",
+            "SELECT COUNT(*) FROM capacity_reservation_provisioning_cleanups WHERE reservation_id = ?1",
             reservation_id,
         )
         .await?,
-        None,
-        "After Journal::open, v18 cleanup keeps its historical four-object proof."
+        0,
+        "Reopening the journal must not add a cleanup receipt for a v18 row."
+    );
+    assert_eq!(
+        query_i64(
+            &reopened,
+            "SELECT storage_cleanup_proven FROM capacity_reservation_provisioning_state WHERE reservation_id = ?1",
+            reservation_id,
+        )
+        .await?,
+        0
     );
     Ok(())
 }
@@ -158,72 +168,4 @@ async fn read_v18_cleanup_identity(journal: &Journal) -> Result<V18CleanupIdenti
         return Err(HostError::Journal);
     }
     Ok(identity)
-}
-
-async fn historical_settlement_probe(
-    scope: &crate::journal::ConnectionJournal,
-    reservation_id: i64,
-    docker_root_digest: &str,
-    probe_nonce: char,
-) -> Result<crate::journal::StorageMetadataSettlementClaim, HostError> {
-    use crate::journal::{OperationalCapacityLimits, ProbePhase, ProbeSeed};
-    use crate::launch::VerifiedProbeCleanup;
-
-    let journal = scope.journal_ref();
-    journal
-        .configure_capacity_with_operational_limits(
-            super::super::admission::JOB_LIMIT,
-            OperationalCapacityLimits {
-                cpu_millicores: 1_000,
-                memory_bytes: 128 * 1024 * 1024,
-            },
-        )
-        .await?;
-    let operation_id = probe_nonce.to_string().repeat(32);
-    let operation_name = format!("velnor-resource-probe-{operation_id}");
-    let seed = ProbeSeed {
-        operation_id: operation_id.clone(),
-        instance_id: journal.instance_id().await?,
-        engine_id: TEST_ENGINE_ID.to_owned(),
-        docker_root_digest: docker_root_digest.to_owned(),
-        source_revision: "b".repeat(40),
-        runtime_image_id: format!("sha256:{}", "c".repeat(64)),
-        image_binding_digest: "d".repeat(64),
-        operation_name: operation_name.clone(),
-        projection_digest: "e".repeat(64),
-        purpose: crate::journal::ResourceProbePurpose::Capacity,
-        request_sha256: crate::journal::capacity_request_sha256(),
-    };
-    let claim = scope
-        .prepare_storage_metadata_settlement_probe(reservation_id, seed)
-        .await?;
-    journal
-        .transition_probe(
-            &operation_id,
-            ProbePhase::Prepared,
-            ProbePhase::CreateRequested,
-        )
-        .await?;
-    let container_id = "f".repeat(64);
-    journal
-        .bind_probe_container(&operation_id, &container_id)
-        .await?;
-    journal
-        .transition_probe(
-            &operation_id,
-            ProbePhase::ContainerCreated,
-            ProbePhase::RemoveRequested,
-        )
-        .await?;
-    journal
-        .retire_probe(VerifiedProbeCleanup::test_only(
-            operation_id,
-            TEST_ENGINE_ID.to_owned(),
-            docker_root_digest.to_owned(),
-            ProbePhase::RemoveRequested,
-            operation_name,
-            Some(container_id),
-        ))
-        .await?;
-    Ok(claim)
 }

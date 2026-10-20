@@ -1011,5 +1011,17 @@
     "replacement_test_manifest_sha256": "61b2c2add9c67a9bfe08e2398f58fe0f900ddd5f17f0ff48155fa3362d0738d5",
     "full_runner_gates": "NOT_RUN",
     "live_installation": "NOT_RUN"
+  },
+  "historical_and_stale_fixture_fixes": {
+    "result": "PASS",
+    "tests": 2,
+    "source_base": "d3c0215b1f6ba83944c1d59d5eb38e84c49d775f",
+    "compile_source_pin": "d3c0215b1f6ba83944c1d59d5eb38e84c49d775f",
+    "run_id": "bd2726dc-5c89-4b24-9d80-bfdb940ef73b",
+    "log": "f40-two-fixes-parent-source-pin-20261020.log",
+    "log_sha256": "26deacd11177a89ce90756f73c26f6d225b370893cf62bdcda200a57903ce772",
+    "review": "f40-two-proven-fixes-independent-review-20261020.md",
+    "review_sha256": "8aa9e5ee6671325f5201bc1c54b434d189fae73ef3d77f1ba51cd5f8bc48a850",
+    "scope": "The tests check missing cleanup evidence and stale resource evidence. They do not prove a live installation."
   }
 }
