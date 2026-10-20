@@ -7,6 +7,37 @@ use super::super::{
     ImageImportId, ImageImportObservation, ImageImportRecord, ImageImportRequest, ImageImportState,
 };
 
+type ImageImportIdentityValues<'a> = (
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a str,
+);
+
+type PreparedImageImportValues<'a> = (
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a str,
+    i64,
+    Option<&'a str>,
+    Option<i64>,
+    i64,
+    Option<&'a str>,
+    Option<&'a str>,
+    &'a str,
+);
+
 pub(super) async fn latest_for_request(
     connection: &turso::Connection,
     request: &ImageImportRequest,
@@ -151,9 +182,7 @@ async fn last_insert_id(connection: &turso::Connection) -> Result<i64, HostError
         .map_err(|_| HostError::Journal)
 }
 
-fn identity_values(
-    request: &ImageImportRequest,
-) -> (&str, &str, &str, &str, &str, &str, &str, &str, &str) {
+fn identity_values(request: &ImageImportRequest) -> ImageImportIdentityValues<'_> {
     (
         request.engine_id.as_str(),
         request.docker_root_digest.as_str(),
@@ -170,27 +199,7 @@ fn identity_values(
 fn identity_values_with_attempt(
     request: &ImageImportRequest,
     attempt: i64,
-) -> Result<
-    (
-        &str,
-        &str,
-        &str,
-        &str,
-        &str,
-        &str,
-        &str,
-        &str,
-        &str,
-        i64,
-        Option<&str>,
-        Option<i64>,
-        i64,
-        Option<&str>,
-        Option<&str>,
-        &str,
-    ),
-    HostError,
-> {
+) -> Result<PreparedImageImportValues<'_>, HostError> {
     let manifest_size = i64::try_from(request.manifest_size).map_err(|_| HostError::Journal)?;
     let image_index_size = request
         .image_index_size
