@@ -148,21 +148,16 @@ async fn assert_started_once(fixture: &StartedFixture) -> Result<(), HostError> 
 async fn clean_and_release_runner(fixture: &StartedFixture) -> Result<(), HostError> {
     let scope = &fixture.scope;
     let claim = scope
-        .claim_completion_cleanup_at(fixture.intent_id, 0, 10)
+        .claim_completion_cleanup(fixture.intent_id, 180)
         .await?
         .ok_or(HostError::Journal)?;
     assert_eq!(
         scope
-            .run_completion_cleanup_effect_at(fixture.intent_id, claim.generation, 1, 5, || async {
+            .run_completion_cleanup_effect(fixture.intent_id, claim.generation, 5, || async {
                 Ok::<_, HostError>(())
             })
             .await?,
         Some(())
-    );
-    assert!(
-        scope
-            .record_completion_runner_absent_at(fixture.intent_id, claim.generation, 2)
-            .await?
     );
     let reservation_id = scope
         .reservation(&fixture.physical)
@@ -170,14 +165,14 @@ async fn clean_and_release_runner(fixture: &StartedFixture) -> Result<(), HostEr
         .ok_or(HostError::Journal)?
         .reservation_id;
     record_owned_storage_cleanup(scope, &fixture.provisioned).await?;
-    assert!(
-        scope
-            .record_completion_cleanup_at(fixture.intent_id, claim.generation, 3)
-            .await?
-    );
     record_owned_network_cleanup(scope, reservation_id).await?;
     scope.record_remote_cleanup(reservation_id).await?;
     scope.record_local_cleanup(reservation_id).await?;
+    assert!(
+        scope
+            .record_completion_runner_absent(fixture.intent_id, claim.generation)
+            .await?
+    );
     let settlement = settle_storage_metadata(scope, &fixture.provisioned, 'd').await?;
     assert_eq!(
         settlement,
