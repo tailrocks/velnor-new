@@ -278,8 +278,13 @@ fn configured_producer_deadline_keeps_original_clock_and_outer_intersection() {
     let started = Instant::now()
         .checked_sub(Duration::from_secs(301))
         .expect("fixture start");
-    let maximum = producer_deadline(started, 10).expect("ten-minute ceiling");
-    assert!(maximum.remaining().expect("remaining") < Duration::from_secs(299));
+    let maximum = producer_deadline(started, 20).expect("twenty-minute ceiling");
+    assert!(maximum.remaining().expect("remaining") < Duration::from_secs(899));
+    assert_eq!(
+        maximum,
+        CheckDeadline::from_start_with_cleanup_reserve(started, Duration::from_mins(20))
+            .expect("cleanup stays inside the original twenty-minute operation")
+    );
     assert!(
         producer_deadline(started, 5)
             .expect("default budget")
@@ -287,13 +292,13 @@ fn configured_producer_deadline_keeps_original_clock_and_outer_intersection() {
             .is_err(),
         "configuration reads cannot reset five elapsed minutes"
     );
-    for minutes in [1, 5, 6, 10] {
+    for minutes in [1, 5, 6, 10, 15, 20] {
         assert!(
             producer_deadline(Instant::now(), minutes).is_ok(),
             "{minutes}"
         );
     }
-    for minutes in [0, 11, u16::MAX] {
+    for minutes in [0, 21, u16::MAX] {
         assert!(
             producer_deadline(Instant::now(), minutes).is_err(),
             "{minutes}"
@@ -302,7 +307,7 @@ fn configured_producer_deadline_keeps_original_clock_and_outer_intersection() {
     let parent = CheckDeadline::from_start(Instant::now(), Duration::from_secs(1)).expect("outer");
     parent
         .scope(|| {
-            let configured = producer_deadline(Instant::now(), 10).expect("configured");
+            let configured = producer_deadline(Instant::now(), 20).expect("configured");
             assert!(configured.remaining().expect("intersected") <= Duration::from_secs(1));
         })
         .expect("outer ceiling retained");
