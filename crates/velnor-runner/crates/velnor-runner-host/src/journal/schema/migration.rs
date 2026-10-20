@@ -366,3 +366,12 @@ pub(super) async fn from_version_thirty_four(conn: &turso::Connection) -> Result
         .map_err(|_| HostError::Journal)?;
     Ok(())
 }
+
+pub(super) async fn from_version_thirty_five(conn: &turso::Connection) -> Result<(), HostError> {
+    super::validate_persisted_schema_v35(conn).await?;
+    super::post_jit_effect_fences::bootstrap(conn).await?;
+    conn.execute("PRAGMA user_version = 36", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    super::post_jit_effect_fences::validate(conn).await
+}

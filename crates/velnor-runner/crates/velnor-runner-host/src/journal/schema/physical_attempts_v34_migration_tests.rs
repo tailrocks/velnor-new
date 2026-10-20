@@ -2,7 +2,7 @@ use crate::error::HostError;
 use crate::journal::{Journal, request_lifecycle::tests::native_started_intake_fixture};
 
 #[tokio::test]
-async fn v34_schema_migrates_to_v35_and_reopens_without_changing_attempt_rows()
+async fn v34_schema_migrates_to_current_schema_and_reopens_without_changing_attempt_rows()
 -> Result<(), HostError> {
     let fixture = native_started_intake_fixture().await?;
     let path = fixture.database_path.clone();
@@ -26,16 +26,24 @@ async fn v34_schema_migrates_to_v35_and_reopens_without_changing_attempt_rows()
 
     let migrated = Journal::open(&path).await?;
     let connection = migrated.connection().await?;
-    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 35);
+    assert_eq!(
+        scalar(&connection, "PRAGMA user_version").await?,
+        super::JOURNAL_VERSION
+    );
     super::physical_attempts::validate_v35(&connection).await?;
+    super::post_jit_effect_fences::validate(&connection).await?;
     assert_attempt_matches(&connection, reservation_id, &initial_identity).await?;
     drop(connection);
     drop(migrated);
 
     let reopened = Journal::open(&path).await?;
     let connection = reopened.connection().await?;
-    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 35);
+    assert_eq!(
+        scalar(&connection, "PRAGMA user_version").await?,
+        super::JOURNAL_VERSION
+    );
     super::physical_attempts::validate_v35(&connection).await?;
+    super::post_jit_effect_fences::validate(&connection).await?;
     assert_attempt_matches(&connection, reservation_id, &initial_identity).await
 }
 
@@ -71,8 +79,12 @@ async fn v34_upgrade_rolls_back_the_new_schema_with_the_outer_transaction() -> R
 
     let migrated = Journal::open(&path).await?;
     let connection = migrated.connection().await?;
-    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 35);
+    assert_eq!(
+        scalar(&connection, "PRAGMA user_version").await?,
+        super::JOURNAL_VERSION
+    );
     super::physical_attempts::validate_v35(&connection).await?;
+    super::post_jit_effect_fences::validate(&connection).await?;
     super::post_jit_retirement::validate(&connection).await
 }
 
@@ -101,6 +113,21 @@ async fn v35_open_rejects_a_changed_terminal_proof_view() -> Result<(), HostErro
 }
 
 async fn downgrade_to_v34(connection: &turso::Connection) -> Result<(), HostError> {
+    for trigger in [
+        "post_jit_jit_claim_fence",
+        "post_jit_runner_start_fence",
+        "post_jit_reservation_jit_fence",
+        "post_jit_job_facts_fence",
+        "post_jit_listener_fence",
+        "post_jit_challenge_fence",
+        "post_jit_decision_fence",
+        "post_jit_publication_fence",
+    ] {
+        connection
+            .execute(&format!("DROP TRIGGER {trigger}"), ())
+            .await
+            .map_err(|_| HostError::Journal)?;
+    }
     connection
         .execute("DROP TRIGGER physical_attempt_insert_guard", ())
         .await
@@ -213,8 +240,12 @@ async fn v33_outcome_guard_migrates_without_changing_attempt_rows() -> Result<()
 
     let migrated = Journal::open(&path).await?;
     let connection = migrated.connection().await?;
-    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 35);
+    assert_eq!(
+        scalar(&connection, "PRAGMA user_version").await?,
+        super::JOURNAL_VERSION
+    );
     super::physical_attempts::validate_v35(&connection).await?;
+    super::post_jit_effect_fences::validate(&connection).await?;
     super::post_jit_retirement::validate(&connection).await?;
     let mut rows = connection
         .query(
@@ -249,8 +280,12 @@ async fn v33_outcome_guard_migrates_without_changing_attempt_rows() -> Result<()
 
     let reopened = Journal::open(&path).await?;
     let connection = reopened.connection().await?;
-    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 35);
+    assert_eq!(
+        scalar(&connection, "PRAGMA user_version").await?,
+        super::JOURNAL_VERSION
+    );
     super::physical_attempts::validate_v35(&connection).await?;
+    super::post_jit_effect_fences::validate(&connection).await?;
     super::post_jit_retirement::validate(&connection).await
 }
 

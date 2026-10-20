@@ -4,6 +4,8 @@ mod claim;
 #[cfg(test)]
 mod claim_tests;
 mod disposition;
+#[cfg(test)]
+mod effect_fence_tests;
 mod identity;
 
 pub(crate) use claim::PostJitRetirementClaim;

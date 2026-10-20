@@ -1,0 +1,17 @@
+{
+  "base_commit": "fff8aed3362314383f7aa8e701ba85430e0443bc",
+  "source_manifest_sha256": "7936696795ab551133e8911f8a2166115adccd9c1253051f8b247d97abbe1d87",
+  "independent_review_sha256": "26e8b64e863c06f4daff306156313de24ba3e62b3f766fc18674743c9c1fc0c1",
+  "language_review": "PASS",
+  "port_amendment_sha256": "4f31bbd38bf2cdb0f79ed65767961e34ff8e1490390352b60905c69e2cd8835d",
+  "nextest": {
+    "result": "PASS",
+    "passed": 31,
+    "run_id": "95c67d87-d3a6-4788-b894-7ea2a58cea22",
+    "log_sha256": "184ffef1af71fca39e4891ad002b3721abdfc6dda9a54c0da27302ac87f858bc"
+  },
+  "format": "PASS",
+  "full_strict_clippy": "NOT_RUN",
+  "production_writers": "NOT_RUN",
+  "live_test": "NOT_RUN"
+}

@@ -26,6 +26,10 @@ mod physical_attempts_tests;
 #[cfg(test)]
 #[path = "schema/physical_attempts_v34_migration_tests.rs"]
 mod physical_attempts_v34_migration_tests;
+mod post_jit_effect_fences;
+#[cfg(test)]
+#[path = "schema/post_jit_effect_fences_tests.rs"]
+mod post_jit_effect_fences_tests;
 mod post_jit_retirement;
 mod pre_jit_cleanup;
 #[cfg(test)]
@@ -48,9 +52,11 @@ mod storage_root_backing;
 #[cfg(test)]
 #[path = "schema/execution_publication/v30_migration_tests.rs"]
 mod v30_migration_tests;
+mod validation;
 
-pub(super) const JOURNAL_VERSION: i64 = 35;
+pub(super) const JOURNAL_VERSION: i64 = 36;
 use current_columns::CURRENT_COLUMNS;
+pub(super) use validation::validate_persisted_schema_v35;
 
 pub(super) struct ColumnInfo {
     declared_type: String,
@@ -99,6 +105,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
         storage_handoff::bootstrap(conn).await?;
         cleanup_observer_witness::bootstrap(conn).await?;
         post_jit_retirement::validate(conn).await?;
+        post_jit_effect_fences::validate(conn).await?;
     } else {
         while version != JOURNAL_VERSION {
             let expected = expected_next_version(version).ok_or(HostError::Journal)?;
@@ -138,6 +145,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
                 32 => migration::from_version_thirty_two(conn).await?,
                 33 => migration::from_version_thirty_three(conn).await?,
                 34 => migration::from_version_thirty_four(conn).await?,
+                35 => migration::from_version_thirty_five(conn).await?,
                 _ => return Err(HostError::Journal),
             }
             version = journal_version(conn).await?;
@@ -151,7 +159,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
 
 fn expected_next_version(version: i64) -> Option<i64> {
     match version {
-        0..=8 | 10..=34 => Some(version + 1),
+        0..=8 | 10..=35 => Some(version + 1),
         9 => Some(11),
         _ => None,
     }
@@ -166,10 +174,8 @@ mod migration_driver_tests;
 pub(crate) mod historical_fixture;
 
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
-    validate_persisted_schema_v32_core(conn).await?;
-    storage_network::validate_v33(conn).await?;
-    physical_attempts::validate_v35(conn).await?;
-    post_jit_retirement::validate(conn).await
+    validate_persisted_schema_v35(conn).await?;
+    post_jit_effect_fences::validate(conn).await
 }
 
 pub(super) async fn validate_persisted_schema_v33(
