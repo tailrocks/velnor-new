@@ -77,8 +77,9 @@ pub use host_container::{
 };
 pub use image_task::{NativeImageCachePolicy, NativeImagePlatform, NativeImageTask};
 pub use images::{
-    IMAGE_REGISTRY_HOST, ImageConfig, ImageDockerfile, ImagePlatform, ImagePrebuilt,
-    is_valid_image_id, is_valid_image_repository, validate_images,
+    DEFAULT_IMAGE_TIMEOUT_MINUTES, IMAGE_JOB_PREFIX, IMAGE_REGISTRY_HOST, ImageConfig,
+    ImageDockerfile, ImagePlatform, ImagePrebuilt, is_valid_image_id, is_valid_image_repository,
+    validate_images,
 };
 pub use mise::{
     CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind,

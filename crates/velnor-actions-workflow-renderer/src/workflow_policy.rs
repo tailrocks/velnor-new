@@ -68,7 +68,7 @@ pub(crate) fn check_single_label(
             let task_label = workflow_tasks
                 .iter()
                 .find(|task| task.owns_job_id(id))
-                .map(WorkflowTaskPolicy::runner_label);
+                .and_then(|task| task.runner_label_for_job(id));
             let suite_runner_ok = id.starts_with("suite-")
                 && velnor_actions_contract::RunsOn::parse(&job.runs_on).is_ok();
             if job.runs_on != label
