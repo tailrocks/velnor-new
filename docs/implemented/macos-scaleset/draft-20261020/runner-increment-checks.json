@@ -918,6 +918,19 @@
       "baseline_fixture_failures": 8,
       "remaining_fixture_owner": "/root/native_intake_composition",
       "live_installation": "NOT_RUN"
+    },
+    {
+      "result": "PASS",
+      "source_parent": "6b1279529b1afb7d2a9ae65b2625eec7dbcbba8f",
+      "scope": "The Git hook removed an unused completion inbox export. Current cleanup tests still pass.",
+      "passed": 17,
+      "exit_status": 0,
+      "nextest_run": "1748c7d7-fe9a-4773-9725-2bc83e341e39",
+      "log": "shipping-m36-post-hook-20261020.log",
+      "log_sha256": "5e6fdceef9a4795e70c2a6af2dbb5c3782f0feeee256a7462e442bb1d34274b9",
+      "author": "/root",
+      "full_runner_clippy": "FAIL",
+      "live_installation": "NOT_RUN"
     }
   ],
   "broader_pair_check": {

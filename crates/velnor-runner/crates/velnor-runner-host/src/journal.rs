@@ -45,8 +45,8 @@ mod migration_tests;
 mod schema_metadata_tests;
 pub(crate) use capacity_header::{HeaderAllocation, HeaderDeleteAttempt, HeaderPollAttempt};
 pub(crate) use completion::{
-    CleanupClaim, CompletedLaunch, CompletionIdentity, CompletionInboxEntry,
-    MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN,
+    CleanupClaim, CompletedLaunch, CompletionIdentity, MAX_COMPLETION_BODY_BYTES,
+    MAX_COMPLETION_INBOX_SCAN,
 };
 pub(crate) use connection::JobFactsPublicationClaim;
 pub(crate) use connection::ListenerDeliveryClaim;
