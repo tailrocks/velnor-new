@@ -87,6 +87,30 @@
       "log_sha256": "91ad07c8454b8b03848f2efa5417c6989a1aff55eb7bf38ebd0b79f620ed6fdd",
       "author": "/root",
       "reviewer": "/root/bounded_integration_review"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "8befe18410e333f08961c5144f031be2a3210e27",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --locked --offline -p velnor-actions-cli -p velnor-actions-workflow-renderer -E 'test(unsafe_forbidden_and_absent) | test(routing_rejects)'",
+      "exit_status": 0,
+      "nextest_run": "06038a3e-b0f8-46f7-9f9b-231f4c273cd7",
+      "passed": 2,
+      "log": "routing-diagnostic-shipping-final-20261020.log",
+      "log_sha256": "b24c13079723219941ea1f42ce9426a0e7ef0ec25fbfdf3edebff448a8930d94",
+      "author": "/root",
+      "reviewer": "/root/execution_source_security_review"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "dc83f910f2a8da795798b7ad60fe904030fda204",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --locked --offline -p velnor-actions-orchestrator -E 'test(project_tool_bumps_keep_static_manifest_binding_and_change_plan_identity) | test(project_rust_versions_change_runtime_identity_with_one_static_binding) | test(missing_repo_pin_fails_closed_before_spawn)'",
+      "exit_status": 0,
+      "nextest_run": "d63526de-1f6e-478a-8a12-bd1035a6a8e3",
+      "passed": 3,
+      "log": "project-tool-fixture-shipping-20261020.log",
+      "log_sha256": "d71a5e7998a8c323d3304876da9d0b7c4669780fb05503a8cf05b2c572ba2e6b",
+      "author": "/root",
+      "reviewer": "/root/bounded_integration_review"
     }
   ],
   "broader_pair_check": {
