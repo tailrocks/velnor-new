@@ -1,6 +1,7 @@
 //! Stack selection and per-stack options.
 use super::binary_release::RustBinaryReleaseConfig;
 use super::bun::BunStackConfig;
+use super::dbt::DbtStackConfig;
 use super::release::RustReleaseConfig;
 use super::rust_inputs::RustInputRule;
 use super::rust_suites::RustSuiteConfig;
@@ -28,6 +29,9 @@ pub struct StacksConfig {
     /// Bun stack options; absent means no Bun workspaces (hard decision 6).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bun: Option<BunStackConfig>,
+    /// dbt-fusion stack options; absent means no dbt projects.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dbt: Option<DbtStackConfig>,
 }
 
 /// Declared compile driver (`[stacks.rust] compile_driver`).
@@ -242,6 +246,9 @@ impl StacksConfig {
         }
         if let Some(bun) = &self.bun {
             bun.validate(file)?;
+        }
+        if let Some(dbt) = &self.dbt {
+            dbt.validate(file)?;
         }
         Ok(())
     }

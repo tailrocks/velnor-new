@@ -5,6 +5,7 @@
     "velnor-actions-bun": "library",
     "velnor-actions-cli": "tool",
     "velnor-actions-contract": "library",
+    "velnor-actions-dbt": "library",
     "velnor-actions-mise": "library",
     "velnor-actions-orchestrator": "library",
     "velnor-actions-rust": "library",
