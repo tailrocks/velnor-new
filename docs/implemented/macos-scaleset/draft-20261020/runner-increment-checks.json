@@ -194,6 +194,42 @@
       "log_sha256": "73e317c1d2c19675594352d2c5de67489b3c81c0159d25cf96054aaf7d39877f",
       "author": "/root",
       "reviewer": "/root/execution_source_security_review"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "bff1765a4ef485bf73cec041fbea94088e75ed50",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml -p velnor-runner-host --lib --locked --offline --no-fail-fast -E 'test(publication_) | test(recovery_projection_) | test(execution_publication)'",
+      "exit_status": 0,
+      "nextest_run": "77e7fe76-98d0-48d2-bee4-ffe97bdc07d2",
+      "passed": 13,
+      "log": "execution-publication-cap-shipping-20261020.log",
+      "log_sha256": "dad0a6fb83ab08d2d875fa93c7b6f816fb4dbe97b2869108ebe8ec75ed5ca70d",
+      "author": "/root",
+      "reviewer": "/root/execution_source_security_review"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "6fefabfad6f05b5a5d39aef5953efd36a7e72915",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml -p velnor-runner-host --lib --locked --offline --no-fail-fast -E 'test(version_twenty_nine_probe_constraints_migrate_without_losing_rows)'",
+      "exit_status": 0,
+      "nextest_run": "c44893c7-4e61-412b-8574-abfbc6d26ae4",
+      "passed": 1,
+      "log": "schema-registration-migration-shipping-20261020.log",
+      "log_sha256": "5ff4c09a7833d8376ba3cf21a98611e6ab6bf39891c8d9ebea0560611b088c75",
+      "author": "/root",
+      "reviewer": null
+    },
+    {
+      "result": "PASS",
+      "source_commit": "6fefabfad6f05b5a5d39aef5953efd36a7e72915",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-root-registration-20261020 cargo nextest run --manifest-path Cargo.toml -p velnor-actions-cli --test velnor_cli --locked --offline --no-fail-fast -E 'test(cargo_targets_register_every_test_bearing_source)'",
+      "exit_status": 0,
+      "nextest_run": "95b28f0c-480c-4811-8dbd-2a3e73490b52",
+      "passed": 1,
+      "log": "schema-registration-root-shipping-20261020.log",
+      "log_sha256": "2bb151b3e7aecafa27193ae56159ff30cb66778b55f2f2a8c485b0ef9e2fb4b1",
+      "author": "/root",
+      "reviewer": null
     }
   ],
   "broader_pair_check": {
