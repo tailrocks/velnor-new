@@ -138,6 +138,7 @@ pub(crate) fn job(id: &str, display: &str, needs: Vec<String>, steps: Vec<Step>)
                 Permissions {
                     contents: PermissionLevel::Read,
                     actions: PermissionLevel::Read,
+                    packages: PermissionLevel::None,
                     pull_requests: PermissionLevel::None,
                     id_token: PermissionLevel::None,
                 },

@@ -19,6 +19,15 @@ const SCRIPT_CONFIG_SUFFIXES: [&str; 6] = [
     ".config.cjs",
 ];
 
+/// True for a file name the scan reads: a `tsconfig*.json` or a script config.
+#[must_use]
+pub fn is_config_file(name: &str) -> bool {
+    is_tsconfig(name)
+        || SCRIPT_CONFIG_SUFFIXES
+            .iter()
+            .any(|suffix| name.ends_with(suffix))
+}
+
 /// Repository paths outside `member_dir` that the member's config files name.
 ///
 /// `files` are `(repository path, text)` pairs of the member's `tsconfig*.json`

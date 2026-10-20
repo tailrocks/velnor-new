@@ -18,7 +18,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 use super::plan::{ObligationDecision, Plan, WorkflowEvent};
-use crate::config::IMAGE_JOB_PREFIX;
+use crate::config::{BUN_JOB_PREFIX, IMAGE_JOB_PREFIX};
 use crate::errors::ContractError;
 use crate::graph::check_sorted_by;
 
@@ -124,9 +124,15 @@ pub(crate) fn validate_plan_jobs(plan: &Plan) -> Result<(), ContractError> {
         }
     }
     for (job_id, disposition) in &jobs {
-        if job_id.starts_with(IMAGE_JOB_PREFIX) {
+        let ownerless = [
+            (IMAGE_JOB_PREFIX, "image_job_owns_work"),
+            (BUN_JOB_PREFIX, "bun_job_owns_work"),
+        ]
+        .into_iter()
+        .find(|(prefix, _)| job_id.starts_with(prefix));
+        if let Some((_, code)) = ownerless {
             if owning.contains(job_id) || entries.contains(job_id) {
-                return Err(ContractError::identity("jobs", "image_job_owns_work"));
+                return Err(ContractError::identity("jobs", code));
             }
             continue;
         }
