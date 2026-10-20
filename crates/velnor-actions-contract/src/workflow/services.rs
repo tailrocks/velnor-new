@@ -6,7 +6,7 @@
 //! catalog holds `postgres`, the database that jOOQ code generation and tests
 //! need; the catalog digest is refreshed by the freshness pipeline.
 //!
-//! The credentials, database name and host port are the ChainArgos build
+//! The credentials, database name and host port are the `ChainArgos` build
 //! convention (`backend/compose.yaml` of every Java repository: user,
 //! password and database `chainargos`, host port 40000), so the same build
 //! runs unchanged against a local compose database and the CI service.
