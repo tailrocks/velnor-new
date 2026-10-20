@@ -72,6 +72,7 @@ fn config_validation_reports_key_paths() {
             tofu: None,
             bun: None,
             gradle: None,
+            dbt: None,
         },
         discovery: DiscoveryConfig {
             exclude: vec!["vendor/**".to_owned()],
@@ -154,6 +155,7 @@ fn runner_label_uses_exact_catalog_match() {
             tofu: None,
             bun: None,
             gradle: None,
+            dbt: None,
         },
         discovery: DiscoveryConfig { exclude: vec![] },
         actions: ActionsConfig::default(),

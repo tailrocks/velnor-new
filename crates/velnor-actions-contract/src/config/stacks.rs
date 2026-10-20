@@ -1,6 +1,7 @@
 //! Stack selection and per-stack options.
 use super::binary_release::RustBinaryReleaseConfig;
 use super::bun::BunStackConfig;
+use super::dbt::DbtStackConfig;
 use super::gradle::GradleStackConfig;
 use super::release::RustReleaseConfig;
 use super::rust_inputs::RustInputRule;
@@ -32,6 +33,9 @@ pub struct StacksConfig {
     /// Gradle stack options; absent means no Gradle jobs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gradle: Option<GradleStackConfig>,
+    /// dbt-fusion stack options; absent means no dbt projects.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dbt: Option<DbtStackConfig>,
 }
 
 /// Declared compile driver (`[stacks.rust] compile_driver`).
@@ -249,6 +253,9 @@ impl StacksConfig {
         }
         if let Some(gradle) = &self.gradle {
             gradle.validate(file)?;
+        }
+        if let Some(dbt) = &self.dbt {
+            dbt.validate(file)?;
         }
         Ok(())
     }

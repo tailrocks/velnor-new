@@ -48,6 +48,7 @@ pub(crate) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> Vel
             tofu: None,
             bun: None,
             gradle: None,
+            dbt: None,
         },
         discovery: DiscoveryConfig {
             exclude: Vec::new(),

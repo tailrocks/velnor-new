@@ -101,9 +101,9 @@ fn a_tampered_asset_fails_the_sha256_check_and_extracts_nothing() {
     );
     assert!(
         !world
-            .temp
+            .workspace
             .path()
-            .join("velnor/deps/explorer-schema")
+            .join(".velnor/deps/explorer-schema")
             .exists()
     );
 }
@@ -180,9 +180,9 @@ fn hostile_archives_cannot_write_outside_the_destination() {
         );
         assert!(
             !world
-                .temp
+                .workspace
                 .path()
-                .join("velnor/deps/explorer-schema")
+                .join(".velnor/deps/explorer-schema")
                 .exists(),
             "{label}"
         );
@@ -231,4 +231,45 @@ fn a_lock_that_drifted_from_the_declarations_is_refused() {
     assert!(message.contains("deps_lock_drift:schema"), "{message}");
     assert!(world.fake.downloads.borrow().is_empty());
     let _ = &world.schema_archive;
+}
+
+#[test]
+fn a_planted_deps_symlink_or_stale_content_never_redirects_extraction() {
+    let world = world();
+    let outside = tempfile::tempdir().expect("outside");
+    let deps = world.workspace.path().join(".velnor/deps");
+    std::os::unix::fs::symlink(outside.path(), &deps).expect("symlink");
+    let request = request(
+        &world,
+        &["blockchain-explorer"],
+        &[SourceKind::ReleaseAssets],
+    );
+    execute(&request, &world.fake).expect("fetch");
+    assert_eq!(
+        fs::read_dir(outside.path()).expect("outside").count(),
+        0,
+        "nothing written through the planted link"
+    );
+    assert!(
+        fs::symlink_metadata(&deps).expect("deps").is_dir(),
+        "the link was replaced by a real directory"
+    );
+    assert!(deps.join("explorer-schema/schema.json").is_file());
+}
+
+#[test]
+fn a_velnor_directory_that_is_a_symlink_is_refused() {
+    let world = world();
+    let outside = tempfile::tempdir().expect("outside");
+    let velnor = world.workspace.path().join(".velnor");
+    fs::rename(&velnor, outside.path().join("real")).expect("move");
+    std::os::unix::fs::symlink(outside.path().join("real"), &velnor).expect("symlink");
+    let request = request(
+        &world,
+        &["blockchain-explorer"],
+        &[SourceKind::ReleaseAssets],
+    );
+    // The config loader refuses first; the deps root check is the second wall.
+    assert!(execute(&request, &world.fake).is_err());
+    assert!(!outside.path().join("real/deps").exists());
 }

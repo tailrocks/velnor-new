@@ -305,7 +305,7 @@ fn a_full_fetch_pins_extracts_and_runs_cargo_fetch_locked_per_root() {
         *world.fake.cargo.borrow(),
         [world.workspace.path().join("Cargo.toml")]
     );
-    let deps = world.temp.path().join("velnor/deps");
+    let deps = world.workspace.path().join(".velnor/deps");
     assert_eq!(
         fs::read(deps.join("explorer-schema/schema.json")).expect("schema"),
         b"{\"v\":1}"

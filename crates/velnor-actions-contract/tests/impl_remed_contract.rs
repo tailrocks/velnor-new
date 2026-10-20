@@ -52,6 +52,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
             tofu: None,
             bun: None,
             gradle: None,
+            dbt: None,
         },
         discovery: DiscoveryConfig { exclude: vec![] },
         actions: ActionsConfig::default(),
