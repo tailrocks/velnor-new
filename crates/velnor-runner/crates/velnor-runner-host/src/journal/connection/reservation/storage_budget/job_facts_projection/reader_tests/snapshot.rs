@@ -4,11 +4,25 @@ use crate::journal::Journal;
 #[tokio::test]
 async fn bound_journal_snapshot_reopens_with_thirteen_roles_and_exact_aliases() {
     let fixture = bound_fixture('b').await.expect("bound fixture");
+    let revision_before_snapshot = fixture
+        .journal
+        .revision()
+        .await
+        .expect("revision before read-only snapshot");
     let first = fixture
         .scope
         .job_facts_snapshot(&fixture.claim, &fixture.ready.ready, &fixture.channel)
         .await
         .expect("snapshot from bound journal rows");
+    assert_eq!(
+        fixture
+            .journal
+            .revision()
+            .await
+            .expect("revision after read-only snapshot"),
+        revision_before_snapshot,
+        "snapshot reads must not change the reservation journal"
+    );
     let first_bytes = first.bytes().to_vec();
     assert_eq!(
         first.physical_binding_digest(),

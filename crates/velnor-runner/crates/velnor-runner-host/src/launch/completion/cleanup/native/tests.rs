@@ -106,7 +106,74 @@ async fn native_capacity_retry_does_not_repeat_proven_cleanup_effects() -> Resul
         .claim_completion_cleanup_at(launch.intent.id, now, 90)
         .await?
         .ok_or(HostError::Journal)?;
-    let first = run_native_cleanup(&fixture, &launch, first_claim).await?;
+    let first_generation =
+        assert_capacity_hold_keeps_attempt(&fixture, &launch, first_claim, now).await?;
+    assert_retry_settlement_is_idempotent(&fixture, &launch, now, first_generation).await
+}
+
+#[tokio::test]
+async fn terminal_replay_requires_the_exact_intent_and_normal_outcome() -> Result<(), HostError> {
+    let fixture = capacity_retry_fixture().await?;
+    let (launch, now) = seed_completion(&fixture).await?;
+    let claim = fixture
+        .scope
+        .claim_completion_cleanup_at(launch.intent.id, now, 90)
+        .await?
+        .ok_or(HostError::Journal)?;
+    assert!(
+        fixture
+            .scope
+            .record_completion_runner_absent_at(launch.intent.id, claim.generation, now)
+            .await?
+    );
+    assert!(matches!(
+        run_native_cleanup(&fixture, &launch, claim).await?,
+        Err(super::super::Failure {
+            phase: "metadata capacity hold",
+            ..
+        })
+    ));
+
+    assert!(
+        fixture
+            .scope
+            .record_completion_cleanup_at(launch.intent.id, claim.generation, now)
+            .await?
+    );
+    assert!(
+        !fixture
+            .scope
+            .terminal_settlement_matches_at(launch.intent.id, claim.generation)
+            .await?
+    );
+    assert!(
+        !fixture
+            .scope
+            .terminal_settlement_matches_at(launch.intent.id + 1, claim.generation)
+            .await?
+    );
+    assert!(
+        !fixture
+            .scope
+            .record_completion_cleanup_at(launch.intent.id, claim.generation, now + 1)
+            .await?
+    );
+    Ok(())
+}
+
+async fn assert_capacity_hold_keeps_attempt(
+    fixture: &crate::launch::bootstrap::CleanupRuntimeFixture,
+    launch: &crate::journal::CompletedLaunch,
+    claim: crate::journal::CleanupClaim,
+    now: i64,
+) -> Result<i64, HostError> {
+    assert!(
+        fixture
+            .scope
+            .record_completion_runner_absent_at(launch.intent.id, claim.generation, now)
+            .await?
+    );
+    let first = run_native_cleanup(fixture, launch, claim).await?;
     assert!(matches!(
         first,
         Err(super::super::Failure {
@@ -126,11 +193,34 @@ async fn native_capacity_retry_does_not_repeat_proven_cleanup_effects() -> Resul
             .state,
         crate::journal::ReservationState::Reserved
     );
-
+    assert!(!fixture.scope.intent(launch.intent.id).await?.cleanup_proven);
     assert!(
         fixture
             .scope
-            .retry_completion_cleanup_at(launch.intent.id, first_claim.generation, now, now + 1)
+            .current_physical_attempt(fixture.reservation_id)
+            .await?
+            .is_some()
+    );
+    assert!(
+        !fixture
+            .scope
+            .terminal_settlement_matches_at(launch.intent.id, claim.generation)
+            .await?
+    );
+    Ok(claim.generation)
+}
+
+async fn assert_retry_settlement_is_idempotent(
+    fixture: &crate::launch::bootstrap::CleanupRuntimeFixture,
+    launch: &crate::journal::CompletedLaunch,
+    now: i64,
+    first_generation: i64,
+) -> Result<(), HostError> {
+    let after_first = fixture.server.effects();
+    assert!(
+        fixture
+            .scope
+            .retry_completion_cleanup_at(launch.intent.id, first_generation, now, now + 1)
             .await?
     );
     let retry_claim = fixture
@@ -138,8 +228,21 @@ async fn native_capacity_retry_does_not_repeat_proven_cleanup_effects() -> Resul
         .claim_completion_cleanup_at(launch.intent.id, now + 1, 90)
         .await?
         .ok_or(HostError::Journal)?;
+    assert!(
+        fixture
+            .scope
+            .record_completion_runner_absent_at(launch.intent.id, retry_claim.generation, now + 1,)
+            .await?
+    );
     let second = run_native_cleanup(&fixture, &launch, retry_claim).await?;
-    assert!(second.is_ok());
+    assert!(second.is_ok(), "Native cleanup retry failed: {second:?}.");
+    assert_eq!(
+        fixture
+            .scope
+            .completion_cleanup_schedule_at(launch.intent.id)
+            .await?,
+        Some((0, 0))
+    );
     let after_retry = fixture.server.effects();
     assert_eq!(after_retry.observer_runs, after_first.observer_runs);
     assert_eq!(after_retry.container_deletes, after_first.container_deletes);
@@ -155,6 +258,29 @@ async fn native_capacity_retry_does_not_repeat_proven_cleanup_effects() -> Resul
             .state,
         crate::journal::ReservationState::Released
     );
+    assert!(
+        !fixture
+            .scope
+            .record_completion_cleanup_at(
+                launch.intent.id,
+                retry_claim.generation + 1,
+                now + 1_000,
+            )
+            .await?
+    );
+    assert!(
+        fixture
+            .scope
+            .record_completion_cleanup_at(launch.intent.id, retry_claim.generation, now + 1_000,)
+            .await?
+    );
+    assert!(
+        fixture
+            .scope
+            .record_completion_cleanup_at(launch.intent.id, retry_claim.generation, now + 1_001,)
+            .await?
+    );
+    assert!(fixture.scope.intent(launch.intent.id).await?.cleanup_proven);
     Ok(())
 }
 
@@ -263,5 +389,5 @@ async fn run_native_cleanup(
         selected_engine: Some(&selected),
     };
     let mut budget = super::super::EffectBudget::new_native(&stopping);
-    Ok(super::cleanup(&mut context, launch, claim, &mut budget).await)
+    Ok(super::super::reconcile_claimed(&mut context, launch, claim, &mut budget).await)
 }

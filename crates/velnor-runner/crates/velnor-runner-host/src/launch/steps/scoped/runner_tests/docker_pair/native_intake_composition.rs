@@ -224,14 +224,18 @@ async fn jit_and_deliver<P: crate::launch::resource_probe::ImageProvider>(
         .binding()
         .instance_binding_digest()
         .to_owned();
+    let secret = ReleaseReadSecret::test_token();
+    let host_context = crate::launch::scoped_runtime::ScopedHostContext {
+        docker: &setup.api.docker,
+        host: &setup.fixture.journal,
+        scoped: &setup.fixture.scope,
+        secret: &secret,
+        engine: &setup.engine,
+        images: &setup.images,
+    };
     let ready = crate::launch::scoped_runtime::prepare_listener_with_test_provider(
         channel,
-        &setup.api.docker,
-        &setup.fixture.journal,
-        &setup.fixture.scope,
-        &ReleaseReadSecret::test_token(),
-        &setup.engine,
-        &setup.images,
+        &host_context,
         &setup.guest_image.connection,
         &setup.guest_image.file,
         provider,

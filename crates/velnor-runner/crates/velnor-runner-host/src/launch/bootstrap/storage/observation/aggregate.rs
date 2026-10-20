@@ -20,6 +20,7 @@ use crate::{
 };
 
 const STORAGE_OBSERVATION_TIMEOUT: Duration = Duration::from_secs(45);
+
 #[path = "backing.rs"]
 mod backing;
 #[path = "capacity.rs"]
@@ -126,11 +127,13 @@ pub(crate) async fn observe_storage_resources<P: ImageProvider>(
             dind.observation().process_start_ticks,
         )?,
     )?;
-    let owned = crate::launch::resource_probe::observe_owned_cgroups_with_provider(
-        docker,
-        host_journal,
-        provider,
-        &subjects,
+    let owned = Box::pin(
+        crate::launch::resource_probe::observe_owned_cgroups_with_provider(
+            docker,
+            host_journal,
+            provider,
+            &subjects,
+        ),
     )
     .await?;
     let owned_observation = owned.observation();

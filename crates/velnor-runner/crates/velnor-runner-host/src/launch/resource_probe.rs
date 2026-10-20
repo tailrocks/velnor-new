@@ -7,7 +7,7 @@ use crate::launch::{SelectedEngineContext, VerifiedWorkerImages};
 use crate::scale_set::EnsureError;
 use crate::worker::ResourceBudget;
 
-pub(in crate::launch) use self::provider::ImageProvider;
+pub(crate) use self::provider::ImageProvider;
 use self::provider::ReleaseImageProvider;
 
 pub(crate) use self::sample::RecoveryObservation;
@@ -267,7 +267,7 @@ pub(crate) async fn run_doctor_probe(
     release_read_secret: &ReleaseReadSecret,
     ticket: &crate::journal::DoctorProbeTicket,
 ) -> Result<Option<serde_json::Value>, crate::error::HostError> {
-    doctor::run(docker, journal, release_read_secret, ticket).await
+    Box::pin(doctor::run(docker, journal, release_read_secret, ticket)).await
 }
 
 pub(crate) async fn observe_owned_cgroups(
@@ -279,7 +279,10 @@ pub(crate) async fn observe_owned_cgroups(
     let token = release_read_secret.as_provider_token()?;
     let provider = ReleaseImageProvider::from_compiled_source(token, journal)
         .map_err(|_| crate::error::HostError::Docker)?;
-    observe_owned_cgroups_with_provider(docker, journal, &provider, subjects).await
+    Box::pin(observe_owned_cgroups_with_provider(
+        docker, journal, &provider, subjects,
+    ))
+    .await
 }
 
 pub(in crate::launch) fn release_image_provider<'a>(

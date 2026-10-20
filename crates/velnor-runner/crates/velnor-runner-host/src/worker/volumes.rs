@@ -1,11 +1,8 @@
 //! Named volumes belong to one durable worker identity.
 
-use std::collections::HashMap;
-use std::future::Future;
-
 use bollard::Docker;
 use bollard::errors::Error as DockerError;
-use bollard::models::{Volume, VolumeCreateRequest};
+use bollard::models::Volume;
 use bollard::query_parameters::RemoveVolumeOptions;
 
 use super::names::WorkerIdentityNames;
@@ -69,66 +66,6 @@ pub(crate) enum WorkerVolumeRemoval {
     StillPresent,
 }
 
-pub(crate) async fn create_named_volumes<F, Fut>(
-    docker: &Docker,
-    worker: &str,
-    mounts: &[PlannedMount],
-    mut before_create: F,
-) -> Result<(), HostError>
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = Result<(), HostError>>,
-{
-    let volumes = volumes(worker)?;
-    let expected_mounts = mounts_for_dind(worker)?;
-    if mounts != expected_mounts
-        || volumes
-            .iter()
-            .any(|volume| !has_mount_contract(volume.role))
-    {
-        return Err(HostError::ForbiddenMount);
-    }
-    for volume in &volumes {
-        if inspect_volume(docker, &volume.name).await?.is_some() {
-            return Err(HostError::Ownership);
-        }
-    }
-    for volume in volumes {
-        before_create().await?;
-        let created = docker_deadline(docker.create_volume(VolumeCreateRequest {
-            name: Some(volume.name.clone()),
-            labels: Some(labels(&volume.worker, volume.role.label())),
-            ..Default::default()
-        }))
-        .await?
-        .map_err(|_| HostError::Docker)?;
-        if !owns(&volume, &created) {
-            return Err(HostError::Docker);
-        }
-    }
-    Ok(())
-}
-
-pub(crate) async fn remove_worker_volumes(
-    docker: &Docker,
-    worker: &str,
-) -> Result<bool, HostError> {
-    for role in WorkerVolumeRole::ALL {
-        match verify_worker_volume(docker, worker, role).await? {
-            WorkerVolumeVerification::Absent => {}
-            WorkerVolumeVerification::OwnershipMismatch => return Ok(false),
-            WorkerVolumeVerification::Verified(verified) => {
-                if remove_verified_worker_volume(docker, &verified).await?
-                    == WorkerVolumeRemoval::StillPresent
-                {
-                    return Ok(false);
-                }
-            }
-        }
-    }
-    Ok(true)
-}
-
 /// Verify exactly the fixed volume for `worker` and `role`.
 ///
 /// Only Docker's confirmed 404 means absent. A verified token is returned only
@@ -175,16 +112,6 @@ async fn inspect_volume(docker: &Docker, name: &str) -> Result<Option<Volume>, H
     }
 }
 
-fn volumes(worker: &str) -> Result<Vec<WorkerVolume>, HostError> {
-    if !valid_worker(worker) {
-        return Err(HostError::ForbiddenMount);
-    }
-    WorkerVolumeRole::ALL
-        .into_iter()
-        .map(|role| worker_volume(worker, role))
-        .collect()
-}
-
 fn valid_worker(worker: &str) -> bool {
     !worker.is_empty()
         && worker
@@ -199,13 +126,6 @@ fn worker_volume(worker: &str, role: WorkerVolumeRole) -> Result<WorkerVolume, H
         name: names.volume_name(role),
         role,
     })
-}
-
-fn labels(worker: &str, role: &str) -> HashMap<String, String> {
-    HashMap::from([
-        ("velnor.role".to_owned(), role.to_owned()),
-        ("velnor.worker".to_owned(), worker.to_owned()),
-    ])
 }
 
 #[derive(Clone, Copy)]
@@ -260,25 +180,6 @@ fn target(role: WorkerVolumeRole, container: ContainerKind) -> Option<String> {
             None
         }
         (WorkerVolumeRole::RunnerMetadata, ContainerKind::Dind) => None,
-    }
-}
-
-fn has_mount_contract(role: WorkerVolumeRole) -> bool {
-    // The ownership inventory includes volumes with no guest mount. A typed publisher
-    // must supply metadata through approved subpath mounts.
-    match role {
-        WorkerVolumeRole::Socket | WorkerVolumeRole::Home | WorkerVolumeRole::Work => {
-            target(role, ContainerKind::Runner).is_some()
-                && target(role, ContainerKind::Dind).is_some()
-        }
-        WorkerVolumeRole::DindData => {
-            target(role, ContainerKind::Runner).is_none()
-                && target(role, ContainerKind::Dind).is_some()
-        }
-        WorkerVolumeRole::RunnerMetadata => {
-            target(role, ContainerKind::Runner).is_none()
-                && target(role, ContainerKind::Dind).is_none()
-        }
     }
 }
 

@@ -265,7 +265,7 @@ async fn mismatched_container_identity_rejects_delivery_before_write() {
     drop(pair);
     let mut observed = Vec::new();
     reader.read_to_end(&mut observed).await.expect("read stdin");
-    assert!(observed.is_empty());
+    assert_eq!(observed, Vec::<u8>::new());
 }
 
 fn expired_start_docker(
@@ -369,8 +369,11 @@ async fn failed_start_keeps_claim_and_runner_attach_until_recovery() -> Result<(
         bootstrap_start_state(&scope, reservation_id).await?,
         "uncertain"
     );
-    pending
-        ._attached
+    let crate::launch::bootstrap::containers::PendingBootstrapPair {
+        _attached: attached,
+        ..
+    } = &mut pending;
+    attached
         .input
         .write_all(b"still-owned")
         .await

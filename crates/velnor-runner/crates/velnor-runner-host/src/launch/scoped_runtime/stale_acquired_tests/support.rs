@@ -344,7 +344,7 @@ fn poll() -> Poll {
             runner_name: None,
             result: None,
             fields: Vec::new(),
-            source: Default::default(),
+            source: velnor_runner_github::SourceMetadata::default(),
         }],
     })
 }

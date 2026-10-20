@@ -87,7 +87,7 @@ pub(crate) use connection::{
     fixture_storage_provisioning_admission_with_filesystem_digest,
 };
 #[cfg(test)]
-pub(crate) use connection::{StorageCacheProjection, StorageReservationPlan, StorageRoleCharge};
+pub(crate) use connection::{StorageReservationPlan, StorageRoleCharge};
 #[cfg(test)]
 pub(crate) use doctor_probe::DoctorProbeRequestRecord;
 pub(crate) use doctor_probe::{

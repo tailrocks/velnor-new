@@ -7,7 +7,68 @@ use super::super::ConnectionJournal;
 use super::super::storage::in_transaction;
 use super::claim::{current_claim, unix_seconds};
 
+#[path = "proof/settled.rs"]
+mod settled;
+
 impl ConnectionJournal {
+    #[cfg(test)]
+    pub(crate) async fn terminal_settlement_matches_at(
+        &self,
+        id: i64,
+        generation: i64,
+    ) -> Result<bool, HostError> {
+        if id <= 0 || generation <= 0 {
+            return Err(HostError::Journal);
+        }
+        in_transaction(&self.journal, async |connection| {
+            self.validate_scope(connection).await?;
+            let set_id = self.required_set_id(connection).await?;
+            settled::matches_terminal_settlement(
+                connection,
+                self.connection_id().as_str(),
+                set_id,
+                id,
+                generation,
+                self.binding_digest(),
+            )
+            .await
+        })
+        .await
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn completion_cleanup_schedule_at(
+        &self,
+        id: i64,
+    ) -> Result<Option<(i64, i64)>, HostError> {
+        if id <= 0 {
+            return Err(HostError::Journal);
+        }
+        in_transaction(&self.journal, async |connection| {
+            self.validate_scope(connection).await?;
+            let set_id = self.required_set_id(connection).await?;
+            let mut rows = connection
+                .query(
+                    "SELECT lease_until, retry_after FROM connection_completion_cleanup WHERE intent_id = ?1 AND connection_id = ?2 AND scale_set_id = ?3",
+                    (id, self.connection_id().as_str(), set_id),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
+                return Ok(None);
+            };
+            let schedule = (
+                row.get(0).map_err(|_| HostError::Journal)?,
+                row.get(1).map_err(|_| HostError::Journal)?,
+            );
+            if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
+                return Err(HostError::Journal);
+            }
+            Ok(Some(schedule))
+        })
+        .await
+    }
+
     /// Bind verified local container IDs under a current cleanup lease.
     pub(crate) async fn bind_completion_containers(
         &self,
@@ -183,7 +244,26 @@ impl ConnectionJournal {
                 .await
                 .map_err(|_| HostError::Journal)?;
             if changed == 0 {
-                return Ok(false);
+                if !settled::matches_terminal_settlement(
+                    connection,
+                    self.connection_id().as_str(),
+                    set_id,
+                    id,
+                    generation,
+                    self.binding_digest(),
+                )
+                .await?
+                {
+                    return Ok(false);
+                }
+                return settled::retire_terminal_claim(
+                    connection,
+                    self.connection_id().as_str(),
+                    set_id,
+                    id,
+                    generation,
+                )
+                .await;
             }
             crate::journal::request_lifecycle::physical::mark_runner_cleaned_after_cleanup(
                 connection,

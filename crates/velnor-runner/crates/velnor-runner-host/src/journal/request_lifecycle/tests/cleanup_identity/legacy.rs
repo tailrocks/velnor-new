@@ -14,7 +14,7 @@ async fn legacy_null_inode_witness_reopens_for_cleanup_and_keeps_capacity_held()
     configure_cleanup_capacity(&journal).await?;
     let repository = binding("cleanup-identity", 1_401)?;
     let scope = created_scope(&journal, &repository, 2_401).await?;
-    let unbound = prepare_physical_initializer(&scope, 'c').await?;
+    let unbound = prepare_legacy_physical_initializer(&scope, 'c').await?;
     assert!(scope.storage_cleanup_identity(unbound).await?.is_none());
     let provisioned = provision_physical_intent(&scope, 'd').await?;
     make_legacy_witness(&journal, provisioned.reservation_id).await?;

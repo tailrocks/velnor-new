@@ -1,9 +1,99 @@
 use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 
 use serde_json::{Value, json};
 
 use super::super::super::support::{self, DOCKER_ROOT};
 use super::*;
+
+static VOLUME_INSPECTION: OnceLock<Mutex<Option<(String, InjectedVolumeInspection)>>> =
+    OnceLock::new();
+
+enum InjectedVolumeInspection {
+    Existing(Value),
+    Status(u16),
+}
+
+impl CapturedRequest {
+    pub(crate) fn inject_preexisting_owned_volume(name: &str, labels: Value) {
+        inject_volume_inspection(
+            name,
+            InjectedVolumeInspection::Existing(json!({
+                "Name": name,
+                "Driver": "local",
+                "Mountpoint": format!("/var/lib/docker/volumes/{name}/_data"),
+                "Labels": labels,
+                "Options": {},
+                "Scope": "local"
+            })),
+        );
+    }
+
+    pub(crate) fn inject_volume_inspection_status(name: &str, status: u16) {
+        inject_volume_inspection(name, InjectedVolumeInspection::Status(status));
+    }
+}
+
+fn inject_volume_inspection(name: &str, response: InjectedVolumeInspection) {
+    if let Ok(mut pending) = VOLUME_INSPECTION.get_or_init(|| Mutex::new(None)).lock() {
+        *pending = Some((name.to_owned(), response));
+    }
+}
+
+fn take_volume_inspection(name: &str) -> Option<InjectedVolumeInspection> {
+    let pending = VOLUME_INSPECTION.get()?;
+    let mut pending = pending.lock().ok()?;
+    if pending.as_ref().is_some_and(|(target, _)| target == name) {
+        pending.take().map(|(_, response)| response)
+    } else {
+        None
+    }
+}
+
+fn volume_response(
+    request: &CapturedRequest,
+    volumes: &HashMap<String, Value>,
+) -> Option<(u16, Vec<u8>)> {
+    let path = route(request);
+    match (request.method.as_str(), path) {
+        ("GET", path) if path.starts_with("/volumes/") => {
+            let name = path.trim_start_matches("/volumes/");
+            match take_volume_inspection(name) {
+                Some(InjectedVolumeInspection::Existing(volume)) => {
+                    Some((200, volume.to_string().into_bytes()))
+                }
+                Some(InjectedVolumeInspection::Status(status)) => Some((
+                    status,
+                    br#"{"message":"injected volume inspection status"}"#.to_vec(),
+                )),
+                None => match volumes.get(name) {
+                    Some(volume) => Some((200, volume.to_string().into_bytes())),
+                    None => Some((404, br#"{"message":"missing"}"#.to_vec())),
+                },
+            }
+        }
+        ("DELETE", path) if path.starts_with("/volumes/") => Some((204, Vec::new())),
+        _ => None,
+    }
+}
+
+fn network_response(
+    request: &CapturedRequest,
+    networks: &HashMap<String, Value>,
+) -> Option<(u16, Vec<u8>)> {
+    let path = route(request);
+    match (request.method.as_str(), path) {
+        ("GET", path) if path.starts_with("/networks/") => {
+            let name = path.trim_start_matches("/networks/");
+            match networks.get(name) {
+                Some(network) => Some((200, network.to_string().into_bytes())),
+                None => Some((404, br#"{"message":"missing"}"#.to_vec())),
+            }
+        }
+        ("DELETE", path) if path.starts_with("/networks/") => Some((204, Vec::new())),
+        _ => None,
+    }
+}
 
 pub(super) fn answer(
     images: &crate::launch::VerifiedWorkerImages,
@@ -15,6 +105,12 @@ pub(super) fn answer(
     probe_available_bytes: u64,
 ) -> Result<(u16, Vec<u8>), String> {
     let route = route(request);
+    if let Some(response) = volume_response(request, volumes) {
+        return Ok(response);
+    }
+    if let Some(response) = network_response(request, networks) {
+        return Ok(response);
+    }
     match (request.method.as_str(), route) {
         ("GET", "/info") => {
             let mut info: Value = serde_json::from_str(&support::engine_info(
@@ -34,22 +130,6 @@ pub(super) fn answer(
                 Ok((200, image_inspection(images, path)?.into_bytes()))
             }
         }
-        ("GET", path) if path.starts_with("/volumes/") => {
-            let name = path.trim_start_matches("/volumes/");
-            match volumes.get(name) {
-                Some(volume) => Ok((200, volume.to_string().into_bytes())),
-                None => Ok((404, br#"{"message":"missing"}"#.to_vec())),
-            }
-        }
-        ("DELETE", path) if path.starts_with("/volumes/") => Ok((204, Vec::new())),
-        ("GET", path) if path.starts_with("/networks/") => {
-            let name = path.trim_start_matches("/networks/");
-            match networks.get(name) {
-                Some(network) => Ok((200, network.to_string().into_bytes())),
-                None => Ok((404, br#"{"message":"missing"}"#.to_vec())),
-            }
-        }
-        ("DELETE", path) if path.starts_with("/networks/") => Ok((204, Vec::new())),
         ("GET", path) if path.starts_with("/containers/") && path.ends_with("/json") => {
             let name = path
                 .trim_start_matches("/containers/")

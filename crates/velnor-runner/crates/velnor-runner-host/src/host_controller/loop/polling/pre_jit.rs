@@ -21,7 +21,7 @@ pub(super) async fn reconcile(
         {
             continue;
         }
-        if let Err(error) = recover_pre_jit_reservation(
+        if let Err(error) = Box::pin(recover_pre_jit_reservation(
             context.docker,
             context.journal,
             &prepared.scope,
@@ -29,7 +29,7 @@ pub(super) async fn reconcile(
             context.worker_images,
             reservation.reservation_id,
             context.release_read_secret,
-        )
+        ))
         .await
         {
             eprintln!(

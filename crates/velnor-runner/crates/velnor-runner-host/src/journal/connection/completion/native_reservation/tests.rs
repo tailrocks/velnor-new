@@ -49,6 +49,33 @@ async fn reader_rejects_reservation_engine_mismatch() -> Result<(), HostError> {
 }
 
 #[tokio::test]
+async fn reader_accepts_a_completed_launch_with_a_recovering_reservation() -> Result<(), HostError>
+{
+    let (fixture, launch) = completed_native_launch().await?;
+    fixture
+        .scope
+        .mark_recovering(fixture.reservation_id)
+        .await?;
+
+    let reservation = fixture
+        .scope
+        .native_completion_reservation(&launch)
+        .await?
+        .ok_or(HostError::Journal)?;
+    assert_eq!(reservation.reservation_id(), fixture.reservation_id);
+    assert_eq!(reservation.intent_id(), fixture.intent_id);
+    assert_eq!(
+        reservation.runner_container_id(),
+        fixture.channel.runner_container_id()
+    );
+    assert_eq!(
+        reservation.dind_container_id(),
+        fixture.channel.dind_container_id()
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn provisioning_rejects_engine_mismatch_with_reservation() -> Result<(), HostError> {
     let (fixture, launch) = completed_native_launch().await?;
     let connection = fixture.scope.journal.connection().await?;

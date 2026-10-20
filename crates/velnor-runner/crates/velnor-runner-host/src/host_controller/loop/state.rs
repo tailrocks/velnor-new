@@ -180,15 +180,18 @@ impl PreparedConnection {
                     )));
                 }
             };
+            let context = crate::launch::scoped_runtime::ScopedHostContext {
+                docker: &docker,
+                host: &host,
+                scoped: &scoped,
+                secret: &secret,
+                engine: &engine,
+                images: &images,
+            };
             runtime
                 .block_on(crate::launch::scoped_runtime::authorize_started_execution(
                     runner,
-                    &docker,
-                    &host,
-                    &scoped,
-                    &secret,
-                    &engine,
-                    &images,
+                    &context,
                     &connection,
                     &policy,
                     github_token.expose(),

@@ -179,12 +179,12 @@ async fn validate_rows(conn: &turso::Connection) -> Result<(), HostError> {
         .await
         .map_err(|_| HostError::Journal)?;
     while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
-        validate_row(&row).await?;
+        validate_row(&row)?;
     }
     Ok(())
 }
 
-async fn validate_row(row: &turso::Row) -> Result<(), HostError> {
+fn validate_row(row: &turso::Row) -> Result<(), HostError> {
     let image_index_digest: Option<String> = row.get(9).map_err(|_| HostError::Journal)?;
     let image_index_size: Option<i64> = row.get(10).map_err(|_| HostError::Journal)?;
     let manifest_size: Option<i64> = row.get(11).map_err(|_| HostError::Journal)?;

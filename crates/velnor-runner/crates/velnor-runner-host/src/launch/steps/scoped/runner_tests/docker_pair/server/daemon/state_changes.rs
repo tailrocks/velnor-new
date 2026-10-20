@@ -1,6 +1,52 @@
 use serde_json::json;
+use std::sync::{Mutex, OnceLock};
 
 use super::{CapturedRequest, ServerState, route};
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum VolumeFailure {
+    DeleteTransport,
+    InspectTransport,
+}
+
+static VOLUME_FAILURE: OnceLock<Mutex<Option<(String, VolumeFailure)>>> = OnceLock::new();
+
+fn fail_once(name: &str, failure: VolumeFailure) -> bool {
+    let Some(injection) = VOLUME_FAILURE.get() else {
+        return false;
+    };
+    let Ok(mut injection) = injection.lock() else {
+        return false;
+    };
+    if injection
+        .as_ref()
+        .is_some_and(|(target, kind)| target == name && *kind == failure)
+    {
+        injection.take();
+        true
+    } else {
+        false
+    }
+}
+
+impl CapturedRequest {
+    /// Inject a transport failure for deletion of one named fixture volume.
+    pub(crate) fn inject_volume_delete_transport_failure(name: &str) {
+        set_failure(name, VolumeFailure::DeleteTransport);
+    }
+
+    /// Inject a transport failure when inspecting one absent fixture volume.
+    pub(crate) fn inject_volume_inspect_transport_failure(name: &str) {
+        set_failure(name, VolumeFailure::InspectTransport);
+    }
+}
+
+fn set_failure(name: &str, failure: VolumeFailure) {
+    let injection = VOLUME_FAILURE.get_or_init(|| Mutex::new(None));
+    if let Ok(mut injection) = injection.lock() {
+        *injection = Some((name.to_owned(), failure));
+    }
+}
 
 impl ServerState {
     pub(super) fn record_docker_change(
@@ -22,6 +68,15 @@ impl ServerState {
             ("DELETE", path) if path.starts_with("/volumes/") => self.remove_volume(request),
             ("DELETE", path) if path.starts_with("/networks/") => self.remove_network(request),
             ("DELETE", path) if path.starts_with("/containers/") => self.remove_container(request),
+            ("GET", path) if path.starts_with("/volumes/") => {
+                let name = path.trim_start_matches("/volumes/");
+                if !self.volumes.contains_key(name)
+                    && fail_once(name, VolumeFailure::InspectTransport)
+                {
+                    return Err("Injected Docker volume inspection transport failure.".to_owned());
+                }
+                Ok(())
+            }
             _ => Ok(()),
         }
     }
@@ -76,6 +131,9 @@ impl ServerState {
         let name = route(request)
             .strip_prefix("/volumes/")
             .ok_or_else(|| "The Docker volume delete path is invalid.".to_owned())?;
+        if fail_once(name, VolumeFailure::DeleteTransport) {
+            return Err("Injected Docker volume deletion transport failure.".to_owned());
+        }
         self.volumes.remove(name);
         Ok(())
     }

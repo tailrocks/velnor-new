@@ -4,7 +4,6 @@ use crate::launch::resource_probe::ImageProvider;
 use bollard::Docker;
 
 use crate::{
-    error::HostError,
     journal::{ConnectionJournal, Journal},
     launch::{
         SelectedEngineContext, VerifiedWorkerImages, resource_probe::ReleaseReadSecret,
@@ -12,33 +11,40 @@ use crate::{
     },
 };
 
-use super::{ScopedRuntimeOutcome, prepare_and_bind_scoped_with_provider};
+use super::{ScopedPrepareFuture, prepare_and_bind_scoped_with_provider, scoped_prepare_context};
 
 /// Prepare storage, start both containers, and bind measured resources.
-pub(crate) async fn prepare_and_bind_scoped(
+pub(crate) fn prepare_and_bind_scoped<'a>(
     outcome: ScopedProvisioningOutcome,
-    docker: &Docker,
-    scoped: &ConnectionJournal,
-    host: &Journal,
-    release_secret: &ReleaseReadSecret,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
-) -> Result<ScopedRuntimeOutcome, HostError> {
-    let provider = crate::launch::resource_probe::release_image_provider(release_secret, host)?;
-    prepare_and_bind_scoped_with_provider(outcome, docker, scoped, host, &provider, engine, images)
+    docker: &'a Docker,
+    scoped: &'a ConnectionJournal,
+    host: &'a Journal,
+    release_secret: &'a ReleaseReadSecret,
+    engine: &'a SelectedEngineContext,
+    images: &'a VerifiedWorkerImages,
+) -> ScopedPrepareFuture<'a> {
+    Box::pin(async move {
+        let provider = crate::launch::resource_probe::release_image_provider(release_secret, host)?;
+        prepare_and_bind_scoped_with_provider(
+            outcome,
+            scoped_prepare_context(docker, scoped, host, &provider, engine, images),
+        )
         .await
+    })
 }
 
 #[cfg(test)]
-pub(in crate::launch) async fn prepare_and_bind_scoped_with_test_provider<P: ImageProvider>(
+pub(in crate::launch) fn prepare_and_bind_scoped_with_test_provider<'a, P: ImageProvider + 'a>(
     outcome: ScopedProvisioningOutcome,
-    docker: &Docker,
-    scoped: &ConnectionJournal,
-    host: &Journal,
-    provider: &P,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
-) -> Result<ScopedRuntimeOutcome, HostError> {
-    prepare_and_bind_scoped_with_provider(outcome, docker, scoped, host, provider, engine, images)
-        .await
+    docker: &'a Docker,
+    scoped: &'a ConnectionJournal,
+    host: &'a Journal,
+    provider: &'a P,
+    engine: &'a SelectedEngineContext,
+    images: &'a VerifiedWorkerImages,
+) -> ScopedPrepareFuture<'a> {
+    prepare_and_bind_scoped_with_provider(
+        outcome,
+        scoped_prepare_context(docker, scoped, host, provider, engine, images),
+    )
 }

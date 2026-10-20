@@ -58,10 +58,6 @@ mod storage_budget_tests;
 mod storage_budget_samples_tests;
 
 #[cfg(test)]
-#[path = "reservation/storage_cache_projection_tests.rs"]
-mod storage_cache_projection_tests;
-
-#[cfg(test)]
 #[path = "reservation/network_tests.rs"]
 mod network_tests;
 
@@ -105,9 +101,7 @@ pub(crate) use storage_budget::{
     StorageRoleLimit, StorageSampleIdentity,
 };
 #[cfg(test)]
-pub(crate) use storage_budget::{
-    StorageCacheProjection, StorageReservationPlan, StorageRoleCharge,
-};
+pub(crate) use storage_budget::{StorageReservationPlan, StorageRoleCharge};
 
 #[cfg(test)]
 pub(crate) use storage_budget_tests::{

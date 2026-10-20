@@ -105,7 +105,7 @@ pub(super) async fn poll_positive_connection(
 ) -> Result<ControllerPollOutcome, HostError> {
     resume_authorized_offers(prepared, allocation, context).await?;
     let cursor = prepared.cursor_for_poll(std::time::Instant::now());
-    let poll = positive_poll_message(prepared, allocation, context, cursor).await?;
+    let poll = Box::pin(positive_poll_message(prepared, allocation, context, cursor)).await?;
     prepared.record_cursor_disposition(
         poll.message_id,
         poll.cursor_disposition,
@@ -123,7 +123,7 @@ pub(super) async fn reconcile_assigned_population(
     prepared: &mut PreparedConnection,
     context: &PositivePollContext<'_>,
 ) -> Result<(), HostError> {
-    pre_jit::reconcile(prepared, context).await?;
+    Box::pin(pre_jit::reconcile(prepared, context)).await?;
     let Some(assigned_total) = prepared.assigned_total else {
         return Ok(());
     };
@@ -370,7 +370,7 @@ async fn positive_poll_message(
         allocated_header: allocation.target(),
     };
     let session_intent = prepared.session_intent;
-    positive_poll_once(
+    Box::pin(positive_poll_once(
         &mut credentials.link,
         set_id,
         &mut credentials.session,
@@ -390,7 +390,7 @@ async fn positive_poll_message(
             )
             .await
         },
-    )
+    ))
     .await
     .map_err(|_| HostError::Journal)
 }

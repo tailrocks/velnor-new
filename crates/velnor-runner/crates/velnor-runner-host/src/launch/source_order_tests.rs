@@ -41,12 +41,12 @@ async fn incomplete_source_is_rejected_by_production_pre_acquire_gate() -> Resul
             reason: "source_metadata_missing",
         })
     );
-    assert!(
+    assert_eq!(
         scope
             .physical_runner_reservations()
             .await
-            .map_err(|error| error.to_string())?
-            .is_empty()
+            .map_err(|error| error.to_string())?,
+        Vec::<crate::journal::PhysicalRunnerReservation>::new()
     );
     Ok(())
 }
@@ -92,7 +92,7 @@ async fn scoped_admission_rejects_missing_source_before_probe_or_acquire() -> Re
             .map_err(|error| error.to_string())?
             .as_nanos()
     ));
-    let _listener =
+    let listener =
         tokio::net::UnixListener::bind(&socket_path).map_err(|error| error.to_string())?;
     let socket = socket_path
         .to_str()
@@ -133,14 +133,14 @@ async fn scoped_admission_rejects_missing_source_before_probe_or_acquire() -> Re
             reason: "source_metadata_missing"
         })
     ));
-    assert!(
+    assert_eq!(
         scope
             .physical_runner_reservations()
             .await
-            .map_err(|error| error.to_string())?
-            .is_empty()
+            .map_err(|error| error.to_string())?,
+        Vec::<crate::journal::PhysicalRunnerReservation>::new()
     );
-    drop(_listener);
+    drop(listener);
     std::fs::remove_file(socket_path).map_err(|error| error.to_string())?;
     Ok(())
 }

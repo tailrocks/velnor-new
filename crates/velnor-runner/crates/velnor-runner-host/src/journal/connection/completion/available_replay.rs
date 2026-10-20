@@ -171,6 +171,7 @@ impl std::fmt::Debug for TerminalReplayBinding {
     }
 }
 
+mod context;
 mod events;
 mod request;
 mod source;

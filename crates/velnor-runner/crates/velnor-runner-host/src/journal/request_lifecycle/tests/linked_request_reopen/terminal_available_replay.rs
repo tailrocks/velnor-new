@@ -105,7 +105,7 @@ async fn stale_completion_lease_cannot_retire_current_physical_attempt() -> Resu
     Ok(())
 }
 
-async fn record_runner_absence(fixture: &LinkedLifecycle) -> Result<(), HostError> {
+pub(super) async fn record_runner_absence(fixture: &LinkedLifecycle) -> Result<(), HostError> {
     let mut launches = fixture.scope.due_completed_launches(0, 1).await?;
     let launch = launches.pop().ok_or(HostError::Journal)?;
     if launch.intent.id != fixture.intent_id {

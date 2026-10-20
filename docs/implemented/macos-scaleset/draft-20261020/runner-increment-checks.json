@@ -971,8 +971,8 @@
       "reviewer": "/root/execution_source_security_review",
       "limits": "The component test uses an 8 MiB thread stack. These checks do not prove a live installation.",
       "integration_changes": [
-        "Keep the unused export removal in launch.rs.",
-        "Use the format from the shipping workspace."
+        "Keep the removal of the unused export from launch.rs.",
+        "Use the formatting from the shipping workspace."
       ],
       "post_hook_check": {
         "result": "PASS",
@@ -982,6 +982,54 @@
         "log": "shipping-successor-post-hook-20261020.log",
         "log_sha256": "b73c9fef5a10306d2f8296cfd725a671701443013970381ecb2299ed2d930ce3"
       }
+    },
+    {
+      "result": "PASS",
+      "base_commit": "901fddb8fa6dfa41b6b7a7c2e8a24c582db4ef7b",
+      "change": "Use the acquired request and current physical attempt in the test fixtures.",
+      "passed": 9,
+      "nextest_run": "9d589530-8b46-4d18-b837-c209ae5a071d",
+      "exit_status": 0,
+      "log": "shipping-nine-fixtures-focused-20261020.log",
+      "log_sha256": "96f0c69b32612c691f72df26aa139542bf3f8c304ea4f44c5e3e96acf20530e7",
+      "author": "/root/native_intake_composition",
+      "reviewer": "/root/obsolete_capacity_cleanup",
+      "integration_changes": [
+        "Keep the initializer order assertion.",
+        "Remove temporary diagnostic output."
+      ],
+      "limits": "The full host suite has a failed event replay test. These checks do not prove a live installation."
+    },
+    {
+      "result": "PASS",
+      "base_commit": "a29b9780d592716bebbe60bd654dc64ea76aa88d",
+      "change": "Keep test values and assertions. Extract the disk pool observations.",
+      "passed": 6,
+      "nextest_run": "cc34a583-3104-42aa-9eb5-3baae8192482",
+      "exit_status": 0,
+      "log": "shipping-lint-caps-focused-20261020.log",
+      "log_sha256": "c31e388b91197497e9f042ebbe989767fb2e61bd0846588b9b7776ca6ab659ef",
+      "source_manifest": "test-lint-caps-901fddb8-manifest-20261020.tsv",
+      "source_manifest_sha256": "69e9c7d26d249debde2851e4dfdaa70677160a102e4eda1fba7a1d365f4d44a9",
+      "author": "/root/container_metadata_repair",
+      "reviewer": "/root/helper_language_review",
+      "limits": "The full runner strict check still has a FAIL result."
+    },
+    {
+      "result": "PASS",
+      "base_commit": "b774d1479cb3c85d4487ecf3dab859edeaf968a0",
+      "change": "Keep the scoped preparation future in heap storage.",
+      "passed": 5,
+      "nextest_run": "b43227d5-9fd1-473b-84d6-1c6709b18f3a",
+      "exit_status": 0,
+      "log": "shipping-future-focused-20261020.log",
+      "log_sha256": "43619ea608e80e7338cf31f1573cd040aeb84a29b5fcd5f4716fc6b0e14701a4",
+      "source_manifest": "future-size-a29b9780/manifest.txt",
+      "source_manifest_sha256": "6df67d838d031d0cf35b3302045985eb3b69fc4dafc195bc33c10e9cedfe4b0f",
+      "author": "/root/grouped_source_evidence",
+      "reviewer": "/root/runner_context_review",
+      "observed_future_bytes": 16,
+      "limits": "These tests do not prove the production stack limit. The full strict check still has a FAIL result."
     }
   ],
   "broader_pair_check": {
@@ -1371,5 +1419,306 @@
     "review_sha256": "8dcf6ccf21a434237569ac6d13cbb934bc26fcbbdcd9649964ebcdcf8db4c05f",
     "language_reviewer": "helper_language_review",
     "scope": "The bootstrap fixture requires no initializer wait. The full composition fixture requires one wait after the runner starts. Full runner tests remain necessary."
+  },
+  "storage_initializer_fixtures": {
+    "source_base": "e7059ca5284f068bd47fd8946e18f8be7a4443e8",
+    "author": "container_metadata_repair",
+    "reviewer": "runner_context_review",
+    "checks": [
+      {
+        "result": "PASS",
+        "tests": 15,
+        "log": "shipping-storage-init-fixtures-20261020.log",
+        "sha256": "fa21df18d475e2c839e6f123a596f68b77a956bb228e32129705caf85337e22b",
+        "run_id": "2c8fa2e1-7ce5-4011-952a-844e6dbb135e"
+      },
+      {
+        "result": "PASS",
+        "tests": 1,
+        "log": "shipping-storage-init-identity-20261020.log",
+        "sha256": "9d4fbcb91fc3a62dad05f127f59293aea66924aacc34270d548528a6fa159ae0",
+        "run_id": "41c29b0f-0a10-4878-a81c-c740e0554aa9"
+      }
+    ],
+    "scope": "The fixtures use acquired requests and current physical attempts. The two historical cleanup tests keep their failure assertions.",
+    "remaining": "Full source gates and live installation remain necessary."
+  },
+  "unused_cache_projection": {
+    "result": "PASS",
+    "source_base": "02ff07b7764a86163e70de3ea29772a2ebe0c70d",
+    "tests": 10,
+    "run_id": "6cb2aa35-74d9-49b6-9979-5cff693ec93b",
+    "log": "shipping-cache-projection-retirement-20261020.log",
+    "log_sha256": "cc19dae460df29b03ae621aab9ab0595b144f4a1252315614be0ef7e514eba72",
+    "reviewer": "runner_context_review",
+    "language_reviewer": "helper_language_review",
+    "scope": "The change removes an unused projection. The active job facts and resource admission remain.",
+    "text_change": "One assertion message now says that snapshot reads must not change the reservation journal.",
+    "remaining": "Strict runner checks and live installation remain necessary.",
+    "text_change_time": "after_test_run"
+  },
+  "native_completion_finalization": {
+    "result": "PASS",
+    "tests": 6,
+    "run_id": "5016d522-4ab4-45c7-b5ce-c1c04d2b9602",
+    "log": "shipping-native-completion-finalization-20261020.log",
+    "log_sha256": "6d5453809019c1872b852f6e2463037e2aa59492dca247ce96c253cb8e7abe5f",
+    "manifest_sha256": "a79229402e7e3123f74d613a8a4bf17304afbaa02bf92ed0929769a26d679bc0",
+    "review_sha256": "71ee674102a8e5212bf87b9320970f851400001761df1ea188c79c9753a843ca",
+    "author": "obsolete_capacity_cleanup",
+    "reviewer": "execution_source_security_review",
+    "language_reviewer": "helper_language_review",
+    "scope": "The settlement transaction sets the completion lease and retry schedule to zero after the terminal proof and capacity release.",
+    "remaining": "The full runner gates and live tests remain necessary."
+  },
+  "completion_replay_contexts": {
+    "result": "PASS",
+    "source_base": "5228231b80af387a19550c7da8ed5ab1ccbc0ddf",
+    "tests": 5,
+    "run_id": "383bedc3-936b-42dd-98d4-218bd1de7882",
+    "log": "shipping-replay5-focused-20261020.log",
+    "log_sha256": "2e8f57c8ee18779566c3c0628b79f7c6a4f47f59ca4bacfb49d616137a0ae9f3",
+    "manifest_sha256": "51f9ed1d2810954dceca14f659e35e31d573ac3773b699f0e30c013aadcc5959",
+    "author": "replay_context_refactor",
+    "reviewer": "runner_context_review",
+    "scope": "Private context records keep the replay identities together. The digest uses lowercase hexadecimal characters.",
+    "remaining": "Full source gates and live tests remain necessary."
+  },
+  "provider_visibility": {
+    "result": "PASS",
+    "tests": 6,
+    "run_id": "e28f1e9b-1ed9-496e-9314-cb66f931c5f4",
+    "log": "shipping-provider3-focused-20261020.log",
+    "log_sha256": "a8369c7f13b98f298fd564b0d22a474d1dc43f897575f94577481856f6c66236",
+    "manifest_sha256": "af5979228cd79c37134ce2476b6562fc5d5be20fbb80450c56812c66e15a3ed0",
+    "review_sha256": "1f3b1018eb158b96ef37a83df95af032833670d735e7330654114e850c0d35e2",
+    "author": "replay_context_refactor",
+    "reviewer": "execution_source_security_review",
+    "scope": "The provider trait and candidate type are available in the Rust crate. Candidate data and evidence methods stay within the resource probe module.",
+    "remaining": "The strict runner gate and live tests remain necessary."
+  },
+  "image_import_row_validation": {
+    "result": "PASS",
+    "author": "replay_context_refactor",
+    "test_source_base": "5228231b80af387a19550c7da8ed5ab1ccbc0ddf",
+    "tests": 17,
+    "run_id": "b6218524-3244-470f-8c1d-3a013a2e5770",
+    "log_sha256": "1e42ad7a312d854634516b9a39a235173957e171dd2ea3013f86dd3ae8577dfb",
+    "final_sha256": "b0ad4e0e6c580e9d484109fe1e83a23c83f035465aca1679351fd83364a6933c",
+    "scope": "The private row validator has no asynchronous operation. Its body and database operation order stay the same.",
+    "remaining": "The strict runner gate still has other failures."
+  },
+  "fixture_numeric_literals": {
+    "result": "PASS",
+    "tests": 1,
+    "run_id": "3f144bf9-00df-4277-abeb-11a7570e8864",
+    "test_log_sha256": "fb72027f7a009015539984c1920f3471fa2194a47d7e9321547283fa5ddd0805",
+    "author": "replay_context_refactor",
+    "scope": "The two fixtures use numeric separators. Their numeric values and JSON text stay the same.",
+    "numeric_tokens_checked": 124,
+    "remaining": "The strict runner gate still has other failures."
+  },
+  "large_future_calls": {
+    "result": "PASS",
+    "tests": 7,
+    "run_id": "d3296cd0-fdc5-4ed7-b845-e838b58d7ddd",
+    "log_sha256": "28a67b66411d61642ce983e1ed219c1c3d9857e5c4514e25bc1120be8bf3eac9",
+    "manifest_sha256": "5d4750c634d166f032bb4ea8b338d6ff60e614da45d71f04d96bad8de8e73440",
+    "author": "grouped_source_evidence",
+    "reviewer": "runner_context_review",
+    "scope": "Three calls use Box::pin before .await. The change keeps the operation order and ownership.",
+    "remaining": "The full strict runner gate still has other failures."
+  },
+  "recovering_completion_reader": {
+    "result": "PASS",
+    "tests": 6,
+    "run_id": "b4961e97-d37a-4d8e-9131-97773b99037d",
+    "log_sha256": "897a7a05b421ca13ac98e56f776fd197573f8392a37d6cdaa10a738fb344b2dd",
+    "source_manifest_sha256": "65bf444cdbcdaa13ab3df250e78844aac81e025915f8d02302eb3ca74f48a2d3",
+    "author": "obsolete_capacity_cleanup",
+    "reviewer": "execution_source_security_review",
+    "language_reviewer": "runner_context_review",
+    "scope": "The migration keeps existing attempt rows. The completion query accepts a recovering reservation with the required identity and completion proof.",
+    "remaining": "Full cleanup and reopen tests remain necessary. The strict runner gate still has other failures."
+  },
+  "resource_probe_future_calls": {
+    "result": "PASS",
+    "tests": 6,
+    "run_id": "26fa31d6-702c-45bf-a4af-d7a43ca10aa2",
+    "log_sha256": "fdf4bd76fb59cbc043da52dc3cbc5e8f4afc2f1824e3aa3cf37e9a6a6c1e14a4",
+    "manifest_sha256": "ec7bdd7b0f0c989a623b58175c14605c92c25c5e271a8fbde7481c42edbd0d9b",
+    "author": "grouped_source_evidence",
+    "reviewer": "runner_context_review",
+    "scope": "Two calls use Box::pin before .await. The change keeps the operation order and ownership.",
+    "remaining": "The strict runner gate still has other failures."
+  },
+  "native_lifecycle_fixture_caps": {
+    "result": "FAIL",
+    "tests": 12,
+    "passed": 10,
+    "failed": 2,
+    "run_id": "0e153840-632a-4a3b-b84e-455f3500c824",
+    "log_sha256": "c7b7fad16ae8f183272b8f5d1dd30de6d5ad56308bac8a343f0e5e5af49a4c53",
+    "manifest_sha256": "f80b13a0def87c65f6d608991753ff7b4ea625ec92fb80b472361343aa30e5f7",
+    "author": "native_intake_composition",
+    "reviewer": "execution_source_security_review",
+    "scope": "The fixtures keep the cleanup assertions. Private helpers keep the files within their size limits.",
+    "remaining": [
+      "The historical JIT states fixture still fails.",
+      "The unassigned runner replacement test still fails.",
+      "The full runner gate remains incomplete."
+    ]
+  },
+  "fixture_bindings_and_empty_values": {
+    "result": "PASS",
+    "tests": 6,
+    "run_id": "25d1b906-df65-4c3f-96b5-de804122ddad",
+    "log_sha256": "6e284f336fe32c033c6b0803ec827ca98ea13ad3033debc302d99e674968c8e4",
+    "author": "replay_context_refactor",
+    "reviewer": "runner_context_review",
+    "scope": "The test bindings keep the same ownership and drop order. The assertions still require empty values.",
+    "remaining": "The strict runner gate still has other failures."
+  },
+  "source_metadata_defaults": {
+    "result": "PASS",
+    "tests": 13,
+    "run_id": "e04f6fd0-27da-4aad-8abc-30696a553e2f",
+    "log_sha256": "a5b3f0cc83c73b79166a4e02cfe5c378760837da76934a7a2246c148c80ffbdf",
+    "manifest_sha256": "ae0fba46814daae5cbead497a6d26fdd4377482204e7796b5067078a63eca943",
+    "author": "replay_context_refactor",
+    "reviewer": "runner_context_review",
+    "scope": "The eight files name the same Default implementation. The source and dependencies match the checked runner workspace.",
+    "remaining": "The strict runner gate still has other failures."
+  },
+  "linked_request_cleanup_replay": {
+    "result": "PASS",
+    "tests": 6,
+    "run_id": "9dfe32d9-bc43-4a12-875f-bc02b7648d00",
+    "log_sha256": "867519e1dd7cb04c63598a46cec861b1edba416e145b576c802dd362111ecfbc",
+    "manifest_sha256": "e07c02d47b08375e63f0a9b81d0758803e84b8d46ff279e4ad0b77451ab245b5",
+    "author": "native_intake_composition",
+    "reviewer": "execution_source_security_review",
+    "scope": "The fixtures use observed runner absence after completion. Replay keeps the released reservation and does not create a new current attempt.",
+    "remaining": "The full runner gate remains incomplete."
+  },
+  "listener_host_context": {
+    "result": "PASS",
+    "tests": 3,
+    "run_id": "1bb00efb-6c4b-4599-a31f-00db819b9da6",
+    "log_sha256": "f70e0db02c7f0c2d3799c0589681a1575d3d6e7464fd4bf7a9b5066422849f8e",
+    "manifest_sha256": "aea0048f4d9252f1425cfe3a7a372ed6f519eb4a7331fe5acd118a974e777ed1",
+    "author": "replay_context_refactor",
+    "reviewer": "runner_context_review",
+    "scope": "The context holds borrowed references. The change keeps provider errors, publication order, and delivery order.",
+    "remaining": "The strict runner gate and the existing file size defect remain incomplete."
+  },
+  "started_execution_host_context": {
+    "result": "PASS",
+    "tests": 5,
+    "run_id": "c2e8c1a3-b428-4e90-b50e-d7a26a4e6937",
+    "log_sha256": "efc1b261e16b9ef13f4f1746bdd8d94d3d76c37f4da32107f894fae2cef8d9f1",
+    "manifest_sha256": "a523ccb483831f0eb1159c214d44dc80217a70a9996cc9d20eb6ea9ad562c442",
+    "author": "replay_context_refactor",
+    "reviewer": "runtime_stack_architecture",
+    "scope": "The authorization body stays the same. The caller supplies the same six borrowed references inside the existing blocking operation.",
+    "remaining": "These tests do not prove live authorization. The strict runner gate still has other failures."
+  },
+  "sql_schema_comparison": {
+    "result": "PASS",
+    "tests": 4,
+    "combined_run_tests": 10,
+    "run_id": "b7adf6e6-9414-49c1-9535-a859dc6e81d2",
+    "log_sha256": "f1feb898b0b33b1e99b22c30748b7a2c70d1ca053f3624843fe9a5fbac2911d0",
+    "manifest_sha256": "0ca44188681c698f5fdfed467b203a17208548f8284ddff5fda0e4ca4356d171",
+    "author": "obsolete_capacity_cleanup",
+    "reviewer": "execution_source_security_review",
+    "scope": "The schema check keeps quoted text and comments unchanged. Different operators stay separate.",
+    "remaining": "This check does not prove the new retirement schema. The full runner gate remains incomplete."
+  },
+  "v10_and_recovering_reopen": {
+    "result": "PASS",
+    "tests": 6,
+    "combined_run_tests": 10,
+    "run_id": "b7adf6e6-9414-49c1-9535-a859dc6e81d2",
+    "log_sha256": "f1feb898b0b33b1e99b22c30748b7a2c70d1ca053f3624843fe9a5fbac2911d0",
+    "manifest_sha256": "9e762c3df20994d0846a5530ec4fc429b931861a7168a59e929ddead76765c23",
+    "author": "native_intake_composition",
+    "reviewer": "execution_source_security_review",
+    "scope": "The V10 test uses its own database. Current cleanup tests use completion and cleanup proofs. Incomplete proof keeps the reservation charged.",
+    "remaining": "The unassigned runner retirement test and full runner gate remain incomplete."
+  },
+  "scoped_runtime_preparation_module": {
+    "result": "PASS",
+    "tests": 1,
+    "baseline_tests": 1,
+    "baseline_run_id": "a6d8769d-f324-4188-9adf-eadcf0eaf08f",
+    "run_id": "d5e03302-fa71-412a-84e9-da9f410400d3",
+    "log_sha256": "0f4ef45229a0d92231b45ecbe49b19a52aa747183f8a12c5c2e756359bc418a8",
+    "author": "root",
+    "reviewer": "runtime_stack_architecture",
+    "file_lines": [
+      283,
+      158
+    ],
+    "function_lines": [
+      73,
+      61
+    ],
+    "scope": "The moved function bodies stay the same. Only module paths and function visibility change. Both files meet the size limit.",
+    "remaining": "This test checks the no-start path and future size. The full runner gate remains incomplete."
+  },
+  "worker_helper_retirement": {
+    "result": "PASS",
+    "tests": 24,
+    "run_id": "ab93a733-b592-4b35-8ede-f1f1208672da",
+    "log_sha256": "01aa669551b620be13de1e1c2890753a5995783fc64fb5e385fcb6e73ccdf911",
+    "manifest_sha256": "bba680295f433e642800aa6d1d38d4f66763fb59cb323a99541d78c3355b15e7",
+    "author": "grouped_source_evidence",
+    "reviewer": "execution_source_security_review",
+    "scope": "The tests use the active storage path. Ownership checks reject an existing volume. Failed cleanup keeps the reservation charged.",
+    "remaining": "These tests use a local HTTP server. Live Docker tests and the full runner gate remain incomplete."
+  },
+  "polling_future_allocation": {
+    "result": "PASS",
+    "tests": 39,
+    "run_id": "464187fc-5c74-4f74-8c06-62a3bb669993",
+    "log_sha256": "946075b79d9d3ccfe0372638d771e07b4dfeaf26885853a088de3be901c3ea09",
+    "manifest_sha256": "f26c33c8d8c69665743fa5091e1bbaa1fd596491029bf518858b5e3ee4843370",
+    "author": "native_intake_composition",
+    "reviewer": "runtime_stack_architecture",
+    "scope": "Four awaited operations use heap storage. The change keeps ownership, cancellation, and operation order.",
+    "strict_result": "FAIL",
+    "remaining": "The strict check has other failures. These tests do not prove live operation."
+  },
+  "worker_test_text": {
+    "result": "PASS",
+    "checks": [
+      "The formatter passed.",
+      "Independent review found changes only in string values."
+    ],
+    "manifest_sha256": "7ee2372060dcd685c8345891cf9c3a9884c366ac2fa8bd365ba7d12c52df7d2a",
+    "author": "grouped_source_evidence",
+    "reviewer": "replay_context_refactor",
+    "scope": "The messages describe the accepted environment values and storage checks. Code identifiers and behavior stay the same."
+  },
+  "full_runner_fa2323": {
+    "result": "FAIL",
+    "source": "fa2323ba305472f978fc3282ab566accbd615609",
+    "tests": 1497,
+    "passed": 1492,
+    "failed": 5,
+    "skipped": 0,
+    "run_id": "81ff7d6f-01fc-4355-93fe-d03ae91e7fb9",
+    "exit_status": 100,
+    "runtime_seconds": 215.692,
+    "log_sha256": "e97b0bebcc9e2c84163d05f5798448cda5b3009af709a9c9134bad1f5cb3510a",
+    "failed_tests": [
+      "journal::request_lifecycle::tests::event_source::started_event_replay_works_before_and_after_completion_and_restart",
+      "journal::request_lifecycle::tests::review_counterexamples::independent_recovered_unassigned_runner_allows_replacement_for_same_request",
+      "journal::request_lifecycle::tests::v32_v33_migration::v33_opens_empty_v32_database_and_reopen_is_idempotent",
+      "journal::request_lifecycle::tests::v32_v33_migration::v33_preserves_charged_started_v32_attempt_and_reopen_is_idempotent",
+      "launch::bootstrap::containers::pair::tests::mismatched_container_identity_rejects_delivery_before_write"
+    ],
+    "remaining": "Each failure has an owner. A later full run is necessary."
   }
 }

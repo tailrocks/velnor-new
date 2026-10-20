@@ -7,20 +7,18 @@ use bollard::models::ContainerCreateBody;
 use bollard::query_parameters::CreateContainerOptions;
 
 use crate::docker_client::docker_deadline;
-use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_mounts, runner_plan};
+use crate::docker_spec::{ContainerPlan, audit_plan, runner_mounts, runner_plan};
 use crate::error::HostError;
 
 mod names;
 pub(crate) mod resources;
 mod volumes;
 pub(crate) use names::{WorkerContainerRole, WorkerIdentityNames};
+#[cfg(test)]
+pub(crate) use volumes::remove_verified_worker_volume;
 pub(crate) use volumes::{
     VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole, WorkerVolumeVerification,
     verify_worker_volume,
-};
-#[cfg(test)]
-pub(crate) use volumes::{
-    create_named_volumes, remove_verified_worker_volume, remove_worker_volumes,
 };
 pub(crate) mod execution_authorization;
 pub(crate) mod guest_image;
@@ -49,32 +47,7 @@ const PLATFORM: &str = "linux/amd64";
 const DIND_IMAGE: &str = "velnor-dind:29.9.1";
 #[cfg(test)]
 const DIND_ENTRYPOINT: [&str; 1] = ["/usr/local/bin/velnor-dind-entrypoint"];
-const IDENTITY_HEX: &[u8; 16] = b"0123456789abcdef";
-
 pub use projection_types::{BindMount, BollardCreate, CreateProjection, Started};
-
-/// Generate a collision-resistant worker volume base for one journal row.
-pub(crate) fn new_worker_volume() -> Result<String, HostError> {
-    let mut random = [0_u8; 16];
-    getrandom::fill(&mut random).map_err(|_| HostError::Identity)?;
-    let mut name = String::with_capacity(33);
-    name.push('w');
-    for byte in random {
-        push_nibble(&mut name, byte >> 4)?;
-        push_nibble(&mut name, byte & 0x0f)?;
-    }
-    Ok(name)
-}
-
-fn push_nibble(name: &mut String, nibble: u8) -> Result<(), HostError> {
-    let index = usize::from(nibble);
-    let digit = IDENTITY_HEX
-        .get(index)
-        .copied()
-        .ok_or(HostError::Identity)?;
-    name.push(char::from(digit));
-    Ok(())
-}
 
 /// Make a Docker create request only after `audit_plan` gives success.
 /// The caller writes the JIT configuration to stdin.
@@ -118,28 +91,6 @@ pub fn runner_create(
         network_mode: None,
         resource_budget,
     })
-}
-
-/// Make a runner Docker create request only after
-/// the release and selected-engine checks give success.
-/// Use the image IDs in the selected engine.
-/// Use the guest metadata file for the same connection and image bundle.
-pub(crate) fn runner_create_verified(
-    plan: &ContainerPlan,
-    resource_budget: ResourceBudget,
-    connection: &crate::config::RepositoryConnection,
-    images: &crate::launch::VerifiedWorkerImages,
-    guest_image: &guest_image::GuestImageFile,
-) -> Result<CreateProjection, HostError> {
-    let metadata_mount = guest_image.runner_bind(connection, images)?;
-    let mut projection = runner_create(plan, resource_budget)?;
-    images
-        .runner()
-        .runtime_id()
-        .clone_into(&mut projection.image);
-    images.platform().clone_into(&mut projection.platform);
-    projection.bind_mounts.push(metadata_mount);
-    Ok(projection)
 }
 
 /// Join `spec` to the private `DinD` network namespace.
@@ -209,23 +160,6 @@ pub fn dind_create(
         network_mode: None,
         resource_budget,
     })
-}
-
-/// Make a privileged Docker-in-Docker request only after release and selected engine checks for both images pass.
-pub(crate) fn dind_create_verified(
-    private_volume: &str,
-    resource_budget: ResourceBudget,
-    images: &crate::launch::VerifiedWorkerImages,
-) -> Result<CreateProjection, HostError> {
-    guest_image::validate_worker_images(images)?;
-    let mut projection = dind_create(private_volume, resource_budget)?;
-    images.dind().runtime_id().clone_into(&mut projection.image);
-    images.platform().clone_into(&mut projection.platform);
-    Ok(projection)
-}
-
-pub(crate) fn dind_mounts(private_volume: &str) -> Result<Vec<Mount>, HostError> {
-    volumes::mounts_for_dind(private_volume)
 }
 
 /// Stable `DinD` container name used by cleanup and recovery.

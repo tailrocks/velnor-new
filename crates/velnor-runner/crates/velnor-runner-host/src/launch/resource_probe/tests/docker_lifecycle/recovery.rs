@@ -113,7 +113,7 @@ fn assert_persisted_projection_rebuilds(row: &crate::journal::ProbeRow) -> Resul
 #[tokio::test]
 async fn held_journal_transition_timeout_sends_no_docker_request() -> Result<(), String> {
     let (_scratch, journal, projection) = prepared().await?;
-    let _held = journal.write_guard().await;
+    let held = journal.write_guard().await;
     let docker = DockerStub::open(Vec::new())?;
     let result = execute::run(
         &docker.docker,
@@ -130,7 +130,7 @@ async fn held_journal_transition_timeout_sends_no_docker_request() -> Result<(),
         requests.is_empty(),
         "expired journal transition sent {requests:?}"
     );
-    drop(_held);
+    drop(held);
     let retained = journal
         .active_probe()
         .await

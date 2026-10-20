@@ -7,7 +7,8 @@ use crate::error::HostError;
 use crate::journal::{AssignmentKey, CapacityLimits, Journal, ReservationState};
 
 #[tokio::test]
-async fn duplicate_scale_set_scope_blocks_jit_for_both_connections() -> Result<(), HostError> {
+async fn duplicate_scale_set_scope_rejects_second_admission_and_blocks_first_jit()
+-> Result<(), HostError> {
     let scratch = Scratch::new()?;
     let journal = Journal::open(&scratch.file()).await?;
     journal
@@ -29,10 +30,26 @@ async fn duplicate_scale_set_scope_blocks_jit_for_both_connections() -> Result<(
         .await?;
     let policy = crate::config::HostConfig::test_with_job_authority_policy(&second_binding)?;
     second.install_job_authority_policy(&policy).await?;
-    let (second_physical, second_intent) = physical_intent(&second, '5').await?;
+    let second_request = second
+        .assignment_identity(AssignmentKey::AssignedRequest { request_id: 66 })
+        .await?;
+    let second_source = super::helpers::receipt(&second, 66, 166, 101).await?;
+    assert_eq!(
+        second
+            .record_source_authorization(&second_request, &second_source)
+            .await,
+        Err(HostError::Journal),
+        "the duplicated Scale Set scope must reject the second source authorization"
+    );
+    assert_eq!(
+        second.request_acquire_state(&second_request).await?,
+        None,
+        "the rejected second authorization must not create an AcquireJobs state"
+    );
+    assert!(second.reservation(&second_request).await?.is_none());
+    assert_no_second_physical_effects(&journal, &second, &second_request).await?;
 
     let first_name = runner_name('4');
-    let second_name = runner_name('5');
     let first_reservation_id = first
         .reservation(&first_physical)
         .await?
@@ -52,25 +69,6 @@ async fn duplicate_scale_set_scope_blocks_jit_for_both_connections() -> Result<(
             .await?
             .is_none()
     );
-    let second_reservation_id = second
-        .reservation(&second_physical)
-        .await?
-        .ok_or(HostError::Journal)?
-        .reservation_id;
-    let (second_generation, second_digest) = second.test_active_authority_identity().await?;
-    assert!(
-        second
-            .claim_runner_jit_for_request(
-                second_intent,
-                second_reservation_id,
-                66,
-                &second_name,
-                second_generation,
-                &second_digest
-            )
-            .await?
-            .is_none()
-    );
     assert_eq!(
         first
             .reservation(&first_physical)
@@ -78,12 +76,42 @@ async fn duplicate_scale_set_scope_blocks_jit_for_both_connections() -> Result<(
             .map(|row| row.state),
         Some(crate::journal::ReservationState::Reserved)
     );
+    Ok(())
+}
+
+async fn assert_no_second_physical_effects(
+    journal: &Journal,
+    scope: &crate::journal::ConnectionJournal,
+    request: &crate::journal::AssignmentIdentity,
+) -> Result<(), HostError> {
+    let connection = journal.connection().await?;
+    let mut rows = connection
+        .query(
+            "SELECT (SELECT COUNT(*) FROM connection_request_authorizations WHERE connection_id = ?1 AND scale_set_id = ?2 AND request_id = ?3), (SELECT COUNT(*) FROM physical_attempts WHERE connection_id = ?1 AND scale_set_id = ?2 AND witness_request_id = ?3), (SELECT COUNT(*) FROM capacity_reservations WHERE connection_id = ?1 AND assignment_key = ?4), (SELECT COUNT(*) FROM connection_runner_jits AS jit JOIN connection_intents AS intent ON intent.id = jit.intent_id WHERE intent.connection_id = ?1 AND intent.assignment_key = ?4)",
+            (
+                scope.connection_id().as_str(),
+                501_i64,
+                66_i64,
+                request.storage_key(),
+            ),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let row = rows
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?;
+    let counts = [
+        row.get::<i64>(0).map_err(|_| HostError::Journal)?,
+        row.get::<i64>(1).map_err(|_| HostError::Journal)?,
+        row.get::<i64>(2).map_err(|_| HostError::Journal)?,
+        row.get::<i64>(3).map_err(|_| HostError::Journal)?,
+    ];
     assert_eq!(
-        second
-            .reservation(&second_physical)
-            .await?
-            .map(|row| row.state),
-        Some(crate::journal::ReservationState::Reserved)
+        counts,
+        [0, 0, 0, 0],
+        "the rejected request must have no authorization, physical attempt, reservation, or JIT row"
     );
     Ok(())
 }

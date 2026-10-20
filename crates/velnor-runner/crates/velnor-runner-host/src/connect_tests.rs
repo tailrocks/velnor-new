@@ -180,7 +180,7 @@ fn disconnect_removes_only_the_selected_binding_and_keeps_shared_settings() -> R
 
     let essential_id = crate::ConnectionId::parse("essential")?;
     assert!(config.remove_connection(&essential_id)?);
-    assert!(config.connections().is_empty());
+    assert_eq!(config.connections(), []);
     let round_trip = HostConfig::parse(&config.to_toml()?)?;
     assert_eq!(round_trip, config);
     assert_eq!(round_trip.host.max_jobs, 1);

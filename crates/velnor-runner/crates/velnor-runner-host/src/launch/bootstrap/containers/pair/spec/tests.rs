@@ -2,11 +2,11 @@ use crate::config::{
     ConnectionId, KeychainReference, RepositoryConnection, ScaleSetSelector, SourcePolicy,
     SourcePolicyMode, WorkflowEvent,
 };
-use crate::connect::SetOwnership;
 use crate::error::HostError;
 use crate::journal::{
-    AssignmentKey, CapacityLimits, ConnectionJournal, EngineContext, Journal, ReservationRequest,
-    ReservationResult, fixture_provisioning_profile, fixture_storage_provisioning_admission,
+    AssignedAcquireResult, CapacityLimits, ConnectionJournal, EngineContext, Journal,
+    RequestPhysicalReservationResult, ReservationRequest, fixture_provisioning_profile,
+    fixture_storage_provisioning_admission,
 };
 use crate::launch::{StartPermit, VerifiedWorkerImages};
 use crate::worker::WorkerIdentityNames;
@@ -48,13 +48,18 @@ async fn fixture(label: &str) -> Result<Fixture, HostError> {
     let docker_root_digest = permit.docker_root_digest().to_owned();
     let admission = fixture_storage_provisioning_admission(&permit)?;
     let assignment = scope
-        .assignment_identity(AssignmentKey::Remote {
+        .assignment_identity(crate::journal::AssignmentKey::Remote {
             kind: "runner".to_owned(),
             subject: NONCE.to_owned(),
         })
         .await?;
+    let request =
+        crate::journal::request_lifecycle::tests::helpers::acquired_physical_fixture_request(
+            &scope,
+        )
+        .await?;
     let reservation = scope
-        .try_reserve_with_provisioning(
+        .try_reserve_and_claim_request_acquire(
             ReservationRequest {
                 assignment: &assignment,
                 engine_id: ENGINE_ID,
@@ -65,12 +70,26 @@ async fn fixture(label: &str) -> Result<Fixture, HostError> {
             },
             permit,
             admission,
+            &request,
         )
         .await?;
-    let ReservationResult::Reserved { reservation_id } = reservation else {
+    let RequestPhysicalReservationResult::AcquireClaimed {
+        reservation_id,
+        intent_id,
+    } = reservation
+    else {
         return Err(HostError::Journal);
     };
-    scope.begin_launch(&assignment).await?;
+    scope
+        .record_request_acquire(
+            &request,
+            AssignedAcquireResult::Returned(vec![request.request_id().ok_or(HostError::Identity)?]),
+        )
+        .await?;
+    let (begun_intent_id, fresh) = scope.begin_launch(&assignment).await?;
+    if fresh || begun_intent_id != intent_id {
+        return Err(HostError::Journal);
+    }
     let plan = scope
         .storage_provisioning_plan(reservation_id)
         .await?
@@ -113,12 +132,25 @@ async fn connection_scope(journal: &Journal) -> Result<ConnectionJournal, HostEr
     )
     .expect("valid repository connection");
     let scope = journal.connection_scope(&connection).await?;
-    scope
-        .bind_scale_set(1_701, "integration", SetOwnership::Adopted)
-        .await?;
+    let request = crate::journal::ScaleSetCreateRequest::new(&connection, 7)?;
+    let prepared = scope.prepare_scale_set_create(&request).await?;
+    let claim = scope
+        .claim_scale_set_create(&prepared)
+        .await?
+        .ok_or(HostError::Journal)?;
+    let response = crate::journal::CreatedScaleSetResponse::verified(
+        &request,
+        1_701,
+        "integration",
+        connection.scale_set.labels(),
+        true,
+    )?;
+    scope.record_scale_set_created(claim, response).await?;
     scope
         .bind_engine_context(ENGINE_ID, "unix:///var/run/docker.sock", "linux/amd64")
         .await?;
+    let config = crate::config::HostConfig::test_with_job_authority_policy(&connection)?;
+    scope.install_job_authority_policy(&config).await?;
 
     Ok(scope)
 }

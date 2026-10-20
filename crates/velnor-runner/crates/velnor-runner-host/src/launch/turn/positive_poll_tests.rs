@@ -22,7 +22,7 @@ fn available_poll() -> Poll {
             job_id: Some("job-91".to_owned()),
             labels: Vec::new(),
             fields: Vec::new(),
-            source: Default::default(),
+            source: velnor_runner_github::SourceMetadata::default(),
         }],
     })
 }
@@ -156,7 +156,7 @@ async fn closed_admission_keeps_available_unacked_and_records_lifecycle() -> Res
                 job_id: Some("job-202".to_owned()),
                 labels: Vec::new(),
                 fields: Vec::new(),
-                source: Default::default(),
+                source: velnor_runner_github::SourceMetadata::default(),
             },
             InnerJob {
                 kind: InnerKind::Completed,

@@ -63,7 +63,7 @@ async fn v32_shaped_migration_preserves_live_link_as_current_attempt() -> Result
     assert_eq!(current_reservation_id, reservation_id);
     assert_eq!(witness_request_id, 101);
     assert_eq!(nonce.len(), 32);
-    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 33);
+    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 34);
     let link_count = scalar(
         &connection,
         "SELECT COUNT(*) FROM connection_request_reservations",

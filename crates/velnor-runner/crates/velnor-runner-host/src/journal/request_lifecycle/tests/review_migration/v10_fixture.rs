@@ -21,11 +21,48 @@ pub(super) async fn make_version_ten_jit_schema(path: &Path) -> Result<PathBuf, 
         .execute("PRAGMA user_version = 10", ())
         .await
         .map_err(|_| HostError::Journal)?;
+    verify_historical_v10_shape(&target).await?;
     drop(source);
     drop(source_database);
     drop(target);
     drop(target_database);
     Ok(target_path)
+}
+
+async fn verify_historical_v10_shape(connection: &turso::Connection) -> Result<(), HostError> {
+    let mut version = connection
+        .query("PRAGMA user_version", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let version = version
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?
+        .get::<i64>(0)
+        .map_err(|_| HostError::Journal)?;
+    if version != 10 {
+        return Err(HostError::Journal);
+    }
+    let mut current_attempt_tables = connection
+        .query(
+            "SELECT COUNT(*) FROM sqlite_schema WHERE type = 'table' AND name IN ('physical_attempt_lineages', 'physical_attempts', 'physical_attempt_current')",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let count = current_attempt_tables
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?
+        .get::<i64>(0)
+        .map_err(|_| HostError::Journal)?;
+    if count == 0 {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
+    }
 }
 
 async fn verify_foreign_keys(connection: &turso::Connection) -> Result<(), HostError> {

@@ -296,15 +296,21 @@ pub(super) async fn check_final_replay(fixture: &LinkedLifecycle) -> Result<(), 
             .await?,
         Some(RequestAcquireState::Acquired)
     );
-    replay_link(
-        &fixture.scope,
-        fixture.witness_request_id,
-        fixture.nonce,
-        '8',
-        fixture.reservation_id,
-        fixture.intent_id,
-    )
-    .await?;
+    assert_eq!(
+        fixture
+            .scope
+            .reservation(&fixture.physical)
+            .await?
+            .map(|reservation| reservation.state),
+        Some(crate::journal::ReservationState::Released)
+    );
+    assert!(
+        fixture
+            .scope
+            .current_physical_attempt(fixture.reservation_id)
+            .await?
+            .is_none()
+    );
     let actual = fixture
         .scope
         .assignment_identity(AssignmentKey::AssignedRequest {
