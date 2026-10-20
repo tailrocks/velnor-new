@@ -1,8 +1,7 @@
 //! HD-4a: the dbt-fusion resolver function accepts exactly `X.Y.Z-preview.N`.
 //!
-//! The generated resolver defines `velnor_exact_fusion`; this test extracts it
-//! (with the helpers it uses) from the generated script and runs it with `sh`
-//! over an accept corpus and an injection/looseness reject corpus.
+//! This test extracts `velnor_exact_fusion` and its helpers from the generated script.
+//! It uses `sh` to check accepted versions and rejected unsafe or incomplete declarations.
 
 use std::collections::BTreeSet;
 use std::process::Command;

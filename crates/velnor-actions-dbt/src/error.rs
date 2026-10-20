@@ -10,7 +10,7 @@ pub struct DbtError {
 }
 
 impl DbtError {
-    /// Error with `name` and an attacker-adjacent `detail`, sanitized.
+    /// Create an error with `name`. Use `sanitize_error_detail` to limit the detail.
     #[must_use]
     pub fn new(name: &str, detail: &str) -> Self {
         Self {

@@ -199,23 +199,22 @@ curl drops the `Authorization` header when a redirect leaves the API host.
 
 ## Bundle location
 
-Bundles land under `<workspace>/.velnor/deps/`, the path a consumer's local
-fetch script (for example `mise run fetch-deps`) already uses, so one
-`.cargo/config.toml` (`[env]` entries with `relative = true` that point
-`build.rs` at `.velnor/deps/<id>/...`) works locally and in CI. Consumers
-gitignore `.velnor/deps/`. A bundle holds no credential: the token is revoked
-before any repository step runs, so a repository build script reading the
-bundle gains nothing it could not read from the locked, digest-verified
-download. The workspace is repository-controlled, so before extracting, the
-fetch resolves the workspace path, requires `.velnor` to be a real directory
-and removes whatever occupies `.velnor/deps` (planted files, stale content or a
-symlink) without following links. The archive reader then refuses symlinked
-ancestors, so extraction cannot leave the workspace. Downloads, the credential
-directory and the revoke state stay under `$RUNNER_TEMP/velnor/`.
+Extract bundles under `<workspace>/.velnor/deps/`. Local fetch scripts use
+this location too. Both environments can use one `.cargo/config.toml`. Its
+`[env]` entries can use `relative = true` to select bundle paths for `build.rs`.
+Add `.velnor/deps/` to `.gitignore`.
 
-Every `vars.*` the generator emits for private sources is declared:
-`config-variables` in the generated `actionlint.yaml` lists
-`private_sources.app_id_variable` next to the review and tap variables.
+Bundles contain no credentials. The workflow revokes the token before
+repository code runs. Build scripts can read the checked bundle files.
+
+Before extraction, resolve the workspace path and require `.velnor` to be a
+directory. Remove existing `.velnor/deps` entries without following symbolic
+links. The archive reader rejects symbolic links in parent directories.
+Downloads, credential files, and revoke state remain under
+`$RUNNER_TEMP/velnor/`.
+
+The generated `actionlint.yaml` declares private-source variable names through
+`config-variables`. This list includes `private_sources.app_id_variable`.
 
 ## Credential boundary
 

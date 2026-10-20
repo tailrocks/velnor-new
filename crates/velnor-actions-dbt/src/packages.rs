@@ -1,7 +1,7 @@
 //! `packages.yml` / `package-lock.yml` policy.
 //!
-//! `dbt deps` is the only network step a dbt job runs, so every dependency
-//! must be pinned by the checked-in lock: a hub package by exact version, a Git
+//! `dbt deps` downloads project packages. Every dependency must be pinned by
+//! the checked-in lock: a hub package by exact version, a Git
 //! package by a 40-hex revision. `local:` packages live in the repository and
 //! need no lock entry but must stay inside the project directory. Tarball
 //! packages are refused.

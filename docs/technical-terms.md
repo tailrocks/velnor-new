@@ -105,3 +105,10 @@
 | Runner registration | A GitHub service record that identifies one runner. |
 | Runner response receipt | A record of one lookup or removal attempt that contains metadata and digests. |
 | Runner absence receipt | A record of an exact lookup that reports no matching runner registration. |
+
+| Cache census | A record of cache entries returned by an API query for one Git ref. |
+| dbt project | A directory with dbt configuration, models, and related source files. |
+| dbt profile | A dbt configuration that supplies connection settings for a data warehouse. |
+| Data warehouse | A database that stores data for analysis. |
+| Flow list | A YAML list written between square brackets. |
+| Block list | A YAML list with one item on each line after a hyphen. |

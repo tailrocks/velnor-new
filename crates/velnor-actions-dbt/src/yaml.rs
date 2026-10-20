@@ -1,9 +1,7 @@
-//! A deliberately tiny reader for the YAML subset dbt control files use.
+//! Read the supported YAML structures in dbt control files.
 //!
-//! It understands top-level `key: scalar` lines, flow lists (`["a", "b"]`),
-//! block lists (`- item`) under a top-level key, and one level of list-of-map
-//! entries (`- key: value` followed by deeper `key: value` lines). Anything it
-//! cannot classify is reported, never guessed.
+//! The reader accepts scalar values, flow lists, block lists, and lists of maps.
+//! It reports input outside this supported set.
 
 use std::collections::BTreeMap;
 

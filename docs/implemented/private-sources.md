@@ -23,16 +23,17 @@ with fixtures and qualification tests, not against live private repositories.
 
 ## Decisions
 
-- Bundle location (adopted per the split brief; owner may revisit). Bundles are
-  extracted to `<workspace>/.velnor/deps/<id>/`, not `$RUNNER_TEMP`, so the local
-  fetch layout and the CI layout match and one `.cargo/config.toml` serves both.
-  No security reason requires keeping bundles outside the workspace: they carry
-  no credential and the token is already revoked when repository code runs. The
-  hostile-checkout cases (a planted `.velnor/deps` symlink or content) are
-  neutralized by `prepare_deps_root` and tested in `private_fetch_attack_tests.rs`.
-- The generated `actionlint.yaml` declares `private_sources.app_id_variable`
-  (`declared_config_variables`); `tests/impl_private_sources_generate.rs`
-  generates a `[private_sources]` repository through the pinned actionlint.
+- Bundles use `<workspace>/.velnor/deps/<id>/` in local runs and CI. Both
+  environments use the same `.cargo/config.toml`. Bundles contain no
+  credentials. The workflow revokes the token before repository code runs.
+  `prepare_deps_root` rejects unsafe parent paths and removes existing
+  dependency entries without following symbolic links.
+  `private_fetch_attack_tests.rs` checks these cases. The owner adopted this
+  location through the split brief and can review it again.
+- The generated `actionlint.yaml` declares `private_sources.app_id_variable`.
+  `declared_config_variables` supplies this name.
+  `tests/impl_private_sources_generate.rs` checks generation with the pinned
+  actionlint.
 
 ## Threat-model checks and where they are tested
 

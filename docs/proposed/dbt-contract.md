@@ -16,7 +16,7 @@ complete.
   `DBT_PASSWORD`, ...); `dbt parse` needs no warehouse connection, so
   placeholder values suffice.
 - The documented parse path is the pinned Fusion Docker image (README "Build
-  and parse"): `dbt deps && dbt parse`. Generated CI replaces the image with the
+  and parse"): `dbt deps && dbt parse`. The proposed generated job will use the
   Mise-installed binary at the same exact version.
 - `lightdash-content/` is a separate concern (a Bun-stack tool member).
 
@@ -57,7 +57,7 @@ Rules:
 1. **Version.** `X.Y.Z-preview.N` with canonical decimal components. A bare
    `X.Y.Z`, `latest`, a range, a template, a leading zero or any character
    outside `[A-Za-z0-9.-]` fails with `project_tool_version_not_exact`.
-2. **Packages.** `dbt deps` is the only network step. Every hub or Git package
+2. **Packages.** `dbt deps` downloads project packages. Every hub or Git package
    in `packages.yml` needs an entry in `package-lock.yml` pinned by an exact hub
    version or a 40-hex Git revision. `local:` packages need no lock entry but
    must stay inside the project directory. Tarball packages are refused. The
@@ -99,7 +99,7 @@ owner approval: a prerelease range, `latest` or a bare `X.Y.Z` for `dbt-fusion`.
 
 - `Stack::Dbt` discovery, the `dbt / <project>` job (deps, then parallel parse
   and compile), plan dispositions and the `dbt-packages` cache family.
-- The `dbt-fusion` catalog entry and `VELNOR_TOOL_DBT_FUSION` resolver key.
-- Postgres service container for `compile` (waits for the shared service IR).
+- The `dbt-fusion` catalog entry.
+- Postgres service emission for `compile`.
 - `dbt build --empty` (phase 2, needs the seeded warehouse schema bundle).
 - The `docker-dbt-fusion` image under `[[images]]` and the Lightdash Bun member.
