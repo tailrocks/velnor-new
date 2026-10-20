@@ -98,44 +98,6 @@ fn clippy_keeps_target_before_separator() -> Result<(), ContractError> {
 }
 
 #[test]
-fn all_features_is_the_only_feature_mode_for_every_compiling_task() -> Result<(), ContractError> {
-    for kind in [
-        TaskKind::Clippy,
-        TaskKind::Test,
-        TaskKind::Nextest,
-        TaskKind::Doctest,
-        TaskKind::Doc,
-        TaskKind::Build,
-    ] {
-        let mut group = group(kind);
-        group.all_features = true;
-        group.features = vec!["declared-a".to_owned(), "declared-b".to_owned()];
-        let argv = text(&group)?;
-        assert_eq!(
-            argv.iter()
-                .filter(|arg| arg.as_str() == "--all-features")
-                .count(),
-            1,
-            "all-features mode for {kind:?}: {argv:?}"
-        );
-        assert!(
-            !argv.contains(&"--no-default-features".to_owned()),
-            "{argv:?}"
-        );
-        assert!(!argv.contains(&"--features".to_owned()), "{argv:?}");
-    }
-
-    let mut fmt = group(TaskKind::Fmt);
-    fmt.all_features = true;
-    let argv = text(&fmt)?;
-    assert!(
-        !argv.contains(&"--all-features".to_owned()),
-        "fmt ignores Cargo features: {argv:?}"
-    );
-    Ok(())
-}
-
-#[test]
 fn clippy_featured_targeted_shape_is_exact() -> Result<(), ContractError> {
     let mut custom = group(TaskKind::Clippy);
     custom.features = vec!["serde".to_owned()];
@@ -198,8 +160,11 @@ fn cargo_kinds_carry_features_without_separator() -> Result<(), ContractError> {
     Ok(())
 }
 
+#[path = "impl_rust_argv/all_features.rs"]
+mod all_features;
+
 #[test]
-fn payloads_never_emit_all_features() -> Result<(), ContractError> {
+fn default_mode_payloads_never_emit_all_features() -> Result<(), ContractError> {
     let kinds = [
         TaskKind::Fmt,
         TaskKind::Clippy,

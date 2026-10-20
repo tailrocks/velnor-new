@@ -272,3 +272,39 @@ fn load_test_config(
     std::fs::write(config_dir.join("config.toml"), contents)?;
     Ok(crate::config::load_config(root.path())?)
 }
+
+#[test]
+fn all_features_configuration_selects_each_package_feature_set() -> Result<(), Box<dyn Error>> {
+    let config = load_test_config(
+        "schema = 1\n[[stacks.rust.configurations]]\nname = \"all\"\nall_features = true\ntarget = \"host\"\n",
+    )?;
+    let index = index(&repository_root()?)?;
+    let workspace = workspace(VelnorV1TaskOwner::Project);
+    let rust = config.stacks.rust.as_ref().expect("Rust stack");
+    let union = declared_union(
+        std::slice::from_ref(&workspace),
+        &index,
+        config.workflow.policy,
+    );
+    let (groups, _) = derive_for_config(
+        &config,
+        &index,
+        &workspace,
+        &rust.configurations[0],
+        true,
+        &mut ArchivePlan::new(),
+        &union,
+    )?;
+    assert_ne!(groups.len(), 0);
+    for group in &groups {
+        let argv = cargo_payload_argv(group)?;
+        assert!(group.all_features, "{}", group.task_id);
+        assert_eq!(group.features, ["repository-only-feature"]);
+        assert_eq!(
+            argv.iter().any(|arg| arg == "--all-features"),
+            group.kind != TaskKind::Fmt,
+            "{argv:?}"
+        );
+    }
+    Ok(())
+}

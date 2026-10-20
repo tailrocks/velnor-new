@@ -324,3 +324,9 @@ fn crate_build_jobs_parse_validate_and_reject_unknown_keys() {
     );
     assert!(load(root.path()).is_ok(), "cap within raised budget");
 }
+
+#[test]
+fn clippy_all_features_rejects_non_boolean_values() {
+    let root = rooted("schema = 1\n[stacks.rust]\nclippy_all_features = \"true\"\n");
+    assert!(load_config(root.path()).is_err());
+}

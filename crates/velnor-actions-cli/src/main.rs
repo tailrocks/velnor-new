@@ -6,6 +6,7 @@
 mod args;
 mod dispatch;
 mod dispatch_config;
+mod dispatch_deps;
 mod dispatch_generate;
 mod dispatch_job_authority;
 mod dispatch_job_image_preview;

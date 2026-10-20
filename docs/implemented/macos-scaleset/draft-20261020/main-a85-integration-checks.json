@@ -1,0 +1,42 @@
+{
+  "result": "PASS",
+  "source_base": "a2cf6e05e4e0c6c17111c742c5fba7344e403f66",
+  "merged_main": "a85ecc06f33291cb2c8ebfa7a339d0b99c17b60d",
+  "full_root_tests_passed": 5194,
+  "final_mise_tests_passed": 4,
+  "checks": [
+    {
+      "log": "main-a85-root-final-nextest-20261020.log",
+      "sha256": "545351239b7032172a7bca4577bd0a83c3ffced528c94135b7dd862820dd7e8f",
+      "exit_status": 0,
+      "run_id": "e5dbb3b9-6164-4a00-9aa3-d9073d9c62b2"
+    },
+    {
+      "log": "main-a85-root-final-clippy-repair-20261020.log",
+      "sha256": "d02c8f66a5bbb83af117a598fc81c228bbe858795de226b13103088533389fb1",
+      "exit_status": 0
+    },
+    {
+      "log": "main-a85-mise-registration-final-20261020.log",
+      "sha256": "0dcbb01aa5211a31e1665b8d3ed535b2584c433b350973f9fc32b81a0b91e50c",
+      "exit_status": 0,
+      "run_id": "656c50a1-07f3-46e8-98b7-6bff62b19b20"
+    },
+    {
+      "log": "main-a85-parity-capture-20261020.log",
+      "sha256": "f233e62ad9c4b991b55445ccd657fc9e7ebfd4eefbf6886d54a73827d16a235f",
+      "exit_status": 0,
+      "run_id": "2e43efdc-30d9-4c07-993b-670905fb07f4"
+    },
+    {
+      "log": "main-a85-tofu-capture-20261020.log",
+      "sha256": "65102a78924e8b28bb8c0c05afc5b5b0871d3dc7bd11f3bd80d3e063488ee718",
+      "exit_status": 0
+    }
+  ],
+  "generation": {
+    "files": 32,
+    "repeat_identical": true
+  },
+  "scope": "These checks cover the root source merge. Runner and live installation gates remain necessary."
+}

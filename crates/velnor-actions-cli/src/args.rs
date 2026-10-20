@@ -50,6 +50,12 @@ pub(crate) enum Command {
         #[command(subcommand)]
         command: ConfigCommand,
     },
+    /// Pin private cross-repository dependency sources.
+    Deps {
+        /// Deps subcommand.
+        #[command(subcommand)]
+        command: DepsCommand,
+    },
     /// Author qualified-tool candidates offline from independently pinned local archives.
     ///
     /// Supply archive SHA-256 values independently. Runs fixed version probes on
@@ -96,6 +102,14 @@ impl Command {
             }
         )
     }
+}
+
+/// Private dependency subcommands.
+#[derive(Debug, Subcommand)]
+pub(crate) enum DepsCommand {
+    /// Resolve every `[private_sources]` declaration to a commit and SHA-256 and
+    /// write `.velnor/deps.lock`. Uses your own `GH_TOKEN` or `GITHUB_TOKEN`.
+    Lock,
 }
 
 /// Config subcommands.

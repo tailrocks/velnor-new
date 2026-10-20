@@ -45,10 +45,10 @@ fn assert_configuration_admission_boundaries(config_calls: &[String]) {
     // source-bound definition, routing reloads before schema migration,
     // the owned-tool preview reloads at its CLI-gated boundary, qualification
     // admission reloads for the repo-resolved catalog, and tap preparation
-    // reloads the captured tap's own config before using its updater task.
-    // Backend cache operations read source configuration before each request.
-    // Preview admission and producer checks load configuration at separate boundaries.
-    assert_eq!(config_calls.len(), 10, "{config_calls:?}");
+    // reloads the captured tap's own config before using its updater task;
+    // preview admission passes its one loaded config to shared preparation;
+    // `deps lock` reloads it to resolve the declared private sources.
+    assert_eq!(config_calls.len(), 11, "{config_calls:?}");
     assert!(
         config_calls
             .iter()
@@ -85,8 +85,9 @@ fn assert_configuration_admission_boundaries(config_calls: &[String]) {
                 || call.starts_with("preview_producer_entry.rs")
                 || call.starts_with("check_runtime.rs")
                 || call.starts_with("routing.rs")
-                || call.starts_with("owned_tool_preview.rs")
+                || call.starts_with("deps_lock.rs")
                 || call.starts_with("job_image_preview.rs")
+                || call.starts_with("owned_tool_preview.rs")
                 || call.starts_with("qualification_cache_backend.rs")
                 || call.starts_with("qualification_resolver.rs")
                 || call.starts_with("tap_prepare.rs")

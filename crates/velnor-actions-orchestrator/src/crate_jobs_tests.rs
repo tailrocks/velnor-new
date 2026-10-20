@@ -87,6 +87,9 @@ mod preludes;
 #[path = "crate_jobs_parallel_tests.rs"]
 mod parallel_tests;
 
+#[path = "crate_jobs_all_features_tests.rs"]
+mod all_features_tests;
+
 #[test]
 fn shards_name_their_index() {
     assert_eq!(shard_suffix("stack/rust/root/nextest/default"), None);

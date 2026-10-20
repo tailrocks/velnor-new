@@ -78,17 +78,21 @@ fn clippy_all_features_defaults_off_and_is_omitted_from_serialization() {
 
 #[test]
 fn all_features_rejects_a_conflicting_feature_subset() {
-    let mut stack = RustStackConfig::default_config();
-    stack.configurations[0].all_features = true;
-    stack.configurations[0].features = vec!["serde".to_owned()];
-
-    let err = stack
-        .validate("config.toml")
-        .expect_err("conflicting subset");
-    assert!(
-        err.to_string().contains("features_conflict_all_features"),
-        "{err}"
-    );
+    for features in [
+        vec!["serde".to_owned()],
+        vec!["default".to_owned(), "serde".to_owned()],
+    ] {
+        let mut stack = RustStackConfig::default_config();
+        stack.configurations[0].all_features = true;
+        stack.configurations[0].features = features;
+        let err = stack
+            .validate("config.toml")
+            .expect_err("conflicting subset");
+        assert!(
+            err.to_string().contains("features_conflict_all_features"),
+            "{err}"
+        );
+    }
 }
 
 #[test]

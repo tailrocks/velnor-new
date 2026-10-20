@@ -184,7 +184,7 @@ Cache restore MUST verify compatibility and ownership before use. A missing arch
 restore/save failure is `cache_unavailable`; failed MBX import is `cache_corrupt`; a failed task-cache
 read/write is a Mise-reported miss. Corrupt, incomplete, or mismatched data MUST be discarded and the task
 MUST execute when otherwise eligible. A cache miss MUST never fail a task by itself. A cache save failure MUST
-leave a successful task successful and report `cache_write_disabled` or `cache_unavailable`.
+leave a successful task successful and report `cache_write_disabled` or `cache_unavailable`. Native Cargo-source, tools and OpenTofu-provider saves follow the [shared optional-save budget](../implemented/cache-save-budget.md): one-minute best-effort attempts use one first-user-step deadline and a thirty-second startup/cleanup reserve; invalid or exhausted clocks refuse the write.
 
 Velnor MUST NOT save unchanged data, use an unbounded stable key, globally prune caches (family pruning of
 superseded exact keys is not global pruning; decision 4), or restore one cache layer through two mechanisms. MBX objects, Cargo sources, and Mise task artifacts MUST remain independently

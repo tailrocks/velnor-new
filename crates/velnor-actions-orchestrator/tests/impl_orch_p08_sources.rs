@@ -104,6 +104,25 @@ fn c10_only_plan_saves_producer_successful_deltas() -> TestResult {
         .position(|name| name == "Save Cargo sources")
         .ok_or("plan save")?;
     assert!(fetch < save, "writer saves after fetch: {plan:?}");
+    let produce = plan
+        .iter()
+        .position(|name| name == "Plan")
+        .ok_or("plan producer")?;
+    assert!(
+        produce < save,
+        "optional save must not block planning: {plan:?}"
+    );
+    let yaml = yaml_for(true)?;
+    let publish = yaml.find("- name: Publish plan").ok_or("publish plan")?;
+    let save_yaml = yaml
+        .find("- name: Save Cargo sources")
+        .ok_or("save sources")?;
+    assert!(
+        publish < save_yaml,
+        "plan artifact precedes optional cache transport"
+    );
+    assert!(yaml.contains("velnor-optional-sources-save-budget.outputs.admitted"));
+    assert!(yaml.contains("Record optional cache budget"));
     let prep = preparation_for(false)?;
     let job = prep
         .workflow

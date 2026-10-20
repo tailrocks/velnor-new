@@ -41,7 +41,7 @@ pub(crate) struct PartialRustStack {
     run_ignored: Option<String>,
     /// Optional cold parallel-target initialization after the test build.
     seed_parallel_targets: Option<bool>,
-    /// This option tells the Clippy task to activate all package features when its value is true.
+    /// Activate all package features for Clippy only; disabled by default.
     clippy_all_features: Option<bool>,
     /// Rust release policy; disabled by default.
     release: Option<RustReleaseConfig>,

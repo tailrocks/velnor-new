@@ -100,6 +100,7 @@ const EXPECTED_MODULES: &[&str] = &[
     "toml_scan.rs",
     "toml_strings.rs",
     "toolfiles.rs",
+    "toolfiles_config_tools.rs",
     "verify.rs",
     "wrappers.rs",
 ];

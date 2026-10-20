@@ -16,7 +16,9 @@ use crate::internal::internal;
 use crate::pins::consumer_acquire_step;
 use crate::workflow_jobs::{PlanJobToolNeeds, PlanRustNeed};
 
-use super::workflow_policy::{plan_uses_nextest, plan_uses_opentofu, plan_uses_rust};
+use super::workflow_policy::{
+    plan_uses_all_features, plan_uses_nextest, plan_uses_opentofu, plan_uses_rust,
+};
 use super::{
     WorkflowPlan, actionlint_input, build_plan_job, check_jobs, insert_format_step,
     insert_gate_jobs, support_workflow, wire_w1, workflow_context, workflow_ir,
@@ -137,11 +139,14 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
     };
     let needs = PlanJobToolNeeds {
         rust,
-        all_features: input.config.stacks.rust.as_ref().is_some_and(|rust| {
-            rust.configurations
-                .iter()
-                .any(|configuration| configuration.all_features)
-        }),
+        all_features: plan_uses_all_features(input.discovery)
+            || input.config.stacks.rust.as_ref().is_some_and(|rust| {
+                rust.clippy_all_features
+                    || rust
+                        .configurations
+                        .iter()
+                        .any(|configuration| configuration.all_features)
+            }),
         nextest: plan_uses_nextest(input.discovery),
         opentofu: plan_uses_opentofu(input.discovery),
         gh: policy == WorkflowPolicy::VelnorRepositoryV1 || has_qualification,

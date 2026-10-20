@@ -86,7 +86,7 @@ pub struct RustTaskIdentityExtension {
     pub targets: Vec<String>,
     /// Enabled features, sorted.
     pub features: Vec<String>,
-    /// Whether Cargo all-features mode is active.
+    /// Whether Cargo all-features mode is active; omitted when false.
     #[serde(skip_serializing_if = "is_false")]
     pub all_features: bool,
     /// Rust target and profile.
@@ -147,7 +147,7 @@ pub struct ExtensionInputs<'a> {
     pub targets: &'a [String],
     /// Enabled features.
     pub features: &'a [String],
-    /// Whether Cargo all-features mode is active.
+    /// Whether Cargo all-features mode is active; omitted when false.
     pub all_features: bool,
     /// Rust target and profile.
     pub target: &'a str,

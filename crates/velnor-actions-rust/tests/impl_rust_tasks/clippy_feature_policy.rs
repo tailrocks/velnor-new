@@ -1,3 +1,5 @@
+//! Clippy-only and configuration-wide all-features task derivation.
+
 use super::{inputs, nextest_profile, package};
 use velnor_actions_rust::{DeriveInputs, TaskKind, derive_task_groups, tasks::cargo_payload_argv};
 
