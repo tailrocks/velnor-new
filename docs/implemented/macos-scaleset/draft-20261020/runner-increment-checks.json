@@ -267,6 +267,30 @@
       "log_sha256": "563e0bb3b9ea9b10c654af268fcd801c60c51cec80d3cb511551965e591b9869",
       "author": "/root",
       "reviewer": null
+    },
+    {
+      "result": "PASS",
+      "source_commit": "526d51c6aea66b8d420e1f5445d025ac6e4c32b2",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --locked --offline --workspace -E 'test(clippy_all_features) | test(all_features_configuration) | test(clippy_feature_policy) | test(global_and_default_feature_policies)'",
+      "exit_status": 0,
+      "nextest_run": "ee7bc654-747c-4905-8ae0-3c9fe91ea102",
+      "passed": 7,
+      "log": "clippy-policy-shipping-final3-20261020.log",
+      "log_sha256": "94106ebc4e247281fd688b7d411a6b591757ec9e9bf30d3586ff78a5ed445504",
+      "author": "/root",
+      "reviewer": "/root/grouped_source_evidence"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "40747d8d4b7655afe75233ea4e55d93f60110175",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host --lib -E 'test(/setup_installs_and_rechecks|setup_rejects/) | test(controller_ipc::server) | test(cursor)'",
+      "exit_status": 0,
+      "nextest_run": "3f2e8806-c698-4a51-af13-a30cc5160571",
+      "passed": 17,
+      "log": "controller-caps-shipping-post-port-20261020.log",
+      "log_sha256": "c05464f7be4d9bc6897ba47a87c92aa856627a5811d818afc927c91d1c64534c",
+      "author": "/root",
+      "reviewer": "/root/obsolete_capacity_cleanup"
     }
   ],
   "broader_pair_check": {
