@@ -113,6 +113,17 @@ impl PrivateWiring {
         self.steps_for_kinds(&[root.to_owned()], &BUN_JOB_KINDS)
     }
 
+    /// The block for a Gradle job: it retrieves Maven bundles only.
+    ///
+    /// # Errors
+    /// Lock read and render-spec failures.
+    pub(crate) fn steps_for_gradle(
+        &self,
+        roots: &[String],
+    ) -> Result<Vec<Step>, OrchestratorError> {
+        self.steps_for_kinds(roots, &[SourceKind::MavenBundles])
+    }
+
     fn steps_for_kinds(
         &self,
         roots: &[String],
