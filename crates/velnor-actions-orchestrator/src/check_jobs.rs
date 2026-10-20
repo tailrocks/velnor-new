@@ -57,6 +57,7 @@ fn check_job(
             problem: format!("check_timeout_out_of_range:{}", check.id),
         })?;
     Ok(Job {
+        services: Vec::new(),
         display_name: format!("Check / {}", check.id),
         runs_on: check.runner.label.clone(),
         check_runner: Some(check.runner.clone()),

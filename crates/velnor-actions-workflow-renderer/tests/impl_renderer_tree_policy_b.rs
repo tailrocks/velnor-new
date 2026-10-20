@@ -14,6 +14,7 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
     ir.jobs.insert(
         "required".to_owned(),
         Job {
+            services: Vec::new(),
             display_name: "Wrong Name".to_owned(),
             runs_on: LABEL.to_owned(),
             check_runner: None,
@@ -31,6 +32,7 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
     ir.jobs.insert(
         "required".to_owned(),
         Job {
+            services: Vec::new(),
             display_name: "Required verdict".to_owned(),
             runs_on: LABEL.to_owned(),
             check_runner: None,
@@ -48,6 +50,7 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
     ir.jobs.insert(
         "required".to_owned(),
         Job {
+            services: Vec::new(),
             display_name: "Required verdict".to_owned(),
             runs_on: LABEL.to_owned(),
             check_runner: None,

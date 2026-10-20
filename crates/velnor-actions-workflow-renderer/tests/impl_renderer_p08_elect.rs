@@ -36,6 +36,7 @@ pub(crate) fn keyed_job(tool: &str) -> Result<Job, RenderError> {
         rustup_components: &[],
     })?;
     Ok(Job {
+        services: Vec::new(),
         display_name: "Keyed".to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,
@@ -148,6 +149,7 @@ fn tools_cache_writer_saves_exact_payload_and_is_push_gated() -> Result<(), Rend
 
 fn bare_job(display_name: &str) -> Job {
     Job {
+        services: Vec::new(),
         display_name: display_name.to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,
@@ -204,6 +206,7 @@ fn provider_job(key: &str, path: &str) -> Job {
         },
     };
     Job {
+        services: Vec::new(),
         display_name: "Provider".to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,

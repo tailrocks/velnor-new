@@ -16,6 +16,7 @@ fn http_backend_spec_gets_mise_setup_in_generated_workflow() {
     )
     .to_owned();
     let job = Job {
+        services: Vec::new(),
         display_name: "Cargo Machete".to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,

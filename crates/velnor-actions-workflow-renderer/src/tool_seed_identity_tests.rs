@@ -160,6 +160,7 @@ fn mise_shell() -> Step {
 
 fn job(steps: Vec<Step>) -> Job {
     Job {
+        services: Vec::new(),
         display_name: "Seed fixture".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         timeout_minutes: velnor_actions_contract::JobTimeout::PLAN,

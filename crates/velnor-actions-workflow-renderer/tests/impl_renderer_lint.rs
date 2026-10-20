@@ -41,6 +41,7 @@ fn fixture_ctx() -> RenderContext {
 
 fn lint_job() -> Result<Job, RenderError> {
     Ok(Job {
+        services: Vec::new(),
         display_name: LINT_DISPLAY.to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,
@@ -77,6 +78,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
     jobs.insert(
         "plan".to_owned(),
         Job {
+            services: Vec::new(),
             display_name: "Plan".to_owned(),
             runs_on: LABEL.to_owned(),
             check_runner: None,
@@ -92,6 +94,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
     jobs.insert(
         "required".to_owned(),
         Job {
+            services: Vec::new(),
             display_name: "Required verdict".to_owned(),
             runs_on: LABEL.to_owned(),
             check_runner: None,

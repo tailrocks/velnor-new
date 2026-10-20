@@ -10,6 +10,7 @@ use super::tests::{ctx, echo_step, render_jobs, workflow_ir};
 
 fn job(display: &str, runs_on: &str, steps: Vec<Step>) -> Job {
     Job {
+        services: Vec::new(),
         display_name: display.to_owned(),
         runs_on: runs_on.to_owned(),
         timeout_minutes: JobTimeout::CRATE,
