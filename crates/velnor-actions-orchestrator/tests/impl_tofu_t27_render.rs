@@ -232,3 +232,93 @@ fn tofu_provider_backed_root_without_lock_fails_planning() -> TestResult {
     );
     Ok(())
 }
+
+/// The composed provider writer retains custody and gets the same optional budget.
+#[test]
+fn tofu_provider_save_shares_job_budget_without_weakening_elected_custody() -> TestResult {
+    use velnor_actions_contract::workflow::cache_family::TOFU_PROVIDERS_SAVE_CONDITION;
+    use velnor_actions_contract::workflow::step_identity::{
+        TOFU_PROVIDERS_KEY_OUTPUT_EXPR, TOFU_PROVIDERS_PATH_OUTPUT_EXPR,
+    };
+    use velnor_actions_contract::{StepKind, StepRole};
+    let config = config_with_extra("\"stacks/a\"", "");
+    let dir = make_pure_tofu_repo(
+        &config,
+        &[
+            ("stacks/a/main.tf", "variable \"a\" {}\n"),
+            (
+                "stacks/a/.terraform.lock.hcl",
+                "provider \"example.com/a/b\" {\nversion = \"1.0.0\"\n}\n",
+            ),
+        ],
+    )?;
+    let prep = prepare(dir.path())?;
+    let jobs = finalized_jobs(&prep)?;
+    let job = jobs.get("tofu-stacks-a").ok_or("tofu job")?;
+    let saves: Vec<_> = job
+        .steps
+        .iter()
+        .filter(|step| step.role == Some(StepRole::TofuProvidersSave))
+        .collect();
+    assert_eq!(saves.len(), 1, "one elected provider writer");
+    assert_eq!(
+        saves[0].condition.as_deref(),
+        Some(TOFU_PROVIDERS_SAVE_CONDITION)
+    );
+    let StepKind::Action { with, .. } = &saves[0].kind else {
+        panic!("provider action")
+    };
+    assert_eq!(
+        with.get("key").map(String::as_str),
+        Some(TOFU_PROVIDERS_KEY_OUTPUT_EXPR)
+    );
+    assert_eq!(
+        with.get("path").map(String::as_str),
+        Some(TOFU_PROVIDERS_PATH_OUTPUT_EXPR)
+    );
+    assert_provider_save_budget(&staged_yaml(dir.path())?)
+}
+
+/// Inspect the actual provider job and its action/guard/reporter ordering.
+fn assert_provider_save_budget(yaml: &str) -> TestResult {
+    let body = yaml
+        .split("  tofu-stacks-a:\n")
+        .nth(1)
+        .ok_or("rendered tofu job")?;
+    let body = body
+        .lines()
+        .take_while(|line| !line.starts_with("  ") || line.starts_with("   "))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let admission = yaml
+        .find("id: velnor-optional-providers-save-budget")
+        .ok_or("provider admission")?;
+    let save = yaml
+        .find("id: velnor-optional-providers-save\n")
+        .ok_or("provider save")?;
+    let reporter = yaml
+        .find("steps.velnor-optional-providers-save.outcome == 'failure'")
+        .ok_or("provider reporter")?;
+    assert!(admission < save && save < reporter);
+    let save_start = yaml[..save]
+        .rfind("name: Save Tofu providers")
+        .ok_or("provider action start")?;
+    let save_body = &yaml[save_start..reporter];
+    for required in [
+        "timeout-minutes: 1",
+        "continue-on-error: true",
+        "steps.velnor-optional-providers-save-budget.outputs.admitted",
+    ] {
+        assert!(
+            save_body.contains(required),
+            "missing provider bound: {required}"
+        );
+    }
+    assert!(body.contains("Record optional cache budget"));
+    assert!(
+        !yaml
+            .lines()
+            .any(|line| line.trim_start().starts_with("shell:"))
+    );
+    Ok(())
+}

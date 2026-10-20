@@ -223,13 +223,18 @@ fn strict_wires_runtime_qualified_tools_cache_after_setup_and_saves_once()
     assert_eq!(names.iter().filter(|s| *s == TOOLS_RESTORE_NAME).count(), 1);
     assert_eq!(names.iter().filter(|s| *s == TOOLS_SAVE_NAME).count(), 1);
     assert_eq!(
+        names.first().map(String::as_str),
+        Some("Record optional cache budget")
+    );
+    assert!(text.contains("id: velnor-cache-clock"));
+    assert_eq!(
         names.iter().position(|s| s == "Setup Mise"),
-        Some(1),
-        "checkout, setup, combined runtime identity and seed, then restore: {names:?}"
+        Some(2),
+        "clock, checkout, setup, combined runtime identity and seed, then restore: {names:?}"
     );
     assert_eq!(
         names.iter().position(|s| s == TOOLS_RESTORE_NAME),
-        Some(3),
+        Some(4),
         "archive restore follows seed admission: {names:?}"
     );
     assert!(!text.contains("name: Restore Velnor tool seed"), "{text}");

@@ -103,7 +103,7 @@ fn uses_staged_helper(step: &StepText) -> bool {
         && step.body.contains("$RUNNER_TEMP/velnor/bin")
 }
 
-/// Setup Mise follows checkout, composite seed/identity, and tools restore.
+/// Setup Mise precedes tool use after the permitted bootstrap prefix.
 fn check_setup_first(job: &JobText) -> Result<(), String> {
     let setup = job.steps.iter().position(|s| s.name == "Setup Mise");
     let first_mise = job.steps.iter().position(uses_mise);
@@ -120,19 +120,63 @@ fn check_setup_first(job: &JobText) -> Result<(), String> {
 
 /// Setup position is legal after the V2 wrapper and restore, or on the cold path.
 fn setup_is_early(job: &JobText, at: usize) -> bool {
-    at <= 1
-        || (at == 3
-            && job
-                .steps
-                .first()
-                .is_some_and(|step| step.name == "Checkout")
-            && job
-                .steps
-                .get(1)
-                .is_some_and(|step| step.name == "V2 identity")
-            && job.steps.get(2).is_some_and(|step| {
-                step.name == velnor_actions_workflow_renderer::steps::TOOLS_RESTORE_NAME
-            }))
+    let offset = usize::from(job.steps.first().is_some_and(is_cache_clock));
+    let steps = &job.steps[offset..];
+    let Some(at) = at.checked_sub(offset) else {
+        return false;
+    };
+    !steps.iter().any(is_cache_clock)
+        && (at <= 1
+            || (at == 3
+                && steps.first().is_some_and(|step| step.name == "Checkout")
+                && steps.get(1).is_some_and(|step| step.name == "V2 identity")
+                && steps.get(2).is_some_and(|step| {
+                    step.name == velnor_actions_workflow_renderer::steps::TOOLS_RESTORE_NAME
+                })))
+}
+
+/// Only the renderer's reserved first-step clock may extend the bootstrap prefix.
+fn is_cache_clock(step: &StepText) -> bool {
+    step.name == "Record optional cache budget"
+        && step.body.lines().any(|line| {
+            matches!(
+                line.trim(),
+                "id: velnor-cache-clock" | "id: \"velnor-cache-clock\""
+            )
+        })
+}
+
+#[test]
+fn setup_prefix_accepts_only_one_reserved_cache_clock() {
+    let mut job = JobText {
+        id: "test".to_owned(),
+        steps: vec![
+            StepText {
+                name: "Record optional cache budget".to_owned(),
+                body: "id: \"velnor-cache-clock\"".to_owned(),
+            },
+            StepText {
+                name: "Checkout".to_owned(),
+                body: String::new(),
+            },
+            StepText {
+                name: "Setup Mise".to_owned(),
+                body: String::new(),
+            },
+        ],
+    };
+    assert!(setup_is_early(&job, 2));
+    job.steps[0].body = "id: unknown-clock".to_owned();
+    assert!(!setup_is_early(&job, 2));
+    job.steps[0].body = "id: velnor-cache-clock".to_owned();
+    job.steps.insert(
+        1,
+        StepText {
+            name: "Record optional cache budget".to_owned(),
+            body: "id: velnor-cache-clock".to_owned(),
+        },
+    );
+    assert!(!setup_is_early(&job, 3));
 }
 
 /// Setup Mise must leave restore and save ownership to the explicit V2 layer.
