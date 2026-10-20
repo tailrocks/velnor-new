@@ -1,6 +1,8 @@
 //! Integration test entry point; cases live in the sibling files.
 mod impl_actionlint_bridge;
 mod impl_bench_p13;
+mod impl_bun;
+mod impl_bun_select;
 mod impl_cache_fixtures;
 mod impl_cache_sources_exact;
 mod impl_cache_warm;

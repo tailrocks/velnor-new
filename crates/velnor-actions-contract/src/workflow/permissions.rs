@@ -12,6 +12,20 @@ pub enum PermissionLevel {
     None,
 }
 
+impl PermissionLevel {
+    /// Serde default for omitted scopes.
+    #[must_use]
+    pub const fn none() -> Self {
+        Self::None
+    }
+
+    /// True for [`PermissionLevel::None`].
+    #[must_use]
+    pub const fn is_none(&self) -> bool {
+        matches!(self, Self::None)
+    }
+}
+
 /// Workflow or job permissions (typed scopes; renderer emits YAML).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Permissions {
@@ -23,6 +37,13 @@ pub struct Permissions {
     pub id_token: PermissionLevel,
     /// Actions scope.
     pub actions: PermissionLevel,
+    /// Packages scope. Only a job whose Velnor-owned registry step reads a
+    /// private npm package holds it (`read`); absent from serialized IR when none.
+    #[serde(
+        default = "PermissionLevel::none",
+        skip_serializing_if = "PermissionLevel::is_none"
+    )]
+    pub packages: PermissionLevel,
 }
 
 impl Permissions {
@@ -48,6 +69,7 @@ impl Default for Permissions {
             pull_requests: PermissionLevel::None,
             id_token: PermissionLevel::None,
             actions: PermissionLevel::None,
+            packages: PermissionLevel::None,
         }
     }
 }
