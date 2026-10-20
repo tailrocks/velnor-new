@@ -20,7 +20,7 @@ use velnor_actions_rust::{
     parse_metadata_json, parse_resolved_graph,
 };
 
-use super::classify_changed;
+use super::{ChangeEvidence, classify_changed};
 use crate::affected_inputs::{AffectedInputs, InputRule, WorkspaceResolve};
 use crate::discover::{Discovery, PlannedWorkspace};
 
@@ -259,6 +259,7 @@ fn select(root: &Path, base: &str, head: &str) -> Outcome<Option<BTreeSet<String
         head,
         &discovery,
         &mut warnings,
+        &mut ChangeEvidence::default(),
     );
     if warnings
         .iter()

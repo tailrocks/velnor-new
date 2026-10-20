@@ -11,6 +11,7 @@ pub use crate::matrix::{
     NOT_AFFECTED_JOBS_OUTPUT, PLAN_ATTEMPT_ENV, PLAN_ATTEMPT_OUTPUT, PLAN_ID_OUTPUT, PLAN_STEP_ID,
     RUN_KEY_OUTPUT,
 };
+pub use crate::plan_gate::not_affected_gate;
 pub use crate::setup::MiseSetup;
 
 /// Generated workflow path inside the repository.

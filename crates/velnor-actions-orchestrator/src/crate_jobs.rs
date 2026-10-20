@@ -299,7 +299,7 @@ fn render_job(
         timeout_minutes: input.timeout,
         needs,
         condition: (use_rust && !use_opentofu)
-            .then(|| crate::plan_dispositions::not_affected_gate(&model.job_id)),
+            .then(|| velnor_actions_workflow_renderer::not_affected_gate(&model.job_id)),
         permissions: None,
         environment: None,
         steps,

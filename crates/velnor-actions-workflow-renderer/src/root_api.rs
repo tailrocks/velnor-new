@@ -39,8 +39,8 @@ pub use crate::render::{
     MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV, MatrixSource, MiseSetup, NOT_AFFECTED_JOBS_OUTPUT,
     PLAN_ATTEMPT_ENV, PLAN_ATTEMPT_OUTPUT, PLAN_ID_OUTPUT, PLAN_JOB_ID, PLAN_STEP_ID,
     RUN_KEY_OUTPUT, RenderContext, RenderedFile, RenderedSymlink, RenderedTree, TASK_JOB_ID,
-    ValidatorCommand, WORKFLOW_PATH, action_pins, finalize_jobs, render_workflow_ir,
-    render_workflow_ir_strict,
+    ValidatorCommand, WORKFLOW_PATH, action_pins, finalize_jobs, not_affected_gate,
+    render_workflow_ir, render_workflow_ir_strict,
 };
 pub use crate::rust_suites::{
     RustSuitesRenderSpec, build_ci_suite_jobs, render_suites_workflow, render_suites_workflows,
