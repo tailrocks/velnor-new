@@ -96,20 +96,62 @@ generation rejects `cargo_bin` with `linux_arm64` as
 `image_prebuilt_platform_unsupported:linux_arm64` until that cache contract is
 extended. Plain Dockerfile images already build on arm64.
 
-## Planned: jobs
+## Publication (implemented, `publish.yml`)
 
 | Job | Event | Permissions | Repository code |
 |---|---|---|---|
-| `image-<id>-<platform>` | PR, push, tag | `contents: read` | yes |
-| `image-publish-<id>` | `push` to the default branch after `Required` succeeded | `packages: write`, `id-token: write`, `attestations: write`, `contents: read`; environment `images` | none |
-| `image-promote-<id>` | release workflow on `<id>-v<X.Y.Z>` | `packages: write`, `attestations: read` | none |
+| `image-<id>-<platform>` (in `ci.yml`) | PR, push | `contents: read` | yes |
+| `image-publish-<id>` | `push` to the default branch after `Required` succeeded | `contents: read`, `actions: read`, `packages: write`, `id-token: write`, `attestations: write`; environment `images` | none |
+| `image-promote-<id>` | `publish.yml` on `<id>-v<X.Y.Z>` | `packages: write`, `attestations: read`; environment `images` | none |
 
-The build job creates a task-owned Buildx builder and
-writes an OCI layout with SBOM and `mode=max` provenance. It joins `Required`.
-The publish job downloads layouts, verifies digests, pushes with a qualified
-`crane` under an isolated `DOCKER_CONFIG`, and attests the digest. Promotion adds
-the `<X.Y.Z>` tag to the digest already built on the default branch (hard
-decision 8); a tag never rebuilds.
+The privileged jobs live in `publish.yml`, not `ci.yml`, because the `ci.yml`
+token hygiene gate forbids any registry token in a step and its permission
+type has no `packages` or `attestations` scope. In the publication IR they are
+the roles `ImagePublish` and `ImagePromote` (`publish_spec.rs`): each has an
+exact permission matrix, may not check out code, and transitively needs the
+branch authority job (publish) or the tag authority job (promote).
+
+`image-publish-<id>` needs the `publish-branch-authority` job, which verifies a
+default-branch push in the generation-time repository and polls the `Required`
+check run at the commit until it concludes (success only). It then:
+
+1. checks that the declared registry owner equals the lowercase repository
+   owner;
+2. finds the successful `ci.yml` run of the same commit and push event and
+   downloads each platform's `velnor-image-<id>-<arch>` artifact (build
+   artifacts are kept one day, so a late re-run of the publish job fails
+   closed);
+3. verifies each artifact: exactly `image.tar`, `image.tar.sha256`,
+   `metadata.json`; the checksum sidecar; a tar of only relative regular
+   files and directories; a layout with one top-level index whose digest
+   equals the build's `containerimage.digest` and its own blob bytes;
+4. merges the per-platform BuildKit indexes (image manifests and attestation
+   manifests, descriptors verbatim) into one multi-platform index layout and
+   extracts each platform's SPDX SBOM from its BuildKit attestation;
+5. logs in with `crane` into an isolated `DOCKER_CONFIG`, pushes the layout to
+   `<repository>:sha-<commit>` (an existing tag with another digest fails),
+   verifies the registry digest equals the assembled one, and tags the default
+   branch name when it is a valid tag;
+6. attests build provenance for the index digest (`attest-build-provenance`)
+   and an SBOM per platform image manifest (`actions/attest`), both pushed to
+   the registry;
+7. runs `gh attestation verify` for the index provenance and every SBOM
+   (signer workflow `publish.yml`, source digest the pushed commit).
+
+`crane` is the catalog tool `PinnedTool::Crane`, installed through Mise's aqua
+backend (the aqua registry verifies the release `checksums.txt`) and recorded
+in `.velnor/version-policy.toml` and the freshness inventory like every other
+pinned tool. `actions/attest` joins the action allowlist pinned by full SHA.
+
+The workflow has no registry credential outside these jobs; PRs run only the
+build jobs, which hold `contents: read`.
+
+Not yet implemented: promotion (`image-promote-<id>`), and the sections below.
+
+## Remaining plan
+
+Promotion adds the `<X.Y.Z>` tag to the digest already built on the default
+branch (hard decision 8); a tag never rebuilds.
 
 No private credential enters a BuildKit build: no secret mount, no `type=gha`
 cache (it hands `ACTIONS_RUNTIME_TOKEN` to BuildKit), no build argument that

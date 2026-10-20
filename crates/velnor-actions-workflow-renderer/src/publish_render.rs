@@ -89,9 +89,11 @@ fn permissions_to_yaml(job: &PublishJobSpec) -> Yaml {
     let perms = &job.permissions;
     let rows = [
         ("contents", perms.contents),
+        ("actions", perms.actions),
         ("checks", perms.checks),
         ("attestations", perms.attestations),
         ("id-token", perms.id_token),
+        ("packages", perms.packages),
     ];
     Yaml::Map(
         rows.iter()

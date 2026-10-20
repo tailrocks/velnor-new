@@ -43,14 +43,21 @@ pub(crate) fn publish_files(
     mise: &MiseSetup,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
     let bundles = &prep.config.publish.bundles;
+    let images = &prep.config.images;
     let git_tag = crate::release_emit::git_tag_release(prep)?;
-    if bundles.is_empty() && git_tag.is_none() {
+    if bundles.is_empty() && git_tag.is_none() && images.is_empty() {
         return Ok(Vec::new());
     }
-    if !bundles.is_empty() && prep.config.workflow.policy != WorkflowPolicy::ConsumerV1 {
+    if (!bundles.is_empty() || !images.is_empty())
+        && prep.config.workflow.policy != WorkflowPolicy::ConsumerV1
+    {
         return Err(OrchestratorError::config(
             CONFIG_REL,
-            "publish.bundles",
+            if bundles.is_empty() {
+                "images"
+            } else {
+                "publish.bundles"
+            },
             "publish_requires_consumer_policy",
         ));
     }
@@ -74,12 +81,13 @@ pub(crate) fn publish_files(
         catalog: &catalog,
         bundles: &plans,
         git_tag_manifest: git_tag.map(|release| release.manifest_path.as_str()),
+        images,
     })?;
     let spec = PublishWorkflowSpec {
         name: PUBLISH_WORKFLOW_NAME.to_owned(),
         repository,
         triggers: PublishTriggers {
-            branches: if git_tag.is_some() {
+            branches: if git_tag.is_some() || !images.is_empty() {
                 vec![prep.default_branch.clone()]
             } else {
                 Vec::new()

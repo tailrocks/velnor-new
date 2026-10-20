@@ -233,6 +233,7 @@ fn policy_file_is_complete() -> Result<(), Box<dyn Error>> {
         "shellcheck = \"0.11.0\"",
         "zizmor = \"1.31.1\"",
         "nextest = \"0.9.148\"",
+        "crane = \"0.22.1\"",
         "cosign = \"3.1.3\"",
     ] {
         assert!(policy.contains(marker), "policy misses {marker}");
@@ -241,7 +242,7 @@ fn policy_file_is_complete() -> Result<(), Box<dyn Error>> {
         .lines()
         .filter(|line| line.trim() == "[[actions]]")
         .count();
-    assert_eq!(tables, 12, "twelve action mirrors");
+    assert_eq!(tables, 13, "thirteen action mirrors");
     let mutants = crate::impl_repo_policy::read(".cargo/mutants.toml")?;
     assert!(
         mutants.contains("# pinned: cargo-mutants = \"27.1.0\""),

@@ -1,12 +1,14 @@
 //! Pinned action refs, override schema, and input validation cases.
 use std::collections::BTreeMap;
 use velnor_actions_actionlint::{
-    ALINT_ACTION_SHA, ALINT_ACTION_VERSION, ALLOWED_ACTIONS, ATTEST_BUILD_PROVENANCE_ACTION_SHA,
-    ATTEST_BUILD_PROVENANCE_ACTION_VERSION, ATTEST_BUILD_PROVENANCE_USES, ActionInputSchema,
-    ActionPinOverride, ActionlintError, ApprovedPinCatalog, CREATE_GITHUB_APP_TOKEN_ACTION_SHA,
-    CREATE_GITHUB_APP_TOKEN_ACTION_VERSION, CREATE_GITHUB_APP_TOKEN_USES, GITHUB_SCRIPT_ACTION,
-    GITHUB_SCRIPT_ACTION_SHA, GITHUB_SCRIPT_ACTION_USES, GITHUB_SCRIPT_ACTION_VERSION,
-    PinnedActionRef, validate_action_inputs,
+    ALINT_ACTION_SHA, ALINT_ACTION_VERSION, ALLOWED_ACTIONS, ATTEST_ACTION_SHA,
+    ATTEST_ACTION_VERSION, ATTEST_BUILD_PROVENANCE_ACTION_SHA,
+    ATTEST_BUILD_PROVENANCE_ACTION_VERSION, ATTEST_BUILD_PROVENANCE_USES, ATTEST_USES,
+    ActionInputSchema, ActionPinOverride, ActionlintError, ApprovedPinCatalog,
+    CREATE_GITHUB_APP_TOKEN_ACTION_SHA, CREATE_GITHUB_APP_TOKEN_ACTION_VERSION,
+    CREATE_GITHUB_APP_TOKEN_USES, GITHUB_SCRIPT_ACTION, GITHUB_SCRIPT_ACTION_SHA,
+    GITHUB_SCRIPT_ACTION_USES, GITHUB_SCRIPT_ACTION_VERSION, PinnedActionRef,
+    validate_action_inputs,
 };
 
 /// Verified checkout pin from the version policy (test fixture).
@@ -24,7 +26,7 @@ fn checkout_schema() -> ActionInputSchema {
 
 #[test]
 fn allowlist_has_only_the_pinned_actions() {
-    assert_eq!(ALLOWED_ACTIONS.len(), 12);
+    assert_eq!(ALLOWED_ACTIONS.len(), 13);
     assert!(ALLOWED_ACTIONS.contains(&"actions/cache/restore"));
     assert!(ALLOWED_ACTIONS.contains(&"asamarts/alint"));
     assert!(!ALLOWED_ACTIONS.contains(&"Swatinem/rust-cache"));
@@ -32,6 +34,14 @@ fn allowlist_has_only_the_pinned_actions() {
     assert!(ALLOWED_ACTIONS.contains(&"actions/attest-build-provenance"));
     assert!(ALLOWED_ACTIONS.contains(&"actions/create-github-app-token"));
     assert!(ALLOWED_ACTIONS.contains(&GITHUB_SCRIPT_ACTION));
+    assert!(ALLOWED_ACTIONS.contains(&"actions/attest"));
+}
+
+#[test]
+fn attest_action_pin_is_a_full_sha_of_the_reviewed_release() {
+    assert_eq!(ATTEST_ACTION_VERSION, "v4.2.2");
+    assert_eq!(ATTEST_ACTION_SHA.len(), 40);
+    assert_eq!(ATTEST_USES, format!("actions/attest@{ATTEST_ACTION_SHA}"));
 }
 
 #[test]
