@@ -14,7 +14,7 @@ pub(super) fn assert_failure_error(
     }
     if matches!(point, FailurePoint::ExistingOwnedVolume) && !failure.ownership_error {
         return Err(format!(
-            "The existing {} volume did not produce the production Ownership refusal: {}.",
+            "Production preparation did not return `HostError::Ownership` for the existing {} volume: {}.",
             role.as_str(),
             failure.error
         ));
@@ -42,7 +42,7 @@ pub(super) fn assert_failure_response(
                 .is_some_and(|error| error.contains("volume inspection transport failure")) =>
         {
             return Err(format!(
-                "The {} inspection fault was not observed.",
+                "The {} volume inspection failure was not observed.",
                 role.as_str()
             ));
         }
@@ -108,7 +108,7 @@ pub(super) fn assert_created_prefix(
         return Ok(());
     }
     Err(format!(
-        "The failed {} operation did not stop at the expected role prefix: {created:?}.",
+        "The failed {} operation created unexpected volumes: {created:?}; expected prefix: {expected_prefix:?}.",
         role.as_str()
     ))
 }

@@ -340,7 +340,7 @@ async fn finish_and_assert_storage_volumes_removed(
                     && candidate.response_status == Some(404)
             }) {
                 return Err(format!(
-                    "The journaled volume {name} was not inspected absent after deletion."
+                    "The journaled volume {name} was not inspected after deletion to confirm that it was absent."
                 ));
             }
             Ok(name.to_owned())

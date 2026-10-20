@@ -127,7 +127,7 @@ async fn preparation_failure_for(
             matches!(error, crate::error::HostError::Ownership),
         ),
         Ok(None) => (
-            "The production preparation result had no start.".to_owned(),
+            "Production preparation returned no runner start.".to_owned(),
             false,
         ),
         Ok(Some(_)) => {

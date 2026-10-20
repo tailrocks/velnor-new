@@ -114,7 +114,7 @@ async fn verified_immutable_image_ids_and_metadata_reach_bootstrap_docker_config
         .get("Env")
         .is_some_and(|environment| !environment.is_null())
     {
-        return Err("Bootstrap supplied Runner environment values.".to_owned());
+        return Err("The Runner create request included non-null environment values.".to_owned());
     }
     let runner_mounts = runner["HostConfig"]["Mounts"]
         .as_array()
@@ -143,7 +143,7 @@ async fn verified_immutable_image_ids_and_metadata_reach_bootstrap_docker_config
         .iter()
         .any(|mount| mount["Target"] == "/opt/velnor/guest-image.json")
     {
-        return Err("DinD unexpectedly received the Runner guest metadata file.".to_owned());
+        return Err("Docker-in-Docker received the Runner guest metadata file.".to_owned());
     }
     Ok(())
 }

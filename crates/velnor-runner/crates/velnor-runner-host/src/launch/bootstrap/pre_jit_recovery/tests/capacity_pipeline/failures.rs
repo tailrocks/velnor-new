@@ -59,7 +59,7 @@ async fn assert_volume_failure_keeps_charge(inspect_failure: bool) -> Result<(),
         .find(|request| request.method == "DELETE" && request.target == format!("/volumes/{name}"))
         .ok_or_else(|| "The selected volume was not sent for deletion.".to_owned())?;
     if inspect_failure && delete.response_status != Some(204) {
-        return Err("The inspect fault did not follow successful deletion.".to_owned());
+        return Err("Deletion did not succeed before the inspection failed.".to_owned());
     }
     if !inspect_failure && delete.response_status.is_some() {
         return Err("The delete transport failure returned a Docker response.".to_owned());
@@ -71,7 +71,7 @@ async fn assert_volume_failure_keeps_charge(inspect_failure: bool) -> Result<(),
                 && request.response_status.is_none()
         })
     {
-        return Err("The post-delete absence inspection did not fail in transport.".to_owned());
+        return Err("Post-delete inspection did not fail at transport layer.".to_owned());
     }
     Ok(())
 }

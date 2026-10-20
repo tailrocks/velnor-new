@@ -1689,5 +1689,16 @@
     "scope": "Four awaited operations use heap storage. The change keeps ownership, cancellation, and operation order.",
     "strict_result": "FAIL",
     "remaining": "The strict check has other failures. These tests do not prove live operation."
+  },
+  "worker_test_text": {
+    "result": "PASS",
+    "checks": [
+      "The formatter passed.",
+      "Independent review found changes only in string values."
+    ],
+    "manifest_sha256": "7ee2372060dcd685c8345891cf9c3a9884c366ac2fa8bd365ba7d12c52df7d2a",
+    "author": "grouped_source_evidence",
+    "reviewer": "replay_context_refactor",
+    "scope": "The messages describe the accepted environment values and storage checks. Code identifiers and behavior stay the same."
   }
 }
