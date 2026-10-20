@@ -7,16 +7,17 @@ use velnor_actions_contract::{JobTimeout, VelnorConfig};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::verification_jobs::BunMemberPolicy;
 
-use super::bun_inventory::BunInventory;
 use super::bun_steps::{MemberInputs, member_steps};
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
+use crate::discover::Discovery;
 
 /// Policies for every member, sorted by job id. `catalog` is the emission
 /// catalog; the packageManager agreement check re-reads the concrete pin.
 pub(crate) fn policies(
     root: &Path,
     config: &VelnorConfig,
+    discovery: &Discovery,
     catalog: &ToolCatalog,
 ) -> Result<Vec<BunMemberPolicy>, OrchestratorError> {
     let Some(bun) = &config.stacks.bun else {
@@ -33,15 +34,13 @@ pub(crate) fn policies(
     {
         return Err(failure("bun_registry_phase_unavailable"));
     }
-    let (index, _) = crate::discover_index::build_file_index(root, &config.discovery.exclude)?;
-    let inventory = BunInventory::load(root, &index, bun)?;
     let timeout = bun
         .timeout_minutes
         .map_or(Ok(config.workflow.crate_timeout_minutes), u16::try_from)
         .map_err(|_| failure("bun_timeout"))?;
     let timeout = JobTimeout::new(timeout)?;
     let mut out = Vec::new();
-    for bun_root in &inventory.roots {
+    for bun_root in &discovery.bun.roots {
         let workspace = &bun_root.workspace;
         check_package_manager(
             workspace.package_manager.as_deref(),

@@ -1,7 +1,8 @@
 //! Bun member jobs (hard decision 6): shape, permissions and role gates.
 
 use velnor_actions_contract::{
-    JobTimeout, PRIVATE_NPM_READ_EXPR, PRIVATE_NPM_READ_TOKEN_ENV, PermissionLevel, Step, StepRole,
+    JobTimeout, PRIVATE_NPM_READ_EXPR, PRIVATE_NPM_READ_TOKEN_ENV, PermissionLevel, Step, StepKind,
+    StepRole,
 };
 use velnor_actions_workflow_renderer::verification_jobs::{
     BUN_RUNNER, BunMemberPolicy, build_bun_member_job,
@@ -75,14 +76,14 @@ fn invalid_policies_are_rejected() -> Result<(), RenderError> {
 
 #[test]
 fn only_the_npm_registry_phase_grants_packages_read() -> Result<(), RenderError> {
-    let mut registry = shell_step(
-        "Install dependencies (registry phase)",
-        vec!["true".to_owned()],
-        std::collections::BTreeMap::from([(
+    let mut registry = step("Install dependencies (registry phase)", false)?;
+    registry.kind = StepKind::Shell {
+        run: vec!["true".to_owned()],
+        env: std::collections::BTreeMap::from([(
             PRIVATE_NPM_READ_TOKEN_ENV.to_owned(),
             PRIVATE_NPM_READ_EXPR.to_owned(),
         )]),
-    )?;
+    };
     registry.role = Some(StepRole::PrivateFetch);
     let job = build_bun_member_job(
         &policy(vec![registry.clone(), step("Test", true)?]),

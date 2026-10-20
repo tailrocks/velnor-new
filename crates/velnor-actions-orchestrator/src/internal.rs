@@ -140,12 +140,12 @@ fn plan_internal_inner(
         &evidence,
     ));
     plan.jobs.extend(crate::select::bun::dispositions(
-        &prep.root,
         &prep.config,
+        &prep.discovery,
         request.event,
         changed.as_ref(),
         &evidence,
-    )?);
+    ));
     plan.jobs
         .sort_by(|left, right| left.job_id.cmp(&right.job_id));
     plan.validate().map_err(internal_contract)?;

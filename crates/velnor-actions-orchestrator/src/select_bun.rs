@@ -8,7 +8,6 @@
 //! a member.
 
 use std::collections::BTreeSet;
-use std::path::Path;
 
 use velnor_actions_bun::{affected_members, forced_members, job_id};
 use velnor_actions_contract::{
@@ -16,22 +15,20 @@ use velnor_actions_contract::{
 };
 
 use super::ChangeEvidence;
-use crate::OrchestratorError;
-use crate::workflow_task_jobs::bun_inventory::BunInventory;
+use crate::discover::Discovery;
 
 /// Plan dispositions for every Bun member job, in member-name order.
 pub(crate) fn dispositions(
-    root: &Path,
     config: &VelnorConfig,
+    discovery: &Discovery,
     event: WorkflowEvent,
     affected: Option<&BTreeSet<String>>,
     evidence: &ChangeEvidence,
-) -> Result<Vec<PlanJob>, OrchestratorError> {
+) -> Vec<PlanJob> {
     let Some(bun) = &config.stacks.bun else {
-        return Ok(Vec::new());
+        return Vec::new();
     };
-    let (index, _) = crate::discover_index::build_file_index(root, &config.discovery.exclude)?;
-    let inventory = BunInventory::load(root, &index, bun)?;
+    let inventory = &discovery.bun;
     let workspaces = inventory.workspaces();
     let selected = match (selects_affected_work(event), affected, &evidence.paths) {
         (true, Some(_), Some(changed)) => {
@@ -41,7 +38,7 @@ pub(crate) fn dispositions(
         }
         _ => None,
     };
-    Ok(workspaces
+    workspaces
         .iter()
         .flat_map(|workspace| &workspace.members)
         .map(|member| PlanJob {
@@ -55,5 +52,5 @@ pub(crate) fn dispositions(
                 JobDisposition::NotAffected
             },
         })
-        .collect())
+        .collect()
 }

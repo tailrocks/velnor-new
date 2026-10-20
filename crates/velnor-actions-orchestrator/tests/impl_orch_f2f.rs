@@ -18,6 +18,7 @@ fn expected_internal(dir: &str) -> Vec<&str> {
         "crates/velnor-actions-contract" | "crates/velnor-actions-freshness" => vec![],
         "crates/velnor-actions-orchestrator" => vec![
             "velnor-actions-actionlint",
+            "velnor-actions-bun",
             "velnor-actions-contract",
             "velnor-actions-mise",
             "velnor-actions-rust",
