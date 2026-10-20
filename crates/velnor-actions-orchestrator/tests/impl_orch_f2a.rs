@@ -153,6 +153,10 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
             // (generator-owned digest commands over validated roots).
             "cache_keys.rs".to_owned(),
             "matrix_step_reports.rs".to_owned(),
+            // publish_steps.rs: `sh -c` wrappers around the fixed publication
+            // scripts in the renderer (tag parsing, bundle packing, upload);
+            // every interpolated value is a contract-validated id or path.
+            "publish_steps.rs".to_owned(),
             "pins.rs".to_owned(),
             "qualify.rs".to_owned(),
             "source_prep.rs".to_owned(),

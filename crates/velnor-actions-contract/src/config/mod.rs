@@ -10,15 +10,18 @@ mod check_receipt_budget;
 mod dco;
 mod discovery;
 mod distribution;
+mod dockerfile;
 mod execution;
 mod host_container;
 mod image_task;
+mod images;
 mod mise;
 mod preview_policy;
 /// Run-time references to project-declared tool versions (hard decision 5).
 pub mod project_tool_refs;
 /// Generated run-time resolver for project-declared versions (hard decision 5).
 pub mod project_tool_resolver;
+mod publish;
 mod qualified_tools;
 mod release;
 mod resources;
@@ -63,6 +66,7 @@ pub use distribution::{
     DistributionConfig, ExactHeadReviewCheck, HomebrewTapConfig, HomebrewTapProtectionObserver,
     HomebrewTapSource, ReviewAppIdentity, TapMergePolicy, TapUpdateEnvironment, TapUpdaterBinding,
 };
+pub use dockerfile::{DockerfileFacts, DockerfileProblem, analyze_dockerfile, is_digest_pinned};
 pub use execution::{
     ExecutionConfig, ExecutionMode, ExecutionOverride, ExecutionParity, ExecutionProfile,
     ExecutionRole, HOSTED_PROFILE_ID, ProfileKind, RoutingWorkflow, SCALE_SET_PROFILE_ID,
@@ -72,9 +76,17 @@ pub use host_container::{
     HostOrbStackSdk,
 };
 pub use image_task::{NativeImageCachePolicy, NativeImagePlatform, NativeImageTask};
+pub use images::{
+    IMAGE_REGISTRY_HOST, ImageConfig, ImageDockerfile, ImagePlatform, ImagePrebuilt,
+    is_valid_image_id, is_valid_image_repository, validate_images,
+};
 pub use mise::{
     CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind,
     MiseCheck, is_valid_check_system_build, is_valid_check_system_version, is_valid_mise_task_name,
+};
+pub use publish::{
+    PublishBundle, PublishConfig, RELEASE_TAG_GLOB, ReleaseTag, VersionSource, is_artifact_id,
+    is_strict_semver,
 };
 pub use qualified_tools::{
     QualifiedCargoInstallation, QualifiedTool, QualifiedToolArtifact, QualifiedToolArtifactRecipe,
@@ -167,6 +179,12 @@ pub struct VelnorConfig {
     /// Optional downstream package promotion policy.
     #[serde(default, skip_serializing_if = "DistributionConfig::is_empty")]
     pub distribution: DistributionConfig,
+    /// Container images built on every run and published from the default branch.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub images: Vec<ImageConfig>,
+    /// Tag-driven publication (`[[publish.bundles]]`).
+    #[serde(default, skip_serializing_if = "PublishConfig::is_empty")]
+    pub publish: PublishConfig,
 }
 
 impl VelnorConfig {
@@ -223,6 +241,7 @@ impl VelnorConfig {
             }
         }
         self.distribution.validate(file)?;
+        self.publish.validate(file)?;
         self.check_distribution_source(file)?;
         self.check_preview_tools(file)?;
         self.check_crate_build_jobs(file)?;
@@ -230,6 +249,7 @@ impl VelnorConfig {
         self.actions.validate(file)?;
         validate_qualified_tools(&self.qualified_tools, file)?;
         self.check_checks(file)?;
+        validate_images(&self.images, file)?;
         self.check_shard_budgets(file)?;
         Ok(())
     }
@@ -338,6 +358,12 @@ mod check_tool_reference_tests;
 
 #[cfg(test)]
 mod preview_policy_tests;
+
+#[cfg(test)]
+mod images_tests;
+
+#[cfg(test)]
+mod dockerfile_tests;
 
 mod review_completion;
 pub(crate) use distribution::valid_review_check_name;

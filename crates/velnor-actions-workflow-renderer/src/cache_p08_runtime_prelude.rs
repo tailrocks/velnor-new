@@ -67,7 +67,7 @@ pub(super) fn validate_action_call(
         .ok_or_else(|| {
             RenderError::InvalidWorkflow("malformed_tools_cache_identity_action".to_owned())
         })?;
-    if !velnor_actions_contract::config::project_tool_refs::is_tools_cache_identity_input(digest) {
+    if !velnor_actions_contract::config::project_tool_refs::is_tools_identity_input(digest) {
         return Err(RenderError::InvalidWorkflow(
             "bad_tools_cache_identity_digest".to_owned(),
         ));
