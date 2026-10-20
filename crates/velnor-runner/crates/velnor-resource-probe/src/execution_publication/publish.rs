@@ -72,6 +72,17 @@ struct OpenedControlFile {
     identity: FileIdentity,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ExpectedOwner {
+    uid: u32,
+    gid: u32,
+}
+
+const CONTROL_OWNER: ExpectedOwner = ExpectedOwner {
+    uid: CONTROL_UID,
+    gid: CONTROL_GID,
+};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct FileIdentity {
     inode: u64,
@@ -125,8 +136,7 @@ pub(super) fn publish_execution_control(
         context.kind,
         &root_mount,
         &mountinfo,
-        CONTROL_UID,
-        CONTROL_GID,
+        CONTROL_OWNER,
     )?;
     let mountinfo_after = read_mountinfo()?;
     let root_mount_after = attachment_mount(&mountinfo_after, PUBLISHER_ROOT)?;
@@ -136,8 +146,7 @@ pub(super) fn publish_execution_control(
         context.kind,
         &root_mount_after,
         &mountinfo_after,
-        CONTROL_UID,
-        CONTROL_GID,
+        CONTROL_OWNER,
     )?;
     let boot_after = crate::execution_channel::identity::read_boot_id()?;
     let namespace_after = crate::execution_channel::identity::mount_namespace_id()?;
@@ -241,8 +250,7 @@ fn publish_or_read(
         bytes,
         mount,
         mountinfo,
-        CONTROL_UID,
-        CONTROL_GID,
+        CONTROL_OWNER,
     )
 }
 
@@ -253,8 +261,7 @@ fn publish_or_read_with_owner(
     bytes: &[u8],
     mount: &MountEntry,
     mountinfo: &[u8],
-    owner_uid: u32,
-    owner_gid: u32,
+    expected_owner: ExpectedOwner,
 ) -> Result<OpenedControlFile, ProbeError> {
     match openat(
         directory,
@@ -263,14 +270,8 @@ fn publish_or_read_with_owner(
         Mode::empty(),
     ) {
         Ok(fd) => {
-            let opened = read_control_file(
-                &File::from(fd),
-                directory,
-                mount,
-                mountinfo,
-                owner_uid,
-                owner_gid,
-            )?;
+            let opened =
+                read_control_file(&File::from(fd), directory, mount, mountinfo, expected_owner)?;
             if opened.bytes != bytes {
                 return Err(ProbeError::Invalid("publication_replay_conflict"));
             }
@@ -292,8 +293,8 @@ fn publish_or_read_with_owner(
         .map_err(|_| ProbeError::Invalid("publication_write"))?;
     fchown(
         &file,
-        Some(Uid::from_raw(owner_uid)),
-        Some(Gid::from_raw(owner_gid)),
+        Some(Uid::from_raw(expected_owner.uid)),
+        Some(Gid::from_raw(expected_owner.gid)),
     )
     .map_err(|_| ProbeError::Invalid("publication_owner"))?;
     fchmod(&file, Mode::from_raw_mode(CONTROL_FILE_MODE))
@@ -311,7 +312,7 @@ fn publish_or_read_with_owner(
     directory
         .sync_all()
         .map_err(|_| ProbeError::Invalid("publication_directory_sync"))?;
-    open_control_file(directory, kind, mount, mountinfo, owner_uid, owner_gid)
+    open_control_file(directory, kind, mount, mountinfo, expected_owner)
 }
 
 fn publication_file(

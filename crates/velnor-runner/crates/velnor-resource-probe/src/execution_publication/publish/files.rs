@@ -3,8 +3,8 @@ use std::{io::Read, os::unix::fs::MetadataExt};
 use rustix::fs::{Mode, OFlags, openat};
 
 use super::{
-    CONTROL_FILE_LIMIT, CONTROL_FILE_MODE, ExecutionPublicationKind, File, MountEntry,
-    OpenedControlFile, ProbeError, observation::observe_control_file_identity,
+    CONTROL_FILE_LIMIT, CONTROL_FILE_MODE, ExecutionPublicationKind, ExpectedOwner, File,
+    MountEntry, OpenedControlFile, ProbeError, observation::observe_control_file_identity,
 };
 
 pub(super) fn open_control_file(
@@ -12,8 +12,7 @@ pub(super) fn open_control_file(
     kind: ExecutionPublicationKind,
     mount: &MountEntry,
     mountinfo: &[u8],
-    owner_uid: u32,
-    owner_gid: u32,
+    expected_owner: ExpectedOwner,
 ) -> Result<OpenedControlFile, ProbeError> {
     let fd = openat(
         directory,
@@ -22,14 +21,7 @@ pub(super) fn open_control_file(
         Mode::empty(),
     )
     .map_err(|_| ProbeError::Invalid("publication_destination_open"))?;
-    read_control_file(
-        &File::from(fd),
-        directory,
-        mount,
-        mountinfo,
-        owner_uid,
-        owner_gid,
-    )
+    read_control_file(&File::from(fd), directory, mount, mountinfo, expected_owner)
 }
 
 pub(super) fn read_control_file(
@@ -37,16 +29,15 @@ pub(super) fn read_control_file(
     directory: &File,
     mount_entry: &MountEntry,
     mountinfo: &[u8],
-    owner_uid: u32,
-    owner_gid: u32,
+    expected_owner: ExpectedOwner,
 ) -> Result<OpenedControlFile, ProbeError> {
     let metadata = file
         .metadata()
         .map_err(|_| ProbeError::Invalid("publication_file_stat"))?;
     let mode = metadata.mode() & 0o777;
     if !metadata.is_file()
-        || metadata.uid() != owner_uid
-        || metadata.gid() != owner_gid
+        || metadata.uid() != expected_owner.uid
+        || metadata.gid() != expected_owner.gid
         || mode != CONTROL_FILE_MODE
         || metadata.len() == 0
         || metadata.len() > CONTROL_FILE_LIMIT as u64
@@ -61,8 +52,7 @@ pub(super) fn read_control_file(
         mountinfo,
         &metadata,
         bytes.len(),
-        owner_uid,
-        owner_gid,
+        expected_owner,
     )?;
     serde_json::from_slice::<serde_json::Value>(&bytes)
         .map_err(|_| ProbeError::Invalid("publication_file_json"))?;

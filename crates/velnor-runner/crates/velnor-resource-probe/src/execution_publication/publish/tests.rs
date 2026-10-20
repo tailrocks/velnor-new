@@ -149,8 +149,10 @@ fn publish_as_current_user(
         bytes,
         mount,
         mountinfo,
-        geteuid().as_raw(),
-        getegid().as_raw(),
+        ExpectedOwner {
+            uid: geteuid().as_raw(),
+            gid: getegid().as_raw(),
+        },
     )
 }
 
@@ -268,8 +270,10 @@ fn file_observation_rejects_an_unexpected_owner() {
             &mountinfo,
             &metadata,
             br#"{"nonce":"a"}"#.len(),
-            unexpected_uid,
-            getegid().as_raw(),
+            ExpectedOwner {
+                uid: unexpected_uid,
+                gid: getegid().as_raw(),
+            },
         ),
         Err(ProbeError::Invalid("publication_file_statx_fields"))
     ));

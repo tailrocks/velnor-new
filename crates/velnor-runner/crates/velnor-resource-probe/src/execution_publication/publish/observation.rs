@@ -1,8 +1,9 @@
 use super::{
     AtFlags, CONTROL_DIRECTORY_MODE, CONTROL_FILE_MODE, CONTROL_GID, CONTROL_UID,
-    DirectoryIdentity, File, FileIdentity, FileType, MOUNTINFO_LIMIT, MOUNTINFO_PATH, MetadataExt,
-    Mode, MountEntry, OFlags, PUBLISHER_ROOT, ProbeError, Read, StatxFlags,
-    attachment_mount_source, filesystem_name, fstat, fstatfs, fstatvfs, open, openat, statx,
+    DirectoryIdentity, ExpectedOwner, File, FileIdentity, FileType, MOUNTINFO_LIMIT,
+    MOUNTINFO_PATH, MetadataExt, Mode, MountEntry, OFlags, PUBLISHER_ROOT, ProbeError, Read,
+    StatxFlags, attachment_mount_source, filesystem_name, fstat, fstatfs, fstatvfs, open, openat,
+    statx,
 };
 
 pub(super) fn observe_control_file_identity(
@@ -12,8 +13,7 @@ pub(super) fn observe_control_file_identity(
     mountinfo: &[u8],
     metadata: &std::fs::Metadata,
     size: usize,
-    owner_uid: u32,
-    owner_gid: u32,
+    expected_owner: ExpectedOwner,
 ) -> Result<FileIdentity, ProbeError> {
     let stat = fstat(file).map_err(|_| ProbeError::Invalid("publication_file_fstat"))?;
     let statx_value = statx(
@@ -28,14 +28,14 @@ pub(super) fn observe_control_file_identity(
     if statx_value.stx_mask & required.bits() != required.bits()
         || FileType::from_raw_mode(stat.st_mode) != FileType::RegularFile
         || stat.st_ino != metadata.ino()
-        || stat.st_uid != owner_uid
-        || stat.st_gid != owner_gid
+        || stat.st_uid != expected_owner.uid
+        || stat.st_gid != expected_owner.gid
         || stat.st_mode & 0o777 != CONTROL_FILE_MODE
         || stat.st_size < 0
         || u64::try_from(stat.st_size).ok() != Some(size)
         || statx_value.stx_ino != metadata.ino()
-        || statx_value.stx_uid != owner_uid
-        || statx_value.stx_gid != owner_gid
+        || statx_value.stx_uid != expected_owner.uid
+        || statx_value.stx_gid != expected_owner.gid
         || u32::from(statx_value.stx_mode) & 0o777 != CONTROL_FILE_MODE
         || statx_value.stx_size != size
     {
