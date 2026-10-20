@@ -26,16 +26,42 @@ pub(crate) async fn cleanup_runtime_fixture_for_base(
     base: crate::journal::request_lifecycle::tests::NativeStartedIntakeFixture,
 ) -> Result<CleanupRuntimeFixture, HostError> {
     let reservation_id = base.reservation_id;
-    let identity = base
-        .scope
+    let (runtime, server) =
+        cleanup_runtime_parts(&base.scope, &base.journal, reservation_id).await?;
+    Ok(CleanupRuntimeFixture {
+        scope: base.scope.clone(),
+        journal: base.journal.clone(),
+        _base: base,
+        runtime,
+        server,
+        reservation_id,
+    })
+}
+
+pub(crate) async fn verify_storage_cleanup_for_scope(
+    scope: &ConnectionJournal,
+    journal: &Journal,
+    reservation_id: i64,
+) -> Result<crate::launch::bootstrap::VerifiedStorageCleanup, HostError> {
+    let (runtime, server) = cleanup_runtime_parts(scope, journal, reservation_id).await?;
+    let pending = runtime
+        .prepare_storage_cleanup(scope, reservation_id)
+        .await?;
+    let proof = runtime.verify_storage_cleanup(scope, pending).await?;
+    drop(server);
+    Ok(proof)
+}
+
+async fn cleanup_runtime_parts(
+    scope: &ConnectionJournal,
+    journal: &Journal,
+    reservation_id: i64,
+) -> Result<(NativeCleanupRuntime, StatefulDocker), HostError> {
+    let identity = scope
         .storage_cleanup_identity(reservation_id)
         .await?
         .ok_or(HostError::Ownership)?;
-    let engine_context = base
-        .scope
-        .engine_context()
-        .await?
-        .ok_or(HostError::Ownership)?;
+    let engine_context = scope.engine_context().await?.ok_or(HostError::Ownership)?;
     let images = crate::launch::verified_images::test_worker_images_for(
         identity.engine_id(),
         identity.docker_root_digest(),
@@ -49,21 +75,14 @@ pub(crate) async fn cleanup_runtime_fixture_for_base(
     let docker = server.docker();
     let runtime = NativeCleanupRuntime::new_with_test_provider(
         docker,
-        base.journal.clone(),
+        journal.clone(),
         engine_context,
         selected,
         images,
         Arc::new(crate::launch::resource_probe::ReleaseReadSecret::test_inert()),
         provider,
     )?;
-    Ok(CleanupRuntimeFixture {
-        scope: base.scope.clone(),
-        journal: base.journal.clone(),
-        _base: base,
-        runtime,
-        server,
-        reservation_id,
-    })
+    Ok((runtime, server))
 }
 
 #[tokio::test]

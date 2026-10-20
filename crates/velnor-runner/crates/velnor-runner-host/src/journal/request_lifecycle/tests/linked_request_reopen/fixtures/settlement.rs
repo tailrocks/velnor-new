@@ -1,5 +1,5 @@
 use super::super::super::helpers::{
-    record_owned_network_cleanup, record_owned_storage_cleanup, settle_storage_metadata,
+    record_observed_storage_cleanup, record_owned_network_cleanup, settle_storage_metadata,
 };
 use super::super::replay_link;
 use super::LinkedLifecycle;
@@ -44,7 +44,7 @@ pub(in crate::journal::request_lifecycle::tests::linked_request_reopen) async fn
             .map(|reservation| reservation.state),
         Some(crate::journal::ReservationState::Reserved)
     );
-    record_owned_storage_cleanup(scope, &fixture.provisioned).await?;
+    record_observed_storage_cleanup(scope, fixture.reservation_id).await?;
     scope.record_remote_cleanup(fixture.reservation_id).await?;
     scope.record_local_cleanup(fixture.reservation_id).await?;
     assert!(matches!(

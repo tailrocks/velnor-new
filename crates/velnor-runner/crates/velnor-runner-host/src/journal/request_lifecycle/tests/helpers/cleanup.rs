@@ -168,6 +168,19 @@ async fn configure_cleanup_probe_capacity(
         .await
 }
 
+pub(super) async fn record_observed_storage_cleanup(
+    scope: &ConnectionJournal,
+    reservation_id: i64,
+) -> Result<(), HostError> {
+    let proof = crate::launch::bootstrap::verify_storage_cleanup_for_scope(
+        scope,
+        scope.journal_ref(),
+        reservation_id,
+    )
+    .await?;
+    scope.record_storage_cleanup(proof).await
+}
+
 pub(super) async fn record_owned_network_cleanup(
     scope: &ConnectionJournal,
     reservation_id: i64,

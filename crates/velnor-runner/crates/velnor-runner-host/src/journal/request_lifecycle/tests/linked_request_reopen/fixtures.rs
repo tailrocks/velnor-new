@@ -2,8 +2,7 @@
 
 use super::super::helpers::{
     Scratch, binding, created_scope, event_source, finish_initialized_listener_delivery,
-    initialize_reserved_request, record_owned_network_cleanup, record_owned_storage_cleanup,
-    runner_name, settle_storage_metadata,
+    initialize_reserved_request, runner_name,
 };
 use super::{
     assert_runner_request_association, authorize, reject_wrong_scope_and_runner, replay_link,
@@ -13,7 +12,7 @@ use crate::config::RepositoryConnection;
 use crate::error::HostError;
 use crate::journal::{
     AssignedAcquireResult, AssignmentKey, CapacityLimits, ConnectionJournal, Journal,
-    MetadataSettlementResult, RequestAcquireState,
+    RequestAcquireState,
 };
 use velnor_runner_github::RunnerReference;
 
@@ -51,11 +50,17 @@ pub(super) async fn prepare_linked_lifecycle(
     let path = scratch.file();
     let journal = Journal::open(&path).await?;
     journal
-        .configure_capacity(CapacityLimits {
-            jobs: 1,
-            cpu_millicores: 2_000,
-            memory_bytes: 25_769_803_776,
-        })
+        .configure_capacity_with_operational_limits(
+            CapacityLimits {
+                jobs: 1,
+                cpu_millicores: 2_000,
+                memory_bytes: 25_769_803_776,
+            },
+            crate::journal::OperationalCapacityLimits {
+                cpu_millicores: 1_000,
+                memory_bytes: 128 * 1024 * 1024,
+            },
+        )
         .await?;
     let repository = binding("essential", 101)?;
     let scope = created_scope(&journal, &repository, 501).await?;
