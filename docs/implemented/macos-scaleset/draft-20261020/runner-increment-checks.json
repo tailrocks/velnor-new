@@ -230,6 +230,30 @@
       "log_sha256": "2bb151b3e7aecafa27193ae56159ff30cb66778b55f2f2a8c485b0ef9e2fb4b1",
       "author": "/root",
       "reviewer": null
+    },
+    {
+      "result": "PASS",
+      "source_commit": "28cf993e9f80c1abb8a80a1ab83636921d92bec1",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host --lib -E 'test(probe_purpose_sets_command_labels_and_input_streams) | test(native_completion_reads_exact_charged_reservation) | test(reader_rejects_reservation_engine_mismatch) | test(provisioning_rejects_engine_mismatch_with_reservation) | test(native_cleanup_runtime_uses_persisted_witness_and_real_observer_lifecycle) | test(native_capacity_retry_does_not_repeat_proven_cleanup_effects) | test(completion::shutdown_tests)'",
+      "exit_status": 0,
+      "nextest_run": "fa00daf4-d9d4-41b1-911e-aae6098c27b2",
+      "passed": 6,
+      "log": "native-ab-shipping-post-hook-20261020.log",
+      "log_sha256": "f10a290f777609b089f3a6fe41b605372e2576e24036f3db7c2905de264bf806",
+      "author": "/root",
+      "reviewer": "/root/execution_source_security_review"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "28cf993e9f80c1abb8a80a1ab83636921d92bec1",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host --lib -E 'test(failed_reaper_start_retains_join_until_start_retry) | test(stop_after_claim_schedules_durable_retry_without_starting_http) | test(dropping_during_an_effect_keeps_heartbeat_and_schedules_retry)'",
+      "exit_status": 0,
+      "nextest_run": "2021d9ea-3d6a-4d64-9291-220d5e2b0497",
+      "passed": 3,
+      "log": "native-ab-shutdown-shipping-20261020.log",
+      "log_sha256": "347d1c4eddefb08a8d0f3c2e91d98e3f3fc59ce29f7664f79e8dbc5d5ac94a6f",
+      "author": "/root",
+      "reviewer": "/root/execution_source_security_review"
     }
   ],
   "broader_pair_check": {
