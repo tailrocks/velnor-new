@@ -20,8 +20,8 @@ bdec75929b81770ca487634adea463531b5aca0b02554a64cc18b1b6b5d846f8  ./.github/acti
 90f18e85ebf7e9105cba3ea7dfef076d76d8f1ab5fb5a95df004afdde9a186fc  ./.github/actions/velnor-tools-prelude-u26/action.yml
 6efee11cf4c12e92b212a54f04041688e2028a063328d635931f1aae994ddcef  ./.github/dco.yml
 d617d9687e2beafa56b313b37771875d2e4eba30ded2ba7807cbea13e3fe50aa  ./.github/scripts/velnor-tools-cache-identity.sh
-49998c42d42860466c88b1dc48f89f6448c3028dcacfbaf185c12295053b0d94  ./.github/velnor/task-execution-manifest-v1.json
-9ff0566776f1a09014bd88d95de92b6ed272bc22c5c3f975517922b793e341f8  ./.github/workflows/ci.yml
+9bc7c41b3440d029edd1a582df8c76e9ba28a349f39395da153ca57cf1da565a  ./.github/velnor/task-execution-manifest-v1.json
+fe4e3381db55e57001555ddcb9faa45be4309548bdf65bd30a9540c27495d132  ./.github/workflows/ci.yml
 e5f29201cbdd0fe10ba11c1a19cf481c301429fcbecfb8d14bbae1c1ff61a90e  ./.github/workflows/freshness.yml
 d5f1fdc85d1d396083305e2d1f73df352c72958fa7cc7bf1189ad87e29f0608f  ./.github/workflows/job-image-candidate.yml
 c2c082dcd32c6d611e3ef90defe02be2f8f5a407c6af1da3c5209baea16ffab6  ./.github/workflows/product-release-binary.yml
