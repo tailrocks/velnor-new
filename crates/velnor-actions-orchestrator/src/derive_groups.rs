@@ -96,6 +96,11 @@ pub(crate) fn derive_for_config(
 ) -> Result<(Vec<TaskGroup>, Vec<FeatureFallback>), OrchestratorError> {
     let record = &workspace.record;
     let profile = &workspace.profile;
+    let clippy_all_features = config
+        .stacks
+        .rust
+        .as_ref()
+        .is_some_and(|rust| rust.clippy_all_features);
     let mut groups = Vec::new();
     let mut fallbacks = Vec::new();
     for package in &record.packages {
@@ -125,6 +130,7 @@ pub(crate) fn derive_for_config(
             configuration: &rust_config.name,
             features: &features,
             all_features: rust_config.all_features,
+            clippy_all_features,
             target: &rust_config.target,
             explicit_fmt,
         };

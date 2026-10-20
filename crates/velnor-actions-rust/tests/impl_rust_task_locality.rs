@@ -27,6 +27,7 @@ fn production_task_prerequisites_stay_with_package_and_configuration()
                 configuration,
                 features: &features,
                 all_features: configuration == "all-features",
+                clippy_all_features: false,
                 target: "host",
                 explicit_fmt: true,
             })?);

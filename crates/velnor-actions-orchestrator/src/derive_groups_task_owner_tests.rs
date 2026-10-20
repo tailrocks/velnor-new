@@ -8,7 +8,8 @@ use velnor_actions_contract::{FileIndex, WorkflowPolicy, build_index_from_list};
 use velnor_actions_mise::ArchivePlan;
 use velnor_actions_rust::{
     CompileDriver, NextestProfile, PackageRecord, ProfileSource, RustExecutionProfile,
-    TargetRecord, TestRunner, VelnorV1TaskOwner, WorkspaceRecord,
+    TargetRecord, TaskKind, TestRunner, VelnorV1TaskOwner, WorkspaceRecord,
+    tasks::cargo_payload_argv,
 };
 
 use crate::config::load_config as read_repository_config;
@@ -166,4 +167,108 @@ fn repository_maintenance_owner_is_scoped_to_the_canonical_repository_policy()
         [] as [velnor_actions_rust::TaskGroup; 0]
     );
     Ok(())
+}
+
+#[test]
+fn loaded_clippy_all_features_config_changes_only_the_clippy_task() -> Result<(), Box<dyn Error>> {
+    let enabled = load_test_config("schema = 1\n[stacks.rust]\nclippy_all_features = true\n")?;
+    let default = load_test_config("schema = 1\n[stacks.rust]\n")?;
+
+    let repository = repository_root()?;
+    let index = index(&repository)?;
+    let workspace = workspace(VelnorV1TaskOwner::Project);
+    let union = declared_union(
+        std::slice::from_ref(&workspace),
+        &index,
+        enabled.workflow.policy,
+    );
+    let config_groups = |config: &velnor_actions_contract::VelnorConfig| {
+        let rust = config
+            .stacks
+            .rust
+            .as_ref()
+            .expect("The Rust stack must exist.");
+        derive_for_config(
+            config,
+            &index,
+            &workspace,
+            &rust.configurations[0],
+            true,
+            &mut ArchivePlan::new(),
+            &union,
+        )
+        .map(|(groups, _)| groups)
+    };
+    let enabled_groups = config_groups(&enabled)?;
+    let default_groups = config_groups(&default)?;
+    assert_eq!(
+        enabled_groups
+            .iter()
+            .map(|group| &group.task_id)
+            .collect::<Vec<_>>(),
+        default_groups
+            .iter()
+            .map(|group| &group.task_id)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        enabled_groups
+            .iter()
+            .filter(|group| group.kind == TaskKind::Clippy)
+            .count(),
+        workspace.record.packages.len()
+    );
+    assert!(
+        enabled
+            .stacks
+            .rust
+            .as_ref()
+            .expect("The Rust stack option must exist.")
+            .clippy_all_features
+    );
+    assert!(
+        enabled_groups
+            .iter()
+            .any(|group| group.kind == TaskKind::Fmt)
+    );
+    assert_clippy_payloads(&enabled_groups, &default_groups)?;
+    Ok(())
+}
+
+fn assert_clippy_payloads(
+    enabled_groups: &[velnor_actions_rust::TaskGroup],
+    default_groups: &[velnor_actions_rust::TaskGroup],
+) -> Result<(), Box<dyn Error>> {
+    for group in enabled_groups {
+        let argv = cargo_payload_argv(group)?;
+        let has_all_features = argv.iter().any(|arg| arg == "--all-features");
+        if group.kind == TaskKind::Clippy {
+            assert!(
+                has_all_features,
+                "The Clippy arguments must include --all-features. Arguments: {argv:?}."
+            );
+        } else {
+            assert!(
+                !has_all_features,
+                "The {} arguments must not include --all-features. Arguments: {argv:?}.",
+                group.kind.as_str()
+            );
+            let default_group = default_groups
+                .iter()
+                .find(|candidate| candidate.task_id == group.task_id)
+                .expect("The default task group must exist.");
+            assert_eq!(argv, cargo_payload_argv(default_group)?);
+        }
+    }
+    Ok(())
+}
+
+fn load_test_config(
+    contents: &str,
+) -> Result<velnor_actions_contract::VelnorConfig, Box<dyn Error>> {
+    let root = tempfile::tempdir()?;
+    let config_dir = root.path().join(".velnor");
+    std::fs::create_dir_all(&config_dir)?;
+    std::fs::write(config_dir.join("config.toml"), contents)?;
+    Ok(crate::config::load_config(root.path())?)
 }

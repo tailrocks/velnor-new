@@ -66,6 +66,7 @@ fn clippy() -> TestResult<TaskGroup> {
     let features = vec!["default".to_owned()];
     let groups = derive_task_groups(&DeriveInputs {
         all_features: false,
+        clippy_all_features: false,
         package: &package,
         profile: &profile,
         configuration: "default",

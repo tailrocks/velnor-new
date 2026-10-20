@@ -55,6 +55,7 @@ fn groups_for(package: &PackageRecord) -> Result<Vec<TaskGroup>, ContractError> 
     let features = vec!["default".to_owned()];
     let inputs = DeriveInputs {
         all_features: false,
+        clippy_all_features: false,
         package,
         profile: &profile,
         configuration: "default",

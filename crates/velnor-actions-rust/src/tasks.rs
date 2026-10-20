@@ -76,7 +76,7 @@ pub struct TaskGroup {
     pub configuration: String,
     /// Sorted enabled features.
     pub features: Vec<String>,
-    /// Cargo all-features mode for this configuration.
+    /// This field tells Cargo to activate all package features for this task group.
     pub all_features: bool,
     /// Execution target (`host` or triple).
     pub target: String,
@@ -148,6 +148,8 @@ pub struct DeriveInputs<'a> {
     pub features: &'a [String],
     /// Activate every package feature.
     pub all_features: bool,
+    /// This value tells Clippy to activate all package features.
+    pub clippy_all_features: bool,
     /// Execution target.
     pub target: &'a str,
     /// Whether the package has explicit formatting configuration.
@@ -160,6 +162,7 @@ struct GroupBase<'a> {
     configuration: &'a str,
     features: &'a [String],
     all_features: bool,
+    clippy_all_features: bool,
     target: &'a str,
     driver: CompileDriver,
     runner: TestRunner,
@@ -189,6 +192,7 @@ pub fn derive_task_groups(inputs: &DeriveInputs<'_>) -> Result<Vec<TaskGroup>, C
         configuration: inputs.configuration,
         features: &features,
         all_features: inputs.all_features,
+        clippy_all_features: inputs.clippy_all_features,
         target: inputs.target,
         driver: inputs.profile.compile_driver,
         runner: inputs.profile.test_runner,
@@ -261,6 +265,7 @@ fn plain_group(base: &GroupBase<'_>, kind: TaskKind, id: &str) -> TaskGroup {
 /// Build the Clippy gate naming exactly one package.
 fn clippy_group(base: &GroupBase<'_>, id: &str) -> TaskGroup {
     let mut group = plain_group(base, TaskKind::Clippy, id);
+    group.all_features |= base.clippy_all_features;
     group.package_arg = Some(base.package.name.clone());
     group
 }

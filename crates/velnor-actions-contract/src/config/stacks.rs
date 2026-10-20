@@ -69,6 +69,9 @@ pub struct RustStackConfig {
     /// Existing target lanes are preserved; disabled by default.
     #[serde(default, skip_serializing_if = "is_false")]
     pub seed_parallel_targets: bool,
+    /// This option tells Clippy to activate all package features. It does not change test or documentation tasks.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub clippy_all_features: bool,
     /// Rust release policy (`[stacks.rust.release]`); disabled by default.
     #[serde(default)]
     pub release: RustReleaseConfig,
@@ -182,6 +185,7 @@ impl RustStackConfig {
             test_runner: None,
             run_ignored: None,
             seed_parallel_targets: false,
+            clippy_all_features: false,
             release: RustReleaseConfig::default(),
             binary_release: RustBinaryReleaseConfig::default(),
             suites: Vec::new(),

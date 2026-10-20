@@ -69,6 +69,14 @@ fn omitted_all_features_preserves_legacy_configuration_bytes() {
 }
 
 #[test]
+fn clippy_all_features_defaults_off_and_is_omitted_from_serialization() {
+    let stack = RustStackConfig::default_config();
+    assert!(!stack.clippy_all_features);
+    let value = serde_json::to_value(stack).expect("The stack data must become a JSON value.");
+    assert_eq!(value.get("clippy_all_features"), None);
+}
+
+#[test]
 fn all_features_rejects_a_conflicting_feature_subset() {
     let mut stack = RustStackConfig::default_config();
     stack.configurations[0].all_features = true;

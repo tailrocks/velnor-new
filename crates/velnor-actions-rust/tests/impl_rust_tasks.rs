@@ -88,6 +88,7 @@ fn inputs<'a>(
 ) -> DeriveInputs<'a> {
     DeriveInputs {
         all_features: false,
+        clippy_all_features: false,
         package,
         profile,
         configuration: "default",
@@ -136,6 +137,9 @@ fn derives_independent_groups_without_gates() {
     }
     assert_eq!(groups[1].depends_on, [] as [std::string::String; 0]);
 }
+
+#[path = "impl_rust_tasks/clippy_feature_policy.rs"]
+mod clippy_feature_policy;
 
 #[test]
 fn nextest_adds_build_with_data_edge() {

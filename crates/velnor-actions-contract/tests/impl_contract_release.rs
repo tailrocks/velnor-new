@@ -252,6 +252,7 @@ fn release_wired_into_stack_validation_with_key_paths() {
         test_runner: None,
         run_ignored: None,
         seed_parallel_targets: false,
+        clippy_all_features: false,
         release: valid_release(),
         binary_release: RustBinaryReleaseConfig::default(),
         suites: Vec::new(),

@@ -71,6 +71,26 @@ fn all_features_configuration_is_preserved_during_stack_materialization() {
 }
 
 #[test]
+fn clippy_all_features_is_an_independent_optional_stack_setting() {
+    let root = rooted("schema = 1\n[stacks.rust]\nclippy_all_features = true\n");
+    let rust = load_config(root.path())
+        .expect("The Clippy feature policy must load.")
+        .stacks
+        .rust
+        .expect("Rust stack");
+    assert!(rust.clippy_all_features);
+    assert!(!rust.configurations[0].all_features);
+
+    let root = rooted("schema = 1\n[stacks.rust]\n");
+    let rust = load_config(root.path())
+        .expect("The default feature policy must load.")
+        .stacks
+        .rust
+        .expect("Rust stack");
+    assert!(!rust.clippy_all_features);
+}
+
+#[test]
 fn release_section_parses_and_defaults_disabled() {
     // Bind once: the f2a gate textually requires a single production
     // `load_config` call site (prepare.rs); test calls use the alias.
