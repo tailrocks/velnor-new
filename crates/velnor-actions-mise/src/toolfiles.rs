@@ -8,6 +8,8 @@
 //!
 //! Install-verification audit lives in [`lockfile`] (declared here so
 //! `lib.rs` stays untouched).
+#[path = "toolfiles_config_tools.rs"]
+mod config_tools;
 #[path = "mise_lockfile.rs"]
 pub mod lockfile;
 
@@ -196,7 +198,7 @@ pub fn inspect_mise_file(
     let Some(text) = content else {
         return Ok(MiseInspection::missing(path));
     };
-    match parse_tools(text) {
+    match parse_tools(path, text) {
         Ok(spec) => Ok(MiseInspection::present(path, spec)),
         Err(problem) => Ok(MiseInspection::invalid(path, &problem)),
     }
@@ -286,81 +288,26 @@ pub fn lock_tool_versions(content: &str) -> BTreeMap<String, String> {
     }
 }
 
-/// Parse `[tools]` name-selector pairs; unknown sections ignored.
-fn parse_tools(content: &str) -> Result<MiseSpec, String> {
-    let mut tools = BTreeMap::new();
-    let mut in_tools = false;
-    for (index, line) in content.lines().enumerate() {
-        let code = strip_comment(line).trim();
-        if code.is_empty() {
-            continue;
-        }
-        if let Some(section) = parse_section(code) {
-            in_tools = section == "tools";
-            continue;
-        }
-        if code.starts_with('[') {
-            return Err(line_problem(index, "unterminated_section"));
-        }
-        if !in_tools {
-            continue;
-        }
-        let (key, value) = split_setting(code, index)?;
-        tools.insert(key.to_owned(), parse_string(value, index)?);
-    }
-    Ok(MiseSpec { tools })
-}
-
-/// Section name of a `[section]` header, if well-formed.
-fn parse_section(code: &str) -> Option<&str> {
-    let section = code.strip_prefix('[')?.strip_suffix(']')?;
-    Some(section.trim())
-}
-
-/// Split one `key = value` setting inside `[tools]`.
-fn split_setting(code: &str, index: usize) -> Result<(&str, &str), String> {
-    let (key, value) = code
-        .split_once('=')
-        .ok_or_else(|| line_problem(index, "expected_key_equals_value"))?;
-    let key = key.trim();
-    if key.is_empty() || value.trim().is_empty() {
-        return Err(line_problem(index, "expected_key_equals_value"));
-    }
-    Ok((key, value.trim()))
-}
-
-/// Parse one quoted TOML basic or literal string.
-fn parse_string(value: &str, index: usize) -> Result<String, String> {
-    let quote = value.chars().next().unwrap_or('\0');
-    if (quote != '"' && quote != '\'') || value.len() < 2 || !value.ends_with(quote) {
-        return Err(line_problem(index, "unterminated_string"));
-    }
-    Ok(value[1..value.len() - 1].to_owned())
-}
-
-/// Strip a trailing `#` comment outside quotes.
+/// Read the tool selections of one owned file in that file's own grammar.
 ///
-/// One comment rule for every `mise.toml` reader, so a `#`-hidden
-/// key cannot dodge one.
-pub(crate) fn strip_comment(line: &str) -> &str {
-    let mut quoted = false;
-    let mut current = '"';
-    for (index, char) in line.char_indices() {
-        if quoted {
-            if char == current {
-                quoted = false;
-            }
-        } else if char == '"' || char == '\'' {
-            quoted = true;
-            current = char;
-        } else if char == '#' {
-            return line[..index].trim_end();
-        }
+/// A lock records `[[tools.<key>]]` entries ([`lockfile`]); a config file
+/// declares scalar or table tool choices ([`config_tools`]).
+fn parse_tools(path: &str, content: &str) -> Result<MiseSpec, String> {
+    if is_lock_file(path) {
+        let lock = lockfile::parse_mise_lockfile(content)?;
+        let tools = lock
+            .tools
+            .into_iter()
+            .filter(|(_, entry)| !entry.version.is_empty())
+            .map(|(name, entry)| (name, entry.version))
+            .collect();
+        return Ok(MiseSpec { tools });
     }
-    line
+    config_tools::parse_config_tools(content).map(|tools| MiseSpec { tools })
 }
 
-/// `line N: problem` detail with one-based line numbers.
-fn line_problem(index: usize, problem: &str) -> String {
-    format!("line {}: {problem}", index.saturating_add(1))
+/// Whether `path` names a Mise lock file rather than a config file.
+fn is_lock_file(path: &str) -> bool {
+    let name = file_name(path);
+    name == MISE_LOCK_FILE || name.strip_prefix('.') == Some(MISE_LOCK_FILE)
 }
