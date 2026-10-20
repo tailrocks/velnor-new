@@ -6,10 +6,14 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
+use crate::toolchain_env::STEP_PRIVATE_FETCH_ALLOWLIST;
 use crate::{
     RenderError,
     render::{FINAL_JOB_ID, PLAN_JOB_ID},
 };
+
+#[path = "support_private_tokens.rs"]
+mod private;
 
 /// Token hygiene: `${{ github.token }}` only as plan/final `GH_TOKEN`.
 ///
@@ -66,6 +70,12 @@ fn is_ambient_auth_role(role: Option<StepRole>) -> bool {
 /// Active leaks report before missing protection: a step that prints a
 /// token fails on the print even when it also lacks the scrub overlay.
 fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
+    private::check_private_binding(id, step)?;
+    if step.role == Some(StepRole::PrivateTokenMint) {
+        // The mint step names the App secret by design; its exact shape was
+        // validated above and it carries no other input or env.
+        return Ok(());
+    }
     match &step.kind {
         StepKind::Shell { run, env } => {
             check_env_tokens(id, env)?;
@@ -112,7 +122,11 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
                 }
             }
         }
-        StepKind::Internal { .. } => {}
+        StepKind::Internal { env, .. } => {
+            if private::is_private_binding_role(step.role) {
+                check_env_tokens(id, env)?;
+            }
+        }
     }
     if matches!(&step.kind, StepKind::Internal { operation, .. }
         if operation == crate::steps::RESOLVE_QUALIFICATION_OPERATION)
@@ -145,6 +159,11 @@ fn is_scoped_gh_token(id: &str, env: &BTreeMap<String, String>) -> bool {
 fn check_env_tokens(id: &str, env: &BTreeMap<String, String>) -> Result<(), RenderError> {
     use crate::toolchain_env::is_denied_credential_key;
     for (key, value) in env {
+        if STEP_PRIVATE_FETCH_ALLOWLIST.contains(&key.as_str()) {
+            // Bound only in private-fetch steps; `check_private_binding`
+            // already pinned the exact expression, or rejected the step.
+            continue;
+        }
         if is_denied_credential_key(key) {
             if value.is_empty() {
                 continue;

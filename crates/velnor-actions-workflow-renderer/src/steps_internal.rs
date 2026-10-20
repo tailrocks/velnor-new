@@ -24,7 +24,12 @@ pub(crate) fn split_internal_operation(operation: &str) -> Result<(&str, &str), 
     if operation == RESOLVE_QUALIFICATION_OPERATION {
         return Ok((operation, PLAN_OPERATION));
     }
-    if operation == PLAN_OPERATION || operation == MERGE_OPERATION || operation == FETCH_OPERATION {
+    if operation == PLAN_OPERATION
+        || operation == MERGE_OPERATION
+        || operation == FETCH_OPERATION
+        || operation == velnor_actions_contract::PRIVATE_FETCH_OPERATION
+        || operation == velnor_actions_contract::PRIVATE_REVOKE_OPERATION
+    {
         return Ok((operation, operation));
     }
     let rest = operation

@@ -133,6 +133,45 @@ pub const CREDENTIAL_ALLOWLIST_BOOTSTRAP: [&str; 3] =
 /// registry token are stripped.
 pub const CREDENTIAL_ALLOWLIST_GH_API: [&str; 2] = ["GITHUB_TOKEN", "GH_TOKEN"];
 
+/// Credential keys the private-fetch policy keeps (HD-7).
+///
+/// `VELNOR_PRIVATE_FETCH_TOKEN` is the GitHub App installation token that
+/// reads private release assets, Maven bundles and git trees;
+/// `VELNOR_NPM_READ_TOKEN` is the `GITHUB_TOKEN` `packages: read` value of the
+/// single `bun install --ignore-scripts` registry phase. Both strip as
+/// `*_TOKEN` credentials under every other policy. Mirrored by the renderer's
+/// `STEP_PRIVATE_FETCH_ALLOWLIST`; the orchestrator pins the two equal by test.
+pub const CREDENTIAL_ALLOWLIST_PRIVATE_FETCH: [&str; 2] =
+    ["VELNOR_PRIVATE_FETCH_TOKEN", "VELNOR_NPM_READ_TOKEN"];
+
+/// Exact fetch-redirect keys no inheriting child ever receives (HD-7).
+///
+/// Each can redirect a credentialed fetch to an attacker host or load an
+/// attacker credential helper: an askpass program, git configuration
+/// injected through the environment, or a registry override. Velnor's own
+/// `GIT_CONFIG_GLOBAL`/`GIT_CONFIG_NOSYSTEM` arrive through constructor-baked
+/// extras after the strip. The pattern keys (`GIT_CONFIG_*`, `NPM_CONFIG_*`,
+/// `npm_config_*`) are covered by [`is_fetch_redirect_key`]. Mirrored by the
+/// renderer's `STEP_FETCH_REDIRECT_DENYLIST`; the orchestrator pins the two
+/// equal by test.
+pub const FETCH_REDIRECT_ENV_KEYS: [&str; 4] = [
+    "GIT_ASKPASS",
+    "SSH_ASKPASS",
+    "GIT_CONFIG",
+    "BUN_CONFIG_REGISTRY",
+];
+
+/// True for a fetch-redirect key: the exact keys, any `GIT_CONFIG_*`
+/// (`GLOBAL`, `SYSTEM`, `NOSYSTEM`, `COUNT`, `KEY_n`, `VALUE_n`,
+/// `PARAMETERS`), any `NPM_CONFIG_*`, or any `npm_config_*`.
+#[must_use]
+pub fn is_fetch_redirect_key(key: &str) -> bool {
+    FETCH_REDIRECT_ENV_KEYS.contains(&key)
+        || key.starts_with("GIT_CONFIG_")
+        || key.starts_with("NPM_CONFIG_")
+        || key.starts_with("npm_config_")
+}
+
 /// Velnor-owned `MISE_*` keys that declared extras may still carry.
 ///
 /// The owned tool homes flow through [`crate::command::IsolatedCommand::with_env`]
@@ -236,6 +275,13 @@ pub enum EnvPolicy {
     QualifiedProbe,
     /// Qualified acquisition: owned environment, proxy passthrough, and fixed overlay.
     QualifiedAcquisition,
+    /// Private-source fetch (HD-7): cleared environment plus proxy passthrough.
+    ///
+    /// The only policy that may carry `VELNOR_PRIVATE_FETCH_TOKEN` or
+    /// `VELNOR_NPM_READ_TOKEN`. Constructible only through
+    /// [`crate::command::IsolatedCommand::private_fetch`], whose callers are the
+    /// orchestrator's `private_fetch` and `bun_registry_install` builders.
+    PrivateFetch,
 }
 
 impl EnvPolicy {
@@ -246,6 +292,7 @@ impl EnvPolicy {
         match self {
             Self::Bootstrap => &CREDENTIAL_ALLOWLIST_BOOTSTRAP,
             Self::GhApi => &CREDENTIAL_ALLOWLIST_GH_API,
+            Self::PrivateFetch => &CREDENTIAL_ALLOWLIST_PRIVATE_FETCH,
             Self::Verify
             | Self::Discovery
             | Self::GitHubToken
@@ -269,6 +316,7 @@ impl EnvPolicy {
                 | Self::QualifiedCheck
                 | Self::QualifiedProbe
                 | Self::QualifiedAcquisition
+                | Self::PrivateFetch
         )
     }
 
@@ -281,6 +329,7 @@ impl EnvPolicy {
                 | Self::ReleaseSigner
                 | Self::QualifiedCheck
                 | Self::QualifiedAcquisition
+                | Self::PrivateFetch
         )
     }
 
@@ -305,6 +354,7 @@ impl EnvPolicy {
                 let stripped = (is_denied_credential_key(&name)
                     && !allowed.contains(&name.as_ref()))
                     || ENDPOINT_ENV_KEYS.contains(&name.as_ref())
+                    || is_fetch_redirect_key(&name)
                     || is_stripped_ambient_key(&name);
                 if !stripped {
                     env.push((key.clone(), value.clone()));
@@ -351,6 +401,7 @@ pub(crate) fn strip_credentials(command: &mut Command, policy: EnvPolicy) {
     for (key, _) in std::env::vars_os() {
         let name = key.to_string_lossy();
         if is_stripped_ambient_key(&name)
+            || is_fetch_redirect_key(&name)
             || (is_denied_credential_key(&name)
                 && !CREDENTIAL_ENV_KEYS.contains(&name.as_ref())
                 && !allowed.contains(&name.as_ref()))

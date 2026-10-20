@@ -74,6 +74,8 @@ mod impl_renderer_preseed;
 mod impl_renderer_preseed_strict;
 #[path = "impl_renderer_preseed_verify.rs"]
 mod impl_renderer_preseed_verify;
+#[path = "impl_renderer_private_sources.rs"]
+mod impl_renderer_private_sources;
 #[path = "impl_renderer_protocol.rs"]
 mod impl_renderer_protocol;
 #[path = "impl_renderer_publish_spec.rs"]

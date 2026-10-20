@@ -169,11 +169,40 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
             && !composite_input
             && !workflow_input
             && !is_github_token_secret(inner)
+            && !is_private_env_binding(key, inner)
         {
             return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
         }
     }
     Ok(())
+}
+
+/// True for the two private-source bindings, each scoped to its own env key.
+///
+/// The step placement is enforced separately by the token-hygiene gate
+/// (`credential_binding_outside_private_fetch`); this only keeps the exact
+/// expression from being legal under any other key.
+fn is_private_env_binding(key: &str, inner: &str) -> bool {
+    (key == velnor_actions_contract::PRIVATE_FETCH_TOKEN_ENV
+        && inner == "steps.deps-token.outputs.token")
+        || (key == velnor_actions_contract::PRIVATE_NPM_READ_TOKEN_ENV && inner == "github.token")
+}
+
+/// True for the mint step's two handle inputs, each under its own key.
+fn is_private_mint_input(key: &str, inner: &str) -> bool {
+    let handle = |context: &str| {
+        inner
+            .strip_prefix(context)
+            .and_then(|rest| rest.strip_prefix('.'))
+            .is_some_and(|name| {
+                name.as_bytes().first().is_some_and(u8::is_ascii_uppercase)
+                    && name.len() <= 100
+                    && name
+                        .bytes()
+                        .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
+            })
+    };
+    (key == "client-id" && handle("vars")) || (key == "private-key" && handle("secrets"))
 }
 
 fn is_task_execution_input(name: &str) -> bool {
@@ -236,6 +265,7 @@ pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError
             && !is_matrix_field(inner)
             && !is_hash_files(inner)
             && !is_tofu_providers_plan_key(inner)
+            && !is_private_mint_input(key, inner)
         {
             return Err(RenderError::BadActionRef(format!(
                 "bad_with_expression:{key}"

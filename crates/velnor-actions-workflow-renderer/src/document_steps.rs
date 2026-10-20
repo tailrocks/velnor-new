@@ -54,6 +54,19 @@ fn internal_env(
             (INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())),
         ]));
     }
+    if op == velnor_actions_contract::PRIVATE_FETCH_OPERATION
+        || op == velnor_actions_contract::PRIVATE_REVOKE_OPERATION
+    {
+        // Private-source operations take no request file: their whole input
+        // is the fixed step env (token binding plus the literal allowlist).
+        let mut env = vec![(INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned()))];
+        env.extend(
+            step_env
+                .iter()
+                .map(|(key, value)| (key.clone(), Yaml::str(value.clone()))),
+        );
+        return Ok(Yaml::Map(env));
+    }
     let request = format!("{}/{target}-request.json", ctx.request_dir);
     let mut env = Vec::new();
     if op == steps::RESOLVE_QUALIFICATION_OPERATION {
