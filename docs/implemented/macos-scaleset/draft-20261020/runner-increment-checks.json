@@ -39,6 +39,54 @@
       "log_sha256": "42bd3e65eebde32d08ad78b0eee174cb5cf91f2944c070cf6a5bd9d2df511533",
       "author": "/root",
       "reviewer": "/root/bounded_integration_review"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "5678622915404f317737d88c58a9da13bcc9a35c",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host -E 'test(failed_ack_settles_known_get_and_retains_durable_offer) | test(native_started_event_is_recorded_before_ack_and_replay_is_idempotent)'",
+      "exit_status": 0,
+      "nextest_run": "bd5f13e8-74a3-456f-afac-cb9d6c740d17",
+      "passed": 2,
+      "log": "acquire-cap-shipping-final-20261020.log",
+      "log_sha256": "1b90b5addf4f1ddfa8dcbf0811ba45481be23a338898c42ba5f41ea9a89ccf67",
+      "author": "/root",
+      "reviewer": "/root/bounded_integration_review"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "8b7748d97c5524f2684de3dc6257d3b29f0c2e0c",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host -E 'test(completion::diagnostics)'",
+      "exit_status": 0,
+      "nextest_run": "75c3e9df-105f-4cee-87ea-1136ed74a610",
+      "passed": 11,
+      "log": "diagnostics-mode-shipping-20261020.log",
+      "log_sha256": "91f5cf7dae425a90bd9f79afcd9bc04000a170cbe086eb4a748577908b6b827d",
+      "author": "/root",
+      "reviewer": "/root"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "511543fd6f8a68f63934a6b82e02efd8254a5a0c",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-resource-probe",
+      "exit_status": 0,
+      "nextest_run": "f322e33c-7760-4635-8efb-b1d1fda56c8a",
+      "passed": 79,
+      "log": "cleanup-root-shipping-final-20261020.log",
+      "log_sha256": "bea529ff398f558228a5615aa91211046c8d418dcce38d80ebf1b02a09912c2c",
+      "author": "/root",
+      "reviewer": "/root/bounded_integration_review"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "2722472d411fe21418ec4dd7836b174ff7420786",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host -E 'test(completion::cleanup::runner::transport_tests)'",
+      "exit_status": 0,
+      "nextest_run": "d55dabee-294f-4c28-9881-a2fe81394182",
+      "passed": 6,
+      "log": "completion-runner-transport-shipping-final-20261020.log",
+      "log_sha256": "91ad07c8454b8b03848f2efa5417c6989a1aff55eb7bf38ebd0b79f620ed6fdd",
+      "author": "/root",
+      "reviewer": "/root/bounded_integration_review"
     }
   ],
   "broader_pair_check": {
@@ -54,5 +102,23 @@
   "full_integrated_gates": "NOT_RUN",
   "release": "NOT_RUN",
   "essential_mac_installation": "NOT_RUN",
-  "chainargos_installation": "NOT_RUN"
+  "chainargos_installation": "NOT_RUN",
+  "linux_diagnostic_check": {
+    "result": "PASS",
+    "scope": "This check tests file modes in a Linux container. It does not use a Scale Set.",
+    "source_file": "crates/velnor-runner/crates/velnor-runner-host/src/launch/completion/diagnostics/stage.rs",
+    "source_file_sha256": "d5d2f86c602023cb544533b79b976722fac0579e810f1c8cc00bc1e6f90de5cc",
+    "matching_source_commit": "8b7748d97c5524f2684de3dc6257d3b29f0c2e0c",
+    "command": "cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host -E 'test(launch::completion::diagnostics::tests::)' --no-capture",
+    "exit_status": 0,
+    "nextest_run": "ae8b8883-005a-4a04-ba17-d750f4363f20",
+    "passed": 9,
+    "engine_context": "orbstack",
+    "engine_id": "bc9058a0-c807-412b-a088-6c1d96ddd462",
+    "platform": "linux/amd64",
+    "log": "stage-diagnostics-linux-post-port-orbstack-amd64-20261020.log",
+    "log_sha256": "22a10c8131a5eee289790a4de5d8b75df7bf87954f58af608f1809b14ed0e402",
+    "author": "/root/container_metadata_repair",
+    "reviewer": "/root"
+  }
 }
