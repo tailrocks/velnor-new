@@ -363,6 +363,19 @@
       "log_sha256": "50bdce804e09aaec45dfb0b79fc50b453c263029e7bb8ecf3890d86f36449f33",
       "author": "/root/obsolete_capacity_cleanup",
       "reviewer": null
+    },
+    {
+      "result": "PASS",
+      "source_commit": "538f20ec83e44bea9241dd96e44135bd9436b416",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 rustup run 1.99.1 cargo nextest run --manifest-path Cargo.toml --locked --offline --workspace --all-features --no-fail-fast",
+      "exit_status": 0,
+      "nextest_run": "8074489e-005a-4850-9c6e-091917fe5e6a",
+      "passed": 5032,
+      "skipped": 5,
+      "log": "build/root-nextest-538f20ec-20261020.log",
+      "log_sha256": "cb73472ea5966bf25df82938a805cb0247dc6e5fac1a90f27f396c47b273ab06",
+      "author": "/root/obsolete_capacity_cleanup",
+      "reviewer": "/root/helper_language_review"
     }
   ],
   "broader_pair_check": {
