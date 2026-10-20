@@ -1,0 +1,25 @@
+{
+  "argv": [
+    "/usr/bin/curl",
+    "--fail",
+    "--silent",
+    "--show-error",
+    "--location",
+    "--max-time",
+    "25",
+    "--max-filesize",
+    "8388608",
+    "--user-agent",
+    "velnor-freshness-qualification/0.1 (https://github.com/tailrocks/velnor-new)",
+    "--range",
+    "0-131071",
+    "https://static.rust-lang.org/dist/channel-rust-stable.toml"
+  ],
+  "body_file": "33b454381578874a.body",
+  "checked_at": "2026-10-20T07:03:00.598436+00:00",
+  "exit_code": 0,
+  "rust_prefix_only": true,
+  "sha256": "131880574a2de9d40db0a035774169281b0fd55a1e94752b0c8f0e9a4c75421a",
+  "size": 131072,
+  "url": "https://static.rust-lang.org/dist/channel-rust-stable.toml"
+}

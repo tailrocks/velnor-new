@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+    "api",
+    "--method",
+    "GET",
+    "https://api.github.com/repos/asamarts/alint/releases/latest"
+  ],
+  "body_file": "d52d5c72605a24ce.body",
+  "checked_at": "2026-10-20T07:02:58.184132+00:00",
+  "exit_code": 0,
+  "rust_prefix_only": false,
+  "sha256": "bab7a834a3a1561b9f0c0c34f20c12638215507072eb77326dd10e61f81ce45e",
+  "size": 27335,
+  "url": "https://api.github.com/repos/asamarts/alint/releases/latest"
+}

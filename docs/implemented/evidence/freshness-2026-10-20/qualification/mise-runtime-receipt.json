@@ -1,0 +1,39 @@
+{
+  "wrapper_exit": 0,
+  "wrapper_elapsed_seconds": 5.168,
+  "commands": 37,
+  "all_passed": true,
+  "scope": "private MacARM smoke only; full SDK tests and Linux/Intel hosted qualification remain separate",
+  "files": [
+    {
+      "name": "runtime-smoke.py",
+      "size": 3134,
+      "mode": "0o600",
+      "sha256": "09800c2680359428904a9e61d9519349aa3a2eb433bab4b9903f92a355da59d4"
+    },
+    {
+      "name": "runtime-smoke-report.json",
+      "size": 7868,
+      "mode": "0o600",
+      "sha256": "a3118519cf3ad3ac80b0d86da2c37a7175f0140c9596357d85af26cc2e40fa97"
+    },
+    {
+      "name": "crypto-freeze.json",
+      "size": 34142,
+      "mode": "0o600",
+      "sha256": "5b00ffa6d9527157f7eda0336a9711d5cd87360be78560d46bb9f7fa2b0e1ca9"
+    },
+    {
+      "name": "crypto-qualification-report.json",
+      "size": 2667,
+      "mode": "0o600",
+      "sha256": "22c9190a9e56bcdb1c89a3467f51e68bfc899a92b2b9563a2fd09c9582d26aee"
+    },
+    {
+      "name": "mise-v2026.10.15-macos-arm64",
+      "size": 135143184,
+      "mode": "0o700",
+      "sha256": "826c4833fa7437a63f6027b86bc10c8b61b1163dc793c03ecde92f68ad167890"
+    }
+  ]
+}

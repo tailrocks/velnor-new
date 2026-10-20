@@ -1,0 +1,823 @@
+{
+  "inventory_sha256": "011005d81f7318f61caf2c9be8dc19be4d3eddc0502385e7ca8807fd3cbfcae7",
+  "no_product_writes": true,
+  "rows": [
+    {
+      "capture": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "--method",
+          "GET",
+          "https://api.github.com/repos/jdx/mise/releases/latest"
+        ],
+        "body_file": "cbcf9a6cd0015891.body",
+        "checked_at": "2026-10-20T07:02:58.920323+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "bef4d31a0923c0179e956c7a620205bd0873b9ac2d4db7ade3a456db7067cf5c",
+        "size": 95720,
+        "url": "https://api.github.com/repos/jdx/mise/releases/latest"
+      },
+      "key": "mise",
+      "kind": "tools",
+      "latest": "v2026.10.15",
+      "observed": true,
+      "pinned": "2026.10.14",
+      "release_id": 417151293
+    },
+    {
+      "capture": {
+        "argv": [
+          "/usr/bin/curl",
+          "--fail",
+          "--silent",
+          "--show-error",
+          "--location",
+          "--max-time",
+          "25",
+          "--max-filesize",
+          "8388608",
+          "--user-agent",
+          "velnor-freshness-qualification/0.1 (https://github.com/tailrocks/velnor-new)",
+          "--range",
+          "0-131071",
+          "https://static.rust-lang.org/dist/channel-rust-stable.toml"
+        ],
+        "body_file": "33b454381578874a.body",
+        "checked_at": "2026-10-20T07:03:00.598436+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": true,
+        "sha256": "131880574a2de9d40db0a035774169281b0fd55a1e94752b0c8f0e9a4c75421a",
+        "size": 131072,
+        "url": "https://static.rust-lang.org/dist/channel-rust-stable.toml"
+      },
+      "key": "rust",
+      "kind": "tools",
+      "latest": "1.99.1",
+      "observed": true,
+      "pinned": "1.99.1"
+    },
+    {
+      "capture": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "--method",
+          "GET",
+          "https://api.github.com/repos/jdx/mr-boxington/releases/latest"
+        ],
+        "body_file": "9e0afae45c7e2f14.body",
+        "checked_at": "2026-10-20T07:02:59.457799+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "55361392d64df71d3d9b69529ef97bcd94e3dbdd7ea4525662f66c097ade8b20",
+        "size": 28889,
+        "url": "https://api.github.com/repos/jdx/mr-boxington/releases/latest"
+      },
+      "key": "mr-boxington",
+      "kind": "tools",
+      "latest": "v1.25.0",
+      "observed": true,
+      "pinned": "1.24.1",
+      "release_id": 417273868
+    },
+    {
+      "capture": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "--method",
+          "GET",
+          "https://api.github.com/repos/cli/cli/releases/latest"
+        ],
+        "body_file": "26d341f2530f210b.body",
+        "checked_at": "2026-10-20T07:02:58.757402+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "9ebd0e882fe863060e821a7b631f70009f1ed6b507905c690dd2a6d38b18c172",
+        "size": 42183,
+        "url": "https://api.github.com/repos/cli/cli/releases/latest"
+      },
+      "key": "gh",
+      "kind": "tools",
+      "latest": "v2.102.0",
+      "observed": true,
+      "pinned": "2.102.0",
+      "release_id": 399674740
+    },
+    {
+      "capture": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "--method",
+          "GET",
+          "https://api.github.com/repos/rhysd/actionlint/releases/latest"
+        ],
+        "body_file": "ac646f4918eb9eee.body",
+        "checked_at": "2026-10-20T07:03:00.021727+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "a0eed60b0c220baa58a8abd799ff37893bff188f5c7463244b376f2b9ffa517d",
+        "size": 23687,
+        "url": "https://api.github.com/repos/rhysd/actionlint/releases/latest"
+      },
+      "key": "actionlint",
+      "kind": "tools",
+      "latest": "v1.7.12",
+      "observed": true,
+      "pinned": "1.7.12",
+      "release_id": 303326868
+    },
+    {
+      "capture": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "--method",
+          "GET",
+          "https://api.github.com/repos/koalaman/shellcheck/releases/latest"
+        ],
+        "body_file": "88576d7cda0a4052.body",
+        "checked_at": "2026-10-20T07:02:59.462297+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "ea7c51ed2e8ff00dfde36056fb8b52355c138b7b1a56c0f3d98f5ff463267a29",
+        "size": 24735,
+        "url": "https://api.github.com/repos/koalaman/shellcheck/releases/latest"
+      },
+      "key": "shellcheck",
+      "kind": "tools",
+      "latest": "v0.11.0",
+      "observed": true,
+      "pinned": "0.11.0",
+      "release_id": 237202770
+    },
+    {
+      "capture": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "--method",
+          "GET",
+          "https://api.github.com/repos/zizmorcore/zizmor/releases/latest"
+        ],
+        "body_file": "edb59db018f13a3c.body",
+        "checked_at": "2026-10-20T07:03:00.050759+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "f382d32010d273a3afdb01df1434931d793030e2210f4797c5be953bebb51741",
+        "size": 10700,
+        "url": "https://api.github.com/repos/zizmorcore/zizmor/releases/latest"
+      },
+      "key": "zizmor",
+      "kind": "tools",
+      "latest": "v1.31.1",
+      "observed": true,
+      "pinned": "1.31.1",
+      "release_id": 414353988
+    },
+    {
+      "capture": {
+        "argv": [
+          "/usr/bin/curl",
+          "--fail",
+          "--silent",
+          "--show-error",
+          "--location",
+          "--max-time",
+          "25",
+          "--max-filesize",
+          "8388608",
+          "--user-agent",
+          "velnor-freshness-qualification/0.1 (https://github.com/tailrocks/velnor-new)",
+          "https://crates.io/api/v1/crates/cargo-nextest"
+        ],
+        "body_file": "a55d4dd113da0c0c.body",
+        "checked_at": "2026-10-20T07:03:00.208948+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "2aa25fda965a1bf311e5c007fa66adeac46994d16fa5e338d422cf935d82a1c4",
+        "size": 309841,
+        "url": "https://crates.io/api/v1/crates/cargo-nextest"
+      },
+      "key": "nextest",
+      "kind": "tools",
+      "latest": "0.9.148",
+      "observed": true,
+      "pinned": "0.9.148"
+    },
+    {
+      "capture": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "--method",
+          "GET",
+          "https://api.github.com/repos/opentofu/opentofu/releases/latest"
+        ],
+        "body_file": "bdcfc083f89000b2.body",
+        "checked_at": "2026-10-20T07:02:59.514265+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "0ff3fe6d0c5bfca56394ee30a8234e9f17b7719d8d87d050e84a24f668c02151",
+        "size": 288538,
+        "url": "https://api.github.com/repos/opentofu/opentofu/releases/latest"
+      },
+      "key": "opentofu",
+      "kind": "tools",
+      "latest": "v1.13.1",
+      "observed": true,
+      "pinned": "1.13.1",
+      "release_id": 401173032
+    },
+    {
+      "capture": {
+        "argv": [
+          "/usr/bin/curl",
+          "--fail",
+          "--silent",
+          "--show-error",
+          "--location",
+          "--max-time",
+          "25",
+          "--max-filesize",
+          "8388608",
+          "--user-agent",
+          "velnor-freshness-qualification/0.1 (https://github.com/tailrocks/velnor-new)",
+          "https://crates.io/api/v1/crates/release-plz"
+        ],
+        "body_file": "dccab394fbaddb94.body",
+        "checked_at": "2026-10-20T07:03:00.559081+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "a08d291999b75de21652ad6dc5429cf53be91ee088b5641c17e4152ea2393a2c",
+        "size": 401823,
+        "url": "https://crates.io/api/v1/crates/release-plz"
+      },
+      "key": "release-plz",
+      "kind": "tools",
+      "latest": "0.3.173",
+      "observed": true,
+      "pinned": "0.3.172"
+    },
+    {
+      "capture": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "--method",
+          "GET",
+          "https://api.github.com/repos/sigstore/cosign/releases/latest"
+        ],
+        "body_file": "74ebd08d5f85fc97.body",
+        "checked_at": "2026-10-20T07:03:00.023952+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "78f8274133bbb941273e1efae0c3b977c1e3ba5cde0360a3c92debc7359d2aa6",
+        "size": 131108,
+        "url": "https://api.github.com/repos/sigstore/cosign/releases/latest"
+      },
+      "key": "cosign",
+      "kind": "tools",
+      "latest": "v3.1.3",
+      "observed": true,
+      "pinned": "3.1.3",
+      "release_id": 365912930
+    },
+    {
+      "capture": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "--method",
+          "GET",
+          "https://api.github.com/repos/actions/attest-build-provenance/releases/latest"
+        ],
+        "body_file": "035fc4486c0e2b8c.body",
+        "checked_at": "2026-10-20T07:02:57.577418+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "6c8a2cddbabf63c4034ee023330703fa0da67d976f3d18cd741cafcf4edea923",
+        "size": 2414,
+        "url": "https://api.github.com/repos/actions/attest-build-provenance/releases/latest"
+      },
+      "key": "actions/attest-build-provenance",
+      "kind": "actions",
+      "latest": "v4.2.2",
+      "latest_sha": "4d101475d8b20a2381f78447822ac1eab6504dd8",
+      "observed": true,
+      "pinned": "v4.2.2",
+      "release_id": 366387834,
+      "tag_captures": [
+        {
+          "argv": [
+            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "api",
+            "--method",
+            "GET",
+            "https://api.github.com/repos/actions/attest-build-provenance/git/ref/tags/v4.2.2"
+          ],
+          "body_file": "595d8c73f551e8cc.body",
+          "checked_at": "2026-10-20T07:03:02.449571+00:00",
+          "exit_code": 0,
+          "rust_prefix_only": false,
+          "sha256": "a6c2623cca548b85426cf7f6adda5b5c3116e472195c7cbd75ae16c7448b698c",
+          "size": 363,
+          "url": "https://api.github.com/repos/actions/attest-build-provenance/git/ref/tags/v4.2.2"
+        }
+      ]
+    },
+    {
+      "capture": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "--method",
+          "GET",
+          "https://api.github.com/repos/actions/cache/releases/latest"
+        ],
+        "body_file": "7790011daec93e1c.body",
+        "checked_at": "2026-10-20T07:02:57.577825+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "fab1cd173714779bcd8cf67c96c3a29f04323b5a5389ad404afcd17abfb36e53",
+        "size": 2171,
+        "url": "https://api.github.com/repos/actions/cache/releases/latest"
+      },
+      "key": "actions/cache/restore",
+      "kind": "actions",
+      "latest": "v6.1.0",
+      "latest_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+      "observed": true,
+      "pinned": "v6.1.0",
+      "release_id": 345492415,
+      "tag_captures": [
+        {
+          "argv": [
+            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "api",
+            "--method",
+            "GET",
+            "https://api.github.com/repos/actions/cache/git/ref/tags/v6.1.0"
+          ],
+          "body_file": "ac55a2a8d6f21f41.body",
+          "checked_at": "2026-10-20T07:03:02.449688+00:00",
+          "exit_code": 0,
+          "rust_prefix_only": false,
+          "sha256": "f7023a72d2b1398908b6654f9751f3af841763f45317b4cea6a8acd2953a0a27",
+          "size": 335,
+          "url": "https://api.github.com/repos/actions/cache/git/ref/tags/v6.1.0"
+        }
+      ]
+    },
+    {
+      "capture": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "--method",
+          "GET",
+          "https://api.github.com/repos/actions/cache/releases/latest"
+        ],
+        "body_file": "7790011daec93e1c.body",
+        "checked_at": "2026-10-20T07:02:57.577825+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "fab1cd173714779bcd8cf67c96c3a29f04323b5a5389ad404afcd17abfb36e53",
+        "size": 2171,
+        "url": "https://api.github.com/repos/actions/cache/releases/latest"
+      },
+      "key": "actions/cache/save",
+      "kind": "actions",
+      "latest": "v6.1.0",
+      "latest_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+      "observed": true,
+      "pinned": "v6.1.0",
+      "release_id": 345492415,
+      "tag_captures": [
+        {
+          "argv": [
+            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "api",
+            "--method",
+            "GET",
+            "https://api.github.com/repos/actions/cache/git/ref/tags/v6.1.0"
+          ],
+          "body_file": "ac55a2a8d6f21f41.body",
+          "checked_at": "2026-10-20T07:03:02.451478+00:00",
+          "exit_code": 0,
+          "rust_prefix_only": false,
+          "sha256": "f7023a72d2b1398908b6654f9751f3af841763f45317b4cea6a8acd2953a0a27",
+          "size": 335,
+          "url": "https://api.github.com/repos/actions/cache/git/ref/tags/v6.1.0"
+        }
+      ]
+    },
+    {
+      "capture": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "--method",
+          "GET",
+          "https://api.github.com/repos/actions/checkout/releases/latest"
+        ],
+        "body_file": "23ee79dd411ea730.body",
+        "checked_at": "2026-10-20T07:02:57.577939+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "8c81e64dda90d1f337e87d30fab6804b818d155630587358ebaa531b27f2d659",
+        "size": 2372,
+        "url": "https://api.github.com/repos/actions/checkout/releases/latest"
+      },
+      "key": "actions/checkout",
+      "kind": "actions",
+      "latest": "v7.0.1",
+      "latest_sha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+      "observed": true,
+      "pinned": "v7.0.1",
+      "release_id": 356804776,
+      "tag_captures": [
+        {
+          "argv": [
+            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "api",
+            "--method",
+            "GET",
+            "https://api.github.com/repos/actions/checkout/git/ref/tags/v7.0.1"
+          ],
+          "body_file": "59728b0f06200452.body",
+          "checked_at": "2026-10-20T07:03:02.453008+00:00",
+          "exit_code": 0,
+          "rust_prefix_only": false,
+          "sha256": "2d93602db4d23c52722ac2e83e9553fa46d84b00dd83ed8557f32b39278fe62e",
+          "size": 341,
+          "url": "https://api.github.com/repos/actions/checkout/git/ref/tags/v7.0.1"
+        }
+      ]
+    },
+    {
+      "capture": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "--method",
+          "GET",
+          "https://api.github.com/repos/actions/create-github-app-token/releases/latest"
+        ],
+        "body_file": "54402be693f2ceb9.body",
+        "checked_at": "2026-10-20T07:02:57.583790+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "60b29c1da192509a18d12e3e57efd22a6c5554da68ed7434d3d244675667253b",
+        "size": 3089,
+        "url": "https://api.github.com/repos/actions/create-github-app-token/releases/latest"
+      },
+      "key": "actions/create-github-app-token",
+      "kind": "actions",
+      "latest": "v3.3.0",
+      "latest_sha": "64ab729a6294000f5aa4a4bc0b73d1f32bc45510",
+      "observed": true,
+      "pinned": "v3.3.0",
+      "release_id": 411079712,
+      "tag_captures": [
+        {
+          "argv": [
+            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "api",
+            "--method",
+            "GET",
+            "https://api.github.com/repos/actions/create-github-app-token/git/ref/tags/v3.3.0"
+          ],
+          "body_file": "f3a532f3cfaa4871.body",
+          "checked_at": "2026-10-20T07:03:03.010603+00:00",
+          "exit_code": 0,
+          "rust_prefix_only": false,
+          "sha256": "72b84224b82a1d420cb861cc2c285cca7d17892f9a04b00d3cf793dd9cbe45db",
+          "size": 363,
+          "url": "https://api.github.com/repos/actions/create-github-app-token/git/ref/tags/v3.3.0"
+        }
+      ]
+    },
+    {
+      "capture": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "--method",
+          "GET",
+          "https://api.github.com/repos/actions/download-artifact/releases/latest"
+        ],
+        "body_file": "e7bcb9aa10aaebf4.body",
+        "checked_at": "2026-10-20T07:02:58.132035+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "5b670503b60f455daaf7a3ad99622f6b408e490747fd6deb79402e0e3585673c",
+        "size": 2457,
+        "url": "https://api.github.com/repos/actions/download-artifact/releases/latest"
+      },
+      "key": "actions/download-artifact",
+      "kind": "actions",
+      "latest": "v8.0.2",
+      "latest_sha": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
+      "observed": true,
+      "pinned": "v8.0.2",
+      "release_id": 405628511,
+      "tag_captures": [
+        {
+          "argv": [
+            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "api",
+            "--method",
+            "GET",
+            "https://api.github.com/repos/actions/download-artifact/git/ref/tags/v8.0.2"
+          ],
+          "body_file": "74559bfc7fa6ed32.body",
+          "checked_at": "2026-10-20T07:03:03.033927+00:00",
+          "exit_code": 0,
+          "rust_prefix_only": false,
+          "sha256": "019b77a68374d41e7f5b3c56f42a048e3ff6f0b179896eb98fc79a9cf6b05364",
+          "size": 359,
+          "url": "https://api.github.com/repos/actions/download-artifact/git/ref/tags/v8.0.2"
+        }
+      ]
+    },
+    {
+      "capture": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "--method",
+          "GET",
+          "https://api.github.com/repos/actions/github-script/releases/latest"
+        ],
+        "body_file": "ae22ba25b9f3599c.body",
+        "checked_at": "2026-10-20T07:02:58.132168+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "ece1bb204fd8c668ab3f71e3e77fa201cbd41f670095f9f4d91a7219b8397417",
+        "size": 4189,
+        "url": "https://api.github.com/repos/actions/github-script/releases/latest"
+      },
+      "key": "actions/github-script",
+      "kind": "actions",
+      "latest": "v9.0.0",
+      "latest_sha": "3a2844b7e9c422d3c10d287c895573f7108da1b3",
+      "observed": true,
+      "pinned": "v9.0.0",
+      "release_id": 307308602,
+      "tag_captures": [
+        {
+          "argv": [
+            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "api",
+            "--method",
+            "GET",
+            "https://api.github.com/repos/actions/github-script/git/ref/tags/v9.0.0"
+          ],
+          "body_file": "71618c77f42f2475.body",
+          "checked_at": "2026-10-20T07:03:03.113489+00:00",
+          "exit_code": 0,
+          "rust_prefix_only": false,
+          "sha256": "43701e20a88e5ceb8fc48384bafe2f177348b7ac3e3c97cf50e920132ac46efb",
+          "size": 345,
+          "url": "https://api.github.com/repos/actions/github-script/git/ref/tags/v9.0.0"
+        },
+        {
+          "argv": [
+            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "api",
+            "--method",
+            "GET",
+            "https://api.github.com/repos/actions/github-script/git/tags/d746ffe35508b1917358783b479e04febd2b8f71"
+          ],
+          "body_file": "258714965fe86091.body",
+          "checked_at": "2026-10-20T07:03:03.640441+00:00",
+          "exit_code": 0,
+          "rust_prefix_only": false,
+          "sha256": "228b5cc74b573b7de2b39e09ef019a450008b55f4e99868fdddf5cef95a03731",
+          "size": 679,
+          "url": "https://api.github.com/repos/actions/github-script/git/tags/d746ffe35508b1917358783b479e04febd2b8f71"
+        }
+      ]
+    },
+    {
+      "capture": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "--method",
+          "GET",
+          "https://api.github.com/repos/actions/upload-artifact/releases/latest"
+        ],
+        "body_file": "dbc3083e44b5bba2.body",
+        "checked_at": "2026-10-20T07:02:58.166481+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "1cd4b7da146610d5396bc37b83b7bf1ed46e0bbedfec232cd330e9d238baa05a",
+        "size": 2376,
+        "url": "https://api.github.com/repos/actions/upload-artifact/releases/latest"
+      },
+      "key": "actions/upload-artifact",
+      "kind": "actions",
+      "latest": "v7.0.2",
+      "latest_sha": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+      "observed": true,
+      "pinned": "v7.0.2",
+      "release_id": 405627178,
+      "tag_captures": [
+        {
+          "argv": [
+            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "api",
+            "--method",
+            "GET",
+            "https://api.github.com/repos/actions/upload-artifact/git/ref/tags/v7.0.2"
+          ],
+          "body_file": "8cdcad27667606c7.body",
+          "checked_at": "2026-10-20T07:03:03.116649+00:00",
+          "exit_code": 0,
+          "rust_prefix_only": false,
+          "sha256": "b3236df40ecab4cf18e1ea4f72bfb4cbf5745efc4936f5197f35409132ad3a40",
+          "size": 355,
+          "url": "https://api.github.com/repos/actions/upload-artifact/git/ref/tags/v7.0.2"
+        }
+      ]
+    },
+    {
+      "capture": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "--method",
+          "GET",
+          "https://api.github.com/repos/asamarts/alint/releases/latest"
+        ],
+        "body_file": "d52d5c72605a24ce.body",
+        "checked_at": "2026-10-20T07:02:58.184132+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "bab7a834a3a1561b9f0c0c34f20c12638215507072eb77326dd10e61f81ce45e",
+        "size": 27335,
+        "url": "https://api.github.com/repos/asamarts/alint/releases/latest"
+      },
+      "key": "asamarts/alint",
+      "kind": "actions",
+      "latest": "v0.19.0",
+      "latest_sha": "f39a25a7e061bb8738a87372561d8b9a6a29ca87",
+      "observed": true,
+      "pinned": "v0.19.0",
+      "release_id": 416674705,
+      "tag_captures": [
+        {
+          "argv": [
+            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "api",
+            "--method",
+            "GET",
+            "https://api.github.com/repos/asamarts/alint/git/ref/tags/v0.19.0"
+          ],
+          "body_file": "17c5fcc7d8439008.body",
+          "checked_at": "2026-10-20T07:03:03.564396+00:00",
+          "exit_code": 0,
+          "rust_prefix_only": false,
+          "sha256": "c58d4f0414dcedfb836bffddd070810b331337245e6431f377a52f961540c8fe",
+          "size": 333,
+          "url": "https://api.github.com/repos/asamarts/alint/git/ref/tags/v0.19.0"
+        }
+      ]
+    },
+    {
+      "capture": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "--method",
+          "GET",
+          "https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest"
+        ],
+        "body_file": "daf4a7d368406d19.body",
+        "checked_at": "2026-10-20T07:02:58.709678+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "161850ffcd42ba5f7f6fd1a11172d788093d760eafa3794872a71165460db92f",
+        "size": 2303,
+        "url": "https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest"
+      },
+      "key": "aws-actions/configure-aws-credentials",
+      "kind": "actions",
+      "latest": "v6.3.0",
+      "latest_sha": "e1253824e5c10ff9df46874f81ed3ec929e19cfd",
+      "observed": true,
+      "pinned": "v6.3.0",
+      "release_id": 388882044,
+      "tag_captures": [
+        {
+          "argv": [
+            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "api",
+            "--method",
+            "GET",
+            "https://api.github.com/repos/aws-actions/configure-aws-credentials/git/ref/tags/v6.3.0"
+          ],
+          "body_file": "8590f30d3b43085c.body",
+          "checked_at": "2026-10-20T07:03:03.570505+00:00",
+          "exit_code": 0,
+          "rust_prefix_only": false,
+          "sha256": "fa5f57ff89d1a239166a2e837cec53bf4eebc4a392dd8778ad8b08288d3fb1b0",
+          "size": 383,
+          "url": "https://api.github.com/repos/aws-actions/configure-aws-credentials/git/ref/tags/v6.3.0"
+        }
+      ]
+    },
+    {
+      "capture": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "--method",
+          "GET",
+          "https://api.github.com/repos/jdx/mise-action/releases/latest"
+        ],
+        "body_file": "b2f2bb1e797aab1f.body",
+        "checked_at": "2026-10-20T07:02:58.817479+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "3ce43195e257c75b53af093174c66be93193a78d3ea58bd2e1ab799022fe7ced",
+        "size": 3300,
+        "url": "https://api.github.com/repos/jdx/mise-action/releases/latest"
+      },
+      "key": "jdx/mise-action",
+      "kind": "actions",
+      "latest": "v5.2.1",
+      "latest_sha": "fc42bcc7ddbf51124c30f95a877a0c5168a3bfde",
+      "observed": true,
+      "pinned": "v5.2.0",
+      "release_id": 417145082,
+      "tag_captures": [
+        {
+          "argv": [
+            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "api",
+            "--method",
+            "GET",
+            "https://api.github.com/repos/jdx/mise-action/git/ref/tags/v5.2.1"
+          ],
+          "body_file": "558f123a5724a518.body",
+          "checked_at": "2026-10-20T07:03:03.642027+00:00",
+          "exit_code": 0,
+          "rust_prefix_only": false,
+          "sha256": "1d0fa2fba881a2dda09d228a357d6054423569700b0b3b4b8afafa93f4c454a5",
+          "size": 331,
+          "url": "https://api.github.com/repos/jdx/mise-action/git/ref/tags/v5.2.1"
+        }
+      ]
+    },
+    {
+      "capture": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "--method",
+          "GET",
+          "https://api.github.com/repos/jdx/mr-boxington-action/releases"
+        ],
+        "body_file": "90805b82ed2a948b.body",
+        "checked_at": "2026-10-20T07:02:59.375735+00:00",
+        "exit_code": 0,
+        "rust_prefix_only": false,
+        "sha256": "65af0d52a3b9126d5afc788729bbedb3a3cbbddce0672f24e9237985161a6f5d",
+        "size": 48359,
+        "url": "https://api.github.com/repos/jdx/mr-boxington-action/releases"
+      },
+      "key": "jdx/mr-boxington-action",
+      "kind": "actions",
+      "latest": "v1.7.2",
+      "latest_sha": "47ce49b32025d93a7a2f4570815afaa2b7092240",
+      "observed": true,
+      "pinned": "v1.7.2",
+      "release_id": 409583857,
+      "tag_captures": [
+        {
+          "argv": [
+            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "api",
+            "--method",
+            "GET",
+            "https://api.github.com/repos/jdx/mr-boxington-action/git/ref/tags/v1.7.2"
+          ],
+          "body_file": "1bc1a50a4613f595.body",
+          "checked_at": "2026-10-20T07:03:04.077200+00:00",
+          "exit_code": 0,
+          "rust_prefix_only": false,
+          "sha256": "81e0b5ee286b60c0eb68735422094d550c41562cb5242d78f8d1a87c497c3d03",
+          "size": 347,
+          "url": "https://api.github.com/repos/jdx/mr-boxington-action/git/ref/tags/v1.7.2"
+        }
+      ]
+    }
+  ],
+  "schema": 1
+}

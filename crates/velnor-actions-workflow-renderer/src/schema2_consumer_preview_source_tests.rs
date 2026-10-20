@@ -107,3 +107,74 @@ fn preview_rejects_divergent_source_homes_and_credential_environment() {
         .insert("GH_TOKEN".to_owned(), "forbidden".to_owned());
     assert!(render_consumer_preview(&spec).is_err());
 }
+
+#[test]
+fn symbolic_project_rust_assembly_resolves_only_after_authenticated_acquisition_and_checkout() {
+    let mut spec = with_sources();
+    spec.install_rust_argv[3] = "rust@${VELNOR_TOOL_RUST}".to_owned();
+    spec.producer_cargo_env.insert(
+        "RUSTUP_TOOLCHAIN".to_owned(),
+        "${VELNOR_TOOL_RUST}".to_owned(),
+    );
+    for prep in &mut spec.producer_source_prep {
+        let StepKind::Shell { env, .. } = &mut prep.kind else {
+            panic!("source shell")
+        };
+        env.insert(
+            "RUSTUP_TOOLCHAIN".to_owned(),
+            "${VELNOR_TOOL_RUST}".to_owned(),
+        );
+    }
+    let actual = render_consumer_preview(&spec)
+        .expect("full symbolic companion")
+        .bytes;
+    let mut document = Yaml::Map(vec![(
+        "jobs".to_owned(),
+        Yaml::Map(production::jobs(&spec).expect("composed production")),
+    )]);
+    crate::project_tool_resolver::bind_workflow(&mut document).expect("symbolic binding");
+    let text = crate::yaml::render_yaml(&document);
+    let assembly = job(&text, "preview-assemble", None);
+    let checkout = assembly.find("actions/checkout@").expect("checkout");
+    let resolver = assembly
+        .find("Resolve project tool versions")
+        .expect("resolver");
+    let admission = assembly
+        .find("acquire-preview-leaves-v1")
+        .expect("authenticated admission");
+    let setup = assembly.find("jdx/mise-action@").expect("Mise bootstrap");
+    let metadata = assembly
+        .find("Install pinned Cargo metadata toolchain")
+        .expect("metadata");
+    let source = assembly
+        .find("prepare-Cargo.toml")
+        .expect("source preparation");
+    let execute = assembly
+        .find("execute-preview-producer-v1")
+        .expect("credential-free execution");
+    assert!(
+        setup < admission
+            && admission < checkout
+            && checkout < resolver
+            && resolver < metadata
+            && metadata < source
+            && source < execute
+    );
+    assert!(assembly.contains("ref: ${{ needs.preview-eligibility.outputs.source_sha }}"));
+    assert!(assembly.contains("fetch-depth: 0"));
+    assert!(assembly.contains("persist-credentials: false"));
+    assert!(!assembly[checkout..].contains("GH_TOKEN:"));
+    let once = document.clone();
+    crate::project_tool_resolver::bind_workflow(&mut document).expect("idempotent binding");
+    assert_eq!(document, once);
+    for (name, next) in [
+        ("preview-signer", Some("preview-publisher")),
+        ("preview-publisher", Some("preview-recovery")),
+        ("preview-recovery", None),
+    ] {
+        let isolated = job(&actual, name, next);
+        assert!(!isolated.contains("actions/checkout@"));
+        assert!(!isolated.contains("Resolve project tool versions"));
+        assert!(!isolated.contains("VELNOR_TOOL_RUST"));
+    }
+}
