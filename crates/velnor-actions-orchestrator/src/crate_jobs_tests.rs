@@ -51,7 +51,7 @@ fn group_with_all_features(
 }
 
 /// Discovery shell carrying only task proposals.
-pub(super) fn discovery(groups: Vec<ProposedTask>) -> Discovery {
+pub(crate) fn discovery(groups: Vec<ProposedTask>) -> Discovery {
     Discovery {
         mise_checks: Vec::new(),
         statuses: Vec::new(),

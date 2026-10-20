@@ -44,7 +44,8 @@ pub(crate) async fn observe_storage_resources(
     started: &StartedBootstrapPair,
     initialization: &VerifiedStorageInitializationReady,
 ) -> Result<VerifiedStorageResourceBinding, HostError> {
-    let provider = crate::launch::resource_probe::release_image_provider(release_read_secret)?;
+    let provider =
+        crate::launch::resource_probe::release_image_provider(release_read_secret, host_journal)?;
     observe_storage_resources_with_provider(
         docker,
         journal,

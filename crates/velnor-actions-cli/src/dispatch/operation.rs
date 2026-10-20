@@ -3,22 +3,24 @@
 /// Private operation selected by the gate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum InternalOp {
-    /// Source-free authenticated selection of the retained tap candidate.
+    /// Select the retained preview candidate for tap continuation.
     TapContinuation,
-    /// Read-only authenticated review proposal capture.
+    /// Capture the independent review proposal.
     CaptureReviewCompletion,
-    /// Independent C-App exact-head check emission.
+    /// Publish the independent review result.
     EmitReviewCompletion,
+    /// Admit immutable preview leaf artifacts.
+    AcquirePreviewLeaves,
+    /// Admit the complete preview aggregate.
+    AdmitPreviewAggregate,
+    /// Authenticate tap promotion inputs.
+    TapAdmission,
     /// Materialize the request file from the GitHub environment.
     WriteRequest,
     /// Execute one named hosted platform check.
     ExecuteCheck,
     /// Run the credential-free native preview producer.
     ExecutePreviewProducer,
-    /// Source-free credentialed leaf acquisition before repository checkout.
-    AcquirePreviewLeaves,
-    /// Source-free authentication of the complete native preview union.
-    AdmitPreviewAggregate,
     /// Plan operation.
     Plan,
     /// Merge operation.
@@ -35,6 +37,26 @@ pub(super) enum InternalOp {
     RepoPolicy,
     /// Read-only predecessor resolution for hosted qualification.
     ResolveQualification,
+    /// Select one cache layer for the validated qualification plan.
+    BindQualificationCache,
+    /// Validate one restored cache against the backend census.
+    ObserveQualificationCacheBackend,
+    /// Import one admitted qualification cache payload.
+    ImportQualificationCachePayload,
+    /// Export one qualification cache payload to isolated staging.
+    ExportQualificationCachePayload,
+    /// Get the isolated staging path for the normal tools cache.
+    NormalToolsCacheStagePath,
+    /// Import an authenticated normal tools payload.
+    ImportNormalToolsCachePayload,
+    /// Export a normal tools payload to isolated staging.
+    ExportNormalToolsCachePayload,
+    /// Install verified tar and gtar aliases for cache action steps.
+    InstallCacheTarLaunchers,
+    /// Do a check of the normal `Tofu` backend and storage limits before archive download.
+    PreflightNormalTofuCacheRestore,
+    /// Record source and report observations for one Qualification lane.
+    WriteQualificationSourceEvidence,
     /// Data-only task execution record resolution for a generated wrapper.
     ResolveTaskExecution,
     /// Isolated, credentialed signing of a plan-bound package release.
@@ -45,10 +67,12 @@ pub(super) enum InternalOp {
     PackageRecovery,
     /// Credential-free updater prepared from captured public tap main.
     TapPrepare,
-    /// Source-free authentication before credential-free tap preparation.
-    TapAdmission,
     /// Isolated App-authenticated PR writer for a validated tap candidate.
     TapWriter,
+    /// Fetch private source with the installation token.
+    PrivateFetch,
+    /// Revoke the installation token after the private fetch.
+    PrivateRevoke,
     /// Isolated exact-head App-authenticated tap promotion merge.
     TapMerge,
 }

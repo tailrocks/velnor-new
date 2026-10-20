@@ -3,8 +3,8 @@ use std::path::PathBuf;
 
 use bollard::models::ContainerConfig;
 
-pub(in crate::launch::resource_probe::provider) const MAX_WORKER_ARCHIVE_BYTES: u64 =
-    1024 * 1024 * 1024;
+pub(crate) const MAX_WORKER_ARCHIVE_BYTES: u64 =
+    crate::artifact_admission::MAX_WORKER_ARCHIVE_BYTES;
 pub(super) const MAX_WORKER_ENTRIES: usize = 64;
 pub(super) const MAX_METADATA_BYTES: u64 = 1024 * 1024;
 pub(super) const MAX_ARCHIVE_METADATA_BYTES: u64 = 2 * 1024 * 1024;

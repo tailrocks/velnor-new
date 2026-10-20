@@ -19,7 +19,8 @@ pub(crate) async fn publish_challenge(
     input: ControlPublicationInput<'_>,
     claim: &ExecutionChallengePublicationClaim,
 ) -> Result<ExecutionChallengePublicationReceipt, HostError> {
-    let provider = crate::launch::resource_probe::release_image_provider(input.release_secret)?;
+    let provider =
+        crate::launch::resource_probe::release_image_provider(input.release_secret, input.journal)?;
     publish_challenge_with_provider(input, claim, &provider).await
 }
 

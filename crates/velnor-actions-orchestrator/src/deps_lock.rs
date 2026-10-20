@@ -228,8 +228,8 @@ impl SourceResolver for GhResolver {
 /// One release asset as the lock sees it.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct FoundAsset {
-    id: u64,
-    sha256: Option<String>,
+    pub(crate) id: u64,
+    pub(crate) sha256: Option<String>,
 }
 
 #[derive(Deserialize)]

@@ -183,10 +183,11 @@ pub(super) fn daemon_architecture(info: &SystemInfo) -> Option<&'static str> {
     }
 }
 
-pub(super) fn compiled_source_revision() -> Result<&'static str, ProviderFailure> {
-    let source_revision =
-        option_env!("VELNOR_SOURCE_SHA").ok_or(ProviderFailure::TrustedSourcePinMissing)?;
-    if valid_sha(source_revision) {
+pub(super) fn compiled_source_revision() -> Result<String, ProviderFailure> {
+    let identity = crate::compile_identity::compiled_release_identity()
+        .ok_or(ProviderFailure::TrustedSourcePinMissing)?;
+    let source_revision = super::hex(identity.source_sha());
+    if valid_sha(&source_revision) {
         Ok(source_revision)
     } else {
         Err(ProviderFailure::TrustedSourcePinInvalid)

@@ -44,8 +44,10 @@ both workspaces.
 | `velnor-runner-host` | Journal, Docker ownership, workers, Keychain, launchd, IPC, recovery | Step interpretation, a second task graph |
 | `velnor-runner-cli` | `velnor-host` parsing and presentation | Scheduling |
 | `velnor-resource-probe` | Guest probe binary, fixed-path numeric procfs/cgroup/statvfs parsers, bounded schema | Host supervisor, network |
+| `velnor-runner-attestation` | `velnor-runner-attestation-helper` binary: one bounded stdin request, Sigstore bundle and Fulcio claim verification against the pinned production TUF root, private TUF cache | Docker, journal, GitHub release fetch, host state |
 
-Direction: CLI to host to GitHub and core; GitHub to core. No runner crate
+Direction: CLI to host to GitHub and core; GitHub to core. The host runs the
+attestation helper as a separate process and never links it. No runner crate
 depends on the Rust, Tofu, Mise, renderer, or orchestrator crates. No generator
 crate depends on runner crates. The host may use pure
 `velnor-actions-contract` types at the evidence boundary only.

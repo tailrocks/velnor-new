@@ -39,6 +39,7 @@ pub(crate) struct WorkflowBuildInput<'a> {
 }
 
 struct PreparedWorkflow {
+    private: Option<crate::config::private_wiring::PrivateWiring>,
     catalog: ToolCatalog,
     report_helper_version: String,
     generator_version: &'static str,
@@ -152,6 +153,11 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
         gh: policy == WorkflowPolicy::VelnorRepositoryV1 || has_qualification,
     };
     Ok(PreparedWorkflow {
+        private: crate::config::private_wiring::PrivateWiring::load(
+            input.root,
+            input.config,
+            catalog,
+        )?,
         catalog: catalog.clone(),
         report_helper_version,
         generator_version,
@@ -176,6 +182,7 @@ fn build_workflow_plan(
         prepared.needs,
         input.fetch_roots,
         input.discovery,
+        prepared.private.as_ref(),
     )?;
     if let Some(format) = prepared.format.take() {
         insert_format_step(&mut plan, format);
@@ -203,8 +210,11 @@ fn build_workflow_jobs(
         prepared.acquire.as_ref(),
         &prepared.report_helper_version,
     )?;
-    let built =
-        crate::crate_jobs::build_for_workflow(crate_job_inputs, qualification_jobs_enabled)?;
+    let built = crate::crate_jobs::build_for_workflow(
+        crate_job_inputs,
+        qualification_jobs_enabled,
+        prepared.private.as_ref(),
+    )?;
     let qualification = if qualification_jobs_enabled {
         crate::crate_jobs::build_qualification_for_workflow(
             input.config,

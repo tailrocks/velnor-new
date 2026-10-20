@@ -2,7 +2,8 @@
 
 Status: adopted per the split brief; the owner may revisit. Hard decision:
 [HD-7](../hard-decisions.md). Origin: private cross-repository dependency
-credentials (H1) of the stacks design.
+credentials (H1) of the stacks design. Implementation record:
+[private sources](../implemented/private-sources.md).
 
 A generated job that consumes dependencies from private sibling repositories
 gets a read-only credential for exactly the repositories its locks name,
@@ -128,6 +129,61 @@ descriptor into `git`; this is the recorded deviation from the design text).
 `cargo fetch` runs no build scripts. A repository `[source]` replacement that
 points elsewhere receives no credential. Later steps run
 `--locked --offline` against `$CARGO_HOME/git/db`.
+
+## Placement in generated jobs
+
+When `[private_sources]` is configured, the block is inserted immediately before
+the `Fetch Cargo sources` step of
+
+- the Plan job (all lockful workspace roots), after moving the helper staging
+  step up to just before the block, and
+- every Rust crate job, scoped to the roots the job fetches.
+
+A job gets the block only when its allowlist is non-empty: Cargo git sources of
+its roots under `owner`, plus the locked repositories of the kinds a Rust job
+retrieves (`cargo` and `release-assets`; `git-trees` and `maven-bundles` belong
+to the jobs that consume them). No table, or a closure with no private source,
+leaves the job byte-identical. Generation fails when declared sources have no
+lock (`deps_lock_missing`), when the lock drifted from the declarations
+(`deps_lock_drift:<id>`), and for the Velnor repository policy, which stages no
+helper (`requires_consumer_policy`). Because the allowlist is a literal, any
+change to a `Cargo.lock` private source or to `deps.lock` changes the generated
+workflow and the freshness gate turns red until it is regenerated.
+
+Not yet wired: the prebuilt-binary image job (`image_prebuilt`), the credential-free
+preview preparation, and jobs of other stacks. They must call
+`PrivateWiring::steps_for_roots` before any step that resolves private sources.
+
+## Fetch and revoke operations
+
+The fetch step carries, as literal non-secret env, the owner, the sorted
+allowlist (`VELNOR_PRIVATE_REPOSITORIES`), the source kinds to retrieve
+(`VELNOR_PRIVATE_SOURCES`: `cargo`, `git-trees`, `maven-bundles`,
+`release-assets`), the Cargo workspace roots (`VELNOR_PRIVATE_FETCH_ROOTS`, `.`
+is the repository root) and the owned toolchain env. `private-fetch-v1`:
+
+1. refuses an empty or malformed token (`private_source_credential_unavailable`);
+2. loads config and `.velnor/deps.lock` from the checkout as data, requires the
+   lock to match the declarations, recomputes the allowlist from the roots'
+   `Cargo.lock` git sources and the locked sources of the requested kinds, and
+   stops with `private_allowlist_drift` on any difference, before a single
+   credentialed call (a pull request that adds a private source to a lock cannot
+   widen what the minted token can reach);
+3. runs `cargo fetch --locked` per root from the runner-owned isolation
+   directory (no repository `.cargo/config.toml`), under the private-fetch policy;
+4. for each locked asset: checks the tag still resolves to the locked commit
+   (`private_tag_moved`), the published digest equals the locked SHA-256, the
+   downloaded bytes hash to it (`private_asset_sha256_mismatch`), then extracts
+   through the bounded archive reader (no absolute or `..` paths, no links) into
+   `$RUNNER_TEMP/velnor/deps/<extract_to>`, `.../maven/<id>` or `.../git/<id>`;
+5. downloads git trees by locked commit.
+
+`private-revoke-v1` runs `always()` after a successful mint: it removes any
+leftover credential directory, sends `DELETE /installation/token` (204, or 401
+for an already dead token), then calls the API with the same token and requires
+401 (`private_token_still_valid` otherwise). Requests use `curl` under the
+private-fetch policy with an `https`-only, API-origin-only configuration file;
+curl drops the `Authorization` header when a redirect leaves the API host.
 
 ## Credential boundary
 

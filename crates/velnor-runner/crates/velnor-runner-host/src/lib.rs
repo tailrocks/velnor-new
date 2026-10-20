@@ -3,7 +3,9 @@
 //! Callers persist intent before an external effect and never hold a
 //! transaction across that effect.
 
+pub(crate) mod artifact_admission;
 mod assign;
+mod compile_identity;
 mod config;
 mod connect;
 mod controller_ipc;
@@ -11,6 +13,7 @@ mod daemon_lock;
 mod docker_client;
 mod docker_spec;
 mod error;
+mod helper_supervisor;
 mod host_controller;
 mod https;
 mod ipc;

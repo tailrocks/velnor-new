@@ -81,7 +81,7 @@ pub(in crate::launch::resource_probe) async fn verify_publication_probe_image(
     selected: &SelectedEngineContext,
     release_read_secret: &ReleaseReadSecret,
 ) -> Result<VerifiedPublicationProbeImage, crate::error::HostError> {
-    let provider = release_image_provider(release_read_secret)?;
+    let provider = release_image_provider(release_read_secret, journal)?;
     verify_publication_probe_image_with_provider(docker, journal, selected, &provider).await
 }
 
@@ -93,7 +93,7 @@ pub(in crate::launch::resource_probe) async fn verify_publication_probe_image_un
     release_read_secret: &ReleaseReadSecret,
     deadline: std::time::Instant,
 ) -> Result<VerifiedPublicationProbeImage, crate::error::HostError> {
-    let provider = release_image_provider(release_read_secret)?;
+    let provider = release_image_provider(release_read_secret, journal)?;
     verify_publication_probe_image_until_with_provider(
         docker, journal, selected, &provider, deadline,
     )
@@ -252,16 +252,18 @@ pub(crate) async fn observe_owned_cgroups(
     subjects: &OwnedCgroupSubjects,
 ) -> Result<VerifiedOwnedCgroups, crate::error::HostError> {
     let token = release_read_secret.as_provider_token()?;
-    let provider = ReleaseImageProvider::from_compiled_source(token)
+    let provider = ReleaseImageProvider::from_compiled_source(token, journal)
         .map_err(|_| crate::error::HostError::Docker)?;
     observe_owned_cgroups_with_provider(docker, journal, &provider, subjects).await
 }
 
-pub(in crate::launch) fn release_image_provider(
-    secret: &ReleaseReadSecret,
-) -> Result<impl ImageProvider + '_, crate::error::HostError> {
+pub(in crate::launch) fn release_image_provider<'a>(
+    secret: &'a ReleaseReadSecret,
+    journal: &'a Journal,
+) -> Result<impl ImageProvider + 'a, crate::error::HostError> {
     let token = secret.as_provider_token()?;
-    ReleaseImageProvider::from_compiled_source(token).map_err(|_| crate::error::HostError::Docker)
+    ReleaseImageProvider::from_compiled_source(token, journal)
+        .map_err(|_| crate::error::HostError::Docker)
 }
 
 pub(in crate::launch) async fn observe_owned_cgroups_with_provider<P: ImageProvider>(
@@ -286,7 +288,7 @@ pub(crate) async fn start_permit(
     release_read_secret: &ReleaseReadSecret,
 ) -> Option<StartPermit> {
     let token = release_read_secret.as_provider_token().ok()?;
-    let provider = match ReleaseImageProvider::from_compiled_source(token) {
+    let provider = match ReleaseImageProvider::from_compiled_source(token, journal) {
         Ok(provider) => provider,
         Err(error) => {
             eprintln!("resource_probe=unavailable reason={}", error.code());
@@ -309,7 +311,7 @@ pub(crate) async fn recovery_observation(
     release_read_secret: &ReleaseReadSecret,
 ) -> Option<RecoveryObservation> {
     let token = release_read_secret.as_provider_token().ok()?;
-    let provider = ReleaseImageProvider::from_compiled_source(token).ok()?;
+    let provider = ReleaseImageProvider::from_compiled_source(token, journal).ok()?;
     let sample = Box::pin(lifecycle::collect(docker, journal, &provider))
         .await
         .ok()??;

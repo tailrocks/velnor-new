@@ -1,8 +1,10 @@
 # Controller-owned guest resource probe
 
-**Status:** Proposed controller contract. Source code includes a production
-image provider. The provider verifies the release. This document does not claim
-a qualified probe, live installation, or safe Scale Set capacity.
+**Status:** Proposed controller contract. The source includes code to check release files and load the image.
+Released host builds lack the source commit, helper digest, and verifier program needed to check an image release.
+The released provider is unavailable.
+The provider and image release still need qualification.
+This document does not prove that installation is live or that a Scale Set has safe capacity.
 
 This contract implements the controller boundary referenced by the
 [resource-admission policy](runner-resource-admission.md). The selected Docker
@@ -117,12 +119,67 @@ by the source-owned provider; the controller uses only the provider's
 daemon-specific immutable runtime image ID and binding fingerprint. It must
 not assume that Docker's runtime image ID always equals the config digest.
 
-No qualified product host verifier or provider is currently available. Until
-that source-owned API passes independent verification, production image
-readiness is unavailable, so no production permit can be minted. Test fakes
-may exercise projection and lifecycle behavior but do not qualify image trust
-or production readiness. Do not introduce shell, PATH, mutable-tag, or
-credential-based fallbacks.
+### Implemented provider (source only, unqualified)
+
+- **Build identity.** `velnor-runner-host`'s build script reads
+  `VELNOR_SOURCE_SHA` (40 lowercase hex) and
+  `VELNOR_ATTESTATION_HELPER_SHA256` (64 lowercase hex) and writes them into
+  `OUT_DIR/compile_identity.rs`, which `compile_identity.rs` includes. Both or
+  neither must be set; one alone, or a malformed value, fails the build. With
+  neither, the identity is `None` and `provider_for_build` in
+  `launch/resource_probe.rs` selects `UnavailableImageProvider`, which is how
+  every local and current release build behaves. With both, a provider
+  construction error is a probe error, never a silent fallback to unavailable.
+- **Release admission.** `artifact_admission::NativeArtifactProvider` reads
+  the GitHub release `runner-<source>` of `tailrocks/velnor-new` with the
+  host's REST credential, accepts only redirects to
+  `release-assets.githubusercontent.com`, and bounds every response. It
+  requires exactly the `SHA256SUMS`, `RESOURCE_PROBE_MANIFEST.json`, and
+  `velnor-resource-probe-linux-amd64.tar` rows; a strict-schema manifest whose
+  source commit and workflow authority equal the compiled source; checksum,
+  manifest, and archive digests that agree; and a deterministic OCI archive
+  whose index, manifest, config, user `65532:65532`, entrypoint, and source
+  label match the manifest. The verified release is cached in process per
+  source, helper digest, and state directory.
+- **Signature verification.** The `SHA256SUMS` attestation bundles are
+  verified by the separate `velnor-runner-attestation-helper` binary
+  (`crates/velnor-runner-attestation`, Sigstore with the pinned production TUF
+  root). The helper must sit next to the canonical host executable, owned by
+  the same user and not writable by group or others, and match the compiled helper
+  digest. The host copies it into a private digest-bound snapshot under the
+  service state directory (the journal's directory) and runs it with a cleared
+  environment (only macOS `__CF_USER_TEXT_ENCODING` passes through), no arguments, one bounded JSON request on stdin, a 90-second
+  deadline, and kill-and-reap on cancellation. The helper requires the GitHub
+  Actions OIDC issuer, a URI identity for
+  `.github/workflows/product-release-images.yml@refs/heads/main`, and the
+  exact Fulcio source, ref, digest, build-config, and runner-environment
+  claims for both the checksum file and each subject. Its TUF cache lives in
+  `attestation-tuf-cache` under that state directory with rollback, size, and
+  lock protection.
+- **Offline load.** The archive is loaded into the selected engine with an
+  explicit `linux/amd64` platform (Docker API 1.49 or later), inspected, and
+  bound to the engine ID and `DockerRootDir` that were checked before and
+  after inspection. The controller receives only the daemon-specific runtime
+  image ID, platform, source revision, binding fingerprint, and inspected
+  config, as `VerifiedCandidate`.
+
+### Remaining before a production permit
+
+The product release must build and ship the helper beside `velnor-host` and
+compile `velnor-host` with the release source commit and the helper digest
+(inside [hard decision 8](../hard-decisions.md#8-publication-only-from-the-default-branch-or-a-release-tag)).
+Until then, and until the provider and image release pass independent
+verification on the selected Docker backend, production image readiness is
+unavailable and no production permit can be minted. Test fakes may exercise
+projection and lifecycle behavior but do not qualify image trust or production
+readiness. Do not introduce shell, PATH, mutable-tag, or credential-based
+fallbacks.
+
+Pull-request selection consequence ([hard decision 3](../hard-decisions.md#3-pull-requests-test-only-what-they-affect)):
+a package with a build script is always `undeclared_reads`, and
+`[[stacks.rust.inputs]]` cannot declare build-script inputs, so the
+`velnor-runner-host` and `velnor-runner-cli` crate jobs now run on every pull
+request.
 
 ## Durable operation lifecycle
 

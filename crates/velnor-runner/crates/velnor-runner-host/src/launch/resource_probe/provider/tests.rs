@@ -7,10 +7,10 @@ use bollard::models::{ContainerConfig, SystemInfo};
 use crate::journal::{ImageImportState, Journal};
 use crate::launch_harness::Scratch;
 
-use super::gh::VerifiedWorkspaceCleanup;
 use super::release::PreparedRelease;
 use super::selected_daemon;
-use super::{ProviderFailure, ReleaseImageProvider, build_pin_status};
+use super::workspace::VerifiedWorkspaceCleanup;
+use super::{PreparedReleaseCacheKey, ProviderFailure, ReleaseImageProvider, build_pin_status};
 use crate::launch::inspect_tests::{DockerStub, http};
 
 fn prepared_release(source_revision: &str) -> PreparedRelease {
@@ -41,6 +41,28 @@ fn prepared_release(source_revision: &str) -> PreparedRelease {
         image_reference: format!("velnor-resource-probe:v{source_revision}-{archive_sha256}"),
         workspace_cleanup: VerifiedWorkspaceCleanup::test_fixture(),
     }
+}
+
+#[test]
+fn prepared_release_cache_binds_source_helper_and_state_directory() {
+    let base = PreparedReleaseCacheKey {
+        source_revision: "a".repeat(40),
+        helper_sha256: [1; 32],
+        state_directory: std::path::PathBuf::from("/state/one"),
+    };
+    let changed_helper = PreparedReleaseCacheKey {
+        helper_sha256: [2; 32],
+        ..base.clone()
+    };
+    let changed_state = PreparedReleaseCacheKey {
+        state_directory: std::path::PathBuf::from("/state/two"),
+        ..base.clone()
+    };
+
+    let cache = HashMap::from([(base.clone(), ())]);
+    assert!(cache.contains_key(&base));
+    assert!(!cache.contains_key(&changed_helper));
+    assert!(!cache.contains_key(&changed_state));
 }
 
 #[test]
@@ -80,10 +102,10 @@ async fn verifier_failure_stops_the_production_provider_path_before_docker() -> 
             &journal,
             "selected-engine",
             &info,
-            std::future::ready(Err(ProviderFailure::Attestation)),
+            std::future::ready(Err(ProviderFailure::NativeAdmission)),
         )
         .await;
-    assert!(matches!(result, Err(ProviderFailure::Attestation)));
+    assert!(matches!(result, Err(ProviderFailure::NativeAdmission)));
     Ok(())
 }
 

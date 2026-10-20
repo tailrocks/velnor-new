@@ -83,8 +83,10 @@ pub(crate) struct JobFactsPublicationInput<'a> {
 pub(crate) async fn publish_job_facts(
     input: JobFactsPublicationInput<'_>,
 ) -> Result<crate::launch::bootstrap::JobFactsPublication, HostError> {
-    let provider = match crate::launch::resource_probe::release_image_provider(input.release_secret)
-    {
+    let provider = match crate::launch::resource_probe::release_image_provider(
+        input.release_secret,
+        input.journal,
+    ) {
         Ok(provider) => provider,
         Err(error) => {
             input
