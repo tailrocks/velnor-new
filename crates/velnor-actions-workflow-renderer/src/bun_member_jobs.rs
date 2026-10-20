@@ -66,6 +66,21 @@ impl BunMemberPolicy {
             }
         }
         self.validate_private_block(&invalid)?;
+        let installs: Vec<usize> = self
+            .steps
+            .iter()
+            .enumerate()
+            .filter(|(_, step)| step.role == Some(StepRole::PlaywrightInstall))
+            .map(|(index, _)| index)
+            .collect();
+        if installs.len() > 1 {
+            return Err(invalid("bun_playwright_install_repeated"));
+        }
+        if let Some(&at) = installs.first()
+            && self.steps[..at].iter().any(|step| step.parallel)
+        {
+            return Err(invalid("bun_playwright_install_late"));
+        }
         if self
             .steps
             .iter()

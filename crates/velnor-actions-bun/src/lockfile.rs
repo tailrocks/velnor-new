@@ -67,6 +67,8 @@ pub struct BunLock {
     pub workspaces: BTreeMap<String, LockWorkspace>,
     /// Resolved version of each top-level package name.
     pub versions: BTreeMap<String, String>,
+    /// Tarball integrity (`sha512-...`) of each top-level package that records one.
+    pub integrity: BTreeMap<String, String>,
 }
 
 const DEPENDENCY_TABLES: [&str; 4] = [
@@ -123,6 +125,13 @@ pub fn parse_lock(text: &str) -> Result<BunLock, BunError> {
             .map(|(_, version)| version)
         {
             lock.versions.insert(name.clone(), version.to_owned());
+        }
+        if let Some(integrity) = entry
+            .get(3)
+            .and_then(Value::as_str)
+            .filter(|value| value.starts_with("sha512-"))
+        {
+            lock.integrity.insert(name.clone(), integrity.to_owned());
         }
     }
     Ok(lock)

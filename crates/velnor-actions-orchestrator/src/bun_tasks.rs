@@ -3,9 +3,13 @@
 use std::path::Path;
 
 use velnor_actions_bun::{Member, check_package_manager, job_id, member_scripts};
+use velnor_actions_contract::config::BunBrowser;
+use velnor_actions_contract::config::playwright_lock::{PlaywrightLock, pin_list};
 use velnor_actions_contract::{JobTimeout, Step, VelnorConfig};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
-use velnor_actions_workflow_renderer::verification_jobs::BunMemberPolicy;
+use velnor_actions_workflow_renderer::verification_jobs::{
+    BunMemberPolicy, playwright_install_step,
+};
 
 use super::bun_steps::{MemberInputs, member_steps};
 use crate::OrchestratorError;
@@ -41,6 +45,7 @@ pub(crate) fn policies(
         .map_or(Ok(config.workflow.crate_timeout_minutes), u16::try_from)
         .map_err(|_| failure("bun_timeout"))?;
     let timeout = JobTimeout::new(timeout)?;
+    let playwright_lock = crate::config::playwright_lock::read_playwright_lock(root)?;
     let mut out = Vec::new();
     for bun_root in &discovery.bun.roots {
         let workspace = &bun_root.workspace;
@@ -54,6 +59,12 @@ pub(crate) fn policies(
             None => Vec::new(),
         };
         for member in &workspace.members {
+            let browsers = bun
+                .members
+                .get(&member.name)
+                .map_or(&[][..], |member| member.browsers.as_slice());
+            let playwright =
+                playwright_step(workspace, member, browsers, playwright_lock.as_ref())?;
             out.push(policy(
                 member,
                 &MemberInputs {
@@ -65,6 +76,7 @@ pub(crate) fn policies(
                     scopes: &scopes,
                     acquire,
                     private: &block,
+                    playwright: playwright.as_ref(),
                 },
                 timeout,
             )?);
@@ -72,6 +84,38 @@ pub(crate) fn policies(
     }
     out.sort_by(|left, right| left.id.cmp(&right.id));
     Ok(out)
+}
+
+/// The Playwright install step of one member, checked against both locks.
+fn playwright_step(
+    workspace: &velnor_actions_bun::Workspace,
+    member: &Member,
+    browsers: &[BunBrowser],
+    lock: Option<&PlaywrightLock>,
+) -> Result<Option<Step>, OrchestratorError> {
+    if browsers.is_empty() {
+        return Ok(None);
+    }
+    let member_failure = |problem: &str| failure(&format!("{problem}:{}", member.name));
+    let version = member
+        .playwright
+        .as_deref()
+        .ok_or_else(|| member_failure("bun_playwright_missing"))?;
+    let core = workspace
+        .playwright_core
+        .as_ref()
+        .filter(|core| core.version == version)
+        .ok_or_else(|| member_failure("bun_playwright_core_mismatch"))?;
+    let lock = lock.ok_or_else(|| member_failure("playwright_lock_missing"))?;
+    let names: Vec<&str> = browsers.iter().map(|browser| browser.as_str()).collect();
+    let archives = lock
+        .archives_for(version, &core.integrity, &names)
+        .map_err(|problem| failure(&format!("{problem}:{}", member.name)))?;
+    Ok(Some(playwright_install_step(
+        &workspace.root,
+        version,
+        &pin_list(&archives),
+    )?))
 }
 
 fn policy(

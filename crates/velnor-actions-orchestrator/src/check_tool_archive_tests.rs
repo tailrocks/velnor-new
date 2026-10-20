@@ -330,6 +330,7 @@ fn global_budget_is_admitted_before_output_creation() {
     let mut budget = ArchiveBudget {
         bytes: 0,
         entries: 1,
+        entry_bytes: MAX_ENTRY_BYTES,
     };
     assert!(
         extract_archive(

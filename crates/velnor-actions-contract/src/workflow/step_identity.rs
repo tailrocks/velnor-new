@@ -145,13 +145,14 @@ pub enum StepRole {
     MbxWorkspaceCleanup,
     /// Mint of the read-only App installation token for private sources (HD-7).
     PrivateTokenMint,
-    /// Velnor-owned fetch of private sources; the only step that may bind a
-    /// private-source credential besides the revoke step (HD-7).
+    /// Velnor-owned private-source fetch; with the revoke, the only credential binding (HD-7).
     PrivateFetch,
     /// Revocation of the private-source token, run `always()` (HD-7).
     PrivateRevoke,
     /// Registry phase of `bun install`; the only step binding the job token.
     BunRegistryInstall,
+    /// Hash-verified Playwright browser install; holds no credential.
+    PlaywrightInstall,
 }
 
 impl StepRole {
@@ -200,10 +201,10 @@ impl StepRole {
             Self::PrivateRevoke => internal_operation(kind, PRIVATE_REVOKE_OPERATION),
             Self::BunRegistryInstall => internal_operation(kind, BUN_REGISTRY_INSTALL_OPERATION),
             Self::MbxCache => valid_mbx_cache(kind),
-            Self::MbxVersionCheck | Self::MbxWorkspaceCleanup => {
-                matches!(kind, StepKind::Shell { .. })
-            }
+            Self::PlaywrightInstall => super::step_protocol::valid_playwright_install(kind),
             Self::PreparePinnedTools
+            | Self::MbxVersionCheck
+            | Self::MbxWorkspaceCleanup
             | Self::PrepareRustComponents
             | Self::CargoDeny
             | Self::CargoMachete
@@ -346,7 +347,6 @@ fn valid_mise_setup(kind: &StepKind) -> bool {
             && with.get("cache_save").is_some_and(|value| value == "false" || value == "true"))
 }
 
-/// Validate the local provider admission call and exact same-restore outputs.
 /// Validate the native MBX action that owns the object-cache lifecycle.
 fn valid_mbx_cache(kind: &StepKind) -> bool {
     matches!(kind, StepKind::Action { uses, with, .. }

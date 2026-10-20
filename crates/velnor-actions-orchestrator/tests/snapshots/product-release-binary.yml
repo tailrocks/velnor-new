@@ -47,7 +47,7 @@ jobs:
   build-binary:
     name: Build velnor-host
     runs-on: macos-15
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       actions: write
       contents: read
