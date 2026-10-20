@@ -96,12 +96,9 @@ job, immediately before the Cargo source fetch: the installation token is
 revoked before the compile, the Dockerfile `RUN` steps or any other repository
 step runs. A closure without private sources adds no credential step.
 
-Not yet implemented for this mode: the MBX target cache (plain `cargo` is used),
-and `linux_arm64`. The shared Mise tools cache is qualified only for the Ubuntu
-x86-64 hosted images (runtime identity script, composite prelude and Mise pins);
-generation rejects `cargo_bin` with `linux_arm64` as
-`image_prebuilt_platform_unsupported:linux_arm64` until that cache contract is
-extended. Plain Dockerfile images already build on arm64.
+Plain Dockerfile images already build on arm64; `cargo_bin` with `linux_arm64`
+and the cache wiring are deferred, with the exact blockers recorded under
+[Deferred work](#deferred-work-and-its-blockers).
 
 ## Publication (implemented, `publish.yml`)
 
@@ -185,3 +182,63 @@ No private credential enters a BuildKit build: no secret mount, no `type=gha`
 cache (it hands `ACTIONS_RUNTIME_TOKEN` to BuildKit), no build argument that
 carries a token. A build that needs private sources must declare `prebuilt`
 (`image_build_needs_private_source`, wired when private sources land).
+
+## Deferred work and its blockers
+
+### `buildkit-<id>` family and the MBX target cache for `cargo_bin`
+
+Neither is wired. The image jobs build with plain `cargo` over the shared
+Cargo sources family and a task-owned builder with no remote cache. Why a
+`buildkit-<id>` family does not fit the merged contract yet:
+
+1. The runtime-keyed family set is closed (`CacheFamily::{Sources,
+   TofuProviders}`, `cache_family.rs`), and each family is threaded through
+   typed surfaces: step ids and roles (`StepId::TofuProviders`,
+   `StepRole::TofuProvidersRestore` and `Save`), the step-protocol validators,
+   the report layer enum and the qualification cache-lineage layer. The only
+   per-root locator the Plan job's key step emits is the Tofu root ordinal. A
+   BuildKit family needs a member in each of those plus per image and platform
+   locator outputs, which is a cache-contract change; `cache-contract.md` is at
+   its 400-line limit and must be split before it can describe one.
+2. [`cache-decisions.md`](cache-decisions.md) requires every hot family to
+   have a measured size and a refused-and-reported save above its ceiling.
+   Decisions 2 to 4 (dependency seed, opaque MBX bundles, per-family pruning)
+   are not implemented, and `cache-measurements.md` holds no BuildKit figure. A
+   `type=local,mode=max` export is unbounded without them. `type=gha` stays
+   rejected because it hands `ACTIONS_RUNTIME_TOKEN` to BuildKit.
+3. The only MBX transport on main is the action's `github-cache-mode: target`;
+   decision 3 replaces it with `mbx cache export` and `import` bundles (not
+   implemented). Wiring `cargo_bin` jobs to target mode would add a consumer to
+   a mode scheduled for removal.
+
+Unblocked by: decisions 2 to 4 landing with measured ceilings. The image
+jobs then add one family (`buildkit-<id>`, schema 1, a local export directory
+under `$RUNNER_TEMP/velnor/buildkit/<id>/<platform>`, trusted writes only) and
+restore the MBX bundle in the prebuilt compile.
+
+### `linux_arm64` for `cargo_bin`
+
+Generation rejects it as `image_prebuilt_platform_unsupported:linux_arm64`.
+The shared Mise tools cache and its prelude are qualified for Ubuntu x86-64
+only. Exactly:
+
+- `ReleaseTarget` has three members (Linux x86-64, macOS arm64, macOS x86-64);
+  `for_runner_label("ubuntu-26.04-arm")` is `None`, so `target_for_runner`
+  is `None` and finalization fails with `tools_cache_unsupported_target`.
+- `MiseSetup::for_target` has binary digests for Linux x64 and the two macOS
+  targets only, and no `aarch64-unknown-linux-gnu` pin.
+- The runtime identity gate accepts only target `x86_64-unknown-linux-gnu`
+  and fixes `RUNNER_ARCH=X64` (`lane_identity` and the shared script's
+  `expected_arch` and `expected_target`); the identity prelude composites exist
+  for the three x86-64 Ubuntu lanes (`TOOLS_CACHE_PRELUDE_USES`).
+- `RUST_TARGET_TRIPLE` and the toolchain name derived from it are x86-64.
+- No hosted evidence exists: the qualification rows of the
+  [hosted cache qualification contract](hosted-cache-qualification-contract.md)
+  are incomplete, and an arm64 identity (`ImageOS`, `RUNNER_ARCH=ARM64`) needs a
+  source-bound hosted run on `ubuntu-26.04-arm` produced by generated workflow
+  changes, not by a hand-written probe.
+
+Not blocking: the Mise Linux arm64 digest is published in the upstream
+`SHASUMS256.txt` the source-build bootstrap already uses, and Mr. Boxington
+ships a Linux aarch64 asset (the bootstrap catalog pins it). Generalizing the
+four code points above and running the hosted qualification unblocks it.
