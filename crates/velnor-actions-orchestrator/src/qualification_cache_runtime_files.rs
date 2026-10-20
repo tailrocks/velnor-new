@@ -19,7 +19,8 @@ use crate::internal::internal;
 use super::QualificationCacheBindingRequest;
 
 pub(super) const MAX_PLAN_JSON_BYTES: u64 = crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES;
-const GUEST_IMAGE_PROJECTION_PATH: &str = "/opt/velnor/guest-image.json";
+const GUEST_IMAGE_PROJECTION_PATH: &str = "/.velnor-runtime-identity/guest-image.json";
+const GUEST_IMAGE_RUNTIME_DIRECTORY: &str = "/.velnor-runtime-identity";
 pub(super) const GUEST_IMAGE_PROJECTION_SCHEMA: &str = "velnor.guest-image/v1";
 const MAX_GUEST_IMAGE_PROJECTION_BYTES: usize = 65_536;
 
@@ -122,21 +123,64 @@ pub(super) struct GuestImageDigests {
 
 pub(super) fn read_guest_image_projection() -> Result<GuestImageProjection, OrchestratorError> {
     let path = Path::new(GUEST_IMAGE_PROJECTION_PATH);
-    for directory in [Path::new("/opt"), Path::new("/opt/velnor")] {
-        let metadata = fs::symlink_metadata(directory)
-            .map_err(|_| internal("qualification_guest_image_directory_missing"))?;
-        if metadata.file_type().is_symlink()
-            || !metadata.is_dir()
-            || metadata.uid() != 0
-            || metadata.mode() & 0o022 != 0
-        {
-            return Err(internal("qualification_guest_image_directory_untrusted"));
-        }
+    let directory = Path::new(GUEST_IMAGE_RUNTIME_DIRECTORY);
+    let metadata = fs::symlink_metadata(directory)
+        .map_err(|_| internal("qualification_guest_image_directory_missing"))?;
+    if metadata.file_type().is_symlink()
+        || !metadata.is_dir()
+        || metadata.uid() != 0
+        || metadata.gid() != 0
+        || metadata.mode() & 0o7777 != 0o555
+    {
+        return Err(internal("qualification_guest_image_directory_untrusted"));
     }
+    validate_readonly_runtime_mount(GUEST_IMAGE_RUNTIME_DIRECTORY)?;
     let bytes = read_readonly_projection_file(path)?;
     let text =
         std::str::from_utf8(&bytes).map_err(|_| internal("qualification_guest_image_encoding"))?;
     parse_canonical(text, MAX_GUEST_IMAGE_PROJECTION_BYTES)
+}
+
+fn validate_readonly_runtime_mount(target: &str) -> Result<(), OrchestratorError> {
+    let mut mountinfo = fs::File::open("/proc/self/mountinfo")
+        .map_err(|_| internal("qualification_guest_image_mount_unreadable"))?
+        .take(64 * 1024 + 1);
+    let mut bytes = Vec::new();
+    mountinfo
+        .read_to_end(&mut bytes)
+        .map_err(|_| internal("qualification_guest_image_mount_unreadable"))?;
+    if bytes.len() > 64 * 1024 {
+        return Err(internal("qualification_guest_image_mount_oversize"));
+    }
+    let text = std::str::from_utf8(&bytes)
+        .map_err(|_| internal("qualification_guest_image_mount_invalid"))?;
+    let mut matching = text
+        .lines()
+        .filter(|line| line.split_whitespace().nth(4) == Some(target));
+    let line = matching
+        .next()
+        .ok_or_else(|| internal("qualification_guest_image_mount_missing"))?;
+    if matching.next().is_some() {
+        return Err(internal("qualification_guest_image_mount_duplicate"));
+    }
+    let fields = line.split_whitespace().collect::<Vec<_>>();
+    let mount_options = fields
+        .get(5)
+        .ok_or_else(|| internal("qualification_guest_image_mount_invalid"))?
+        .split(',')
+        .collect::<Vec<_>>();
+    if !mount_options.contains(&"ro") || mount_options.contains(&"rw") {
+        return Err(internal("qualification_guest_image_mount_not_read_only"));
+    }
+    if text.lines().any(|candidate| {
+        candidate
+            .split_whitespace()
+            .nth(4)
+            .is_some_and(|mountpoint| mountpoint.starts_with(&format!("{target}/")))
+    }) {
+        return Err(internal("qualification_guest_image_mount_shadowed"));
+    }
+    Ok(())
 }
 
 fn read_readonly_projection_file(path: &Path) -> Result<Vec<u8>, OrchestratorError> {
@@ -152,7 +196,10 @@ fn read_readonly_projection_file(path: &Path) -> Result<Vec<u8>, OrchestratorErr
     let stat =
         rustix::fs::fstat(&fd).map_err(|_| internal("qualification_guest_image_unreadable"))?;
     if rustix::fs::FileType::from_raw_mode(stat.st_mode) != rustix::fs::FileType::RegularFile
+        || stat.st_uid != 0
+        || stat.st_gid != 0
         || stat.st_mode & 0o222 != 0
+        || stat.st_mode & 0o7777 != 0o444
     {
         return Err(internal("qualification_guest_image_file_untrusted"));
     }

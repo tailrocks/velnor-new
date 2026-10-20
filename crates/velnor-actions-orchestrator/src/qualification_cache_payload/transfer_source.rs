@@ -3,6 +3,8 @@ use rustix::fs::{AtFlags, FileType, Mode, OFlags, Stat, open, openat, statat};
 use std::ffi::CString;
 use std::fs;
 use std::os::unix::ffi::OsStrExt;
+#[cfg(target_os = "linux")]
+use std::path::PathBuf;
 use std::path::{Component, Path};
 
 const MAX_SOURCE_PATH_BYTES: usize = 4_096;
@@ -18,6 +20,8 @@ struct Edge {
 pub(in crate::qualification_cache_payload) struct SourceDirectory {
     root: rustix::fd::OwnedFd,
     edges: Vec<Edge>,
+    #[cfg(target_os = "linux")]
+    target: PathBuf,
 }
 
 impl SourceDirectory {
@@ -45,6 +49,8 @@ impl SourceDirectory {
         let mut result = Self {
             root,
             edges: Vec::with_capacity(names.len()),
+            #[cfg(target_os = "linux")]
+            target: path.to_path_buf(),
         };
         for (index, name) in names.iter().enumerate() {
             let parent = result.current_fd();
@@ -86,6 +92,11 @@ impl SourceDirectory {
 
     pub(in crate::qualification_cache_payload) fn fd(&self) -> &rustix::fd::OwnedFd {
         self.edges.last().map_or(&self.root, |edge| &edge.child)
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(in crate::qualification_cache_payload) fn target(&self) -> &Path {
+        &self.target
     }
 
     pub(in crate::qualification_cache_payload) fn revalidate(&self) -> Result<(), &'static str> {

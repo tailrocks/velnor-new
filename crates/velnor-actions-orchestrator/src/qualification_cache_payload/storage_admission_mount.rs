@@ -2,6 +2,10 @@
 
 use super::super::storage_admission_types::JobFactsMountV1;
 
+#[path = "storage_admission_mount/mountinfo.rs"]
+mod mountinfo;
+use mountinfo::{read_mountinfo, validate_mountinfo, validate_work_mountinfo};
+
 const JOB_FACTS_DIRECTORY: &str = "/opt/velnor/job-facts";
 const JOB_FACTS_FILE: &str = "storage-cache-admission.json";
 const MOUNTINFO_PATH: &str = "/proc/self/mountinfo";
@@ -19,8 +23,7 @@ pub(super) struct MountObservation {
 
 impl MountObservation {
     pub(super) fn agrees_with(self, expected: &JobFactsMountV1) -> bool {
-        self.mount_id == expected.guest_mount_id
-            && self.device_major == expected.guest_device_major
+        self.device_major == expected.guest_device_major
             && self.device_minor == expected.guest_device_minor
             && self.directory_device == expected.guest_directory_device
             && self.directory_inode == expected.guest_directory_inode
@@ -149,23 +152,27 @@ fn observe_job_facts_mount(
 
 #[cfg(target_os = "linux")]
 fn validate_current_mountinfo(observation: MountObservation) -> Result<(), &'static str> {
-    use std::fs::File;
-    use std::io::Read;
+    let mountinfo = read_mountinfo()?;
+    validate_mountinfo(&mountinfo, observation)
+}
 
-    let mut mountinfo =
-        File::open(MOUNTINFO_PATH).map_err(|_| "cache_storage_mountinfo_read_failed")?;
-    let mut mountinfo_bytes = Vec::new();
-    (&mut mountinfo)
-        .take(u64::try_from(MAX_MOUNTINFO_BYTES + 1).unwrap_or(u64::MAX))
-        .read_to_end(&mut mountinfo_bytes)
-        .map_err(|_| "cache_storage_mountinfo_read_failed")?;
-    if mountinfo_bytes.len() > MAX_MOUNTINFO_BYTES {
-        return Err("cache_storage_mountinfo_too_large");
-    }
-    let mountinfo =
-        std::str::from_utf8(&mountinfo_bytes).map_err(|_| "cache_storage_mountinfo_invalid")?;
-    validate_mountinfo(mountinfo, observation)?;
-    Ok(())
+pub(super) fn validate_current_work_mountinfo(
+    target: &std::path::Path,
+    mount_id: u64,
+    device_major: u32,
+    device_minor: u32,
+) -> Result<(), &'static str> {
+    let mountinfo = read_mountinfo()?;
+    let target = target
+        .to_str()
+        .filter(|value| {
+            value.starts_with('/')
+                && !value
+                    .bytes()
+                    .any(|byte| byte.is_ascii_whitespace() || byte == b'\\')
+        })
+        .ok_or("cache_storage_mount_path_invalid")?;
+    validate_work_mountinfo(&mountinfo, target, mount_id, device_major, device_minor)
 }
 
 #[cfg(target_os = "linux")]
@@ -219,60 +226,10 @@ fn read_projection_file(directory: &rustix::fd::OwnedFd) -> Result<Vec<u8>, &'st
     Ok(bytes)
 }
 
-fn validate_mountinfo(mountinfo: &str, expected: MountObservation) -> Result<(), &'static str> {
-    let mut found = false;
-    for line in mountinfo.lines() {
-        let mut halves = line.splitn(2, " - ");
-        let left = halves.next().ok_or("cache_storage_mountinfo_invalid")?;
-        let right = halves.next().ok_or("cache_storage_mountinfo_invalid")?;
-        let fields = left.split_ascii_whitespace().collect::<Vec<_>>();
-        if fields.len() < 6 {
-            return Err("cache_storage_mountinfo_invalid");
-        }
-        if fields[4] != JOB_FACTS_DIRECTORY {
-            continue;
-        }
-        if found {
-            return Err("cache_storage_mount_ambiguous");
-        }
-        found = true;
-        let mount_id = fields[0]
-            .parse::<u64>()
-            .map_err(|_| "cache_storage_mountinfo_invalid")?;
-        let mut device = fields[2].split(':');
-        let major = device
-            .next()
-            .ok_or("cache_storage_mountinfo_invalid")?
-            .parse::<u32>()
-            .map_err(|_| "cache_storage_mountinfo_invalid")?;
-        let minor = device
-            .next()
-            .ok_or("cache_storage_mountinfo_invalid")?
-            .parse::<u32>()
-            .map_err(|_| "cache_storage_mountinfo_invalid")?;
-        if device.next().is_some() {
-            return Err("cache_storage_mountinfo_invalid");
-        }
-        let mount_options = fields[5].split(',').collect::<Vec<_>>();
-        if mount_id != expected.mount_id
-            || major != expected.device_major
-            || minor != expected.device_minor
-            || !mount_options.contains(&"ro")
-            || right.trim().is_empty()
-        {
-            return Err("cache_storage_mount_not_read_only_bind");
-        }
-    }
-    if found {
-        Ok(())
-    } else {
-        Err("cache_storage_mount_missing")
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{MountObservation, validate_mountinfo};
+    use super::{MountObservation, validate_mountinfo, validate_work_mountinfo};
+    use crate::qualification_cache_payload::storage_admission_types::JobFactsMountV1;
 
     fn observation() -> MountObservation {
         MountObservation {
@@ -314,6 +271,27 @@ mod tests {
     }
 
     #[test]
+    fn job_facts_checks_stable_directory_identity_across_namespaces() {
+        let expected = JobFactsMountV1 {
+            target: "/opt/velnor/job-facts".to_owned(),
+            read_only: true,
+            host_directory_device: 55,
+            host_directory_inode: 77,
+            guest_mount_id: 5,
+            guest_device_major: 0,
+            guest_device_minor: 55,
+            guest_directory_device: 55,
+            guest_directory_inode: 77,
+        };
+        let observed = observation();
+        assert_ne!(observed.mount_id, expected.guest_mount_id);
+        assert!(observed.agrees_with(&expected));
+        let mut foreign = expected;
+        foreign.guest_directory_inode += 1;
+        assert!(!observed.agrees_with(&foreign));
+    }
+
+    #[test]
     fn mountinfo_rejects_duplicate_targets_and_nonexact_paths() {
         let duplicated = format!(
             "{}{}",
@@ -330,6 +308,64 @@ mod tests {
                 observation()
             ),
             Err("cache_storage_mount_missing")
+        );
+    }
+
+    #[test]
+    fn work_mountinfo_uses_the_job_namespace_identity() {
+        assert_eq!(
+            validate_work_mountinfo(
+                "87 25 0:55 / /__w rw,relatime - ext4 /dev/vda rw\n",
+                "/__w",
+                87,
+                0,
+                55,
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            validate_work_mountinfo(
+                "42 25 0:55 / /__w rw,relatime - ext4 /dev/vda rw\n",
+                "/__w",
+                87,
+                0,
+                55,
+            ),
+            Err("cache_storage_mount_not_read_only_bind")
+        );
+        assert_eq!(
+            validate_work_mountinfo(
+                "87 25 0:55 / /__w ro,relatime - ext4 /dev/vda ro\n",
+                "/__w",
+                87,
+                0,
+                55,
+            ),
+            Err("cache_storage_mount_not_read_only_bind")
+        );
+    }
+
+    #[test]
+    fn temp_and_work_mounts_use_the_deepest_local_mount() {
+        let mountinfo = concat!(
+            "87 25 0:55 / /__w rw,relatime - ext4 /dev/vda rw\n",
+            "88 87 0:56 / /__w/_temp rw,relatime - ext4 /dev/vdb rw\n",
+        );
+        assert_eq!(
+            validate_work_mountinfo(mountinfo, "/__w/_temp", 88, 0, 56),
+            Ok(())
+        );
+        assert_eq!(
+            validate_work_mountinfo(mountinfo, "/__w/_temp/cache", 88, 0, 56),
+            Ok(())
+        );
+        assert_eq!(
+            validate_work_mountinfo(mountinfo, "/__w/_temp", 87, 0, 55),
+            Err("cache_storage_mount_not_read_only_bind")
+        );
+        assert_eq!(
+            validate_work_mountinfo(mountinfo, "/__w", 87, 0, 55),
+            Ok(())
         );
     }
 }

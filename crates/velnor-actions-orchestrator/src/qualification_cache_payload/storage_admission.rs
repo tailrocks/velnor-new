@@ -43,7 +43,6 @@ pub(super) struct VerifiedCacheBudget {
 #[cfg(target_os = "linux")]
 #[derive(Debug, Clone, Copy)]
 pub(super) struct RunnerWorkFilesystem {
-    mount_id: u64,
     device_major: u32,
     device_minor: u32,
     statx_device_major: u32,
@@ -186,7 +185,6 @@ fn budget_from_document(document: &StorageCacheAdmissionV1) -> VerifiedCacheBudg
     let runner_work = {
         let work = &document.instance_binding.roles[2];
         RunnerWorkFilesystem {
-            mount_id: work.mount_id,
             device_major: work.device_major,
             device_minor: work.device_minor,
             statx_device_major: work.statx_device_major,

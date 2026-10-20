@@ -41,17 +41,17 @@ pub(in crate::qualification_cache_payload) fn observe_cache_storage(
     #[cfg(target_os = "linux")]
     {
         let expected = budget.runner_work();
-        let fresh_capacity = filesystem_capacity(work_anchor.fd(), expected)?;
+        let fresh_capacity = filesystem_capacity(work_anchor.fd(), expected, work_anchor.target())?;
         let live_usage = match live {
             Some(directory) => {
-                filesystem_capacity(directory.fd(), expected)?;
+                filesystem_capacity(directory.fd(), expected, directory.target())?;
                 measure_tree(directory.fd())?
             }
             None => CacheTreeUsage::default(),
         };
         let stage_usage = match stage {
             Some(directory) => {
-                filesystem_capacity(directory.fd(), expected)?;
+                filesystem_capacity(directory.fd(), expected, directory.target())?;
                 measure_tree(directory.fd())?
             }
             None => CacheTreeUsage::default(),
@@ -69,6 +69,7 @@ pub(in crate::qualification_cache_payload) fn observe_cache_storage(
 fn filesystem_capacity(
     directory: &rustix::fd::OwnedFd,
     expected: RunnerWorkFilesystem,
+    target: &std::path::Path,
 ) -> Result<FreshCapacity, &'static str> {
     use rustix::fs::{AtFlags, StatxFlags, fstatfs, fstatvfs, statx};
 
@@ -84,7 +85,6 @@ fn filesystem_capacity(
     .map_err(|_| "cache_storage_filesystem_observation_failed")?;
     let mask = StatxFlags::from_bits_retain(observed.stx_mask);
     if !mask.contains(StatxFlags::BASIC_STATS | StatxFlags::MNT_ID)
-        || observed.stx_mnt_id != expected.mount_id
         || observed.stx_dev_major != expected.statx_device_major
         || observed.stx_dev_minor != expected.statx_device_minor
         || rustix::fs::major(device) != expected.device_major
@@ -92,6 +92,12 @@ fn filesystem_capacity(
     {
         return Err("cache_storage_filesystem_identity_mismatch");
     }
+    super::mount::validate_current_work_mountinfo(
+        target,
+        observed.stx_mnt_id,
+        observed.stx_dev_major,
+        observed.stx_dev_minor,
+    )?;
     let filesystem =
         fstatfs(directory).map_err(|_| "cache_storage_filesystem_observation_failed")?;
     if u64::try_from(filesystem.f_type).map_err(|_| "cache_storage_filesystem_identity_invalid")?
