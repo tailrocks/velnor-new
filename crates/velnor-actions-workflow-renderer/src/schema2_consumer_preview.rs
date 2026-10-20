@@ -50,6 +50,8 @@ pub struct ConsumerRollingPreviewSpec {
 pub struct ConsumerReleaseSpec {
     /// Official generator version used by all isolated helpers.
     pub generator_version: String,
+    /// Fetch LFS objects in every existing source checkout when explicitly enabled.
+    pub checkout_lfs: bool,
     /// Closed product inventory and source repository identity.
     pub policy: PackageReleasePolicy,
     /// Producer platform selected by validated native configuration.
@@ -239,7 +241,7 @@ pub(super) fn eligibility(
         ),
         fields,
         vec![
-            steps::history_checkout(),
+            steps::history_checkout(spec),
             setup(&spec.linux_setup),
             run_step(
                 "Install pinned GitHub CLI",

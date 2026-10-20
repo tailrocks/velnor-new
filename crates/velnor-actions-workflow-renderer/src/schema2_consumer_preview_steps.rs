@@ -91,21 +91,22 @@ pub(in crate::schema2) fn script(name: &str, id: &str, run: &str, env: &[(&str, 
     ])
 }
 
-pub(in crate::schema2) fn checkout(source_ref: &str) -> Yaml {
+pub(in crate::schema2) fn checkout(spec: &ConsumerReleaseSpec, source_ref: &str) -> Yaml {
+    let mut inputs = vec![
+        ("ref".to_owned(), Yaml::str(source_ref)),
+        ("fetch-depth".to_owned(), Yaml::Int(0)),
+        ("persist-credentials".to_owned(), Yaml::Bool(false)),
+    ];
+    if spec.checkout_lfs {
+        inputs.push(("lfs".to_owned(), Yaml::str("true")));
+    }
     Yaml::Map(vec![
         (
             "name".to_owned(),
             Yaml::str("Check out exact source with complete history"),
         ),
         ("uses".to_owned(), Yaml::str(CHECKOUT_USES)),
-        (
-            "with".to_owned(),
-            Yaml::Map(vec![
-                ("ref".to_owned(), Yaml::str(source_ref)),
-                ("fetch-depth".to_owned(), Yaml::Int(0)),
-                ("persist-credentials".to_owned(), Yaml::Bool(false)),
-            ]),
-        ),
+        ("with".to_owned(), Yaml::Map(inputs)),
     ])
 }
 
@@ -174,8 +175,8 @@ fn source_operation_script(op: &str, run: String) -> String {
 mod evidence;
 pub(in crate::schema2) use evidence::{Artifact, attest, transfer};
 
-pub(in crate::schema2) fn history_checkout() -> Yaml {
-    checkout("${{ github.sha }}")
+pub(in crate::schema2) fn history_checkout(spec: &ConsumerReleaseSpec) -> Yaml {
+    checkout(spec, "${{ github.sha }}")
 }
 
 pub(in crate::schema2) fn history_count(context: super::TapInvocationContext) -> Yaml {

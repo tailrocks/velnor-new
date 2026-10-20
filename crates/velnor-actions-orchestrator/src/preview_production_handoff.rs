@@ -85,7 +85,7 @@ pub(super) fn write_task_request(
         || checkpoint(deadline),
     )?;
     let bytes = canonical_json_bytes(&TaskRequest {
-        schema: "velnor.preview-task.v1",
+        schema: "velnor.release-task.v1",
         request,
         inputs,
     })

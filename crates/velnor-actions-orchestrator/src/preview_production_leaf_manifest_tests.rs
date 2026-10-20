@@ -220,3 +220,28 @@ fn native_metadata_is_canonical_and_rejects_unknown_fields() {
         .is_err()
     );
 }
+
+#[test]
+fn task_handoff_emits_channel_neutral_schema_and_exact_bound_request() {
+    let root = tempfile::tempdir().expect("owned handoff");
+    let path = root.path().canonicalize().expect("canonical owned handoff");
+    let request = request();
+    let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(5))
+        .expect("deadline");
+    let handoff = super::super::handoff::write_task_request(&path, &request, &[], deadline)
+        .expect("write actual handoff");
+    assert_eq!(
+        handoff.path.file_name().expect("filename"),
+        "release-task-request.json"
+    );
+    let bytes = std::fs::read(&handoff.path).expect("handoff bytes");
+    let value: serde_json::Value = serde_json::from_slice(&bytes).expect("task JSON");
+    assert_eq!(value["schema"], "velnor.release-task.v1");
+    assert_eq!(
+        value["request"],
+        serde_json::to_value(&request).expect("request")
+    );
+    assert_eq!(value["inputs"], serde_json::json!([]));
+    assert_eq!(bytes, canonical_json_bytes(&value).expect("canonical task"));
+    handoff.verify(deadline).expect("unchanged held task files");
+}

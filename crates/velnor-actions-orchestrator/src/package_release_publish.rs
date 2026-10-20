@@ -116,7 +116,11 @@ fn publish_backend(
             published::verify_published_release(&backend.signed)?;
             Ok(outcome)
         }
-        PackageReleaseChannel::Stable => publish_package_release(backend),
+        PackageReleaseChannel::Stable => {
+            let outcome = publish_package_release(backend)?;
+            published::verify_published_release(&backend.signed)?;
+            Ok(outcome)
+        }
     }
 }
 
@@ -145,6 +149,8 @@ struct GitHubPackagePublisher {
     tag: String,
     recovery_body: String,
     current_ci: (u64, u32),
+    stable_origin: Option<stable_tag_origin::StableOriginProof>,
+    stable_observation: Option<backend::stable::Observation>,
     original_verification: OriginalVerification,
     original_closure: std::sync::Arc<crate::filesystem_owner::held_directory::HeldDirectory>,
 }
@@ -170,9 +176,22 @@ impl GitHubPackagePublisher {
             recovery_body,
             receipt,
             current_ci,
+            stable_origin: None,
+            stable_observation: None,
             original_verification,
             original_closure,
         })
+    }
+
+    fn verify_stable_origin(&mut self) -> Result<(), OrchestratorError> {
+        if self.stable_origin.is_none() {
+            let proof = stable_tag_origin::admit_signed_origin(&self.api, &self.signed)?;
+            self.stable_origin = Some(proof);
+        }
+        self.stable_origin
+            .as_ref()
+            .ok_or_else(|| internal("stable_origin_missing"))?
+            .verify_local(&self.signed)
     }
 
     fn release_list(&self) -> Result<Vec<ReleaseResponse>, OrchestratorError> {
@@ -184,12 +203,13 @@ impl GitHubPackagePublisher {
     }
 
     fn remote_state(
-        &self,
+        &mut self,
         release: &ReleaseResponse,
         tag: TagObservation,
     ) -> Result<PublicationState, OrchestratorError> {
         require_stable(self.receipt.channel)?;
-        stable_tag_origin::verify_signed_origin(&self.signed)?;
+        admit_stable_release_lifecycle(release, &self.tag)?;
+        self.verify_stable_origin()?;
         let assets = self.api.remote_assets(release)?;
         if release.draft == Some(true) {
             return Ok(PublicationState::Draft {
@@ -218,6 +238,22 @@ impl GitHubPackagePublisher {
             immutable: release.immutable == Some(true) && release.prerelease == Some(false),
         })
     }
+}
+
+fn admit_stable_release_lifecycle(
+    release: &ReleaseResponse,
+    expected_tag: &str,
+) -> Result<(), OrchestratorError> {
+    if release.id == 0
+        || release.tag_name != expected_tag
+        || release.prerelease != Some(false)
+        || release.draft.is_none()
+        || (release.draft == Some(true) && release.immutable != Some(false))
+    {
+        return Err(internal("stable_release_lifecycle_invalid"));
+    }
+    // Published immutability is independently required by the publication planner.
+    Ok(())
 }
 
 fn require_stable(channel: PackageReleaseChannel) -> Result<(), OrchestratorError> {

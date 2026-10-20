@@ -302,8 +302,10 @@ fn source_steps(spec: &ConsumerReleaseSpec, id: &str) -> Result<Vec<Yaml>, Rende
     let runner = spec.producer_runner.runs_on();
     crate::toolchain_env::check_toolchain_homes(&spec.producer_cargo_env)?;
     crate::toolchain_env::reject_denied_step_keys(&spec.producer_cargo_env)?;
-    let checkout =
-        steps::checkout(super::TapInvocationContext::for_channel(spec.policy.channel).source());
+    let checkout = steps::checkout(
+        spec,
+        super::TapInvocationContext::for_channel(spec.policy.channel).source(),
+    );
     let mut producer_steps = vec![
         checkout,
         run_step(

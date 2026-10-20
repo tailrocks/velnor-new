@@ -390,3 +390,6 @@ fn native_binary_generation_rejects_noncanonical_ci_names_before_discovery() -> 
     }
     Ok(())
 }
+
+#[path = "impl_schema2_binary_lfs.rs"]
+mod lfs;

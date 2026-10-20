@@ -78,7 +78,7 @@ fn prepare(
         false,
         context,
     )?);
-    job_steps.push(steps::checkout(context.source()));
+    job_steps.push(steps::checkout(spec, context.source()));
     job_steps.push(operation(
         spec,
         tap,

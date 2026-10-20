@@ -126,7 +126,7 @@ fn selection(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), RenderError> 
         id,
         fields,
         vec![
-            steps::history_checkout(),
+            steps::history_checkout(spec),
             steps::setup(&spec.linux_setup),
             run_step(
                 "Install pinned GitHub CLI",

@@ -40,19 +40,20 @@ pub trait PackagePublicationBackend {
     /// # Errors
     /// Rejects malformed, unavailable, or contradictory eligibility evidence.
     fn candidate_current(&mut self) -> Result<bool, OrchestratorError>;
-    /// Create the deterministic receipt-bound annotated tag without force or replacement.
+    /// Consume observed action authority and recheck freshness before tag mutation.
     /// # Errors
     /// Rejects an existing reference, stale authority, or a failed tag mutation.
     fn create_tag(&mut self) -> Result<(), OrchestratorError>;
-    /// Create an unpublished prerelease draft without replacing an existing release.
+    /// Consume observed action authority and recheck freshness before creating a draft.
     /// # Errors
     /// Rejects an existing conflicting release or a failed draft mutation.
     fn create_draft(&mut self) -> Result<(), OrchestratorError>;
-    /// Upload one missing original asset exclusively. Existing names must conflict.
+    /// Consume the exact observed release/action, then recheck live authority and upload.
+    /// Existing names must conflict; no later release reselection is permitted.
     /// # Errors
     /// Rejects an existing asset name, changed original bytes, or a failed upload.
     fn upload_original_asset(&mut self, name: &str) -> Result<(), OrchestratorError>;
-    /// Publish the complete draft as an immutable prerelease, never as latest.
+    /// Consume the exact observed draft/action and recheck authority before publication.
     /// # Errors
     /// Rejects incomplete assets, stale eligibility, or a failed publication.
     fn publish_draft(&mut self) -> Result<(), OrchestratorError>;
@@ -93,22 +94,17 @@ pub fn publish_package_release(
         }
         let observed = backend.observe()?;
         let available = backend.available_original_assets()?;
-        let current = if matches!(observed, PublicationState::Published { .. }) {
-            false
-        } else {
-            backend.candidate_current()?
-        };
+        // Eligibility here is only a proposal; each backend write consumes its
+        // observation and checks live authority at its actual transport boundary.
+        let current = true;
         match publication_action(&expected, &observed, current, &available) {
             PublicationAction::CreateTagAndDraft => {
-                require_current(backend)?;
                 backend.create_tag()?;
             }
             PublicationAction::CreateDraft => {
-                require_current(backend)?;
                 backend.create_draft()?;
             }
             PublicationAction::CompleteDraft { missing_assets } => {
-                require_current(backend)?;
                 if let Some(name) = missing_assets.first() {
                     backend.upload_original_asset(name)?;
                 } else {
@@ -129,14 +125,6 @@ pub fn publish_package_release(
         }
     }
     Err(internal("package_publication_postcondition_not_reached"))
-}
-
-fn require_current(backend: &mut impl PackagePublicationBackend) -> Result<(), OrchestratorError> {
-    if backend.candidate_current()? {
-        Ok(())
-    } else {
-        Err(internal("package_publication_refused:StaleCandidate"))
-    }
 }
 
 #[cfg(test)]

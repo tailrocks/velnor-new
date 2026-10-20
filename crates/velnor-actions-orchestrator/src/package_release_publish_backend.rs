@@ -2,14 +2,15 @@
 
 use super::{
     GitHubPackagePublisher, OrchestratorError, OriginalVerification,
-    github::{ReleaseResponse, encode_segment, sha256, unique_release},
+    github::{ReleaseResponse, encode_segment, sha256},
     identity::{local_identity, read_regular},
     internal, make_latest, require_stable,
     run_identity::RunSource,
-    stable_tag_origin,
 };
 use crate::package_publication::PackagePublicationBackend;
 use std::collections::BTreeSet;
+#[path = "package_release_publish_stable.rs"]
+pub(super) mod stable;
 use velnor_actions_contract::{
     package_release::PackageReleaseChannel,
     publication_retry::{PublicationIdentity, PublicationState},
@@ -40,36 +41,38 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
             return Err(internal("package_publish_original_changed"));
         }
         if self.receipt.channel == PackageReleaseChannel::Stable {
-            stable_tag_origin::verify_signed_origin(&self.signed)?;
+            self.verify_stable_origin()?;
         }
         Ok(identity)
     }
 
     fn observe(&mut self) -> Result<PublicationState, OrchestratorError> {
+        self.stable_observation = None;
         require_stable(self.receipt.channel)?;
         self.verify_remote_repository()?;
-        let tag = self.api.tag_identity(&self.tag)?;
-        if self.receipt.channel == PackageReleaseChannel::Stable && tag.is_none() {
-            return Err(internal("stable_authorized_tag_missing"));
-        }
+        self.verify_stable_origin()?;
+        let tag = self
+            .api
+            .tag_identity(&self.tag)?
+            .ok_or_else(|| internal("stable_authorized_tag_missing"))?;
         let releases = self.release_list()?;
         if releases.len() > 1 {
             return Err(internal("package_publish_duplicate_release_tag"));
         }
-        let Some(release) = releases.first() else {
-            let tag = tag.ok_or_else(|| internal("stable_authorized_tag_missing"))?;
-            stable_tag_origin::verify_signed_origin(&self.signed)?;
+        let Some(mut release) = releases.into_iter().next() else {
             if tag.source_sha != self.identity.source_sha {
                 return Err(internal("stable_authorized_tag_source_changed"));
             }
-            return Ok(PublicationState::AuthorizedStableTag {
+            let state = PublicationState::AuthorizedStableTag {
                 identity: self.identity.clone(),
-            });
+            };
+            self.stable_observation = Some(stable::capture(&state, None));
+            return Ok(state);
         };
-        let Some(tag) = tag else {
-            return Err(internal("package_publish_release_tag_missing"));
-        };
-        self.remote_state(release, tag)
+        release.assets = self.api.complete_release_assets(release.id)?;
+        let state = self.remote_state(&release, tag)?;
+        self.stable_observation = Some(stable::capture(&state, Some(&release)));
+        Ok(state)
     }
 
     fn available_original_assets(&mut self) -> Result<BTreeSet<String>, OrchestratorError> {
@@ -90,7 +93,12 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
                 self.receipt.channel,
                 &self.receipt.source.default_branch,
             )?;
-            stable_tag_origin::verify_signed_origin(&self.signed)?;
+            self.verify_stable_origin()?;
+            stable::verify_current_ci(self)?;
+            self.stable_origin
+                .as_ref()
+                .ok_or_else(|| internal("stable_origin_missing"))?
+                .verify_tag(&self.api)?;
             self.original_closure.verify()?;
             return Ok(true);
         }
@@ -120,7 +128,9 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
     }
 
     fn create_draft(&mut self) -> Result<(), OrchestratorError> {
+        let observed = stable::take(self, &stable::Action::Draft)?;
         require_stable(self.receipt.channel)?;
+        stable::authorize(self, observed)?;
         let prerelease = false;
         self.api.post_fields(
             &self.api.route("releases"),
@@ -138,6 +148,7 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
     }
 
     fn upload_original_asset(&mut self, name: &str) -> Result<(), OrchestratorError> {
+        let observed = stable::take(self, &stable::Action::Upload(name))?;
         require_stable(self.receipt.channel)?;
         let expected = self
             .identity
@@ -149,20 +160,21 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
         if &sha256(&bytes) != expected {
             return Err(internal("package_publish_original_asset_changed"));
         }
-        let releases = self.release_list()?;
-        let release = unique_release(&releases, &self.tag)?;
+        let release_id = stable::authorize(self, observed)?
+            .ok_or_else(|| internal("stable_write_release_missing"))?;
         let route = format!(
             "{}?name={}",
-            self.api.route(&format!("releases/{}/assets", release.id)),
+            self.api.route(&format!("releases/{release_id}/assets")),
             encode_segment(name)
         );
         self.api.upload_file(&route, &path)
     }
 
     fn publish_draft(&mut self) -> Result<(), OrchestratorError> {
-        let releases = self.release_list()?;
-        let release = unique_release(&releases, &self.tag)?;
-        let route = self.api.route(&format!("releases/{}", release.id));
+        let observed = stable::take(self, &stable::Action::Publish)?;
+        let release_id = stable::authorize(self, observed)?
+            .ok_or_else(|| internal("stable_write_release_missing"))?;
+        let route = self.api.route(&format!("releases/{release_id}"));
         require_stable(self.receipt.channel)?;
         let prerelease = false;
         let make_latest = make_latest(self.receipt.channel);

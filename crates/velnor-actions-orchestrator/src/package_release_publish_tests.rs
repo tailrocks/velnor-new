@@ -110,3 +110,49 @@ fn immutable_backend_rejects_preview_channel() {
     assert!(require_stable(PackageReleaseChannel::Stable).is_ok());
     assert!(require_stable(PackageReleaseChannel::Preview).is_err());
 }
+
+#[test]
+fn stable_release_json_lifecycle_admission_rejects_unknown_or_malformed_drafts() {
+    use serde_json::{Value, json};
+    let draft = json!({"id":42,"tag_name":"v1.2.3","draft":true,"prerelease":false,"immutable":false,"assets":[]});
+    let parse =
+        |value| serde_json::from_value::<ReleaseResponse>(value).expect("actual release response");
+    admit_stable_release_lifecycle(&parse(draft.clone()), "v1.2.3")
+        .expect("native mutable stable draft");
+    for (field, replacement) in [
+        ("id", json!(0)),
+        ("tag_name", json!("preview")),
+        ("draft", Value::Null),
+        ("prerelease", json!(true)),
+        ("prerelease", Value::Null),
+        ("immutable", json!(true)),
+        ("immutable", Value::Null),
+    ] {
+        let mut changed = draft.clone();
+        changed[field] = replacement;
+        assert!(
+            admit_stable_release_lifecycle(&parse(changed), "v1.2.3").is_err(),
+            "{field}"
+        );
+    }
+    for missing in ["draft", "prerelease", "immutable"] {
+        let mut changed = draft.clone();
+        changed.as_object_mut().expect("object").remove(missing);
+        assert!(
+            admit_stable_release_lifecycle(&parse(changed), "v1.2.3").is_err(),
+            "missing {missing}"
+        );
+    }
+    let mut published = draft;
+    published["draft"] = json!(false);
+    published["immutable"] = json!(true);
+    admit_stable_release_lifecycle(&parse(published.clone()), "v1.2.3")
+        .expect("immutable stable publication");
+    for immutable in [json!(false), Value::Null] {
+        published["immutable"] = immutable;
+        let response = parse(published.clone());
+        admit_stable_release_lifecycle(&response, "v1.2.3")
+            .expect("published planner owns immutability verdict");
+        assert_ne!(response.immutable, Some(true));
+    }
+}

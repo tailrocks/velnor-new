@@ -34,6 +34,8 @@ use velnor_actions_orchestrator::{
     write_preseed_manifest, write_request, write_task_report,
 };
 
+#[path = "dispatch/fileless.rs"]
+mod fileless;
 #[path = "dispatch_preview_production.rs"]
 mod preview_production;
 mod public;
@@ -95,31 +97,16 @@ pub(crate) fn try_internal() -> Option<ExitCode> {
 /// takes no request file either: runner temp scopes its output.
 fn gate_request() -> Option<InternalRequest> {
     let op = internal_op()?;
-    if op == InternalOp::ResolveTaskExecution {
-        if !env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
-            return None;
-        }
-        return runner_velnor_dir().map(|path| InternalRequest { op, path });
-    }
-    if op == InternalOp::Fetch || op == InternalOp::Report || op == InternalOp::ExecuteCheck {
-        if env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
-            return runner_velnor_dir().map(|path| InternalRequest { op, path });
-        }
-        return None;
-    }
-    if op == InternalOp::PrivateFetch || op == InternalOp::PrivateRevoke {
-        return runner_velnor_dir().map(|path| InternalRequest { op, path });
-    }
-    if op == InternalOp::PreseedManifest {
-        return runner_velnor_dir().map(|path| InternalRequest { op, path });
-    }
-    if op == InternalOp::RepoPolicy {
-        let root = crate::dispatch_repo_policy::gate_root()?;
-        return Some(InternalRequest { op, path: root });
+    if fileless::uses_runner_temp_gate(op) {
+        return fileless::gate_runner_temp_operation(op);
     }
     let path = env::var_os(REQUEST_FILE_ENV)
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)?;
+    gate_file_request(op, path)
+}
+
+fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
     match op {
         InternalOp::TapContinuation => {
             return tap_continuation::gate_request(&path).map(|path| InternalRequest { op, path });
@@ -188,17 +175,6 @@ fn request_can_be_materialized(path: &Path) -> bool {
     !path.exists()
         && env::var(GITHUB_EVENT_ENV).is_ok_and(|name| !name.is_empty())
         && env::var_os(GITHUB_EVENT_PATH_ENV).is_some_and(|value| !value.is_empty())
-}
-
-/// Runner-temp velnor directory for file-less private operations.
-///
-/// `None` when `RUNNER_TEMP` is unset or empty; shared by the fetch,
-/// report, and preseed-manifest gate branches so the scoping rule has
-/// one definition.
-fn runner_velnor_dir() -> Option<PathBuf> {
-    env::var_os(RUNNER_TEMP_ENV)
-        .filter(|value| !value.is_empty())
-        .map(|temp| Path::new(&temp).join("velnor"))
 }
 
 /// Run one validated private operation.

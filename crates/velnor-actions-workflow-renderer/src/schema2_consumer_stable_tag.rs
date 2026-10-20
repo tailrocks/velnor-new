@@ -19,7 +19,7 @@ pub(super) fn prepare(
     fields.push(("environment".to_owned(), Yaml::str("release")));
     let mut steps = bootstrap(spec, "stable-prepare")?;
     steps.push(configuration(stable)?);
-    steps.push(metadata_checkout());
+    steps.push(metadata_checkout(spec));
     steps.push(prepare_plz(stable)?);
     Ok(finish("stable-prepare", fields, steps))
 }
@@ -113,8 +113,8 @@ fn configuration(stable: &ConsumerStableReleaseSpec) -> Result<Yaml, RenderError
         &[("VELNOR_STABLE_FIXED_CONFIG", &config)],
     ))
 }
-fn metadata_checkout() -> Yaml {
-    steps::checkout("${{ needs.stable-eligibility.outputs.source_sha }}")
+fn metadata_checkout(spec: &ConsumerReleaseSpec) -> Yaml {
+    steps::checkout(spec, "${{ needs.stable-eligibility.outputs.source_sha }}")
 }
 fn prepare_plz(stable: &ConsumerStableReleaseSpec) -> Result<Yaml, RenderError> {
     let prefix = join_argv_for_run(&stable.release_plz_argv)?;

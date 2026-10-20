@@ -26,6 +26,7 @@ pub(super) fn fixture() -> ConsumerReleaseSpec {
         sha256: "a".repeat(64), commit: "b".repeat(40),
     }, vec!["sh".to_owned(), "-c".to_owned(), r#"curl -fsSL "$VELNOR_ASSET_URL" -o "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.12" && printf '%s  %s\n' "$VELNOR_ASSET_SHA256" "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.12" | sha256sum -c -"#.to_owned()]).expect("pinned helper");
     ConsumerReleaseSpec {
+        checkout_lfs: false,
         stable: None,
         preview: Some(ConsumerRollingPreviewSpec {
             release_id: 123,
@@ -363,3 +364,6 @@ fn tap_updater_rejects_self_hosted_execution_without_native_provisioning() {
 
 #[path = "schema2_consumer_preview_trigger_tests.rs"]
 mod triggers;
+
+#[path = "schema2_consumer_release_lfs_tests.rs"]
+mod lfs;

@@ -31,7 +31,7 @@ mod tag;
 pub use admission::admit_stable_tag_origin_from_env;
 pub(crate) use admission::{admitted_policy_plan, admitted_production_context};
 use io::{ensure_directory, read_metadata, write_new};
-pub(super) use retained::verify_signed_origin;
+pub(super) use retained::{StableOriginProof, admit_signed_origin, verify_signed_origin};
 use tag::{create_or_resume_tag, observe_tag};
 
 #[path = "stable_tag_origin_selector.rs"]

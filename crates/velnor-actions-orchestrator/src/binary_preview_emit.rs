@@ -85,6 +85,7 @@ pub(crate) fn specification(
         &crate::source_prep::lockful_roots(&prep.root, &prep.discovery.workspaces),
     )?;
     let spec = ConsumerReleaseSpec {
+        checkout_lfs: prep.config.workflow.checkout_lfs,
         generator_version: version.to_owned(),
         policy,
         producer_runner: release.producer.runner,

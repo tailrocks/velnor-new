@@ -4,7 +4,7 @@ use crate::schema2::{
     ConsumerReleaseSpec, ConsumerStableReleaseSpec, render_consumer_binary_release,
 };
 use velnor_actions_contract::package_release::PackageReleaseChannel;
-fn stable() -> ConsumerReleaseSpec {
+pub(super) fn stable() -> ConsumerReleaseSpec {
     let mut spec = fixture();
     spec.policy.channel = PackageReleaseChannel::Stable;
     spec.preview = None;
