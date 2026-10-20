@@ -1121,27 +1121,27 @@ jobs:
     name: Rust / velnor-runner-attestation
     runs-on: ubuntu-26.04
     timeout-minutes: 5
-    env: *m13
+    env: *m15
     needs:
       - plan
     if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-runner-attestation,')"
     steps:
-      - *s1
       - *s2
-      - *s10
-      - *s16
       - *s3
-      - *s6
-      - *s7
-      - *s8
-      - *s9
-      - *s17
-      - *s18
-      - *s19
-      - *s11
-      - *s23
       - *s13
+      - *s19
+      - *s4
+      - *s9
+      - *s10
+      - *s11
+      - *s12
+      - *s20
+      - *s21
       - *s22
+      - *s14
+      - *s26
+      - *s16
+      - *s25
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-ec9eb6949317945556837acce161dfd4f2fb79d99ff5702546ecab3b7f9b54f5"}
@@ -1172,7 +1172,7 @@ jobs:
           overwrite: "true"
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-      - *s24
+      - *s27
   rust-velnor-runner-cli:
     name: Rust / velnor-runner-cli
     runs-on: ubuntu-26.04
