@@ -80,7 +80,7 @@ The generator crates MUST NOT implement a runner, a Scale Set client, or an Acti
 24. [Resource probe controller](resource-probe-controller.md) defines controller-side guest probe execution and parsing.
 25. [Runner resource admission](runner-resource-admission.md) defines candidate job admission and resource enforcement.
 26. [GitHub Actions reference](github-actions-reference.md) defines source repository requirements and fidelity contracts.
-28. [Private sources contract](private-sources-contract.md) defines private cross-repository dependency credentials (HD-7): the `[private_sources]` config, `.velnor/deps.lock`, the mint, fetch and revoke steps, and the credential boundary.
 27. [Image publication contract](image-publication-contract.md) defines `[[images]]`, Dockerfile pinning rules, and the build, publish and promote jobs.
+28. [Private sources contract](private-sources-contract.md) defines private cross-repository dependency credentials (HD-7): the `[private_sources]` config, `.velnor/deps.lock`, the mint, fetch and revoke steps, and the credential boundary.
 
 The listed documents are intended to be implementable without inventing behavior. If a behavior is not specified, fail with a clear error and add a decision to the spec before implementing it. Do not silently broaden V1.

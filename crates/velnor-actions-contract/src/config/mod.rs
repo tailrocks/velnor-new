@@ -22,6 +22,7 @@ mod private_sources;
 pub mod project_tool_refs;
 /// Generated run-time resolver for project-declared versions (hard decision 5).
 pub mod project_tool_resolver;
+mod publish;
 mod qualified_tools;
 mod release;
 mod resources;
@@ -88,6 +89,9 @@ pub use private_sources::{
     DEPS_LOCK_PATH, PrivateAssetSource, PrivateGitTreeSource, PrivateSourcesConfig,
     is_valid_asset_name, is_valid_extract_to, is_valid_github_owner, is_valid_github_repo_name,
     is_valid_source_id, is_valid_source_tag, split_repository,
+pub use publish::{
+    PublishBundle, PublishConfig, RELEASE_TAG_GLOB, ReleaseTag, VersionSource, is_artifact_id,
+    is_strict_semver,
 };
 pub use qualified_tools::{
     QualifiedCargoInstallation, QualifiedTool, QualifiedToolArtifact, QualifiedToolArtifactRecipe,
@@ -186,6 +190,9 @@ pub struct VelnorConfig {
     /// Container images built on every run and published from the default branch.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub images: Vec<ImageConfig>,
+    /// Tag-driven publication (`[[publish.bundles]]`).
+    #[serde(default, skip_serializing_if = "PublishConfig::is_empty")]
+    pub publish: PublishConfig,
 }
 
 impl VelnorConfig {
@@ -245,6 +252,7 @@ impl VelnorConfig {
         if let Some(private_sources) = &self.private_sources {
             private_sources.validate(file)?;
         }
+        self.publish.validate(file)?;
         self.check_distribution_source(file)?;
         self.check_preview_tools(file)?;
         self.check_crate_build_jobs(file)?;

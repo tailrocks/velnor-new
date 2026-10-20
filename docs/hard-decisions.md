@@ -304,10 +304,37 @@ unprivileged jobs, and consuming only same-run artifacts with verified digests
 in the privileged ones, keeps provenance bound to one source SHA and workflow.
 
 **Status.** Adopted per the split brief; owner may revisit. Specification:
-[image publication contract](proposed/image-publication-contract.md).
+[image publication contract](proposed/image-publication-contract.md) and
+[package publication contract](proposed/package-publication-contract.md).
+
+**Tag flow and release-asset bundles.** The same boundary covers release
+assets. The trigger set is closed in the typed IR: tag pushes only for
+`publish.yml`, with no `pull_request`, `pull_request_target`,
+`workflow_run`, `workflow_dispatch` or `schedule` variant, so no config field
+can add one. Every publication job transitively needs one authority job
+(`contents: read`, `checks: read`, no checkout) that verifies the tag is
+annotated, targets the pushed commit, is reachable from the default branch,
+has a green `Required` check run from GitHub Actions at that SHA, names a
+declared artifact and carries the manifest version the tag claims. Release
+bundles are the one tag-time build: a deterministic archive (sorted entries,
+zero mtimes, root owner) of files at a commit reachable from the default
+branch, built by a read-only job that runs no repository code. Roles are
+fixed (build, attest with OIDC and attestations, publish with
+`contents: write` in the protected environment, the last two without
+checkout) and permissions equal the role matrix exactly. Release assets are
+immutable: an existing asset fails the job. The concurrency group is one
+never-cancelled queue per pushed ref, because GitHub keeps one pending run
+per group and a per-artifact group would silently drop a queued release.
+
+**Release-asset Maven bundle choice.** Adopted per the split brief; owner may
+revisit. GitHub Packages Maven is repository-scoped and cannot serve private
+cross-repository consumers with a scoped CI credential, so Java libraries
+ship as release-asset Maven bundles consumed through the same App-token fetch
+as Cargo git dependencies. Rejected: a machine-user classic PAT in every
+consumer.
 
 **Must not be reintroduced without owner approval:** publishing from a pull
 request or fork event, a privileged job that checks out or runs repository
-code, a release tag that rebuilds instead of promoting, or BuildKit cache
-backends and mounts that hand a credential to the build.
-
+code, a release tag that rebuilds instead of promoting, BuildKit cache
+backends and mounts that hand a credential to the build, or overwriting or
+deleting a published release asset or moving a published tag.
