@@ -195,6 +195,9 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
         StepId::SourcesRestore => {
             matches!(kind, StepKind::Action { uses, .. } if uses.starts_with("actions/cache/restore@"))
         }
+        StepId::DepsToken => {
+            matches!(kind, StepKind::Action { uses, .. } if uses.starts_with(super::step_identity::PRIVATE_TOKEN_MINT_ACTION_PREFIX))
+        }
         StepId::ToolsRestore => {
             matches!(kind, StepKind::Action { uses, .. } if uses == super::step_identity::TOOLS_CACHE_RESTORE_USES)
         }

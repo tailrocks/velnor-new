@@ -28,6 +28,21 @@ pub const TOFU_PROVIDERS_PATH_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outp
 /// Run MBX workspace cleanup only after the exact-version/store guard passed.
 pub const MBX_WORKSPACE_CLEAN_CONDITION: &str = "always() && steps.mbx-ready.outcome == 'success'";
 
+/// Expression of the App installation token minted for private sources (HD-7).
+pub const PRIVATE_TOKEN_OUTPUT_EXPR: &str = "${{ steps.deps-token.outputs.token }}";
+/// Expression of the job token bound to the npm registry phase (HD-7).
+pub const PRIVATE_NPM_READ_EXPR: &str = "${{ github.token }}";
+/// Step env key carrying the App installation token (HD-7).
+pub const PRIVATE_FETCH_TOKEN_ENV: &str = "VELNOR_PRIVATE_FETCH_TOKEN";
+/// Step env key carrying the npm registry read token (HD-7).
+pub const PRIVATE_NPM_READ_TOKEN_ENV: &str = "VELNOR_NPM_READ_TOKEN";
+/// Internal operation of the Velnor-owned private fetch step (HD-7).
+pub const PRIVATE_FETCH_OPERATION: &str = "private-fetch-v1";
+/// Internal operation of the token revocation step (HD-7).
+pub const PRIVATE_REVOKE_OPERATION: &str = "private-revoke-v1";
+/// Pinned-action prefix of the private token mint step (HD-7).
+pub const PRIVATE_TOKEN_MINT_ACTION_PREFIX: &str = "actions/create-github-app-token@";
+
 pub use super::step_id::StepId;
 
 /// Semantic step role used for workflow composition and validation.
@@ -126,6 +141,13 @@ pub enum StepRole {
     MbxPreflight,
     /// Final workspace-target cleanup before the native MBX action post step.
     MbxWorkspaceCleanup,
+    /// Mint of the read-only App installation token for private sources (HD-7).
+    PrivateTokenMint,
+    /// Velnor-owned fetch of private sources; the only step that may bind a
+    /// private-source credential besides the revoke step (HD-7).
+    PrivateFetch,
+    /// Revocation of the private-source token, run `always()` (HD-7).
+    PrivateRevoke,
 }
 
 impl StepRole {
@@ -168,6 +190,10 @@ impl StepRole {
             Self::CargoSourcesRestore => action_has_prefix_for_kind(kind, "actions/cache/restore@"),
             Self::TofuProvidersRestore => super::step_protocol::valid_provider_restore(kind),
             Self::TofuProvidersSave => super::step_protocol::valid_provider_save(kind),
+            Self::PrivateTokenMint => matches!(kind,
+                StepKind::Action { uses, .. } if uses.starts_with(PRIVATE_TOKEN_MINT_ACTION_PREFIX)),
+            Self::PrivateFetch => internal_operation(kind, PRIVATE_FETCH_OPERATION),
+            Self::PrivateRevoke => internal_operation(kind, PRIVATE_REVOKE_OPERATION),
             Self::MbxCache => valid_mbx_cache(kind),
             Self::MbxVersionCheck | Self::MbxWorkspaceCleanup => {
                 matches!(kind, StepKind::Shell { .. })
@@ -207,6 +233,7 @@ impl StepRole {
             Self::MbxVersionCheck => Some(StepId::MbxReady),
             Self::CacheKeys => Some(StepId::CacheKeys),
             Self::ToolsCacheRestore => Some(StepId::ToolsRestore),
+            Self::PrivateTokenMint => Some(StepId::DepsToken),
             _ => None,
         }
     }
@@ -222,6 +249,7 @@ impl StepRole {
             StepId::SourcesRestore => Self::CargoSourcesRestore,
             StepId::SourcesFetch => Self::CargoSourcesFetch,
             StepId::ToolsRestore => Self::ToolsCacheRestore,
+            StepId::DepsToken => Self::PrivateTokenMint,
         }
     }
 }

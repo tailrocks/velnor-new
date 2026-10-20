@@ -10,6 +10,8 @@ mod env;
 mod git;
 #[path = "command_output.rs"]
 mod output;
+#[path = "command_private_fetch.rs"]
+mod private_fetch;
 #[path = "command_progress.rs"]
 mod progress;
 #[path = "qualified_acquisition.rs"]
@@ -21,6 +23,10 @@ mod stream;
 #[path = "command_tofu.rs"]
 mod tofu;
 pub use check::resolve_program as resolve_check_program;
+pub use private_fetch::{
+    CREDENTIAL_ALLOWLIST_PRIVATE_FETCH, FETCH_REDIRECT_ENV_KEYS, PrivateFetchCredential,
+    is_fetch_redirect_key,
+};
 
 pub use self::env::{
     CREDENTIAL_ALLOWLIST_BOOTSTRAP, CREDENTIAL_ALLOWLIST_GH_API, CREDENTIAL_ENV_KEYS,

@@ -120,31 +120,53 @@ any repository-controlled step:
 Cargo fetch uses `CARGO_NET_GIT_FETCH_WITH_CLI=true`, a Velnor-owned
 `GIT_CONFIG_GLOBAL` with `GIT_CONFIG_NOSYSTEM=1`, and a credential helper
 keyed exactly on `https://github.com/<owner>/<repo>` with
-`credential.useHttpPath=true`. The helper reads the token from an inherited
-pipe, not from the environment, so git's children never see it.
+`credential.useHttpPath=true`. The helper reads the token from a mode-0600
+file in a mode-0700 Velnor-owned directory that is removed before the revoke
+step, not from the environment, so no child process environment carries it
+(the workspace forbids `unsafe`, which rules out inheriting a pipe file
+descriptor into `git`; this is the recorded deviation from the design text).
 `cargo fetch` runs no build scripts. A repository `[source]` replacement that
 points elsewhere receives no credential. Later steps run
 `--locked --offline` against `$CARGO_HOME/git/db`.
 
 ## Credential boundary
 
-`CredentialPolicy::PrivateFetch` (`EnvPolicy::PrivateFetch` in
-`command_env.rs`) allows exactly `VELNOR_PRIVATE_FETCH_TOKEN` and
-`VELNOR_NPM_READ_TOKEN`. It is constructible only by the orchestrator's
-`private_fetch` and `bun_registry_install` builders. The renderer mirrors it
-with `StepRole::PrivateFetch` and rejects
-`${{ steps.deps-token.outputs.token }}` or `${{ github.token }}` in any other
-step as `credential_binding_outside_private_fetch`. A parity test pins the
-renderer and Mise lists equal. Repository task, Gradle, Bun-script, dbt and
-Ansible policies keep stripping every `*_TOKEN`. `GIT_ASKPASS`,
-`GIT_CONFIG_*` (except Velnor's own), `NPM_CONFIG_*` and
-`BUN_CONFIG_REGISTRY` are never-inherited keys.
+`EnvPolicy::PrivateFetch` (`crates/velnor-actions-mise/src/command_env.rs`)
+spawns children from a cleared environment plus proxy passthrough and allows
+exactly `VELNOR_PRIVATE_FETCH_TOKEN` and `VELNOR_NPM_READ_TOKEN`
+(`CREDENTIAL_ALLOWLIST_PRIVATE_FETCH`). It is reachable only through
+`IsolatedCommand::private_fetch`, which bakes `GIT_CONFIG_GLOBAL`,
+`GIT_CONFIG_NOSYSTEM=1`, `GIT_TERMINAL_PROMPT=0`, `GIT_ALLOW_PROTOCOL=https` and
+`CARGO_NET_GIT_FETCH_WITH_CLI=true`, and accepts at most one credential of a
+closed kind. Its callers are the orchestrator's `private_fetch` and
+`bun_registry_install` builders; a source scan pins that. Every other policy
+strips both tokens as `*_TOKEN` credentials, and `with_env` and repository task
+declarations reject them as reserved keys.
+
+`GIT_ASKPASS`, `SSH_ASKPASS`, `GIT_CONFIG`, `GIT_CONFIG_*`, `NPM_CONFIG_*`,
+`npm_config_*` and `BUN_CONFIG_REGISTRY` are never inherited by any policy
+(`FETCH_REDIRECT_ENV_KEYS` and `is_fetch_redirect_key`), and rendered task env
+may not declare them.
+
+The renderer mirrors the boundary with three step roles
+(`StepRole::PrivateTokenMint`, `PrivateFetch`, `PrivateRevoke`):
+
+- `${{ steps.deps-token.outputs.token }}` may appear only as the exact value of
+  `VELNOR_PRIVATE_FETCH_TOKEN` in a fetch or revoke step, and `${{ github.token }}`
+  only as `VELNOR_NPM_READ_TOKEN` in a fetch step. Anywhere else (any env key,
+  action input, argv) fails with `credential_binding_outside_private_fetch`.
+- The mint step is the only place a secret may be named, only as `private-key`,
+  and its inputs are closed (`client-id`, `private-key`, `owner`, `repositories`,
+  `permission-contents: read`, `skip-token-revoke: false`);
+  anything else fails with `private_mint_shape`.
+
+Parity tests pin the renderer and Mise lists and predicates equal.
 
 ## Threat model
 
 | Threat | Outcome |
 |---|---|
-| Fork PR | Secrets are withheld. The mint fails with `private_source_credential_unavailable:fork`, the job fails, `Required` fails closed. `pull_request_target` is never used. |
+| Fork PR | Secrets are withheld, so the mint step fails (the App-token action rejects the empty key), the job fails and `Required` fails closed. The fetch operation independently refuses an empty token (`private_source_credential_unavailable`). `pull_request_target` is never used. |
 | Same-repository PR by a writer | Can edit the generated workflow and mint `contents: read` tokens for App-installed repositories. This is the recorded self-attestation limit (review and CODEOWNERS are the trust root, see [fork-PR trust model](../implemented/fork-pr-trust-model.md)). Mitigations: App installed on producers only, no write permission, secret visible only to consumer repositories, CODEOWNERS on `.github/**` and `.velnor/**`, rotation runbook, audit-log alerts. |
 | Compromised dependency or build script | The token is revoked before the first repository-controlled step; a crate build script never sees it. |
 | Exfiltration by redirect | The helper sends the token only to allowlisted GitHub URLs. Velnor writes the bunfig; repository registry overrides fail generation. |

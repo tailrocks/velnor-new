@@ -46,6 +46,7 @@ mod parallel_target_seed;
 pub mod plan_format;
 pub mod preseed;
 mod preseed_closure;
+pub mod private_source_steps;
 /// Project tool-version resolver binding (hard decision 5).
 mod project_tool_resolver;
 pub mod publish_render;
