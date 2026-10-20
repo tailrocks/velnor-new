@@ -47,9 +47,20 @@ pub struct ImageBuildPolicy {
     pub image: ImageConfig,
     /// SHA-256 of the Dockerfile bytes per platform, read at planning time.
     pub dockerfile_sha256: BTreeMap<ImagePlatform, String>,
+    /// Orchestrator-built steps that compile and stage the prebuilt artifact.
+    ///
+    /// Empty for a plain Dockerfile image. Their stack knowledge stays with
+    /// the orchestrator; the renderer only orders and validates them.
+    pub prebuilt_steps: Vec<Step>,
 }
 
 impl ImageBuildPolicy {
+    /// True when the jobs run pinned tools (they then get Mise setup and the plan).
+    #[must_use]
+    pub fn uses_pinned_tools(&self) -> bool {
+        !self.prebuilt_steps.is_empty()
+    }
+
     /// Build job ids, one per platform in declaration order.
     #[must_use]
     pub fn job_ids(&self) -> Vec<String> {
@@ -115,7 +126,11 @@ pub fn build_image_build_job(
         ),
         runs_on: platform.runs_on().to_owned(),
         timeout_minutes: timeout,
-        needs: Vec::new(),
+        needs: if policy.uses_pinned_tools() {
+            vec![crate::render::PLAN_JOB_ID.to_owned()]
+        } else {
+            Vec::new()
+        },
         condition: None,
         permissions: Some(image_build_permissions()),
         cache_mode: None,
@@ -175,7 +190,7 @@ fn image_build_steps(
         ]),
     )?;
     upload.condition = Some("success()".to_owned());
-    Ok(vec![
+    let mut steps = vec![
         steps::checkout_step(checkout_uses)?,
         shell_step(
             VERIFY_IMAGE_SOURCE_NAME,
@@ -187,6 +202,9 @@ fn image_build_steps(
             bash(&host_script(platform)),
             BTreeMap::new(),
         )?,
+    ];
+    steps.extend(policy.prebuilt_steps.iter().cloned());
+    steps.extend([
         shell_step(
             CREATE_IMAGE_BUILDER_NAME,
             bash(&create_script(image, platform)),
@@ -199,7 +217,8 @@ fn image_build_steps(
         )?,
         remove,
         upload,
-    ])
+    ]);
+    Ok(steps)
 }
 
 /// Artifact name carrying one platform's OCI layout.

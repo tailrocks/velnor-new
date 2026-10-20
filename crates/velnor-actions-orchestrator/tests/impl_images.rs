@@ -145,3 +145,116 @@ context = \"svc\"\nplatforms = [\"linux_amd64\"]\n\
     );
     Ok(())
 }
+
+const CARGO_IMAGE: &str = "[[images]]\nid = \"demo-app\"\nrepository = \"ghcr.io/acme/demo-app\"\n\
+dockerfile = \"Dockerfile\"\nplatforms = [\"linux_amd64\"]\n\
+[images.prebuilt]\nkind = \"cargo_bin\"\npackage = \"demo\"\nbin = \"demo\"\nstage = \"dist/demo\"\n";
+
+fn cargo_repo(dockerfile_tail: &str) -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
+    let body = format!(
+        "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n{CARGO_IMAGE}"
+    );
+    let repo = make_repo(&body)?;
+    let root = repo.path();
+    fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n[[bin]]\nname = \"demo\"\npath = \"src/main.rs\"\n",
+    )?;
+    fs::write(root.join("src/main.rs"), "fn main() {}\n")?;
+    fs::write(
+        root.join("Cargo.lock"),
+        "version = 4\n\n[[package]]\nname = \"demo\"\nversion = \"0.1.0\"\n",
+    )?;
+    fs::write(
+        root.join("Dockerfile"),
+        format!("FROM debian:12@{DIGEST}\n{dockerfile_tail}"),
+    )?;
+    git(&["add", "."], root)?;
+    Ok(repo)
+}
+
+#[test]
+fn cargo_bin_jobs_build_offline_and_stage_before_the_docker_build() -> TestResult {
+    let repo = cargo_repo("COPY dist/demo /usr/local/bin/demo\n")?;
+    let tree = render_staged_tree(&prepare(repo.path())?)?;
+    let ci = required_file(&tree, ".github/workflows/ci.yml")?;
+    let job = job_body(ci, "image-demo-app-amd64")?;
+    assert!(job.contains("runs-on: ubuntu-26.04\n"), "{job}");
+    assert!(job.contains("- plan"), "{job}");
+    assert!(job.contains("Setup Mise"), "{job}");
+    assert!(
+        job.contains("cargo build --release --locked --offline"),
+        "{job}"
+    );
+    assert!(job.contains("--package demo --bin demo"), "{job}");
+    assert!(
+        job.contains("CARGO_TARGET_DIR: ${{ runner.temp }}/velnor/image-target/demo-app"),
+        "{job}"
+    );
+    let build = job.find("Build release binary").ok_or("build step")?;
+    let stage = job.find("Stage release binary").ok_or("stage step")?;
+    let docker = job.find("Build OCI image").ok_or("docker step")?;
+    assert!(build < stage && stage < docker, "{job}");
+    assert!(
+        !job.contains("packages:") && !job.contains("id-token: write"),
+        "{job}"
+    );
+    Ok(())
+}
+
+#[test]
+fn cargo_bin_rejects_uncopied_stage_missing_package_and_existing_stage() -> TestResult {
+    let repo = cargo_repo("COPY README /readme\n")?;
+    let error = prepare(repo.path()).expect_err("stage not copied");
+    assert!(
+        error
+            .to_string()
+            .contains("image_prebuilt_stage_not_copied"),
+        "{error}"
+    );
+
+    let repo = cargo_repo("COPY dist/demo /usr/local/bin/demo\n")?;
+    let config = fs::read_to_string(repo.path().join(".velnor/config.toml"))?;
+    fs::write(
+        repo.path().join(".velnor/config.toml"),
+        config.replace("package = \"demo\"", "package = \"nope\""),
+    )?;
+    let error = prepare(repo.path()).expect_err("missing package");
+    assert!(
+        error
+            .to_string()
+            .contains("image_prebuilt_package_not_discovered"),
+        "{error}"
+    );
+
+    let repo = cargo_repo("COPY dist/demo /usr/local/bin/demo\n")?;
+    fs::create_dir_all(repo.path().join("dist"))?;
+    fs::write(repo.path().join("dist/demo"), "old")?;
+    let error = prepare(repo.path()).expect_err("stage exists");
+    assert!(
+        error.to_string().contains("image_prebuilt_stage_exists"),
+        "{error}"
+    );
+    Ok(())
+}
+
+#[test]
+fn cargo_bin_on_arm64_fails_until_the_tools_cache_supports_it() -> TestResult {
+    let repo = cargo_repo("COPY dist/demo /usr/local/bin/demo\n")?;
+    let config = fs::read_to_string(repo.path().join(".velnor/config.toml"))?;
+    fs::write(
+        repo.path().join(".velnor/config.toml"),
+        config.replace(
+            "platforms = [\"linux_amd64\"]",
+            "platforms = [\"linux_amd64\", \"linux_arm64\"]",
+        ),
+    )?;
+    let error = prepare(repo.path()).expect_err("arm64 prebuilt unsupported");
+    assert!(
+        error
+            .to_string()
+            .contains("image_prebuilt_platform_unsupported:linux_arm64"),
+        "{error}"
+    );
+    Ok(())
+}

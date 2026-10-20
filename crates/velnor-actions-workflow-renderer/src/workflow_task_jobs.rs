@@ -52,6 +52,12 @@ impl WorkflowTaskPolicy {
         }
     }
 
+    /// Whether the task's job runs pinned tools and needs the shared Mise prelude.
+    #[must_use]
+    pub fn uses_pinned_tools(&self) -> bool {
+        matches!(self, Self::Image(policy) if policy.uses_pinned_tools())
+    }
+
     /// Whether a job belongs to this task's permitted placement set.
     #[must_use]
     pub fn owns_job_id(&self, job_id: &str) -> bool {

@@ -35,6 +35,7 @@ mod generator;
 mod gh_download;
 mod git_paths;
 mod image_build_tasks;
+mod image_prebuilt;
 mod init;
 mod internal;
 mod internal_plan;
