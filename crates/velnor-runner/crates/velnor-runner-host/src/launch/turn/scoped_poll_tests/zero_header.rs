@@ -20,7 +20,7 @@ fn deferred_zero_header_ack_accepts_assigned_and_rejects_unknown_kinds() {
         job_id: Some("opaque-job".to_owned()),
         labels: Vec::new(),
         fields: Vec::new(),
-        source: Default::default(),
+        source: velnor_runner_github::SourceMetadata::default(),
     };
     for (kind, expected) in [
         (InnerKind::Assigned, true),
@@ -41,7 +41,7 @@ fn deferred_zero_header_ack_accepts_assigned_and_rejects_unknown_kinds() {
                     job_id: Some("unhandled-job".to_owned()),
                     labels: Vec::new(),
                     fields: Vec::new(),
-                    source: Default::default(),
+                    source: velnor_runner_github::SourceMetadata::default(),
                 },
             ],
         });
@@ -65,7 +65,7 @@ fn deferred_zero_header_ack_allows_only_available_and_lifecycle_kinds() {
                 job_id: Some("available-job".to_owned()),
                 labels: Vec::new(),
                 fields: Vec::new(),
-                source: Default::default(),
+                source: velnor_runner_github::SourceMetadata::default(),
             },
             InnerJob {
                 kind: InnerKind::Started,
@@ -76,7 +76,7 @@ fn deferred_zero_header_ack_allows_only_available_and_lifecycle_kinds() {
                 job_id: Some("started-job".to_owned()),
                 labels: Vec::new(),
                 fields: Vec::new(),
-                source: Default::default(),
+                source: velnor_runner_github::SourceMetadata::default(),
             },
             InnerJob {
                 kind: InnerKind::Completed,
@@ -87,7 +87,7 @@ fn deferred_zero_header_ack_allows_only_available_and_lifecycle_kinds() {
                 job_id: Some("completed-job".to_owned()),
                 labels: Vec::new(),
                 fields: Vec::new(),
-                source: Default::default(),
+                source: velnor_runner_github::SourceMetadata::default(),
             },
         ],
     });
@@ -298,7 +298,7 @@ async fn available_message_stays_unacknowledged_at_zero_header() -> Result<(), S
             job_id: Some("opaque-job".to_owned()),
             labels: Vec::new(),
             fields: Vec::new(),
-            source: Default::default(),
+            source: velnor_runner_github::SourceMetadata::default(),
         }],
     });
     let acknowledged = Cell::new(false);
@@ -334,7 +334,7 @@ async fn mixed_available_and_completion_is_stored_without_acknowledgement() -> R
                 job_id: Some("opaque-job".to_owned()),
                 labels: Vec::new(),
                 fields: Vec::new(),
-                source: Default::default(),
+                source: velnor_runner_github::SourceMetadata::default(),
             },
             InnerJob {
                 kind: InnerKind::Completed,
@@ -345,7 +345,7 @@ async fn mixed_available_and_completion_is_stored_without_acknowledgement() -> R
                 job_id: None,
                 labels: Vec::new(),
                 fields: Vec::new(),
-                source: Default::default(),
+                source: velnor_runner_github::SourceMetadata::default(),
             },
         ],
     });

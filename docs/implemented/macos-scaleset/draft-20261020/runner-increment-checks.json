@@ -1578,5 +1578,16 @@
     "reviewer": "runner_context_review",
     "scope": "The test bindings keep the same ownership and drop order. The assertions still require empty values.",
     "remaining": "The strict runner gate still has other failures."
+  },
+  "source_metadata_defaults": {
+    "result": "PASS",
+    "tests": 13,
+    "run_id": "e04f6fd0-27da-4aad-8abc-30696a553e2f",
+    "log_sha256": "a5b3f0cc83c73b79166a4e02cfe5c378760837da76934a7a2246c148c80ffbdf",
+    "manifest_sha256": "ae0fba46814daae5cbead497a6d26fdd4377482204e7796b5067078a63eca943",
+    "author": "replay_context_refactor",
+    "reviewer": "runner_context_review",
+    "scope": "The eight files name the same Default implementation. The source and dependencies match the checked runner workspace.",
+    "remaining": "The strict runner gate still has other failures."
   }
 }

@@ -28,7 +28,7 @@ fn available(message_id: i64, request_id: i64) -> Poll {
             job_id: None,
             labels: Vec::new(),
             fields: Vec::new(),
-            source: Default::default(),
+            source: velnor_runner_github::SourceMetadata::default(),
         }],
     })
 }
@@ -49,7 +49,7 @@ fn available_many(message_id: i64, request_ids: &[i64]) -> Poll {
                 job_id: None,
                 labels: Vec::new(),
                 fields: Vec::new(),
-                source: Default::default(),
+                source: velnor_runner_github::SourceMetadata::default(),
             })
             .collect(),
     })
