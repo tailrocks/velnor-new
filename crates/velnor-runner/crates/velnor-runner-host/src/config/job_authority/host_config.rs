@@ -113,14 +113,6 @@ impl super::super::HostConfig {
 
     /// Add one valid test-only authority policy through normal `HostConfig` validation.
     #[cfg(test)]
-    pub(crate) fn add_test_job_authority_policy(
-        &mut self,
-        connection_id: &super::ConnectionId,
-    ) -> Result<(), HostError> {
-        self.add_test_job_authority_policy_generation(connection_id, 1)
-    }
-
-    #[cfg(test)]
     pub(crate) fn add_test_job_authority_policy_generation(
         &mut self,
         connection_id: &super::ConnectionId,
