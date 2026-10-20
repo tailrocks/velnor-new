@@ -3,6 +3,22 @@ use super::assert_current_schema;
 use crate::error::HostError;
 
 #[tokio::test]
+async fn current_v31_validator_rejects_a_missing_inode_guard() -> Result<(), HostError> {
+    use crate::journal::request_lifecycle::tests::helpers::Scratch;
+
+    let scratch = Scratch::new()?;
+    let journal = crate::journal::Journal::open(&scratch.file()).await?;
+    let connection = journal.connection().await?;
+    root::validate_v27(&connection).await?;
+    connection
+        .execute("DROP TRIGGER bound_storage_path_inode_insert_guard", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    assert!(root::validate_v27(&connection).await.is_err());
+    Ok(())
+}
+
+#[tokio::test]
 async fn current_journal_open_repairs_exact_legacy_attachment_checks_and_keeps_charge()
 -> Result<(), HostError> {
     use crate::journal::request_lifecycle::tests::helpers::{
@@ -73,6 +89,7 @@ async fn current_journal_open_repairs_exact_legacy_attachment_checks_and_keeps_c
 
     let reopened = crate::journal::Journal::open(&path).await?;
     let query = reopened.connection().await?;
+    root::validate_v27(&query).await?;
     assert_charge(&query, reservation_id).await?;
     assert_current_schema(&query, true).await
 }

@@ -24,6 +24,8 @@ async fn v27_path_repair_preserves_rows_and_accepts_the_current_home_layout()
 
 #[path = "storage_root_backing_tests/current_journal_reopen.rs"]
 mod current_journal_reopen;
+#[path = "storage_root_backing_tests/v27_compat.rs"]
+mod v27_compat;
 
 async fn setup_legacy_rows(connection: &turso::Connection) -> Result<(), HostError> {
     connection

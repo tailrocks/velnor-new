@@ -111,6 +111,48 @@ pub(super) async fn validate_v30(connection: &turso::Connection) -> Result<(), H
     validate_schema(connection, ATTACHMENT_PATHS, false).await
 }
 
+pub(super) async fn validate_v27(connection: &turso::Connection) -> Result<(), HostError> {
+    let mut rows = connection
+        .query(
+            "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'capacity_reservation_bound_storage_paths'",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let paths = rows
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?
+        .get::<String>(0)
+        .map_err(|_| HostError::Journal)?;
+    let with_inode = attachment_paths_with_inode();
+    if normalize(&paths) == normalize(&with_inode) {
+        return validate_schema(connection, &with_inode, true).await;
+    }
+    if normalize(&paths) == normalize(ATTACHMENT_PATHS) {
+        let mut rows = connection
+            .query(
+                "SELECT COUNT(*) FROM sqlite_schema WHERE type = 'trigger' AND name = ?1",
+                [PATH_INODE_TRIGGER.0],
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        let count = rows
+            .next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .ok_or(HostError::Journal)?
+            .get::<i64>(0)
+            .map_err(|_| HostError::Journal)?;
+        if count != 0 {
+            return Err(HostError::Journal);
+        }
+        return validate_schema(connection, ATTACHMENT_PATHS, false).await;
+    }
+    Err(HostError::Journal)
+}
+
 async fn validate_schema(
     connection: &turso::Connection,
     attachment_paths: &str,

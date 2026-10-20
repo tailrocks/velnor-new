@@ -202,7 +202,7 @@ pub(super) async fn validate_persisted_schema_v27(
     conn: &turso::Connection,
 ) -> Result<(), HostError> {
     validate_persisted_schema_v27_core(conn).await?;
-    storage_root_backing::validate_v30(conn).await
+    storage_root_backing::validate_v27(conn).await
 }
 
 async fn validate_persisted_schema_v27_core(conn: &turso::Connection) -> Result<(), HostError> {
