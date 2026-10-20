@@ -21,8 +21,22 @@ fn write_dockerfile(root: &std::path::Path, body: &str) -> TestResult {
     fs::create_dir_all(root.join("svc"))?;
     fs::write(root.join("svc/Dockerfile"), body)?;
     fs::write(root.join("svc/app"), "bin")?;
+    add_origin(root)?;
     git(&["add", "."], root)?;
     Ok(())
+}
+
+/// Images always emit `publish.yml`, which names the repository by its origin.
+fn add_origin(root: &std::path::Path) -> TestResult {
+    git(
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/acme/widgets.git",
+        ],
+        root,
+    )
 }
 
 fn pinned() -> String {
@@ -240,6 +254,7 @@ fn cargo_repo(dockerfile_tail: &str) -> Result<tempfile::TempDir, Box<dyn std::e
         root.join("Dockerfile"),
         format!("FROM debian:12@{DIGEST}\n{dockerfile_tail}"),
     )?;
+    add_origin(root)?;
     git(&["add", "."], root)?;
     Ok(repo)
 }

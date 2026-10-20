@@ -1,15 +1,18 @@
-//! Publication emission: `[[publish.bundles]]` to `publish.yml`.
+//! Publication emission: `[[publish.bundles]]`, `[[images]]` and the Rust
+//! `git-tag` release to `publish.yml`.
 //!
 //! The file exists only under `consumer-v1` with at least one declared
-//! bundle. Generation reads each bundle's version manifest and checks
+//! bundle or image. Generation reads each version manifest and checks
 //! its paths against the work tree, so a stale declaration fails at
 //! generation time; the generated authority job repeats the version
 //! check against the tagged commit at run time.
 
 use std::path::Path;
 
-use velnor_actions_contract::WorkflowPolicy;
-use velnor_actions_contract::config::{PublishBundle, RELEASE_TAG_GLOB, RustReleaseConfig};
+use velnor_actions_contract::config::{
+    PublishBundle, RELEASE_TAG_GLOB, RustReleaseConfig, VersionSource,
+};
+use velnor_actions_contract::{ImageConfig, WorkflowPolicy};
 use velnor_actions_rust::git_pins::unpinned_git_sources;
 use velnor_actions_workflow_renderer::publish_render::render_publish_workflow_with_routing;
 use velnor_actions_workflow_renderer::publish_spec::{PublishTriggers, PublishWorkflowSpec};
@@ -22,7 +25,7 @@ use velnor_actions_workflow_renderer::{MiseSetup, WorkflowRoutingPolicy, render:
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
 use crate::prepare::GenerationPreparation;
-use crate::publish_steps::{BundlePlan, Inputs, VersionCheck, assemble_jobs};
+use crate::publish_steps::{BundlePlan, Inputs, PromotionPlan, VersionCheck, assemble_jobs};
 use crate::release_identity::origin_repository;
 
 #[path = "publish_job.rs"]
@@ -53,14 +56,21 @@ pub(crate) fn publish_files(
     routing: &WorkflowRoutingPolicy,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
     let bundles = &prep.config.publish.bundles;
+    let images = &prep.config.images;
     let git_tag = crate::release_emit::git_tag_release(prep)?;
-    if bundles.is_empty() && git_tag.is_none() {
+    if bundles.is_empty() && git_tag.is_none() && images.is_empty() {
         return Ok(Vec::new());
     }
-    if !bundles.is_empty() && prep.config.workflow.policy != WorkflowPolicy::ConsumerV1 {
+    if (!bundles.is_empty() || !images.is_empty())
+        && prep.config.workflow.policy != WorkflowPolicy::ConsumerV1
+    {
         return Err(OrchestratorError::config(
             CONFIG_REL,
-            "publish.bundles",
+            if bundles.is_empty() {
+                "images"
+            } else {
+                "publish.bundles"
+            },
             "publish_requires_consumer_policy",
         ));
     }
@@ -70,6 +80,7 @@ pub(crate) fn publish_files(
         .map(|(index, bundle)| resolve_bundle(&prep.root, index, bundle))
         .collect::<Result<Vec<_>, _>>()?;
     check_tag_collisions(prep)?;
+    let promotions = resolve_promotions(&prep.root, images)?;
     let repository = origin_repository(&prep.root)?;
     let tag_config = git_tag
         .map(|release| git_tag_config(prep, release, &repository))
@@ -84,17 +95,20 @@ pub(crate) fn publish_files(
         catalog: &catalog,
         bundles: &plans,
         git_tag_manifest: git_tag.map(|release| release.manifest_path.as_str()),
+        images,
+        promotions: &promotions,
     })?;
     let spec = PublishWorkflowSpec {
         name: PUBLISH_WORKFLOW_NAME.to_owned(),
         repository,
         triggers: PublishTriggers {
-            branches: if git_tag.is_some() {
+            branches: if git_tag.is_some() || !images.is_empty() {
                 vec![prep.default_branch.clone()]
             } else {
                 Vec::new()
             },
-            tag_glob: (!plans.is_empty()).then(|| RELEASE_TAG_GLOB.to_owned()),
+            tag_glob: (!plans.is_empty() || !promotions.is_empty())
+                .then(|| RELEASE_TAG_GLOB.to_owned()),
         },
         jobs,
     };
@@ -190,23 +204,7 @@ fn resolve_bundle<'a>(
         bundle.version_source(),
     ) {
         (Some(version), _, _) => VersionCheck::Inline(version.clone()),
-        (None, Some(path), Some(source)) => {
-            let text = std::fs::read_to_string(root.join(path)).map_err(|_| {
-                OrchestratorError::config(
-                    CONFIG_REL,
-                    format!("{key}.version_file"),
-                    format!("unreadable_version_file:{path}"),
-                )
-            })?;
-            if source.read(&text).is_none() {
-                return Err(OrchestratorError::config(
-                    CONFIG_REL,
-                    format!("{key}.version_file"),
-                    format!("version_not_literal:{path}"),
-                ));
-            }
-            VersionCheck::Manifest(source, path.clone())
-        }
+        (None, Some(path), Some(source)) => manifest_check(root, &key, path, source)?,
         _ => {
             return Err(OrchestratorError::config(
                 CONFIG_REL,
@@ -218,22 +216,97 @@ fn resolve_bundle<'a>(
     Ok(BundlePlan { bundle, check })
 }
 
-/// Reject a bundle id that is also a released Rust package name.
+/// Read the manifest version source once, so a stale declaration fails at generation.
+fn manifest_check(
+    root: &Path,
+    key: &str,
+    path: &str,
+    source: VersionSource,
+) -> Result<VersionCheck, OrchestratorError> {
+    let text = std::fs::read_to_string(root.join(path)).map_err(|_| {
+        OrchestratorError::config(
+            CONFIG_REL,
+            format!("{key}.version_file"),
+            format!("unreadable_version_file:{path}"),
+        )
+    })?;
+    if source.read(&text).is_none() {
+        return Err(OrchestratorError::config(
+            CONFIG_REL,
+            format!("{key}.version_file"),
+            format!("version_not_literal:{path}"),
+        ));
+    }
+    Ok(VersionCheck::Manifest(source, path.to_owned()))
+}
+
+/// Resolve the promotable images: those declaring a `version_file`.
+fn resolve_promotions<'a>(
+    root: &Path,
+    images: &'a [ImageConfig],
+) -> Result<Vec<PromotionPlan<'a>>, OrchestratorError> {
+    let mut plans = Vec::new();
+    for (index, image) in images.iter().enumerate() {
+        let Some(path) = &image.version_file else {
+            continue;
+        };
+        let key = format!("images[{index}]");
+        let source = VersionSource::for_path(path).ok_or_else(|| {
+            OrchestratorError::config(
+                CONFIG_REL,
+                format!("{key}.version_file"),
+                format!("unsupported_image_version_file:{path}"),
+            )
+        })?;
+        plans.push(PromotionPlan {
+            image,
+            check: manifest_check(root, &key, path, source)?,
+        });
+    }
+    Ok(plans)
+}
+
+/// Reject a tag-namespace id shared by two artifacts.
 ///
-/// Both kinds mint tags in the same `<id>-v<X.Y.Z>` namespace, so a shared
-/// name would let one tag mean two artifacts.
+/// Bundles, promotable images and released Rust packages all mint tags
+/// `<id>-v<X.Y.Z>`, so a shared name would let one tag mean two artifacts.
 fn check_tag_collisions(prep: &GenerationPreparation) -> Result<(), OrchestratorError> {
-    let release: Option<&RustReleaseConfig> =
-        prep.config.stacks.rust.as_ref().map(|stack| &stack.release);
-    let Some(release) = release.filter(|release| release.enabled) else {
-        return Ok(());
-    };
-    for bundle in &prep.config.publish.bundles {
-        if release.packages.contains(&bundle.id) {
+    let release: Option<&RustReleaseConfig> = prep
+        .config
+        .stacks
+        .rust
+        .as_ref()
+        .map(|stack| &stack.release)
+        .filter(|release| release.enabled);
+    let packages: std::collections::BTreeSet<&str> = release
+        .map(|release| release.packages.iter().map(String::as_str).collect())
+        .unwrap_or_default();
+    let mut seen = std::collections::BTreeSet::new();
+    let bundles = prep
+        .config
+        .publish
+        .bundles
+        .iter()
+        .map(|b| ("publish.bundles", &b.id));
+    let images = prep
+        .config
+        .images
+        .iter()
+        .filter(|image| image.version_file.is_some())
+        .map(|image| ("images", &image.id));
+    for (key, id) in bundles.chain(images) {
+        if packages.contains(id.as_str()) {
             return Err(OrchestratorError::config(
                 CONFIG_REL,
-                "publish.bundles",
-                format!("artifact_id_collides_with_package:{}", bundle.id),
+                key,
+                format!("artifact_id_collides_with_package:{id}"),
+            ));
+        }
+        if !seen.insert(id.as_str()) {
+            return Err(OrchestratorError::config(
+                CONFIG_REL,
+                key,
+                format!("artifact_id_collides:{id}"),
             ));
         }
     }

@@ -37,6 +37,7 @@ impl PinnedTool {
             Self::Nextest => "VELNOR_TOOL_NEXTEST",
             Self::Opentofu => "VELNOR_TOOL_OPENTOFU",
             Self::ReleasePlz => "VELNOR_TOOL_RELEASE_PLZ",
+            Self::Crane => "VELNOR_TOOL_CRANE",
         }
     }
 
@@ -130,6 +131,7 @@ impl ToolCatalog {
             PinnedTool::Nextest => &mut self.nextest,
             PinnedTool::Opentofu => &mut self.opentofu,
             PinnedTool::ReleasePlz => &mut self.release_plz,
+            PinnedTool::Crane => &mut self.crane,
         }
     }
 }

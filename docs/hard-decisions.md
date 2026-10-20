@@ -74,7 +74,9 @@ library used by one app runs exactly those two crate jobs; touching one app runs
 only that app's job. `push`, `merge_group`, and `workflow_dispatch` run every
 job. The baseline-coverage skip path (trusted-baseline artifacts and
 `covered_tasks` step gates) is removed completely; it is not a second skip
-mechanism. See [affected selection](implemented/affected-selection.md).
+mechanism. Container image build jobs join the same disposition table, keyed
+on their Dockerfile, context inputs and prebuilt crate (adopted per the split
+brief; owner may revisit). See [affected selection](implemented/affected-selection.md).
 Approved by the human owner on 2026-10-19, together with the decision 1
 amendment ("every crate job the plan schedules").
 On 2026-10-20, the human owner gave approval for the `complete = true` input rule.
@@ -321,6 +323,12 @@ in the privileged ones, keeps provenance bound to one source SHA and workflow.
 **Status.** Adopted per the split brief; owner may revisit. Specification:
 [image publication contract](proposed/image-publication-contract.md) and
 [package publication contract](proposed/package-publication-contract.md).
+
+**Image jobs placement.** The privileged image jobs live in `publish.yml`, the
+workflow whose IR owns the authority boundary, and consume the artifacts of the
+push's successful `ci.yml` run (same commit, same event) rather than same-run
+artifacts; `ci.yml` keeps its closed permission set and credential-free steps.
+Adopted per the split brief; owner may revisit.
 
 **Tag flow and release-asset bundles.** The same boundary covers release
 assets. The trigger set is closed in the typed IR: tag pushes only for

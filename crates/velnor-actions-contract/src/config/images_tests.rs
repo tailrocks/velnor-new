@@ -1,7 +1,5 @@
-use super::images::{
-    ImageConfig, ImageDockerfile, ImagePlatform, ImagePrebuilt, is_valid_image_repository,
-    validate_images,
-};
+use super::image_grammar::is_valid_image_repository;
+use super::images::{ImageConfig, ImageDockerfile, ImagePlatform, ImagePrebuilt, validate_images};
 use std::collections::BTreeMap;
 
 fn image(id: &str) -> ImageConfig {
@@ -170,4 +168,29 @@ fn timeout_is_bounded() {
     }
     bad.timeout_minutes = 360;
     assert!(bad.validate("c", 0).is_ok());
+}
+
+#[test]
+fn version_file_must_be_a_supported_manifest() {
+    let mut bad = image("demo");
+    bad.version_file = Some("demo/VERSION".to_owned());
+    assert!(problem(&bad).contains("unsupported_image_version_file"));
+    for ok in ["demo/Cargo.toml", "g/gradle.properties", "web/package.json"] {
+        let mut good = image("demo");
+        good.version_file = Some(ok.to_owned());
+        assert!(good.validate("c", 0).is_ok(), "{ok}");
+    }
+}
+
+#[test]
+fn generated_job_ids_never_collide_across_images() {
+    // Build job `image-publish-foo-amd64` equals the publish job of `foo-amd64`.
+    let error = validate_images(&[image("foo-amd64"), image("publish-foo")], "c")
+        .expect_err("collision")
+        .to_string();
+    assert!(
+        error.contains("image_job_id_collision:image-publish-foo-amd64"),
+        "{error}"
+    );
+    assert!(validate_images(&[image("foo"), image("bar")], "c").is_ok());
 }

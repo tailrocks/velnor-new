@@ -9,24 +9,27 @@
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 
-use velnor_actions_actionlint::actions::{
-    ATTEST_BUILD_PROVENANCE_USES, DOWNLOAD_ARTIFACT_ACTION_USES, UPLOAD_ARTIFACT_ACTION_USES,
-};
 use velnor_actions_contract::config::{PublishBundle, VersionSource};
-use velnor_actions_contract::{JobTimeout, Step};
+use velnor_actions_contract::{ImageConfig, JobTimeout, Step};
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 use velnor_actions_workflow_renderer::publish_scripts as script;
 use velnor_actions_workflow_renderer::publish_spec::{
     PublishJobSpec, PublishPermissions, PublishRole, PublishStep,
 };
-use velnor_actions_workflow_renderer::{
-    MiseSetup, action_step, ambient_shell_step, checkout_step, mise_setup_step,
-};
+use velnor_actions_workflow_renderer::{MiseSetup, ambient_shell_step, mise_setup_step};
 
 use crate::OrchestratorError;
-use crate::publish_emit::release::{event_kind, release_jobs};
+use crate::publish_emit::release::{
+    BRANCH_AUTHORITY_JOB, branch_authority_job, event_kind, release_jobs,
+};
 use crate::utf8::strings_of;
-use crate::workflow::CHECKOUT_USES;
+use bundle_steps::{attest_job, build_job, publish_job};
+use image_steps::{crane_function, promote_job, publish_job as image_publish_job, publish_job_id};
+
+#[path = "publish_bundle_steps.rs"]
+mod bundle_steps;
+#[path = "publish_image_steps.rs"]
+pub(crate) mod image_steps;
 
 /// Tag authority job id; every bundle job needs it.
 pub(crate) const AUTHORITY_JOB: &str = "publish-authority";
@@ -69,6 +72,33 @@ pub(crate) struct Inputs<'a> {
     pub(crate) bundles: &'a [BundlePlan<'a>],
     /// Manifest for the `git-tag` release job; `None` without that mode.
     pub(crate) git_tag_manifest: Option<&'a str>,
+    /// Declared container images, sorted by id.
+    pub(crate) images: &'a [ImageConfig],
+    /// Images a release tag promotes, with their resolved version checks.
+    pub(crate) promotions: &'a [PromotionPlan<'a>],
+}
+
+/// One promotable image plus its resolved version check.
+pub(crate) struct PromotionPlan<'a> {
+    /// Declared image (carries a supported `version_file`).
+    pub(crate) image: &'a ImageConfig,
+    /// Version check applied by the authority job.
+    pub(crate) check: VersionCheck,
+}
+
+impl Inputs<'_> {
+    /// Every artifact a release tag may name, bundles first, with its check.
+    fn tag_artifacts(&self) -> Vec<(&str, &VersionCheck)> {
+        self.bundles
+            .iter()
+            .map(|plan| (plan.bundle.id.as_str(), &plan.check))
+            .chain(
+                self.promotions
+                    .iter()
+                    .map(|plan| (plan.image.id.as_str(), &plan.check)),
+            )
+            .collect()
+    }
 }
 
 /// Assemble the authority job and every bundle chain.
@@ -81,8 +111,10 @@ pub(crate) fn assemble_jobs(
 ) -> Result<BTreeMap<String, PublishJobSpec>, OrchestratorError> {
     let gh = gh_function(inputs.catalog)?;
     let mut jobs = BTreeMap::new();
-    let mixed = !inputs.bundles.is_empty() && inputs.git_tag_manifest.is_some();
-    if !inputs.bundles.is_empty() {
+    let branch_side = inputs.git_tag_manifest.is_some() || !inputs.images.is_empty();
+    let tag_side = !inputs.bundles.is_empty() || !inputs.promotions.is_empty();
+    let mixed = tag_side && branch_side;
+    if tag_side {
         let mut authority = authority_job(inputs, &gh)?;
         if mixed {
             authority.condition = Some(event_kind("tag"));
@@ -101,8 +133,30 @@ pub(crate) fn assemble_jobs(
             publish_job(inputs, id, &gh)?,
         );
     }
+    if branch_side {
+        let mut authority = branch_authority_job(inputs, &gh)?;
+        if mixed {
+            authority.condition = Some(event_kind("branch"));
+        }
+        jobs.insert(BRANCH_AUTHORITY_JOB.to_owned(), authority);
+    }
     if let Some(manifest) = inputs.git_tag_manifest {
-        jobs.extend(release_jobs(inputs, &gh, manifest, mixed)?);
+        jobs.extend(release_jobs(inputs, manifest)?);
+    }
+    if !inputs.images.is_empty() {
+        let crane = crane_function(inputs.catalog)?;
+        for image in inputs.images {
+            jobs.insert(
+                publish_job_id(image),
+                image_publish_job(inputs, image, &gh, &crane)?,
+            );
+        }
+        for plan in inputs.promotions {
+            jobs.insert(
+                plan.image.promote_job_id(),
+                promote_job(inputs, plan.image, &gh, &crane)?,
+            );
+        }
     }
     Ok(jobs)
 }
@@ -151,11 +205,8 @@ fn when_artifact(mut step: Step, id: &str) -> Step {
 
 /// Authority: tag grammar, annotation, ancestry, `Required`, versions.
 fn authority_job(inputs: &Inputs<'_>, gh: &str) -> Result<PublishJobSpec, OrchestratorError> {
-    let ids: Vec<&str> = inputs
-        .bundles
-        .iter()
-        .map(|p| p.bundle.id.as_str())
-        .collect();
+    let artifacts = inputs.tag_artifacts();
+    let ids: Vec<&str> = artifacts.iter().map(|(id, _)| *id).collect();
     let mut steps = vec![
         plain(mise_setup_step(inputs.mise)?),
         PublishStep {
@@ -182,8 +233,8 @@ fn authority_job(inputs: &Inputs<'_>, gh: &str) -> Result<PublishJobSpec, Orches
             true,
         )?),
     ];
-    for plan in inputs.bundles {
-        let (name, body, token) = match &plan.check {
+    for (id, check) in artifacts {
+        let (name, body, token) = match check {
             VersionCheck::Inline(version) => (
                 "Verify configured version",
                 script::inline_version_script(version),
@@ -195,8 +246,8 @@ fn authority_job(inputs: &Inputs<'_>, gh: &str) -> Result<PublishJobSpec, Orches
                 true,
             ),
         };
-        let step = script_step(&format!("{name} ({})", plan.bundle.id), body, token)?;
-        steps.push(plain(when_artifact(step, &plan.bundle.id)));
+        let step = script_step(&format!("{name} ({id})"), body, token)?;
+        steps.push(plain(when_artifact(step, id)));
     }
     let outputs = ["artifact", "version"]
         .iter()
@@ -242,114 +293,4 @@ pub(crate) fn bundle_job(
         permissions: PublishPermissions::expected(role),
         steps,
     }
-}
-
-/// Artifact name shared by upload and download.
-fn artifact_name(id: &str) -> String {
-    format!("bundle-{id}")
-}
-
-/// Download step restoring the bundle directory.
-fn download_step(id: &str) -> Result<PublishStep, OrchestratorError> {
-    Ok(plain(action_step(
-        "Download bundle",
-        DOWNLOAD_ARTIFACT_ACTION_USES,
-        BTreeMap::from([
-            ("name".to_owned(), artifact_name(id)),
-            ("path".to_owned(), "${{ runner.temp }}/bundle".to_owned()),
-        ]),
-    )?))
-}
-
-/// Build: checkout the tagged commit, pack deterministically, upload.
-fn build_job(
-    inputs: &Inputs<'_>,
-    bundle: &PublishBundle,
-) -> Result<PublishJobSpec, OrchestratorError> {
-    let id = bundle.id.as_str();
-    let upload = action_step(
-        "Upload bundle",
-        UPLOAD_ARTIFACT_ACTION_USES,
-        BTreeMap::from([
-            ("name".to_owned(), artifact_name(id)),
-            ("path".to_owned(), "${{ runner.temp }}/bundle".to_owned()),
-            ("if-no-files-found".to_owned(), "error".to_owned()),
-            ("retention-days".to_owned(), "7".to_owned()),
-        ]),
-    )?;
-    let steps = vec![
-        plain(checkout_step(CHECKOUT_USES)?),
-        plain(script_step(
-            "Pack bundle",
-            script::pack_script(id, &bundle.paths),
-            false,
-        )?),
-        plain(upload),
-    ];
-    let mut job = bundle_job(
-        inputs,
-        PublishRole::ArtifactBuild,
-        format!("Bundle build ({id})"),
-        AUTHORITY_JOB.to_owned(),
-        steps,
-    );
-    job.condition = Some(format!("needs.{AUTHORITY_JOB}.outputs.artifact == '{id}'"));
-    Ok(job)
-}
-
-/// Attest: verify the checksum, then sign provenance for the tarball.
-fn attest_job(inputs: &Inputs<'_>, id: &str) -> Result<PublishJobSpec, OrchestratorError> {
-    let attest = action_step(
-        "Attest bundle provenance",
-        ATTEST_BUILD_PROVENANCE_USES,
-        BTreeMap::from([(
-            "subject-path".to_owned(),
-            "${{ runner.temp }}/bundle/*.tar.gz".to_owned(),
-        )]),
-    )?;
-    let steps = vec![
-        download_step(id)?,
-        plain(script_step(
-            "Verify checksum",
-            script::verify_checksum_script(id),
-            false,
-        )?),
-        plain(attest),
-    ];
-    Ok(bundle_job(
-        inputs,
-        PublishRole::ArtifactAttest,
-        format!("Bundle attest ({id})"),
-        format!("bundle-build-{id}"),
-        steps,
-    ))
-}
-
-/// Publish: re-verify, then upload immutable release assets.
-fn publish_job(
-    inputs: &Inputs<'_>,
-    id: &str,
-    gh: &str,
-) -> Result<PublishJobSpec, OrchestratorError> {
-    let steps = vec![
-        plain(mise_setup_step(inputs.mise)?),
-        download_step(id)?,
-        plain(script_step(
-            "Verify checksum",
-            script::verify_checksum_script(id),
-            false,
-        )?),
-        plain(script_step(
-            "Upload release assets",
-            script::upload_script(gh, id),
-            true,
-        )?),
-    ];
-    Ok(bundle_job(
-        inputs,
-        PublishRole::ArtifactPublish,
-        format!("Bundle publish ({id})"),
-        format!("bundle-attest-{id}"),
-        steps,
-    ))
 }

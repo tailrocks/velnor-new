@@ -103,3 +103,18 @@ the installed repositories: this is the self-attestation limit above, with
 review and CODEOWNERS on `.github/**` and `.velnor/**` as the trust root.
 The credential boundary and the threat model live in the
 [private sources contract](../proposed/private-sources-contract.md).
+
+## Image publication
+
+Pull requests build image layouts with `contents: read` and upload them as
+one-day artifacts; they hold no `packages`, `attestations` or `id-token`
+scope, and `ci.yml` has no publish job. Registry writes happen only in
+`publish.yml`, whose trigger set is `push` to the default branch and release
+tags, in jobs bound to the `images` environment (the repository owner must
+restrict it to the default branch and release tags; environment protection is
+repository settings, not generated). The publish job downloads layouts only
+from a successful `ci.yml` run of the pushed commit with the `push` event and
+the default-branch head, never from a pull-request run, so fork and
+same-repository PR artifacts cannot reach the registry. It checks out and
+executes no repository code. See the
+[image publication contract](../proposed/image-publication-contract.md).

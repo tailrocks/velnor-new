@@ -80,6 +80,8 @@ mod impl_renderer_preseed_verify;
 mod impl_renderer_private_sources;
 #[path = "impl_renderer_protocol.rs"]
 mod impl_renderer_protocol;
+#[path = "impl_renderer_publish_images.rs"]
+mod impl_renderer_publish_images;
 #[path = "impl_renderer_publish_spec.rs"]
 mod impl_renderer_publish_spec;
 #[path = "impl_renderer_release_checkouts.rs"]
