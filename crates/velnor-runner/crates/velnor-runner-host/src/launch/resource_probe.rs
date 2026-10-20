@@ -7,7 +7,7 @@ use crate::launch::{SelectedEngineContext, VerifiedWorkerImages};
 use crate::scale_set::EnsureError;
 use crate::worker::ResourceBudget;
 
-pub(in crate::launch) use self::provider::ImageProvider;
+pub(crate) use self::provider::ImageProvider;
 use self::provider::ReleaseImageProvider;
 
 pub(crate) use self::sample::RecoveryObservation;

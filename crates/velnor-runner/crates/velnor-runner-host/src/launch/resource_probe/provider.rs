@@ -25,7 +25,7 @@ mod worker_verify;
 mod workspace;
 
 pub(in crate::launch) use evidence::ProbeImagePreparationEvidence;
-pub(super) use evidence::VerifiedCandidate;
+pub(crate) use evidence::VerifiedCandidate;
 pub(super) use failure::ProviderFailure;
 use identity::{
     SelectedDaemon, candidate, compiled_source_revision, image_import_request, inspect_image,
@@ -78,7 +78,7 @@ pub(super) async fn verify_worker_images_for_engine(
 }
 
 /// Supplies only an inspected daemon-specific immutable image identity.
-pub(in crate::launch) trait ImageProvider {
+pub(crate) trait ImageProvider {
     /// Authenticate, verify, load offline, and inspect the selected daemon's image.
     async fn verified_candidate(
         &self,

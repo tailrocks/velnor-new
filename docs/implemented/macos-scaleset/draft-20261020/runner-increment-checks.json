@@ -1482,5 +1482,18 @@
     "reviewer": "runner_context_review",
     "scope": "Private context records keep the replay identities together. The digest uses lowercase hexadecimal characters.",
     "remaining": "Full source gates and live tests remain necessary."
+  },
+  "provider_visibility": {
+    "result": "PASS",
+    "tests": 6,
+    "run_id": "e28f1e9b-1ed9-496e-9314-cb66f931c5f4",
+    "log": "shipping-provider3-focused-20261020.log",
+    "log_sha256": "a8369c7f13b98f298fd564b0d22a474d1dc43f897575f94577481856f6c66236",
+    "manifest_sha256": "af5979228cd79c37134ce2476b6562fc5d5be20fbb80450c56812c66e15a3ed0",
+    "review_sha256": "1f3b1018eb158b96ef37a83df95af032833670d735e7330654114e850c0d35e2",
+    "author": "replay_context_refactor",
+    "reviewer": "execution_source_security_review",
+    "scope": "The provider trait and opaque candidate type have crate visibility. Their data and verification methods keep their restricted visibility.",
+    "remaining": "The strict runner gate and live tests remain necessary."
   }
 }
