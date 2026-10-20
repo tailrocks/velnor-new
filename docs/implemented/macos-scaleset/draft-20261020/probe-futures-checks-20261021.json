@@ -1,6 +1,6 @@
 {
   "base_commit": "abfd5608b4ef851252fb455b4059281b76bd0c89",
-  "scope": "Immediate resource probe future allocation.",
+  "scope": "Heap storage for resource probe futures.",
   "source_manifest_sha256": "2c80ce9cbd1f3d12c120a208eb0e1d772875c4c161ada45e388ece6ffbb0aff1",
   "independent_review_sha256": "4b34c333bbe49ec2e3803bfd06a59c555e00ea325f555e4110aa9789ee6b8d73",
   "language_review": "PASS. The change adds no explanatory text.",

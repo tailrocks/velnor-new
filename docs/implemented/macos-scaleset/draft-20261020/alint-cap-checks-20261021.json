@@ -29,8 +29,8 @@
     "run_id": "d3ba6be5-f725-448d-b5f3-61bd5077ea04"
   },
   "generated_files_equal": 230,
-  "initial_nextest": "FAIL. The filter selected no tests. The corrected filter passed 39 tests.",
-  "initial_alint": "FAIL. The hook created an untracked build directory. The build directory was moved outside the repository.",
-  "baseline_full_renderer": "FAIL. The archive lacks the candidate source SHA for one checksum fixture.",
+  "initial_nextest": "FAIL. The first filter selected no tests. The next filter selected 39 tests, and all passed.",
+  "initial_alint": "FAIL. The program that Git runs before a commit created an untracked build directory. The parent agent moved that directory outside the repository.",
+  "baseline_full_renderer": "FAIL. The archive does not contain the source SHA that one checksum fixture expects.",
   "release_gate": "NOT_RUN"
 }

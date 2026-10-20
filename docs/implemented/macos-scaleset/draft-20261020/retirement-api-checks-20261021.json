@@ -23,7 +23,7 @@
     "run_id": "73cff33c-494d-4ade-b6c3-73d4d8a16e53",
     "log_sha256": "445503e7cb86b0fb934def467e8513f56e438703ff189c3136bd805523d83340"
   },
-  "hook_change": "Remove the unused status re-export. The test reads the enum from its module.",
+  "hook_change": "The change removes an unused status name. The test reads the status type from its module.",
   "hook_change_reviewer": "/root/runtime_stack_architecture",
-  "previous_hook_test": "FAIL. The removed re-export was used by one test."
+  "previous_hook_test": "FAIL. One test still used the removed status name."
 }

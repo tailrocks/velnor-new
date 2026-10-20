@@ -17,5 +17,5 @@
   "format": "PASS",
   "host_adapter": "NOT_RUN",
   "live_test": "NOT_RUN",
-  "limit": "Registration absence does not prove job assignment absence."
+  "limit": "A missing runner registration does not show whether GitHub assigned a job."
 }
