@@ -3,7 +3,7 @@ use bollard::models::ContainerConfig;
 use super::{PLATFORM, valid_sha};
 
 /// A verified release image plus the selected daemon's inspected image config.
-pub(in crate::launch::resource_probe) struct VerifiedCandidate {
+pub(in crate::launch) struct VerifiedCandidate {
     pub(in crate::launch::resource_probe) runtime_id: String,
     /// Verified probe image target. This can differ from daemon architecture under emulation.
     pub(in crate::launch::resource_probe) platform: String,

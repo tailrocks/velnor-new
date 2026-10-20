@@ -23,7 +23,6 @@ pub(crate) struct TestGuestImage {
 
 impl TestGuestImage {
     pub(crate) fn new() -> Result<Self, HostError> {
-        let state = TestState::new()?;
         let binding = basic_connection(
             "build-main",
             42,
@@ -37,7 +36,14 @@ impl TestGuestImage {
             .first()
             .cloned()
             .ok_or(HostError::Config)?;
-        let images = test_worker_images();
+        Self::for_connection_and_images(connection, test_worker_images())
+    }
+
+    pub(crate) fn for_connection_and_images(
+        connection: RepositoryConnection,
+        images: VerifiedWorkerImages,
+    ) -> Result<Self, HostError> {
+        let state = TestState::new()?;
         let selected = EngineContext {
             engine_id: images.engine_id().to_owned(),
             endpoint: "unix:///var/run/docker.sock".to_owned(),

@@ -45,12 +45,12 @@ async fn fresh_jit_claim_rejects_a_policy_changed_after_acquire() -> Result<(), 
         &fixture.authority_policy,
     )
     .await
-    .map_err(|error| format!("reservation failed: {error}"))?;
+    .map_err(|error| format!("The reservation failed. Error: {error}."))?;
     let ReservationOutcome::AcquireClaimed(physical, acquire_claim) = reserved else {
         return Err(match reserved {
-            ReservationOutcome::Existing => "the request already has a reservation".to_owned(),
-            ReservationOutcome::AtCapacity => "the host has no available capacity".to_owned(),
-            ReservationOutcome::ReconcileRequired => "the request needs recovery".to_owned(),
+            ReservationOutcome::Existing => "The request already has a reservation.".to_owned(),
+            ReservationOutcome::AtCapacity => "The host has no available capacity.".to_owned(),
+            ReservationOutcome::ReconcileRequired => "The request needs recovery.".to_owned(),
             ReservationOutcome::AcquireClaimed(_, _) => unreachable!(),
         });
     };
@@ -58,7 +58,7 @@ async fn fresh_jit_claim_rejects_a_policy_changed_after_acquire() -> Result<(), 
     assert_eq!(
         acquire::run_claimed(&mut lane, "queue-token", &fixture.scope, acquire_claim)
             .await
-            .map_err(|error| format!("Acquire failed: {error}"))?,
+            .map_err(|error| format!("The Acquire operation failed. Error: {error}."))?,
         AcquireDisposition::Acquired
     );
     assert_eq!(lane.methods, [Method::Post]);
@@ -72,7 +72,7 @@ async fn fresh_jit_claim_rejects_a_policy_changed_after_acquire() -> Result<(), 
         .scope
         .install_job_authority_policy(&changed)
         .await
-        .map_err(|error| format!("policy update failed: {error}"))?;
+        .map_err(|error| format!("The policy update failed. Error: {error}."))?;
     assert!(
         fixture
             .scope
@@ -82,13 +82,13 @@ async fn fresh_jit_claim_rejects_a_policy_changed_after_acquire() -> Result<(), 
                 fixture
                     .request
                     .request_id()
-                    .ok_or_else(|| "Request ID is missing.".to_owned())?,
+                    .ok_or_else(|| "The request ID is missing.".to_owned())?,
                 &physical.runner_name,
                 physical.authority_generation,
                 &physical.authority_digest,
             )
             .await
-            .map_err(|error| format!("JIT claim failed: {error}"))?
+            .map_err(|error| format!("The JIT claim failed. Error: {error}."))?
             .is_none()
     );
     let reservations = fixture

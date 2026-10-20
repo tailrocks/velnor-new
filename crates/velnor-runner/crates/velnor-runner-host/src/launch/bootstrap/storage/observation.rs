@@ -16,12 +16,48 @@ use velnor_resource_probe::worker_binding::{
 use zeroize::Zeroize;
 
 mod aggregate;
-pub(crate) use aggregate::observe_storage_resources;
+mod provider_entry;
+use aggregate::observe_storage_resources as observe_storage_resources_core;
+pub(in crate::launch) use provider_entry::observe_storage_resources_with_provider;
 
 use crate::{
     error::HostError,
-    launch::{SelectedEngineContext, VerifiedWorkerImages},
+    journal::{ConnectionJournal, Journal},
+    launch::{
+        SelectedEngineContext, VerifiedWorkerImages,
+        bootstrap::{
+            PreparedAcquiredBootstrap, StartedBootstrapPair, VerifiedStorageResourceBinding,
+        },
+        resource_probe::ReleaseReadSecret,
+    },
+    worker::storage_initialization::VerifiedStorageInitializationReady,
 };
+
+pub(crate) async fn observe_storage_resources(
+    docker: &Docker,
+    journal: &ConnectionJournal,
+    host_journal: &Journal,
+    release_read_secret: &ReleaseReadSecret,
+    engine: &SelectedEngineContext,
+    images: &VerifiedWorkerImages,
+    prepared: &PreparedAcquiredBootstrap,
+    started: &StartedBootstrapPair,
+    initialization: &VerifiedStorageInitializationReady,
+) -> Result<VerifiedStorageResourceBinding, HostError> {
+    let provider = crate::launch::resource_probe::release_image_provider(release_read_secret)?;
+    observe_storage_resources_with_provider(
+        docker,
+        journal,
+        host_journal,
+        &provider,
+        engine,
+        images,
+        prepared,
+        started,
+        initialization,
+    )
+    .await
+}
 
 const HELPER_PATH: &str = "/velnor/resource-probe";
 const MODE_ARGUMENT: &str = "self_storage";

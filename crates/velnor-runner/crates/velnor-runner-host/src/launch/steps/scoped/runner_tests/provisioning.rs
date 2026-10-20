@@ -50,9 +50,9 @@ async fn production_reservation_claims_acquire_once_and_replay_sends_none() -> R
     .map_err(|error| error.to_string())?;
     let ReservationOutcome::AcquireClaimed(_, claim) = first else {
         return Err(match first {
-            ReservationOutcome::Existing => "the request already has a reservation".to_owned(),
-            ReservationOutcome::AtCapacity => "the host has no available capacity".to_owned(),
-            ReservationOutcome::ReconcileRequired => "the request needs recovery".to_owned(),
+            ReservationOutcome::Existing => "The request already has a reservation.".to_owned(),
+            ReservationOutcome::AtCapacity => "The host has no available capacity.".to_owned(),
+            ReservationOutcome::ReconcileRequired => "The request needs recovery.".to_owned(),
             ReservationOutcome::AcquireClaimed(_, _) => unreachable!(),
         });
     };

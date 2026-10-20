@@ -28,6 +28,22 @@ pub(crate) use scoped::{
 };
 
 #[cfg(test)]
+pub(crate) async fn test_started_intake_and_ack<F, Fut>(
+    journal: &crate::journal::ConnectionJournal,
+    set_id: i64,
+    polled: &velnor_runner_github::Poll,
+    acknowledge: F,
+) -> Result<Vec<i64>, crate::scale_set::EnsureError>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = Result<(), crate::scale_set::EnsureError>>,
+{
+    completion_intake::intake_and_ack_if_only_scoped(journal, set_id, polled, acknowledge)
+        .await
+        .map(|decision| decision.started_request_ids)
+}
+
+#[cfg(test)]
 #[path = "turn/completion_intake_tests.rs"]
 mod completion_intake_tests;
 

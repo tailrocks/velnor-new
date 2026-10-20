@@ -44,7 +44,7 @@ async fn read_headers(stream: &mut UnixStream, bytes: &mut Vec<u8>) -> Result<us
         if bytes.len() >= HTTP_LIMIT {
             return Err("Docker API headers exceed the test limit".to_owned());
         }
-        let mut chunk = [0_u8; 2048];
+        let mut chunk = [0_u8; 1];
         let count = stream
             .read(&mut chunk)
             .await

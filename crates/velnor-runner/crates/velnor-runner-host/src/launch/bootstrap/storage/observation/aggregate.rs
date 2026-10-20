@@ -14,7 +14,7 @@ use crate::{
             BootstrapContainerRole, PreparedAcquiredBootstrap, StartedBootstrapPair,
             VerifiedStorageResourceBinding,
         },
-        resource_probe::{OwnedCgroupSubjects, OwnedContainerSubjects, ReleaseReadSecret},
+        resource_probe::{ImageProvider, OwnedCgroupSubjects, OwnedContainerSubjects},
     },
     worker::storage_initialization::VerifiedStorageInitializationReady,
 };
@@ -43,11 +43,11 @@ fn admission_witness_is_fresh(
 }
 
 /// Measure both started containers and build the binding from one trusted plan.
-pub(crate) async fn observe_storage_resources(
+pub(crate) async fn observe_storage_resources<P: ImageProvider>(
     docker: &Docker,
     journal: &ConnectionJournal,
     host_journal: &Journal,
-    release_read_secret: &ReleaseReadSecret,
+    provider: &P,
     engine: &SelectedEngineContext,
     images: &VerifiedWorkerImages,
     prepared: &PreparedAcquiredBootstrap,
@@ -126,10 +126,10 @@ pub(crate) async fn observe_storage_resources(
             dind.observation().process_start_ticks,
         )?,
     )?;
-    let owned = crate::launch::resource_probe::observe_owned_cgroups(
+    let owned = crate::launch::resource_probe::observe_owned_cgroups_with_provider(
         docker,
         host_journal,
-        release_read_secret,
+        provider,
         &subjects,
     )
     .await?;

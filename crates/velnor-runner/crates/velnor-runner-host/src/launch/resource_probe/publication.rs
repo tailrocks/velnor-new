@@ -41,7 +41,10 @@ pub(crate) struct ControlPublicationInput<'a> {
 }
 
 mod control;
-pub(crate) use control::{publish_challenge, publish_decision};
+pub(in crate::launch) use control::publish_challenge_with_provider;
+#[cfg(test)]
+pub(in crate::launch) use control::publish_challenge_with_test_provider;
+pub(crate) use control::publish_decision;
 
 fn validate_job_facts_binding(
     claim: &crate::journal::JobFactsPublicationClaim,
@@ -80,9 +83,39 @@ pub(crate) struct JobFactsPublicationInput<'a> {
 pub(crate) async fn publish_job_facts(
     input: JobFactsPublicationInput<'_>,
 ) -> Result<crate::launch::bootstrap::JobFactsPublication, HostError> {
+    let provider = match crate::launch::resource_probe::release_image_provider(input.release_secret)
+    {
+        Ok(provider) => provider,
+        Err(error) => {
+            input
+                .connection_journal
+                .mark_job_facts_publication_uncertain(input.claim)
+                .await?;
+            return Err(error);
+        }
+    };
+    publish_job_facts_with_provider(input, &provider).await
+}
+
+#[cfg(test)]
+pub(in crate::launch) async fn publish_job_facts_with_test_provider<
+    P: crate::launch::resource_probe::ImageProvider,
+>(
+    input: JobFactsPublicationInput<'_>,
+    provider: &P,
+) -> Result<crate::launch::bootstrap::JobFactsPublication, HostError> {
+    publish_job_facts_with_provider(input, provider).await
+}
+
+pub(in crate::launch) async fn publish_job_facts_with_provider<
+    P: crate::launch::resource_probe::ImageProvider,
+>(
+    input: JobFactsPublicationInput<'_>,
+    provider: &P,
+) -> Result<crate::launch::bootstrap::JobFactsPublication, HostError> {
     let journal = input.connection_journal;
     let claim = input.claim;
-    match publish_job_facts_inner(input).await {
+    match publish_job_facts_inner(input, provider).await {
         Ok(proof) => Ok(proof),
         Err(error) => {
             journal.mark_job_facts_publication_uncertain(claim).await?;
@@ -138,15 +171,16 @@ async fn prepare_job_facts_publication<'a>(
     })
 }
 
-async fn publish_job_facts_inner(
+async fn publish_job_facts_inner<P: crate::launch::resource_probe::ImageProvider>(
     input: JobFactsPublicationInput<'_>,
+    provider: &P,
 ) -> Result<crate::launch::bootstrap::JobFactsPublication, HostError> {
     let prepared = prepare_job_facts_publication(&input).await?;
-    let probe = super::verify_publication_probe_image_until(
+    let probe = super::verify_publication_probe_image_until_with_provider(
         input.docker,
         input.journal,
         input.selected,
-        input.release_secret,
+        provider,
         input.deadline,
     )
     .await?;

@@ -176,6 +176,10 @@ impl Fixture {
             authority_policy,
         })
     }
+
+    pub(super) fn journal_file(&self) -> PathBuf {
+        self._scratch.file()
+    }
 }
 
 pub(super) fn fixture_storage(permit: &StartPermit) -> Result<StorageAdmission, String> {

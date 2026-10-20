@@ -84,6 +84,7 @@ impl InitializationDockerApi {
         Ok(ApiCapture {
             requests: capture.requests.clone(),
             stdin: capture.stdin.clone(),
+            metadata_inodes: capture.metadata_inodes,
             create_name: capture.create_name.clone(),
         })
     }

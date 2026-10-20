@@ -14,6 +14,18 @@ mod http;
 
 use self::http::read_request;
 
+#[path = "daemon/publication.rs"]
+mod publication;
+
+#[path = "daemon/exec_protocol.rs"]
+mod exec_protocol;
+
+#[path = "daemon/state_changes.rs"]
+mod state_changes;
+
+#[path = "exec_fixture.rs"]
+mod exec_fixture;
+
 pub(super) async fn serve(
     listener: UnixListener,
     images: crate::launch::VerifiedWorkerImages,
@@ -53,7 +65,16 @@ struct ServerState {
     volumes: HashMap<String, Value>,
     networks: HashMap<String, Value>,
     containers: HashMap<String, Value>,
+    publication_logs: Arc<AsyncMutex<HashMap<String, Vec<u8>>>>,
     attach_tasks: Vec<tokio::task::JoinHandle<Result<(), String>>>,
+    execs: Arc<AsyncMutex<HashMap<String, ExecRecord>>>,
+}
+
+#[derive(Clone)]
+struct ExecRecord {
+    container_id: String,
+    pid: u32,
+    running: bool,
 }
 
 impl ServerState {
@@ -75,7 +96,9 @@ impl ServerState {
             volumes: HashMap::new(),
             networks: HashMap::new(),
             containers: HashMap::new(),
+            publication_logs: Arc::new(AsyncMutex::new(HashMap::new())),
             attach_tasks: Vec::new(),
+            execs: Arc::new(AsyncMutex::new(HashMap::new())),
         }
     }
 
@@ -97,6 +120,10 @@ impl ServerState {
             requests.push(request.clone());
             requests.len() - 1
         };
+        if request.method == "POST" && route(&request).starts_with("/exec/") {
+            self.start_exec(stream, &request, request_index).await?;
+            return Ok(());
+        }
         if request.method == "POST" && route(&request).ends_with("/attach") {
             self.start_attach(stream, &request).await?;
             return Ok(());
@@ -131,7 +158,14 @@ impl ServerState {
                     .map_err(|error| format!("Initializer attach error: {error}"))
             }));
         } else {
-            if !super::super::request_checks::valid_runner_attach(request) {
+            if self.is_execution_publication_attach(request) {
+                self.start_execution_publication_attach(stream, request)
+                    .await?;
+                return Ok(());
+            } else if self.is_owned_cgroup_probe_attach(request) {
+                self.start_owned_cgroup_attach(stream).await?;
+                return Ok(());
+            } else if !super::super::request_checks::valid_runner_attach(request) {
                 return Err(format!(
                     "The Docker attach target is incorrect: {} {}",
                     request.method, request.target
@@ -151,6 +185,9 @@ impl ServerState {
         let initializer_create = self.is_initializer_create(request);
         if initializer_create || self.is_initializer_container(request) {
             return self.reply_initializer(request, initializer_create).await;
+        }
+        if self.is_execution_publication_logs(request) {
+            return self.execution_publication_logs(request).await;
         }
         self.reply_docker(request)
     }
@@ -175,6 +212,18 @@ impl ServerState {
     }
 
     fn reply_docker(&mut self, request: &CapturedRequest) -> Result<(u16, Vec<u8>), String> {
+        if request.method == "POST"
+            && route(request).starts_with("/containers/")
+            && route(request).ends_with("/exec")
+        {
+            return self.create_exec(request);
+        }
+        if request.method == "GET"
+            && route(request).starts_with("/exec/")
+            && route(request).ends_with("/json")
+        {
+            return self.inspect_exec(request);
+        }
         let initializer_image = self.initializer.as_ref().map(|(image, _)| image.as_str());
         let response = super::responses::answer(
             &self.images,
@@ -186,22 +235,6 @@ impl ServerState {
         )?;
         self.record_docker_change(request, &response)?;
         Ok(response)
-    }
-
-    fn record_docker_change(
-        &mut self,
-        request: &CapturedRequest,
-        response: &(u16, Vec<u8>),
-    ) -> Result<(), String> {
-        match (request.method.as_str(), route(request)) {
-            ("POST", "/volumes/create") => self.record_volume(response),
-            ("POST", "/networks/create") => self.record_network(request),
-            ("POST", "/containers/create") => self.record_container(request, response),
-            ("POST", path) if path.ends_with("/start") => {
-                super::responses::mark_container_started(&mut self.containers, request)
-            }
-            _ => Ok(()),
-        }
     }
 
     fn record_volume(&mut self, response: &(u16, Vec<u8>)) -> Result<(), String> {
@@ -253,7 +286,8 @@ impl ServerState {
             .map(|(_, value)| value.split('&').next().unwrap_or(value))
             .ok_or_else(|| "Created container name is absent".to_owned())?;
         let id = super::responses::response_id(&response.1)?;
-        let inspection = super::responses::container_inspect(&self.images, &created, &id, name)?;
+        let inspection =
+            super::responses::container_inspect(&self.images, &created, &self.volumes, &id, name)?;
         self.containers.insert(name.to_owned(), inspection.clone());
         self.containers.insert(id, inspection);
         Ok(())

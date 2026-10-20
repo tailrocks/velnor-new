@@ -2,12 +2,15 @@
 
 mod authorization;
 mod jit;
+mod provider_entry;
 mod registry;
 
 #[cfg(test)]
 #[path = "scoped_runtime/stale_acquired_tests.rs"]
 mod stale_acquired_tests;
 
+#[cfg(test)]
+pub(in crate::launch) use authorization::prepare_listener_with_test_provider;
 pub(crate) use authorization::{
     AuthorizedScopedExecution, PendingScopedExecution, authorize_started_execution,
     prepare_listener,
@@ -16,6 +19,9 @@ pub(crate) use jit::{
     ChannelReadyBootstrap, PendingChannelBootstrap, PendingJitBootstrap, RunnerReadyBootstrap,
     create_and_bind,
 };
+pub(crate) use provider_entry::prepare_and_bind_scoped;
+#[cfg(test)]
+pub(in crate::launch) use provider_entry::prepare_and_bind_scoped_with_test_provider;
 pub(crate) use registry::RunnerReadyRegistry;
 
 use bollard::Docker;
@@ -28,7 +34,7 @@ use crate::{
     launch::{
         Lane, SelectedEngineContext, VerifiedWorkerImages,
         bootstrap::{PendingBootstrapPair, PreparedAcquiredBootstrap, StartedBootstrapPair},
-        resource_probe::ReleaseReadSecret,
+        resource_probe::{ImageProvider, ReleaseReadSecret},
         steps::ScopedProvisioningOutcome,
     },
     worker::storage_initialization::VerifiedStorageInitializationReady,
@@ -155,13 +161,12 @@ impl PendingScopedBootstrap {
     }
 }
 
-/// Prepare storage, start both containers, and bind measured resources.
-pub(crate) async fn prepare_and_bind_scoped(
+async fn prepare_and_bind_scoped_with_provider<P: ImageProvider>(
     outcome: ScopedProvisioningOutcome,
     docker: &Docker,
     scoped: &ConnectionJournal,
     host: &Journal,
-    release_secret: &ReleaseReadSecret,
+    provider: &P,
     engine: &SelectedEngineContext,
     images: &VerifiedWorkerImages,
 ) -> Result<ScopedRuntimeOutcome, HostError> {
@@ -171,16 +176,7 @@ pub(crate) async fn prepare_and_bind_scoped(
     else {
         return Ok(ScopedRuntimeOutcome::NoStart);
     };
-    prepare_started_and_bound(
-        prepared,
-        docker,
-        scoped,
-        host,
-        release_secret,
-        engine,
-        images,
-    )
-    .await
+    prepare_started_and_bound(prepared, docker, scoped, host, provider, engine, images).await
 }
 
 /// Prepare one job, bind its exact Runner, and measure its proof channel.
@@ -226,12 +222,12 @@ where
     }
 }
 
-async fn prepare_started_and_bound(
+async fn prepare_started_and_bound<P: ImageProvider>(
     mut prepared: PreparedAcquiredBootstrap,
     docker: &Docker,
     scoped: &ConnectionJournal,
     host: &Journal,
-    release_secret: &ReleaseReadSecret,
+    provider: &P,
     engine: &SelectedEngineContext,
     images: &VerifiedWorkerImages,
 ) -> Result<ScopedRuntimeOutcome, HostError> {
@@ -312,14 +308,14 @@ async fn prepare_started_and_bound(
         docker,
         scoped,
         host,
-        release_secret,
+        provider,
         engine,
         images,
     )
     .await
 }
 
-async fn bind_started(
+async fn bind_started<P: ImageProvider>(
     prepared: PreparedAcquiredBootstrap,
     network: RecordedStorageNetwork,
     started: StartedBootstrapPair,
@@ -328,15 +324,15 @@ async fn bind_started(
     docker: &Docker,
     scoped: &ConnectionJournal,
     host: &Journal,
-    release_secret: &ReleaseReadSecret,
+    provider: &P,
     engine: &SelectedEngineContext,
     images: &VerifiedWorkerImages,
 ) -> Result<ScopedRuntimeOutcome, HostError> {
-    let binding = match super::bootstrap::observe_storage_resources(
+    let binding = match super::bootstrap::observe_storage_resources_with_provider(
         docker,
         scoped,
         host,
-        release_secret,
+        provider,
         engine,
         images,
         &prepared,

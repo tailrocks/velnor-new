@@ -2,6 +2,8 @@ use velnor_runner_github::RunnerReference;
 
 mod delivery;
 mod job_facts;
+#[cfg(test)]
+mod test_snapshot;
 mod validation;
 
 /// One durable publication attempt for the read-only job-facts file.

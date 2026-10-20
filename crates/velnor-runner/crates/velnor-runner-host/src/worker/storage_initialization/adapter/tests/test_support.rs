@@ -25,6 +25,7 @@ pub(super) async fn volume_identity(
 pub(super) struct ApiCapture {
     pub(super) requests: Vec<String>,
     pub(super) stdin: Vec<u8>,
+    pub(super) metadata_inodes: Option<[u64; 3]>,
     pub(super) create_name: Option<String>,
 }
 
@@ -82,6 +83,7 @@ impl InitializationTestResponder {
             capture: Arc::new(Mutex::new(ApiCapture {
                 requests: Vec::new(),
                 stdin: Vec::new(),
+                metadata_inodes: None,
                 create_name: None,
             })),
         })
@@ -121,6 +123,14 @@ impl InitializationTestResponder {
             capture: Arc::clone(&self.capture),
         })
     }
+
+    pub(crate) async fn metadata_inodes(&self) -> Result<[u64; 3], String> {
+        self.capture
+            .lock()
+            .await
+            .metadata_inodes
+            .ok_or_else(|| "The initializer has not recorded the JobFacts identity.".to_owned())
+    }
 }
 
 impl InitializationAttachHandle {
@@ -131,10 +141,14 @@ impl InitializationAttachHandle {
         stream
             .write_all(b"HTTP/1.1 101 UPGRADED\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n")
             .await
-            .map_err(|error| format!("write attach upgrade: {error}"))?;
+            .map_err(|error| {
+                format!("The test server could not write the attach upgrade. Error: {error}.")
+            })?;
         server::serve_attach_stream(stream, self.operation, self.capture)
             .await
-            .map_err(|error| format!("serve attach stream: {error}"))
+            .map_err(|error| {
+                format!("The test server could not process the attach stream. Error: {error}.")
+            })
     }
 }
 

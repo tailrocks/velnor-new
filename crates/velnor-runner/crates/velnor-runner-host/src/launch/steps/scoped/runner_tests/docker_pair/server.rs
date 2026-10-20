@@ -22,6 +22,8 @@ pub(super) const RUNNER_ID: &str = concat!(
 
 #[path = "server/daemon.rs"]
 mod daemon;
+#[path = "server/publication_fixture.rs"]
+mod publication_fixture;
 #[path = "server/responses.rs"]
 mod responses;
 
@@ -38,6 +40,16 @@ pub(super) struct CapturedApi {
     pub(super) requests: Vec<CapturedRequest>,
     pub(super) jit_input: Vec<u8>,
     pub(super) server_error: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct ActivitySnapshot {
+    pub(super) requests: usize,
+    pub(super) starts: usize,
+    pub(super) publisher_containers: usize,
+    pub(super) publisher_logs: usize,
+    pub(super) runner_attaches: usize,
+    pub(super) jit_input_bytes: usize,
 }
 
 pub(super) struct PairDockerApi {
@@ -126,6 +138,76 @@ impl PairDockerApi {
             jit_input: take(&self.jit_input, "JIT input is poisoned")?,
             server_error,
         })
+    }
+
+    pub(super) fn request_summary(&self) -> Result<Vec<String>, String> {
+        self.requests
+            .lock()
+            .map_err(|_| "Docker request list is poisoned".to_owned())
+            .map(|requests| {
+                let mut summary: Vec<String> = requests
+                    .iter()
+                    .rev()
+                    .take(8)
+                    .map(|request| {
+                        format!(
+                            "{} {} -> {:?}",
+                            request.method, request.target, request.response_status
+                        )
+                    })
+                    .collect();
+                summary.reverse();
+                summary
+            })
+    }
+
+    pub(super) fn activity_snapshot(&self) -> Result<ActivitySnapshot, String> {
+        let requests = self
+            .requests
+            .lock()
+            .map_err(|_| "Docker request list is poisoned".to_owned())?;
+        let publisher_containers = requests
+            .iter()
+            .filter(|request| {
+                request.method == "POST"
+                    && route(request) == "/containers/create"
+                    && serde_json::from_slice::<serde_json::Value>(&request.body)
+                        .ok()
+                        .is_some_and(|body| {
+                            body["Labels"]["velnor.role"] == "execution-publication"
+                        })
+            })
+            .count();
+        let snapshot = ActivitySnapshot {
+            requests: requests.len(),
+            starts: requests
+                .iter()
+                .filter(|request| {
+                    request.method == "POST"
+                        && route(request).starts_with("/containers/")
+                        && route(request).ends_with("/start")
+                })
+                .count(),
+            publisher_containers,
+            publisher_logs: requests
+                .iter()
+                .filter(|request| {
+                    request.method == "GET"
+                        && route(request).starts_with("/containers/")
+                        && route(request).ends_with("/logs")
+                })
+                .count(),
+            runner_attaches: requests
+                .iter()
+                .filter(|request| super::request_checks::valid_runner_attach(request))
+                .count(),
+            jit_input_bytes: self
+                .jit_input
+                .lock()
+                .map_err(|_| "JIT input is poisoned".to_owned())?
+                .len(),
+        };
+        Ok(snapshot)
     }
 }
 

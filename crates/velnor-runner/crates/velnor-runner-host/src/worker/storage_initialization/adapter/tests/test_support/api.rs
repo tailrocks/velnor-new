@@ -314,6 +314,7 @@ impl InitializationDockerApi {
         let capture = Arc::new(Mutex::new(ApiCapture {
             requests: Vec::new(),
             stdin: Vec::new(),
+            metadata_inodes: None,
             create_name: None,
         }));
         let server_capture = Arc::clone(&capture);

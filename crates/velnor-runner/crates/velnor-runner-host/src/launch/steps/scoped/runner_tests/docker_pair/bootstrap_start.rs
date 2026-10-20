@@ -123,7 +123,7 @@ async fn production_bootstrap_starts_private_pair_and_keeps_jit_withheld() -> Re
     verify_retained_charge(&fixture, reservation_id, operation_id, &request).await
 }
 
-struct BootstrapSetup {
+pub(super) struct BootstrapSetup {
     fixture: Fixture,
     api: PairDockerApi,
     prepared: crate::launch::bootstrap::PreparedAcquiredBootstrap,
@@ -133,7 +133,7 @@ struct BootstrapSetup {
 }
 
 impl BootstrapSetup {
-    async fn open() -> Result<Self, String> {
+    pub(super) async fn open() -> Result<Self, String> {
         let fixture = Fixture::open_with_engine("native-bootstrap-pair", ENGINE_ID).await?;
         configure_capacity(&fixture).await?;
         let permit = StartPermit::test_fixture_with_engine_and_available_memory(
@@ -266,7 +266,7 @@ async fn initializer_for(
         crate::worker::storage_initialization::StorageInitializationImage::from_verified_release(
             images,
         )
-        .map_err(|error| format!("Verified storage initializer is absent: {error}"))?;
+        .map_err(|error| format!("The verified storage initializer is absent. Error: {error}."))?;
     let metadata = format!("{}-metadata", names.private_volume());
     let responder = crate::worker::storage_initialization::InitializationTestResponder::new(
         &fixture.scope,
@@ -298,6 +298,49 @@ async fn prepare_acquired(
     .await
     .map_err(|error| format!("Production storage preparation error: {error}"))?
     .ok_or_else(|| "The production storage preparation result has no start.".to_owned())
+}
+
+pub(super) struct CompositionSetup {
+    pub(super) fixture: Fixture,
+    pub(super) api: PairDockerApi,
+    pub(super) outcome: Option<crate::launch::steps::ScopedProvisioningOutcome>,
+    pub(super) engine: crate::launch::SelectedEngineContext,
+    pub(super) images: crate::launch::VerifiedWorkerImages,
+    pub(super) guest_image: crate::worker::guest_image::test_support::TestGuestImage,
+    _state: BootstrapAdmissionState,
+}
+
+pub(super) async fn open_composition() -> Result<CompositionSetup, String> {
+    let fixture = Fixture::open_with_engine("native-intake-composition", ENGINE_ID).await?;
+    configure_capacity(&fixture).await?;
+    let permit = StartPermit::test_fixture_with_engine_and_available_memory(
+        &"a".repeat(32),
+        ENGINE_ID,
+        MEMORY_BYTES,
+    );
+    let images =
+        super::super::support::test_images_for_engine(ENGINE_ID, permit.docker_root_digest());
+    let engine = selected_engine(&images)?;
+    let state = BootstrapAdmissionState::new(&fixture.binding)?;
+    let drive = bootstrap_drive(&fixture, &state.path);
+    let outcome = acquire_source_authorized(&drive, permit, &engine).await?;
+    let guest_image =
+        crate::worker::guest_image::test_support::TestGuestImage::for_connection_and_images(
+            fixture.binding.clone(),
+            images.clone(),
+        )
+        .map_err(|error| error.to_string())?;
+    let (initializer_image, initializer) = initializer_for(&outcome, &fixture, &images).await?;
+    let api = PairDockerApi::open_with_initializer(images.clone(), initializer_image, initializer)?;
+    Ok(CompositionSetup {
+        fixture,
+        api,
+        outcome: Some(outcome),
+        engine,
+        images,
+        guest_image,
+        _state: state,
+    })
 }
 
 async fn verify_retained_charge(

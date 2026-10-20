@@ -20,6 +20,8 @@ const INBOX_PATH: &str = "/opt/velnor/source-proof/inbox";
 const INBOX_SOURCE: &str = "source-proof/inbox";
 const JOB_FACTS_PATH: &str = "/opt/velnor/job-facts";
 const JOB_FACTS_SOURCE: &str = "job-facts";
+const RUNTIME_IDENTITY_PATH: &str = "/.velnor-runtime-identity";
+const RUNTIME_IDENTITY_SOURCE: &str = "runtime-identity";
 
 pub(super) struct AttachmentFact {
     role: StorageRole,
@@ -88,11 +90,16 @@ pub(super) fn validate_storage_attachments(
         JOB_FACTS_PATH,
         StorageRole::EngineMetadata,
     )?;
+    let job_facts_inode = storage.metadata_job_facts_inode()?;
     let dind_attached = storage.attachments().iter().any(|attachment| {
-        attachment.container_id() == Some(started.dind_container_id())
-            && matches!(
+        attachment.observer() == StorageObserver::Dind
+            && attachment.container_id() == Some(started.dind_container_id())
+            && dind_channel_mount_is_forbidden(
+                attachment.role(),
                 attachment.target(),
-                CONTROL_PATH | INBOX_PATH | JOB_FACTS_PATH
+                attachment.source_target(),
+                attachment.volume_subpath(),
+                attachment.read_only(),
             )
     });
     if dind_attached
@@ -117,10 +124,43 @@ pub(super) fn validate_storage_attachments(
             StorageRole::EngineMetadata,
             true,
         )
+        || !matches_initialized_job_facts_inode(&observation.job_facts, job_facts_inode)
     {
         return Err(HostError::Identity);
     }
     Ok(())
+}
+
+fn matches_initialized_job_facts_inode(
+    directory: &ExecutionChannelDirectory,
+    initialized_inode: u64,
+) -> bool {
+    initialized_inode > 0 && directory.inode == initialized_inode
+}
+
+fn dind_channel_mount_is_forbidden(
+    role: StorageRole,
+    target: &str,
+    source_target: Option<&str>,
+    volume_subpath: Option<&str>,
+    read_only: bool,
+) -> bool {
+    match target {
+        CONTROL_PATH | INBOX_PATH => true,
+        JOB_FACTS_PATH => {
+            role != StorageRole::EngineMetadata
+                || source_target.is_some()
+                || volume_subpath != Some(JOB_FACTS_SOURCE)
+                || !read_only
+        }
+        RUNTIME_IDENTITY_PATH => {
+            role != StorageRole::EngineMetadata
+                || source_target.is_some()
+                || volume_subpath != Some(RUNTIME_IDENTITY_SOURCE)
+                || !read_only
+        }
+        _ => false,
+    }
 }
 
 pub(super) fn matching_attachment(

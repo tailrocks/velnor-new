@@ -1,6 +1,7 @@
 use super::{
     AttachmentFact, CONTROL_PATH, CONTROL_SOURCE, INBOX_PATH, INBOX_SOURCE, JOB_FACTS_PATH,
-    JOB_FACTS_SOURCE,
+    JOB_FACTS_SOURCE, RUNTIME_IDENTITY_PATH, RUNTIME_IDENTITY_SOURCE,
+    dind_channel_mount_is_forbidden, matches_initialized_job_facts_inode,
 };
 use crate::journal::StorageRole;
 use velnor_resource_probe::execution_channel_wire::ExecutionChannelDirectory;
@@ -218,4 +219,63 @@ fn job_facts_directory_is_verified_on_its_metadata_volume_subpath() {
         StorageRole::EngineMetadata,
         true,
     ));
+    assert!(matches_initialized_job_facts_inode(&directory, 102));
+    assert!(!matches_initialized_job_facts_inode(&directory, 103));
+}
+
+#[test]
+fn dind_allows_only_bound_read_only_metadata_views() {
+    for (target, subpath) in [
+        (JOB_FACTS_PATH, JOB_FACTS_SOURCE),
+        (RUNTIME_IDENTITY_PATH, RUNTIME_IDENTITY_SOURCE),
+    ] {
+        assert!(!dind_channel_mount_is_forbidden(
+            StorageRole::EngineMetadata,
+            target,
+            None,
+            Some(subpath),
+            true,
+        ));
+        assert!(dind_channel_mount_is_forbidden(
+            StorageRole::EngineMetadata,
+            target,
+            None,
+            Some(subpath),
+            false,
+        ));
+        assert!(dind_channel_mount_is_forbidden(
+            StorageRole::EngineMetadata,
+            target,
+            None,
+            Some("foreign-subpath"),
+            true,
+        ));
+        assert!(dind_channel_mount_is_forbidden(
+            StorageRole::RunnerHome,
+            target,
+            None,
+            Some(subpath),
+            true,
+        ));
+        assert!(dind_channel_mount_is_forbidden(
+            StorageRole::EngineMetadata,
+            target,
+            Some("foreign-source"),
+            Some(subpath),
+            true,
+        ));
+    }
+}
+
+#[test]
+fn dind_never_receives_source_proof_control_or_inbox() {
+    for target in [CONTROL_PATH, INBOX_PATH] {
+        assert!(dind_channel_mount_is_forbidden(
+            StorageRole::EngineMetadata,
+            target,
+            None,
+            Some("control"),
+            true,
+        ));
+    }
 }

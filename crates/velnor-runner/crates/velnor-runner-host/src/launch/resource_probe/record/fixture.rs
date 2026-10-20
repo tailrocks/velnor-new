@@ -8,7 +8,7 @@ pub(in crate::launch::resource_probe) fn fixture_record() -> ProbeRecord {
         docker_root_mount_root: "/_data".to_owned(),
         docker_root_mount_id: 5,
         docker_root_device_major: 0,
-        docker_root_device_minor: 38,
+        docker_root_device_minor: 41,
         docker_root_statx_device_major: 0,
         docker_root_statx_device_minor: 41,
         docker_root_fs_type_magic: 0x9123_683e,

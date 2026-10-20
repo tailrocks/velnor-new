@@ -17,6 +17,11 @@ impl ReleaseReadSecret {
         Self(Zeroizing::new(Vec::new()))
     }
 
+    #[cfg(test)]
+    pub(crate) fn test_token() -> Self {
+        Self(Zeroizing::new(b"native-intake-fixture-token".to_vec()))
+    }
+
     /// Load the dedicated host credential after a check of its configured role.
     ///
     /// # Errors

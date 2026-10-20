@@ -23,8 +23,9 @@ pub(crate) use containers::{
 pub(crate) use delivery::ListenerDeliveryReceipt;
 pub(crate) use publication::JobFactsPublication;
 pub(crate) use publication::job_facts_publication;
+pub(crate) use storage::VerifiedStorageResourceBinding;
+pub(in crate::launch) use storage::observe_storage_resources_with_provider;
 pub(crate) use storage::{ObservedContainerCgroup, ObservedStorageAttachment, ObservedStorageRole};
-pub(crate) use storage::{VerifiedStorageResourceBinding, observe_storage_resources};
 
 #[cfg(test)]
 mod test_fixtures;

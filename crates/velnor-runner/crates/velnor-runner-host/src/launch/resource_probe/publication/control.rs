@@ -19,24 +19,42 @@ pub(crate) async fn publish_challenge(
     input: ControlPublicationInput<'_>,
     claim: &ExecutionChallengePublicationClaim,
 ) -> Result<ExecutionChallengePublicationReceipt, HostError> {
+    let provider = crate::launch::resource_probe::release_image_provider(input.release_secret)?;
+    publish_challenge_with_provider(input, claim, &provider).await
+}
+
+#[cfg(test)]
+pub(in crate::launch) async fn publish_challenge_with_test_provider<
+    P: crate::launch::resource_probe::ImageProvider,
+>(
+    input: ControlPublicationInput<'_>,
+    claim: &ExecutionChallengePublicationClaim,
+    provider: &P,
+) -> Result<ExecutionChallengePublicationReceipt, HostError> {
+    publish_challenge_with_provider(input, claim, provider).await
+}
+
+pub(in crate::launch) async fn publish_challenge_with_provider<
+    P: crate::launch::resource_probe::ImageProvider,
+>(
+    input: ControlPublicationInput<'_>,
+    claim: &ExecutionChallengePublicationClaim,
+    provider: &P,
+) -> Result<ExecutionChallengePublicationReceipt, HostError> {
     let ControlPublicationInput {
         docker,
         journal,
         selected,
         images,
-        release_secret,
+        release_secret: _,
         metadata,
         channel,
         guest_boot_id,
         deadline,
     } = input;
     let probe = Box::pin(
-        crate::launch::resource_probe::verify_publication_probe_image_until(
-            docker,
-            journal,
-            selected,
-            release_secret,
-            deadline,
+        crate::launch::resource_probe::verify_publication_probe_image_until_with_provider(
+            docker, journal, selected, provider, deadline,
         ),
     )
     .await?;

@@ -43,7 +43,7 @@ async fn acquire_401_is_not_replayed_and_keeps_the_physical_charge() -> Result<(
                 fixture
                     .request
                     .request_id()
-                    .ok_or_else(|| "Request ID is missing.".to_owned())?,
+                    .ok_or_else(|| "The request ID is missing.".to_owned())?,
                 &physical.runner_name,
                 physical.authority_generation,
                 &physical.authority_digest,
