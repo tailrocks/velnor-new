@@ -1,7 +1,7 @@
 //! Prebuilt `cargo_bin` steps for an image build job.
 //!
 //! The binary is compiled by Velnor outside `BuildKit`, from pinned tools and
-//! sources fetched without credentials, then staged into the build context.
+//! sources prepared without credentials, then staged into the build context.
 //! The Dockerfile then only copies it into a runtime image, so the build never
 //! needs a secret and the compile is not duplicated inside the image build.
 
@@ -46,7 +46,7 @@ pub(crate) fn steps(
     let record = locate(discovery, package, bin, &image.id)?;
     let roots = crate::source_prep::crate_fetch_roots(&record.manifest, fetch_roots, false);
     if roots.is_empty() {
-        return Err(failure(&image.id, "image_prebuilt_workspace_not_fetchable"));
+        return Err(failure(&image.id, "image_prebuilt_workspace_unresolved"));
     }
     let mut env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
     for (native, mise) in [
@@ -55,12 +55,12 @@ pub(crate) fn steps(
     ] {
         env.insert(native.to_owned(), env[mise].clone());
     }
-    let fetch = crate::source_prep::fetch_steps_for_crate(catalog, &roots)?;
+    let source_steps = crate::source_prep::fetch_steps_for_crate(catalog, &roots)?;
     let mut steps = vec![crate::matrix_step::prepare_crate_tools_step(
         catalog, true, false, false, false,
     )?];
     steps.extend(crate::source_cache::restore_step_for_crate(&roots, true)?);
-    steps.extend(fetch);
+    steps.extend(source_steps);
     let target_dir = format!("${{{{ runner.temp }}}}/velnor/image-target/{}", image.id);
     let mut build_env = env;
     build_env.insert("CARGO_TARGET_DIR".to_owned(), target_dir);
