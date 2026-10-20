@@ -147,6 +147,41 @@
       "log_sha256": "1ba78abeb7d6c55dedfa6905494c28eadeba7eeca73417a65ff982e78043d54c",
       "author": "/root",
       "reviewer": "/root"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "56481d9c73b80233a7035546a89b6ae0bb399857",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked -p velnor-runner-host -p velnor-resource-probe --lib -E 'package(velnor-resource-probe) | test(response_schema_roundtrips_through_the_host_parser) | test(response_parser_rejects_old_and_unknown_schema_versions) | test(owned_request_is_one_canonical_bounded_line)'",
+      "exit_status": 0,
+      "nextest_run": "f6a68aac-03a1-45f6-a798-30c149f8ad3b",
+      "passed": 55,
+      "log": "owned-cgroup-schema-shipping-lib-20261020.log",
+      "log_sha256": "54810268ab9d082f18d6eb88429d0aebb7209405977c299adcce38b143e5ba92",
+      "author": "/root",
+      "reviewer": "/root/execution_source_security_review",
+      "scope": "The host parser and macOS probe tests had no errors. The test source had the cleanup and metadata changes. This record gives no indication of a live installation."
+    },
+    {
+      "result": "PASS",
+      "source_commit": "7fb774bac5ec4f6f6b687c50778b90c92df7e012",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --locked -p velnor-actions-orchestrator --lib -E 'test(storage_admission) | test(qualification_cache)'",
+      "exit_status": 0,
+      "nextest_run": "1c30c5f0-8977-4c49-bba0-6fb233ce103d",
+      "passed": 132,
+      "log": "cleanup-metadata-root-nextest-final-20261020.log",
+      "log_sha256": "33c0635057bd7be30c49a4fc354f0612a3e31e519c03c3dc7f737e8abecf0ab7",
+      "author": "/root",
+      "reviewer": "/root/execution_source_security_review"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "7fb774bac5ec4f6f6b687c50778b90c92df7e012",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings",
+      "exit_status": 0,
+      "log": "cleanup-metadata-root-clippy-final-20261020.log",
+      "log_sha256": "3823f070bab32e5716744c47ae59266722d74157aacac820a626159bcdb20d59",
+      "author": "/root",
+      "reviewer": "/root/execution_source_security_review"
     }
   ],
   "broader_pair_check": {
@@ -165,7 +200,7 @@
   "chainargos_installation": "NOT_RUN",
   "linux_diagnostic_check": {
     "result": "PASS",
-    "scope": "This check tests file modes in a Linux container. It does not use a Scale Set.",
+    "scope": "This is a test of file modes in a Linux container. It is not a Scale Set test.",
     "source_file": "crates/velnor-runner/crates/velnor-runner-host/src/launch/completion/diagnostics/stage.rs",
     "source_file_sha256": "d5d2f86c602023cb544533b79b976722fac0579e810f1c8cc00bc1e6f90de5cc",
     "matching_source_commit": "8b7748d97c5524f2684de3dc6257d3b29f0c2e0c",
