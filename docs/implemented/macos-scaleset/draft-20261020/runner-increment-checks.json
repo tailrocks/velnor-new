@@ -1014,6 +1014,22 @@
       "author": "/root/container_metadata_repair",
       "reviewer": "/root/helper_language_review",
       "limits": "The full runner strict check still has a FAIL result."
+    },
+    {
+      "result": "PASS",
+      "base_commit": "b774d1479cb3c85d4487ecf3dab859edeaf968a0",
+      "change": "Keep the scoped preparation future in heap storage.",
+      "passed": 5,
+      "nextest_run": "b43227d5-9fd1-473b-84d6-1c6709b18f3a",
+      "exit_status": 0,
+      "log": "shipping-future-focused-20261020.log",
+      "log_sha256": "43619ea608e80e7338cf31f1573cd040aeb84a29b5fcd5f4716fc6b0e14701a4",
+      "source_manifest": "future-size-a29b9780/manifest.txt",
+      "source_manifest_sha256": "6df67d838d031d0cf35b3302045985eb3b69fc4dafc195bc33c10e9cedfe4b0f",
+      "author": "/root/grouped_source_evidence",
+      "reviewer": "/root/runner_context_review",
+      "observed_future_bytes": 16,
+      "limits": "These tests do not prove the production stack limit. The full strict check still has a FAIL result."
     }
   ],
   "broader_pair_check": {

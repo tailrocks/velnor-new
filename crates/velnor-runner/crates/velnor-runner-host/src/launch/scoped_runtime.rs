@@ -10,6 +10,9 @@ mod registry;
 mod test_provider;
 
 #[cfg(test)]
+#[path = "scoped_runtime/future_size_tests.rs"]
+mod future_size_tests;
+#[cfg(test)]
 #[path = "scoped_runtime/stale_acquired_tests.rs"]
 mod stale_acquired_tests;
 
@@ -32,7 +35,7 @@ pub(crate) use registry::RunnerReadyRegistry;
 pub(crate) use test_provider::prepare_jit_and_measure_scoped_with_provider;
 
 use bollard::Docker;
-use std::time::Instant;
+use std::{future::Future, pin::Pin, time::Instant};
 use velnor_runner_github::Transport;
 
 use crate::{
@@ -64,6 +67,9 @@ pub(crate) enum ScopedChannelOutcome {
     PendingJit(PendingJitBootstrap),
     PendingChannel(PendingChannelBootstrap),
 }
+
+pub(crate) type ScopedPrepareFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<ScopedRuntimeOutcome, HostError>> + 'a>>;
 
 /// Keep the prepared state and the durable network proof after binding.
 #[must_use]
@@ -144,26 +150,64 @@ impl PendingScopedBootstrap {
     }
 }
 
-async fn prepare_and_bind_scoped_with_provider<P: ImageProvider>(
+struct ScopedPrepareContext<'a, P> {
+    docker: &'a Docker,
+    scoped: &'a ConnectionJournal,
+    host: &'a Journal,
+    provider: &'a P,
+    engine: &'a SelectedEngineContext,
+    images: &'a VerifiedWorkerImages,
+}
+
+fn prepare_and_bind_scoped_with_provider<'a, P: ImageProvider + 'a>(
     outcome: ScopedProvisioningOutcome,
-    docker: &Docker,
-    scoped: &ConnectionJournal,
-    host: &Journal,
-    provider: &P,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
-) -> Result<ScopedRuntimeOutcome, HostError> {
-    let prepared =
-        match super::bootstrap::adapter::prepare_acquired(outcome, docker, scoped, engine, images)
-            .await
+    context: ScopedPrepareContext<'a, P>,
+) -> ScopedPrepareFuture<'a> {
+    Box::pin(async move {
+        let prepared = match super::bootstrap::adapter::prepare_acquired(
+            outcome,
+            context.docker,
+            context.scoped,
+            context.engine,
+            context.images,
+        )
+        .await
         {
             Ok(prepared) => prepared,
             Err(error) => return Err(error),
         };
-    let Some(prepared) = prepared else {
-        return Ok(ScopedRuntimeOutcome::NoStart);
-    };
-    prepare_started_and_bound(prepared, docker, scoped, host, provider, engine, images).await
+        let Some(prepared) = prepared else {
+            return Ok(ScopedRuntimeOutcome::NoStart);
+        };
+        prepare_started_and_bound(
+            prepared,
+            context.docker,
+            context.scoped,
+            context.host,
+            context.provider,
+            context.engine,
+            context.images,
+        )
+        .await
+    })
+}
+
+fn scoped_prepare_context<'a, P: ImageProvider + 'a>(
+    docker: &'a Docker,
+    scoped: &'a ConnectionJournal,
+    host: &'a Journal,
+    provider: &'a P,
+    engine: &'a SelectedEngineContext,
+    images: &'a VerifiedWorkerImages,
+) -> ScopedPrepareContext<'a, P> {
+    ScopedPrepareContext {
+        docker,
+        scoped,
+        host,
+        provider,
+        engine,
+        images,
+    }
 }
 
 /// Prepare one job, bind its exact Runner, and measure its proof channel.
