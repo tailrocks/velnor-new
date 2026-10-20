@@ -11,13 +11,13 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Largest accepted job timeout, matching the other stacks.
-pub const MAX_DBT_TIMEOUT_MINUTES: u32 = 360;
+pub(super) const MAX_DBT_TIMEOUT_MINUTES: u32 = 360;
 /// Job id prefix of every generated dbt project job.
 pub const DBT_JOB_PREFIX: &str = "dbt-";
 /// Most `env` entries one table may declare.
-pub const MAX_DBT_ENV_ENTRIES: usize = 32;
+pub(super) const MAX_DBT_ENV_ENTRIES: usize = 32;
 /// Longest accepted `env` value.
-pub const MAX_DBT_ENV_VALUE_BYTES: usize = 128;
+pub(super) const MAX_DBT_ENV_VALUE_BYTES: usize = 128;
 
 /// dbt stack options (`[stacks.dbt]`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -171,7 +171,7 @@ impl DbtStackConfig {
 
 /// True for `DBT_` followed by upper-case alphanumerics and `_`.
 #[must_use]
-pub fn is_valid_env_name(name: &str) -> bool {
+pub(super) fn is_valid_env_name(name: &str) -> bool {
     name.strip_prefix("DBT_").is_some_and(|rest| {
         !rest.is_empty()
             && name.len() <= 64
@@ -183,7 +183,7 @@ pub fn is_valid_env_name(name: &str) -> bool {
 
 /// True for a value that can carry no expression, quote, shell or YAML syntax.
 #[must_use]
-pub fn is_inert_env_value(value: &str) -> bool {
+pub(super) fn is_inert_env_value(value: &str) -> bool {
     value.len() <= MAX_DBT_ENV_VALUE_BYTES
         && value
             .bytes()
