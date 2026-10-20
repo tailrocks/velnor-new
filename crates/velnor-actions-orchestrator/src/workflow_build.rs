@@ -210,6 +210,15 @@ fn build_workflow_jobs(
         required_ids.push(id.clone());
         jobs.insert(id, job);
     }
+    for (id, job) in crate::config::gradle_jobs::build_jobs(
+        input.config,
+        &input.discovery.gradle_roots,
+        prepared.acquire.as_ref(),
+        prepared.private.as_ref(),
+    )? {
+        required_ids.push(id.clone());
+        jobs.insert(id, job);
+    }
     let (suite_jobs, suite_required_ids) = crate::rust_suites_emit::build_ci_jobs(
         input.root,
         input.config,
