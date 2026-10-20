@@ -180,10 +180,12 @@ declaration, because Mise (idiomatic version files) and rustup both read it.
   (`nested_rust_toolchain_not_supported`: rustup would honor it for commands
   run in that directory while the resolver reads root sources only). A Velnor
   pin never replaces a declaration the generator cannot use.
-- Every job (or composite action) that reads such a reference gets one
-  generated **Resolve project tool versions** step right after its Mise
-  setup (first, in a shared-lane composite whose callers ran Setup Mise),
-  ahead of the tools-cache identity and restore. It reads every source above with
+- Every job that reads such a reference gets one generated **Resolve project
+  tool versions** step after both its Mise setup and source checkout,
+  immediately after the later prerequisite and ahead of tools-cache identity
+  and restore. A composite action resolves after its own Mise setup, or first
+  in a shared-lane composite whose callers provide Setup Mise and checked-out
+  source. It does not add a checkout. It reads every source above with
   `mise --no-config --no-env --no-hooks config get` (`.tool-versions` and a
   plain-text `rust-toolchain` are read as text, never executed), fails on an
   unparseable or symlinked source, requires all declarations of a tool to

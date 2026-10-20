@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.28
+Velnor Actions plan 0.1.29
 Repository: <repo>
 
 Detected stacks
@@ -40,7 +40,7 @@ Workflow to generate
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
     - actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
     - actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-    - jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
+    - jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
 
 Required-check migration

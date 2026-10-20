@@ -1,0 +1,11 @@
+{
+  "argv": [
+    "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+    "api",
+    "repos/release-plz/release-plz/releases/tags/release-plz-v0.3.173"
+  ],
+  "checked_at": "2026-10-20T07:03:56.756979+00:00",
+  "exit_code": 0,
+  "sha256": "4f077cdf0457294d7afc192f7e151a46c05a80d786d10915c601af5e662b01cc",
+  "size": 19951
+}

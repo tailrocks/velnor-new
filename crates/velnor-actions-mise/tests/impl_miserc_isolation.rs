@@ -7,7 +7,7 @@ use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 use velnor_actions_mise::command::IsolatedCommand;
 
-const PINNED_MISE: &str = "2026.10.14";
+const PINNED_MISE: &str = "2026.10.15";
 const FIX_SOURCE_REV: &str = "dfe74a90b41603625ee6aabecb42f14a1f5eb0f6";
 const FIX_SOURCE_VERSION: &str = "2026.10.1";
 const BINARY_ENV: &str = "VELNOR_MISE_REGRESSION_BINARY";
@@ -186,11 +186,11 @@ fn find_on_path(program: &str) -> Result<PathBuf, String> {
 
 fn official_release_digest(version: &str) -> Result<&'static str, String> {
     match (version, std::env::consts::OS, std::env::consts::ARCH) {
-        ("2026.10.14", "linux", "x86_64") => {
-            Ok("50be7185bcf75929f01cc5630276bcb43ca367f7c5b176e2580903d28c611dc4")
+        ("2026.10.15", "linux", "x86_64") => {
+            Ok("e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9")
         }
-        ("2026.10.14", "macos", "aarch64") => {
-            Ok("005b32b9c22ca9cb63ff9d35c74b3abe69c433e9ca655fea288ba3dcbe7e4918")
+        ("2026.10.15", "macos", "aarch64") => {
+            Ok("826c4833fa7437a63f6027b86bc10c8b61b1163dc793c03ecde92f68ad167890")
         }
         _ => Err(format!(
             "unqualified mise release/platform: {version} {}/{}",

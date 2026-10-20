@@ -10,7 +10,7 @@ fn source() -> ApprovedOwnedSource {
         version: "2026.10.14-owned-cargo-wrapper".to_owned(),
         source_commit: "1".repeat(40),
         source_tree: "2".repeat(40),
-        upstream_base_commit: "d7131a7d69a2bdb2cfc84a66a5ff97329dd740e9".to_owned(),
+        upstream_base_commit: "597c1897dfed28d1c0dea9f98fba581059e42cd3".to_owned(),
         archive_url: format!("{base}/source.tar"),
         archive_sha256: "4".repeat(64),
         receipt_url: format!("{base}/source-receipt.json"),

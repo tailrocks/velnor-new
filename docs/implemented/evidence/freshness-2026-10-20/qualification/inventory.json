@@ -1,0 +1,78 @@
+{
+  "qualification/mbx-acquisition.json": {
+    "sha256": "bd33ab90c80fc81f1070f1c4ca6fb48e88da560b71808e45dfaae64ac7177003",
+    "size": 3233
+  },
+  "qualification/mbx-cache-roundtrip.json": {
+    "sha256": "55665ce00b5093e62860d70140c43f57ef991cbe63ae5ecd36882d025e56921b",
+    "size": 2114
+  },
+  "qualification/mbx-compare.body": {
+    "sha256": "07d2f63e2cc93f60fbf2501a31bae7944a2a1cff7950e5171ef562fdabb7bc83",
+    "size": 816887
+  },
+  "qualification/mbx-compare.json": {
+    "sha256": "482da2d31c9d1a42a8aa1af05833afc58d0cf28a6488f4ad3d8112ca60c6b437",
+    "size": 345
+  },
+  "qualification/mbx-crypto-admission.json": {
+    "sha256": "1ee59233fb2a17d79f4e1882bb04f3ea8213dfca547b35d22344f806b310a7ad",
+    "size": 8888
+  },
+  "qualification/mbx-runtime-report.json": {
+    "sha256": "8b15e26dde4573c996dd32623127f34338ef1c9d2cbacefa1965b8d65ed2f311",
+    "size": 3315
+  },
+  "qualification/mise-action-compare.body": {
+    "sha256": "5ad80cc83ade6b33ab37145a8bc0ef76559180d4f3f960bebd31f230405e2215",
+    "size": 51544
+  },
+  "qualification/mise-action-compare.json": {
+    "sha256": "3a86f95add1531009bcfefd8dd3d748757cc154aa7240fb830c1201a7cf2ce93",
+    "size": 341
+  },
+  "qualification/mise-build-provenance-admission.json": {
+    "sha256": "5b0446a4fc6db864bad630651c1833e14600073c7caddec8771f03e95ea8c07f",
+    "size": 10198
+  },
+  "qualification/mise-crypto-admission.json": {
+    "sha256": "557fab4c03739332c57134bc9528df2d85d71d86a8d0a03a3446176f37c0c7b1",
+    "size": 7161
+  },
+  "qualification/mise-measurements.json": {
+    "sha256": "5e7361831a9231ee113422159a49f0ef86fe27453769ea5ed1fa32d3b2f87646",
+    "size": 7981
+  },
+  "qualification/mise-runtime-receipt.json": {
+    "sha256": "45aa0db9207dba716ff29ed9aaa8875d14cb626a785d0c29ff30b17558d382c7",
+    "size": 1136
+  },
+  "qualification/release-plz-compare.body": {
+    "sha256": "f78f39f0c6ac7db23b55475370c776e5eb0bebc1dd1cf12915a1d3e700da8850",
+    "size": 287417
+  },
+  "qualification/release-plz-compare.json": {
+    "sha256": "492e9b01d05e3ea777af8e32455f2510d4cbebf80d06cec611e97f537f4cb73d",
+    "size": 378
+  },
+  "qualification/release-plz-identified.body": {
+    "sha256": "a08d291999b75de21652ad6dc5429cf53be91ee088b5641c17e4152ea2393a2c",
+    "size": 401823
+  },
+  "qualification/release-plz-identified.json": {
+    "sha256": "4ad6518a9e3e351a45a87cff589f07d641e73d4431268e9a0b608778a9d774aa",
+    "size": 459
+  },
+  "qualification/release-plz-mise-install.json": {
+    "sha256": "49240d7c4dc3cf0d74c7921fd314df4d11fc6ca53e67768a1302e32527d77a89",
+    "size": 2754
+  },
+  "qualification/release-plz-release.body": {
+    "sha256": "4f077cdf0457294d7afc192f7e151a46c05a80d786d10915c601af5e662b01cc",
+    "size": 19951
+  },
+  "qualification/release-plz-release.json": {
+    "sha256": "ccfacb806cbbb0ea59e54db0cea2f42e9789a6f60b10de2df7281467a0ae2957",
+    "size": 360
+  }
+}

@@ -19,13 +19,19 @@ fn operation(step: &Yaml, name: &str) -> bool {
 
 #[test]
 fn both_tap_routes_end_authenticated_admission_before_checkout_and_token_free_prepare() {
-    let spec = with_tap();
+    let mut spec = with_tap();
+    spec.install_rust_argv[3] = "rust@${VELNOR_TOOL_RUST}".to_owned();
     let policy = spec.homebrew_tap.as_ref().expect("tap");
     for context in [
         TapInvocationContext::Preview,
         TapInvocationContext::Reconcile,
     ] {
         let jobs = tap::jobs(&spec, policy, context).expect("jobs");
+        let original = Yaml::Map(vec![("jobs".to_owned(), Yaml::Map(jobs.clone()))]);
+        let mut bound = original.clone();
+        crate::project_tool_resolver::bind_workflow(&mut bound)
+            .expect("no project reads in tap operations");
+        assert_eq!(bound, original, "tap admission/checkout order is unchanged");
         let Yaml::Seq(steps) = field(&jobs[0].1, "steps") else {
             panic!("steps")
         };
