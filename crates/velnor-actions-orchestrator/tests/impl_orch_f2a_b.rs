@@ -152,13 +152,13 @@ fn offline_deps_fail_closed_without_fetch() -> TestResult {
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
         // HD-7: the credentialed private-source fetch is a dedicated runtime
-        // operation (`private-fetch-v1`) behind its own CLI gate; its two
+        // operation (`private-fetch-v1`) behind its own CLI gate; its three
         // modules are the only product files exempt from the fetch-verb scan,
         // and `private_fetch_is_unreachable_from_analysis` pins that nothing
         // else in the crate calls into them.
         if matches!(
             name.as_str(),
-            "private_fetch.rs" | "private_fetch_session.rs"
+            "private_fetch.rs" | "private_fetch_session.rs" | "private_revoke.rs"
         ) {
             continue;
         }
