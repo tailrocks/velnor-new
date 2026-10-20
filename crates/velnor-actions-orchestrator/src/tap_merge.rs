@@ -72,11 +72,23 @@ fn merge_once() -> Result<TapMergeOutcome, OrchestratorError> {
             observation::observe(&candidate, &authority, &api, &observer)
         },
         || {
-            crate::tap_source_freshness::verify_preview_source_is_current(
-                &candidate.plan.repository,
-                &candidate.plan.default_branch,
-                &candidate.release.receipt.source.commit_sha,
-            )
+            let signed = crate::package_release_signer::verify_attested_signed_package_from_env()?;
+            crate::package_release_publish::verify_published_release(&signed)?;
+            if signed.receipt().canonical_digest().ok().as_deref()
+                != Some(candidate.release.receipt_digest.as_str())
+            {
+                return Err(internal("tap_merge_release_changed"));
+            }
+            if candidate.plan.channel
+                == velnor_actions_contract::package_release::PackageReleaseChannel::Preview
+            {
+                crate::tap_source_freshness::verify_preview_source_is_current(
+                    &candidate.plan.repository,
+                    &candidate.plan.default_branch,
+                    &candidate.release.receipt.source.commit_sha,
+                )?;
+            }
+            Ok(())
         },
         |observed| merge_validated_head(&candidate, &api, observed),
     )

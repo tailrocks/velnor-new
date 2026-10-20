@@ -197,11 +197,17 @@ fn malformed_present_protection_fields_fail_even_when_other_source_is_complete()
 #[test]
 fn stable_environment_preserves_human_reviewer_and_protected_branch_requirements() {
     let stable = json!({
-        "name":"consumer-binary-release",
+        "name":"release",
+        "can_admins_bypass":false,
         "protection_rules":[{"type":"required_reviewers","reviewers":[{"type":"User","reviewer":{"id":17,"login":"release-reviewer"}}],"prevent_self_review":true}],
         "deployment_branch_policy":{"protected_branches":true,"custom_branch_policies":false}
     });
     assert!(super::validate_stable_environment_settings(&stable, "main").is_ok());
+    for wrong_name in ["consumer-binary-release", "preview-publish", "tap-update"] {
+        let mut wrong_environment = stable.clone();
+        wrong_environment["name"] = json!(wrong_name);
+        assert!(super::validate_stable_environment_settings(&wrong_environment, "main").is_err());
+    }
 
     assert!(super::validate_stable_environment_settings(&stable, "release/1.2").is_ok());
     let mut additional_rules = stable.clone();
@@ -294,4 +300,98 @@ fn environment_branch_policy_must_be_the_only_exact_main_pattern() {
         assert!(validate_environment_branch_policy(&bad, "main").is_err());
     }
     assert!(validate_environment_branch_policy(&only_main, "release/1.2").is_err());
+}
+
+#[test]
+fn permanent_tag_release_environment_requires_human_review_without_self_approval() {
+    let settings = json!({"name":"release", "can_admins_bypass":false, "deployment_branch_policy":{
+        "protected_branches":true,"custom_branch_policies":false},
+        "protection_rules":[{"type":"required_reviewers","prevent_self_review":true,
+            "reviewers":[{"type":"User","reviewer":{"id":17}}]}]});
+    assert!(
+        super::validation::validate_human_environment_settings(&settings, "main", "release")
+            .is_ok()
+    );
+    for bypass in [None, Some(json!(null)), Some(json!(true))] {
+        let mut changed = settings.clone();
+        changed
+            .as_object_mut()
+            .expect("environment")
+            .remove("can_admins_bypass");
+        if let Some(value) = bypass {
+            changed["can_admins_bypass"] = value;
+        }
+        assert!(super::validate_stable_environment_settings(&changed, "main").is_err());
+    }
+    for mutate in [
+        |value: &mut serde_json::Value| value["name"] = json!("other"),
+        |value: &mut serde_json::Value| {
+            value["protection_rules"][0]["prevent_self_review"] = json!(false);
+        },
+        |value: &mut serde_json::Value| value["protection_rules"][0]["reviewers"] = json!([]),
+        |value: &mut serde_json::Value| {
+            value["protection_rules"][0]["reviewers"][0]["type"] = json!("Bot");
+        },
+    ] {
+        let mut changed = settings.clone();
+        mutate(&mut changed);
+        assert!(
+            super::validation::validate_human_environment_settings(&changed, "main", "release")
+                .is_err()
+        );
+    }
+}
+
+#[test]
+fn status_reader_routes_are_closed_to_same_repository_metadata_and_settings() {
+    for suffix in [
+        "",
+        "/branches/main",
+        "/rules/branches/main",
+        "/branches/main/protection",
+        "/environments/release",
+        "/environments/preview-publish",
+        "/environments/tap-update",
+        "/environments/tap-update/deployment-branch-policies?per_page=100&page=1",
+    ] {
+        assert!(
+            super::validate_status_route("example/app", &format!("repos/example/app{suffix}"))
+                .is_ok()
+        );
+    }
+    for route in [
+        "repos/foreign/app",
+        "repos/example/app/contents/Cargo.toml",
+        "repos/example/app/actions/runs/22",
+        "repos/example/app/actions/artifacts/22",
+        "repos/example/app/releases",
+        "repos/example/app/environments/other",
+        "repos/example/app/branches/other",
+        "repos/example/app/environments/release/deployment-branch-policies?per_page=100&page=2",
+        "https://api.github.com/repos/example/app",
+    ] {
+        assert!(
+            super::validate_status_route("example/app", route).is_err(),
+            "{route}"
+        );
+    }
+}
+
+#[test]
+fn current_source_sha_and_protection_come_from_one_branch_snapshot() {
+    let valid = json!({"name":"main","protected":true,"commit":{"sha":"a".repeat(40)}});
+    assert_eq!(
+        super::protected_branch_sha(&valid).expect("protected main"),
+        "a".repeat(40)
+    );
+    for (pointer, replacement) in [
+        ("/name", json!("other")),
+        ("/protected", json!(false)),
+        ("/commit/sha", json!("bad")),
+        ("/commit", serde_json::Value::Null),
+    ] {
+        let mut changed = valid.clone();
+        *changed.pointer_mut(pointer).expect("field") = replacement;
+        assert!(super::protected_branch_sha(&changed).is_err(), "{pointer}");
+    }
 }

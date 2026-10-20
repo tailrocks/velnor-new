@@ -8,14 +8,13 @@ fn config(stable: bool, preview: bool) -> VelnorConfig {
         "resources":{"compiler_process_budget":2,"test_process_budget":2},
         "test_sharding":{"default_shards":1,"by_manifest":{}},
         "discovery":{"exclude":[]},
-        "stacks":{"ignore":[],"rust":{"binary_release":{
-            "enabled":stable,"package":"jackin","bin":"jackin",
-            "preview":{
-                "enabled":preview,"version_env":"JACKIN_VERSION_OVERRIDE",
-                "evidence":{"profile":"signed-sbom-v1"},
-                "producer":{"task":"release:preview-package","tools":["rust"],"inputs":["mise.toml","Cargo.lock"]},
-                "products":[{"id":"jackin","package":"jackin","bins":["jackin"],"targets":["aarch64-apple-darwin"],"archive":"tar.gz"}]
-            }
+        "stacks":{"ignore":[],"rust":{"release":{"enabled":stable,"registry":"git-tag","packages":["jackin"],"tag_name":"v{{ version }}"},"binary_release":{
+            "version_package":"jackin", "version_env":"JACKIN_VERSION_OVERRIDE",
+            "evidence":{"profile":"signed-sbom-v1"},
+            "producer":{"task":"release:package","tools":["rust"],"inputs":["mise.toml","Cargo.lock"]},
+            "products":[{"id":"jackin","package":"jackin","bins":["jackin"],"targets":["aarch64-apple-darwin"],"archive":"tar.gz"}],
+            "stable":{"enabled":stable},
+            "preview":{"enabled":preview,"release_id":328_385_904}
         }}}
     })).expect("typed config");
     config
@@ -71,7 +70,6 @@ fn producer_tool_must_be_qualified_for_its_runner() {
         .as_mut()
         .expect("rust")
         .binary_release
-        .preview
         .producer
         .runner = VerificationRunner::MacosArm64;
     assert!(
@@ -93,7 +91,7 @@ fn distribution_requires_enabled_preview_even_when_stable_enabled() {
                 .validate("config.toml")
                 .expect_err("disabled source")
                 .to_string()
-                .contains("requires_enabled_binary_preview")
+                .contains("requires_enabled_binary_channel")
         );
         config.stacks.rust = None;
         assert!(
@@ -101,7 +99,7 @@ fn distribution_requires_enabled_preview_even_when_stable_enabled() {
                 .validate("config.toml")
                 .expect_err("missing source")
                 .to_string()
-                .contains("requires_enabled_binary_preview")
+                .contains("requires_enabled_binary_channel")
         );
     }
 }
@@ -130,7 +128,6 @@ fn producer_respects_repository_compiler_budget() {
         .as_mut()
         .expect("rust")
         .binary_release
-        .preview
         .producer
         .build_jobs = 3;
     assert!(
@@ -182,7 +179,7 @@ fn native_consumer_authorization_error_precedes_ci_name_restriction() {
         .expect_err("nonconsumer native policy");
     assert!(
         matches!(error, ContractError::Config { ref key_path, ref problem, .. }
-        if key_path == "stacks.rust.binary_release.enabled" && problem == "binary_release_requires_consumer_policy"),
+        if key_path == "stacks.rust.binary_release" && problem == "binary_release_requires_consumer_policy"),
         "{error}"
     );
 }
@@ -205,4 +202,52 @@ fn generic_ci_name_validation_retains_its_original_diagnostics() {
             "{error}"
         );
     }
+}
+
+#[test]
+fn native_stable_requires_the_matching_manual_git_tag_version_owner() {
+    let baseline = config(true, false);
+    assert!(baseline.validate("config.toml").is_ok());
+    for mutation in 0..6 {
+        let mut value = baseline.clone();
+        let rust = value.stacks.rust.as_mut().expect("rust policy");
+        match mutation {
+            0 => rust.release.enabled = false,
+            1 => rust.release.registry = ReleaseRegistry::CratesIo,
+            2 => rust.release.packages = vec!["other".to_owned()],
+            3 => rust.release.manifest_path = "other/Cargo.toml".to_owned(),
+            4 => rust.release.environment = "other".to_owned(),
+            _ => rust.release.tag_name = "{{ package }}-v{{ version }}".to_owned(),
+        }
+        assert!(
+            value
+                .validate("config.toml")
+                .expect_err("mismatched stable owner")
+                .to_string()
+                .contains("requires_matching_manual_git_tag_release")
+        );
+    }
+}
+
+#[test]
+fn stable_destination_requires_stable_and_never_borrows_preview_authority() {
+    let mut value = config(false, true);
+    let mut tap = super::distribution::valid_tap();
+    tap.destinations.preview = None;
+    tap.destinations.stable = Some(HomebrewTapDestination {
+        formula: "Formula/jackin.rb".to_owned(),
+    });
+    tap.updater.inputs.push("Formula/jackin.rb".to_owned());
+    value.distribution.homebrew_tap = Some(tap);
+    assert!(
+        value
+            .validate("config.toml")
+            .expect_err("stable disabled")
+            .to_string()
+            .contains("requires_enabled_binary_channel")
+    );
+    let rust = value.stacks.rust.as_mut().expect("rust");
+    rust.binary_release.stable.enabled = true;
+    rust.release.enabled = true;
+    assert!(value.validate("config.toml").is_ok());
 }

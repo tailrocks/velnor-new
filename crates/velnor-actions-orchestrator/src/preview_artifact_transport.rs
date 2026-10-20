@@ -6,7 +6,7 @@
 //! in a separate owner, and these bytes alone are not an admitted payload.
 
 use super::artifact_zip::{ZipProfile, leaf_union_compressed_bound};
-use super::github::PreviewArtifactApi;
+use super::github::ReleaseArtifactApi;
 use std::{fs::File, path::Path};
 #[path = "preview_artifact_transport_file.rs"]
 mod archive_file;
@@ -16,19 +16,19 @@ use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::PackageReleasePlan;
 use velnor_actions_contract::preview_production::{
-    PREVIEW_ASSEMBLE_JOB_ID, PayloadArtifactRef, PreviewProductionContext,
-    PreviewProductionRequest, PreviewProductionStage, preview_payload_artifact_name,
+    PayloadArtifactRef, ReleaseProductionContext, ReleaseProductionRequest, ReleaseProductionStage,
+    release_payload_artifact_name,
 };
 use velnor_actions_mise::CheckDeadline;
 
 #[path = "preview_artifact_transport_aggregate.rs"]
 mod aggregate;
-pub(crate) use aggregate::acquire_preview_aggregate;
+pub(crate) use aggregate::acquire_release_aggregate;
 
 const MAX_ARTIFACTS: usize = 1000;
 
 /// Authenticated service archive bytes, still requiring closed ZIP/leaf admission.
-pub(crate) struct AdmittedPreviewArtifact {
+pub(crate) struct AdmittedReleaseArtifact {
     pub reference: PayloadArtifactRef,
     pub archive: SealedArchive,
 }
@@ -36,37 +36,44 @@ pub(crate) struct AdmittedPreviewArtifact {
 /// Acquire exactly the literal assembly references under one cumulative budget.
 /// The caller must first admit the request against its trusted source plan and
 /// authenticated job context; this function independently reauthenticates GitHub.
-pub(crate) fn acquire_preview_artifacts(
-    request: &PreviewProductionRequest,
+pub(crate) fn acquire_release_artifacts(
+    request: &ReleaseProductionRequest,
     directory: &Path,
     deadline: CheckDeadline,
-    mut consume: impl FnMut(AdmittedPreviewArtifact) -> Result<(), OrchestratorError>,
+    mut consume: impl FnMut(AdmittedReleaseArtifact) -> Result<(), OrchestratorError>,
 ) -> Result<(), OrchestratorError> {
-    require_consumer_environment(PreviewConsumer::Assembler)?;
-    let api = PreviewArtifactApi::new(&request.plan.repository);
+    require_consumer_environment(ReleaseConsumer::Assembler, request.plan.channel)?;
+    let api = ReleaseArtifactApi::new(&request.plan.repository);
     deadline
         .scope(|| acquire(&api, request, directory, deadline, &mut consume))
         .map_err(|_| internal("preview_artifact_deadline"))?
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum PreviewConsumer {
+pub(super) enum ReleaseConsumer {
     Assembler,
     Signer,
 }
-impl PreviewConsumer {
-    pub(in crate::package_release_publish) fn job_name(self) -> &'static str {
+impl ReleaseConsumer {
+    pub(in crate::package_release_publish) fn job_name(
+        self,
+        channel: velnor_actions_contract::package_release::PackageReleaseChannel,
+    ) -> &'static str {
         match self {
-            Self::Assembler => PREVIEW_ASSEMBLE_JOB_ID,
-            Self::Signer => {
-                velnor_actions_contract::package_release::PackageReleaseChannel::Preview
-                    .signer_job_id()
-            }
+            Self::Assembler => channel.assemble_job_id(),
+            Self::Signer => channel.signer_job_id(),
         }
     }
 }
-fn require_consumer_environment(consumer: PreviewConsumer) -> Result<(), OrchestratorError> {
-    validate_consumer_environment(consumer, std::env::var("GITHUB_JOB").ok().as_deref())?;
+fn require_consumer_environment(
+    consumer: ReleaseConsumer,
+    channel: velnor_actions_contract::package_release::PackageReleaseChannel,
+) -> Result<(), OrchestratorError> {
+    validate_consumer_environment(
+        consumer,
+        channel,
+        std::env::var("GITHUB_JOB").ok().as_deref(),
+    )?;
     // This new read capability must not fall back to ambient cached gh login.
     let token_present = std::env::var("GH_TOKEN").is_ok_and(|token| !token.trim().is_empty());
     if !token_present {
@@ -75,10 +82,11 @@ fn require_consumer_environment(consumer: PreviewConsumer) -> Result<(), Orchest
     Ok(())
 }
 fn validate_consumer_environment(
-    consumer: PreviewConsumer,
+    consumer: ReleaseConsumer,
+    channel: velnor_actions_contract::package_release::PackageReleaseChannel,
     actual: Option<&str>,
 ) -> Result<(), OrchestratorError> {
-    if actual != Some(consumer.job_name()) {
+    if actual != Some(consumer.job_name(channel)) {
         return Err(internal("preview_artifact_consumer_environment"));
     }
     Ok(())
@@ -88,8 +96,8 @@ pub(super) trait ArtifactReadApi {
     fn authenticate(
         &self,
         plan: &PackageReleasePlan,
-        context: &PreviewProductionContext,
-        consumer: PreviewConsumer,
+        context: &ReleaseProductionContext,
+        consumer: ReleaseConsumer,
     ) -> Result<(), OrchestratorError>;
     fn page(&self, run: u64, page: usize) -> Result<ArtifactPage, OrchestratorError>;
     fn download(
@@ -103,19 +111,19 @@ pub(super) trait ArtifactReadApi {
 
 fn acquire(
     api: &impl ArtifactReadApi,
-    request: &PreviewProductionRequest,
+    request: &ReleaseProductionRequest,
     directory: &Path,
     deadline: CheckDeadline,
-    consume: &mut impl FnMut(AdmittedPreviewArtifact) -> Result<(), OrchestratorError>,
+    consume: &mut impl FnMut(AdmittedReleaseArtifact) -> Result<(), OrchestratorError>,
 ) -> Result<(), OrchestratorError> {
     request
         .validate()
         .map_err(|_| internal("preview_artifact_request"))?;
-    let PreviewProductionStage::Assemble { inputs } = &request.stage else {
+    let ReleaseProductionStage::Assemble { inputs } = &request.stage else {
         return Err(internal("preview_artifact_assembly_required"));
     };
     checkpoint(deadline)?;
-    api.authenticate(&request.plan, &request.context, PreviewConsumer::Assembler)?;
+    api.authenticate(&request.plan, &request.context, ReleaseConsumer::Assembler)?;
     let inventory = inventory(api, request.context.run_id, deadline)?;
     let mut total = 0_u64;
     for reference in inputs {
@@ -145,13 +153,13 @@ fn acquire(
             deadline,
         )?;
         archive.seal(deadline)?;
-        consume(AdmittedPreviewArtifact {
+        consume(AdmittedReleaseArtifact {
             reference: reference.clone(),
             archive,
         })?;
         checkpoint(deadline)?;
     }
-    api.authenticate(&request.plan, &request.context, PreviewConsumer::Assembler)?;
+    api.authenticate(&request.plan, &request.context, ReleaseConsumer::Assembler)?;
     checkpoint(deadline)?;
     Ok(())
 }
@@ -197,10 +205,10 @@ fn inventory(
 fn validate_selected(
     artifact: &ArtifactRecord,
     reference: &PayloadArtifactRef,
-    request: &PreviewProductionRequest,
+    request: &ReleaseProductionRequest,
 ) -> Result<(), OrchestratorError> {
     let expected_name =
-        preview_payload_artifact_name(&request.plan, &reference.pair, &request.context)
+        release_payload_artifact_name(&request.plan, &reference.pair, &request.context)
             .map_err(|_| internal("preview_artifact_name"))?;
     if artifact.size_in_bytes > ZipProfile::PreviewLeaf.compressed() {
         return Err(internal("preview_artifact_metadata_identity"));
@@ -221,7 +229,7 @@ fn validate_metadata(
     digest: &str,
     expected_name: &str,
     plan: &PackageReleasePlan,
-    context: &PreviewProductionContext,
+    context: &ReleaseProductionContext,
 ) -> Result<(), OrchestratorError> {
     let valid_run = artifact.workflow_run.as_ref().is_some_and(|run| {
         run.id == context.run_id
@@ -279,3 +287,7 @@ pub(super) mod fixture;
 #[cfg(test)]
 #[path = "preview_artifact_transport_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "preview_artifact_transport_environment_tests.rs"]
+mod environment_tests;

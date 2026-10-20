@@ -8,7 +8,7 @@ use std::{
 use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
 use velnor_actions_contract::{
-    PackageReleasePlan, VerifiedPreviewRelease, canonical_json_bytes,
+    PackageReleasePlan, VerifiedPackageRelease, canonical_json_bytes,
     config::HomebrewTapConfig,
     homebrew_formula::{HomebrewFormulaCandidate, validate_homebrew_formula_candidate},
     parse_strict_json,
@@ -28,10 +28,11 @@ const LIMIT: u64 = 1024 * 1024;
 pub(super) struct MergeCandidate {
     pub(super) policy: HomebrewTapConfig,
     pub(super) plan: PackageReleasePlan,
-    pub(super) release: VerifiedPreviewRelease,
+    pub(super) release: VerifiedPackageRelease,
     pub(super) proof: HomebrewTapPreparationProof,
     pub(super) promotion: TapPromotionReceipt,
     pub(super) formula: Vec<u8>,
+    pub(super) formula_path: String,
 }
 
 pub(super) struct PromotionSelection<'a> {
@@ -87,11 +88,15 @@ impl MergeCandidate {
 
 pub(super) fn load_candidate() -> Result<MergeCandidate, OrchestratorError> {
     let signed = crate::package_release_signer::verify_attested_signed_package_from_env()?;
+    crate::package_release_publish::verify_published_release(&signed)?;
     let plan = signed.plan().clone();
     plan.validate()
         .map_err(|_| internal("tap_merge_plan_invalid"))?;
+    crate::tap_prepare::release_policy_from_env()?
+        .validate_plan(&plan)
+        .map_err(|_| internal("tap_merge_release_policy_plan"))?;
     let receipt = signed.receipt().clone();
-    let release = VerifiedPreviewRelease {
+    let release = VerifiedPackageRelease {
         receipt_digest: receipt
             .canonical_digest()
             .map_err(|_| internal("tap_merge_receipt_digest"))?,
@@ -101,6 +106,7 @@ pub(super) fn load_candidate() -> Result<MergeCandidate, OrchestratorError> {
         .validate(&plan.repository, &plan)
         .map_err(|_| internal("tap_merge_receipt_invalid"))?;
     let policy = crate::tap_prepare::writer_policy_from_env()?;
+    let formula_path = crate::tap_prepare::formula_path(&policy, plan.channel)?.to_owned();
     let root = runner_root()?;
     let proof: HomebrewTapPreparationProof =
         read_canonical_json(&root.join("tap-candidate/candidate.json"))?;
@@ -114,13 +120,14 @@ pub(super) fn load_candidate() -> Result<MergeCandidate, OrchestratorError> {
         proof,
         promotion,
         formula,
+        formula_path,
     })
 }
 
 fn validate_handoff(
     policy: &HomebrewTapConfig,
     plan: &PackageReleasePlan,
-    release: &VerifiedPreviewRelease,
+    release: &VerifiedPackageRelease,
     proof: &HomebrewTapPreparationProof,
     promotion: &TapPromotionReceipt,
     formula: &[u8],
@@ -134,8 +141,9 @@ fn validate_handoff(
     );
     let tap_digest =
         sha256(&canonical_json_bytes(policy).map_err(|_| internal("tap_merge_policy_encode"))?);
-    if proof.schema != "velnor.homebrew-candidate.v2"
-        || proof.formula_path != policy.formula
+    if proof.schema != "velnor.homebrew-candidate.v3"
+        || proof.channel != plan.channel
+        || proof.formula_path != crate::tap_prepare::formula_path(policy, plan.channel)?
         || proof.candidate_formula != "formula.rb"
         || proof.tap_repository != policy.repository
         || proof.source_repository != plan.repository
@@ -162,7 +170,12 @@ fn validate_handoff(
         } if proof.disposition == TapPreparationDisposition::Changed
             && *pull_request > 0
             && base_sha == &proof.base_sha
-            && branch == &expected_branch(&release.receipt_digest, base_sha)?
+            && branch
+                == &expected_branch(
+                    &release.receipt_digest,
+                    base_sha,
+                    release.receipt.channel,
+                )?
             && candidate_proof_digest == &promotion.preparation_proof_digest
             && is_hex(head_sha, 40)
             && is_hex(base_sha, 40) => {}
@@ -177,7 +190,12 @@ fn validate_handoff(
         } if proof.disposition == TapPreparationDisposition::FormulaAlreadyCurrent
             && proof.old_formula_sha256 == proof.new_formula_sha256
             && *pull_request > 0
-            && branch == &expected_branch(&release.receipt_digest, base_sha)?
+            && branch
+                == &expected_branch(
+                    &release.receipt_digest,
+                    base_sha,
+                    release.receipt.channel,
+                )?
             && is_hex(candidate_proof_digest, 64)
             && is_hex(head_sha, 40)
             && is_hex(base_sha, 40)
@@ -198,7 +216,7 @@ pub(super) fn validate_formula_at_base(
         source_repository: &candidate.proof.source_repository,
         plan: &candidate.plan,
         tap_repository: &candidate.policy.repository,
-        formula_path: &candidate.policy.formula,
+        formula_path: &candidate.formula_path,
         captured_base_sha: base_sha,
         base_bytes: base_formula,
         proposed_bytes: proposed_formula,
@@ -214,6 +232,7 @@ pub(super) fn validate_formula_at_base(
 pub(super) fn expected_branch(
     receipt_digest: &str,
     base_sha: &str,
+    channel: velnor_actions_contract::package_release::PackageReleaseChannel,
 ) -> Result<String, OrchestratorError> {
     let digest = receipt_digest
         .strip_prefix("b3-")
@@ -222,7 +241,11 @@ pub(super) fn expected_branch(
     if !is_hex(base_sha, 40) {
         return Err(internal("tap_merge_branch_base_invalid"));
     }
-    Ok(format!("velnor/preview/{digest}-{base_sha}"))
+    let channel = match channel {
+        velnor_actions_contract::package_release::PackageReleaseChannel::Preview => "preview",
+        velnor_actions_contract::package_release::PackageReleaseChannel::Stable => "stable",
+    };
+    Ok(format!("velnor/{channel}/{digest}-{base_sha}"))
 }
 
 fn read_canonical_json<T: DeserializeOwned + serde::Serialize>(

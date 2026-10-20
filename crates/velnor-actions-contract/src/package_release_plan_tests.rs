@@ -33,15 +33,23 @@ fn static_plan_round_trips_canonically_without_task_payload() {
 }
 
 #[test]
-fn static_stable_plan_names_the_raw_single_binary_representation() {
+fn stable_and_preview_admit_the_same_multi_binary_archive_inventory() {
     let mut plan = plan();
-    plan.channel = crate::package_release::PackageReleaseChannel::Stable;
-    plan.products[0].format = PackageReleasePayloadFormat::RawBinary;
-    plan.products[0].targets = vec!["aarch64-apple-darwin".to_owned()];
-    plan.validate().expect("valid stable raw payload plan");
-
-    plan.products[0].format = PackageReleasePayloadFormat::TarGz;
-    assert!(plan.validate().is_err(), "stable cannot claim a tarball");
+    plan.products[0].bins.push("jackin-role".to_owned());
+    plan.products[0]
+        .targets
+        .push("x86_64-unknown-linux-gnu".to_owned());
+    assert!(plan.validate().is_ok());
+    plan.channel = PackageReleaseChannel::Stable;
+    assert!(plan.validate().is_ok());
+    let bytes = plan.canonical_bytes().expect("stable inventory");
+    assert_eq!(
+        parse_package_release_plan(&bytes).expect("stable plan"),
+        plan
+    );
+    let mut raw = serde_json::to_value(&plan).expect("stable plan value");
+    raw["products"][0]["format"] = serde_json::json!("raw-binary");
+    assert!(serde_json::from_value::<PackageReleasePlan>(raw).is_err());
 }
 
 #[test]
@@ -53,7 +61,6 @@ fn preview_plan_requires_main_while_stable_keeps_custom_default_branches() {
     let mut stable = plan();
     stable.channel = PackageReleaseChannel::Stable;
     stable.default_branch = "release/1.2".to_owned();
-    stable.products[0].format = PackageReleasePayloadFormat::RawBinary;
     stable.products[0].targets = vec!["aarch64-apple-darwin".to_owned()];
     stable
         .validate()

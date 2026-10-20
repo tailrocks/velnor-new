@@ -1,35 +1,40 @@
 use super::*;
 use crate::metadata::{TargetRecord, VelnorV1TaskOwner};
 use velnor_actions_contract::config::{
-    RustBinaryPreviewArchive, RustBinaryPreviewConfig, RustBinaryPreviewProducer,
-    RustBinaryPreviewProduct,
+    RustBinaryReleaseArchive, RustBinaryReleaseConfig, RustBinaryReleaseProducer,
+    RustBinaryReleaseProduct,
 };
 
-fn preview(products: Vec<RustBinaryPreviewProduct>) -> RustBinaryPreviewConfig {
-    RustBinaryPreviewConfig {
-        enabled: true,
+fn preview(products: Vec<RustBinaryReleaseProduct>) -> RustBinaryReleaseConfig {
+    RustBinaryReleaseConfig {
+        version_package: "jackin".to_owned(),
+        preview: velnor_actions_contract::config::RustBinaryPreviewConfig {
+            enabled: true,
+            release_id: 328_385_904,
+            ..velnor_actions_contract::config::RustBinaryPreviewConfig::default()
+        },
         version_env: "JACKIN_VERSION_OVERRIDE".to_owned(),
-        producer: RustBinaryPreviewProducer {
+        producer: RustBinaryReleaseProducer {
             task: "release:preview-package".to_owned(),
             tools: vec!["rust".to_owned()],
             inputs: vec![
                 "Cargo.lock".to_owned(),
                 "scripts/preview-producer.rs".to_owned(),
             ],
-            ..RustBinaryPreviewProducer::default()
+            ..RustBinaryReleaseProducer::default()
         },
         products,
-        ..RustBinaryPreviewConfig::default()
+        ..RustBinaryReleaseConfig::default()
     }
 }
 
-fn product(id: &str, package: &str, bins: &[&str], targets: &[&str]) -> RustBinaryPreviewProduct {
-    RustBinaryPreviewProduct {
+fn product(id: &str, package: &str, bins: &[&str], targets: &[&str]) -> RustBinaryReleaseProduct {
+    RustBinaryReleaseProduct {
         id: id.to_owned(),
         package: package.to_owned(),
         bins: bins.iter().map(|value| (*value).to_owned()).collect(),
         targets: targets.iter().map(|value| (*value).to_owned()).collect(),
-        archive: RustBinaryPreviewArchive::TarGz,
+        archive: RustBinaryReleaseArchive::TarGz,
     }
 }
 
@@ -91,7 +96,7 @@ fn jackin_workspace() -> WorkspaceRecord {
     ])
 }
 
-fn jackin_preview() -> RustBinaryPreviewConfig {
+fn jackin_preview() -> RustBinaryReleaseConfig {
     preview(vec![
         product(
             "jackin",
@@ -116,7 +121,7 @@ fn jackin_preview() -> RustBinaryPreviewConfig {
 #[test]
 fn jackin_preview_resolves_six_archives_and_sorted_receipt_members()
 -> Result<(), velnor_actions_contract::ContractError> {
-    let resolved = resolve_preview_products(&jackin_preview(), &jackin_workspace())?;
+    let resolved = resolve_release_products(&jackin_preview(), &jackin_workspace())?;
     assert_eq!(resolved.base_version, "1.2.3");
     assert_eq!(resolved.products.len(), 2);
     assert_eq!(resolved.products[0].id, "jackin");
@@ -153,7 +158,7 @@ fn missing_package_and_binary_fail_closed() {
         &["tool"],
         &["x86_64-unknown-linux-gnu"],
     )]);
-    assert!(resolve_preview_products(&missing_package, &jackin_workspace()).is_err());
+    assert!(resolve_release_products(&missing_package, &jackin_workspace()).is_err());
 
     let missing_bin = preview(vec![product(
         "jackin",
@@ -161,7 +166,7 @@ fn missing_package_and_binary_fail_closed() {
         &["ghost"],
         &["x86_64-unknown-linux-gnu"],
     )]);
-    assert!(resolve_preview_products(&missing_bin, &jackin_workspace()).is_err());
+    assert!(resolve_release_products(&missing_bin, &jackin_workspace()).is_err());
 }
 
 #[test]
@@ -179,7 +184,7 @@ fn package_versions_must_be_equal_numeric_bases() {
         ),
         package("jackin-capsule", "1.2.4", &[("jackin-capsule", &[])]),
     ]);
-    assert!(resolve_preview_products(&config, &first_workspace).is_err());
+    assert!(resolve_release_products(&config, &first_workspace).is_err());
 
     let mut bad_version = package(
         "jackin",
@@ -195,7 +200,7 @@ fn package_versions_must_be_equal_numeric_bases() {
         bad_version,
         package("jackin-capsule", "1.2.3", &[("jackin-capsule", &[])]),
     ]);
-    assert!(resolve_preview_products(&config, &workspace).is_err());
+    assert!(resolve_release_products(&config, &workspace).is_err());
 }
 
 #[test]
@@ -211,7 +216,7 @@ fn feature_gated_and_nonworkspace_products_fail_closed() {
         "1.2.3",
         &[("jackin", &["desktop"])],
     )]);
-    assert!(resolve_preview_products(&config, &feature_gated).is_err());
+    assert!(resolve_release_products(&config, &feature_gated).is_err());
 
     let mut outside = package("jackin", "1.2.3", &[("jackin", &[])]);
     outside.in_workspace = false;
@@ -225,5 +230,48 @@ fn feature_gated_and_nonworkspace_products_fail_closed() {
         has_external_dependencies: false,
     };
     assert!(workspace.members.iter().all(|id| id != &outside_id));
-    assert!(resolve_preview_products(&config, &workspace).is_err());
+    assert!(resolve_release_products(&config, &workspace).is_err());
+}
+
+#[test]
+fn stable_and_preview_resolve_identical_source_bound_product_matrices() {
+    let mut config = jackin_preview();
+    let preview = resolve_release_products(&config, &jackin_workspace()).expect("preview products");
+    config.preview.enabled = false;
+    config.stable.enabled = true;
+    config.products.reverse();
+    let stable = resolve_release_products(&config, &jackin_workspace()).expect("stable products");
+    assert_eq!(stable, preview);
+    config.preview.enabled = false;
+    config.stable.enabled = false;
+    assert!(resolve_release_products(&config, &jackin_workspace()).is_err());
+}
+
+#[test]
+fn version_owner_must_be_explicit_selected_and_present_in_discovered_workspace() {
+    let mut config = jackin_preview();
+    config.version_package = "not-a-product".to_owned();
+    assert!(
+        resolve_release_products(&config, &jackin_workspace())
+            .expect_err("undeclared version owner")
+            .to_string()
+            .contains("version_package_not_a_product")
+    );
+    config.version_package = "jackin-capsule".to_owned();
+    let mut incomplete = jackin_workspace();
+    incomplete
+        .packages
+        .retain(|package| package.name != "jackin-capsule");
+    assert!(
+        resolve_release_products(&config, &incomplete)
+            .expect_err("version owner absent")
+            .to_string()
+            .contains("missing_package")
+    );
+    assert_eq!(
+        resolve_release_products(&config, &jackin_workspace())
+            .expect("explicit alternate owner")
+            .base_version,
+        "1.2.3"
+    );
 }

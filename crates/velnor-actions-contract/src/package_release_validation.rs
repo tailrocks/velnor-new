@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use crate::{
-    ContractError, config::RustBinaryPreviewConfig, package_release_plan::PackageReleasePlan,
+    ContractError, config::RustBinaryReleaseConfig, package_release_plan::PackageReleasePlan,
 };
 
 #[path = "package_release_asset_validation.rs"]
@@ -34,16 +34,20 @@ pub(super) fn validate(receipt: &PackageReleaseReceipt) -> Result<(), ContractEr
     Ok(())
 }
 
-pub(super) fn validate_against_preview(
+pub(super) fn validate_against_config(
     receipt: &PackageReleaseReceipt,
-    preview: &RustBinaryPreviewConfig,
+    config: &RustBinaryReleaseConfig,
 ) -> Result<(), ContractError> {
     receipt.validate()?;
-    preview.validate("release.json")?;
-    if receipt.channel != PackageReleaseChannel::Preview || !preview.enabled {
-        return Err(invalid("preview_policy_not_enabled"));
+    config.validate("release.json")?;
+    let enabled = match receipt.channel {
+        PackageReleaseChannel::Preview => config.preview.enabled,
+        PackageReleaseChannel::Stable => config.stable.enabled,
+    };
+    if !enabled {
+        return Err(invalid("release_channel_not_enabled"));
     }
-    validate_against_inventory(receipt, &preview.products, &preview.companions)
+    validate_against_inventory(receipt, &config.products, &config.companions)
 }
 
 pub(super) fn validate_against_plan(
@@ -76,7 +80,6 @@ pub(super) fn validate_against_plan(
         for (archive, target) in actual.payloads.iter().zip(&declared.targets) {
             let expected_name = match declared.format {
                 PackageReleasePayloadFormat::TarGz => format!("{}-{target}.tar.gz", declared.id),
-                PackageReleasePayloadFormat::RawBinary => format!("{}-{target}", declared.bins[0]),
             };
             if archive.format != declared.format
                 || archive.target != *target
@@ -106,8 +109,8 @@ pub(super) fn validate_against_plan(
 
 fn validate_against_inventory(
     receipt: &PackageReleaseReceipt,
-    declared_products: &[crate::config::RustBinaryPreviewProduct],
-    declared_companions: &[crate::config::RustBinaryPreviewCompanion],
+    declared_products: &[crate::config::RustBinaryReleaseProduct],
+    declared_companions: &[crate::config::RustBinaryReleaseCompanion],
 ) -> Result<(), ContractError> {
     if receipt.products.len() != declared_products.len() {
         return Err(invalid("preview_product_inventory_mismatch"));
@@ -164,8 +167,8 @@ fn validate_against_inventory(
 }
 
 fn expected_asset_names(
-    products: &[crate::config::RustBinaryPreviewProduct],
-    companions: &[crate::config::RustBinaryPreviewCompanion],
+    products: &[crate::config::RustBinaryReleaseProduct],
+    companions: &[crate::config::RustBinaryReleaseCompanion],
 ) -> Vec<String> {
     let mut names = Vec::new();
     for product in products {
@@ -228,12 +231,6 @@ fn validate_products(receipt: &PackageReleaseReceipt) -> Result<(), ContractErro
             let name_matches = match archive.format {
                 PackageReleasePayloadFormat::TarGz => {
                     archive.name == format!("{}-{}.tar.gz", product.id, archive.target)
-                }
-                PackageReleasePayloadFormat::RawBinary => {
-                    receipt.channel == PackageReleaseChannel::Stable
-                        && product.bins.len() == 1
-                        && product.payloads.len() == 1
-                        && archive.name == format!("{}-{}", product.bins[0], archive.target)
                 }
             };
             if !crate::package_release::is_supported_release_target(&archive.target)
@@ -331,13 +328,14 @@ fn valid_identifier(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
 }
 
-pub(super) fn valid_asset_name(value: &str) -> bool {
+pub(crate) fn valid_asset_name(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 180
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
-        && !matches!(value, "." | "..")
+        && !value.starts_with('.')
+        && !value.ends_with('.')
 }
 
 pub(super) fn invalid(problem: &str) -> ContractError {

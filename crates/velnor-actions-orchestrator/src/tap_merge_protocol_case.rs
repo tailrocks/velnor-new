@@ -27,8 +27,12 @@ pub(super) fn completed_case() -> (
     let base = "b".repeat(40);
     let head = "c".repeat(40);
     let merge = "d".repeat(40);
-    let branch = super::super::candidate::expected_branch(&fixture.release.receipt_digest, &base)
-        .expect("receipt and base branch");
+    let branch = super::super::candidate::expected_branch(
+        &fixture.release.receipt_digest,
+        &base,
+        fixture.release.receipt.channel,
+    )
+    .expect("receipt and base branch");
     let historical = crate::tap_prepare::reconstruct_historical_candidate_proof(
         &fixture.plan.repository,
         &fixture.policy,
@@ -69,6 +73,7 @@ fn completed_candidate(
     let current_proof = current_proof(&fixture, merge);
     let current_proof_digest = sha256(&canonical_json_bytes(&current_proof).expect("proof bytes"));
     let receipt_digest = fixture.release.receipt_digest.clone();
+    let formula_path = fixture.formula_path.clone();
     MergeCandidate {
         policy: fixture.policy,
         plan: fixture.plan,
@@ -90,6 +95,7 @@ fn completed_candidate(
             },
         },
         formula: fixture.proposed_formula,
+        formula_path,
     }
 }
 
@@ -99,10 +105,11 @@ fn current_proof(
 ) -> HomebrewTapPreparationProof {
     let formula_sha = sha256(&fixture.proposed_formula);
     HomebrewTapPreparationProof {
-        schema: "velnor.homebrew-candidate.v2".to_owned(),
+        schema: "velnor.homebrew-candidate.v3".to_owned(),
+        channel: fixture.release.receipt.channel,
         disposition: TapPreparationDisposition::FormulaAlreadyCurrent,
         base_sha: base.to_owned(),
-        formula_path: fixture.policy.formula.clone(),
+        formula_path: fixture.formula_path.clone(),
         old_formula_sha256: formula_sha.clone(),
         new_formula_sha256: formula_sha,
         receipt_digest: fixture.release.receipt_digest.clone(),

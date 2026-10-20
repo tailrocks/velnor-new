@@ -17,9 +17,8 @@ use crate::{
 };
 use std::path::Path;
 use velnor_actions_contract::{
-    config::RustBinaryPreviewConfig,
-    preview_identity::PreviewIdentity,
-    preview_production::{PreviewProductionRequest, PreviewProductionStage},
+    config::RustBinaryReleaseConfig,
+    preview_production::{ReleaseProductionRequest, ReleaseProductionStage},
 };
 use velnor_actions_mise::CheckDeadline;
 
@@ -28,22 +27,22 @@ struct Publication<'a> {
     manifest: &'a str,
     temp: &'a Path,
     raw: &'a Path,
-    request: &'a PreviewProductionRequest,
+    request: &'a ReleaseProductionRequest,
     deadline: CheckDeadline,
 }
 
 pub(super) fn execute(
     prep: &crate::GenerationPreparation,
     temp: &Path,
-    preview: &RustBinaryPreviewConfig,
-    request: &PreviewProductionRequest,
+    preview: &RustBinaryReleaseConfig,
+    request: &ReleaseProductionRequest,
     deadline: CheckDeadline,
     guard: &mut ProofGuard,
 ) -> Result<(), OrchestratorError> {
     let progress = crate::preview_producer::progress::Progress::artifacts();
     let admitted = match request.stage {
-        PreviewProductionStage::Payload { .. } => None,
-        PreviewProductionStage::Assemble { .. } => {
+        ReleaseProductionStage::Payload { .. } => None,
+        ReleaseProductionStage::Assemble { .. } => {
             Some(super::acquisition::load(temp, request, preview, deadline)?)
         }
     };
@@ -55,12 +54,11 @@ pub(super) fn execute(
             .map_or(&[], |leaves| leaves.inputs.as_slice()),
         deadline,
     )?;
-    let identity = PreviewIdentity::derive(
-        &request.plan.base_version,
+    let identity = crate::release_task_identity::ReleaseTaskIdentity::derive(
+        &request.plan,
         &request.context.source_sha,
         request.context.commit_count,
-    )
-    .map_err(|_| internal("preview_identity_invalid"))?;
+    )?;
     let producer = execute_preview_task(
         &prep.root,
         temp,
@@ -137,7 +135,7 @@ fn publish_leaf(
 fn publish_aggregate(
     operation: &Publication<'_>,
     producer: crate::preview_producer::PreviewProducerProof,
-    preview: &RustBinaryPreviewConfig,
+    preview: &RustBinaryReleaseConfig,
     leaves: &AdmittedLeaves,
     guard: &mut ProofGuard,
 ) -> Result<(), OrchestratorError> {
@@ -183,7 +181,12 @@ fn publish_aggregate(
     };
     proof.validate_source(preview)?;
     let bytes = leaf_manifest::encode(&proof)?;
-    PreviewAggregateManifest::parse(&bytes, &request.plan, &request.context)?;
+    PreviewAggregateManifest::parse(
+        &bytes,
+        &request.policy_sha256,
+        &request.plan,
+        &request.context,
+    )?;
     publish_proof(
         &raw.join(handoff::AGGREGATE_MANIFEST),
         &bytes,
@@ -211,5 +214,5 @@ pub(super) fn fresh_raw_output(
     deadline: CheckDeadline,
 ) -> Result<std::path::PathBuf, OrchestratorError> {
     handoff::checkpoint(deadline)?;
-    handoff::fresh_directory(temp, "preview-output")
+    handoff::fresh_directory(temp, "release-output")
 }

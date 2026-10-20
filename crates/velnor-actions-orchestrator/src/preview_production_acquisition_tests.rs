@@ -4,12 +4,12 @@ use velnor_actions_contract::{
     PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlan, PackageReleasePlanProduct,
     package_release::{PackageReleaseChannel, PackageReleasePayloadFormat},
     preview_production::{
-        PREVIEW_PRODUCTION_SCHEMA_V1, PayloadArtifactRef, PreviewProductionContext,
-        expected_preview_payload_pairs, preview_plan_sha256,
+        PayloadArtifactRef, RELEASE_PRODUCTION_SCHEMA_V1, ReleaseProductionContext,
+        expected_release_payload_pairs, release_plan_sha256,
     },
 };
 
-fn request() -> PreviewProductionRequest {
+fn request() -> ReleaseProductionRequest {
     let plan = PackageReleasePlan {
         schema: PACKAGE_RELEASE_PLAN_SCHEMA_V1.into(),
         channel: PackageReleaseChannel::Preview,
@@ -25,7 +25,7 @@ fn request() -> PreviewProductionRequest {
         }],
         companions: vec![],
     };
-    let inputs = expected_preview_payload_pairs(&plan)
+    let inputs = expected_release_payload_pairs(&plan)
         .expect("pairs")
         .into_iter()
         .enumerate()
@@ -35,11 +35,12 @@ fn request() -> PreviewProductionRequest {
             sha256: "b".repeat(64),
         })
         .collect();
-    PreviewProductionRequest {
-        schema: PREVIEW_PRODUCTION_SCHEMA_V1.into(),
-        plan_sha256: preview_plan_sha256(&plan).expect("digest"),
+    ReleaseProductionRequest {
+        schema: RELEASE_PRODUCTION_SCHEMA_V1.into(),
+        policy_sha256: "d".repeat(64),
+        plan_sha256: release_plan_sha256(&plan).expect("digest"),
         plan,
-        context: PreviewProductionContext {
+        context: ReleaseProductionContext {
             repository_id: 1,
             head_repository_id: 1,
             source_sha: "a".repeat(40),
@@ -52,7 +53,7 @@ fn request() -> PreviewProductionRequest {
             commit_count: 10,
             version: "1.2.3-preview.10+aaaaaaa".into(),
         },
-        stage: PreviewProductionStage::Assemble { inputs },
+        stage: ReleaseProductionStage::Assemble { inputs },
     }
 }
 
@@ -92,7 +93,7 @@ fn source_executor_refuses_either_ambient_token() {
 fn admitted_union_cannot_omit_original_leaf_proofs() {
     let deadline =
         CheckDeadline::from_start(Instant::now(), Duration::from_secs(5)).expect("deadline");
-    let preview = RustBinaryPreviewConfig::default();
+    let preview = RustBinaryReleaseConfig::default();
     let error = restore(admission(), &preview, deadline)
         .err()
         .expect("missing leaf rejected");
@@ -102,14 +103,14 @@ fn admitted_union_cannot_omit_original_leaf_proofs() {
     );
 }
 
-fn admitted_files(root: &Path, preview: &RustBinaryPreviewConfig) -> Admission {
+fn admitted_files(root: &Path, preview: &RustBinaryReleaseConfig) -> Admission {
     let mut record = admission();
-    let PreviewProductionStage::Assemble { inputs } = record.request.stage.clone() else {
+    let ReleaseProductionStage::Assemble { inputs } = record.request.stage.clone() else {
         panic!("assemble")
     };
     for reference in inputs {
         let mut request = record.request.clone();
-        request.stage = PreviewProductionStage::Payload {
+        request.stage = ReleaseProductionStage::Payload {
             pair: reference.pair.clone(),
         };
         let producer = super::super::PreviewProducerProof {
@@ -164,7 +165,7 @@ fn admitted_files(root: &Path, preview: &RustBinaryPreviewConfig) -> Admission {
 fn complete_admission_repins_assets_and_rejects_pre_task_byte_tampering() {
     let root = tempfile::tempdir().expect("root");
     let root = root.path().canonicalize().expect("canonical root");
-    let preview = RustBinaryPreviewConfig::default();
+    let preview = RustBinaryReleaseConfig::default();
     let deadline =
         CheckDeadline::from_start(Instant::now(), Duration::from_secs(5)).expect("deadline");
     let record = admitted_files(&root, &preview);

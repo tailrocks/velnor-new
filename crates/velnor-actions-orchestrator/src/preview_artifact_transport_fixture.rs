@@ -5,12 +5,12 @@ use velnor_actions_contract::{
     PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlan, PackageReleasePlanProduct,
     package_release::{PackageReleaseChannel, PackageReleasePayloadFormat},
     preview_production::{
-        PREVIEW_PRODUCTION_SCHEMA_V1, PreviewPayloadPair, PreviewProductionContext,
-        preview_plan_sha256,
+        RELEASE_PRODUCTION_SCHEMA_V1, ReleasePayloadPair, ReleaseProductionContext,
+        release_plan_sha256,
     },
 };
 
-pub(in crate::package_release_publish) fn request() -> PreviewProductionRequest {
+pub(in crate::package_release_publish) fn request() -> ReleaseProductionRequest {
     let plan = PackageReleasePlan {
         schema: PACKAGE_RELEASE_PLAN_SCHEMA_V1.into(),
         channel: PackageReleaseChannel::Preview,
@@ -26,11 +26,12 @@ pub(in crate::package_release_publish) fn request() -> PreviewProductionRequest 
         }],
         companions: vec![],
     };
-    PreviewProductionRequest {
-        schema: PREVIEW_PRODUCTION_SCHEMA_V1.into(),
-        plan_sha256: preview_plan_sha256(&plan).expect("plan"),
+    ReleaseProductionRequest {
+        schema: RELEASE_PRODUCTION_SCHEMA_V1.into(),
+        policy_sha256: "f".repeat(64),
+        plan_sha256: release_plan_sha256(&plan).expect("plan"),
         plan,
-        context: PreviewProductionContext {
+        context: ReleaseProductionContext {
             repository_id: 101,
             head_repository_id: 101,
             source_sha: "a".repeat(40),
@@ -43,9 +44,9 @@ pub(in crate::package_release_publish) fn request() -> PreviewProductionRequest 
             commit_count: 1306,
             version: "0.6.4-preview.1306+aaaaaaa".into(),
         },
-        stage: PreviewProductionStage::Assemble {
+        stage: ReleaseProductionStage::Assemble {
             inputs: vec![PayloadArtifactRef {
-                pair: PreviewPayloadPair {
+                pair: ReleasePayloadPair {
                     product_id: "app".into(),
                     target: "aarch64-apple-darwin".into(),
                 },
@@ -58,12 +59,12 @@ pub(in crate::package_release_publish) fn request() -> PreviewProductionRequest 
 
 pub(in crate::package_release_publish) fn record() -> ArtifactRecord {
     let request = request();
-    let PreviewProductionStage::Assemble { inputs } = &request.stage else {
+    let ReleaseProductionStage::Assemble { inputs } = &request.stage else {
         unreachable!()
     };
     ArtifactRecord {
         id: 303,
-        name: preview_payload_artifact_name(&request.plan, &inputs[0].pair, &request.context)
+        name: release_payload_artifact_name(&request.plan, &inputs[0].pair, &request.context)
             .expect("name"),
         expired: false,
         size_in_bytes: 16,

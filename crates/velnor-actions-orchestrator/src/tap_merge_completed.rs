@@ -49,7 +49,7 @@ pub(super) fn verify_already_promoted(
     let current_formula = contents(
         api,
         &candidate.policy.repository,
-        &candidate.policy.formula,
+        &candidate.formula_path,
         &current_main,
     )?;
     validate_formula_at_base(

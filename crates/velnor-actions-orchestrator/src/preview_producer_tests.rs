@@ -8,6 +8,23 @@ use velnor_actions_mise::{CheckDeadline, IsolatedCommand};
 
 use crate::{git_fixture, preview_producer::PreviewTaskSpec};
 
+fn preview_identity(
+    base: &str,
+    sha: &str,
+    count: u64,
+) -> Result<crate::release_task_identity::ReleaseTaskIdentity, velnor_actions_contract::ContractError>
+{
+    let identity = PreviewIdentity::derive(base, sha, count)?;
+    Ok(crate::release_task_identity::ReleaseTaskIdentity {
+        channel: velnor_actions_contract::package_release::PackageReleaseChannel::Preview,
+        base_version: base.to_owned(),
+        version: identity.version,
+        tag: identity.tag,
+        source_sha: identity.source_sha,
+        commit_count: identity.commit_count,
+    })
+}
+
 fn fixture_git(root: &std::path::Path, args: &[&str]) -> std::process::Output {
     git_fixture::command(root)
         .expect("fixture Git authority")
@@ -58,7 +75,7 @@ fn stage_zero_parser_accepts_only_exact_regular_tracked_record() {
 
 #[test]
 fn producer_identity_and_source_ref_must_be_canonical() {
-    let identity = PreviewIdentity::derive("0.6.4", &"a".repeat(40), 12).expect("identity");
+    let identity = preview_identity("0.6.4", &"a".repeat(40), 12).expect("identity");
     assert!(canonical_identity(&identity));
     let mut forged = identity.clone();
     forged.version.push_str(".other");
@@ -150,7 +167,7 @@ fn source_validation_requires_exact_head_full_history_and_matching_count() {
         CheckDeadline::after(Duration::from_secs(10)).expect("deadline"),
     )
     .expect("head");
-    let identity = PreviewIdentity::derive("0.6.4", &head, 1).expect("identity");
+    let identity = preview_identity("0.6.4", &head, 1).expect("identity");
     assert!(
         validate_preview_source(
             repo.path(),
@@ -160,7 +177,7 @@ fn source_validation_requires_exact_head_full_history_and_matching_count() {
         .is_ok()
     );
 
-    let incorrect_count = PreviewIdentity::derive("0.6.4", &head, 2).expect("identity");
+    let incorrect_count = preview_identity("0.6.4", &head, 2).expect("identity");
     assert!(
         validate_preview_source(
             repo.path(),
@@ -198,8 +215,8 @@ fn source_validation_requires_exact_head_full_history_and_matching_count() {
 fn isolated_producer_task_receives_fixed_handoff_without_credentials() {
     let temp = tempfile::tempdir().expect("temporary root");
     let source_sha = "a".repeat(40);
-    let identity = PreviewIdentity::derive("1.2.3", &source_sha, 42).expect("identity");
-    let mut preview = velnor_actions_contract::config::RustBinaryPreviewConfig {
+    let identity = preview_identity("1.2.3", &source_sha, 42).expect("identity");
+    let mut preview = velnor_actions_contract::config::RustBinaryReleaseConfig {
         version_env: "JACKIN_VERSION_OVERRIDE".to_owned(),
         ..Default::default()
     };
@@ -227,7 +244,7 @@ fn isolated_producer_task_receives_fixed_handoff_without_credentials() {
         "\"$VELNOR_RELEASE_COMMIT_COUNT\" ",
         "\"$CARGO_BUILD_JOBS\" ",
         "\"$JACKIN_VERSION_OVERRIDE\" ",
-        "\"$VELNOR_PREVIEW_REQUEST_FILE\"; ",
+        "\"$VELNOR_RELEASE_TASK_REQUEST_FILE\"; ",
         "test -z \"${GH_TOKEN+x}${GITHUB_TOKEN+x}${AWS_SECRET_ACCESS_KEY+x}\""
     );
     let command = IsolatedCommand::repo_task(

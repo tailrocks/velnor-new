@@ -9,10 +9,10 @@ fn merge_gate_accepts_github_output_environment() -> Result<(), Box<dyn Error>> 
     let tmp = fresh_tempdir("tap-merge-github-output")?;
     let root = tmp.join("velnor");
     let candidate = root.join("tap-candidate");
-    std::fs::create_dir_all(root.join("preview-publish-input"))?;
+    std::fs::create_dir_all(root.join("release-publish-input"))?;
     std::fs::create_dir_all(&candidate)?;
     for relative in [
-        "package-release-plan.json",
+        "package-release-policy.json",
         "tap-pr.json",
         "tap-candidate/formula.rb",
         "tap-candidate/candidate.json",
@@ -21,7 +21,7 @@ fn merge_gate_accepts_github_output_environment() -> Result<(), Box<dyn Error>> 
     }
     let output_file = tmp.join("github-output");
     std::fs::write(&output_file, "")?;
-    let request = root.join("package-release-plan.json");
+    let request = root.join("package-release-policy.json");
     let output = spawn_isolated(
         &[],
         &[

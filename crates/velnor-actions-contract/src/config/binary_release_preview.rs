@@ -1,14 +1,8 @@
-//! Closed configuration contract for Rust binary preview publication.
+//! Closed channel policy and shared native release inventory types.
 
+use super::RustBinaryReleaseConfig;
 use crate::config::{CheckSystemTool, MiseTaskSource, VerificationRunner};
 use serde::{Deserialize, Serialize};
-
-#[cfg(test)]
-#[path = "binary_release_preview_tests.rs"]
-mod tests;
-#[path = "binary_release_preview_validation.rs"]
-mod validation;
-pub(crate) use validation::validate_static_release_inventory;
 
 /// Independently enabled Rust binary preview policy.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -20,53 +14,16 @@ pub struct RustBinaryPreviewConfig {
     /// Fixed native preview version derivation algorithm.
     #[serde(default)]
     pub versioning: RustBinaryPreviewVersioning,
-    /// Application build variable populated only by Velnor.
-    #[serde(default)]
-    pub version_env: String,
     /// Protected environment authorizing automatic preview publication.
     #[serde(default = "default_preview_environment")]
     pub environment: String,
-    /// Isolated, repository-owned product builder.
+    /// Existing mutable rolling release selected by immutable source policy.
     #[serde(default)]
-    pub producer: RustBinaryPreviewProducer,
-    /// Explicit Cargo product inventory.
-    #[serde(default)]
-    pub products: Vec<RustBinaryPreviewProduct>,
-    /// Explicit non-binary release assets produced by the producer.
-    #[serde(default)]
-    pub companions: Vec<RustBinaryPreviewCompanion>,
-    /// Closed mandatory proof profile. No individual evidence switches.
-    pub evidence: RustBinaryPreviewEvidence,
-}
-
-impl RustBinaryPreviewConfig {
-    /// Derive every release asset name from the typed product and companion inventory.
-    ///
-    /// Includes publisher-owned digests, signatures, SBOMs, checksum list,
-    /// and canonical receipt names. The producer manifest is not published.
-    #[must_use]
-    pub fn expected_asset_names(&self) -> Vec<String> {
-        let mut names = Vec::new();
-        for product in &self.products {
-            for target in &product.targets {
-                let archive = format!("{}-{target}.tar.gz", product.id);
-                names.push(archive.clone());
-                names.push(format!("{archive}.sha256"));
-                names.push(format!("{archive}.bundle"));
-                names.push(format!("{archive}.sbom.json"));
-            }
-        }
-        for companion in &self.companions {
-            names.push(companion.asset_name.clone());
-            names.push(format!("{}.bundle", companion.asset_name));
-        }
-        names.extend([
-            "SHA256SUMS".to_owned(),
-            "release.json".to_owned(),
-            "release.json.bundle".to_owned(),
-        ]);
-        names
-    }
+    pub release_id: u64,
+    /// Reviewed canonical legacy snapshot fingerprint for the first native transition.
+    /// This never authorizes a reset of established native journal history.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bootstrap_snapshot_sha256: Option<String>,
 }
 
 impl Default for RustBinaryPreviewConfig {
@@ -74,12 +31,9 @@ impl Default for RustBinaryPreviewConfig {
         Self {
             enabled: false,
             versioning: RustBinaryPreviewVersioning::PackagePreviewCommitCountSha7,
-            version_env: String::new(),
             environment: default_preview_environment(),
-            producer: RustBinaryPreviewProducer::default(),
-            products: Vec::new(),
-            companions: Vec::new(),
-            evidence: RustBinaryPreviewEvidence::default(),
+            release_id: 0,
+            bootstrap_snapshot_sha256: None,
         }
     }
 }
@@ -93,18 +47,18 @@ pub enum RustBinaryPreviewVersioning {
     PackagePreviewCommitCountSha7,
 }
 
-/// Mandatory immutable release evidence profile.
+/// Mandatory native release evidence profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct RustBinaryPreviewEvidence {
+pub struct RustBinaryReleaseEvidence {
     /// Complete required identity and integrity proof set.
-    pub profile: RustBinaryPreviewEvidenceProfile,
+    pub profile: RustBinaryReleaseEvidenceProfile,
 }
 
-impl Default for RustBinaryPreviewEvidence {
+impl Default for RustBinaryReleaseEvidence {
     fn default() -> Self {
         Self {
-            profile: RustBinaryPreviewEvidenceProfile::SignedSbomV1,
+            profile: RustBinaryReleaseEvidenceProfile::SignedSbomV1,
         }
     }
 }
@@ -112,7 +66,7 @@ impl Default for RustBinaryPreviewEvidence {
 /// Fixed preview release evidence profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum RustBinaryPreviewEvidenceProfile {
+pub enum RustBinaryReleaseEvidenceProfile {
     /// Checksums, `CycloneDX` JSON SBOMs, Sigstore signatures, and GitHub attestations.
     #[default]
     SignedSbomV1,
@@ -121,7 +75,7 @@ pub enum RustBinaryPreviewEvidenceProfile {
 /// Qualified repository-owned task producing the declared inventory.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct RustBinaryPreviewProducer {
+pub struct RustBinaryReleaseProducer {
     /// Exact task name in the selected Mise source.
     #[serde(default)]
     pub task: String,
@@ -154,12 +108,12 @@ pub struct RustBinaryPreviewProducer {
     pub build_jobs: u16,
 }
 
-impl RustBinaryPreviewProducer {
+impl RustBinaryReleaseProducer {
     /// Independent native producer ceiling; an omitted timeout remains five minutes.
     pub const MAX_TIMEOUT_MINUTES: u16 = 20;
 }
 
-impl Default for RustBinaryPreviewProducer {
+impl Default for RustBinaryReleaseProducer {
     fn default() -> Self {
         Self {
             task: String::new(),
@@ -179,7 +133,7 @@ impl Default for RustBinaryPreviewProducer {
 /// One Cargo package and its explicit binary/target matrix.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct RustBinaryPreviewProduct {
+pub struct RustBinaryReleaseProduct {
     /// Stable unique product identity.
     pub id: String,
     /// Exact Cargo package name.
@@ -189,12 +143,12 @@ pub struct RustBinaryPreviewProduct {
     /// Exact Rust target triples built for each binary.
     pub targets: Vec<String>,
     /// Closed archive format used for each binary payload.
-    pub archive: RustBinaryPreviewArchive,
+    pub archive: RustBinaryReleaseArchive,
 }
 
-/// Supported immutable preview archive format.
+/// Supported native release archive format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum RustBinaryPreviewArchive {
+pub enum RustBinaryReleaseArchive {
     /// Gzip-compressed tar archive.
     #[serde(rename = "tar.gz")]
     TarGz,
@@ -203,12 +157,12 @@ pub enum RustBinaryPreviewArchive {
 /// One declared companion asset, such as a capsule manifest.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct RustBinaryPreviewCompanion {
+pub struct RustBinaryReleaseCompanion {
     /// Stable unique asset identity.
     pub id: String,
     /// Producer output path relative to the producer output directory.
     pub path: String,
-    /// Exact immutable release asset filename.
+    /// Exact logical release asset filename.
     pub asset_name: String,
 }
 
@@ -229,4 +183,33 @@ const fn default_preview_timeout() -> u16 {
 }
 const fn default_build_jobs() -> u16 {
     2
+}
+impl RustBinaryReleaseConfig {
+    /// Derive every release asset name from the typed product and companion inventory.
+    ///
+    /// Includes publisher-owned digests, signatures, SBOMs, checksum list,
+    /// and canonical receipt names. The producer manifest is not published.
+    #[must_use]
+    pub fn expected_asset_names(&self) -> Vec<String> {
+        let mut names = Vec::new();
+        for product in &self.products {
+            for target in &product.targets {
+                let archive = format!("{}-{target}.tar.gz", product.id);
+                names.push(archive.clone());
+                names.push(format!("{archive}.sha256"));
+                names.push(format!("{archive}.bundle"));
+                names.push(format!("{archive}.sbom.json"));
+            }
+        }
+        for companion in &self.companions {
+            names.push(companion.asset_name.clone());
+            names.push(format!("{}.bundle", companion.asset_name));
+        }
+        names.extend([
+            "SHA256SUMS".to_owned(),
+            "release.json".to_owned(),
+            "release.json.bundle".to_owned(),
+        ]);
+        names
+    }
 }

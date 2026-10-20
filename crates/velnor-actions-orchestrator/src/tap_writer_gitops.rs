@@ -2,7 +2,7 @@
 
 use super::{BotIdentity, TapGitHubApi, encode_segment};
 use super::{
-    HomebrewTapPreparationProof, OrchestratorError, VerifiedPreviewRelease,
+    HomebrewTapPreparationProof, OrchestratorError, VerifiedPackageRelease,
     github::{self, CommitResponse, PullRequestResponse},
     internal,
 };
@@ -11,7 +11,6 @@ use velnor_actions_contract::config::HomebrewTapConfig;
 const TAP_BASE: &str = "main";
 
 pub(super) struct BranchRequest<'a> {
-    pub(super) policy: &'a HomebrewTapConfig,
     pub(super) proof: &'a HomebrewTapPreparationProof,
     pub(super) formula: &'a [u8],
     pub(super) base_sha: &'a str,
@@ -33,14 +32,14 @@ pub(super) fn create_or_reconcile_branch(
         &api.repo_route("git/trees"),
         &[
             ("base_tree", request.base_tree_sha.to_owned()),
-            ("tree[][path]", request.policy.formula.clone()),
+            ("tree[][path]", request.proof.formula_path.clone()),
             ("tree[][mode]", "100644".to_owned()),
             ("tree[][type]", "blob".to_owned()),
             ("tree[][sha]", blob.sha),
         ],
     )?;
     let expected_message = signed_off_message(request.proof, request.bot);
-    if let Some(existing_sha) = exact_branch_ref(api, request.branch)? {
+    if let Some(existing_sha) = exact_branch_ref(api, request.branch, request.proof.channel)? {
         return validate_existing_branch(
             api,
             request.branch,
@@ -82,7 +81,7 @@ pub(super) fn create_or_reconcile_branch(
     if create_ref.is_ok() {
         return Ok(commit.sha);
     }
-    let raced = exact_branch_ref(api, request.branch)?
+    let raced = exact_branch_ref(api, request.branch, request.proof.channel)?
         .ok_or_else(|| internal("tap_writer_ref_create_failed"))?;
     validate_existing_branch(
         api,
@@ -94,9 +93,15 @@ pub(super) fn create_or_reconcile_branch(
     )
 }
 
-fn exact_branch_ref(api: &TapGitHubApi, branch: &str) -> Result<Option<String>, OrchestratorError> {
-    let response: Vec<github::GitRefResponse> =
-        api.get_json(&api.repo_route("git/matching-refs/heads/velnor/preview"))?;
+fn exact_branch_ref(
+    api: &TapGitHubApi,
+    branch: &str,
+    channel: velnor_actions_contract::package_release::PackageReleaseChannel,
+) -> Result<Option<String>, OrchestratorError> {
+    let response: Vec<github::GitRefResponse> = api.get_json(&api.repo_route(&format!(
+        "git/matching-refs/heads/velnor/{}",
+        channel_key(channel),
+    )))?;
     let expected = format!("refs/heads/{branch}");
     let mut found = response
         .into_iter()
@@ -133,7 +138,8 @@ fn validate_existing_branch(
 
 pub(super) fn signed_off_message(proof: &HomebrewTapPreparationProof, bot: &BotIdentity) -> String {
     format!(
-        "Update preview formula to {}\n\nSource: {}@{}\nRelease receipt: {}\n\nSigned-off-by: {} <{}>",
+        "Update {} formula to {}\n\nSource: {}@{}\nRelease receipt: {}\n\nSigned-off-by: {} <{}>",
+        channel_key(proof.channel),
         proof.version,
         proof.source_repository,
         proof.source_sha,
@@ -153,7 +159,7 @@ pub(super) struct PullRequestRequest<'a> {
     pub(super) head_sha: &'a str,
     pub(super) base_sha: &'a str,
     pub(super) proof_digest: &'a str,
-    pub(super) release: &'a VerifiedPreviewRelease,
+    pub(super) release: &'a VerifiedPackageRelease,
     pub(super) bot: &'a BotIdentity,
     pub(super) verify_current: &'a mut dyn FnMut() -> Result<(), OrchestratorError>,
 }
@@ -238,23 +244,39 @@ fn matches_expected_pr(
             )
 }
 
-pub(super) fn expected_pr_title(release: &VerifiedPreviewRelease) -> String {
+pub(super) fn expected_pr_title(release: &VerifiedPackageRelease) -> String {
     format!(
-        "Update preview formula to {}",
+        "Update {} formula to {}",
+        channel_key(release.receipt.channel),
         release.receipt.version.value
     )
 }
 
 pub(super) fn expected_pr_body(
-    release: &VerifiedPreviewRelease,
+    release: &VerifiedPackageRelease,
     proof_digest: &str,
     base_sha: &str,
 ) -> String {
     format!(
-        "Promotes immutable preview release `{}` from `{}` at `{}`.\n\nReceipt digest: `{}`\nCandidate proof digest: `{proof_digest}`\nTap base: `{base_sha}`.",
+        "Promotes {} release `{}` from `{}` at `{}`.\n\nReceipt digest: `{}`\nCandidate proof digest: `{proof_digest}`\nTap base: `{base_sha}`.",
+        match release.receipt.channel {
+            velnor_actions_contract::package_release::PackageReleaseChannel::Preview =>
+                "rolling preview",
+            velnor_actions_contract::package_release::PackageReleaseChannel::Stable =>
+                "immutable stable",
+        },
         release.receipt.tag,
         release.receipt.repository.slug,
         release.receipt.source.commit_sha,
         release.receipt_digest,
     )
+}
+
+fn channel_key(
+    channel: velnor_actions_contract::package_release::PackageReleaseChannel,
+) -> &'static str {
+    match channel {
+        velnor_actions_contract::package_release::PackageReleaseChannel::Preview => "preview",
+        velnor_actions_contract::package_release::PackageReleaseChannel::Stable => "stable",
+    }
 }

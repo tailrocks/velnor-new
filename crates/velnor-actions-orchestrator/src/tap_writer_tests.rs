@@ -2,7 +2,8 @@ use super::*;
 
 fn proof_json() -> serde_json::Value {
     serde_json::json!({
-        "schema": "velnor.homebrew-candidate.v2",
+        "schema": "velnor.homebrew-candidate.v3",
+        "channel": "preview",
         "disposition": "changed",
         "base_sha": "a".repeat(40),
         "formula_path": "Formula/example.rb",
@@ -39,12 +40,32 @@ fn branch_name_binds_receipt_and_tap_base() {
     let first = "b".repeat(40);
     let second = "c".repeat(40);
     assert_eq!(
-        branch_name(&receipt, &first).expect("branch"),
-        branch_name(&receipt, &first).expect("branch")
+        branch_name(
+            &receipt,
+            &first,
+            velnor_actions_contract::package_release::PackageReleaseChannel::Preview
+        )
+        .expect("branch"),
+        branch_name(
+            &receipt,
+            &first,
+            velnor_actions_contract::package_release::PackageReleaseChannel::Preview
+        )
+        .expect("branch")
     );
     assert_ne!(
-        branch_name(&receipt, &first).expect("branch"),
-        branch_name(&receipt, &second).expect("branch")
+        branch_name(
+            &receipt,
+            &first,
+            velnor_actions_contract::package_release::PackageReleaseChannel::Preview
+        )
+        .expect("branch"),
+        branch_name(
+            &receipt,
+            &second,
+            velnor_actions_contract::package_release::PackageReleaseChannel::Preview
+        )
+        .expect("branch")
     );
 }
 

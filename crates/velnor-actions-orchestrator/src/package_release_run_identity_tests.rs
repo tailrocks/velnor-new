@@ -235,3 +235,45 @@ fn workflow_metadata_admission_requires_active_exact_canonical_identity() {
         );
     }
 }
+
+#[test]
+fn completed_attempt_cache_has_full_source_and_workflow_identity() {
+    let mut cache = RunIdentityCache::default();
+    cache
+        .admit_completed(cache::CompletedAttempt::new(22, 3, source(), &workflow()))
+        .expect("admit");
+    assert!(cache.contains(&cache::CompletedAttempt::new(22, 3, source(), &workflow())));
+    for changed in [
+        RunSource {
+            repository_id: 10,
+            ..source()
+        },
+        RunSource {
+            sha: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            ..source()
+        },
+        RunSource {
+            branch: "other",
+            ..source()
+        },
+    ] {
+        assert!(!cache.contains(&cache::CompletedAttempt::new(22, 3, changed, &workflow())));
+    }
+    for (id, attempt) in [(23, 3), (22, 4)] {
+        assert!(!cache.contains(&cache::CompletedAttempt::new(
+            id,
+            attempt,
+            source(),
+            &workflow()
+        )));
+    }
+    let mut changed = workflow();
+    changed.id = 8;
+    assert!(!cache.contains(&cache::CompletedAttempt::new(22, 3, source(), &changed)));
+    changed = workflow();
+    changed.name = "Other CI".to_owned();
+    assert!(!cache.contains(&cache::CompletedAttempt::new(22, 3, source(), &changed)));
+    changed = workflow();
+    changed.path = ".github/workflows/other.yml".to_owned();
+    assert!(!cache.contains(&cache::CompletedAttempt::new(22, 3, source(), &changed)));
+}

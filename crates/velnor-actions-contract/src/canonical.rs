@@ -380,3 +380,15 @@ fn write_quoted(text: &str, out: &mut Vec<u8>) {
     }
     out.push(b'"');
 }
+
+/// Encode the standard SHA-256 identity used by GitHub release artifacts.
+pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest as _, Sha256};
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut encoded = String::with_capacity(64);
+    for byte in Sha256::digest(bytes) {
+        encoded.push(char::from(HEX[usize::from(byte >> 4)]));
+        encoded.push(char::from(HEX[usize::from(byte & 15)]));
+    }
+    encoded
+}

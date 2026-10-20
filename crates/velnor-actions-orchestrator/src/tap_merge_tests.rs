@@ -190,10 +190,11 @@ fn promotion_fixture() -> (String, String, crate::tap_prepare::TapPromotionRecei
         .canonical_digest()
         .expect("canonical receipt digest");
     let base_sha = "b".repeat(40);
-    let branch =
-        candidate::expected_branch(&receipt_digest, &base_sha).expect("deterministic branch");
+    let branch = candidate::expected_branch(&receipt_digest, &base_sha, receipt.channel)
+        .expect("deterministic branch");
     let proof = crate::tap_prepare::HomebrewTapPreparationProof {
-        schema: "velnor.homebrew-candidate.v2".to_owned(),
+        schema: "velnor.homebrew-candidate.v3".to_owned(),
+        channel: receipt.channel,
         disposition: crate::tap_prepare::TapPreparationDisposition::Changed,
         base_sha: base_sha.clone(),
         formula_path: "Formula/example.rb".to_owned(),

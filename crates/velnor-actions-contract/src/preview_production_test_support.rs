@@ -4,7 +4,7 @@ use super::*;
 use crate::package_release::{PackageReleaseChannel, PackageReleasePayloadFormat};
 use crate::{PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlanProduct};
 
-pub(super) fn request() -> PreviewProductionRequest {
+pub(super) fn request() -> ReleaseProductionRequest {
     let plan = PackageReleasePlan {
         schema: PACKAGE_RELEASE_PLAN_SCHEMA_V1.to_owned(),
         channel: PackageReleaseChannel::Preview,
@@ -30,11 +30,14 @@ pub(super) fn request() -> PreviewProductionRequest {
         ],
         companions: Vec::new(),
     };
-    PreviewProductionRequest {
-        schema: PREVIEW_PRODUCTION_SCHEMA_V1.to_owned(),
-        plan_sha256: preview_plan_sha256(&plan).expect("full plan digest"),
+    ReleaseProductionRequest {
+        schema: RELEASE_PRODUCTION_SCHEMA_V1.to_owned(),
+        policy_sha256: crate::canonical::sha256_hex(
+            &policy(&plan).canonical_bytes().expect("policy"),
+        ),
+        plan_sha256: release_plan_sha256(&plan).expect("full plan digest"),
         plan,
-        context: PreviewProductionContext {
+        context: ReleaseProductionContext {
             repository_id: 101,
             head_repository_id: 101,
             source_sha: "a".repeat(40),
@@ -47,8 +50,8 @@ pub(super) fn request() -> PreviewProductionRequest {
             commit_count: 1306,
             version: "0.6.4-preview.1306+aaaaaaa".to_owned(),
         },
-        stage: PreviewProductionStage::Payload {
-            pair: PreviewPayloadPair {
+        stage: ReleaseProductionStage::Payload {
+            pair: ReleasePayloadPair {
                 product_id: "jackin".to_owned(),
                 target: "aarch64-apple-darwin".to_owned(),
             },
@@ -66,10 +69,10 @@ fn product(id: &str, bins: &[&str], targets: &[&str]) -> PackageReleasePlanProdu
     }
 }
 
-pub(super) fn assembly() -> PreviewProductionRequest {
+pub(super) fn assembly() -> ReleaseProductionRequest {
     let mut request = request();
-    request.stage = PreviewProductionStage::Assemble {
-        inputs: expected_preview_payload_pairs(&request.plan)
+    request.stage = ReleaseProductionStage::Assemble {
+        inputs: expected_release_payload_pairs(&request.plan)
             .expect("pairs")
             .into_iter()
             .enumerate()
@@ -81,4 +84,30 @@ pub(super) fn assembly() -> PreviewProductionRequest {
             .collect(),
     };
     request
+}
+
+pub(super) fn policy(plan: &PackageReleasePlan) -> crate::PackageReleasePolicy {
+    crate::PackageReleasePolicy {
+        schema: crate::PACKAGE_RELEASE_POLICY_SCHEMA_V1.to_owned(),
+        channel: plan.channel,
+        repository: plan.repository.clone(),
+        default_branch: plan.default_branch.clone(),
+        version: crate::CargoVersionPolicy {
+            version_package: "jackin".to_owned(),
+            bindings: vec![
+                crate::CargoVersionBinding {
+                    package: "jackin".to_owned(),
+                    manifest_path: "Cargo.toml".to_owned(),
+                    workspace_manifest_path: "Cargo.toml".to_owned(),
+                },
+                crate::CargoVersionBinding {
+                    package: "jackin-capsule".to_owned(),
+                    manifest_path: "capsule/Cargo.toml".to_owned(),
+                    workspace_manifest_path: "Cargo.toml".to_owned(),
+                },
+            ],
+        },
+        products: plan.products.clone(),
+        companions: plan.companions.clone(),
+    }
 }

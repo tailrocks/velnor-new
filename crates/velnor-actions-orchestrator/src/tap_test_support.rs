@@ -2,11 +2,11 @@
 
 use velnor_actions_contract::{
     PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlan, PackageReleasePlanProduct,
-    VerifiedPreviewRelease,
+    VerifiedPackageRelease,
     config::{
         CheckExecutor, CheckPlatform, CheckRunner, ExactHeadReviewCheck, HomebrewTapConfig,
-        HomebrewTapSource, MiseTaskSource, ReviewAppIdentity, TapMergePolicy, TapUpdateEnvironment,
-        TapUpdaterBinding,
+        HomebrewTapDestination, HomebrewTapDestinations, MiseTaskSource, ReviewAppIdentity,
+        TapMergePolicy, TapUpdateEnvironment, TapUpdaterBinding,
     },
     package_release::{
         PACKAGE_RELEASE_EVIDENCE_PROFILE, PACKAGE_RELEASE_SCHEMA_V2, PackageReleaseAsset,
@@ -21,15 +21,23 @@ use velnor_actions_contract::{
 pub(crate) struct TapFixture {
     pub(crate) policy: HomebrewTapConfig,
     pub(crate) plan: PackageReleasePlan,
-    pub(crate) release: VerifiedPreviewRelease,
+    pub(crate) release: VerifiedPackageRelease,
     pub(crate) base_formula: Vec<u8>,
     pub(crate) proposed_formula: Vec<u8>,
+    pub(crate) formula_path: String,
 }
 
 pub(crate) fn fixture() -> TapFixture {
     let policy = policy();
     let plan = plan();
     let release = release();
+    let formula_path = policy
+        .destinations
+        .preview
+        .as_ref()
+        .expect("preview")
+        .formula
+        .clone();
     let base_formula = formula();
     let proposed_formula = canonical_formula(&base_formula, &release);
     assert_eq!(
@@ -38,7 +46,7 @@ pub(crate) fn fixture() -> TapFixture {
                 source_repository: &plan.repository,
                 plan: &plan,
                 tap_repository: &policy.repository,
-                formula_path: &policy.formula,
+                formula_path: &formula_path,
                 captured_base_sha: &"b".repeat(40),
                 base_bytes: &base_formula,
                 proposed_bytes: &proposed_formula,
@@ -54,15 +62,22 @@ pub(crate) fn fixture() -> TapFixture {
         release,
         base_formula,
         proposed_formula,
+        formula_path,
     }
 }
 
 pub(crate) fn policy() -> HomebrewTapConfig {
     HomebrewTapConfig {
         enabled: true,
-        source: HomebrewTapSource::RustBinaryReleasePreview,
         repository: "owner/homebrew-tap".to_owned(),
-        formula: "Formula/cli-preview.rb".to_owned(),
+        destinations: HomebrewTapDestinations {
+            preview: Some(HomebrewTapDestination {
+                formula: "Formula/cli-preview.rb".to_owned(),
+            }),
+            stable: Some(HomebrewTapDestination {
+                formula: "Formula/cli.rb".to_owned(),
+            }),
+        },
         updater: TapUpdaterBinding {
             task: "package:update-preview".to_owned(),
             source: MiseTaskSource {
@@ -77,6 +92,7 @@ pub(crate) fn policy() -> HomebrewTapConfig {
             },
             inputs: vec![
                 "Formula/cli-preview.rb".to_owned(),
+                "Formula/cli.rb".to_owned(),
                 "mise.toml".to_owned(),
                 "scripts/update.sh".to_owned(),
             ],
@@ -119,7 +135,7 @@ pub(crate) fn plan() -> PackageReleasePlan {
     }
 }
 
-pub(crate) fn release() -> VerifiedPreviewRelease {
+pub(crate) fn release() -> VerifiedPackageRelease {
     let source_sha = "abcdef0123456789abcdef0123456789abcdef01";
     let archive = "cli-aarch64-apple-darwin.tar.gz";
     let version = "1.2.3-preview.9+abcdef0";
@@ -157,7 +173,7 @@ pub(crate) fn release() -> VerifiedPreviewRelease {
             commit_count: Some(9),
             source_sha7: Some(source_sha[..7].to_owned()),
         },
-        tag: format!("v{version}"),
+        tag: "preview".to_owned(),
         products: vec![release_product(archive)],
         companions: Vec::new(),
         assets,
@@ -165,7 +181,7 @@ pub(crate) fn release() -> VerifiedPreviewRelease {
     };
     receipt.validate().expect("fixture receipt validates");
     let receipt_digest = receipt.canonical_digest().expect("receipt digest");
-    VerifiedPreviewRelease {
+    VerifiedPackageRelease {
         receipt_digest,
         receipt,
     }
@@ -262,13 +278,13 @@ fn formula() -> Vec<u8> {
         "# source-sha: {}\nclass CliPreview < Formula\n  version \"{}\"\n      url \"https://github.com/owner/source/releases/download/{}/cli-aarch64-apple-darwin.tar.gz\"\n      sha256 \"{}\"\n  def install\n    bin.install \"cli\"\n  end\nend\n",
         "bbbbbbb000000000000000000000000000000000",
         "1.2.3-preview.8+bbbbbbb",
-        "v1.2.3-preview.8+bbbbbbb",
+        "preview",
         "a".repeat(64),
     )
     .into_bytes()
 }
 
-fn canonical_formula(base: &[u8], release: &VerifiedPreviewRelease) -> Vec<u8> {
+fn canonical_formula(base: &[u8], release: &VerifiedPackageRelease) -> Vec<u8> {
     let text = std::str::from_utf8(base).expect("formula UTF-8");
     let archive = &release.receipt.products[0].payloads[0].name;
     text.replace(

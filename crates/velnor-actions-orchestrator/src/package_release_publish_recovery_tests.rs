@@ -126,7 +126,7 @@ fn recovery_binds_receipt_to_original_artifact_not_current_dispatch_head_or_coun
         42,
         2,
         &original_sha,
-        Some(original_count),
+        (PackageReleaseChannel::Preview, Some(original_count)),
         42,
         2,
         &original_sha,
@@ -135,7 +135,7 @@ fn recovery_binds_receipt_to_original_artifact_not_current_dispatch_head_or_coun
         41,
         2,
         &original_sha,
-        Some(original_count),
+        (PackageReleaseChannel::Preview, Some(original_count)),
         42,
         2,
         &original_sha,
@@ -144,7 +144,7 @@ fn recovery_binds_receipt_to_original_artifact_not_current_dispatch_head_or_coun
         42,
         1,
         &original_sha,
-        Some(original_count),
+        (PackageReleaseChannel::Preview, Some(original_count)),
         42,
         2,
         &original_sha,
@@ -153,7 +153,7 @@ fn recovery_binds_receipt_to_original_artifact_not_current_dispatch_head_or_coun
         42,
         2,
         &current_dispatch_sha,
-        Some(original_count),
+        (PackageReleaseChannel::Preview, Some(original_count)),
         42,
         2,
         &original_sha,
@@ -162,7 +162,7 @@ fn recovery_binds_receipt_to_original_artifact_not_current_dispatch_head_or_coun
         42,
         2,
         &original_sha,
-        Some(0),
+        (PackageReleaseChannel::Preview, Some(0)),
         42,
         2,
         &original_sha,
@@ -244,4 +244,47 @@ fn recovery_rejects_original_push_or_dispatch_instead_of_workflow_run() {
         .expect("run fixture");
         assert!(!source_run_matches(&run, &plan, &sha, 42, 2, 9, &workflow));
     }
+}
+
+#[test]
+fn recovery_stable_identity_requires_no_preview_count_and_exact_original() {
+    let sha = "a".repeat(40);
+    assert!(receipt_matches_original(
+        42,
+        2,
+        &sha,
+        (PackageReleaseChannel::Stable, None),
+        42,
+        2,
+        &sha
+    ));
+    for count in [Some(0), Some(17)] {
+        assert!(!receipt_matches_original(
+            42,
+            2,
+            &sha,
+            (PackageReleaseChannel::Stable, count),
+            42,
+            2,
+            &sha
+        ));
+    }
+    assert!(!receipt_matches_original(
+        42,
+        2,
+        &sha,
+        (PackageReleaseChannel::Stable, None),
+        42,
+        3,
+        &sha
+    ));
+    assert!(!receipt_matches_original(
+        42,
+        2,
+        &sha,
+        (PackageReleaseChannel::Stable, None),
+        42,
+        2,
+        &"b".repeat(40)
+    ));
 }

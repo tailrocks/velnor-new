@@ -1,5 +1,6 @@
 //! Stream verified assets between native-owned locations without payload-sized buffers.
-use super::{AssetProof, PinnedAsset, checkpoint, hex};
+use super::{AssetProof, checkpoint, hex};
+use crate::filesystem_owner::held_file::HeldFile;
 use crate::{OrchestratorError, internal::internal};
 use rustix::fs::{AtFlags, Mode, OFlags};
 use sha2::{Digest, Sha256};
@@ -17,8 +18,8 @@ pub(crate) fn copy_verified(
     proof: &AssetProof,
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
-    let source = PinnedAsset::new(source, proof, deadline)?;
-    let mut input = source.file.try_clone().map_err(|_| invalid("source"))?;
+    let source = HeldFile::new(source, &proof.sha256, proof.size, deadline)?;
+    let mut input = source.file().try_clone().map_err(|_| invalid("source"))?;
     input.rewind().map_err(|_| invalid("source"))?;
     let mut output = CopyOutput::create(destination)?;
     let mut total = 0_u64;

@@ -19,20 +19,24 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
-    ACQUIRE_PREVIEW_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP, ADMIT_PREVIEW_AGGREGATE_OP,
-    BUN_REGISTRY_INSTALL_OP, CAPTURE_REVIEW_COMPLETION_OP, DYNAMIC_MATRIX_OUTPUT_MODE,
-    EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP, EXECUTE_PREVIEW_PRODUCER_OP, FETCH_OP,
-    MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP,
-    PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP, PRIVATE_REVOKE_OP,
-    PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP, REPORT_OP,
-    REQUEST_FILE_ENV, SELECT_PREVIEW_TAP_CONTINUATION_OP, SIGN_PACKAGE_RELEASE_OP,
-    TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, execute_check,
-    merge_internal, merge_passed, plan_internal, plan_outputs, publish_final_report,
-    publish_plan_files, resolve_task_execution, response_path_for, retrieve_reports,
-    run_bun_registry_install, run_private_fetch, run_private_revoke, write_preseed_manifest,
-    write_request, write_task_report,
+    ACQUIRE_RELEASE_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP, ADMIT_RELEASE_AGGREGATE_OP,
+    ADMIT_RELEASE_POLICY_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_REGISTRY_INSTALL_OP,
+    CAPTURE_REVIEW_COMPLETION_OP, DYNAMIC_MATRIX_OUTPUT_MODE, EMIT_REVIEW_COMPLETION_OP,
+    EXECUTE_CHECK_OP, EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP,
+    OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PREPARE_HOMEBREW_TAP_OP,
+    PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP, PRIVATE_REVOKE_OP, PUBLISH_PACKAGE_RELEASE_OP,
+    PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP, REPORT_OP, REQUEST_FILE_ENV,
+    SELECT_RELEASE_TAP_CONTINUATION_OP, SELECT_STABLE_RELEASE_SOURCE_OP, SIGN_PACKAGE_RELEASE_OP,
+    TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP,
+    WRITE_STABLE_TAG_INTENT_OP, WRITE_STABLE_TAG_ORIGIN_OP, execute_check, merge_internal,
+    merge_passed, plan_internal, plan_outputs, publish_final_report, publish_plan_files,
+    resolve_task_execution, response_path_for, retrieve_reports, run_bun_registry_install,
+    run_private_fetch, run_private_revoke, write_preseed_manifest, write_request,
+    write_task_report,
 };
 
+#[path = "dispatch/fileless.rs"]
+mod fileless;
 #[path = "dispatch_preview_production.rs"]
 mod preview_production;
 mod public;
@@ -66,7 +70,7 @@ const GITHUB_EVENT_ENV: &str = "GITHUB_EVENT_NAME";
 const GITHUB_EVENT_PATH_ENV: &str = "GITHUB_EVENT_PATH";
 
 mod operation;
-use operation::InternalOp;
+use operation::{InternalOp, from_env as internal_op};
 
 /// Validated private request: operation plus exact request-file path.
 #[derive(Debug)]
@@ -87,40 +91,6 @@ pub(crate) fn try_internal() -> Option<ExitCode> {
     Some(run_internal(&request))
 }
 
-fn internal_op() -> Option<InternalOp> {
-    Some(match env::var(OP_ENV).as_deref() {
-        Ok(tag) if tag == SELECT_PREVIEW_TAP_CONTINUATION_OP => InternalOp::TapContinuation,
-        Ok(tag) if tag == CAPTURE_REVIEW_COMPLETION_OP => InternalOp::CaptureReviewCompletion,
-        Ok(tag) if tag == EMIT_REVIEW_COMPLETION_OP => InternalOp::EmitReviewCompletion,
-        Ok(tag) if tag == EXECUTE_CHECK_OP => InternalOp::ExecuteCheck,
-        Ok(tag) if tag == ACQUIRE_PREVIEW_LEAVES_OP => InternalOp::AcquirePreviewLeaves,
-        Ok(tag) if tag == EXECUTE_PREVIEW_PRODUCER_OP => InternalOp::ExecutePreviewProducer,
-        Ok(tag) if tag == ADMIT_PREVIEW_AGGREGATE_OP => InternalOp::AdmitPreviewAggregate,
-        Ok(tag) if tag == WRITE_REQUEST_OP => InternalOp::WriteRequest,
-        Ok(tag) if tag == PLAN_OP => InternalOp::Plan,
-        Ok(tag) if tag == MERGE_OP => InternalOp::Merge,
-        Ok(tag) if tag == FETCH_OP => InternalOp::Fetch,
-        Ok(tag) if tag == REPORT_OP => InternalOp::Report,
-        Ok(tag) if tag == PRESEED_MANIFEST_OP => InternalOp::PreseedManifest,
-        Ok("repo-policy-v1") => InternalOp::RepoPolicy,
-        Ok(tag) if crate::dispatch_qualification::is_resolver_op(tag) => {
-            InternalOp::ResolveQualification
-        }
-        Ok(tag) if tag == TASK_EXECUTION_RESOLVER_OP => InternalOp::ResolveTaskExecution,
-        Ok(tag) if tag == PRIVATE_FETCH_OP => InternalOp::PrivateFetch,
-        Ok(tag) if tag == PRIVATE_REVOKE_OP => InternalOp::PrivateRevoke,
-        Ok(tag) if tag == BUN_REGISTRY_INSTALL_OP => InternalOp::BunRegistryInstall,
-        Ok(tag) if tag == SIGN_PACKAGE_RELEASE_OP => InternalOp::PackageSigner,
-        Ok(tag) if tag == PUBLISH_PACKAGE_RELEASE_OP => InternalOp::PackagePublisher,
-        Ok(tag) if tag == RECOVER_PACKAGE_RELEASE_OP => InternalOp::PackageRecovery,
-        Ok(tag) if tag == PREPARE_HOMEBREW_TAP_OP => InternalOp::TapPrepare,
-        Ok(tag) if tag == ADMIT_HOMEBREW_TAP_OP => InternalOp::TapAdmission,
-        Ok(tag) if tag == WRITE_HOMEBREW_TAP_PR_OP => InternalOp::TapWriter,
-        Ok(tag) if tag == MERGE_HOMEBREW_TAP_PR_OP => InternalOp::TapMerge,
-        _ => return None,
-    })
-}
-
 /// Check the private gate: known op plus request-file presence by op.
 ///
 /// Fetch and report take no request file: they need the runner-temp
@@ -128,28 +98,16 @@ fn internal_op() -> Option<InternalOp> {
 /// takes no request file either: runner temp scopes its output.
 fn gate_request() -> Option<InternalRequest> {
     let op = internal_op()?;
-    if op == InternalOp::ResolveTaskExecution {
-        if !env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
-            return None;
-        }
-        return runner_velnor_dir().map(|path| InternalRequest { op, path });
-    }
-    if op == InternalOp::Fetch || op == InternalOp::Report || op == InternalOp::ExecuteCheck {
-        if env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
-            return runner_velnor_dir().map(|path| InternalRequest { op, path });
-        }
-        return None;
-    }
-    if takes_runner_velnor_dir(op) {
-        return runner_velnor_dir().map(|path| InternalRequest { op, path });
-    }
-    if op == InternalOp::RepoPolicy {
-        let root = crate::dispatch_repo_policy::gate_root()?;
-        return Some(InternalRequest { op, path: root });
+    if fileless::uses_runner_temp_gate(op) {
+        return fileless::gate_runner_temp_operation(op);
     }
     let path = env::var_os(REQUEST_FILE_ENV)
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)?;
+    gate_file_request(op, path)
+}
+
+fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
     match op {
         InternalOp::TapContinuation => {
             return tap_continuation::gate_request(&path).map(|path| InternalRequest { op, path });
@@ -162,21 +120,30 @@ fn gate_request() -> Option<InternalRequest> {
                 return None;
             }
         }
-        InternalOp::Plan | InternalOp::Merge | InternalOp::ExecutePreviewProducer => {
+        InternalOp::Plan | InternalOp::Merge => {
             if !path.is_file() {
                 return None;
             }
+        }
+        InternalOp::ExecuteReleaseProducer => {
+            return package_release::gate_producer_request(&path)
+                .map(|path| InternalRequest { op, path });
         }
         InternalOp::ResolveQualification => {
             if !crate::dispatch_qualification::request_is_eligible(&path) {
                 return None;
             }
         }
-        InternalOp::PackageSigner
+        InternalOp::StableSourceSelection
+        | InternalOp::ReleasePolicyAdmission
+        | InternalOp::StableTagIntent
+        | InternalOp::StableTagOrigin
+        | InternalOp::StableTagAdmission
+        | InternalOp::PackageSigner
         | InternalOp::PackagePublisher
         | InternalOp::PackageRecovery
-        | InternalOp::AdmitPreviewAggregate
-        | InternalOp::AcquirePreviewLeaves => {
+        | InternalOp::AdmitReleaseAggregate
+        | InternalOp::AcquireReleaseLeaves => {
             return package_release::gate_request(&path).map(|path| InternalRequest { op, path });
         }
         InternalOp::TapAdmission => {
@@ -195,9 +162,9 @@ fn gate_request() -> Option<InternalRequest> {
         }
         InternalOp::Fetch
         | InternalOp::Report
+        | InternalOp::BunRegistryInstall
         | InternalOp::PrivateFetch
         | InternalOp::PrivateRevoke
-        | InternalOp::BunRegistryInstall
         | InternalOp::PreseedManifest
         | InternalOp::RepoPolicy
         | InternalOp::ExecuteCheck
@@ -212,55 +179,64 @@ fn request_can_be_materialized(path: &Path) -> bool {
         && env::var_os(GITHUB_EVENT_PATH_ENV).is_some_and(|value| !value.is_empty())
 }
 
-/// Runner-temp velnor directory for file-less private operations.
-///
-/// `None` when `RUNNER_TEMP` is unset or empty; shared by the fetch,
-/// report, and preseed-manifest gate branches so the scoping rule has
-/// one definition.
-fn runner_velnor_dir() -> Option<PathBuf> {
-    env::var_os(RUNNER_TEMP_ENV)
-        .filter(|value| !value.is_empty())
-        .map(|temp| Path::new(&temp).join("velnor"))
-}
-
-/// Private operations whose whole input is the runner-temp velnor directory.
-const fn takes_runner_velnor_dir(op: InternalOp) -> bool {
-    matches!(
-        op,
-        InternalOp::PrivateFetch
-            | InternalOp::PrivateRevoke
-            | InternalOp::BunRegistryInstall
-            | InternalOp::PreseedManifest
-    )
-}
-
-/// Exit code of one fallible private operation.
-fn finish<T>(result: Result<T, OrchestratorError>) -> ExitCode {
-    match result {
-        Ok(_) => ExitCode::SUCCESS,
-        Err(error) => fail_internal(&error.to_string()),
-    }
-}
-
 /// Run one validated private operation.
 fn run_internal(request: &InternalRequest) -> ExitCode {
     match request.op {
-        InternalOp::ExecuteCheck => finish(execute_check()),
-        InternalOp::ExecutePreviewProducer => preview_production::produce(),
-        InternalOp::AcquirePreviewLeaves => preview_production::acquire(),
+        InternalOp::ExecuteCheck => match execute_check() {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
+        InternalOp::StableSourceSelection => preview_production::native(
+            velnor_actions_orchestrator::select_stable_release_source_from_env(),
+        ),
+        InternalOp::ReleasePolicyAdmission => {
+            preview_production::native(velnor_actions_orchestrator::admit_release_policy_from_env())
+        }
+        InternalOp::StableTagIntent => preview_production::native(
+            velnor_actions_orchestrator::write_stable_tag_intent_from_env(),
+        ),
+        InternalOp::StableTagOrigin => preview_production::native(
+            velnor_actions_orchestrator::write_stable_tag_origin_from_env(),
+        ),
+        InternalOp::StableTagAdmission => preview_production::native(
+            velnor_actions_orchestrator::admit_stable_tag_origin_from_env(),
+        ),
+        InternalOp::ExecuteReleaseProducer => preview_production::produce(),
+        InternalOp::AcquireReleaseLeaves => preview_production::acquire(),
         InternalOp::TapContinuation => tap_continuation::run(),
         InternalOp::CaptureReviewCompletion => review_completion::capture(),
         InternalOp::EmitReviewCompletion => review_completion::emit(),
-        InternalOp::AdmitPreviewAggregate => preview_production::admit(),
-        InternalOp::WriteRequest => finish(write_request()),
+        InternalOp::AdmitReleaseAggregate => preview_production::admit(),
+        InternalOp::WriteRequest => match write_request() {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
         InternalOp::Plan => run_plan_internal(&request.path),
         InternalOp::Merge => run_merge_internal(&request.path),
-        InternalOp::Fetch => finish(retrieve_reports()),
-        InternalOp::Report => finish(write_task_report()),
-        InternalOp::PrivateFetch => finish(run_private_fetch()),
-        InternalOp::PrivateRevoke => finish(run_private_revoke()),
-        InternalOp::BunRegistryInstall => finish(run_bun_registry_install()),
-        InternalOp::PreseedManifest => finish(write_preseed_manifest()),
+        InternalOp::Fetch => match retrieve_reports() {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
+        InternalOp::Report => match write_task_report() {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
+        InternalOp::BunRegistryInstall => match run_bun_registry_install() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
+        InternalOp::PrivateFetch => match run_private_fetch() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
+        InternalOp::PrivateRevoke => match run_private_revoke() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
+        InternalOp::PreseedManifest => match write_preseed_manifest() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
         InternalOp::RepoPolicy => crate::dispatch_repo_policy::run(&request.path),
         InternalOp::ResolveQualification => crate::dispatch_qualification::run(&request.path),
         InternalOp::ResolveTaskExecution => match resolve_task_execution() {
