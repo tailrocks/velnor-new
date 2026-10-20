@@ -13,6 +13,7 @@ use velnor_actions_mise::{
     PREPARE_PINNED_TOOLS_STEP, PinnedTool, PinnedToolExec, PreparePinnedTools, ToolCatalog,
     ToolHomes,
 };
+use velnor_actions_workflow_renderer::verification_jobs::bun_registry_step;
 use velnor_actions_workflow_renderer::{ambient_shell_step, shell_step};
 
 use crate::OrchestratorError;
@@ -24,6 +25,7 @@ const CACHE_DIR: &str = "${{ runner.temp }}/velnor/bun-cache";
 const CONFIG_DIR: &str = "$RUNNER_TEMP/velnor/bun";
 const VERIFY_NAME: &str = "Verify Bun workspace";
 const INSTALL_NAME: &str = "Install dependencies";
+const LIFECYCLE_NAME: &str = "Install dependencies (lifecycle phase)";
 
 /// Inputs shared by every step of one member.
 pub(crate) struct MemberInputs<'a> {
@@ -37,15 +39,26 @@ pub(crate) struct MemberInputs<'a> {
     pub(crate) scripts: &'a [String],
     /// Repository `bunfig.toml` text.
     pub(crate) bunfig: Option<&'a str>,
+    /// Private npm scopes (sorted); non-empty selects the two-phase install.
+    pub(crate) scopes: &'a [String],
+    /// Staged helper step the registry phase needs (consumer policy).
+    pub(crate) acquire: Option<&'a Step>,
 }
 
 /// Every step after checkout, in execution order.
 pub(crate) fn member_steps(input: &MemberInputs<'_>) -> Result<Vec<Step>, OrchestratorError> {
-    let mut steps = vec![
-        prepare_step(input.catalog)?,
-        verify_step(input)?,
-        install_step(input)?,
-    ];
+    let mut steps = vec![prepare_step(input.catalog)?, verify_step(input)?];
+    if input.scopes.is_empty() {
+        steps.push(install_step(input)?);
+    } else {
+        steps.extend(input.acquire.cloned());
+        steps.push(bun_registry_step(
+            input.root,
+            input.scopes,
+            &step_env(input.catalog)?,
+        )?);
+        steps.push(lifecycle_step(input)?);
+    }
     for script in input.scripts {
         let mut step = script_step(input, script)?;
         step.parallel = true;
@@ -147,6 +160,33 @@ printf '%s\\n' {lines} > \"$cfg\"; {install}"
     );
     Ok(shell_step(
         INSTALL_NAME,
+        bash(&script),
+        step_env(input.catalog)?,
+    )?)
+}
+
+/// Token-free second phase: rebuild `node_modules` from the warm cache so the
+/// trusted lifecycle scripts run, with the config the registry phase wrote.
+fn lifecycle_step(input: &MemberInputs<'_>) -> Result<Step, OrchestratorError> {
+    let root = quote(&dir_arg(input.root));
+    let install = bun_words(
+        input.catalog,
+        &[
+            "install".to_owned(),
+            "--frozen-lockfile".to_owned(),
+            format!("--cwd={}", dir_arg(input.root)),
+            "--config=@CONFIG@".to_owned(),
+        ],
+    )?
+    .replace(
+        "'--config=@CONFIG@'",
+        "\"--config=$RUNNER_TEMP/velnor/bun/lifecycle.toml\"",
+    );
+    let script = format!(
+        "set -euo pipefail; cd -P -- \"$GITHUB_WORKSPACE\"; find {root} -name node_modules -type d -prune -exec rm -rf {{}} +; {install}"
+    );
+    Ok(shell_step(
+        LIFECYCLE_NAME,
         bash(&script),
         step_env(input.catalog)?,
     )?)

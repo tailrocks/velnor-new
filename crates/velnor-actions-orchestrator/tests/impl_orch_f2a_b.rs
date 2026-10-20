@@ -99,8 +99,8 @@ fn merge_consumes_no_publish_verbs() -> TestResult {
 }
 
 /// Analysis, planning and generation never call the credentialed fetch: only
-/// the module mount, the public re-export, and the fetch modules themselves
-/// name it.
+/// the module mount, the public re-export, and the fetch modules (including
+/// the Bun registry phase) themselves name it.
 #[test]
 fn private_fetch_is_unreachable_from_analysis() -> TestResult {
     for path in product_src_files()? {
@@ -111,6 +111,7 @@ fn private_fetch_is_unreachable_from_analysis() -> TestResult {
         if matches!(
             name.as_str(),
             "private_fetch.rs"
+                | "bun_registry_install.rs"
                 | "private_fetch_session.rs"
                 | "private_revoke.rs"
                 | "api.rs"
@@ -153,12 +154,15 @@ fn offline_deps_fail_closed_without_fetch() -> TestResult {
             .unwrap_or_default();
         // HD-7: the credentialed private-source fetch is a dedicated runtime
         // operation (`private-fetch-v1`) behind its own CLI gate; its three
-        // modules are the only product files exempt from the fetch-verb scan,
+        // modules and the Bun registry phase (`bun-registry-install-v1`) are the only product files exempt from the fetch-verb scan,
         // and `private_fetch_is_unreachable_from_analysis` pins that nothing
         // else in the crate calls into them.
         if matches!(
             name.as_str(),
-            "private_fetch.rs" | "private_fetch_session.rs" | "private_revoke.rs"
+            "private_fetch.rs"
+                | "private_fetch_session.rs"
+                | "private_revoke.rs"
+                | "bun_registry_install.rs"
         ) {
             continue;
         }

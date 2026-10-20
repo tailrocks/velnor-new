@@ -127,9 +127,41 @@ steps like every pinned-tool job. Steps:
    `Lint`, `Test`, `Build`; any other script is `Script <name>`.
 
 Every Bun invocation runs under `mise exec` with the isolation environment and
-`BUN_INSTALL_CACHE_DIR=$RUNNER_TEMP/velnor/bun-cache`. No step holds a credential.
-A `[private_sources] npm_scopes` entry fails generation with
-`bun_registry_phase_unavailable` until the registry phase lands.
+`BUN_INSTALL_CACHE_DIR=$RUNNER_TEMP/velnor/bun-cache`.
+
+### Registry phase (`bun_registry_install`)
+
+When `[private_sources] npm_scopes` is non-empty, step 3 becomes two phases
+and the job holds `packages: read`:
+
+1. `Install dependencies (registry phase)` is the internal operation
+   `bun-registry-install-v1` (step role `BunRegistryInstall`, after the staged
+   helper under consumer policy). It is the only step that binds
+   `${{ github.token }}`, and only as `VELNOR_NPM_READ_TOKEN`; the renderer
+   rejects the binding anywhere else (`credential_binding_outside_private_fetch`).
+   The operation reads the repository `bunfig.toml` at run time, fails with
+   `bunfig_registry_override` on a registry, scope, token or certificate, writes
+   `$RUNNER_TEMP/velnor/bun/registry.toml` (each scope mapped to
+   `https://npm.pkg.github.com/` with `token = "$VELNOR_NPM_READ_TOKEN"`) and
+   `lifecycle.toml` (the same without the scopes), then starts
+   `mise exec bun@<pin> -- bun install --frozen-lockfile --ignore-scripts
+   --cwd=<root> --config=<registry.toml>` under the private-fetch policy: a
+   cleared environment, `PATH`/`HOME`/`TMPDIR`, the Mise isolation keys,
+   `BUN_INSTALL_CACHE_DIR` and the one credential. `--ignore-scripts` means no
+   repository code runs while the token exists.
+2. `Install dependencies (lifecycle phase)` holds no credential. It removes every
+   `node_modules` under the root and runs `bun install --frozen-lockfile
+   --config=<lifecycle.toml>` from the cache the first phase filled, which runs
+   the `trustedDependencies` lifecycle scripts. Measured with Bun 1.4.2: a
+   plain `bun install` over an existing `node_modules` is a no-op and runs no
+   scripts, while the same install after removing `node_modules` completes from the
+   warm cache with the network unreachable and runs them. Whether Bun refetches
+   scoped package metadata in this phase against the real registry is a
+   qualification item; the fallback is for the registry operation to pre-fetch
+   the scoped tarballs itself.
+
+The org admin must grant "Manage Actions access" read on each npm package to the
+consuming repository after its first publish; there is no API for it.
 
 ## Affected selection (hard decision 3)
 

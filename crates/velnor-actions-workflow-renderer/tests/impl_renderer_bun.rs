@@ -1,11 +1,13 @@
 //! Bun member jobs (hard decision 6): shape, permissions and role gates.
 
+use std::collections::BTreeMap;
 use velnor_actions_contract::{
     JobTimeout, PRIVATE_NPM_READ_EXPR, PRIVATE_NPM_READ_TOKEN_ENV, PermissionLevel, Step, StepKind,
     StepRole,
 };
 use velnor_actions_workflow_renderer::verification_jobs::{
-    BUN_RUNNER, BunMemberPolicy, build_bun_member_job,
+    BUN_ROOT_ENV, BUN_RUNNER, BUN_SCOPES_ENV, BunMemberPolicy, build_bun_member_job,
+    bun_registry_step,
 };
 use velnor_actions_workflow_renderer::{RenderError, shell_step};
 
@@ -76,15 +78,16 @@ fn invalid_policies_are_rejected() -> Result<(), RenderError> {
 
 #[test]
 fn only_the_npm_registry_phase_grants_packages_read() -> Result<(), RenderError> {
-    let mut registry = step("Install dependencies (registry phase)", false)?;
-    registry.kind = StepKind::Shell {
-        run: vec!["true".to_owned()],
-        env: std::collections::BTreeMap::from([(
-            PRIVATE_NPM_READ_TOKEN_ENV.to_owned(),
-            PRIVATE_NPM_READ_EXPR.to_owned(),
-        )]),
+    let env = BTreeMap::from([("MISE_NO_CONFIG".to_owned(), "1".to_owned())]);
+    let registry = bun_registry_step(".", &["@chainargos".to_owned()], &env)?;
+    assert_eq!(registry.role, Some(StepRole::BunRegistryInstall));
+    let StepKind::Internal { operation, env } = &registry.kind else {
+        return Err(RenderError::BadCommand("not internal".to_owned()));
     };
-    registry.role = Some(StepRole::PrivateFetch);
+    assert_eq!(operation, "bun-registry-install-v1");
+    assert_eq!(env[PRIVATE_NPM_READ_TOKEN_ENV], PRIVATE_NPM_READ_EXPR);
+    assert_eq!(env[BUN_ROOT_ENV], ".");
+    assert_eq!(env[BUN_SCOPES_ENV], "@chainargos");
     let job = build_bun_member_job(
         &policy(vec![registry.clone(), step("Test", true)?]),
         CHECKOUT,
@@ -100,4 +103,21 @@ fn only_the_npm_registry_phase_grants_packages_read() -> Result<(), RenderError>
         "{error}"
     );
     Ok(())
+}
+
+#[test]
+fn the_registry_step_rejects_malformed_inputs_and_credentials() {
+    let env = BTreeMap::new();
+    let scopes = vec!["@chainargos".to_owned()];
+    for (root, scopes) in [
+        ("../escape", scopes.clone()),
+        ("a b", scopes.clone()),
+        (".", Vec::new()),
+        (".", vec!["chainargos".to_owned()]),
+        (".", vec!["@b".to_owned(), "@a".to_owned()]),
+    ] {
+        assert!(bun_registry_step(root, &scopes, &env).is_err(), "{root:?}");
+    }
+    let credential = BTreeMap::from([("GH_TOKEN".to_owned(), "x".to_owned())]);
+    assert!(bun_registry_step(".", &scopes, &credential).is_err());
 }
