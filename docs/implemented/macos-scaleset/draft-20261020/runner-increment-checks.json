@@ -700,6 +700,21 @@
       "scope": "The tests now construct unequal device numbers. Production parser checks did not change.",
       "author": "/root/native_intake_composition",
       "reviewer": "/root"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "1d6192d212d59c78eafbbe13be637dbeddb95910",
+      "command": "env -u RUST_MIN_STACK CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 rustup run 1.99.1 mbx nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host -E 'test(linked_reservation_reopens_for_same_request_through_cleanup_and_replay)'",
+      "exit_status": 0,
+      "nextest_run": "7e4dadcb-4671-410e-a002-defa13b94026",
+      "passed": 1,
+      "log": "topology2-linked-parent-integrated-20261020.log",
+      "log_sha256": "22dd386934f14eceb2ac2113bfded7b68d93542dac56942a57e5932cdcf3c4ec",
+      "author": "/root/container_metadata_repair",
+      "reviewer": "/root/execution_source_security_review",
+      "scope": "The test uses the cleanup observer with Docker test data. It does not prove a live installation.",
+      "format_exit_status": 0,
+      "commit_hook_exit_status": 0
     }
   ],
   "broader_pair_check": {
@@ -764,5 +779,15 @@
     "author": "/root/execution_channel_helper",
     "reviewer": null,
     "scale_set_installation": "NOT_RUN"
+  },
+  "linked_fixture_initial_integration": {
+    "result": "FAIL",
+    "source_base": "35f7d7dc1f09649bc4ea06fc35198f408d1023d0",
+    "nextest_run": "ea00edc0-9737-40bc-bae3-99cd24dd42c3",
+    "passed": 1,
+    "failed": 2,
+    "log": "topology2-parent-integrated-20261020.log",
+    "log_sha256": "602dbc474962394b52850a4f8b0102671a8cb4b3ca310b96f07f420dfeb6d544",
+    "note": "The two failed tests need the recovery observer change. Their changes are not in this commit."
   }
 }
