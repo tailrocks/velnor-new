@@ -122,6 +122,7 @@ fn machete_cold_install_uses_verified_asset_and_preserves_scan_invocation() {
         "crates/velnor-actions-contract",
         "crates/velnor-actions-rust",
         "crates/velnor-actions-tofu",
+        "crates/velnor-actions-ansible",
         "crates/velnor-actions-dbt",
         "crates/velnor-actions-gradle",
         "crates/velnor-actions-mise",
