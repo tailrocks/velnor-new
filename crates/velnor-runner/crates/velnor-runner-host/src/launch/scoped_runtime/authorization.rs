@@ -81,17 +81,20 @@ pub(in crate::launch) use publication::prepare_listener_with_test_provider;
 /// Verify one source after the session loop records its native start event.
 pub(crate) async fn authorize_started_execution(
     runner: RunnerReadyBootstrap,
-    docker: &bollard::Docker,
-    host: &Journal,
-    scoped: &ConnectionJournal,
-    secret: &ReleaseReadSecret,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
+    context: &ScopedHostContext<'_>,
     connection: &RepositoryConnection,
     policy: &ApprovedJobAuthorityPolicy,
     github_token: &str,
     deadline: Instant,
 ) -> Result<AuthorizedScopedExecution, PendingScopedExecution> {
+    let ScopedHostContext {
+        docker,
+        host,
+        scoped,
+        secret,
+        engine,
+        images,
+    } = *context;
     let request =
         match read_started_request(scoped, &runner, docker, engine, images, deadline).await {
             Ok(request) => request,

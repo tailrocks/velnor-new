@@ -1611,5 +1611,16 @@
     "reviewer": "runner_context_review",
     "scope": "The context holds borrowed references. The change keeps provider errors, publication order, and delivery order.",
     "remaining": "The strict runner gate and the existing file size defect remain incomplete."
+  },
+  "started_execution_host_context": {
+    "result": "PASS",
+    "tests": 5,
+    "run_id": "c2e8c1a3-b428-4e90-b50e-d7a26a4e6937",
+    "log_sha256": "efc1b261e16b9ef13f4f1746bdd8d94d3d76c37f4da32107f894fae2cef8d9f1",
+    "manifest_sha256": "a523ccb483831f0eb1159c214d44dc80217a70a9996cc9d20eb6ea9ad562c442",
+    "author": "replay_context_refactor",
+    "reviewer": "runtime_stack_architecture",
+    "scope": "The authorization body stays the same. The caller supplies the same six borrowed references inside the existing blocking operation.",
+    "remaining": "These tests do not prove live authorization. The strict runner gate still has other failures."
   }
 }
