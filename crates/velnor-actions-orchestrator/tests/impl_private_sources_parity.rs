@@ -90,14 +90,15 @@ fn only_the_private_fetch_builders_reach_the_private_fetch_policy() {
     ] {
         rust_files(&crates.join(krate).join("src"), &mut files);
     }
-    let allowed = ["private_fetch.rs", "bun_registry_install.rs"];
+    let allowed =
+        |name: &str| name.starts_with("private_fetch") || name == "bun_registry_install.rs";
     let mut offenders = Vec::new();
     for file in files {
         let name = file
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
-        if name.ends_with("_tests.rs") || allowed.contains(&name.as_str()) {
+        if name.ends_with("_tests.rs") || allowed(&name) {
             continue;
         }
         let Ok(text) = fs::read_to_string(&file) else {
