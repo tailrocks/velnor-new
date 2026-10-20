@@ -6,10 +6,10 @@ use crate::error::HostError;
 use crate::journal::Journal;
 use crate::launch::{SelectedEngineContext, VerifiedWorkerImages};
 
-use super::identity::{SelectedDaemon, compiled_source_revision, verify_selected_daemon};
-use super::release;
+use super::identity::{SelectedDaemon, verify_selected_daemon};
+use super::release::PreparedWorkerArtifact;
 use super::worker_import::import_worker_artifact;
-use super::{PLATFORM, ProviderFailure};
+use super::{PLATFORM, ProviderFailure, ReleaseImageProvider};
 
 #[cfg(test)]
 use super::worker_import::VerifiedWorkerImageIdentityProof;
@@ -20,7 +20,9 @@ pub(super) async fn prepare_worker_images(
     expected: &SelectedEngineContext,
     release_read_secret: &str,
 ) -> Result<VerifiedWorkerImages, HostError> {
-    let source_sha = compiled_source_revision().map_err(public_failure)?;
+    let provider = ReleaseImageProvider::from_compiled_source(release_read_secret, journal)
+        .map_err(public_failure)?;
+    let source_sha = provider.source_revision();
     if !valid_release_secret(release_read_secret) {
         return Err(public_failure(ProviderFailure::CredentialMissing));
     }
@@ -41,13 +43,28 @@ pub(super) async fn prepare_worker_images(
         .await
         .map_err(public_failure)?;
 
-    let release::PreparedWorkerReleases {
-        workspace,
-        runner: runner_artifact,
-        dind: dind_artifact,
-    } = release::prepare_worker_releases(release_read_secret, source_sha)
+    let workspace = super::workspace::Workspace::create_native().map_err(public_failure)?;
+    let material = provider
+        .download_worker_material(workspace.assets())
         .await
         .map_err(public_failure)?;
+    if material.source_sha != source_sha {
+        return Err(public_failure(ProviderFailure::TrustedSourcePinInvalid));
+    }
+    let runner_artifact = prepare_worker_artifact(
+        &workspace,
+        &material.runner_path,
+        &material.runner_sha256,
+        source_sha,
+        super::archive::worker::WorkerImage::Runner,
+    )?;
+    let dind_artifact = prepare_worker_artifact(
+        &workspace,
+        &material.dind_path,
+        &material.dind_sha256,
+        source_sha,
+        super::archive::worker::WorkerImage::Dind,
+    )?;
     verify_selected_daemon(docker, &selected)
         .await
         .map_err(public_failure)?;
@@ -67,6 +84,39 @@ pub(super) async fn prepare_worker_images(
         .await
         .map_err(public_failure)?;
     VerifiedWorkerImages::from_verified_proofs(expected, source_sha, cleanup, runner, dind)
+}
+
+fn prepare_worker_artifact(
+    workspace: &super::workspace::Workspace,
+    archive_path: &std::path::Path,
+    archive_sha256: &str,
+    source_sha: &str,
+    image: super::archive::worker::WorkerImage,
+) -> Result<PreparedWorkerArtifact, HostError> {
+    let original = super::archive::worker::verify(
+        archive_path,
+        image,
+        source_sha,
+        archive_sha256,
+        &image.release_tag(),
+    )
+    .map_err(public_failure)?;
+    let output_path = workspace
+        .assets()
+        .join(format!("{}-load.tar", image.image_name()));
+    let load = super::archive::worker::derive_load_archive(
+        archive_path,
+        &output_path,
+        image,
+        source_sha,
+        &original,
+    )
+    .map_err(public_failure)?;
+    Ok(PreparedWorkerArtifact {
+        image,
+        original,
+        load,
+    })
 }
 
 fn public_failure(error: ProviderFailure) -> HostError {

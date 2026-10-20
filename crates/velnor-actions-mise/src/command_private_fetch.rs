@@ -72,6 +72,24 @@ impl PrivateFetchCredential {
     }
 }
 
+/// Parent keys a private-fetch child may copy: the lookup path and home that
+/// `mise`, `git` and `cargo` need to find their tools. Nothing else ambient.
+const PARENT_PASSTHROUGH: [&str; 3] = ["PATH", "HOME", "TMPDIR"];
+
+/// Owned toolchain keys the generated step env supplies to the child: the
+/// Mise isolation overlay, the install-disable pair and the owned tool homes.
+const OWNED_ENV_KEYS: [&str; 9] = [
+    "MISE_NO_CONFIG",
+    "MISE_NO_ENV",
+    "MISE_NO_HOOKS",
+    "MISE_LOCKFILE",
+    "MISE_AUTO_INSTALL",
+    "MISE_EXEC_AUTO_INSTALL",
+    "MISE_RUSTUP_HOME",
+    "MISE_CARGO_HOME",
+    "RUSTUP_TOOLCHAIN",
+];
+
 /// Fixed environment baked into every private-fetch child, apart from the
 /// Velnor-owned `GIT_CONFIG_GLOBAL` path.
 const BAKED_FETCH_ENV: [(&str, &str); 4] = [
@@ -87,18 +105,22 @@ impl IsolatedCommand {
     /// The child starts from an empty environment plus proxy passthrough. It
     /// receives the Velnor-owned git configuration file as `GIT_CONFIG_GLOBAL`,
     /// system git configuration disabled, no interactive prompts, https as the
-    /// only git protocol, and, when given, exactly one allowlisted credential.
+    /// only git protocol, `PATH`/`HOME`/`TMPDIR` copied from the parent, the
+    /// owned toolchain keys in `owned_env`, and, when given, exactly one
+    /// allowlisted credential.
     ///
     /// # Errors
     ///
     /// Returns [`MiseError::InvalidStepInput`] for a relative or non-UTF-8
-    /// configuration path, or a credential value that is empty or contains
-    /// anything but ASCII alphanumerics, `_`, `-` and `.`.
+    /// configuration path, an `owned_env` key outside the owned toolchain set,
+    /// or a credential value that is empty or contains anything but ASCII
+    /// alphanumerics, `_`, `-` and `.`.
     pub fn private_fetch(
         program: &str,
         args: Vec<OsString>,
         cwd: PathBuf,
         git_config_global: &Path,
+        owned_env: &[(String, String)],
         credential: Option<(PrivateFetchCredential, &str)>,
     ) -> Result<Self, MiseError> {
         let invalid = |field: &str, value: &str| MiseError::InvalidStepInput {
@@ -116,6 +138,17 @@ impl IsolatedCommand {
             OsString::from("GIT_CONFIG_GLOBAL"),
             git_config_global.as_os_str().to_owned(),
         ));
+        for key in PARENT_PASSTHROUGH {
+            if let Some(value) = std::env::var_os(key) {
+                extra_env.push((OsString::from(key), value));
+            }
+        }
+        for (key, value) in owned_env {
+            if !OWNED_ENV_KEYS.contains(&key.as_str()) {
+                return Err(invalid(key, "not_an_owned_toolchain_key"));
+            }
+            extra_env.push((OsString::from(key), OsString::from(value)));
+        }
         if let Some((kind, value)) = credential {
             if value.is_empty()
                 || !value

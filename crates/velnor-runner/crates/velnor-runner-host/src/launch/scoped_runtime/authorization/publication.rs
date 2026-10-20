@@ -23,7 +23,7 @@ pub(crate) async fn prepare_listener(
     guest_image: &crate::worker::guest_image::GuestImageFile,
     deadline: Instant,
 ) -> Result<RunnerReadyBootstrap, PendingScopedExecution> {
-    let provider = crate::launch::resource_probe::release_image_provider(secret);
+    let provider = crate::launch::resource_probe::release_image_provider(secret, host);
     let provider = provider.as_ref().map_err(|error| *error);
     prepare_listener_with_provider(
         ready,

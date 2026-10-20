@@ -47,8 +47,8 @@ fn assert_configuration_admission_boundaries(config_calls: &[String]) {
     // admission reloads for the repo-resolved catalog, and tap preparation
     // reloads the captured tap's own config before using its updater task;
     // preview admission passes its one loaded config to shared preparation;
-    // `deps lock` reloads it to resolve the declared private sources.
-    assert_eq!(config_calls.len(), 11, "{config_calls:?}");
+    // `deps lock` and the private fetch reload it to resolve and verify the declared private sources.
+    assert_eq!(config_calls.len(), 12, "{config_calls:?}");
     assert!(
         config_calls
             .iter()
@@ -87,6 +87,7 @@ fn assert_configuration_admission_boundaries(config_calls: &[String]) {
                 || call.starts_with("routing.rs")
                 || call.starts_with("deps_lock.rs")
                 || call.starts_with("job_image_preview.rs")
+                || call.starts_with("private_fetch.rs")
                 || call.starts_with("owned_tool_preview.rs")
                 || call.starts_with("qualification_cache_backend.rs")
                 || call.starts_with("qualification_resolver.rs")

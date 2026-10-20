@@ -20,10 +20,10 @@ use velnor_actions_orchestrator::{
     ACQUIRE_PREVIEW_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP, ADMIT_PREVIEW_AGGREGATE_OP,
     CAPTURE_REVIEW_COMPLETION_OP, EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP,
     EXECUTE_PREVIEW_PRODUCER_OP, FETCH_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, PLAN_OP,
-    PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PUBLISH_PACKAGE_RELEASE_OP,
-    RECOVER_PACKAGE_RELEASE_OP, REPORT_OP, REQUEST_FILE_ENV, SELECT_PREVIEW_TAP_CONTINUATION_OP,
-    SIGN_PACKAGE_RELEASE_OP, SOURCE_EVIDENCE_OP, TASK_EXECUTION_RESOLVER_OP,
-    WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP,
+    PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP, PRIVATE_REVOKE_OP, PUBLISH_OP,
+    PUBLISH_PACKAGE_RELEASE_OP, RECOVER_PACKAGE_RELEASE_OP, REPORT_OP, REQUEST_FILE_ENV,
+    SELECT_PREVIEW_TAP_CONTINUATION_OP, SIGN_PACKAGE_RELEASE_OP, SOURCE_EVIDENCE_OP,
+    TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP,
 };
 
 use crate::dispatch_publish::run_publish_internal;
@@ -79,78 +79,9 @@ const GITHUB_EVENT_ENV: &str = "GITHUB_EVENT_NAME";
 /// Environment variable carrying the event payload path. Never printed.
 const GITHUB_EVENT_PATH_ENV: &str = "GITHUB_EVENT_PATH";
 
-/// Private operation selected by the gate.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum InternalOp {
-    /// Select the retained preview candidate for tap continuation.
-    TapContinuation,
-    /// Capture the independent review proposal.
-    CaptureReviewCompletion,
-    /// Publish the independent review result.
-    EmitReviewCompletion,
-    /// Admit immutable preview leaf artifacts.
-    AcquirePreviewLeaves,
-    /// Admit the complete preview aggregate.
-    AdmitPreviewAggregate,
-    /// Authenticate tap promotion inputs.
-    TapAdmission,
-    /// Materialize the request file from the GitHub environment.
-    WriteRequest,
-    /// Execute one named hosted platform check.
-    ExecuteCheck,
-    /// Run the credential-free native preview producer.
-    ExecutePreviewProducer,
-    /// Plan operation.
-    Plan,
-    /// Merge operation.
-    Merge,
-    /// Matrix-report fetch operation.
-    Fetch,
-    /// Task-report production operation.
-    Report,
-    /// Pre-seed manifest-writing operation.
-    PreseedManifest,
-    /// Baseline-publish operation.
-    Publish,
-    /// Repository-maintenance operation behind its separate private gate.
-    RepoPolicy,
-    /// Read-only predecessor resolution for hosted qualification.
-    ResolveQualification,
-    /// Select one cache layer for the validated qualification plan.
-    BindQualificationCache,
-    /// Validate one restored cache against the backend census.
-    ObserveQualificationCacheBackend,
-    /// Import one admitted qualification cache payload.
-    ImportQualificationCachePayload,
-    /// Export one qualification cache payload to isolated staging.
-    ExportQualificationCachePayload,
-    /// Get the isolated staging path for the normal tools cache.
-    NormalToolsCacheStagePath,
-    /// Import an authenticated normal tools payload.
-    ImportNormalToolsCachePayload,
-    /// Export a normal tools payload to isolated staging.
-    ExportNormalToolsCachePayload,
-    /// Install verified tar and gtar aliases for cache action steps.
-    InstallCacheTarLaunchers,
-    /// Do a check of the normal `Tofu` backend and storage limits before archive download.
-    PreflightNormalTofuCacheRestore,
-    /// Record source and report observations for one Qualification lane.
-    WriteQualificationSourceEvidence,
-    /// Data-only task execution record resolution for a generated wrapper.
-    ResolveTaskExecution,
-    /// Isolated, credentialed signing of a plan-bound package release.
-    PackageSigner,
-    /// Isolated publisher for an authenticated signed native package.
-    PackagePublisher,
-    /// Authenticated replay of a retained signed preview candidate.
-    PackageRecovery,
-    /// Credential-free updater prepared from captured public tap main.
-    TapPrepare,
-    /// Isolated App-authenticated PR writer for a validated tap candidate.
-    TapWriter,
-    /// Isolated exact-head App-authenticated tap promotion merge.
-    TapMerge,
-}
+#[path = "dispatch/operation.rs"]
+mod operation;
+use operation::InternalOp;
 
 /// Validated private request: operation plus exact request-file path.
 #[derive(Debug)]
@@ -239,6 +170,8 @@ fn internal_op() -> Option<InternalOp> {
         }
         Ok(tag) if tag == SOURCE_EVIDENCE_OP => InternalOp::WriteQualificationSourceEvidence,
         Ok(tag) if tag == TASK_EXECUTION_RESOLVER_OP => InternalOp::ResolveTaskExecution,
+        Ok(tag) if tag == PRIVATE_FETCH_OP => InternalOp::PrivateFetch,
+        Ok(tag) if tag == PRIVATE_REVOKE_OP => InternalOp::PrivateRevoke,
         Ok(tag) if tag == SIGN_PACKAGE_RELEASE_OP => InternalOp::PackageSigner,
         Ok(tag) if tag == PUBLISH_PACKAGE_RELEASE_OP => InternalOp::PackagePublisher,
         Ok(tag) if tag == RECOVER_PACKAGE_RELEASE_OP => InternalOp::PackageRecovery,
@@ -284,6 +217,9 @@ fn gate_request() -> Option<InternalRequest> {
             return runner_velnor_dir().map(|path| InternalRequest { op, path });
         }
         return None;
+    }
+    if matches!(op, InternalOp::PrivateFetch | InternalOp::PrivateRevoke) {
+        return runner_velnor_dir().map(|path| InternalRequest { op, path });
     }
     if op == InternalOp::PreseedManifest {
         return runner_velnor_dir().map(|path| InternalRequest { op, path });
@@ -351,6 +287,8 @@ fn gate_request_file(op: InternalOp) -> Option<InternalRequest> {
             return tap_merge::gate_request(&path).map(|path| InternalRequest { op, path });
         }
         InternalOp::Fetch
+        | InternalOp::PrivateFetch
+        | InternalOp::PrivateRevoke
         | InternalOp::Report
         | InternalOp::PreseedManifest
         | InternalOp::RepoPolicy

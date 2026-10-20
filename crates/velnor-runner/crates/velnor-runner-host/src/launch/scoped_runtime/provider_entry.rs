@@ -24,7 +24,7 @@ pub(crate) async fn prepare_and_bind_scoped(
     engine: &SelectedEngineContext,
     images: &VerifiedWorkerImages,
 ) -> Result<ScopedRuntimeOutcome, HostError> {
-    let provider = crate::launch::resource_probe::release_image_provider(release_secret)?;
+    let provider = crate::launch::resource_probe::release_image_provider(release_secret, host)?;
     prepare_and_bind_scoped_with_provider(outcome, docker, scoped, host, &provider, engine, images)
         .await
 }

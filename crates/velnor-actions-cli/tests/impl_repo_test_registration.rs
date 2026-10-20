@@ -20,6 +20,8 @@ type Outcome<T> = Result<T, Box<dyn Error>>;
 
 struct PackagePlan {
     root: PathBuf,
+    /// Cargo metadata reports a `custom-build` target, so Cargo sets `OUT_DIR`.
+    has_build_script: bool,
     test_targets: Vec<TestTarget>,
 }
 
@@ -50,7 +52,10 @@ fn compiled_test_sources(workspace: &WorkspacePlan) -> Outcome<HashSet<PathBuf>>
             if !seen_targets.insert(target.source.clone()) {
                 continue;
             }
-            compiled.extend(modules::declared_target_source_closure(&target.source)?);
+            compiled.extend(modules::declared_target_source_closure(
+                &target.source,
+                package.has_build_script,
+            )?);
         }
     }
     if compiled.is_empty() {
@@ -126,8 +131,10 @@ pub(super) fn registration_audit(
         }
         let macro_includes = graph::active_macro_includes(&findings)?;
         for include in &findings.includes {
-            if include.path.is_file() {
-                pending.insert(include.path.clone());
+            if let graph::IncludePath::Relative(path) = &include.path
+                && path.is_file()
+            {
+                pending.insert(path.clone());
             }
         }
         for (include, _) in macro_includes {

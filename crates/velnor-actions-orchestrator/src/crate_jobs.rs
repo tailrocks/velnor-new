@@ -15,6 +15,7 @@ use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 use {velnor_actions_mise::PinnedTool, velnor_actions_workflow_renderer::render::PLAN_JOB_ID};
 
 use crate::OrchestratorError;
+use crate::config::private_wiring::PrivateWiring;
 use crate::crate_job_ids::{
     JobOwners, group_is_tofu, group_runnable, qualification_job_id_for_member,
 };
@@ -64,8 +65,9 @@ pub(crate) struct CrateBuild {
 pub(crate) fn build_for_workflow(
     input: CrateJobInputs<'_>,
     qualification: bool,
+    private: Option<&PrivateWiring>,
 ) -> Result<CrateBuild, OrchestratorError> {
-    build_crate_jobs_inner(input, qualification)
+    build_crate_jobs_inner(input, qualification, private)
 }
 
 /// Make one `ToFu` Qualification executor for each matrix entry that has tasks.
@@ -78,7 +80,7 @@ pub(crate) fn build_qualification_for_workflow(
     acquire: Option<&Step>,
     helper_version: &str,
 ) -> Result<CrateBuild, OrchestratorError> {
-    build_qualification_crate_jobs(workflow_job_inputs(
+    let inputs = workflow_job_inputs(
         config,
         label,
         discovery,
@@ -86,7 +88,8 @@ pub(crate) fn build_qualification_for_workflow(
         fetch_roots,
         acquire,
         helper_version,
-    )?)
+    )?;
+    build_qualification_crate_jobs(inputs)
 }
 
 /// Shared rendering inputs for grouped and `ToFu` Qualification jobs.
@@ -160,7 +163,7 @@ pub(crate) struct CrateJobInputs<'a> {
 /// Returns contract, render-context, or tool-request errors.
 #[cfg(test)]
 pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, OrchestratorError> {
-    build_crate_jobs_inner(input, false)
+    build_crate_jobs_inner(input, false, None)
 }
 
 /// Make one `ToFu` Qualification job for each matrix entry that has tasks.
@@ -191,8 +194,14 @@ pub(crate) fn build_qualification_crate_jobs(
             &job_id,
             velnor_actions_contract::WorkflowEvent::Qualification,
         )?;
-        let (job, driver, use_opentofu) =
-            build_job_for_members(input, &job_id, std::slice::from_ref(&task), needs, true)?;
+        let (job, driver, use_opentofu) = build_job_for_members(
+            input,
+            &job_id,
+            std::slice::from_ref(&task),
+            needs,
+            true,
+            None,
+        )?;
         drivers.insert(job_id.clone(), driver);
         if use_opentofu {
             tofu_ids.push(job_id.clone());
@@ -236,6 +245,7 @@ fn disambiguate_rust_job_names(
 fn build_crate_jobs_inner(
     input: CrateJobInputs<'_>,
     qualification: bool,
+    private: Option<&PrivateWiring>,
 ) -> Result<CrateBuild, OrchestratorError> {
     let grouped = group_runnable(&input.discovery.proposals)?;
     let owners = JobOwners::from_grouped(&input.discovery.proposals, &grouped);
@@ -258,8 +268,14 @@ fn build_crate_jobs_inner(
             &job_id,
             velnor_actions_contract::WorkflowEvent::PullRequest,
         )?;
-        let (job, driver, use_opentofu) =
-            build_job_for_members(input, &job_id, tasks, needs, qualification && !is_tofu)?;
+        let (job, driver, use_opentofu) = build_job_for_members(
+            input,
+            &job_id,
+            tasks,
+            needs,
+            qualification && !is_tofu,
+            private,
+        )?;
         drivers.insert(job_id.clone(), driver);
         if use_opentofu {
             tofu_ids.push(job_id.clone());
@@ -279,6 +295,7 @@ fn build_job_for_members(
     tasks: &[&ProposedTask],
     needs: Vec<String>,
     qualification: bool,
+    private: Option<&PrivateWiring>,
 ) -> Result<(Job, RenderDriver, bool), OrchestratorError> {
     let first = tasks.first().ok_or_else(|| internal("crate_empty"))?;
     let manifest = first.identity.unit_path.clone();
@@ -326,6 +343,17 @@ fn build_job_for_members(
         qualification,
     )?;
     let mut job = job;
+    if use_rust && let Some(private) = private {
+        let suite = crate::matrix_step::suite_for_package(&model.package_name);
+        let needs_validators =
+            crate::matrix_step::crate_needs_generate_validators(input.policy, suite);
+        let roots = crate::source_prep::crate_fetch_roots(
+            &model.manifest,
+            input.fetch_roots,
+            input.policy == WorkflowPolicy::VelnorRepositoryV1 && needs_validators,
+        );
+        private.insert_into_job(&mut job, &roots)?;
+    }
     if let Some(seed) =
         job_steps::parallel_target_seed_step(&input, &model, use_rust, use_opentofu)?
         && let Some(index) = job.steps.iter().position(|step| step.parallel)

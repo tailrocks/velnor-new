@@ -209,6 +209,32 @@ fn unproven_invoked_macro_includes_fail_closed() -> Outcome<()> {
     Ok(())
 }
 
+#[test]
+fn cargo_out_dir_include_requires_a_build_script_and_adds_no_repository_source() -> Outcome<()> {
+    let scratch = ScratchDir::create()?;
+    let root = scratch.write(
+        "tests/registered.rs",
+        "include!(concat!(env!(\"OUT_DIR\"), \"/generated.rs\"));\n#[test] fn registered() {}\n",
+    )?;
+    scratch.write(
+        "tests/generated.rs",
+        "#[test] fn same_named_repository_file() {}\n",
+    )?;
+    let sources = super::modules::declared_target_source_closure(&root, true)?;
+    assert_eq!(
+        sources,
+        std::collections::HashSet::from([root.canonicalize()?])
+    );
+    assert!(super::modules::declared_target_source_closure(&root, false).is_err());
+    let gated = scratch.write(
+        "tests/gated.rs",
+        "#[cfg(not(test))] include!(concat!(env!(\"OUT_DIR\"), \"/generated.rs\"));\n",
+    )?;
+    super::modules::declared_target_source_closure(&gated, false)?;
+    scratch.cleanup()?;
+    Ok(())
+}
+
 // Unfinished merged fixture: pinned Cargo 1.98 artifact dep-info does not
 // expose the non-source `include_str!` dependency asserted here.
 #[cfg(any())]
@@ -239,7 +265,8 @@ fn compiler_closure_handles_paths_includes_macros_fixtures_and_orphans() -> Outc
     let registered_root = scratch.0.join("tests/registered.rs").canonicalize()?;
     let root_findings = super::graph::source_findings(&registered_root)?;
     assert!(root_findings.includes.iter().any(|include| {
-        include.path == scratch.0.join("tests/macos_included.rs")
+        matches!(&include.path, super::graph::IncludePath::Relative(path)
+            if *path == scratch.0.join("tests/macos_included.rs"))
             && include.condition == super::graph::Possibility::Sometimes
     }));
     for source in [

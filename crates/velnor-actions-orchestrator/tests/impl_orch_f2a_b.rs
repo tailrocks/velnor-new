@@ -98,6 +98,36 @@ fn merge_consumes_no_publish_verbs() -> TestResult {
     Ok(())
 }
 
+/// Analysis, planning and generation never call the credentialed fetch: only
+/// the module mount, the public re-export, and the fetch modules themselves
+/// name it.
+#[test]
+fn private_fetch_is_unreachable_from_analysis() -> TestResult {
+    for path in product_src_files()? {
+        let name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if matches!(
+            name.as_str(),
+            "private_fetch.rs"
+                | "private_fetch_session.rs"
+                | "private_revoke.rs"
+                | "api.rs"
+                | "config.rs"
+        ) {
+            continue;
+        }
+        let source = std::fs::read_to_string(&path)?;
+        assert!(
+            !source.contains("private_fetch") && !source.contains("run_private_"),
+            "{} reaches the private fetch outside its operation",
+            path.display()
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn offline_deps_fail_closed_without_fetch() -> TestResult {
     let source_files = product_src_files()?;
@@ -121,6 +151,17 @@ fn offline_deps_fail_closed_without_fetch() -> TestResult {
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
+        // HD-7: the credentialed private-source fetch is a dedicated runtime
+        // operation (`private-fetch-v1`) behind its own CLI gate; its three
+        // modules are the only product files exempt from the fetch-verb scan,
+        // and `private_fetch_is_unreachable_from_analysis` pins that nothing
+        // else in the crate calls into them.
+        if matches!(
+            name.as_str(),
+            "private_fetch.rs" | "private_fetch_session.rs" | "private_revoke.rs"
+        ) {
+            continue;
+        }
         for (line, code) in code_of(&path)? {
             if name == "source_prep.rs" {
                 assert!(
@@ -139,6 +180,10 @@ fn offline_deps_fail_closed_without_fetch() -> TestResult {
                 // lives in source_prep.rs (scoped above, execution-free);
                 // analysis-time fetching stays forbidden.
                 .replace("fetch_steps", "")
+                // HD-7 operation names re-exported by `api.rs` and mounted
+                // under `config.rs`; the modules themselves are exempt above.
+                .replace("private_fetch", "")
+                .replace("PRIVATE_FETCH", "")
                 .replace("fetch_roots", "")
                 // Plan checkout input emission: `fetch-depth: 0` is a
                 // workflow input literal (history for HEAD^2 + base diff),

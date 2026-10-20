@@ -10,8 +10,9 @@ use velnor_actions_orchestrator::{
     DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV, PlanOutputMode, execute_check,
     execute_preview_producer, merge_internal, merge_passed, plan_internal,
     plan_outputs_from_staged_admission, publish_final_report, publish_plan_files_with_outputs,
-    resolve_task_execution, response_path_for, retrieve_reports, write_preseed_manifest,
-    write_qualification_source_evidence, write_request, write_task_report,
+    resolve_task_execution, response_path_for, retrieve_reports, run_private_fetch,
+    run_private_revoke, write_preseed_manifest, write_qualification_source_evidence, write_request,
+    write_task_report,
 };
 
 use super::{
@@ -49,6 +50,14 @@ pub(super) fn run_internal(request: &InternalRequest) -> ExitCode {
         },
         InternalOp::Report => match write_task_report() {
             Ok(_) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
+        InternalOp::PrivateFetch => match run_private_fetch() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
+        InternalOp::PrivateRevoke => match run_private_revoke() {
+            Ok(()) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
         },
         InternalOp::PreseedManifest => match write_preseed_manifest() {

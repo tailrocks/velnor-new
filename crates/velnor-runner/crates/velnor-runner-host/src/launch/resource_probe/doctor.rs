@@ -34,8 +34,8 @@ pub(super) async fn run(
     }
     let result = async {
         let token = secret.as_provider_token()?;
-        let provider =
-            ReleaseImageProvider::from_compiled_source(token).map_err(|_| HostError::Docker)?;
+        let provider = ReleaseImageProvider::from_compiled_source(token, journal)
+            .map_err(|_| HostError::Docker)?;
         super::lifecycle::collect_for_doctor(docker, journal, &provider, ticket).await
     }
     .await;

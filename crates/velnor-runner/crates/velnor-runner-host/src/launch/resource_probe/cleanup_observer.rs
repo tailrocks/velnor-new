@@ -79,8 +79,8 @@ pub(in crate::launch) async fn observe_cleanup_binding(
     deadline: Instant,
 ) -> Result<VerifiedCleanupObserverRecord, HostError> {
     let token = context.release_read_secret.as_provider_token()?;
-    let provider =
-        ReleaseImageProvider::from_compiled_source(token).map_err(|_| HostError::Docker)?;
+    let provider = ReleaseImageProvider::from_compiled_source(token, context.journal)
+        .map_err(|_| HostError::Docker)?;
     observe_cleanup_binding_using(context, reservation_id, binding, deadline, &provider).await
 }
 
