@@ -1540,5 +1540,16 @@
     "language_reviewer": "runner_context_review",
     "scope": "The migration keeps existing attempt rows. The completion query accepts a recovering reservation with the required identity and completion proof.",
     "remaining": "Full cleanup and reopen tests remain necessary. The strict runner gate still has other failures."
+  },
+  "resource_probe_future_calls": {
+    "result": "PASS",
+    "tests": 6,
+    "run_id": "26fa31d6-702c-45bf-a4af-d7a43ca10aa2",
+    "log_sha256": "fdf4bd76fb59cbc043da52dc3cbc5e8f4afc2f1824e3aa3cf37e9a6a6c1e14a4",
+    "manifest_sha256": "ec7bdd7b0f0c989a623b58175c14605c92c25c5e271a8fbde7481c42edbd0d9b",
+    "author": "grouped_source_evidence",
+    "reviewer": "runner_context_review",
+    "scope": "Two calls use Box::pin before .await. The change keeps the operation order and ownership.",
+    "remaining": "The strict runner gate still has other failures."
   }
 }
