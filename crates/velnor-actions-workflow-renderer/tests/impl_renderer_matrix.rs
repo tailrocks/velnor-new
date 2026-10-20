@@ -42,6 +42,7 @@ fn fixture_ir(task: Job) -> Result<WorkflowIr, RenderError> {
     jobs.insert(
         "plan".to_owned(),
         Job {
+            services: Vec::new(),
             display_name: "Plan".to_owned(),
             runs_on: LABEL.to_owned(),
             check_runner: None,
@@ -86,6 +87,7 @@ fn fixture_ir(task: Job) -> Result<WorkflowIr, RenderError> {
 fn task_job(env: &BTreeMap<String, String>, needs: Vec<String>) -> Result<Job, RenderError> {
     let argv = ["sh", "-c", "echo hi"].map(str::to_owned).to_vec();
     Ok(Job {
+        services: Vec::new(),
         display_name: "Task".to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,
@@ -196,6 +198,7 @@ fn fixture_ir_with(id: &str, job: Job) -> Result<WorkflowIr, RenderError> {
 fn capped_job(env: &BTreeMap<String, String>, needs: Vec<String>) -> Result<Job, RenderError> {
     let argv = ["sh", "-c", "echo hi"].map(str::to_owned).to_vec();
     Ok(Job {
+        services: Vec::new(),
         display_name: "Rust / stacks-a".to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,

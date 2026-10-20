@@ -27,6 +27,7 @@ pub(crate) fn cache_step(uses: &str, name: &str) -> Step {
 
 pub(crate) fn job(needs: &[&str], step: Step) -> Job {
     Job {
+        services: Vec::new(),
         display_name: "cache job".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,
@@ -118,6 +119,7 @@ fn dispatch_plan_job(staged: &str) -> Result<Job, crate::RenderError> {
             },
         };
     Ok(Job {
+        services: Vec::new(),
         display_name: "Velnor Plan".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,

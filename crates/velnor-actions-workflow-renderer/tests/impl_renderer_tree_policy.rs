@@ -40,6 +40,7 @@ pub(crate) fn fixture_ctx() -> RenderContext {
 
 fn plan_job() -> Result<Job, RenderError> {
     Ok(Job {
+        services: Vec::new(),
         display_name: "Plan".to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,
@@ -107,6 +108,7 @@ pub(crate) fn actionlint_bytes() -> Result<String, RenderError> {
 
 fn simple_job(display: &str, needs: Vec<String>, steps: Vec<Step>) -> Job {
     Job {
+        services: Vec::new(),
         display_name: display.to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,

@@ -230,6 +230,7 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
     with.insert("version".to_owned(), ALINT_BINARY_VERSION.to_owned());
     steps::scan_for_private_subcommands(ALINT_USES)?;
     Ok(Job {
+        services: Vec::new(),
         display_name: ValidatorKind::Alint.display_name().to_owned(),
         runs_on: ctx.runs_on.clone(),
         check_runner: None,
@@ -297,6 +298,7 @@ pub(crate) fn validator_job(
     }
     job_steps.push(step);
     Ok(Job {
+        services: Vec::new(),
         display_name: validator.display_name().to_owned(),
         runs_on: ctx.runs_on.clone(),
         check_runner: None,

@@ -22,6 +22,7 @@ fn keyed_job() -> Result<Job, RenderError> {
         rustup_components: &[],
     })?;
     Ok(Job {
+        services: Vec::new(),
         display_name: "Keyed".to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,
@@ -165,6 +166,7 @@ fn tools_cache_election_ignores_winner_save_presentation_name() -> Result<(), Re
 fn tools_cache_election_rejects_orphan_and_duplicate_winner_saves() -> Result<(), RenderError> {
     let canonical = canonical_save()?;
     let orphan = Job {
+        services: Vec::new(),
         display_name: "Orphan".to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,
