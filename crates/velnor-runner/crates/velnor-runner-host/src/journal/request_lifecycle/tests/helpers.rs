@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::time::Instant;
 
 use crate::config::{
@@ -24,6 +24,51 @@ macro_rules! trace_test_stage {
 }
 
 pub(crate) const TEST_ENGINE_ID: &str = "11111111-1111-4111-8111-111111111111";
+
+static NEXT_PHYSICAL_FIXTURE_REQUEST_ID: AtomicI64 = AtomicI64::new(1_000_000);
+
+pub(crate) async fn acquired_physical_fixture_request(
+    scope: &ConnectionJournal,
+) -> Result<crate::journal::AssignmentIdentity, HostError> {
+    use crate::journal::{AssignmentKey, SourceAuthorizationResult};
+
+    let request_id = NEXT_PHYSICAL_FIXTURE_REQUEST_ID.fetch_add(1, Ordering::Relaxed);
+    if request_id <= 0 {
+        return Err(HostError::Journal);
+    }
+    let request = scope
+        .assignment_identity(AssignmentKey::AssignedRequest { request_id })
+        .await?;
+    let repository_id = read_transaction(scope.journal_ref(), async |connection| {
+        let mut rows = connection
+            .query(
+                "SELECT identity FROM connection_scopes WHERE connection_id = ?1 AND retired = 0",
+                [request.connection_id().as_str()],
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        let identity = rows
+            .next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .ok_or(HostError::Journal)?
+            .get::<String>(0)
+            .map_err(|_| HostError::Journal)?;
+        serde_json::from_str::<serde_json::Value>(&identity)
+            .map_err(|_| HostError::Journal)?
+            .get("repository_id")
+            .and_then(serde_json::Value::as_i64)
+            .filter(|id| *id > 0)
+            .ok_or(HostError::Journal)
+    })
+    .await?;
+    let source = receipt(scope, request_id, request_id + 1, repository_id).await?;
+    let result = scope.record_source_authorization(&request, &source).await?;
+    if result != SourceAuthorizationResult::Recorded {
+        return Err(HostError::Journal);
+    }
+    Ok(request)
+}
 
 pub(crate) fn test_initializer_limits()
 -> Result<crate::worker::storage_initialization::StorageInitializationLimits, HostError> {

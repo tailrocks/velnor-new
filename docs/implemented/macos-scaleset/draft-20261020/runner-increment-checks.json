@@ -971,8 +971,8 @@
       "reviewer": "/root/execution_source_security_review",
       "limits": "The component test uses an 8 MiB thread stack. These checks do not prove a live installation.",
       "integration_changes": [
-        "Keep the unused export removal in launch.rs.",
-        "Use the format from the shipping workspace."
+        "Keep the removal of the unused export from launch.rs.",
+        "Use the formatting from the shipping workspace."
       ],
       "post_hook_check": {
         "result": "PASS",
@@ -982,6 +982,23 @@
         "log": "shipping-successor-post-hook-20261020.log",
         "log_sha256": "b73c9fef5a10306d2f8296cfd725a671701443013970381ecb2299ed2d930ce3"
       }
+    },
+    {
+      "result": "PASS",
+      "base_commit": "901fddb8fa6dfa41b6b7a7c2e8a24c582db4ef7b",
+      "change": "Use the acquired request and current physical attempt in the test fixtures.",
+      "passed": 9,
+      "nextest_run": "9d589530-8b46-4d18-b837-c209ae5a071d",
+      "exit_status": 0,
+      "log": "shipping-nine-fixtures-focused-20261020.log",
+      "log_sha256": "96f0c69b32612c691f72df26aa139542bf3f8c304ea4f44c5e3e96acf20530e7",
+      "author": "/root/native_intake_composition",
+      "reviewer": "/root/obsolete_capacity_cleanup",
+      "integration_changes": [
+        "Keep the initializer order assertion.",
+        "Remove temporary diagnostic output."
+      ],
+      "limits": "The full host suite has a failed event replay test. These checks do not prove a live installation."
     }
   ],
   "broader_pair_check": {

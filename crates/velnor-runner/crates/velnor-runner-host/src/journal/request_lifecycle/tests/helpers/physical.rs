@@ -26,7 +26,7 @@ pub(crate) async fn prepare_bootstrap_start_claim_for_nonce(
     nonce: char,
 ) -> Result<BootstrapStartClaimFixture, HostError> {
     use crate::journal::{
-        AssignmentKey, ReservationRequest, ReservationResult,
+        AssignedAcquireResult, AssignmentKey, RequestPhysicalReservationResult, ReservationRequest,
         fixture_storage_provisioning_admission,
     };
     use crate::launch::StartPermit;
@@ -44,8 +44,9 @@ pub(crate) async fn prepare_bootstrap_start_claim_for_nonce(
     let sample_generation_id = permit.sample_generation_id().to_owned();
     let docker_root_digest = permit.docker_root_digest().to_owned();
     let admission = fixture_storage_provisioning_admission(&permit)?;
+    let request = acquired_physical_fixture_request(scope).await?;
     let reservation = scope
-        .try_reserve_with_provisioning(
+        .try_reserve_and_claim_request_acquire(
             ReservationRequest {
                 assignment: &assignment,
                 engine_id: TEST_ENGINE_ID,
@@ -56,13 +57,24 @@ pub(crate) async fn prepare_bootstrap_start_claim_for_nonce(
             },
             permit,
             admission,
+            &request,
         )
         .await?;
-    let ReservationResult::Reserved { reservation_id } = reservation else {
+    let RequestPhysicalReservationResult::AcquireClaimed {
+        reservation_id,
+        intent_id: acquired_intent_id,
+    } = reservation
+    else {
         return Err(HostError::Journal);
     };
+    scope
+        .record_request_acquire(
+            &request,
+            AssignedAcquireResult::Returned(vec![request.request_id().ok_or(HostError::Identity)?]),
+        )
+        .await?;
     let (intent_id, fresh) = scope.begin_launch(&assignment).await?;
-    if fresh {
+    if fresh || intent_id != acquired_intent_id {
         return Err(HostError::Journal);
     }
     let (claim, metadata_handoff) = provisioning::prepare_bootstrap_start_claim(
@@ -99,7 +111,7 @@ pub(super) async fn provision_physical_intent_with_sample(
     sample_nonce: char,
 ) -> Result<ProvisionedRunner, HostError> {
     use crate::journal::{
-        AssignmentKey, ReservationRequest, ReservationResult,
+        AssignedAcquireResult, AssignmentKey, RequestPhysicalReservationResult, ReservationRequest,
         fixture_storage_provisioning_admission,
     };
     use crate::launch::StartPermit;
@@ -117,8 +129,9 @@ pub(super) async fn provision_physical_intent_with_sample(
     let sample_generation_id = permit.sample_generation_id().to_owned();
     let docker_root_digest = permit.docker_root_digest().to_owned();
     let admission = fixture_storage_provisioning_admission(&permit)?;
+    let request = acquired_physical_fixture_request(scope).await?;
     let result = scope
-        .try_reserve_with_provisioning(
+        .try_reserve_and_claim_request_acquire(
             ReservationRequest {
                 assignment: &assignment,
                 engine_id: TEST_ENGINE_ID,
@@ -129,13 +142,24 @@ pub(super) async fn provision_physical_intent_with_sample(
             },
             permit,
             admission,
+            &request,
         )
         .await?;
-    let ReservationResult::Reserved { reservation_id } = result else {
+    let RequestPhysicalReservationResult::AcquireClaimed {
+        reservation_id,
+        intent_id: acquired_intent_id,
+    } = result
+    else {
         return Err(HostError::Journal);
     };
+    scope
+        .record_request_acquire(
+            &request,
+            AssignedAcquireResult::Returned(vec![request.request_id().ok_or(HostError::Identity)?]),
+        )
+        .await?;
     let (intent_id, fresh) = scope.begin_launch(&assignment).await?;
-    if fresh {
+    if fresh || intent_id != acquired_intent_id {
         return Err(HostError::Journal);
     }
 
