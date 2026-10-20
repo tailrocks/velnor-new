@@ -59,17 +59,13 @@ impl BunMemberPolicy {
             } else if seen_parallel {
                 closed = true;
             }
-            let app_token_step = matches!(
-                step.role,
-                Some(StepRole::PrivateTokenMint | StepRole::PrivateFetch | StepRole::PrivateRevoke)
-            );
-            if app_token_step {
-                return Err(invalid("bun_job_app_token_step"));
-            }
-            if matches!(step.kind, StepKind::Action { .. }) {
+            if matches!(step.kind, StepKind::Action { .. })
+                && step.role != Some(StepRole::PrivateTokenMint)
+            {
                 return Err(invalid("bun_job_action_step"));
             }
         }
+        self.validate_private_block(&invalid)?;
         if self
             .steps
             .iter()
@@ -78,6 +74,46 @@ impl BunMemberPolicy {
             > 1
         {
             return Err(invalid("bun_registry_phase_repeated"));
+        }
+        Ok(())
+    }
+}
+
+impl BunMemberPolicy {
+    /// The App-token block is all or nothing: one mint, fetch and revoke in
+    /// that order, adjacent, ahead of every step that runs repository code, so
+    /// the token is revoked before any install or script (HD-7).
+    fn validate_private_block(
+        &self,
+        invalid: &dyn Fn(&str) -> RenderError,
+    ) -> Result<(), RenderError> {
+        let roles: Vec<Option<StepRole>> = self.steps.iter().map(|step| step.role).collect();
+        let at = roles
+            .iter()
+            .position(|role| *role == Some(StepRole::PrivateTokenMint));
+        let private = |role: &Option<StepRole>| {
+            matches!(
+                role,
+                Some(StepRole::PrivateTokenMint | StepRole::PrivateFetch | StepRole::PrivateRevoke)
+            )
+        };
+        let count = roles.iter().filter(|role| private(role)).count();
+        let Some(at) = at else {
+            return if count == 0 {
+                Ok(())
+            } else {
+                Err(invalid("bun_job_private_block"))
+            };
+        };
+        if count != 3
+            || roles.get(at + 1) != Some(&Some(StepRole::PrivateFetch))
+            || roles.get(at + 2) != Some(&Some(StepRole::PrivateRevoke))
+        {
+            return Err(invalid("bun_job_private_block"));
+        }
+        let only_staging = |role: &Option<StepRole>| *role == Some(StepRole::AcquireVelnor);
+        if !roles[..at].iter().all(only_staging) {
+            return Err(invalid("bun_job_private_block_late"));
         }
         Ok(())
     }

@@ -42,8 +42,8 @@ pub use super::plan_output_limits::{JOB_OUTPUTS_BUDGET_UTF16_BYTES, PlanOutputMo
 pub use super::prepare::{GenerationPreparation, prepare};
 pub use super::preseed_manifest::{PRESEED_MANIFEST_OP, write_preseed_manifest};
 pub use super::preview_producer::{
-    ACQUIRE_PREVIEW_LEAVES_OP, ADMIT_PREVIEW_AGGREGATE_OP, EXECUTE_PREVIEW_PRODUCER_OP,
-    acquire_preview_leaves, admit_preview_aggregate, execute_preview_producer,
+    ACQUIRE_RELEASE_LEAVES_OP, ADMIT_RELEASE_AGGREGATE_OP, EXECUTE_RELEASE_PRODUCER_OP,
+    acquire_release_leaves, admit_release_aggregate, execute_release_producer,
 };
 pub use super::provenance::{EvidenceProvenance, ProfileProvenance};
 pub use super::qualification_resolver::{
@@ -91,8 +91,18 @@ pub use super::package_publication::{
     PackagePublicationBackend, PackagePublicationOutcome, publish_package_release,
 };
 pub use super::package_release_publish::{
-    PUBLISH_PACKAGE_RELEASE_OP, PreviewTapContinuationSelection, RECOVER_PACKAGE_RELEASE_OP,
-    SELECT_PREVIEW_TAP_CONTINUATION_OP, publish_package_release_from_env,
-    recover_package_release_from_env, select_preview_tap_continuation_from_env,
+    ADMIT_RELEASE_POLICY_OP, ADMIT_STABLE_TAG_ORIGIN_OP, PUBLISH_PACKAGE_RELEASE_OP,
+    RECOVER_PACKAGE_RELEASE_OP, ReleaseTapContinuationSelection,
+    SELECT_RELEASE_TAP_CONTINUATION_OP, SELECT_STABLE_RELEASE_SOURCE_OP,
+    WRITE_STABLE_TAG_INTENT_OP, WRITE_STABLE_TAG_ORIGIN_OP, admit_release_policy_from_env,
+    admit_stable_tag_origin_from_env, publish_package_release_from_env,
+    recover_package_release_from_env, select_release_tap_continuation_from_env,
+    select_stable_release_source_from_env, write_stable_tag_intent_from_env,
+    write_stable_tag_origin_from_env,
 };
 pub use super::package_release_signer::{SIGN_PACKAGE_RELEASE_OP, sign_package_release_from_env};
+
+/// Version marker for the orchestrator shell.
+pub const ORCHESTRATOR_VERSION: u32 = 0;
+
+pub use crate::qualification_candidate::qualify_tools;

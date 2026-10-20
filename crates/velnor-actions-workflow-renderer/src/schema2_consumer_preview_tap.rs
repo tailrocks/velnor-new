@@ -1,7 +1,7 @@
 //! Unprivileged tap preparation and independently authenticated PR write/merge jobs.
 
 use super::{
-    ConsumerPreviewSpec, MiseSetup, RenderError, Step, TapInvocationContext, Yaml, acquire, base,
+    ConsumerReleaseSpec, MiseSetup, RenderError, Step, TapInvocationContext, Yaml, acquire, base,
     finish, run_step, steps,
 };
 use crate::commands::join_argv_for_run;
@@ -14,7 +14,7 @@ use native_operation::operation;
 
 /// Static downstream policy and official helper placement for the updater.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConsumerPreviewTapSpec {
+pub struct ConsumerReleaseTapSpec {
     /// Closed native promotion policy, never executable workflow data.
     pub policy: HomebrewTapConfig,
     /// Official helper matching the declared updater platform.
@@ -23,9 +23,9 @@ pub struct ConsumerPreviewTapSpec {
     pub updater_setup: MiseSetup,
 }
 
-pub(super) fn jobs(
-    spec: &ConsumerPreviewSpec,
-    tap: &ConsumerPreviewTapSpec,
+pub(in crate::schema2) fn jobs(
+    spec: &ConsumerReleaseSpec,
+    tap: &ConsumerReleaseTapSpec,
     context: TapInvocationContext,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
     tap.policy
@@ -45,11 +45,11 @@ pub(super) fn jobs(
 }
 
 fn prepare(
-    spec: &ConsumerPreviewSpec,
-    tap: &ConsumerPreviewTapSpec,
+    spec: &ConsumerReleaseSpec,
+    tap: &ConsumerReleaseTapSpec,
     context: TapInvocationContext,
 ) -> Result<(String, Yaml), RenderError> {
-    let id = "preview-tap-prepare";
+    let id = format!("{}-tap-prepare", context.prefix());
     let runner = &tap.policy.updater.runner.label;
     let mut fields = base(
         "Prepare a literal-only tap update without write credentials",
@@ -63,10 +63,13 @@ fn prepare(
             "Install pinned GitHub CLI",
             &join_argv_for_run(&spec.install_gh_argv)?,
         ),
-        acquire(&tap.updater_acquire, id, runner)?,
+        acquire(&tap.updater_acquire, &id, runner)?,
     ];
-    if matches!(context, TapInvocationContext::Preview) {
-        job_steps.push(push_download());
+    if matches!(
+        context,
+        TapInvocationContext::Preview | TapInvocationContext::StableAuthority
+    ) {
+        job_steps.push(push_download(spec, context));
     }
     job_steps.push(operation(
         spec,
@@ -75,7 +78,7 @@ fn prepare(
         false,
         context,
     )?);
-    job_steps.push(steps::checkout(context.source()));
+    job_steps.push(steps::checkout(spec, context.source()));
     job_steps.push(operation(
         spec,
         tap,
@@ -83,38 +86,40 @@ fn prepare(
         false,
         context,
     )?);
-    job_steps.push(steps::transfer(false, steps::Artifact::TapCandidate));
-    Ok(finish(id, fields, job_steps))
+    job_steps.push(steps::transfer(spec, false, steps::Artifact::TapCandidate));
+    Ok(finish(&id, fields, job_steps))
 }
 
 fn writer(
-    spec: &ConsumerPreviewSpec,
-    tap: &ConsumerPreviewTapSpec,
+    spec: &ConsumerReleaseSpec,
+    tap: &ConsumerReleaseTapSpec,
     merge: bool,
     context: TapInvocationContext,
 ) -> Result<(String, Yaml), RenderError> {
-    let (id, name, dependency, op, timeout) = if merge {
+    let (suffix, name, dependency, op, timeout) = if merge {
         (
-            "preview-tap-merge",
+            "tap-merge",
             "Merge only the validated and fully reviewed PR head",
-            "preview-tap-writer",
+            "tap-writer",
             "merge-homebrew-tap-pr-v1",
             JobTimeout::DEFAULT,
         )
     } else {
         (
-            "preview-tap-writer",
+            "tap-writer",
             "Independently validate and create a signed-off tap PR",
-            "preview-tap-prepare",
+            "tap-prepare",
             "write-homebrew-tap-pr-v1",
             JobTimeout::DEFAULT,
         )
     };
+    let id = format!("{}-{suffix}", context.prefix());
+    let dependency = format!("{}-{dependency}", context.prefix());
     let mut fields = base(name, Yaml::str("ubuntu-26.04"), timeout);
     fields.extend([
         (
             "needs".to_owned(),
-            steps::needs(&[context.selection(), dependency]),
+            steps::needs(&[context.selection(), &dependency]),
         ),
         ("permissions".to_owned(), source_permissions()),
         ("environment".to_owned(), Yaml::str("tap-update")),
@@ -125,14 +130,17 @@ fn writer(
             "Install pinned GitHub CLI",
             &join_argv_for_run(&spec.install_gh_argv)?,
         ),
-        acquire(&spec.linux_acquire, id, "ubuntu-26.04")?,
-        steps::transfer(true, steps::Artifact::TapCandidate),
+        acquire(&spec.linux_acquire, &id, "ubuntu-26.04")?,
+        steps::transfer(spec, true, steps::Artifact::TapCandidate),
     ];
-    if matches!(context, TapInvocationContext::Preview) {
-        job_steps.insert(3, push_download());
+    if matches!(
+        context,
+        TapInvocationContext::Preview | TapInvocationContext::StableAuthority
+    ) {
+        job_steps.insert(3, push_download(spec, context));
     }
     if merge {
-        job_steps.push(steps::transfer(true, steps::Artifact::TapPr));
+        job_steps.push(steps::transfer(spec, true, steps::Artifact::TapPr));
     }
     job_steps.push(mint(tap)?);
     if merge {
@@ -140,9 +148,9 @@ fn writer(
     }
     job_steps.push(operation(spec, tap, op, merge, context)?);
     if !merge {
-        job_steps.push(steps::transfer(false, steps::Artifact::TapPr));
+        job_steps.push(steps::transfer(spec, false, steps::Artifact::TapPr));
     }
-    Ok(finish(id, fields, job_steps))
+    Ok(finish(&id, fields, job_steps))
 }
 
 fn source_permissions() -> Yaml {
@@ -153,18 +161,15 @@ fn source_permissions() -> Yaml {
     ])
 }
 
-fn push_download() -> Yaml {
-    let mut step = steps::transfer(true, steps::Artifact::Signed);
+fn push_download(spec: &ConsumerReleaseSpec, context: TapInvocationContext) -> Yaml {
+    let mut step = steps::transfer(spec, true, steps::Artifact::Signed);
     if let Yaml::Map(fields) = &mut step {
-        fields.push((
-            "if".to_owned(),
-            Yaml::str("${{ github.event_name == 'workflow_run' }}"),
-        ));
+        fields.push(("if".to_owned(), Yaml::str(context.production_if())));
     }
     step
 }
 
-fn mint(tap: &ConsumerPreviewTapSpec) -> Result<Yaml, RenderError> {
+fn mint(tap: &ConsumerReleaseTapSpec) -> Result<Yaml, RenderError> {
     let (owner, repository) = tap
         .policy
         .repository
@@ -202,7 +207,7 @@ fn mint(tap: &ConsumerPreviewTapSpec) -> Result<Yaml, RenderError> {
     ]))
 }
 
-fn mint_observer(tap: &ConsumerPreviewTapSpec) -> Result<Yaml, RenderError> {
+fn mint_observer(tap: &ConsumerReleaseTapSpec) -> Result<Yaml, RenderError> {
     let (owner, repository) = tap
         .policy
         .repository
@@ -252,6 +257,14 @@ fn prepare_bindings(context: TapInvocationContext) -> Vec<(String, Yaml)> {
                 "preview-recovery",
             ]),
             "${{ always() && !cancelled() && needs.preview-eligibility.result == 'success' && ((github.event_name == 'workflow_run' && needs.preview-publisher.result == 'success') || (github.event_name == 'workflow_dispatch' && needs.preview-recovery.result == 'success')) }}",
+        ),
+        TapInvocationContext::Stable | TapInvocationContext::StableAuthority => (
+            steps::needs(&["stable-eligibility", "stable-publisher", "stable-recovery"]),
+            "${{ always() && !cancelled() && needs.stable-eligibility.result == 'success' && (needs.stable-publisher.result == 'success' || needs.stable-recovery.result == 'success') }}",
+        ),
+        TapInvocationContext::StableReconcile => (
+            steps::needs(&["stable-tap-selection"]),
+            "${{ needs.stable-tap-selection.outputs.eligible == 'true' }}",
         ),
         TapInvocationContext::Reconcile => (
             steps::needs(&["preview-tap-selection"]),

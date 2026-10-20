@@ -1,11 +1,15 @@
 //! Strict handoff proof for an isolated tap candidate.
 
+use velnor_actions_contract::package_release::PackageReleaseChannel;
+
 /// Proof retained for an isolated tap preparation and handed to the writer.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HomebrewTapPreparationProof {
     /// Versioned schema for the unprivileged candidate handoff.
     pub schema: String,
+    /// Release channel selecting the configured formula destination.
+    pub channel: PackageReleaseChannel,
     /// Whether preparation produced a new formula or found this exact release
     /// already represented by the captured tap main.
     pub disposition: TapPreparationDisposition,
@@ -17,7 +21,7 @@ pub struct HomebrewTapPreparationProof {
     pub old_formula_sha256: String,
     /// SHA-256 of the independently validated candidate bytes.
     pub new_formula_sha256: String,
-    /// Canonical digest of the authenticated preview release receipt.
+    /// Canonical digest of the authenticated release receipt.
     pub receipt_digest: String,
     /// Canonical digest of the static package release plan.
     pub plan_digest: String,
@@ -29,7 +33,7 @@ pub struct HomebrewTapPreparationProof {
     pub source_repository: String,
     /// Exact immutable source commit from the receipt.
     pub source_sha: String,
-    /// Deterministic preview version from the receipt.
+    /// Deterministic channel version from the receipt.
     pub version: String,
     /// Exclusive path of the validated formula bytes for the isolated writer.
     pub candidate_formula: String,

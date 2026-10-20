@@ -12,10 +12,6 @@ pub(crate) struct ImmutableResponse {
     pub enabled: Option<bool>,
 }
 #[derive(Deserialize)]
-pub(crate) struct BranchResponse {
-    pub protected: Option<bool>,
-}
-#[derive(Deserialize)]
 pub(crate) struct GitRefResponse {
     #[serde(rename = "ref")]
     pub ref_name: String,

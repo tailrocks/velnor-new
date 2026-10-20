@@ -6,6 +6,9 @@ mod api;
 mod attach;
 mod binary_preview_emit;
 mod binary_release_emit;
+mod stable_release_emit;
+pub(crate) use package_release_publish::release_policy_admission;
+pub(crate) use package_release_publish::stable_tag_origin;
 mod build_task_tools;
 mod build_tasks;
 mod cache_keys;
@@ -86,6 +89,7 @@ mod release_checkouts;
 mod release_emit;
 mod release_identity;
 mod release_steps;
+mod release_task_identity;
 mod request_event;
 mod required_dispositions;
 mod retrieve_reports;
@@ -142,9 +146,5 @@ pub(crate) mod tap_test_support;
 pub(crate) mod git_fixture;
 
 pub use api::*;
-pub use qualification_candidate::qualify_tools;
-
-/// Version marker for the orchestrator shell.
-pub const ORCHESTRATOR_VERSION: u32 = 0;
 
 mod review_completion_workflow_emit;

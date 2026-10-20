@@ -33,8 +33,8 @@ use runner_spec::RunnerSpec;
 #[path = "schema2_consumer_preview.rs"]
 mod consumer_preview;
 pub use consumer_preview::{
-    ConsumerPreviewSpec, ConsumerPreviewTapSpec, render_consumer_preview,
-    render_preview_tap_reconcile,
+    ConsumerReleaseSpec, ConsumerReleaseTapSpec, ConsumerRollingPreviewSpec,
+    render_consumer_preview, render_release_tap_reconcile,
 };
 #[path = "schema2_consumer_binary_release.rs"]
 mod consumer_binary_release;
@@ -71,12 +71,12 @@ pub use product_release_pins::ProductReleasePins;
 ///
 /// Returns render errors for invalid identities, pins, or commands.
 pub fn render_consumer_binary_release(
-    spec: &consumer_binary_release::ConsumerBinaryReleaseSpec,
+    spec: &ConsumerReleaseSpec,
 ) -> Result<RenderedFile, RenderError> {
     consumer_binary_release::render_consumer_binary_release(spec)
 }
 
-pub use consumer_binary_release::ConsumerBinaryReleaseSpec;
+pub use consumer_binary_release::ConsumerStableReleaseSpec;
 
 #[cfg(test)]
 #[path = "schema2_runner_shell_tests.rs"]

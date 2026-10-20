@@ -2,7 +2,7 @@
 use super::*;
 #[test]
 fn reconcile_has_only_four_bounded_jobs_and_no_release_mutation_route() {
-    let rendered = render_preview_tap_reconcile(&with_tap()).expect("render");
+    let rendered = render_release_tap_reconcile(&with_tap()).expect("render");
     assert_eq!(rendered.path, ".github/workflows/preview-tap-reconcile.yml");
     let text = &rendered.bytes;
     assert!(
@@ -34,8 +34,8 @@ fn reconcile_has_only_four_bounded_jobs_and_no_release_mutation_route() {
         "recover-package-release-v1",
         "sign-package-release-v1",
         "publish-package-release-v1",
-        "execute-preview-producer-v1",
-        "preview-signed-",
+        "execute-release-producer-v1",
+        "release-signed-",
         "permission-actions",
         "actions: write",
         "attestations: write",
@@ -47,19 +47,23 @@ fn reconcile_has_only_four_bounded_jobs_and_no_release_mutation_route() {
 }
 #[test]
 fn reconcile_selection_and_updater_never_receive_tap_credentials() {
-    let rendered = render_preview_tap_reconcile(&with_tap()).expect("render");
+    let rendered = render_release_tap_reconcile(&with_tap()).expect("render");
     let text = &rendered.bytes;
     let selection = job(text, "preview-tap-selection", Some("preview-tap-prepare"));
-    assert!(selection.contains("select-preview-tap-continuation-v1"));
+    assert!(selection.contains("select-release-tap-continuation-v1"));
     assert!(selection.contains("EXPECTED_SOURCE_SHA: ${{ github.sha }}"));
     assert!(selection.contains("steps.history.outputs.commit_count"));
     for part in [
         selection,
         job(text, "preview-tap-prepare", Some("preview-tap-writer")),
     ] {
-        assert!(!part.contains("secrets."));
+        let reader = "${{ secrets.RELEASE_STATUS_READ_TOKEN }}";
+        assert!(part.contains(reader));
+        assert!(part.contains("VELNOR_RELEASE_STATUS_TOKEN:"));
+        assert!(!part.replace(reader, "").contains("secrets."));
         assert!(!part.contains("permission-contents: write"));
         assert!(!part.contains("VELNOR_TAP_TOKEN"));
+        assert!(!part.contains("VELNOR_TAP_MERGE_TOKEN"));
         assert!(!part.contains("VELNOR_TAP_PROTECTION_TOKEN"));
     }
     let prepare = job(text, "preview-tap-prepare", Some("preview-tap-writer"));
@@ -94,5 +98,5 @@ fn reconcile_native_operations_bind_original_tuple_from_selection_not_dispatch_i
             .contains("needs.preview-publisher.result == 'success'")
     );
     assert!(crate::yaml::render_yaml(&current[0].1).contains("inputs.original_run_id"));
-    assert!(render_preview_tap_reconcile(&fixture()).is_err());
+    assert!(render_release_tap_reconcile(&fixture()).is_err());
 }

@@ -6,12 +6,12 @@ use std::{
     path::{Path, PathBuf},
     process::ExitCode,
 };
-use velnor_actions_orchestrator::select_preview_tap_continuation_from_env;
+use velnor_actions_orchestrator::select_release_tap_continuation_from_env;
 
 pub(super) fn gate_request(path: &Path) -> Option<PathBuf> {
     let temp = PathBuf::from(env::var_os("RUNNER_TEMP")?);
     if !temp.is_absolute()
-        || path != temp.join("velnor/package-release-plan.json")
+        || path != temp.join("velnor/package-release-policy.json")
         || env::var_os("VELNOR_REQUEST_FILE").as_deref() != Some(path.as_os_str())
         || !matches!(
             env::var("GITHUB_EVENT_NAME").as_deref(),
@@ -40,7 +40,7 @@ pub(super) fn gate_request(path: &Path) -> Option<PathBuf> {
 }
 
 pub(super) fn run() -> ExitCode {
-    let selection = match select_preview_tap_continuation_from_env() {
+    let selection = match select_release_tap_continuation_from_env() {
         Ok(value) => value,
         Err(error) => return super::fail_internal(&error.to_string()),
     };

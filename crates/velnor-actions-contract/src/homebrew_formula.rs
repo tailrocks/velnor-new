@@ -16,25 +16,25 @@ use helpers::{
 };
 
 const MAX_FORMULA_BYTES: usize = 1024 * 1024;
-/// Receipt identity authenticated by the caller's signature and attestation checks.
+/// Release identity authenticated by channel-specific publication verification,
+/// signature checks, and attestations.
 ///
-/// Construct this value only after verifying the receipt bundle, signer workflow,
-/// source authority, and every artifact attestation against trusted policy.
+/// Construct this value only after verifying the published channel state, receipt
+/// bundle, signer workflow, source authority, and each artifact attestation.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VerifiedPreviewRelease {
+pub struct VerifiedPackageRelease {
     /// Canonical receipt digest verified by the caller.
     pub receipt_digest: String,
     /// Canonical, semantically valid receipt bytes parsed by Velnor.
     pub receipt: PackageReleaseReceipt,
 }
 
-impl VerifiedPreviewRelease {
+impl VerifiedPackageRelease {
     /// Validate the receipt binding against the authenticated static release plan.
     ///
     /// # Errors
     ///
-    /// Returns an identity error when the receipt is not the expected preview
-    /// release or its canonical digest, version, tag, or archive inventory differs.
+    /// Returns an identity error when channel identity, digest, or inventory differs.
     pub fn validate(
         &self,
         source_repository: &str,
@@ -42,20 +42,30 @@ impl VerifiedPreviewRelease {
     ) -> Result<(), ContractError> {
         self.receipt.validate_against_plan(plan)?;
         let source = &self.receipt.source.commit_sha;
-        let expected = PreviewIdentity::derive(
-            &self.receipt.version.base,
-            source,
-            self.receipt.version.commit_count.unwrap_or(0),
-        )?;
-        if self.receipt.channel != PackageReleaseChannel::Preview
+        let channel_identity_matches = match self.receipt.channel {
+            PackageReleaseChannel::Preview => {
+                let expected = PreviewIdentity::derive(
+                    &self.receipt.version.base,
+                    source,
+                    self.receipt.version.commit_count.unwrap_or(0),
+                )?;
+                self.receipt.version.value == expected.version
+                    && self.receipt.version.source_sha7.as_deref() == Some(&source[..7])
+                    && self.receipt.tag == expected.tag
+            }
+            PackageReleaseChannel::Stable => {
+                self.receipt.version.value == self.receipt.version.base
+                    && self.receipt.version.commit_count.is_none()
+                    && self.receipt.version.source_sha7.is_none()
+                    && self.receipt.tag == format!("v{}", self.receipt.version.base)
+            }
+        };
+        if !channel_identity_matches
             || self.receipt.repository.slug != source_repository
             || plan.repository != source_repository
-            || self.receipt.version.value != expected.version
-            || self.receipt.version.source_sha7.as_deref() != Some(&source[..7])
-            || self.receipt.tag != expected.tag
             || self.receipt.canonical_digest()? != self.receipt_digest
         {
-            return Err(invalid("untrusted_preview_receipt_identity"));
+            return Err(invalid("untrusted_release_receipt_identity"));
         }
         Ok(())
     }
@@ -72,7 +82,7 @@ impl VerifiedPreviewRelease {
     }
 }
 
-/// Captured tap-main formula and updater output, bound to one immutable release.
+/// Captured tap-main formula and updater output, bound to one verified release.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HomebrewFormulaCandidate<'a> {
     /// Source repository slug from trusted Velnor configuration.
@@ -89,8 +99,8 @@ pub struct HomebrewFormulaCandidate<'a> {
     pub base_bytes: &'a [u8],
     /// Formula bytes proposed by the unprivileged updater.
     pub proposed_bytes: &'a [u8],
-    /// Authenticated preview receipt identity.
-    pub release: &'a VerifiedPreviewRelease,
+    /// Authenticated channel receipt identity.
+    pub release: &'a VerifiedPackageRelease,
 }
 
 /// Derive canonical formula bytes and require exact equality with the proposal.
@@ -133,7 +143,7 @@ fn validate_candidate(candidate: &HomebrewFormulaCandidate<'_>) -> Result<(), Co
 fn rewrite_formula(
     base: &[u8],
     repository: &str,
-    release: &VerifiedPreviewRelease,
+    release: &VerifiedPackageRelease,
 ) -> Result<Vec<u8>, ContractError> {
     if base.is_empty() || base.len() > MAX_FORMULA_BYTES || !base.is_ascii() {
         return Err(invalid("formula_base_size_or_encoding"));
@@ -162,7 +172,7 @@ impl FormulaRewriteState {
         &mut self,
         line: &str,
         repository: &str,
-        release: &VerifiedPreviewRelease,
+        release: &VerifiedPackageRelease,
     ) -> Result<String, ContractError> {
         if let Some(source) = parse_source_sha(line) {
             self.slots.source += 1;
@@ -174,7 +184,7 @@ impl FormulaRewriteState {
         }
         if let Some(version) = parse_version(line) {
             self.slots.version += 1;
-            validate_old_preview_version(version)?;
+            validate_old_version(version, release.receipt.channel)?;
             self.prior_version = Some(version.to_owned());
             return Ok(format!("  version \"{}\"\n", release.receipt.version.value));
         }
@@ -195,7 +205,7 @@ impl FormulaRewriteState {
         line: &str,
         url: &str,
         repository: &str,
-        release: &VerifiedPreviewRelease,
+        release: &VerifiedPackageRelease,
     ) -> Result<String, ContractError> {
         self.slots.urls += 1;
         let (tag, name) = parse_release_url(url, repository)?;
@@ -203,7 +213,11 @@ impl FormulaRewriteState {
             .prior_version
             .as_deref()
             .ok_or_else(|| invalid("formula_version_must_precede_urls"))?;
-        if tag != format!("v{old_version}") || release.archive(name).is_none() {
+        let expected_old_tag = match release.receipt.channel {
+            PackageReleaseChannel::Preview => "preview".to_owned(),
+            PackageReleaseChannel::Stable => format!("v{old_version}"),
+        };
+        if tag != expected_old_tag || release.archive(name).is_none() {
             return Err(invalid("formula_base_release_binding_mismatch"));
         }
         if !self.seen_archives.iter().any(|seen| seen == name) {
@@ -221,7 +235,7 @@ impl FormulaRewriteState {
         &mut self,
         line: &str,
         hash: &str,
-        release: &VerifiedPreviewRelease,
+        release: &VerifiedPackageRelease,
     ) -> Result<String, ContractError> {
         self.slots.hashes += 1;
         if !is_sha256(hash) {
@@ -243,7 +257,7 @@ impl FormulaRewriteState {
         Ok(format!("{}sha256 \"{}\"\n", spaces(line), asset.sha256))
     }
 
-    fn validate(&self, release: &VerifiedPreviewRelease) -> Result<(), ContractError> {
+    fn validate(&self, release: &VerifiedPackageRelease) -> Result<(), ContractError> {
         let count = self.seen_archives.len();
         if self.slots
             != (FormulaSlots {
@@ -265,23 +279,33 @@ impl FormulaRewriteState {
             .prior_source
             .as_deref()
             .ok_or_else(|| invalid("formula_source_sha_missing"))?;
-        let sha7 = version
-            .rsplit_once('+')
-            .map(|(_, sha)| sha)
-            .ok_or_else(|| invalid("formula_version_not_canonical"))?;
-        if !source.starts_with(sha7) {
-            return Err(invalid("formula_source_version_mismatch"));
+        if release.receipt.channel == PackageReleaseChannel::Preview {
+            let sha7 = version
+                .rsplit_once('+')
+                .map(|(_, sha)| sha)
+                .ok_or_else(|| invalid("formula_version_not_canonical"))?;
+            if !source.starts_with(sha7) {
+                return Err(invalid("formula_source_version_mismatch"));
+            }
         }
         validate_upgrade(
             version,
             source,
             &release.receipt.version,
             release.source_sha(),
+            release.receipt.channel,
         )
     }
 }
 
-fn validate_old_preview_version(value: &str) -> Result<(), ContractError> {
+fn validate_old_version(value: &str, channel: PackageReleaseChannel) -> Result<(), ContractError> {
+    if channel == PackageReleaseChannel::Stable {
+        return if crate::config::is_exact_semver(value) {
+            Ok(())
+        } else {
+            Err(invalid("formula_version_not_canonical"))
+        };
+    }
     let (base, suffix) = value
         .split_once("-preview.")
         .ok_or_else(|| invalid("formula_version_not_preview"))?;
@@ -305,7 +329,19 @@ fn validate_upgrade(
     old_source: &str,
     next: &PackageReleaseVersion,
     source_sha: &str,
+    channel: PackageReleaseChannel,
 ) -> Result<(), ContractError> {
+    if channel == PackageReleaseChannel::Stable {
+        let old_version = semver_parts(old)?;
+        let next_version = semver_parts(&next.value)?;
+        if next_version < old_version {
+            return Err(invalid("formula_stable_downgrade"));
+        }
+        if next_version == old_version && old_source != source_sha {
+            return Err(invalid("formula_stable_identity_conflict"));
+        }
+        return Ok(());
+    }
     let (old_base, old_suffix) = old
         .split_once("-preview.")
         .ok_or_else(|| invalid("formula_version_not_preview"))?;

@@ -3,7 +3,8 @@ use super::*;
 use crate::tap_prepare::sha256;
 use serde_json::json;
 use velnor_actions_contract::{
-    PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlanProduct,
+    CargoVersionBinding, CargoVersionPolicy, PACKAGE_RELEASE_PLAN_SCHEMA_V1,
+    PACKAGE_RELEASE_POLICY_SCHEMA_V1, PackageReleasePlanProduct, PackageReleasePolicy,
     package_release::{
         PACKAGE_RELEASE_EVIDENCE_PROFILE, PACKAGE_RELEASE_SCHEMA_V2, PackageReleaseChannel,
         PackageReleasePayloadFormat,
@@ -55,7 +56,7 @@ pub(super) fn receipt() -> PackageReleaseReceipt {
             "run_id":42,"run_attempt":2,"producer_run_id":42,"producer_run_attempt":2,
             "signer_job_id":channel.signer_job_id(),"signer_workflow":channel.workflow_path()},
         "version":{"base":"1.2.3","value":"1.2.3-preview.9+aaaaaaa","commit_count":9,"source_sha7":"aaaaaaa"},
-        "tag":"v1.2.3-preview.9+aaaaaaa",
+        "tag":"preview",
         "products":[{"id":"app","package":"app","package_version":"1.2.3","bins":["app"],
             "payloads":[{"format":"tar-gz","target":"aarch64-apple-darwin","name":PAYLOAD,"members":["app"]}]}],
         "companions":[],"assets":assets,
@@ -71,5 +72,24 @@ pub(super) fn receipt() -> PackageReleaseReceipt {
 }
 
 pub(super) fn policy() -> HomebrewTapConfig {
-    serde_json::from_value(json!({"enabled":true,"source":"rust.binary_release.preview","repository":"example/homebrew-tap","formula":"Formula/app.rb","environment":"tap-update","app_id_variable":"TAP_APP_ID","app_private_key_secret":"TAP_APP_PRIVATE_KEY","merge":"squash-after-gates","protection_observer":{"app_id_variable":"OBSERVER_APP_ID","app_private_key_secret":"OBSERVER_APP_PRIVATE_KEY"},"review_completion":{"check_name":"Review completion","app_id_variable":"COMPLETION_APP_ID","expected_reviewers":[{"app_id_variable":"REVIEWER_APP_ID"}]},"updater":{"task":"update","source":{"mise_config":"mise.toml","working_directory":"."},"runner":{"label":"ubuntu-26.04","platform":"linux_x64","executor":"hosted"},"inputs":["mise.toml","Formula/app.rb"],"tools":["python"],"timeout_minutes":5}})).expect("policy")
+    serde_json::from_value(json!({"enabled":true,"destinations":{"preview":{"formula":"Formula/app-preview.rb"},"stable":{"formula":"Formula/app.rb"}},"repository":"example/homebrew-tap","environment":"tap-update","app_id_variable":"TAP_APP_ID","app_private_key_secret":"TAP_APP_PRIVATE_KEY","merge":"squash-after-gates","protection_observer":{"app_id_variable":"OBSERVER_APP_ID","app_private_key_secret":"OBSERVER_APP_PRIVATE_KEY"},"review_completion":{"check_name":"Review completion","app_id_variable":"COMPLETION_APP_ID","expected_reviewers":[{"app_id_variable":"REVIEWER_APP_ID"}]},"updater":{"task":"update","source":{"mise_config":"mise.toml","working_directory":"."},"runner":{"label":"ubuntu-26.04","platform":"linux_x64","executor":"hosted"},"inputs":["Formula/app-preview.rb","Formula/app.rb","mise.toml"],"tools":["python"],"timeout_minutes":5}})).expect("policy")
+}
+
+pub(super) fn release_policy() -> PackageReleasePolicy {
+    PackageReleasePolicy {
+        schema: PACKAGE_RELEASE_POLICY_SCHEMA_V1.to_owned(),
+        channel: PackageReleaseChannel::Preview,
+        repository: "example/app".to_owned(),
+        default_branch: "main".to_owned(),
+        version: CargoVersionPolicy {
+            version_package: "app".to_owned(),
+            bindings: vec![CargoVersionBinding {
+                package: "app".to_owned(),
+                manifest_path: "Cargo.toml".to_owned(),
+                workspace_manifest_path: "Cargo.toml".to_owned(),
+            }],
+        },
+        products: plan().products,
+        companions: Vec::new(),
+    }
 }

@@ -10,6 +10,10 @@ use velnor_actions_contract::{
     package_release::PackageReleaseReceipt,
 };
 
+#[path = "package_release_run_identity_cache.rs"]
+mod cache;
+pub(super) use cache::RunIdentityCache;
+
 #[derive(Clone, Copy)]
 pub(super) struct RunSource<'a> {
     pub repository_id: u64,
@@ -31,6 +35,9 @@ impl GitHubApi {
         path: &str,
         name: &str,
     ) -> Result<WorkflowMetadata, OrchestratorError> {
+        if let Some(workflow) = self.run_identity_cache.borrow().workflow(path, name) {
+            return Ok(workflow);
+        }
         let filename = path
             .rsplit('/')
             .next()
@@ -38,6 +45,9 @@ impl GitHubApi {
         let workflow: WorkflowMetadata =
             self.get_json(&self.route(&format!("actions/workflows/{}", encode_segment(filename))))?;
         validate_workflow_metadata(&workflow, path, name)?;
+        self.run_identity_cache
+            .borrow_mut()
+            .admit_workflow(&workflow)?;
         Ok(workflow)
     }
 
@@ -51,19 +61,43 @@ impl GitHubApi {
             receipt.channel.workflow_name(),
         )?;
         let run = self.workflow_run(receipt.workflow.run_id, receipt.workflow.run_attempt)?;
+        Self::verify_release_run_response(receipt, retained, &run, &workflow)
+    }
+
+    pub(super) fn verify_current_release_run(
+        &self,
+        receipt: &PackageReleaseReceipt,
+        retained: bool,
+    ) -> Result<(), OrchestratorError> {
+        let workflow = self.admitted_workflow(
+            receipt.channel.workflow_path(),
+            receipt.channel.workflow_name(),
+        )?;
+        let run: WorkflowRunResponse =
+            self.get_json(&self.route(&format!("actions/runs/{}", receipt.workflow.run_id)))?;
+        Self::verify_release_run_response(receipt, retained, &run, &workflow)
+    }
+
+    fn verify_release_run_response(
+        receipt: &PackageReleaseReceipt,
+        retained: bool,
+        run: &WorkflowRunResponse,
+        workflow: &WorkflowMetadata,
+    ) -> Result<(), OrchestratorError> {
         let source = RunSource {
             repository_id: receipt.repository.id,
             sha: &receipt.source.commit_sha,
             branch: &receipt.source.default_branch,
         };
         if !run_matches(
-            &run,
-            &workflow,
+            run,
+            workflow,
             receipt.workflow.run_id,
             receipt.workflow.run_attempt,
             source,
             receipt.channel.event().as_str(),
         ) || run.status.as_deref() != Some(if retained { "completed" } else { "in_progress" })
+            || (!retained && run.conclusion.is_some())
         {
             return Err(internal("package_original_run_identity_mismatch"));
         }
@@ -78,11 +112,15 @@ impl GitHubApi {
         latest: bool,
     ) -> Result<(), OrchestratorError> {
         let workflow = self.admitted_workflow(CI_WORKFLOW_PATH, WORKFLOW_DISPLAY_NAME)?;
-        let run = self.workflow_run(id, attempt)?;
-        if !ci_run_is_success(&run, id, attempt, source, &workflow) {
-            return Err(internal("package_ci_run_identity_mismatch"));
+        let key = cache::CompletedAttempt::new(id, attempt, source, &workflow);
+        if !self.run_identity_cache.borrow().contains(&key) {
+            let run = self.workflow_run(id, attempt)?;
+            if !ci_run_is_success(&run, id, attempt, source, &workflow) {
+                return Err(internal("package_ci_run_identity_mismatch"));
+            }
+            require_required_job(&self.complete_workflow_jobs(id, attempt)?, id, source.sha)?;
+            self.run_identity_cache.borrow_mut().admit_completed(key)?;
         }
-        require_required_job(&self.complete_workflow_jobs(id, attempt)?, id, source.sha)?;
         if latest {
             let observed = self.latest_source_ci(&workflow, source)?;
             if observed.id != Some(id)

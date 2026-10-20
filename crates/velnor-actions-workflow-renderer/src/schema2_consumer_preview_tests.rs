@@ -1,8 +1,8 @@
 use super::*;
 use crate::{HelperProvenance, provision_acquire_step};
 use velnor_actions_contract::{
-    PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlanProduct, config::RustBinaryPreviewCompanion,
-    package_release::PackageReleasePayloadFormat,
+    PACKAGE_RELEASE_POLICY_SCHEMA_V1, PackageReleasePlanProduct,
+    config::RustBinaryReleaseCompanion, package_release::PackageReleasePayloadFormat,
 };
 
 #[path = "schema2_consumer_preview_tap_admission_tests.rs"]
@@ -13,45 +13,27 @@ mod reconcile_tests;
 
 #[path = "schema2_consumer_preview_payload_tests.rs"]
 mod payloads;
+#[path = "schema2_consumer_release_policy_tests.rs"]
+mod policies;
 #[path = "schema2_consumer_preview_source_tests.rs"]
 mod sources;
+#[path = "schema2_consumer_binary_release_tests.rs"]
+mod stable;
 
-fn fixture() -> ConsumerPreviewSpec {
+pub(super) fn fixture() -> ConsumerReleaseSpec {
     let acquire = provision_acquire_step(&HelperProvenance::ReleaseAsset {
         url: "https://github.com/tailrocks/velnor-new/releases/download/v0.1.12/velnor-actions-0.1.12-x86_64-unknown-linux-gnu".to_owned(),
         sha256: "a".repeat(64), commit: "b".repeat(40),
     }, vec!["sh".to_owned(), "-c".to_owned(), r#"curl -fsSL "$VELNOR_ASSET_URL" -o "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.12" && printf '%s  %s\n' "$VELNOR_ASSET_SHA256" "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.12" | sha256sum -c -"#.to_owned()]).expect("pinned helper");
-    let targets = [
-        "aarch64-apple-darwin",
-        "aarch64-unknown-linux-gnu",
-        "x86_64-apple-darwin",
-        "x86_64-unknown-linux-gnu",
-    ];
-    let products = [("capsule", &targets[..2]), ("scanner", &targets[..])]
-        .into_iter()
-        .map(|(id, targets)| PackageReleasePlanProduct {
-            id: id.to_owned(),
-            package: id.to_owned(),
-            bins: vec![id.to_owned()],
-            targets: targets.iter().map(|target| (*target).to_owned()).collect(),
-            format: PackageReleasePayloadFormat::TarGz,
-        })
-        .collect();
-    ConsumerPreviewSpec {
+    ConsumerReleaseSpec {
+        checkout_lfs: false,
+        stable: None,
+        preview: Some(ConsumerRollingPreviewSpec {
+            release_id: 123,
+            bootstrap_snapshot_sha256: None,
+        }),
         generator_version: "0.1.12".to_owned(),
-        plan: PackageReleasePlan {
-            schema: PACKAGE_RELEASE_PLAN_SCHEMA_V1.to_owned(),
-            channel: PackageReleaseChannel::Preview,
-            repository: "example/scanner".to_owned(),
-            default_branch: "main".to_owned(),
-            base_version: "1.2.3".to_owned(),
-            products,
-            companions: vec![RustBinaryPreviewCompanion {
-                id: "manifest".to_owned(),
-                path: "capsule.json".to_owned(),
-                asset_name: "capsule.json".to_owned(),
-            }],
-        },
+        policy: policy_fixture(),
         producer_runner: VerificationRunner::Macos26Arm64,
         producer_timeout_minutes: 5,
         linux_acquire: acquire.clone(),
@@ -95,6 +77,48 @@ fn fixture() -> ConsumerPreviewSpec {
     }
 }
 
+fn policy_fixture() -> PackageReleasePolicy {
+    let targets = [
+        "aarch64-apple-darwin",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-apple-darwin",
+        "x86_64-unknown-linux-gnu",
+    ];
+    let products = [("capsule", &targets[..2]), ("scanner", &targets[..])]
+        .into_iter()
+        .map(|(id, targets)| PackageReleasePlanProduct {
+            id: id.to_owned(),
+            package: id.to_owned(),
+            bins: vec![id.to_owned()],
+            targets: targets.iter().map(|target| (*target).to_owned()).collect(),
+            format: PackageReleasePayloadFormat::TarGz,
+        })
+        .collect();
+    PackageReleasePolicy {
+        schema: PACKAGE_RELEASE_POLICY_SCHEMA_V1.to_owned(),
+        channel: PackageReleaseChannel::Preview,
+        repository: "example/scanner".to_owned(),
+        default_branch: "main".to_owned(),
+        version: velnor_actions_contract::CargoVersionPolicy {
+            version_package: "scanner".to_owned(),
+            bindings: ["capsule", "scanner"]
+                .into_iter()
+                .map(|package| velnor_actions_contract::CargoVersionBinding {
+                    package: package.to_owned(),
+                    manifest_path: format!("{package}/Cargo.toml"),
+                    workspace_manifest_path: "Cargo.toml".to_owned(),
+                })
+                .collect(),
+        },
+        products,
+        companions: vec![RustBinaryReleaseCompanion {
+            id: "manifest".to_owned(),
+            path: "capsule.json".to_owned(),
+            asset_name: "capsule.json".to_owned(),
+        }],
+    }
+}
+
 fn setup_fixture() -> MiseSetup {
     MiseSetup {
         uses: "jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde".to_owned(),
@@ -135,35 +159,35 @@ fn preview_has_isolated_privileges_and_exact_inventory_attestation() {
     assert!(!producer.contains("GH_TOKEN: \"${{ github.token }}\""));
     assert!(!producer.contains("id-token"));
     assert!(!producer.contains("contents: write"));
-    assert!(!producer.contains("PREVIEW_IMMUTABILITY_READ_TOKEN"));
+    assert!(!producer.contains("RELEASE_STATUS_READ_TOKEN"));
     let signer = job(yaml, "preview-signer", Some("preview-publisher"));
     assert!(!signer.contains("actions/checkout"));
     assert!(signer.contains("id-token: write"));
     assert!(signer.contains("contents: read"));
     assert!(!signer.contains("contents: write"));
-    assert_eq!(signer.matches("/velnor/preview-signed/").count(), 8);
+    assert_eq!(signer.matches("/velnor/release-signed/").count(), 8);
     assert!(!signer.contains("artifact-metadata"));
     assert!(signer.contains("create-storage-record: false"));
-    assert!(!signer.contains("PREVIEW_IMMUTABILITY_READ_TOKEN"));
+    assert!(!signer.contains("RELEASE_STATUS_READ_TOKEN"));
     let publisher = job(yaml, "preview-publisher", None);
     assert!(!publisher.contains("actions/checkout"));
     assert!(!publisher.contains("id-token"));
     assert!(publisher.contains("contents: write"));
     assert!(publisher.contains("publish-package-release-v1"));
-    assert!(publisher.contains("${{ secrets.PREVIEW_IMMUTABILITY_READ_TOKEN }}"));
+    assert!(publisher.contains("${{ secrets.RELEASE_STATUS_READ_TOKEN }}"));
     assert!(!yaml.contains("tap-update"));
 }
 
 #[test]
 fn preview_rejects_stable_plan_or_invalid_inventory_before_rendering() {
     let mut spec = fixture();
-    spec.plan.channel = PackageReleaseChannel::Stable;
+    spec.policy.channel = PackageReleaseChannel::Stable;
     assert!(render_consumer_preview(&spec).is_err());
-    spec.plan.channel = PackageReleaseChannel::Preview;
-    spec.plan.default_branch = "develop".to_owned();
+    spec.policy.channel = PackageReleaseChannel::Preview;
+    spec.policy.default_branch = "develop".to_owned();
     assert!(render_consumer_preview(&spec).is_err());
-    spec.plan.default_branch = "main".to_owned();
-    spec.plan.products[0]
+    spec.policy.default_branch = "main".to_owned();
+    spec.policy.products[0]
         .targets
         .push("../../escape".to_owned());
     assert!(render_consumer_preview(&spec).is_err());
@@ -191,28 +215,32 @@ fn manual_recovery_has_no_build_or_signing_authority() {
     assert!(recovery.contains("github.event_name == 'workflow_dispatch'"));
     assert!(recovery.contains("recover-package-release-v1"));
     assert!(!recovery.contains("actions/checkout"));
-    assert!(!recovery.contains("execute-preview-producer-v1"));
+    assert!(!recovery.contains("execute-release-producer-v1"));
     assert!(!recovery.contains("sign-package-release-v1"));
     assert!(!recovery.contains("id-token"));
     assert!(!recovery.contains("attestations: write"));
-    assert!(recovery.contains("${{ secrets.PREVIEW_IMMUTABILITY_READ_TOKEN }}"));
+    assert!(recovery.contains("${{ secrets.RELEASE_STATUS_READ_TOKEN }}"));
 }
 
-fn with_tap() -> ConsumerPreviewSpec {
+fn with_tap() -> ConsumerReleaseSpec {
     use velnor_actions_contract::config::{
         CheckExecutor, CheckPlatform, CheckRunner, ExactHeadReviewCheck, HomebrewTapConfig,
-        HomebrewTapSource, MiseTaskSource, ReviewAppIdentity, TapMergePolicy, TapUpdateEnvironment,
-        TapUpdaterBinding,
+        HomebrewTapDestination, HomebrewTapDestinations, MiseTaskSource, ReviewAppIdentity,
+        TapMergePolicy, TapUpdateEnvironment, TapUpdaterBinding,
     };
     let mut spec = fixture();
-    spec.homebrew_tap = Some(ConsumerPreviewTapSpec {
+    spec.homebrew_tap = Some(ConsumerReleaseTapSpec {
         updater_acquire: spec.linux_acquire.clone(),
         updater_setup: setup_fixture(),
         policy: HomebrewTapConfig {
             enabled: true,
-            source: HomebrewTapSource::RustBinaryReleasePreview,
             repository: "example/homebrew-tap".to_owned(),
-            formula: "Formula/scanner-preview.rb".to_owned(),
+            destinations: HomebrewTapDestinations {
+                preview: Some(HomebrewTapDestination {
+                    formula: "Formula/scanner-preview.rb".to_owned(),
+                }),
+                stable: None,
+            },
             updater: TapUpdaterBinding {
                 task: "package:update-preview".to_owned(),
                 source: MiseTaskSource {
@@ -276,7 +304,7 @@ fn tap_jobs_separate_unprivileged_preparation_and_scoped_app_authority() {
         assert!(privileged.contains("owner: example"));
         assert!(privileged.contains("repositories: homebrew-tap"));
         assert!(privileged.contains("skip-token-revoke: false"));
-        assert!(!privileged.contains("PREVIEW_IMMUTABILITY_READ_TOKEN"));
+        assert!(privileged.contains("${{ secrets.RELEASE_STATUS_READ_TOKEN }}"));
         assert!(privileged.contains("VELNOR_RELEASE_ORIGINAL_RUN_ID:"));
     }
     let writer = job(yaml, "preview-tap-writer", Some("preview-tap-merge"));
@@ -334,45 +362,8 @@ fn tap_updater_rejects_self_hosted_execution_without_native_provisioning() {
     assert!(render_consumer_preview(&spec).is_err());
 }
 
-#[test]
-fn preview_rejects_unbounded_producer_limits_before_rendering() {
-    for minutes in [0, 21, 30, 360, 361, u16::MAX] {
-        let mut spec = fixture();
-        spec.producer_timeout_minutes = minutes;
-        assert!(render_consumer_preview(&spec).is_err(), "{minutes}");
-    }
-}
-
 #[path = "schema2_consumer_preview_trigger_tests.rs"]
 mod triggers;
 
-#[test]
-fn twenty_minute_producer_jobs_leave_control_signer_publication_and_updater_at_five() {
-    let mut spec = with_tap();
-    spec.producer_timeout_minutes = 20;
-    let pairs =
-        velnor_actions_contract::preview_production::expected_preview_payload_pairs(&spec.plan)
-            .expect("full plan")
-            .len();
-    let rendered = render_consumer_preview(&spec).expect("explicit twenty-minute producer");
-    assert_eq!(
-        rendered.bytes.matches("timeout-minutes: 20").count(),
-        pairs + 1,
-        "only each payload and the assembly job use the producer budget"
-    );
-    assert!(rendered.bytes.contains("timeout-minutes: 5"));
-    for minutes in [1, 5, 6, 10, 15, 20] {
-        spec.producer_timeout_minutes = minutes;
-        assert!(render_consumer_preview(&spec).is_ok(), "{minutes}");
-    }
-    spec.homebrew_tap
-        .as_mut()
-        .expect("tap")
-        .policy
-        .updater
-        .timeout_minutes = 6;
-    assert!(
-        render_consumer_preview(&spec).is_err(),
-        "producer authorization does not widen updater"
-    );
-}
+#[path = "schema2_consumer_release_lfs_tests.rs"]
+mod lfs;

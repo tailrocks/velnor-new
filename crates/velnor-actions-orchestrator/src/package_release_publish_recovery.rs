@@ -6,7 +6,9 @@ use std::{
 };
 
 use velnor_actions_contract::{
-    PackageReleasePlan, package_release::PackageReleaseReceipt, parse_package_release_plan,
+    PackageReleasePlan, PackageReleasePolicy,
+    package_release::{PackageReleaseChannel, PackageReleaseReceipt},
+    parse_package_release_policy,
 };
 
 use crate::{
@@ -23,8 +25,8 @@ use super::{
     github::{
         GitHubApi, WorkflowArtifact, WorkflowJobList, WorkflowMetadata, WorkflowRunResponse, sha256,
     },
-    identity::{is_git_sha, read_regular},
-    publish_package_release,
+    identity::is_git_sha,
+    publish_backend,
     run_identity::{RunSource, run_matches},
 };
 
@@ -32,8 +34,11 @@ use super::{
 pub(super) mod promotion_context;
 use promotion_context::{Invocation, Purpose};
 
-const PLAN_FILE: &str = "package-release-plan.json";
-const INPUT_DIR: &str = "preview-recovery-input";
+#[path = "package_release_rolling_original.rs"]
+pub(super) mod rolling_original;
+
+const POLICY_FILE: &str = "package-release-policy.json";
+const INPUT_DIR: &str = "release-recovery-input";
 const MAX_PLAN_BYTES: u64 = 1024 * 1024;
 const MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
 
@@ -41,7 +46,7 @@ pub(super) fn recover() -> Result<super::PackagePublicationOutcome, Orchestrator
     let (signed, mode) = verified_original(Purpose::PublicationRecovery)?;
     let current_ci = current_ci_from_env()?;
     let mut backend = GitHubPackagePublisher::new(signed, current_ci, mode)?;
-    publish_package_release(&mut backend)
+    publish_backend(&mut backend)
 }
 
 /// Authenticate original bytes for promotion without release-write authority.
@@ -60,45 +65,23 @@ fn verified_original(
     purpose: Purpose,
 ) -> Result<(VerifiedAttestedSignedPackage, OriginalVerification), OrchestratorError> {
     let root = runner_root()?;
-    let plan_path = root.join(PLAN_FILE);
-    if env_path("VELNOR_REQUEST_FILE")? != plan_path {
-        return Err(internal("package_recovery_request_path_mismatch"));
-    }
-    let plan_bytes = read_regular_bounded(&plan_path, MAX_PLAN_BYTES)?;
-    let plan = parse_package_release_plan(&plan_bytes)
-        .map_err(|_| internal("package_recovery_plan_invalid"))?;
-    validate_recovery_context(&plan, purpose)?;
+    let policy = recovery_policy(&root)?;
     let original_run_id = positive_env("VELNOR_RELEASE_ORIGINAL_RUN_ID")?;
     let original_attempt = positive_env_u32("VELNOR_RELEASE_ORIGINAL_RUN_ATTEMPT")?;
     let repository_id = positive_env("GITHUB_REPOSITORY_ID")?;
-    let api = GitHubApi::new(plan.repository.clone());
+    let api = GitHubApi::new(policy.repository.clone());
     api.verify_repository(repository_id)?;
 
-    let artifact_name = format!("velnor-preview-signed-{original_run_id}-{original_attempt}");
-    let artifacts = api.workflow_artifacts(original_run_id)?;
-    let matches: Vec<_> = artifacts
-        .iter()
-        .filter(|artifact| artifact.name == artifact_name)
-        .collect();
-    if matches.len() != 1 {
-        return Err(internal("package_recovery_artifact_not_unique"));
-    }
-    let artifact = matches[0];
-    let artifact_source_sha = validate_artifact(
-        artifact,
+    let (artifact_source_sha, zip_bytes) = original_archive(
+        &api,
+        &policy,
         original_run_id,
+        original_attempt,
         repository_id,
-        &plan.default_branch,
     )?;
-    let zip_bytes = api.download_artifact_archive(artifact.id)?;
-    if zip_bytes.len() as u64 != artifact.size_in_bytes
-        || artifact
-            .digest
-            .as_deref()
-            .is_some_and(|digest| digest != format!("sha256:{}", sha256(&zip_bytes)))
-    {
-        return Err(internal("package_recovery_artifact_digest_mismatch"));
-    }
+    let plan =
+        super::release_policy_admission::resolve_policy_at_source(&policy, &artifact_source_sha)?;
+    validate_recovery_context(&plan, purpose)?;
 
     let input = root.join(INPUT_DIR);
     create_fresh_directory(&input)?;
@@ -107,7 +90,7 @@ fn verified_original(
         receipt.workflow.run_id,
         receipt.workflow.run_attempt,
         &receipt.source.commit_sha,
-        receipt.version.commit_count,
+        (plan.channel, receipt.version.commit_count),
         original_run_id,
         original_attempt,
         &artifact_source_sha,
@@ -129,6 +112,63 @@ fn verified_original(
         identity: Box::new(identity),
     };
     Ok((signed, mode))
+}
+
+fn recovery_policy(root: &Path) -> Result<PackageReleasePolicy, OrchestratorError> {
+    let plan_path = root.join(POLICY_FILE);
+    if env_path("VELNOR_REQUEST_FILE")? != plan_path {
+        return Err(internal("package_recovery_request_path_mismatch"));
+    }
+    let plan_bytes = read_regular_bounded(&plan_path, MAX_PLAN_BYTES)?;
+    let policy = parse_package_release_policy(&plan_bytes)
+        .map_err(|_| internal("package_recovery_policy_invalid"))?;
+    if policy
+        .canonical_bytes()
+        .map_err(|_| internal("package_recovery_policy_encoding"))?
+        != env_text("VELNOR_RELEASE_POLICY")?.as_bytes()
+    {
+        return Err(internal("package_recovery_policy_substitution"));
+    }
+    Ok(policy)
+}
+
+fn original_archive(
+    api: &GitHubApi,
+    policy: &PackageReleasePolicy,
+    original_run_id: u64,
+    original_attempt: u32,
+    repository_id: u64,
+) -> Result<(String, Vec<u8>), OrchestratorError> {
+    let channel = match policy.channel {
+        PackageReleaseChannel::Preview => "preview",
+        PackageReleaseChannel::Stable => "stable",
+    };
+    let artifact_name = format!("velnor-{channel}-signed-{original_run_id}-{original_attempt}");
+    let artifacts = api.workflow_artifacts(original_run_id)?;
+    let matches: Vec<_> = artifacts
+        .iter()
+        .filter(|artifact| artifact.name == artifact_name)
+        .collect();
+    if matches.len() != 1 {
+        return Err(internal("package_recovery_artifact_not_unique"));
+    }
+    let artifact = matches[0];
+    let artifact_source_sha = validate_artifact(
+        artifact,
+        original_run_id,
+        repository_id,
+        &policy.default_branch,
+    )?;
+    let zip_bytes = api.download_artifact_archive(artifact.id)?;
+    if zip_bytes.len() as u64 != artifact.size_in_bytes
+        || artifact
+            .digest
+            .as_deref()
+            .is_some_and(|digest| digest != format!("sha256:{}", sha256(&zip_bytes)))
+    {
+        return Err(internal("package_recovery_artifact_digest_mismatch"));
+    }
+    Ok((artifact_source_sha, zip_bytes))
 }
 
 fn validate_recovery_context(
@@ -164,7 +204,7 @@ fn receipt_matches_original(
     receipt_run_id: u64,
     receipt_attempt: u32,
     receipt_source_sha: &str,
-    receipt_commit_count: Option<u64>,
+    version: (PackageReleaseChannel, Option<u64>),
     original_run_id: u64,
     original_attempt: u32,
     artifact_source_sha: &str,
@@ -172,7 +212,11 @@ fn receipt_matches_original(
     receipt_run_id == original_run_id
         && receipt_attempt == original_attempt
         && receipt_source_sha == artifact_source_sha
-        && receipt_commit_count.is_some_and(|count| count > 0)
+        && match version {
+            (PackageReleaseChannel::Preview, Some(count)) => count > 0,
+            (PackageReleaseChannel::Stable, None) => true,
+            _ => false,
+        }
 }
 
 fn original_signing_identity(
@@ -267,7 +311,7 @@ fn source_run_matches(
     )
 }
 
-fn require_successful_job(
+pub(super) fn require_successful_job(
     jobs: &WorkflowJobList,
     run_id: u64,
     source_sha: &str,
@@ -346,7 +390,8 @@ fn read_regular_bounded(path: &Path, max: u64) -> Result<Vec<u8>, OrchestratorEr
     if !metadata.file_type().is_file() || metadata.len() == 0 || metadata.len() > max {
         return Err(internal("package_recovery_plan_invalid"));
     }
-    read_regular(path).map_err(|_| internal("package_recovery_plan_read"))
+    super::release_policy_admission::metadata::read(path)
+        .map_err(|_| internal("package_recovery_plan_read"))
 }
 
 #[cfg(test)]

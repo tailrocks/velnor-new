@@ -90,7 +90,11 @@ fn canonical_rewrite(fixture: &crate::tap_test_support::TapFixture, base: &[u8])
 #[test]
 fn receipt_history_requires_both_exact_body_and_deterministic_branch_markers() {
     let digest = format!("b3-{}", "a".repeat(64));
-    let prefix = branch_prefix(&digest).expect("valid receipt digest");
+    let prefix = branch_prefix(
+        &digest,
+        velnor_actions_contract::package_release::PackageReleaseChannel::Preview,
+    )
+    .expect("valid receipt digest");
     let marker = format!("Receipt digest: `{digest}`");
     let branch = format!("{prefix}{}", "b".repeat(40));
     assert!(belongs_to_receipt(&branch, &marker, &prefix, &marker).is_ok_and(|value| value));
@@ -107,9 +111,33 @@ fn receipt_history_requires_both_exact_body_and_deterministic_branch_markers() {
 #[test]
 fn receipt_branch_binds_the_full_digest_and_full_base_sha() {
     let digest = format!("b3-{}", "c".repeat(64));
-    let prefix = branch_prefix(&digest).expect("valid receipt digest");
+    let prefix = branch_prefix(
+        &digest,
+        velnor_actions_contract::package_release::PackageReleaseChannel::Preview,
+    )
+    .expect("valid receipt digest");
     let base = "d".repeat(40);
-    assert!(branch_base(&digest, &format!("{prefix}{base}")).is_ok_and(|value| value == base));
-    assert!(branch_base(&digest, &format!("{prefix}{}", "D".repeat(40))).is_err());
-    assert!(branch_prefix("b3-deadbeef").is_err());
+    assert!(
+        branch_base(
+            &digest,
+            &format!("{prefix}{base}"),
+            velnor_actions_contract::package_release::PackageReleaseChannel::Preview
+        )
+        .is_ok_and(|value| value == base)
+    );
+    assert!(
+        branch_base(
+            &digest,
+            &format!("{prefix}{}", "D".repeat(40)),
+            velnor_actions_contract::package_release::PackageReleaseChannel::Preview
+        )
+        .is_err()
+    );
+    assert!(
+        branch_prefix(
+            "b3-deadbeef",
+            velnor_actions_contract::package_release::PackageReleaseChannel::Preview
+        )
+        .is_err()
+    );
 }

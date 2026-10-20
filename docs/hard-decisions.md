@@ -318,7 +318,7 @@ credential. Specification:
 
 **Status.** Adopted per the split brief; owner may revisit. Recorded
 2026-10-20 together with the release-asset Maven bundle choice. The
-`velnor-deps` App does not exist yet; creating it is an owner blocker.
+`velnor-deps` App exists (id 5394413); Bun jobs pin release assets too.
 
 **Rationale.** Without it a private sibling dependency forces a long-lived
 broad credential (a machine-user classic PAT or per-producer deploy keys)
@@ -384,17 +384,17 @@ immutable: an existing asset fails the job. The concurrency group is one
 never-cancelled queue per pushed ref, because GitHub keeps one pending run
 per group and a per-artifact group would silently drop a queued release.
 
-**Release-asset Maven bundle choice.** Adopted per the split brief; owner may
-revisit. GitHub Packages Maven is repository-scoped and cannot serve private
-cross-repository consumers with a scoped CI credential, so Java libraries
-ship as release-asset Maven bundles consumed through the same App-token fetch
-as Cargo git dependencies. Rejected: a machine-user classic PAT in every
-consumer.
+**Release-asset Maven bundle choice.** See the preserved decision in
+[release publication decisions](release-publication-decisions.md).
 
 **Must not be reintroduced without owner approval:** publishing from a pull
 request or fork event, a privileged job that checks out or runs repository
 code, a release tag that rebuilds instead of promoting, BuildKit cache
 backends and mounts that hand a credential to the build, or overwriting or
 deleting a published release asset or moving a published tag.
+
+**Native release channel decisions (2026-10-20).** The scoped rolling preview
+exception and manual stable version/tag authority are recorded in
+[release publication decisions](release-publication-decisions.md).
 
 **Gradle stack decisions (HD-4a adapter version grammars, HD-5 one job per Gradle project) and the release-asset Maven bundle choice** are recorded in [Gradle stack contract](proposed/gradle-contract.md#decisions); adopted per the split brief, owner may revisit.

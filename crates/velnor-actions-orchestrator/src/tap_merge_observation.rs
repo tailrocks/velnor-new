@@ -238,7 +238,8 @@ fn validate_pr_state(
 
 pub(super) fn expected_pr_title(candidate: &MergeCandidate) -> String {
     format!(
-        "Update preview formula to {}",
+        "Update {} formula to {}",
+        channel_key(candidate.release.receipt.channel),
         candidate.release.receipt.version.value
     )
 }
@@ -258,7 +259,13 @@ pub(super) fn expected_pr_body_for(
     proof_digest: &str,
 ) -> String {
     format!(
-        "Promotes immutable preview release `{}` from `{}` at `{}`.\n\nReceipt digest: `{}`\nCandidate proof digest: `{}`\nTap base: `{}`.",
+        "Promotes {} release `{}` from `{}` at `{}`.\n\nReceipt digest: `{}`\nCandidate proof digest: `{}`\nTap base: `{}`.",
+        match candidate.release.receipt.channel {
+            velnor_actions_contract::package_release::PackageReleaseChannel::Preview =>
+                "rolling preview",
+            velnor_actions_contract::package_release::PackageReleaseChannel::Stable =>
+                "immutable stable",
+        },
         candidate.release.receipt.tag,
         candidate.release.receipt.repository.slug,
         candidate.release.receipt.source.commit_sha,
@@ -266,6 +273,15 @@ pub(super) fn expected_pr_body_for(
         proof_digest,
         base_sha,
     )
+}
+
+fn channel_key(
+    channel: velnor_actions_contract::package_release::PackageReleaseChannel,
+) -> &'static str {
+    match channel {
+        velnor_actions_contract::package_release::PackageReleaseChannel::Preview => "preview",
+        velnor_actions_contract::package_release::PackageReleaseChannel::Stable => "stable",
+    }
 }
 
 pub(super) fn contents(

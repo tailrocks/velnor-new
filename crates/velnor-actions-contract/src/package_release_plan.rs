@@ -2,10 +2,10 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::{RustBinaryPreviewArchive, RustBinaryPreviewProduct};
+use crate::config::{RustBinaryReleaseArchive, RustBinaryReleaseProduct};
 use crate::package_release::{PackageReleaseChannel, PackageReleasePayloadFormat};
 use crate::{
-    ContractError, canonical_json_bytes, config::RustBinaryPreviewCompanion, is_exact_semver,
+    ContractError, canonical_json_bytes, config::RustBinaryReleaseCompanion, is_exact_semver,
     is_valid_branch_name,
 };
 
@@ -29,7 +29,7 @@ pub struct PackageReleasePlan {
     /// Literal product inventory copied from source policy.
     pub products: Vec<PackageReleasePlanProduct>,
     /// Literal companion inventory copied from source policy.
-    pub companions: Vec<RustBinaryPreviewCompanion>,
+    pub companions: Vec<RustBinaryReleaseCompanion>,
 }
 
 /// Channel-neutral product matrix carried to isolated release jobs.
@@ -89,12 +89,12 @@ impl PackageReleasePlan {
         let config_products = self
             .products
             .iter()
-            .map(|product| RustBinaryPreviewProduct {
+            .map(|product| RustBinaryReleaseProduct {
                 id: product.id.clone(),
                 package: product.package.clone(),
                 bins: product.bins.clone(),
                 targets: product.targets.clone(),
-                archive: RustBinaryPreviewArchive::TarGz,
+                archive: RustBinaryReleaseArchive::TarGz,
             })
             .collect::<Vec<_>>();
         crate::config::validate_static_release_inventory(
@@ -103,17 +103,6 @@ impl PackageReleasePlan {
             &self.companions,
             None,
         )?;
-        for product in &self.products {
-            if (self.channel == PackageReleaseChannel::Preview
-                && product.format != PackageReleasePayloadFormat::TarGz)
-                || (self.channel == PackageReleaseChannel::Stable
-                    && (product.format != PackageReleasePayloadFormat::RawBinary
-                        || product.bins.len() != 1
-                        || product.targets.len() != 1))
-            {
-                return Err(invalid("product_inventory_invalid_for_channel"));
-            }
-        }
         Ok(())
     }
 

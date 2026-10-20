@@ -6,17 +6,18 @@ use crate::errors::ContractError;
 
 impl VelnorConfig {
     pub(super) fn check_binary_release_authority(&self, file: &str) -> Result<(), ContractError> {
-        let enabled =
-            self.stacks.rust.as_ref().is_some_and(|rust| {
-                rust.binary_release.enabled || rust.binary_release.preview.enabled
-            });
+        let enabled = self
+            .stacks
+            .rust
+            .as_ref()
+            .is_some_and(|rust| rust.binary_release.enabled());
         if !enabled {
             return Ok(());
         }
         if self.workflow.policy != WorkflowPolicy::ConsumerV1 {
             return Err(ContractError::config(
                 file,
-                "stacks.rust.binary_release.enabled",
+                "stacks.rust.binary_release",
                 "binary_release_requires_consumer_policy",
             ));
         }
@@ -26,6 +27,28 @@ impl VelnorConfig {
                 "workflow.name",
                 format!("native_binary_release_requires_canonical_ci_name:{WORKFLOW_DISPLAY_NAME}"),
             ));
+        }
+        if let Some(rust) = self
+            .stacks
+            .rust
+            .as_ref()
+            .filter(|rust| rust.binary_release.stable.enabled)
+        {
+            let binary = &rust.binary_release;
+            let release = &rust.release;
+            if !release.enabled
+                || release.registry != super::ReleaseRegistry::GitTag
+                || release.packages.as_slice() != [binary.version_package.as_str()]
+                || release.manifest_path != binary.manifest_path
+                || release.environment != binary.stable.environment
+                || !super::release_validation::is_stable_tag_name(&release.tag_name)
+            {
+                return Err(ContractError::config(
+                    file,
+                    "stacks.rust.binary_release.stable",
+                    "requires_matching_manual_git_tag_release",
+                ));
+            }
         }
         Ok(())
     }
@@ -46,20 +69,20 @@ impl VelnorConfig {
         Ok(())
     }
 
-    pub(super) fn check_preview_tools(&self, file: &str) -> Result<(), ContractError> {
+    pub(super) fn check_binary_release_tools(&self, file: &str) -> Result<(), ContractError> {
         let Some(preview) = self
             .stacks
             .rust
             .as_ref()
-            .map(|rust| &rust.binary_release.preview)
-            .filter(|preview| preview.enabled)
+            .map(|rust| &rust.binary_release)
+            .filter(|release| release.enabled())
         else {
             return Ok(());
         };
         if u32::from(preview.producer.build_jobs) > self.resources.compiler_process_budget {
             return Err(ContractError::config(
                 file,
-                "stacks.rust.binary_release.preview.producer.build_jobs",
+                "stacks.rust.binary_release.producer.build_jobs",
                 "exceeds_compiler_process_budget",
             ));
         }
@@ -71,7 +94,7 @@ impl VelnorConfig {
                 .ok_or_else(|| {
                     ContractError::config(
                         file,
-                        "stacks.rust.binary_release.preview.producer.tools",
+                        "stacks.rust.binary_release.producer.tools",
                         format!("unknown_qualified_tool:{id}"),
                     )
                 })?;
@@ -82,7 +105,7 @@ impl VelnorConfig {
             {
                 return Err(ContractError::config(
                     file,
-                    "stacks.rust.binary_release.preview.producer.tools",
+                    "stacks.rust.binary_release.producer.tools",
                     format!("qualified_tool_missing_producer_platform:{id}"),
                 ));
             }
@@ -91,22 +114,27 @@ impl VelnorConfig {
     }
 
     pub(super) fn check_distribution_source(&self, file: &str) -> Result<(), ContractError> {
-        if self
+        let Some(tap) = self
             .distribution
             .homebrew_tap
             .as_ref()
-            .is_some_and(|tap| tap.enabled)
-            && !self
+            .filter(|tap| tap.enabled)
+        else {
+            return Ok(());
+        };
+        for (channel, _) in tap.destinations.iter() {
+            if !self
                 .stacks
                 .rust
                 .as_ref()
-                .is_some_and(|rust| rust.binary_release.preview.enabled)
-        {
-            return Err(ContractError::config(
-                file,
-                "distribution.homebrew_tap.source",
-                "requires_enabled_binary_preview",
-            ));
+                .is_some_and(|rust| rust.binary_release.channel_enabled(channel))
+            {
+                return Err(ContractError::config(
+                    file,
+                    "distribution.homebrew_tap.destinations",
+                    "requires_enabled_binary_channel",
+                ));
+            }
         }
         Ok(())
     }

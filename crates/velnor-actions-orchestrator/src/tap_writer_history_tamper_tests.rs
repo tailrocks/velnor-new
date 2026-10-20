@@ -21,6 +21,15 @@ fn open_receipt_branch_with_mutated_body_marker_blocks_completed_retry() {
 }
 
 fn assert_open_receipt_candidate_rejected(mutate_title: bool) {
+    let (inputs, bot) = open_receipt_inputs(mutate_title);
+    assert!(find_already_promoted(&inputs, &bot).is_err());
+    assert!(
+        inputs.api.scripted_is_empty(),
+        "no historical detail or write is allowed"
+    );
+}
+
+fn open_receipt_inputs(mutate_title: bool) -> (WriterInputs, BotIdentity) {
     let fixture = tap_test_support::fixture();
     let base_sha = "b".repeat(40);
     let open_base_sha = "c".repeat(40);
@@ -29,12 +38,21 @@ fn assert_open_receipt_candidate_rejected(mutate_title: bool) {
     let valid_closed = pull_summary(
         21,
         "closed",
-        &branch_name(&fixture.release.receipt_digest, &base_sha).expect("closed branch"),
+        &branch_name(
+            &fixture.release.receipt_digest,
+            &base_sha,
+            fixture.release.receipt.channel,
+        )
+        .expect("closed branch"),
         &expected_title,
         &expected_pr_body(&fixture.release, &"e".repeat(64), &base_sha),
     );
-    let open_branch =
-        branch_name(&fixture.release.receipt_digest, &open_base_sha).expect("open branch");
+    let open_branch = branch_name(
+        &fixture.release.receipt_digest,
+        &open_base_sha,
+        fixture.release.receipt.channel,
+    )
+    .expect("open branch");
     let open_title = if mutate_title {
         "Changed title".to_owned()
     } else {
@@ -50,18 +68,14 @@ fn assert_open_receipt_candidate_rejected(mutate_title: bool) {
         "repos/{}/pulls?state=all&per_page=100&page=1",
         fixture.policy.repository
     );
-    let response = ScriptedResponse {
-        method: "GET",
-        route,
-        body: serde_json::to_vec(&vec![valid_closed, open]).expect("list JSON"),
-    };
-    let api = TapGitHubApi::scripted(fixture.policy.repository.clone(), [response]);
+    let api = scripted_history_api(&fixture, route, valid_closed, open);
     let formula_sha = sha256(&fixture.proposed_formula);
     let proof = HomebrewTapPreparationProof {
-        schema: "velnor.homebrew-candidate.v2".to_owned(),
+        schema: "velnor.homebrew-candidate.v3".to_owned(),
+        channel: fixture.release.receipt.channel,
         disposition: TapPreparationDisposition::FormulaAlreadyCurrent,
         base_sha: "f".repeat(40),
-        formula_path: fixture.policy.formula.clone(),
+        formula_path: fixture.formula_path.clone(),
         old_formula_sha256: formula_sha.clone(),
         new_formula_sha256: formula_sha,
         receipt_digest: fixture.release.receipt_digest.clone(),
@@ -78,6 +92,7 @@ fn assert_open_receipt_candidate_rejected(mutate_title: bool) {
         policy: fixture.policy,
         plan: fixture.plan,
         release: fixture.release,
+        formula_path: fixture.formula_path.clone(),
         proof,
         proposed: fixture.proposed_formula,
         api,
@@ -89,12 +104,21 @@ fn assert_open_receipt_candidate_rejected(mutate_title: bool) {
         login: "tap-writer[bot]".to_owned(),
         user_id: 77,
     };
+    (inputs, bot)
+}
 
-    assert!(find_already_promoted(&inputs, &bot).is_err());
-    assert!(
-        inputs.api.scripted_is_empty(),
-        "no historical detail or write is allowed"
-    );
+fn scripted_history_api(
+    fixture: &tap_test_support::TapFixture,
+    route: String,
+    valid_closed: serde_json::Value,
+    open: serde_json::Value,
+) -> TapGitHubApi {
+    let response = ScriptedResponse {
+        method: "GET",
+        route,
+        body: serde_json::to_vec(&vec![valid_closed, open]).expect("list JSON"),
+    };
+    TapGitHubApi::scripted(fixture.policy.repository.clone(), [response])
 }
 
 fn pull_summary(

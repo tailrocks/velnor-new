@@ -6,13 +6,12 @@ use crate::{
 use serde::Deserialize;
 use std::{collections::BTreeMap, env, path::Path};
 use velnor_actions_contract::{
-    PackageReleasePlan,
+    PackageReleasePlan, PackageReleasePolicy,
     preview_identity::PreviewIdentity,
     preview_production::{
-        PREVIEW_ASSEMBLE_JOB_ID, PREVIEW_PRODUCTION_SCHEMA_V1, PayloadArtifactRef,
-        PreviewPayloadPair, PreviewProductionContext, PreviewProductionRequest,
-        PreviewProductionStage, expected_preview_payload_pairs, preview_payload_job_id,
-        preview_plan_sha256,
+        PayloadArtifactRef, RELEASE_PRODUCTION_SCHEMA_V1, ReleasePayloadPair,
+        ReleaseProductionContext, ReleaseProductionRequest, ReleaseProductionStage,
+        expected_release_payload_pairs, release_payload_job_id, release_plan_sha256,
     },
 };
 use velnor_actions_mise::CheckDeadline;
@@ -42,21 +41,28 @@ fn positive(value: &str) -> Result<u64, OrchestratorError> {
 
 pub(super) fn derive(
     root: &Path,
+    policy: &PackageReleasePolicy,
     plan: PackageReleasePlan,
     deadline: CheckDeadline,
-) -> Result<PreviewProductionRequest, OrchestratorError> {
+) -> Result<ReleaseProductionRequest, OrchestratorError> {
     let context = derive_context(root, &plan, deadline)?;
-    from_context(plan, context)
+    from_context(policy, plan, context)
 }
 
 pub(super) fn from_context(
+    policy: &PackageReleasePolicy,
     plan: PackageReleasePlan,
-    context: PreviewProductionContext,
-) -> Result<PreviewProductionRequest, OrchestratorError> {
+    context: ReleaseProductionContext,
+) -> Result<ReleaseProductionRequest, OrchestratorError> {
     let stage = stage(&plan, &context)?;
-    let request = PreviewProductionRequest {
-        schema: PREVIEW_PRODUCTION_SCHEMA_V1.to_owned(),
-        plan_sha256: preview_plan_sha256(&plan).map_err(|_| internal("preview_plan_digest"))?,
+    let request = ReleaseProductionRequest {
+        schema: RELEASE_PRODUCTION_SCHEMA_V1.to_owned(),
+        policy_sha256: super::handoff::sha256(
+            &policy
+                .canonical_bytes()
+                .map_err(|_| internal("release_policy_digest"))?,
+        ),
+        plan_sha256: release_plan_sha256(&plan).map_err(|_| internal("preview_plan_digest"))?,
         plan,
         context,
         stage,
@@ -72,14 +78,13 @@ pub(super) fn derive_context(
     root: &Path,
     plan: &PackageReleasePlan,
     deadline: CheckDeadline,
-) -> Result<PreviewProductionContext, OrchestratorError> {
+) -> Result<ReleaseProductionContext, OrchestratorError> {
     let context = workflow_context(plan, deadline)?;
-    let count = crate::preview_producer::source_commit_count(root, &context.source_sha, deadline)?;
-    if count != context.commit_count {
-        return Err(internal("preview_eligibility_commit_count_mismatch"));
-    }
-    let identity = PreviewIdentity::derive(&plan.base_version, &context.source_sha, count)
-        .map_err(|_| internal("preview_identity_invalid"))?;
+    let identity = crate::release_task_identity::ReleaseTaskIdentity::derive(
+        plan,
+        &context.source_sha,
+        context.commit_count,
+    )?;
     crate::preview_producer::validate_preview_source(root, &identity, deadline)?;
     Ok(context)
 }
@@ -89,14 +94,17 @@ pub(super) fn derive_context(
 pub(super) fn workflow_context(
     plan: &PackageReleasePlan,
     deadline: CheckDeadline,
-) -> Result<PreviewProductionContext, OrchestratorError> {
+) -> Result<ReleaseProductionContext, OrchestratorError> {
+    if plan.channel == velnor_actions_contract::package_release::PackageReleaseChannel::Stable {
+        return crate::stable_tag_origin::admitted_production_context(plan, deadline);
+    }
     validate_workflow(plan)?;
     let source_sha = required_env("GITHUB_SHA")?;
     let count = positive_env("VELNOR_RELEASE_COMMIT_COUNT")?;
     let identity = PreviewIdentity::derive(&plan.base_version, &source_sha, count)
         .map_err(|_| internal("preview_identity_invalid"))?;
     let repository_id = positive_env("GITHUB_REPOSITORY_ID")?;
-    let context = PreviewProductionContext {
+    let context = ReleaseProductionContext {
         repository_id,
         head_repository_id: repository_id,
         source_sha,
@@ -111,7 +119,7 @@ pub(super) fn workflow_context(
         commit_count: count,
         version: identity.version,
     };
-    velnor_actions_contract::preview_production::validate_preview_production_context(
+    velnor_actions_contract::preview_production::validate_release_production_context(
         plan, &context,
     )
     .map_err(|_| internal("preview_context_invalid"))?;
@@ -120,13 +128,15 @@ pub(super) fn workflow_context(
 }
 
 pub(super) fn validate_role(
-    request: &PreviewProductionRequest,
+    request: &ReleaseProductionRequest,
     job: &str,
 ) -> Result<(), OrchestratorError> {
     let expected = match &request.stage {
-        PreviewProductionStage::Payload { pair } => preview_payload_job_id(&request.plan, pair)
+        ReleaseProductionStage::Payload { pair } => release_payload_job_id(&request.plan, pair)
             .map_err(|_| internal("preview_payload_role"))?,
-        PreviewProductionStage::Assemble { .. } => PREVIEW_ASSEMBLE_JOB_ID.to_owned(),
+        ReleaseProductionStage::Assemble { .. } => {
+            request.plan.channel.assemble_job_id().to_owned()
+        }
     };
     if job != expected {
         return Err(internal("preview_job_role_mismatch"));
@@ -136,29 +146,29 @@ pub(super) fn validate_role(
 
 fn stage(
     plan: &PackageReleasePlan,
-    context: &PreviewProductionContext,
-) -> Result<PreviewProductionStage, OrchestratorError> {
-    match required_env("VELNOR_PREVIEW_STAGE")?.as_str() {
+    context: &ReleaseProductionContext,
+) -> Result<ReleaseProductionStage, OrchestratorError> {
+    match required_env("VELNOR_RELEASE_STAGE")?.as_str() {
         "payload" => {
-            if env::var_os("VELNOR_PREVIEW_NEEDS_JSON").is_some() {
+            if env::var_os("VELNOR_RELEASE_NEEDS_JSON").is_some() {
                 return Err(internal("preview_payload_unexpected_inputs"));
             }
-            Ok(PreviewProductionStage::Payload {
-                pair: PreviewPayloadPair {
-                    product_id: required_env("VELNOR_PREVIEW_PRODUCT_ID")?,
-                    target: required_env("VELNOR_PREVIEW_TARGET")?,
+            Ok(ReleaseProductionStage::Payload {
+                pair: ReleasePayloadPair {
+                    product_id: required_env("VELNOR_RELEASE_PRODUCT_ID")?,
+                    target: required_env("VELNOR_RELEASE_TARGET")?,
                 },
             })
         }
         "assemble" => {
-            if ["VELNOR_PREVIEW_PRODUCT_ID", "VELNOR_PREVIEW_TARGET"]
+            if ["VELNOR_RELEASE_PRODUCT_ID", "VELNOR_RELEASE_TARGET"]
                 .iter()
                 .any(|key| env::var_os(key).is_some())
             {
                 return Err(internal("preview_assembly_unexpected_selector"));
             }
-            Ok(PreviewProductionStage::Assemble {
-                inputs: parse_needs(&required_env("VELNOR_PREVIEW_NEEDS_JSON")?, plan, context)?,
+            Ok(ReleaseProductionStage::Assemble {
+                inputs: parse_needs(&required_env("VELNOR_RELEASE_NEEDS_JSON")?, plan, context)?,
             })
         }
         _ => Err(internal("preview_stage_unknown")),
@@ -175,7 +185,7 @@ struct Need {
 pub(super) fn parse_needs(
     text: &str,
     plan: &PackageReleasePlan,
-    context: &PreviewProductionContext,
+    context: &ReleaseProductionContext,
 ) -> Result<Vec<PayloadArtifactRef>, OrchestratorError> {
     let value =
         velnor_actions_contract::strict_json::parse_strict_json_bytes(text.as_bytes(), 1024 * 1024)
@@ -183,9 +193,14 @@ pub(super) fn parse_needs(
     let mut needs: BTreeMap<String, Need> =
         serde_json::from_value(value).map_err(|_| internal("preview_needs_shape"))?;
     let eligibility = needs
-        .remove("preview-eligibility")
+        .remove(match plan.channel {
+            velnor_actions_contract::package_release::PackageReleaseChannel::Preview => {
+                "preview-eligibility"
+            }
+            velnor_actions_contract::package_release::PackageReleaseChannel::Stable => "stable-tag",
+        })
         .ok_or_else(|| internal("preview_needs_eligibility"))?;
-    let expected = BTreeMap::from([
+    let mut expected = BTreeMap::from([
         ("source_sha".to_owned(), context.source_sha.clone()),
         (
             "workflow_authority_sha".to_owned(),
@@ -195,14 +210,30 @@ pub(super) fn parse_needs(
         ("ci_attempt".to_owned(), context.ci_run_attempt.to_string()),
         ("commit_count".to_owned(), context.commit_count.to_string()),
     ]);
+    if plan.channel == velnor_actions_contract::package_release::PackageReleaseChannel::Stable {
+        for (key, env) in [
+            ("origin_artifact_id", "VELNOR_STABLE_TAG_ORIGIN_ARTIFACT_ID"),
+            (
+                "origin_artifact_digest",
+                "VELNOR_STABLE_TAG_ORIGIN_ARTIFACT_DIGEST",
+            ),
+            ("intent_artifact_id", "VELNOR_STABLE_TAG_INTENT_ARTIFACT_ID"),
+            (
+                "intent_artifact_digest",
+                "VELNOR_STABLE_TAG_INTENT_ARTIFACT_DIGEST",
+            ),
+        ] {
+            expected.insert(key.to_owned(), required_env(env)?);
+        }
+    }
     if eligibility.result != "success" || eligibility.outputs != expected {
         return Err(internal("preview_needs_eligibility"));
     }
-    let pairs = expected_preview_payload_pairs(plan).map_err(|_| internal("preview_needs_plan"))?;
+    let pairs = expected_release_payload_pairs(plan).map_err(|_| internal("preview_needs_plan"))?;
     let mut inputs = Vec::with_capacity(pairs.len());
     for pair in pairs {
         let job =
-            preview_payload_job_id(plan, &pair).map_err(|_| internal("preview_needs_plan"))?;
+            release_payload_job_id(plan, &pair).map_err(|_| internal("preview_needs_plan"))?;
         let need = needs
             .remove(&job)
             .ok_or_else(|| internal("preview_needs_missing_leaf"))?;
@@ -265,7 +296,7 @@ pub(super) fn workflow_identity_matches(
 
 fn validate_event(
     plan: &PackageReleasePlan,
-    context: &PreviewProductionContext,
+    context: &ReleaseProductionContext,
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     let bytes = read_staged_bytes_until(

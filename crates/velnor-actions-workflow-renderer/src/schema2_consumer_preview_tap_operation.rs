@@ -1,12 +1,12 @@
 //! Credential placement for the two closed tap invocation routes.
 use super::{
-    ConsumerPreviewSpec, ConsumerPreviewTapSpec, RenderError, TapInvocationContext, Yaml, steps,
+    ConsumerReleaseSpec, ConsumerReleaseTapSpec, RenderError, TapInvocationContext, Yaml, steps,
     variable,
 };
 use velnor_actions_contract::canonical_json_bytes;
 pub(super) fn operation(
-    spec: &ConsumerPreviewSpec,
-    tap: &ConsumerPreviewTapSpec,
+    spec: &ConsumerReleaseSpec,
+    tap: &ConsumerReleaseTapSpec,
     op: &str,
     merge: bool,
     context: TapInvocationContext,
@@ -44,7 +44,7 @@ pub(super) fn operation(
     Ok(step)
 }
 
-fn writer_values(tap: &ConsumerPreviewTapSpec, merge: bool) -> Vec<(String, Yaml)> {
+fn writer_values(tap: &ConsumerReleaseTapSpec, merge: bool) -> Vec<(String, Yaml)> {
     vec![
         (
             "VELNOR_TAP_APP_ID".to_owned(),
@@ -70,7 +70,7 @@ fn writer_values(tap: &ConsumerPreviewTapSpec, merge: bool) -> Vec<(String, Yaml
     ]
 }
 
-fn observer_values(tap: &ConsumerPreviewTapSpec) -> Vec<(String, Yaml)> {
+fn observer_values(tap: &ConsumerReleaseTapSpec) -> Vec<(String, Yaml)> {
     let mut values = vec![
         (
             "VELNOR_TAP_PROTECTION_TOKEN".to_owned(),
