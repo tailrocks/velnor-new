@@ -184,8 +184,22 @@ qualification use fixtures.
 
 ## CLI
 
-`velnor-actions deps lock` resolves every declaration to a commit and
-SHA-256 and writes `.velnor/deps.lock`. The fetch is the internal operation
-`private-fetch-v1` that the generated step runs (the design's `deps fetch`); it
-is deliberately not a public subcommand. See the
-[CLI contract](cli-contract.md).
+```text
+velnor-actions deps lock
+```
+
+`deps lock` is the only writer of `.velnor/deps.lock` and never writes config.
+It requires a `[private_sources]` table, resolves every declared maven bundle,
+release asset and git tree to the commit its tag points at (annotated tags
+peeled) and, for assets, to the SHA-256 of the published asset, and replaces the
+lock atomically with the deterministic document it prints. Resolution runs
+through the pinned `gh` with the operator's own `GH_TOKEN` or `GITHUB_TOKEN`;
+generated jobs never run it. A draft release, an asset that is missing,
+duplicated or not `uploaded`, or an unreadable tag fails the whole command and
+leaves the existing lock untouched. Exit statuses follow the
+[CLI contract](cli-contract.md) section 7.
+
+The fetch is the internal operation `private-fetch-v1` (the design's `deps
+fetch`) and the revocation is `private-revoke-v1`, both selected through
+`VELNOR_INTERNAL_OP` with no request file; they are deliberately not public
+subcommands.

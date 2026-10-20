@@ -22,6 +22,7 @@ velnor-actions plan
 velnor-actions generate [--output-dir PATH]
 ```
 
+`velnor-actions deps lock` pins private sources; see the [private sources contract](private-sources-contract.md).
 No command may accept `--root`, a stack or profile selector, a format selector,
 an ignore flag, a base/head selector, `--check`, a task ID, a report path, or
 any other option not listed above. Unknown flags and extra positional arguments
@@ -39,9 +40,7 @@ Internal workflow steps MUST NOT be exposed as subcommands. Product workflow
 operations use a bare invocation (no CLI arguments)
 with `VELNOR_INTERNAL_OP` naming a versioned typed operation
 (`write-request-v1`, `plan-v1`, `merge-v1`, `fetch-reports-v1`, or
-`write-task-report-v1`, or `resolve-qualification-v1`, plus the private-source
-operations `private-fetch-v1` and `private-revoke-v1` described in
-[`private-sources-contract.md`](private-sources-contract.md)) plus its gate inputs.
+`write-task-report-v1`, or `resolve-qualification-v1`) plus its gate inputs.
 `resolve-qualification-v1` is restricted to a Velnor `workflow_dispatch`
 plan with a runner-temp request file and a read-only GitHub token; it resolves
 and verifies predecessor receipt lineage before `plan-v1` emits typed cache
@@ -398,24 +397,3 @@ Exit statuses are intentionally small:
 
 No command may report success when a required detector, renderer, workflow
 validation, or output replacement failed.
-
-## 8. `deps lock`
-
-```text
-velnor-actions deps lock
-```
-
-`deps lock` is the only writer of `.velnor/deps.lock` and never writes config.
-It requires a `[private_sources]` table, resolves every declared maven bundle,
-release asset and git tree to the commit its tag points at (annotated tags
-peeled) and, for assets, to the SHA-256 of the published asset, and replaces the
-lock atomically with the deterministic document it prints. Resolution runs
-through the pinned `gh` with the operator's own `GH_TOKEN` or `GITHUB_TOKEN`;
-generated jobs never run it. A draft release, an asset that is missing,
-duplicated or not `uploaded`, or an unreadable tag fails the whole command and
-leaves the existing lock untouched. Exit statuses follow section 7. The lock
-format and freshness rules are in
-[`private-sources-contract.md`](private-sources-contract.md).
-
-The fetch itself is not a public subcommand: the generated `Fetch private
-sources` step runs the internal operation `private-fetch-v1` (section 1).

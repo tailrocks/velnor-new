@@ -2,11 +2,11 @@
 
 pub use super::check_runtime::{EXECUTE_CHECK_OP, execute_check};
 pub use super::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
+pub use super::config::deps_lock::{lock_private_sources, read_deps_lock, render_lock};
 pub use super::critical_path::{
     CriticalPath, critical_path, critical_path_for_groups, critical_path_line,
     critical_path_structural, render_critical_path,
 };
-pub use super::deps_lock::{lock_private_sources, read_deps_lock, render_lock};
 pub use super::derive_groups::FeatureFallback;
 pub use super::discover::{Discovery, PlannedWorkspace};
 pub use super::error::OrchestratorError;

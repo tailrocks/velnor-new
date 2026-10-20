@@ -19,7 +19,6 @@ mod crate_job_ids;
 mod crate_jobs;
 mod critical_path;
 pub mod decisions;
-mod deps_lock;
 mod derive_groups;
 mod discover;
 mod discover_index;
