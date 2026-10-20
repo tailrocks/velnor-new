@@ -113,13 +113,13 @@ where
 fn multiple_connections_share_one_budget_and_keep_separate_credentials() -> Result<(), HostError> {
     let next = config(true)?;
     let mut effects = FakeEffects::default();
-    assert!(
+    assert_eq!(
         run(apply_config_transition(
             &config(false)?,
             &next,
             &mut effects
-        ))?
-        .is_empty()
+        ))?,
+        []
     );
 
     assert_eq!(
@@ -147,7 +147,7 @@ fn removal_publishes_absence_before_retiring_only_the_removed_binding() -> Resul
     let mut effects = FakeEffects::default();
     let mut pending = run(apply_config_transition(&previous, &next, &mut effects))?;
     run(retire_pending(&mut pending, &mut effects))?;
-    assert!(pending.is_empty());
+    assert_eq!(pending, []);
 
     assert_eq!(
         effects.events,
@@ -246,7 +246,7 @@ fn stable_connection_id_cannot_change_binding_or_engine() -> Result<(), HostErro
         run(apply_config_transition(&previous, &changed, &mut effects)),
         Err(HostError::Config)
     );
-    assert!(effects.events.is_empty());
+    assert_eq!(effects.events, []);
 
     let mut changed_engine = previous.clone();
     changed_engine.docker.endpoint = "unix:///tmp/other-docker.sock".to_owned();
@@ -258,7 +258,7 @@ fn stable_connection_id_cannot_change_binding_or_engine() -> Result<(), HostErro
         )),
         Err(HostError::Config)
     );
-    assert!(effects.events.is_empty());
+    assert_eq!(effects.events, []);
     Ok(())
 }
 

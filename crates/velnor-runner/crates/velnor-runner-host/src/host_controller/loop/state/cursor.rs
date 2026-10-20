@@ -27,6 +27,12 @@ impl PreparedConnection {
     }
 }
 
+pub(super) fn record_assigned_total(current: &mut Option<i64>, sample: Option<i64>) {
+    if sample.is_some() {
+        *current = sample;
+    }
+}
+
 fn expire_cursor(cursor: i64, retry_at: Option<Instant>, now: Instant) -> (i64, Option<Instant>) {
     if retry_at.is_some_and(|retry_at| now >= retry_at) {
         (0, None)
@@ -140,11 +146,5 @@ mod cursor_tests {
             total_busy_runners: 0,
             total_idle_runners: 0,
         }
-    }
-}
-
-pub(super) fn record_assigned_total(current: &mut Option<i64>, sample: Option<i64>) {
-    if sample.is_some() {
-        *current = sample;
     }
 }
