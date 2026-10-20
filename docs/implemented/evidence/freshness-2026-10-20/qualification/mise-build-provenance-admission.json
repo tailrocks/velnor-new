@@ -1,0 +1,237 @@
+{
+  "all_five_build_provenance_verified": true,
+  "source": "597c1897dfed28d1c0dea9f98fba581059e42cd3",
+  "identity": "https://github.com/jdx/mise/.github/workflows/release.yml@refs/tags/v2026.10.15",
+  "proofs": [
+    {
+      "name": "mise-v2026.10.15-linux-x64",
+      "sha256": "e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9",
+      "api": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "repos/jdx/mise/attestations/sha256:e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9"
+        ],
+        "exit": 0,
+        "seconds": 0.806,
+        "stdout_sha256": "1e892d3d4417ec3372f29927d4024cc148661a7bf90c4a68dd1928474b3c7d56",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "verification": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "attestation",
+          "verify",
+          "/Users/donbeave/.cache/velnor/mise15-qualification-preparation-uufzbppm/mise-v2026.10.15-linux-x64",
+          "--repo",
+          "jdx/mise",
+          "--bundle",
+          "/Users/donbeave/.cache/velnor/mise15-qualification-preparation-uufzbppm/v2-mise-v2026.10.15-linux-x64.attestations.jsonl",
+          "--cert-identity",
+          "https://github.com/jdx/mise/.github/workflows/release.yml@refs/tags/v2026.10.15",
+          "--cert-oidc-issuer",
+          "https://token.actions.githubusercontent.com",
+          "--signer-digest",
+          "597c1897dfed28d1c0dea9f98fba581059e42cd3",
+          "--source-digest",
+          "597c1897dfed28d1c0dea9f98fba581059e42cd3",
+          "--source-ref",
+          "refs/tags/v2026.10.15",
+          "--deny-self-hosted-runners",
+          "--predicate-type",
+          "https://slsa.dev/provenance/v1",
+          "--format",
+          "json"
+        ],
+        "exit": 0,
+        "seconds": 4.44,
+        "stdout_sha256": "8434aa9e50ebd32af9191fba406605a618630fbbbdb01757ee7480bec765b59b",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "mise-v2026.10.15-macos-x64",
+      "sha256": "ea45cc6e787d412deb8e069eec57875c71863e33a36acf69dd59791c27c9c073",
+      "api": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "repos/jdx/mise/attestations/sha256:ea45cc6e787d412deb8e069eec57875c71863e33a36acf69dd59791c27c9c073"
+        ],
+        "exit": 0,
+        "seconds": 0.803,
+        "stdout_sha256": "288abac6a0677234271bcb6854d92819f9e43f6e8b3d834f7fafcf5622c4703d",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "verification": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "attestation",
+          "verify",
+          "/Users/donbeave/.cache/velnor/mise15-qualification-preparation-uufzbppm/mise-v2026.10.15-macos-x64",
+          "--repo",
+          "jdx/mise",
+          "--bundle",
+          "/Users/donbeave/.cache/velnor/mise15-qualification-preparation-uufzbppm/v2-mise-v2026.10.15-macos-x64.attestations.jsonl",
+          "--cert-identity",
+          "https://github.com/jdx/mise/.github/workflows/release.yml@refs/tags/v2026.10.15",
+          "--cert-oidc-issuer",
+          "https://token.actions.githubusercontent.com",
+          "--signer-digest",
+          "597c1897dfed28d1c0dea9f98fba581059e42cd3",
+          "--source-digest",
+          "597c1897dfed28d1c0dea9f98fba581059e42cd3",
+          "--source-ref",
+          "refs/tags/v2026.10.15",
+          "--deny-self-hosted-runners",
+          "--predicate-type",
+          "https://slsa.dev/provenance/v1",
+          "--format",
+          "json"
+        ],
+        "exit": 0,
+        "seconds": 4.47,
+        "stdout_sha256": "8434aa9e50ebd32af9191fba406605a618630fbbbdb01757ee7480bec765b59b",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "mise-v2026.10.15-macos-arm64",
+      "sha256": "826c4833fa7437a63f6027b86bc10c8b61b1163dc793c03ecde92f68ad167890",
+      "api": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "repos/jdx/mise/attestations/sha256:826c4833fa7437a63f6027b86bc10c8b61b1163dc793c03ecde92f68ad167890"
+        ],
+        "exit": 0,
+        "seconds": 0.647,
+        "stdout_sha256": "b4748532bb98a5c49cc33f2403706e7d4cb877837233b6f83c56c6cf98735f20",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "verification": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "attestation",
+          "verify",
+          "/Users/donbeave/.cache/velnor/mise15-qualification-preparation-uufzbppm/mise-v2026.10.15-macos-arm64",
+          "--repo",
+          "jdx/mise",
+          "--bundle",
+          "/Users/donbeave/.cache/velnor/mise15-qualification-preparation-uufzbppm/v2-mise-v2026.10.15-macos-arm64.attestations.jsonl",
+          "--cert-identity",
+          "https://github.com/jdx/mise/.github/workflows/release.yml@refs/tags/v2026.10.15",
+          "--cert-oidc-issuer",
+          "https://token.actions.githubusercontent.com",
+          "--signer-digest",
+          "597c1897dfed28d1c0dea9f98fba581059e42cd3",
+          "--source-digest",
+          "597c1897dfed28d1c0dea9f98fba581059e42cd3",
+          "--source-ref",
+          "refs/tags/v2026.10.15",
+          "--deny-self-hosted-runners",
+          "--predicate-type",
+          "https://slsa.dev/provenance/v1",
+          "--format",
+          "json"
+        ],
+        "exit": 0,
+        "seconds": 4.296,
+        "stdout_sha256": "8434aa9e50ebd32af9191fba406605a618630fbbbdb01757ee7480bec765b59b",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "mise-v2026.10.15-linux-arm64.tar.gz",
+      "sha256": "ae36e72ea72d337ab7b367edb0f7016fa1502aa0e36ccb705acad7902c60677b",
+      "api": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "repos/jdx/mise/attestations/sha256:ae36e72ea72d337ab7b367edb0f7016fa1502aa0e36ccb705acad7902c60677b"
+        ],
+        "exit": 0,
+        "seconds": 1.194,
+        "stdout_sha256": "86dc8a03f76cd6d8b0d1050d4e91f252f925361d6d079e1b35489a0784fa5f31",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "verification": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "attestation",
+          "verify",
+          "/Users/donbeave/.cache/velnor/mise15-qualification-preparation-uufzbppm/mise-v2026.10.15-linux-arm64.tar.gz",
+          "--repo",
+          "jdx/mise",
+          "--bundle",
+          "/Users/donbeave/.cache/velnor/mise15-qualification-preparation-uufzbppm/v2-mise-v2026.10.15-linux-arm64.tar.gz.attestations.jsonl",
+          "--cert-identity",
+          "https://github.com/jdx/mise/.github/workflows/release.yml@refs/tags/v2026.10.15",
+          "--cert-oidc-issuer",
+          "https://token.actions.githubusercontent.com",
+          "--signer-digest",
+          "597c1897dfed28d1c0dea9f98fba581059e42cd3",
+          "--source-digest",
+          "597c1897dfed28d1c0dea9f98fba581059e42cd3",
+          "--source-ref",
+          "refs/tags/v2026.10.15",
+          "--deny-self-hosted-runners",
+          "--predicate-type",
+          "https://slsa.dev/provenance/v1",
+          "--format",
+          "json"
+        ],
+        "exit": 0,
+        "seconds": 4.209,
+        "stdout_sha256": "8434aa9e50ebd32af9191fba406605a618630fbbbdb01757ee7480bec765b59b",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "mise-v2026.10.15-macos-arm64.tar.gz",
+      "sha256": "8a44a56f72323c777298a1d5abd88ffd21d0fca19fab1ccccd389a912374f69c",
+      "api": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "api",
+          "repos/jdx/mise/attestations/sha256:8a44a56f72323c777298a1d5abd88ffd21d0fca19fab1ccccd389a912374f69c"
+        ],
+        "exit": 0,
+        "seconds": 0.813,
+        "stdout_sha256": "0e164fb4e927401fc7396b788a18091667f03da93fd319b931d6a8894e04ea01",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "verification": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+          "attestation",
+          "verify",
+          "/Users/donbeave/.cache/velnor/mise15-qualification-preparation-uufzbppm/mise-v2026.10.15-macos-arm64.tar.gz",
+          "--repo",
+          "jdx/mise",
+          "--bundle",
+          "/Users/donbeave/.cache/velnor/mise15-qualification-preparation-uufzbppm/v2-mise-v2026.10.15-macos-arm64.tar.gz.attestations.jsonl",
+          "--cert-identity",
+          "https://github.com/jdx/mise/.github/workflows/release.yml@refs/tags/v2026.10.15",
+          "--cert-oidc-issuer",
+          "https://token.actions.githubusercontent.com",
+          "--signer-digest",
+          "597c1897dfed28d1c0dea9f98fba581059e42cd3",
+          "--source-digest",
+          "597c1897dfed28d1c0dea9f98fba581059e42cd3",
+          "--source-ref",
+          "refs/tags/v2026.10.15",
+          "--deny-self-hosted-runners",
+          "--predicate-type",
+          "https://slsa.dev/provenance/v1",
+          "--format",
+          "json"
+        ],
+        "exit": 0,
+        "seconds": 4.332,
+        "stdout_sha256": "8434aa9e50ebd32af9191fba406605a618630fbbbdb01757ee7480bec765b59b",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ]
+}

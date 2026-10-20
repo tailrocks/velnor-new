@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+    "api",
+    "--method",
+    "GET",
+    "https://api.github.com/repos/rhysd/actionlint/releases/latest"
+  ],
+  "body_file": "ac646f4918eb9eee.body",
+  "checked_at": "2026-10-20T07:03:00.021727+00:00",
+  "exit_code": 0,
+  "rust_prefix_only": false,
+  "sha256": "a0eed60b0c220baa58a8abd799ff37893bff188f5c7463244b376f2b9ffa517d",
+  "size": 23687,
+  "url": "https://api.github.com/repos/rhysd/actionlint/releases/latest"
+}

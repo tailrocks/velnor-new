@@ -178,7 +178,7 @@ fn create_candidate_manifest(root: &Path, case: Failure) -> Result<(), Box<dyn E
             release_version(),
             REPOSITORY,
             "1.99.1",
-            "1.24.1",
+            "1.25.0",
         ])
         .current_dir(root)
         .env("PATH", with_required_tool_path(&[])?)

@@ -1,0 +1,219 @@
+{
+  "source_commit": "2ade2bc6b661f1b40a55cfa7083fa9a4efc9348d",
+  "source_tree": "54170d2d1f8fa99bbd7f1bbce328cd69562e6305",
+  "signer_commit": "9c70fabd7db412e497e5ddbb61606456cee21890",
+  "signing_run": 39257355707,
+  "signing_attempt": 1,
+  "proofs": [
+    {
+      "asset": {
+        "archive_sha256": "2b4efb2ef340d38ed2d840d32b5535e45be7541224378ff353c7a83f85744195",
+        "binary_member": "mbx",
+        "binary_sha256": "48424ca46f5f3b984f0d8b0c2dcafaaaaf8dbde50464b6ecfcef1b324bfc251d",
+        "binary_size": 15497472,
+        "members": [
+          "mbx",
+          "LICENSE",
+          "NOTICE"
+        ],
+        "name": "mbx-x86_64-unknown-linux-gnu.tar.gz"
+      },
+      "cosign": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/cosign/3.1.3/cosign",
+          "verify-blob-attestation",
+          "--timeout",
+          "40s",
+          "--bundle",
+          "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/packslip.sigstore.json",
+          "--certificate-identity",
+          "https://github.com/jdx/mr-boxington/.github/workflows/release.yml@refs/heads/main",
+          "--certificate-oidc-issuer",
+          "https://token.actions.githubusercontent.com",
+          "--certificate-github-workflow-repository",
+          "jdx/mr-boxington",
+          "--certificate-github-workflow-ref",
+          "refs/heads/main",
+          "--certificate-github-workflow-sha",
+          "9c70fabd7db412e497e5ddbb61606456cee21890",
+          "--certificate-github-workflow-trigger",
+          "workflow_dispatch",
+          "--type",
+          "https://packslip.dev/release/v1",
+          "--digest",
+          "2b4efb2ef340d38ed2d840d32b5535e45be7541224378ff353c7a83f85744195",
+          "--digestAlg",
+          "sha256"
+        ],
+        "exit_code": 0,
+        "elapsed": 0.9816635839815717,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "80a53f76c7ed6969dade3b6ee47cdb753162db7c00be625448999d08bae77ed8"
+      },
+      "github_provenance_workflow_source": [
+        {
+          "argv": [
+            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "attestation",
+            "verify",
+            "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/mbx-x86_64-unknown-linux-gnu.tar.gz",
+            "--bundle",
+            "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/mbx-x86_64-unknown-linux-gnu.tar.gz.provenance-1.json",
+            "--repo",
+            "jdx/mr-boxington",
+            "--signer-workflow",
+            "jdx/mr-boxington/.github/workflows/release.yml",
+            "--source-digest",
+            "9c70fabd7db412e497e5ddbb61606456cee21890",
+            "--deny-self-hosted-runners=false"
+          ],
+          "exit_code": 0,
+          "elapsed": 5.555121957993833,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "asset": {
+        "archive_sha256": "26adcf79262395e7fb355203afa7deda0f18fd790585f6e49e51994b9d32b55c",
+        "binary_member": "mbx",
+        "binary_sha256": "aef1baabde6a1eb6299fcf03c33e61a15538426aa7e82c9204e5ff7419ec1c3b",
+        "binary_size": 12790000,
+        "members": [
+          "mbx",
+          "LICENSE",
+          "NOTICE"
+        ],
+        "name": "mbx-aarch64-unknown-linux-gnu.tar.gz"
+      },
+      "cosign": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/cosign/3.1.3/cosign",
+          "verify-blob-attestation",
+          "--timeout",
+          "40s",
+          "--bundle",
+          "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/packslip.sigstore.json",
+          "--certificate-identity",
+          "https://github.com/jdx/mr-boxington/.github/workflows/release.yml@refs/heads/main",
+          "--certificate-oidc-issuer",
+          "https://token.actions.githubusercontent.com",
+          "--certificate-github-workflow-repository",
+          "jdx/mr-boxington",
+          "--certificate-github-workflow-ref",
+          "refs/heads/main",
+          "--certificate-github-workflow-sha",
+          "9c70fabd7db412e497e5ddbb61606456cee21890",
+          "--certificate-github-workflow-trigger",
+          "workflow_dispatch",
+          "--type",
+          "https://packslip.dev/release/v1",
+          "--digest",
+          "26adcf79262395e7fb355203afa7deda0f18fd790585f6e49e51994b9d32b55c",
+          "--digestAlg",
+          "sha256"
+        ],
+        "exit_code": 0,
+        "elapsed": 0.9697703330020886,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "80a53f76c7ed6969dade3b6ee47cdb753162db7c00be625448999d08bae77ed8"
+      },
+      "github_provenance_workflow_source": [
+        {
+          "argv": [
+            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "attestation",
+            "verify",
+            "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/mbx-aarch64-unknown-linux-gnu.tar.gz",
+            "--bundle",
+            "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/mbx-aarch64-unknown-linux-gnu.tar.gz.provenance-1.json",
+            "--repo",
+            "jdx/mr-boxington",
+            "--signer-workflow",
+            "jdx/mr-boxington/.github/workflows/release.yml",
+            "--source-digest",
+            "9c70fabd7db412e497e5ddbb61606456cee21890",
+            "--deny-self-hosted-runners=false"
+          ],
+          "exit_code": 0,
+          "elapsed": 4.2518556250142865,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "asset": {
+        "archive_sha256": "47630813d15a001cfceceeeb1f35008421fb22b8ba132106067d217e000b1b68",
+        "binary_member": "mbx",
+        "binary_sha256": "2d957002c399d77670c7222fc4475c021adacfa0b63eb709af9437b63de08e2d",
+        "binary_size": 11725456,
+        "members": [
+          "mbx",
+          "LICENSE",
+          "NOTICE"
+        ],
+        "name": "mbx-aarch64-apple-darwin.tar.gz"
+      },
+      "cosign": {
+        "argv": [
+          "/Users/donbeave/.local/share/mise/installs/cosign/3.1.3/cosign",
+          "verify-blob-attestation",
+          "--timeout",
+          "40s",
+          "--bundle",
+          "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/packslip.sigstore.json",
+          "--certificate-identity",
+          "https://github.com/jdx/mr-boxington/.github/workflows/release.yml@refs/heads/main",
+          "--certificate-oidc-issuer",
+          "https://token.actions.githubusercontent.com",
+          "--certificate-github-workflow-repository",
+          "jdx/mr-boxington",
+          "--certificate-github-workflow-ref",
+          "refs/heads/main",
+          "--certificate-github-workflow-sha",
+          "9c70fabd7db412e497e5ddbb61606456cee21890",
+          "--certificate-github-workflow-trigger",
+          "workflow_dispatch",
+          "--type",
+          "https://packslip.dev/release/v1",
+          "--digest",
+          "47630813d15a001cfceceeeb1f35008421fb22b8ba132106067d217e000b1b68",
+          "--digestAlg",
+          "sha256"
+        ],
+        "exit_code": 0,
+        "elapsed": 1.5024547500070184,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "80a53f76c7ed6969dade3b6ee47cdb753162db7c00be625448999d08bae77ed8"
+      },
+      "github_provenance_workflow_source": [
+        {
+          "argv": [
+            "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+            "attestation",
+            "verify",
+            "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/mbx-aarch64-apple-darwin.tar.gz",
+            "--bundle",
+            "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/mbx-aarch64-apple-darwin.tar.gz.provenance-1.json",
+            "--repo",
+            "jdx/mr-boxington",
+            "--signer-workflow",
+            "jdx/mr-boxington/.github/workflows/release.yml",
+            "--source-digest",
+            "9c70fabd7db412e497e5ddbb61606456cee21890",
+            "--deny-self-hosted-runners=false"
+          ],
+          "exit_code": 0,
+          "elapsed": 5.140259666019119,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    }
+  ],
+  "candidate_executed": false,
+  "all_verified": true,
+  "slsa_source_is_workflow_not_product": true
+}

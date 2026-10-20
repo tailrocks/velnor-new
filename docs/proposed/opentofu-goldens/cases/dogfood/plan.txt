@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.28
+Velnor Actions plan 0.1.29
 Repository: <repo>
 
 Detected stacks
@@ -170,7 +170,7 @@ Workflow to generate
     - actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
     - actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
     - asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87
-    - jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
+    - jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde
     - jdx/mr-boxington-action@47ce49b32025d93a7a2f4570815afaa2b7092240
   Ineligible: stack/rust/crates/velnor-actions-cli/doctest/default has no test targets; no test command emitted
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
