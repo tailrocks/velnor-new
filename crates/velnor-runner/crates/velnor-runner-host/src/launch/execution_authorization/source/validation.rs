@@ -173,8 +173,6 @@ impl PersistedExecutionSource {
             .as_ref()
             .map(PersistedPullRequestSource::policy_rule);
         let lookup = JobAuthorityLookup {
-            connection_id: policy.connection_id(),
-            generation: policy.generation(),
             root_path: &self.root_workflow_path,
             workflow_path: &self.leaf_workflow_path,
             job_key: self.request.job_key(),

@@ -41,6 +41,20 @@ fn actual_started_request_can_equal_or_differ_from_the_jit_witness() {
 }
 
 #[test]
+fn inactive_journal_policy_snapshot_denies_matching_source() {
+    let source = execution_source(1_101, 1, "f");
+    let started = started_execution(101, 1_101, 1, Some("f"));
+    let proof = proof_row();
+    let mut snapshot = policy_snapshot();
+    snapshot.is_active = false;
+
+    let (role, deny_code) = determine_authority(&source, &proof, &started, &snapshot)
+        .expect("An inactive policy must reject the matching source.");
+    assert_eq!(role, None);
+    assert_eq!(deny_code, Some("policy_changed"));
+}
+
+#[test]
 fn mismatched_workflow_source_is_denied_before_policy_allowance() {
     let source = execution_source(1_101, 1, "e");
     let started = started_execution(101, 1_101, 1, Some("f"));

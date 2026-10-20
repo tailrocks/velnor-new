@@ -17,8 +17,6 @@ pub(crate) use validate::validate_policies;
 
 /// Authenticated facts required to find one policy row.
 pub(crate) struct JobAuthorityLookup<'a> {
-    pub(crate) connection_id: &'a ConnectionId,
-    pub(crate) generation: u64,
     pub(crate) root_path: &'a str,
     pub(crate) workflow_path: &'a str,
     pub(crate) job_key: &'a str,
@@ -269,24 +267,8 @@ impl<'a> ApprovedWorkflowCall<'a> {
 }
 
 impl ApprovedJobAuthorityEntry {
-    pub(crate) fn root_path(&self) -> &str {
-        &self.root_path
-    }
-
-    pub(crate) fn workflow_path(&self) -> &str {
-        &self.workflow_path
-    }
-
-    pub(crate) fn job_key(&self) -> &str {
-        &self.job_key
-    }
-
     pub(crate) const fn role(&self) -> JobAuthorityRole {
         self.role
-    }
-
-    pub(crate) fn canonical_json(&self) -> Result<Vec<u8>, HostError> {
-        serde_json::to_vec(self).map_err(|_| HostError::Config)
     }
 
     fn canonicalize(&mut self) {

@@ -79,14 +79,8 @@ fn validate(policy: &ApprovedJobAuthorityPolicy) -> Result<(), HostError> {
     super::validate::validate_policy(policy, &connection()?)
 }
 
-fn lookup<'a>(
-    connection_id: &'a ConnectionId,
-    generation: u64,
-    event_ref: &'a str,
-) -> JobAuthorityLookup<'a> {
+fn lookup(event_ref: &str) -> JobAuthorityLookup<'_> {
     JobAuthorityLookup {
-        connection_id,
-        generation,
         root_path: ".github/workflows/ci.yml",
         workflow_path: ".github/workflows/ci.yml",
         job_key: "required",
@@ -105,17 +99,12 @@ fn valid_policy_matches_exact_job_context_and_round_trips() -> Result<(), HostEr
     let reopened: ApprovedJobAuthorityPolicy =
         toml::from_str(&toml).map_err(|_| HostError::Config)?;
     assert_eq!(reopened, policy);
-    let connection_id = policy.connection_id();
     assert!(
         policy
-            .entry(&lookup(connection_id, 1, "refs/heads/sea/integration"))
+            .entry(&lookup("refs/heads/sea/integration"))
             .is_some()
     );
-    assert!(
-        policy
-            .entry(&lookup(connection_id, 1, "refs/heads/main"))
-            .is_none()
-    );
+    assert!(policy.entry(&lookup("refs/heads/main")).is_none());
     Ok(())
 }
 
@@ -187,29 +176,33 @@ fn source_inventory_exposes_the_validated_call_graph_without_mutable_policy_fiel
 }
 
 #[test]
-fn host_config_missing_and_stale_policy_lookup_deny() -> Result<(), HostError> {
+fn host_config_selects_validated_policy_by_connection_before_job_matching() -> Result<(), HostError>
+{
     let connection_text = basic_connection("test", 7, "example/repo", "test", "test-scale-set");
     let missing =
         crate::HostConfig::parse(&host_config(std::slice::from_ref(&connection_text), 1))?;
     let id = ConnectionId::parse("test")?;
-    assert!(
-        missing
-            .approved_job_authority(&lookup(&id, 1, "refs/heads/sea/integration"))
-            .is_none()
-    );
+    assert!(missing.validated_job_authority_policy(&id)?.is_none());
 
     let connection = missing.connections()[0].clone();
     let mut configured = missing.clone();
     configured.job_authority_policies.push(policy(&connection));
     let configured = crate::HostConfig::parse(&configured.to_toml()?)?;
+    let selected = configured
+        .validated_job_authority_policy(&id)?
+        .ok_or(HostError::Config)?;
+    assert_eq!(selected.generation(), 1);
     assert!(
-        configured
-            .approved_job_authority(&lookup(&id, 0, "refs/heads/sea/integration"))
-            .is_none()
+        selected
+            .entry(&lookup("refs/heads/sea/integration"))
+            .is_some()
     );
+    assert!(selected.entry(&lookup("refs/heads/main")).is_none());
+
+    let other_id = ConnectionId::parse("other")?;
     assert!(
         configured
-            .approved_job_authority(&lookup(&id, 2, "refs/heads/sea/integration"))
+            .validated_job_authority_policy(&other_id)?
             .is_none()
     );
     Ok(())

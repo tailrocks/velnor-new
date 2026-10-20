@@ -1,11 +1,11 @@
 #[cfg(test)]
+use super::ApprovedJobAuthorityEntry;
+#[cfg(test)]
 use super::{
     ApprovedEventContext, ApprovedWorkflow, GeneratorIdentity, JobAuthorityRole, POLICY_SCHEMA,
     PermissionLevel, WorkflowEvent, sha256,
 };
-use super::{
-    ApprovedJobAuthorityEntry, ApprovedJobAuthorityPolicy, ConnectionId, JobAuthorityLookup,
-};
+use super::{ApprovedJobAuthorityPolicy, ConnectionId};
 #[cfg(test)]
 use crate::config::RepositoryConnection;
 use crate::error::HostError;
@@ -204,21 +204,5 @@ impl super::super::HostConfig {
             return Err(error);
         }
         Ok(true)
-    }
-
-    /// Find one approved job entry for the current policy generation.
-    /// Use a merge-group target ref only after payload authentication.
-    #[must_use]
-    pub(crate) fn approved_job_authority(
-        &self,
-        lookup: &JobAuthorityLookup<'_>,
-    ) -> Option<&ApprovedJobAuthorityEntry> {
-        self.job_authority_policies
-            .iter()
-            .find(|policy| {
-                policy.connection_id() == lookup.connection_id
-                    && policy.generation() == lookup.generation
-            })?
-            .entry(lookup)
     }
 }
