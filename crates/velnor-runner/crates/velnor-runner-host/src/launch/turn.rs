@@ -1,11 +1,14 @@
 //! Native queue polling, lifecycle intake, and scoped header polling.
 
+#[cfg(test)]
 mod admission;
 mod completion_intake;
 mod positive_poll;
 mod scoped;
 
-use super::{ack_ready, slot, steps};
+#[cfg(test)]
+use super::slot;
+use super::{ack_ready, steps};
 #[cfg(test)]
 pub(crate) use admission::admission;
 #[cfg(test)]

@@ -985,5 +985,31 @@
     "log": "prejit-v32-parent-facade-final-20261020.log",
     "log_sha256": "fb099e0d806e0e5fe27429357d85b2d09210bc384523b081c563140e9e139f26",
     "scope": "The focused tests check cleanup and acquired request recovery. Release and live installation checks remain NOT_RUN."
+  },
+  "legacy_launch_driver_retirement": {
+    "result": "PASS",
+    "scope": "The removed driver had no production callers. The new tests check active offer replay and acquisition guards.",
+    "source_base": "d3235ddfec38a193f017c576766201e770d85deb",
+    "checks": [
+      {
+        "result": "PASS",
+        "tests": 12,
+        "run_id": "ce86d7b8-a304-4947-8343-6c6fe333c3b0",
+        "log": "legacy-native-parent-integrated-20261020.log",
+        "log_sha256": "3d4bade1985c2800b083178a0d52fb6b1a3d3f9fb2466173042d344cf13a663f"
+      },
+      {
+        "result": "PASS",
+        "tests": 7,
+        "run_id": "765a262c-095e-431e-a048-1ce4309ee129",
+        "log": "legacy-native-parent-cap-registration-20261020.log",
+        "log_sha256": "18c05621ae85e470de2c0e50db379d6c397d7c0230f9dbd00db969e2a0523494"
+      }
+    ],
+    "review": "native-legacy-retirement-independent-review-20261020.md",
+    "review_sha256": "ad724d4a7a35b02a8d7287214cb9f750a0a909830fb7cbef36ee62d1f90961f3",
+    "replacement_test_manifest_sha256": "61b2c2add9c67a9bfe08e2398f58fe0f900ddd5f17f0ff48155fa3362d0738d5",
+    "full_runner_gates": "NOT_RUN",
+    "live_installation": "NOT_RUN"
   }
 }

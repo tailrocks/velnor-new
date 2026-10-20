@@ -335,6 +335,8 @@ fn intake_decision() -> IntakeDecision {
 
 #[path = "positive_poll_tests/ack_replay.rs"]
 mod ack_replay;
+#[path = "positive_poll_tests/ack_uncertain.rs"]
+mod ack_uncertain;
 #[path = "positive_poll_tests/assigned_total.rs"]
 mod assigned_total;
 #[path = "positive_poll_tests/ownership_cursor.rs"]

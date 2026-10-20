@@ -2,19 +2,12 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use crate::launch::{SelectedEngineContext, VerifiedWorkerImages};
-use crate::launch_harness::{Mode, Script};
 use crate::stage::{PairEngine, StageAdmission};
 use crate::worker::{CreateProjection, WorkerVolumeRole, WorkerVolumeVerification};
 use crate::{HostError, Journal, Outcome};
 
 pub(crate) fn hex(n: u64) -> String {
     format!("{n:064x}")
-}
-
-pub(crate) fn valid_worker_volume(volume: &str) -> bool {
-    volume.starts_with('w')
-        && volume.len() == 33
-        && volume.bytes().skip(1).all(|byte| byte.is_ascii_hexdigit())
 }
 
 pub(crate) struct Engine {
@@ -324,13 +317,6 @@ pub(crate) async fn seed_done(
         .await
         .map_err(|err| err.to_string())?;
     Ok(volume)
-}
-
-pub(crate) fn script() -> Script {
-    Script {
-        calls: Vec::new(),
-        mode: Mode::Ok,
-    }
 }
 
 fn parse_labels(labels: &[String]) -> (String, String) {

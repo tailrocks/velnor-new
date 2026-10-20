@@ -1,44 +1,27 @@
-//! Acquire, JIT, and ack for one offered id. The journal commits first.
+//! Shared poll classification, source authorization, and ACK helpers.
 
-use std::future::Future;
-
-use velnor_runner_github::{
-    Ack, AckScope, AcquireOutcome, Certainty, Poll, RefreshGate, SessionError, WireError, ack,
-    acquire, may_ack,
-};
+use velnor_runner_github::{Ack, AckScope, Poll, RefreshGate, WireError, ack, may_ack};
 
 use crate::Offer;
 use crate::error::HostError;
-use crate::journal::{Journal, Outcome};
 use crate::listen::map_listen;
 use crate::offer;
 use crate::scale_set::EnsureError;
-use crate::worker::Started;
 
-mod mint;
 mod offer_authorization;
-mod scale;
 mod scoped;
 #[cfg(test)]
 pub(crate) use scoped::{RunnerCreateFailure, runner_create_409};
 pub(crate) mod source;
 mod source_authorization;
 
-#[cfg(test)]
-#[path = "steps/stale_auth_tests.rs"]
-mod stale_auth_tests;
-
-use super::mint_origin::MintOrigin;
 use super::{Drive, Lane};
 
 pub(super) use offer_authorization::authorize_offer;
 #[cfg(test)]
 pub(super) use offer_authorization::authorize_offer_with_transport;
-pub(super) use scale::scale_id;
-#[cfg(test)]
-pub(super) use scale::scale_unacked;
+pub(super) use source_authorization::authorize_poll_rest;
 use source_authorization::source_blocked;
-pub(super) use source_authorization::{authorize_poll_rest, authorize_population_message};
 
 #[cfg(test)]
 pub(crate) use scoped::run_native_quarantine_composition;
@@ -54,7 +37,7 @@ pub(crate) enum Idle {
     Empty,
     /// One `JobAvailable` id. Do not acknowledge yet.
     Launch,
-    /// Assigned population is positive. Mint one JIT runner, then acknowledge.
+    /// Assigned population is positive. Apply current admission rules.
     Scale,
     /// The batch is safe to acknowledge, even when assigned population is unknown.
     /// Deleting it does not free a running slot.
@@ -93,6 +76,7 @@ pub(crate) fn idle(polled: &Poll) -> Idle {
 }
 
 /// Subject of a redelivered assigned poll. Other polls have no exception.
+#[cfg(test)]
 #[must_use]
 pub(super) fn mint_subject(polled: &Poll) -> Option<String> {
     let Poll::Batch(batch) = polled else {
@@ -142,169 +126,6 @@ fn one_request<'a>(
         })
     }
 }
-#[cfg(test)]
-#[path = "steps/assigned_resume_tests.rs"]
-mod assigned_resume_tests;
-
-fn acquired_request<'a>(
-    ctx: &'a Drive,
-    batch: &'a velnor_runner_github::ParsedBatch,
-    journal: &'a Journal,
-    id: i64,
-    name: &'a str,
-) -> mint::Request<'a> {
-    mint::Request {
-        ctx,
-        batch: Some(batch),
-        journal,
-        id,
-        name,
-        origin: MintOrigin::AcquiredJob,
-    }
-}
-
-pub(super) async fn launch_id<T, S, F>(
-    lane: &mut T,
-    ctx: &Drive,
-    batch: &velnor_runner_github::ParsedBatch,
-    journal: &Journal,
-    request_id: i64,
-    start: S,
-) -> Result<Option<Started>, EnsureError>
-where
-    T: velnor_runner_github::Transport + Lane,
-    S: Fn(&str, &[u8], super::bind::Bind) -> F,
-    F: Future<Output = Result<Started, HostError>>,
-{
-    if !ctx.source_authorized {
-        let _authorized = authorize_offer(
-            ctx.connection.as_ref(),
-            ctx.scoped_journal.as_ref(),
-            &ctx.pat,
-            batch,
-            request_id,
-        )
-        .await?;
-    }
-    lane.on_admin()?;
-    let subject = format!("m{}r{request_id}", batch.message_id);
-    let name = format!("v{request_id}");
-    let (id, fresh) = journal
-        .begin_assigned_launch(&subject, ctx.set_id, request_id, &name)
-        .await
-        .map_err(map_journal)?;
-    if docker_of(journal, id).await?.is_some() {
-        return ack_bound(lane, ctx, batch, journal, id).await;
-    }
-    if !fresh {
-        if super::runner_dir::cleared_repeat(journal, id).await? {
-            return Err(EnsureError::NameCleared);
-        }
-        if journal.claim_launch_jit(id).await.map_err(map_journal)? {
-            return mint::run_claimed(
-                lane,
-                acquired_request(ctx, batch, journal, id, &name),
-                start,
-            )
-            .await;
-        }
-        if !journal
-            .claim_assigned_acquire(id)
-            .await
-            .map_err(map_journal)?
-        {
-            return hold(journal, id, EnsureError::Uncertain).await;
-        }
-    } else if !journal
-        .claim_assigned_acquire(id)
-        .await
-        .map_err(map_journal)?
-    {
-        return hold(journal, id, EnsureError::Uncertain).await;
-    }
-    match taken(lane, ctx, request_id) {
-        Ok(AcquireOutcome::Acquired(ids)) if ids.as_slice() == [request_id] => {
-            journal
-                .record_assigned_acquire(id, true)
-                .await
-                .map_err(map_journal)?;
-            mint::run(
-                lane,
-                acquired_request(ctx, batch, journal, id, &name),
-                start,
-            )
-            .await
-        }
-        Ok(AcquireOutcome::Noop) => {
-            journal
-                .record_assigned_acquire(id, true)
-                .await
-                .map_err(map_journal)?;
-            hold(journal, id, EnsureError::Uncertain).await
-        }
-        Ok(AcquireOutcome::Acquired(_)) => {
-            journal
-                .record_assigned_acquire(id, false)
-                .await
-                .map_err(map_journal)?;
-            reject_empty(journal, id).await
-        }
-        Err(error) => fail_acquire(journal, id, error).await,
-    }
-}
-
-fn taken<T>(lane: &mut T, ctx: &Drive, request_id: i64) -> Result<AcquireOutcome, SessionError>
-where
-    T: velnor_runner_github::Transport + ?Sized,
-{
-    let gate = RefreshGate::new();
-    let refresh = || Err(WireError::RefreshExhausted);
-    acquire(
-        lane,
-        ctx.set_id,
-        &[request_id],
-        &[],
-        &ctx.queue_token,
-        &gate,
-        refresh,
-    )
-}
-
-async fn fail_acquire(
-    journal: &Journal,
-    id: i64,
-    error: SessionError,
-) -> Result<Option<Started>, EnsureError> {
-    let refresh_unavailable = matches!(error, SessionError::Wire(WireError::RefreshExhausted));
-    if error.certainty() == Certainty::Uncertain || refresh_unavailable {
-        journal
-            .finish(id, Outcome::Uncertain)
-            .await
-            .map_err(map_journal)?;
-    } else {
-        journal
-            .record_assigned_acquire(id, false)
-            .await
-            .map_err(map_journal)?;
-    }
-    if refresh_unavailable {
-        Err(EnsureError::Uncertain)
-    } else {
-        Err(map_listen(error))
-    }
-}
-
-async fn reject_empty(journal: &Journal, id: i64) -> Result<Option<Started>, EnsureError> {
-    journal
-        .finish(id, Outcome::DefiniteFailure)
-        .await
-        .map_err(map_journal)?;
-    Err(EnsureError::Unexpected {
-        status: 0,
-        step: "acquire",
-    })
-}
-
 pub(super) fn acknowledge<T>(
     lane: &mut T,
     ctx: &Drive,
@@ -333,60 +154,6 @@ where
     };
     restored?;
     deleted
-}
-
-async fn ack_bound<T>(
-    lane: &mut T,
-    ctx: &Drive,
-    batch: &velnor_runner_github::ParsedBatch,
-    journal: &Journal,
-    id: i64,
-) -> Result<Option<Started>, EnsureError>
-where
-    T: velnor_runner_github::Transport + Lane,
-{
-    if let Err(error) = acknowledge(lane, ctx, batch) {
-        return hold(journal, id, error).await;
-    }
-    mark_done(journal, id).await?;
-    Ok(None)
-}
-
-pub(super) async fn hold(
-    journal: &Journal,
-    id: i64,
-    error: EnsureError,
-) -> Result<Option<Started>, EnsureError> {
-    journal
-        .finish(id, Outcome::Uncertain)
-        .await
-        .map_err(map_journal)?;
-    Err(error)
-}
-
-/// Settle one JIT error without the runner directory.
-pub(super) async fn fail_jit(
-    journal: &Journal,
-    id: i64,
-    origin: MintOrigin,
-    error: SessionError,
-) -> Result<Option<Started>, EnsureError> {
-    mint::fail_jit(journal, id, origin, error).await
-}
-
-async fn mark_done(journal: &Journal, id: i64) -> Result<(), EnsureError> {
-    if journal.read(id).await.map_err(map_journal)? == crate::IntentState::Done {
-        return Ok(());
-    }
-    journal.finish(id, Outcome::Done).await.map_err(map_journal)
-}
-
-pub(super) async fn docker_of(journal: &Journal, id: i64) -> Result<Option<String>, EnsureError> {
-    let rows = journal.rows().await.map_err(map_journal)?;
-    Ok(rows
-        .into_iter()
-        .find(|row| row.id == id)
-        .and_then(|row| row.docker_id))
 }
 
 pub(super) fn map_journal(error: HostError) -> EnsureError {
