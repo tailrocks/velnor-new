@@ -1,7 +1,8 @@
 //! Typed release config cases (synthetic demo data only).
 use std::collections::BTreeMap;
 use velnor_actions_contract::config::{
-    BootstrapRelease, ReleaseAuthentication, RustBinaryReleaseConfig, RustReleaseConfig,
+    BootstrapRelease, ReleaseAuthentication, ReleaseRegistry, RustBinaryReleaseConfig,
+    RustReleaseConfig,
 };
 use velnor_actions_contract::{ContractError, canonical_json_str};
 
@@ -15,7 +16,8 @@ fn valid_release() -> RustReleaseConfig {
         packages: vec!["demo-crate".to_owned()],
         publishable_workspace: false,
         environment: "demo-publish".to_owned(),
-        authentication: ReleaseAuthentication::TrustedPublishing,
+        registry: ReleaseRegistry::CratesIo,
+        authentication: Some(ReleaseAuthentication::TrustedPublishing),
         release_pr: true,
         tag_name: "{{ package }}-v{{ version }}".to_owned(),
         bootstrap: None,
@@ -33,7 +35,7 @@ fn valid_bootstrap() -> BootstrapRelease {
 
 fn bootstrap_release(mutate: impl FnOnce(&mut BootstrapRelease)) -> RustReleaseConfig {
     let mut config = valid_release();
-    config.authentication = ReleaseAuthentication::BootstrapToken;
+    config.authentication = Some(ReleaseAuthentication::BootstrapToken);
     let mut bootstrap = valid_bootstrap();
     mutate(&mut bootstrap);
     config.bootstrap = Some(bootstrap);
@@ -65,10 +67,12 @@ fn release_disabled_by_default_and_enabled_needs_allowlist() {
     assert!(!default.enabled);
     assert_eq!(default.packages, [] as [std::string::String; 0]);
     assert_eq!(default.validate(FILE), Ok(()));
+    assert_eq!(default.authentication, None);
     assert_eq!(
-        default.authentication,
+        default.effective_authentication(),
         ReleaseAuthentication::TrustedPublishing
     );
+    assert_eq!(default.registry, ReleaseRegistry::CratesIo);
     assert_eq!(valid_release().validate(FILE), Ok(()));
     let mut empty = valid_release();
     empty.packages.clear();
@@ -122,7 +126,7 @@ fn release_rejects_duplicate_unsorted_and_unsafe_selection() {
 #[test]
 fn release_rejects_contradictory_authentication_modes() {
     let mut missing = valid_release();
-    missing.authentication = ReleaseAuthentication::BootstrapToken;
+    missing.authentication = Some(ReleaseAuthentication::BootstrapToken);
     let got = config_problem(&missing).expect("must reject");
     assert_eq!(
         got,
@@ -275,4 +279,49 @@ fn release_config_is_deterministic() {
     let roundtrip: RustReleaseConfig = serde_json::from_str(&first).expect("roundtrip");
     assert_eq!(roundtrip, valid_release());
     assert_eq!(canonical_json_str(&roundtrip).expect("canonical"), first);
+}
+
+fn git_tag() -> RustReleaseConfig {
+    let mut config = valid_release();
+    config.registry = ReleaseRegistry::GitTag;
+    config.authentication = None;
+    config
+}
+
+#[test]
+fn git_tag_mode_needs_no_credential_and_decodes_from_toml() {
+    assert_eq!(git_tag().validate(FILE), Ok(()));
+    let text = r#"{"enabled":true,"registry":"git-tag","packages":["demo"]}"#;
+    let decoded: Result<RustReleaseConfig, _> = serde_json::from_str(text);
+    assert_eq!(
+        decoded.ok().map(|c| c.registry),
+        Some(ReleaseRegistry::GitTag)
+    );
+}
+
+#[test]
+fn git_tag_mode_rejects_every_credential_shape() {
+    let mut authenticated = git_tag();
+    authenticated.authentication = Some(ReleaseAuthentication::TrustedPublishing);
+    assert_eq!(
+        config_problem(&authenticated).as_deref(),
+        Some("stacks.rust.release.authentication contradictory_authentication")
+    );
+    let mut bootstrapped = git_tag();
+    bootstrapped.bootstrap = Some(BootstrapRelease {
+        package: "demo".to_owned(),
+        version: "1.0.0".to_owned(),
+        source_sha: SHA.to_owned(),
+    });
+    assert_eq!(
+        config_problem(&bootstrapped).as_deref(),
+        Some("stacks.rust.release.bootstrap contradictory_authentication")
+    );
+    let mut workspace = git_tag();
+    workspace.packages.clear();
+    workspace.publishable_workspace = true;
+    assert_eq!(
+        config_problem(&workspace).as_deref(),
+        Some("stacks.rust.release.publishable_workspace git_tag_requires_packages")
+    );
 }

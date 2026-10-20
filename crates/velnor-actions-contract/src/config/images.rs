@@ -130,7 +130,20 @@ pub struct ImageConfig {
     /// Optional artifacts Velnor builds before `BuildKit`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prebuilt: Option<ImagePrebuilt>,
+    /// Literal `timeout-minutes` of every build job of this image.
+    #[serde(default = "default_timeout_minutes")]
+    pub timeout_minutes: u16,
 }
+
+/// Default build-job bound; image builds outlast the 5-minute crate default.
+pub const DEFAULT_IMAGE_TIMEOUT_MINUTES: u16 = 30;
+
+fn default_timeout_minutes() -> u16 {
+    DEFAULT_IMAGE_TIMEOUT_MINUTES
+}
+
+/// Generated build and publish job ids all start with this prefix.
+pub const IMAGE_JOB_PREFIX: &str = "image-";
 
 fn default_context() -> String {
     ".".to_owned()
@@ -165,6 +178,14 @@ impl ImageConfig {
                 file,
                 at("repository"),
                 format!("bad_image_repository:{}", self.repository),
+            ));
+        }
+        if !crate::workflow::timeout::JobTimeout::is_valid_minutes(u32::from(self.timeout_minutes))
+        {
+            return Err(ContractError::config(
+                file,
+                at("timeout_minutes"),
+                format!("bad_image_timeout:{}", self.timeout_minutes),
             ));
         }
         self.validate_platforms(file, &at("platforms"))?;

@@ -13,7 +13,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::WorkflowPolicy;
-use velnor_actions_contract::config::{ReleaseAuthentication, RustReleaseConfig};
+use velnor_actions_contract::config::{ReleaseAuthentication, ReleaseRegistry, RustReleaseConfig};
 use velnor_actions_mise::{MetadataDiscovery, ToolCatalog};
 use velnor_actions_rust::release_select::{
     DEFAULT_REGISTRY, ReleaseRequest as SelectRequest, ReleaseScope, ReleaseSelection,
@@ -57,6 +57,10 @@ pub(crate) fn release_files(
     let Some(release) = enabled_release(prep)? else {
         return Ok(Vec::new());
     };
+    if release.registry == ReleaseRegistry::GitTag {
+        // Tag-only releases are generated with the publication workflow.
+        return Ok(Vec::new());
+    }
     if !release.version_groups.is_empty() {
         return Err(OrchestratorError::unsupported(
             "version_groups",
@@ -152,6 +156,17 @@ pub(crate) fn enabled_release(
     Ok(Some(release))
 }
 
+/// Active `git-tag` release section, if enabled under `consumer-v1`.
+///
+/// # Errors
+///
+/// Returns the policy error of [`enabled_release`].
+pub(crate) fn git_tag_release(
+    prep: &GenerationPreparation,
+) -> Result<Option<&RustReleaseConfig>, OrchestratorError> {
+    Ok(enabled_release(prep)?.filter(|release| release.registry == ReleaseRegistry::GitTag))
+}
+
 /// Resolve the release set over pinned `cargo metadata`.
 ///
 /// # Errors
@@ -162,17 +177,32 @@ fn select_packages(
     prep: &GenerationPreparation,
     release: &RustReleaseConfig,
 ) -> Result<ReleaseSelection, OrchestratorError> {
+    let json = release_metadata_json(&prep.root, release.manifest_path.as_str(), &prep.catalog)?;
+    select_from_json(prep, release, &json)
+}
+
+/// Resolve the release set from already-fetched `cargo metadata` JSON.
+///
+/// # Errors
+///
+/// Returns contract errors for unknown, forbidden, or unsupported selections.
+pub(crate) fn select_from_json(
+    prep: &GenerationPreparation,
+    release: &RustReleaseConfig,
+    json: &str,
+) -> Result<ReleaseSelection, OrchestratorError> {
     let manifest = release.manifest_path.as_str();
-    let json = release_metadata_json(&prep.root, manifest, &prep.catalog)?;
     let scope = if release.publishable_workspace {
         ReleaseScope::PublishableWorkspace
+    } else if release.registry == ReleaseRegistry::GitTag {
+        ReleaseScope::GitTagPackages(release.packages.clone())
     } else {
         ReleaseScope::Packages(release.packages.clone())
     };
     let affected = BTreeSet::new();
     let supported: &[String] = &[];
     let request = SelectRequest {
-        metadata_json: &json,
+        metadata_json: json,
         repo_root: &prep.root,
         manifest_hint: manifest,
         scope: &scope,
@@ -192,7 +222,7 @@ fn select_packages(
 /// Returns [`OrchestratorError::PreparationIncomplete`] when the pinned
 /// toolchain is absent (fail closed, before any spawn), the tool cannot
 /// run, or the manifest read fails.
-fn release_metadata_json(
+pub(crate) fn release_metadata_json(
     root: &std::path::Path,
     manifest: &str,
     catalog: &ToolCatalog,
@@ -234,7 +264,7 @@ fn check_bootstrap_record(
     release: &RustReleaseConfig,
     selection: &ReleaseSelection,
 ) -> Result<(), OrchestratorError> {
-    if release.authentication != ReleaseAuthentication::BootstrapToken {
+    if release.effective_authentication() != ReleaseAuthentication::BootstrapToken {
         return Ok(());
     }
     let Some(record) = release.bootstrap.as_ref() else {
@@ -275,7 +305,7 @@ fn approved_source(
     root: &std::path::Path,
     release: &RustReleaseConfig,
 ) -> Result<String, OrchestratorError> {
-    if release.authentication == ReleaseAuthentication::BootstrapToken {
+    if release.effective_authentication() == ReleaseAuthentication::BootstrapToken {
         let Some(record) = release.bootstrap.as_ref() else {
             return Err(OrchestratorError::config(
                 CONFIG_REL,

@@ -19,6 +19,8 @@ mod impl_contract_ids_b;
 mod impl_contract_job_ids;
 #[path = "impl_contract_manifest_targets.rs"]
 mod impl_contract_manifest_targets;
+#[path = "impl_contract_private_sources.rs"]
+mod impl_contract_private_sources;
 #[path = "impl_contract_release.rs"]
 mod impl_contract_release;
 #[path = "impl_contract_release_ir.rs"]

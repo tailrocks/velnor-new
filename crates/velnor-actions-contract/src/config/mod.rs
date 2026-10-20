@@ -13,10 +13,12 @@ mod distribution;
 mod dockerfile;
 mod execution;
 mod host_container;
+mod image_jobs;
 mod image_task;
 mod images;
 mod mise;
 mod preview_policy;
+mod private_sources;
 /// Run-time references to project-declared tool versions (hard decision 5).
 pub mod project_tool_refs;
 /// Generated run-time resolver for project-declared versions (hard decision 5).
@@ -24,6 +26,7 @@ pub mod project_tool_resolver;
 mod publish;
 mod qualified_tools;
 mod release;
+mod release_validation;
 mod resources;
 mod runs_on;
 mod rust_inputs;
@@ -77,12 +80,18 @@ pub use host_container::{
 };
 pub use image_task::{NativeImageCachePolicy, NativeImagePlatform, NativeImageTask};
 pub use images::{
-    IMAGE_REGISTRY_HOST, ImageConfig, ImageDockerfile, ImagePlatform, ImagePrebuilt,
-    is_valid_image_id, is_valid_image_repository, validate_images,
+    DEFAULT_IMAGE_TIMEOUT_MINUTES, IMAGE_JOB_PREFIX, IMAGE_REGISTRY_HOST, ImageConfig,
+    ImageDockerfile, ImagePlatform, ImagePrebuilt, is_valid_image_id, is_valid_image_repository,
+    validate_images,
 };
 pub use mise::{
     CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind,
     MiseCheck, is_valid_check_system_build, is_valid_check_system_version, is_valid_mise_task_name,
+};
+pub use private_sources::{
+    DEPS_LOCK_PATH, PrivateAssetSource, PrivateGitTreeSource, PrivateSourcesConfig,
+    is_valid_asset_name, is_valid_extract_to, is_valid_github_owner, is_valid_github_repo_name,
+    is_valid_source_id, is_valid_source_tag, split_repository,
 };
 pub use publish::{
     PublishBundle, PublishConfig, RELEASE_TAG_GLOB, ReleaseTag, VersionSource, is_artifact_id,
@@ -95,7 +104,7 @@ pub use qualified_tools::{
     QualifiedToolRecipePlatform, validate_qualified_tool_recipe, validate_qualified_tool_recipes,
     validate_qualified_tools,
 };
-pub use release::{BootstrapRelease, ReleaseAuthentication, RustReleaseConfig};
+pub use release::{BootstrapRelease, ReleaseAuthentication, ReleaseRegistry, RustReleaseConfig};
 pub use resources::{
     ResourcesConfig, ShardTimingEvidence, TestShardingConfig, validate_shard_changes_need_evidence,
 };
@@ -179,6 +188,9 @@ pub struct VelnorConfig {
     /// Optional downstream package promotion policy.
     #[serde(default, skip_serializing_if = "DistributionConfig::is_empty")]
     pub distribution: DistributionConfig,
+    /// Private cross-repository dependency credentials (`[private_sources]`, HD-7).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub private_sources: Option<PrivateSourcesConfig>,
     /// Container images built on every run and published from the default branch.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub images: Vec<ImageConfig>,
@@ -241,6 +253,9 @@ impl VelnorConfig {
             }
         }
         self.distribution.validate(file)?;
+        if let Some(private_sources) = &self.private_sources {
+            private_sources.validate(file)?;
+        }
         self.publish.validate(file)?;
         self.check_distribution_source(file)?;
         self.check_preview_tools(file)?;

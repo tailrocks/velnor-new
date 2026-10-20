@@ -23,9 +23,8 @@ pub fn observed_platform_id(inputs: &PlatformInputs) -> Result<String, ContractE
     ] {
         validate_observed_fact(field, value)?;
     }
-    let evidence = RunnerImageEvidence::observed(&inputs.image_os, &inputs.image_version)?;
+    let evidence = RunnerImageEvidence::observed(&inputs.image_os)?;
     validate_observed_fact("image_os", &evidence.image_os)?;
-    validate_observed_fact("image_version", &evidence.image_version)?;
     platform_id(inputs)
 }
 

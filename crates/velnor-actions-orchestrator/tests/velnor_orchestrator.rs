@@ -36,6 +36,7 @@ mod impl_generate_tofu_env;
 mod impl_generator_seed;
 mod impl_git_authority_p10;
 mod impl_git_paths_p10;
+mod impl_images;
 mod impl_lane_isolation;
 mod impl_local_release_manifest_fs;
 #[path = "impl_local_shared_action.rs"]
@@ -78,6 +79,7 @@ mod impl_orch_p08_sources;
 mod impl_orch_plansel;
 mod impl_orch_process_feature;
 mod impl_orch_publish_emit;
+mod impl_orch_publish_git_tag;
 mod impl_orch_release_emit;
 mod impl_orch_timeout;
 mod impl_p03_identity;
