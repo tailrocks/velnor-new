@@ -76,6 +76,9 @@ impl Parser {
         }
         self.end_of_line()?;
         doc.sections.push((path.clone(), line));
+        if array {
+            doc.array_sections.push((path.clone(), line));
+        }
         Ok((path, array))
     }
 
