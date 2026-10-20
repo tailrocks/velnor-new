@@ -17,6 +17,8 @@ use crate::config_stacks::PartialStacks;
 pub(crate) mod bun_registry_install;
 #[path = "deps_lock.rs"]
 pub(crate) mod deps_lock;
+#[path = "gradle_run.rs"]
+pub(crate) mod gradle_run;
 #[path = "playwright_install.rs"]
 pub(crate) mod playwright_install;
 #[path = "playwright_lock.rs"]
