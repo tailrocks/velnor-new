@@ -76,6 +76,20 @@ pub(in crate::journal::request_lifecycle::tests::linked_request_reopen) async fn
     assert!(!scope.intent(fixture.intent_id).await?.cleanup_proven);
 
     remove_release_rejection(scope).await?;
+    crate::journal::connection::storage::read_transaction(scope.journal_ref(), async |connection| {
+        let changed = connection
+            .execute(
+                "UPDATE capacity_reservations SET state = 'uncertain' WHERE id = ?1 AND state = 'reserved'",
+                [fixture.reservation_id],
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        if changed != 1 {
+            return Err(HostError::Journal);
+        }
+        Ok(())
+    })
+    .await?;
     assert_eq!(
         settle_storage_metadata(scope, &fixture.provisioned, 'a').await?,
         MetadataSettlementResult::Settled

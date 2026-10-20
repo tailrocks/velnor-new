@@ -2,7 +2,11 @@
 
 #[path = "host_controller/assigned_population.rs"]
 mod assigned_population;
-pub(crate) use assigned_population::{AssignedPopulationAction, plan_assigned_population};
+#[cfg(test)]
+pub(crate) use assigned_population::plan_assigned_population;
+pub(crate) use assigned_population::{
+    AssignedPopulationAction, plan_assigned_population_with_successors,
+};
 mod config_watch;
 #[path = "host_controller/loop.rs"]
 mod loop_driver;

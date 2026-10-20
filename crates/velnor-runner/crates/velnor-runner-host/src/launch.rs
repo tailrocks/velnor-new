@@ -41,6 +41,8 @@ pub(crate) use drive::{
 };
 pub(crate) use engine_context::SelectedEngineContext;
 pub(crate) use inspect::classify_inspect;
+#[cfg(test)]
+pub(crate) use resource_probe::IntakeCompositionProvider;
 pub(crate) use resource_probe::StartObservationWitness;
 pub(crate) use resource_probe::StartPermit;
 pub(crate) use resource_probe::VerifiedProbeCleanup;
@@ -82,7 +84,7 @@ mod source_order_tests;
 pub(crate) mod steady;
 pub(crate) mod steps;
 #[cfg(test)]
-pub(crate) use steps::{RunnerCreateFailure, runner_create_409};
+pub(crate) use steps::{RunnerCreateFailure, runner_create_409, runner_create_409_with_jobs};
 mod trace;
 mod turn;
 pub(crate) mod verified_images;

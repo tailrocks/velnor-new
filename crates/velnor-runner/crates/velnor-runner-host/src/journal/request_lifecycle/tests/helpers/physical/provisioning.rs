@@ -115,9 +115,34 @@ pub(crate) async fn provision_with_initialization_and_filesystem_digest(
     sample_generation_id: String,
     filesystem_instance_digest: String,
 ) -> Result<ProvisionedStorageInitialization, HostError> {
+    provision_with_engine_and_filesystem_digest(
+        scope,
+        super::TEST_ENGINE_ID,
+        assignment,
+        nonce,
+        reservation_id,
+        intent_id,
+        docker_root_digest,
+        sample_generation_id,
+        filesystem_instance_digest,
+    )
+    .await
+}
+
+pub(crate) async fn provision_with_engine_and_filesystem_digest(
+    scope: &ConnectionJournal,
+    engine_id: &str,
+    assignment: AssignmentIdentity,
+    nonce: char,
+    reservation_id: i64,
+    intent_id: i64,
+    docker_root_digest: String,
+    sample_generation_id: String,
+    filesystem_instance_digest: String,
+) -> Result<ProvisionedStorageInitialization, HostError> {
     ProvisioningFixture {
         scope,
-        engine_id: super::TEST_ENGINE_ID.to_owned(),
+        engine_id: engine_id.to_owned(),
         assignment,
         nonce: nonce.to_string().repeat(32),
         reservation_id,

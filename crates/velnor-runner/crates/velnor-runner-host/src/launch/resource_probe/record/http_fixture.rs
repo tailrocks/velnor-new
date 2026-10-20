@@ -9,6 +9,7 @@ pub(in crate::launch) fn canonical_logs_response(
     record.probe_host_pid = probe_pid;
     record.probe_namespace_pid = probe_pid;
     record.docker_root_available_bytes = available_bytes;
+    record.docker_root_free_bytes = record.docker_root_free_bytes.max(available_bytes);
     let mut body = serde_json::to_vec(&record).map_err(|_| crate::error::HostError::Frame)?;
     body.push(b'\n');
     let length = u32::try_from(body.len()).map_err(|_| crate::error::HostError::Frame)?;

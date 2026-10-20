@@ -11,7 +11,7 @@ mod network;
 #[path = "pre_jit_recovery/storage.rs"]
 mod storage;
 
-pub(in crate::launch) async fn remove_bootstrap_after_terminal_failure<
+pub(crate) async fn remove_bootstrap_after_terminal_failure<
     P: crate::launch::resource_probe::ImageProvider,
 >(
     docker: &bollard::Docker,
@@ -25,10 +25,22 @@ pub(in crate::launch) async fn remove_bootstrap_after_terminal_failure<
     let Some(claim) = journal.claim_pre_jit_cleanup(reservation_id).await? else {
         return Ok(false);
     };
-    if !journal.validate_pre_jit_cleanup_claim(&claim).await? {
+    remove_bootstrap_with_claim(docker, journal, host, engine, images, &claim, provider).await
+}
+
+pub(crate) async fn remove_bootstrap_with_claim<P: crate::launch::resource_probe::ImageProvider>(
+    docker: &bollard::Docker,
+    journal: &crate::journal::ConnectionJournal,
+    host: &crate::journal::Journal,
+    engine: &crate::launch::SelectedEngineContext,
+    images: &crate::launch::VerifiedWorkerImages,
+    claim: &PreJitCleanupClaim,
+    provider: &P,
+) -> Result<bool, HostError> {
+    if !journal.validate_pre_jit_cleanup_claim(claim).await? {
         return Ok(false);
     }
-    let Some(inventory) = journal.pre_jit_cleanup_inventory(&claim).await? else {
+    let Some(inventory) = journal.pre_jit_cleanup_inventory(claim).await? else {
         return Ok(false);
     };
     if claim.engine_id() != engine.engine_id()
@@ -37,18 +49,45 @@ pub(in crate::launch) async fn remove_bootstrap_after_terminal_failure<
     {
         return Err(HostError::Ownership);
     }
-    bootstrap::remove_pair_if_claimed(docker, journal, engine, images, &claim, &inventory).await?;
-    if journal.pre_jit_cleanup_phase(&claim).await? != Some(PreJitCleanupPhase::NetworkAbsent) {
+    bootstrap::remove_pair_if_claimed(docker, journal, engine, images, claim, &inventory).await?;
+    if journal.pre_jit_cleanup_phase(claim).await? != Some(PreJitCleanupPhase::NetworkAbsent) {
         return Err(HostError::Journal);
     }
     let observation =
-        crate::launch::measure_pre_jit_capacity(docker, host, journal, &claim, engine, provider)
+        crate::launch::measure_pre_jit_capacity(docker, host, journal, claim, engine, provider)
             .await?;
     let proof = PreJitCleanupSettlementProof::after_retired_capacity_probe(observation)?;
-    let _outcome = journal
-        .record_pre_jit_cleanup_settlement(&claim, &proof)
+    let outcome = journal
+        .record_pre_jit_cleanup_settlement(claim, &proof)
         .await?;
+    if outcome == crate::journal::PreJitCleanupSettlementResult::CapacityAvailable
+        && !journal.release_pre_jit_attempt(claim).await?
+    {
+        return Err(HostError::Journal);
+    }
     Ok(true)
+}
+
+pub(crate) async fn recover_pre_jit_reservation(
+    docker: &bollard::Docker,
+    journal: &crate::journal::Journal,
+    scope: &crate::journal::ConnectionJournal,
+    engine: &crate::launch::SelectedEngineContext,
+    images: &crate::launch::VerifiedWorkerImages,
+    reservation_id: i64,
+    release_secret: &crate::launch::ReleaseReadSecret,
+) -> Result<bool, HostError> {
+    let provider = crate::launch::resource_probe::release_image_provider(release_secret, journal)?;
+    remove_bootstrap_after_terminal_failure(
+        docker,
+        scope,
+        journal,
+        engine,
+        images,
+        reservation_id,
+        &provider,
+    )
+    .await
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

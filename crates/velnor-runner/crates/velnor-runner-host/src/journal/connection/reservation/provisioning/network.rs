@@ -169,7 +169,7 @@ impl ConnectionJournal {
             };
             if !super::hold_is_claimable(&context) { return Ok(None); }
             let mut rows = connection.query(
-                "SELECT i.runner_name FROM connection_intents AS i WHERE i.id = ?1 AND i.connection_id = ?2 AND i.kind = 'launch' AND i.state = 'pending' AND i.cleanup_proven = 0 AND (NOT EXISTS (SELECT 1 FROM connection_request_reservations AS link WHERE link.reservation_id = ?3) OR EXISTS (SELECT 1 FROM connection_request_reservations AS link JOIN connection_request_authorizations AS auth ON auth.connection_id = link.connection_id AND auth.scale_set_id = link.scale_set_id AND auth.request_id = link.request_id WHERE link.reservation_id = ?3 AND auth.acquire_state = 'acquired'))",
+                "SELECT i.runner_name FROM connection_intents AS i WHERE i.id = ?1 AND i.connection_id = ?2 AND i.kind = 'launch' AND i.state = 'pending' AND i.cleanup_proven = 0 AND (NOT EXISTS (SELECT 1 FROM physical_attempt_current AS current WHERE current.reservation_id = ?3) OR EXISTS (SELECT 1 FROM physical_attempt_current AS current JOIN physical_attempts AS attempt ON attempt.lineage_id = current.lineage_id AND attempt.generation = current.generation AND attempt.reservation_id = current.reservation_id JOIN connection_request_authorizations AS auth ON auth.connection_id = attempt.connection_id AND auth.scale_set_id = attempt.scale_set_id AND auth.request_id = attempt.witness_request_id WHERE current.reservation_id = ?3 AND auth.acquire_state = 'acquired'))",
                 (context.operation_id, connection_id.as_str(), reservation_id),
             ).await.map_err(|_| HostError::Journal)?;
             let runner_name: String = rows.next().await.map_err(|_| HostError::Journal)?

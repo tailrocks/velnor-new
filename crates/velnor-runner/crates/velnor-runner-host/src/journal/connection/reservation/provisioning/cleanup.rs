@@ -328,6 +328,28 @@ pub(super) async fn prove_cleanup_before_release(
     } else if changed != 1 {
         return Err(HostError::Journal);
     }
+    let mut rows = connection
+        .query(
+            "SELECT 1 FROM physical_attempt_current WHERE reservation_id = ?1",
+            [reservation_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let has_current_attempt = rows.next().await.map_err(|_| HostError::Journal)?.is_some();
+    if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
+        return Err(HostError::Journal);
+    }
+    if has_current_attempt
+        && !crate::journal::connection::record_terminal_cleanup_outcome(
+            connection,
+            connection_id,
+            reservation_id,
+            operation_id,
+        )
+        .await?
+    {
+        return Err(HostError::Journal);
+    }
     let changed = connection
         .execute(
             "UPDATE capacity_reservations SET state = 'released' WHERE id = ?1 AND connection_id = ?2 AND remote_cleanup_proven = 1 AND local_cleanup_proven = 1 AND state != 'released'",
@@ -337,6 +359,18 @@ pub(super) async fn prove_cleanup_before_release(
         .map_err(|_| HostError::Journal)?;
     if changed != 1 {
         return Err(HostError::Journal);
+    }
+    if has_current_attempt {
+        let retired = connection
+            .execute(
+                "DELETE FROM physical_attempt_current WHERE reservation_id = ?1 AND intent_id = ?2",
+                (reservation_id, operation_id),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        if retired != 1 {
+            return Err(HostError::Journal);
+        }
     }
     Ok(())
 }

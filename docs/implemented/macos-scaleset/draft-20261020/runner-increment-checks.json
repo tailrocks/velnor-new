@@ -839,6 +839,50 @@
       "reviewer": "/root/execution_source_security_review",
       "review": "source-auth6-independent-review-20261020.md",
       "full_strict_gate": "FAIL. Separate repairs remain necessary."
+    },
+    {
+      "result": "PASS",
+      "source_parent": "a3ba395c89f89a5b3ab23e2cc1c5cbfe9bb36c84",
+      "scope": "V33 physical attempt release and recovery. These tests do not prove a live installation.",
+      "exit_status": 0,
+      "passed": 25,
+      "nextest_run": "13810d90-cd82-48be-81b6-4f65b8a92c5b",
+      "log": "shipping-v33-focused-final-20261020.log",
+      "log_sha256": "5bb82bfe99bf54921df8a427b4822d1e3c210c4269e2e06353935a08eefeeddb",
+      "author": "/root/grouped_source_evidence",
+      "integration_author": "/root",
+      "reviewer": "/root/execution_source_security_review",
+      "review": "v33-a3ba395-overlap-independent-review-20261020.md",
+      "full_strict_gate": "FAIL. Separate repairs remain necessary."
+    },
+    {
+      "result": "PASS",
+      "source_parent": "a3ba395c89f89a5b3ab23e2cc1c5cbfe9bb36c84",
+      "scope": "V33 physical attempt release and recovery. These tests do not prove a live installation.",
+      "exit_status": 0,
+      "passed": 24,
+      "nextest_run": "46305ce1-61f6-4160-aa53-1f10bcac84f8",
+      "log": "shipping-v33-original-regressions-20261020.log",
+      "log_sha256": "0deeebd4fd4447a924b658d5d05b18a240e4f86431cfa08b5594f1aec67b309e",
+      "author": "/root/grouped_source_evidence",
+      "integration_author": "/root",
+      "reviewer": "/root/execution_source_security_review",
+      "review": "v33-a3ba395-overlap-independent-review-20261020.md",
+      "full_strict_gate": "FAIL. Separate repairs remain necessary."
+    },
+    {
+      "result": "PASS",
+      "source_parent": "a3ba395c89f89a5b3ab23e2cc1c5cbfe9bb36c84",
+      "scope": "V33 regression tests after the Git hook changes.",
+      "exit_status": 0,
+      "passed": 37,
+      "nextest_run": "b81616c9-7f00-41cf-9aa2-0a3e698a8b25",
+      "log": "shipping-v33-post-hook-fixed-final-20261020.log",
+      "log_sha256": "77de4442f7bdbe09a54fdb2b5a5e6635736ad49f48d7ea80d9bcca8c73a3eef2",
+      "author": "/root",
+      "reviewer": "/root/execution_source_security_review",
+      "review": "genuine-v32-v33-independent-review-20261020.md",
+      "note": "The hook removed two imports that the tests use. Explicit test-only imports keep the tests available."
     }
   ],
   "broader_pair_check": {

@@ -1,8 +1,9 @@
-use std::{collections::HashMap, sync::atomic::AtomicU8};
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 
 use serde_json::{Value, json};
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
     net::{UnixListener, UnixStream},
     sync::{Mutex as AsyncMutex, oneshot},
 };
@@ -12,7 +13,7 @@ use super::*;
 #[path = "daemon/http.rs"]
 mod http;
 
-use self::http::{read_request, write_response};
+use self::http::read_request;
 
 #[path = "daemon/publication.rs"]
 mod publication;
@@ -26,6 +27,11 @@ mod state_changes;
 #[path = "daemon/runner_failure.rs"]
 mod runner_failure;
 
+#[path = "daemon/responses.rs"]
+mod responses;
+
+use self::responses::{record_jit_input, write_response};
+
 #[path = "exec_fixture.rs"]
 mod exec_fixture;
 
@@ -37,6 +43,7 @@ pub(super) async fn serve(
         Arc<AsyncMutex<crate::worker::storage_initialization::InitializationTestResponder>>,
     )>,
     runner_create_status: Option<u16>,
+    probe_available_bytes: Arc<AtomicU64>,
     requests: Arc<std::sync::Mutex<Vec<CapturedRequest>>>,
     jit_input: Arc<std::sync::Mutex<Vec<u8>>>,
     tamper_channel_response: Arc<AtomicU8>,
@@ -46,6 +53,7 @@ pub(super) async fn serve(
         images,
         initializer,
         runner_create_status,
+        probe_available_bytes,
         requests,
         jit_input,
         tamper_channel_response,
@@ -72,6 +80,7 @@ struct ServerState {
         Arc<AsyncMutex<crate::worker::storage_initialization::InitializationTestResponder>>,
     )>,
     runner_create_status: Option<u16>,
+    probe_available_bytes: Arc<AtomicU64>,
     initializer_container_id: Option<String>,
     requests: Arc<Mutex<Vec<CapturedRequest>>>,
     jit_input: Arc<Mutex<Vec<u8>>>,
@@ -99,6 +108,7 @@ impl ServerState {
             Arc<AsyncMutex<crate::worker::storage_initialization::InitializationTestResponder>>,
         )>,
         runner_create_status: Option<u16>,
+        probe_available_bytes: Arc<AtomicU64>,
         requests: Arc<std::sync::Mutex<Vec<CapturedRequest>>>,
         jit_input: Arc<std::sync::Mutex<Vec<u8>>>,
         tamper_channel_response: Arc<AtomicU8>,
@@ -107,6 +117,7 @@ impl ServerState {
             images,
             initializer,
             runner_create_status,
+            probe_available_bytes,
             initializer_container_id: None,
             requests,
             jit_input,
@@ -263,6 +274,7 @@ impl ServerState {
             &self.volumes,
             &self.networks,
             &self.containers,
+            self.probe_available_bytes.load(Ordering::SeqCst),
         )?;
         self.record_docker_change(request, &response)?;
         Ok(response)
@@ -360,24 +372,4 @@ impl ServerState {
             .as_ref()
             .ok_or_else(|| "The initializer API configuration is absent.".to_owned())
     }
-}
-
-async fn record_jit_input(
-    stream: &mut UnixStream,
-    jit_input: &std::sync::Mutex<Vec<u8>>,
-) -> Result<(), String> {
-    stream
-        .write_all(b"HTTP/1.1 101 UPGRADED\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n")
-        .await
-        .map_err(|error| error.to_string())?;
-    let mut payload = Vec::new();
-    stream
-        .read_to_end(&mut payload)
-        .await
-        .map_err(|error| error.to_string())?;
-    jit_input
-        .lock()
-        .map_err(|_| "The JIT configuration lock failed.".to_owned())?
-        .extend(payload);
-    Ok(())
 }

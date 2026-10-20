@@ -15,6 +15,7 @@ mod initialization;
 mod legacy_migration;
 mod linked_request_reopen;
 mod phase_recovery;
+mod pre_jit_crossed_assignment;
 mod profile_lifecycle;
 mod request_link;
 mod review_counterexamples;

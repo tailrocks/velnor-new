@@ -1,8 +1,6 @@
 use std::path::PathBuf;
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicU8, Ordering},
-};
+use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use bollard::Docker;
@@ -61,13 +59,14 @@ pub(super) struct PairDockerApi {
     requests: Arc<Mutex<Vec<CapturedRequest>>>,
     jit_input: Arc<Mutex<Vec<u8>>>,
     tamper_channel_response: Arc<AtomicU8>,
+    probe_available_bytes: Arc<AtomicU64>,
     stop: Option<oneshot::Sender<bool>>,
     task: Option<tokio::task::JoinHandle<Result<(), String>>>,
 }
 
 impl PairDockerApi {
     pub(super) fn open(images: crate::launch::VerifiedWorkerImages) -> Result<Self, String> {
-        Self::open_with_optional_initializer(images, None, None)
+        Self::open_with_optional_initializer(images, None, None, 1_u64 << 30)
     }
 
     pub(super) fn open_with_initializer(
@@ -80,6 +79,7 @@ impl PairDockerApi {
             initializer_image_id,
             initializer,
             None,
+            1_u64 << 30,
         )
     }
 
@@ -88,6 +88,22 @@ impl PairDockerApi {
         initializer_image_id: String,
         initializer: crate::worker::storage_initialization::InitializationTestResponder,
         status: u16,
+    ) -> Result<Self, String> {
+        Self::open_with_runner_create_rejection_and_capacity(
+            images,
+            initializer_image_id,
+            initializer,
+            status,
+            1_u64 << 30,
+        )
+    }
+
+    pub(super) fn open_with_runner_create_rejection_and_capacity(
+        images: crate::launch::VerifiedWorkerImages,
+        initializer_image_id: String,
+        initializer: crate::worker::storage_initialization::InitializationTestResponder,
+        status: u16,
+        probe_available_bytes: u64,
     ) -> Result<Self, String> {
         if !matches!(status, 400 | 404 | 409) {
             return Err(
@@ -100,6 +116,7 @@ impl PairDockerApi {
             initializer_image_id,
             initializer,
             Some(status),
+            probe_available_bytes,
         )
     }
 
@@ -108,12 +125,14 @@ impl PairDockerApi {
         initializer_image_id: String,
         initializer: crate::worker::storage_initialization::InitializationTestResponder,
         runner_create_status: Option<u16>,
+        probe_available_bytes: u64,
     ) -> Result<Self, String> {
         let initializer = Arc::new(AsyncMutex::new(initializer));
         Self::open_with_optional_initializer(
             images,
             Some((initializer_image_id, Arc::clone(&initializer))),
             runner_create_status,
+            probe_available_bytes,
         )
     }
 
@@ -124,6 +143,7 @@ impl PairDockerApi {
             Arc<AsyncMutex<crate::worker::storage_initialization::InitializationTestResponder>>,
         )>,
         runner_create_status: Option<u16>,
+        probe_available_bytes: u64,
     ) -> Result<Self, String> {
         let path = std::env::temp_dir().join(format!("vp-{}.sock", uuid::Uuid::new_v4()));
         let listener = UnixListener::bind(&path).map_err(|error| error.to_string())?;
@@ -134,12 +154,15 @@ impl PairDockerApi {
         let server_requests = Arc::clone(&requests);
         let server_jit = Arc::clone(&jit_input);
         let server_tamper_channel = Arc::clone(&tamper_channel_response);
+        let probe_available_bytes = Arc::new(AtomicU64::new(probe_available_bytes));
+        let server_probe_available_bytes = Arc::clone(&probe_available_bytes);
         let task = tokio::spawn(async move {
             daemon::serve(
                 listener,
                 images,
                 initializer,
                 runner_create_status,
+                server_probe_available_bytes,
                 server_requests,
                 server_jit,
                 server_tamper_channel,
@@ -158,6 +181,7 @@ impl PairDockerApi {
             requests,
             jit_input,
             tamper_channel_response,
+            probe_available_bytes,
             stop: Some(stop),
             task: Some(task),
         })
@@ -169,6 +193,15 @@ impl PairDockerApi {
 
     pub(super) fn tamper_next_channel_attachment_inode(&self) {
         self.tamper_channel_response.store(2, Ordering::SeqCst);
+    }
+
+    pub(super) fn set_probe_available_bytes(&self, available_bytes: u64) {
+        self.probe_available_bytes
+            .store(available_bytes, Ordering::SeqCst);
+    }
+
+    pub(super) fn probe_available_bytes(&self) -> u64 {
+        self.probe_available_bytes.load(Ordering::SeqCst)
     }
 
     pub(super) async fn finish(self) -> Result<CapturedApi, String> {

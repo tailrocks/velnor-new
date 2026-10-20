@@ -1,6 +1,6 @@
 #[tokio::test]
 async fn terminal_runner_rejection_runs_owned_cleanup_and_capacity_probe() -> Result<(), String> {
-    let failure = crate::launch::steps::runner_create_409().await?;
+    let failure = Box::pin(crate::launch::steps::runner_create_409()).await?;
     let provider = crate::launch::resource_probe::IntakeCompositionProvider::new(
         failure.engine(),
         failure.images().source_sha(),
@@ -71,6 +71,195 @@ async fn terminal_runner_rejection_runs_owned_cleanup_and_capacity_probe() -> Re
     Ok(())
 }
 
+#[tokio::test]
+async fn available_capacity_releases_the_pre_jit_reservation() -> Result<(), String> {
+    let failure = crate::launch::steps::runner_create_409().await?;
+    failure.set_probe_available_bytes(35 * 1024 * 1024 * 1024);
+    let provider = crate::launch::resource_probe::IntakeCompositionProvider::new(
+        failure.engine(),
+        failure.images().source_sha(),
+    );
+    let cleanup_result = crate::launch::bootstrap::remove_bootstrap_after_terminal_failure(
+        failure.docker(),
+        failure.scope(),
+        failure.host_journal(),
+        failure.engine(),
+        failure.images(),
+        failure.reservation_id(),
+        &provider,
+    )
+    .await;
+    let cleanup = match cleanup_result {
+        Ok(cleanup) => cleanup,
+        Err(error) => {
+            let outcome = failure
+                .scope()
+                .pre_jit_cleanup_settlement_outcome(failure.reservation_id())
+                .await
+                .map_err(|lookup_error| lookup_error.to_string())?;
+            return Err(format!(
+                "The pre-JIT cleanup failed. Error: {error}. Recorded settlement: {outcome:?}."
+            ));
+        }
+    };
+
+    assert!(cleanup);
+    assert_eq!(
+        failure
+            .scope()
+            .pre_jit_cleanup_settlement_outcome(failure.reservation_id())
+            .await
+            .map_err(|error| error.to_string())?,
+        Some(crate::journal::PreJitCleanupSettlementResult::CapacityAvailable),
+        "The 35 GiB fresh Capacity sample must permit release."
+    );
+    assert_capacity_probe_retired(&failure).await?;
+    assert_eq!(
+        failure.host_journal().occupied_reservation_count().await,
+        Ok(1),
+        "The acquired logical request must remain live after physical release."
+    );
+    let reservation = failure
+        .scope()
+        .reservation(failure.assignment())
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "The released pre-JIT reservation record is absent.".to_owned())?;
+    assert_eq!(
+        reservation.state,
+        crate::journal::ReservationState::Released
+    );
+    assert!(
+        failure
+            .scope()
+            .current_physical_attempt(failure.reservation_id())
+            .await
+            .map_err(|error| error.to_string())?
+            .is_none()
+    );
+    assert_acquired_demand_stays_live(&failure).await?;
+    failure.finish_and_assert_capacity_probe().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn rejected_release_rolls_back_outcome_charge_and_current_pointer() -> Result<(), String> {
+    let failure = crate::launch::steps::runner_create_409().await?;
+    failure.set_probe_available_bytes(35 * 1024 * 1024 * 1024);
+    let connection = failure
+        .host_journal()
+        .connection()
+        .await
+        .map_err(|error| error.to_string())?;
+    connection
+        .execute(
+            &format!(
+                "CREATE TRIGGER reject_pre_jit_release BEFORE UPDATE OF state ON capacity_reservations WHEN OLD.id = {} AND NEW.state = 'released' BEGIN SELECT RAISE(ABORT, 'test release rejection'); END",
+                failure.reservation_id()
+            ),
+            (),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+
+    let provider = crate::launch::resource_probe::IntakeCompositionProvider::new(
+        failure.engine(),
+        failure.images().source_sha(),
+    );
+    let result = crate::launch::bootstrap::remove_bootstrap_after_terminal_failure(
+        failure.docker(),
+        failure.scope(),
+        failure.host_journal(),
+        failure.engine(),
+        failure.images(),
+        failure.reservation_id(),
+        &provider,
+    )
+    .await;
+    if result.is_ok() {
+        return Err("The injected release failure did not stop cleanup.".to_owned());
+    }
+    assert_eq!(
+        failure
+            .scope()
+            .pre_jit_cleanup_settlement_outcome(failure.reservation_id())
+            .await
+            .map_err(|error| error.to_string())?,
+        Some(crate::journal::PreJitCleanupSettlementResult::CapacityAvailable)
+    );
+    let reservation = failure
+        .scope()
+        .reservation(failure.assignment())
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "The uncertain reservation record is absent.".to_owned())?;
+    if reservation.state != crate::journal::ReservationState::Uncertain
+        || failure
+            .scope()
+            .current_physical_attempt(failure.reservation_id())
+            .await
+            .map_err(|error| error.to_string())?
+            .is_none()
+    {
+        return Err("A failed release changed the charge or current attempt.".to_owned());
+    }
+    let mut rows = connection
+        .query(
+            "SELECT COUNT(*) FROM physical_attempt_outcomes WHERE reservation_id = ?1",
+            [failure.reservation_id()],
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    let row = rows
+        .next()
+        .await
+        .map_err(|error| error.to_string())
+        .and_then(|row| row.ok_or_else(|| "The outcome count is absent.".to_owned()))?;
+    let outcomes: i64 = row.get(0).map_err(|error| error.to_string())?;
+    if outcomes != 0 {
+        return Err("The failed release left a terminal physical outcome.".to_owned());
+    }
+    failure.finish_and_assert_capacity_probe().await?;
+    Ok(())
+}
+
+async fn assert_acquired_demand_stays_live(
+    failure: &crate::launch::steps::RunnerCreateFailure,
+) -> Result<(), String> {
+    let connection = failure
+        .host_journal()
+        .connection()
+        .await
+        .map_err(|error| error.to_string())?;
+    let mut rows = connection
+        .query(
+            "SELECT authorization.acquire_state, authorization.started_event_digest, authorization.completed_event_digest FROM physical_attempts AS attempt JOIN connection_request_authorizations AS authorization ON authorization.connection_id = attempt.connection_id AND authorization.scale_set_id = attempt.scale_set_id AND authorization.request_id = attempt.witness_request_id WHERE attempt.reservation_id = ?1",
+            [failure.reservation_id()],
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    let row = rows
+        .next()
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "The historical acquired request record is absent.".to_owned())?;
+    let acquire_state: String = row.get(0).map_err(|error| error.to_string())?;
+    let started_digest: Option<String> = row.get(1).map_err(|error| error.to_string())?;
+    let completed_digest: Option<String> = row.get(2).map_err(|error| error.to_string())?;
+    if rows
+        .next()
+        .await
+        .map_err(|error| error.to_string())?
+        .is_some()
+        || acquire_state != "acquired"
+        || started_digest.is_some()
+        || completed_digest.is_some()
+    {
+        return Err("Physical cleanup changed or duplicated logical request state.".to_owned());
+    }
+    Ok(())
+}
+
 async fn assert_capacity_probe_retired(
     failure: &crate::launch::steps::RunnerCreateFailure,
 ) -> Result<(), String> {
@@ -81,15 +270,6 @@ async fn assert_capacity_probe_retired(
         .map_err(|error| error.to_string())?;
     if active.is_some() {
         return Err("The Capacity probe stayed active after observation.".to_owned());
-    }
-    let reservation = failure
-        .scope()
-        .reservation(failure.assignment())
-        .await
-        .map_err(|error| error.to_string())?
-        .ok_or_else(|| "The pre-JIT reservation disappeared.".to_owned())?;
-    if reservation.state == crate::journal::ReservationState::Released {
-        return Err("The pre-JIT reservation was released after local settlement.".to_owned());
     }
     Ok(())
 }

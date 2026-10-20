@@ -10,11 +10,19 @@ mod cleanup_observer_witness;
 #[cfg(test)]
 mod cleanup_observer_witness_tests;
 mod connection;
+mod current_columns;
 mod doctor_probe;
 mod execution_authorization;
 mod execution_publication;
 mod image_import;
 mod migration;
+mod physical_attempts;
+#[cfg(test)]
+#[path = "schema/physical_attempts_migration_tests.rs"]
+mod physical_attempts_migration_tests;
+#[cfg(test)]
+#[path = "schema/physical_attempts_tests.rs"]
+mod physical_attempts_tests;
 mod pre_jit_cleanup;
 #[cfg(test)]
 pub(in crate::journal) mod provisioning;
@@ -37,56 +45,8 @@ mod storage_root_backing;
 #[path = "schema/execution_publication/v30_migration_tests.rs"]
 mod v30_migration_tests;
 
-pub(super) const JOURNAL_VERSION: i64 = 32;
-const CURRENT_COLUMNS: [ColumnShape; 23] = [
-    ColumnShape::new("id", "INTEGER", false, None),
-    ColumnShape::new("kind", "TEXT", true, None),
-    ColumnShape::new("subject", "TEXT", true, None),
-    ColumnShape::new("state", "TEXT", true, None),
-    ColumnShape::new("docker_id", "TEXT", false, None),
-    ColumnShape::new("github_runner_id", "TEXT", false, None),
-    ColumnShape::new("cleanup_proven", "INTEGER", true, Some("0")),
-    ColumnShape::new("dind_id", "TEXT", false, None),
-    ColumnShape::new("worker_volume", "TEXT", false, None),
-    ColumnShape::new("scale_set_id", "INTEGER", false, None),
-    ColumnShape::new("runner_request_id", "INTEGER", false, None),
-    ColumnShape::new("runner_name", "TEXT", false, None),
-    ColumnShape::new("acquire_attempted", "INTEGER", true, Some("0")),
-    ColumnShape::new("acquire_resolved", "INTEGER", true, Some("0")),
-    ColumnShape::new("acquired", "INTEGER", true, Some("0")),
-    ColumnShape::new("jit_requested", "INTEGER", true, Some("0")),
-    ColumnShape::new("docker_engine_id", "TEXT", false, None),
-    ColumnShape::new("launch_phase", "TEXT", false, None),
-    ColumnShape::new("launch_id", "TEXT", false, None),
-    ColumnShape::new("assignment_key", "TEXT", false, None),
-    ColumnShape::new("seed_generation_id", "TEXT", false, None),
-    ColumnShape::new("runner_completed", "INTEGER", true, Some("0")),
-    ColumnShape::new("worker_cleanup_proven", "INTEGER", true, Some("0")),
-];
-
-#[derive(Clone, Copy)]
-struct ColumnShape {
-    name: &'static str,
-    declared_type: &'static str,
-    not_null: bool,
-    default_value: Option<&'static str>,
-}
-
-impl ColumnShape {
-    const fn new(
-        name: &'static str,
-        declared_type: &'static str,
-        not_null: bool,
-        default_value: Option<&'static str>,
-    ) -> Self {
-        Self {
-            name,
-            declared_type,
-            not_null,
-            default_value,
-        }
-    }
-}
+pub(super) const JOURNAL_VERSION: i64 = 33;
+use current_columns::CURRENT_COLUMNS;
 
 pub(super) struct ColumnInfo {
     declared_type: String,
@@ -170,6 +130,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
                 29 => migration::from_version_twenty_nine(conn).await?,
                 30 => migration::from_version_thirty(conn).await?,
                 31 => migration::from_version_thirty_one(conn).await?,
+                32 => migration::from_version_thirty_two(conn).await?,
                 _ => return Err(HostError::Journal),
             }
             version = journal_version(conn).await?;
@@ -183,7 +144,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
 
 fn expected_next_version(version: i64) -> Option<i64> {
     match version {
-        0..=8 | 10..=31 => Some(version + 1),
+        0..=8 | 10..=32 => Some(version + 1),
         9 => Some(11),
         _ => None,
     }
@@ -198,6 +159,19 @@ mod migration_driver_tests;
 pub(crate) mod historical_fixture;
 
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_persisted_schema_v32_core(conn).await?;
+    storage_network::validate_v33(conn).await?;
+    physical_attempts::validate(conn).await
+}
+
+pub(super) async fn validate_persisted_schema_v32(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
+    storage_network::validate(conn).await?;
+    validate_persisted_schema_v32_core(conn).await
+}
+
+async fn validate_persisted_schema_v32_core(conn: &turso::Connection) -> Result<(), HostError> {
     validate_persisted_schema_v27_core(conn).await?;
     storage_root_backing::validate(conn).await?;
     execution_publication::validate_v30(conn).await?;
@@ -209,12 +183,12 @@ pub(super) async fn validate_persisted_schema_v27(
     conn: &turso::Connection,
 ) -> Result<(), HostError> {
     validate_persisted_schema_v27_core(conn).await?;
+    storage_network::validate(conn).await?;
     storage_root_backing::validate_v27(conn).await
 }
 
 async fn validate_persisted_schema_v27_core(conn: &turso::Connection) -> Result<(), HostError> {
     validate_persisted_schema_v20(conn).await?;
-    storage_network::validate(conn).await?;
     storage_initialization::validate_v22(conn).await?;
     execution_authorization::validate(conn).await?;
     execution_publication::validate(conn).await?;

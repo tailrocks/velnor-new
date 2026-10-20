@@ -46,7 +46,9 @@ pub(in crate::journal::schema) async fn ensure_completion_objects(
     ensure_runner_absent(conn).await
 }
 
-pub(super) async fn ensure_legacy_columns(conn: &turso::Connection) -> Result<(), HostError> {
+pub(in crate::journal::schema) async fn ensure_legacy_columns(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
     let columns = super::super::read_table_columns(conn, "intents").await?;
     for (column, definition) in [("dind_id", "TEXT"), ("worker_volume", "TEXT")] {
         if !columns.contains_key(column) {

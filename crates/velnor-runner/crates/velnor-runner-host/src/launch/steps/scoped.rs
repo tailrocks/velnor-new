@@ -16,7 +16,7 @@ pub(crate) use runner::run_native_quarantine_composition;
 pub(crate) use runner::{AcquiredProvisioning, CheckedAcquiredRecovery};
 
 #[cfg(test)]
-pub(crate) use runner::{RunnerCreateFailure, runner_create_409};
+pub(crate) use runner::{RunnerCreateFailure, runner_create_409, runner_create_409_with_jobs};
 
 pub(crate) enum ScopedProvisioningOutcome {
     NoStart,

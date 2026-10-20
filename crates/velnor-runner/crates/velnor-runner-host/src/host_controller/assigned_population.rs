@@ -2,6 +2,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "assigned_population/coverage.rs"]
+mod coverage;
+use coverage::{blocked_plan, physical_covers_population, physical_is_uncertain};
+
 use crate::config::ConnectionId;
 use crate::journal::{
     AcquiredRecoveryCandidate, AssignmentIdentity, AssignmentKey, PhysicalRunnerJitState,
@@ -23,6 +27,11 @@ pub(crate) enum AssignedPopulationAction {
         reservation_id: i64,
         /// Index of the recovery candidate checked against the journal.
         candidate_index: usize,
+    },
+    /// This action reserves a successor for acquired demand after a terminal attempt is proven.
+    ReserveSuccessor {
+        /// This request was acquired earlier. The method does not call `AcquireJobs` again.
+        request: AssignmentIdentity,
     },
 }
 
@@ -58,7 +67,7 @@ pub(crate) struct AssignedPopulationPlan {
 
 struct PhysicalCoverage {
     count: u64,
-    request_reservations: BTreeMap<i64, (i64, bool, bool)>,
+    request_reservations: BTreeMap<i64, Vec<(i64, bool, bool)>>,
     has_unattributed_runner: bool,
 }
 
@@ -73,6 +82,26 @@ pub(crate) fn plan_assigned_population(
     reservations: &[PhysicalRunnerReservation],
     acquired: &[AssignmentIdentity],
     recovery_candidates: &[AcquiredRecoveryCandidate],
+) -> AssignedPopulationPlan {
+    plan_assigned_population_with_successors(
+        assigned_total,
+        connection_id,
+        scale_set_id,
+        reservations,
+        acquired,
+        recovery_candidates,
+        &[],
+    )
+}
+
+pub(crate) fn plan_assigned_population_with_successors(
+    assigned_total: i64,
+    connection_id: &ConnectionId,
+    scale_set_id: i64,
+    reservations: &[PhysicalRunnerReservation],
+    acquired: &[AssignmentIdentity],
+    recovery_candidates: &[AcquiredRecoveryCandidate],
+    successor_ready: &[AssignmentIdentity],
 ) -> AssignedPopulationPlan {
     let Ok(assigned_total) = u64::try_from(assigned_total) else {
         return blocked_plan(0, AssignedPopulationBlock::InvalidCount);
@@ -108,6 +137,7 @@ pub(crate) fn plan_assigned_population(
         acquired,
         recovery_candidates,
         &coverage.request_reservations,
+        successor_ready,
         shortfall,
     );
     let uncovered = shortfall.saturating_sub(actions.len() as u64);
@@ -127,7 +157,7 @@ fn collect_physical_coverage(
     recovery_candidates: &[AcquiredRecoveryCandidate],
 ) -> Result<PhysicalCoverage, AssignedPopulationBlock> {
     let mut physical_ids = BTreeSet::new();
-    let mut request_reservations = BTreeMap::new();
+    let mut request_reservations: BTreeMap<i64, Vec<(i64, bool, bool)>> = BTreeMap::new();
     let mut runner_ids = BTreeSet::new();
     let mut count = 0_u64;
     let mut has_unattributed_runner = false;
@@ -165,15 +195,11 @@ fn collect_physical_coverage(
         }
         let request_id = reservation_request_id(reservation, identity)?;
         if let Some(request_id) = request_id {
-            if request_reservations
-                .insert(
-                    request_id,
-                    (reservation.reservation_id, covers, exact_acquired_link),
-                )
-                .is_some()
-            {
-                return Err(AssignedPopulationBlock::DuplicateRequestReservation);
-            }
+            request_reservations.entry(request_id).or_default().push((
+                reservation.reservation_id,
+                covers,
+                exact_acquired_link,
+            ));
         } else if covers {
             has_unattributed_runner = true;
         }
@@ -253,7 +279,8 @@ fn select_acquired_actions(
     scale_set_id: i64,
     acquired: &[AssignmentIdentity],
     recovery_candidates: &[AcquiredRecoveryCandidate],
-    request_reservations: &BTreeMap<i64, (i64, bool, bool)>,
+    request_reservations: &BTreeMap<i64, Vec<(i64, bool, bool)>>,
+    successor_ready: &[AssignmentIdentity],
     shortfall: u64,
 ) -> (
     Vec<AssignedPopulationAction>,
@@ -271,25 +298,43 @@ fn select_acquired_actions(
         if !seen_request_ids.insert(request_id) {
             continue;
         }
-        let Some((reservation_id, covered, exact_link)) = request_reservations.get(&request_id)
-        else {
-            return (Vec::new(), Some(AssignedPopulationBlock::ClosedUnproven));
-        };
-        let matching_candidate = recovery_candidates
-            .iter()
-            .enumerate()
-            .find(|(_, candidate)| {
-                candidate.request() == identity && candidate.reservation_id() == *reservation_id
-            });
-        if let Some((candidate_index, _)) = matching_candidate {
+        let reservations = request_reservations.get(&request_id);
+        let matching_candidate = reservations.and_then(|reservations| {
+            recovery_candidates
+                .iter()
+                .enumerate()
+                .find(|(_, candidate)| {
+                    candidate.request() == identity
+                        && reservations
+                            .iter()
+                            .any(|(id, _, _)| *id == candidate.reservation_id())
+                })
+        });
+        if let Some((candidate_index, candidate)) = matching_candidate {
             if actions.len() < usize::try_from(shortfall).unwrap_or(usize::MAX) {
                 actions.push(AssignedPopulationAction::ContinueExisting {
                     request: identity.clone(),
-                    reservation_id: *reservation_id,
+                    reservation_id: candidate.reservation_id(),
                     candidate_index,
                 });
             }
-        } else if !covered && !exact_link {
+            continue;
+        }
+        if successor_ready.contains(identity) {
+            if actions.len() < usize::try_from(shortfall).unwrap_or(usize::MAX) {
+                actions.push(AssignedPopulationAction::ReserveSuccessor {
+                    request: identity.clone(),
+                });
+            }
+            continue;
+        }
+        let Some(reservations) = reservations else {
+            return (Vec::new(), Some(AssignedPopulationBlock::ClosedUnproven));
+        };
+        if !reservations
+            .iter()
+            .any(|(_, covered, exact_link)| *covered || *exact_link)
+        {
             return (Vec::new(), Some(AssignedPopulationBlock::ClosedUnproven));
         }
     }
@@ -301,9 +346,11 @@ fn select_acquired_actions(
             );
         };
         if !seen_request_ids.contains(&request_id)
-            || request_reservations
-                .get(&request_id)
-                .is_none_or(|(id, _, _)| *id != candidate.reservation_id())
+            || request_reservations.get(&request_id).is_none_or(|rows| {
+                !rows
+                    .iter()
+                    .any(|(id, _, _)| *id == candidate.reservation_id())
+            })
         {
             return (
                 Vec::new(),
@@ -312,58 +359,4 @@ fn select_acquired_actions(
         }
     }
     (actions, None)
-}
-
-fn physical_is_uncertain(reservation: &PhysicalRunnerReservation) -> bool {
-    reservation.reservation.state == ReservationState::Uncertain
-        || reservation.reservation.state == ReservationState::Recovering
-        || reservation.intent_state.is_none()
-        || reservation.launch_phase.is_none()
-        || reservation.intent_state == Some(crate::journal::IntentState::Uncertain)
-        || matches!(
-            reservation.jit_state,
-            PhysicalRunnerJitState::Uncertain
-                | PhysicalRunnerJitState::StartUncertain
-                | PhysicalRunnerJitState::Unknown
-        )
-        || matches!(
-            reservation.launch_phase,
-            Some(
-                crate::reconcile::LaunchPhase::AcquireUncertain
-                    | crate::reconcile::LaunchPhase::JitUncertain
-                    | crate::reconcile::LaunchPhase::DockerUncertain
-                    | crate::reconcile::LaunchPhase::AcquireRequested
-                    | crate::reconcile::LaunchPhase::JitRequested
-                    | crate::reconcile::LaunchPhase::DockerRequested
-            )
-        )
-}
-
-fn physical_covers_population(reservation: &PhysicalRunnerReservation) -> bool {
-    reservation.reservation.state != ReservationState::Released
-        && !reservation.intent_cleanup_proven
-        && !matches!(
-            reservation.jit_state,
-            PhysicalRunnerJitState::Completed | PhysicalRunnerJitState::Cleaned
-        )
-        && (reservation.runner.is_some()
-            || (reservation.reservation.resume_eligible && reservation.acquired_request.is_none())
-            || matches!(
-                reservation.jit_state,
-                PhysicalRunnerJitState::Claimed
-                    | PhysicalRunnerJitState::Bound
-                    | PhysicalRunnerJitState::StartRequested
-                    | PhysicalRunnerJitState::Ready
-                    | PhysicalRunnerJitState::Started
-            ))
-}
-
-fn blocked_plan(assigned_total: u64, blocked: AssignedPopulationBlock) -> AssignedPopulationPlan {
-    AssignedPopulationPlan {
-        assigned_total,
-        owned_coverage: 0,
-        actions: Vec::new(),
-        uncovered: assigned_total,
-        blocked: Some(blocked),
-    }
 }

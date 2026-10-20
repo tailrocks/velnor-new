@@ -8,6 +8,7 @@ use crate::journal::resource_probe::ProbeSeed;
 mod eligibility;
 mod inventory;
 mod phase;
+mod release;
 mod settlement;
 mod snapshot;
 use eligibility::{claim_eligible, initial_eligible};
@@ -15,7 +16,6 @@ pub(crate) use inventory::{
     PreJitBootstrapContainer, PreJitCleanupInventory, PreJitCreateSpec, PreJitInitializerIdentity,
     PreJitNetworkIdentity, PreJitStorageObject,
 };
-#[cfg(test)]
 pub(crate) use settlement::PreJitCleanupSettlementResult;
 use snapshot::snapshot_digest;
 

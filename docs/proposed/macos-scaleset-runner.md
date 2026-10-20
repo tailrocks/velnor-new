@@ -70,7 +70,10 @@ idempotent reconnect; `daemon run` and readiness load the same configured pair.
 No fallback account is consulted. No PAT on argv. No secret in TOML. Ready means
 bounded readiness, not "a process exists".
 
-One active repository connection. A second incompatible connection is rejected.
+One host controller manages separate repository connections.
+All connections share one capacity budget and the selected Docker engine.
+A second connection must use the same host resource settings.
+Each connection keeps separate credentials and Scale Set records.
 A second daemon fails before it opens another session.
 
 `disconnect` drains and deletes only remote resources this controller recorded

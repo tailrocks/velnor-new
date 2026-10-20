@@ -4,6 +4,7 @@ mod admission;
 mod enumerate;
 mod lifecycle;
 mod limits;
+mod physical_attempt;
 mod provisioning;
 
 pub(in crate::journal) async fn release_ready(
@@ -12,6 +13,29 @@ pub(in crate::journal) async fn release_ready(
 ) -> Result<bool, crate::error::HostError> {
     provisioning::release_ready(connection, reservation_id).await
 }
+
+pub(in crate::journal) async fn record_no_acquire_outcome(
+    connection: &turso::Connection,
+    reservation_id: i64,
+    response_digest: &str,
+) -> Result<(), crate::error::HostError> {
+    physical_attempt::record_no_acquire_outcome(connection, reservation_id, response_digest).await
+}
+
+pub(in crate::journal) async fn record_terminal_cleanup_outcome(
+    connection: &turso::Connection,
+    connection_id: &str,
+    reservation_id: i64,
+    intent_id: i64,
+) -> Result<bool, crate::error::HostError> {
+    physical_attempt::record_terminal_cleanup_outcome(
+        connection,
+        connection_id,
+        reservation_id,
+        intent_id,
+    )
+    .await
+}
 mod read;
 mod storage;
 mod storage_budget;
@@ -19,6 +43,8 @@ mod storage_budget;
 pub(crate) use enumerate::{
     PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation,
 };
+#[cfg(test)]
+pub(crate) use physical_attempt::PhysicalAttemptIdentity;
 #[cfg(test)]
 pub(crate) use read::ReservationSnapshot;
 pub(crate) use read::ReservationState;
@@ -48,7 +74,6 @@ pub(crate) use provisioning::ListenerDeliveryClaim;
 pub(crate) use provisioning::MetadataSettlementResult;
 pub(crate) use provisioning::PreJitCapacityProbeClaim;
 pub(crate) use provisioning::PreJitCleanupClaim;
-#[cfg(test)]
 pub(crate) use provisioning::PreJitCleanupSettlementResult;
 pub(crate) use provisioning::StorageCleanupObserverWitness;
 pub(crate) use provisioning::{
@@ -57,10 +82,11 @@ pub(crate) use provisioning::{
 #[cfg(test)]
 pub(crate) use provisioning::{CreateCommitStage, arm_create_commit_gate};
 pub(crate) use provisioning::{
-    CreateInterruptionOutcome, RequestPhysicalReservationResult, StorageCleanupIdentity,
-    StorageInitializationClaim, StorageMetadataSettlementClaim, StorageNetworkCreateClaim,
-    StorageNetworkRemovalClaim, StorageObjectCreateClaim, StorageProvisioningPlan,
-    StorageProvisioningRole, VerifiedMetadataInitialization, VerifiedMetadataInitializationHandoff,
+    CreateInterruptionOutcome, PhysicalSuccessorReservationResult,
+    RequestPhysicalReservationResult, StorageCleanupIdentity, StorageInitializationClaim,
+    StorageMetadataSettlementClaim, StorageNetworkCreateClaim, StorageNetworkRemovalClaim,
+    StorageObjectCreateClaim, StorageProvisioningPlan, StorageProvisioningRole,
+    VerifiedMetadataInitialization, VerifiedMetadataInitializationHandoff,
 };
 pub(crate) use provisioning::{
     PreJitBootstrapContainer, PreJitCleanupInventory, PreJitCreateSpec, PreJitInitializerIdentity,
@@ -86,7 +112,7 @@ pub(crate) use storage_budget::{
 #[cfg(test)]
 pub(crate) use storage_budget_tests::{
     fixture_admission, fixture_profile, fixture_provisioning_profile,
-    fixture_storage_provisioning_admission,
+    fixture_storage_provisioning_admission, fixture_storage_provisioning_admission_for_profile,
     fixture_storage_provisioning_admission_with_filesystem_digest,
 };
 

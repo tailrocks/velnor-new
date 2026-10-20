@@ -20,12 +20,12 @@ pub(in crate::launch) fn intake_composition_image_inspect(
     }))
 }
 
-pub(in crate::launch) struct IntakeCompositionProvider {
+pub(crate) struct IntakeCompositionProvider {
     candidate: provider::VerifiedCandidate,
 }
 
 impl IntakeCompositionProvider {
-    pub(in crate::launch) fn new(engine: &SelectedEngineContext, source_revision: &str) -> Self {
+    pub(crate) fn new(engine: &SelectedEngineContext, source_revision: &str) -> Self {
         Self {
             candidate: provider::VerifiedCandidate {
                 runtime_id: format!("sha256:{}", "a".repeat(64)),

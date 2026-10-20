@@ -1,3 +1,6 @@
+use super::super::helpers::{
+    record_observed_storage_cleanup, record_owned_network_cleanup, settle_storage_metadata,
+};
 use super::fixtures::{self, LinkedLifecycle};
 use crate::error::HostError;
 use crate::journal::{AssignmentKey, ReservationState};
@@ -39,6 +42,67 @@ async fn completed_available_remains_owned_after_observed_cleanup_and_reopen()
     );
     assert_available_is_owned(&fixture).await?;
     assert_changed_job_and_source_are_rejected(&fixture).await
+}
+
+#[tokio::test]
+async fn stale_completion_lease_cannot_retire_current_physical_attempt() -> Result<(), HostError> {
+    let fixture = fixtures::prepare_linked_lifecycle(100, 117, 'c').await?;
+    let actual = fixture
+        .scope
+        .assignment_identity(AssignmentKey::AssignedRequest {
+            request_id: fixture.actual_request_id,
+        })
+        .await?;
+    super::record_completed(&fixture, &actual).await?;
+    record_runner_absence(&fixture).await?;
+    record_observed_storage_cleanup(&fixture.scope, fixture.reservation_id).await?;
+    fixture
+        .scope
+        .record_remote_cleanup(fixture.reservation_id)
+        .await?;
+    fixture
+        .scope
+        .record_local_cleanup(fixture.reservation_id)
+        .await?;
+    record_owned_network_cleanup(&fixture.scope, fixture.reservation_id).await?;
+    crate::journal::connection::storage::read_transaction(
+        fixture.scope.journal_ref(),
+        async |connection| {
+            let changed = connection
+                .execute(
+                    "UPDATE connection_completion_cleanup SET lease_until = 0 WHERE intent_id = ?1",
+                    [fixture.intent_id],
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            if changed != 1 {
+                return Err(HostError::Journal);
+            }
+            Ok(())
+        },
+    )
+    .await?;
+    assert!(
+        settle_storage_metadata(&fixture.scope, &fixture.provisioned, 't')
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        fixture
+            .scope
+            .reservation(&fixture.physical)
+            .await?
+            .map(|reservation| reservation.state),
+        Some(ReservationState::Reserved)
+    );
+    assert!(
+        fixture
+            .scope
+            .current_physical_attempt(fixture.reservation_id)
+            .await?
+            .is_some()
+    );
+    Ok(())
 }
 
 async fn record_runner_absence(fixture: &LinkedLifecycle) -> Result<(), HostError> {

@@ -8,6 +8,13 @@ impl BootstrapSetup {
     async fn open_with_runner_create_status(
         runner_create_status: Option<u16>,
     ) -> Result<Self, String> {
+        Self::open_with_runner_create_status_and_jobs(runner_create_status, 1).await
+    }
+
+    async fn open_with_runner_create_status_and_jobs(
+        runner_create_status: Option<u16>,
+        _jobs: u32,
+    ) -> Result<Self, String> {
         let fixture = Fixture::open_with_engine("native-bootstrap-pair", ENGINE_ID).await?;
         configure_capacity(&fixture).await?;
         let permit = StartPermit::test_fixture_with_engine_and_available_memory(
@@ -20,7 +27,7 @@ impl BootstrapSetup {
             permit.docker_root_digest(),
         );
         let engine = selected_engine(&images)?;
-        let state = BootstrapAdmissionState::new(&fixture.binding)?;
+        let state = BootstrapAdmissionState::new(&fixture.binding, 1)?;
         let drive = bootstrap_drive(&fixture, &state.path);
         let poll = crate::launch_harness::available(&[REQUEST_ID]);
         let outcome = acquire_source_authorized(&drive, permit, &engine, &poll).await?;
@@ -64,14 +71,28 @@ pub(crate) struct RunnerCreateFailure {
 }
 
 pub(crate) async fn runner_create_409() -> Result<RunnerCreateFailure, String> {
-    let setup = BootstrapSetup::open_with_runner_create_status(Some(409)).await?;
+    runner_create_409_with_jobs(1).await
+}
+
+pub(crate) async fn runner_create_409_with_jobs(jobs: u32) -> Result<RunnerCreateFailure, String> {
+    let setup = BootstrapSetup::open_with_runner_create_status_and_jobs(Some(409), jobs).await?;
     let error = setup.start().await.err().ok_or_else(|| {
         "The Runner container request succeeded, but the test expected it to fail.".to_owned()
     })?;
+    if jobs > 1 {
+        configure_capacity_for_jobs(&setup.fixture, jobs).await?;
+    }
     Ok(RunnerCreateFailure { setup, error })
 }
 
 impl RunnerCreateFailure {
+    pub(crate) fn binding(&self) -> &crate::config::RepositoryConnection {
+        &self.setup.fixture.binding
+    }
+    pub(crate) fn set_probe_available_bytes(&self, available_bytes: u64) {
+        self.setup.api.set_probe_available_bytes(available_bytes);
+    }
+
     pub(crate) fn host_journal(&self) -> &crate::journal::Journal {
         &self.setup.fixture.journal
     }
@@ -113,6 +134,7 @@ impl RunnerCreateFailure {
     }
 
     pub(crate) async fn finish_and_assert_capacity_probe(self) -> Result<(), String> {
+        let available_bytes = self.setup.api.probe_available_bytes();
         let captured = self.finish().await?;
         if let Some(error) = captured.server_error {
             return Err(format!("The Docker fixture failed. Error: {error}."));
@@ -145,7 +167,7 @@ impl RunnerCreateFailure {
         if logs.len() != 1
             || deletes != 1
             || logs[0].response_body
-                != crate::launch::resource_probe::canonical_logs_response(1_203, 1_u64 << 30)
+                != crate::launch::resource_probe::canonical_logs_response(1_203, available_bytes)
                     .map_err(|error| error.to_string())?
         {
             return Err(

@@ -2,15 +2,16 @@
 
 use crate::error::HostError;
 
-mod completion;
-pub(super) use completion::ensure_completion_objects;
-use completion::ensure_legacy_columns;
-
 use super::{
     connection, doctor_probe, image_import, provisioning, remote, request_ledger,
     request_reservations, scale_set_create, session, session_refresh, source_authorization,
     storage_budget, storage_initialization, storage_network,
 };
+
+#[path = "migration/completion.rs"]
+mod completion;
+
+pub(super) use completion::{ensure_completion_objects, ensure_legacy_columns};
 
 pub(super) async fn from_version_zero(conn: &turso::Connection) -> Result<(), HostError> {
     crate::journal_schema::bootstrap(conn).await?;
@@ -332,6 +333,16 @@ pub(super) async fn from_version_thirty_one(conn: &turso::Connection) -> Result<
     super::cleanup_observer_witness::upgrade_for_v32(conn).await?;
     super::pre_jit_cleanup::bootstrap(conn).await?;
     conn.execute("PRAGMA user_version = 32", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(())
+}
+
+pub(super) async fn from_version_thirty_two(conn: &turso::Connection) -> Result<(), HostError> {
+    super::validate_persisted_schema_v32(conn).await?;
+    super::physical_attempts::upgrade_from_v32(conn).await?;
+    super::storage_network::upgrade_for_v33(conn).await?;
+    conn.execute("PRAGMA user_version = 33", ())
         .await
         .map_err(|_| HostError::Journal)?;
     Ok(())

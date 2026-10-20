@@ -368,4 +368,7 @@ fn fresh_nonce() -> Result<String, EnsureError> {
 mod tests;
 
 #[cfg(test)]
-pub(crate) use tests::{RunnerCreateFailure, run_native_quarantine_composition, runner_create_409};
+pub(crate) use tests::{
+    RunnerCreateFailure, run_native_quarantine_composition, runner_create_409,
+    runner_create_409_with_jobs,
+};

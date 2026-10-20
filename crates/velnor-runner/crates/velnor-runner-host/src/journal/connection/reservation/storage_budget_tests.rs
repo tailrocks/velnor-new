@@ -133,6 +133,14 @@ pub(crate) fn fixture_storage_provisioning_admission_with_filesystem_digest(
     filesystem_instance_digest: String,
 ) -> Result<StorageProvisioningAdmission, HostError> {
     let profile = fixture_provisioning_profile();
+    fixture_storage_provisioning_admission_for_profile(permit, filesystem_instance_digest, &profile)
+}
+
+pub(crate) fn fixture_storage_provisioning_admission_for_profile(
+    permit: &StartPermit,
+    filesystem_instance_digest: String,
+    profile: &StorageProfile,
+) -> Result<StorageProvisioningAdmission, HostError> {
     let sample = StorageAdmissionSample::new(
         StorageSampleIdentity::new(
             permit.sample_generation_id().to_owned(),

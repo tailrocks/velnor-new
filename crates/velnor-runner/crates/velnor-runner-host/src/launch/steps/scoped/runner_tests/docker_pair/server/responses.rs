@@ -12,6 +12,7 @@ pub(super) fn answer(
     volumes: &HashMap<String, Value>,
     networks: &HashMap<String, Value>,
     containers: &HashMap<String, Value>,
+    probe_available_bytes: u64,
 ) -> Result<(u16, Vec<u8>), String> {
     let route = route(request);
     match (request.method.as_str(), route) {
@@ -68,7 +69,7 @@ pub(super) fn answer(
                 .and_then(|container| container["State"]["Pid"].as_u64())
                 .and_then(|pid| u32::try_from(pid).ok())
                 .ok_or_else(|| "The probe log target has no inspected process ID.".to_owned())?;
-            crate::launch::resource_probe::canonical_logs_response(pid, 1_u64 << 30)
+            crate::launch::resource_probe::canonical_logs_response(pid, probe_available_bytes)
                 .map(|response| (200, response))
                 .map_err(|error| {
                     format!("The canonical probe logs could not be encoded. Error: {error}.")

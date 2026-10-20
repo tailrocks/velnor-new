@@ -35,7 +35,7 @@ pub(super) struct LinkedLifecycle {
     pub(super) nonce: char,
     pub(super) reservation_id: i64,
     pub(super) intent_id: i64,
-    provisioned: super::super::helpers::ProvisionedRunner,
+    pub(super) provisioned: super::super::helpers::ProvisionedRunner,
     pub(super) runner: RunnerReference,
     pub(super) source: velnor_runner_github::SourceMetadata,
     pub(super) job_id: String,

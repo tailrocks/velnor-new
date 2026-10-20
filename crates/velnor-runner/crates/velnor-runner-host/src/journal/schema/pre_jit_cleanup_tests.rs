@@ -9,6 +9,10 @@ struct Scratch(PathBuf);
 mod missing_create_spec_table;
 #[path = "pre_jit_cleanup_tests/settlement_schema.rs"]
 mod settlement_schema;
+#[path = "pre_jit_cleanup_tests/version_downgrade.rs"]
+mod version_downgrade;
+
+use version_downgrade::{remove_v33_physical_attempt_schema, restore_v31_observer_guard};
 
 impl Scratch {
     fn new() -> Self {
@@ -85,7 +89,8 @@ async fn create_v31_database(path: &std::path::Path) -> Result<(), String> {
 }
 
 #[tokio::test]
-async fn version_thirty_one_upgrade_installs_only_the_typed_create_receipt() -> Result<(), String> {
+async fn version_thirty_one_empty_fixture_upgrade_installs_only_the_typed_create_receipt()
+-> Result<(), String> {
     let scratch = Scratch::new();
     std::fs::create_dir_all(&scratch.0).map_err(|_| "The test directory could not be created.")?;
     let path = scratch.database();
@@ -124,6 +129,58 @@ async fn version_thirty_one_upgrade_installs_only_the_typed_create_receipt() -> 
     if count != 0 {
         return Err("The upgrade must not invent create receipts.".to_owned());
     }
+    Ok(())
+}
+
+async fn remove_v32_pre_jit_schema(connection: &turso::Connection) -> Result<(), String> {
+    restore_v31_observer_guard(connection).await?;
+    super::super::storage_network::restore_v32_transition_for_test(connection)
+        .await
+        .map_err(|_| "Could not restore the version 32 network guard.")?;
+    remove_v33_physical_attempt_schema(connection).await?;
+    for trigger in [
+        "pre_jit_create_spec_insert_guard",
+        "pre_jit_create_spec_no_update",
+        "pre_jit_create_spec_no_delete",
+    ] {
+        connection
+            .execute(&format!("DROP TRIGGER {trigger}"), ())
+            .await
+            .map_err(|_| "The test create-spec trigger could not be removed.")?;
+    }
+    connection
+        .execute("DROP TABLE capacity_reservation_pre_jit_create_specs", ())
+        .await
+        .map_err(|_| "The test create-spec table could not be removed.")?;
+    for trigger in [
+        "pre_jit_cleanup_claim_insert_guard",
+        "pre_jit_cleanup_claim_update_guard",
+        "pre_jit_cleanup_claim_no_delete",
+        "pre_jit_cleanup_progress_insert_guard",
+        "pre_jit_cleanup_progress_update_guard",
+        "pre_jit_cleanup_progress_no_delete",
+    ] {
+        connection
+            .execute(&format!("DROP TRIGGER {trigger}"), ())
+            .await
+            .map_err(|_| "The test trigger could not be removed.")?;
+    }
+    connection
+        .execute(
+            "DROP TABLE capacity_reservation_pre_jit_cleanup_progress",
+            (),
+        )
+        .await
+        .map_err(|_| "The test progress table could not be removed.")?;
+    connection
+        .execute("DROP TABLE capacity_reservation_pre_jit_cleanup_claims", ())
+        .await
+        .map_err(|_| "The test claim table could not be removed.")?;
+    connection
+        .execute("PRAGMA user_version = 31", ())
+        .await
+        .map_err(|_| "The prior schema version could not be set.")?;
+
     Ok(())
 }
 
@@ -256,7 +313,7 @@ async fn runner_create_terminal_reply_allows_one_live_pre_jit_claim() -> Result<
         || !captured.jit_input.is_empty()
     {
         return Err(format!(
-            "The test server did not record one Runner 409 while JIT configuration was withheld. Error: {:?}; create requests: {:?}; JIT bytes: {}.",
+            "The test server did not record one Runner 409 with JIT withheld: error={:?}, creates={:?}, jit_bytes={}",
             captured.server_error,
             captured
                 .requests
@@ -297,12 +354,12 @@ async fn claimed_pre_jit_recovery_accepts_progress_without_changing_reservation_
         Ok(())
     })
     .await
-    .map_err(|_| "The active claim did not accept the source state for its phase.".to_owned())?;
+    .map_err(|_| "The active claim did not accept phase-compatible source state.".to_owned())?;
 
     if !scope
         .validate_pre_jit_cleanup_claim(&claim)
         .await
-        .map_err(|_| "The journal could not validate its progressed cleanup claim.".to_owned())?
+        .map_err(|_| "The journal could not validate its progressed cleanup claim".to_owned())?
     {
         return Err("The active claim became invalid after cleanup progress.".to_owned());
     }
@@ -322,21 +379,21 @@ async fn claimed_pre_jit_recovery_accepts_progress_without_changing_reservation_
         Ok(())
     })
     .await
-    .map_err(|_| "The progress record rejected its ordered completion stages.".to_owned())?;
+    .map_err(|_| "The progress record rejected its ordered completion stages".to_owned())?;
     if scope
         .validate_pre_jit_cleanup_claim(&claim)
         .await
-        .map_err(|_| "The journal could not validate a terminal cleanup claim.".to_owned())?
+        .map_err(|_| "The journal could not validate a terminal cleanup claim".to_owned())?
     {
         return Err("The settled claim remained available for more effects.".to_owned());
     }
     if scope
         .claim_pre_jit_cleanup(reservation_id)
         .await
-        .map_err(|_| "The journal could not reject a settled cleanup claim.".to_owned())?
+        .map_err(|_| "The journal could not reject a settled cleanup claim".to_owned())?
         .is_some()
     {
-        return Err("The journal reissued a settled cleanup claim.".to_owned());
+        return Err("The journal reissued a settled cleanup claim".to_owned());
     }
     let _captured = failure.finish().await?;
     Ok(())

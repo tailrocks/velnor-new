@@ -11,7 +11,7 @@ use crate::scale_set::EnsureError;
 mod offer_authorization;
 mod scoped;
 #[cfg(test)]
-pub(crate) use scoped::{RunnerCreateFailure, runner_create_409};
+pub(crate) use scoped::{RunnerCreateFailure, runner_create_409, runner_create_409_with_jobs};
 pub(crate) mod source;
 mod source_authorization;
 

@@ -4,7 +4,10 @@ use crate::journal::{
     PhysicalRunnerOwnership, PhysicalRunnerReservation, ReservationSnapshot, ReservationState,
 };
 
-use super::{AssignedPopulationBlock, plan_assigned_population};
+use super::{
+    AssignedPopulationAction, AssignedPopulationBlock, plan_assigned_population,
+    plan_assigned_population_with_successors,
+};
 
 fn request(request_id: i64) -> AssignmentIdentity {
     AssignmentIdentity::new(
@@ -226,6 +229,53 @@ fn actual_started_request_can_differ_from_the_acquire_witness() {
     assert_eq!(
         plan.blocked,
         Some(AssignedPopulationBlock::UncertainPhysicalWork)
+    );
+}
+
+#[test]
+fn crossed_started_assignments_allow_a_successor_for_pending_witness_demand() {
+    let mut first = reservation(
+        20,
+        remote_runner("nonce-20"),
+        PhysicalRunnerJitState::Started,
+        Some(runner(220)),
+    );
+    first.launch_phase = Some(crate::reconcile::LaunchPhase::RunnerStarted);
+    first.witness_request_id = Some(120);
+    first.runner_request_id = Some(121);
+    first.started_request_id = Some(121);
+    first.acquired_request = Some(request(120));
+
+    let mut second = reservation(
+        21,
+        remote_runner("nonce-21"),
+        PhysicalRunnerJitState::Started,
+        Some(runner(221)),
+    );
+    second.launch_phase = Some(crate::reconcile::LaunchPhase::RunnerStarted);
+    second.witness_request_id = Some(120);
+    second.runner_request_id = Some(122);
+    second.started_request_id = Some(122);
+    second.acquired_request = Some(request(120));
+
+    let plan = plan_assigned_population_with_successors(
+        3,
+        &connection(),
+        17,
+        &[first, second],
+        &[request(120)],
+        &[],
+        &[request(120)],
+    );
+
+    assert_eq!(plan.owned_coverage, 2);
+    assert_eq!(plan.uncovered, 0);
+    assert_eq!(plan.blocked, None);
+    assert_eq!(
+        plan.actions,
+        [AssignedPopulationAction::ReserveSuccessor {
+            request: request(120)
+        }]
     );
 }
 

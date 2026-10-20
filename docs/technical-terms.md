@@ -73,3 +73,7 @@
 | Cache owner | A generated job that owns cache layers for its matrix members. |
 | Cache layer | One type of data stored in the qualification cache. |
 | Matrix member | A plan entry that belongs to one generated job. |
+
+| DDL | SQL statements that define or change database objects. |
+
+| Physical attempt | An attempt to start an acquired request with one reservation. |

@@ -13,7 +13,9 @@ pub(super) use native_intake::{
 };
 #[path = "bootstrap_start/partial_failure.rs"]
 mod partial_failure;
-pub(crate) use partial_failure::{RunnerCreateFailure, runner_create_409};
+pub(crate) use partial_failure::{
+    RunnerCreateFailure, runner_create_409, runner_create_409_with_jobs,
+};
 
 const ENGINE_ID: &str = "bc9058a0-c807-412b-a088-6c1d96ddd462";
 const MEMORY_BYTES: u64 = 32 * 1024 * 1024 * 1024;
@@ -24,7 +26,7 @@ struct BootstrapAdmissionState {
 }
 
 impl BootstrapAdmissionState {
-    fn new(binding: &crate::config::RepositoryConnection) -> Result<Self, String> {
+    fn new(binding: &crate::config::RepositoryConnection, jobs: u32) -> Result<Self, String> {
         let path = std::env::temp_dir().join(format!(
             "velnor-bootstrap-admission-{}",
             uuid::Uuid::new_v4()
@@ -35,7 +37,7 @@ impl BootstrapAdmissionState {
             .replace("[scale_set]", "[connections.scale_set]")
             .replace("[source_policy]", "[connections.source_policy]");
         let config = format!(
-            "schema = 2\n[[connections]]\n{connection}\n[host]\nmax_jobs = 1\n[host.resources]\nrunner_cpu_millicores = 1000\nrunner_memory_bytes = 4294967296\ndind_cpu_millicores = 1000\ndind_memory_bytes = 4294967296\noperational_memory_reserve_bytes = 1\n[docker]\ncontext = \"orbstack\"\nplatform = \"linux/amd64\"\nendpoint = \"unix:///var/run/docker.sock\"\n"
+            "schema = 2\n[[connections]]\n{connection}\n[host]\nmax_jobs = {jobs}\n[host.resources]\nrunner_cpu_millicores = 1000\nrunner_memory_bytes = 4294967296\ndind_cpu_millicores = 1000\ndind_memory_bytes = 4294967296\noperational_memory_reserve_bytes = 1\n[docker]\ncontext = \"orbstack\"\nplatform = \"linux/amd64\"\nendpoint = \"unix:///var/run/docker.sock\"\n"
         );
         std::fs::write(path.join("host.toml"), config).map_err(|error| error.to_string())?;
         Ok(Self { path })
@@ -168,13 +170,27 @@ impl BootstrapSetup {
 }
 
 async fn configure_capacity(fixture: &Fixture) -> Result<(), String> {
+    configure_capacity_limits(fixture, 1).await?;
+    fixture
+        .journal
+        .configure_storage_profile(crate::journal::fixture_provisioning_profile())
+        .await
+        .map_err(|error| format!("Storage profile setup error: {error}"))
+}
+
+async fn configure_capacity_for_jobs(fixture: &Fixture, jobs: u32) -> Result<(), String> {
+    configure_capacity_limits(fixture, jobs).await
+}
+
+async fn configure_capacity_limits(fixture: &Fixture, jobs: u32) -> Result<(), String> {
+    let job_count = u64::from(jobs);
     fixture
         .journal
         .configure_capacity_with_operational_limits(
             crate::journal::CapacityLimits {
-                jobs: 1,
-                cpu_millicores: 4_000,
-                memory_bytes: MEMORY_BYTES,
+                jobs,
+                cpu_millicores: 4_000 * job_count,
+                memory_bytes: (MEMORY_BYTES + (32_u64 << 30)).saturating_mul(job_count),
             },
             crate::journal::OperationalCapacityLimits {
                 cpu_millicores: 1_000,
@@ -183,11 +199,7 @@ async fn configure_capacity(fixture: &Fixture) -> Result<(), String> {
         )
         .await
         .map_err(|error| format!("Capacity setup error: {error}"))?;
-    fixture
-        .journal
-        .configure_storage_profile(crate::journal::fixture_provisioning_profile())
-        .await
-        .map_err(|error| format!("Storage profile setup error: {error}"))
+    Ok(())
 }
 
 async fn acquire_source_authorized(

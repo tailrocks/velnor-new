@@ -39,9 +39,9 @@ pub(in crate::launch) use record::http_fixture::canonical_logs_response;
 mod recover;
 mod sample;
 #[cfg(test)]
-pub(in crate::launch) use intake_composition::{
-    IntakeCompositionProvider, intake_composition_image_inspect,
-};
+pub(crate) use intake_composition::IntakeCompositionProvider;
+#[cfg(test)]
+pub(in crate::launch) use intake_composition::intake_composition_image_inspect;
 pub(in crate::launch) use sample::retained_tmpfs_bytes as retained_tmpfs_memory_bytes;
 
 pub(in crate::launch) use cleanup_observer::{

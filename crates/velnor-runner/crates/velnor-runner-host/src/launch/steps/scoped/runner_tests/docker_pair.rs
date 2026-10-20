@@ -14,6 +14,8 @@ mod request_checks;
 #[path = "docker_pair/server.rs"]
 mod server;
 
-pub(crate) use bootstrap_start::{RunnerCreateFailure, runner_create_409};
+pub(crate) use bootstrap_start::{
+    RunnerCreateFailure, runner_create_409, runner_create_409_with_jobs,
+};
 
 use server::{CapturedApi, CapturedRequest, DIND_ID, PairDockerApi, RUNNER_ID, route};

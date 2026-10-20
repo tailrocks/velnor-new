@@ -172,7 +172,7 @@ pub(super) async fn witness_jit_context(
 ) -> Result<Option<(i64, i64, String)>, HostError> {
     let mut rows = connection
         .query(
-            "SELECT scale_set_id, request_id, binding_digest FROM connection_request_reservations WHERE reservation_id = ?1 AND connection_id = ?2",
+            "SELECT attempt.scale_set_id, attempt.witness_request_id, attempt.binding_digest FROM physical_attempt_current AS current JOIN physical_attempts AS attempt ON attempt.lineage_id = current.lineage_id AND attempt.generation = current.generation AND attempt.reservation_id = current.reservation_id AND attempt.intent_id = current.intent_id WHERE current.reservation_id = ?1 AND attempt.connection_id = ?2",
             (query.reservation_id, query.connection_id),
         )
         .await

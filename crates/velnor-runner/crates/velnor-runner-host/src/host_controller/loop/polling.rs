@@ -22,8 +22,12 @@ mod acquired;
 mod outcome;
 #[path = "polling/positive_offer.rs"]
 mod positive_offer;
+#[path = "polling/pre_jit.rs"]
+mod pre_jit;
 #[path = "polling/recovery.rs"]
 mod recovery;
+#[path = "polling/successor.rs"]
+mod successor;
 
 pub(crate) use outcome::{ControllerPollOutcome, PollKind};
 use positive_offer::{PositiveOfferInputs, admit_positive_offer};
@@ -117,6 +121,7 @@ pub(super) async fn reconcile_assigned_population(
     prepared: &mut PreparedConnection,
     context: &PositivePollContext<'_>,
 ) -> Result<(), HostError> {
+    pre_jit::reconcile(prepared, context).await?;
     let Some(assigned_total) = prepared.assigned_total else {
         return Ok(());
     };
@@ -135,6 +140,16 @@ pub(super) async fn reconcile_assigned_population(
         .acquired_authorized_requests(ASSIGNED_POPULATION_SCAN_LIMIT)
         .await?;
     let mut recovery_candidates = Vec::new();
+    let mut successor_ready = Vec::new();
+    for request in &acquired {
+        if prepared
+            .scope
+            .acquired_successor_ready(request, policy.generation(), policy.policy_sha256())
+            .await?
+        {
+            successor_ready.push(request.clone());
+        }
+    }
     for reservation in &reservations {
         let Some(request) = reservation.acquired_request.as_ref() else {
             continue;
@@ -160,21 +175,28 @@ pub(super) async fn reconcile_assigned_population(
             recovery_candidates.push(candidate);
         }
     }
-    let plan = crate::host_controller::plan_assigned_population(
+    let plan = crate::host_controller::plan_assigned_population_with_successors(
         assigned_total,
         &prepared.binding.connection_id,
         prepared.set_id,
         &reservations,
         &acquired,
         &recovery_candidates,
+        &successor_ready,
     );
 
     for action in plan.actions {
-        let crate::host_controller::AssignedPopulationAction::ContinueExisting {
-            request,
-            reservation_id,
-            candidate_index,
-        } = action;
+        let (request, reservation_id, candidate_index) = match action {
+            crate::host_controller::AssignedPopulationAction::ContinueExisting {
+                request,
+                reservation_id,
+                candidate_index,
+            } => (request, reservation_id, candidate_index),
+            crate::host_controller::AssignedPopulationAction::ReserveSuccessor { request } => {
+                successor::reserve_and_start(prepared, context, &request, assigned_total).await?;
+                continue;
+            }
+        };
         let candidate = recovery_candidates
             .get(candidate_index)
             .ok_or(HostError::Identity)?;

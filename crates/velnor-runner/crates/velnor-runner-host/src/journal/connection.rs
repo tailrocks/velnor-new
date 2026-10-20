@@ -24,7 +24,6 @@ pub(crate) use reservation::ListenerDeliveryClaim;
 pub(crate) use reservation::MetadataSettlementResult;
 pub(crate) use reservation::PreJitCapacityProbeClaim;
 pub(crate) use reservation::PreJitCleanupClaim;
-#[cfg(test)]
 pub(crate) use reservation::PreJitCleanupSettlementResult;
 pub(crate) use reservation::{
     PreJitBootstrapContainer, PreJitCleanupInventory, PreJitCreateSpec, PreJitInitializerIdentity,
@@ -45,17 +44,40 @@ pub(in crate::journal) async fn reservation_release_ready(
 ) -> Result<bool, crate::error::HostError> {
     reservation::release_ready(connection, reservation_id).await
 }
+
+pub(in crate::journal) async fn record_no_acquire_outcome(
+    connection: &turso::Connection,
+    reservation_id: i64,
+    response_digest: &str,
+) -> Result<(), crate::error::HostError> {
+    reservation::record_no_acquire_outcome(connection, reservation_id, response_digest).await
+}
+
+pub(in crate::journal) async fn record_terminal_cleanup_outcome(
+    connection: &turso::Connection,
+    connection_id: &str,
+    reservation_id: i64,
+    intent_id: i64,
+) -> Result<bool, crate::error::HostError> {
+    reservation::record_terminal_cleanup_outcome(
+        connection,
+        connection_id,
+        reservation_id,
+        intent_id,
+    )
+    .await
+}
 pub(crate) use reservation::{
     BootstrapContainerCreateClaim, BootstrapStartClaim, BoundJobFactsSnapshot, CapacityLimits,
-    CreateInterruptionOutcome, OperationalCapacityLimits, RecordedStorageNetwork,
-    RequestPhysicalReservationResult, ReservationRequest, StorageAdmissionSample,
-    StorageCleanupIdentity, StorageCleanupObserverWitness, StorageFilesystemKind,
-    StorageInitializationClaim, StorageInodePolicy, StorageMedium, StorageMetadataSettlementClaim,
-    StorageNetworkCreateClaim, StorageNetworkRemovalClaim, StorageObjectCreateClaim,
-    StorageObserver, StoragePoolLimit, StoragePoolObservation, StorageProfile,
-    StorageProvisioningAdmission, StorageProvisioningMemoryObservation, StorageProvisioningPlan,
-    StorageProvisioningRole, StorageRole, StorageRoleLimit, StorageSampleIdentity,
-    VerifiedMetadataInitialization, VerifiedMetadataInitializationHandoff,
+    CreateInterruptionOutcome, OperationalCapacityLimits, PhysicalSuccessorReservationResult,
+    RecordedStorageNetwork, RequestPhysicalReservationResult, ReservationRequest,
+    StorageAdmissionSample, StorageCleanupIdentity, StorageCleanupObserverWitness,
+    StorageFilesystemKind, StorageInitializationClaim, StorageInodePolicy, StorageMedium,
+    StorageMetadataSettlementClaim, StorageNetworkCreateClaim, StorageNetworkRemovalClaim,
+    StorageObjectCreateClaim, StorageObserver, StoragePoolLimit, StoragePoolObservation,
+    StorageProfile, StorageProvisioningAdmission, StorageProvisioningMemoryObservation,
+    StorageProvisioningPlan, StorageProvisioningRole, StorageRole, StorageRoleLimit,
+    StorageSampleIdentity, VerifiedMetadataInitialization, VerifiedMetadataInitializationHandoff,
 };
 #[cfg(test)]
 pub(crate) use reservation::{CreateCommitStage, arm_create_commit_gate};
@@ -69,7 +91,7 @@ pub(crate) use reservation::{StorageCacheProjection, StorageReservationPlan, Sto
 #[cfg(test)]
 pub(crate) use reservation::{
     fixture_admission, fixture_profile, fixture_provisioning_profile,
-    fixture_storage_provisioning_admission,
+    fixture_storage_provisioning_admission, fixture_storage_provisioning_admission_for_profile,
     fixture_storage_provisioning_admission_with_filesystem_digest,
 };
 pub(crate) use runtime::{EngineContext, SourceAuthorizationBinding};

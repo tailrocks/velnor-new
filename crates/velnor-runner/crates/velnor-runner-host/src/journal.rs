@@ -51,7 +51,6 @@ pub(crate) use completion::{
 pub(crate) use connection::JobFactsPublicationClaim;
 pub(crate) use connection::ListenerDeliveryClaim;
 pub(crate) use connection::NativeCompletionReservation;
-#[cfg(test)]
 pub(crate) use connection::PreJitCleanupSettlementResult;
 pub(crate) use connection::TerminalReplayBinding;
 pub(crate) use connection::{
@@ -62,17 +61,18 @@ pub(crate) use connection::{
     AssignmentIdentity, AssignmentKey, BootstrapContainerCreateClaim, BootstrapStartClaim,
     BoundJobFactsSnapshot, CapacityLimits, ConnectionCompletionInboxEntry, ConnectionJournal,
     CreateInterruptionOutcome, EngineContext, MetadataSettlementResult, OperationalCapacityLimits,
-    PreJitBootstrapContainer, PreJitCapacityProbeClaim, PreJitCleanupClaim, PreJitCleanupInventory,
-    PreJitCreateSpec, PreJitInitializerIdentity, PreJitNetworkIdentity, PreJitStorageObject,
-    RecordedStorageNetwork, RequestPhysicalReservationResult, ReservationRequest,
-    SessionCreateState, SessionRefreshClaim, SourceAuthorizationBinding, StorageAdmissionSample,
-    StorageCleanupIdentity, StorageCleanupObserverWitness, StorageFilesystemKind,
-    StorageInitializationClaim, StorageInodePolicy, StorageMedium, StorageMetadataSettlementClaim,
-    StorageNetworkCreateClaim, StorageNetworkRemovalClaim, StorageObjectCreateClaim,
-    StorageObserver, StoragePoolLimit, StoragePoolObservation, StorageProfile,
-    StorageProvisioningAdmission, StorageProvisioningMemoryObservation, StorageProvisioningPlan,
-    StorageProvisioningRole, StorageRole, StorageRoleLimit, StorageSampleIdentity,
-    VerifiedMetadataInitialization, VerifiedMetadataInitializationHandoff,
+    PhysicalSuccessorReservationResult, PreJitBootstrapContainer, PreJitCapacityProbeClaim,
+    PreJitCleanupClaim, PreJitCleanupInventory, PreJitCreateSpec, PreJitInitializerIdentity,
+    PreJitNetworkIdentity, PreJitStorageObject, RecordedStorageNetwork,
+    RequestPhysicalReservationResult, ReservationRequest, SessionCreateState, SessionRefreshClaim,
+    SourceAuthorizationBinding, StorageAdmissionSample, StorageCleanupIdentity,
+    StorageCleanupObserverWitness, StorageFilesystemKind, StorageInitializationClaim,
+    StorageInodePolicy, StorageMedium, StorageMetadataSettlementClaim, StorageNetworkCreateClaim,
+    StorageNetworkRemovalClaim, StorageObjectCreateClaim, StorageObserver, StoragePoolLimit,
+    StoragePoolObservation, StorageProfile, StorageProvisioningAdmission,
+    StorageProvisioningMemoryObservation, StorageProvisioningPlan, StorageProvisioningRole,
+    StorageRole, StorageRoleLimit, StorageSampleIdentity, VerifiedMetadataInitialization,
+    VerifiedMetadataInitializationHandoff,
 };
 #[cfg(test)]
 pub(crate) use connection::{CreateCommitStage, arm_create_commit_gate};
@@ -83,7 +83,7 @@ pub(crate) use connection::{
 #[cfg(test)]
 pub(crate) use connection::{
     SessionRefreshState, fixture_admission, fixture_profile, fixture_provisioning_profile,
-    fixture_storage_provisioning_admission,
+    fixture_storage_provisioning_admission, fixture_storage_provisioning_admission_for_profile,
     fixture_storage_provisioning_admission_with_filesystem_digest,
 };
 #[cfg(test)]

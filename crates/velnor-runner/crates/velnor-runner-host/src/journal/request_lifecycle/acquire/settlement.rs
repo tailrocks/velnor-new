@@ -50,8 +50,14 @@ impl ConnectionJournal {
             else {
                 return Ok(false);
             };
-            release_unused_reservation(connection, &connection_id, reservation_id, intent_id)
-                .await?;
+            release_unused_reservation(
+                connection,
+                &connection_id,
+                reservation_id,
+                intent_id,
+                &response_digest,
+            )
+            .await?;
             Ok(true)
         })
         .await
@@ -110,7 +116,7 @@ async fn unused_reservation(
 ) -> Result<Option<(i64, i64)>, HostError> {
     let mut rows = connection
         .query(
-            "SELECT reservation.id, reservation.intent_id FROM connection_request_reservations AS link JOIN capacity_reservations AS reservation ON reservation.id = link.reservation_id AND reservation.connection_id = link.connection_id JOIN connection_intents AS intent ON intent.id = reservation.intent_id AND intent.connection_id = reservation.connection_id JOIN capacity_reservation_provisioning_state AS state ON state.reservation_id = reservation.id WHERE link.connection_id = ?1 AND link.scale_set_id = ?2 AND link.request_id = ?3 AND link.binding_digest = ?4 AND link.physical_nonce = substr(intent.runner_name, 2) AND reservation.assignment_key = intent.assignment_key AND reservation.state = 'reserved' AND reservation.remote_cleanup_proven = 0 AND reservation.local_cleanup_proven = 0 AND intent.kind = 'launch' AND intent.state = 'pending' AND intent.cleanup_proven = 0 AND intent.jit_requested = 0 AND intent.acquire_attempted = 0 AND intent.runner_completed = 0 AND intent.github_runner_id IS NULL AND intent.docker_id IS NULL AND intent.dind_id IS NULL AND intent.worker_volume IS NULL AND intent.launch_phase = 'provisioning_held' AND state.bootstrap_start_state = 'not_requested' AND state.runner_container_id IS NULL AND state.dind_container_id IS NULL AND state.resources_bound = 0 AND state.jit_state = 'not_requested' AND state.runner_id IS NULL AND state.runner_name IS NULL AND state.runner_scale_set_id IS NULL AND state.publication_state = 'not_requested' AND state.delivery_state = 'not_requested' AND state.storage_cleanup_proven = 0 AND NOT EXISTS (SELECT 1 FROM capacity_reservation_provisioning_objects AS object WHERE object.reservation_id = reservation.id AND object.create_state != 'unclaimed') AND NOT EXISTS (SELECT 1 FROM capacity_reservation_bootstrap_containers AS container WHERE container.reservation_id = reservation.id AND (container.create_state != 'unclaimed' OR container.start_state != 'not_requested')) AND NOT EXISTS (SELECT 1 FROM capacity_reservation_storage_initialization AS initialization WHERE initialization.reservation_id = reservation.id) AND NOT EXISTS (SELECT 1 FROM capacity_reservation_networks AS network WHERE network.reservation_id = reservation.id) AND NOT EXISTS (SELECT 1 FROM capacity_reservation_bound_storage_attachments AS attachment WHERE attachment.reservation_id = reservation.id) AND NOT EXISTS (SELECT 1 FROM capacity_reservation_metadata_settlement_claims AS metadata WHERE metadata.reservation_id = reservation.id) AND NOT EXISTS (SELECT 1 FROM connection_runner_jits AS jit WHERE jit.intent_id = reservation.intent_id) AND NOT EXISTS (SELECT 1 FROM execution_publication_operations AS publication WHERE publication.reservation_id = reservation.id) AND NOT EXISTS (SELECT 1 FROM connection_execution_proofs AS proof WHERE proof.reservation_id = reservation.id)",
+            "SELECT reservation.id, reservation.intent_id FROM physical_attempt_current AS current JOIN physical_attempts AS attempt ON attempt.lineage_id = current.lineage_id AND attempt.generation = current.generation AND attempt.reservation_id = current.reservation_id AND attempt.intent_id = current.intent_id JOIN capacity_reservations AS reservation ON reservation.id = current.reservation_id AND reservation.connection_id = attempt.connection_id JOIN connection_intents AS intent ON intent.id = reservation.intent_id AND intent.connection_id = reservation.connection_id JOIN capacity_reservation_provisioning_state AS state ON state.reservation_id = reservation.id WHERE attempt.connection_id = ?1 AND attempt.scale_set_id = ?2 AND attempt.witness_request_id = ?3 AND attempt.binding_digest = ?4 AND attempt.physical_nonce = substr(intent.runner_name, 2) AND reservation.assignment_key = intent.assignment_key AND reservation.state = 'reserved' AND reservation.remote_cleanup_proven = 0 AND reservation.local_cleanup_proven = 0 AND intent.kind = 'launch' AND intent.state = 'pending' AND intent.cleanup_proven = 0 AND intent.jit_requested = 0 AND intent.acquire_attempted = 0 AND intent.runner_completed = 0 AND intent.github_runner_id IS NULL AND intent.docker_id IS NULL AND intent.dind_id IS NULL AND intent.worker_volume IS NULL AND intent.launch_phase = 'provisioning_held' AND state.bootstrap_start_state = 'not_requested' AND state.runner_container_id IS NULL AND state.dind_container_id IS NULL AND state.resources_bound = 0 AND state.jit_state = 'not_requested' AND state.runner_id IS NULL AND state.runner_name IS NULL AND state.runner_scale_set_id IS NULL AND state.publication_state = 'not_requested' AND state.delivery_state = 'not_requested' AND state.storage_cleanup_proven = 0 AND NOT EXISTS (SELECT 1 FROM capacity_reservation_provisioning_objects AS object WHERE object.reservation_id = reservation.id AND object.create_state != 'unclaimed') AND NOT EXISTS (SELECT 1 FROM capacity_reservation_bootstrap_containers AS container WHERE container.reservation_id = reservation.id AND (container.create_state != 'unclaimed' OR container.start_state != 'not_requested')) AND NOT EXISTS (SELECT 1 FROM capacity_reservation_storage_initialization AS initialization WHERE initialization.reservation_id = reservation.id) AND NOT EXISTS (SELECT 1 FROM capacity_reservation_networks AS network WHERE network.reservation_id = reservation.id) AND NOT EXISTS (SELECT 1 FROM capacity_reservation_bound_storage_attachments AS attachment WHERE attachment.reservation_id = reservation.id) AND NOT EXISTS (SELECT 1 FROM capacity_reservation_metadata_settlement_claims AS metadata WHERE metadata.reservation_id = reservation.id) AND NOT EXISTS (SELECT 1 FROM connection_runner_jits AS jit WHERE jit.intent_id = reservation.intent_id) AND NOT EXISTS (SELECT 1 FROM execution_publication_operations AS publication WHERE publication.reservation_id = reservation.id) AND NOT EXISTS (SELECT 1 FROM connection_execution_proofs AS proof WHERE proof.reservation_id = reservation.id)",
             (
                 connection_id,
                 identity.scale_set_id(),
@@ -138,11 +144,18 @@ async fn release_unused_reservation(
     connection_id: &str,
     reservation_id: i64,
     intent_id: i64,
+    response_digest: &str,
 ) -> Result<(), HostError> {
     mark_cleanup_proven(connection, connection_id, reservation_id).await?;
     if !crate::journal::connection::reservation_release_ready(connection, reservation_id).await? {
         return Err(HostError::Journal);
     }
+    crate::journal::connection::record_no_acquire_outcome(
+        connection,
+        reservation_id,
+        response_digest,
+    )
+    .await?;
     release_reservation(connection, connection_id, reservation_id, intent_id).await
 }
 
@@ -190,7 +203,18 @@ async fn release_reservation(
         .await
         .map_err(|_| HostError::Journal)?;
     if changed == 1 {
-        Ok(())
+        let retired = connection
+            .execute(
+                "DELETE FROM physical_attempt_current WHERE reservation_id = ?1 AND intent_id = ?2",
+                (reservation_id, intent_id),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        if retired == 1 {
+            Ok(())
+        } else {
+            Err(HostError::Journal)
+        }
     } else {
         Err(HostError::Journal)
     }

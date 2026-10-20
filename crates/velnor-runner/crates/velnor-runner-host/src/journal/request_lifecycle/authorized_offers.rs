@@ -122,7 +122,7 @@ impl ConnectionJournal {
             let repository_id = repository_id(connection, &connection_id).await?;
             let mut rows = connection
                 .query(
-                    "SELECT request_id, message_id, policy_mode, authority_model, binding_digest, source_digest, source_json FROM connection_request_authorizations WHERE connection_id = ?1 AND scale_set_id = ?2 AND binding_digest = ?3 AND authority_model = ?4 AND acquire_state = 'authorized' AND started_event_digest IS NULL AND completed_event_digest IS NULL AND NOT EXISTS (SELECT 1 FROM connection_request_reservations AS link WHERE link.connection_id = connection_request_authorizations.connection_id AND link.scale_set_id = connection_request_authorizations.scale_set_id AND link.request_id = connection_request_authorizations.request_id) ORDER BY message_id, request_id LIMIT ?5",
+                    "SELECT request_id, message_id, policy_mode, authority_model, binding_digest, source_digest, source_json FROM connection_request_authorizations WHERE connection_id = ?1 AND scale_set_id = ?2 AND binding_digest = ?3 AND authority_model = ?4 AND acquire_state = 'authorized' AND started_event_digest IS NULL AND completed_event_digest IS NULL ORDER BY message_id, request_id LIMIT ?5",
                     (
                         connection_id.as_str(),
                         scale_set_id,
@@ -175,7 +175,7 @@ impl ConnectionJournal {
             let repository_id = repository_id(connection, &connection_id).await?;
             let mut rows = connection
                 .query(
-                    "SELECT request_id, message_id, policy_mode, authority_model, binding_digest, source_digest, source_json FROM connection_request_authorizations WHERE connection_id = ?1 AND scale_set_id = ?2 AND request_id = ?3 AND message_id = ?4 AND binding_digest = ?5 AND authority_model = ?6 AND acquire_state = 'authorized' AND started_event_digest IS NULL AND completed_event_digest IS NULL AND NOT EXISTS (SELECT 1 FROM connection_request_reservations AS link WHERE link.connection_id = connection_request_authorizations.connection_id AND link.scale_set_id = connection_request_authorizations.scale_set_id AND link.request_id = connection_request_authorizations.request_id)",
+                    "SELECT request_id, message_id, policy_mode, authority_model, binding_digest, source_digest, source_json FROM connection_request_authorizations WHERE connection_id = ?1 AND scale_set_id = ?2 AND request_id = ?3 AND message_id = ?4 AND binding_digest = ?5 AND authority_model = ?6 AND acquire_state = 'authorized' AND started_event_digest IS NULL AND completed_event_digest IS NULL",
                     (
                         connection_id.as_str(),
                         scale_set_id,
@@ -240,7 +240,7 @@ impl ConnectionJournal {
             let expected_source = encode_source_receipt(receipt, repository_id)?;
             let mut rows = connection
                 .query(
-                    "SELECT request_id, message_id, policy_mode, authority_model, binding_digest, source_digest, source_json FROM connection_request_authorizations WHERE connection_id = ?1 AND scale_set_id = ?2 AND request_id = ?3 AND binding_digest = ?4 AND authority_model = ?5 AND acquire_state = 'authorized' AND started_event_digest IS NULL AND completed_event_digest IS NULL AND NOT EXISTS (SELECT 1 FROM connection_request_reservations AS link WHERE link.connection_id = connection_request_authorizations.connection_id AND link.scale_set_id = connection_request_authorizations.scale_set_id AND link.request_id = connection_request_authorizations.request_id)",
+                    "SELECT request_id, message_id, policy_mode, authority_model, binding_digest, source_digest, source_json FROM connection_request_authorizations WHERE connection_id = ?1 AND scale_set_id = ?2 AND request_id = ?3 AND binding_digest = ?4 AND authority_model = ?5 AND acquire_state = 'authorized' AND started_event_digest IS NULL AND completed_event_digest IS NULL",
                     (
                         connection_id.as_str(),
                         scale_set_id,

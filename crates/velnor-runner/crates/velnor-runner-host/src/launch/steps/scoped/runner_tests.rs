@@ -24,6 +24,7 @@ mod atomic_acquire;
 mod docker_pair;
 pub(crate) use docker_pair::{
     RunnerCreateFailure, run_native_quarantine_composition, runner_create_409,
+    runner_create_409_with_jobs,
 };
 #[path = "runner_tests/policy_change.rs"]
 mod policy_change;

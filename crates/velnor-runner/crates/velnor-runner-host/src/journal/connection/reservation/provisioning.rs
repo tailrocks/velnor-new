@@ -33,7 +33,6 @@ pub(crate) use network::{
 pub(crate) use objects::StorageObjectCreateClaim;
 pub(crate) use pre_jit_cleanup::PreJitCapacityProbeClaim;
 pub(crate) use pre_jit_cleanup::PreJitCleanupClaim;
-#[cfg(test)]
 pub(crate) use pre_jit_cleanup::PreJitCleanupSettlementResult;
 pub(crate) use pre_jit_cleanup::{
     PreJitBootstrapContainer, PreJitCleanupInventory, PreJitCreateSpec, PreJitInitializerIdentity,
@@ -41,7 +40,9 @@ pub(crate) use pre_jit_cleanup::{
 };
 pub(crate) use publication::JobFactsPublicationClaim;
 pub(crate) use publication::ListenerDeliveryClaim;
-pub(crate) use request_link::RequestPhysicalReservationResult;
+pub(crate) use request_link::{
+    PhysicalSuccessorReservationResult, RequestPhysicalReservationResult,
+};
 pub(crate) use storage_plan::{StorageProvisioningPlan, StorageProvisioningRole};
 
 pub(in crate::journal) async fn insert_metadata_settlement_claim(
@@ -114,7 +115,7 @@ impl ConnectionJournal {
             }
             let mut rows = connection
                 .query(
-                    "SELECT 1 FROM connection_request_reservations AS link JOIN connection_request_authorizations AS auth ON auth.connection_id = link.connection_id AND auth.scale_set_id = link.scale_set_id AND auth.request_id = link.request_id WHERE link.reservation_id = ?1 AND link.connection_id = ?2 AND auth.acquire_state = 'acquired'",
+                    "SELECT 1 FROM physical_attempt_current AS current JOIN physical_attempts AS attempt ON attempt.lineage_id = current.lineage_id AND attempt.generation = current.generation AND attempt.reservation_id = current.reservation_id JOIN connection_request_authorizations AS auth ON auth.connection_id = attempt.connection_id AND auth.scale_set_id = attempt.scale_set_id AND auth.request_id = attempt.witness_request_id WHERE current.reservation_id = ?1 AND attempt.connection_id = ?2 AND auth.acquire_state = 'acquired'",
                     (reservation_id, connection_id.as_str()),
                 )
                 .await
@@ -122,7 +123,7 @@ impl ConnectionJournal {
             if rows.next().await.map_err(|_| HostError::Journal)?.is_none() {
                 let mut links = connection
                     .query(
-                        "SELECT 1 FROM connection_request_reservations WHERE reservation_id = ?1 AND connection_id = ?2",
+                        "SELECT 1 FROM physical_attempt_current WHERE reservation_id = ?1",
                         (reservation_id, connection_id.as_str()),
                     )
                     .await

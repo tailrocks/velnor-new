@@ -65,7 +65,7 @@ pub(in crate::launch::steps::scoped::runner::tests::docker_pair) async fn open_c
         permit.docker_root_digest(),
     );
     let engine = selected_engine(&images)?;
-    let state = BootstrapAdmissionState::new(&fixture.binding)?;
+    let state = BootstrapAdmissionState::new(&fixture.binding, 1)?;
     let drive = bootstrap_drive(&fixture, &state.path);
     if backlog_rows > 0 {
         seed_native_inbox(&fixture.scope, backlog_rows).await?;
