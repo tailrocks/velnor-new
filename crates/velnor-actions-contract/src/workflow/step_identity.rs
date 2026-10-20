@@ -38,8 +38,6 @@ pub const PRIVATE_FETCH_TOKEN_ENV: &str = "VELNOR_PRIVATE_FETCH_TOKEN";
 pub const PRIVATE_NPM_READ_TOKEN_ENV: &str = "VELNOR_NPM_READ_TOKEN";
 /// Internal operation of the Velnor-owned private fetch step (HD-7).
 pub const PRIVATE_FETCH_OPERATION: &str = "private-fetch-v1";
-/// Internal operation of the Gradle run step (verify wrapper, install JDK, run Gradle).
-pub const GRADLE_RUN_OPERATION: &str = "gradle-run-v1";
 /// Internal operation of the token revocation step (HD-7).
 pub const PRIVATE_REVOKE_OPERATION: &str = "private-revoke-v1";
 /// Internal operation of the Bun registry phase (HD-6, HD-7).
