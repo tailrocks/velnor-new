@@ -5,6 +5,11 @@
 //! so a service cannot become an arbitrary image or carry a secret. Today the
 //! catalog holds `postgres`, the database that jOOQ code generation and tests
 //! need; the catalog digest is refreshed by the freshness pipeline.
+//!
+//! The credentials, database name and host port are the ChainArgos build
+//! convention (`backend/compose.yaml` of every Java repository: user,
+//! password and database `chainargos`, host port 40000), so the same build
+//! runs unchanged against a local compose database and the CI service.
 
 use std::collections::BTreeMap;
 
@@ -12,11 +17,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::errors::ContractError;
 
-/// Fixed, non-secret PostgreSQL credentials of the catalog service.
-pub const POSTGRES_USER: &str = "velnor";
-/// Fixed, non-secret PostgreSQL password of the catalog service.
-pub const POSTGRES_PASSWORD: &str = "velnor";
-/// Host and container port of the catalog PostgreSQL service.
+/// Fixed, non-secret PostgreSQL user, password and database of the catalog service.
+pub const POSTGRES_USER: &str = "chainargos";
+/// Host port of the catalog PostgreSQL service (the compose default).
+pub const POSTGRES_HOST_PORT: u16 = 40000;
+/// Container port of PostgreSQL.
 pub const POSTGRES_PORT: u16 = 5432;
 
 /// `(major, image reference)` rows: tag-less, digest-pinned.
@@ -60,12 +65,12 @@ impl ServiceContainer {
             image: image.to_owned(),
             env: BTreeMap::from([
                 ("POSTGRES_USER".to_owned(), POSTGRES_USER.to_owned()),
-                ("POSTGRES_PASSWORD".to_owned(), POSTGRES_PASSWORD.to_owned()),
-                ("POSTGRES_DB".to_owned(), "postgres".to_owned()),
+                ("POSTGRES_PASSWORD".to_owned(), POSTGRES_USER.to_owned()),
+                ("POSTGRES_DB".to_owned(), POSTGRES_USER.to_owned()),
             ]),
-            ports: vec![format!("{POSTGRES_PORT}:{POSTGRES_PORT}")],
+            ports: vec![format!("{POSTGRES_HOST_PORT}:{POSTGRES_PORT}")],
             options: format!(
-                "--health-cmd \"pg_isready -h 127.0.0.1 -U {POSTGRES_USER}\" --health-interval 2s --health-timeout 5s --health-retries 30"
+                "--health-cmd \"pg_isready -h 127.0.0.1 -U {POSTGRES_USER} -d {POSTGRES_USER}\" --health-interval 2s --health-timeout 5s --health-retries 30"
             ),
         })
     }
@@ -108,7 +113,7 @@ mod tests {
         assert!(!service.image.contains(':') || service.image.contains("@sha256:"));
         assert_eq!(
             service.env.get("POSTGRES_PASSWORD").map(String::as_str),
-            Some("velnor")
+            Some("chainargos")
         );
         assert!(service.options.contains("--health-cmd"));
         assert_eq!(service.validate(), Ok(()));

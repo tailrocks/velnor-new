@@ -88,8 +88,8 @@ fn postgres_renders_pinned_with_fixed_env_port_and_health_check() {
         services.contains("      postgres:\n        image: postgres@sha256:"),
         "{yaml}"
     );
-    assert!(services.contains("POSTGRES_PASSWORD: velnor"), "{yaml}");
-    assert!(services.contains("- 5432:5432"), "{yaml}");
+    assert!(services.contains("POSTGRES_PASSWORD: chainargos"), "{yaml}");
+    assert!(services.contains("- 40000:5432"), "{yaml}");
     assert!(services.contains("--health-cmd"), "{yaml}");
     let before_steps =
         yaml.find("    services:").expect("services") < yaml.find("    steps:").expect("steps");
