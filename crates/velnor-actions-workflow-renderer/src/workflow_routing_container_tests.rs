@@ -73,7 +73,10 @@ fn routing_rejects_private_mount_shadows_and_unresolved_mounts() {
             ])),
             &configured(ExecutionMode::ScaleSet),
         );
-        assert!(routed.is_err(), "accepted unsafe {key} value");
+        assert!(
+            routed.is_err(),
+            "accepted {key} value that is not permitted"
+        );
     }
 }
 
