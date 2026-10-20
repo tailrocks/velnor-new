@@ -210,7 +210,10 @@ async fn install_legacy_guards(connection: &turso::Connection) {
 
 async fn assert_current_guard_counts(path: &std::path::Path) {
     let (_database, connection) = open_database(path).await;
-    assert_eq!(scalar(&connection, "PRAGMA user_version").await, 30);
+    assert_eq!(
+        scalar(&connection, "PRAGMA user_version").await,
+        super::super::super::JOURNAL_VERSION
+    );
     assert_eq!(scalar(&connection, "SELECT COUNT(*) FROM sqlite_schema WHERE type='trigger' AND name IN ('provisioning_container_transition', 'provisioning_state_transition')").await, 0);
     assert_eq!(scalar(&connection, "SELECT COUNT(*) FROM sqlite_schema WHERE type='trigger' AND name GLOB 'provisioning_container_*'").await, 8);
     assert_eq!(scalar(&connection, "SELECT COUNT(*) FROM sqlite_schema WHERE type='trigger' AND name GLOB 'provisioning_state_*'").await, 8);

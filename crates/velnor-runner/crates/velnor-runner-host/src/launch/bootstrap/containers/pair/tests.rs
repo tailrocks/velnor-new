@@ -153,16 +153,40 @@ fn dind_mounts_private_storage_and_never_mounts_the_host_socket() {
         .iter()
         .map(|mount| mount.target.as_deref().expect("target"))
         .collect::<Vec<_>>();
-    assert_eq!(targets.len(), 4);
+    assert_eq!(targets.len(), 6);
     assert!(targets.contains(&"/var/lib/docker"));
+    assert!(targets.contains(&"/opt/velnor/job-facts"));
+    assert!(targets.contains(&"/.velnor-runtime-identity"));
     assert!(!targets.contains(&"/var/run/docker.sock"));
-    assert!(mounts.iter().all(|mount| mount.read_only == Some(false)));
     assert!(mounts.iter().all(|mount| {
         mount
             .volume_options
             .as_ref()
             .and_then(|options| options.no_copy)
             == Some(true)
+    }));
+    let metadata = names.volume_name(WorkerVolumeRole::RunnerMetadata);
+    let metadata_mounts = mounts
+        .iter()
+        .filter(|mount| mount.source.as_deref() == Some(metadata.as_str()))
+        .collect::<Vec<_>>();
+    assert_eq!(metadata_mounts.len(), 2);
+    for (subpath, target) in [
+        ("job-facts", "/opt/velnor/job-facts"),
+        ("runtime-identity", "/.velnor-runtime-identity"),
+    ] {
+        let mount = metadata_mounts
+            .iter()
+            .find(|mount| mount.target.as_deref() == Some(target))
+            .expect("The mount subpath must be present.");
+        assert_eq!(mount.source.as_deref(), Some(metadata.as_str()));
+        assert_eq!(mount.read_only, Some(true));
+        let options = mount.volume_options.as_ref().expect("volume options");
+        assert_eq!(options.no_copy, Some(true));
+        assert_eq!(options.subpath.as_deref(), Some(subpath));
+    }
+    assert!(mounts.iter().all(|mount| {
+        mount.source.as_deref() == Some(metadata.as_str()) || mount.read_only == Some(false)
     }));
     assert_eq!(
         mounts

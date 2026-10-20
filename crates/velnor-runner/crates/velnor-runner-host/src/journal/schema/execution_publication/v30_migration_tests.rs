@@ -128,7 +128,10 @@ async fn assert_doctor_reference_is_intact(connection: &turso::Connection) {
 async fn migrate_and_assert_v30(path: &std::path::Path, publication_id: &str) {
     drop(Journal::open(path).await.expect("upgrade v29 journal"));
     let (database, connection) = open_database(path).await;
-    assert_eq!(scalar(&connection, "PRAGMA user_version").await, 30);
+    assert_eq!(
+        scalar(&connection, "PRAGMA user_version").await,
+        super::JOURNAL_VERSION
+    );
     assert_eq!(
         scalar(
             &connection,
