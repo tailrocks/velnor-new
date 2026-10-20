@@ -788,6 +788,6 @@
     "failed": 2,
     "log": "topology2-parent-integrated-20261020.log",
     "log_sha256": "602dbc474962394b52850a4f8b0102671a8cb4b3ca310b96f07f420dfeb6d544",
-    "note": "The two failed tests need the recovery observer change. Their changes are not in this commit."
+    "note": "The two failed tests need a cleanup observer change. This commit does not include that change."
   }
 }
