@@ -39,7 +39,7 @@ pub(super) async fn remove_if_claimed(
     let Some(inspected) = inspect_container(docker, identity.helper_name(), deadline).await? else {
         return cleanup.record_if_absent(identity).await;
     };
-    cleanup.remove_present(identity, inspected).await
+    Box::pin(cleanup.remove_present(identity, inspected)).await
 }
 
 struct InitializerCleanup<'a> {

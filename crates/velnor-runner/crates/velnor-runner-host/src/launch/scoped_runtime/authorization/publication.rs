@@ -20,7 +20,7 @@ pub(crate) async fn prepare_listener(
     let provider =
         crate::launch::resource_probe::release_image_provider(context.secret, context.host);
     let provider = provider.as_ref().map_err(|error| *error);
-    prepare_listener_with_provider(
+    Box::pin(prepare_listener_with_provider(
         ready,
         context,
         connection,
@@ -28,7 +28,7 @@ pub(crate) async fn prepare_listener(
         provider,
         |_| async { Ok(()) },
         deadline,
-    )
+    ))
     .await
 }
 

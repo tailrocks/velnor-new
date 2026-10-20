@@ -38,7 +38,10 @@ pub(super) async fn remove_pair_if_claimed(
         return Err(HostError::Journal);
     };
     if phase == PreJitCleanupPhase::BootstrapAbsent {
-        initializer::remove_if_claimed(docker, journal, engine, images, claim, inventory).await?;
+        Box::pin(initializer::remove_if_claimed(
+            docker, journal, engine, images, claim, inventory,
+        ))
+        .await?;
     }
     let Some(phase) = journal.pre_jit_cleanup_phase(claim).await? else {
         return Err(HostError::Journal);

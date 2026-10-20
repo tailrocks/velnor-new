@@ -25,7 +25,10 @@ pub(crate) async fn remove_bootstrap_after_terminal_failure<
     let Some(claim) = journal.claim_pre_jit_cleanup(reservation_id).await? else {
         return Ok(false);
     };
-    remove_bootstrap_with_claim(docker, journal, host, engine, images, &claim, provider).await
+    Box::pin(remove_bootstrap_with_claim(
+        docker, journal, host, engine, images, &claim, provider,
+    ))
+    .await
 }
 
 pub(crate) async fn remove_bootstrap_with_claim<P: crate::launch::resource_probe::ImageProvider>(
@@ -49,7 +52,10 @@ pub(crate) async fn remove_bootstrap_with_claim<P: crate::launch::resource_probe
     {
         return Err(HostError::Ownership);
     }
-    bootstrap::remove_pair_if_claimed(docker, journal, engine, images, claim, &inventory).await?;
+    Box::pin(bootstrap::remove_pair_if_claimed(
+        docker, journal, engine, images, claim, &inventory,
+    ))
+    .await?;
     if journal.pre_jit_cleanup_phase(claim).await? != Some(PreJitCleanupPhase::NetworkAbsent) {
         return Err(HostError::Journal);
     }
@@ -78,7 +84,7 @@ pub(crate) async fn recover_pre_jit_reservation(
     release_secret: &crate::launch::ReleaseReadSecret,
 ) -> Result<bool, HostError> {
     let provider = crate::launch::resource_probe::release_image_provider(release_secret, journal)?;
-    remove_bootstrap_after_terminal_failure(
+    Box::pin(remove_bootstrap_after_terminal_failure(
         docker,
         scope,
         journal,
@@ -86,7 +92,7 @@ pub(crate) async fn recover_pre_jit_reservation(
         images,
         reservation_id,
         &provider,
-    )
+    ))
     .await
 }
 
