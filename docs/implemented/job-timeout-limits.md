@@ -1,7 +1,8 @@
 # Job timeout limits
 
 Every concrete generated GitHub Actions job has an explicit literal timeout of
-one through 360 minutes. Five is the default for every job family. 360 is
+one through 360 minutes. Five is the general default. Official product compiler
+jobs have an explicit ten-minute budget. 360 is
 GitHub's per-job execution limit on hosted runners
 ([Actions limits](https://docs.github.com/en/actions/reference/limits)).
 Configuration that requests zero or more than 360 is rejected for general crate
@@ -17,6 +18,19 @@ five-minute default.
 The Velnor configuration sets ten minutes for Rust package jobs. This limit
 covers build, parallel checks, report upload, and cleanup. Control jobs use the
 five-minute default.
+
+The three official generator compiler jobs (Linux, macOS ARM64, and macOS Intel)
+and the official `velnor-host` binary compiler job use ten minutes. This bound
+covers checkout, tool setup, compilation, artifact upload, and job cleanup.
+Their eligibility, qualification, signing, manifest, and publication jobs retain
+five minutes; runner-image jobs and configurable consumer budgets are unchanged.
+In [run 39471133008](https://github.com/tailrocks/velnor-new/actions/runs/39471133008),
+macOS ARM64 compilation finished successfully in 4 minutes 35 seconds and its
+artifact uploaded, but the complete job exceeded five minutes during cleanup.
+Local MBX objects were not uploaded to a remote cache, so a warm retry was not
+established. The compiler budget provides bounded setup and completion margin;
+it does not make a cancelled build eligible for publication or change required
+checks, evidence, retries, permissions, or protected approval.
 
 ```toml
 [workflow]

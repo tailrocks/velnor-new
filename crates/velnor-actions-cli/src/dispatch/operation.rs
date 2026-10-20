@@ -6,12 +6,13 @@ use super::{
     ADMIT_RELEASE_POLICY_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_REGISTRY_INSTALL_OP, CACHE_RECEIPT_OP,
     CAPTURE_REVIEW_COMPLETION_OP, EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP,
     EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OP_ENV, PLAN_OP,
-    PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP, PRIVATE_REVOKE_OP, PUBLISH_OP,
-    PUBLISH_PACKAGE_RELEASE_OP, RECOVER_PACKAGE_RELEASE_OP, REPORT_OP,
-    SELECT_RELEASE_TAP_CONTINUATION_OP, SELECT_STABLE_RELEASE_SOURCE_OP, SIGN_PACKAGE_RELEASE_OP,
-    SOURCE_EVIDENCE_OP, TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP,
-    WRITE_STABLE_TAG_INTENT_OP, WRITE_STABLE_TAG_ORIGIN_OP, cache_bind, cache_observe,
-    cache_owner_evidence, cache_runtime, cache_tar_launcher, env, normal_tofu_cache_preflight,
+    PLAYWRIGHT_INSTALL_OP, PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP,
+    PRIVATE_REVOKE_OP, PUBLISH_OP, PUBLISH_PACKAGE_RELEASE_OP, RECOVER_PACKAGE_RELEASE_OP,
+    REPORT_OP, SELECT_RELEASE_TAP_CONTINUATION_OP, SELECT_STABLE_RELEASE_SOURCE_OP,
+    SIGN_PACKAGE_RELEASE_OP, SOURCE_EVIDENCE_OP, TASK_EXECUTION_RESOLVER_OP,
+    WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, WRITE_STABLE_TAG_INTENT_OP,
+    WRITE_STABLE_TAG_ORIGIN_OP, cache_bind, cache_observe, cache_owner_evidence, cache_runtime,
+    cache_tar_launcher, env, normal_tofu_cache_preflight,
 };
 
 /// Private operation selected by the gate.
@@ -64,6 +65,7 @@ pub(super) enum InternalOp {
     StableTagOrigin,
     StableTagAdmission,
     BunRegistryInstall,
+    PlaywrightInstall,
 }
 
 /// Validated private request: operation plus exact request-file path.
@@ -126,6 +128,7 @@ pub(super) fn from_env() -> Option<InternalOp> {
         Ok(tag) if tag == PRIVATE_FETCH_OP => InternalOp::PrivateFetch,
         Ok(tag) if tag == PRIVATE_REVOKE_OP => InternalOp::PrivateRevoke,
         Ok(tag) if tag == BUN_REGISTRY_INSTALL_OP => InternalOp::BunRegistryInstall,
+        Ok(tag) if tag == PLAYWRIGHT_INSTALL_OP => InternalOp::PlaywrightInstall,
         Ok(tag) if tag == SIGN_PACKAGE_RELEASE_OP => InternalOp::PackageSigner,
         Ok(tag) if tag == PUBLISH_PACKAGE_RELEASE_OP => InternalOp::PackagePublisher,
         Ok(tag) if tag == RECOVER_PACKAGE_RELEASE_OP => InternalOp::PackageRecovery,

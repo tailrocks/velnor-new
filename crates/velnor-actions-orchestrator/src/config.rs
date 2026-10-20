@@ -17,6 +17,12 @@ use crate::config_stacks::PartialStacks;
 pub(crate) mod bun_registry_install;
 #[path = "deps_lock.rs"]
 pub(crate) mod deps_lock;
+#[path = "playwright_install.rs"]
+pub(crate) mod playwright_install;
+#[path = "playwright_lock.rs"]
+pub(crate) mod playwright_lock;
+#[path = "playwright_resolve.rs"]
+pub(crate) mod playwright_resolve;
 #[path = "private_fetch.rs"]
 pub(crate) mod private_fetch;
 #[path = "private_fetch_session.rs"]

@@ -33,6 +33,15 @@ const SOURCES_PATHS: [&str; 3] = [
     "${{ runner.temp }}/velnor/cargo/git/db",
 ];
 const TOFU_PROVIDERS_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/tofu-cache/{root}"];
+const BUN_INSTALL_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/bun-cache"];
+const PLAYWRIGHT_BROWSERS_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/ms-playwright"];
+
+/// Repository cache quota the budget rule is computed against (GitHub's 10 GB
+/// default, taken as 10 GiB; [cache decisions](../../../../docs/proposed/cache-decisions.md)).
+pub const CACHE_QUOTA_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+/// Hot families plus superseded entries stay at or below this share of the quota (percent).
+pub const CACHE_BUDGET_PERCENT: u64 = 85;
+const MIB: u64 = 1024 * 1024;
 
 /// One runtime-keyed cache family.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -41,6 +50,10 @@ pub enum CacheFamily {
     Sources,
     /// One `OpenTofu` root's job-private provider plugin cache.
     TofuProviders,
+    /// Bun's package cache (`BUN_INSTALL_CACHE_DIR`), keyed by `bun.lock`.
+    BunInstall,
+    /// Playwright browser archives installed from the hash-pinned browser lock.
+    PlaywrightBrowsers,
 }
 
 /// Static identity of one family: key layer, schema, and archive paths.
@@ -52,22 +65,51 @@ pub struct FamilySpec {
     pub schema: u32,
     /// Archive paths in expression form, in declared order.
     pub paths: &'static [&'static str],
+    /// Largest stored size of one entry; a save that would exceed it is
+    /// refused and reported as `over_ceiling`.
+    pub ceiling_bytes: u64,
+    /// Newest entries kept per cache unit (a Bun root, an `OpenTofu` root, a
+    /// Playwright version); older exact keys are pruned (decision 4).
+    pub retained_entries: u64,
 }
 
 const SOURCES: FamilySpec = FamilySpec {
     layer: "sources",
     schema: 2,
     paths: &SOURCES_PATHS,
+    ceiling_bytes: 128 * MIB,
+    retained_entries: 3,
 };
 const TOFU_PROVIDERS: FamilySpec = FamilySpec {
     layer: "tofu-providers",
     schema: 2,
     paths: &TOFU_PROVIDERS_PATHS,
+    ceiling_bytes: 256 * MIB,
+    retained_entries: 3,
+};
+const BUN_INSTALL: FamilySpec = FamilySpec {
+    layer: "bun-install",
+    schema: 1,
+    paths: &BUN_INSTALL_PATHS,
+    ceiling_bytes: 256 * MIB,
+    retained_entries: 2,
+};
+const PLAYWRIGHT_BROWSERS: FamilySpec = FamilySpec {
+    layer: "playwright-browsers",
+    schema: 1,
+    paths: &PLAYWRIGHT_BROWSERS_PATHS,
+    ceiling_bytes: 512 * MIB,
+    retained_entries: 2,
 };
 
 impl CacheFamily {
     /// Every family, in key-prefix order.
-    pub const ALL: [Self; 2] = [Self::Sources, Self::TofuProviders];
+    pub const ALL: [Self; 4] = [
+        Self::Sources,
+        Self::TofuProviders,
+        Self::BunInstall,
+        Self::PlaywrightBrowsers,
+    ];
 
     /// Static family identity.
     #[must_use]
@@ -75,6 +117,8 @@ impl CacheFamily {
         match self {
             Self::Sources => &SOURCES,
             Self::TofuProviders => &TOFU_PROVIDERS,
+            Self::BunInstall => &BUN_INSTALL,
+            Self::PlaywrightBrowsers => &PLAYWRIGHT_BROWSERS,
         }
     }
 
@@ -153,6 +197,14 @@ impl FamilySpec {
         self.paths
             .iter()
             .any(|path| path.contains(ROOT_PLACEHOLDER))
+    }
+}
+
+impl FamilySpec {
+    /// Worst-case bytes this family holds for `units` cache units.
+    #[must_use]
+    pub const fn worst_case_bytes(&self, units: u64) -> u64 {
+        self.ceiling_bytes * self.retained_entries * units
     }
 }
 

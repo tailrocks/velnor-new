@@ -53,20 +53,63 @@ fn every_schema2_family_renders_only_bounded_executable_jobs() {
             .any(|workflow| workflow.path == ".github/workflows/job-image-candidate.yml")
     );
     for workflow in workflows {
-        let timeouts: Vec<_> = workflow
+        let (_, jobs) = workflow
             .bytes
-            .lines()
-            .filter_map(|line| line.trim().strip_prefix("timeout-minutes: "))
-            .collect();
-        assert!(!timeouts.is_empty(), "{}", workflow.path);
-        for timeout in timeouts {
-            let minutes: u16 = timeout.parse().expect("literal timeout");
-            assert_eq!(
-                minutes,
-                velnor_actions_contract::JobTimeout::DEFAULT_MINUTES,
-                "{}",
-                workflow.path
-            );
+            .split_once("\njobs:\n")
+            .expect("literal jobs map");
+        let mut current = None;
+        let mut fields = Vec::new();
+        for line in jobs.lines() {
+            if let Some(id) = line
+                .strip_prefix("  ")
+                .and_then(|line| line.strip_suffix(':'))
+                && !id.starts_with(char::is_whitespace)
+            {
+                if let Some(previous) = current.replace(id) {
+                    assert_job_budget(&workflow.path, previous, &fields);
+                    fields.clear();
+                }
+            } else {
+                fields.push(line);
+            }
         }
+        assert_job_budget(&workflow.path, current.expect("nonempty jobs map"), &fields);
     }
+}
+
+fn assert_job_budget(workflow: &str, id: &str, fields: &[&str]) {
+    let timeouts: Vec<_> = fields
+        .iter()
+        .filter_map(|line| line.strip_prefix("    timeout-minutes: "))
+        .collect();
+    let caller = fields.iter().any(|line| line.starts_with("    uses: "));
+    let concrete = fields.iter().any(|line| line.starts_with("    steps:"));
+    assert_ne!(
+        caller, concrete,
+        "{workflow}:{id} must have exactly one job kind"
+    );
+    if caller {
+        assert!(
+            timeouts.is_empty(),
+            "{workflow}:{id} caller cannot have a timeout"
+        );
+        return;
+    }
+    assert_eq!(timeouts.len(), 1, "{workflow}:{id} must have one timeout");
+    let minutes: u16 = timeouts[0].parse().expect("literal timeout");
+    assert!(velnor_actions_contract::JobTimeout::is_valid_minutes(
+        u32::from(minutes)
+    ));
+    let compiler = matches!(
+        (workflow, id),
+        (
+            ".github/workflows/product-release-binary.yml",
+            "build-binary"
+        ) | (
+            ".github/workflows/product-release-generator.yml",
+            "build-linux" | "build-macos" | "build-macos-intel"
+        )
+    );
+    let expected = if compiler { 10 } else { 5 };
+    assert_eq!(minutes, expected, "{workflow}:{id}");
 }

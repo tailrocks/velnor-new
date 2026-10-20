@@ -20,6 +20,7 @@ mod image_task;
 mod images;
 mod job_authority;
 mod mise;
+pub mod playwright_lock;
 mod preview_policy;
 mod private_sources;
 /// Run-time references to project-declared tool versions (hard decision 5).

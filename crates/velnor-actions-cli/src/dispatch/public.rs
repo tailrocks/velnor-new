@@ -30,6 +30,7 @@ pub(crate) fn run_public() -> ExitCode {
         } => crate::dispatch_generate::run_generate(output_dir, mode),
         Command::Config { command } => crate::dispatch_config::run_config(&command),
         Command::Deps { command } => crate::dispatch_deps::run_deps(&command),
+        Command::Playwright { command } => crate::dispatch_deps::run_playwright(&command),
         Command::QualifyTools {
             request,
             work_dir,

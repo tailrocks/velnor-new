@@ -133,6 +133,8 @@ pub enum StepRole {
     QualificationCacheRoots,
     /// Bun registry install using the workflow-scoped npm token.
     BunRegistryInstall,
+    /// Hash-verified Playwright browser install; holds no credential.
+    PlaywrightInstall,
     /// Binding of one emitted job owner and cache layer.
     QualificationCacheBind,
     /// Restore action for one emitted job owner and cache layer.
@@ -229,6 +231,7 @@ impl StepRole {
                 )
             }
             Self::MbxCache => valid_mbx_cache(kind),
+            Self::PlaywrightInstall => super::super::step_protocol::valid_playwright_install(kind),
             Self::MbxVersionCheck | Self::MbxWorkspaceCleanup => {
                 matches!(kind, StepKind::Shell { .. })
             }

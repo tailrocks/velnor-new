@@ -53,6 +53,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
             "deps_lock.rs",
             "job_image_preview.rs",
             "owned_tool_preview.rs",
+            "playwright_resolve.rs",
             "prepare.rs",
             "preview_producer_entry.rs",
             "private_fetch.rs",
@@ -62,7 +63,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
             "tap_prepare.rs",
             "tap_prepare_execute.rs",
         ],
-        "preparation, execution, image preview, preview budget admission, routing, owned preview, qualification admission, captured tap preparation, private dependency lock, private fetch, and qualification cache backend load configuration at their boundaries"
+        "preparation, execution, image preview, preview budget admission, routing, owned preview, qualification admission, cache backend, captured tap preparation, private dependency lock, private fetch, and Playwright browser lock load configuration at their boundaries"
     );
     Ok(())
 }

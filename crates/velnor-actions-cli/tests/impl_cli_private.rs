@@ -80,12 +80,43 @@ fn private_operations_fail_closed_without_a_token_and_print_no_secret() -> Resul
 }
 
 #[test]
+fn the_playwright_install_fails_closed_without_the_locks() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("smoke-playwright-install")?;
+    let runner_temp = tmp.to_string_lossy().into_owned();
+    let output = spawn_isolated(
+        &[],
+        &[
+            ("VELNOR_INTERNAL_OP", "playwright-browsers-install-v1"),
+            ("RUNNER_TEMP", &runner_temp),
+            ("GITHUB_WORKSPACE", &runner_temp),
+            ("VELNOR_PLAYWRIGHT_VERSION", "1.64.1"),
+            ("VELNOR_PLAYWRIGHT_ROOT", "."),
+            (
+                "VELNOR_PLAYWRIGHT_PINS",
+                "chromium-1248:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            ),
+        ],
+        &tmp,
+    )?;
+    assert_eq!(code(&output), 1);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("playwright_bun_lock_missing"), "{stderr}");
+    assert!(
+        !tmp.join("velnor/ms-playwright").exists(),
+        "nothing is installed without the locks"
+    );
+    cleanup(&tmp);
+    Ok(())
+}
+
+#[test]
 fn private_operations_without_runner_temp_fall_through_to_usage() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("smoke-private-gate")?;
     for op in [
         "private-fetch-v1",
         "private-revoke-v1",
         "bun-registry-install-v1",
+        "playwright-browsers-install-v1",
     ] {
         let gated = spawn_isolated(&[], &[("VELNOR_INTERNAL_OP", op)], &tmp)?;
         let bare = spawn_isolated(&[], &[], &tmp)?;

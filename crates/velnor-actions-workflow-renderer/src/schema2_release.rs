@@ -73,7 +73,7 @@ pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Y
                 "build-binary",
                 "Build velnor-host",
                 macos.clone(),
-                JobTimeout::DEFAULT,
+                JobTimeout::PRODUCT_COMPILER,
                 vec![
                     generator_release::mise_setup_step(pins, ReleaseTarget::MacosArm64)?,
                     run_step("Install pinned Rust and MBX", &install),

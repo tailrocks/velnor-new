@@ -22,7 +22,7 @@ velnor-actions plan
 velnor-actions generate [--output-dir PATH]
 ```
 
-`velnor-actions deps lock` pins private sources; see the [private sources contract](private-sources-contract.md).
+`velnor-actions deps lock` pins private sources; see the [private sources contract](private-sources-contract.md). `velnor-actions playwright lock` pins the Playwright browser archives of Bun members; see the [Bun contract](bun-contract.md).
 No command may accept `--root`, a stack or profile selector, a format selector,
 an ignore flag, a base/head selector, `--check`, a task ID, a report path, or
 any other option not listed above. Unknown flags and extra positional arguments

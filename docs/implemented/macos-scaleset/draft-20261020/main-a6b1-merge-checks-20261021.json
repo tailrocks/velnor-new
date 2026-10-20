@@ -1,0 +1,32 @@
+{
+  "status": "PASS",
+  "scope": "Strict Clippy, focused tests, and generated output checks passed. Full test and live installation gates remain incomplete.",
+  "parents": [
+    "4f2edb1a7c4c4bcbdf06b14ca8be2885b6793435",
+    "a6b1d7873151dc62711844158490e8687d191943"
+  ],
+  "checks": {
+    "main-4f2-a6b1-full-strict-rerun2-20261021.log": {
+      "sha256": "abcb43e893277b843d2dccb649134f49abd5b97321753d27b2e7bbb57aad419c"
+    },
+    "main-4f2-a6b1-focused-tests-20261021.log": {
+      "sha256": "d132aa5e2760d9c58c55f99df8027dd242dfa69d222778f6012190540bb88163",
+      "run_id": "a18a48c6-5edc-4240-a51b-5467e11ebca1"
+    },
+    "main-4f2-a6b1-eight-resolution-independent-review-20261021.md": {
+      "sha256": "82bacf17916a49ee3efbfcd86d3cf7f0bc4b8bcee02b05da79f61512fa1738fb"
+    },
+    "main-a6b1-generation-first-20261021.log": {
+      "sha256": "451ab492caa7842326b992628d6a9b0297c7fc6eaa58eadbe585e715f95ec6de"
+    },
+    "main-a6b1-generation-second-20261021.log": {
+      "sha256": "6e2686aa75cf2d22d2cc852cf4e94cbdf86d0dafb77e27cca0d7cb8527a65814"
+    },
+    "main-a6b1-opentofu-check-20261021.log": {
+      "sha256": "f9f7d45211fe7c6caa15ae755fa743666289054d857f8937a2c263a8fa537d54"
+    }
+  },
+  "strict_command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/main-8e12-integration-target-20261021 mise --no-config exec rust@1.99.1 mr-boxington@1.25.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.148 -- mbx clippy --workspace --all-targets --all-features --locked -- -D warnings",
+  "strict_exit": 0,
+  "workflow_bytes": 442851
+}

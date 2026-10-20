@@ -308,3 +308,9 @@ fn invalid(scope: &str, problem: &str) -> ContractError {
         format!("{problem}:{scope}"),
     )
 }
+
+/// The Playwright browser install is an internal operation of the staged binary.
+pub(crate) fn valid_playwright_install(kind: &StepKind) -> bool {
+    matches!(kind, StepKind::Internal { operation, .. }
+        if operation == crate::config::playwright_lock::PLAYWRIGHT_INSTALL_OPERATION)
+}

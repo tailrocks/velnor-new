@@ -23,6 +23,7 @@ fn workspace() -> Vec<Workspace> {
     vec![Workspace {
         root: "frontend".to_owned(),
         package_manager: None,
+        playwright_core: None,
         members: vec![
             member("contracts", "frontend", "packages/contracts", &[]),
             member("ui", "frontend", "packages/ui", &["contracts"]),
@@ -110,6 +111,7 @@ fn a_root_package_at_the_repository_root_owns_every_path() {
     let spaces = vec![Workspace {
         root: String::new(),
         package_manager: None,
+        playwright_core: None,
         members: vec![member("catalog", "", "", &[])],
     }];
     assert_eq!(

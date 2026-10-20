@@ -55,6 +55,9 @@ pub(super) fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::Fetch => finish_internal_result(retrieve_reports()),
         InternalOp::Report => finish_internal_result(write_task_report()),
         InternalOp::BunRegistryInstall => finish_internal_result(run_bun_registry_install()),
+        InternalOp::PlaywrightInstall => {
+            finish_internal_result(velnor_actions_orchestrator::run_playwright_install())
+        }
         InternalOp::PrivateFetch => finish_internal_result(run_private_fetch()),
         InternalOp::PrivateRevoke => finish_internal_result(run_private_revoke()),
         InternalOp::PreseedManifest => finish_internal_result(write_preseed_manifest()),
