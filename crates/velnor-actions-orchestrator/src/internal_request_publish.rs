@@ -113,6 +113,13 @@ pub(crate) fn write_plan_files(
         (false, Some(_)) => return Err(internal("cache_directive_for_non_qualification_plan")),
         (true, _) => return Err(internal("missing_qualification_cache_directive")),
     };
+    if let Some(context) = response.plan.qualification.as_ref() {
+        crate::qualification_cache_backend::verify_staged_qualification_cache_before(
+            dir,
+            context,
+            &response.plan.run_key,
+        )?;
+    }
     if cache_directive.is_some_and(|value| {
         value.len() > crate::qualification_cache_runtime::QUALIFICATION_CACHE_DIRECTIVE_MAX_BYTES
             || value.bytes().any(|byte| matches!(byte, b'\n' | b'\r'))

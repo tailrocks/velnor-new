@@ -1,5 +1,14 @@
 //! Exact cache API census for one restore or save key.
 
+#[path = "qualification_cache_backend/snapshot.rs"]
+mod snapshot;
+#[cfg(test)]
+pub(crate) use snapshot::complete_snapshot_for_test;
+pub(crate) use snapshot::{
+    capture_qualification_cache_before, stage_qualification_cache_before,
+    verify_staged_qualification_cache_before,
+};
+
 use std::collections::BTreeSet;
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
@@ -265,14 +274,14 @@ fn valid_cache_ref(value: &str) -> bool {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct CachePage {
+pub(super) struct CachePage {
     total_count: u64,
     actions_caches: Vec<CacheRecord>,
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct CacheRecord {
+pub(super) struct CacheRecord {
     id: u64,
     key: String,
     #[serde(rename = "ref")]
@@ -284,7 +293,7 @@ struct CacheRecord {
 }
 
 impl CacheRecord {
-    fn into_entry(self) -> Result<QualificationCacheBackendEntry, &'static str> {
+    pub(super) fn into_entry(self) -> Result<QualificationCacheBackendEntry, &'static str> {
         if self.id == 0
             || !valid_cache_key(&self.key)
             || !valid_cache_ref(&self.git_ref)

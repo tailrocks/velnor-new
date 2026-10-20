@@ -17,6 +17,17 @@ fn publishes_qualification_directives_beside_the_validated_plan() {
     assert!(outputs.qualification_cache_directives.starts_with('{'));
 
     let artifacts = tempfile::tempdir().expect("artifact root");
+    let response_value: serde_json::Value = serde_json::from_str(&response).expect("response");
+    let context: QualificationDispatch =
+        serde_json::from_value(response_value["plan"]["qualification"].clone())
+            .expect("qualification context");
+    let snapshot = crate::qualification_cache_backend::complete_snapshot_for_test(&context)
+        .expect("test snapshot");
+    crate::qualification_cache_backend::stage_qualification_cache_before(
+        artifacts.path(),
+        &snapshot,
+    )
+    .expect("stage backend snapshot");
     let run_dir =
         publish_plan_files_with_outputs(&response, &artifacts.path().join("velnor"), &outputs)
             .expect("publish plan and directives");
@@ -49,6 +60,43 @@ fn qualification_plan_without_directive_outputs_fails_before_artifacts() {
 
     assert!(matches!(error, OrchestratorError::Internal { .. }));
     assert!(!artifacts.path().join("velnor").exists());
+}
+
+#[test]
+fn qualification_plan_publication_requires_the_exact_before_snapshot() {
+    let response = cold_qualification_response();
+    let outputs = plan_outputs_with_admission(&response, PlanOutputMode::Static, None)
+        .expect("cold plan outputs");
+    let artifacts = tempfile::tempdir().expect("artifact root");
+    let error =
+        publish_plan_files_with_outputs(&response, &artifacts.path().join("velnor"), &outputs)
+            .expect_err("missing before snapshot fails closed");
+    assert!(matches!(error, OrchestratorError::Internal { .. }));
+    assert!(!artifacts.path().join("velnor").exists());
+}
+
+#[test]
+fn qualification_plan_publication_rejects_snapshot_from_another_dispatch() {
+    let response = cold_qualification_response();
+    let outputs = plan_outputs_with_admission(&response, PlanOutputMode::Static, None)
+        .expect("cold plan outputs");
+    let artifacts = tempfile::tempdir().expect("artifact root");
+    let response_value: serde_json::Value = serde_json::from_str(&response).expect("response");
+    let mut context: QualificationDispatch =
+        serde_json::from_value(response_value["plan"]["qualification"].clone())
+            .expect("qualification context");
+    context.campaign = "other-campaign".to_owned();
+    let snapshot = crate::qualification_cache_backend::complete_snapshot_for_test(&context)
+        .expect("foreign snapshot");
+    crate::qualification_cache_backend::stage_qualification_cache_before(
+        artifacts.path(),
+        &snapshot,
+    )
+    .expect("stage foreign snapshot");
+    let error =
+        publish_plan_files_with_outputs(&response, &artifacts.path().join("velnor"), &outputs)
+            .expect_err("snapshot binding must match final plan");
+    assert!(matches!(error, OrchestratorError::Internal { .. }));
 }
 
 fn cold_qualification_response() -> String {

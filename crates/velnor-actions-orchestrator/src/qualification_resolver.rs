@@ -42,6 +42,19 @@ pub fn resolve_qualification_admission(request_path: &Path) -> Result<(), Orches
         &request.head,
     )?;
     client.validate_current_branch()?;
+    let run_key = run_key_for_ci(
+        request.context.run_id,
+        u64::from(request.context.run_attempt),
+    );
+    let snapshot = crate::qualification_cache_backend::capture_qualification_cache_before(
+        &root,
+        &request.context,
+    )?;
+    let runner_temp = env::var_os("RUNNER_TEMP")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .ok_or_else(|| internal("missing_runner_temp"))?;
+    crate::qualification_cache_backend::stage_qualification_cache_before(&runner_temp, &snapshot)?;
     let Some(predecessor) = request.context.predecessor else {
         return Ok(());
     };
@@ -59,14 +72,6 @@ pub fn resolve_qualification_admission(request_path: &Path) -> Result<(), Orches
     .map_err(crate::internal::internal_contract)?;
     QualificationCacheAdmission::parse_bounded(&bytes)
         .map_err(crate::internal::internal_contract)?;
-    let run_key = run_key_for_ci(
-        request.context.run_id,
-        u64::from(request.context.run_attempt),
-    );
-    let runner_temp = env::var_os("RUNNER_TEMP")
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .ok_or_else(|| internal("missing_runner_temp"))?;
     stage_admission(&runner_temp, &run_key, &bytes)
 }
 
