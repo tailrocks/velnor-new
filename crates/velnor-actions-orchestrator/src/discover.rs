@@ -86,6 +86,8 @@ pub struct Discovery {
     pub affected: crate::affected_inputs::AffectedInputs,
     /// Bun workspaces named by `[stacks.bun]`, read from the same index.
     pub(crate) bun: crate::workflow_task_jobs::bun_inventory::BunInventory,
+    /// dbt projects named by `[stacks.dbt]`, analysed from the same index.
+    pub(crate) dbt: crate::workflow_task_jobs::dbt_inventory::DbtInventory,
 }
 
 /// Run file index, detection, inventory, profiles, and task derivation.
@@ -109,6 +111,20 @@ pub(crate) fn discover_with_phase_timings(
     phases: &mut PlanPhaseTimings,
 ) -> Result<Discovery, OrchestratorError> {
     discover_inner(root, config, catalog, Some(phases))
+}
+
+/// Bun member inventory for the configured `[stacks.bun]` (empty without it).
+fn bun_inventory(
+    root: &Path,
+    index: &FileIndex,
+    config: &VelnorConfig,
+) -> Result<crate::workflow_task_jobs::bun_inventory::BunInventory, OrchestratorError> {
+    match &config.stacks.bun {
+        Some(stack) => {
+            crate::workflow_task_jobs::bun_inventory::BunInventory::load(root, index, stack)
+        }
+        None => Ok(crate::workflow_task_jobs::bun_inventory::BunInventory::default()),
+    }
 }
 
 fn discover_inner(
@@ -174,12 +190,9 @@ fn discover_inner(
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
     let (consumer_manifest_json, consumer_manifest_stand_in) =
         consumer_manifest::for_policy(root, config.workflow.policy)?;
-    let bun = match &config.stacks.bun {
-        Some(stack) => {
-            crate::workflow_task_jobs::bun_inventory::BunInventory::load(root, &index, stack)?
-        }
-        None => crate::workflow_task_jobs::bun_inventory::BunInventory::default(),
-    };
+    let bun = bun_inventory(root, &index, config)?;
+    let dbt =
+        crate::workflow_task_jobs::dbt_inventory::DbtInventory::for_config(root, &index, config)?;
     Ok(Discovery {
         mise_checks,
         statuses,
@@ -196,6 +209,7 @@ fn discover_inner(
         tofu_units,
         affected: crate::affected_inputs::AffectedInputs { resolves, rules },
         bun,
+        dbt,
     })
 }
 
