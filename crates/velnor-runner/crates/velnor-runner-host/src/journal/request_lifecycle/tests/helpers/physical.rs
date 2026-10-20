@@ -1,5 +1,5 @@
 #[derive(Clone)]
-pub(super) struct ProvisionedRunner {
+pub(crate) struct ProvisionedRunner {
     pub(super) assignment: crate::journal::AssignmentIdentity,
     pub(super) intent_id: i64,
     pub(super) reservation_id: i64,

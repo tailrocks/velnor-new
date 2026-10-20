@@ -18,6 +18,15 @@ mod publication;
 mod request_link;
 mod storage_plan;
 
+pub(in crate::journal) use cleanup::validate_retirement_digest;
+
+pub(super) async fn post_jit_retirement_claim_exists(
+    connection: &turso::Connection,
+    reservation_id: i64,
+) -> Result<bool, HostError> {
+    cleanup::post_jit_retirement_claim_exists(connection, reservation_id).await
+}
+
 #[cfg(test)]
 pub(crate) use initialization::{CreateCommitStage, arm_create_commit_gate};
 pub(crate) use initialization::{CreateInterruptionOutcome, StorageInitializationClaim};

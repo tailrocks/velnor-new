@@ -7,6 +7,8 @@ mod limits;
 mod physical_attempt;
 mod provisioning;
 
+pub(in crate::journal) use provisioning::validate_retirement_digest;
+
 pub(in crate::journal) async fn release_ready(
     connection: &turso::Connection,
     reservation_id: i64,

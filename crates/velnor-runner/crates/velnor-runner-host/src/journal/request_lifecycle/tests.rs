@@ -15,6 +15,7 @@ mod initialization;
 mod legacy_migration;
 mod linked_request_reopen;
 mod phase_recovery;
+mod post_jit_retirement;
 mod pre_jit_crossed_assignment;
 mod profile_lifecycle;
 mod request_link;
@@ -39,6 +40,7 @@ pub(crate) struct NativeStartedIntakeFixture {
     pub(crate) message_id: i64,
     pub(crate) intent_id: i64,
     pub(crate) reservation_id: i64,
+    pub(crate) provisioned: helpers::ProvisionedRunner,
     pub(crate) assignment: crate::journal::AssignmentIdentity,
     pub(crate) reservation_assignment: crate::journal::AssignmentIdentity,
     pub(crate) runner: velnor_runner_github::RunnerReference,
@@ -194,6 +196,7 @@ pub(crate) async fn native_started_intake_fixture_with_filesystem_digest(
             .await?
     };
     let provisioned = &initialized.provisioned;
+    let retained_provisioned = initialized.provisioned.clone();
     let runner = velnor_runner_github::RunnerReference {
         id: 701,
         name: helpers::runner_name('a'),
@@ -244,6 +247,7 @@ pub(crate) async fn native_started_intake_fixture_with_filesystem_digest(
         message_id: MESSAGE_ID,
         intent_id: initialized.intent_id,
         reservation_id: initialized.reservation_id,
+        provisioned: retained_provisioned,
         assignment: initialized.assignment,
         reservation_assignment: initialized.provisioned.assignment.clone(),
         runner,

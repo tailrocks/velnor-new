@@ -15,6 +15,17 @@ mod scope;
 mod session;
 pub(super) mod storage;
 
+pub(in crate::journal) use reservation::validate_retirement_digest;
+
+pub(in crate::journal) struct RetirementDigestIdentity<'a> {
+    pub(in crate::journal) lineage_id: i64,
+    pub(in crate::journal) generation: i64,
+    pub(in crate::journal) reservation_id: i64,
+    pub(in crate::journal) claim_generation: i64,
+    pub(in crate::journal) metadata_generation: i64,
+    pub(in crate::journal) cleanup_probe_operation_id: &'a str,
+}
+
 pub(crate) use completion::{
     ConnectionCompletionInboxEntry, NativeCompletionReservation, TerminalReplayBinding,
 };

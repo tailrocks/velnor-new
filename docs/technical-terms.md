@@ -91,3 +91,10 @@
 | Future | A Rust value for an operation that can finish later. |
 
 | Heap storage | Memory that a program allocates while it runs. |
+
+| Physical retirement | Cleanup that stops a runner and releases its physical reservation after JIT configuration delivery. |
+| Retirement claim | A journal record that permits physical retirement of one physical attempt until a specified time. |
+| Retirement phase | One recorded step in physical retirement. |
+| Retirement proof | A journal record that links runner absence, resource cleanup, and capacity checks for one physical retirement. |
+| Retirement fence | A database rule that prevents a normal completion record while a retirement claim exists. |
+| Runner absence receipt | A journal record that confirms a GitHub lookup returned no runner for the specified identity. |

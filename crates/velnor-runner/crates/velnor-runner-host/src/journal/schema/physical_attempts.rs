@@ -2,6 +2,8 @@
 
 use crate::error::HostError;
 
+mod v35_validation;
+
 const LINEAGE: &str = "physical_attempt_lineages";
 const ATTEMPT: &str = "physical_attempts";
 const CURRENT: &str = "physical_attempt_current";
@@ -15,12 +17,12 @@ const ATTEMPT_NO_UPDATE: &str = "CREATE TRIGGER IF NOT EXISTS physical_attempts_
 const ATTEMPT_NO_DELETE: &str = "CREATE TRIGGER IF NOT EXISTS physical_attempts_no_delete BEFORE DELETE ON physical_attempts BEGIN SELECT RAISE(ABORT, 'physical attempt history is immutable'); END";
 const LINEAGE_NO_UPDATE: &str = "CREATE TRIGGER IF NOT EXISTS physical_attempt_lineages_no_update BEFORE UPDATE ON physical_attempt_lineages BEGIN SELECT RAISE(ABORT, 'physical attempt lineage is immutable'); END";
 const LINEAGE_NO_DELETE: &str = "CREATE TRIGGER IF NOT EXISTS physical_attempt_lineages_no_delete BEFORE DELETE ON physical_attempt_lineages BEGIN SELECT RAISE(ABORT, 'physical attempt lineage is immutable'); END";
-const ATTEMPT_INSERT_GUARD: &str = "CREATE TRIGGER IF NOT EXISTS physical_attempt_insert_guard BEFORE INSERT ON physical_attempts WHEN NOT EXISTS (SELECT 1 FROM physical_attempt_lineages AS lineage JOIN capacity_reservations AS reservation ON reservation.id = NEW.reservation_id JOIN connection_intents AS intent ON intent.id = NEW.intent_id JOIN connection_request_authorizations AS witness ON witness.connection_id = NEW.connection_id AND witness.scale_set_id = NEW.scale_set_id AND witness.request_id = NEW.witness_request_id WHERE lineage.lineage_id = NEW.lineage_id AND lineage.connection_id = NEW.connection_id AND lineage.scale_set_id = NEW.scale_set_id AND lineage.binding_digest = NEW.binding_digest AND reservation.intent_id = NEW.intent_id AND reservation.connection_id = NEW.connection_id AND reservation.binding_digest = NEW.binding_digest AND reservation.engine_id = NEW.engine_id AND reservation.docker_root_digest = NEW.docker_root_digest AND intent.id = NEW.intent_id AND intent.connection_id = NEW.connection_id AND intent.scale_set_id = NEW.scale_set_id AND intent.kind = 'launch' AND witness.binding_digest = NEW.binding_digest AND witness.source_digest = NEW.source_digest AND witness.acquire_response_digest IS NEW.acquire_response_digest AND NEW.generation = COALESCE((SELECT MAX(prior.generation) + 1 FROM physical_attempts AS prior WHERE prior.lineage_id = NEW.lineage_id), 1) AND NOT EXISTS (SELECT 1 FROM physical_attempt_current AS current_attempt WHERE current_attempt.lineage_id = NEW.lineage_id) AND (NEW.generation = 1 OR EXISTS (SELECT 1 FROM physical_attempt_outcomes AS outcome WHERE outcome.lineage_id = NEW.lineage_id AND outcome.generation = NEW.generation - 1))) BEGIN SELECT RAISE(ABORT, 'invalid physical attempt history'); END";
+pub(super) const ATTEMPT_INSERT_GUARD: &str = "CREATE TRIGGER IF NOT EXISTS physical_attempt_insert_guard BEFORE INSERT ON physical_attempts WHEN NOT EXISTS (SELECT 1 FROM physical_attempt_lineages AS lineage JOIN capacity_reservations AS reservation ON reservation.id = NEW.reservation_id JOIN connection_intents AS intent ON intent.id = NEW.intent_id JOIN connection_request_authorizations AS witness ON witness.connection_id = NEW.connection_id AND witness.scale_set_id = NEW.scale_set_id AND witness.request_id = NEW.witness_request_id WHERE lineage.lineage_id = NEW.lineage_id AND lineage.connection_id = NEW.connection_id AND lineage.scale_set_id = NEW.scale_set_id AND lineage.binding_digest = NEW.binding_digest AND reservation.intent_id = NEW.intent_id AND reservation.connection_id = NEW.connection_id AND reservation.binding_digest = NEW.binding_digest AND reservation.engine_id = NEW.engine_id AND reservation.docker_root_digest = NEW.docker_root_digest AND intent.id = NEW.intent_id AND intent.connection_id = NEW.connection_id AND intent.scale_set_id = NEW.scale_set_id AND intent.kind = 'launch' AND witness.binding_digest = NEW.binding_digest AND witness.source_digest = NEW.source_digest AND witness.acquire_response_digest IS NEW.acquire_response_digest AND NEW.generation = COALESCE((SELECT MAX(prior.generation) + 1 FROM physical_attempts AS prior WHERE prior.lineage_id = NEW.lineage_id), 1) AND NOT EXISTS (SELECT 1 FROM physical_attempt_current AS current_attempt WHERE current_attempt.lineage_id = NEW.lineage_id) AND (NEW.generation = 1 OR EXISTS (SELECT 1 FROM physical_attempt_outcomes AS outcome WHERE outcome.lineage_id = NEW.lineage_id AND outcome.generation = NEW.generation - 1))) BEGIN SELECT RAISE(ABORT, 'invalid physical attempt history'); END";
 const OUTCOME_NO_UPDATE: &str = "CREATE TRIGGER IF NOT EXISTS physical_attempt_outcomes_no_update BEFORE UPDATE ON physical_attempt_outcomes BEGIN SELECT RAISE(ABORT, 'physical attempt outcome is immutable'); END";
 const OUTCOME_NO_DELETE: &str = "CREATE TRIGGER IF NOT EXISTS physical_attempt_outcomes_no_delete BEFORE DELETE ON physical_attempt_outcomes BEGIN SELECT RAISE(ABORT, 'physical attempt outcome is immutable'); END";
 const CURRENT_INSERT_GUARD: &str = "CREATE TRIGGER IF NOT EXISTS physical_attempt_current_insert_guard BEFORE INSERT ON physical_attempt_current WHEN NOT EXISTS (SELECT 1 FROM physical_attempts AS attempt JOIN physical_attempt_lineages AS lineage ON lineage.lineage_id = attempt.lineage_id JOIN capacity_reservations AS reservation ON reservation.id = attempt.reservation_id JOIN connection_intents AS intent ON intent.id = attempt.intent_id JOIN connection_request_authorizations AS witness ON witness.connection_id = attempt.connection_id AND witness.scale_set_id = attempt.scale_set_id AND witness.request_id = attempt.witness_request_id WHERE attempt.lineage_id = NEW.lineage_id AND attempt.generation = NEW.generation AND attempt.reservation_id = NEW.reservation_id AND attempt.intent_id = NEW.intent_id AND lineage.connection_id = attempt.connection_id AND lineage.scale_set_id = attempt.scale_set_id AND lineage.binding_digest = attempt.binding_digest AND reservation.id = attempt.reservation_id AND reservation.state IN ('reserved', 'uncertain', 'recovering') AND reservation.connection_id = attempt.connection_id AND reservation.binding_digest = attempt.binding_digest AND reservation.engine_id = attempt.engine_id AND reservation.docker_root_digest = attempt.docker_root_digest AND intent.id = attempt.intent_id AND intent.connection_id = attempt.connection_id AND intent.scale_set_id = attempt.scale_set_id AND intent.kind = 'launch' AND intent.state IN ('pending', 'uncertain', 'done') AND witness.binding_digest = attempt.binding_digest AND witness.source_digest = attempt.source_digest AND witness.acquire_response_digest IS attempt.acquire_response_digest) BEGIN SELECT RAISE(ABORT, 'invalid current physical attempt'); END";
 const CURRENT_NO_UPDATE: &str = "CREATE TRIGGER IF NOT EXISTS physical_attempt_current_no_update BEFORE UPDATE ON physical_attempt_current BEGIN SELECT RAISE(ABORT, 'replace current physical attempt atomically'); END";
-const CURRENT_DELETE_GUARD: &str = "CREATE TRIGGER IF NOT EXISTS physical_attempt_current_delete_guard BEFORE DELETE ON physical_attempt_current WHEN NOT EXISTS (SELECT 1 FROM physical_attempt_outcomes AS outcome JOIN capacity_reservations AS reservation ON reservation.id = outcome.reservation_id WHERE outcome.lineage_id = OLD.lineage_id AND outcome.generation = OLD.generation AND outcome.reservation_id = OLD.reservation_id AND reservation.state = 'released' AND reservation.remote_cleanup_proven = 1 AND reservation.local_cleanup_proven = 1) BEGIN SELECT RAISE(ABORT, 'current attempt requires durable terminal release'); END";
+pub(super) const CURRENT_DELETE_GUARD: &str = "CREATE TRIGGER IF NOT EXISTS physical_attempt_current_delete_guard BEFORE DELETE ON physical_attempt_current WHEN NOT EXISTS (SELECT 1 FROM physical_attempt_outcomes AS outcome JOIN capacity_reservations AS reservation ON reservation.id = outcome.reservation_id WHERE outcome.lineage_id = OLD.lineage_id AND outcome.generation = OLD.generation AND outcome.reservation_id = OLD.reservation_id AND reservation.state = 'released' AND reservation.remote_cleanup_proven = 1 AND reservation.local_cleanup_proven = 1) BEGIN SELECT RAISE(ABORT, 'current attempt requires durable terminal release'); END";
 macro_rules! outcome_insert_guard {
     ($capacity_states:literal) => {
         concat!(
@@ -35,9 +37,11 @@ macro_rules! outcome_insert_guard {
     };
 }
 pub(super) const OUTCOME_INSERT_GUARD_V33: &str = outcome_insert_guard!("'reserved', 'uncertain'");
-const OUTCOME_INSERT_GUARD: &str = outcome_insert_guard!("'reserved', 'uncertain', 'recovering'");
+pub(super) const OUTCOME_INSERT_GUARD: &str =
+    outcome_insert_guard!("'reserved', 'uncertain', 'recovering'");
 const REVISION_TABLES: [&str; 4] = [LINEAGE, ATTEMPT, CURRENT, OUTCOME];
 
+#[cfg(test)]
 pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError> {
     bootstrap_with_outcome_guard(conn, OUTCOME_INSERT_GUARD).await
 }
@@ -167,18 +171,48 @@ pub(super) async fn upgrade_from_v32(conn: &turso::Connection) -> Result<(), Hos
 }
 
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
-    validate_with_outcome_guard(conn, OUTCOME_INSERT_GUARD).await
+    validate_with_guards(
+        conn,
+        OUTCOME_INSERT_GUARD,
+        ATTEMPT_INSERT_GUARD,
+        CURRENT_DELETE_GUARD,
+    )
+    .await
+}
+
+pub(super) async fn validate_v35(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_with_guards(
+        conn,
+        OUTCOME_INSERT_GUARD,
+        &v35_validation::terminal_proof_guard(ATTEMPT_INSERT_GUARD),
+        &v35_validation::terminal_proof_guard(CURRENT_DELETE_GUARD),
+    )
+    .await?;
+    v35_validation::validate_rows_v35(conn).await
 }
 
 pub(super) async fn validate_v33(conn: &turso::Connection) -> Result<(), HostError> {
-    validate_with_outcome_guard(conn, OUTCOME_INSERT_GUARD_V33).await
+    validate_with_guards(
+        conn,
+        OUTCOME_INSERT_GUARD_V33,
+        ATTEMPT_INSERT_GUARD,
+        CURRENT_DELETE_GUARD,
+    )
+    .await
 }
 
-async fn validate_with_outcome_guard(
+async fn validate_with_guards(
     conn: &turso::Connection,
     outcome_guard: &'static str,
+    attempt_insert_guard: &str,
+    current_delete_guard: &str,
 ) -> Result<(), HostError> {
     for (kind, name, expected) in objects(outcome_guard) {
+        let expected = match name {
+            "physical_attempt_insert_guard" => attempt_insert_guard,
+            "physical_attempt_current_delete_guard" => current_delete_guard,
+            _ => expected,
+        };
         let mut rows = conn
             .query(
                 "SELECT sql FROM sqlite_schema WHERE type = ?1 AND name = ?2",
@@ -196,7 +230,7 @@ async fn validate_with_outcome_guard(
             return Err(HostError::Journal);
         }
     }
-    validate_revision_triggers(conn).await?;
+    v35_validation::validate_revision_triggers(conn).await?;
     validate_rows(conn).await
 }
 
@@ -211,38 +245,22 @@ pub(super) async fn upgrade_from_v33(conn: &turso::Connection) -> Result<(), Hos
     validate(conn).await
 }
 
-async fn validate_revision_triggers(conn: &turso::Connection) -> Result<(), HostError> {
-    for table in REVISION_TABLES {
-        for (suffix, action) in [
-            ("insert", "after insert"),
-            ("update", "after update"),
-            ("delete", "after delete"),
-        ] {
-            let name = format!("{table}_revision_{suffix}");
-            let expected = normalize_sql(&format!(
-                "CREATE TRIGGER {name} {action} ON {table} BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END"
-            ));
-            let mut rows = conn
-                .query(
-                    "SELECT sql FROM sqlite_schema WHERE type = 'trigger' AND name = ?1",
-                    (name.as_str(),),
-                )
-                .await
-                .map_err(|_| HostError::Journal)?;
-            let actual: String = rows
-                .next()
-                .await
-                .map_err(|_| HostError::Journal)?
-                .ok_or(HostError::Journal)?
-                .get(0)
-                .map_err(|_| HostError::Journal)?;
-            if normalize_sql(&actual) != expected
-                || rows.next().await.map_err(|_| HostError::Journal)?.is_some()
-            {
-                return Err(HostError::Journal);
-            }
-        }
-    }
+pub(super) async fn upgrade_from_v34(conn: &turso::Connection) -> Result<(), HostError> {
+    validate(conn).await?;
+    conn.execute("DROP TRIGGER physical_attempt_insert_guard", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    conn.execute("DROP TRIGGER physical_attempt_current_delete_guard", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let attempt_guard = v35_validation::terminal_proof_guard(ATTEMPT_INSERT_GUARD);
+    let current_delete_guard = v35_validation::terminal_proof_guard(CURRENT_DELETE_GUARD);
+    conn.execute(&attempt_guard, ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    conn.execute(&current_delete_guard, ())
+        .await
+        .map_err(|_| HostError::Journal)?;
     Ok(())
 }
 

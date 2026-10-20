@@ -2,6 +2,185 @@ use crate::error::HostError;
 use crate::journal::{Journal, request_lifecycle::tests::native_started_intake_fixture};
 
 #[tokio::test]
+async fn v34_schema_migrates_to_v35_and_reopens_without_changing_attempt_rows()
+-> Result<(), HostError> {
+    let fixture = native_started_intake_fixture().await?;
+    let path = fixture.database_path.clone();
+    let reservation_id = fixture.reservation_id;
+    let initial = fixture
+        .scope
+        .current_physical_attempt(reservation_id)
+        .await?
+        .ok_or(HostError::Journal)?;
+    let initial_identity = (
+        initial.lineage_id,
+        initial.generation,
+        initial.intent_id,
+        initial.physical_nonce.clone(),
+    );
+    let connection = fixture.journal.connection().await?;
+    downgrade_to_v34(&connection).await?;
+    drop(connection);
+    let crate::journal::request_lifecycle::tests::NativeStartedIntakeFixture { _scratch, .. } =
+        fixture;
+
+    let migrated = Journal::open(&path).await?;
+    let connection = migrated.connection().await?;
+    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 35);
+    super::physical_attempts::validate_v35(&connection).await?;
+    assert_attempt_matches(&connection, reservation_id, &initial_identity).await?;
+    drop(connection);
+    drop(migrated);
+
+    let reopened = Journal::open(&path).await?;
+    let connection = reopened.connection().await?;
+    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 35);
+    super::physical_attempts::validate_v35(&connection).await?;
+    assert_attempt_matches(&connection, reservation_id, &initial_identity).await
+}
+
+#[tokio::test]
+async fn v34_upgrade_rolls_back_the_new_schema_with_the_outer_transaction() -> Result<(), HostError>
+{
+    let fixture = native_started_intake_fixture().await?;
+    let path = fixture.database_path.clone();
+    let connection = fixture.journal.connection().await?;
+    downgrade_to_v34(&connection).await?;
+
+    connection
+        .execute("BEGIN IMMEDIATE", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    super::migration::from_version_thirty_four(&connection).await?;
+    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 35);
+    assert!(
+        connection
+            .execute("INSERT INTO missing_after_v35_migration VALUES (1)", ())
+            .await
+            .is_err()
+    );
+    connection
+        .execute("ROLLBACK", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 34);
+    super::validate_persisted_schema_v34(&connection).await?;
+    drop(connection);
+    let crate::journal::request_lifecycle::tests::NativeStartedIntakeFixture { _scratch, .. } =
+        fixture;
+
+    let migrated = Journal::open(&path).await?;
+    let connection = migrated.connection().await?;
+    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 35);
+    super::physical_attempts::validate_v35(&connection).await?;
+    super::post_jit_retirement::validate(&connection).await
+}
+
+#[tokio::test]
+async fn v35_open_rejects_a_changed_terminal_proof_view() -> Result<(), HostError> {
+    let fixture = native_started_intake_fixture().await?;
+    let path = fixture.database_path.clone();
+    let connection = fixture.journal.connection().await?;
+    connection
+        .execute("DROP VIEW physical_attempt_terminal_proofs", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(
+            "CREATE VIEW physical_attempt_terminal_proofs AS SELECT lineage_id, generation, reservation_id FROM physical_attempts",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    drop(connection);
+    let crate::journal::request_lifecycle::tests::NativeStartedIntakeFixture { _scratch, .. } =
+        fixture;
+
+    assert!(Journal::open(&path).await.is_err());
+    Ok(())
+}
+
+async fn downgrade_to_v34(connection: &turso::Connection) -> Result<(), HostError> {
+    connection
+        .execute("DROP TRIGGER physical_attempt_insert_guard", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute("DROP TRIGGER physical_attempt_current_delete_guard", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(super::physical_attempts::ATTEMPT_INSERT_GUARD, ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(super::physical_attempts::CURRENT_DELETE_GUARD, ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute("DROP TRIGGER physical_attempt_outcome_retirement_fence", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute("DROP VIEW physical_attempt_terminal_proofs", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    for table in [
+        "physical_attempt_post_jit_retirements",
+        "physical_attempt_post_jit_retirement_remote_absence",
+        "physical_attempt_post_jit_retirement_progress",
+        "physical_attempt_post_jit_retirement_claims",
+    ] {
+        connection
+            .execute(&format!("DROP TABLE {table}"), ())
+            .await
+            .map_err(|_| HostError::Journal)?;
+    }
+    connection
+        .execute("PRAGMA user_version = 34", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    super::validate_persisted_schema_v34(connection).await
+}
+
+async fn assert_attempt_matches(
+    connection: &turso::Connection,
+    reservation_id: i64,
+    initial: &(i64, i64, i64, String),
+) -> Result<(), HostError> {
+    let mut rows = connection
+        .query(
+            "SELECT attempt.lineage_id, attempt.generation, attempt.intent_id, attempt.physical_nonce FROM physical_attempt_current AS current JOIN physical_attempts AS attempt ON attempt.lineage_id=current.lineage_id AND attempt.generation=current.generation AND attempt.reservation_id=current.reservation_id AND attempt.intent_id=current.intent_id WHERE current.reservation_id=?1",
+            [reservation_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let row = rows
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?;
+    assert_eq!(
+        row.get::<i64>(0).map_err(|_| HostError::Journal)?,
+        initial.0
+    );
+    assert_eq!(
+        row.get::<i64>(1).map_err(|_| HostError::Journal)?,
+        initial.1
+    );
+    assert_eq!(
+        row.get::<i64>(2).map_err(|_| HostError::Journal)?,
+        initial.2
+    );
+    assert_eq!(
+        row.get::<String>(3).map_err(|_| HostError::Journal)?,
+        initial.3
+    );
+    assert!(rows.next().await.map_err(|_| HostError::Journal)?.is_none());
+    Ok(())
+}
+
+#[tokio::test]
 async fn v33_outcome_guard_migrates_without_changing_attempt_rows() -> Result<(), HostError> {
     let fixture = native_started_intake_fixture().await?;
     let path = fixture.database_path.clone();
@@ -13,6 +192,7 @@ async fn v33_outcome_guard_migrates_without_changing_attempt_rows() -> Result<()
         .await?
         .ok_or(HostError::Journal)?;
     let connection = fixture.journal.connection().await?;
+    downgrade_to_v34(&connection).await?;
     connection
         .execute("DROP TRIGGER physical_attempt_outcome_insert_guard", ())
         .await
@@ -33,8 +213,9 @@ async fn v33_outcome_guard_migrates_without_changing_attempt_rows() -> Result<()
 
     let migrated = Journal::open(&path).await?;
     let connection = migrated.connection().await?;
-    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 34);
-    super::physical_attempts::validate(&connection).await?;
+    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 35);
+    super::physical_attempts::validate_v35(&connection).await?;
+    super::post_jit_retirement::validate(&connection).await?;
     let mut rows = connection
         .query(
             "SELECT attempt.lineage_id, attempt.generation, attempt.reservation_id, attempt.intent_id, attempt.physical_nonce FROM physical_attempt_current AS current JOIN physical_attempts AS attempt ON attempt.lineage_id = current.lineage_id AND attempt.generation = current.generation AND attempt.reservation_id = current.reservation_id AND attempt.intent_id = current.intent_id WHERE current.reservation_id = ?1",
@@ -68,8 +249,9 @@ async fn v33_outcome_guard_migrates_without_changing_attempt_rows() -> Result<()
 
     let reopened = Journal::open(&path).await?;
     let connection = reopened.connection().await?;
-    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 34);
-    super::physical_attempts::validate(&connection).await
+    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 35);
+    super::physical_attempts::validate_v35(&connection).await?;
+    super::post_jit_retirement::validate(&connection).await
 }
 
 #[tokio::test]
@@ -79,6 +261,7 @@ async fn v33_migration_rejects_the_v34_guard_without_changing_the_version() -> R
     let journal = fixture.journal.clone();
     let path = fixture.database_path.clone();
     let connection = journal.connection().await?;
+    downgrade_to_v34(&connection).await?;
     connection
         .execute("PRAGMA user_version = 33", ())
         .await
@@ -109,6 +292,7 @@ async fn v33_guard_replacement_rolls_back_with_the_outer_migration_transaction()
 -> Result<(), HostError> {
     let fixture = native_started_intake_fixture().await?;
     let connection = fixture.journal.connection().await?;
+    downgrade_to_v34(&connection).await?;
     connection
         .execute("DROP TRIGGER physical_attempt_outcome_insert_guard", ())
         .await
