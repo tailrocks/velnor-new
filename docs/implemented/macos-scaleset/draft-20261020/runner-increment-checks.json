@@ -512,7 +512,7 @@
       "parser_log_sha256": "69e4f8def8c238292481318e331f6e5e22a869e4f1e2e12e449b016e01dd9765",
       "scope": "The external parser preserved the scalar values. The diagnostic fixture uses marker version 0.1.4.",
       "author": "/root/execution_channel_helper",
-      "reviewer": "PENDING"
+      "reviewer": "/root/helper_language_review"
     },
     {
       "result": "PASS",
@@ -525,7 +525,99 @@
       "log_sha256": "c21067f3b4483f4a129b5a09deac178ad2ee04c067321bbc2609691bd2f19453",
       "scope": "The provider download and readonly initialization passed. The lock file did not change.",
       "author": "/root/execution_channel_helper",
-      "reviewer": "PENDING"
+      "reviewer": "/root/helper_language_review"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "8cac30fd67bb797d7770539fe1cdeb20ae8c3c89",
+      "exit_status": 0,
+      "log": "build/root-gate-029-clean-evidence-20261020/root-nextest-8cac30f-20261020T062519Z.log",
+      "log_sha256": "44048e093ae6a192787444a2e9d6d7a0923dd1fdcae7561dc0be03fd37d7381f",
+      "author": "/root/obsolete_capacity_cleanup",
+      "reviewer": "/root/helper_language_review",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 rustup run 1.99.1 cargo nextest run --manifest-path Cargo.toml --workspace --locked --profile ci --no-tests fail",
+      "nextest_run": "1d5d5c37-366a-4ee1-8d91-1402586e3edf",
+      "passed": 5029,
+      "skipped": 4,
+      "scope": "These checks used a clean source worktree. Ignored qualification tests remain separate."
+    },
+    {
+      "result": "PASS",
+      "source_commit": "8cac30fd67bb797d7770539fe1cdeb20ae8c3c89",
+      "exit_status": 0,
+      "log": "build/root-gate-029-clean-evidence-20261020/root-format-8cac30f.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "author": "/root/obsolete_capacity_cleanup",
+      "reviewer": "PENDING",
+      "command": "rustup run 1.99.1 cargo fmt --all -- --check"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "8cac30fd67bb797d7770539fe1cdeb20ae8c3c89",
+      "exit_status": 0,
+      "log": "build/root-gate-029-clean-evidence-20261020/root-clippy-8cac30f.log",
+      "log_sha256": "d7c12ebf413542243e10ffbc7023dbf240743fa9f7879ccd5824d9c8a85ab419",
+      "author": "/root/obsolete_capacity_cleanup",
+      "reviewer": "PENDING",
+      "commands": [
+        "rustup run 1.99.1 mbx clippy --locked -p velnor-actions-actionlint --all-targets -- -D warnings",
+        "rustup run 1.99.1 mbx clippy --locked -p velnor-actions-cli --all-targets -- -D warnings",
+        "rustup run 1.99.1 mbx clippy --locked -p velnor-actions-contract --all-targets -- -D warnings",
+        "rustup run 1.99.1 mbx clippy --locked -p velnor-actions-freshness --all-targets -- -D warnings",
+        "rustup run 1.99.1 mbx clippy --locked -p velnor-actions-mise --all-targets -- -D warnings",
+        "rustup run 1.99.1 mbx clippy --locked -p velnor-actions-orchestrator --all-targets -- -D warnings",
+        "rustup run 1.99.1 mbx clippy --locked -p velnor-actions-rust --all-targets -- -D warnings",
+        "rustup run 1.99.1 mbx clippy --locked -p velnor-actions-tofu --all-targets -- -D warnings",
+        "rustup run 1.99.1 mbx clippy --locked -p velnor-actions-workflow-renderer --all-targets -- -D warnings",
+        "rustup run 1.99.1 mbx clippy --locked -p velnor-archive-guard --all-targets -- -D warnings"
+      ],
+      "packages": 10
+    },
+    {
+      "result": "PASS",
+      "source_commit": "8cac30fd67bb797d7770539fe1cdeb20ae8c3c89",
+      "exit_status": 0,
+      "log": "build/root-gate-029-clean-evidence-20261020/root-doctests-8cac30f.log",
+      "log_sha256": "d61dd99265ae0367c531cc69e6309633b0862b6c2add6da0ec39cf80675642ed",
+      "author": "/root/obsolete_capacity_cleanup",
+      "reviewer": "PENDING",
+      "commands": [
+        "rustup run 1.99.1 mbx test --locked -p velnor-actions-actionlint --doc",
+        "rustup run 1.99.1 mbx test --locked -p velnor-actions-contract --doc",
+        "rustup run 1.99.1 mbx test --locked -p velnor-actions-freshness --doc",
+        "rustup run 1.99.1 mbx test --locked -p velnor-actions-mise --doc",
+        "rustup run 1.99.1 mbx test --locked -p velnor-actions-orchestrator --doc",
+        "rustup run 1.99.1 mbx test --locked -p velnor-actions-rust --doc",
+        "rustup run 1.99.1 mbx test --locked -p velnor-actions-tofu --doc",
+        "rustup run 1.99.1 mbx test --locked -p velnor-actions-workflow-renderer --doc",
+        "rustup run 1.99.1 mbx test --locked -p velnor-archive-guard --doc"
+      ],
+      "packages": 9,
+      "scope": "All commands completed. Each library reported zero doctest cases."
+    },
+    {
+      "result": "PASS",
+      "source_commit": "d2aab7e5cd3f53596722f735500745ecc983cdbb",
+      "passed": 3,
+      "exit_status": 0,
+      "nextest_run": "14ee45dc-5b2a-407f-9953-1b31c8606752",
+      "log": "native-primary-shipping-final-2-20261020.log",
+      "log_sha256": "367b76ba2c959a8212c4514f380998c31cb2c1bad993b2f5cf6071616ff1e611",
+      "scope": "Mocked Docker and guest output fixtures proved native delivery ordering. This is not a live job.",
+      "author": "/root",
+      "reviewer": "/root/execution_source_security_review"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "4648f319c321f50c2b7de24c28637e130ab62fd0",
+      "passed": 5,
+      "exit_status": 0,
+      "nextest_run": "229176e2-eb7b-4c64-bbfe-31bafbb3e196",
+      "log": "native-attachments-cleanup-integrated-20261020.log",
+      "log_sha256": "e2e5c1ba2b8ca0893e61b5cdecd6643abd71592d259262e789c40e26ec5a5f43",
+      "scope": "Attachment and journal cleanup fixtures passed. This does not prove live Docker cleanup.",
+      "author": "/root",
+      "reviewer": "/root/journal_restart_repair"
     }
   ],
   "broader_pair_check": {
