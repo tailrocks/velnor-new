@@ -20,6 +20,7 @@ velnor-actions-contract = { version = "=0.1.29", path = "../velnor-actions-contr
 velnor-actions-mise = { version = "=0.1.29", path = "../velnor-actions-mise" }
 velnor-actions-rust = { version = "=0.1.29", path = "../velnor-actions-rust" }
 velnor-actions-tofu = { version = "=0.1.29", path = "../velnor-actions-tofu" }
+velnor-actions-gradle = { version = "=0.1.29", path = "../velnor-actions-gradle" }
 velnor-actions-workflow-renderer = { version = "=0.1.29", path = "../velnor-actions-workflow-renderer" }
 rustix = { version = "=1.1.5", features = ["fs", "process"] }
 serde = { workspace = true }

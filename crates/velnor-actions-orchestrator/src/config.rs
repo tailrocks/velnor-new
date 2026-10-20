@@ -15,6 +15,8 @@ use crate::config_stacks::PartialStacks;
 
 #[path = "deps_lock.rs"]
 pub(crate) mod deps_lock;
+#[path = "gradle_run.rs"]
+pub(crate) mod gradle_run;
 #[path = "private_fetch.rs"]
 pub(crate) mod private_fetch;
 #[path = "private_fetch_session.rs"]
