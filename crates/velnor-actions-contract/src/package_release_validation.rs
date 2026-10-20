@@ -328,13 +328,14 @@ fn valid_identifier(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
 }
 
-pub(super) fn valid_asset_name(value: &str) -> bool {
+pub(crate) fn valid_asset_name(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 180
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
-        && !matches!(value, "." | "..")
+        && !value.starts_with('.')
+        && !value.ends_with('.')
 }
 
 pub(super) fn invalid(problem: &str) -> ContractError {

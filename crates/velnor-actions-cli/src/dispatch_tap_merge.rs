@@ -10,7 +10,7 @@ use velnor_actions_orchestrator::{
     OrchestratorError, TapMergeOutcome, merge_homebrew_tap_from_env,
 };
 
-const PLAN_FILE: &str = "package-release-plan.json";
+const PLAN_FILE: &str = "package-release-policy.json";
 const ROOT_DIR: &str = "velnor";
 
 pub(super) fn gate_request(path: &Path) -> Option<PathBuf> {

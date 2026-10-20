@@ -13,8 +13,8 @@ use velnor_actions_orchestrator::{
 
 const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
 const REQUEST_ENV: &str = "VELNOR_REQUEST_FILE";
-const PLAN_FILE: &str = "package-release-plan.json";
-const PACKAGE_INPUT_DIR: &str = "preview-publish-input";
+const PLAN_FILE: &str = "package-release-policy.json";
+const PACKAGE_INPUT_DIR: &str = "release-publish-input";
 const CANDIDATE_DIR: &str = "tap-candidate";
 
 /// Admit only the fixed package plan plus retained signed release assets.
@@ -22,7 +22,10 @@ pub(super) fn gate_request(path: &Path) -> Option<PathBuf> {
     if ["GH_TOKEN", "GITHUB_TOKEN"]
         .iter()
         .any(|key| env::var_os(key).is_some())
-        || env::var("GITHUB_JOB").as_deref() != Ok("preview-tap-prepare")
+        || !matches!(
+            env::var("GITHUB_JOB").as_deref(),
+            Ok("preview-tap-prepare" | "stable-tap-prepare")
+        )
         || !env::var("VELNOR_TAP_ADMISSION_DIGEST").is_ok_and(|value| valid_digest(&value))
     {
         return None;
@@ -34,8 +37,10 @@ pub(super) fn gate_request(path: &Path) -> Option<PathBuf> {
 
 /// Authenticate before any source checkout or updater configuration is read.
 pub(super) fn gate_admission_request(path: &Path) -> Option<PathBuf> {
-    if env::var("GITHUB_JOB").as_deref() != Ok("preview-tap-prepare")
-        || !env::var("GH_TOKEN").is_ok_and(|value| !value.is_empty())
+    if !matches!(
+        env::var("GITHUB_JOB").as_deref(),
+        Ok("preview-tap-prepare" | "stable-tap-prepare")
+    ) || !env::var("GH_TOKEN").is_ok_and(|value| !value.is_empty())
         || !env::var_os("GITHUB_OUTPUT")
             .map(PathBuf::from)
             .is_some_and(|path| path.is_absolute() && is_regular_file(&path))
@@ -135,10 +140,25 @@ fn gate_common(path: &Path, writer: bool) -> Option<PathBuf> {
 pub(crate) fn package_input_available(root: &Path) -> bool {
     match env::var("GITHUB_EVENT_NAME").as_deref() {
         Ok("workflow_run") => is_real_directory(&root.join(PACKAGE_INPUT_DIR)),
-        Ok("workflow_dispatch") => original_run_available(),
+        Ok("workflow_dispatch") => {
+            original_run_available()
+                || (stable_production_context() && is_real_directory(&root.join(PACKAGE_INPUT_DIR)))
+        }
         Ok("schedule") => continuation_context() && original_run_available(),
         _ => false,
     }
+}
+
+fn stable_production_context() -> bool {
+    let Ok(repository) = env::var("GITHUB_REPOSITORY") else {
+        return false;
+    };
+    !repository.is_empty()
+        && env::var("GITHUB_REF").as_deref() == Ok("refs/heads/main")
+        && env::var("GITHUB_WORKFLOW_REF").is_ok_and(|value| {
+            value == format!("{repository}/.github/workflows/binary-release.yml@refs/heads/main")
+        })
+        && env::var("VELNOR_STABLE_OPERATION").as_deref() == Ok("release")
 }
 
 fn original_run_available() -> bool {
@@ -155,10 +175,12 @@ fn continuation_context() -> bool {
     !repository.is_empty()
         && env::var("GITHUB_REF").as_deref() == Ok("refs/heads/main")
         && env::var("GITHUB_WORKFLOW_REF").is_ok_and(|value| {
-            value
-                == format!(
-                    "{repository}/.github/workflows/preview-tap-reconcile.yml@refs/heads/main"
-                )
+            ["preview", "stable"].iter().any(|channel| {
+                value
+                    == format!(
+                        "{repository}/.github/workflows/{channel}-tap-reconcile.yml@refs/heads/main"
+                    )
+            })
         })
 }
 

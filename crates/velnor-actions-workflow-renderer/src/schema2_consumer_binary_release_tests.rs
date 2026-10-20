@@ -1,373 +1,174 @@
-use super::{ConsumerBinaryReleaseSpec, render_consumer_binary_release};
-use crate::{HelperProvenance, provision_acquire_step, setup::MiseSetup};
-use std::{
-    fs,
-    os::unix::fs::PermissionsExt,
-    path::{Path, PathBuf},
-    process::{Command, Output},
-    time::{SystemTime, UNIX_EPOCH},
+//! Stable uses the same product matrix and isolated custody as rolling preview.
+use super::{fixture, job};
+use crate::schema2::{
+    ConsumerReleaseSpec, ConsumerStableReleaseSpec, render_consumer_binary_release,
 };
-use velnor_actions_contract::{
-    PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlan, PackageReleasePlanProduct,
-    package_release::{PackageReleaseChannel, PackageReleasePayloadFormat},
-};
-
-fn install_argv(tools: &[&str]) -> Vec<String> {
-    let mut command = vec![
-        "mise".to_owned(),
-        "--no-config".to_owned(),
-        "--no-env".to_owned(),
-        "--no-hooks".to_owned(),
-        "install".to_owned(),
-    ];
-    command.extend(tools.iter().map(|tool| (*tool).to_owned()));
-    command
-}
-
-fn exec_argv(tool: &str, program: &str, args: &[&str]) -> Vec<String> {
-    let mut command = vec![
-        "mise".to_owned(),
-        "--no-config".to_owned(),
-        "--no-env".to_owned(),
-        "--no-hooks".to_owned(),
-        "exec".to_owned(),
-        tool.to_owned(),
-        "--".to_owned(),
-        program.to_owned(),
-    ];
-    command.extend(args.iter().map(|arg| (*arg).to_owned()));
-    command
-}
-
-fn spec() -> ConsumerBinaryReleaseSpec {
-    let linux_setup = MiseSetup {
-        uses: "jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde".to_owned(),
-        version: "2026.10.15".to_owned(),
-        sha256: "e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9".to_owned(),
-    };
-    ConsumerBinaryReleaseSpec {
-        generator_version: env!("CARGO_PKG_VERSION").to_owned(),
-        plan: PackageReleasePlan {
-            schema: PACKAGE_RELEASE_PLAN_SCHEMA_V1.to_owned(),
-            channel: PackageReleaseChannel::Stable,
-            repository: "example/repo-scan".to_owned(),
-            default_branch: "stable".to_owned(),
-            base_version: "0.4.3".to_owned(),
-            products: vec![PackageReleasePlanProduct {
-                id: "repo-scan".to_owned(),
-                package: "repo-scan".to_owned(),
-                bins: vec!["repo-scan".to_owned()],
-                targets: vec!["aarch64-apple-darwin".to_owned()],
-                format: PackageReleasePayloadFormat::RawBinary,
-            }],
-            companions: Vec::new(),
-        },
-        repository: "example/repo-scan".to_owned(),
-        default_branch: "stable".to_owned(),
+use velnor_actions_contract::package_release::PackageReleaseChannel;
+fn stable() -> ConsumerReleaseSpec {
+    let mut spec = fixture();
+    spec.policy.channel = PackageReleaseChannel::Stable;
+    spec.preview = None;
+    spec.stable = Some(ConsumerStableReleaseSpec {
+        version_package: "scanner".to_owned(),
+        release_pr: true,
         manifest_path: "Cargo.toml".to_owned(),
-        package: "repo-scan".to_owned(),
-        bin: "repo-scan".to_owned(),
-        linux_setup,
-        macos_setup: MiseSetup {
-            uses: "jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde".to_owned(),
-            version: "2026.10.15".to_owned(),
-            sha256: "826c4833fa7437a63f6027b86bc10c8b61b1163dc793c03ecde92f68ad167890".to_owned(),
-        },
-        install_tools_argv: install_argv(&["rust@1.98.1", "gh@2.102.0"]),
-        install_gh_argv: install_argv(&["gh@2.102.0"]),
-        install_rust_argv: install_argv(&["rust@1.98.1"]),
-        metadata_argv: exec_argv("rust@1.98.1", "cargo", &["metadata", "--format-version", "1", "--locked", "--no-deps", "--manifest-path", "Cargo.toml"]),
-        add_target_argv: exec_argv("rust@1.98.1", "rustup", &["target", "add", "--toolchain", "1.98.1-aarch64-apple-darwin", "aarch64-apple-darwin"]),
-        build_argv: exec_argv("rust@1.98.1", "cargo", &["build", "--release", "--locked", "--manifest-path", "Cargo.toml", "--package", "repo-scan", "--bin", "repo-scan", "--target", "aarch64-apple-darwin"]),
-        gh_argv: exec_argv("gh@2.102.0", "gh", &[]),
-        linux_acquire: provision_acquire_step(
-            &HelperProvenance::ReleaseAsset {
-                url: "https://github.com/tailrocks/velnor/releases/download/v0.1.12/velnor-actions-0.1.12-x86_64-unknown-linux-gnu".to_owned(),
-                sha256: "a".repeat(64),
-                commit: "b".repeat(40),
-            },
-            vec![
-                "sh".to_owned(),
-                "-c".to_owned(),
-                r#"curl -fsSL "$VELNOR_ASSET_URL" -o "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.12" && printf '%s  %s\n' "$VELNOR_ASSET_SHA256" "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.12" | sha256sum -c -"#.to_owned(),
-            ],
-        ).expect("verified helper acquisition"),
-    }
+        release_plz_argv: vec![
+            "mise".to_owned(),
+            "--no-config".to_owned(),
+            "--no-env".to_owned(),
+            "--no-hooks".to_owned(),
+            "exec".to_owned(),
+            "rust@1.99.1".to_owned(),
+            "release-plz@0.3.173".to_owned(),
+            "--".to_owned(),
+            "release-plz".to_owned(),
+        ],
+    });
+    spec
 }
-
 #[test]
-fn stable_renderer_uses_common_receipt_ops_and_preserves_manual_approval_boundary() {
-    let rendered = render_consumer_binary_release(&spec()).expect("workflow renders");
-    let yaml = rendered.bytes;
+fn stable_manual_graph_retains_complete_inventory_and_separates_custody() {
+    let rendered = render_consumer_binary_release(&stable()).expect("shared stable graph");
     assert_eq!(rendered.path, ".github/workflows/binary-release.yml");
-    assert!(yaml.contains("workflow_dispatch: {}"));
-    assert!(!yaml.contains("push:"));
-    assert!(yaml.contains("consumer-binary-release-${{ github.repository }}"));
-    assert!(yaml.contains("raw-binary"));
-    assert!(yaml.contains("sign-package-release-v1"));
-    assert!(yaml.contains("publish-package-release-v1"));
-    assert!(yaml.contains("consumer-binary-release"));
-    assert!(yaml.contains("IMMUTABILITY_READ_TOKEN"));
-    assert!(yaml.contains("attestations: write"));
-    assert!(yaml.contains("contents: write"));
+    let yaml = rendered.bytes;
+    let trigger = &yaml[..yaml.find("jobs:").expect("jobs")];
+    assert!(trigger.contains("workflow_dispatch:"));
+    for forbidden in ["workflow_run:", "push:", "schedule:"] {
+        assert!(!trigger.contains(forbidden));
+    }
+    assert!(trigger.contains("default: prepare"));
+    for (index, pair) in [
+        ("capsule", "aarch64-apple-darwin"),
+        ("capsule", "aarch64-unknown-linux-gnu"),
+        ("scanner", "aarch64-apple-darwin"),
+        ("scanner", "aarch64-unknown-linux-gnu"),
+        ("scanner", "x86_64-apple-darwin"),
+        ("scanner", "x86_64-unknown-linux-gnu"),
+    ]
+    .iter()
+    .enumerate()
+    {
+        let id = format!("stable-payload-{index:03}");
+        let payload = job(&yaml, &id, None);
+        assert!(payload.contains(&format!("Build {} / {}", pair.0, pair.1)));
+    }
+    let signer = job(&yaml, "stable-signer", Some("stable-publisher"));
+    assert!(signer.contains("attestations: write"));
+    assert!(signer.contains("id-token: write"));
+    assert!(!signer.contains("actions/checkout"));
+    assert!(!signer.contains("contents: write"));
+    let publisher = job(&yaml, "stable-publisher", Some("stable-recovery"));
+    assert!(publisher.contains("contents: write"));
+    assert!(!publisher.contains("actions/checkout"));
+    assert!(!publisher.contains("id-token: write"));
+    assert!(!yaml.contains("raw-binary"));
     assert!(!yaml.contains("actions: write"));
-    assert!(!yaml.contains("gh release create"));
-    assert!(!yaml.contains("gh release edit"));
-    assert!(!yaml.contains("make_latest=true"));
-    assert!(yaml.contains("aarch64-apple-darwin"));
-    assert!(yaml.contains("CARGO_TARGET_DIR"));
+}
+#[test]
+fn stable_intent_precedes_tag_mutation_and_observed_origin_precedes_builds() {
+    let yaml = render_consumer_binary_release(&stable())
+        .expect("stable")
+        .bytes;
+    let tag = job(&yaml, "stable-tag", Some("stable-payload-000"));
+    let intent = tag
+        .find("write-stable-tag-intent-v1")
+        .expect("intent writer");
+    let retained = tag.find("id: intent-upload").expect("durable intent");
+    let origin = tag
+        .find("write-stable-tag-origin-v1")
+        .expect("observed origin");
+    let upload = tag.find("id: origin-upload").expect("origin artifact");
+    assert!(intent < retained && retained < origin && origin < upload);
+    assert!(!tag.contains("actions/checkout"));
+    assert!(!tag.contains("id: release-plz"));
+    assert!(!tag.contains("release-plz-output.json"));
+    let prepare = job(&yaml, "stable-prepare", Some("stable-tag"));
+    assert!(prepare.contains("git_release_enable = false"));
+    assert!(prepare.contains("git_tag_enable = false"));
+    assert!(prepare.contains("publish = false"));
+    assert!(prepare.contains("core.hooksPath"));
+    assert!(prepare.contains("tag.gpgSign"));
+    assert!(prepare.contains("commit.gpgSign"));
+    assert!(prepare.contains("persist-credentials: false"));
+    assert!(tag.contains("VELNOR_STABLE_TAG_INTENT_ARTIFACT_DIGEST"));
+    let leaf = job(&yaml, "stable-payload-000", Some("stable-payload-001"));
+    assert!(leaf.find("admit-stable-tag-origin-v1") < leaf.find("actions/checkout"));
+    assert!(leaf.contains("VELNOR_STABLE_TAG_ORIGIN_ADMISSION_DIGEST"));
+    assert!(!leaf.contains("environment:"));
+    assert!(!leaf.contains("contents: write"));
+}
+#[test]
+fn stable_recovery_cannot_rebuild_and_preparation_is_explicitly_disabled() {
+    let mut spec = stable();
+    spec.stable.as_mut().expect("stable").release_pr = false;
+    let yaml = render_consumer_binary_release(&spec)
+        .expect("no prepare")
+        .bytes;
+    let trigger = &yaml[..yaml.find("jobs:").expect("jobs")];
+    assert!(!trigger.contains("default:"));
+    assert!(!trigger.contains("prepare"));
+    assert!(!yaml.contains("  stable-prepare:"));
+    let recovery = job(&yaml, "stable-recovery", None);
+    assert!(recovery.contains("inputs.original_run_id != ''"));
+    assert!(recovery.contains("inputs.original_run_attempt != ''"));
+    assert!(recovery.contains("recover-package-release-v1"));
+    assert!(recovery.contains("needs.stable-eligibility.outputs.ci_run_id"));
+    assert!(!recovery.contains("needs.stable-tag"));
+    assert!(!recovery.contains("actions/checkout"));
+    assert!(!recovery.contains("execute-release-producer-v1"));
+    let payload = job(&yaml, "stable-payload-000", Some("stable-payload-001"));
+    assert!(payload.contains("inputs.original_run_id == ''"));
+    assert!(payload.contains("inputs.original_run_attempt == ''"));
+}
+#[test]
+fn stable_rejects_legacy_inventory_and_invalid_authority_before_rendering() {
+    let spec = stable();
+    let raw = String::from_utf8(spec.policy.canonical_bytes().expect("plan"))
+        .expect("utf8")
+        .replace("tar-gz", "raw-binary");
+    assert!(velnor_actions_contract::parse_package_release_policy(raw.as_bytes()).is_err());
+    let mut spec = stable();
+    spec.stable = None;
+    assert!(render_consumer_binary_release(&spec).is_err());
+    let mut spec = stable();
+    spec.policy.channel = PackageReleaseChannel::Preview;
+    assert!(render_consumer_binary_release(&spec).is_err());
+    let mut spec = stable();
+    spec.stable.as_mut().expect("stable").version_package =
+        "x\"\npre_release_hook = ['evil']".to_owned();
+    assert!(render_consumer_binary_release(&spec).is_err());
 }
 
 #[test]
-fn stable_renderer_rejects_tarball_plan_without_changing_public_package_config() {
-    let mut invalid = spec();
-    invalid.plan.products[0].format = PackageReleasePayloadFormat::TarGz;
-    assert!(render_consumer_binary_release(&invalid).is_err());
-}
-
-#[test]
-fn stable_renderer_rejects_divergent_branch_authorities() {
-    let mut invalid = spec();
-    invalid.plan.default_branch = "other-main".to_owned();
-    assert!(render_consumer_binary_release(&invalid).is_err());
-}
-
-#[test]
-fn executable_stable_build_emits_raw_handoff_for_package_name_distinct_from_bin() {
-    let scratch = Scratch::new();
-    let (workspace, source_sha, metadata, runner_temp) = stable_fixture_workspace(&scratch);
-    let output = scratch.path().join("identity.out");
-    let identity = super::scripts::identity("cat \"$METADATA_FILE\"");
-    let mut environment = stable_identity_environment(&workspace, &output, &metadata);
-    let result = run(&identity, &workspace, &environment, None);
-    assert!(
-        result.status.success(),
-        "identity: {}",
-        String::from_utf8_lossy(&result.stderr)
-    );
-    assert!(
-        fs::read_to_string(&output)
-            .expect("identity output")
-            .contains("tag=demo-package-v0.4.3")
-    );
-
-    let fake_bin = fake_file_tool(&scratch);
-    environment.extend(stable_build_environment(&source_sha, &runner_temp));
-    let build = super::scripts::build(
-        &identity,
-        "true",
-        "mkdir -p \"$CARGO_TARGET_DIR/$TARGET_TRIPLE/release\"; printf raw-binary > \"$CARGO_TARGET_DIR/$TARGET_TRIPLE/release/$BINARY_NAME\"",
-    );
-    let result = run(&build, &workspace, &environment, Some(&fake_bin));
-    assert!(
-        result.status.success(),
-        "build: {}",
-        String::from_utf8_lossy(&result.stderr)
-    );
-    assert_raw_handoff(&runner_temp, &source_sha);
-    assert_locked_metadata_mismatch_rejected(&workspace, environment, &fake_bin);
-}
-
-fn stable_fixture_workspace(scratch: &Scratch) -> (PathBuf, String, PathBuf, PathBuf) {
-    let workspace = scratch.path().join("workspace");
-    fs::create_dir_all(workspace.join("src")).expect("workspace");
-    fs::write(
-        workspace.join("Cargo.toml"),
-        "[package]\nname = \"demo-package\"\nversion = \"0.4.3\"\nedition = \"2021\"\n\n[[bin]]\nname = \"demo-cli\"\npath = \"src/main.rs\"\n",
-    )
-    .expect("manifest");
-    fs::write(workspace.join("src/main.rs"), "fn main() {}\n").expect("source");
-    fs::write(
-        workspace.join("Cargo.lock"),
-        "version = 4\n\n[[package]]\nname = \"demo-package\"\nversion = \"0.4.3\"\n",
-    )
-    .expect("lockfile");
-    git(&workspace, &["init", "-q"]);
-    git(
-        &workspace,
-        &["config", "user.email", "test@example.invalid"],
-    );
-    git(&workspace, &["config", "user.name", "Velnor tests"]);
-    git(&workspace, &["add", "Cargo.toml", "Cargo.lock", "src"]);
-    git(&workspace, &["commit", "-q", "-m", "fixture"]);
-    let source_sha = git_output(&workspace, &["rev-parse", "HEAD"]);
-    let canonical_workspace = fs::canonicalize(&workspace).expect("canonical workspace");
-    let metadata = scratch.path().join("metadata.json");
-    fs::write(
-        &metadata,
-        format!(
-            r#"{{"packages":[{{"name":"demo-package","version":"0.4.3","id":"path+file:///workspace#demo-package@0.4.3","manifest_path":"{}/Cargo.toml","targets":[{{"name":"demo-cli","kind":["bin"],"required-features":[]}}]}}],"workspace_members":["path+file:///workspace#demo-package@0.4.3"],"workspace_root":"{}"}}"#,
-            canonical_workspace.display(),
-            canonical_workspace.display()
-        ),
-    )
-    .expect("metadata");
-    let runner_temp = scratch.path().join("runner");
-    fs::create_dir(&runner_temp).expect("runner temp");
-    (workspace, source_sha, metadata, runner_temp)
-}
-
-fn stable_identity_environment(
-    workspace: &Path,
-    output: &Path,
-    metadata: &Path,
-) -> Vec<(&'static str, String)> {
-    vec![
-        ("GITHUB_WORKSPACE", workspace.display().to_string()),
-        ("GITHUB_OUTPUT", output.display().to_string()),
-        ("MANIFEST_PATH", "Cargo.toml".to_owned()),
-        ("PACKAGE_NAME", "demo-package".to_owned()),
-        ("BINARY_NAME", "demo-cli".to_owned()),
-        ("EXPECTED_VERSION", "0.4.3".to_owned()),
-        ("METADATA_FILE", metadata.display().to_string()),
-    ]
-}
-
-fn fake_file_tool(scratch: &Scratch) -> PathBuf {
-    let fake_bin = scratch.path().join("bin");
-    fs::create_dir(&fake_bin).expect("fake bin");
-    let fake_file = fake_bin.join("file");
-    fs::write(
-        &fake_file,
-        "#!/bin/sh\nprintf 'Mach-O 64-bit executable arm64\\n'\n",
-    )
-    .expect("fake file");
-    fs::set_permissions(&fake_file, fs::Permissions::from_mode(0o755)).expect("executable");
-    fake_bin
-}
-
-fn stable_build_environment(source_sha: &str, runner_temp: &Path) -> Vec<(&'static str, String)> {
-    vec![
-        ("GITHUB_SHA", source_sha.to_owned()),
-        ("GITHUB_REF", "refs/heads/stable".to_owned()),
-        ("GITHUB_RUN_ID", "12".to_owned()),
-        ("GITHUB_RUN_ATTEMPT", "1".to_owned()),
-        ("RUNNER_TEMP", runner_temp.display().to_string()),
-        ("TARGET_TRIPLE", "aarch64-apple-darwin".to_owned()),
-        ("EXPECTED_TAG", "demo-package-v0.4.3".to_owned()),
-    ]
-}
-
-fn assert_raw_handoff(runner_temp: &Path, source_sha: &str) {
-    let producer = runner_temp.join("velnor/preview-output");
-    let payload = producer.join("demo-cli-aarch64-apple-darwin");
-    assert_eq!(fs::read(&payload).expect("raw payload"), b"raw-binary");
-    let manifest = velnor_actions_contract::parse_strict_json(
-        &fs::read_to_string(producer.join("package-output.json")).expect("handoff"),
-    )
-    .expect("handoff JSON");
-    assert_eq!(manifest["schema"], "velnor.package-output.v1");
-    assert_eq!(manifest["source_commit"], source_sha);
-    assert_eq!(manifest["source_ref"], "refs/heads/stable");
-    assert_eq!(manifest["version"], "0.4.3");
-    assert_eq!(manifest["payloads"][0]["product_id"], "demo-package");
-    assert_eq!(manifest["payloads"][0]["format"], "raw-binary");
-    assert_eq!(
-        manifest["payloads"][0]["name"],
-        "demo-cli-aarch64-apple-darwin"
-    );
-    assert_eq!(
-        manifest["sboms"][0]["payload_name"],
-        manifest["payloads"][0]["name"]
-    );
-    assert_eq!(
-        manifest["sboms"][0]["sha256"].as_str().map(str::len),
-        Some(64)
-    );
-}
-
-fn assert_locked_metadata_mismatch_rejected(
-    workspace: &Path,
-    mut environment: Vec<(&'static str, String)>,
-    fake_bin: &Path,
-) {
-    fs::write(
-        workspace.join("Cargo.toml"),
-        "[package]\nname = \"demo-package\"\nversion = \"0.4.4\"\nedition = \"2021\"\n\n[[bin]]\nname = \"demo-cli\"\npath = \"src/main.rs\"\n",
-    )
-    .expect("introduce an uncommitted lockfile mismatch");
-    let locked_identity = super::scripts::identity(
-        "cargo metadata --format-version 1 --locked --no-deps --manifest-path Cargo.toml",
-    );
-    let failed_output = workspace.join("locked-mismatch.out");
-    for (key, value) in &mut environment {
-        if *key == "GITHUB_OUTPUT" {
-            *value = failed_output.display().to_string();
-        }
-    }
-    let result = run(&locked_identity, workspace, &environment, Some(fake_bin));
-    assert!(
-        !result.status.success(),
-        "--locked metadata must reject stale Cargo.lock"
-    );
-}
-
-struct Scratch(PathBuf);
-
-impl Scratch {
-    fn new() -> Self {
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        let path = std::env::temp_dir().join(format!(
-            "velnor-stable-build-{}-{nonce}",
-            std::process::id()
-        ));
-        fs::create_dir_all(&path).expect("scratch directory");
-        Self(path)
-    }
-
-    fn path(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        drop(fs::remove_dir_all(&self.0));
-    }
-}
-
-fn run(script: &str, cwd: &Path, env: &[(&str, String)], path_prefix: Option<&Path>) -> Output {
-    let mut command = Command::new("bash");
-    command
-        .arg("-c")
-        .arg(script)
-        .current_dir(cwd)
-        .envs(env.iter().cloned());
-    if let Some(prefix) = path_prefix {
-        let path = std::env::var_os("PATH").unwrap_or_default();
-        command.env(
-            "PATH",
-            format!("{}:{}", prefix.display(), path.to_string_lossy()),
-        );
-    }
-    command.output().expect("run generated shell")
-}
-
-fn git(cwd: &Path, args: &[&str]) {
-    let result = crate::schema2::git_fixture::command(cwd)
-        .expect("fixture git command")
-        .args(args)
-        .output()
-        .expect("git invocation");
-    assert!(
-        result.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&result.stderr)
-    );
-}
-
-fn git_output(cwd: &Path, args: &[&str]) -> String {
-    let result = crate::schema2::git_fixture::command(cwd)
-        .expect("fixture git command")
-        .args(args)
-        .output()
-        .expect("git invocation");
-    assert!(result.status.success(), "git {args:?}");
-    String::from_utf8(result.stdout)
-        .expect("git output")
-        .trim()
-        .to_owned()
+fn stable_shares_bounded_production_and_channel_specific_tap_destinations() {
+    use velnor_actions_contract::config::HomebrewTapDestination;
+    let mut spec = stable();
+    spec.producer_timeout_minutes = 20;
+    let mut tap = super::with_tap().homebrew_tap.expect("tap");
+    tap.policy.destinations.stable = Some(HomebrewTapDestination {
+        formula: "Formula/scanner.rb".to_owned(),
+    });
+    tap.policy
+        .updater
+        .inputs
+        .push("Formula/scanner.rb".to_owned());
+    spec.homebrew_tap = Some(tap);
+    let yaml = render_consumer_binary_release(&spec)
+        .expect("stable tap")
+        .bytes;
+    assert_eq!(yaml.matches("timeout-minutes: 20").count(), 7);
+    let prepare = job(&yaml, "stable-tap-prepare", Some("stable-tap-writer"));
+    assert!(!prepare.contains("create-github-app-token"));
+    assert!(prepare.contains("admit-homebrew-tap-v1"));
+    assert!(prepare.find("admit-homebrew-tap-v1") < prepare.find("actions/checkout"));
+    assert!(prepare.contains("needs.stable-eligibility.outputs.source_sha"));
+    let merge = job(&yaml, "stable-tap-merge", None);
+    assert!(merge.contains("merge-homebrew-tap-pr-v1"));
+    assert!(!merge.contains("actions/checkout"));
+    assert!(!merge.contains("timeout-minutes: 20"));
+    spec.producer_timeout_minutes = 21;
+    assert!(render_consumer_binary_release(&spec).is_err());
+    let mut spec = stable();
+    spec.stable.as_mut().expect("stable").release_plz_argv[0] = "bash".to_owned();
+    assert!(render_consumer_binary_release(&spec).is_err());
 }

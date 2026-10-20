@@ -10,7 +10,7 @@ use std::{
 use sha2::{Digest, Sha256};
 use velnor_actions_contract::{
     PackageReleasePlan,
-    config::RustBinaryPreviewCompanion,
+    config::RustBinaryReleaseCompanion,
     package_release::{PackageReleaseChannel, PackageReleaseEvent, PackageReleaseReceipt},
     preview_identity::PreviewIdentity,
 };
@@ -22,6 +22,7 @@ use crate::{OrchestratorError, internal::internal};
 pub(super) fn signing_identity_from_env(
     plan: &PackageReleasePlan,
 ) -> Result<PackageReleaseSigningIdentity, OrchestratorError> {
+    let started = std::time::Instant::now();
     let repository = required_env("GITHUB_REPOSITORY")?;
     let source_sha = required_env("GITHUB_SHA")?;
     let source_ref = required_env("GITHUB_REF")?;
@@ -54,7 +55,41 @@ pub(super) fn signing_identity_from_env(
         commit_count,
     };
     validate_identity(plan, &identity)?;
+    if plan.channel == PackageReleaseChannel::Stable {
+        let deadline = velnor_actions_mise::CheckDeadline::from_start_with_cleanup_reserve(
+            started,
+            Duration::from_secs(
+                u64::from(velnor_actions_contract::workflow::JobTimeout::DEFAULT_MINUTES) * 60,
+            ),
+        )
+        .map_err(|_| internal("package_signer_deadline"))?;
+        let admitted = crate::stable_tag_origin::admitted_production_context(plan, deadline)?;
+        require_stable_context(plan, &identity, &admitted)?;
+    }
     Ok(identity)
+}
+
+pub(super) fn require_stable_context(
+    plan: &PackageReleasePlan,
+    identity: &PackageReleaseSigningIdentity,
+    admitted: &velnor_actions_contract::preview_production::ReleaseProductionContext,
+) -> Result<(), OrchestratorError> {
+    if plan.channel != PackageReleaseChannel::Stable
+        || admitted.repository_id != identity.repository_id
+        || admitted.head_repository_id != identity.repository_id
+        || admitted.source_sha != identity.source_sha
+        || admitted.source_ref != identity.source_ref
+        || admitted.workflow_authority_sha != identity.workflow_sha
+        || admitted.run_id != identity.run_id
+        || admitted.run_attempt != identity.run_attempt
+        || admitted.ci_run_id != identity.ci_run_id
+        || admitted.ci_run_attempt != identity.ci_run_attempt
+        || admitted.commit_count != 0
+        || admitted.version != plan.base_version
+    {
+        return Err(internal("package_signer_stable_origin_context_mismatch"));
+    }
+    Ok(())
 }
 
 pub(super) fn signing_event(
@@ -123,27 +158,19 @@ pub(super) fn release_version(
                 Some(identity.source_sha[..7].to_owned()),
             ))
         }
-        PackageReleaseChannel::Stable => {
-            let package = plan
-                .products
-                .first()
-                .ok_or_else(|| internal("package_signer_empty_products"))?
-                .package
-                .clone();
-            Ok((
-                plan.base_version.clone(),
-                format!("{package}-v{}", plan.base_version),
-                None,
-                None,
-            ))
-        }
+        PackageReleaseChannel::Stable => Ok((
+            plan.base_version.clone(),
+            format!("v{}", plan.base_version),
+            None,
+            None,
+        )),
     }
 }
 
-pub(super) fn preview_companions(plan: &PackageReleasePlan) -> Vec<RustBinaryPreviewCompanion> {
+pub(super) fn release_companions(plan: &PackageReleasePlan) -> Vec<RustBinaryReleaseCompanion> {
     plan.companions
         .iter()
-        .map(|companion| RustBinaryPreviewCompanion {
+        .map(|companion| RustBinaryReleaseCompanion {
             id: companion.id.clone(),
             path: companion.path.clone(),
             asset_name: companion.asset_name.clone(),

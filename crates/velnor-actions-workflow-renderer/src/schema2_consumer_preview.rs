@@ -13,32 +13,45 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::JobTimeout;
 use velnor_actions_contract::{
     Step, config::VerificationRunner, package_release::PackageReleaseChannel,
-    package_release_plan::PackageReleasePlan,
+    package_release_policy::PackageReleasePolicy,
 };
 
 #[path = "schema2_consumer_preview_context.rs"]
 mod invocation;
-use invocation::TapInvocationContext;
+pub(super) use invocation::TapInvocationContext;
 #[path = "schema2_consumer_preview_reconcile.rs"]
 mod reconcile;
-pub use reconcile::render_preview_tap_reconcile;
+pub use reconcile::render_release_tap_reconcile;
 
 #[path = "schema2_consumer_preview_production.rs"]
-mod production;
+pub(super) mod production;
 #[path = "schema2_consumer_preview_steps.rs"]
-mod steps;
+pub(super) mod steps;
 #[path = "schema2_consumer_preview_tap.rs"]
-mod tap;
+pub(super) mod tap;
 use steps::{Artifact, needs, operation, outputs, permissions, setup, transfer};
-pub use tap::ConsumerPreviewTapSpec;
+pub use tap::ConsumerReleaseTapSpec;
+
+#[path = "schema2_consumer_release_admission.rs"]
+mod admission;
+use admission::{aggregate_admission, finish_policy_job, policy_admission};
+
+/// Fixed existing mutable release authority, never inferred from a receipt URL.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConsumerRollingPreviewSpec {
+    /// Positive existing mutable release database ID.
+    pub release_id: u64,
+    /// Exact legacy inventory authorization for the first committed generation.
+    pub bootstrap_snapshot_sha256: Option<String>,
+}
 
 /// Generation-time, inventory-only authority for a native preview workflow.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConsumerPreviewSpec {
+pub struct ConsumerReleaseSpec {
     /// Official generator version used by all isolated helpers.
     pub generator_version: String,
     /// Closed product inventory and source repository identity.
-    pub plan: PackageReleasePlan,
+    pub policy: PackageReleasePolicy,
     /// Producer platform selected by validated native configuration.
     pub producer_runner: VerificationRunner,
     /// Producer task time limit.
@@ -62,31 +75,55 @@ pub struct ConsumerPreviewSpec {
     /// Fixed qualified GitHub CLI argv prefix.
     pub gh_argv: Vec<String>,
     /// Independently enabled downstream PR promotion, with isolated task and App boundaries.
-    pub homebrew_tap: Option<ConsumerPreviewTapSpec>,
+    pub homebrew_tap: Option<ConsumerReleaseTapSpec>,
+    /// Closed manual tag coordination, present only for the stable channel.
+    pub stable: Option<super::consumer_binary_release::ConsumerStableReleaseSpec>,
+    /// Explicit fixed rolling target authority, absent for permanent stable.
+    pub preview: Option<ConsumerRollingPreviewSpec>,
 }
 
 /// Render the independently enabled native preview workflow.
 /// # Errors
 /// Rejects malformed inventory, helper acquisition, pins, or generated commands.
-pub fn render_consumer_preview(spec: &ConsumerPreviewSpec) -> Result<RenderedFile, RenderError> {
-    spec.plan
+pub fn render_consumer_preview(spec: &ConsumerReleaseSpec) -> Result<RenderedFile, RenderError> {
+    spec.policy
         .validate()
         .map_err(|error| RenderError::InvalidWorkflow(error.to_string()))?;
     spec.linux_setup.validate()?;
     spec.producer_setup.validate()?;
-    if spec.plan.channel != PackageReleaseChannel::Preview
-        || spec.plan.default_branch != "main"
-        || !(1..=velnor_actions_contract::config::RustBinaryPreviewProducer::MAX_TIMEOUT_MINUTES)
+    if spec.policy.channel != PackageReleaseChannel::Preview
+        || spec.policy.default_branch != "main"
+        || !(1..=velnor_actions_contract::config::RustBinaryReleaseProducer::MAX_TIMEOUT_MINUTES)
             .contains(&spec.producer_timeout_minutes)
     {
         return Err(RenderError::InvalidWorkflow(
             "preview_spec_invalid".to_owned(),
         ));
     }
+    let preview = spec
+        .preview
+        .as_ref()
+        .ok_or_else(|| RenderError::InvalidWorkflow("rolling_policy_missing".to_owned()))?;
+    if spec.stable.is_some()
+        || preview.release_id == 0
+        || preview
+            .bootstrap_snapshot_sha256
+            .as_ref()
+            .is_some_and(|value| {
+                value.len() != 64
+                    || !value
+                        .bytes()
+                        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            })
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "rolling_policy_invalid".to_owned(),
+        ));
+    }
     let gate = consumer_script(
         &ReleaseEligibilityContext {
-            repository: spec.plan.repository.clone(),
-            default_branch: spec.plan.default_branch.clone(),
+            repository: spec.policy.repository.clone(),
+            default_branch: spec.policy.default_branch.clone(),
             channel: PackageReleaseChannel::Preview,
         },
         &spec.gh_argv,
@@ -101,13 +138,13 @@ pub fn render_consumer_preview(spec: &ConsumerPreviewSpec) -> Result<RenderedFil
     let document = Yaml::Map(vec![
         (
             "name".to_owned(),
-            Yaml::str(spec.plan.channel.workflow_name()),
+            Yaml::str(spec.policy.channel.workflow_name()),
         ),
         (
             "on".to_owned(),
             Yaml::Map(vec![
                 super::consumer_release_eligibility::preview_trigger::trigger(
-                    &spec.plan.default_branch,
+                    &spec.policy.default_branch,
                 ),
                 ("workflow_dispatch".to_owned(), steps::recovery_inputs()),
             ]),
@@ -132,7 +169,7 @@ pub fn render_consumer_preview(spec: &ConsumerPreviewSpec) -> Result<RenderedFil
 }
 
 fn render_preview_document(
-    spec: &ConsumerPreviewSpec,
+    spec: &ConsumerReleaseSpec,
     document: &Yaml,
 ) -> Result<String, RenderError> {
     super::consumer_release_eligibility::preview_trigger::validate(
@@ -146,11 +183,14 @@ fn render_preview_document(
     )
 }
 
-fn acquire(step: &Step, job: &str, runner: &str) -> Result<Yaml, RenderError> {
+pub(super) fn acquire(step: &Step, job: &str, runner: &str) -> Result<Yaml, RenderError> {
     non_internal_step_to_yaml(job, step, &BTreeMap::new(), runner)
 }
 
-fn eligibility(spec: &ConsumerPreviewSpec, gate: &str) -> Result<(String, Yaml), RenderError> {
+pub(super) fn eligibility(
+    spec: &ConsumerReleaseSpec,
+    gate: &str,
+) -> Result<(String, Yaml), RenderError> {
     let mut fields = base(
         "Verify exact-commit Required CI",
         Yaml::str("ubuntu-26.04"),
@@ -158,7 +198,7 @@ fn eligibility(spec: &ConsumerPreviewSpec, gate: &str) -> Result<(String, Yaml),
     );
     fields.push((
         "if".to_owned(),
-        Yaml::str("${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}"),
+        Yaml::str(match spec.policy.channel { PackageReleaseChannel::Preview => "${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}", PackageReleaseChannel::Stable => "${{ github.event_name == 'workflow_dispatch' }}" }),
     ));
     fields.push((
         "permissions".to_owned(),
@@ -177,14 +217,26 @@ fn eligibility(spec: &ConsumerPreviewSpec, gate: &str) -> Result<(String, Yaml),
         ));
     }
     fields.push(("outputs".to_owned(), output));
-    let step = steps::script(
-        "Verify source and CI",
-        "source",
-        gate,
-        &[("GH_TOKEN", "${{ github.token }}")],
-    );
+    let mut env = vec![("GH_TOKEN", "${{ github.token }}")];
+    if spec.policy.channel == PackageReleaseChannel::Stable {
+        env.extend([
+            ("VELNOR_STABLE_OPERATION", "${{ inputs.operation }}"),
+            (
+                "VELNOR_STABLE_ORIGINAL_RUN_ID",
+                "${{ inputs.original_run_id }}",
+            ),
+            (
+                "VELNOR_STABLE_ORIGINAL_RUN_ATTEMPT",
+                "${{ inputs.original_run_attempt }}",
+            ),
+        ]);
+    }
+    let step = steps::script("Verify source and CI", "source", gate, &env);
     Ok(finish(
-        "preview-eligibility",
+        &format!(
+            "{}-eligibility",
+            TapInvocationContext::for_channel(spec.policy.channel).prefix()
+        ),
         fields,
         vec![
             steps::history_checkout(),
@@ -194,26 +246,24 @@ fn eligibility(spec: &ConsumerPreviewSpec, gate: &str) -> Result<(String, Yaml),
                 &join_argv_for_run(&spec.install_gh_argv)?,
             ),
             step,
-            steps::history_count(TapInvocationContext::Preview),
+            steps::history_count(TapInvocationContext::for_channel(spec.policy.channel)),
         ],
     ))
 }
 
-fn signer(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
-    let mut fields = base(
-        "preview-signer",
-        Yaml::str("ubuntu-26.04"),
-        JobTimeout::DEFAULT,
-    );
-    fields.push((
-        "if".to_owned(),
-        Yaml::str("${{ github.event_name == 'workflow_run' }}"),
-    ));
+pub(super) fn signer(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), RenderError> {
+    let context = TapInvocationContext::for_channel(spec.policy.channel);
+    let id = format!("{}-signer", context.prefix());
+    let mut fields = base(&id, Yaml::str("ubuntu-26.04"), JobTimeout::DEFAULT);
+    fields.push(("if".to_owned(), Yaml::str(context.production_if())));
     fields.push((
         "needs".to_owned(),
-        needs(&["preview-eligibility", "preview-assemble"]),
+        needs(&[
+            context.selection(),
+            &format!("{}-assemble", context.prefix()),
+        ]),
     ));
-    fields.push(("environment".to_owned(), Yaml::str("preview-publish")));
+    fields.push(("environment".to_owned(), Yaml::str(context.environment())));
     fields.push((
         "permissions".to_owned(),
         permissions(&[
@@ -223,76 +273,88 @@ fn signer(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
             ("id-token", "write"),
         ]),
     ));
-    Ok(finish(
-        "preview-signer",
-        fields,
-        vec![
-            setup(&spec.linux_setup),
-            run_step(
-                "Install pinned GitHub CLI",
-                &join_argv_for_run(&spec.install_gh_argv)?,
-            ),
-            acquire(&spec.linux_acquire, "preview-signer", "ubuntu-26.04")?,
-            aggregate_admission(spec)?,
-            operation(
-                spec,
-                "sign-package-release-v1",
-                true,
-                TapInvocationContext::Preview,
-            )?,
-            steps::attest(&spec.plan),
-            transfer(false, Artifact::Signed),
-        ],
-    ))
+    let mut job_steps = vec![
+        setup(&spec.linux_setup),
+        run_step(
+            "Install pinned GitHub CLI",
+            &join_argv_for_run(&spec.install_gh_argv)?,
+        ),
+        acquire(&spec.linux_acquire, &id, "ubuntu-26.04")?,
+        aggregate_admission(spec)?,
+        operation(
+            spec,
+            "sign-package-release-v1",
+            true,
+            TapInvocationContext::for_channel(spec.policy.channel),
+        )?,
+        steps::attest(&spec.policy),
+        transfer(spec, false, Artifact::Signed),
+    ];
+    job_steps.insert(3, policy_admission(spec)?);
+    finish_policy_job(&id, fields, job_steps)
 }
 
-fn aggregate_admission(spec: &ConsumerPreviewSpec) -> Result<Yaml, RenderError> {
-    let mut step = operation(
-        spec,
-        "admit-preview-aggregate-v1",
-        true,
-        TapInvocationContext::Preview,
-    )?;
-    if let Yaml::Map(fields) = &mut step {
-        let (_, id) = fields
-            .iter_mut()
-            .find(|(key, _)| key == "id")
-            .ok_or_else(|| {
-                RenderError::InvalidWorkflow("preview_operation_id_missing".to_owned())
-            })?;
-        *id = Yaml::str("aggregate");
-    }
-    production::operation_env(
-        &mut step,
-        &[
-            (
-                "VELNOR_PREVIEW_AGGREGATE_ARTIFACT_ID",
-                "${{ needs.preview-assemble.outputs.artifact_id }}",
-            ),
-            (
-                "VELNOR_PREVIEW_AGGREGATE_ARTIFACT_DIGEST",
-                "${{ needs.preview-assemble.outputs.artifact_digest }}",
-            ),
-        ],
-    )?;
-    Ok(step)
-}
-
-fn publisher(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
+pub(super) fn publisher(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), RenderError> {
+    let context = TapInvocationContext::for_channel(spec.policy.channel);
+    let id = format!("{}-publisher", context.prefix());
     let mut fields = base(
-        "Publish immutable authenticated preview",
+        "Publish authenticated channel release",
+        Yaml::str("ubuntu-26.04"),
+        JobTimeout::DEFAULT,
+    );
+    fields.push(("if".to_owned(), Yaml::str(context.production_if())));
+    fields.push((
+        "needs".to_owned(),
+        needs(&[context.selection(), &format!("{}-signer", context.prefix())]),
+    ));
+    fields.push(("environment".to_owned(), Yaml::str(context.environment())));
+    fields.push((
+        "permissions".to_owned(),
+        permissions(&[
+            ("actions", "read"),
+            ("attestations", "read"),
+            ("contents", "write"),
+        ]),
+    ));
+    let mut job_steps = vec![
+        setup(&spec.linux_setup),
+        run_step(
+            "Install pinned GitHub CLI",
+            &join_argv_for_run(&spec.install_gh_argv)?,
+        ),
+        acquire(&spec.linux_acquire, &id, "ubuntu-26.04")?,
+        transfer(spec, true, Artifact::Signed),
+        operation(
+            spec,
+            "publish-package-release-v1",
+            true,
+            TapInvocationContext::for_channel(spec.policy.channel),
+        )?,
+    ];
+    job_steps.insert(3, policy_admission(spec)?);
+    finish_policy_job(&id, fields, job_steps)
+}
+
+pub(super) fn recovery(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), RenderError> {
+    let context = match spec.policy.channel {
+        PackageReleaseChannel::Preview => TapInvocationContext::Preview,
+        PackageReleaseChannel::Stable => TapInvocationContext::StableAuthority,
+    };
+    let id = format!("{}-recovery", context.prefix());
+    let mut fields = base(
+        "Recover the original signed release without rebuilding",
         Yaml::str("ubuntu-26.04"),
         JobTimeout::DEFAULT,
     );
     fields.push((
         "if".to_owned(),
-        Yaml::str("${{ github.event_name == 'workflow_run' }}"),
+        Yaml::str(match spec.policy.channel { PackageReleaseChannel::Preview => "${{ github.event_name == 'workflow_dispatch' }}", PackageReleaseChannel::Stable => "${{ github.event_name == 'workflow_dispatch' && inputs.operation == 'release' && inputs.original_run_id != '' && inputs.original_run_attempt != '' }}" }),
     ));
     fields.push((
         "needs".to_owned(),
-        needs(&["preview-eligibility", "preview-signer"]),
+        needs(&[&format!("{}-eligibility", context.prefix())]),
     ));
-    fields.push(("environment".to_owned(), Yaml::str("preview-publish")));
+    fields.push(("environment".to_owned(), Yaml::str(context.environment())));
     fields.push((
         "permissions".to_owned(),
         permissions(&[
@@ -302,7 +364,7 @@ fn publisher(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> 
         ]),
     ));
     Ok(finish(
-        "preview-publisher",
+        &id,
         fields,
         vec![
             setup(&spec.linux_setup),
@@ -310,58 +372,12 @@ fn publisher(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> 
                 "Install pinned GitHub CLI",
                 &join_argv_for_run(&spec.install_gh_argv)?,
             ),
-            acquire(&spec.linux_acquire, "preview-publisher", "ubuntu-26.04")?,
-            transfer(true, Artifact::Signed),
-            operation(
-                spec,
-                "publish-package-release-v1",
-                true,
-                TapInvocationContext::Preview,
-            )?,
-        ],
-    ))
-}
-
-fn recovery(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
-    let mut fields = base(
-        "Recover original signed preview without rebuilding",
-        Yaml::str("ubuntu-26.04"),
-        JobTimeout::DEFAULT,
-    );
-    fields.push((
-        "if".to_owned(),
-        Yaml::str("${{ github.event_name == 'workflow_dispatch' }}"),
-    ));
-    fields.push(("needs".to_owned(), needs(&["preview-eligibility"])));
-    fields.push(("environment".to_owned(), Yaml::str("preview-publish")));
-    fields.push((
-        "permissions".to_owned(),
-        permissions(&[
-            ("actions", "read"),
-            ("attestations", "read"),
-            ("contents", "write"),
-        ]),
-    ));
-    Ok(finish(
-        "preview-recovery",
-        fields,
-        vec![
-            setup(&spec.linux_setup),
-            run_step(
-                "Install pinned GitHub CLI",
-                &join_argv_for_run(&spec.install_gh_argv)?,
-            ),
-            acquire(&spec.linux_acquire, "preview-recovery", "ubuntu-26.04")?,
-            operation(
-                spec,
-                "recover-package-release-v1",
-                true,
-                TapInvocationContext::Preview,
-            )?,
+            acquire(&spec.linux_acquire, &id, "ubuntu-26.04")?,
+            operation(spec, "recover-package-release-v1", true, context)?,
         ],
     ))
 }
 
 #[cfg(test)]
 #[path = "schema2_consumer_preview_tests.rs"]
-mod tests;
+pub(super) mod tests;

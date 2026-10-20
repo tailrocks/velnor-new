@@ -8,6 +8,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::PublicationIdentity;
+#[path = "rolling_bootstrap.rs"]
+mod bootstrap;
+pub use bootstrap::RollingBootstrapSnapshot;
 
 #[cfg(test)]
 #[path = "rolling_publication_tests.rs"]
@@ -111,7 +114,8 @@ pub fn rolling_action(
     if !observed.tag_can_fast_forward {
         return Reject(R::TagWouldRewind);
     }
-    if !valid_observation(expected, &observed.assets)
+    if !lower_hex(&observed.tag_source, 40)
+        || !valid_observation(expected, &observed.assets)
         || observed.original.run_id == 0
         || observed.original.run_attempt == 0
         || observed.original.artifact_id == 0

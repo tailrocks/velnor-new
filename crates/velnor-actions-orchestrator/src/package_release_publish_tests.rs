@@ -1,9 +1,11 @@
 use super::*;
 use super::{
+    github::sha256,
     github::{
         GITHUB_ACTIONS_BOT_ID, ReleaseAuthor, RunRepository, WorkflowMetadata, WorkflowRunResponse,
     },
     identity::{MAX_RECOVERY_BODY_BYTES, make_recovery_body},
+    run_identity::RunSource,
 };
 
 #[test]
@@ -39,14 +41,6 @@ fn recovery_envelope_binds_exact_receipt_and_signature_bundle() {
     assert_eq!(
         draft_receipt_digest(Some(&expected), None, &expected, &digest),
         None
-    );
-    assert_eq!(
-        tag_receipt_digest(Some(&expected), &expected, &digest).as_deref(),
-        Some(digest.as_str())
-    );
-    assert_ne!(
-        tag_receipt_digest(Some("different envelope"), &expected, &digest).as_deref(),
-        Some(digest.as_str())
     );
     let forged_author = ReleaseAuthor {
         login: Some("untrusted".to_owned()),
@@ -109,4 +103,10 @@ fn publisher_ci_gate_binds_exact_run_and_attempt() {
 fn stable_and_preview_publications_never_request_latest() {
     assert!(!make_latest(PackageReleaseChannel::Stable));
     assert!(!make_latest(PackageReleaseChannel::Preview));
+}
+
+#[test]
+fn immutable_backend_rejects_preview_channel() {
+    assert!(require_stable(PackageReleaseChannel::Stable).is_ok());
+    assert!(require_stable(PackageReleaseChannel::Preview).is_err());
 }

@@ -18,7 +18,7 @@ use crate::{OrchestratorError, internal::internal};
 const API_TIMEOUT: Duration = Duration::from_secs(90);
 const PREVIEW_ENVIRONMENT: &str = "preview-publish";
 const TAP_ENVIRONMENT: &str = "tap-update";
-const STABLE_ENVIRONMENT: &str = "consumer-binary-release";
+const STABLE_ENVIRONMENT: &str = "release";
 
 pub(super) fn verify_main_protection(
     api: &GitHubApi,
@@ -216,4 +216,13 @@ fn github_api_not_found(stderr: &[u8], stdout: &[u8]) -> bool {
 
 fn encode_segment(value: &str) -> String {
     value.replace('%', "%25").replace('/', "%2F")
+}
+
+/// Require the metadata/tag environment's human approval and self-review guard.
+pub(super) fn verify_stable_tag_environment(
+    api: &GitHubApi,
+    branch: &str,
+) -> Result<(), OrchestratorError> {
+    verify_stable_environment(&api.repository, branch)
+        .map_err(|_| internal("stable_tag_environment_unprotected"))
 }

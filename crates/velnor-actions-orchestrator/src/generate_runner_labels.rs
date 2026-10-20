@@ -15,14 +15,10 @@ pub(super) fn collect(
         .values()
         .map(|job| job.runs_on.as_str())
         .collect::<BTreeSet<_>>();
-    if let Some(preview) = config
-        .stacks
-        .rust
-        .as_ref()
-        .map(|rust| &rust.binary_release.preview)
-        && preview.enabled
+    if let Some(release) = config.stacks.rust.as_ref().map(|rust| &rust.binary_release)
+        && release.enabled()
     {
-        hosted.insert(preview.producer.runner.runs_on());
+        hosted.insert(release.producer.runner.runs_on());
     }
     for label in hosted {
         if (ReleaseTarget::for_runner_label(label).is_some()

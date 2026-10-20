@@ -14,7 +14,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
     PackageReleasePlanProduct,
-    config::RustBinaryPreviewCompanion,
+    config::RustBinaryReleaseCompanion,
     package_release::{PackageReleaseAsset, PackageReleasePayloadFormat},
     parse_strict_json,
 };
@@ -178,7 +178,7 @@ pub(crate) fn verify_package_output(
     manifest_path: &str,
     staging_dir: &Path,
     products: &[PackageReleasePlanProduct],
-    companions: &[RustBinaryPreviewCompanion],
+    companions: &[RustBinaryReleaseCompanion],
     identity: PackageOutputIdentity<'_>,
 ) -> Result<VerifiedPackageOutput, OrchestratorError> {
     let started = Instant::now();
@@ -283,7 +283,7 @@ fn validate_manifest_identity(
 
 fn expected_files(
     products: &[PackageReleasePlanProduct],
-    companions: &[RustBinaryPreviewCompanion],
+    companions: &[RustBinaryReleaseCompanion],
     manifest_path: &str,
 ) -> Result<Vec<ExpectedFile>, OrchestratorError> {
     let mut files = Vec::new();
@@ -291,7 +291,6 @@ fn expected_files(
         for target in &product.targets {
             let payload = match product.format {
                 PackageReleasePayloadFormat::TarGz => format!("{}-{target}.tar.gz", product.id),
-                PackageReleasePayloadFormat::RawBinary => format!("{}-{target}", product.bins[0]),
             };
             files.push(ExpectedFile {
                 path: payload.clone(),

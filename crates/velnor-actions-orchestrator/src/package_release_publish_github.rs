@@ -11,14 +11,24 @@ use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 
 use crate::{OrchestratorError, internal::internal};
 
+#[path = "package_release_publish_fields.rs"]
+mod fields;
+#[path = "package_release_metadata_download.rs"]
+mod metadata_download;
+#[path = "package_release_read_transport.rs"]
+mod read_transport;
+#[path = "package_release_rolling_api.rs"]
+mod rolling_api;
 #[path = "package_release_publish_github_types.rs"]
 mod types;
+#[path = "package_release_publish_upload.rs"]
+mod upload;
 pub(super) use types::*;
 #[path = "preview_artifact_transport_download.rs"]
 mod preview_download;
 #[path = "preview_artifact_transport_api.rs"]
 mod preview_reads;
-pub(super) use preview_reads::PreviewArtifactApi;
+pub(super) use preview_reads::ReleaseArtifactApi;
 #[path = "package_release_publish_github_immutable_status.rs"]
 mod immutable_status;
 #[path = "package_release_publish_preflight.rs"]
@@ -55,19 +65,6 @@ impl GitHubApi {
 
     pub(super) fn route(&self, suffix: &str) -> String {
         format!("repos/{}/{suffix}", self.repository)
-    }
-
-    pub(super) fn get_json<T: serde::de::DeserializeOwned>(
-        &self,
-        route: &str,
-    ) -> Result<T, OrchestratorError> {
-        #[cfg(test)]
-        if let Some(fixture) = &self.fixture {
-            return serde_json::from_value(fixture.read(route)?)
-                .map_err(|_| internal("package_publish_api_json"));
-        }
-        let bytes = self.request(vec![OsString::from(route)], JSON_LIMIT)?;
-        serde_json::from_slice(&bytes).map_err(|_| internal("package_publish_api_json"))
     }
 
     pub(super) fn post_fields(
@@ -115,25 +112,45 @@ impl GitHubApi {
 
     pub(super) fn upload_file(
         &self,
-        route: String,
+        route: &str,
         path: &std::path::Path,
     ) -> Result<(), OrchestratorError> {
-        self.request(
-            vec![
-                OsString::from(route),
-                OsString::from("--method"),
-                OsString::from("POST"),
-                OsString::from("--header"),
-                OsString::from("Content-Type: application/octet-stream"),
-                OsString::from("--input"),
-                path.as_os_str().to_owned(),
-            ],
-            JSON_LIMIT,
-        )?;
+        let args = self.upload_arguments(route, path)?;
+        #[cfg(test)]
+        if let Some(fixture) = &self.fixture {
+            let bytes = super::identity::read_regular(path)?;
+            let endpoint = args[0]
+                .to_str()
+                .ok_or_else(|| internal("fixture_upload_endpoint"))?;
+            fixture.mutate(
+                "UPLOAD",
+                endpoint,
+                &[
+                    ("sha256", sha256(&bytes)),
+                    ("size", bytes.len().to_string()),
+                ],
+            )?;
+            return Ok(());
+        }
+        self.request(args, JSON_LIMIT)?;
         Ok(())
     }
 
     pub(super) fn download_asset(&self, id: u64) -> Result<Vec<u8>, OrchestratorError> {
+        #[cfg(test)]
+        if let Some(fixture) = &self.fixture {
+            let response = fixture.read(&format!(
+                "DOWNLOAD {}",
+                self.route(&format!("releases/assets/{id}"))
+            ))?;
+            return serde_json::from_value(
+                response
+                    .get("bytes")
+                    .cloned()
+                    .ok_or_else(|| internal("fixture_download_bytes"))?,
+            )
+            .map_err(|_| internal("fixture_download_bytes"));
+        }
         self.request_accept(
             vec![OsString::from(self.route(&format!("releases/assets/{id}")))],
             ASSET_LIMIT,
@@ -187,13 +204,7 @@ impl GitHubApi {
         &self,
         artifact_id: u64,
     ) -> Result<Vec<u8>, OrchestratorError> {
-        self.request_accept(
-            vec![OsString::from(
-                self.route(&format!("actions/artifacts/{artifact_id}/zip")),
-            )],
-            ARTIFACT_LIMIT,
-            "application/vnd.github+json",
-        )
+        self.download_artifact_archive_bounded(artifact_id, ARTIFACT_LIMIT)
     }
 
     pub(super) fn tag_identity(
@@ -253,10 +264,7 @@ impl GitHubApi {
     }
 
     pub(super) fn verify_repository(&self, expected_id: u64) -> Result<(), OrchestratorError> {
-        let repo: RepositoryResponse = self.get_json(&format!("repos/{}", self.repository))?;
-        if repo.full_name.as_deref() != Some(self.repository.as_str()) || repo.id != expected_id {
-            return Err(internal("package_publish_repository_mismatch"));
-        }
+        self.verify_repository_identity(expected_id)?;
         self.verify_immutable_status()
     }
 
@@ -266,30 +274,6 @@ impl GitHubApi {
         branch: &str,
     ) -> Result<(), OrchestratorError> {
         preflight::verify_release_channel_environment(channel, self, branch)
-    }
-
-    fn fields_request(
-        &self,
-        route: &str,
-        method: &str,
-        fields: &[(&str, String)],
-    ) -> Result<Vec<u8>, OrchestratorError> {
-        let mut args = vec![
-            OsString::from(route),
-            OsString::from("--method"),
-            OsString::from(method),
-        ];
-        for (key, value) in fields {
-            // `make_latest` is a string enum, while draft/prerelease are booleans.
-            // Raw fields also prevent accidental @file expansion of literal data.
-            args.push(OsString::from(if matches!(*key, "draft" | "prerelease") {
-                "--field"
-            } else {
-                "--raw-field"
-            }));
-            args.push(OsString::from(format!("{key}={value}")));
-        }
-        self.request(args, JSON_LIMIT)
     }
 
     fn request(

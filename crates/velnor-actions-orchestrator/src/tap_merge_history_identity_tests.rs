@@ -51,7 +51,11 @@ fn receipt_ownership_ignores_public_markers_outside_its_branch_namespace() {
     use super::{belongs_to_receipt, branch_prefix};
 
     let digest = format!("b3-{}", "a".repeat(64));
-    let prefix = branch_prefix(&digest).expect("valid receipt digest");
+    let prefix = branch_prefix(
+        &digest,
+        velnor_actions_contract::package_release::PackageReleaseChannel::Preview,
+    )
+    .expect("valid receipt digest");
     let marker = format!("Receipt digest: `{digest}`");
 
     assert!(

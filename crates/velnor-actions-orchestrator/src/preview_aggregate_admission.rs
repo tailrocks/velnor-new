@@ -1,13 +1,13 @@
 //! Privileged-job admission of authenticated aggregate bytes; executes no source.
 
-use super::{context, handoff, leaf_manifest::PreviewAggregateManifest, read_plan};
+use super::{context, handoff, leaf_manifest::PreviewAggregateManifest};
 use crate::{
     OrchestratorError,
     exclusive_write::write_exclusive_until,
     internal::internal,
     package_release_artifacts::{PackageOutputIdentity, verify_package_output},
     package_release_publish::{
-        acquire_preview_aggregate,
+        acquire_release_aggregate,
         artifact_zip::{self, ExpectedZipEntry, ZipProfile},
     },
 };
@@ -18,12 +18,12 @@ use std::{
 use velnor_actions_mise::CheckDeadline;
 
 /// Admit the exact aggregate service ID before the separate, unchanged signer.
-pub const ADMIT_PREVIEW_AGGREGATE_OP: &str = "admit-preview-aggregate-v1";
+pub const ADMIT_RELEASE_AGGREGATE_OP: &str = "admit-release-aggregate-v1";
 
 /// Authenticate and inspect the full union without running any repository task.
 /// # Errors
 /// Rejects role, source, remote authority, ZIP, native proof or full artifact drift.
-pub fn admit_preview_aggregate() -> Result<(), OrchestratorError> {
+pub fn admit_release_aggregate() -> Result<(), OrchestratorError> {
     let deadline = CheckDeadline::from_start_with_cleanup_reserve(
         Instant::now(),
         Duration::from_secs(u64::from(velnor_actions_contract::JobTimeout::DEFAULT_MINUTES) * 60),
@@ -35,16 +35,21 @@ pub fn admit_preview_aggregate() -> Result<(), OrchestratorError> {
 }
 
 fn admit_until(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
-    if context::required_env("GITHUB_JOB")? != "preview-signer" {
+    let temp = runner_temp()?;
+    let (policy, plan) = crate::release_policy_admission::admitted_policy_plan(&temp, deadline)?;
+    if context::required_env("GITHUB_JOB")? != plan.channel.signer_job_id() {
         return Err(internal("preview_signer_role"));
     }
-    let temp = runner_temp()?;
-    let plan = read_plan(&temp, deadline)?;
+    let policy_sha256 = handoff::sha256(
+        &policy
+            .canonical_bytes()
+            .map_err(|_| internal("release_policy_digest"))?,
+    );
     let authenticated_context = context::workflow_context(&plan, deadline)?;
-    let id = context::positive_env("VELNOR_PREVIEW_AGGREGATE_ARTIFACT_ID")?;
-    let digest = context::required_env("VELNOR_PREVIEW_AGGREGATE_ARTIFACT_DIGEST")?;
+    let id = context::positive_env("VELNOR_RELEASE_AGGREGATE_ARTIFACT_ID")?;
+    let digest = context::required_env("VELNOR_RELEASE_AGGREGATE_ARTIFACT_DIGEST")?;
     let archive_dir = handoff::fresh_directory(&temp, "preview-aggregate-download")?;
-    let mut artifact = acquire_preview_aggregate(
+    let mut artifact = acquire_release_aggregate(
         &plan,
         &authenticated_context,
         id,
@@ -59,7 +64,8 @@ fn admit_until(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
         handoff::MAX_NATIVE_MANIFEST,
         deadline,
     )?;
-    let proof = PreviewAggregateManifest::parse(&metadata, &plan, &authenticated_context)?;
+    let proof =
+        PreviewAggregateManifest::parse(&metadata, &policy_sha256, &plan, &authenticated_context)?;
     let source_manifest = artifact_zip::read_manifest_file(
         artifact.archive.reader()?,
         ZipProfile::PreviewAggregate,
@@ -111,11 +117,11 @@ fn admit_until(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
 
 fn preview_companions(
     plan: &velnor_actions_contract::PackageReleasePlan,
-) -> Vec<velnor_actions_contract::config::RustBinaryPreviewCompanion> {
+) -> Vec<velnor_actions_contract::config::RustBinaryReleaseCompanion> {
     plan.companions
         .iter()
         .map(
-            |row| velnor_actions_contract::config::RustBinaryPreviewCompanion {
+            |row| velnor_actions_contract::config::RustBinaryReleaseCompanion {
                 id: row.id.clone(),
                 path: row.path.clone(),
                 asset_name: row.asset_name.clone(),

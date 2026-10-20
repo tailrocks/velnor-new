@@ -9,17 +9,23 @@ use std::{
 use velnor_actions_orchestrator::{OrchestratorError, sign_package_release_from_env};
 
 const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
-const REQUEST_FILE: &str = "package-release-plan.json";
+const REQUEST_FILE: &str = "package-release-policy.json";
 
 /// Validate the exact signer request location and its regular-file identity.
 pub(super) fn gate_request(path: &Path) -> Option<PathBuf> {
+    gate_named_request(path, REQUEST_FILE)
+}
+pub(super) fn gate_producer_request(path: &Path) -> Option<PathBuf> {
+    gate_named_request(path, "package-release-plan.json")
+}
+fn gate_named_request(path: &Path, name: &str) -> Option<PathBuf> {
     let runner_temp = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty())?;
     let runner_temp = PathBuf::from(runner_temp);
     if !runner_temp.is_absolute() {
         return None;
     }
     let root = runner_temp.join("velnor");
-    let expected = root.join(REQUEST_FILE);
+    let expected = root.join(name);
     if path != expected {
         return None;
     }

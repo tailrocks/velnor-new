@@ -15,14 +15,14 @@ use std::{
 };
 use velnor_actions_contract::{
     canonical_json_bytes,
-    preview_production::{PreviewPayloadPair, PreviewProductionRequest},
+    preview_production::{ReleasePayloadPair, ReleaseProductionRequest},
 };
 use velnor_actions_mise::CheckDeadline;
 
-pub(super) const TASK_REQUEST: &str = "preview-task-request.json";
-pub(super) const PRODUCTION_REQUEST: &str = "preview-production-request.json";
-pub(crate) const LEAF_MANIFEST: &str = "preview-payload.json";
-pub(crate) const AGGREGATE_MANIFEST: &str = "preview-aggregate.json";
+pub(super) const TASK_REQUEST: &str = "release-task-request.json";
+pub(super) const PRODUCTION_REQUEST: &str = "release-production-request.json";
+pub(crate) const LEAF_MANIFEST: &str = "release-payload.json";
+pub(crate) const AGGREGATE_MANIFEST: &str = "release-aggregate.json";
 pub(crate) const MAX_NATIVE_MANIFEST: u64 =
     crate::package_release_publish::artifact_zip::NATIVE_MANIFEST_BYTES;
 #[path = "preview_production_handoff_copy.rs"]
@@ -114,7 +114,7 @@ impl PinnedAsset {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub(super) struct TaskInput {
-    pub pair: PreviewPayloadPair,
+    pub pair: ReleasePayloadPair,
     pub name: String,
     pub sha256: String,
     pub size: u64,
@@ -125,7 +125,7 @@ pub(super) struct TaskInput {
 #[serde(deny_unknown_fields)]
 struct TaskRequest<'a> {
     schema: &'static str,
-    request: &'a PreviewProductionRequest,
+    request: &'a ReleaseProductionRequest,
     inputs: &'a [TaskInput],
 }
 
@@ -145,7 +145,7 @@ impl TaskHandoff {
 
 pub(super) fn write_task_request(
     temp: &Path,
-    request: &PreviewProductionRequest,
+    request: &ReleaseProductionRequest,
     inputs: &[TaskInput],
     deadline: CheckDeadline,
 ) -> Result<TaskHandoff, OrchestratorError> {

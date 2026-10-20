@@ -11,8 +11,8 @@ use std::{
     time::{Duration, Instant},
 };
 use velnor_actions_contract::{
-    PackageReleasePlan, canonical_json_bytes, config::HomebrewTapConfig,
-    package_release::PackageReleaseReceipt, parse_package_release_plan,
+    PackageReleasePlan, PackageReleasePolicy, canonical_json_bytes, config::HomebrewTapConfig,
+    package_release::PackageReleaseReceipt,
 };
 use velnor_actions_mise::CheckDeadline;
 /// Fixed authenticated handoff producer; never executes source code.
@@ -42,6 +42,7 @@ const CONTEXT: &[&str] = &[
 pub(super) struct Admission {
     schema: String,
     pub(super) plan: PackageReleasePlan,
+    release_policy: PackageReleasePolicy,
     pub(super) receipt: PackageReleaseReceipt,
     policy: HomebrewTapConfig,
     context: BTreeMap<String, Option<String>>,
@@ -58,9 +59,15 @@ pub fn admit_homebrew_tap_from_env() -> Result<String, OrchestratorError> {
             }
             let root = absolute_env("RUNNER_TEMP", "tap_runner_temp")?.join("velnor");
             let signed = crate::package_release_signer::verify_attested_signed_package_from_env()?;
+            crate::package_release_publish::verify_published_release(&signed)?;
+            let release_policy = release_policy_request()?;
+            release_policy
+                .validate_plan(signed.plan())
+                .map_err(|_| internal("tap_admission_release_policy_plan"))?;
             let record = Admission {
                 schema: SCHEMA.to_owned(),
                 plan: signed.plan().clone(),
+                release_policy,
                 receipt: signed.receipt().clone(),
                 policy: static_tap_policy()?,
                 context: context()?,
@@ -88,17 +95,27 @@ pub(super) fn load(root: &Path, deadline: CheckDeadline) -> Result<Admission, Or
         .map_err(|_| internal("tap_admission_digest_missing"))?;
     let bytes = read(root.join(RECORD).as_path(), LIMIT, deadline)?;
     let request = absolute_env("VELNOR_REQUEST_FILE", "tap_request_missing")?;
-    if request != root.join("package-release-plan.json") {
+    if request != root.join("package-release-policy.json") {
         return Err(internal("tap_admission_request_path"));
     }
-    let plan = parse_package_release_plan(&read(&request, 1024 * 1024, deadline)?)
-        .map_err(|_| internal("tap_admission_plan"))?;
-    parse_record(&bytes, &expected, &plan, &static_tap_policy()?, &context()?)
+    let release_policy = velnor_actions_contract::parse_package_release_policy(&read(
+        &request,
+        1024 * 1024,
+        deadline,
+    )?)
+    .map_err(|_| internal("tap_admission_release_policy"))?;
+    parse_record(
+        &bytes,
+        &expected,
+        &release_policy,
+        &static_tap_policy()?,
+        &context()?,
+    )
 }
 fn parse_record(
     bytes: &[u8],
     digest: &str,
-    plan: &PackageReleasePlan,
+    release_policy: &PackageReleasePolicy,
     policy: &HomebrewTapConfig,
     context: &BTreeMap<String, Option<String>>,
 ) -> Result<Admission, OrchestratorError> {
@@ -113,19 +130,19 @@ fn parse_record(
     if canonical_json_bytes(&record).map_err(|_| internal("tap_admission_encode"))? != bytes {
         return Err(internal("tap_admission_noncanonical"));
     }
-    validate_binding(&record, plan, policy, context)?;
+    validate_binding(&record, release_policy, policy, context)?;
     Ok(record)
 }
 fn validate_binding(
     record: &Admission,
-    plan: &PackageReleasePlan,
+    release_policy: &PackageReleasePolicy,
     policy: &HomebrewTapConfig,
     context: &BTreeMap<String, Option<String>>,
 ) -> Result<(), OrchestratorError> {
     if record.schema != SCHEMA
         || record.context != *context
         || record.policy != *policy
-        || record.plan != *plan
+        || record.release_policy != *release_policy
     {
         return Err(internal("tap_admission_context_changed"));
     }
@@ -133,6 +150,10 @@ fn validate_binding(
         .plan
         .validate()
         .map_err(|_| internal("tap_admission_plan"))?;
+    record
+        .release_policy
+        .validate_plan(&record.plan)
+        .map_err(|_| internal("tap_admission_release_policy_plan"))?;
     record
         .receipt
         .validate_against_plan(&record.plan)
@@ -145,12 +166,16 @@ fn validate(
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     let request = absolute_env("VELNOR_REQUEST_FILE", "tap_request_missing")?;
-    if request != root.join("package-release-plan.json") {
+    if request != root.join("package-release-policy.json") {
         return Err(internal("tap_admission_request_path"));
     }
-    let plan = parse_package_release_plan(&read(&request, 1024 * 1024, deadline)?)
-        .map_err(|_| internal("tap_admission_plan"))?;
-    validate_binding(record, &plan, &static_tap_policy()?, &context()?)?;
+    let release_policy = velnor_actions_contract::parse_package_release_policy(&read(
+        &request,
+        1024 * 1024,
+        deadline,
+    )?)
+    .map_err(|_| internal("tap_admission_release_policy"))?;
+    validate_binding(record, &release_policy, &static_tap_policy()?, &context()?)?;
     checkpoint(deadline)
 }
 fn context() -> Result<BTreeMap<String, Option<String>>, OrchestratorError> {
@@ -162,6 +187,13 @@ fn context() -> Result<BTreeMap<String, Option<String>>, OrchestratorError> {
             Err(_) => Err(internal("tap_admission_context_encoding")),
         })
         .collect()
+}
+
+fn release_policy_request() -> Result<PackageReleasePolicy, OrchestratorError> {
+    let raw = env::var("VELNOR_RELEASE_POLICY")
+        .map_err(|_| internal("tap_admission_release_policy_missing"))?;
+    velnor_actions_contract::parse_package_release_policy(raw.as_bytes())
+        .map_err(|_| internal("tap_admission_release_policy_invalid"))
 }
 pub(super) fn deadline() -> Result<CheckDeadline, OrchestratorError> {
     CheckDeadline::from_start_with_cleanup_reserve(Instant::now(), Duration::from_secs(300))

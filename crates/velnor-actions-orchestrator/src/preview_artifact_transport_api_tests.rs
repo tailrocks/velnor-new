@@ -1,7 +1,6 @@
 use super::*;
 use crate::package_release_publish::preview_artifacts::fixture::request;
 use serde_json::{Value, json};
-use velnor_actions_contract::preview_production::PREVIEW_ASSEMBLE_JOB_ID;
 
 fn route(suffix: &str) -> String {
     format!("repos/example/app/{suffix}")
@@ -18,7 +17,7 @@ fn run(ci: bool) -> Value {
         "repository":{"id":101}, "head_repository":{"id":101}})
 }
 fn consumer_job() -> Value {
-    json!({"id":404,"run_id":202,"name":PREVIEW_ASSEMBLE_JOB_ID,"head_sha":"a".repeat(40),
+    json!({"id":404,"run_id":202,"name":"preview-assemble","head_sha":"a".repeat(40),
         "status":"in_progress","conclusion":null})
 }
 fn responses() -> Vec<(String, Value)> {
@@ -75,14 +74,14 @@ fn responses() -> Vec<(String, Value)> {
 #[test]
 fn read_capability_authenticates_current_and_exact_attempt_workflow_source_and_ci() {
     let (api, fixture) = GitHubApi::with_fixture("example/app", responses());
-    let read = PreviewArtifactApi {
+    let read = ReleaseArtifactApi {
         api,
         repository: "example/app".into(),
     };
     read.authenticate(
         &request().plan,
         &request().context,
-        PreviewConsumer::Assembler,
+        ReleaseConsumer::Assembler,
     )
     .expect("complete remote authentication");
     fixture.assert_drained();
@@ -117,7 +116,7 @@ fn stale_attempt_wrong_source_fork_workflow_or_repository_fail_before_artifact_i
         let mut responses = responses();
         responses[index].1[key] = value;
         let (api, fixture) = GitHubApi::with_fixture("example/app", responses);
-        let read = PreviewArtifactApi {
+        let read = ReleaseArtifactApi {
             api,
             repository: "example/app".into(),
         };
@@ -125,7 +124,7 @@ fn stale_attempt_wrong_source_fork_workflow_or_repository_fail_before_artifact_i
             read.authenticate(
                 &request().plan,
                 &request().context,
-                PreviewConsumer::Assembler
+                ReleaseConsumer::Assembler
             )
             .is_err(),
             "accepted field {index}/{key}"
@@ -152,7 +151,7 @@ fn page_reads_exact_run_page_and_requires_head_repository_identity_in_records() 
             json!({"total_count":101,"artifacts":[record.clone()]}),
         )],
     );
-    let read = PreviewArtifactApi {
+    let read = ReleaseArtifactApi {
         api,
         repository: "example/app".into(),
     };
@@ -177,14 +176,14 @@ fn queued_run_is_admitted_only_with_exact_unique_executing_assembler() {
     valid[2].1["status"] = json!("queued");
     valid[3].1["status"] = json!("queued");
     let (api, fixture) = GitHubApi::with_fixture("example/app", valid);
-    PreviewArtifactApi {
+    ReleaseArtifactApi {
         api,
         repository: "example/app".into(),
     }
     .authenticate(
         &request().plan,
         &request().context,
-        PreviewConsumer::Assembler,
+        ReleaseConsumer::Assembler,
     )
     .expect("queued run with executing native consumer");
     fixture.assert_drained();
@@ -201,14 +200,14 @@ fn queued_run_is_admitted_only_with_exact_unique_executing_assembler() {
         queued[4].1["jobs"][0][field] = value;
         let (api, _) = GitHubApi::with_fixture("example/app", queued);
         assert!(
-            PreviewArtifactApi {
+            ReleaseArtifactApi {
                 api,
                 repository: "example/app".into()
             }
             .authenticate(
                 &request().plan,
                 &request().context,
-                PreviewConsumer::Assembler
+                ReleaseConsumer::Assembler
             )
             .is_err(),
             "accepted consumer {field}"
@@ -219,14 +218,14 @@ fn queued_run_is_admitted_only_with_exact_unique_executing_assembler() {
         duplicate[4].1 = json!({"total_count":jobs.len(),"jobs":jobs});
         let (api, _) = GitHubApi::with_fixture("example/app", duplicate);
         assert!(
-            PreviewArtifactApi {
+            ReleaseArtifactApi {
                 api,
                 repository: "example/app".into()
             }
             .authenticate(
                 &request().plan,
                 &request().context,
-                PreviewConsumer::Assembler
+                ReleaseConsumer::Assembler
             )
             .is_err()
         );
@@ -263,11 +262,15 @@ fn assembler_job_inventory_requires_complete_stable_pages_and_unique_ids() {
             .collect::<Vec<_>>()
     };
     let (api, fixture) = GitHubApi::with_fixture("example/app", queued(pages.to_vec()));
-    PreviewArtifactApi {
+    ReleaseArtifactApi {
         api,
         repository: "example/app".into(),
     }
-    .require_active_consumer(&request().context, PreviewConsumer::Assembler)
+    .require_active_consumer(
+        PackageReleaseChannel::Preview,
+        &request().context,
+        ReleaseConsumer::Assembler,
+    )
     .expect("second-page exact consumer");
     fixture.assert_drained();
     let mut cases = Vec::new();
@@ -289,11 +292,15 @@ fn assembler_job_inventory_requires_complete_stable_pages_and_unique_ids() {
     for pages in cases {
         let (api, _) = GitHubApi::with_fixture("example/app", queued(pages));
         assert!(
-            PreviewArtifactApi {
+            ReleaseArtifactApi {
                 api,
                 repository: "example/app".into()
             }
-            .require_active_consumer(&request().context, PreviewConsumer::Assembler)
+            .require_active_consumer(
+                PackageReleaseChannel::Preview,
+                &request().context,
+                ReleaseConsumer::Assembler
+            )
             .is_err()
         );
     }
@@ -304,21 +311,21 @@ fn source_free_signer_requires_its_own_active_job_not_the_assembler() {
     let request = request();
     let (api, _) = GitHubApi::with_fixture("example/app", responses());
     assert!(
-        PreviewArtifactApi {
+        ReleaseArtifactApi {
             api,
             repository: "example/app".into()
         }
-        .authenticate(&request.plan, &request.context, PreviewConsumer::Signer)
+        .authenticate(&request.plan, &request.context, ReleaseConsumer::Signer)
         .is_err()
     );
     let mut signer = responses();
     signer[4].1["jobs"][0]["name"] = serde_json::json!("preview-signer");
     let (api, fixture) = GitHubApi::with_fixture("example/app", signer);
-    PreviewArtifactApi {
+    ReleaseArtifactApi {
         api,
         repository: "example/app".into(),
     }
-    .authenticate(&request.plan, &request.context, PreviewConsumer::Signer)
+    .authenticate(&request.plan, &request.context, ReleaseConsumer::Signer)
     .expect("exact native signer");
     fixture.assert_drained();
 }

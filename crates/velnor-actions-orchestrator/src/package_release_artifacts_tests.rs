@@ -5,10 +5,10 @@ use std::{fs, os::unix::fs::symlink, path::Path};
 use super::*;
 use sha2::{Digest, Sha256};
 use support::{
-    append_nonzero_tar_trailer, append_second_gzip_member, corrupt_gzip_crc, expected, fixture,
-    truncate_gzip_trailer, write_archive, write_archive_with_mode, write_gnu_longname_archive,
-    write_manifest, write_pax_archive, write_raw_source_files, write_sbom, write_source_files,
-    write_symlink_archive,
+    append_nonzero_tar_trailer, append_second_gzip_member, corrupt_gzip_crc, expected,
+    fake_executable, fixture, make_manifest, truncate_gzip_trailer, write_archive,
+    write_archive_with_mode, write_gnu_longname_archive, write_manifest, write_pax_archive,
+    write_sbom, write_source_files, write_symlink_archive,
 };
 use velnor_actions_contract::package_release::PackageReleaseAssetKind;
 
@@ -70,30 +70,25 @@ fn accepts_exact_source_bound_inventory_and_stages_archives_without_extracting()
 }
 
 #[test]
-fn accepts_stable_raw_binary_payload_without_repacking() {
-    let mut fixture = fixture();
-    fixture.products[0].format =
-        velnor_actions_contract::package_release::PackageReleasePayloadFormat::RawBinary;
-    write_raw_source_files(&fixture);
-    let verified = verify_package_output(
-        &fixture.producer,
-        "package-output.json",
-        &fixture.staging,
-        &fixture.products,
-        &fixture.companions,
-        PackageOutputIdentity {
-            source_commit: &fixture.commit,
-            source_ref: &fixture.source_ref,
-            version: &fixture.version,
-        },
+fn rejects_raw_executable_disguised_as_declared_tar_gz() {
+    let fixture = fixture();
+    write_source_files(&fixture, "x86_64", &fixture.version);
+    fs::write(
+        fixture.producer.join("cli-x86_64-unknown-linux-gnu.tar.gz"),
+        fake_executable("x86_64"),
     )
-    .expect("raw binary payload passes format and target admission");
-    let payload = verified
-        .artifacts
-        .iter()
-        .find(|artifact| artifact.name == "cli-x86_64-unknown-linux-gnu")
-        .expect("original raw payload name retained");
-    assert_eq!(payload.release_asset.kind, PackageReleaseAssetKind::Payload);
+    .expect("replace archive with raw executable");
+    let name = "cli-x86_64-unknown-linux-gnu.tar.gz";
+    let digest = inventory::hex_lower(&Sha256::digest(fake_executable("x86_64")));
+    write_sbom(
+        &fixture.producer.join(format!("{name}.sbom.json")),
+        name,
+        &digest,
+    );
+    let manifest = make_manifest(&fixture, &fixture.version);
+    write_manifest(&fixture, &serde_json::to_value(manifest).expect("manifest"));
+    let error = verify(&fixture).expect_err("raw executable is not a tar.gz archive");
+    assert!(error.to_string().contains("preview_tar_"), "{error}");
 }
 
 #[test]

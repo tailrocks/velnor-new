@@ -24,7 +24,8 @@ fn continuation_stale_candidate_stops_before_ci_release_or_tag_reads() {
         )],
     );
     assert_eq!(
-        select(&api, &plan(), &"a".repeat(40), 9, 17).expect("admitted read-only API result"),
+        select_preview(&api, &plan(), &"a".repeat(40), 9, 17)
+            .expect("admitted read-only API result"),
         None
     );
     fixture.assert_drained();
@@ -53,7 +54,7 @@ fn continuation_without_exact_source_ci_does_not_discover_publication() {
         ],
     );
     assert_eq!(
-        select(&api, &plan(), &sha, 9, 17).expect("admitted read-only API result"),
+        select_preview(&api, &plan(), &sha, 9, 17).expect("admitted read-only API result"),
         None
     );
     fixture.assert_drained();

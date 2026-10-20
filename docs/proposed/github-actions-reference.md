@@ -390,3 +390,6 @@ keys and unchanged generation, job, toolchain and restore-prefix boundaries.
 
 See [credential-free preview progress encoding](../implemented/native-preview-progress.md)
 for the bounded diagnostic output protocol and its runner-source references.
+
+See [native release asset upload](../implemented/native-release-upload.md) for
+the qualified upload-host, authentication and binary-input source contract.

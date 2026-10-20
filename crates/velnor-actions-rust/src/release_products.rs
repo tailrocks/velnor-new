@@ -99,6 +99,37 @@ pub fn resolve_release_products(
     })
 }
 
+/// Capture version ownership paths without copying any version value into generated policy.
+/// # Errors
+/// Rejects undiscovered/ambiguous/external packages or unsafe ownership paths.
+pub fn release_version_policy(
+    config: &RustBinaryReleaseConfig,
+    workspace: &WorkspaceRecord,
+) -> Result<velnor_actions_contract::CargoVersionPolicy, ContractError> {
+    let names = config
+        .products
+        .iter()
+        .map(|product| product.package.as_str())
+        .collect::<BTreeSet<_>>();
+    let bindings = names
+        .iter()
+        .map(|name| {
+            let package = resolve_package(workspace, name)?;
+            Ok(velnor_actions_contract::CargoVersionBinding {
+                package: (*name).to_owned(),
+                manifest_path: package.manifest.clone(),
+                workspace_manifest_path: config.manifest_path.clone(),
+            })
+        })
+        .collect::<Result<Vec<_>, ContractError>>()?;
+    let version = velnor_actions_contract::CargoVersionPolicy {
+        version_package: config.version_package.clone(),
+        bindings,
+    };
+    version.validate(&names)?;
+    Ok(version)
+}
+
 fn resolve_package<'a>(
     workspace: &'a WorkspaceRecord,
     name: &str,

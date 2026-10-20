@@ -21,7 +21,7 @@ use crate::{
 
 mod runtime;
 use runtime::{
-    absolute_env, preview_companions, read_regular_file, release_version,
+    absolute_env, read_regular_file, release_companions, release_version,
     require_private_directory, sha256, signing_identity_from_env, validate_identity,
     validate_release_directory, write_new_file,
 };
@@ -39,9 +39,9 @@ mod tests;
 /// Private CLI operation for signing a statically planned package release.
 pub const SIGN_PACKAGE_RELEASE_OP: &str = "sign-package-release-v1";
 const PLAN_FILE: &str = "package-release-plan.json";
-const INPUT_DIR: &str = "preview-input";
-const OUTPUT_DIR: &str = "preview-signed";
-const PUBLISH_INPUT_DIR: &str = "preview-publish-input";
+const INPUT_DIR: &str = "release-output";
+const OUTPUT_DIR: &str = "release-signed";
+const PUBLISH_INPUT_DIR: &str = "release-publish-input";
 const HANDOFF_FILE: &str = "package-output.json";
 
 /// Trusted GitHub workflow identity, independently captured from runner facts.
@@ -192,7 +192,7 @@ pub(crate) fn sign_package_release(
         .map_err(|_| internal("package_signer_plan_invalid"))?;
     validate_identity(plan, identity)?;
     let (version, tag, commit_count, source_sha7) = release_version(plan, identity)?;
-    let companions = preview_companions(plan);
+    let companions = release_companions(plan);
     let verified = verify_package_output(
         input_dir,
         HANDOFF_FILE,

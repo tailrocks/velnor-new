@@ -2,7 +2,7 @@ use super::*;
 
 #[path = "preview_production_test_support.rs"]
 mod support;
-use support::{assembly, request};
+use support::{assembly, policy, request};
 
 #[test]
 fn six_pairs_preserve_complete_product_bins_and_full_plan() {
@@ -37,7 +37,7 @@ fn six_pairs_preserve_complete_product_bins_and_full_plan() {
             parse_release_production_request(&bytes).expect("leaf"),
             leaf
         );
-        leaf.validate_against(&request.plan, &request.context)
+        leaf.validate_against(&policy(&request.plan), &request.plan, &request.context)
             .expect("full authority");
         assert_eq!(leaf.plan, request.plan);
     }
@@ -130,7 +130,7 @@ fn trusted_comparison_rejects_self_consistent_partial_plan_and_stale_attempt() {
         .expect("syntax cannot know remote full policy");
     assert!(
         partial
-            .validate_against(&trusted.plan, &trusted.context)
+            .validate_against(&policy(&trusted.plan), &trusted.plan, &trusted.context)
             .is_err()
     );
     let mut stale = trusted.clone();
@@ -140,14 +140,14 @@ fn trusted_comparison_rejects_self_consistent_partial_plan_and_stale_attempt() {
         .expect("syntax cannot authenticate current attempt");
     assert!(
         stale
-            .validate_against(&trusted.plan, &trusted.context)
+            .validate_against(&policy(&trusted.plan), &trusted.plan, &trusted.context)
             .is_err()
     );
     let mut stale_ci = trusted.clone();
     stale_ci.context.ci_run_attempt += 1;
     assert!(
         stale_ci
-            .validate_against(&trusted.plan, &trusted.context)
+            .validate_against(&policy(&trusted.plan), &trusted.plan, &trusted.context)
             .is_err()
     );
 }
@@ -170,7 +170,7 @@ fn full_plan_hash_covers_all_products_and_companions_without_changing_plan() {
     assert_ne!(changed.plan_sha256, original.plan_sha256);
     assert!(
         changed
-            .validate_against(&original.plan, &original.context)
+            .validate_against(&policy(&original.plan), &original.plan, &original.context)
             .is_err()
     );
     changed = original.clone();
@@ -391,28 +391,5 @@ fn aggregate_locator_requires_valid_full_context_and_binds_current_run_attempt()
     assert!(release_aggregate_artifact_name(&invalid, &retry).is_err());
 }
 
-#[test]
-fn stable_uses_full_inventory_and_exact_base_version() {
-    let mut candidate = request();
-    candidate.plan.channel = crate::package_release::PackageReleaseChannel::Stable;
-    candidate.plan_sha256 = release_plan_sha256(&candidate.plan).expect("stable digest");
-    candidate.context.version = candidate.plan.base_version.clone();
-    candidate.context.commit_count = 0;
-    candidate.validate().expect("shared stable production");
-    assert_eq!(
-        expected_release_payload_pairs(&candidate.plan)
-            .expect("pairs")
-            .len(),
-        6
-    );
-    assert_eq!(
-        release_payload_job_id(
-            &candidate.plan,
-            &expected_release_payload_pairs(&candidate.plan).expect("pairs")[0]
-        )
-        .expect("job"),
-        "stable-payload-000"
-    );
-    candidate.context.version.push_str("-preview.1+aaaaaaa");
-    assert!(candidate.validate().is_err());
-}
+#[path = "preview_production_channel_tests.rs"]
+mod channel;

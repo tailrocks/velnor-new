@@ -14,6 +14,7 @@ pub use event::{NativePreviewEvent, PackageReleaseEvent};
 pub(crate) mod tests;
 #[path = "package_release_validation.rs"]
 mod validation;
+pub(crate) use validation::valid_asset_name;
 
 /// Receipt schema discriminator.
 pub const PACKAGE_RELEASE_SCHEMA_V2: &str = "velnor.package-release.v2";

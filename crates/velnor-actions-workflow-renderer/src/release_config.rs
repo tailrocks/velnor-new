@@ -31,6 +31,17 @@ pub struct ReleasePlzConfig {
     pub packages: Vec<ReleasePlzPackage>,
 }
 
+/// Fixed native stable version-PR configuration; native tag authority is separate.
+///
+/// # Errors
+/// Rejects a package name that cannot be a literal Cargo package selector.
+pub fn stable_release_pr_config(version_package: &str) -> Result<String, RenderError> {
+    validate_package_name(version_package)?;
+    Ok(format!(
+        "[workspace]\nrelease = false\ngit_only = true\npublish = false\ngit_tag_enable = false\ngit_release_enable = false\nsemver_check = false\n\n[[package]]\nname = \"{version_package}\"\nrelease = true\n"
+    ))
+}
+
 /// Bootstrap-only effective config (the single `release_always` file).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BootstrapReleasePlzConfig {

@@ -17,7 +17,7 @@ impl SignerApi {
     fn new() -> Self {
         let request = request();
         let mut artifact = record();
-        artifact.name = preview_aggregate_artifact_name(&request.plan, &request.context)
+        artifact.name = release_aggregate_artifact_name(&request.plan, &request.context)
             .expect("aggregate name");
         Self {
             artifact: RefCell::new(Some(artifact)),
@@ -32,10 +32,10 @@ impl ArtifactReadApi for SignerApi {
     fn authenticate(
         &self,
         _: &PackageReleasePlan,
-        _: &PreviewProductionContext,
-        role: PreviewConsumer,
+        _: &ReleaseProductionContext,
+        role: ReleaseConsumer,
     ) -> Result<(), OrchestratorError> {
-        assert_eq!(role, PreviewConsumer::Signer);
+        assert_eq!(role, ReleaseConsumer::Signer);
         self.authentications.set(self.authentications.get() + 1);
         if self.fail_after_download && self.downloads.get() > 0 {
             return Err(internal("changed_attempt"));

@@ -18,21 +18,21 @@ use std::{
 };
 use velnor_actions_contract::{
     canonical_json_bytes,
-    config::RustBinaryPreviewConfig,
-    preview_production::{PreviewProductionRequest, PreviewProductionStage},
+    config::RustBinaryReleaseConfig,
+    preview_production::{ReleaseProductionRequest, ReleaseProductionStage},
 };
 use velnor_actions_mise::CheckDeadline;
 
 /// Source-free acquisition of the exact complete leaf union.
-pub const ACQUIRE_PREVIEW_LEAVES_OP: &str = "acquire-preview-leaves-v1";
+pub const ACQUIRE_RELEASE_LEAVES_OP: &str = "acquire-release-leaves-v1";
 const RECORD: &str = "preview-admitted-leaves.json";
-const SCHEMA: &str = "velnor.preview-admitted-leaves.v1";
+const SCHEMA: &str = "velnor.release-admitted-leaves.v1";
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Admission {
     schema: String,
-    request: PreviewProductionRequest,
+    request: ReleaseProductionRequest,
     leaves: Vec<PreviewLeafManifest>,
     inputs: Vec<TaskInput>,
 }
@@ -41,17 +41,18 @@ struct Admission {
 /// repository commands. The caller publishes the returned digest as a step output.
 /// # Errors
 /// Rejects remote, request, artifact, inventory and deadline drift.
-pub fn acquire_preview_leaves() -> Result<String, OrchestratorError> {
+pub fn acquire_release_leaves() -> Result<String, OrchestratorError> {
     let deadline =
         CheckDeadline::from_start_with_cleanup_reserve(Instant::now(), Duration::from_secs(300))
             .map_err(|error| internal(&error.to_string()))?;
     deadline
         .scope(|| {
             let temp = runner_temp()?;
-            let plan = super::read_plan(&temp, deadline)?;
+            let (policy, plan) =
+                crate::release_policy_admission::admitted_policy_plan(&temp, deadline)?;
             let identity = context::workflow_context(&plan, deadline)?;
-            let request = context::from_context(plan, identity)?;
-            if !matches!(request.stage, PreviewProductionStage::Assemble { .. }) {
+            let request = context::from_context(&policy, plan, identity)?;
+            if !matches!(request.stage, ReleaseProductionStage::Assemble { .. }) {
                 return Err(internal("preview_acquisition_stage"));
             }
             let admitted = aggregate::acquire(&temp, &request, deadline)?;
@@ -90,11 +91,11 @@ fn credentials_absent(present: bool) -> Result<(), OrchestratorError> {
 
 pub(super) fn load(
     temp: &Path,
-    request: &PreviewProductionRequest,
-    preview: &RustBinaryPreviewConfig,
+    request: &ReleaseProductionRequest,
+    preview: &RustBinaryReleaseConfig,
     deadline: CheckDeadline,
 ) -> Result<AdmittedLeaves, OrchestratorError> {
-    let expected = context::required_env("VELNOR_PREVIEW_ADMISSION_DIGEST")?;
+    let expected = context::required_env("VELNOR_RELEASE_ADMISSION_DIGEST")?;
     let bytes = read_staged_bytes_until(&temp.join(RECORD), handoff::MAX_NATIVE_MANIFEST, || {
         deadline
             .remaining()
@@ -109,7 +110,7 @@ pub(super) fn load(
 fn parse(
     bytes: &[u8],
     digest: &str,
-    request: &PreviewProductionRequest,
+    request: &ReleaseProductionRequest,
 ) -> Result<Admission, OrchestratorError> {
     if digest.len() != 64 || handoff::sha256(bytes) != digest {
         return Err(internal("preview_admission_digest"));
@@ -131,10 +132,10 @@ fn parse(
 
 fn restore(
     record: Admission,
-    preview: &RustBinaryPreviewConfig,
+    preview: &RustBinaryReleaseConfig,
     deadline: CheckDeadline,
 ) -> Result<AdmittedLeaves, OrchestratorError> {
-    let PreviewProductionStage::Assemble { inputs } = &record.request.stage else {
+    let ReleaseProductionStage::Assemble { inputs } = &record.request.stage else {
         return Err(internal("preview_admission_stage"));
     };
     if inputs.len() != record.leaves.len() {
@@ -143,7 +144,7 @@ fn restore(
     let mut expected = Vec::new();
     for (reference, leaf) in inputs.iter().zip(&record.leaves) {
         let mut request = record.request.clone();
-        request.stage = PreviewProductionStage::Payload {
+        request.stage = ReleaseProductionStage::Payload {
             pair: reference.pair.clone(),
         };
         PreviewLeafManifest::parse(&leaf_manifest::encode(leaf)?, &request)?;

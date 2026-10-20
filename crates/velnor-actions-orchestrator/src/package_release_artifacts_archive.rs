@@ -63,9 +63,6 @@ pub(super) fn validate_copied_content(
                             started,
                         )?;
                     }
-                    Some(velnor_actions_contract::package_release::PackageReleasePayloadFormat::RawBinary) => {
-                        binary::inspect_raw_binary(&artifact.path, target, started)?;
-                    }
                     None => return Err(invalid("payload_format_missing")),
                 }
             }

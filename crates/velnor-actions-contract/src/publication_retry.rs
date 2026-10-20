@@ -34,6 +34,12 @@ pub enum PublicationState {
         /// Receipt digest embedded in the authenticated annotated tag message.
         original_receipt_digest: Option<String>,
     },
+    /// Existing permanent tag authenticated through retained pre-tag intent and
+    /// observed post-tag origin, independently bound to the signed generation.
+    AuthorizedStableTag {
+        /// Verified signed generation admitted by the original manual tag job.
+        identity: PublicationIdentity,
+    },
     /// Unpublished draft; unknown original authority is represented by `None`.
     Draft {
         /// Full commit to which the draft tag resolves.
@@ -142,6 +148,19 @@ pub fn publication_action(
                 } else {
                     Reject(Rejection::ConflictingIdentity)
                 }
+            } else if expected
+                .assets
+                .keys()
+                .all(|name| available_original_assets.contains(name))
+            {
+                PublicationAction::CreateDraft
+            } else {
+                Reject(Rejection::UnavailableOriginalAssets)
+            }
+        }
+        PublicationState::AuthorizedStableTag { identity } => {
+            if identity != expected {
+                Reject(Rejection::ConflictingIdentity)
             } else if expected
                 .assets
                 .keys()

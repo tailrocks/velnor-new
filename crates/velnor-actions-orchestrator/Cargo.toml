@@ -25,6 +25,7 @@ rustix = { version = "=1.1.5", features = ["fs", "process"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
+sha1-checked = { version = "=0.10.0" }
 tempfile = { version = "=3.27.0" }
 thiserror = { workspace = true }
 toml = { version = "=1.1.8" }

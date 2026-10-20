@@ -19,9 +19,7 @@ use velnor_actions_rust::release_select::{
     DEFAULT_REGISTRY, ReleaseRequest as SelectRequest, ReleaseScope, ReleaseSelection,
     select_release_set,
 };
-use velnor_actions_workflow_renderer::release_config::{
-    BootstrapReleasePlzConfig, ReleasePlzConfig, ReleasePlzPackage,
-};
+use velnor_actions_workflow_renderer::release_config::BootstrapReleasePlzConfig;
 use velnor_actions_workflow_renderer::release_jobs::ReleaseWorkflowSpec;
 use velnor_actions_workflow_renderer::release_spec::{
     BootstrapPlan, DispatchInput, ReleaseTriggers, lock::stable_lock_group, publish_gate_condition,
@@ -37,6 +35,10 @@ use crate::release_identity::{
     common_registry, head_sha, origin_repository, plan_id_for_source, workspace_slug,
 };
 use crate::release_steps::{JobInputs, assemble_jobs};
+
+#[path = "release_emit_config.rs"]
+mod config;
+use config::plz_config;
 
 /// Release workflow display name (fixed; config carries no workflow name).
 const RELEASE_WORKFLOW_NAME: &str = "Velnor Release";
@@ -164,6 +166,16 @@ pub(crate) fn enabled_release(
 pub(crate) fn git_tag_release(
     prep: &GenerationPreparation,
 ) -> Result<Option<&RustReleaseConfig>, OrchestratorError> {
+    // Native stable has one manual coordinator; never add an automatic tag writer.
+    if prep
+        .config
+        .stacks
+        .rust
+        .as_ref()
+        .is_some_and(|rust| rust.binary_release.stable.enabled)
+    {
+        return Ok(None);
+    }
     Ok(enabled_release(prep)?.filter(|release| release.registry == ReleaseRegistry::GitTag))
 }
 
@@ -376,24 +388,5 @@ fn release_triggers(branch: &str, bootstrap: &BootstrapPlan) -> ReleaseTriggers 
         push_branches: vec![branch.to_owned()],
         schedule: None,
         dispatch_inputs,
-    }
-}
-
-/// Effective normal-policy config: tag plus allowlist, no features.
-///
-/// The schema carries no `publish_features`, so emission sets none;
-/// `semver_check` stays true per the release contract.
-fn plz_config(release: &RustReleaseConfig, selection: &ReleaseSelection) -> ReleasePlzConfig {
-    ReleasePlzConfig {
-        tag_pattern: release.tag_name.clone(),
-        semver_check: true,
-        packages: selection
-            .packages
-            .iter()
-            .map(|package| ReleasePlzPackage {
-                name: package.name.clone(),
-                publish_features: Vec::new(),
-            })
-            .collect(),
     }
 }

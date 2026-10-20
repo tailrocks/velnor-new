@@ -197,11 +197,16 @@ fn malformed_present_protection_fields_fail_even_when_other_source_is_complete()
 #[test]
 fn stable_environment_preserves_human_reviewer_and_protected_branch_requirements() {
     let stable = json!({
-        "name":"consumer-binary-release",
+        "name":"release",
         "protection_rules":[{"type":"required_reviewers","reviewers":[{"type":"User","reviewer":{"id":17,"login":"release-reviewer"}}],"prevent_self_review":true}],
         "deployment_branch_policy":{"protected_branches":true,"custom_branch_policies":false}
     });
     assert!(super::validate_stable_environment_settings(&stable, "main").is_ok());
+    for wrong_name in ["consumer-binary-release", "preview-publish", "tap-update"] {
+        let mut wrong_environment = stable.clone();
+        wrong_environment["name"] = json!(wrong_name);
+        assert!(super::validate_stable_environment_settings(&wrong_environment, "main").is_err());
+    }
 
     assert!(super::validate_stable_environment_settings(&stable, "release/1.2").is_ok());
     let mut additional_rules = stable.clone();
@@ -294,4 +299,33 @@ fn environment_branch_policy_must_be_the_only_exact_main_pattern() {
         assert!(validate_environment_branch_policy(&bad, "main").is_err());
     }
     assert!(validate_environment_branch_policy(&only_main, "release/1.2").is_err());
+}
+
+#[test]
+fn permanent_tag_release_environment_requires_human_review_without_self_approval() {
+    let settings = json!({"name":"release", "deployment_branch_policy":{
+        "protected_branches":true,"custom_branch_policies":false},
+        "protection_rules":[{"type":"required_reviewers","prevent_self_review":true,
+            "reviewers":[{"type":"User","reviewer":{"id":17}}]}]});
+    assert!(
+        super::validation::validate_human_environment_settings(&settings, "main", "release")
+            .is_ok()
+    );
+    for mutate in [
+        |value: &mut serde_json::Value| value["name"] = json!("other"),
+        |value: &mut serde_json::Value| {
+            value["protection_rules"][0]["prevent_self_review"] = json!(false);
+        },
+        |value: &mut serde_json::Value| value["protection_rules"][0]["reviewers"] = json!([]),
+        |value: &mut serde_json::Value| {
+            value["protection_rules"][0]["reviewers"][0]["type"] = json!("Bot");
+        },
+    ] {
+        let mut changed = settings.clone();
+        mutate(&mut changed);
+        assert!(
+            super::validation::validate_human_environment_settings(&changed, "main", "release")
+                .is_err()
+        );
+    }
 }

@@ -96,7 +96,9 @@ pub struct ReleaseProductionRequest {
     pub schema: String,
     /// Full unchanged static plan, including every product and companion.
     pub plan: PackageReleasePlan,
-    /// SHA-256 of the complete validated canonical static plan bytes.
+    /// SHA-256 of the complete validated canonical source-policy bytes.
+    pub policy_sha256: String,
+    /// SHA-256 of the complete validated canonical resolved plan bytes.
     pub plan_sha256: String,
     /// Claimed execution identity, requiring independent runtime admission.
     pub context: ReleaseProductionContext,
@@ -118,11 +120,16 @@ impl ReleaseProductionRequest {
     /// Rejects any structurally invalid request or policy/context substitution.
     pub fn validate_against(
         &self,
+        trusted_policy: &crate::PackageReleasePolicy,
         trusted_plan: &PackageReleasePlan,
         authenticated_context: &ReleaseProductionContext,
     ) -> Result<(), ContractError> {
         self.validate()?;
-        if &self.plan != trusted_plan || &self.context != authenticated_context {
+        trusted_policy.validate_plan(trusted_plan)?;
+        if self.policy_sha256 != crate::canonical::sha256_hex(&trusted_policy.canonical_bytes()?)
+            || &self.plan != trusted_plan
+            || &self.context != authenticated_context
+        {
             return Err(invalid("trusted_plan_or_context_mismatch"));
         }
         Ok(())
@@ -166,15 +173,7 @@ pub fn expected_release_payload_pairs(
 /// # Errors
 /// Rejects invalid full plans or canonical encoding failures.
 pub fn release_plan_sha256(plan: &PackageReleasePlan) -> Result<String, ContractError> {
-    use sha2::{Digest as _, Sha256};
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let digest = Sha256::digest(plan.canonical_bytes()?);
-    let mut encoded = String::with_capacity(64);
-    for byte in digest {
-        encoded.push(char::from(HEX[usize::from(byte >> 4)]));
-        encoded.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
-    Ok(encoded)
+    Ok(crate::canonical::sha256_hex(&plan.canonical_bytes()?))
 }
 
 /// Derive the fixed machine job ID from the pair's canonical full-plan index.

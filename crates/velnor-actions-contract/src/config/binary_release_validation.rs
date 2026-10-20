@@ -7,6 +7,7 @@ use super::{
 use crate::config::is_valid_mise_task_name;
 use crate::config::{CheckPlatform, CheckSystemTool, VerificationRunner};
 use crate::errors::ContractError;
+use crate::package_release::valid_asset_name;
 use std::collections::BTreeSet;
 
 #[path = "binary_release_inventory.rs"]
@@ -302,15 +303,6 @@ fn valid_identifier(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
-}
-
-fn valid_asset_name(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 180
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
-        && !matches!(value, "." | "..")
 }
 
 fn valid_repo_path(value: &str, allow_root: bool) -> bool {

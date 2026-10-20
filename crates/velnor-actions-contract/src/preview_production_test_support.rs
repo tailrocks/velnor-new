@@ -32,6 +32,9 @@ pub(super) fn request() -> ReleaseProductionRequest {
     };
     ReleaseProductionRequest {
         schema: RELEASE_PRODUCTION_SCHEMA_V1.to_owned(),
+        policy_sha256: crate::canonical::sha256_hex(
+            &policy(&plan).canonical_bytes().expect("policy"),
+        ),
         plan_sha256: release_plan_sha256(&plan).expect("full plan digest"),
         plan,
         context: ReleaseProductionContext {
@@ -81,4 +84,30 @@ pub(super) fn assembly() -> ReleaseProductionRequest {
             .collect(),
     };
     request
+}
+
+pub(super) fn policy(plan: &PackageReleasePlan) -> crate::PackageReleasePolicy {
+    crate::PackageReleasePolicy {
+        schema: crate::PACKAGE_RELEASE_POLICY_SCHEMA_V1.to_owned(),
+        channel: plan.channel,
+        repository: plan.repository.clone(),
+        default_branch: plan.default_branch.clone(),
+        version: crate::CargoVersionPolicy {
+            version_package: "jackin".to_owned(),
+            bindings: vec![
+                crate::CargoVersionBinding {
+                    package: "jackin".to_owned(),
+                    manifest_path: "Cargo.toml".to_owned(),
+                    workspace_manifest_path: "Cargo.toml".to_owned(),
+                },
+                crate::CargoVersionBinding {
+                    package: "jackin-capsule".to_owned(),
+                    manifest_path: "capsule/Cargo.toml".to_owned(),
+                    workspace_manifest_path: "Cargo.toml".to_owned(),
+                },
+            ],
+        },
+        products: plan.products.clone(),
+        companions: plan.companions.clone(),
+    }
 }

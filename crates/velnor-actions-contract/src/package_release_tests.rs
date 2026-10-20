@@ -194,3 +194,16 @@ fn preview_validation_rejects_malformed_receipt_even_when_inventory_matches() {
     receipt.assets[0].sha256 = "not-a-sha256".to_owned();
     assert!(receipt.validate_against_config(&preview).is_err());
 }
+
+#[test]
+fn release_asset_names_must_survive_github_upload_without_renaming() {
+    for valid in ["capsules.toml", "SHA256SUMS", "app-1.2.3.tar.gz"] {
+        assert!(super::valid_asset_name(valid));
+    }
+    for renamed in [".hidden", "name.", ".", ".."] {
+        assert!(!super::valid_asset_name(renamed));
+        let mut receipt = fixture(PackageReleaseChannel::Preview);
+        receipt.products[0].payloads[0].name = renamed.to_owned();
+        assert!(receipt.validate().is_err());
+    }
+}

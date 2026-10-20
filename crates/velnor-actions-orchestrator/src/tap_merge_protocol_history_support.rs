@@ -25,9 +25,12 @@ pub(super) fn add_closed_prior_pr(
     )
     .expect("old formula candidate proof");
     let proof_digest = sha256(&canonical_json_bytes(&proof).expect("old proof bytes"));
-    let branch =
-        super::super::candidate::expected_branch(&candidate.release.receipt_digest, &original_base)
-            .expect("old deterministic branch");
+    let branch = super::super::candidate::expected_branch(
+        &candidate.release.receipt_digest,
+        &original_base,
+        candidate.release.receipt.channel,
+    )
+    .expect("old deterministic branch");
     let summary = pull(
         candidate,
         authority,
@@ -93,9 +96,13 @@ fn add_prior_git_responses(
         format!("repos/{repo}/pulls/20/commits?per_page=100&page=1"),
         json!([{"sha": head}]),
     );
-    let formula = &candidate.policy.formula;
+    let formula = &candidate.formula_path;
     let message = format!(
-        "Update preview formula to {}\n\nSource: {}@{}\nRelease receipt: {}\n\nSigned-off-by: {} <{}+{}@users.noreply.github.com>",
+        "Update {} formula to {}\n\nSource: {}@{}\nRelease receipt: {}\n\nSigned-off-by: {} <{}+{}@users.noreply.github.com>",
+        match candidate.release.receipt.channel {
+            velnor_actions_contract::package_release::PackageReleaseChannel::Preview => "preview",
+            velnor_actions_contract::package_release::PackageReleaseChannel::Stable => "stable",
+        },
         candidate.release.receipt.version.value,
         candidate.plan.repository,
         candidate.release.receipt.source.commit_sha,

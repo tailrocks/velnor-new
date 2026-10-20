@@ -11,13 +11,8 @@ pub(super) fn valid_observation(expected: &PublicationIdentity, assets: &[Rollin
         && lower_hex(&expected.source_sha, 40)
         && lower_hex(&expected.receipt_digest, 64)
         && expected.assets.iter().all(|(name, digest)| {
-            !name.is_empty()
-                && name.len() <= 180
+            crate::package_release::valid_asset_name(name)
                 && !name.starts_with("vlnr-")
-                && !matches!(name.as_str(), "." | "..")
-                && name
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
                 && lower_hex(digest, 64)
         })
         && ids.len() == assets.len()

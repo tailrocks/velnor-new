@@ -13,7 +13,8 @@ pub(super) fn validate(request: &ReleaseProductionRequest) -> Result<(), Contrac
         return Err(invalid("unknown_schema"));
     }
     let pairs = expected_release_payload_pairs(&request.plan)?;
-    if !lower_hex(&request.plan_sha256, 64)
+    if !lower_hex(&request.policy_sha256, 64)
+        || !lower_hex(&request.plan_sha256, 64)
         || request.plan_sha256 != release_plan_sha256(&request.plan)?
     {
         return Err(invalid("full_plan_digest_mismatch"));

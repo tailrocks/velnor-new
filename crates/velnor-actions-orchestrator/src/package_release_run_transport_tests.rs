@@ -112,17 +112,18 @@ fn real_api_reads_required_from_second_job_page_and_preserves_original_ci() {
 }
 
 #[test]
-fn queued_fixture_rejects_mutation_transport_without_any_process_or_network() {
+fn unconfigured_mutation_is_rejected_without_any_process_or_network() {
     let (api, fixture) = GitHubApi::with_fixture("example/app", vec![]);
     let error = api
         .post_fields(&route("releases"), &[])
         .expect_err("fixture must never fall through to gh");
     assert!(
-        error
-            .to_string()
-            .contains("unexpected_fixture_transport_request"),
+        error.to_string().contains("unexpected_fixture_api_call"),
         "got {error}"
     );
-    assert_eq!(fixture.observed(), Vec::<String>::new());
+    assert_eq!(
+        fixture.observed(),
+        vec![format!("POST {}", route("releases"))]
+    );
     fixture.assert_drained();
 }

@@ -72,7 +72,10 @@ fn list_receipt_prs(
     api: &TapMergeGitHub,
 ) -> Result<Vec<Value>, OrchestratorError> {
     let digest_marker = format!("Receipt digest: `{}`", candidate.release.receipt_digest);
-    let receipt_prefix = branch_prefix(&candidate.release.receipt_digest)?;
+    let receipt_prefix = branch_prefix(
+        &candidate.release.receipt_digest,
+        candidate.release.receipt.channel,
+    )?;
     let mut selected = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
     for page in 1..=MAX_PAGES {
@@ -125,7 +128,11 @@ fn authenticate_pull(
     let branch = required_text(&detail, "/head/ref", "tap_merge_history_branch")?.to_owned();
     let head_sha = required_sha(&detail, "/head/sha", "tap_merge_history_head")?;
     validate_pull_identity(candidate, authority, &detail, number, &branch, &head_sha)?;
-    let base_sha = branch_base(&candidate.release.receipt_digest, &branch)?;
+    let base_sha = branch_base(
+        &candidate.release.receipt_digest,
+        &branch,
+        candidate.release.receipt.channel,
+    )?;
     let observed_base_sha = required_sha(&detail, "/base/sha", "tap_merge_history_base")?;
     let (merged, merge_sha, merged_at) = merged_fields(&detail)?;
     identity::validate_observed_base(&detail, &base_sha, merged)?;
@@ -186,17 +193,21 @@ fn validate_historical_formula(
     branch: &str,
     head_sha: &str,
 ) -> Result<HistoricalFormula, OrchestratorError> {
-    let base_sha = branch_base(&candidate.release.receipt_digest, branch)?;
+    let base_sha = branch_base(
+        &candidate.release.receipt_digest,
+        branch,
+        candidate.release.receipt.channel,
+    )?;
     let base_formula = contents(
         api,
         &candidate.policy.repository,
-        &candidate.policy.formula,
+        &candidate.formula_path,
         &base_sha,
     )?;
     let head_formula = contents(
         api,
         &candidate.policy.repository,
-        &candidate.policy.formula,
+        &candidate.formula_path,
         head_sha,
     )?;
     let historical_proof = reconstruct_historical_proof(
@@ -254,7 +265,7 @@ fn reconstruct_historical_proof(
     source_repository: &str,
     policy: &velnor_actions_contract::config::HomebrewTapConfig,
     plan: &velnor_actions_contract::PackageReleasePlan,
-    release: &velnor_actions_contract::VerifiedPreviewRelease,
+    release: &velnor_actions_contract::VerifiedPackageRelease,
     base_sha: &str,
     base_formula: &[u8],
     head_formula: &[u8],
@@ -319,7 +330,11 @@ fn verify_commit(
         candidate.policy.repository
     ))?;
     let message = format!(
-        "Update preview formula to {}\n\nSource: {}@{}\nRelease receipt: {}\n\nSigned-off-by: {} <{}+{}@users.noreply.github.com>",
+        "Update {} formula to {}\n\nSource: {}@{}\nRelease receipt: {}\n\nSigned-off-by: {} <{}+{}@users.noreply.github.com>",
+        match candidate.release.receipt.channel {
+            velnor_actions_contract::package_release::PackageReleaseChannel::Preview => "preview",
+            velnor_actions_contract::package_release::PackageReleaseChannel::Stable => "stable",
+        },
         candidate.release.receipt.version.value,
         candidate.proof.source_repository,
         candidate.proof.source_sha,

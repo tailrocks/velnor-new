@@ -6,12 +6,19 @@ use crate::{OrchestratorError, internal::internal};
 
 use super::super::candidate::expected_branch;
 
-pub(super) fn branch_prefix(receipt_digest: &str) -> Result<String, OrchestratorError> {
+pub(super) fn branch_prefix(
+    receipt_digest: &str,
+    channel: velnor_actions_contract::package_release::PackageReleaseChannel,
+) -> Result<String, OrchestratorError> {
     let digest = receipt_digest
         .strip_prefix("b3-")
         .filter(|value| is_lower_hex(value, 64))
         .ok_or_else(|| internal("tap_merge_history_receipt_digest"))?;
-    Ok(format!("velnor/preview/{digest}-"))
+    let channel = match channel {
+        velnor_actions_contract::package_release::PackageReleaseChannel::Preview => "preview",
+        velnor_actions_contract::package_release::PackageReleaseChannel::Stable => "stable",
+    };
+    Ok(format!("velnor/{channel}/{digest}-"))
 }
 
 pub(super) fn belongs_to_receipt(
@@ -31,13 +38,17 @@ pub(super) fn belongs_to_receipt(
     Ok(true)
 }
 
-pub(super) fn branch_base(receipt_digest: &str, branch: &str) -> Result<String, OrchestratorError> {
-    let prefix = branch_prefix(receipt_digest)?;
+pub(super) fn branch_base(
+    receipt_digest: &str,
+    branch: &str,
+    channel: velnor_actions_contract::package_release::PackageReleaseChannel,
+) -> Result<String, OrchestratorError> {
+    let prefix = branch_prefix(receipt_digest, channel)?;
     let base = branch
         .strip_prefix(&prefix)
         .filter(|value| is_lower_hex(value, 40))
         .ok_or_else(|| internal("tap_merge_history_branch_invalid"))?;
-    if branch != expected_branch(receipt_digest, base)? {
+    if branch != expected_branch(receipt_digest, base, channel)? {
         return Err(internal("tap_merge_history_branch_invalid"));
     }
     Ok(base.to_owned())

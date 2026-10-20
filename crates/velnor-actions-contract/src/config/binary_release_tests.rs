@@ -1,6 +1,15 @@
 use super::*;
 use crate::config::{CheckSystemTool, CheckSystemToolKind, VerificationRunner};
 
+#[test]
+fn companion_names_must_survive_github_upload_without_renaming() {
+    for renamed in [".hidden", "name.", ".", ".."] {
+        let mut config = enabled_preview();
+        config.companions[0].asset_name = renamed.to_owned();
+        assert!(config.validate("config.toml").is_err());
+    }
+}
+
 pub(super) fn enabled_preview() -> RustBinaryReleaseConfig {
     RustBinaryReleaseConfig {
         version_package: "jackin".to_owned(),

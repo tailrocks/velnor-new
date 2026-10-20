@@ -98,17 +98,50 @@ fn release_section_parses_and_defaults_disabled() {
     let config = load(root.path()).expect("rust config");
     let rust = config.stacks.rust.expect("rust stack");
     assert!(!rust.release.enabled);
-    assert!(!rust.binary_release.enabled);
+    assert!(!rust.binary_release.enabled());
     assert_eq!(rust.binary_release.manifest_path, "Cargo.toml");
 
-    let root = rooted(
-        "schema = 1\n[workflow]\npolicy = \"consumer-v1\"\n[stacks.rust.binary_release]\nenabled = true\npackage = \"repo-scan\"\nbin = \"repo-scan\"\n",
-    );
+    let root = rooted(&native_preview_config());
     let config = load(root.path()).expect("consumer binary release config");
     let rust = config.stacks.rust.expect("rust stack");
-    assert!(rust.binary_release.enabled);
-    assert_eq!(rust.binary_release.package, "repo-scan");
-    assert_eq!(rust.binary_release.bin, "repo-scan");
+    assert!(rust.binary_release.enabled());
+    assert_eq!(rust.binary_release.version_package, "repo-scan");
+    assert_eq!(rust.binary_release.products[0].package, "repo-scan");
+    assert_eq!(rust.binary_release.products[0].bins, ["repo-scan"]);
+}
+
+fn native_preview_config() -> String {
+    let tool = serde_json::json!({"qualified_tools":[{
+        "id":"rust","version":"1.98.1","backend":{"kind":"core","tool":"rust"},
+        "options":{"kind":"rust","components":[],"targets":[]},"depends_on":[],
+        "platforms":[{"platform":"linux_x64","artifacts":[{"url":"https://static.rust-lang.org/dist/rust-1.98.1-x86_64-unknown-linux-gnu.tar.xz","sha256":"a".repeat(64)}],"dependency_artifacts":[],"install_tree_sha256":"b".repeat(64),
+        "executables":[{"name":"rustc","path":"bin/rustc","sha256":"c".repeat(64),"probe":{"kind":"version","expected":"rustc 1.98.1"}}]}]
+    }]});
+    format!(
+        r#"schema = 1
+[workflow]
+policy = "consumer-v1"
+[stacks.rust.binary_release]
+version_package = "repo-scan"
+version_env = "REPO_SCAN_VERSION_OVERRIDE"
+[stacks.rust.binary_release.evidence]
+profile = "signed-sbom-v1"
+[stacks.rust.binary_release.producer]
+task = "release-native"
+tools = ["rust"]
+inputs = ["Cargo.toml", "Cargo.lock", "mise.toml"]
+[[stacks.rust.binary_release.products]]
+id = "repo-scan"
+package = "repo-scan"
+bins = ["repo-scan"]
+targets = ["aarch64-apple-darwin"]
+archive = "tar.gz"
+[stacks.rust.binary_release.preview]
+enabled = true
+release_id = 1
+{}"#,
+        toml::to_string(&tool).expect("qualified loader fixture")
+    )
 }
 
 #[test]

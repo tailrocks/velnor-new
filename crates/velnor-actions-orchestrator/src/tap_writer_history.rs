@@ -39,7 +39,10 @@ pub(super) fn find_already_promoted(
 ) -> Result<HistoricalPromotion, OrchestratorError> {
     let pulls = all_pulls(&inputs.api)?;
     let receipt_marker = format!("Receipt digest: `{}`", inputs.release.receipt_digest);
-    let branch_prefix = receipt_branch_prefix(&inputs.release.receipt_digest)?;
+    let branch_prefix = receipt_branch_prefix(
+        &inputs.release.receipt_digest,
+        inputs.release.receipt.channel,
+    )?;
     let expected_title = expected_pr_title(&inputs.release);
     let mut candidates = Vec::new();
     for pull in pulls {
@@ -85,12 +88,19 @@ pub(super) fn find_already_promoted(
         .ok_or_else(|| internal("tap_already_current_historical_pr_missing"))
 }
 
-fn receipt_branch_prefix(receipt_digest: &str) -> Result<String, OrchestratorError> {
+fn receipt_branch_prefix(
+    receipt_digest: &str,
+    channel: velnor_actions_contract::package_release::PackageReleaseChannel,
+) -> Result<String, OrchestratorError> {
     let digest = receipt_digest
         .strip_prefix("b3-")
         .filter(|value| super::helpers::is_sha256(value))
         .ok_or_else(|| internal("tap_historical_receipt_digest_invalid"))?;
-    Ok(format!("velnor/preview/{digest}-"))
+    let channel = match channel {
+        velnor_actions_contract::package_release::PackageReleaseChannel::Preview => "preview",
+        velnor_actions_contract::package_release::PackageReleaseChannel::Stable => "stable",
+    };
+    Ok(format!("velnor/{channel}/{digest}-"))
 }
 
 fn all_pulls(api: &TapGitHubApi) -> Result<Vec<PullRequestResponse>, OrchestratorError> {
@@ -148,19 +158,54 @@ fn authenticate_merged_pull(
         return Err(internal("tap_historical_head_parent_invalid"));
     }
     let base_sha = &head_commit.parents[0].sha;
-    let branch = branch_name(&inputs.release.receipt_digest, base_sha)?;
+    let branch = branch_name(
+        &inputs.release.receipt_digest,
+        base_sha,
+        inputs.release.receipt.channel,
+    )?;
     if pull.head.ref_name != branch
         || pull.head.label != format!("{owner}:{branch}")
         || pull.base.label != format!("{owner}:{TAP_BASE}")
     {
         return Err(internal("tap_historical_branch_mismatch"));
     }
+    let proof_digest =
+        authenticate_historical_candidate(inputs, bot, pull, base_sha, &head_commit)?;
+    let merge_sha = pull
+        .merge_commit_sha
+        .as_deref()
+        .filter(|sha| is_full_sha(sha))
+        .ok_or_else(|| internal("tap_historical_merge_sha_missing"))?;
+    let merged_at = pull
+        .merged_at
+        .as_deref()
+        .filter(|value| valid_timestamp(value))
+        .ok_or_else(|| internal("tap_historical_merge_time_missing"))?;
+    validate_squash_commit(&inputs.api, merge_sha, base_sha, &head_commit.tree.sha)?;
+    Ok(HistoricalPromotion {
+        pull_request: pull.number,
+        head_sha: head_sha.clone(),
+        base_sha: base_sha.clone(),
+        branch,
+        candidate_proof_digest: proof_digest,
+        merge_sha: merge_sha.to_owned(),
+        merged_at: merged_at.to_owned(),
+    })
+}
+
+fn authenticate_historical_candidate(
+    inputs: &WriterInputs,
+    bot: &BotIdentity,
+    pull: &PullRequestResponse,
+    base_sha: &str,
+    head_commit: &CommitResponse,
+) -> Result<String, OrchestratorError> {
     let base_commit = commit(&inputs.api, base_sha)?;
     let head_tree = read_tree(&inputs.api, &head_commit.tree.sha)?;
     let base_tree = read_tree(&inputs.api, &base_commit.tree.sha)?;
-    validate_single_formula_delta(&inputs.policy.formula, &base_tree, &head_tree)?;
-    let old_formula = read_formula_blob(&inputs.api, &base_tree, &inputs.policy.formula)?;
-    let proposed = read_formula_blob(&inputs.api, &head_tree, &inputs.policy.formula)?;
+    validate_single_formula_delta(&inputs.formula_path, &base_tree, &head_tree)?;
+    let old_formula = read_formula_blob(&inputs.api, &base_tree, &inputs.formula_path)?;
+    let proposed = read_formula_blob(&inputs.api, &head_tree, &inputs.formula_path)?;
     if old_formula == proposed {
         return Err(internal("tap_historical_formula_not_changed"));
     }
@@ -182,26 +227,7 @@ fn authenticate_merged_pull(
     {
         return Err(internal("tap_historical_candidate_proof_mismatch"));
     }
-    let merge_sha = pull
-        .merge_commit_sha
-        .as_deref()
-        .filter(|sha| is_full_sha(sha))
-        .ok_or_else(|| internal("tap_historical_merge_sha_missing"))?;
-    let merged_at = pull
-        .merged_at
-        .as_deref()
-        .filter(|value| valid_timestamp(value))
-        .ok_or_else(|| internal("tap_historical_merge_time_missing"))?;
-    validate_squash_commit(&inputs.api, merge_sha, base_sha, &head_commit.tree.sha)?;
-    Ok(HistoricalPromotion {
-        pull_request: pull.number,
-        head_sha: head_sha.clone(),
-        base_sha: base_sha.clone(),
-        branch,
-        candidate_proof_digest: proof_digest,
-        merge_sha: merge_sha.to_owned(),
-        merged_at: merged_at.to_owned(),
-    })
+    Ok(proof_digest)
 }
 
 fn same_repository(pull: &PullRequestResponse, policy: &HomebrewTapConfig) -> bool {
