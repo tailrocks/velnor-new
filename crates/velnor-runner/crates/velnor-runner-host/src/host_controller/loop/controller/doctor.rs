@@ -67,10 +67,15 @@ impl ControllerLoop<'_> {
             Ok(worker) => Some(DoctorProbeWorker(Some(worker))),
             Err(error) => {
                 eprintln!("doctor probe worker start failed: {error}");
-                let _ = self
+                if let Err(failure) = self
                     .journal
                     .fail_queued_doctor_probe_request(&failure_ticket)
-                    .await;
+                    .await
+                {
+                    eprintln!(
+                        "The host could not set the probe request to failed. Error: {failure}."
+                    );
+                }
                 None
             }
         };
@@ -93,7 +98,13 @@ fn run_doctor_probe_worker(
                 &docker, &journal, &secret, &ticket,
             )),
             Err(error) => {
-                let _ = runtime.block_on(journal.fail_queued_doctor_probe_request(&ticket));
+                if let Err(failure) =
+                    runtime.block_on(journal.fail_queued_doctor_probe_request(&ticket))
+                {
+                    eprintln!(
+                        "The host could not set the probe request to failed. Error: {failure}."
+                    );
+                }
                 Err(error)
             }
         },
@@ -101,7 +112,9 @@ fn run_doctor_probe_worker(
     };
     match result {
         Ok(Some(report)) => {
-            let _ = state.save_doctor_report(ticket.nonce(), report);
+            if let Err(error) = state.save_doctor_report(ticket.nonce(), report) {
+                eprintln!("The host could not write the probe report. Error: {error}.");
+            }
         }
         Ok(None) => {}
         Err(error) => eprintln!("doctor probe worker failed: {error}"),

@@ -80,6 +80,10 @@ pub(super) async fn pause_after_commit(reservation_id: i64, stage: &'static str)
         matches.then(|| guard.take()).flatten()
     });
     let Some(gate) = gate else { return };
-    let _ = gate.entered.send(());
-    let _ = gate.release.await;
+    match gate.entered.send(()) {
+        Ok(()) | Err(()) => {}
+    }
+    match gate.release.await {
+        Ok(()) | Err(_) => {}
+    }
 }

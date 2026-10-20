@@ -56,7 +56,9 @@ pub(super) async fn run(
             Ok(None)
         }
         Err(error) => {
-            record_failure(journal, ticket).await;
+            if let Err(failure) = record_failure(journal, ticket).await {
+                eprintln!("The host could not record the probe request state. Error: {failure}.");
+            }
             Err(error)
         }
     }
@@ -73,17 +75,21 @@ async fn fail_unstarted(journal: &Journal, ticket: &DoctorProbeTicket) -> Result
     Ok(())
 }
 
-async fn record_failure(journal: &Journal, ticket: &DoctorProbeTicket) {
-    let Ok(Some(record)) = journal.doctor_probe_request_by_nonce(ticket.nonce()).await else {
-        return;
+async fn record_failure(journal: &Journal, ticket: &DoctorProbeTicket) -> Result<(), HostError> {
+    let Some(record) = journal
+        .doctor_probe_request_by_nonce(ticket.nonce())
+        .await?
+    else {
+        return Ok(());
     };
     let Some(child) = record.child() else {
         if record.state() == DoctorProbeState::Queued {
-            let _ = journal.fail_queued_doctor_probe_request(ticket).await;
+            journal.fail_queued_doctor_probe_request(ticket).await?;
         }
-        return;
+        return Ok(());
     };
-    let _ = journal
+    journal
         .mark_doctor_probe_uncertain(ticket, &child.operation_id)
-        .await;
+        .await?;
+    Ok(())
 }
