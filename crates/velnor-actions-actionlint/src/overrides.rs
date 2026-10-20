@@ -155,13 +155,13 @@ impl ActionInputSchema {
 /// Canonical input schema for the no-credentials checkout step.
 ///
 /// `persist-credentials` is required (always `false` in generated
-/// jobs); `ref` and `fetch-depth` are the only other accepted inputs.
+/// jobs); `ref`, `fetch-depth` and `lfs` are the only other accepted inputs.
 #[must_use]
 pub fn checkout_inputs_schema() -> ActionInputSchema {
     ActionInputSchema {
         action: CHECKOUT_ACTION.to_owned(),
         required: vec!["persist-credentials".to_owned()],
-        optional: vec!["ref".to_owned(), "fetch-depth".to_owned()],
+        optional: vec!["ref".to_owned(), "fetch-depth".to_owned(), "lfs".to_owned()],
     }
 }
 
