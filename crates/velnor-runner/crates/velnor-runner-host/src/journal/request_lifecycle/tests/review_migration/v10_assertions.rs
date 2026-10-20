@@ -52,15 +52,20 @@ pub(super) async fn assert_cleaned_runner_identity(
     Ok(())
 }
 
-pub(super) async fn restore_legacy_runner_state(
+pub(super) async fn seed_cleaned_version_ten_runner(
     path: &Path,
     intent_id: i64,
+    reservation_id: i64,
     legacy_state: &str,
 ) -> Result<(), HostError> {
-    if !matches!(
-        legacy_state,
-        "bound" | "start_requested" | "start_uncertain" | "ready" | "started"
-    ) {
+    // Seed only rows in the isolated historical V10 database created by this test.
+    if intent_id <= 0
+        || reservation_id <= 0
+        || !matches!(
+            legacy_state,
+            "bound" | "start_requested" | "start_uncertain" | "ready" | "started"
+        )
+    {
         return Err(HostError::Journal);
     }
     let path = path.to_str().ok_or(HostError::Journal)?;
@@ -69,14 +74,28 @@ pub(super) async fn restore_legacy_runner_state(
         .await
         .map_err(|_| HostError::Journal)?;
     let connection = database.connect().map_err(|_| HostError::Journal)?;
-    let changed = connection
+    let intent_changed = connection
         .execute(
-            "UPDATE connection_runner_jits SET state = ?1 WHERE intent_id = ?2 AND state = 'cleaned' AND runner_id IS NOT NULL AND runner_name IS NOT NULL",
+            "UPDATE connection_intents SET cleanup_proven = 1 WHERE id = ?1 AND cleanup_proven = 0",
+            [intent_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let reservation_changed = connection
+        .execute(
+            "UPDATE capacity_reservations SET state = 'released', remote_cleanup_proven = 1, local_cleanup_proven = 1 WHERE id = ?1 AND intent_id = ?2 AND state = 'reserved' AND remote_cleanup_proven = 0 AND local_cleanup_proven = 0",
+            (reservation_id, intent_id),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let runner_changed = connection
+        .execute(
+            "UPDATE connection_runner_jits SET state = ?1 WHERE intent_id = ?2 AND state IN ('ready', 'started') AND runner_id IS NOT NULL AND runner_name IS NOT NULL",
             (legacy_state, intent_id),
         )
         .await
         .map_err(|_| HostError::Journal)?;
-    if changed == 1 {
+    if intent_changed == 1 && reservation_changed == 1 && runner_changed == 1 {
         Ok(())
     } else {
         Err(HostError::Journal)

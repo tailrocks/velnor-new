@@ -2,9 +2,8 @@ use std::path::PathBuf;
 
 use super::helpers::{
     TEST_ENGINE_ID, event_source, provision_acquired_request_with_initialization,
-    record_observed_storage_cleanup, record_owned_network_cleanup, record_owned_storage_cleanup,
-    record_runner_absent_for_cleanup, record_runner_completion_for_cleanup, runner_name,
-    settle_storage_metadata,
+    record_owned_network_cleanup, record_owned_storage_cleanup, record_runner_absent_for_cleanup,
+    record_runner_completion_for_cleanup, runner_name, settle_storage_metadata,
 };
 use super::review_counterexamples::ready;
 use crate::error::HostError;
@@ -19,7 +18,9 @@ mod v10_fixture;
 use v10_fixture::make_version_ten_jit_schema;
 #[path = "review_migration/v10_assertions.rs"]
 mod v10_assertions;
-use v10_assertions::{assert_cleaned_runner_identity, restore_legacy_runner_state};
+use v10_assertions::assert_cleaned_runner_identity;
+#[path = "review_migration/recovering_reopen.rs"]
+mod recovering_reopen;
 
 // Version 10 has no storage-provisioning history for a second settlement.
 
@@ -76,8 +77,7 @@ async fn assert_known_cleaned_state_allows_replacement(
     index: usize,
 ) -> Result<(), HostError> {
     let fixture = ready().await?;
-    let (_scratch, journal, scope) =
-        close_and_reopen_legacy_fixture(fixture, legacy_state, index).await?;
+    let (_scratch, journal, scope) = close_and_reopen_legacy_fixture(fixture, legacy_state).await?;
     let nonce = char::from(b'a' + u8::try_from(index).map_err(|_| HostError::Journal)?);
     let replacement =
         provision_acquired_request_with_initialization(&scope, 72, nonce, nonce).await?;
@@ -104,7 +104,6 @@ async fn assert_known_cleaned_state_allows_replacement(
 async fn close_and_reopen_legacy_fixture(
     fixture: super::review_counterexamples::Ready,
     legacy_state: &str,
-    index: usize,
 ) -> Result<
     (
         super::helpers::Scratch,
@@ -130,38 +129,17 @@ async fn close_and_reopen_legacy_fixture(
         .reservation(&fixture.physical)
         .await?
         .ok_or(HostError::Journal)?;
-    fixture
-        .scope
-        .mark_recovering(reservation.reservation_id)
-        .await?;
-    record_observed_storage_cleanup(&fixture.scope, reservation.reservation_id).await?;
-    fixture
-        .scope
-        .record_remote_cleanup(reservation.reservation_id)
-        .await?;
-    fixture
-        .scope
-        .record_local_cleanup(reservation.reservation_id)
-        .await?;
-    record_owned_network_cleanup(&fixture.scope, reservation.reservation_id).await?;
-    assert_eq!(
-        settle_storage_metadata(
-            &fixture.scope,
-            &fixture.provisioned,
-            char::from(b'0' + u8::try_from(index).map_err(|_| HostError::Journal)?),
-        )
-        .await?,
-        crate::journal::MetadataSettlementResult::Settled
-    );
     let path = fixture.scratch.file();
     let intent = fixture.intent;
+    let reservation_id = reservation.reservation_id;
     let physical = fixture.physical.clone();
     let binding = fixture.binding.clone();
     let scratch = fixture.scratch;
     drop(fixture.scope);
     drop(fixture.journal);
-    restore_legacy_runner_state(&path, intent, legacy_state).await?;
     let path = make_version_ten_jit_schema(&path).await?;
+    v10_assertions::seed_cleaned_version_ten_runner(&path, intent, reservation_id, legacy_state)
+        .await?;
 
     let journal = Journal::open(&path).await?;
     journal

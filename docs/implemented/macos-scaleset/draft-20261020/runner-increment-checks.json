@@ -1634,5 +1634,17 @@
     "reviewer": "execution_source_security_review",
     "scope": "The schema check keeps quoted text and comments unchanged. Different operators stay separate.",
     "remaining": "This check does not prove the new retirement schema. The full runner gate remains incomplete."
+  },
+  "v10_and_recovering_reopen": {
+    "result": "PASS",
+    "tests": 6,
+    "combined_run_tests": 10,
+    "run_id": "b7adf6e6-9414-49c1-9535-a859dc6e81d2",
+    "log_sha256": "f1feb898b0b33b1e99b22c30748b7a2c70d1ca053f3624843fe9a5fbac2911d0",
+    "manifest_sha256": "9e762c3df20994d0846a5530ec4fc429b931861a7168a59e929ddead76765c23",
+    "author": "native_intake_composition",
+    "reviewer": "execution_source_security_review",
+    "scope": "The V10 test uses its own database. Current cleanup tests use completion and cleanup proofs. Incomplete proof keeps the reservation charged.",
+    "remaining": "The unassigned runner retirement test and full runner gate remain incomplete."
   }
 }
