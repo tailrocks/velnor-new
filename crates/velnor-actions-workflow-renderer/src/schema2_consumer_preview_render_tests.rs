@@ -2,7 +2,15 @@ use super::*;
 
 #[test]
 fn preview_has_isolated_privileges_and_exact_inventory_attestation() {
-    let rendered = render_consumer_preview(&fixture(), &hosted_policy()).expect("preview");
+    let spec = fixture();
+    let producer_ids = spec
+        .policy
+        .payload_pairs()
+        .expect("payload pairs")
+        .iter()
+        .map(|pair| spec.policy.payload_job_id(pair).expect("payload job ID"))
+        .collect::<Vec<_>>();
+    let rendered = render_consumer_preview(&spec, &hosted_policy()).expect("preview");
     assert_eq!(rendered.path, ".github/workflows/binary-preview.yml");
     let yaml = &rendered.bytes;
     let triggers = &yaml[..yaml.find("jobs:").expect("jobs")];
@@ -17,14 +25,19 @@ fn preview_has_isolated_privileges_and_exact_inventory_attestation() {
     assert!(eligibility.find("actions/checkout") < eligibility.find("Verify source and CI"));
     assert!(eligibility.contains("fetch-depth: 0"));
     assert!(eligibility.contains("persist-credentials: false"));
-    let producer = job(yaml, "preview-payload-000", Some("preview-payload-001"));
-    assert!(producer.contains("fetch-depth: 0"));
-    assert!(producer.contains("persist-credentials: false"));
-    assert!(!producer.contains("environment:"));
-    assert!(!producer.contains("GH_TOKEN: \"${{ github.token }}\""));
-    assert!(!producer.contains("id-token"));
-    assert!(!producer.contains("contents: write"));
-    assert!(!producer.contains("RELEASE_STATUS_READ_TOKEN"));
+    for (index, id) in producer_ids.iter().enumerate() {
+        let next = producer_ids
+            .get(index + 1)
+            .map_or("preview-assemble", String::as_str);
+        let producer = job(yaml, id, Some(next));
+        assert!(producer.contains("fetch-depth: 0"));
+        assert!(producer.contains("persist-credentials: false"));
+        assert!(!producer.contains("environment:"));
+        assert!(!producer.contains("GH_TOKEN: \"${{ github.token }}\""));
+        assert!(!producer.contains("id-token"));
+        assert!(!producer.contains("contents: write"));
+        assert!(!producer.contains("RELEASE_STATUS_READ_TOKEN"));
+    }
     let signer = job(yaml, "preview-signer", Some("preview-publisher"));
     assert!(!signer.contains("actions/checkout"));
     assert!(signer.contains("id-token: write"));
