@@ -31,6 +31,7 @@ const MAX_ENTRIES: usize = 100_000;
 const MAX_PATH_BYTES: usize = 4096;
 const MAX_PATH_COMPONENTS: usize = 256;
 const MAX_ENTRY_BYTES: u64 = 256 * 1024 * 1024;
+const MAX_BROWSER_ENTRY_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_TOTAL_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 const MAX_GLOBAL_ENTRIES: usize = 200_000;
 const XZ_MEMORY_LIMIT_KIB: u32 = 256 * 1024;
@@ -49,6 +50,8 @@ pub(crate) struct ArchiveBudget {
     pub(crate) bytes: u64,
     /// Remaining archive entries.
     pub(crate) entries: usize,
+    /// Largest single regular file admitted.
+    pub(crate) entry_bytes: u64,
 }
 
 impl ArchiveBudget {
@@ -57,6 +60,16 @@ impl ArchiveBudget {
         Self {
             bytes: MAX_TOTAL_BYTES,
             entries: MAX_GLOBAL_ENTRIES,
+            entry_bytes: MAX_ENTRY_BYTES,
+        }
+    }
+
+    /// Budget for a browser archive, whose single browser binary exceeds
+    /// the tool-archive entry bound (Chrome is about 300 MB).
+    pub(crate) const fn browser() -> Self {
+        Self {
+            entry_bytes: MAX_BROWSER_ENTRY_BYTES,
+            ..Self::new()
         }
     }
 
@@ -307,7 +320,7 @@ fn reserve_size(
     total: &mut u64,
     budget: &mut ArchiveBudget,
 ) -> Result<(), OrchestratorError> {
-    if size > MAX_ENTRY_BYTES {
+    if size > budget.entry_bytes {
         return Err(internal("tool_archive_entry_size_limit"));
     }
     let next = total
