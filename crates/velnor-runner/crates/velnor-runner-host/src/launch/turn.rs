@@ -1,16 +1,10 @@
 //! Native queue polling, lifecycle intake, and scoped header polling.
 
-#[cfg(test)]
-mod admission;
 mod completion_intake;
 mod positive_poll;
 mod scoped;
 
-#[cfg(test)]
-use super::slot;
 use super::{ack_ready, steps};
-#[cfg(test)]
-pub(crate) use admission::admission;
 #[cfg(test)]
 use scoped::finish_scoped_poll_response;
 use scoped::poll_scoped_queue;
@@ -59,14 +53,6 @@ pub(crate) async fn test_scoped_intake(
     completion_intake::intake_and_ack_if_only_scoped(journal, set_id, polled, || async { Ok(()) })
         .await
 }
-
-#[cfg(test)]
-#[path = "turn/completion_intake_tests.rs"]
-mod completion_intake_tests;
-
-#[cfg(test)]
-#[path = "turn/completion_quarantine_tests.rs"]
-mod completion_quarantine_tests;
 
 #[cfg(test)]
 #[path = "turn/progress_tests.rs"]

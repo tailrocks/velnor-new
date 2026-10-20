@@ -15,10 +15,6 @@ use crate::scale_set::EnsureError;
 
 use super::acquire;
 
-mod start;
-#[cfg(test)]
-pub(super) use start::start;
-
 pub(super) struct PhysicalIntent {
     pub(super) reservation_id: i64,
     intent_id: i64,

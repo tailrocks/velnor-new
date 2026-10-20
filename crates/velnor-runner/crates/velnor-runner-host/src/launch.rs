@@ -10,11 +10,9 @@ use crate::scale_set::EnsureError;
 use crate::worker::ResourceBudget;
 
 mod admission_gate;
-mod bind;
 pub(crate) mod bootstrap;
 #[cfg(all(test, unix))]
 mod busy_slot_tests;
-mod capacity;
 mod completion;
 mod drive;
 mod engine_context;
@@ -89,9 +87,6 @@ mod trace;
 mod turn;
 pub(crate) mod verified_images;
 
-pub(crate) use capacity::install_job_capacity;
-#[cfg(test)]
-pub(crate) use capacity::job_capacity;
 pub(crate) use completion::CompletionWorker;
 pub(crate) use gate::{gate_line, reconcile_gate};
 pub(crate) use resource_probe::prepare_worker_images;
@@ -138,18 +133,11 @@ pub(crate) async fn poll_scoped_connection_once(
 }
 
 #[cfg(test)]
-pub(crate) use capacity::{
-    Admit, Seat, admit, needs_running, parse_admit_target, parse_job_capacity, poll_limit,
-    statistics_blocked, wide_poll_limit,
-};
-#[cfg(test)]
-pub(crate) use name_taken::{fail_unstarted, should_ack};
+pub(crate) use name_taken::fail_unstarted;
 #[cfg(test)]
 pub(crate) use steps::run_native_quarantine_composition;
 #[cfg(test)]
 pub(crate) use steps::{Idle, idle};
-#[cfg(test)]
-pub(crate) use turn::admission;
 
 fn ack_ready(
     link: &mut Link,

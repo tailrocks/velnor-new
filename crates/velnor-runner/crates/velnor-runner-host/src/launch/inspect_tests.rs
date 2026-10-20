@@ -3,7 +3,7 @@
 use std::future::Future;
 use std::time::Duration;
 
-use crate::launch::{gate, slot};
+use crate::launch::gate;
 use crate::launch_harness::Scratch;
 use crate::{EnsureError, IntentState, Journal, Outcome};
 
@@ -15,20 +15,11 @@ pub(in crate::launch) use self::docker_stub::{DockerResponse, closed, delayed_ht
 const TIMEOUT: Duration = Duration::from_secs(2);
 
 #[tokio::test]
-async fn non_not_found_inspect_error_blocks_admission_and_reconcile() -> Result<(), String> {
+async fn non_not_found_inspect_error_blocks_startup_reconciliation() -> Result<(), String> {
     let (scratch, journal) = journal("inspect-error").await?;
     let row_id = launch_row(&journal).await?;
     let before = journal.rows().await.map_err(|error| error.to_string())?;
-    let stub = DockerStub::open(vec![
-        http(500, r#"{"message":"private runner-id detail"}"#),
-        http(500, r#"{"message":"private runner-id detail"}"#),
-    ])?;
-
-    let busy = within(
-        slot::busy_except(&journal, &stub.docker, 2, None),
-        "capacity probe",
-    )
-    .await?;
+    let stub = DockerStub::open(vec![http(500, r#"{"message":"private runner-id detail"}"#)])?;
     let reconcile = within(
         gate::reconcile_gate(&journal, &stub.docker),
         "reconcile probe",
@@ -37,20 +28,13 @@ async fn non_not_found_inspect_error_blocks_admission_and_reconcile() -> Result<
     stub.finish().await?;
 
     assert_eq!(
-        busy,
-        Err(EnsureError::Unexpected {
-            status: 0,
-            step: "docker",
-        })
-    );
-    assert_eq!(
         reconcile,
         Err(EnsureError::Unexpected {
             status: 500,
             step: "docker inspect",
         })
     );
-    let errors = format!("{busy:?} {reconcile:?}");
+    let errors = format!("{reconcile:?}");
     if errors.contains("runner-id") || errors.contains("private runner-id detail") {
         return Err("inspect error exposed Docker response data".to_owned());
     }
@@ -99,40 +83,13 @@ async fn failed_done_row_inspect_cannot_advertise_capacity() -> Result<(), Strin
 }
 
 #[tokio::test]
-async fn docker_api_observations_preserve_only_known_running_states() -> Result<(), String> {
+async fn malformed_container_state_cannot_reconcile_or_leak_response_data() -> Result<(), String> {
     let (scratch, journal) = journal("inspect-states").await?;
     launch_row(&journal).await?;
     let before = journal.rows().await.map_err(|error| error.to_string())?;
-    let stub = DockerStub::open(vec![
-        http(404, r#"{"message":"missing"}"#),
-        http(200, r#"{"State":{"Status":"running","Running":true}}"#),
-        http(200, r#"{"State":{"Status":"exited","Running":false}}"#),
-        http(200, "{}"),
-        http(200, r#"{"State":{}}"#),
-        http(200, "{}"),
-    ])?;
+    let stub = DockerStub::open(vec![http(200, "{}")])?;
 
-    for expected in [
-        Ok(0),
-        Ok(1),
-        Ok(0),
-        Err(EnsureError::Unexpected {
-            status: 0,
-            step: "docker",
-        }),
-        Err(EnsureError::Unexpected {
-            status: 0,
-            step: "docker",
-        }),
-    ] {
-        let actual = within(
-            slot::running_count(&journal, &stub.docker),
-            "slot observation",
-        )
-        .await?;
-        assert_eq!(actual, expected);
-    }
-    let gate = within(
+    let reconcile = within(
         gate::reconcile_gate(&journal, &stub.docker),
         "reconcile probe",
     )
@@ -140,7 +97,7 @@ async fn docker_api_observations_preserve_only_known_running_states() -> Result<
     stub.finish().await?;
 
     assert_eq!(
-        gate,
+        reconcile,
         Err(EnsureError::Unexpected {
             status: 200,
             step: "docker inspect",
@@ -153,15 +110,15 @@ async fn docker_api_observations_preserve_only_known_running_states() -> Result<
 }
 
 #[tokio::test]
-async fn closed_docker_connection_is_not_treated_as_absent() -> Result<(), String> {
+async fn closed_docker_connection_blocks_startup_reconciliation() -> Result<(), String> {
     let (scratch, journal) = journal("inspect-transport").await?;
     launch_row(&journal).await?;
     let before = journal.rows().await.map_err(|error| error.to_string())?;
     let stub = DockerStub::open(vec![closed()])?;
 
     let actual = within(
-        slot::running_count(&journal, &stub.docker),
-        "slot observation",
+        gate::reconcile_gate(&journal, &stub.docker),
+        "reconcile probe",
     )
     .await?;
     stub.finish().await?;
@@ -170,10 +127,10 @@ async fn closed_docker_connection_is_not_treated_as_absent() -> Result<(), Strin
         actual,
         Err(EnsureError::Unexpected {
             status: 0,
-            step: "docker",
+            step: "docker inspect",
         })
     );
-    assert_eq!(slot::occupied(&journal).await, Ok(1));
+    assert_eq!(journal.occupied_launches().await, Ok(1));
     let after = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(after, before);
     no_response_body_in_journal(&scratch.file())

@@ -8,20 +8,18 @@ use crate::{
     error::HostError,
     journal::{RequestAcquireState, ReservationState},
     launch::{
-        ReleaseReadSecret,
-        inspect_tests::{DockerStub, http},
+        bootstrap::adapter::prepare_acquired, inspect_tests::DockerStub,
         steps::ScopedProvisioningOutcome,
     },
 };
 
 #[tokio::test]
 async fn stale_acquired_witness_is_rejected_before_jit_or_docker_effects() -> Result<(), String> {
-    assert_stale_acquired_path().await?;
-    assert_fresh_control_reaches_docker().await
+    assert_stale_acquired_path().await
 }
 
 async fn assert_stale_acquired_path() -> Result<(), String> {
-    let (fixture, mut outcome, mut lane) = Fixture::acquire("stale").await?;
+    let (fixture, mut outcome, lane) = Fixture::acquire("stale").await?;
     let ScopedProvisioningOutcome::Acquired(acquired) = &mut outcome else {
         return Err("The request did not retain its acquired proof.".to_owned());
     };
@@ -45,21 +43,12 @@ async fn assert_stale_acquired_path() -> Result<(), String> {
         acquired.sample_generation_id(),
     ));
     let docker = DockerStub::open(Vec::new()).map_err(|error| error.to_string())?;
-    let result = super::prepare_jit_and_measure_scoped(
-        outcome,
-        &docker.docker,
-        &fixture.scope,
-        &fixture.journal,
-        &ReleaseReadSecret::test_token(),
-        &engine,
-        &images,
-        &mut lane,
-        "admin-token",
-        std::time::Instant::now() + std::time::Duration::from_secs(20),
-    )
-    .await;
+    let result = prepare_acquired(outcome, &docker.docker, &fixture.scope, &engine, &images).await;
     if !matches!(result, Err(HostError::Identity)) {
-        return Err("The stale witness failed at the wrong boundary.".to_owned());
+        return Err(format!(
+            "The stale witness failed at the wrong boundary: {:?}.",
+            result.as_ref().err()
+        ));
     }
     assert!(
         docker
@@ -118,40 +107,5 @@ async fn assert_acquired_charge(
             .and_then(|request| request.request_id()),
         Some(request_id)
     );
-    Ok(())
-}
-
-async fn assert_fresh_control_reaches_docker() -> Result<(), String> {
-    let (fixture, outcome, mut lane) = Fixture::acquire("fresh").await?;
-    let images = test_images();
-    let engine = selected_engine(&images)?;
-    let docker = DockerStub::open(vec![http(500, r#"{"message":"stop at Docker boundary"}"#)])
-        .map_err(|error| error.to_string())?;
-    let result = super::prepare_jit_and_measure_scoped(
-        outcome,
-        &docker.docker,
-        &fixture.scope,
-        &fixture.journal,
-        &ReleaseReadSecret::test_token(),
-        &engine,
-        &images,
-        &mut lane,
-        "admin-token",
-        std::time::Instant::now() + std::time::Duration::from_secs(20),
-    )
-    .await;
-    if !matches!(result, Err(HostError::Docker)) {
-        return Err("The fresh control failed at the Docker boundary.".to_owned());
-    }
-    let requests = docker
-        .finish_observed()
-        .await
-        .map_err(|error| error.to_string())?;
-    assert_eq!(requests.len(), 1, "one Docker request reaches the failure");
-    let request = requests[0].split_whitespace().collect::<Vec<_>>();
-    assert_eq!(request[0], "GET");
-    assert!(request[1].ends_with("/info"), "{}", requests[0]);
-    assert_eq!(lane.methods, [Method::Post]);
-    assert_eq!(fixture.journal.occupied_reservation_count().await, Ok(1));
     Ok(())
 }

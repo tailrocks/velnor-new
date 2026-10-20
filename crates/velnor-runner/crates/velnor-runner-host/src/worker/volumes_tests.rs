@@ -8,9 +8,8 @@ use bollard::Docker;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 
-use crate::launch::admission;
+use crate::HostError;
 use crate::worker::{create_named_volumes, remove_worker_volumes, worker_id_for_name};
-use crate::{HostError, IntentState, Outcome};
 
 #[path = "volumes_effect_tests.rs"]
 mod effect_tests;
@@ -21,8 +20,6 @@ mod post_delete;
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 const WORKER: &str = "wtransport";
-
-mod release_tests;
 
 #[tokio::test]
 async fn only_exactly_owned_volumes_are_removed() -> Result<(), String> {

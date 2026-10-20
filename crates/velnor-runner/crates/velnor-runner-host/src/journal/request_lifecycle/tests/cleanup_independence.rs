@@ -1,6 +1,7 @@
 use super::helpers::{
     Scratch, binding, created_scope, event_source, finish_initialized_listener_delivery,
-    provision_acquired_request_with_initialization, record_owned_network_cleanup,
+    provision_acquired_request_with_initialization,
+    provision_acquired_request_with_initialization_for_repository, record_owned_network_cleanup,
     record_owned_storage_cleanup, runner_name,
 };
 use crate::error::HostError;
@@ -22,11 +23,88 @@ async fn cleanup_releases_one_charge_without_changing_another_live_pair() -> Res
     finish_initialized_listener_delivery(&scope, &binding, &second, &second_runner, 71).await?;
     let second_network_id =
         assert_distinct_reserved_pairs(&journal, &scope, &first, &second).await?;
-    start_both_jobs(&scope, &first, &second, &first_runner, &second_runner).await?;
+    start_both_jobs(
+        &scope,
+        &scope,
+        &first,
+        &second,
+        &first_runner,
+        &second_runner,
+        101,
+        101,
+    )
+    .await?;
     complete_and_clean_first(&scope, &first, &first_runner).await?;
     assert_first_reservation_released(&scope, &first).await?;
     assert_second_pair_remains_live(&journal, &scope, &second, &second_network_id).await?;
     admit_third_job(&journal, &scope, &first, &second).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn cleanup_in_one_repository_scope_keeps_other_scope_charged() -> Result<(), HostError> {
+    let scratch = Scratch::new()?;
+    let journal = Journal::open(&scratch.file()).await?;
+    journal.configure_capacity(two_job_capacity()).await?;
+    let first_binding = binding("essential", 101)?;
+    let second_binding = binding("chain", 202)?;
+    let first_scope = created_scope(&journal, &first_binding, 501).await?;
+    let second_scope = created_scope(&journal, &second_binding, 502).await?;
+    let first = provision_acquired_request_with_initialization(&first_scope, 70, 'b', 'b').await?;
+    let second = provision_acquired_request_with_initialization_for_repository(
+        &second_scope,
+        71,
+        'c',
+        'c',
+        202,
+    )
+    .await?;
+    let first_runner = runner('b', 801);
+    let second_runner = runner_for_set('c', 802, 502);
+
+    finish_initialized_listener_delivery(&first_scope, &first_binding, &first, &first_runner, 70)
+        .await?;
+    finish_initialized_listener_delivery(
+        &second_scope,
+        &second_binding,
+        &second,
+        &second_runner,
+        71,
+    )
+    .await?;
+    start_both_jobs(
+        &first_scope,
+        &second_scope,
+        &first,
+        &second,
+        &first_runner,
+        &second_runner,
+        101,
+        202,
+    )
+    .await?;
+    complete_and_clean_first(&first_scope, &first, &first_runner).await?;
+
+    assert_first_reservation_released(&first_scope, &first).await?;
+    let surviving = second_scope
+        .reservation(&second.reservation_assignment)
+        .await?
+        .ok_or(HostError::Journal)?;
+    assert_eq!(surviving.reservation_id, second.reservation_id);
+    assert_eq!(surviving.state, ReservationState::Reserved);
+    assert_eq!(surviving.cpu_millicores, 2_000);
+    assert_eq!(surviving.memory_bytes, JOB_MEMORY);
+    let intent = second_scope.intent(second.intent_id).await?;
+    assert_eq!(
+        intent.docker_id.as_deref(),
+        Some(second.runner_container_id.as_str())
+    );
+    assert_eq!(
+        intent.dind_id.as_deref(),
+        Some(second.dind_container_id.as_str())
+    );
+    assert!(!intent.cleanup_proven);
+    assert_eq!(journal.occupied_reservation_count().await?, 1);
     Ok(())
 }
 
@@ -93,18 +171,21 @@ async fn assert_distinct_reserved_pairs(
 }
 
 async fn start_both_jobs(
-    scope: &ConnectionJournal,
+    first_scope: &ConnectionJournal,
+    second_scope: &ConnectionJournal,
     first: &super::helpers::JobFactsReaderFixture,
     second: &super::helpers::JobFactsReaderFixture,
     first_runner: &RunnerReference,
     second_runner: &RunnerReference,
+    first_repository_id: i64,
+    second_repository_id: i64,
 ) -> Result<(), HostError> {
     assert_eq!(
-        scope
+        first_scope
             .record_job_started(
                 &first.assignment,
                 1_070,
-                &event_source(101, 1_070),
+                &event_source(first_repository_id, 1_070),
                 first_runner,
                 None
             )
@@ -112,11 +193,11 @@ async fn start_both_jobs(
         first.intent_id
     );
     assert_eq!(
-        scope
+        second_scope
             .record_job_started(
                 &second.assignment,
                 1_071,
-                &event_source(101, 1_071),
+                &event_source(second_repository_id, 1_071),
                 second_runner,
                 None
             )
@@ -144,11 +225,22 @@ async fn complete_and_clean_first(
             .await?,
         Some(first.intent_id)
     );
+    let claim = scope
+        .claim_completion_cleanup(first.intent_id, 90)
+        .await?
+        .ok_or(HostError::Journal)?;
+    if !scope
+        .record_completion_runner_absent(first.intent_id, claim.generation)
+        .await?
+    {
+        return Err(HostError::Journal);
+    }
     record_owned_storage_cleanup(scope, &first.provisioned).await?;
     record_owned_network_cleanup(scope, first.reservation_id).await?;
     scope.record_remote_cleanup(first.reservation_id).await?;
     scope.record_local_cleanup(first.reservation_id).await?;
-    settle_metadata(scope, first).await
+    settle_metadata(scope, first).await?;
+    Ok(())
 }
 
 async fn settle_metadata(
@@ -237,9 +329,13 @@ async fn admit_third_job(
 }
 
 fn runner(nonce: char, id: i64) -> RunnerReference {
+    runner_for_set(nonce, id, 501)
+}
+
+fn runner_for_set(nonce: char, id: i64, set_id: i64) -> RunnerReference {
     RunnerReference {
         id,
         name: runner_name(nonce),
-        runner_scale_set_id: 501,
+        runner_scale_set_id: set_id,
     }
 }

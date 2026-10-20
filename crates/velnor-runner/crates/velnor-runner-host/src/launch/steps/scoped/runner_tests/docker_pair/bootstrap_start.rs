@@ -6,6 +6,8 @@ use super::*;
 #[path = "bootstrap_start/preflight.rs"]
 mod preflight;
 use preflight::assert_verified_preflight_before_mutations;
+#[path = "bootstrap_start/identity_boundary.rs"]
+mod identity_boundary;
 #[path = "bootstrap_start/native_intake.rs"]
 mod native_intake;
 pub(super) use native_intake::{

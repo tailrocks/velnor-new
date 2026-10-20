@@ -900,6 +900,24 @@
       "reviewer": "/root/execution_source_security_review",
       "review": "genuine-v32-v33-independent-review-20261020.md",
       "live_installation": "NOT_RUN"
+    },
+    {
+      "result": "PASS",
+      "source_parent": "af32c3c5b1283cd50e3fc9da5ca411a5f895f273",
+      "scope": "Remove the unused launch path. Keep current cleanup ownership and capacity checks.",
+      "passed": 17,
+      "exit_status": 0,
+      "nextest_run": "56f79315-ead3-4ae4-b6b9-cf6ba4939ef9",
+      "log": "shipping-m36-cleanup-20261020.log",
+      "log_sha256": "c1ce58abf384a62dfd73ae2ae07fc22fff9bac0b51ce25bb2de0fc3b5549edba",
+      "author": "/root/container_metadata_repair",
+      "integration_author": "/root/native_intake_composition",
+      "reviewer": "/root/execution_source_security_review",
+      "review": "native-m39-v33-adaptation-independent-review-20261020.md",
+      "full_runner_clippy": "FAIL",
+      "baseline_fixture_failures": 8,
+      "remaining_fixture_owner": "/root/native_intake_composition",
+      "live_installation": "NOT_RUN"
     }
   ],
   "broader_pair_check": {

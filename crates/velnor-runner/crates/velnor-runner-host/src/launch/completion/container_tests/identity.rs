@@ -111,6 +111,10 @@ async fn retry_rejects_a_different_container_at_the_durable_name() -> Result<(),
     let requests = stub.finish().await?;
     assert_eq!(requests.len(), 2);
     assert!(requests.iter().all(|request| request.starts_with("GET ")));
+    let rows = journal.rows().await?;
+    assert_eq!(rows.len(), 1);
+    assert!(!rows[0].cleanup_proven);
+    assert_eq!(journal.capacity_rows(1).await?.len(), 1);
     Ok(())
 }
 

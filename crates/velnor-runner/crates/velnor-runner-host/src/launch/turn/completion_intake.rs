@@ -2,11 +2,12 @@
 
 use std::collections::BTreeSet;
 use std::future::Future;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use velnor_runner_github::{InnerJob, InnerKind, Poll, RunnerReference, parse_inner_messages};
 
 use crate::error::HostError;
-use crate::journal::{AssignmentKey, ConnectionCompletionInboxEntry, ConnectionJournal, Journal};
+use crate::journal::{AssignmentKey, ConnectionCompletionInboxEntry, ConnectionJournal};
 use crate::scale_set::EnsureError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,38 +51,6 @@ impl ScopedEventRecords {
 enum RecordedScopedEvent {
     Started(i64),
     Completed(i64),
-}
-
-pub(super) async fn intake_poll(
-    journal: &Journal,
-    set_id: i64,
-    polled: &Poll,
-) -> Result<IntakeDecision, EnsureError> {
-    let retried = retry_quarantined(journal).await?;
-    record_completed(journal, set_id, polled).await?;
-    Ok(IntakeDecision {
-        completion_only: completion_only(polled),
-        wake_cleanup: retried || has_completion(polled),
-        session_delete_candidate: session_delete_candidate(polled),
-        started_request_ids: Vec::new(),
-    })
-}
-
-pub(super) async fn intake_and_ack_if_only<F, Fut>(
-    journal: &Journal,
-    set_id: i64,
-    polled: &Poll,
-    acknowledge: F,
-) -> Result<IntakeDecision, EnsureError>
-where
-    F: FnOnce() -> Fut,
-    Fut: Future<Output = Result<(), EnsureError>>,
-{
-    let decision = intake_poll(journal, set_id, polled).await?;
-    if decision.completion_only {
-        acknowledge().await?;
-    }
-    Ok(decision)
 }
 
 /// Persist scoped Started/Completed events against their exact source receipts.
@@ -339,8 +308,38 @@ fn scoped_entry(
     }
 }
 
-mod legacy;
-pub(super) use legacy::{
-    completion_error, completion_only, has_completion, record_completed, retry_quarantined,
-};
-use legacy::{map_completion_journal, unix_seconds, validate_inbox_message};
+fn has_completion(polled: &Poll) -> bool {
+    matches!(polled, Poll::Batch(batch) if batch.jobs.iter().any(|job| matches!(job.kind, InnerKind::Completed)))
+}
+
+pub(super) fn completion_error() -> EnsureError {
+    EnsureError::Unexpected {
+        status: 0,
+        step: "completion cleanup",
+    }
+}
+
+fn map_completion_journal(error: HostError) -> EnsureError {
+    match error {
+        HostError::Endpoint => EnsureError::Endpoint,
+        _ => EnsureError::Unexpected {
+            status: 0,
+            step: "completion journal",
+        },
+    }
+}
+
+fn validate_inbox_message(message_id: i64, raw_body: &str) -> Result<(), EnsureError> {
+    if message_id < 0
+        || raw_body.is_empty()
+        || raw_body.len() > crate::journal::MAX_COMPLETION_BODY_BYTES
+    {
+        return Err(completion_error());
+    }
+    Ok(())
+}
+
+fn unix_seconds() -> Option<i64> {
+    let seconds = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs();
+    i64::try_from(seconds).ok()
+}

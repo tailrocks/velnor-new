@@ -11,17 +11,6 @@ use crate::journal::IntentState;
 use crate::journal::{Journal, Outcome};
 use crate::scale_set::EnsureError;
 
-use super::steps::Idle;
-
-/// True when a JIT name collision may be acknowledged.
-///
-/// `Idle::Scale` already has a runner name. The assigned count does not
-/// block the acknowledgement. A live container stays occupied.
-#[must_use]
-pub(crate) fn should_ack(idle: Idle) -> bool {
-    matches!(idle, Idle::Scale)
-}
-
 /// Fail an unstarted `m{message_id}` row. Return true only when every match has no container id.
 ///
 /// A runner id or a `DinD` id means a container exists. Do not fail that row.

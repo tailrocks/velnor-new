@@ -16,7 +16,7 @@ pub(super) fn verify_native_pair_requests(
     assert_eq!(network_creates.len(), 1);
     let network_create = network_creates[0];
     let network_body: Value = serde_json::from_slice(&network_create.body)
-        .map_err(|error| format!("The network create request is invalid: {error}."))?;
+        .map_err(|error| format!("The network create request is invalid: {error}"))?;
     assert_eq!(network_body["Name"], expected_network_name);
     assert_eq!(network_body["Driver"], "bridge");
     assert_eq!(network_body["Scope"], "local");
@@ -30,7 +30,7 @@ pub(super) fn verify_native_pair_requests(
         serde_json::to_value(expected_network_labels).map_err(|error| error.to_string())?
     );
     let network_response: Value = serde_json::from_slice(&network_create.response_body)
-        .map_err(|error| format!("The network create response is invalid: {error}."))?;
+        .map_err(|error| format!("The network create response is invalid: {error}"))?;
     assert_eq!(network_response["Id"], expected_network_id);
     super::request_checks::verify_worker_image_ids(requests, images)?;
     assert_jit_is_absent_from_docker_requests(requests, jit_input)?;
@@ -66,10 +66,10 @@ fn assert_volume_roles(requests: &[CapturedRequest]) {
         .iter()
         .map(|request| {
             let body: Value =
-                serde_json::from_slice(&request.body).expect("The volume request must be JSON.");
+                serde_json::from_slice(&request.body).expect("volume request is JSON");
             body["Labels"]["velnor.role"]
                 .as_str()
-                .expect("The volume role label must be present.")
+                .expect("volume role label is present")
                 .to_owned()
         })
         .collect::<std::collections::BTreeSet<_>>();

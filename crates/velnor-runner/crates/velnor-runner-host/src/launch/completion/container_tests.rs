@@ -4,6 +4,8 @@
 mod diagnostics;
 #[path = "container_tests/identity.rs"]
 mod identity;
+#[path = "container_tests/volume_ownership.rs"]
+mod volume_ownership;
 
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;

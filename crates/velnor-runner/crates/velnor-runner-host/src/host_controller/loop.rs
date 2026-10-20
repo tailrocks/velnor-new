@@ -55,7 +55,6 @@ pub fn run_host_blocking(
         return Err(HostError::Lock.into());
     }
     let release_read_secret = ReleaseReadSecret::load(config)?;
-    let _capacity = crate::launch::install_job_capacity(config.max_jobs());
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()

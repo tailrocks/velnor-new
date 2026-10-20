@@ -2,10 +2,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::config::ConnectionId;
-use crate::journal::{AssignedAcquireResult, RequestAcquireState};
+use crate::journal::{AssignedAcquireResult, RequestAcquireState, fixture_provisioning_profile};
 use crate::journal::{AssignmentIdentity, AssignmentKey};
 use crate::launch::inspect_tests::DockerStub;
 use crate::launch::resource_probe::StartPermit;
+use crate::launch::steps::ScopedProvisioningOutcome;
 use crate::worker::Started;
 use velnor_runner_github::Method;
 
@@ -121,52 +122,11 @@ async fn acquire_rejects_connection_scale_set_and_request_identity_mismatches_be
 }
 
 #[tokio::test]
-async fn expiry_after_acquire_keeps_charge_and_sends_no_jit_or_docker_request() -> Result<(), String>
-{
+async fn stale_acquire_witness_keeps_charge_and_prevents_storage_or_jit() -> Result<(), String> {
     let fixture = Fixture::open("scoped-expiry").await?;
-    let permit = StartPermit::test_fixture();
-    let storage = fixture_storage(&permit)?;
-    let root_digest = permit.docker_root_digest().to_owned();
-    let stale = permit.stale_observation_witness();
-    let mut physical = runner::reserve(&fixture.scope, permit, storage)
-        .await
-        .map_err(|error| error.to_string())?;
-    physical.observation = stale;
-
-    let mut lane = FakeLane::new([Ok(exchange(200, r#"{"count":1,"value":[41]}"#))]);
-    assert_eq!(
-        acquire::run(&mut lane, "queue-token", &fixture.scope, &fixture.request,)
-            .await
-            .map_err(|error| error.to_string())?,
-        AcquireDisposition::Acquired
-    );
-
-    let images = test_images(&root_digest);
-    let selected = selected_engine(&images)?;
-    let docker = DockerStub::open(Vec::new())?;
-    let calls = Arc::new(AtomicUsize::new(0));
-    let callback_calls = Arc::clone(&calls);
-    let result = runner::start(
-        &mut lane,
-        "admin-token",
-        &fixture.scope,
-        &physical,
-        &docker.docker,
-        &selected,
-        &images,
-        move |_, _, _, _| {
-            callback_calls.fetch_add(1, Ordering::SeqCst);
-            std::future::ready(Ok(Started {
-                runner_id: "unexpected-runner".to_owned(),
-                dind_id: "unexpected-dind".to_owned(),
-            }))
-        },
-    )
-    .await;
-    assert!(result.is_err());
+    let (lane, docker, identity) = reject_stale_acquire_before_storage(&fixture).await?;
     assert_eq!(lane.methods, [Method::Post]);
     assert!(lane.paths[0].ends_with("/acquirejobs"));
-    assert_eq!(calls.load(Ordering::SeqCst), 0);
     assert!(docker.finish().await?.is_empty());
     assert_eq!(fixture.journal.occupied_reservation_count().await, Ok(1));
     assert_eq!(
@@ -177,25 +137,91 @@ async fn expiry_after_acquire_keeps_charge_and_sends_no_jit_or_docker_request() 
             .map_err(|error| error.to_string())?,
         Some(RequestAcquireState::Acquired)
     );
+    let reservations = fixture
+        .scope
+        .physical_runner_reservations()
+        .await
+        .map_err(|error| error.to_string())?;
+    let reservation = reservations
+        .first()
+        .ok_or_else(|| "The physical reservation is absent.".to_owned())?;
+    assert_eq!(
+        reservation.jit_state,
+        crate::journal::PhysicalRunnerJitState::Absent
+    );
     assert!(
         fixture
             .scope
             .claim_runner_jit_for_request(
-                physical.intent_id,
-                physical.reservation_id,
+                identity.intent_id,
+                identity.reservation_id,
                 fixture
                     .request
                     .request_id()
                     .ok_or_else(|| "Request ID is missing.".to_owned())?,
-                &physical.runner_name,
-                physical.authority_generation,
-                &physical.authority_digest,
+                &identity.runner_name,
+                identity.authority_generation,
+                &identity.authority_digest,
             )
             .await
             .map_err(|error| error.to_string())?
             .is_none()
     );
     Ok(())
+}
+
+async fn reject_stale_acquire_before_storage(
+    fixture: &Fixture,
+) -> Result<(FakeLane, DockerStub, StaleAcquireIdentity), String> {
+    atomic_acquire::prepare_capacity(fixture).await?;
+    fixture
+        .journal
+        .configure_storage_profile(fixture_provisioning_profile())
+        .await
+        .map_err(|error| error.to_string())?;
+    let state = atomic_acquire::ActiveHostState::new(&fixture.binding)?;
+    let drive = atomic_acquire::drive(fixture, &state.path);
+    let permit =
+        StartPermit::test_fixture_with_available_memory(&"e".repeat(32), 32 * 1024 * 1024 * 1024);
+    let images = test_images(permit.docker_root_digest());
+    let selected = selected_engine(&images)?;
+    let poll = crate::launch_harness::available(&[REQUEST_ID]);
+    let mut lane = FakeLane::new([Ok(exchange(200, r#"{"count":1,"value":[41]}"#))]);
+    let outcome = crate::launch::steps::acquire_scoped(&mut lane, &drive, &poll, permit, &selected)
+        .await
+        .map_err(|error| error.to_string())?;
+    let ScopedProvisioningOutcome::Acquired(mut acquired) = outcome else {
+        return Err("The request did not produce an acquired continuation.".to_owned());
+    };
+    let identity = StaleAcquireIdentity {
+        intent_id: acquired.intent_id(),
+        reservation_id: acquired.reservation_id(),
+        runner_name: acquired.runner_name().to_owned(),
+        authority_generation: acquired.authority_generation(),
+        authority_digest: acquired.authority_digest().to_owned(),
+    };
+    acquired.mark_observation_stale_for_test();
+    let docker = DockerStub::open(Vec::new())?;
+    let result = crate::launch::bootstrap::adapter::prepare_acquired(
+        ScopedProvisioningOutcome::Acquired(acquired),
+        &docker.docker,
+        &fixture.scope,
+        &selected,
+        &images,
+    )
+    .await;
+    if !matches!(result, Err(crate::HostError::Identity)) {
+        return Err("The stale observation was not rejected before storage creation.".to_owned());
+    }
+    Ok((lane, docker, identity))
+}
+
+struct StaleAcquireIdentity {
+    intent_id: i64,
+    reservation_id: i64,
+    runner_name: String,
+    authority_generation: u64,
+    authority_digest: String,
 }
 
 #[tokio::test]

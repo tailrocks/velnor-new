@@ -16,7 +16,7 @@ pub(super) fn verify_worker_image_ids(
     if dind["Image"] != images.dind().runtime_id()
         || runner["Image"] != images.runner().runtime_id()
     {
-        return Err("The pair create requests do not use the expected image IDs.".to_owned());
+        return Err("The pair create requests use incorrect verified image IDs.".to_owned());
     }
     Ok(())
 }
@@ -164,6 +164,14 @@ fn assert_pair_event_order(
         .find(|(_, request)| valid_runner_attach(request))
         .map(|(index, _)| *index)
         .ok_or_else(|| "The Runner attach event is absent.".to_owned())?;
+    let initializer_attach = attaches
+        .iter()
+        .find(|(_, request)| {
+            request.method == "POST"
+                && route(request) == format!("/containers/{initializer_id}/attach")
+        })
+        .map(|(index, _)| *index)
+        .ok_or_else(|| "The initializer attach event is absent.".to_owned())?;
     let dind_start = event_index(requests, &format!("/containers/{DIND_ID}/start"))?;
     let runner_start = event_index(requests, &format!("/containers/{RUNNER_ID}/start"))?;
     let initializer_start = event_index(requests, &format!("/containers/{initializer_id}/start"))?;
@@ -182,6 +190,7 @@ fn assert_pair_event_order(
         );
     }
     if !(initializer_start < dind_create
+        && initializer_attach < dind_create
         && dind_create < runner_create
         && runner_create < runner_attach
         && runner_attach < dind_start
@@ -241,7 +250,10 @@ fn event_index(requests: &[CapturedRequest], path: &str) -> Result<usize, String
     if matches.len() == 1 {
         Ok(matches[0])
     } else {
-        Err(format!("There must be one Docker event for {path}."))
+        Err(format!(
+            "There must be one Docker event for {path}; observed {}.",
+            matches.len()
+        ))
     }
 }
 

@@ -389,3 +389,9 @@ async fn home_volume_delete_failure_keeps_capacity_until_cleanup_proof() -> Resu
     assert_eq!(journal.capacity_rows(1).await?.len(), 1);
     Ok(())
 }
+
+#[path = "diagnostics/metadata_volume.rs"]
+mod metadata_volume;
+
+#[path = "diagnostics/post_delete.rs"]
+mod post_delete;
