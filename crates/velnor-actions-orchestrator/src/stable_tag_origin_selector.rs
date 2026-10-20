@@ -1,8 +1,8 @@
 //! Read-only source/CI selection; permanent tag writers reauthenticate these hints.
 
 use super::super::{
-    github::{GitHubApi, GitRefResponse, TagObjectResponse, WorkflowRunResponse},
-    run_identity::{RunSource, run_matches},
+    github::{GitHubApi, GitRefResponse, TagObjectResponse},
+    run_identity::{CurrentRun, RunSource, run_matches},
 };
 use super::{artifacts, attempt, authorization_for_context, positive, recovery, required};
 use crate::{OrchestratorError, internal::internal};
@@ -56,19 +56,16 @@ fn select() -> Result<(), OrchestratorError> {
     };
     let workflow =
         api.admitted_workflow(plan.channel.workflow_path(), plan.channel.workflow_name())?;
-    let current: WorkflowRunResponse =
-        api.get_json(&api.route(&format!("actions/runs/{run_id}")))?;
-    if !run_matches(
-        &current,
-        &workflow,
-        run_id,
-        current_attempt,
-        source,
-        "workflow_dispatch",
-    ) || current.status.as_deref() != Some("in_progress")
-    {
-        return Err(internal("stable_selector_current_attempt"));
-    }
+    api.verify_current_role(
+        &CurrentRun {
+            id: run_id,
+            attempt: current_attempt,
+            source,
+            workflow: &workflow,
+            event: "workflow_dispatch",
+        },
+        "Authenticate stable source and complete CI",
+    )?;
     let (ci_run_id, ci_attempt) = if let Some((old_attempt, reference)) =
         recovery::prior_reference(&api, run_id, current_attempt)?
     {
