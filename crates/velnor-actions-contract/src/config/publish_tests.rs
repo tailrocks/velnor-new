@@ -100,6 +100,7 @@ fn valid_bundles_pass_and_defaults_are_empty() {
     assert!(PublishConfig::default().is_empty());
     let config = PublishConfig {
         bundles: vec![bundle("a-schema"), bundle("b-schema")],
+        ..PublishConfig::default()
     };
     assert_eq!(problem(&config), "");
 }
@@ -110,7 +111,8 @@ fn invalid_bundles_name_their_key() {
     inline.version = Some("1.0.0".to_owned());
     assert!(
         problem(&PublishConfig {
-            bundles: vec![inline]
+            bundles: vec![inline],
+            ..PublishConfig::default()
         })
         .contains("version_and_version_file")
     );
@@ -118,7 +120,8 @@ fn invalid_bundles_name_their_key() {
     none.version_file = None;
     assert!(
         problem(&PublishConfig {
-            bundles: vec![none]
+            bundles: vec![none],
+            ..PublishConfig::default()
         })
         .contains("missing_version_source")
     );
@@ -127,28 +130,38 @@ fn invalid_bundles_name_their_key() {
     loose.version = Some("1.0".to_owned());
     assert!(
         problem(&PublishConfig {
-            bundles: vec![loose]
+            bundles: vec![loose],
+            ..PublishConfig::default()
         })
         .contains("bad_version")
     );
     let mut pom = bundle("a");
     pom.version_file = Some("pom.xml".to_owned());
-    assert!(problem(&PublishConfig { bundles: vec![pom] }).contains("unsupported_version_file"));
     assert!(
         problem(&PublishConfig {
-            bundles: vec![bundle("A")]
+            bundles: vec![pom],
+            ..PublishConfig::default()
+        })
+        .contains("unsupported_version_file")
+    );
+    assert!(
+        problem(&PublishConfig {
+            bundles: vec![bundle("A")],
+            ..PublishConfig::default()
         })
         .contains("bad_artifact_id")
     );
     assert!(
         problem(&PublishConfig {
-            bundles: vec![bundle("a"), bundle("a")]
+            bundles: vec![bundle("a"), bundle("a")],
+            ..PublishConfig::default()
         })
         .contains("duplicate_id")
     );
     assert!(
         problem(&PublishConfig {
-            bundles: vec![bundle("b"), bundle("a")]
+            bundles: vec![bundle("b"), bundle("a")],
+            ..PublishConfig::default()
         })
         .contains("must_be_sorted_by_id")
     );
@@ -170,7 +183,8 @@ fn invalid_paths_are_rejected() {
         item.paths = vec![bad.to_owned()];
         assert!(
             problem(&PublishConfig {
-                bundles: vec![item]
+                bundles: vec![item],
+                ..PublishConfig::default()
             })
             .contains("unsafe_path"),
             "{bad}"
@@ -180,18 +194,26 @@ fn invalid_paths_are_rejected() {
     unsorted.paths = vec!["b".to_owned(), "a".to_owned()];
     assert!(
         problem(&PublishConfig {
-            bundles: vec![unsorted]
+            bundles: vec![unsorted],
+            ..PublishConfig::default()
         })
         .contains("must_be_sorted")
     );
     let mut dup = bundle("a");
     dup.paths = vec!["a".to_owned(), "a".to_owned()];
-    assert!(problem(&PublishConfig { bundles: vec![dup] }).contains("duplicate_path"));
+    assert!(
+        problem(&PublishConfig {
+            bundles: vec![dup],
+            ..PublishConfig::default()
+        })
+        .contains("duplicate_path")
+    );
     let mut empty = bundle("a");
     empty.paths = Vec::new();
     assert!(
         problem(&PublishConfig {
-            bundles: vec![empty]
+            bundles: vec![empty],
+            ..PublishConfig::default()
         })
         .contains("bad_path_count")
     );

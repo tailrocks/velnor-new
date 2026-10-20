@@ -51,19 +51,10 @@ pub(super) enum InternalOp {
     PrivateRevoke,
     /// `gradle-run-v1`: verify the wrapper, install the JDK, run Gradle.
     GradleRun,
+    /// Registry phase of `bun install` under the job token (HD-6, HD-7).
+    BunRegistryInstall,
     /// Isolated App-authenticated PR writer for a validated tap candidate.
     TapWriter,
     /// Isolated exact-head App-authenticated tap promotion merge.
     TapMerge,
-}
-
-impl InternalOp {
-    /// Whether the operation's whole input is the runner-temp velnor directory
-    /// and the step env (no request file).
-    pub(super) const fn uses_velnor_dir(self) -> bool {
-        matches!(
-            self,
-            Self::PrivateFetch | Self::PrivateRevoke | Self::GradleRun | Self::PreseedManifest
-        )
-    }
 }

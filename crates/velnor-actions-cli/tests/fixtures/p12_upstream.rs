@@ -47,6 +47,11 @@ fn probe_tool_rows() -> Vec<ProbeRow> {
             "{\"tag_name\": \"v0.22.1\"}",
         ),
         (
+            "https://api.github.com/repos/oven-sh/bun/releases/latest",
+            "bun.json",
+            "{\"tag_name\": \"bun-v1.4.3\"}",
+        ),
+        (
             "https://api.github.com/repos/sigstore/cosign/releases/latest",
             "cosign.json",
             "{\"tag_name\": \"v3.1.3\"}",
@@ -235,7 +240,7 @@ fn probe_rows_carry_source_and_check_time() -> Result<(), Box<dyn Error>> {
         .iter()
         .filter(|line| line.contains("\"check\":\"upstream-probe\""))
         .collect();
-    assert_eq!(probe.len(), 26, "25 rows + runner note:\n{}", run.stdout);
+    assert_eq!(probe.len(), 27, "26 rows + runner note:\n{}", run.stdout);
     for line in probe {
         if line.contains("\"subject\":\"runner\"") {
             assert!(

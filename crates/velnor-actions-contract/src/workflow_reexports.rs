@@ -1,10 +1,10 @@
 //! Crate-root re-exports for the workflow contract surface.
 pub use crate::workflow::qualification_cache_lineage::*;
 pub use crate::workflow::{
-    ALLOWED_WORKFLOW_EVENTS, CACHE_MODE_PUSH_WRITE_EXPR, CANDIDATE_ATTESTATION_FILENAME,
-    CANDIDATE_EVIDENCE_SUBDIR, CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, CacheLayer, CacheMode,
-    CacheOutcome, CacheResult, Concurrency, CrateJob, CrateObligation,
-    DEFAULT_BLOCKED_PUBLIC_REPO_EVENTS, DYNAMIC_MATRIX_OUTPUT_MODE, DispatchInput,
+    ALLOWED_WORKFLOW_EVENTS, BUN_REGISTRY_INSTALL_OPERATION, CACHE_MODE_PUSH_WRITE_EXPR,
+    CANDIDATE_ATTESTATION_FILENAME, CANDIDATE_EVIDENCE_SUBDIR, CI_WORKFLOW_PATH,
+    CRATE_JOB_ID_PREFIX, CacheLayer, CacheMode, CacheOutcome, CacheResult, Concurrency, CrateJob,
+    CrateObligation, DEFAULT_BLOCKED_PUBLIC_REPO_EVENTS, DYNAMIC_MATRIX_OUTPUT_MODE, DispatchInput,
     DispatchInputType, EntryCacheIds, ExecuteTaskIds, ExecuteTaskRef, FINAL_JSON_FILENAME,
     FRESHNESS_CRON_WEEKLY, FRESHNESS_WORKFLOW_PATH, FinalCounts, FinalReport, FinalStatus,
     GRADLE_RUN_OPERATION, HOSTED_SUFFIX, Job, JobConclusion, JobDisposition, JobTimeout,

@@ -162,10 +162,11 @@ pub(crate) fn iso_timestamp(seconds: i64) -> String {
 /// Trim a leading `v` and build metadata for version comparisons.
 #[must_use]
 pub(crate) fn norm_version(value: &str) -> String {
+    let value = value.trim();
+    let value = value.strip_prefix("bun-").unwrap_or(value);
     value
-        .trim()
         .strip_prefix('v')
-        .unwrap_or(value.trim())
+        .unwrap_or(value)
         .split('+')
         .next()
         .unwrap_or("")

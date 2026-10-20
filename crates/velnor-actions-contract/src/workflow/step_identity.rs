@@ -42,6 +42,8 @@ pub const PRIVATE_FETCH_OPERATION: &str = "private-fetch-v1";
 pub const GRADLE_RUN_OPERATION: &str = "gradle-run-v1";
 /// Internal operation of the token revocation step (HD-7).
 pub const PRIVATE_REVOKE_OPERATION: &str = "private-revoke-v1";
+/// Internal operation of the Bun registry phase (HD-6, HD-7).
+pub const BUN_REGISTRY_INSTALL_OPERATION: &str = "bun-registry-install-v1";
 /// Pinned-action prefix of the private token mint step (HD-7).
 pub const PRIVATE_TOKEN_MINT_ACTION_PREFIX: &str = "actions/create-github-app-token@";
 
@@ -150,6 +152,8 @@ pub enum StepRole {
     PrivateFetch,
     /// Revocation of the private-source token, run `always()` (HD-7).
     PrivateRevoke,
+    /// Registry phase of `bun install`; the only step binding the job token.
+    BunRegistryInstall,
 }
 
 impl StepRole {
@@ -196,6 +200,7 @@ impl StepRole {
                 StepKind::Action { uses, .. } if uses.starts_with(PRIVATE_TOKEN_MINT_ACTION_PREFIX)),
             Self::PrivateFetch => internal_operation(kind, PRIVATE_FETCH_OPERATION),
             Self::PrivateRevoke => internal_operation(kind, PRIVATE_REVOKE_OPERATION),
+            Self::BunRegistryInstall => internal_operation(kind, BUN_REGISTRY_INSTALL_OPERATION),
             Self::MbxCache => valid_mbx_cache(kind),
             Self::MbxVersionCheck | Self::MbxWorkspaceCleanup => {
                 matches!(kind, StepKind::Shell { .. })

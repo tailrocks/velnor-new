@@ -36,6 +36,7 @@ pub(crate) const EXPECTED_TOOLS: &[(&str, &str)] = &[
     ("opentofu", "OPENTOFU_VERSION"),
     ("release-plz", "RELEASE_PLZ_VERSION"),
     ("crane", "CRANE_VERSION"),
+    ("bun", "BUN_VERSION"),
     ("cosign", "COSIGN_VERSION"),
 ];
 

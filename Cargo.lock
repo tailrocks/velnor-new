@@ -996,6 +996,7 @@ dependencies = [
  "thiserror",
  "toml",
  "velnor-actions-actionlint",
+ "velnor-actions-bun",
  "velnor-actions-contract",
  "velnor-actions-gradle",
  "velnor-actions-mise",

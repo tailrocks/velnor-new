@@ -13,6 +13,8 @@ use velnor_actions_contract::{
 use crate::OrchestratorError;
 use crate::config_stacks::PartialStacks;
 
+#[path = "bun_registry_install.rs"]
+pub(crate) mod bun_registry_install;
 #[path = "deps_lock.rs"]
 pub(crate) mod deps_lock;
 #[path = "gradle_run.rs"]

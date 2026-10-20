@@ -172,13 +172,16 @@ pub struct PublishConfig {
     /// Release-asset bundles, sorted by id.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub bundles: Vec<PublishBundle>,
+    /// npm packages published to GitHub Packages, sorted by id.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub npm: Vec<super::publish_npm::PublishNpm>,
 }
 
 impl PublishConfig {
     /// True when nothing is declared (serialization skip predicate).
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.bundles.is_empty()
+        self.bundles.is_empty() && self.npm.is_empty()
     }
 
     /// Validate every declaration.
@@ -208,6 +211,37 @@ impl PublishConfig {
             return Err(ContractError::config(
                 file,
                 "publish.bundles",
+                "must_be_sorted_by_id",
+            ));
+        }
+        self.validate_npm(file, &mut seen)
+    }
+}
+
+impl PublishConfig {
+    /// Validate npm entries: grammar, sorted unique ids, no id shared with a bundle.
+    fn validate_npm<'a>(
+        &'a self,
+        file: &str,
+        taken: &mut BTreeSet<&'a str>,
+    ) -> Result<(), ContractError> {
+        if self.npm.len() > MAX_BUNDLES {
+            return Err(ContractError::config(file, "publish.npm", "too_many"));
+        }
+        for (index, entry) in self.npm.iter().enumerate() {
+            entry.validate(file, &format!("publish.npm[{index}]"))?;
+            if !taken.insert(entry.id.as_str()) {
+                return Err(ContractError::config(
+                    file,
+                    "publish.npm",
+                    format!("duplicate_id:{}", entry.id),
+                ));
+            }
+        }
+        if self.npm.windows(2).any(|pair| pair[0].id >= pair[1].id) {
+            return Err(ContractError::config(
+                file,
+                "publish.npm",
                 "must_be_sorted_by_id",
             ));
         }
@@ -294,7 +328,7 @@ fn validate_paths(file: &str, key: &str, paths: &[String]) -> Result<(), Contrac
 }
 
 /// Safe repo-relative path: plain charset, no empty, `.` or `..` segments.
-fn validate_repo_path(file: &str, key: &str, path: &str) -> Result<(), ContractError> {
+pub(super) fn validate_repo_path(file: &str, key: &str, path: &str) -> Result<(), ContractError> {
     let plain = |b: u8| b.is_ascii_alphanumeric() || matches!(b, b'/' | b'.' | b'-' | b'_');
     let segments_ok = path
         .split('/')

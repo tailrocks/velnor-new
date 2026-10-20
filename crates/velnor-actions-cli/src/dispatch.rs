@@ -20,17 +20,17 @@ use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
     ACQUIRE_PREVIEW_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP, ADMIT_PREVIEW_AGGREGATE_OP,
-    CAPTURE_REVIEW_COMPLETION_OP, DYNAMIC_MATRIX_OUTPUT_MODE, EMIT_REVIEW_COMPLETION_OP,
-    EXECUTE_CHECK_OP, EXECUTE_PREVIEW_PRODUCER_OP, FETCH_OP, GRADLE_RUN_OP,
-    MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP,
-    PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP, PRIVATE_REVOKE_OP,
-    PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP, REPORT_OP,
-    REQUEST_FILE_ENV, SELECT_PREVIEW_TAP_CONTINUATION_OP, SIGN_PACKAGE_RELEASE_OP,
-    TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, execute_check,
-    merge_internal, merge_passed, plan_internal, plan_outputs, publish_final_report,
-    publish_plan_files, resolve_task_execution, response_path_for, retrieve_reports,
-    run_gradle_run, run_private_fetch, run_private_revoke, write_preseed_manifest, write_request,
-    write_task_report,
+    BUN_REGISTRY_INSTALL_OP, CAPTURE_REVIEW_COMPLETION_OP, DYNAMIC_MATRIX_OUTPUT_MODE,
+    EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP, EXECUTE_PREVIEW_PRODUCER_OP, FETCH_OP,
+    GRADLE_RUN_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OrchestratorError,
+    PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP,
+    PRIVATE_FETCH_OP, PRIVATE_REVOKE_OP, PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode,
+    RECOVER_PACKAGE_RELEASE_OP, REPORT_OP, REQUEST_FILE_ENV, SELECT_PREVIEW_TAP_CONTINUATION_OP,
+    SIGN_PACKAGE_RELEASE_OP, TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP,
+    WRITE_REQUEST_OP, execute_check, merge_internal, merge_passed, plan_internal, plan_outputs,
+    publish_final_report, publish_plan_files, resolve_task_execution, response_path_for,
+    retrieve_reports, run_bun_registry_install, run_gradle_run, run_private_fetch,
+    run_private_revoke, write_preseed_manifest, write_request, write_task_report,
 };
 
 #[path = "dispatch_preview_production.rs"]
@@ -109,6 +109,7 @@ fn internal_op() -> Option<InternalOp> {
         Ok(tag) if tag == TASK_EXECUTION_RESOLVER_OP => InternalOp::ResolveTaskExecution,
         Ok(tag) if tag == PRIVATE_FETCH_OP => InternalOp::PrivateFetch,
         Ok(tag) if tag == PRIVATE_REVOKE_OP => InternalOp::PrivateRevoke,
+        Ok(tag) if tag == BUN_REGISTRY_INSTALL_OP => InternalOp::BunRegistryInstall,
         Ok(tag) if tag == GRADLE_RUN_OP => InternalOp::GradleRun,
         Ok(tag) if tag == SIGN_PACKAGE_RELEASE_OP => InternalOp::PackageSigner,
         Ok(tag) if tag == PUBLISH_PACKAGE_RELEASE_OP => InternalOp::PackagePublisher,
@@ -140,7 +141,7 @@ fn gate_request() -> Option<InternalRequest> {
         }
         return None;
     }
-    if op.uses_velnor_dir() {
+    if takes_runner_velnor_dir(op) {
         return runner_velnor_dir().map(|path| InternalRequest { op, path });
     }
     if op == InternalOp::RepoPolicy {
@@ -197,6 +198,7 @@ fn gate_request() -> Option<InternalRequest> {
         | InternalOp::Report
         | InternalOp::PrivateFetch
         | InternalOp::PrivateRevoke
+        | InternalOp::BunRegistryInstall
         | InternalOp::GradleRun
         | InternalOp::PreseedManifest
         | InternalOp::RepoPolicy
@@ -223,40 +225,46 @@ fn runner_velnor_dir() -> Option<PathBuf> {
         .map(|temp| Path::new(&temp).join("velnor"))
 }
 
+/// Private operations whose whole input is the runner-temp velnor directory.
+const fn takes_runner_velnor_dir(op: InternalOp) -> bool {
+    matches!(
+        op,
+        InternalOp::PrivateFetch
+            | InternalOp::PrivateRevoke
+            | InternalOp::BunRegistryInstall
+            | InternalOp::GradleRun
+            | InternalOp::PreseedManifest
+    )
+}
+
+/// Exit code of one fallible private operation.
+fn finish<T>(result: Result<T, OrchestratorError>) -> ExitCode {
+    match result {
+        Ok(_) => ExitCode::SUCCESS,
+        Err(error) => fail_internal(&error.to_string()),
+    }
+}
+
 /// Run one validated private operation.
 fn run_internal(request: &InternalRequest) -> ExitCode {
     match request.op {
-        InternalOp::ExecuteCheck => match execute_check() {
-            Ok(_) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
+        InternalOp::ExecuteCheck => finish(execute_check()),
         InternalOp::ExecutePreviewProducer => preview_production::produce(),
         InternalOp::AcquirePreviewLeaves => preview_production::acquire(),
         InternalOp::TapContinuation => tap_continuation::run(),
         InternalOp::CaptureReviewCompletion => review_completion::capture(),
         InternalOp::EmitReviewCompletion => review_completion::emit(),
         InternalOp::AdmitPreviewAggregate => preview_production::admit(),
-        InternalOp::WriteRequest => match write_request() {
-            Ok(_) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
+        InternalOp::WriteRequest => finish(write_request()),
         InternalOp::Plan => run_plan_internal(&request.path),
         InternalOp::Merge => run_merge_internal(&request.path),
-        InternalOp::Fetch => match retrieve_reports() {
-            Ok(_) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
-        InternalOp::Report => match write_task_report() {
-            Ok(_) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
-        InternalOp::PrivateFetch => unit_result(run_private_fetch()),
-        InternalOp::GradleRun => unit_result(run_gradle_run()),
-        InternalOp::PrivateRevoke => unit_result(run_private_revoke()),
-        InternalOp::PreseedManifest => match write_preseed_manifest() {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
+        InternalOp::Fetch => finish(retrieve_reports()),
+        InternalOp::Report => finish(write_task_report()),
+        InternalOp::PrivateFetch => finish(run_private_fetch()),
+        InternalOp::PrivateRevoke => finish(run_private_revoke()),
+        InternalOp::BunRegistryInstall => finish(run_bun_registry_install()),
+        InternalOp::GradleRun => finish(run_gradle_run()),
+        InternalOp::PreseedManifest => finish(write_preseed_manifest()),
         InternalOp::RepoPolicy => crate::dispatch_repo_policy::run(&request.path),
         InternalOp::ResolveQualification => crate::dispatch_qualification::run(&request.path),
         InternalOp::ResolveTaskExecution => match resolve_task_execution() {
@@ -362,14 +370,6 @@ fn run_merge_internal(path: &Path) -> ExitCode {
 }
 
 /// Report a private failure without printing the private operation.
-/// Exit code of a unit-returning internal operation.
-fn unit_result<E: std::fmt::Display>(result: Result<(), E>) -> ExitCode {
-    match result {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(error) => fail_internal(&error.to_string()),
-    }
-}
-
 pub(crate) fn fail_internal(problem: &str) -> ExitCode {
     eprintln!("velnor-actions: internal request failed: {problem}");
     ExitCode::from(1)
