@@ -1,0 +1,92 @@
+{
+  "all_passed": true,
+  "tool": "release-plz@0.3.173",
+  "backend": "aqua:release-plz/release-plz",
+  "installed_binary": "/Users/donbeave/.cache/velnor/release-plz173-qualification-3wm38l4j/mise-prebuilt-attempt-2/data/installs/release-plz/0.3.173/release-plz",
+  "sha256": "5e1e7b9e622426fd3785873a56982ff4342acee52090355fdfe64fcae6498a87",
+  "size": 42903792,
+  "commands": [
+    {
+      "label": "registry",
+      "argv": [
+        "/Users/donbeave/.cache/velnor/mise15-qualification-preparation-uufzbppm/mise-v2026.10.15-macos-arm64",
+        "--no-config",
+        "--no-env",
+        "--no-hooks",
+        "registry",
+        "release-plz"
+      ],
+      "exit": 0,
+      "seconds": 0.03999004099750891
+    },
+    {
+      "label": "install",
+      "argv": [
+        "/Users/donbeave/.cache/velnor/mise15-qualification-preparation-uufzbppm/mise-v2026.10.15-macos-arm64",
+        "--no-config",
+        "--no-env",
+        "--no-hooks",
+        "install",
+        "release-plz@0.3.173"
+      ],
+      "exit": 0,
+      "seconds": 4.380341874988517
+    },
+    {
+      "label": "where",
+      "argv": [
+        "/Users/donbeave/.cache/velnor/mise15-qualification-preparation-uufzbppm/mise-v2026.10.15-macos-arm64",
+        "--no-config",
+        "--no-env",
+        "--no-hooks",
+        "where",
+        "release-plz@0.3.173"
+      ],
+      "exit": 0,
+      "seconds": 0.015664500009734184
+    },
+    {
+      "label": "version",
+      "argv": [
+        "/Users/donbeave/.cache/velnor/release-plz173-qualification-3wm38l4j/mise-prebuilt-attempt-2/data/installs/release-plz/0.3.173/release-plz",
+        "--version"
+      ],
+      "exit": 0,
+      "seconds": 0.5663994159840513
+    },
+    {
+      "label": "help",
+      "argv": [
+        "/Users/donbeave/.cache/velnor/release-plz173-qualification-3wm38l4j/mise-prebuilt-attempt-2/data/installs/release-plz/0.3.173/release-plz",
+        "--help"
+      ],
+      "exit": 0,
+      "seconds": 0.012689124996541068
+    },
+    {
+      "label": "release-help",
+      "argv": [
+        "/Users/donbeave/.cache/velnor/release-plz173-qualification-3wm38l4j/mise-prebuilt-attempt-2/data/installs/release-plz/0.3.173/release-plz",
+        "release",
+        "--help"
+      ],
+      "exit": 0,
+      "seconds": 0.013284541986649856
+    },
+    {
+      "label": "release-pr-help",
+      "argv": [
+        "/Users/donbeave/.cache/velnor/release-plz173-qualification-3wm38l4j/mise-prebuilt-attempt-2/data/installs/release-plz/0.3.173/release-plz",
+        "release-pr",
+        "--help"
+      ],
+      "exit": 0,
+      "seconds": 0.013117874972522259
+    }
+  ],
+  "HOME_preserved": true,
+  "private_tool_homes": true,
+  "credentials_proxies_absent": true,
+  "cargo_backend_disabled": true,
+  "global_install": false
+}

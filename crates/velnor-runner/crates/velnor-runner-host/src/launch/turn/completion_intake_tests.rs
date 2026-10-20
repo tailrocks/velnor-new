@@ -15,6 +15,7 @@ fn completed(request_id: Option<i64>, runner_id: Option<i64>, name: Option<&str>
         raw_body,
         statistics: None,
         jobs: vec![InnerJob {
+            source: velnor_runner_github::SourceMetadata::default(),
             kind: InnerKind::Completed,
             request_id,
             job_id: None,
@@ -194,6 +195,7 @@ async fn oversized_completion_data_fails_before_inbox_write() -> Result<(), Stri
         raw_body: "x".repeat(MAX_COMPLETION_BODY_BYTES + 1),
         statistics: None,
         jobs: vec![InnerJob {
+            source: velnor_runner_github::SourceMetadata::default(),
             kind: InnerKind::Completed,
             request_id: None,
             job_id: None,

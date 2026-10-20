@@ -110,6 +110,7 @@ fn batch(statistics: Option<Statistics>, jobs: Vec<InnerJob>) -> Poll {
 
 fn job(kind: InnerKind) -> InnerJob {
     InnerJob {
+        source: velnor_runner_github::SourceMetadata::default(),
         kind,
         request_id: None,
         job_id: None,

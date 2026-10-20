@@ -25,7 +25,7 @@ fn workflow(job_env: Vec<(String, Yaml)>, steps: Vec<Yaml>) -> Yaml {
     ])
 }
 
-const SETUP: &str = "jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7";
+const SETUP: &str = "jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde";
 
 #[test]
 fn inserts_resolver_after_setup_and_rewrites_non_run_values() {
@@ -310,3 +310,6 @@ fn identity_lock_references_resolve_their_tool_and_lock_digest() {
         .expect("resolver");
     assert!(resolver < text.find("velnor-tools-prelude-u26").expect("identity"));
 }
+
+#[path = "project_tool_resolver_order_tests.rs"]
+mod order;

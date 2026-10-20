@@ -4,7 +4,7 @@ rust = "1.99.1"
 # `mbx` binary required by wrappers.cargo.command above (P07-9). Generated
 # CI reads every version in this table at run time (hard decision 5); clean
 # checkouts resolve MBX from this file via `mise install`, never globally.
-mr-boxington = "1.24.1"
+mr-boxington = "1.25.0"
 "aqua:nextest-rs/nextest/cargo-nextest" = "0.9.148"
 
 [tasks.test-maintenance-helpers]

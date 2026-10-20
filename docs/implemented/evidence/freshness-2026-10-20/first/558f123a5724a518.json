@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+    "api",
+    "--method",
+    "GET",
+    "https://api.github.com/repos/jdx/mise-action/git/ref/tags/v5.2.1"
+  ],
+  "body_file": "558f123a5724a518.body",
+  "checked_at": "2026-10-20T07:01:36.319681+00:00",
+  "exit_code": 0,
+  "rust_prefix_only": false,
+  "sha256": "1d0fa2fba881a2dda09d228a357d6054423569700b0b3b4b8afafa93f4c454a5",
+  "size": 331,
+  "url": "https://api.github.com/repos/jdx/mise-action/git/ref/tags/v5.2.1"
+}

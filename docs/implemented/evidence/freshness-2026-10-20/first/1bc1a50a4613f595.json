@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+    "api",
+    "--method",
+    "GET",
+    "https://api.github.com/repos/jdx/mr-boxington-action/git/ref/tags/v1.7.2"
+  ],
+  "body_file": "1bc1a50a4613f595.body",
+  "checked_at": "2026-10-20T07:01:36.691617+00:00",
+  "exit_code": 0,
+  "rust_prefix_only": false,
+  "sha256": "81e0b5ee286b60c0eb68735422094d550c41562cb5242d78f8d1a87c497c3d03",
+  "size": 347,
+  "url": "https://api.github.com/repos/jdx/mr-boxington-action/git/ref/tags/v1.7.2"
+}

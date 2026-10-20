@@ -1,0 +1,78 @@
+{
+  "rows": [
+    {
+      "case": "fresh-target-build",
+      "argv": [
+        "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/runtime-prefix/mbx",
+        "build",
+        "--locked",
+        "--offline",
+        "-j",
+        "2"
+      ],
+      "exit_code": 0,
+      "elapsed": 0.33035279202158563
+    },
+    {
+      "case": "fresh-target-binary",
+      "argv": [
+        "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/runtime-smoke/target-second/debug/mbx125_qualification"
+      ],
+      "exit_code": 0,
+      "elapsed": 0.07011749999946915
+    },
+    {
+      "case": "post-restore-verify",
+      "argv": [
+        "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/runtime-prefix/mbx",
+        "cache",
+        "verify"
+      ],
+      "exit_code": 0,
+      "elapsed": 0.009439916990231723
+    },
+    {
+      "case": "post-restore-stats",
+      "argv": [
+        "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/runtime-prefix/mbx",
+        "stats",
+        "--json"
+      ],
+      "exit_code": 0,
+      "elapsed": 0.009974874992622063
+    }
+  ],
+  "stats": {
+    "version": 1,
+    "store": "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/runtime-smoke/cache/actions",
+    "savings": {
+      "byte_accounting": "logical",
+      "since_unix_secs": 1792480522,
+      "builds": 2,
+      "cached_compilations": 1,
+      "estimated_compiler_ns_avoided": 70852083,
+      "reflinked_bytes": 472280,
+      "pruned_bytes": 0,
+      "pruned_target_bytes": 0,
+      "pruned_store_bytes": 0,
+      "automatically_pruned_bytes": 0,
+      "automatically_pruned_since_unix_secs": 1792480522,
+      "requested_removal_bytes": 0
+    },
+    "cache": {
+      "objects": 7,
+      "bytes": 475187,
+      "managed_targets": 0,
+      "managed_target_bytes": 0
+    },
+    "sharing": {
+      "live_workspaces": 1,
+      "independent_cache_bytes": 475187,
+      "shared_store_bytes": 475187,
+      "duplicate_cache_bytes_avoided_lower_bound": 0
+    }
+  },
+  "actual_cache_hits_observed": 1,
+  "fresh_target_initially_absent": true,
+  "official_upstream_local_only": true
+}

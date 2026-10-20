@@ -51,7 +51,7 @@ pub(super) fn write_candidate_records(root: &Path, case: Failure) -> Result<(), 
         fs::write(
             directory.join(product.provenance),
             format!(
-                "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"{REPOSITORY}\",\"commit\":\"{SOURCE_SHA}\",\"target\":\"{}\",\"asset\":\"{}\",\"sha256\":\"{digest}\",\"toolchain\":{{\"rust\":\"1.99.1\",\"mr-boxington\":\"1.24.1\"}}}}\n",
+                "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"{REPOSITORY}\",\"commit\":\"{SOURCE_SHA}\",\"target\":\"{}\",\"asset\":\"{}\",\"sha256\":\"{digest}\",\"toolchain\":{{\"rust\":\"1.99.1\",\"mr-boxington\":\"1.25.0\"}}}}\n",
                 product.target.triple(),
                 product.binary
             ),

@@ -2,9 +2,9 @@
 
 use velnor_runner_github::{
     AcquireOutcome, CAPACITY_HEADER, Certainty, EncodedJit, InnerKind, Label, Poll, RefreshGate,
-    ScaleSetView, StatusClass, TransportFail, WireError, accept_scale_set, acquire_path,
-    capacity_header_value, classify_acquire, classify_status, create_body, effect_certainty,
-    jit_path, last_message_query, may_ack, parse_poll,
+    ScaleSetView, SourceMetadata, StatusClass, TransportFail, WireError, accept_scale_set,
+    acquire_path, capacity_header_value, classify_acquire, classify_status, create_body,
+    effect_certainty, jit_path, last_message_query, may_ack, parse_poll,
 };
 
 const NULL_STATS: &str =
@@ -135,6 +135,67 @@ fn completed_message_decodes_runner_identity_and_keeps_job_fields() -> Result<()
     assert_eq!(job.runner_name.as_deref(), Some("runner-31"));
     assert_eq!(job.result.as_deref(), Some("succeeded"));
     Ok(())
+}
+
+#[test]
+fn job_id_is_bounded_opaque_metadata_and_never_supplies_request_identity() {
+    let jobs = velnor_runner_github::parse_inner_messages(
+        r#"[{"messageType":"JobAvailable","runnerRequestId":41,"jobId":"job:opaque/41"},{"messageType":"JobStarted","jobId":"runner-job:alpha"}]"#,
+    )
+    .expect("valid job messages");
+    assert_eq!(jobs[0].request_id, Some(41));
+    assert_eq!(jobs[0].job_id.as_deref(), Some("job:opaque/41"));
+    assert_eq!(jobs[1].request_id, None);
+    assert_eq!(jobs[1].job_id.as_deref(), Some("runner-job:alpha"));
+
+    let oversized = "x".repeat(257);
+    let body = format!(
+        r#"[{{"messageType":"JobCompleted","jobId":"{oversized}"}},{{"messageType":"JobCompleted","jobId":"bad\nvalue"}}]"#
+    );
+    let jobs = velnor_runner_github::parse_inner_messages(&body).expect("valid message shape");
+    assert_eq!(jobs[0].job_id, None);
+    assert_eq!(jobs[1].job_id, None);
+}
+
+#[test]
+fn source_metadata_keeps_pinned_fields_and_missing_values() -> Result<(), &'static str> {
+    let body = r#"[{"messageType":"JobAvailable","ownerName":"ChainArgos","repositoryName":"java-monorepo","jobWorkflowRef":"ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/sea/integration","workflowRunId":2468,"eventName":"push"}]"#;
+    let jobs = velnor_runner_github::parse_inner_messages(body).map_err(|_| "parse")?;
+    let source = &jobs.first().ok_or("job")?.source;
+    assert_eq!(source.owner_name.as_deref(), Some("ChainArgos"));
+    assert_eq!(source.repository_name.as_deref(), Some("java-monorepo"));
+    assert_eq!(
+        source.job_workflow_ref.as_deref(),
+        Some("ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/sea/integration")
+    );
+    assert_eq!(source.workflow_run_id, Some(2468));
+    assert_eq!(source.event_name.as_deref(), Some("push"));
+    let complete = source.complete().ok_or("complete")?;
+    assert_eq!(complete.workflow_run_id, 2468);
+    assert_eq!(complete.event_name, "push");
+
+    let old_body = r#"[{"messageType":"JobAvailable","runnerRequestId":3}]"#;
+    let old_jobs = velnor_runner_github::parse_inner_messages(old_body).map_err(|_| "old parse")?;
+    let old_source = &old_jobs.first().ok_or("old job")?.source;
+    assert_eq!(old_source, &SourceMetadata::default());
+    assert_eq!(old_source.complete(), None);
+    Ok(())
+}
+
+#[test]
+fn malformed_source_metadata_is_not_accepted() {
+    for body in [
+        r#"[{"messageType":"JobAvailable","ownerName":4}]"#,
+        r#"[{"messageType":"JobAvailable","repositoryName":4}]"#,
+        r#"[{"messageType":"JobAvailable","jobWorkflowRef":4}]"#,
+        r#"[{"messageType":"JobAvailable","workflowRunId":"2468"}]"#,
+        r#"[{"messageType":"JobAvailable","eventName":4}]"#,
+    ] {
+        assert_eq!(
+            velnor_runner_github::parse_inner_messages(body),
+            Err(WireError::Malformed)
+        );
+    }
 }
 
 #[test]
