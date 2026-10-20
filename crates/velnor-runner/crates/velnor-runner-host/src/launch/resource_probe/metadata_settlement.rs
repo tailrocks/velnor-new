@@ -12,8 +12,12 @@ use super::ReleaseReadSecret;
 use super::provider::{ImageProvider, ReleaseImageProvider};
 
 mod claim;
+mod pre_jit_capacity;
 mod sample;
 mod setup;
+
+pub(in crate::launch) use pre_jit_capacity::PreJitCapacityObservation;
+pub(in crate::launch) use pre_jit_capacity::measure_pre_jit_capacity;
 
 #[cfg(test)]
 use sample::verify_startup_evidence;

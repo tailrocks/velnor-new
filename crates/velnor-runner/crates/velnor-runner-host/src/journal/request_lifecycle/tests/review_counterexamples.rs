@@ -2,8 +2,8 @@ use super::admission::JOB_LIMIT;
 use super::helpers::{
     ProvisionedRunner, Scratch, binding, created_scope, event_source,
     finish_initialized_listener_delivery, provision_acquired_request_with_initialization, receipt,
-    record_acquired, record_owned_network_cleanup, record_owned_storage_cleanup, runner_name,
-    settle_storage_metadata,
+    record_acquired, record_observed_storage_cleanup, record_owned_network_cleanup,
+    record_owned_storage_cleanup, runner_name, settle_storage_metadata,
 };
 use crate::error::HostError;
 use crate::journal::{AssignmentIdentity, AssignmentKey, ConnectionJournal, Journal};
@@ -24,7 +24,15 @@ pub(super) struct Ready {
 pub(super) async fn ready() -> Result<Ready, HostError> {
     let scratch = Scratch::new()?;
     let journal = Journal::open(&scratch.file()).await?;
-    journal.configure_capacity(JOB_LIMIT).await?;
+    journal
+        .configure_capacity_with_operational_limits(
+            JOB_LIMIT,
+            crate::journal::OperationalCapacityLimits {
+                cpu_millicores: 1_000,
+                memory_bytes: 128 * 1024 * 1024,
+            },
+        )
+        .await?;
     let binding = binding("essential", 101)?;
     let scope = created_scope(&journal, &binding, 501).await?;
     let initialized = provision_acquired_request_with_initialization(&scope, 70, '8', '8').await?;
@@ -192,7 +200,7 @@ async fn independent_recovered_unassigned_runner_allows_replacement_for_same_req
         .await?
         .ok_or(HostError::Journal)?;
     f.scope.mark_recovering(reservation.reservation_id).await?;
-    record_owned_storage_cleanup(&f.scope, &f.provisioned).await?;
+    record_observed_storage_cleanup(&f.scope, reservation.reservation_id).await?;
     record_owned_network_cleanup(&f.scope, reservation.reservation_id).await?;
     f.scope
         .record_remote_cleanup(reservation.reservation_id)
@@ -213,18 +221,18 @@ async fn independent_recovered_unassigned_runner_allows_replacement_for_same_req
     let scope = journal.connection_scope(&binding).await?;
     let replacement = provision_acquired_request_with_initialization(&scope, 72, 'f', 'f').await?;
     let (generation, digest) = scope.test_active_authority_identity().await?;
+    let claim = scope
+        .claim_runner_jit_for_request(
+            replacement.intent_id,
+            replacement.reservation_id,
+            72,
+            &runner_name('f'),
+            generation,
+            &digest,
+        )
+        .await?;
     assert!(
-        scope
-            .claim_runner_jit_for_request(
-                replacement.intent_id,
-                replacement.reservation_id,
-                72,
-                &runner_name('f'),
-                generation,
-                &digest
-            )
-            .await?
-            .is_some(),
+        claim.is_some(),
         "cleaned unassigned runner still holds the only acquired request witness"
     );
     Ok(())

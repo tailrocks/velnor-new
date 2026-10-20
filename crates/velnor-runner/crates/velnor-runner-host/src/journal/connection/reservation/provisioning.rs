@@ -13,6 +13,7 @@ mod initialization;
 mod metadata_settlement;
 mod network;
 mod objects;
+mod pre_jit_cleanup;
 mod publication;
 mod request_link;
 mod storage_plan;
@@ -30,6 +31,14 @@ pub(crate) use network::{
     RecordedStorageNetwork, StorageNetworkCreateClaim, StorageNetworkRemovalClaim,
 };
 pub(crate) use objects::StorageObjectCreateClaim;
+pub(crate) use pre_jit_cleanup::PreJitCapacityProbeClaim;
+pub(crate) use pre_jit_cleanup::PreJitCleanupClaim;
+#[cfg(test)]
+pub(crate) use pre_jit_cleanup::PreJitCleanupSettlementResult;
+pub(crate) use pre_jit_cleanup::{
+    PreJitBootstrapContainer, PreJitCleanupInventory, PreJitCreateSpec, PreJitInitializerIdentity,
+    PreJitNetworkIdentity, PreJitStorageObject,
+};
 pub(crate) use publication::JobFactsPublicationClaim;
 pub(crate) use publication::ListenerDeliveryClaim;
 pub(crate) use request_link::RequestPhysicalReservationResult;

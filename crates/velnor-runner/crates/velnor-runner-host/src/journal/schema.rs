@@ -15,6 +15,7 @@ mod execution_authorization;
 mod execution_publication;
 mod image_import;
 mod migration;
+mod pre_jit_cleanup;
 #[cfg(test)]
 pub(in crate::journal) mod provisioning;
 #[cfg(not(test))]
@@ -36,7 +37,7 @@ mod storage_root_backing;
 #[path = "schema/execution_publication/v30_migration_tests.rs"]
 mod v30_migration_tests;
 
-pub(super) const JOURNAL_VERSION: i64 = 31;
+pub(super) const JOURNAL_VERSION: i64 = 32;
 const CURRENT_COLUMNS: [ColumnShape; 23] = [
     ColumnShape::new("id", "INTEGER", false, None),
     ColumnShape::new("kind", "TEXT", true, None),
@@ -168,6 +169,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
                 28 => migration::from_version_twenty_eight(conn).await?,
                 29 => migration::from_version_twenty_nine(conn).await?,
                 30 => migration::from_version_thirty(conn).await?,
+                31 => migration::from_version_thirty_one(conn).await?,
                 _ => return Err(HostError::Journal),
             }
             version = journal_version(conn).await?;
@@ -181,7 +183,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
 
 fn expected_next_version(version: i64) -> Option<i64> {
     match version {
-        0..=8 | 10..=30 => Some(version + 1),
+        0..=8 | 10..=31 => Some(version + 1),
         9 => Some(11),
         _ => None,
     }
@@ -195,7 +197,8 @@ async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostE
     validate_persisted_schema_v27_core(conn).await?;
     storage_root_backing::validate(conn).await?;
     execution_publication::validate_v30(conn).await?;
-    cleanup_observer_witness::validate(conn).await
+    cleanup_observer_witness::validate_current(conn).await?;
+    pre_jit_cleanup::validate(conn).await
 }
 
 pub(super) async fn validate_persisted_schema_v27(

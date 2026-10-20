@@ -7,6 +7,7 @@ pub(crate) mod adapter;
 mod cleanup;
 mod containers;
 mod delivery;
+mod pre_jit_recovery;
 mod publication;
 mod storage;
 
@@ -20,7 +21,13 @@ pub(crate) use containers::{
     VerifiedStorageNetworkCreated, VerifiedStorageNetworkRemoved, create_owned_network,
     remove_owned_network, start_bootstrap_pair,
 };
+#[cfg(test)]
+use containers::{create_spec, verify_pre_jit_created};
 pub(crate) use delivery::ListenerDeliveryReceipt;
+pub(in crate::launch) use pre_jit_recovery::remove_bootstrap_after_terminal_failure;
+pub(crate) use pre_jit_recovery::{
+    PreJitCleanupPhase, PreJitCleanupPhaseProof, PreJitCleanupSettlementProof,
+};
 pub(crate) use publication::JobFactsPublication;
 pub(crate) use publication::job_facts_publication;
 pub(crate) use storage::VerifiedStorageResourceBinding;

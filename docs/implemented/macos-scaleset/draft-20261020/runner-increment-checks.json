@@ -793,6 +793,37 @@
       "author": "/root/obsolete_capacity_cleanup",
       "reviewer": "/root/execution_source_security_review",
       "scope": "The fixture does not test the production image provider or a policy that revokes source access."
+    },
+    {
+      "result": "PASS",
+      "source_base_commit": "c6fcf68c8503f9c4f0517799bf3e06358bb90e88",
+      "source_delta": "The V32 cleanup change retains capacity after physical cleanup. The parent also applied the reviewed language changes.",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 rustup run 1.99.1 mbx nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host -E 'test(saved_container_id_blocks_absence_when_name_lookup_misses) | test(current_schema_rejects_missing_create_spec_table) | test(current_schema_rejects_missing_pre_jit_settlement_guard) | test(native_cleanup_runtime_uses_persisted_witness_and_real_observer_lifecycle) | test(claimed_pre_jit_recovery_accepts_progress_without_changing_reservation_identity) | test(runner_create_terminal_reply_allows_one_live_pre_jit_claim) | test(terminal_runner_rejection_runs_owned_cleanup_and_capacity_probe) | test(acknowledged_acquire_reopens_and_rechecks_before_jit) | test(completed_available_remains_owned_after_observed_cleanup_and_reopen) | test(overflow_body_survives_restart_and_mixed_offer_starts_once)' --no-tests fail --no-fail-fast",
+      "exit_status": 0,
+      "nextest_run": "17ef45c3-b237-4148-b89e-55b53df23d66",
+      "passed": 10,
+      "log": "prejit-v32-parent-integrated-20261020.log",
+      "log_sha256": "8571b866422caf751d0e33d28e4c8dace19d73b7806dbbbc7466026b7399661e",
+      "manifest_sha256": "23cfc2d597ff22ada6cd55cc0b9b75bf1ef08b303acd413be55b0b5d4967ad03",
+      "author": "/root/native_intake_composition",
+      "reviewer": "/root/execution_source_security_review",
+      "scope": "The tests do not prove capacity release, a live provider, or a live installation."
+    },
+    {
+      "result": "PASS",
+      "source_base_commit": "c6fcf68c8503f9c4f0517799bf3e06358bb90e88",
+      "source_delta": "The V32 cleanup change retains capacity after physical cleanup. The parent also applied the reviewed language changes.",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 rustup run 1.99.1 mbx nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host -E 'test(saved_container_id_blocks_absence_when_name_lookup_misses) | test(current_schema_rejects_missing_create_spec_table) | test(current_schema_rejects_missing_pre_jit_settlement_guard) | test(native_cleanup_runtime_uses_persisted_witness_and_real_observer_lifecycle) | test(claimed_pre_jit_recovery_accepts_progress_without_changing_reservation_identity) | test(runner_create_terminal_reply_allows_one_live_pre_jit_claim) | test(terminal_runner_rejection_runs_owned_cleanup_and_capacity_probe) | test(acknowledged_acquire_reopens_and_rechecks_before_jit) | test(completed_available_remains_owned_after_observed_cleanup_and_reopen) | test(overflow_body_survives_restart_and_mixed_offer_starts_once)' --no-tests fail --no-fail-fast",
+      "exit_status": 0,
+      "nextest_run": "50f1bbb7-d89d-423c-bd26-42f3b060a93c",
+      "passed": 10,
+      "log": "prejit-v32-parent-after-hook-20261020.log",
+      "log_sha256": "bca050a80974c811f67fdc4c6e969d85185e976d3831528fb22d1c5b496a9c67",
+      "manifest_sha256": "23cfc2d597ff22ada6cd55cc0b9b75bf1ef08b303acd413be55b0b5d4967ad03",
+      "author": "/root/native_intake_composition",
+      "reviewer": "/root/execution_source_security_review",
+      "scope": "The tests do not prove capacity release, a live provider, or a live installation.",
+      "phase": "after_hook"
     }
   ],
   "broader_pair_check": {
@@ -946,5 +977,13 @@
     "author": "/root/container_metadata_repair",
     "reviewer": "/root",
     "earlier_attempts": "The record keeps the failed extraction attempts and the earlier host mount. The passing test used no host mounts."
+  },
+  "pre_jit_cleanup_final_facades": {
+    "result": "PASS",
+    "tests_passed": 10,
+    "exit_status": 0,
+    "log": "prejit-v32-parent-facade-final-20261020.log",
+    "log_sha256": "fb099e0d806e0e5fe27429357d85b2d09210bc384523b081c563140e9e139f26",
+    "scope": "The focused tests check cleanup and acquired request recovery. Release and live installation checks remain NOT_RUN."
   }
 }

@@ -310,7 +310,15 @@ fn container_response(state: &ApiState, config: &Value, host_config: &Value, nam
             {"Type": "volume", "Name": state.metadata_volume, "Destination": "/velnor/init/metadata", "RW": true}
         ],
         "Config": config, "HostConfig": host_config,
-        "State": {"Status": match state.lifecycle { ContainerLifecycle::Started => "running", ContainerLifecycle::Stopped => "exited", ContainerLifecycle::Created | ContainerLifecycle::Removed => "created" }, "StartedAt": if matches!(state.lifecycle, ContainerLifecycle::Started | ContainerLifecycle::Stopped) { "2026-10-19T00:00:00Z" } else { "0001-01-01T00:00:00Z" }},
+        "State": {
+            "Status": match state.lifecycle {
+                ContainerLifecycle::Started => "running",
+                ContainerLifecycle::Stopped => "exited",
+                ContainerLifecycle::Created | ContainerLifecycle::Removed => "created"
+            },
+            "Running": state.lifecycle == ContainerLifecycle::Started,
+            "StartedAt": if matches!(state.lifecycle, ContainerLifecycle::Started | ContainerLifecycle::Stopped) { "2026-10-19T00:00:00Z" } else { "0001-01-01T00:00:00Z" }
+        },
         "NetworkSettings": {"SandboxID": "", "SandboxKey": "", "Ports": {}, "Networks": {"none": {
             "IPAMConfig": null, "Links": null, "Aliases": null, "DriverOpts": null, "GwPriority": 0,
             "NetworkID": "", "EndpointID": "", "Gateway": "", "IPAddress": "", "MacAddress": "",

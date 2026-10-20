@@ -23,6 +23,9 @@ mod exec_protocol;
 #[path = "daemon/state_changes.rs"]
 mod state_changes;
 
+#[path = "daemon/runner_failure.rs"]
+mod runner_failure;
+
 #[path = "exec_fixture.rs"]
 mod exec_fixture;
 
@@ -33,15 +36,22 @@ pub(super) async fn serve(
         String,
         Arc<AsyncMutex<crate::worker::storage_initialization::InitializationTestResponder>>,
     )>,
+    runner_create_status: Option<u16>,
     requests: Arc<std::sync::Mutex<Vec<CapturedRequest>>>,
     jit_input: Arc<std::sync::Mutex<Vec<u8>>>,
-    mut stop: oneshot::Receiver<()>,
+    mut stop: oneshot::Receiver<bool>,
 ) -> Result<(), String> {
-    let mut state = ServerState::new(images, initializer, requests, jit_input);
+    let mut state = ServerState::new(
+        images,
+        initializer,
+        runner_create_status,
+        requests,
+        jit_input,
+    );
     loop {
         let accepted = tokio::select! {
-            _ = &mut stop => {
-                state.finish().await?;
+            drain_open_attachments = &mut stop => {
+                state.finish(drain_open_attachments.unwrap_or(false)).await?;
                 return Ok(());
             },
             accepted = tokio::time::timeout(TIMEOUT, listener.accept()) => accepted,
@@ -59,6 +69,7 @@ struct ServerState {
         String,
         Arc<AsyncMutex<crate::worker::storage_initialization::InitializationTestResponder>>,
     )>,
+    runner_create_status: Option<u16>,
     initializer_container_id: Option<String>,
     requests: Arc<Mutex<Vec<CapturedRequest>>>,
     jit_input: Arc<Mutex<Vec<u8>>>,
@@ -84,12 +95,14 @@ impl ServerState {
             String,
             Arc<AsyncMutex<crate::worker::storage_initialization::InitializationTestResponder>>,
         )>,
+        runner_create_status: Option<u16>,
         requests: Arc<std::sync::Mutex<Vec<CapturedRequest>>>,
         jit_input: Arc<std::sync::Mutex<Vec<u8>>>,
     ) -> Self {
         Self {
             images,
             initializer,
+            runner_create_status,
             initializer_container_id: None,
             requests,
             jit_input,
@@ -102,10 +115,19 @@ impl ServerState {
         }
     }
 
-    async fn finish(self) -> Result<(), String> {
+    async fn finish(self, drain_open_attachments: bool) -> Result<(), String> {
         for task in self.attach_tasks {
-            task.await
-                .map_err(|error| format!("Docker attach task error: {error}"))??;
+            if !drain_open_attachments {
+                task.abort();
+            }
+            match task.await {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => return Err(error),
+                Err(error) if !drain_open_attachments && error.is_cancelled() => {}
+                Err(error) => {
+                    return Err(format!("The Docker attach task failed. Error: {error}."));
+                }
+            }
         }
         Ok(())
     }
@@ -116,7 +138,7 @@ impl ServerState {
             let mut requests = self
                 .requests
                 .lock()
-                .map_err(|_| "Docker request list is poisoned".to_owned())?;
+                .map_err(|_| "The Docker request list lock failed.".to_owned())?;
             requests.push(request.clone());
             requests.len() - 1
         };
@@ -133,10 +155,10 @@ impl ServerState {
             let mut requests = self
                 .requests
                 .lock()
-                .map_err(|_| "Docker request list is poisoned".to_owned())?;
+                .map_err(|_| "The Docker request list lock failed.".to_owned())?;
             let recorded = requests
                 .get_mut(request_index)
-                .ok_or_else(|| "Docker request record is absent".to_owned())?;
+                .ok_or_else(|| "The Docker request record is absent.".to_owned())?;
             recorded.response_status = Some(response.0);
             recorded.response_body = response.1.clone();
         }
@@ -155,7 +177,7 @@ impl ServerState {
                 attachment
                     .attach(stream)
                     .await
-                    .map_err(|error| format!("Initializer attach error: {error}"))
+                    .map_err(|error| format!("The initializer attach failed. Error: {error}."))
             }));
         } else {
             if self.is_execution_publication_attach(request) {
@@ -175,7 +197,7 @@ impl ServerState {
             self.attach_tasks.push(tokio::spawn(async move {
                 record_jit_input(&mut stream, &jit_input)
                     .await
-                    .map_err(|error| format!("Runner attach error: {error}"))
+                    .map_err(|error| format!("The Runner attach failed. Error: {error}."))
             }));
         }
         Ok(())
@@ -212,6 +234,10 @@ impl ServerState {
     }
 
     fn reply_docker(&mut self, request: &CapturedRequest) -> Result<(u16, Vec<u8>), String> {
+        if let Some(response) = runner_failure::create_rejection(self.runner_create_status, request)
+        {
+            return Ok(response);
+        }
         if request.method == "POST"
             && route(request).starts_with("/containers/")
             && route(request).ends_with("/exec")
@@ -284,7 +310,7 @@ impl ServerState {
             .target
             .split_once("name=")
             .map(|(_, value)| value.split('&').next().unwrap_or(value))
-            .ok_or_else(|| "Created container name is absent".to_owned())?;
+            .ok_or_else(|| "The created container name is absent.".to_owned())?;
         let id = super::responses::response_id(&response.1)?;
         let inspection =
             super::responses::container_inspect(&self.images, &created, &self.volumes, &id, name)?;
@@ -327,7 +353,7 @@ impl ServerState {
     > {
         self.initializer
             .as_ref()
-            .ok_or_else(|| "The initializer API configuration is absent".to_owned())
+            .ok_or_else(|| "The initializer API configuration is absent.".to_owned())
     }
 }
 
@@ -346,7 +372,7 @@ async fn record_jit_input(
         .map_err(|error| error.to_string())?;
     jit_input
         .lock()
-        .map_err(|_| "JIT input is poisoned".to_owned())?
+        .map_err(|_| "The JIT configuration lock failed.".to_owned())?
         .extend(payload);
     Ok(())
 }

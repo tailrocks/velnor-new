@@ -19,6 +19,8 @@ mod mint;
 mod offer_authorization;
 mod scale;
 mod scoped;
+#[cfg(test)]
+pub(crate) use scoped::{RunnerCreateFailure, runner_create_409};
 pub(crate) mod source;
 mod source_authorization;
 

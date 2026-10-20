@@ -27,8 +27,9 @@ mod adverse_acquire;
 mod atomic_acquire;
 #[path = "runner_tests/docker_pair.rs"]
 mod docker_pair;
-#[cfg(test)]
-pub(crate) use docker_pair::run_native_quarantine_composition;
+pub(crate) use docker_pair::{
+    RunnerCreateFailure, run_native_quarantine_composition, runner_create_409,
+};
 #[path = "runner_tests/exact_acquire.rs"]
 mod exact_acquire;
 #[path = "runner_tests/policy_change.rs"]
@@ -191,7 +192,7 @@ async fn expiry_after_acquire_keeps_charge_and_sends_no_jit_or_docker_request() 
                 fixture
                     .request
                     .request_id()
-                    .ok_or_else(|| "The request ID is missing.".to_owned())?,
+                    .ok_or_else(|| "Request ID is missing.".to_owned())?,
                 &physical.runner_name,
                 physical.authority_generation,
                 &physical.authority_digest,
@@ -267,7 +268,7 @@ async fn uncertain_acquire_keeps_charge_and_blocks_jit_replay() -> Result<(), St
                 fixture
                     .request
                     .request_id()
-                    .ok_or_else(|| "The request ID is missing.".to_owned())?,
+                    .ok_or_else(|| "Request ID is missing.".to_owned())?,
                 &physical.runner_name,
                 physical.authority_generation,
                 &physical.authority_digest,
@@ -318,7 +319,7 @@ async fn already_acquired_request_never_authorizes_a_new_runner() -> Result<(), 
                 fixture
                     .request
                     .request_id()
-                    .ok_or_else(|| "The request ID is missing.".to_owned())?,
+                    .ok_or_else(|| "Request ID is missing.".to_owned())?,
                 &physical.runner_name,
                 physical.authority_generation,
                 &physical.authority_digest,

@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use bollard::Docker;
 use bollard::container::AttachContainerResults;
-use bollard::query_parameters::{AttachContainerOptionsBuilder, StartContainerOptions};
+use bollard::query_parameters::StartContainerOptions;
 
 use crate::error::HostError;
 use crate::journal::{
@@ -17,11 +17,19 @@ use super::super::{
     VerifiedBootstrapMountHandoff,
 };
 use super::spec::create_spec;
+mod attach;
+use attach::attach_runner;
+mod helpers;
 use super::{PairCreate, PairStartFailure, StartedBootstrapPair, fixed_mounts};
+pub(in crate::launch::bootstrap) use helpers::create_spec_sha256;
+use helpers::require_worker_runtime_id;
+#[cfg(test)]
+use helpers::worker_image;
 mod inputs;
 use inputs::validate_pair_inputs;
 mod mounts;
 use mounts::{create_handoff, inspect_volume_mounts};
+mod terminal_response;
 
 const PAIR_TIMEOUT: Duration = Duration::from_secs(90);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
@@ -90,6 +98,16 @@ pub(crate) async fn start_bootstrap_pair(
         deadline,
     )
     .await
+}
+
+pub(in crate::launch::bootstrap) fn verify_pre_jit_created(
+    inspected: &bollard::models::ContainerInspectResponse,
+    expected_id: &str,
+    expected_name: &str,
+    spec: &PairCreate,
+    image: &bollard::models::ImageConfig,
+) -> Result<(), HostError> {
+    verify::verify_observed_spec(inspected, expected_id, expected_name, spec, image)
 }
 
 async fn create_pair_containers(
@@ -220,6 +238,19 @@ async fn create_one(
             images,
             prepared.acquired().resource_budget(),
         )?;
+        let image_runtime_id = spec.config.image.as_deref().ok_or(HostError::Identity)?;
+        let spec_sha256 = create_spec_sha256(&spec)?;
+        request(
+            deadline,
+            journal.record_pre_jit_create_spec(
+                &claim,
+                prepared.acquired().resource_budget(),
+                image_runtime_id,
+                images.source_sha(),
+                &spec_sha256,
+            ),
+        )
+        .await??;
         create_claimed(docker, journal, engine, images, &claim, &spec, deadline).await
     }
     .await;
@@ -256,12 +287,18 @@ async fn create_claimed(
         .map_err(|_| HostError::Docker)?;
     require_worker_runtime_id(image.id.as_deref(), claim.role(), images)?;
     let image_config = image.config.ok_or(HostError::Identity)?;
-    let created = request(
+    let create_result = request(
         deadline,
         docker.create_container(Some(spec.options.clone()), spec.config.clone()),
     )
-    .await?
-    .map_err(|_| HostError::Docker)?;
+    .await?;
+    let created = match create_result {
+        Ok(created) => created,
+        Err(error) => {
+            terminal_response::record_terminal_create_response(journal, claim, error).await;
+            return Err(HostError::Docker);
+        }
+    };
     if !valid_resource_id(&created.id) {
         return Err(HostError::Docker);
     }
@@ -285,52 +322,6 @@ async fn create_claimed(
     )
     .await??;
     Ok(created.id)
-}
-
-fn worker_image(
-    images: &VerifiedWorkerImages,
-    role: BootstrapContainerRole,
-) -> &crate::launch::VerifiedImageIdentity {
-    match role {
-        BootstrapContainerRole::Runner => images.runner(),
-        BootstrapContainerRole::Dind => images.dind(),
-    }
-}
-
-fn require_worker_runtime_id(
-    actual: Option<&str>,
-    role: BootstrapContainerRole,
-    images: &VerifiedWorkerImages,
-) -> Result<(), HostError> {
-    if actual == Some(worker_image(images, role).runtime_id()) {
-        Ok(())
-    } else {
-        Err(HostError::Ownership)
-    }
-}
-
-async fn attach_runner(
-    docker: &Docker,
-    runner_id: &str,
-    deadline: Instant,
-) -> Result<AttachContainerResults, HostError> {
-    request(
-        deadline,
-        docker.attach_container(
-            runner_id,
-            Some(
-                AttachContainerOptionsBuilder::default()
-                    .stdin(true)
-                    .stdout(false)
-                    .stderr(false)
-                    .stream(true)
-                    .logs(false)
-                    .build(),
-            ),
-        ),
-    )
-    .await?
-    .map_err(|_| HostError::Docker)
 }
 
 async fn start_pair(

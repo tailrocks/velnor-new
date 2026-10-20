@@ -65,4 +65,6 @@
 | Repository binding | A digest of one repository connection and its source policy. |
 | Policy generation | A positive integer that identifies one policy version. |
 | JIT configuration | Configuration data that registers one runner for one job. |
+| Capacity probe | A probe that measures available host capacity. |
+| Pre-JIT cleanup | Cleanup after Docker returns a final container-create response before JIT configuration delivery. |
 | Parser | Software that reads input data and checks its structure. |

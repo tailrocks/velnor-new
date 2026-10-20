@@ -30,6 +30,16 @@ pub(super) fn verify_created(
     image: &bollard::models::ImageConfig,
 ) -> Result<(), HostError> {
     let name = format!("/{}", claim.container_name());
+    verify_observed_spec(inspected, expected_id, &name, spec, image)
+}
+
+pub(super) fn verify_observed_spec(
+    inspected: &bollard::models::ContainerInspectResponse,
+    expected_id: &str,
+    expected_name: &str,
+    spec: &PairCreate,
+    image: &bollard::models::ImageConfig,
+) -> Result<(), HostError> {
     let Some(config) = inspected.config.as_ref() else {
         return Err(HostError::Ownership);
     };
@@ -45,7 +55,7 @@ pub(super) fn verify_created(
         return Err(HostError::Ownership);
     }
     if inspected.id.as_deref() != Some(expected_id)
-        || inspected.name.as_deref() != Some(name.as_str())
+        || inspected.name.as_deref() != Some(expected_name)
         || inspected.image.as_deref() != config.image.as_deref()
         || config.image != spec.config.image
         || host.privileged != expected_host.privileged

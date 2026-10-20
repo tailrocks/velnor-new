@@ -181,12 +181,13 @@ impl ConnectionJournal {
             else {
                 return Ok(None);
             };
-            if !matches!(context.reservation_state.as_str(), "reserved" | "uncertain")
-                || !matches!(
-                    context.intent_state.as_str(),
-                    "pending" | "uncertain" | "done"
-                )
-                || context.cleanup_proven
+            if !matches!(
+                context.reservation_state.as_str(),
+                "reserved" | "uncertain" | "recovering"
+            ) || !matches!(
+                context.intent_state.as_str(),
+                "pending" | "uncertain" | "done"
+            ) || context.cleanup_proven
             {
                 return Ok(None);
             }

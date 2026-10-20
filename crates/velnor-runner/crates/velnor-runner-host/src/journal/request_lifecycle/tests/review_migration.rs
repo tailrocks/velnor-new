@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 use super::helpers::{
     TEST_ENGINE_ID, event_source, provision_acquired_request_with_initialization,
-    record_owned_network_cleanup, record_owned_storage_cleanup, runner_name,
-    settle_storage_metadata,
+    record_observed_storage_cleanup, record_owned_network_cleanup, record_owned_storage_cleanup,
+    runner_name, settle_storage_metadata,
 };
 use super::review_counterexamples::ready;
 use crate::error::HostError;
@@ -133,7 +133,7 @@ async fn close_and_reopen_legacy_fixture(
         .scope
         .mark_recovering(reservation.reservation_id)
         .await?;
-    record_owned_storage_cleanup(&fixture.scope, &fixture.provisioned).await?;
+    record_observed_storage_cleanup(&fixture.scope, reservation.reservation_id).await?;
     fixture
         .scope
         .record_remote_cleanup(reservation.reservation_id)

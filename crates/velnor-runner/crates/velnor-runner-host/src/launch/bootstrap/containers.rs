@@ -5,10 +5,15 @@ pub(crate) use network::remove_owned_network;
 #[cfg(test)]
 pub(crate) use pair::PairStartFailure;
 
+pub(in crate::launch::bootstrap) use network::validate_pre_jit_network;
 pub(crate) use network::{
     VerifiedStorageNetworkCreated, VerifiedStorageNetworkRemoved, create_owned_network,
 };
+pub(in crate::launch::bootstrap) use pair::{
+    PairCreate, create_spec, create_spec_sha256, verify_pre_jit_created,
+};
 pub(crate) use pair::{PendingBootstrapPair, StartedBootstrapPair, start_bootstrap_pair};
+pub(in crate::launch::bootstrap) use storage_object::verify_pre_jit_volume;
 pub(crate) use storage_object::{create_metadata_storage_object, create_storage_object};
 
 /// Proof that both workers mounted the exact initialized storage objects.

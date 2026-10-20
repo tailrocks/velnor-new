@@ -365,5 +365,9 @@ mod fixture;
 pub(super) use fixture::fixture_record;
 
 #[cfg(test)]
+#[path = "record/http_fixture.rs"]
+pub(in crate::launch) mod http_fixture;
+
+#[cfg(test)]
 #[path = "record/schema3_tests.rs"]
 mod schema3_tests;

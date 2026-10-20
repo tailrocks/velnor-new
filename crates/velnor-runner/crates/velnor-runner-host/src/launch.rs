@@ -57,6 +57,7 @@ pub(crate) use resource_probe::build_pin_status;
 pub(crate) use resource_probe::publication::VerifiedExecutionPublicationCleanup;
 pub(crate) use resource_probe::run_doctor_probe;
 pub(crate) use resource_probe::start_permit;
+pub(in crate::launch) use resource_probe::{PreJitCapacityObservation, measure_pre_jit_capacity};
 pub(crate) use resource_probe::{RecoveryObservation, ReleaseReadSecret};
 pub(crate) use session::{
     CompletedHeaderPoll, DeletedSession204, ReturnedSessionRefreshTransportError,
@@ -90,6 +91,8 @@ mod slot;
 mod source_order_tests;
 pub(crate) mod steady;
 pub(crate) mod steps;
+#[cfg(test)]
+pub(crate) use steps::{RunnerCreateFailure, runner_create_409};
 #[cfg(test)]
 mod subject_tests;
 mod trace;

@@ -34,6 +34,8 @@ mod release_secret;
 pub(in crate::launch) use provider::VerifiedWorkerImageIdentityProof;
 
 mod record;
+#[cfg(test)]
+pub(in crate::launch) use record::http_fixture::canonical_logs_response;
 mod recover;
 mod sample;
 #[cfg(test)]
@@ -52,6 +54,9 @@ pub(in crate::launch) use cleanup_observer::{
 pub(in crate::launch) use metadata_settlement::settle_storage_metadata_after_cleanup;
 #[cfg(test)]
 pub(in crate::launch) use metadata_settlement::settle_storage_metadata_after_cleanup_with_test_provider;
+pub(in crate::launch) use metadata_settlement::{
+    PreJitCapacityObservation, measure_pre_jit_capacity,
+};
 
 pub(crate) use owned_cgroups::{OwnedCgroupSubjects, OwnedContainerSubjects, VerifiedOwnedCgroups};
 pub(crate) use release_secret::ReleaseReadSecret;
@@ -134,6 +139,7 @@ pub(crate) struct VerifiedProbeCleanup {
     operation_id: String,
     engine_id: String,
     docker_root_digest: String,
+    purpose: crate::journal::ResourceProbePurpose,
     phase: ProbePhase,
     operation_name: String,
     container_id: Option<String>,
@@ -146,11 +152,18 @@ impl VerifiedProbeCleanup {
         projection: &projection::ProbeProjection,
         container_id: &str,
     ) -> Result<Self, crate::error::HostError> {
+        let purpose = match row.work() {
+            crate::journal::ProbeWork::ResourceProbe { purpose, .. } => *purpose,
+            crate::journal::ProbeWork::ExecutionPublication => {
+                return Err(crate::error::HostError::Ownership);
+            }
+        };
         if row.phase != ProbePhase::RemoveRequested
             || row.container_id.as_deref() != Some(container_id)
             || row.operation_id != projection.operation_id
             || row.engine_id != projection.engine_id
             || row.docker_root_digest != projection.root.digest()
+            || purpose != projection.purpose
             || row.operation_name != projection.name
             || row.projection_digest != projection.projection_digest
         {
@@ -160,6 +173,7 @@ impl VerifiedProbeCleanup {
             operation_id: row.operation_id.clone(),
             engine_id: row.engine_id.clone(),
             docker_root_digest: row.docker_root_digest.clone(),
+            purpose,
             phase: row.phase,
             operation_name: row.operation_name.clone(),
             container_id: row.container_id.clone(),
@@ -176,6 +190,10 @@ impl VerifiedProbeCleanup {
 
     pub(crate) fn docker_root_digest(&self) -> &str {
         &self.docker_root_digest
+    }
+
+    pub(crate) const fn purpose(&self) -> crate::journal::ResourceProbePurpose {
+        self.purpose
     }
 
     pub(crate) const fn phase(&self) -> ProbePhase {
@@ -203,6 +221,7 @@ impl VerifiedProbeCleanup {
             operation_id,
             engine_id,
             docker_root_digest,
+            purpose: crate::journal::ResourceProbePurpose::Capacity,
             phase,
             operation_name,
             container_id,

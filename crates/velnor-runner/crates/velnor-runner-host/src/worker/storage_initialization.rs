@@ -20,6 +20,7 @@ pub(crate) use proof::{
 pub(crate) use ready::VerifiedStorageInitializationReady;
 pub(crate) use request_result::ObservedStorageInitialization;
 pub(crate) use specification::{StorageInitializationImage, StorageInitializationLimits};
+pub(crate) use verification::pre_jit_container_matches;
 
 #[cfg(test)]
 mod tests;

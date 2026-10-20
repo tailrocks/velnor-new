@@ -11,6 +11,9 @@ mod native_intake;
 pub(super) use native_intake::{
     NATIVE_COMPOSITION_JOB_ID, open_composition_with_poll, replay_owned_terminal_offer,
 };
+#[path = "bootstrap_start/partial_failure.rs"]
+mod partial_failure;
+pub(crate) use partial_failure::{RunnerCreateFailure, runner_create_409};
 
 const ENGINE_ID: &str = "bc9058a0-c807-412b-a088-6c1d96ddd462";
 const MEMORY_BYTES: u64 = 32 * 1024 * 1024 * 1024;
@@ -138,43 +141,6 @@ pub(super) struct BootstrapSetup {
 }
 
 impl BootstrapSetup {
-    pub(super) async fn open() -> Result<Self, String> {
-        let fixture = Fixture::open_with_engine("native-bootstrap-pair", ENGINE_ID).await?;
-        configure_capacity(&fixture).await?;
-        let permit = StartPermit::test_fixture_with_engine_and_available_memory(
-            &"a".repeat(32),
-            ENGINE_ID,
-            MEMORY_BYTES,
-        );
-        let images =
-            super::super::support::test_images_for_engine(ENGINE_ID, permit.docker_root_digest());
-        let engine = selected_engine(&images)?;
-        let state = BootstrapAdmissionState::new(&fixture.binding)?;
-        let drive = bootstrap_drive(&fixture, &state.path);
-        let poll = crate::launch_harness::available(&[REQUEST_ID]);
-        let outcome = acquire_source_authorized(&drive, permit, &engine, &poll).await?;
-        let (initializer_image, initializer) = initializer_for(&outcome, &fixture, &images).await?;
-        let api =
-            PairDockerApi::open_with_initializer(images.clone(), initializer_image, initializer)?;
-        let prepared = prepare_acquired(outcome, &fixture, &api, &engine, &images).await?;
-        let network = crate::launch::bootstrap::create_owned_network(
-            &api.docker,
-            &fixture.scope,
-            &engine,
-            prepared.acquired().reservation_id(),
-        )
-        .await
-        .map_err(|error| format!("Private network preparation error: {error}"))?;
-        Ok(Self {
-            fixture,
-            api,
-            prepared,
-            network,
-            engine,
-            images,
-        })
-    }
-
     async fn start(&self) -> Result<crate::launch::bootstrap::StartedBootstrapPair, String> {
         let pending = self
             .prepared
@@ -272,7 +238,7 @@ async fn initializer_for(
         crate::worker::storage_initialization::StorageInitializationImage::from_verified_release(
             images,
         )
-        .map_err(|error| format!("The verified storage initializer is absent. Error: {error}."))?;
+        .map_err(|error| format!("The verified storage initializer is missing. Error: {error}."))?;
     let metadata = format!("{}-metadata", names.private_volume());
     let responder = crate::worker::storage_initialization::InitializationTestResponder::new(
         &fixture.scope,

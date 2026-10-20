@@ -1,9 +1,12 @@
 //! Prepare one acquired job through measured storage binding.
 
 mod authorization;
+mod binding;
+use binding::bind_started;
 mod jit;
 mod provider_entry;
 mod registry;
+mod terminal_failure;
 
 #[cfg(test)]
 #[path = "scoped_runtime/stale_acquired_tests.rs"]
@@ -262,7 +265,23 @@ async fn prepare_started_and_bound<P: ImageProvider>(
         Ok(started) => started,
         Err(failure) => {
             let (error, pending_pair) = failure.into_parts();
-            return Ok(pending(prepared, Some(network), None, pending_pair, error));
+            let cleaned = terminal_failure::remove_bootstrap_after_terminal_failure(
+                docker,
+                scoped,
+                host,
+                engine,
+                images,
+                reservation_id,
+                provider,
+            )
+            .await;
+            return Ok(pending(
+                prepared,
+                Some(network),
+                None,
+                if cleaned { None } else { pending_pair },
+                error,
+            ));
         }
     };
     let initialization = match crate::worker::storage_initialization::finish_after_pair_mounts(
@@ -313,55 +332,6 @@ async fn prepare_started_and_bound<P: ImageProvider>(
         images,
     )
     .await
-}
-
-async fn bind_started<P: ImageProvider>(
-    prepared: PreparedAcquiredBootstrap,
-    network: RecordedStorageNetwork,
-    started: StartedBootstrapPair,
-    metadata: VerifiedMetadataInitialization,
-    initialization: VerifiedStorageInitializationReady,
-    docker: &Docker,
-    scoped: &ConnectionJournal,
-    host: &Journal,
-    provider: &P,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
-) -> Result<ScopedRuntimeOutcome, HostError> {
-    let binding = match super::bootstrap::observe_storage_resources_with_provider(
-        docker,
-        scoped,
-        host,
-        provider,
-        engine,
-        images,
-        &prepared,
-        &started,
-        &initialization,
-    )
-    .await
-    {
-        Ok(binding) => binding,
-        Err(error) => {
-            return Ok(pending(prepared, Some(network), Some(started), None, error));
-        }
-    };
-    let guest_boot_id = binding.guest_boot_id().to_owned();
-    if let Err(error) = scoped
-        .bind_storage_resources(prepared.acquired().reservation_id(), &binding)
-        .await
-    {
-        return Ok(pending(prepared, Some(network), Some(started), None, error));
-    }
-    Ok(ScopedRuntimeOutcome::Bound(BoundScopedBootstrap {
-        prepared,
-        network,
-        started,
-        metadata,
-        initialization,
-        binding,
-        guest_boot_id,
-    }))
 }
 
 fn pending(

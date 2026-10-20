@@ -51,6 +51,8 @@ pub(crate) use completion::{
 pub(crate) use connection::JobFactsPublicationClaim;
 pub(crate) use connection::ListenerDeliveryClaim;
 pub(crate) use connection::NativeCompletionReservation;
+#[cfg(test)]
+pub(crate) use connection::PreJitCleanupSettlementResult;
 pub(crate) use connection::TerminalReplayBinding;
 pub(crate) use connection::{
     PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation, ReservationState,
@@ -60,6 +62,8 @@ pub(crate) use connection::{
     AssignmentIdentity, AssignmentKey, BootstrapContainerCreateClaim, BootstrapStartClaim,
     BoundJobFactsSnapshot, CapacityLimits, ConnectionCompletionInboxEntry, ConnectionJournal,
     CreateInterruptionOutcome, EngineContext, MetadataSettlementResult, OperationalCapacityLimits,
+    PreJitBootstrapContainer, PreJitCapacityProbeClaim, PreJitCleanupClaim, PreJitCleanupInventory,
+    PreJitCreateSpec, PreJitInitializerIdentity, PreJitNetworkIdentity, PreJitStorageObject,
     RecordedStorageNetwork, RequestPhysicalReservationResult, ReservationRequest,
     SessionCreateState, SessionRefreshClaim, SourceAuthorizationBinding, StorageAdmissionSample,
     StorageCleanupIdentity, StorageCleanupObserverWitness, StorageFilesystemKind,

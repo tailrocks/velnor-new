@@ -62,7 +62,10 @@ async fn read_witness(
         || current_boot_id.as_deref() != Some(guest_boot_id.as_str())
         || current_runner.as_deref() != Some(runner_container_id.as_str())
         || current_dind.as_deref() != Some(dind_container_id.as_str())
-        || !matches!(reservation_state.as_str(), "reserved" | "uncertain")
+        || !matches!(
+            reservation_state.as_str(),
+            "reserved" | "uncertain" | "recovering"
+        )
         || !matches!(intent_state.as_str(), "pending" | "uncertain" | "done")
         || intent_cleanup != 0
         || bootstrap_state != "started"

@@ -24,7 +24,9 @@ mod request_checks;
 #[path = "docker_pair/server.rs"]
 mod server;
 
-use server::{CapturedRequest, DIND_ID, PairDockerApi, RUNNER_ID, route};
+pub(crate) use bootstrap_start::{RunnerCreateFailure, runner_create_409};
+
+use server::{CapturedApi, CapturedRequest, DIND_ID, PairDockerApi, RUNNER_ID, route};
 
 #[tokio::test]
 async fn scoped_start_uses_bollard_to_create_and_start_the_verified_pair() -> Result<(), String> {

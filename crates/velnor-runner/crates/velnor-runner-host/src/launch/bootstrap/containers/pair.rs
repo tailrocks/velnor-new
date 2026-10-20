@@ -21,7 +21,9 @@ pub(super) use config::{create_body, fixed_mounts};
 #[cfg(test)]
 pub(super) use config::{limits_for, tmpfs_options};
 pub(crate) use production::start_bootstrap_pair;
+pub(in crate::launch::bootstrap) use production::{create_spec_sha256, verify_pre_jit_created};
 pub(crate) use spec::PairCreate;
+pub(in crate::launch::bootstrap) use spec::create_spec;
 
 /// Keep the attach stream and start claim after a failed start attempt.
 #[must_use]

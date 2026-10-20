@@ -186,6 +186,18 @@ fn validate_network(
     Ok(())
 }
 
+pub(in crate::launch::bootstrap) fn validate_pre_jit_network(
+    network: &NetworkInspect,
+    expected_name: &str,
+    expected_id: &str,
+    expected_labels: &BTreeMap<String, String>,
+) -> Result<(), HostError> {
+    if !valid_network_id(expected_id) {
+        return Err(HostError::Ownership);
+    }
+    validate_network(network, expected_name, expected_id, expected_labels)
+}
+
 async fn verify_engine(
     docker: &Docker,
     engine: &SelectedEngineContext,
