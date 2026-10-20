@@ -47,36 +47,9 @@ pub const CARGO_AUTO_CLEAN_ENV: (&str, &str) = ("CARGO_CACHE_AUTO_CLEAN_FREQUENC
 /// the two lists equal by test.
 pub const STEP_ENDPOINT_DENYLIST: [&str; 2] = ["GH_HOST", "GH_CONFIG_DIR"];
 
-/// Credential keys only a private-fetch step may bind (HD-7).
-///
-/// Mirrors the Mise adapter's `CREDENTIAL_ALLOWLIST_PRIVATE_FETCH`
-/// element-for-element without depending on it; the orchestrator pins the
-/// two lists equal by test.
-pub const STEP_PRIVATE_FETCH_ALLOWLIST: [&str; 2] =
-    ["VELNOR_PRIVATE_FETCH_TOKEN", "VELNOR_NPM_READ_TOKEN"];
-
-/// Exact fetch-redirect keys no rendered task env may carry (HD-7).
-///
-/// Mirrors the Mise adapter's `FETCH_REDIRECT_ENV_KEYS`; the pattern
-/// families are covered by [`is_fetch_redirect_key`]. The orchestrator pins
-/// the two lists and predicates equal by test.
-pub const STEP_FETCH_REDIRECT_DENYLIST: [&str; 4] = [
-    "GIT_ASKPASS",
-    "SSH_ASKPASS",
-    "GIT_CONFIG",
-    "BUN_CONFIG_REGISTRY",
-];
-
-/// True for a fetch-redirect key: the exact keys, any `GIT_CONFIG_*`, any
-/// `NPM_CONFIG_*`, or any `npm_config_*`.
-#[must_use]
-pub fn is_fetch_redirect_key(key: &str) -> bool {
-    STEP_FETCH_REDIRECT_DENYLIST.contains(&key)
-        || key.starts_with("GIT_CONFIG_")
-        || key.starts_with("NPM_CONFIG_")
-        || key.starts_with("npm_config_")
-}
-
+#[path = "toolchain_env_fetch.rs"]
+mod fetch;
+pub use fetch::*;
 /// True for a credential-shaped env key: the denylisted nine, any
 /// `CARGO_REGISTRIES_*` entry (per-registry tokens the fixed list can
 /// never enumerate), or any `*_TOKEN` name. Rejection is fail-closed:
@@ -175,13 +148,8 @@ pub fn reject_denied_step_keys(env: &BTreeMap<String, String>) -> Result<(), Ren
                 "credential_step_env:{key}"
             )));
         }
-        if is_denied_endpoint_key(key) {
+        if is_denied_endpoint_key(key) || is_fetch_redirect_key(key) {
             return Err(RenderError::BadCommand(format!("endpoint_step_env:{key}")));
-        }
-        if is_fetch_redirect_key(key) {
-            return Err(RenderError::BadCommand(format!(
-                "fetch_redirect_step_env:{key}"
-            )));
         }
     }
     Ok(())

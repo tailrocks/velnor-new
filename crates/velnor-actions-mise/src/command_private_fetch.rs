@@ -11,7 +11,46 @@ use std::path::{Path, PathBuf};
 
 use crate::error::MiseError;
 
-use super::{CREDENTIAL_ALLOWLIST_PRIVATE_FETCH, EnvPolicy, IsolatedCommand};
+use super::{EnvPolicy, IsolatedCommand};
+
+/// Credential keys the private-fetch policy keeps (HD-7).
+///
+/// `VELNOR_PRIVATE_FETCH_TOKEN` is the GitHub App installation token that
+/// reads private release assets, Maven bundles and git trees;
+/// `VELNOR_NPM_READ_TOKEN` is the `GITHUB_TOKEN` `packages: read` value of the
+/// single `bun install --ignore-scripts` registry phase. Both strip as
+/// `*_TOKEN` credentials under every other policy. Mirrored by the renderer's
+/// `STEP_PRIVATE_FETCH_ALLOWLIST`; the orchestrator pins the two equal by test.
+pub const CREDENTIAL_ALLOWLIST_PRIVATE_FETCH: [&str; 2] =
+    ["VELNOR_PRIVATE_FETCH_TOKEN", "VELNOR_NPM_READ_TOKEN"];
+
+/// Exact fetch-redirect keys no inheriting child ever receives (HD-7).
+///
+/// Each can redirect a credentialed fetch to an attacker host or load an
+/// attacker credential helper: an askpass program, git configuration
+/// injected through the environment, or a registry override. Velnor's own
+/// `GIT_CONFIG_GLOBAL`/`GIT_CONFIG_NOSYSTEM` arrive through constructor-baked
+/// extras after the strip. The pattern keys (`GIT_CONFIG_*`, `NPM_CONFIG_*`,
+/// `npm_config_*`) are covered by [`is_fetch_redirect_key`]. Mirrored by the
+/// renderer's `STEP_FETCH_REDIRECT_DENYLIST`; the orchestrator pins the two
+/// equal by test.
+pub const FETCH_REDIRECT_ENV_KEYS: [&str; 4] = [
+    "GIT_ASKPASS",
+    "SSH_ASKPASS",
+    "GIT_CONFIG",
+    "BUN_CONFIG_REGISTRY",
+];
+
+/// True for a fetch-redirect key: the exact keys, any `GIT_CONFIG_*`
+/// (`GLOBAL`, `SYSTEM`, `NOSYSTEM`, `COUNT`, `KEY_n`, `VALUE_n`,
+/// `PARAMETERS`), any `NPM_CONFIG_*`, or any `npm_config_*`.
+#[must_use]
+pub fn is_fetch_redirect_key(key: &str) -> bool {
+    FETCH_REDIRECT_ENV_KEYS.contains(&key)
+        || key.starts_with("GIT_CONFIG_")
+        || key.starts_with("NPM_CONFIG_")
+        || key.starts_with("npm_config_")
+}
 
 /// Which allowlisted credential a private-fetch child receives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
