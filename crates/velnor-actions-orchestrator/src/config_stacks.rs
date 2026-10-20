@@ -27,6 +27,7 @@ pub(crate) struct PartialStacks {
     tofu: Option<PartialTofuStack>,
     /// Bun stack options (strict: `roots` is required).
     bun: Option<BunStackConfig>,
+    gradle: Option<velnor_actions_contract::config::GradleStackConfig>,
 }
 
 /// Rust stack section with every value optional.
@@ -111,6 +112,7 @@ impl PartialStacks {
             rust,
             tofu,
             bun: self.bun,
+            gradle: self.gradle,
         })
     }
 }

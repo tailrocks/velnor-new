@@ -12,6 +12,7 @@ use velnor_actions_contract::WorkflowPolicy;
 /// Discovery with no selected workloads.
 fn empty_discovery() -> Discovery {
     Discovery {
+        gradle_roots: Vec::new(),
         mise_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),

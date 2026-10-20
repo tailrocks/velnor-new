@@ -45,6 +45,8 @@ pub struct PlannedWorkspace {
 /// Full detection output feeding planning and rendering.
 #[derive(Debug, Clone, Default)]
 pub struct Discovery {
+    /// Analysed Gradle roots (stack contract: findings fail generation).
+    pub(crate) gradle_roots: Vec<crate::gradle_jobs::GradleRoot>,
     /// Explicit repository-owned checks, independent of detected workspaces.
     pub mise_checks: Vec<velnor_actions_mise::DiscoveredCheck>,
     /// Per-project selection states.
@@ -172,7 +174,10 @@ fn discover_inner(
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
     let (consumer_manifest_json, consumer_manifest_stand_in) =
         consumer_manifest::for_policy(root, config.workflow.policy)?;
+    let gradle_roots =
+        crate::gradle_jobs::discover(root, index.files(), config.stacks.gradle.as_ref())?;
     Ok(Discovery {
+        gradle_roots,
         mise_checks,
         statuses,
         workspaces,
