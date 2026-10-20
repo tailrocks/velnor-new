@@ -13,8 +13,8 @@ pub use super::named_check_lanes::{
 };
 use crate::config::{
     CheckExecutor, CheckPlatform, EPHEMERAL_CHECK_ADMISSION_CONDITION, ExecutionConfig,
-    ExecutionMode, ExecutionRole, ImageConfig, VelnorConfig, VerificationRunner,
-    WORKFLOW_TASK_JOB_PREFIX, WorkflowTask,
+    ExecutionMode, ExecutionRole, VelnorConfig, VerificationRunner, WORKFLOW_TASK_JOB_PREFIX,
+    WorkflowTask,
 };
 use crate::errors::ContractError;
 use std::collections::BTreeMap;
@@ -160,7 +160,7 @@ pub(super) fn placement_for(
             .get(job_id)
             .is_some_and(|over| over.profile == execution.scale_set_profile)
         {
-            let hosted_only = image_for_job(job_id, config).is_some()
+            let hosted_only = config.image_for_build_job(job_id).is_some()
                 || config.workflow.tasks.iter().any(|task| {
                     matches!(task, WorkflowTask::Build(_) | WorkflowTask::NativeImage(_))
                         && format!("{WORKFLOW_TASK_JOB_PREFIX}{}", task.id()) == job_id
@@ -215,20 +215,8 @@ fn workflow_task_supports_scale_set(
             check.platform == CheckPlatform::LinuxX64 && check.executor == CheckExecutor::Hosted
         );
     }
-    if let Some(image) = image_for_job(job_id, config) {
-        let expected = image_runner_for_job(job_id, image);
-        if expected != Some(job.runs_on.as_str()) {
-            return Err(ContractError::config(
-                "config.toml",
-                format!("images.runner:{job_id}"),
-                format!(
-                    "runner_mismatch:{}:{}",
-                    expected.unwrap_or("none"),
-                    job.runs_on
-                ),
-            ));
-        }
-        return Ok(false);
+    if let Some(checked) = config.check_image_job_runner(job_id, &job.runs_on) {
+        return checked.map(|()| false);
     }
     let Some(task_id) = job_id.strip_prefix(WORKFLOW_TASK_JOB_PREFIX) else {
         return Ok(true);
@@ -257,24 +245,6 @@ fn workflow_task_supports_scale_set(
         ));
     }
     Ok(supports_scale_set)
-}
-
-/// The declared image whose generated build job has this id.
-fn image_for_job<'a>(job_id: &str, config: &'a VelnorConfig) -> Option<&'a ImageConfig> {
-    config.images.iter().find(|image| {
-        image
-            .platforms
-            .iter()
-            .any(|p| image.build_job_id(*p) == job_id)
-    })
-}
-
-fn image_runner_for_job(job_id: &str, image: &ImageConfig) -> Option<&'static str> {
-    image
-        .platforms
-        .iter()
-        .find(|platform| image.build_job_id(**platform) == job_id)
-        .map(|platform| platform.runs_on())
 }
 
 fn role_matches(role: ExecutionRole, class: LaneClass) -> bool {

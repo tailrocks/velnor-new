@@ -13,6 +13,7 @@ mod distribution;
 mod dockerfile;
 mod execution;
 mod host_container;
+mod image_jobs;
 mod image_task;
 mod images;
 mod mise;
