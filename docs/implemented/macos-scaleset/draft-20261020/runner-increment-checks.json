@@ -315,6 +315,18 @@
       "log_sha256": "6b06d57679e0967e0302402111a600a52e97597415a823485b774281dfe667f5",
       "author": "/root",
       "reviewer": "/root/journal_restart_repair"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "b3b6518fe0f99858a0fba990bb8dcff8e2c2b048",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host --lib -E 'test(committed_result_is_preserved_and_helper_cleanup_finishes)'",
+      "exit_status": 0,
+      "nextest_run": "eb9a4fe1-12ae-4ae9-9020-22d996b10a61",
+      "passed": 1,
+      "log": "initializer-result-lifetime-shipping-20261020.log",
+      "log_sha256": "9281545c448275c7548f62732fb469cd3954428503d33cce70774a2329ac2261",
+      "author": "/root",
+      "reviewer": "/root/journal_restart_repair"
     }
   ],
   "broader_pair_check": {
