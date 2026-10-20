@@ -1087,6 +1087,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "velnor-actions-dbt"
+version = "0.1.30"
+dependencies = [
+ "thiserror",
+ "toml",
+ "velnor-actions-contract",
+]
+
+[[package]]
 name = "velnor-actions-freshness"
 version = "0.1.30"
 dependencies = [

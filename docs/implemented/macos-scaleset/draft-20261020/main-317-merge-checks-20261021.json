@@ -1,0 +1,31 @@
+{
+  "base_commit": "f5a5479aaacedf06fc386841e4f439b21faf0b64",
+  "main_commit": "317a67eba97d1e26bb0e08bbc3cf91540f52927c",
+  "workspace_check": "PASS",
+  "strict_clippy": "PASS",
+  "format": "PASS",
+  "focused_nextest": {
+    "result": "PASS",
+    "passed": 382,
+    "run_id": "d3290f5c-6e25-49bc-8611-f3fbbe6281b9"
+  },
+  "generation_twice": "PASS",
+  "generated_tree": "PASS",
+  "goldens": "PASS",
+  "independent_reviewers": [
+    "/root/runner_context_review",
+    "/root/native_intake_composition"
+  ],
+  "full_final_nextest": "NOT_RUN",
+  "runner_workspace": "NOT_RUN",
+  "live_test": "NOT_RUN",
+  "logs": {
+    "main-317-check-20261021.log": "b2e52b20ecdf5d91f6e2b8581bdcba442b7ef2f251c64e4b3aef61510abd1999",
+    "main-317-fmt-final2-20261021.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "main-317-clippy-final2-20261021.log": "0a66b0f6f4dcc8acc79ff2fc2ced7df52214a12b38ef90bfa45da0870f1b91ca",
+    "main-317-nextest-final-20261021.log": "39fcd88ac5b9cbcd53eac6491db98b2da6c07c33af21a42f243b8e5e2bad6a57",
+    "main-317-generation-diff-20261021.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "main-317-generation-current-diff-20261021.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "main-317-goldens-check-20261021.log": "f9f7d45211fe7c6caa15ae755fa743666289054d857f8937a2c263a8fa537d54"
+  }
+}

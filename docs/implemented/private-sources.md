@@ -21,6 +21,19 @@ with fixtures and qualification tests, not against live private repositories.
 | Generated placement in the Plan job and Rust crate jobs | orchestrator `private_wiring.rs` | `private_wiring_tests.rs`, `private_wiring_workflow_tests.rs` |
 | Placement in `cargo_bin` image build jobs (helper staging, mint, fetch, revoke before the Cargo source fetch and the BuildKit build) | orchestrator `image_prebuilt.rs` | `image_prebuilt_tests.rs` |
 
+## Decisions
+
+- Bundle location (adopted per the split brief; owner may revisit). Bundles are
+  extracted to `<workspace>/.velnor/deps/<id>/`, not `$RUNNER_TEMP`, so the local
+  fetch layout and the CI layout match and one `.cargo/config.toml` serves both.
+  No security reason requires keeping bundles outside the workspace: they carry
+  no credential and the token is already revoked when repository code runs. The
+  hostile-checkout cases (a planted `.velnor/deps` symlink or content) are
+  neutralized by `prepare_deps_root` and tested in `private_fetch_attack_tests.rs`.
+- The generated `actionlint.yaml` declares `private_sources.app_id_variable`
+  (`declared_config_variables`); `tests/impl_private_sources_generate.rs`
+  generates a `[private_sources]` repository through the pinned actionlint.
+
 ## Threat-model checks and where they are tested
 
 - Token unavailable (fork pull request) fails closed: `impl_cli_private.rs`, `Token` tests.

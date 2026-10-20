@@ -386,3 +386,26 @@ fn bun_stack_loads_strictly_and_requires_roots() {
         assert!(load_config(rooted(body).path()).is_err(), "{body}");
     }
 }
+
+#[test]
+fn dbt_stack_loads_strictly_and_requires_projects() {
+    let root = rooted(
+        "schema = 1\n[stacks.dbt]\nprojects = [\"chainargos-dbt\"]\nservices = [\"postgres\"]\nchecks = [\"parse\", \"compile\"]\n[stacks.dbt.env]\nDBT_HOST = \"127.0.0.1\"\n",
+    );
+    let dbt = load_config(root.path())
+        .expect("dbt stack")
+        .stacks
+        .dbt
+        .expect("dbt");
+    assert_eq!(dbt.projects[0].as_str(), "chainargos-dbt");
+    assert_eq!(dbt.env["DBT_HOST"], "127.0.0.1");
+    for body in [
+        "schema = 1\n[stacks.dbt]\n",
+        "schema = 1\n[stacks.dbt]\nprojects = []\n",
+        "schema = 1\n[stacks.dbt]\nprojects = [\".\"]\nrun = \"dbt run\"\n",
+        "schema = 1\n[stacks.dbt]\nprojects = [\".\"]\nchecks = [\"compile\"]\n",
+        "schema = 1\n[stacks.dbt]\nprojects = [\".\"]\n[stacks.dbt.env]\nHOME = \"x\"\n",
+    ] {
+        assert!(load_config(rooted(body).path()).is_err(), "{body}");
+    }
+}

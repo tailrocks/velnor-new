@@ -5,7 +5,9 @@
 //! stack-focused load tests.
 
 use serde::Deserialize;
-use velnor_actions_contract::config::{BunStackConfig, RustBinaryReleaseConfig, RustReleaseConfig};
+use velnor_actions_contract::config::{
+    BunStackConfig, DbtStackConfig, RustBinaryReleaseConfig, RustReleaseConfig,
+};
 use velnor_actions_contract::{
     DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig, StacksConfig,
     TofuStackConfig, Utf8RepoRelDir,
@@ -27,6 +29,8 @@ pub(crate) struct PartialStacks {
     tofu: Option<PartialTofuStack>,
     /// Bun stack options (strict: `roots` is required).
     bun: Option<BunStackConfig>,
+    /// dbt stack options (strict: `projects` is required).
+    dbt: Option<DbtStackConfig>,
 }
 
 /// Rust stack section with every value optional.
@@ -111,6 +115,7 @@ impl PartialStacks {
             rust,
             tofu,
             bun: self.bun,
+            dbt: self.dbt,
         })
     }
 }

@@ -73,6 +73,7 @@ fn config_validation_reports_key_paths() {
             }),
             tofu: None,
             bun: None,
+            dbt: None,
         },
         discovery: DiscoveryConfig {
             exclude: vec!["vendor/**".to_owned()],
@@ -108,68 +109,19 @@ fn config_validation_reports_key_paths() {
 }
 
 #[test]
-fn runner_label_uses_exact_catalog_match() {
-    use velnor_actions_contract::config::ActionsConfig;
+fn runner_label_accepts_only_catalog_entries() {
     use velnor_actions_contract::config::{LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG};
-    use velnor_actions_contract::{
-        ContractError, DiscoveryConfig, PullRequestCachePolicy, ResourcesConfig, StacksConfig,
-        TestShardingConfig, VelnorConfig,
-    };
-    let base = || VelnorConfig {
-        checks: Vec::new(),
-        qualified_tools: Vec::new(),
-        distribution: velnor_actions_contract::config::DistributionConfig::default(),
-        job_authority: Vec::new(),
-        private_sources: None,
-        images: Vec::new(),
-        publish: velnor_actions_contract::config::PublishConfig::default(),
-        schema: 1,
-        workflow: velnor_actions_contract::WorkflowConfig {
-            name: "CI".to_owned(),
-            policy: velnor_actions_contract::WorkflowPolicy::ConsumerV1,
-            default_branch: None,
-            verification_branch: None,
-            generator_validation: velnor_actions_contract::GeneratorValidation::Bootstrap,
-            mise_quiet: true,
-            checkout_lfs: false,
-            max_parallel_jobs: 2,
-            crate_timeout_minutes: 5,
-            pull_request_cache_policy: PullRequestCachePolicy::default(),
-            runner_label: None,
-            tasks: Vec::new(),
-            tofu_apply: None,
-            review_completion: None,
-            verify: velnor_actions_contract::VerifyConfig::default(),
-            dispatch: velnor_actions_contract::WorkflowDispatchConfig::default(),
-            preserve_workflows: Vec::new(),
-        },
-        resources: ResourcesConfig {
-            compiler_process_budget: 2,
-            test_process_budget: 2,
-        },
-        test_sharding: TestShardingConfig {
-            default_shards: 1,
-            by_manifest: BTreeMap::new(),
-        },
-        stacks: StacksConfig {
-            ignore: vec![],
-            rust: None,
-            tofu: None,
-            bun: None,
-        },
-        discovery: DiscoveryConfig { exclude: vec![] },
-        actions: ActionsConfig::default(),
-        tools: velnor_actions_contract::ToolsConfig::default(),
-        agents: velnor_actions_contract::AgentsConfig::default(),
-        dco: None,
-        execution: None,
-    };
     assert!(RUNNER_LABEL_CATALOG.contains(&LATEST_RUNNER_LABEL));
     for label in RUNNER_LABEL_CATALOG {
-        let mut config = base();
+        let mut config = crate::impl_remed_contract::valid_config();
         config.workflow.runner_label = Some(label.to_owned());
         assert_eq!(config.validate("cfg"), Ok(()), "label {label}");
     }
+}
+
+#[test]
+fn runner_label_rejects_non_catalog_values() {
+    use velnor_actions_contract::ContractError;
     for label in [
         "ubuntu-latest",
         "ubuntu-24.04-latest",
@@ -178,7 +130,7 @@ fn runner_label_uses_exact_catalog_match() {
         "",
         " ubuntu-24.04",
     ] {
-        let mut config = base();
+        let mut config = crate::impl_remed_contract::valid_config();
         config.workflow.runner_label = Some(label.to_owned());
         let Err(ContractError::Config {
             key_path, problem, ..

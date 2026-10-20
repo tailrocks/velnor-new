@@ -1,11 +1,11 @@
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/dogfood.diff
 1cc103f316d7707bb7ead8d7a203934bbf0f1251b615eb6056deb22c90d6144f  ./dogfood/dogfood.verdict
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./dogfood/generate.exit
-205d7dd4826010eacbe28955026316c7d83d8269c877dd50253c46ab5855db2d  ./dogfood/generate.stderr.txt
+f00c6c6b4dbec579a251e9856ebe5aa98e4c4faf614566b9e2f7a8d7ee5d856b  ./dogfood/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./dogfood/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/plan.stderr.txt
-fb00d788e58069c32d8df20489bc5c6956c4c4d2b01b5f7729b4b7837aaffe63  ./dogfood/plan.txt
+6ea4501f8f64f05bcaa54db3dd94ad5d32c4dd509de46d7a4bf1a5e2b749d67a  ./dogfood/plan.txt
 f947f85575cade7668de729f30fbf29c4a3d666e0870e0bb172eb3b319385cf4  ./dogfood/preview/.github/AGENTS.md
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./dogfood/preview/.github/CLAUDE.md
 952c78c7e8f944dc89ae7733a76f912e2c6b7f7e6013bb2bad00ae85e5ceed3a  ./dogfood/preview/.github/PULL_REQUEST_TEMPLATE.md
@@ -26,6 +26,7 @@ b6c0278d0ad6ba7b7e302d2f6fc9b5a35ead857159be1d7e7c6a229c647e456a  ./dogfood/prev
 1651f5af1accb8883961f1969d42a98d483086f2ca0f33a50f747819f1b50fa4  ./dogfood/preview/.github/actions/qualification-cache-after-save-cargo_sources-rust-velnor-actions-bun/action.yml
 6ba2f1664785f824af7667bff519f9e7b56effdd6c6e14c1f4d195fd891b0f44  ./dogfood/preview/.github/actions/qualification-cache-after-save-cargo_sources-rust-velnor-actions-cli/action.yml
 f75cedff0b961c69dcd89d6b370a9270c353ca3882ba976a760fd26e7ad84b1d  ./dogfood/preview/.github/actions/qualification-cache-after-save-cargo_sources-rust-velnor-actions-contract/action.yml
+84cffbb2c462b089743b0967c0fb7a823e5c8d8ac4e4650e0c829f1ab65e3cef  ./dogfood/preview/.github/actions/qualification-cache-after-save-cargo_sources-rust-velnor-actions-dbt/action.yml
 1ffbfba1e670be1946301a559e93648b0385a3da37ac5a8e6b977b812eec3e3b  ./dogfood/preview/.github/actions/qualification-cache-after-save-cargo_sources-rust-velnor-actions-freshness/action.yml
 53f1cffd4fb1380614df8866752f389d84f7b7d34c9f469127d9104d7f5dda14  ./dogfood/preview/.github/actions/qualification-cache-after-save-cargo_sources-rust-velnor-actions-gradle/action.yml
 d603c158458c56584bfb28673616f88b6e40a8c19fdb8771f1f3d853e362ebee  ./dogfood/preview/.github/actions/qualification-cache-after-save-cargo_sources-rust-velnor-actions-mise/action.yml
@@ -44,6 +45,7 @@ b11d8ee6ee89655716ff97ba8d893f0ef0b42310bf03a3b7d41b6644e98517b8  ./dogfood/prev
 82a7c931a2235c60c13fa4af7205fad8d358fe2ce1e09ffb437afe9b7d105c67  ./dogfood/preview/.github/actions/qualification-cache-after-save-mbx_objects-rust-velnor-actions-bun/action.yml
 99ce75daed540fc61ffb4d0218d82780c1bc1c5850ad2f3c6521200941c74aef  ./dogfood/preview/.github/actions/qualification-cache-after-save-mbx_objects-rust-velnor-actions-cli/action.yml
 0c251e1758d41ba5750a0e2435902eed2560feee4319566a87f85a2087745942  ./dogfood/preview/.github/actions/qualification-cache-after-save-mbx_objects-rust-velnor-actions-contract/action.yml
+dc89cbffb81e6cb4c0076402fac3c66248bdbc0b869693c757eed68e05da28cd  ./dogfood/preview/.github/actions/qualification-cache-after-save-mbx_objects-rust-velnor-actions-dbt/action.yml
 29b54ea23870ee63dec24bd32ba61bd2b672001a518a6b972a48d8d854c7cba3  ./dogfood/preview/.github/actions/qualification-cache-after-save-mbx_objects-rust-velnor-actions-freshness/action.yml
 3b4a4584817b5f8ed68ef8cb0c972057e4d830f6e280ebd68090e7248e4fcd57  ./dogfood/preview/.github/actions/qualification-cache-after-save-mbx_objects-rust-velnor-actions-gradle/action.yml
 069c78809163b026e049b552bfc39c7d71ec3e5fcfdc7854f4f40cf8b1babef0  ./dogfood/preview/.github/actions/qualification-cache-after-save-mbx_objects-rust-velnor-actions-mise/action.yml
@@ -62,6 +64,7 @@ f3e6888a8710f4a9ce64ea570ac1cdeeaeff8bf25197e00e31fe8b2bc550ff1f  ./dogfood/prev
 174459175ab00bae34190f1c8211bb03fb45d6fbf5c6c717f7d24413c811c25b  ./dogfood/preview/.github/actions/qualification-cache-after-save-mise_tools-rust-velnor-actions-bun/action.yml
 d15fc232c3623f747d258c6f180dd96ad03bdc61af7947bd6a5690b0011dc218  ./dogfood/preview/.github/actions/qualification-cache-after-save-mise_tools-rust-velnor-actions-cli/action.yml
 eadb00ae03a18d1123ede269d60618532120173d0abdaad6d7174205acbdd2f8  ./dogfood/preview/.github/actions/qualification-cache-after-save-mise_tools-rust-velnor-actions-contract/action.yml
+c1464912a6e9f6aadf8a99f7104264a9a24a839f6fb43c749795d3360a1f6a0f  ./dogfood/preview/.github/actions/qualification-cache-after-save-mise_tools-rust-velnor-actions-dbt/action.yml
 21f1ac680c487637d74a6421a9e27e5e6dc29c22ac5aad74502de1b9122313ae  ./dogfood/preview/.github/actions/qualification-cache-after-save-mise_tools-rust-velnor-actions-freshness/action.yml
 3a4071b5da6d80704e4eb98ac66831562464c3dac4cd10730974987c67ac8deb  ./dogfood/preview/.github/actions/qualification-cache-after-save-mise_tools-rust-velnor-actions-gradle/action.yml
 6407e37e1f0dc9f500d2250b017ef944deb8b103ce420c92fdbee78111577b22  ./dogfood/preview/.github/actions/qualification-cache-after-save-mise_tools-rust-velnor-actions-mise/action.yml
@@ -80,6 +83,7 @@ a2b11dc5afac6c267d9ea54d2cab2c5b2f1ccc2b4b5e715035ce2f837e7a5ab5  ./dogfood/prev
 8586ea71a0bff6517634e113950b68184fc0e9d8498e63596f370d9f0603cbad  ./dogfood/preview/.github/actions/qualification-cache-after-save-task_result-rust-velnor-actions-bun/action.yml
 498da0cd281638f6374325aea088038d1a52179eba9af3965aa492e830b14c22  ./dogfood/preview/.github/actions/qualification-cache-after-save-task_result-rust-velnor-actions-cli/action.yml
 3fd61dde746ca3957a3eea550adbc4d7399c52530b9dec3fda4c3579f71ba4c1  ./dogfood/preview/.github/actions/qualification-cache-after-save-task_result-rust-velnor-actions-contract/action.yml
+9973152472301325c96b15b66aa453a166ee4c3f48f3c48cde4cae7ba332cc09  ./dogfood/preview/.github/actions/qualification-cache-after-save-task_result-rust-velnor-actions-dbt/action.yml
 2eb7cf2fea374c06dbe5eb8d03f0d583fd1cb376602adffb2db657e2d39aee73  ./dogfood/preview/.github/actions/qualification-cache-after-save-task_result-rust-velnor-actions-freshness/action.yml
 12fb4ccec5a2e757bf418f77f074d233e5ced6e5330261929a98b8e691b878ee  ./dogfood/preview/.github/actions/qualification-cache-after-save-task_result-rust-velnor-actions-gradle/action.yml
 a4426d13b8101ff9e5b78f10d722835da5aec83b2e4015c044ef1700c0eb58ff  ./dogfood/preview/.github/actions/qualification-cache-after-save-task_result-rust-velnor-actions-mise/action.yml
@@ -98,6 +102,7 @@ e561d6b43eacd72c34dc6098cd24373c96b6592cf79149731a901d0e9d63ba01  ./dogfood/prev
 7cd0c41411794461c32a1d021990e847f3291fe2989955ce06f50acf4bb0f5f2  ./dogfood/preview/.github/actions/qualification-cache-after-save-tofu_providers-rust-velnor-actions-bun/action.yml
 8b4e3ffb6bbed24a44dd64aa3d6f8b9a8907587d64326cdf98288424cfad56aa  ./dogfood/preview/.github/actions/qualification-cache-after-save-tofu_providers-rust-velnor-actions-cli/action.yml
 8fc8d836466abc72e5acc9cfe1aaa6453a89ec682be9386f8316fcb17bfb9b25  ./dogfood/preview/.github/actions/qualification-cache-after-save-tofu_providers-rust-velnor-actions-contract/action.yml
+8c78e638f3f7de1b066a3b82b4c758c90d5692d18a6bd141179ddd40378699b5  ./dogfood/preview/.github/actions/qualification-cache-after-save-tofu_providers-rust-velnor-actions-dbt/action.yml
 e7d8511d6c894fac31c1965c89a226225d9c7cc0b22be4a92cd6b7ab93ed8bd4  ./dogfood/preview/.github/actions/qualification-cache-after-save-tofu_providers-rust-velnor-actions-freshness/action.yml
 67b31e3dc8b856eab325ebb0590df37816af1004168efc41330f4970e4f339d6  ./dogfood/preview/.github/actions/qualification-cache-after-save-tofu_providers-rust-velnor-actions-gradle/action.yml
 605b76e152a6f34211ef48fc02e506c1215819006bd6b859c11fbc6b36f39592  ./dogfood/preview/.github/actions/qualification-cache-after-save-tofu_providers-rust-velnor-actions-mise/action.yml
@@ -116,6 +121,7 @@ c89e69a95e32a1b09c67ac416727649f3d981b86708a4eaa3537a5df594158e6  ./dogfood/prev
 3bee0872bdfe111916522f16fc05047153162d63c4a0cb798f63019318f65bae  ./dogfood/preview/.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-bun/action.yml
 25017d6a5e3539768ac7cc82c859140041d38135a19fd5417626f33f10e630b2  ./dogfood/preview/.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-cli/action.yml
 0c48259b025e17d049665617a6d0fa1fc5335c194d780b28306b2aca94efd5df  ./dogfood/preview/.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-contract/action.yml
+7cae408746c30b55470fe560cce131f1e03b3aac162f3e200fce053f67bf650f  ./dogfood/preview/.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-dbt/action.yml
 22d12b149da8f2fead3f5d4747df0ade7ba41e30b64b3fe6a9c41e56e6e6bf3a  ./dogfood/preview/.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-freshness/action.yml
 4afea3b55efe3cb55a173f8bd884a182f3570ebe9977fa7528b490b82698f93a  ./dogfood/preview/.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-gradle/action.yml
 563cfcb38fcd27c63d8c0cd69b9c616f3ac067b49e180781ec84da5484f19851  ./dogfood/preview/.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-mise/action.yml
@@ -134,6 +140,7 @@ ad9cad20344e43b721c50349a84d83bc563be2adc3ad30d879b9e3856ca472bc  ./dogfood/prev
 d3dcefc52d2508bbf0650cca29845e21f35b9eece83c62943db2844660687987  ./dogfood/preview/.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-bun/action.yml
 1b594f04d715147ba94375cca00639fab0a70169c4cec4475944519145238e71  ./dogfood/preview/.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-cli/action.yml
 ca90382a7af8b02ed623cf6d9ed48b74bfebecdd116f825516057cf791e8e411  ./dogfood/preview/.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-contract/action.yml
+d21f86218dfdddf52ea78069cde3b3e13ded54163768bad0e0c864951dbf3e09  ./dogfood/preview/.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-dbt/action.yml
 fb0e76c53ca978c6f05bfd3a340d1472f41c71b3762263a40d24583d85954013  ./dogfood/preview/.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-freshness/action.yml
 06c686cea0f8f75a7f43f93e8b1fe8bec7ebd5a099f59aac5d477695d22eec3a  ./dogfood/preview/.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-gradle/action.yml
 a76aa9bf95f4b3bcdbab57f50706ead4a5ea6163fc2c815d384c86ce6257e300  ./dogfood/preview/.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-mise/action.yml
@@ -152,6 +159,7 @@ b5f33326cc14b047d0f017f694f22aef72384e46af8a4278dcc669a6d2d44c36  ./dogfood/prev
 fb91c96abc8819bfd5668171d0169f0983d45d9cc49738a4aee81c37445b118b  ./dogfood/preview/.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-bun/action.yml
 2e047cae18076cec40555b48e5c47758cbf78dcc498d9e7998d746adca888cb8  ./dogfood/preview/.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-cli/action.yml
 c54ce0a37bc64276d4137d4a673427a10f7805f7dfa946c57482ab3e7c4dbbec  ./dogfood/preview/.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-contract/action.yml
+5939c0603a0fd7b1e63f11dd73c586ecf9b4218717a784d124ca75c89044d782  ./dogfood/preview/.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-dbt/action.yml
 6162ecedf7cb2e3402727dc9062aec8c6cabd9618dddbb9f3ef22637caca7052  ./dogfood/preview/.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-freshness/action.yml
 254525b64f8c48a56135d377d7434d3c01b10f1683acd325d0072a09da3b4086  ./dogfood/preview/.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-gradle/action.yml
 c19a486da025239cc0a5f9968a91c81139615311523836dee313eeeb56af4242  ./dogfood/preview/.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-mise/action.yml
@@ -170,6 +178,7 @@ b87e815e88490ca906ea2ac0a081373cb52569c03addadb330538af1eb2c0ca5  ./dogfood/prev
 f11615bd9597515582b1e49b53b54ab7fc6cb3dc28ab07541090af6760654951  ./dogfood/preview/.github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-bun/action.yml
 e3f6c6a8d99d64eec15f8fc9a4a8b7d3bf553fb82e84c2d87e70e2bbe134cb09  ./dogfood/preview/.github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-cli/action.yml
 ac6a63aebf62a59a7ab2d3ddee938cc0f1ccf759bb00d48702675b1ffe8b381a  ./dogfood/preview/.github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-contract/action.yml
+b387a4969ebe0101de6ca90240e085f7775148a75247a98d0e9a79ae19f1dbf7  ./dogfood/preview/.github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-dbt/action.yml
 77a2054d42494a65a3c41cf32e71ff8e8c7a06a4df9ef69a27730e72a10e45eb  ./dogfood/preview/.github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-freshness/action.yml
 959e56e43a33e1e711b43236436e60c85f4bc8fce50934dbc43e3b9a8abfed81  ./dogfood/preview/.github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-gradle/action.yml
 c897b261ab50e2f632d77da2c1142a37c9d2132452f364a3afea280bb4ae046a  ./dogfood/preview/.github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-mise/action.yml
@@ -188,6 +197,7 @@ bddc83246cb41c96ff35b54f23738ed9417ab0d4cdc033d9f1d0d0e299b4907d  ./dogfood/prev
 26686311e6ed571244bbc799879ce34bdf5fd3785cd3d2475cc8ec82cb0c4113  ./dogfood/preview/.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-bun/action.yml
 571be85434d7ed449bf9337fd85b806ec2bb9ad9d6d4f6d6f49c6eab8177d30a  ./dogfood/preview/.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-cli/action.yml
 5d6b4a6770a3311ed6921d2a4e621e8bd5c5eb1b3c660ee54db0dae50a9f9e9f  ./dogfood/preview/.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-contract/action.yml
+85531e1ff52e8d0e5946224c77ac3e9f66e79becbd35512a1a612fe3e318aed1  ./dogfood/preview/.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-dbt/action.yml
 970b6f9aa4d36775cd83eabedfde37ca72731e214dd4ca050a25806455245a16  ./dogfood/preview/.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-freshness/action.yml
 41e5b1b6319105c6f448c53fe1bcb8f5de87154599801781c8a362470e183b8c  ./dogfood/preview/.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-gradle/action.yml
 08d2854893b26b8701df4a89b32cfe665c0e94f6f5936dc032bfe50800024bc3  ./dogfood/preview/.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-mise/action.yml
@@ -206,6 +216,7 @@ e44d8fe4fa5c532b74cbb2698a9776f6dd8957cc50bb1e61e0542f9cc510b25d  ./dogfood/prev
 0512e5333b2cfa358b2c4af51d9f3275843fda1a0be4476d7bd5ff4d38a6dcc8  ./dogfood/preview/.github/actions/qualification-cache-prepare-rust-velnor-actions-bun/action.yml
 0620e04efec93ad33baaf7e467baf3eeda92fb95bcf71dda573829a14c8314c0  ./dogfood/preview/.github/actions/qualification-cache-prepare-rust-velnor-actions-cli/action.yml
 e01e6275c7ced6d56939477beeee6fb8bc108a38c1e7ffdab35e6a1673b2f1e8  ./dogfood/preview/.github/actions/qualification-cache-prepare-rust-velnor-actions-contract/action.yml
+522f86e4be2e0631047ac4e918db167c83bd1b051152cce881298ec08bd11c49  ./dogfood/preview/.github/actions/qualification-cache-prepare-rust-velnor-actions-dbt/action.yml
 97168274ca1bbb6b14026cd79b33bb5929a76b7c3f69f4b6f0de86ef225345d3  ./dogfood/preview/.github/actions/qualification-cache-prepare-rust-velnor-actions-freshness/action.yml
 51e5e2ab48f845952aedca91b33e05312614c086c8160c6c69e6748f0b46a844  ./dogfood/preview/.github/actions/qualification-cache-prepare-rust-velnor-actions-gradle/action.yml
 7e4ab52c91291e3573b5a52135c72b17d08916e42b2881b63bcba3082fd0d42c  ./dogfood/preview/.github/actions/qualification-cache-prepare-rust-velnor-actions-mise/action.yml
@@ -227,8 +238,8 @@ cb49c6f58ec46707037d1b74458274d14e449f9cf41b0e92ea87e8294d024bcc  ./dogfood/prev
 67c5bf877a33a4aeea953a8e99d0b765333878657dc4e77d10bb45f8e0793b64  ./dogfood/preview/.github/actions/velnor-tools-prelude-u26/action.yml
 bc38e3f364cf2760b02a40e71f864b2623cbf74c83ea365d6d38cf88ba87bdb5  ./dogfood/preview/.github/dco.yml
 b1c27980ac1e35a19a84559e2e2e15ee659847345156c598059bd86f5e7d04b0  ./dogfood/preview/.github/scripts/velnor-tools-cache-identity.sh
-ce1dcfe49d1325755c59e24bb04c45ed29440aaa0049ee24292bc21fa32812cc  ./dogfood/preview/.github/velnor/task-execution-manifest-v1.json
-ab60109dd585addf741694e68b03fdd0ea14729c7d4a0da5d15df66ed7837e0b  ./dogfood/preview/.github/workflows/ci.yml
+dfbf823ff3c53c19c9c1707625da61602bb3c676065ac9192444de0a28c16ab8  ./dogfood/preview/.github/velnor/task-execution-manifest-v1.json
+1ec75fdacc19a5649370d265a20b70ddfc5f3acd964d00fe1a6863e555823122  ./dogfood/preview/.github/workflows/ci.yml
 6fad48a91f31b8313c88fa19684ed89d9e925149bb9d26f07243c93a46b76461  ./dogfood/preview/.github/workflows/freshness.yml
 4e37e82bcf948de1faa465f581525c726f6b75b655370e1596990db8aee91fc9  ./dogfood/preview/.github/workflows/job-image-candidate.yml
 66636f383f85b4e0df361a7d6c6617e615f13e38a683f55c40e5f1ce47606bc4  ./dogfood/preview/.github/workflows/product-release-binary.yml
@@ -236,7 +247,7 @@ ab60109dd585addf741694e68b03fdd0ea14729c7d4a0da5d15df66ed7837e0b  ./dogfood/prev
 8ca575ad401ac3632e41f9c69d147684b4451e1c2643a94e925178f551480f14  ./dogfood/preview/.github/workflows/product-release-images.yml
 757d4631bf573c38713d4d909b1ebe2ea2466852a25a659fe9f881c4618ec5aa  ./dogfood/preview/.github/workflows/product-release.yml
 4be64347009d3b6571034c42f3f2c4429944d6cfdb7714ea5f3ebf98deb785cb  ./dogfood/preview/.github/workflows/qualification.yml
-0553cee603f5120823a2846c4a64d48f16faed32608a7277a35149b31dabea00  ./dogfood/tree.sha256
+d75e9c884b64365e15739c852c57003c2f2f8724528b3448a12683e246a1580f  ./dogfood/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./empty-suite/generate.exit
 c83441390123e74310f47f7cae62c277ab09f764642906ec4b7111a8da5b4444  ./empty-suite/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./empty-suite/generate.stdout.txt
