@@ -62,6 +62,7 @@ fn discovery(groups: Vec<ProposedTask>) -> Discovery {
         tofu_note: None,
         tofu_units: Vec::new(),
         affected: crate::affected_inputs::AffectedInputs::default(),
+        bun: crate::workflow_task_jobs::bun_inventory::BunInventory::default(),
     }
 }
 
@@ -91,6 +92,7 @@ fn tofu_install_follows_executed_suite_per_policy() {
         "velnor-actions-rust",
         "velnor-actions-tofu",
         "velnor-actions-bun",
+        "velnor-actions-gradle",
         "velnor-actions-workflow-renderer",
         "velnor-actions-actionlint",
         "velnor-actions-freshness",
@@ -115,6 +117,7 @@ fn tofu_install_follows_executed_suite_per_policy() {
         "velnor-actions-rust",
         "velnor-actions-tofu",
         "velnor-actions-bun",
+        "velnor-actions-gradle",
         "velnor-actions-workflow-renderer",
         "velnor-actions-actionlint",
         "velnor-actions-freshness",
@@ -215,6 +218,7 @@ fn every_workspace_member_is_classified_for_tofu() {
             "velnor-actions-rust",
             "velnor-actions-tofu",
             "velnor-actions-bun",
+            "velnor-actions-gradle",
             "velnor-actions-workflow-renderer",
             "velnor-actions-actionlint",
             "velnor-actions-freshness",

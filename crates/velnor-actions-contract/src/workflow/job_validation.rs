@@ -108,6 +108,12 @@ impl Job {
                 format!("id_token_write_needs_environment:{id}"),
             ));
         }
+        if matches!(effective.packages, PermissionLevel::Write) {
+            return Err(ContractError::identity(
+                "job.permissions",
+                format!("packages_write_outside_publication:{id}"),
+            ));
+        }
         if pr_triggered && matches!(effective.contents, PermissionLevel::Write) {
             return Err(ContractError::identity(
                 "job.permissions",

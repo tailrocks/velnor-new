@@ -87,6 +87,8 @@ pub struct Discovery {
     pub tofu_units: Vec<crate::select_tofu::TofuSelectionUnit>,
     /// Resolved graphs and declared input rules for affected selection.
     pub affected: crate::affected_inputs::AffectedInputs,
+    /// Bun workspaces named by `[stacks.bun]`, read from the same index.
+    pub(crate) bun: crate::workflow_task_jobs::bun_inventory::BunInventory,
 }
 
 /// Run file index, detection, inventory, profiles, and task derivation.
@@ -168,6 +170,12 @@ fn discover_inner(
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
     let (consumer_manifest_json, consumer_manifest_stand_in) =
         consumer_manifest::for_policy(root, config.workflow.policy)?;
+    let bun = match &config.stacks.bun {
+        Some(stack) => {
+            crate::workflow_task_jobs::bun_inventory::BunInventory::load(root, &index, stack)?
+        }
+        None => crate::workflow_task_jobs::bun_inventory::BunInventory::default(),
+    };
     Ok(Discovery {
         mise_checks,
         statuses,
@@ -183,6 +191,7 @@ fn discover_inner(
         tofu_note: tofu_step.note,
         tofu_units,
         affected: crate::affected_inputs::AffectedInputs { resolves, rules },
+        bun,
     })
 }
 

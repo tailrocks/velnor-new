@@ -47,6 +47,7 @@ fn discovery_with_proposals(proposals: Vec<ProposedTask>) -> Discovery {
         skipped_non_utf8: false,
         tofu_note: None,
         tofu_units: Vec::new(),
+        bun: crate::workflow_task_jobs::bun_inventory::BunInventory::default(),
     }
 }
 

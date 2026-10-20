@@ -1,0 +1,73 @@
+{
+  "parents": [
+    "877b848fc1952cb45b50e5e52658a7280444d49a",
+    "e65971c57c50f308c2a464840caf7eadaa243d32"
+  ],
+  "source_reviewer": "runner_context_review",
+  "source_review_result": "PASS",
+  "scope": "The source review covers six conflict and fixture files. It does not prove live runner operation.",
+  "checks": [
+    {
+      "result": "PASS",
+      "log": "main-e659-generator-build-20261020.log",
+      "sha256": "265938b421149e79d97df7f8e2fed4f081f956bbb3202f314361a734298def22"
+    },
+    {
+      "result": "PASS",
+      "log": "main-e659-generation-1-20261020.log",
+      "sha256": "b4974cb7747c09f39b993a6d176c92a58caa0e8532cbf85f5798ada03632af54"
+    },
+    {
+      "result": "PASS",
+      "log": "main-e659-generation-2-20261020.log",
+      "sha256": "4e8ebbbc89fb787fc76f66ede6d1b2220a3250030c7dcfed865b3c8381b061c2"
+    },
+    {
+      "result": "PASS",
+      "log": "main-e659-generation-apply-20261020.log",
+      "sha256": "c9038874cb8c9da1f6ebf64f91a330a43ca1d09973691aacbbb6609736b430d8"
+    },
+    {
+      "result": "PASS",
+      "log": "main-e659-goldens-capture-20261020.log",
+      "sha256": "65102a78924e8b28bb8c0c05afc5b5b0871d3dc7bd11f3bd80d3e063488ee718"
+    },
+    {
+      "result": "FAIL",
+      "description": "The full root run has 5376 PASS results and four FAIL results.",
+      "log": "main-e659-root-nextest-20261020.log",
+      "sha256": "bff85e0a303ee9c3045e90ed8feb4214fed9329cf64add01a06bd24f900b292e",
+      "nextest_run": "4b3399ae-77c6-40f4-8ccf-33adf73889c1"
+    },
+    {
+      "result": "PASS",
+      "description": "The root strict check used all targets and all features.",
+      "log": "main-e659-root-strict-20261020.log",
+      "sha256": "e7dbd3faea07e93f92a8885d96cbae379f122ce6906edd3e5487aa7748bf889b"
+    },
+    {
+      "result": "PASS",
+      "description": "Both size checks have PASS results.",
+      "log": "main-e659-doc-cap-focused-20261020.log",
+      "sha256": "96de6eee73f450b2a392a336d7d52e119f74b76aeac16db6f61750c103b56dc9",
+      "nextest_run": "283f2567-9b68-44e6-ad13-c8e584516410"
+    },
+    {
+      "result": "PASS",
+      "description": "The changed package strict check used all targets and all features.",
+      "log": "main-e659-cap-strict-20261020.log",
+      "sha256": "2e48a45a300dcf066f962c327276c5e7351e057cb6d44ecd17459b9fe5fbdce1"
+    }
+  ],
+  "remaining": "The cache owner protocol repair needs integration. The final full source gates remain necessary.",
+  "repairs": [
+    "Move the complete budget test block into its own module.",
+    "Keep the hard decision text. Remove one blank line.",
+    "Move the untracked build output outside the source tree."
+  ],
+  "cap_source_review": {
+    "reviewer": "runner_context_review",
+    "internal_rs_sha256": "108d9f008d7ccd359169b0b1e63f7df43745859de7ea847646383f4e3cbfe5c6",
+    "internal_budget_tests_rs_sha256": "02380dc7e28aa1969aa9185057320a399c806cd5f6be3bc0bd11ff85e6ac3fbb"
+  }
+}

@@ -1032,6 +1032,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "velnor-actions-gradle"
+version = "0.1.29"
+dependencies = [
+ "sha2",
+]
+
+[[package]]
 name = "velnor-actions-mise"
 version = "0.1.29"
 dependencies = [
@@ -1063,6 +1070,7 @@ dependencies = [
  "thiserror",
  "toml",
  "velnor-actions-actionlint",
+ "velnor-actions-bun",
  "velnor-actions-contract",
  "velnor-actions-mise",
  "velnor-actions-rust",

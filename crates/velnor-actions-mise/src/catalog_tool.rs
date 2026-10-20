@@ -25,11 +25,13 @@ pub enum PinnedTool {
     ReleasePlz,
     /// OCI registry client (`crane`) for image publication and promotion.
     Crane,
+    /// JavaScript runtime and package manager (`bun`) for Bun workspace jobs.
+    Bun,
 }
 
 impl PinnedTool {
     /// Every catalog tool in stable order.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Rust,
         Self::MrBoxington,
         Self::Gh,
@@ -40,6 +42,7 @@ impl PinnedTool {
         Self::Opentofu,
         Self::ReleasePlz,
         Self::Crane,
+        Self::Bun,
     ];
 
     /// Mise registry name used in `<tool>@<version>` selectors.
@@ -56,6 +59,7 @@ impl PinnedTool {
             Self::Opentofu => "opentofu",
             Self::ReleasePlz => "release-plz",
             Self::Crane => "crane",
+            Self::Bun => "bun",
         }
     }
 

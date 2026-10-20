@@ -112,6 +112,13 @@ pub const RELEASE_PLZ_VERSION: &str = "0.3.173";
 /// Install: Mise registry name `crane` through the aqua backend, which checks
 /// the release `checksums.txt` before the binary is used.
 pub const CRANE_VERSION: &str = "0.22.1";
+/// Qualified Bun (`oven-sh/bun` tag `bun-v1.4.3`): the package manager and
+/// script runner of Bun workspace jobs. A project declares its own exact
+/// version in `mise.toml` (hard decision 4); this pin applies only to
+/// callers that declare none.
+/// Source: `https://api.github.com/repos/oven-sh/bun/releases/latest`; checked 2026-10-20.
+/// Install: Mise core `bun@<exact>`.
+pub const BUN_VERSION: &str = "1.4.3";
 /// Fixed Cosign signer helper (release tag `v3.1.3`), not installed by Mise.
 /// Source release assets and GitHub API SHA-256 digest were verified 2026-10-18.
 pub const COSIGN_VERSION: &str = "3.1.3";
@@ -159,6 +166,8 @@ pub struct ToolCatalog {
     release_plz: String,
     /// Pinned `crane` registry client version.
     crane: String,
+    /// Pinned Bun version.
+    bun: String,
     /// Project-declared tools and the sources declaring them.
     project: std::collections::BTreeSet<PinnedTool>,
     /// Whether project versions render as run-time references.
@@ -188,6 +197,7 @@ impl ToolCatalog {
             opentofu: OPENTOFU_VERSION.to_owned(),
             release_plz: RELEASE_PLZ_VERSION.to_owned(),
             crane: CRANE_VERSION.to_owned(),
+            bun: BUN_VERSION.to_owned(),
             project: std::collections::BTreeSet::new(),
             emission: false,
             export_rustup_toolchain: true,
@@ -238,6 +248,7 @@ impl ToolCatalog {
             opentofu: opentofu.to_owned(),
             release_plz: RELEASE_PLZ_VERSION.to_owned(),
             crane: CRANE_VERSION.to_owned(),
+            bun: BUN_VERSION.to_owned(),
             project: std::collections::BTreeSet::new(),
             emission: false,
             export_rustup_toolchain: true,
@@ -259,6 +270,7 @@ impl ToolCatalog {
             PinnedTool::Opentofu => &self.opentofu,
             PinnedTool::ReleasePlz => &self.release_plz,
             PinnedTool::Crane => &self.crane,
+            PinnedTool::Bun => &self.bun,
         }
     }
 

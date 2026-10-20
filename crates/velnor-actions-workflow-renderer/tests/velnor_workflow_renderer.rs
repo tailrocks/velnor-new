@@ -6,6 +6,8 @@ mod required_tool_path;
 mod impl_adapter_wire_renderer;
 #[path = "impl_renderer_acquire.rs"]
 mod impl_renderer_acquire;
+#[path = "impl_renderer_bun.rs"]
+mod impl_renderer_bun;
 #[path = "impl_renderer_cache_script.rs"]
 mod impl_renderer_cache_script;
 #[path = "impl_renderer_cache_steps.rs"]

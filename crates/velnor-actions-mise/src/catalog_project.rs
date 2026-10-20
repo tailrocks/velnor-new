@@ -38,6 +38,7 @@ impl PinnedTool {
             Self::Opentofu => "VELNOR_TOOL_OPENTOFU",
             Self::ReleasePlz => "VELNOR_TOOL_RELEASE_PLZ",
             Self::Crane => "VELNOR_TOOL_CRANE",
+            Self::Bun => "VELNOR_TOOL_BUN",
         }
     }
 
@@ -132,6 +133,7 @@ impl ToolCatalog {
             PinnedTool::Opentofu => &mut self.opentofu,
             PinnedTool::ReleasePlz => &mut self.release_plz,
             PinnedTool::Crane => &mut self.crane,
+            PinnedTool::Bun => &mut self.bun,
         }
     }
 }

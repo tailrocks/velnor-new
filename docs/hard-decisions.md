@@ -44,7 +44,6 @@ and overlaps the independent checks.
 - The pinned actionlint does not parse the native step keys yet; the narrow,
   documented bridge in `velnor-actions-actionlint` (`STEP_PARALLELISM_IGNORES`)
   suppresses only the unknown `background` key and the body-less join step.
-
 - The dependency-seed job is not a crate job: it runs no checks and is not in
   Required, so this decision governs crate jobs only. Crate jobs restore
   compiled caches read-only. See the
@@ -397,3 +396,5 @@ request or fork event, a privileged job that checks out or runs repository
 code, a release tag that rebuilds instead of promoting, BuildKit cache
 backends and mounts that hand a credential to the build, or overwriting or
 deleting a published release asset or moving a published tag.
+
+**Gradle stack decisions (HD-4a adapter version grammars, HD-5 one job per Gradle project) and the release-asset Maven bundle choice** are recorded in [Gradle stack contract](proposed/gradle-contract.md#decisions); adopted per the split brief, owner may revisit.

@@ -27,9 +27,12 @@ use crate::impl_repo_policy::{
 /// Intra-workspace edges allowed per member package.
 fn expected_internal(dir: &str) -> Vec<&str> {
     match dir {
-        "crates/velnor-actions-contract" | "crates/velnor-actions-freshness" => vec![],
+        "crates/velnor-actions-contract"
+        | "crates/velnor-actions-freshness"
+        | "crates/velnor-actions-gradle" => vec![],
         "crates/velnor-actions-orchestrator" => vec![
             "velnor-actions-actionlint",
+            "velnor-actions-bun",
             "velnor-actions-contract",
             "velnor-actions-mise",
             "velnor-actions-rust",

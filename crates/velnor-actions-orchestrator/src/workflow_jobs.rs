@@ -231,6 +231,7 @@ pub(crate) fn read_actions_permissions() -> Permissions {
         pull_requests: PermissionLevel::None,
         id_token: PermissionLevel::None,
         actions: PermissionLevel::Read,
+        packages: PermissionLevel::None,
     }
 }
 
