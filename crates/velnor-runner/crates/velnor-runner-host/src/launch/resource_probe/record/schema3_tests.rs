@@ -89,7 +89,8 @@ fn parser_rejects_schema_two_and_pid_authority_failures() {
 
 #[test]
 fn parser_accepts_verified_btrfs_mountinfo_and_statx_device_difference() {
-    let record = fixture_record();
+    let mut record = fixture_record();
+    record.docker_root_device_minor = 38;
     assert_eq!(record.docker_root_device_major, 0);
     assert_eq!(record.docker_root_device_minor, 38);
     assert_eq!(record.docker_root_statx_device_major, 0);
@@ -106,6 +107,7 @@ fn parser_requires_matching_devices_for_non_btrfs_filesystems() {
     ext4.docker_root_inode_total = 100;
     ext4.docker_root_inode_free = 90;
     ext4.docker_root_inode_available = 80;
+    ext4.docker_root_statx_device_minor = ext4.docker_root_device_minor + 3;
     assert!(ProbeRecord::parse(&serialize(&ext4), MEMORY_TOTAL).is_none());
 
     ext4.docker_root_statx_device_minor = ext4.docker_root_device_minor;
