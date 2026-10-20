@@ -1568,5 +1568,15 @@
       "The unassigned runner replacement test still fails.",
       "The full runner gate remains incomplete."
     ]
+  },
+  "fixture_bindings_and_empty_values": {
+    "result": "PASS",
+    "tests": 6,
+    "run_id": "25d1b906-df65-4c3f-96b5-de804122ddad",
+    "log_sha256": "6e284f336fe32c033c6b0803ec827ca98ea13ad3033debc302d99e674968c8e4",
+    "author": "replay_context_refactor",
+    "reviewer": "runner_context_review",
+    "scope": "The test bindings keep the same ownership and drop order. The assertions still require empty values.",
+    "remaining": "The strict runner gate still has other failures."
   }
 }

@@ -30,7 +30,7 @@ pub(super) const MESSAGE_ID: i64 = 77;
 pub(super) const DOCKER_ROOT: &str = "/var/lib/docker";
 
 pub(super) struct Fixture {
-    _scratch: Scratch,
+    scratch: Scratch,
     pub(super) journal: Journal,
     pub(super) scope: ConnectionJournal,
     pub(super) request: crate::journal::AssignmentIdentity,
@@ -134,7 +134,7 @@ impl Fixture {
             .await
             .map_err(|error| error.to_string())?;
         Ok(Self {
-            _scratch: scratch,
+            scratch,
             journal,
             scope,
             request,
@@ -145,7 +145,7 @@ impl Fixture {
 
     pub(super) async fn reopen(self) -> Result<Self, String> {
         let Self {
-            _scratch,
+            scratch,
             journal,
             scope,
             request: _,
@@ -154,7 +154,7 @@ impl Fixture {
         } = self;
         drop(scope);
         drop(journal);
-        let journal = Journal::open(&_scratch.file())
+        let journal = Journal::open(&scratch.file())
             .await
             .map_err(|error| error.to_string())?;
         let scope = journal
@@ -168,7 +168,7 @@ impl Fixture {
             .await
             .map_err(|error| error.to_string())?;
         Ok(Self {
-            _scratch,
+            scratch,
             journal,
             scope,
             request,
@@ -178,7 +178,7 @@ impl Fixture {
     }
 
     pub(super) fn journal_file(&self) -> PathBuf {
-        self._scratch.file()
+        self.scratch.file()
     }
 }
 
