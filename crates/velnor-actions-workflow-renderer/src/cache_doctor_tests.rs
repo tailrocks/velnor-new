@@ -285,3 +285,31 @@ fn tools_identity_binds_resolved_versions_never_hashed_files() {
         "i1_tools_identity_shape",
     );
 }
+
+#[test]
+fn bun_families_fail_closed_until_a_generator_emits_them() {
+    for (family, path) in [
+        ("bun-install", "${{ runner.temp }}/velnor/bun-cache"),
+        (
+            "playwright-browsers",
+            "${{ runner.temp }}/velnor/ms-playwright",
+        ),
+    ] {
+        let key = format!("velnor-v1-{family}-trusted-x-y");
+        for (uses, condition) in [
+            (RESTORE, None),
+            (
+                SAVE,
+                Some("success() && needs.plan.outputs.cache_trust == 'trusted'"),
+            ),
+        ] {
+            let step = action("Cache", uses, &[("key", &key), ("path", path)], condition);
+            let jobs = with_reader(step);
+            let text = check(&jobs).expect_err(family).to_string();
+            assert!(
+                text.contains("i2_path_not_from_spec") || text.contains("i7_save_not_trust_gated"),
+                "{family}: {text}"
+            );
+        }
+    }
+}
