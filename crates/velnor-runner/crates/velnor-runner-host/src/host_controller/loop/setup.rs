@@ -19,6 +19,17 @@ use super::state::PreparedConnection;
 #[path = "setup/connection.rs"]
 mod connection;
 
+pub(super) struct PrepareConnectionRequest<'a> {
+    pub(super) state: &'a Path,
+    pub(super) journal: &'a Journal,
+    pub(super) binding: &'a RepositoryConnection,
+    pub(super) config: &'a HostConfig,
+    pub(super) selected_engine: &'a SelectedEngineContext,
+    pub(super) worker_images: &'a VerifiedWorkerImages,
+    pub(super) docker: &'a Docker,
+    pub(super) options: ConnectionLaunchOptions<'a>,
+}
+
 pub(super) fn discover_retirements(
     state: &Path,
     config: &HostConfig,
@@ -92,7 +103,7 @@ pub(super) async fn prepare_active_connections(
             requested_header_capacity_after(config, binding, cursor.as_ref())?
         };
         prepared.push(
-            prepare_connection(
+            prepare_connection(PrepareConnectionRequest {
                 state,
                 journal,
                 binding,
@@ -100,11 +111,11 @@ pub(super) async fn prepare_active_connections(
                 selected_engine,
                 worker_images,
                 docker,
-                ConnectionLaunchOptions {
+                options: ConnectionLaunchOptions {
                     release_read_secret,
                     requested_header_capacity: target,
                 },
-            )
+            })
             .await?,
         );
     }
@@ -114,26 +125,9 @@ pub(super) async fn prepare_active_connections(
 /// Keep durable identifiers when preparation fails after acquire.
 #[must_use = "handle preparation failure to retain durable identifiers"]
 pub(super) async fn prepare_connection(
-    state: &Path,
-    journal: &Journal,
-    binding: &RepositoryConnection,
-    config: &HostConfig,
-    selected_engine: &SelectedEngineContext,
-    worker_images: &VerifiedWorkerImages,
-    docker: &Docker,
-    options: ConnectionLaunchOptions<'_>,
+    request: PrepareConnectionRequest<'_>,
 ) -> Result<PreparedConnection, ListenFault> {
-    connection::prepare_connection(connection::PrepareConnectionRequest {
-        state,
-        journal,
-        binding,
-        config,
-        selected_engine,
-        worker_images,
-        docker,
-        options,
-    })
-    .await
+    connection::prepare_connection(request).await
 }
 
 pub(super) async fn bind_connection(

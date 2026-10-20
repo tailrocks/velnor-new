@@ -113,19 +113,19 @@ impl TransitionEffects for JournalEffects<'_> {
                 .find(|allocation| allocation.connection_id() == &binding.connection_id)
                 .map_or(0, crate::journal::HeaderAllocation::target)
         };
-        let prepared = setup::prepare_connection(
-            self.state,
-            self.journal,
+        let prepared = setup::prepare_connection(setup::PrepareConnectionRequest {
+            state: self.state,
+            journal: self.journal,
             binding,
             config,
-            self.selected_engine,
-            self.worker_images,
-            self.docker,
-            setup::ConnectionLaunchOptions {
+            selected_engine: self.selected_engine,
+            worker_images: self.worker_images,
+            docker: self.docker,
+            options: setup::ConnectionLaunchOptions {
                 release_read_secret: self.release_read_secret,
                 requested_header_capacity: target,
             },
-        )
+        })
         .await
         .map_err(|_| HostError::Journal)?;
         self.connection_sessions.push(prepared);

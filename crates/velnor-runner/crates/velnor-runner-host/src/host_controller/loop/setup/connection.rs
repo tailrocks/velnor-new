@@ -1,14 +1,10 @@
-use std::{collections::BTreeMap, path::Path, sync::Arc};
-
-use bollard::Docker;
+use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
-    config::{HostConfig, RepositoryConnection},
     error::HostError,
-    journal::{EngineContext, Journal},
+    journal::EngineContext,
     launch::{
-        CompletionWorker, SelectedEngineContext, VerifiedWorkerImages,
-        bootstrap::NativeCleanupRuntime, open_connection_session,
+        CompletionWorker, bootstrap::NativeCleanupRuntime, open_connection_session,
         scoped_runtime::RunnerReadyRegistry,
     },
     launch_blocking::ListenFault,
@@ -18,18 +14,7 @@ use crate::{
 
 use super::super::state::{PreparedConnection, SessionCredentials, session_assigned_total};
 
-use super::{ConnectionLaunchOptions, bind_connection, connection_pat};
-
-pub(super) struct PrepareConnectionRequest<'a> {
-    pub(super) state: &'a Path,
-    pub(super) journal: &'a Journal,
-    pub(super) binding: &'a RepositoryConnection,
-    pub(super) config: &'a HostConfig,
-    pub(super) selected_engine: &'a SelectedEngineContext,
-    pub(super) worker_images: &'a VerifiedWorkerImages,
-    pub(super) docker: &'a Docker,
-    pub(super) options: ConnectionLaunchOptions<'a>,
-}
+use super::{PrepareConnectionRequest, bind_connection, connection_pat};
 
 struct ConnectionAuthority {
     setup: ConnectionSetup,
