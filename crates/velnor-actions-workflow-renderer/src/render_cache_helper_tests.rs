@@ -56,6 +56,7 @@ fn context(expected: Option<Step>, required: bool) -> RenderContext {
 
 fn job(steps: Vec<Step>) -> Job {
     Job {
+        services: Vec::new(),
         display_name: "Cache helper".to_owned(),
         runs_on: RUNS_ON.to_owned(),
         check_runner: None,

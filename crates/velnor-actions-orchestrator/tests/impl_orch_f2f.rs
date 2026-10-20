@@ -22,6 +22,7 @@ fn expected_internal(dir: &str) -> Vec<&str> {
             "velnor-actions-actionlint",
             "velnor-actions-bun",
             "velnor-actions-contract",
+            "velnor-actions-gradle",
             "velnor-actions-mise",
             "velnor-actions-rust",
             "velnor-actions-tofu",

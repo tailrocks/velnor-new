@@ -2,6 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Internal operation of the Gradle run step (verify wrapper, install JDK, run Gradle).
+pub const GRADLE_RUN_OPERATION: &str = "gradle-run-v1";
+
 mod qualification_cache;
 pub use qualification_cache::{
     QualificationCacheCompositeId, QualificationCacheCompositePhase, QualificationCacheStepId,
@@ -9,7 +12,6 @@ pub use qualification_cache::{
     qualification_cache_after_save_output_names, qualification_cache_before_save_output_names,
     qualification_cache_composite_output_names, qualification_cache_layer_prepare_input_names,
 };
-
 /// Stable GitHub Actions id for a step whose outputs or outcome have consumers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]

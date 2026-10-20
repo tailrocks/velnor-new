@@ -289,6 +289,7 @@ fn native_check_ir() -> WorkflowIr {
     jobs.insert(
         "check-native".to_owned(),
         Job {
+            services: Vec::new(),
             display_name: "Check / native".to_owned(),
             runs_on: "native-scale-set".to_owned(),
             check_runner: Some(CheckRunner {

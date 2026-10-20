@@ -36,6 +36,7 @@ fn generated_tree_includes_launcher_composite_only_for_cache_jobs() -> Result<()
 
     let step = crate::steps::cache_tar_launcher_step(&"a".repeat(64))?;
     let job = Job {
+        services: Vec::new(),
         display_name: "Cache job".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,

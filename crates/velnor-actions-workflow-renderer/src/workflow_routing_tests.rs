@@ -127,6 +127,7 @@ fn typed_policy_routes_late_added_jobs_and_rejects_darwin() {
 
 fn job(runs_on: &str) -> Job {
     Job {
+        services: Vec::new(),
         display_name: "Runner routing fixture".to_owned(),
         runs_on: runs_on.to_owned(),
         check_runner: None,

@@ -14,6 +14,7 @@ use crate::vectors::{CARGO_DENY_VERSION, LYCHEE_TOOL_SPEC, LYCHEE_VERSION};
 
 fn shell_job(run: Vec<String>) -> Job {
     Job {
+        services: Vec::new(),
         check_runner: None,
         display_name: "Plan".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),

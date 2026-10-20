@@ -93,6 +93,16 @@ impl Job {
         if let Some(cache_mode) = &self.cache_mode {
             cache_mode.validate("job.cache_mode")?;
         }
+        let mut service_ids = BTreeSet::new();
+        for service in &self.services {
+            service.validate()?;
+            if !service_ids.insert(service.id.as_str()) {
+                return Err(ContractError::identity(
+                    "job.services",
+                    format!("duplicate_service:{}", service.id),
+                ));
+            }
+        }
         if let Some(environment) = &self.environment
             && !is_valid_environment(environment)
         {
@@ -143,6 +153,7 @@ mod admission_tests {
 
     fn ephemeral_job(condition: Option<&str>) -> Job {
         Job {
+            services: Vec::new(),
             display_name: "Check / native".to_owned(),
             runs_on: "native-scale-set".to_owned(),
             check_runner: Some(CheckRunner {

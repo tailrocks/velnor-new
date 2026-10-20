@@ -152,6 +152,7 @@ mod tests {
     fn extracts_job_starting_with_provider_prelude() {
         let job_id = "tofu-provider-prelude-alpha";
         let mut job = Job {
+            services: Vec::new(),
             display_name: "tofu provider prelude alpha".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             timeout_minutes: JobTimeout::CRATE,

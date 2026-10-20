@@ -11,7 +11,7 @@ use velnor_actions_orchestrator::{
     admit_release_policy_from_env, admit_stable_tag_origin_from_env, execute_check, merge_internal,
     merge_passed, plan_internal, plan_outputs_from_staged_admission, publish_final_report,
     publish_plan_files_with_outputs, resolve_task_execution, response_path_for, retrieve_reports,
-    run_bun_registry_install, run_private_fetch, run_private_revoke,
+    run_bun_registry_install, run_gradle_run, run_private_fetch, run_private_revoke,
     select_stable_release_source_from_env, write_preseed_manifest,
     write_qualification_source_evidence, write_request, write_stable_tag_intent_from_env,
     write_stable_tag_origin_from_env, write_task_report,
@@ -55,6 +55,7 @@ pub(super) fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::Fetch => finish_internal_result(retrieve_reports()),
         InternalOp::Report => finish_internal_result(write_task_report()),
         InternalOp::BunRegistryInstall => finish_internal_result(run_bun_registry_install()),
+        InternalOp::GradleRun => finish_internal_result(run_gradle_run()),
         InternalOp::PlaywrightInstall => {
             finish_internal_result(velnor_actions_orchestrator::run_playwright_install())
         }

@@ -195,6 +195,7 @@ fn all_declared_tasks_join_required_fan_in() {
         (
             crate::render::FINAL_JOB_ID.to_owned(),
             Job {
+                services: Vec::new(),
                 display_name: "Required verdict".to_owned(),
                 runs_on: "ubuntu-26.04".to_owned(),
                 check_runner: None,
@@ -248,6 +249,7 @@ fn paired_task_lanes_are_complete_and_join_required_together() {
         (
             crate::render::FINAL_JOB_ID.to_owned(),
             Job {
+                services: Vec::new(),
                 display_name: "Required verdict".to_owned(),
                 runs_on: "ubuntu-26.04".to_owned(),
                 check_runner: None,

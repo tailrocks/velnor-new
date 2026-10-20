@@ -69,6 +69,7 @@ fn exact_concurrency() -> Concurrency {
 
 fn plan_job() -> Result<Job, RenderError> {
     Ok(Job {
+        services: Vec::new(),
         display_name: "Plan".to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,

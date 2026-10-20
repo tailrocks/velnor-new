@@ -2,6 +2,7 @@ use super::*;
 
 fn job(needs: Vec<String>, condition: Option<&str>) -> Job {
     Job {
+        services: Vec::new(),
         display_name: "Rust / crate".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         timeout_minutes: velnor_actions_contract::JobTimeout::CRATE,

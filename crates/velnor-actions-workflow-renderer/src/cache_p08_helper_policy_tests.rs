@@ -15,6 +15,7 @@ fn setup() -> crate::MiseSetup {
 
 fn job_with(steps: Vec<Step>) -> Job {
     Job {
+        services: Vec::new(),
         display_name: "Cache helper policy".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,

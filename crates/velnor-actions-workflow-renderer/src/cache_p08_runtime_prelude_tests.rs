@@ -287,6 +287,7 @@ fn tools_cache_conditions_follow_the_job_plan_dependency() -> Result<(), RenderE
             BTreeMap::new(),
         )?;
         let mut job = Job {
+            services: Vec::new(),
             display_name: "Suite check".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             check_runner: None,
@@ -340,6 +341,7 @@ fn generated_files_exist_only_for_real_v2_consumers() -> Result<(), RenderError>
     let payload = payload("ubuntu-26.04")?;
     let prelude = payload.runtime_prelude_step()?;
     let job = Job {
+        services: Vec::new(),
         display_name: "fixture".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,

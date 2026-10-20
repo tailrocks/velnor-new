@@ -37,6 +37,7 @@ fn workflow_ir(pin: &str) -> Result<WorkflowIr, Box<dyn std::error::Error>> {
     jobs.insert(
         "plan".to_owned(),
         Job {
+            services: Vec::new(),
             check_runner: None,
             display_name: "Plan".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),

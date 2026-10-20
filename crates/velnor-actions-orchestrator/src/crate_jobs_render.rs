@@ -89,6 +89,7 @@ pub(super) fn render_job(
     )?);
     steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);
     Ok(Job {
+        services: Vec::new(),
         display_name: model.display_name.clone(),
         runs_on: label.to_owned(),
         check_runner: None,

@@ -174,6 +174,7 @@ fn suite_job_record(
     steps: Vec<Step>,
 ) -> Job {
     Job {
+        services: Vec::new(),
         display_name,
         runs_on: runs_on.to_owned(),
         check_runner: None,

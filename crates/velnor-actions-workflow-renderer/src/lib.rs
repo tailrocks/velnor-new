@@ -28,6 +28,7 @@ mod dispatch_cache_boundary;
 mod document;
 mod document_env;
 mod document_lanes;
+mod document_services;
 mod document_steps;
 mod error;
 mod expressions;

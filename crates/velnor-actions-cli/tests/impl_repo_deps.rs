@@ -34,6 +34,7 @@ fn expected_internal(dir: &str) -> Vec<&str> {
             "velnor-actions-actionlint",
             "velnor-actions-bun",
             "velnor-actions-contract",
+            "velnor-actions-gradle",
             "velnor-actions-mise",
             "velnor-actions-rust",
             "velnor-actions-tofu",
@@ -243,14 +244,18 @@ fn init_reads_no_tool_files() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn parse_tests_live_outside_src() -> Result<(), Box<dyn Error>> {
-    for path in tree_files("crates/velnor-actions-cli/src", "rs")? {
+    let args = read("crates/velnor-actions-cli/src/args.rs")?;
+    assert!(
+        !args.contains("#[test]"),
+        "CLI argument definitions should not contain inline tests"
+    );
+    let integration_tests = read("crates/velnor-actions-cli/tests/impl_cli_args.rs")?;
+    for test in ["unknown_flags_exit_two", "generate_output_dir_flag_parses"] {
         assert!(
-            !std::fs::read_to_string(&path)?.contains("#[test]"),
-            "{}",
-            path.display()
+            integration_tests.contains(&format!("fn {test}")),
+            "CLI argument parsing coverage is missing {test}"
         );
     }
-    assert!(read("crates/velnor-actions-cli/tests/impl_cli_args.rs")?.contains("#[test]"));
     Ok(())
 }
 

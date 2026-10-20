@@ -16,6 +16,7 @@ fn job(needs: &[&str]) -> Job {
         permissions: None,
         cache_mode: None,
         environment: None,
+        services: Vec::new(),
         steps: vec![Step {
             name: "Run".to_owned(),
             id: None,

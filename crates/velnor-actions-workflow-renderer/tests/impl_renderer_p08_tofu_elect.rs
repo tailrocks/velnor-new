@@ -38,6 +38,7 @@ fn provider_job(key: &str, path: &str) -> Job {
         },
     };
     Job {
+        services: Vec::new(),
         display_name: "Provider".to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,
@@ -78,6 +79,7 @@ const PROVIDER_PATH_B: &str = "${{ runner.temp }}/velnor/tofu-cache/b3-111111111
 #[test]
 fn provider_writer_election_elects_lowest_id_per_key() -> Result<(), RenderError> {
     let bare = Job {
+        services: Vec::new(),
         display_name: "Plan".to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,
@@ -159,6 +161,7 @@ fn provider_writer_election_saves_push_gated_exact_entry() -> Result<(), RenderE
 #[test]
 fn provider_writer_election_skips_keyless_and_reruns() -> Result<(), RenderError> {
     let bare = Job {
+        services: Vec::new(),
         display_name: "Bare".to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,

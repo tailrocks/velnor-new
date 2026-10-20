@@ -85,6 +85,7 @@ fn check_ir(runs_on: &str, runner: CheckRunner) -> WorkflowIr {
                 permissions: None,
                 cache_mode: None,
                 environment: None,
+                services: Vec::new(),
                 steps: vec![Step {
                     parallel: false,
                     name: "Run check".to_owned(),

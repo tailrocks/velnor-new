@@ -44,6 +44,7 @@ fn gate_jobs() -> BTreeMap<String, Job> {
     jobs.insert(
         FINAL_JOB_ID.to_owned(),
         Job {
+            services: Vec::new(),
             display_name: FINAL_DISPLAY_NAME.to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             check_runner: None,
@@ -135,6 +136,7 @@ fn consumer_ir_still_rejects_velnor_ids() {
     jobs.insert(
         "alint".to_owned(),
         Job {
+            services: Vec::new(),
             display_name: "Alint".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             check_runner: None,

@@ -165,6 +165,7 @@ fn scale_set_selector() -> velnor_actions_contract::ScaleSetSelector {
 
 fn required_verdict() -> Job {
     Job {
+        services: Vec::new(),
         display_name: velnor_actions_contract::REQUIRED_VERDICT_DISPLAY_NAME.to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,

@@ -38,6 +38,7 @@ fn consumer_steps() -> Vec<Step> {
 
 fn plan_job(steps: Vec<Step>) -> Job {
     Job {
+        services: Vec::new(),
         display_name: "Plan".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,
@@ -53,6 +54,7 @@ fn plan_job(steps: Vec<Step>) -> Job {
 
 fn consumer_job(needs: Vec<String>, condition: Option<&str>, steps: Vec<Step>) -> Job {
     Job {
+        services: Vec::new(),
         display_name: "Helper consumer".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,

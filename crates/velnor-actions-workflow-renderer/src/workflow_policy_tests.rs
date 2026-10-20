@@ -44,6 +44,7 @@ fn check_workflow(
         jobs: BTreeMap::from([(
             id.to_owned(),
             Job {
+                services: Vec::new(),
                 display_name: "Check / runner policy".to_owned(),
                 runs_on: runs_on.to_owned(),
                 check_runner: Some(CheckRunner {

@@ -9,6 +9,8 @@ mod impl_gradle_edges;
 mod impl_gradle_integrity;
 #[path = "impl_gradle_lex.rs"]
 mod impl_gradle_lex;
+#[path = "impl_gradle_script.rs"]
+mod impl_gradle_script;
 #[path = "impl_gradle_settings.rs"]
 mod impl_gradle_settings;
 #[path = "impl_gradle_version.rs"]

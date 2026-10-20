@@ -19,6 +19,7 @@ fn runner_token() -> String {
 
 fn job(runs_on: &str) -> Job {
     Job {
+        services: Vec::new(),
         display_name: "Probe".to_owned(),
         runs_on: runs_on.to_owned(),
         timeout_minutes: JobTimeout::CRATE,

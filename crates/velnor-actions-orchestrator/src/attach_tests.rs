@@ -19,6 +19,7 @@ fn rust_plan_needs() -> PlanJobToolNeeds {
 /// Minimal crate job covering the crate attach branch.
 fn legacy_task_job() -> Job {
     Job {
+        services: Vec::new(),
         check_runner: None,
         display_name: "Rust / demo".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),

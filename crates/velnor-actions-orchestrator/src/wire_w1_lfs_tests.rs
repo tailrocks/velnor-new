@@ -21,6 +21,7 @@ fn checkout_lfs_pass_marks_only_checkout_steps() {
     jobs.insert(
         "a".to_owned(),
         Job {
+            services: Vec::new(),
             check_runner: None,
             display_name: "Demo".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),

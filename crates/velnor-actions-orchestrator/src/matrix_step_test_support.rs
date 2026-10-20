@@ -65,6 +65,7 @@ pub(super) fn obligation_workflow_ir(checkout_uses: &str, task_step: Step) -> Wo
 
 pub(super) fn obligation_plan_job(checkout_uses: &str) -> Job {
     Job {
+        services: Vec::new(),
         check_runner: None,
         display_name: "Plan".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
@@ -85,6 +86,7 @@ pub(super) fn obligation_plan_job(checkout_uses: &str) -> Job {
 
 pub(super) fn obligation_task_job(checkout_uses: &str, task_step: Step) -> Job {
     Job {
+        services: Vec::new(),
         check_runner: None,
         display_name: "Rust / demo".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),

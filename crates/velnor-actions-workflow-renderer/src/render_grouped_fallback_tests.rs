@@ -58,6 +58,7 @@ fn workflow() -> WorkflowIr {
 
 fn job(steps: Vec<Step>) -> Job {
     Job {
+        services: Vec::new(),
         display_name: "Rust / demo".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,
@@ -73,6 +74,7 @@ fn job(steps: Vec<Step>) -> Job {
 
 fn grouped_jobs() -> BTreeMap<String, Job> {
     let plan = Job {
+        services: Vec::new(),
         display_name: "Plan".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,
