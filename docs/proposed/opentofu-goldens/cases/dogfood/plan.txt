@@ -4,7 +4,7 @@ Repository: <repo>
 Detected stacks
   Rust: selected
   Mise check maintenance-helpers: test-maintenance-helpers (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
-  Workspace crates: 17
+  Workspace crates: 18
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-bun (crates/velnor-actions-bun/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin, test; depends on velnor-actions-freshness, velnor-actions-orchestrator]
@@ -69,7 +69,7 @@ Workflow to generate
     - rust-velnor-runner-github (23 steps)
     - rust-velnor-runner-host (23 steps)
     - zizmor (7 steps)
-    - 15 Rust crate jobs
+    - 16 Rust crate jobs
       Timeout: 8 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
       Entries:
@@ -184,7 +184,7 @@ Workflow to generate
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/doctest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/default
-  Parallel: 15 execution jobs; dependencies preserved; no matrix fan-out
+  Parallel: 16 execution jobs; dependencies preserved; no matrix fan-out
   Critical path: stack/rust/crates/velnor-actions-actionlint/build/default -> stack/rust/crates/velnor-actions-actionlint/nextest/default (2 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
