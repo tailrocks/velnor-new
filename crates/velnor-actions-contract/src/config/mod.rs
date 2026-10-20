@@ -41,6 +41,7 @@ mod tofu_apply;
 mod tools;
 mod verification;
 mod workflow;
+mod workflow_flags;
 mod workflow_task;
 
 pub(crate) use binary_release::validate_static_release_inventory;
