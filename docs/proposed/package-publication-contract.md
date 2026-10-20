@@ -157,7 +157,7 @@ Rust crates consumed as `git` dependencies release by tag. The same
   tags and restrict creation to maintainers.
 - A protected `release` environment in each producer repository.
 - `velnor-deps` GitHub App (contents: read) for consumers to fetch bundles
-  is item P and does not exist yet.
+  is item P; the App exists (id 5394413) and is installed on the producers.
 
 ## 8. npm packages (N)
 
@@ -239,7 +239,5 @@ Tests: `impl_orch_publish_maven.rs` (generated chain, roles, private-source
 ordering, determinism, stale declarations), `publish_maven_scripts_tests.rs`
 (the collect, verify and upload scripts run for real against fixture zips),
 `impl_renderer_publish_spec.rs` (internal operations by role, staged helper)
-and `publish_maven_tests.rs` (config grammar). Owner blockers: the same tag
-rulesets and protected `release` environment as section 7, and the
-`velnor-deps` GitHub App that does not exist yet (item P) before a consumer can
-fetch a private bundle.
+and `publish_maven_tests.rs` (config grammar). Owner blocker: the same tag
+rulesets and protected `release` environment as section 7.
