@@ -264,6 +264,15 @@
       "status": "current"
     },
     {
+      "checked_at": "2026-10-20T14:46:00Z",
+      "latest": "bun-v1.4.3",
+      "name": "bun",
+      "pinned": "1.4.3",
+      "qualified": "1.4.3",
+      "source": "https://api.github.com/repos/oven-sh/bun/releases/latest",
+      "status": "current"
+    },
+    {
       "name": "cosign",
       "pinned": "3.1.3",
       "qualified": "3.1.3",

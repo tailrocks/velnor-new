@@ -50,6 +50,14 @@ that each root holds `package.json` and `bun.lock`.
   of `bun@<x.y.z>` must equal it (`conflicting_project_tool_versions:bun`);
   any other manager is `unsupported_package_manager`.
 
+Bun is the catalog tool `PinnedTool::Bun` (Mise core `bun`). A project's
+`[tools] bun` (or `core:bun`) is read at run time into `VELNOR_TOOL_BUN` like
+every project-declared tool (hard decision 4); the catalog pin
+(`BUN_VERSION`, freshness-gated against the `oven-sh/bun` release feed) applies
+only to callers that declare none. Node is not a catalog tool: `bun run`
+provides a `node` alias for scripts, and a repository that needs a real Node
+runs that check as a Mise check.
+
 ## Workspace members
 
 The members of a root are the entries of `bun.lock` `workspaces` other than
