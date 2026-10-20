@@ -240,7 +240,8 @@ hash-pinned lock. Decisions:
   another build. Only `ubuntu-26.04` x86-64 is supported
   (`unsupported_platform` in the lock).
 - The install lands in `$RUNNER_TEMP/velnor/ms-playwright`, the path of the
-  `playwright-browsers` cache family (trusted writers only; not yet generated).
+  `playwright-browsers` [cache family](cache-families.md) (trusted writers only;
+  its restore and save steps are not generated yet).
 
 ## Remaining work
 

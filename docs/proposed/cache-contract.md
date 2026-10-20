@@ -87,16 +87,14 @@ The GitHub cache key MUST be:
 velnor-v${schema}-${layer}-${trust}-${compatibility_id}-${snapshot_id}
 ```
 
-Runtime-computed families (`sources`, `tofu-providers`) take `layer`, `schema`, and their one path list from
-the typed family spec (`workflow::cache_family`); a path change requires a schema bump (pinned by test). The
-Plan `Compute cache keys` step computes `trust` (`trusted`: protected default-branch push; `pr`: same-repo PR;
-`none` otherwise) and `s256-<64 hex>` digests with coreutils `sha256sum`. Sources compat hashes family,
-schema, paths, `uname -s`/`-m`, and `CARGO_HOME`, never a toolchain or tool version; its snapshot hashes the
-sorted `<root>\t<sha256 of Cargo.lock>` lines (providers add `tofu version`; snapshot is the root lock). The
-cache doctor rejects keys with `hashFiles`, job/workflow/run IDs, action SHAs, literal versions, or
-`ImageVersion`. Keys over 512 bytes fail generation (family bound) and the key step. Restore prefixes omit
-`snapshot_id` only within the same compatibility ID and the `trusted` scope; a `pr` prefix is never restored.
-A commit SHA alone MUST NOT be a cache identity.
+Runtime-computed families take `layer`, `schema`, their one path list, and their size ceiling from the typed
+family spec (`workflow::cache_family`); a path change requires a schema bump (pinned by test). The families, their
+keys, writers and budgets are specified in [cache families](cache-families.md). The Plan `Compute cache keys` step
+computes `trust` (`trusted`: protected default-branch push; `pr`: same-repo PR; `none` otherwise) and `s256-<64 hex>`
+digests with coreutils `sha256sum`. The cache doctor rejects keys with `hashFiles`, job/workflow/run IDs, action
+SHAs, literal versions, or `ImageVersion`. Keys over 512 bytes fail generation (family bound) and the key step.
+Restore prefixes omit `snapshot_id` only within the same compatibility ID and the `trusted` scope; a `pr` prefix is
+never restored. A commit SHA alone MUST NOT be a cache identity.
 
 ## 2. V1 Rust cache paths, transport, fallback, and [host seeds](host-seed-contract.md)
 
