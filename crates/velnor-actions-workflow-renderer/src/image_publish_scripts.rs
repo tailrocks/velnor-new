@@ -159,3 +159,27 @@ pub fn verify_script(gh: &str, id: &str, repository: &str, platforms: &[ImagePla
          gh attestation verify \"oci://{repository}@$img\" {common} --predicate-type \"https://spdx.dev/Document/v$val\"; done"
     )
 }
+
+/// Verify the commit's image digest and add the release tag to that digest.
+///
+/// The digest behind `sha-<tagged commit>` must carry a provenance
+/// attestation signed by this workflow for exactly the tagged commit on the
+/// default branch; only then is `<X.Y.Z>` added to the same digest. An
+/// existing release tag must already name that digest. Nothing is rebuilt.
+#[must_use]
+pub fn promote_script(crane: &str, gh: &str, repository: &str, branch: &str) -> String {
+    format!(
+        "set -eu; {crane}; {gh}; export DOCKER_CONFIG=\"{DOCKER_CONFIG_DIR}\"; \
+         dir=\"$RUNNER_TEMP/velnor/image-promote\"; rm -rf \"$dir\"; mkdir -p \"$dir\"; {GET}; \
+         ver=${{GITHUB_REF_NAME##*-v}}; get crane digest \"{repository}:sha-$GITHUB_SHA\"; dig=$val; \
+         printf '%s\\n' \"$dig\" | grep -Eqx 'sha256:[0-9a-f]{{64}}'; \
+         gh attestation verify \"oci://{repository}@$dig\" --repo \"$GITHUB_REPOSITORY\" \
+         --signer-workflow \"$GITHUB_REPOSITORY/.github/workflows/publish.yml\" \
+         --source-digest \"$GITHUB_SHA\" --source-ref refs/heads/{branch} \
+         --predicate-type https://slsa.dev/provenance/v1; \
+         if crane digest \"{repository}:$ver\" > \"$dir/.have\" 2> /dev/null; then \
+         read -r have < \"$dir/.have\"; [ \"$have\" = \"$dig\" ]; \
+         else crane tag \"{repository}@$dig\" \"$ver\"; fi; \
+         get crane digest \"{repository}:$ver\"; [ \"$val\" = \"$dig\" ]"
+    )
+}

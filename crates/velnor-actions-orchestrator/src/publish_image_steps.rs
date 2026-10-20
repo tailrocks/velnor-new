@@ -18,7 +18,7 @@ use velnor_actions_workflow_renderer::image_publish_scripts as script;
 use velnor_actions_workflow_renderer::publish_spec::{PublishJobSpec, PublishRole, PublishStep};
 use velnor_actions_workflow_renderer::{action_step, mise_setup_step};
 
-use super::{Inputs, bundle_job, plain, script_step};
+use super::{AUTHORITY_JOB, Inputs, bundle_job, plain, script_step};
 use crate::OrchestratorError;
 use crate::publish_release_steps::BRANCH_AUTHORITY_JOB;
 use crate::utf8::strings_of;
@@ -53,13 +53,7 @@ pub(crate) fn publish_job(
     crane: &str,
 ) -> Result<PublishJobSpec, OrchestratorError> {
     let id = image.id.as_str();
-    let owner = image
-        .repository
-        .split('/')
-        .nth(1)
-        .ok_or_else(|| OrchestratorError::Contract {
-            problem: format!("images.{id}:image_repository_owner"),
-        })?;
+    let owner = registry_owner(image)?;
     let branch_tag = is_image_tag(inputs.branch).then_some(inputs.branch);
     let step = |name: &str, body: String, token: bool| script_step(name, body, token);
     let mut steps = vec![
@@ -112,6 +106,58 @@ pub(crate) fn publish_job(
     job.environment = Some(IMAGE_ENVIRONMENT.to_owned());
     job.timeout_minutes = JobTimeout::try_from(60)?;
     Ok(job)
+}
+
+/// The promote job of one image: verify the attestation, then re-tag the digest.
+///
+/// It runs on the release tag the authority job verified, needs only the
+/// registry, `gh` and `crane`, and never builds or downloads a layout.
+pub(crate) fn promote_job(
+    inputs: &Inputs<'_>,
+    image: &ImageConfig,
+    gh: &str,
+    crane: &str,
+) -> Result<PublishJobSpec, OrchestratorError> {
+    let id = image.id.as_str();
+    let steps = vec![
+        plain(mise_setup_step(inputs.mise)?),
+        plain(script_step(
+            "Verify image registry owner",
+            script::owner_script(registry_owner(image)?),
+            false,
+        )?),
+        plain(script_step(
+            "Log in to the registry",
+            script::login_script(crane),
+            true,
+        )?),
+        plain(script_step(
+            "Promote image digest",
+            script::promote_script(crane, gh, &image.repository, inputs.branch),
+            true,
+        )?),
+    ];
+    let mut job = bundle_job(
+        inputs,
+        PublishRole::ImagePromote,
+        format!("Image promote ({id})"),
+        AUTHORITY_JOB.to_owned(),
+        steps,
+    );
+    job.condition = Some(format!("needs.{AUTHORITY_JOB}.outputs.artifact == '{id}'"));
+    job.environment = Some(IMAGE_ENVIRONMENT.to_owned());
+    Ok(job)
+}
+
+/// Lowercase registry owner segment of an image repository.
+fn registry_owner(image: &ImageConfig) -> Result<&str, OrchestratorError> {
+    image
+        .repository
+        .split('/')
+        .nth(1)
+        .ok_or_else(|| OrchestratorError::Contract {
+            problem: format!("images.{}:image_repository_owner", image.id),
+        })
 }
 
 /// Build provenance for the pushed index digest, stored with the image.
@@ -180,3 +226,7 @@ fn is_image_tag(name: &str) -> bool {
 #[cfg(test)]
 #[path = "publish_image_scripts_tests.rs"]
 mod scripts_tests;
+
+#[cfg(test)]
+#[path = "publish_image_promote_tests.rs"]
+mod promote_tests;
