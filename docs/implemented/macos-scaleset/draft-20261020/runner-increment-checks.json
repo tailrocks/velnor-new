@@ -1646,5 +1646,25 @@
     "reviewer": "execution_source_security_review",
     "scope": "The V10 test uses its own database. Current cleanup tests use completion and cleanup proofs. Incomplete proof keeps the reservation charged.",
     "remaining": "The unassigned runner retirement test and full runner gate remain incomplete."
+  },
+  "scoped_runtime_preparation_module": {
+    "result": "PASS",
+    "tests": 1,
+    "baseline_tests": 1,
+    "baseline_run_id": "a6d8769d-f324-4188-9adf-eadcf0eaf08f",
+    "run_id": "d5e03302-fa71-412a-84e9-da9f410400d3",
+    "log_sha256": "0f4ef45229a0d92231b45ecbe49b19a52aa747183f8a12c5c2e756359bc418a8",
+    "author": "root",
+    "reviewer": "runtime_stack_architecture",
+    "file_lines": [
+      283,
+      158
+    ],
+    "function_lines": [
+      73,
+      61
+    ],
+    "scope": "The moved function bodies stay the same. Only module paths and function visibility change. Both files meet the size limit.",
+    "remaining": "This test checks the no-start path and future size. The full runner gate remains incomplete."
   }
 }

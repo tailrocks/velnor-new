@@ -4,6 +4,7 @@ mod authorization;
 mod binding;
 mod channel_outcome;
 mod jit;
+mod preparation;
 mod provider_entry;
 mod registry;
 #[cfg(test)]
@@ -22,11 +23,11 @@ pub(crate) use authorization::{
     AuthorizedScopedExecution, PendingScopedExecution, ScopedHostContext,
     authorize_started_execution, prepare_listener,
 };
-use binding::{bind_started, cleanup_failed_pair};
 pub(crate) use jit::{
     ChannelReadyBootstrap, PendingChannelBootstrap, PendingJitBootstrap, RunnerReadyBootstrap,
     create_and_bind,
 };
+use preparation::prepare_started_and_bound;
 pub(crate) use provider_entry::prepare_and_bind_scoped;
 #[cfg(test)]
 pub(in crate::launch) use provider_entry::prepare_and_bind_scoped_with_test_provider;
@@ -251,148 +252,6 @@ where
         Ok(ready) => Ok(ScopedChannelOutcome::Ready(ready)),
         Err(pending) => Ok(ScopedChannelOutcome::PendingChannel(pending)),
     }
-}
-
-async fn prepare_started_and_bound<P: ImageProvider>(
-    prepared: PreparedAcquiredBootstrap,
-    docker: &Docker,
-    scoped: &ConnectionJournal,
-    host: &Journal,
-    provider: &P,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
-) -> Result<ScopedRuntimeOutcome, HostError> {
-    let StartedPairPreparation {
-        mut prepared,
-        network,
-        started,
-    } = match Box::pin(prepare_network_and_started_pair(
-        prepared, docker, scoped, host, provider, engine, images,
-    ))
-    .await
-    {
-        Ok(preparation) => preparation,
-        Err(pending) => return Ok(pending),
-    };
-    let reservation_id = prepared.acquired().reservation_id();
-    let initialization = match Box::pin(
-        crate::worker::storage_initialization::finish_after_pair_mounts(
-            docker,
-            scoped,
-            prepared.storage_mut().pending_initialization_mut(),
-            started.mount_handoff(),
-        ),
-    )
-    .await
-    {
-        Ok(initialization) => initialization,
-        Err(error) => return Ok(pending(prepared, Some(network), Some(started), None, error)),
-    };
-    let metadata = match scoped.metadata_initialization_ready(reservation_id).await {
-        Ok(Some(metadata)) => metadata,
-        Ok(None) => {
-            return Ok(pending_with_initialization(
-                prepared,
-                Some(network),
-                Some(started),
-                None,
-                Some(initialization),
-                HostError::Journal,
-            ));
-        }
-        Err(error) => {
-            return Ok(pending_with_initialization(
-                prepared,
-                Some(network),
-                Some(started),
-                None,
-                Some(initialization),
-                error,
-            ));
-        }
-    };
-    Box::pin(bind_started(
-        prepared,
-        network,
-        started,
-        metadata,
-        initialization,
-        docker,
-        scoped,
-        host,
-        provider,
-        engine,
-        images,
-    ))
-    .await
-}
-
-struct StartedPairPreparation {
-    prepared: PreparedAcquiredBootstrap,
-    network: RecordedStorageNetwork,
-    started: StartedBootstrapPair,
-}
-
-async fn prepare_network_and_started_pair<P: ImageProvider>(
-    prepared: PreparedAcquiredBootstrap,
-    docker: &Docker,
-    scoped: &ConnectionJournal,
-    host: &Journal,
-    provider: &P,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
-) -> Result<StartedPairPreparation, ScopedRuntimeOutcome> {
-    let reservation_id = prepared.acquired().reservation_id();
-    let Some(initializer) = prepared.storage().pending_initialization() else {
-        return Err(pending(prepared, None, None, None, HostError::Journal));
-    };
-    let network = match Box::pin(super::bootstrap::create_owned_network(
-        docker,
-        scoped,
-        engine,
-        reservation_id,
-    ))
-    .await
-    {
-        Ok(network) => network,
-        Err(error) => return Err(pending(prepared, None, None, None, error)),
-    };
-    let started = match Box::pin(super::bootstrap::start_bootstrap_pair(
-        &prepared,
-        &network,
-        initializer.metadata_handoff(),
-        initializer,
-        docker,
-        scoped,
-        engine,
-        images,
-    ))
-    .await
-    {
-        Ok(started) => started,
-        Err(failure) => {
-            let (error, pending_pair) = failure.into_parts();
-            return Err(cleanup_failed_pair(
-                prepared,
-                network,
-                error,
-                pending_pair,
-                docker,
-                scoped,
-                host,
-                provider,
-                engine,
-                images,
-                reservation_id,
-            )
-            .await);
-        }
-    };
-    Ok(StartedPairPreparation {
-        prepared,
-        network,
-        started,
-    })
 }
 
 fn pending(
