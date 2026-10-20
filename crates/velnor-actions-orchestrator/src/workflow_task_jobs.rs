@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, VelnorConfig};
+use velnor_actions_contract::{Job, Step, VelnorConfig};
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::{
     build_verification_task_job,
@@ -12,6 +12,7 @@ use velnor_actions_workflow_renderer::{
 };
 
 use crate::OrchestratorError;
+use crate::config::private_wiring::PrivateWiring;
 use crate::discover::Discovery;
 use crate::workflow::CHECKOUT_USES;
 
@@ -22,6 +23,8 @@ pub(crate) fn policies(
     discovery: &Discovery,
     catalog: &ToolCatalog,
     fetch_roots: &[String],
+    acquire: Option<&Step>,
+    private: Option<&PrivateWiring>,
 ) -> Result<Vec<WorkflowTaskPolicy>, OrchestratorError> {
     let verification_policies = crate::verification_tasks::policies(config, discovery)?;
     let build_policies = crate::build_tasks::policies(config, discovery)?;
@@ -33,6 +36,8 @@ pub(crate) fn policies(
             discovery,
             catalog,
             fetch_roots,
+            acquire,
+            private,
         },
     )?;
     let mut workflow_tasks = verification_policies

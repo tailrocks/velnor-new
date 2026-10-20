@@ -108,13 +108,6 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
     let report_helper_version = input.consumer_release_version.to_owned();
     let generator_version = env!("CARGO_PKG_VERSION");
     let policy = input.config.workflow.policy;
-    let workflow_tasks = crate::workflow_task_jobs::policies(
-        input.root,
-        input.config,
-        input.discovery,
-        catalog,
-        input.fetch_roots,
-    )?;
     let validation = input.config.workflow.generator_validation;
     let verify = crate::verify::verify_kinds(&input.config.workflow.verify.jobs)?;
     let support = support_workflow(policy, validation, input.discovery, &verify);
@@ -126,6 +119,17 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
         )?),
         WorkflowPolicy::VelnorRepositoryV1 => None,
     };
+    let private =
+        crate::config::private_wiring::PrivateWiring::load(input.root, input.config, catalog)?;
+    let workflow_tasks = crate::workflow_task_jobs::policies(
+        input.root,
+        input.config,
+        input.discovery,
+        catalog,
+        input.fetch_roots,
+        acquire.as_ref(),
+        private.as_ref(),
+    )?;
     let format = wire_w1::workspace_format_step(input.discovery, catalog)?;
     let rust = match (plan_uses_rust(input.discovery, policy), format.is_some()) {
         (false, false) => PlanRustNeed::None,
@@ -140,11 +144,7 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
         gh: policy == WorkflowPolicy::VelnorRepositoryV1,
     };
     Ok(PreparedWorkflow {
-        private: crate::config::private_wiring::PrivateWiring::load(
-            input.root,
-            input.config,
-            catalog,
-        )?,
+        private,
         catalog: catalog.clone(),
         report_helper_version,
         generator_version,

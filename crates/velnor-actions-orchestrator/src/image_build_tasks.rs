@@ -6,11 +6,12 @@ use std::fs;
 use std::path::{Component, Path};
 
 use velnor_actions_contract::config::analyze_dockerfile;
-use velnor_actions_contract::{ImageConfig, ImagePrebuilt, VelnorConfig};
+use velnor_actions_contract::{ImageConfig, ImagePrebuilt, Step, VelnorConfig};
 use velnor_actions_mise::{GitRequest, ToolCatalog};
 use velnor_actions_workflow_renderer::verification_jobs::ImageBuildPolicy;
 
 use crate::OrchestratorError;
+use crate::config::private_wiring::PrivateWiring;
 use crate::discover::Discovery;
 use crate::safe_read::{RepoRead, read_repo_file};
 
@@ -34,6 +35,10 @@ pub(crate) struct PrebuiltInputs<'a> {
     pub(crate) discovery: &'a Discovery,
     pub(crate) catalog: &'a ToolCatalog,
     pub(crate) fetch_roots: &'a [String],
+    /// Helper staging step (consumer policy); the private-source block needs it.
+    pub(crate) acquire: Option<&'a Step>,
+    /// Private-source wiring; `None` without `[private_sources]`.
+    pub(crate) private: Option<&'a PrivateWiring>,
 }
 
 fn resolve(
@@ -66,12 +71,7 @@ fn resolve(
     {
         return Err(failure(&image.id, "image_prebuilt_stage_exists"));
     }
-    let prebuilt_steps = crate::image_prebuilt::steps(
-        image,
-        prebuilt.discovery,
-        prebuilt.catalog,
-        prebuilt.fetch_roots,
-    )?;
+    let prebuilt_steps = crate::image_prebuilt::steps(image, prebuilt)?;
     Ok(ImageBuildPolicy {
         image: image.clone(),
         dockerfile_sha256,

@@ -14,18 +14,28 @@ use velnor_actions_rust::PackageRecord;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
+use crate::image_build_tasks::PrebuiltInputs;
 use crate::utf8::strings_of;
 
 const BUILD_STEP: &str = "Build release binary";
 const STAGE_STEP: &str = "Stage release binary";
 
 /// Steps shared by every platform job of one `cargo_bin` image.
+///
+/// Private Cargo sources are retrieved exactly like a crate job does: the
+/// mint, fetch and revoke block runs after the helper is staged and before
+/// the Cargo source fetch, so no credential outlives the Velnor-owned fetch.
 pub(crate) fn steps(
     image: &ImageConfig,
-    discovery: &Discovery,
-    catalog: &ToolCatalog,
-    fetch_roots: &[String],
+    inputs: &PrebuiltInputs<'_>,
 ) -> Result<Vec<Step>, OrchestratorError> {
+    let PrebuiltInputs {
+        discovery,
+        catalog,
+        fetch_roots,
+        acquire,
+        private,
+    } = *inputs;
     let Some(ImagePrebuilt::CargoBin {
         package,
         bin,
@@ -60,6 +70,14 @@ pub(crate) fn steps(
         catalog, true, false, false, false,
     )?];
     steps.extend(crate::source_cache::restore_step_for_crate(&roots, true)?);
+    let block = match private {
+        Some(private) => private.steps_for_roots(&roots)?,
+        None => Vec::new(),
+    };
+    if !block.is_empty() {
+        steps.extend(acquire.cloned());
+        steps.extend(block);
+    }
     steps.extend(source_steps);
     let target_dir = format!("${{{{ runner.temp }}}}/velnor/image-target/{}", image.id);
     let mut build_env = env;
@@ -168,3 +186,7 @@ fn failure(image: &str, problem: &str) -> OrchestratorError {
         problem: format!("images.{image}:{problem}"),
     }
 }
+
+#[cfg(test)]
+#[path = "image_prebuilt_tests.rs"]
+mod tests;
