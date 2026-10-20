@@ -1070,5 +1070,26 @@
     ],
     "review_sha256": "6009b931d231555f2d2a19e111ac4bcb95d6151916b60021e33d59f572f650c6",
     "scope": "The lookup checks executable paths and hashes. Runtime cache production and live installation tests remain NOT_RUN."
+  },
+  "cache_step_identity": {
+    "result": "PASS",
+    "source_base": "80c30ff665861074467c85a6ea1a8f127a7b4be2",
+    "tests": 15,
+    "checks": [
+      {
+        "log": "qualification-cache-stepid-capped-parent-20261020.log",
+        "sha256": "bce9eea372c7b71ea47f20ff965d4ddbccc0f2b2d2ec29c6f4163835ee1dc14d",
+        "exit_status": 0,
+        "run_id": "1421a81d-1fac-4915-8bfe-ba59eb08126b"
+      },
+      {
+        "log": "qualification-cache-stepid-capped-parent-clippy-20261020.log",
+        "sha256": "7afb2acaca6b7f5fc8011f49bc065efc8b6fd0d518449366bd7732f3d6860cf2",
+        "exit_status": 0
+      }
+    ],
+    "reviewer": "obsolete_capacity_cleanup",
+    "language_reviewer": "helper_language_review",
+    "scope": "The tests check step IDs, job IDs, file sizes, and test registration. Generated cache steps and live tests remain necessary."
   }
 }

@@ -2,14 +2,10 @@
 
 use super::step::{Step, StepKind};
 use crate::errors::ContractError;
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 mod payload;
-use payload::{
-    action_has_prefix_for_kind, internal_operation, valid_checkout_payload,
-    valid_configured_checkout_payload, valid_mbx_cache, valid_mise_setup, valid_tool_seed_payload,
-};
 pub(super) use payload::{valid_cache_tar_launcher, valid_tools_cache_identity};
+use payload::{valid_configured_checkout_payload, valid_tool_seed_payload};
 
 /// Fixed local action path used for exact provider-cache admission.
 pub const TOFU_PROVIDER_ADMISSION_USES: &str = "./.github/actions/tofu-provider-admission";
@@ -72,249 +68,10 @@ pub const PRIVATE_REVOKE_OPERATION: &str = "private-revoke-v1";
 /// Pinned-action prefix of the private token mint step (HD-7).
 pub const PRIVATE_TOKEN_MINT_ACTION_PREFIX: &str = "actions/create-github-app-token@";
 
-pub use super::step_id::StepId;
+pub use super::step_id::{QualificationCacheStepId, QualificationCacheStepStage, StepId};
 
-/// Semantic step role used for workflow composition and validation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum StepRole {
-    /// Checkout whose credentials are disabled.
-    Checkout,
-    /// Copy from the trusted, exact-key host tool seed.
-    ToolSeed,
-    /// Install the exact catalog tools used by later steps.
-    PreparePinnedTools,
-    /// Install the pinned Rust components used by task work.
-    PrepareRustComponents,
-    /// Pinned Mise action that owns its built-in tools cache.
-    MiseSetup,
-    /// Authenticated cargo-deny analyzer bootstrap.
-    CargoDeny,
-    /// Authenticated cargo-machete analyzer bootstrap.
-    CargoMachete,
-    /// Authenticated actionlint analyzer bootstrap.
-    Actionlint,
-    /// Authenticated zizmor analyzer bootstrap.
-    Zizmor,
-    /// Authenticated markdownlint analyzer bootstrap.
-    Markdownlint,
-    /// Authenticated strict-JSON check bootstrap.
-    StrictJson,
-    /// Authenticated frontmatter-ID check bootstrap.
-    FrontmatterId,
-    /// Authenticated link-check analyzer bootstrap.
-    LinkCheck,
-    /// Authenticated native-validators probe bootstrap.
-    NativeValidators,
-    /// Planner producing the plan outputs.
-    PlanProducer,
-    /// Baseline publisher producing the artifact name output.
-    BaselinePublisher,
-    /// Digest-verified Velnor executable acquisition.
-    AcquireVelnor,
-    /// Pre-seed copy of the helper into runner-temp staging.
-    PreseedStage,
-    /// Download of the plan artifact for final merging.
-    DownloadPlan,
-    /// Generated-tree freshness check.
-    CheckGenerated,
-    /// Upload of the planner report artifact.
-    PublishPlan,
-    /// Upload of one matrix task report.
-    MatrixReportUpload,
-    /// Download of a candidate attestation artifact.
-    AttestationDownload,
-    /// Fetch of exact matrix report artifacts.
-    FetchReports,
-    /// Upload of the final merged report.
-    PublishFinal,
-    /// `OpenTofu`/Rust plan formatting step.
-    PlanFormat,
-    /// Per-crate minimum-supported-Rust-version qualification.
-    MsrvQualification,
-    /// One elected tools-cache writer.
-    ToolsCacheSave,
-    /// Installer producing PATH output for cache-action steps only.
-    CacheTarLaunchers,
-    /// Runtime identity action that gates the V2 tools-cache layer.
-    ToolsCacheIdentity,
-    /// Read-only restore wrapper for the V2 tools-cache payload.
-    ToolsCacheRestore,
-    /// CLI operation that computes the normal tools-cache staging path.
-    NormalToolsCacheStage,
-    /// CLI operation that checks and imports the normal tools-cache payload.
-    NormalToolsCacheImport,
-    /// CLI operation that checks and stages the normal tools-cache payload.
-    NormalToolsCacheExport,
-    /// Restore of the shared Cargo registry and git sources snapshot.
-    CargoSourcesRestore,
-    /// Single elected writer for the shared Cargo sources snapshot.
-    CargoSourcesSave,
-    /// Fetch probe used to populate the Cargo source snapshot on a miss.
-    CargoSourcesFetch,
-    /// Compute runtime cache trust and keys before cache restores.
-    CacheKeys,
-    /// One elected `OpenTofu` provider-cache writer.
-    TofuProvidersSave,
-    /// `OpenTofu` provider-cache restore/admission composite before provider use.
-    TofuProvidersRestore,
-    /// `OpenTofu` init/validate shell that consumes the admitted plugin cache.
-    TofuProviderUse,
-    /// Pre-seed build of the candidate helper.
-    PreseedBuild,
-    /// Pre-seed manifest creation.
-    PreseedManifest,
-    /// Verification of the freshly built pre-seed candidate.
-    PreseedVerifyBuild,
-    /// Pre-seed candidate artifact upload.
-    PreseedUpload,
-    /// Pre-seed candidate artifact download.
-    PreseedDownload,
-    /// Pre-seed manifest verification.
-    PreseedVerifyManifest,
-    /// Native MBX action owns hosted and local object-cache lifecycle.
-    MbxCache,
-    /// Exact MBX binary and object-store verification after the native action.
-    MbxVersionCheck,
-    /// Exact MBX and Rust toolchain preflight.
-    MbxPreflight,
-    /// Final workspace-target cleanup before the native MBX action post step.
-    MbxWorkspaceCleanup,
-    /// Mint of the read-only App installation token for private sources (HD-7).
-    PrivateTokenMint,
-    /// Velnor-owned fetch of private sources; the only step that may bind a
-    /// private-source credential besides the revoke step (HD-7).
-    PrivateFetch,
-    /// Revocation of the private-source token, run `always()` (HD-7).
-    PrivateRevoke,
-}
-
-impl StepRole {
-    /// Check role-specific payload kind and identity.
-    pub(crate) fn validate(self, kind: &StepKind, job: &str) -> Result<(), ContractError> {
-        if self.matches_payload(kind) {
-            Ok(())
-        } else {
-            Err(ContractError::identity(
-                "step.role",
-                format!("role_kind_mismatch:{job}:{self:?}"),
-            ))
-        }
-    }
-
-    /// Match one role against its fixed kind and payload family.
-    fn matches_payload(self, kind: &StepKind) -> bool {
-        match self {
-            Self::Checkout => valid_checkout_payload(kind),
-            Self::ToolSeed => valid_tool_seed_payload(kind),
-            Self::MiseSetup => valid_mise_setup(kind),
-            Self::TofuProviderUse => super::step_protocol::valid_provider_use(kind),
-            Self::PlanProducer => internal_operation(kind, "plan-v1"),
-            Self::BaselinePublisher => internal_operation(kind, "publish-baseline-v1"),
-            Self::FetchReports => internal_operation(kind, "fetch-reports-v1"),
-            Self::DownloadPlan | Self::AttestationDownload | Self::PreseedDownload => {
-                action_has_prefix_for_kind(kind, "actions/download-artifact@")
-            }
-            Self::PublishPlan
-            | Self::MatrixReportUpload
-            | Self::PublishFinal
-            | Self::PreseedUpload => action_has_prefix_for_kind(kind, "actions/upload-artifact@"),
-            Self::ToolsCacheSave | Self::CargoSourcesSave => {
-                action_has_prefix_for_kind(kind, "actions/cache/save@")
-            }
-            Self::ToolsCacheIdentity => valid_tools_cache_identity(kind),
-            Self::ToolsCacheRestore => matches!(
-                kind,
-                StepKind::Action { uses, .. } if uses == TOOLS_CACHE_RESTORE_USES
-            ),
-            Self::NormalToolsCacheStage => {
-                internal_operation(kind, NORMAL_TOOLS_CACHE_STAGE_OPERATION)
-            }
-            Self::NormalToolsCacheImport => {
-                internal_operation(kind, NORMAL_TOOLS_CACHE_IMPORT_OPERATION)
-            }
-            Self::NormalToolsCacheExport => {
-                internal_operation(kind, NORMAL_TOOLS_CACHE_EXPORT_OPERATION)
-            }
-            Self::CacheTarLaunchers => valid_cache_tar_launcher(kind),
-            Self::CargoSourcesRestore => action_has_prefix_for_kind(kind, "actions/cache/restore@"),
-            Self::TofuProvidersRestore => super::step_protocol::valid_provider_restore(kind),
-            Self::TofuProvidersSave => super::step_protocol::valid_provider_save(kind),
-            Self::PrivateTokenMint => matches!(kind,
-                StepKind::Action { uses, .. } if uses.starts_with(PRIVATE_TOKEN_MINT_ACTION_PREFIX)),
-            Self::PrivateFetch => internal_operation(kind, PRIVATE_FETCH_OPERATION),
-            Self::PrivateRevoke => internal_operation(kind, PRIVATE_REVOKE_OPERATION),
-            Self::MbxCache => valid_mbx_cache(kind),
-            Self::MbxVersionCheck | Self::MbxWorkspaceCleanup => {
-                matches!(kind, StepKind::Shell { .. })
-            }
-            Self::PreparePinnedTools
-            | Self::PrepareRustComponents
-            | Self::CargoDeny
-            | Self::CargoMachete
-            | Self::Actionlint
-            | Self::Zizmor
-            | Self::Markdownlint
-            | Self::StrictJson
-            | Self::FrontmatterId
-            | Self::LinkCheck
-            | Self::NativeValidators
-            | Self::AcquireVelnor
-            | Self::PreseedStage
-            | Self::CheckGenerated
-            | Self::PlanFormat
-            | Self::MsrvQualification
-            | Self::CargoSourcesFetch
-            | Self::CacheKeys
-            | Self::PreseedBuild
-            | Self::PreseedManifest
-            | Self::PreseedVerifyBuild
-            | Self::PreseedVerifyManifest
-            | Self::MbxPreflight => matches!(kind, StepKind::Shell { .. }),
-        }
-    }
-
-    /// Output identity required for a role that publishes step outputs.
-    pub(crate) const fn required_id(self) -> Option<StepId> {
-        match self {
-            Self::PlanProducer => Some(StepId::Plan),
-            Self::BaselinePublisher => Some(StepId::PublishBaseline),
-            Self::ToolsCacheIdentity => Some(StepId::ToolsCacheIdentity),
-            Self::ToolsCacheRestore => Some(StepId::ToolsRestore),
-            Self::NormalToolsCacheStage => Some(StepId::NormalToolsCacheStage),
-            Self::NormalToolsCacheImport => Some(StepId::NormalToolsCacheImport),
-            Self::NormalToolsCacheExport => Some(StepId::NormalToolsCacheExport),
-            Self::CacheTarLaunchers => Some(StepId::CacheTarLaunchers),
-            Self::PreseedStage => Some(StepId::PreseedStage),
-            Self::TofuProvidersRestore => Some(StepId::TofuProviders),
-            Self::MbxVersionCheck => Some(StepId::MbxReady),
-            Self::CacheKeys => Some(StepId::CacheKeys),
-            Self::PrivateTokenMint => Some(StepId::DepsToken),
-            _ => None,
-        }
-    }
-
-    /// Role required for a typed step output identity.
-    pub(crate) const fn for_id(id: StepId) -> Self {
-        match id {
-            StepId::Plan => Self::PlanProducer,
-            StepId::PublishBaseline => Self::BaselinePublisher,
-            StepId::ToolsCacheIdentity => Self::ToolsCacheIdentity,
-            StepId::NormalToolsCacheStage => Self::NormalToolsCacheStage,
-            StepId::NormalToolsCacheImport => Self::NormalToolsCacheImport,
-            StepId::NormalToolsCacheExport => Self::NormalToolsCacheExport,
-            StepId::CacheTarLaunchers => Self::CacheTarLaunchers,
-            StepId::PreseedStage => Self::PreseedStage,
-            StepId::TofuProviders => Self::TofuProvidersRestore,
-            StepId::MbxReady => Self::MbxVersionCheck,
-            StepId::CacheKeys => Self::CacheKeys,
-            StepId::SourcesRestore => Self::CargoSourcesRestore,
-            StepId::SourcesFetch => Self::CargoSourcesFetch,
-            StepId::ToolsRestore => Self::ToolsCacheRestore,
-            StepId::DepsToken => Self::PrivateTokenMint,
-        }
-    }
-}
+mod role;
+pub use role::StepRole;
 
 /// Check that a step is the configured checkout owner in this workflow scope.
 ///
@@ -372,7 +129,7 @@ fn validate_step_identities(steps: &[Step], scope: &str) -> Result<(), ContractE
         {
             return Err(ContractError::identity(
                 "job.steps.id",
-                format!("duplicate_step_id:{scope}:{}", step_id.as_str()),
+                format!("duplicate_step_id:{scope}:{}", step_id.as_string()),
             ));
         }
     }

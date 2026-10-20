@@ -122,7 +122,8 @@ pub use step::{MAX_TASK_EXECUTION_ARGV, MAX_TASK_EXECUTION_ENV, Step, StepKind};
 pub use step_identity::{
     MBX_WORKSPACE_CLEAN_CONDITION, PRIVATE_FETCH_OPERATION, PRIVATE_FETCH_TOKEN_ENV,
     PRIVATE_NPM_READ_EXPR, PRIVATE_NPM_READ_TOKEN_ENV, PRIVATE_REVOKE_OPERATION,
-    PRIVATE_TOKEN_MINT_ACTION_PREFIX, PRIVATE_TOKEN_OUTPUT_EXPR, StepId, StepRole,
+    PRIVATE_TOKEN_MINT_ACTION_PREFIX, PRIVATE_TOKEN_OUTPUT_EXPR, QualificationCacheStepId,
+    QualificationCacheStepStage, StepId, StepRole,
 };
 pub use task_binding_digest::TaskBindingDigest;
 pub use task_execution_manifest::{
