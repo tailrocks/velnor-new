@@ -291,6 +291,30 @@
       "log_sha256": "c05464f7be4d9bc6897ba47a87c92aa856627a5811d818afc927c91d1c64534c",
       "author": "/root",
       "reviewer": "/root/obsolete_capacity_cleanup"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "9525590b4237d516196264b9abf16821289264f5",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host --lib -E 'test(doctor_probe) | test(committed_recovery)'",
+      "exit_status": 0,
+      "nextest_run": "a868044e-8a13-4d9d-a208-b6ea2868907e",
+      "passed": 9,
+      "log": "doctor-must-use-shipping-20261020.log",
+      "log_sha256": "dc5771ecdd737ece677f9266a747ce782e68d19822ab5e58f7d7fdf36e42c072",
+      "author": "/root",
+      "reviewer": "/root/journal_restart_repair"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "88dee4f8bcdaaf262c2a94c6e3430bcfb40f2950",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host --lib -E 'test(image_import)'",
+      "exit_status": 0,
+      "nextest_run": "0145a019-529e-4ff7-a117-e6c1d190ae46",
+      "passed": 17,
+      "log": "image-import-tuple-shipping-20261020.log",
+      "log_sha256": "6b06d57679e0967e0302402111a600a52e97597415a823485b774281dfe667f5",
+      "author": "/root",
+      "reviewer": "/root/journal_restart_repair"
     }
   ],
   "broader_pair_check": {
@@ -324,5 +348,36 @@
     "log_sha256": "22a10c8131a5eee289790a4de5d8b75df7bf87954f58af608f1809b14ed0e402",
     "author": "/root/container_metadata_repair",
     "reviewer": "/root"
+  },
+  "essential_mac_host_checks": {
+    "result": "PASS",
+    "repository": "donbeave/essential-mac",
+    "branch": "feat/velnor-scale-set",
+    "source_commit": "a06a70a4f4ca940e3da08f7cd32879a0162fa83d",
+    "platform": "darwin/arm64",
+    "rust_version": "1.99.1",
+    "mise_version": "2026.10.15",
+    "passed": 851,
+    "failed": 0,
+    "format_exit_status": 0,
+    "clippy_exit_status": 0,
+    "test_exit_status": 0,
+    "test_environment": {
+      "ESSENTIAL_MAC_ROOT": "/Users/donbeave/Projects/donbeave/essential-mac",
+      "CARGO_TARGET_DIR": "/Users/donbeave/Downloads/velnor-goal/build/essential-mac-darwin-verify-a06a70a4-target"
+    },
+    "commands": [
+      "mise run check:fmt",
+      "mise run check:clippy",
+      "mise run check:test"
+    ],
+    "receipt": "essential-mac-darwin-a06a70a4/run.txt",
+    "receipt_sha256": "10870d3629d8da0fb9b37a926164a12d94fef559f83eb6220159604619de7f9e",
+    "initial_test_exit_status": 101,
+    "initial_test_log_sha256": "3aea34b90794a997f20428aa6a419fb27c40eb30a32f55aa4c3cdfb490b3c326",
+    "test_log_sha256": "debee4fbc5bad52ebb873e497146a4bff72977447689e7148f83ff808840d430",
+    "author": "/root/execution_channel_helper",
+    "reviewer": null,
+    "scale_set_installation": "NOT_RUN"
   }
 }
