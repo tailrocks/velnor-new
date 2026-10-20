@@ -207,6 +207,69 @@ app_private_key_secret = \"VELNOR_DEPS_APP_PRIVATE_KEY\"\nnpm_scopes = [\"@chain
     Ok(())
 }
 
+const COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
+const SHA: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+#[test]
+fn pinned_release_assets_wire_the_app_token_block_ahead_of_every_install() -> TestResult {
+    let config = format!(
+        "{}[private_sources]\nowner = \"acme\"\napp_id_variable = \"VELNOR_DEPS_APP_ID\"\n\
+app_private_key_secret = \"VELNOR_DEPS_APP_PRIVATE_KEY\"\nnpm_scopes = [\"@chainargos\"]\n\
+[[private_sources.release_assets]]\nid = \"ui-assets\"\nrepository = \"acme/ui-assets\"\n\
+tag = \"v1.0.0\"\nasset = \"assets.tar.gz\"\nextract_to = \"ui-assets\"\n",
+        bun_config("")
+    );
+    let repo = make_repo(&config)?;
+    write_workspace(repo.path(), MISE)?;
+    fs::write(
+        repo.path().join(".velnor/deps.lock"),
+        format!(
+            "schema = 1\n[[release_assets]]\nid = \"ui-assets\"\nrepository = \"acme/ui-assets\"\n\
+tag = \"v1.0.0\"\ncommit = \"{COMMIT}\"\nasset = \"assets.tar.gz\"\nsha256 = \"{SHA}\"\n\
+extract_to = \"ui-assets\"\n"
+        ),
+    )?;
+    git(&["add", "."], repo.path())?;
+    let tree = render_staged_tree(&prepare(repo.path())?)?;
+    let ci = required_file(&tree, ".github/workflows/ci.yml")?;
+    let docs = job_body(ci, "bun-chainargos-docs")?;
+    let position = |needle: &str| docs.find(needle).ok_or(format!("missing {needle}: {docs}"));
+    let mint = position("name: Mint read-only token for private sources")?;
+    let fetch = position("name: Fetch private sources")?;
+    let revoke = position("name: Revoke private-source token")?;
+    let registry = position("name: Install dependencies (registry phase)")?;
+    let lifecycle = position("name: Install dependencies (lifecycle phase)")?;
+    let script = position("name: Test")?;
+    assert!(mint < fetch && fetch < revoke, "{docs}");
+    assert!(
+        revoke < registry && registry < lifecycle && lifecycle < script,
+        "the token is revoked before any repository code: {docs}"
+    );
+    assert!(docs.contains("repositories: ui-assets"), "{docs}");
+    assert!(
+        docs.contains("VELNOR_PRIVATE_SOURCES: release-assets"),
+        "{docs}"
+    );
+    assert!(
+        !docs.contains("name: Fetch private sources\n")
+            || docs.matches("deps-token.outputs").count() <= 2,
+        "{docs}"
+    );
+    // The App token is bound to the fetch and revoke steps only.
+    let after = &docs[revoke..];
+    let after = after
+        .split("name: Revoke private-source token")
+        .nth(1)
+        .ok_or("after")?;
+    let after = after
+        .split("- name:")
+        .skip(1)
+        .collect::<Vec<_>>()
+        .join("- name:");
+    assert!(!after.contains("deps-token"), "{after}");
+    Ok(())
+}
+
 fn npm_config(extra: &str) -> String {
     format!(
         "{}[[publish.npm]]\nid = \"ui\"\nroot = \"frontend\"\nmember = \"@chainargos/ui\"\n\

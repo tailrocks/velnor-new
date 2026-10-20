@@ -318,7 +318,7 @@ credential. Specification:
 
 **Status.** Adopted per the split brief; owner may revisit. Recorded
 2026-10-20 together with the release-asset Maven bundle choice. The
-`velnor-deps` App does not exist yet; creating it is an owner blocker.
+`velnor-deps` App exists (id 5394413); Bun jobs pin release assets too.
 
 **Rationale.** Without it a private sibling dependency forces a long-lived
 broad credential (a machine-user classic PAT or per-producer deploy keys)

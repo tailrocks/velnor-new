@@ -137,7 +137,18 @@ the `Fetch Cargo sources` step of
 
 - the Plan job (all lockful workspace roots), after moving the helper staging
   step up to just before the block, and
-- every Rust crate job, scoped to the roots the job fetches.
+- every Rust crate job, scoped to the roots the job fetches, and
+- every Bun member job, for the locked `release-assets` repositories only
+  (documentation-portal and platform pin release-asset bundles). The block is
+  the first thing in the job after the staged helper, so it is revoked before
+  `bun install` (registry and lifecycle phases) and every script runs. The
+  renderer rejects a Bun job whose block is partial, reordered, repeated or
+  preceded by any step other than the helper staging
+  (`bun_job_private_block`, `bun_job_private_block_late`).
+
+The Plan job gets the block only when the repository has Cargo roots; a
+Bun-only repository has no Cargo source fetch to precede and its release
+assets belong to the jobs that name them.
 
 A job gets the block only when its allowlist is non-empty: Cargo git sources of
 its roots under `owner`, plus the locked repositories of the kinds a Rust job

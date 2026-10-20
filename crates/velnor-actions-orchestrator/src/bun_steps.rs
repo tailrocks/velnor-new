@@ -43,15 +43,24 @@ pub(crate) struct MemberInputs<'a> {
     pub(crate) scopes: &'a [String],
     /// Staged helper step the registry phase needs (consumer policy).
     pub(crate) acquire: Option<&'a Step>,
+    /// Mint, fetch and revoke steps for pinned private release assets (HD-7);
+    /// empty when the member consumes none. They run before every other step.
+    pub(crate) private: &'a [Step],
 }
 
 /// Every step after checkout, in execution order.
 pub(crate) fn member_steps(input: &MemberInputs<'_>) -> Result<Vec<Step>, OrchestratorError> {
-    let mut steps = vec![prepare_step(input.catalog)?, verify_step(input)?];
+    let staged = !input.scopes.is_empty() || !input.private.is_empty();
+    let mut steps = Vec::new();
+    if staged {
+        steps.extend(input.acquire.cloned());
+    }
+    steps.extend(input.private.iter().cloned());
+    steps.push(prepare_step(input.catalog)?);
+    steps.push(verify_step(input)?);
     if input.scopes.is_empty() {
         steps.push(install_step(input)?);
     } else {
-        steps.extend(input.acquire.cloned());
         steps.push(bun_registry_step(
             input.root,
             input.scopes,

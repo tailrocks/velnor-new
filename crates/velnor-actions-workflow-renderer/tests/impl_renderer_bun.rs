@@ -5,6 +5,9 @@ use velnor_actions_contract::{
     JobTimeout, PRIVATE_NPM_READ_EXPR, PRIVATE_NPM_READ_TOKEN_ENV, PermissionLevel, Step, StepKind,
     StepRole,
 };
+use velnor_actions_workflow_renderer::private_source_steps::{
+    PrivateSourcesSpec, private_source_steps,
+};
 use velnor_actions_workflow_renderer::verification_jobs::{
     BUN_ROOT_ENV, BUN_RUNNER, BUN_SCOPES_ENV, BunMemberPolicy, build_bun_member_job,
     bun_registry_step,
@@ -67,12 +70,61 @@ fn invalid_policies_are_rejected() -> Result<(), RenderError> {
         ]),
         "bun_parallel_group_split",
     );
-    let mut mint = step("Mint", false)?;
-    mint.role = Some(StepRole::PrivateTokenMint);
-    reject(policy(vec![mint]), "bun_job_app_token_step");
-    let mut app_fetch = step("Fetch", false)?;
-    app_fetch.role = Some(StepRole::PrivateFetch);
-    reject(policy(vec![app_fetch]), "bun_job_app_token_step");
+    Ok(())
+}
+
+fn block() -> Result<Vec<Step>, RenderError> {
+    let repositories = ["ui-assets".to_owned()];
+    let roots = [".".to_owned()];
+    let env = BTreeMap::new();
+    Ok(private_source_steps(&PrivateSourcesSpec {
+        owner: "ChainArgos",
+        app_id_variable: "VELNOR_DEPS_APP_ID",
+        app_private_key_secret: "VELNOR_DEPS_APP_PRIVATE_KEY",
+        repositories: &repositories,
+        kinds: &["release-assets"],
+        roots: &roots,
+        toolchain_env: &env,
+    })?
+    .into())
+}
+
+#[test]
+fn the_app_token_block_must_be_whole_ordered_and_ahead_of_repository_code()
+-> Result<(), RenderError> {
+    let reject = |steps: Vec<Step>, code: &str| {
+        let error = build_bun_member_job(&policy(steps), CHECKOUT).expect_err(code);
+        assert!(error.to_string().contains(code), "{code}: {error}");
+    };
+    let mut whole = block()?;
+    whole.push(step("Install", false)?);
+    whole.push(step("Test", true)?);
+    let job = build_bun_member_job(&policy(whole.clone()), CHECKOUT)?;
+    assert_eq!(
+        job.permissions.expect("permissions").packages,
+        PermissionLevel::None,
+        "the App token needs no job permission"
+    );
+    let mut staged = whole.clone();
+    let mut helper = step("Acquire Velnor", false)?;
+    helper.role = Some(StepRole::AcquireVelnor);
+    staged.insert(0, helper);
+    build_bun_member_job(&policy(staged), CHECKOUT)?;
+    let mut late = whole.clone();
+    late.insert(0, step("Verify", false)?);
+    reject(late, "bun_job_private_block_late");
+    let mut partial = whole.clone();
+    partial.remove(2);
+    reject(partial, "bun_job_private_block");
+    let mut swapped = whole.clone();
+    swapped.swap(1, 2);
+    reject(swapped, "bun_job_private_block");
+    let mut doubled = whole.clone();
+    doubled.extend(block()?);
+    reject(doubled, "bun_job_private_block");
+    let mut orphan = step("Fetch", false)?;
+    orphan.role = Some(StepRole::PrivateFetch);
+    reject(vec![orphan], "bun_job_private_block");
     Ok(())
 }
 

@@ -48,7 +48,7 @@ pub(crate) fn policies(
             private,
         },
     )?;
-    let bun_policies = bun_tasks::policies(root, config, discovery, catalog, acquire)?;
+    let bun_policies = bun_tasks::policies(root, config, discovery, catalog, acquire, private)?;
     let mut workflow_tasks = verification_policies
         .iter()
         .cloned()

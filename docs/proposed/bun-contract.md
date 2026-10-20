@@ -163,6 +163,21 @@ and the job holds `packages: read`:
 The org admin must grant "Manage Actions access" read on each npm package to the
 consuming repository after its first publish; there is no API for it.
 
+### Private release assets
+
+A member job in a repository whose `.velnor/deps.lock` pins release assets
+(documentation-portal, platform) starts with the HD-7 block: the staged helper,
+then the mint, fetch and revoke steps for the `release-assets` repositories
+(see the [private sources contract](private-sources-contract.md)). Everything
+else follows the block, so the App token is dead before `bun install`, the
+lifecycle scripts and every script step. A job with both release assets and
+npm scopes holds both credentials in disjoint, ordered steps: the App token
+(revoked) and then the `github.token` registry phase. Maven bundles are not Bun
+inputs. The `velnor-deps` GitHub App exists (id 5394413, installed on the 17
+producer repositories with `contents:read` and `metadata:read`); the
+organization variable `VELNOR_DEPS_APP_ID` and secret
+`VELNOR_DEPS_APP_PRIVATE_KEY` are set.
+
 ## Affected selection (hard decision 3)
 
 A member is selected by a changed path in its directory (the deepest member
@@ -202,9 +217,6 @@ run time. Design decisions already taken:
 - `bun-install` and `playwright-browsers` cache families (design 3.4): the Bun
   package cache is currently cold in every job.
 - Playwright provisioning as above.
-- A Bun member job that also consumes release assets or Maven bundles through the
-  App-token block (documentation-portal, platform): the Bun job builder rejects
-  App-token steps today.
 - Members of an npm publication that depend on private npm scopes (the
   unprivileged build holds no registry credential).
 - Live qualification against the private fixture repositories: the lifecycle phase
