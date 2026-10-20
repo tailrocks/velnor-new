@@ -1622,5 +1622,17 @@
     "reviewer": "runtime_stack_architecture",
     "scope": "The authorization body stays the same. The caller supplies the same six borrowed references inside the existing blocking operation.",
     "remaining": "These tests do not prove live authorization. The strict runner gate still has other failures."
+  },
+  "sql_schema_comparison": {
+    "result": "PASS",
+    "tests": 4,
+    "combined_run_tests": 10,
+    "run_id": "b7adf6e6-9414-49c1-9535-a859dc6e81d2",
+    "log_sha256": "f1feb898b0b33b1e99b22c30748b7a2c70d1ca053f3624843fe9a5fbac2911d0",
+    "manifest_sha256": "0ca44188681c698f5fdfed467b203a17208548f8284ddff5fda0e4ca4356d171",
+    "author": "obsolete_capacity_cleanup",
+    "reviewer": "execution_source_security_review",
+    "scope": "The schema check keeps quoted text and comments unchanged. Different operators stay separate.",
+    "remaining": "This check does not prove the new retirement schema. The full runner gate remains incomplete."
   }
 }
