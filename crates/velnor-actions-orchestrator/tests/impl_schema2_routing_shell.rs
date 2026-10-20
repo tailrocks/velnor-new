@@ -56,6 +56,9 @@ fn tool_lines(body: &str) -> Vec<&str> {
                         | "- name: Restore Mise tools"
                         | "- name: Save Mise tools"
                         | "- name: Install cache tar adapters"
+                        | "- name: Record optional cache budget"
+                        | "- name: Admit optional cache save"
+                        | "- name: Report optional cache save failure"
                 );
                 return false;
             }
@@ -93,4 +96,10 @@ fn tool_lines_ignores_defaults_but_detects_step_differences() {
     let changed = scaled.replace("cargo test", "cargo check");
     assert_eq!(tool_lines(hosted), tool_lines(scaled));
     assert_ne!(tool_lines(hosted), tool_lines(&changed));
+    let clock = "    steps:\n      - name: Record optional cache budget\n        run: date +%s\n      - name: run\n        run: cargo test\n";
+    assert_eq!(tool_lines(hosted), tool_lines(clock));
+    assert_ne!(
+        tool_lines(hosted),
+        tool_lines(&clock.replace("optional cache budget", "unknown prefix"))
+    );
 }

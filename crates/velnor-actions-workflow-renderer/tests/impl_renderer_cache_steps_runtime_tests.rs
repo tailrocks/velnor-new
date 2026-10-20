@@ -55,18 +55,23 @@ fn assert_runtime_cache_step_order(
     assert_eq!(names.iter().filter(|s| *s == TOOLS_RESTORE_NAME).count(), 1);
     assert_eq!(names.iter().filter(|s| *s == TOOLS_SAVE_NAME).count(), 1);
     assert_eq!(
+        names.first().map(String::as_str),
+        Some("Record optional cache budget")
+    );
+    assert!(text.contains("id: velnor-cache-clock"));
+    assert_eq!(
         names.iter().position(|s| s == "Acquire Velnor"),
-        Some(1),
+        Some(2),
         "verified helper precedes cache access: {names:?}"
     );
     assert_eq!(
         names.iter().position(|s| s == "Install cache tar adapters"),
-        Some(2),
+        Some(3),
         "trusted tar adapters follow helper verification: {names:?}"
     );
     assert_eq!(
         names.iter().position(|s| s == "Setup Mise"),
-        Some(3),
+        Some(4),
         "Mise setup follows the verified helper and tar adapter: {names:?}"
     );
     let identity_at = names
@@ -82,7 +87,7 @@ fn assert_runtime_cache_step_order(
             RenderError::InvalidWorkflow("The tools cache restore step is missing.".to_owned())
         })?;
     assert!(
-        3 < identity_at && identity_at < restore_at,
+        4 < identity_at && identity_at < restore_at,
         "setup, resolved identity, then restore: {names:?}"
     );
     assert!(!text.contains("name: Restore Velnor tool seed"), "{text}");

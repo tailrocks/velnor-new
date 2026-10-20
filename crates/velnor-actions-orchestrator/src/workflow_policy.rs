@@ -19,6 +19,17 @@ pub(super) fn plan_uses_nextest(discovery: &Discovery) -> bool {
         .any(|workspace| workspace.profile.test_runner == TestRunner::CargoNextest)
 }
 
+/// True when any proposal compiles with `--all-features`; the plan-job
+/// source probe then resolves every optional dependency those tasks use.
+pub(super) fn plan_uses_all_features(discovery: &Discovery) -> bool {
+    discovery.proposals.iter().any(|task| {
+        task.identity
+            .flags
+            .iter()
+            .any(|flag| flag == "--all-features")
+    })
+}
+
 /// True when any proposal runs through the pinned Opentofu driver.
 ///
 /// Tofu has no workspace profiles, so the plan derives its tofu role

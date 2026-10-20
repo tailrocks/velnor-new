@@ -16,6 +16,7 @@ pub use velnor_actions_contract::workflow::{
 pub use super::baseline_publish::{PUBLISH_OP, PublishOutputs, baseline_publish};
 pub use super::check_runtime::{EXECUTE_CHECK_OP, execute_check};
 pub use super::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
+pub use super::config::deps_lock::{lock_private_sources, read_deps_lock, render_lock};
 pub use super::critical_path::{
     CriticalPath, critical_path, critical_path_for_groups, critical_path_line,
     critical_path_structural, render_critical_path,

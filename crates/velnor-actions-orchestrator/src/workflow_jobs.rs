@@ -104,7 +104,6 @@ pub(crate) fn plan_job(
         fetch_steps_for_plan_with_all_features(catalog, fetch_roots, needs.all_features)?;
     crate::workflow_jobs_cache::mark_writer_gate(&mut source_steps);
     steps.extend(source_steps);
-    steps.extend(cached.save);
     steps.extend(acquire);
     steps.push(request_step(PLAN_OPERATION)?);
     if needs.gh {
@@ -119,6 +118,8 @@ pub(crate) fn plan_job(
         steps.push(resolve);
     }
     steps.push(plan_step());
+    // Optional writes follow planning; the renderer inserts Publish plan first.
+    steps.extend(cached.save);
     Ok(Job {
         display_name: "Plan".to_owned(),
         runs_on: label.to_owned(),

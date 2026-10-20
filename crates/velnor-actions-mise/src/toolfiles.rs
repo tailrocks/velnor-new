@@ -8,6 +8,8 @@
 //!
 //! Install-verification audit lives in [`lockfile`] (declared here so
 //! `lib.rs` stays untouched).
+#[path = "toolfiles_config_tools.rs"]
+mod config_tools;
 #[path = "mise_lockfile.rs"]
 pub mod lockfile;
 
@@ -15,7 +17,6 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use crate::catalog::{PinnedTool, validate_exact_version};
-use crate::toml_scan::{TomlValue, parse_toml};
 use crate::wrappers::parse_cargo_wrapper;
 
 /// Tool-file name owned by the Mise adapter.
@@ -197,7 +198,7 @@ pub fn inspect_mise_file(
     let Some(text) = content else {
         return Ok(MiseInspection::missing(path));
     };
-    match parse_tools(text) {
+    match parse_tools(path, text) {
         Ok(spec) => Ok(MiseInspection::present(path, spec)),
         Err(problem) => Ok(MiseInspection::invalid(path, &problem)),
     }
@@ -287,69 +288,26 @@ pub fn lock_tool_versions(content: &str) -> BTreeMap<String, String> {
     }
 }
 
-/// Read tool choices from the structural TOML document.
+/// Read the tool selections of one owned file in that file's own grammar.
 ///
-/// Mise permits scalar versions and tool tables. Tool-table metadata does
-/// not set a version. Malformed input or unsupported choices return an error.
-fn parse_tools(content: &str) -> Result<MiseSpec, String> {
-    let doc = parse_toml(content)
-        .map_err(|failed| format!("line {}: {}", failed.line, failed.problem))?;
-    if let Some((path, line)) = doc
-        .array_sections
-        .iter()
-        .find(|(path, _)| path.first().map(String::as_str) == Some("tools"))
-    {
-        return Err(line_problem(
-            *line,
-            &format!("tool_array_table:{}", path.join(".")),
-        ));
+/// A lock records `[[tools.<key>]]` entries ([`lockfile`]); a config file
+/// declares scalar or table tool choices ([`config_tools`]).
+fn parse_tools(path: &str, content: &str) -> Result<MiseSpec, String> {
+    if is_lock_file(path) {
+        let lock = lockfile::parse_mise_lockfile(content)?;
+        let tools = lock
+            .tools
+            .into_iter()
+            .filter(|(_, entry)| !entry.version.is_empty())
+            .map(|(name, entry)| (name, entry.version))
+            .collect();
+        return Ok(MiseSpec { tools });
     }
-    let mut tools = BTreeMap::new();
-    for assignment in &doc.assignments {
-        if assignment.path.first().map(String::as_str) != Some("tools") {
-            continue;
-        }
-        let Some(tool) = assignment.path.get(1) else {
-            continue;
-        };
-        match assignment.path.as_slice() {
-            [_, _] => {
-                let TomlValue::Str(version) = &assignment.value else {
-                    return Err(line_problem(assignment.line, "tool_selector_not_string"));
-                };
-                tools.insert(tool.clone(), version.clone());
-            }
-            [_, _, field, rest @ ..] if field == "version" => {
-                if !rest.is_empty() {
-                    return Err(line_problem(assignment.line, "tool_version_not_scalar"));
-                }
-                let TomlValue::Str(version) = &assignment.value else {
-                    return Err(line_problem(assignment.line, "tool_version_not_string"));
-                };
-                if tools.insert(tool.clone(), version.clone()).is_some() {
-                    return Err(line_problem(assignment.line, "duplicate_tool_version"));
-                }
-            }
-            [_, _, field, rest @ ..] if matches!(field.as_str(), "path" | "prefix" | "ref") => {
-                if !rest.is_empty() {
-                    return Err(line_problem(assignment.line, "tool_selector_not_scalar"));
-                }
-                return Err(line_problem(
-                    assignment.line,
-                    &format!("unsupported_tool_selector:{tool}:{field}"),
-                ));
-            }
-            // Other tool-table fields hold metadata, not tool choices.
-            [_, _, ..] => {}
-            _ => {
-                return Err(line_problem(assignment.line, "invalid_tool_path"));
-            }
-        }
-    }
-    Ok(MiseSpec { tools })
+    config_tools::parse_config_tools(content).map(|tools| MiseSpec { tools })
 }
 
-/// Render a source line and stable parser problem.
-fn line_problem(line: u32, problem: &str) -> String {
-    format!("line {line}: {problem}")
+/// Whether `path` names a Mise lock file rather than a config file.
+fn is_lock_file(path: &str) -> bool {
+    let name = file_name(path);
+    name == MISE_LOCK_FILE || name.strip_prefix('.') == Some(MISE_LOCK_FILE)
 }

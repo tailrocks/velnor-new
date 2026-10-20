@@ -63,7 +63,8 @@ only the derived values above.
 The default matrix policy is one entry per selected stack task-group/configuration with at least one `execute`
 obligation. Its `execute_task_ids` contains only obligations that this matrix entry must run; `test_run` is an
 array of shard task IDs, including `shard-1-of-1` when not sharded. The complete plan retains covered/reused
-obligations separately. The V1 Rust adapter MUST NOT generate `--all-features` configurations. Cross-package
+obligations separately. The V1 Rust adapter MUST NOT generate `--all-features` configurations on its own; only an explicit
+`all_features` configuration or `clippy_all_features` opt-in emits `--all-features`. Cross-package
 or cross-component integration tasks MUST be represented by explicit matrix entries. An intentionally empty
 test target MUST remain visible in the plan.
 

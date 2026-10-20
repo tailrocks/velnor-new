@@ -103,6 +103,10 @@ fn all_features_mode_is_bound_in_neutral_and_typed_identity() {
     assert_eq!(json_of(&from_group), json_of(&from_proposal));
     assert!(from_group.all_features);
     assert_eq!(from_group.features, ["a", "b"]);
+    assert_eq!(
+        from_group.to_stack_extension().data["all_features"],
+        serde_json::json!(true)
+    );
 
     let mut changed_features = group.clone();
     changed_features.features.push("c".to_owned());
@@ -247,4 +251,23 @@ fn closure_vcs_unknown_with_undeclared_reads() -> Outcome {
     assert_eq!(closure.unknown_inputs(), vec!["vcs"]);
     assert!(closure.verify_complete().is_err());
     Ok(())
+}
+
+#[test]
+fn all_features_sorts_with_multi_target_identity_flags() {
+    let mut group = group();
+    group.kind = TaskKind::Test;
+    group.task_id = "stack/rust/crates-a/test/default".to_owned();
+    group.all_features = true;
+    group.target_flags = vec![
+        "--lib".to_owned(),
+        "--bins".to_owned(),
+        "--tests".to_owned(),
+    ];
+    let task = propose_task(&group).expect("multi-target group proposes");
+    assert_eq!(
+        task.identity.flags,
+        ["--all-features", "--bins", "--lib", "--tests"]
+    );
+    assert!(task.validate().is_ok());
 }

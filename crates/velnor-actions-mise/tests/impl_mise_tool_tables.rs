@@ -1,104 +1,110 @@
-//! These tests do a check of Mise tool versions.
+//! MBX pin reconciliation reads every Mise tool-table spelling.
 use velnor_actions_mise::MR_BOXINGTON_VERSION;
 use velnor_actions_mise::toolfiles::{MbxWrapperStatus, mbx_wrapper_pin_status};
 
+const WRAPPER: &str = "[wrappers.cargo]\ncommand = \"mbx\"\n";
+
+fn status(tools: &str) -> MbxWrapperStatus {
+    mbx_wrapper_pin_status(&format!("{WRAPPER}{tools}"))
+}
+
 #[test]
-fn mbx_wrapper_reconciles_scalar_and_tool_table_pins() {
-    let cases = [
+fn mbx_wrapper_reads_scalar_inline_and_nested_tool_pins() {
+    let v = MR_BOXINGTON_VERSION;
+    for (tools, form) in [
+        (format!("[tools]\nmr-boxington = \"{v}\"\n"), "scalar"),
         (
-            "[wrappers.cargo]\ncommand = \"mbx\"\n[tools]\nmr-boxington = \"1.24.1\"\n",
-            "scalar",
-        ),
-        (
-            "[wrappers.cargo]\ncommand = \"mbx\"\n[tools]\nmr-boxington = { version = \"1.24.1\", workflow = \"release.yml\" }\n",
+            format!("[tools]\nmr-boxington = {{ version = \"{v}\", os = [\"linux\"] }}\n"),
             "inline table",
         ),
         (
-            "[wrappers.cargo]\ncommand = \"mbx\"\n[tools.mr-boxington]\nversion = \"1.24.1\"\nworkflow = \"release.yml\"\n",
+            format!("[tools.mr-boxington]\nversion = \"{v}\"\nos = [\"linux\"]\n"),
             "nested table",
         ),
         (
-            "[wrappers.cargo]\ncommand = \"mbx\"\n[tools]\nmr-boxington = { version = \"1.24.1\", workflow = \"release.yml\" }\n[env]\nMR_BOXINGTON_VERSION = \"wrong\"\n",
-            "unrelated section",
+            format!("[tools]\nmr-boxington.version = \"{v}\"\n"),
+            "dotted key",
         ),
-    ];
-    for (content, form) in cases {
-        let content = content.replace("1.24.1", MR_BOXINGTON_VERSION);
-        assert_eq!(
-            mbx_wrapper_pin_status(&content),
-            MbxWrapperStatus::Pinned {
-                version: MR_BOXINGTON_VERSION.to_owned(),
-            },
-            "{form}: the version must be MR_BOXINGTON_VERSION."
-        );
-    }
-}
-
-#[test]
-fn mbx_wrapper_rejects_invalid_tool_table_versions() {
-    for tools in [
-        "mr-boxington = { version = 1.24.1, workflow = \"release.yml\" }",
-        "mr-boxington = { version = true, workflow = \"release.yml\" }",
-        "mr-boxington = { version = [\"1.24.1\"] }",
-        "mr-boxington.version = { major = 1 }",
-        "mr-boxington = { version = \"1.24.1\" }\nmr-boxington.version = \"1.24.2\"",
+        (
+            format!("[tools]\nmr-boxington = \"{v}\" # pinned\n[env]\nX = \"wrong\"\n"),
+            "comment and unrelated section",
+        ),
+        (
+            format!(
+                "[tools]\nmr-boxington = {{ version = \"{v}\", workflow = \"release.yml\" }}\n[env]\nMR_BOXINGTON_VERSION = \"wrong\"\n"
+            ),
+            "unrelated environment value",
+        ),
     ] {
-        let content = format!("[wrappers.cargo]\ncommand = \"mbx\"\n[tools]\n{tools}\n");
-        assert!(
-            matches!(
-                mbx_wrapper_pin_status(&content),
-                MbxWrapperStatus::Invalid { .. }
-            ),
-            "The parser must reject this version: {tools}."
+        assert_eq!(
+            status(&tools),
+            MbxWrapperStatus::Pinned {
+                version: v.to_owned()
+            },
+            "{form}"
         );
     }
-    let metadata_only = "[wrappers.cargo]\ncommand = \"mbx\"\n[tools]\nmr-boxington = { workflow = \"release.yml\" }\n";
+}
+
+#[test]
+fn mbx_wrapper_rejects_non_string_and_duplicate_tool_versions() {
+    let v = MR_BOXINGTON_VERSION;
+    for tools in [
+        "[tools]\nmr-boxington = { version = 123 }\n".to_owned(),
+        "[tools]\nmr-boxington = { version = true }\n".to_owned(),
+        format!("[tools]\nmr-boxington = {{ version = [\"{v}\"] }}\n"),
+        "[tools]\nmr-boxington.version = { major = 1 }\n".to_owned(),
+        format!("[tools]\nmr-boxington = [\"{v}\"]\n"),
+        format!(
+            "[tools]\nmr-boxington = {{ version = \"{v}\" }}\nmr-boxington.version = \"{v}\"\n"
+        ),
+        format!("[tools]\nmr-boxington = \"{v}\"\n[tools.mr-boxington]\nversion = \"{v}\"\n"),
+    ] {
+        assert!(
+            matches!(status(&tools), MbxWrapperStatus::Invalid { .. }),
+            "{tools}"
+        );
+    }
     assert_eq!(
-        mbx_wrapper_pin_status(metadata_only),
+        status("[tools]\nmr-boxington = { os = [\"linux\"] }\n"),
         MbxWrapperStatus::MissingPin,
-        "The metadata has no version."
+        "a tool table without a version declares no pin"
     );
 }
 
 #[test]
-fn mbx_wrapper_rejects_unsupported_tool_selectors() {
+fn mbx_wrapper_rejects_non_version_tool_selectors() {
     for selector in ["path", "prefix", "ref"] {
-        let content = format!(
-            "[wrappers.cargo]\ncommand = \"mbx\"\n[tools]\nmr-boxington = {{ {selector} = \"value\" }}\n"
-        );
+        let tools = format!("[tools]\nmr-boxington = {{ {selector} = \"value\" }}\n");
+        let expected = format!("unsupported_tool_selector:mr-boxington:{selector}");
         assert!(
             matches!(
-                mbx_wrapper_pin_status(&content),
-                MbxWrapperStatus::Invalid { problem } if problem.contains(&format!("unsupported_tool_selector:mr-boxington:{selector}"))
+                status(&tools),
+                MbxWrapperStatus::Invalid { problem } if problem.contains(&expected)
             ),
-            "The parser must reject {selector}."
+            "{selector}"
         );
     }
-
-    let conflicting = "[wrappers.cargo]\ncommand = \"mbx\"\n[tools]\nmr-boxington = { version = \"1.24.1\", path = \"./mbx\" }\n";
-    assert!(
-        matches!(
-            mbx_wrapper_pin_status(conflicting),
-            MbxWrapperStatus::Invalid { .. }
-        ),
-        "The parser must reject these fields."
+    let mixed = format!(
+        "[tools]\nmr-boxington = {{ version = \"{MR_BOXINGTON_VERSION}\", path = \"./mbx\" }}\n"
     );
+    assert!(matches!(status(&mixed), MbxWrapperStatus::Invalid { .. }));
 }
 
 #[test]
 fn mbx_wrapper_rejects_tool_array_tables() {
-    for declaration in [
-        "[[tools.mr-boxington]]\nversion = \"1.24.1\"\n",
-        "[[tools.mr-boxington]]\nworkflow = \"release.yml\"\n",
-        "[[tools.mr-boxington]]\n",
+    for tools in [
+        format!("[[tools.mr-boxington]]\nversion = \"{MR_BOXINGTON_VERSION}\"\n"),
+        "[[tools.mr-boxington]]\nworkflow = \"release.yml\"\n".to_owned(),
+        "[[tools.mr-boxington]]\n".to_owned(),
     ] {
-        let content = format!("[wrappers.cargo]\ncommand = \"mbx\"\n{declaration}");
         assert!(
             matches!(
-                mbx_wrapper_pin_status(&content),
-                MbxWrapperStatus::Invalid { problem } if problem.contains("tool_array_table:tools.mr-boxington")
+                status(&tools),
+                MbxWrapperStatus::Invalid { problem }
+                    if problem.contains("tool_array_table:tools.mr-boxington")
             ),
-            "The parser must reject this table: {declaration}."
+            "{tools}"
         );
     }
 }

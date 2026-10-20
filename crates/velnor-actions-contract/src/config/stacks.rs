@@ -69,7 +69,7 @@ pub struct RustStackConfig {
     /// Existing target lanes are preserved; disabled by default.
     #[serde(default, skip_serializing_if = "is_false")]
     pub seed_parallel_targets: bool,
-    /// This option tells Clippy to activate all package features. It does not change test or documentation tasks.
+    /// Activate all package features for Clippy only; this does not change test or documentation tasks.
     #[serde(default, skip_serializing_if = "is_false")]
     pub clippy_all_features: bool,
     /// Rust release policy (`[stacks.rust.release]`); disabled by default.
@@ -127,7 +127,8 @@ pub struct RustConfiguration {
     /// Cargo features for this variant.
     #[serde(default)]
     pub features: Vec<String>,
-    /// Activate every feature declared by each package in this variant.
+    /// Activate every feature declared by each package in this variant (`--all-features`).
+    /// This conflicts with a feature list other than empty or `default` only.
     #[serde(default, skip_serializing_if = "is_false")]
     pub all_features: bool,
     /// Target triple or `host`.
@@ -297,10 +298,8 @@ impl RustStackConfig {
                     ));
                 }
             }
-            if config.all_features
-                && !config.features.is_empty()
-                && !(config.features.len() == 1 && config.features[0] == "default")
-            {
+            let default_features = config.features.is_empty() || config.features == ["default"];
+            if config.all_features && !default_features {
                 return Err(ContractError::config(
                     file,
                     "stacks.rust.configurations.features",

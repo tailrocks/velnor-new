@@ -10,6 +10,8 @@
 //! otherwise healthy crate, so fallback keeps the cell with a recorded
 //! [`FeatureFallback`] rendered in the plan. A requested feature no
 //! workspace crate declares is a typo and fails closed, naming the crate.
+//! An `all_features` configuration skips the intersection: each crate
+//! records its complete declared feature set and runs `--all-features`.
 
 use std::collections::BTreeSet;
 
@@ -332,4 +334,7 @@ fn manifest_for_key(key: &str) -> String {
 
 #[cfg(test)]
 #[path = "derive_groups_archive_tests.rs"]
-mod tests;
+mod archive_tests;
+#[cfg(test)]
+#[path = "derive_groups_shard_tests.rs"]
+mod shard_tests;

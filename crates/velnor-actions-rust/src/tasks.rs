@@ -76,7 +76,7 @@ pub struct TaskGroup {
     pub configuration: String,
     /// Sorted enabled features.
     pub features: Vec<String>,
-    /// This field tells Cargo to activate all package features for this task group.
+    /// Whether Cargo activates every package feature for this task group.
     pub all_features: bool,
     /// Execution target (`host` or triple).
     pub target: String,
@@ -146,9 +146,9 @@ pub struct DeriveInputs<'a> {
     pub configuration: &'a str,
     /// Enabled features.
     pub features: &'a [String],
-    /// Activate every package feature.
+    /// Activate every package feature for each compiling task.
     pub all_features: bool,
-    /// This value tells Clippy to activate all package features.
+    /// Activate every package feature for Clippy only.
     pub clippy_all_features: bool,
     /// Execution target.
     pub target: &'a str,
