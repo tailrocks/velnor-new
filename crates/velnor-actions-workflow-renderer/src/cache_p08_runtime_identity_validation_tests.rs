@@ -3,13 +3,12 @@ use std::{error::Error, fs, os::unix::fs::symlink};
 use super::{Fixture, assert_disabled, payload, run_and_read, run_and_read_removed};
 
 #[test]
-fn hosted_identity_disables_on_image_arch_or_version_mismatch() -> Result<(), Box<dyn Error>> {
+fn hosted_identity_disables_on_image_or_arch_mismatch() -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new()?;
     let hosted = payload("ubuntu-26.04");
     for (key, value, reason) in [
         ("ImageOS", "ubuntu24", "image_os_mismatch"),
         ("RUNNER_ARCH", "ARM64", "runner_arch_mismatch"),
-        ("ImageVersion", "", "image_version_missing"),
     ] {
         let (output, text) = run_and_read(&hosted, &fixture, &[(key, value.to_owned())]);
         assert_disabled(&output, &text, reason);
@@ -18,7 +17,6 @@ fn hosted_identity_disables_on_image_arch_or_version_mismatch() -> Result<(), Bo
         ("RUNNER_OS", "runner_os_missing"),
         ("RUNNER_ARCH", "runner_arch_missing"),
         ("ImageOS", "image_os_missing"),
-        ("ImageVersion", "image_version_missing"),
     ] {
         let (output, text) = run_and_read_removed(&hosted, &fixture, &[variable]);
         assert_disabled(&output, &text, reason);

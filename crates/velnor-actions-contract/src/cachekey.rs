@@ -1,7 +1,7 @@
 //! Cache-key computation over semantic inputs only (cache §1).
 //!
 //! Keys derive from profile, config, declared env, toolchain, platform
-//! (OS/arch/label/`ImageOS`/`ImageVersion`/target), format, and output
+//! (OS/arch/label/`ImageOS`/target), format, and output
 //! contract. Run IDs, absolute paths, and cwd never enter an identity.
 
 use serde::{Deserialize, Serialize};
@@ -374,7 +374,6 @@ mod tests {
                 arch: "x86_64".to_owned(),
                 runs_on: "ubuntu-26.04".to_owned(),
                 image_os: "ubuntu26".to_owned(),
-                image_version: "20260928.1.0".to_owned(),
                 target: "host".to_owned(),
             })
             .is_ok()

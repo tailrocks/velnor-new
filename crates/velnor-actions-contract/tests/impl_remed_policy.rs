@@ -212,19 +212,17 @@ fn ver_overridable_actions_are_exact_seven() {
 
 #[test]
 fn ver_platform_binds_runner_image() -> Result<(), ContractError> {
-    let platform = |version: &str| {
+    let platform = |image_os: &str| {
         platform_id(&PlatformInputs {
             os: "linux".to_owned(),
             arch: "x86_64".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
-            image_os: "ubuntu26".to_owned(),
-            image_version: version.to_owned(),
+            image_os: image_os.to_owned(),
             target: "host".to_owned(),
         })
     };
-    let base = platform("20260928.1.0")?;
-    assert_ne!(platform("20260929.1.0")?, base);
-    assert_eq!(platform("20260928.1.0")?, base);
+    let base = platform("ubuntu26")?;
+    assert_ne!(platform("ubuntu24")?, base);
     Ok(())
 }
 
@@ -301,26 +299,24 @@ fn ver_freshness_classes_cover_nine_inputs() {
 fn ver_runner_image_evidence_and_family_change() {
     let evidence = RunnerImageEvidence {
         image_os: "ubuntu26".to_owned(),
-        image_version: "20260928.1.0".to_owned(),
     };
     assert_eq!(evidence.validate(), Ok(()));
     let text = serde_json::to_string(&evidence).expect("serialize");
-    assert!(text.contains("ubuntu26") && text.contains("20260928.1.0"));
+    assert!(text.contains("ubuntu26") && !text.contains("image_version"));
     for overclaim in ["packages", "immutable", "fixed"] {
         assert!(!text.contains(overclaim), "overclaims {overclaim}");
     }
     let mut bad = evidence.clone();
-    bad.image_version = String::new();
+    bad.image_os = String::new();
     assert!(bad.validate().is_err());
     let unobserved = RunnerImageEvidence::unobserved();
     assert!(unobserved.is_unobserved());
     assert_eq!(unobserved.validate(), Ok(()));
     assert_eq!(UNOBSERVED_IMAGE_VALUE, "unknown");
     assert!(!evidence.is_unobserved());
-    let observed = RunnerImageEvidence::observed("ubuntu26", "20260928.1.0").expect("observed");
+    let observed = RunnerImageEvidence::observed("ubuntu26").expect("observed");
     assert!(!observed.is_unobserved());
-    assert!(RunnerImageEvidence::observed("unknown", "20260928.1.0").is_err());
-    assert!(RunnerImageEvidence::observed("ubuntu26", "unknown").is_err());
+    assert!(RunnerImageEvidence::observed("unknown").is_err());
     assert!(!runner_family_changed("ubuntu-26.04", "ubuntu-26.04-arm"));
     assert!(runner_family_changed("ubuntu-24.04", "ubuntu-26.04"));
     assert!(runner_family_changed("ubuntu-26.04", "ubuntu-24.04-arm"));
