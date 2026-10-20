@@ -11,9 +11,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Largest accepted job timeout, matching the other stacks.
-pub const MAX_GRADLE_TIMEOUT_MINUTES: u32 = 360;
+pub(super) const MAX_GRADLE_TIMEOUT_MINUTES: u32 = 360;
 /// Largest accepted `--max-workers`.
-pub const MAX_GRADLE_WORKERS: u8 = 64;
+pub(super) const MAX_GRADLE_WORKERS: u8 = 64;
 /// Job id prefix of every generated Gradle project job.
 pub const GRADLE_JOB_PREFIX: &str = "gradle-";
 

@@ -10,7 +10,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use velnor_actions_contract::config::{GRADLE_JOB_PREFIX, GradleService, GradleStackConfig};
+use velnor_actions_contract::config::gradle::{GRADLE_JOB_PREFIX, GradleService};
 use velnor_actions_contract::{
     GRADLE_RUN_OPERATION, Job, JobTimeout, Permissions, ServiceContainer, Step, StepKind,
     VelnorConfig, slugify_segment,
@@ -46,14 +46,15 @@ fn join(root: &str, rel: &str) -> String {
 ///
 /// # Errors
 /// A contract error listing `<root>: <finding>` codes.
-pub(crate) fn discover(
+pub(crate) fn analyze_roots(
     repo: &Path,
-    files: &[String],
-    config: Option<&GradleStackConfig>,
+    index: &velnor_actions_contract::FileIndex,
+    config: &VelnorConfig,
 ) -> Result<Vec<GradleRoot>, OrchestratorError> {
-    let Some(config) = config else {
+    let Some(config) = config.stacks.gradle.as_ref() else {
         return Ok(Vec::new());
     };
+    let files = index.files();
     let mut found = Vec::new();
     let mut problems = Vec::new();
     for dir in &config.roots {
