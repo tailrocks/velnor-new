@@ -390,6 +390,54 @@
       "log_sha256": "a82bb316da8fde2fa885eda67189f3c21e97794347a7c02f211eb138ddb6426a",
       "author": "/root/obsolete_capacity_cleanup",
       "reviewer": null
+    },
+    {
+      "result": "PASS",
+      "source_commit": "6e9e9e137961a43fe9e9cdc3cf9a2ac89e6c851d",
+      "nextest_run": "de77a7d1-c129-4433-98b8-7b0953d09977",
+      "passed": 20,
+      "exit_status": 0,
+      "log": "clippy-residual-shipping-20261020.log",
+      "log_sha256": "ad7ce3ad4ab7ef6abfffca782d1ceeb40041b6031b527bd95fa884a67fda75d7",
+      "scope": "Mechanical quality repairs passed focused tests. Strict workspace Clippy remains failed.",
+      "author": "/root",
+      "reviewer": "/root/journal_restart_repair"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "43266a93feb5b68c5b53503df1679e4e6f6423ac",
+      "nextest_run": "5d06a278-94d2-4a47-b8ed-1e88c9f4e625",
+      "passed": 9,
+      "exit_status": 0,
+      "log": "journal-v27-shipping-final-20261020.log",
+      "log_sha256": "0025696403f8fb452b55beadbf785320c79753fcf48e5d2aa560b3905cfbe678",
+      "scope": "Historical schema validation passed focused tests.",
+      "author": "/root",
+      "reviewer": "/root/journal_restart_repair"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "e352a4e0667e7969593523454d8294269126eaab",
+      "nextest_run": "0c13a9e2-63a9-4ff3-9a35-dfa1e72cf99d",
+      "passed": 12,
+      "exit_status": 0,
+      "log": "connect-policy-shipping-final-20261020.log",
+      "log_sha256": "1b7989a48ed084ac3928b9de96c263eb4eb8a6bf5835b72d0d833680ebfea475",
+      "scope": "Policy import passed focused tests. This does not prove release provenance or a live connection.",
+      "author": "/root",
+      "reviewer": "/root/execution_source_security_review"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "5e427407e58ce6fff49a7a0aae2b03a01d0aa4f1",
+      "nextest_run": "dca4c433-1469-42a3-a14b-380d89c63bf8",
+      "passed": 31,
+      "exit_status": 0,
+      "log": "controller-quality-shipping-20261020.log",
+      "log_sha256": "a4eb5423340aa6dea7a51eadbf2d25bc67ee712ebd05c1d881cf16488b54a4ca",
+      "scope": "Controller checks passed focused tests. Strict workspace Clippy remains failed.",
+      "author": "/root",
+      "reviewer": "/root/journal_restart_repair"
     }
   ],
   "broader_pair_check": {
