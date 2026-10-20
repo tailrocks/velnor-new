@@ -52,6 +52,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
             tofu: None,
             bun: None,
             dbt: None,
+            ansible: None,
         },
         discovery: DiscoveryConfig { exclude: vec![] },
         actions: ActionsConfig::default(),

@@ -981,6 +981,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "velnor-actions-ansible"
+version = "0.1.31"
+dependencies = [
+ "thiserror",
+ "velnor-actions-contract",
+]
+
+[[package]]
 name = "velnor-actions-bun"
 version = "0.1.31"
 dependencies = [
