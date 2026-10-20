@@ -20,7 +20,10 @@ pub(crate) fn validate_call(step: &Step) -> Result<&str, RenderError> {
         || step.id != Some(velnor_actions_contract::StepId::ToolsRestore)
         || uses != super::TOOLS_RESTORE_USES
         || !env.is_empty()
-        || with.len() != 2
+        || with.len() != 3
+        || !with
+            .get(super::TOOLS_MISE_SHA256_INPUT)
+            .is_some_and(|sha| is_mise_sha256(sha))
         || seed_admitted.map(String::as_str) != Some(super::TOOLS_SEED_ADMITTED_EXPRESSION)
         || !crate::cache_p08::is_v2_cache_key_expression(key)
         || step.condition.as_deref() != Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
@@ -32,7 +35,21 @@ pub(crate) fn validate_call(step: &Step) -> Result<&str, RenderError> {
     Ok(key)
 }
 
+/// Exact lower-case SHA-256 of a pinned Mise binary.
+pub(super) fn is_mise_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
 /// Keep only an exact cache hit or a validated seed on an empty-cache miss.
+///
+/// Setup Mise runs before this restore (the resolver step needs its binary
+/// before the identity exists), and the archive owns its binary directory
+/// `~/.local/share/mise/bin`. A miss therefore sweeps every other entry of
+/// the Mise root, and both paths then re-verify that binary against the
+/// job's pinned digest, so no restored or seeded Mise binary runs unchecked.
 /// Semicolons keep this valid after `quote_run_line_env_paths` joins words with spaces.
 const TOOLS_CACHE_ADMISSION_SCRIPT: &str = r#"set -eu;
 [ -n "$HOME" ] && [ -n "$RUNNER_TEMP" ] || exit 1;
@@ -43,6 +60,14 @@ cache_hit="${TOOLS_CACHE_HIT-}";
 expected_key="${TOOLS_EXPECTED_KEY-}";
 matched_key="${TOOLS_MATCHED_KEY-}";
 seed_admitted="${TOOLS_SEED_ADMITTED-}";
+mise_sha256="${TOOLS_MISE_SHA256-}";
+mise_root="$HOME/.local/share/mise";
+[[ "$mise_sha256" =~ ^[0-9a-f]{64}$ ]] || exit 1;
+verify_mise() {
+[ ! -L "$mise_root" ] && [ ! -L "$mise_root/bin" ] && [ ! -L "$mise_root/bin/mise" ] && [ -f "$mise_root/bin/mise" ] || { echo "Setup Mise binary is missing" >&2; exit 1; };
+actual=$(sha256sum "$mise_root/bin/mise");
+[ "${actual%% *}" = "$mise_sha256" ] || { echo "Mise binary does not match its pinned SHA-256" >&2; exit 1; };
+};
 keep=false;
 if [ "$cache_hit" = true ] && [[ "$expected_key" =~ ^mise-tools-v2-[0-9a-f]{64}$ ]] && [ "$matched_key" = "$expected_key" ]; then
 keep=true;
@@ -55,16 +80,22 @@ if [ "$keep" = true ]; then
 [ ! -L "$RUNNER_TEMP/velnor/cargo/bin" ] || exit 1;
 [ ! -L "$RUNNER_TEMP/velnor/cargo/.crates.toml" ] || exit 1;
 [ ! -L "$RUNNER_TEMP/velnor/cargo/.crates2.json" ] || exit 1;
+verify_mise;
 exit 0;
 fi;
-for d in "$HOME/.local/share/mise" "$RUNNER_TEMP/velnor/rustup" "$RUNNER_TEMP/velnor/cargo/bin"; do
+[ ! -L "$mise_root" ] || exit 1;
+if [ -d "$mise_root" ]; then
+find "$mise_root" -mindepth 1 -maxdepth 1 ! -name bin -exec rm -rf {} +;
+fi;
+for d in "$RUNNER_TEMP/velnor/rustup" "$RUNNER_TEMP/velnor/cargo/bin"; do
 [ ! -L "$d" ] || exit 1;
 rm -rf "$d";
 done;
 for f in "$RUNNER_TEMP/velnor/cargo/.crates.toml" "$RUNNER_TEMP/velnor/cargo/.crates2.json"; do
 [ ! -L "$f" ] || exit 1;
 rm -f "$f";
-done"#;
+done;
+verify_mise"#;
 
 fn restore_step() -> Result<Yaml, RenderError> {
     steps::validate_uses(super::TOOLS_RESTORE_ACTION_USES)?;
@@ -96,6 +127,7 @@ fn admission_step() -> Yaml {
             "steps.restore.outputs.cache-matched-key",
         ),
         ("TOOLS_SEED_ADMITTED", "inputs.seed-admitted"),
+        ("TOOLS_MISE_SHA256", "inputs.mise-sha256"),
     ]
     .into_iter()
     .map(|(key, value)| {
@@ -135,6 +167,16 @@ fn action_body() -> Result<Yaml, RenderError> {
                         (
                             "description".to_owned(),
                             Yaml::str("Exact runtime-qualified V2 tools key."),
+                        ),
+                        ("required".to_owned(), Yaml::Bool(true)),
+                    ]),
+                ),
+                (
+                    super::TOOLS_MISE_SHA256_INPUT.to_owned(),
+                    Yaml::Map(vec![
+                        (
+                            "description".to_owned(),
+                            Yaml::str("Pinned SHA-256 of the Setup Mise binary."),
                         ),
                         ("required".to_owned(), Yaml::Bool(true)),
                     ]),

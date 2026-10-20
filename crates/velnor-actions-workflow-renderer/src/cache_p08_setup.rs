@@ -5,7 +5,12 @@ use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::{MiseSetup, RenderError, cache_p08, cache_p08::ToolsCacheInputs};
 
-/// Add runtime identity, read-only restore, and cache-disabled Mise setup.
+/// Add cache-disabled Mise setup, then runtime identity and read-only restore.
+///
+/// The identity follows Setup Mise: the document pass inserts the project
+/// tool resolver directly after Setup Mise, and the identity's `d` input
+/// reads the versions and lock digests it exports. The restore composite
+/// re-verifies the Setup Mise binary it may overwrite.
 /// # Errors
 pub(crate) fn ensure_tools_cache_v2(
     job_id: &str,
@@ -105,8 +110,9 @@ fn insert_tools_prelude(
     }
     let prelude = payload.runtime_prelude_step()?;
     let restore = payload.restore_step()?;
+    let after_setup = setup_index + 1;
     job.steps
-        .splice(setup_index..setup_index, [prelude, restore]);
+        .splice(after_setup..after_setup, [prelude, restore]);
     Ok(())
 }
 

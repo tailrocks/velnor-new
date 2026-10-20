@@ -72,8 +72,10 @@ pub struct ToolsCacheInputs<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolsCachePayload {
     static_digest: String,
-    /// Whether any spec is a project-declared run-time reference.
-    project_bound: bool,
+    /// Project-declared tool variables the installed specs reference.
+    project_tools: Vec<String>,
+    /// Pinned SHA-256 of the Mise binary Setup Mise verified for this job.
+    mise_sha256: String,
     paths: Vec<String>,
     runs_on: String,
     target: String,
@@ -104,12 +106,17 @@ impl ToolsCachePayload {
             .get(3..)
             .ok_or_else(|| RenderError::BadCommand("bad_tools_cache_digest".to_owned()))?
             .to_owned();
-        let project_bound = specs.iter().any(|spec| {
-            velnor_actions_contract::config::project_tool_refs::has_project_tool_ref(spec)
-        });
+        let project_tools = specs
+            .iter()
+            .flat_map(|spec| {
+                velnor_actions_contract::config::project_tool_refs::project_tool_ref_names(spec)
+            })
+            .map(str::to_owned)
+            .collect();
         Ok(Self {
             static_digest,
-            project_bound,
+            project_tools,
+            mise_sha256: inputs.mise_setup.sha256.clone(),
             paths,
             runs_on: inputs.runs_on.to_owned(),
             target: inputs.target.to_owned(),
@@ -122,21 +129,17 @@ impl ToolsCachePayload {
         &self.static_digest
     }
 
-    /// `d` input of the runtime identity step: the static digest, bound to
-    /// the project tool sources when any version is project-declared, so a
-    /// `mise.toml`/`mise.lock` bump invalidates the tools cache (hard
-    /// decision 5) before the resolver step has run.
+    /// `d` input of the runtime identity step: the static digest bound to
+    /// the resolved version and `mise.lock` digest of each project-declared
+    /// tool this job installs (hard decision 5). The resolver step exports
+    /// both before the identity runs; nothing else in the project's Mise
+    /// config enters the identity.
     #[must_use]
     pub fn identity_input(&self) -> String {
-        if self.project_bound {
-            format!(
-                "{}-{}",
-                self.static_digest,
-                velnor_actions_contract::config::project_tool_refs::project_tool_sources_hash()
-            )
-        } else {
-            self.static_digest.clone()
-        }
+        velnor_actions_contract::config::project_tool_refs::tools_identity_input(
+            &self.static_digest,
+            self.project_tools.iter().map(String::as_str),
+        )
     }
 
     /// Whether this lane has an exact hosted image identity for V2 restores.
@@ -181,9 +184,9 @@ impl ToolsCachePayload {
     /// Read-only restore over the payload's key expression and exact paths.
     /// # Errors
     pub fn restore_step(&self) -> Result<Step, RenderError> {
-        steps::tools_cache_step(
-            true,
+        steps::tools_cache_restore_step(
             &self.key_expression(),
+            &self.mise_sha256,
             Some(cache_p08::TOOLS_CACHE_RESTORE_CONDITION.to_owned()),
         )
     }
@@ -191,8 +194,7 @@ impl ToolsCachePayload {
     /// Save over the identical key expression and exact paths.
     /// # Errors
     pub fn save_step(&self) -> Result<Step, RenderError> {
-        steps::tools_cache_step(
-            false,
+        steps::tools_cache_save_step(
             &self.key_expression(),
             Some(super::save_policy::condition(
                 velnor_actions_contract::PullRequestCachePolicy::ReadOnly,

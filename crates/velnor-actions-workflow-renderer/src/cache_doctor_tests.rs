@@ -258,3 +258,30 @@ fn only_the_named_mbx_target_mode_exemption_skips_the_doctor() {
     );
     rejects(&with_reader(other), "i1_key_contains:github.job");
 }
+
+#[test]
+fn tools_identity_binds_resolved_versions_never_hashed_files() {
+    let identity = |d: &str| {
+        let mut step = action(
+            "V2 identity",
+            "./.github/actions/velnor-tools-prelude-u26",
+            &[("d", d)],
+            None,
+        );
+        step.role = Some(velnor_actions_contract::StepRole::ToolsCacheIdentity);
+        step
+    };
+    let digest = "a".repeat(64);
+    let resolved = format!("{digest}-${{VELNOR_TOOL_RUST}}-${{VELNOR_TOOL_RUST_LOCK}}");
+    check(&with_reader(identity(&resolved))).expect("resolved-version identity");
+    rejects(
+        &with_reader(identity(&format!(
+            "{digest}-${{{{ hashFiles('mise.toml','mise.lock') }}}}"
+        ))),
+        "i1_tools_identity_contains:hashFiles(",
+    );
+    rejects(
+        &with_reader(identity(&format!("{digest}-${{VELNOR_TOOL_RUST}}"))),
+        "i1_tools_identity_shape",
+    );
+}

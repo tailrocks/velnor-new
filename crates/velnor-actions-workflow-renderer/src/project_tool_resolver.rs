@@ -5,7 +5,8 @@
 //! rendered workflow before node sharing:
 //!
 //! - each job that references a project version gains the fixed resolver
-//!   step after both Mise setup and source checkout; no earlier step may read one;
+//!   step after both Mise setup and source checkout, and no earlier step may
+//!   read one (the tools-cache identity and restore follow it);
 //! - `run:` text keeps the shell form; every other value (`with:`, `env:`,
 //!   cache keys) takes the `${{ env.NAME }}` expression form;
 //! - a job-level `RUSTUP_TOOLCHAIN` reference moves into the resolver,
@@ -120,9 +121,8 @@ fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
 }
 
 fn hoist_early_rustup(id: &str, steps: &mut [Yaml]) -> Result<bool, RenderError> {
-    // Before both prerequisites, only the inert Rustup value may be hoisted.
-    // The resolver
-    // exports `RUSTUP_TOOLCHAIN` for every later step instead.
+    // Before both prerequisites, only the inert Rustup value may be hoisted;
+    // the resolver exports `RUSTUP_TOOLCHAIN` for every later step instead.
     let mut export_rustup = false;
     for step in steps.iter_mut() {
         if let Yaml::Map(fields) = step
@@ -163,17 +163,20 @@ fn resolver_at(id: &str, steps: &[Yaml], insertion: usize) -> Result<bool, Rende
 }
 
 /// Bind one composite action's steps: insert the resolver after its own Mise
-/// setup. This runs once per rendered document ([`bind_workflow`]); a
-/// composite that already carries the resolver step is left as it is.
+/// setup, or first when it has none. This runs once per rendered document
+/// ([`bind_workflow`]); a composite that already carries the resolver step
+/// is left as it is.
 ///
-/// A composite is a separate unit that a caller may use from any job, and a
-/// caller job binds only the references written in its own steps, so a
-/// composite that reads a project version must resolve it itself.
+/// A composite is a separate unit, and a caller job binds only the
+/// references written in its own steps, so a composite that reads a project
+/// version always resolves it itself. Only the shared-lane composite has no
+/// Setup Mise of its own: both lane jobs render Setup Mise before calling it,
+/// because the hosted lane's tools-cache identity reads resolved versions
+/// before the call.
 ///
 /// # Errors
 ///
-/// Returns [`RenderError::InvalidWorkflow`] for unbalanced `run` quoting, or
-/// when the composite reads a project version without its own Mise setup.
+/// Returns [`RenderError::InvalidWorkflow`] for unbalanced `run` quoting.
 fn bind_composite_steps(steps: &mut Vec<Yaml>) -> Result<(), RenderError> {
     let referenced: BTreeSet<String> = steps.iter().flat_map(names).collect();
     if referenced.is_empty() {
@@ -182,14 +185,15 @@ fn bind_composite_steps(steps: &mut Vec<Yaml>) -> Result<(), RenderError> {
     for step in steps.iter_mut() {
         rewrite_mappings(step, false)?;
     }
-    let Some(setup) = steps.iter().position(is_mise_setup) else {
-        return Err(invalid("composite_no_mise_setup"));
-    };
     if steps.iter().any(is_resolver_step) {
         return Ok(());
     }
+    let at = steps
+        .iter()
+        .position(is_mise_setup)
+        .map_or(0, |setup| setup + 1);
     steps.insert(
-        setup + 1,
+        at,
         Yaml::Map(vec![
             ("name".to_owned(), Yaml::str(PROJECT_TOOLS_STEP_NAME)),
             ("shell".to_owned(), Yaml::str("bash")),
@@ -202,7 +206,8 @@ fn bind_composite_steps(steps: &mut Vec<Yaml>) -> Result<(), RenderError> {
 /// Job and composite resolvers share the same narrowly validated write.
 fn resolver_run(referenced: &BTreeSet<String>, export_rustup: bool) -> Yaml {
     // zizmor audits every composite and privileged job `GITHUB_ENV` write;
-    // this one appends only digits-and-dots values the script validated.
+    // this one appends only digits-and-dots values and lock digests (64 hex
+    // characters or `unlocked`) the script validated.
     Yaml::annotated(
         project_tool_resolver_script(referenced, export_rustup),
         "zizmor: ignore[github-env]",
@@ -348,3 +353,7 @@ pub(super) fn invalid(context: &str) -> RenderError {
 #[cfg(test)]
 #[path = "project_tool_resolver_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "project_tool_resolver_order_tests.rs"]
+mod order_tests;
