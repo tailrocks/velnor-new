@@ -43,6 +43,7 @@ pub const RUN_KEY_OUTPUT: &str = "run_key";
 /// Negative list: empty or missing means every crate job runs, so a
 /// failed or garbled plan can never skip work by itself.
 pub const NOT_AFFECTED_JOBS_OUTPUT: &str = "not_affected_jobs";
+
 /// Plan job output carrying the run attempt that produced the plan.
 pub const PLAN_ATTEMPT_OUTPUT: &str = "plan_attempt";
 /// Env key binding run-scoped identities to the plan's attempt.

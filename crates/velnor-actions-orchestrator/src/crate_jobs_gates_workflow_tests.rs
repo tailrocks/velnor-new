@@ -252,7 +252,7 @@ fn assert_seed_job_dispositions(jobs: &BTreeMap<String, velnor_actions_contract:
     let id = "rust-demo";
     assert_eq!(
         jobs[id].condition.as_deref(),
-        Some(crate::plan_dispositions::not_affected_gate(id).as_str())
+        Some(velnor_actions_workflow_renderer::not_affected_gate(id).as_str())
     );
     assert!(jobs["required"].needs.iter().any(|need| need == id));
     for step in &jobs[id].steps {
