@@ -12,19 +12,22 @@ use velnor_actions_contract::config::project_tool_resolver::{
 };
 
 /// The shell definitions `velnor_exact_java` needs, cut from the real script.
-fn harness() -> String {
+fn harness() -> Result<String, String> {
     let script =
         project_tool_resolver_script(&BTreeSet::from([JAVA_TOOL_VARIABLE.to_owned()]), false);
-    let between = |from: &str, to: &str| -> String {
-        let start = script.find(from).expect(from);
-        let end = start + script[start..].find(to).expect(to);
-        script[start..end].to_owned()
+    let between = |from: &str, to: &str| -> Result<String, String> {
+        let start = script.find(from).ok_or_else(|| format!("missing {from}"))?;
+        let end = start
+            + script[start..]
+                .find(to)
+                .ok_or_else(|| format!("missing {to}"))?;
+        Ok(script[start..end].to_owned())
     };
-    let safe = between("velnor_safe()", "\n") + "\n";
-    let fail = between("velnor_fail()", "\n") + "\n";
-    let exact = between("velnor_exact() {", "velnor_tool() {");
-    let java = between("velnor_exact_java() {", "velnor_tool_java() {");
-    format!("{safe}{fail}{exact}{java}")
+    let safe = between("velnor_safe()", "\n")? + "\n";
+    let fail = between("velnor_fail()", "\n")? + "\n";
+    let exact = between("velnor_exact() {", "velnor_tool() {")?;
+    let java = between("velnor_exact_java() {", "velnor_tool_java() {")?;
+    Ok(format!("{safe}{fail}{exact}{java}"))
 }
 
 fn accepts(harness: &str, value: &str) -> bool {
@@ -41,7 +44,7 @@ fn accepts(harness: &str, value: &str) -> bool {
 
 #[test]
 fn accepts_the_documented_forms() {
-    let harness = harness();
+    let harness = harness().expect("harness");
     for ok in [
         "oracle-graalvm-25.0.3",
         "temurin-21.0.8+9.0.LTS",
@@ -56,7 +59,7 @@ fn accepts_the_documented_forms() {
 
 #[test]
 fn rejects_loose_unknown_and_hostile_declarations() {
-    let harness = harness();
+    let harness = harness().expect("harness");
     for bad in [
         "21",
         "temurin-21",
