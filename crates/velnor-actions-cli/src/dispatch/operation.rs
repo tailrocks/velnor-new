@@ -49,6 +49,8 @@ pub(super) enum InternalOp {
     PrivateFetch,
     /// Installation-token revocation after the private fetch (HD-7).
     PrivateRevoke,
+    /// Registry phase of `bun install` under the job token (HD-6, HD-7).
+    BunRegistryInstall,
     /// Isolated App-authenticated PR writer for a validated tap candidate.
     TapWriter,
     /// Isolated exact-head App-authenticated tap promotion merge.

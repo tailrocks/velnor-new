@@ -204,12 +204,13 @@ declarations reject them as reserved keys.
 (`FETCH_REDIRECT_ENV_KEYS` and `is_fetch_redirect_key`), and rendered task env
 may not declare them.
 
-The renderer mirrors the boundary with three step roles
-(`StepRole::PrivateTokenMint`, `PrivateFetch`, `PrivateRevoke`):
+The renderer mirrors the boundary with four step roles
+(`StepRole::PrivateTokenMint`, `PrivateFetch`, `PrivateRevoke` and
+`BunRegistryInstall`, the [Bun registry phase](bun-contract.md)):
 
 - `${{ steps.deps-token.outputs.token }}` may appear only as the exact value of
   `VELNOR_PRIVATE_FETCH_TOKEN` in a fetch or revoke step, and `${{ github.token }}`
-  only as `VELNOR_NPM_READ_TOKEN` in a fetch step. Anywhere else (any env key,
+  only as `VELNOR_NPM_READ_TOKEN` in the Bun registry-phase step. Anywhere else (any env key,
   action input, argv) fails with `credential_binding_outside_private_fetch`.
 - The mint step is the only place a secret may be named, only as `private-key`,
   and its inputs are closed (`client-id`, `private-key`, `owner`, `repositories`,

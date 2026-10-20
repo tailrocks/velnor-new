@@ -9,8 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    Job, JobTimeout, PRIVATE_NPM_READ_TOKEN_ENV, PermissionLevel, Permissions, Step, StepKind,
-    StepRole,
+    Job, JobTimeout, PermissionLevel, Permissions, Step, StepKind, StepRole,
 };
 
 use crate::{RenderError, steps};
@@ -62,9 +61,8 @@ impl BunMemberPolicy {
             }
             let app_token_step = matches!(
                 step.role,
-                Some(StepRole::PrivateTokenMint | StepRole::PrivateRevoke)
-            ) || (step.role == Some(StepRole::PrivateFetch)
-                && !is_registry_phase(step));
+                Some(StepRole::PrivateTokenMint | StepRole::PrivateFetch | StepRole::PrivateRevoke)
+            );
             if app_token_step {
                 return Err(invalid("bun_job_app_token_step"));
             }
@@ -87,8 +85,7 @@ impl BunMemberPolicy {
 
 /// The registry phase: the one step bound to the npm read token.
 fn is_registry_phase(step: &Step) -> bool {
-    step.role == Some(StepRole::PrivateFetch)
-        && matches!(&step.kind, StepKind::Shell { env, .. } if env.contains_key(PRIVATE_NPM_READ_TOKEN_ENV))
+    step.role == Some(StepRole::BunRegistryInstall)
 }
 
 /// Build the job for one member.

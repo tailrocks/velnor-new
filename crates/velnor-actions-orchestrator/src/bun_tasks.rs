@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use velnor_actions_bun::{Member, check_package_manager, job_id, member_scripts};
-use velnor_actions_contract::{JobTimeout, VelnorConfig};
+use velnor_actions_contract::{JobTimeout, Step, VelnorConfig};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::verification_jobs::BunMemberPolicy;
 
@@ -19,6 +19,7 @@ pub(crate) fn policies(
     config: &VelnorConfig,
     discovery: &Discovery,
     catalog: &ToolCatalog,
+    acquire: Option<&Step>,
 ) -> Result<Vec<BunMemberPolicy>, OrchestratorError> {
     let Some(bun) = &config.stacks.bun else {
         return Ok(Vec::new());
@@ -27,13 +28,12 @@ pub(crate) fn policies(
     if !concrete.is_project_declared(PinnedTool::Bun) {
         return Err(failure("bun_tool_not_declared"));
     }
-    if config
+    let mut scopes: Vec<String> = config
         .private_sources
         .as_ref()
-        .is_some_and(|sources| !sources.npm_scopes.is_empty())
-    {
-        return Err(failure("bun_registry_phase_unavailable"));
-    }
+        .map_or_else(Vec::new, |sources| sources.npm_scopes.clone());
+    scopes.sort();
+    scopes.dedup();
     let timeout = bun
         .timeout_minutes
         .map_or(Ok(config.workflow.crate_timeout_minutes), u16::try_from)
@@ -56,6 +56,8 @@ pub(crate) fn policies(
                     member,
                     scripts: &member_scripts(member, bun).map_err(|err| failure(err.code()))?,
                     bunfig: bun_root.bunfig.as_deref(),
+                    scopes: &scopes,
+                    acquire,
                 },
                 timeout,
             )?);
