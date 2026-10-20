@@ -20,8 +20,12 @@ use crate::{
 /// Publication boundary role carried by one job.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PublishRole {
-    /// Verifies release authority; reads GitHub metadata only, no checkout.
+    /// Verifies tag release authority; reads GitHub metadata only, no checkout.
     Authority,
+    /// Verifies default-branch push authority; waits for `Required`, no checkout.
+    BranchAuthority,
+    /// Creates tags and GitHub releases from the verified default-branch commit.
+    TagRelease,
     /// Builds an artifact from the checked-out tag commit; read-only.
     ArtifactBuild,
     /// Attests the built artifact; holds OIDC and attestation authority, no checkout.
@@ -36,6 +40,8 @@ impl PublishRole {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Authority => "authority",
+            Self::BranchAuthority => "branch-authority",
+            Self::TagRelease => "tag-release",
             Self::ArtifactBuild => "artifact-build",
             Self::ArtifactAttest => "artifact-attest",
             Self::ArtifactPublish => "artifact-publish",
@@ -45,16 +51,35 @@ impl PublishRole {
     /// Forward-only pipeline rank (needs must point to lower ranks).
     fn rank(self) -> u8 {
         match self {
-            Self::Authority => 0,
-            Self::ArtifactBuild => 1,
+            Self::Authority | Self::BranchAuthority => 0,
+            Self::TagRelease | Self::ArtifactBuild => 1,
             Self::ArtifactAttest => 2,
             Self::ArtifactPublish => 3,
         }
     }
 
     /// True for roles that execute no repository code and never check it out.
+    ///
+    /// `ArtifactBuild` only reads files; `TagRelease` checks out so the pinned
+    /// release tool can read manifests and history, and runs no repository code.
     fn forbids_checkout(self) -> bool {
-        !matches!(self, Self::ArtifactBuild)
+        !matches!(self, Self::ArtifactBuild | Self::TagRelease)
+    }
+
+    /// True for the roles that gate the rest of the workflow.
+    fn is_authority(self) -> bool {
+        matches!(self, Self::Authority | Self::BranchAuthority)
+    }
+
+    /// The authority role a downstream role must transitively need.
+    fn gate(self) -> Option<Self> {
+        match self {
+            Self::Authority | Self::BranchAuthority => None,
+            Self::TagRelease => Some(Self::BranchAuthority),
+            Self::ArtifactBuild | Self::ArtifactAttest | Self::ArtifactPublish => {
+                Some(Self::Authority)
+            }
+        }
     }
 }
 
@@ -77,10 +102,10 @@ impl PublishPermissions {
     pub fn expected(role: PublishRole) -> Self {
         use PermissionLevel::{None, Read, Write};
         let (contents, checks, id_token, attestations) = match role {
-            PublishRole::Authority => (Read, Read, None, None),
+            PublishRole::Authority | PublishRole::BranchAuthority => (Read, Read, None, None),
             PublishRole::ArtifactBuild => (Read, None, None, None),
             PublishRole::ArtifactAttest => (Read, None, Write, Write),
-            PublishRole::ArtifactPublish => (Write, None, None, None),
+            PublishRole::TagRelease | PublishRole::ArtifactPublish => (Write, None, None, None),
         };
         Self {
             contents,
@@ -255,22 +280,22 @@ impl PublishWorkflowSpec {
         scan_for_private_subcommands(&self.name)?;
         validate_repository(&self.repository)?;
         self.validate_triggers()?;
-        let mut authority = None;
+        let mut authorities = BTreeMap::new();
         for (id, job) in &self.jobs {
             validate_job_id(id).map_err(RenderError::Contract)?;
             job.validate_shape(id)?;
-            if job.role == PublishRole::Authority && authority.replace(id).is_some() {
+            if job.role.is_authority() && authorities.insert(job.role, id.as_str()).is_some() {
                 return Err(RenderError::InvalidWorkflow(
                     "publish_authority_count".to_owned(),
                 ));
             }
         }
-        let Some(authority) = authority else {
+        if authorities.is_empty() {
             return Err(RenderError::InvalidWorkflow(
                 "publish_authority_count".to_owned(),
             ));
-        };
-        self.check_needs(authority)
+        }
+        self.check_needs(&authorities)
     }
 
     /// Validate branches and the tag glob.
@@ -306,10 +331,10 @@ impl PublishWorkflowSpec {
     }
 
     /// Require known forward-only needs, then the authority gate on every job.
-    fn check_needs(&self, authority: &str) -> Result<(), RenderError> {
+    fn check_needs(&self, authorities: &BTreeMap<PublishRole, &str>) -> Result<(), RenderError> {
         for (id, job) in &self.jobs {
-            if job.role == PublishRole::Authority {
-                if !job.needs.is_empty() || job.condition.is_some() {
+            if job.role.is_authority() {
+                if !job.needs.is_empty() {
                     return Err(RenderError::InvalidWorkflow(format!(
                         "authority_shape:{id}"
                     )));
@@ -330,7 +355,13 @@ impl PublishWorkflowSpec {
             }
         }
         for (id, job) in &self.jobs {
-            if job.role != PublishRole::Authority && !self.reaches(id, authority) {
+            let Some(gate) = job.role.gate() else {
+                continue;
+            };
+            let gated = authorities
+                .get(&gate)
+                .is_some_and(|authority| self.reaches(id, authority));
+            if !gated {
                 return Err(RenderError::InvalidWorkflow(format!("ungated_job:{id}")));
             }
         }

@@ -19,6 +19,21 @@ pub enum ReleaseAuthentication {
     BootstrapToken,
 }
 
+/// Where a release lands: a registry, or only git tags and GitHub releases.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ReleaseRegistry {
+    /// Publish to crates.io through release-plz.
+    #[default]
+    CratesIo,
+    /// Create tags and GitHub releases only (`publish = false`, git-only).
+    ///
+    /// Consumers pin `git` dependencies to the tag. A git dependency checks
+    /// out the whole repository, which keeps paths such as
+    /// `embed_migrations!("../../backend/eth-flyway/...")` valid.
+    GitTag,
+}
+
 /// Exact first-publication authorization (bootstrap mode only).
 ///
 /// Immutable record: package, version, and source SHA. A dispatch must never
@@ -56,10 +71,15 @@ pub struct RustReleaseConfig {
     /// Protected GitHub environment bound to publishing jobs.
     #[serde(default = "default_environment")]
     pub environment: String,
-    /// Authentication mode (default trusted publishing).
-    #[serde(default)]
-    pub authentication: ReleaseAuthentication,
-    /// Run release-plz release-pr preparation (default true).
+    /// Release destination (default crates.io).
+    #[serde(default, skip_serializing_if = "is_default_registry")]
+    pub registry: ReleaseRegistry,
+    /// Authentication mode; absent means trusted publishing on crates.io.
+    /// Forbidden in `git-tag` mode, which holds no registry credential.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authentication: Option<ReleaseAuthentication>,
+    /// Run release-plz release-pr preparation (default true; crates.io only,
+    /// `git-tag` releases are prepared by a maintainer's version bump).
     #[serde(default = "default_true")]
     pub release_pr: bool,
     /// Package-qualified tag template carrying package and version vars.
@@ -74,6 +94,15 @@ pub struct RustReleaseConfig {
     /// publishable-workspace opt-in, emission enforces set membership.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub version_groups: BTreeMap<String, Vec<String>>,
+}
+
+/// Serde skip predicate for the default registry.
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip predicates take a reference"
+)]
+fn is_default_registry(registry: &ReleaseRegistry) -> bool {
+    *registry == ReleaseRegistry::default()
 }
 
 /// Default workspace manifest path.
@@ -106,7 +135,8 @@ impl Default for RustReleaseConfig {
             packages: Vec::new(),
             publishable_workspace: false,
             environment: default_environment(),
-            authentication: ReleaseAuthentication::default(),
+            registry: ReleaseRegistry::default(),
+            authentication: None,
             release_pr: true,
             tag_name: default_tag_name(),
             bootstrap: None,
@@ -116,6 +146,12 @@ impl Default for RustReleaseConfig {
 }
 
 impl RustReleaseConfig {
+    /// Effective authentication: the declared mode, else trusted publishing.
+    #[must_use]
+    pub fn effective_authentication(&self) -> ReleaseAuthentication {
+        self.authentication.unwrap_or_default()
+    }
+
     /// Validate shape, safety, and mode coherence.
     ///
     /// Runs whether enabled or not so drafted config stays safe; `enabled`
@@ -148,7 +184,10 @@ impl RustReleaseConfig {
     /// Reject contradictory authentication/authorization combinations.
     fn validate_authentication(&self, file: &str) -> Result<(), ContractError> {
         let key = "stacks.rust.release.bootstrap";
-        match (self.authentication, &self.bootstrap) {
+        if self.registry == ReleaseRegistry::GitTag {
+            return self.validate_git_tag(file);
+        }
+        match (self.effective_authentication(), &self.bootstrap) {
             (ReleaseAuthentication::BootstrapToken, None) => {
                 Err(ContractError::config(file, key, "missing_bootstrap_record"))
             }
@@ -159,6 +198,34 @@ impl RustReleaseConfig {
             )),
             _ => Ok(()),
         }
+    }
+}
+
+impl RustReleaseConfig {
+    /// `git-tag` mode: no registry, no credential, explicit packages only.
+    fn validate_git_tag(&self, file: &str) -> Result<(), ContractError> {
+        if self.authentication.is_some() {
+            return Err(ContractError::config(
+                file,
+                "stacks.rust.release.authentication",
+                "contradictory_authentication",
+            ));
+        }
+        if self.bootstrap.is_some() {
+            return Err(ContractError::config(
+                file,
+                "stacks.rust.release.bootstrap",
+                "contradictory_authentication",
+            ));
+        }
+        if self.publishable_workspace {
+            return Err(ContractError::config(
+                file,
+                "stacks.rust.release.publishable_workspace",
+                "git_tag_requires_packages",
+            ));
+        }
+        Ok(())
     }
 }
 

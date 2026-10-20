@@ -234,3 +234,63 @@ pub fn render_bootstrap_release_plz_config(
     scan_for_private_subcommands(&text)?;
     Ok(text)
 }
+
+/// Deterministic TOML body of the `git-tag` mode config.
+///
+/// Tags and GitHub releases only: `publish = false` skips the registry and
+/// `git_only = true` takes versions from git tags, so release-plz never asks
+/// crates.io about a private crate. No `publish_*` verification keys apply.
+///
+/// `release_always = true` is deliberate here: without release PRs the
+/// maintainer's version bump is the authorization, and tagging is
+/// idempotent (an existing tag makes release-plz skip the package). The
+/// registry modes keep `release_always = false`.
+fn git_tag_toml_body(config: &ReleasePlzConfig) -> Result<String, RenderError> {
+    let mut out = String::from("[workspace]\nrelease = false\nrelease_always = true\n");
+    toml_line(
+        &mut out,
+        format_args!("semver_check = {}\n", config.semver_check),
+    )?;
+    out.push_str(
+        "publish = false\ngit_only = true\ngit_tag_enable = true\ngit_release_enable = true\n",
+    );
+    toml_line(
+        &mut out,
+        format_args!("git_tag_name = \"{}\"\n", toml_escape(&config.tag_pattern)),
+    )?;
+    for package in &config.packages {
+        out.push_str("\n[[package]]\n");
+        toml_line(
+            &mut out,
+            format_args!("name = \"{}\"\n", toml_escape(&package.name)),
+        )?;
+        out.push_str("release = true\n");
+    }
+    Ok(out)
+}
+
+/// Render the `git-tag` mode config with the marker line.
+///
+/// # Errors
+///
+/// Returns [`RenderError`] for invalid configs, versions, or features: a
+/// git-tag package carries no `publish_features`.
+pub fn render_git_tag_release_plz_config(
+    config: &ReleasePlzConfig,
+    version: &str,
+) -> Result<String, RenderError> {
+    config.validate()?;
+    if let Some(package) = config
+        .packages
+        .iter()
+        .find(|package| !package.publish_features.is_empty())
+    {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "git_tag_publish_features:{}",
+            package.name
+        )));
+    }
+    let text = marker::with_marker(version, &git_tag_toml_body(config)?)?;
+    scan_for_private_subcommands(&text)?;
+    Ok(text)
+}

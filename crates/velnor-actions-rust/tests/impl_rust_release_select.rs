@@ -162,6 +162,65 @@ fn publishable_workspace_skips_private_helpers() -> Outcome {
 }
 
 #[test]
+fn git_tag_scope_selects_private_and_restricted_packages() -> Outcome {
+    let dir = TempDir::create("release-git-tag")?;
+    let root = root_of(&dir)?;
+    let json = doc(
+        &root,
+        vec!["app-id", "help-id", "reg-id"],
+        vec![
+            pkg(
+                &root,
+                "app-id",
+                "app",
+                "2.0.0",
+                "crates/app/Cargo.toml",
+                Value::Null,
+                vec![],
+            ),
+            pkg(
+                &root,
+                "help-id",
+                "helper",
+                "1.3.0",
+                "crates/helper/Cargo.toml",
+                json!([]),
+                vec![],
+            ),
+            pkg(
+                &root,
+                "reg-id",
+                "regd",
+                "0.4.0",
+                "crates/regd/Cargo.toml",
+                json!(["kellnr"]),
+                vec![],
+            ),
+        ],
+    );
+    let scope = ReleaseScope::GitTagPackages(vec!["regd".to_owned(), "helper".to_owned()]);
+    let selection = select_of(&json, &root, &scope, &BTreeSet::new(), &[])?;
+    assert_eq!(selection.names(), vec!["helper", "regd"]);
+    assert!(
+        selection
+            .packages
+            .iter()
+            .all(|p| p.registries == ["git-tag"])
+    );
+    let unknown = ReleaseScope::GitTagPackages(vec!["ghost".to_owned()]);
+    assert!(matches!(
+        select_of(&json, &root, &unknown, &BTreeSet::new(), &[]),
+        Err(ReleaseError::UnknownPackage { .. })
+    ));
+    let repeated = ReleaseScope::GitTagPackages(vec!["app".to_owned(), "app".to_owned()]);
+    assert!(matches!(
+        select_of(&json, &root, &repeated, &BTreeSet::new(), &[]),
+        Err(ReleaseError::DuplicateSelection { .. })
+    ));
+    Ok(())
+}
+
+#[test]
 fn unsupported_registry_fails_closed_until_supported() -> Outcome {
     let dir = TempDir::create("release-registry")?;
     let root = root_of(&dir)?;

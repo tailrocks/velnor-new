@@ -110,7 +110,47 @@ Attestation verification at the consumer is part of P's fetch step.
   (match, target mismatch and lightweight-tag failure) and the `Required`
   check-run filter against a real commit.
 
-## 5. Owner actions and blockers
+## 5. Verification of git-tag mode
+
+See §6 for the mode; its tests are `impl_orch_publish_git_tag.rs` (generated
+shape, config keys, credential rejection, mixed workflow), the wait script
+executed against a fake `gh` that applies the real jq program (success,
+re-run supersedes failure, failure, spoofed app, unsettled, absent), the
+branch gate with wrong event, ref type, repository and ref, and the
+selection and pin-check unit tests in `velnor-actions-rust`.
+
+## 6. `registry = "git-tag"` (RT)
+
+Rust crates consumed as `git` dependencies release by tag. The same
+`publish.yml` carries the Rust tag release when
+`[stacks.rust.release] registry = "git-tag"`; see
+[release config schema](release-config-schema.md#git-tag-mode) for the keys.
+
+- Trigger: `push` to the default branch. With bundles declared the workflow
+  also triggers on release tags; each authority job then carries
+  `if: github.ref_type == 'tag'` or `'branch'`, so a push runs exactly one.
+- `publish-branch-authority` (`contents: read`, `checks: read`, no checkout):
+  confirms the event, ref type, repository and `refs/heads/<default>`, then
+  polls the newest `Required` check run from GitHub Actions at the pushed
+  SHA every 30 seconds for up to 30 minutes (job timeout 35). A settled
+  non-success fails at once; running, absent or an exhausted budget fails
+  closed. A re-run that succeeds supersedes an earlier failure.
+- `rust-tag-release` (`contents: write`, environment `release`, no
+  `id-token`, no registry token): checks out the commit, then runs the pinned
+  `release-plz release` with `GIT_TOKEN`. It runs no repository code;
+  release-plz reads manifests and history.
+- Tags that release-plz creates with `GITHUB_TOKEN` do not trigger other
+  workflows, so a tag-driven artifact (bundle) is released by a maintainer's
+  tag push, never by this job.
+- Generation refuses a private git source on the owner's organization that is
+  not pinned by `tag`, using `cargo metadata`'s resolved sources (this covers
+  dependencies and `[patch]` entries); `Cargo.lock` carries the `#<sha>`.
+  Consumer repositories that only depend on producers need the same check
+  without a release section: that wiring and the derived repository
+  allowlist belong to item P (private sources) and are not part of this
+  change.
+
+## 7. Owner actions and blockers
 
 - Tag rulesets on every producer that block updating and deleting `*-v*`
   tags and restrict creation to maintainers.

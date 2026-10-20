@@ -95,7 +95,7 @@ pub use qualified_tools::{
     QualifiedToolRecipePlatform, validate_qualified_tool_recipe, validate_qualified_tool_recipes,
     validate_qualified_tools,
 };
-pub use release::{BootstrapRelease, ReleaseAuthentication, RustReleaseConfig};
+pub use release::{BootstrapRelease, ReleaseAuthentication, ReleaseRegistry, RustReleaseConfig};
 pub use resources::{
     ResourcesConfig, ShardTimingEvidence, TestShardingConfig, validate_shard_changes_need_evidence,
 };
