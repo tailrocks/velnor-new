@@ -282,16 +282,38 @@ fn rejects_inventory_larger_than_canonical_receipt_limits() {
 }
 
 #[test]
-fn native_producer_timeout_has_independent_ten_minute_ceiling() {
+fn native_producer_timeout_has_independent_twenty_minute_ceiling() {
     assert!(crate::workflow::timeout::JobTimeout::new(360).is_ok());
-    for minutes in [1, 5, 6, 10] {
+    for minutes in [1, 5, 6, 10, 15, 20] {
         let mut value = enabled_preview();
         value.producer.timeout_minutes = minutes;
         assert!(value.validate("config.toml").is_ok(), "{minutes}");
     }
-    for minutes in [0, 11, 30, 360, 361, u16::MAX] {
+    for minutes in [0, 21, 30, 360, 361, u16::MAX] {
         let mut value = enabled_preview();
         value.producer.timeout_minutes = minutes;
         assert!(value.validate("config.toml").is_err(), "{minutes}");
     }
+}
+
+#[test]
+fn native_producer_timeout_rejects_malformed_and_duplicate_values() {
+    let producer = RustBinaryPreviewProducer::default();
+    let canonical = serde_json::to_string(&producer).expect("producer JSON");
+    for value in ["\"20\"", "20.0", "-1", "null", "true"] {
+        let malformed = canonical.replace(
+            "\"timeout_minutes\":5",
+            &format!("\"timeout_minutes\":{value}"),
+        );
+        assert_ne!(malformed, canonical);
+        assert!(
+            serde_json::from_str::<RustBinaryPreviewProducer>(&malformed).is_err(),
+            "{value}"
+        );
+    }
+    let duplicate = canonical.replace(
+        "\"timeout_minutes\":5",
+        "\"timeout_minutes\":20,\"timeout_minutes\":5",
+    );
+    assert!(serde_json::from_str::<RustBinaryPreviewProducer>(&duplicate).is_err());
 }

@@ -216,12 +216,12 @@ The separately published `release.json.bundle` and GitHub attestations are exclu
 
 ## 5. Job boundaries and credential projection
 
-Native preview producer budgets accept one through ten minutes, with five as
+Native preview producer budgets accept one through twenty minutes, with five as
 the unchanged default. Tap updaters retain one through five minutes. This explicit
 producer ceiling is independent of the general workflow range; control, signer,
 publication and source-free acquisition budgets remain five minutes. The producer
 operation keeps its original start and intersects the configured budget with its
-ten-minute ceiling, including cleanup; a larger setting does not weaken approval
+twenty-minute ceiling, including cleanup; a larger setting does not weaken approval
 or artifact admission.
 
 Generated preview workflow is separate from CI and stable release. Its fixed DAG is eligibility; unprivileged producer; independent output/evidence validation; signer; immutable publisher; unprivileged tap preparation; isolated App PR writer; exact-head gated merge. Build has no OIDC, release write, or tap credentials. Signer does not execute repository code. Publisher has release contents permission only and no build/updater execution. The publisher and recovery verifier use an explicitly passed source-repository read token for GitHub attestation lookup; the pinned `gh` child receives only that token after clearing ambient credentials. Reject identical source-read and tap App tokens. Updater has no write credentials. App token exists only in isolated writer/merge boundary with target-scoped `contents:write` and `pull_requests:write`; no `actions:write`, admin, or bypass. Use clean ephemeral jobs, no persisted checkout token, hooks, filters, executable config, producer cache, or environment-file credential handoff.

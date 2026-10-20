@@ -6,7 +6,7 @@ GitHub's per-job execution limit on hosted runners
 ([Actions limits](https://docs.github.com/en/actions/reference/limits)).
 Configuration that requests zero or more than 360 is rejected for general crate
 jobs, custom checks, native builds, verification, and suites. Native preview
-production accepts one through ten minutes and tap-updater configuration accepts
+production accepts one through twenty minutes and tap-updater configuration accepts
 one through five, both defaulting to five independently of the general workflow range. No job family may omit the
 field, substitute GitHub's implicit default, or silently clamp a request.
 
@@ -29,7 +29,7 @@ limits. Reusable workflow callers cannot declare a job timeout; their exact
 canonical local callee inventory is admitted together, and each executable
 callee job has its own bounded timeout. External or missing callees are rejected.
 
-Native preview production starts one monotonic ten-minute maximum deadline
+Native preview production starts one monotonic twenty-minute maximum deadline
 before reading its context, configuration, plan, or preparation. A shorter
 configured native budget uses
 the same original start. A synchronous scoped ceiling bounds transitive
@@ -57,10 +57,16 @@ native operation after 45 seconds of bootstrap. Its captured output did not
 identify the internal stage. A prior partially cached six-payload diagnostic
 took 37 minutes 37 seconds, with each CLI target already exceeding five minutes.
 The policy does not claim those native builds fit. The later explicit Jackin
-CI/CD timeout authorization permits a producer setting of ten minutes, retaining
-five as the default and the tap updater ceiling. Actual builds must still finish
+CI/CD timeout authorization permits a larger producer budget. The native
+producer ceiling is twenty minutes, retaining five as the default and the tap
+updater ceiling. Actual builds must still finish
 inside their configured producer budget; a larger setting is not capacity proof.
 The general workflow limit cannot widen this independent native ceiling.
+The later cold Jackin preview run 39346520177 exceeded its explicit ten-minute
+producer jobs while legitimate release dependencies were still compiling, after
+qualification and xtask bootstrap. Twenty minutes provides a bounded cold-build
+window, not qualification that every payload fits. All six real payloads must
+still complete and pass the unchanged SDK, artifact, signer and publisher checks.
 
 Regression coverage exercises configuration boundaries, all workflow families,
 reusable callee admission, cumulative preparation and retry budgets, scoped
