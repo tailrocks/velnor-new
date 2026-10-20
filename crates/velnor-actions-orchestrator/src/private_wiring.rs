@@ -98,7 +98,26 @@ impl PrivateWiring {
     /// # Errors
     /// Lock read and render-spec failures.
     pub(crate) fn steps_for_roots(&self, roots: &[String]) -> Result<Vec<Step>, OrchestratorError> {
-        let kinds: BTreeSet<SourceKind> = RUST_JOB_KINDS.into_iter().collect();
+        self.steps_for_kinds(roots, &RUST_JOB_KINDS)
+    }
+
+    /// The block for a Gradle job: it retrieves Maven bundles only.
+    ///
+    /// # Errors
+    /// Lock read and render-spec failures.
+    pub(crate) fn steps_for_gradle(
+        &self,
+        roots: &[String],
+    ) -> Result<Vec<Step>, OrchestratorError> {
+        self.steps_for_kinds(roots, &[SourceKind::MavenBundles])
+    }
+
+    fn steps_for_kinds(
+        &self,
+        roots: &[String],
+        kinds: &[SourceKind],
+    ) -> Result<Vec<Step>, OrchestratorError> {
+        let kinds: BTreeSet<SourceKind> = kinds.iter().copied().collect();
         let repositories = job_allowlist(
             &self.workspace,
             &self.config,
