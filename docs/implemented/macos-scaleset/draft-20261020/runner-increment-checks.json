@@ -1050,5 +1050,25 @@
     "review_sha256": "9b1302e26abf913d977d674e8cc110adab15d5b57d3662a8c24e59ba6d34f3d4",
     "scope": "The tests check runtime file ownership and directory identity. Live cache tests remain NOT_RUN.",
     "integration_review_sha256": "932a5745e50775ecba7b5d7bbfc635ba156afd6f94c0e7bc838beb7c9327c420"
+  },
+  "mise_executable_lookup": {
+    "result": "PASS",
+    "source_base": "539fd6627afcf7b9ef3f3b11511cb2339f4eb49b",
+    "tests": 6,
+    "checks": [
+      {
+        "log": "qualification-cache-mise-lookup-parent-final-20261020.log",
+        "sha256": "6e58537512ce139ff7e7813fcdb1af2e5ebf015d2f8ad54273f416b6dcb29f82",
+        "exit_status": 0,
+        "run_id": "c9312d27-3242-4bce-9070-e42b45dc0f93"
+      },
+      {
+        "log": "qualification-cache-mise-lookup-parent-clippy-20261020.log",
+        "sha256": "c0373ab1ed79d95d8f11240cece754dbfda5e3116391bbb11c89bd94a94100dd",
+        "exit_status": 0
+      }
+    ],
+    "review_sha256": "6009b931d231555f2d2a19e111ac4bcb95d6151916b60021e33d59f572f650c6",
+    "scope": "The lookup checks executable paths and hashes. Runtime cache production and live installation tests remain NOT_RUN."
   }
 }
