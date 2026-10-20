@@ -174,6 +174,8 @@ struct PartialWorkflow {
     crate_timeout_minutes: Option<u16>,
     /// Workflow-level Mise silencing override.
     mise_quiet: Option<bool>,
+    /// Git LFS objects in generated checkouts.
+    checkout_lfs: Option<bool>,
     /// Pull-request cache-write policy.
     #[serde(default)]
     pull_request_cache_policy: PullRequestCachePolicy,
@@ -279,6 +281,7 @@ impl PartialWorkflow {
                 .crate_timeout_minutes
                 .unwrap_or_else(velnor_actions_contract::config::default_crate_timeout_minutes),
             mise_quiet: self.mise_quiet.unwrap_or(true),
+            checkout_lfs: self.checkout_lfs.unwrap_or(false),
             pull_request_cache_policy: self.pull_request_cache_policy,
             runner_label: self.runner_label,
             tasks: self.tasks,

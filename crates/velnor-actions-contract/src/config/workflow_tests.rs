@@ -14,6 +14,7 @@ fn named(name: &str) -> WorkflowConfig {
         default_branch: None,
         generator_validation: GeneratorValidation::Bootstrap,
         mise_quiet: true,
+        checkout_lfs: false,
         max_parallel_jobs: 2,
         crate_timeout_minutes: 5,
         pull_request_cache_policy: PullRequestCachePolicy::default(),
