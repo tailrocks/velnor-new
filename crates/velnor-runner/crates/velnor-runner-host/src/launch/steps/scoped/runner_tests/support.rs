@@ -16,9 +16,13 @@ use crate::journal::{
 use crate::launch::resource_probe::StartPermit;
 use crate::launch::steps::source::test_receipt;
 use crate::launch::{
-    SelectedEngineContext, VerifiedImageIdentity, VerifiedWorkerImages,
+    SelectedEngineContext, VerifiedWorkerImages,
     inspect_tests::{DockerStub, http},
 };
+
+#[path = "support/image.rs"]
+mod image;
+pub(super) use image::image_inspect;
 
 pub(super) const SET_ID: i64 = 501;
 pub(super) const REQUEST_ID: i64 = 41;
@@ -368,39 +372,6 @@ pub(super) fn engine_info(engine_id: &str, root: &str, architecture: &str) -> St
         "OSType": "linux",
         "Architecture": architecture,
         "DockerRootDir": root
-    })
-    .to_string()
-}
-
-pub(super) fn image_inspect(
-    images: &VerifiedWorkerImages,
-    name: &str,
-    identity: &VerifiedImageIdentity,
-) -> String {
-    let reference = format!(
-        "{name}:v{}-{}",
-        images.source_sha(),
-        identity.archive_sha256()
-    );
-    let index = identity
-        .image_index_digest()
-        .expect("worker image fixture has an index");
-    let tag = reference.split_once(':').expect("image has a tag").1;
-    json!({
-        "Id": identity.runtime_id(),
-        "Os": "linux",
-        "Architecture": "amd64",
-        "RepoTags": [reference],
-        "RepoDigests": [format!("docker.io/library/{name}@{index}")],
-        "Descriptor": {
-            "digest": index,
-            "mediaType": "application/vnd.oci.image.index.v1+json",
-            "size": identity.image_index_size().expect("worker index has size"),
-            "annotations": {
-                "io.containerd.image.name": format!("docker.io/library/{reference}"),
-                "org.opencontainers.image.ref.name": tag
-            }
-        }
     })
     .to_string()
 }

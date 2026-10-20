@@ -9,10 +9,8 @@ use crate::{
     error::HostError,
     journal::Journal,
     launch::{
-        Drive, GuestAdmission, PositiveAdmission, PositiveOfferAuthorization, ReleaseReadSecret,
-        Rest, ScopedAdmissionInput, SelectedEngineContext, VerifiedWorkerImages, ZeroHeaderMode,
-        acquire_authorized_scoped_offer, admit_when_ready, authorize_positive_offer,
-        positive_poll_once,
+        Drive, GuestAdmission, ReleaseReadSecret, Rest, SelectedEngineContext,
+        VerifiedWorkerImages, ZeroHeaderMode, positive_poll_once,
     },
 };
 
@@ -22,10 +20,13 @@ use acquired::start_acquired;
 mod acquired;
 #[path = "polling/outcome.rs"]
 mod outcome;
+#[path = "polling/positive_offer.rs"]
+mod positive_offer;
 #[path = "polling/recovery.rs"]
 mod recovery;
 
 pub(crate) use outcome::{ControllerPollOutcome, PollKind};
+use positive_offer::{PositiveOfferInputs, admit_positive_offer};
 use recovery::{retain_authorization_pending, retain_bootstrap_pending, retain_ready_or_pending};
 
 const ASSIGNED_POPULATION_SCAN_LIMIT: u32 = 64;
@@ -333,6 +334,17 @@ async fn positive_poll_message(
     let scoped = &prepared.scope;
     let guest_image = &prepared.guest_image;
     let pat = credentials.github_pat.expose();
+    let inputs = PositiveOfferInputs {
+        context,
+        connection,
+        policy,
+        budget,
+        set_id,
+        scoped,
+        guest_image,
+        pat,
+        allocated_header: allocation.target(),
+    };
     let session_intent = prepared.session_intent;
     positive_poll_once(
         &mut credentials.link,
@@ -343,60 +355,16 @@ async fn positive_poll_message(
         allocation,
         cursor,
         async |link, polled, queue_origin, queue_path, queue_token, admin_token| {
-            let authorized =
-                match authorize_positive_offer(connection, scoped, pat, set_id, polled).await? {
-                    PositiveOfferAuthorization::Deferred(authorized) => authorized,
-                    PositiveOfferAuthorization::TerminalNoAcquire(receipt) => {
-                        return Ok(PositiveAdmission::KnownNoAcquire(receipt));
-                    }
-                };
-            let admission = admit_when_ready(context.admission_ready, || async {
-                let admission = acquire_authorized_scoped_offer(
-                    ScopedAdmissionInput {
-                        link,
-                        queue_origin,
-                        queue_path,
-                        queue_token,
-                        admin_token,
-                        set_id,
-                        polled,
-                        docker: context.docker,
-                        connection,
-                        authority_policy: policy,
-                        pat,
-                        host_journal: context.journal,
-                        scoped_journal: scoped,
-                        release_read_secret: context.release_read_secret,
-                        selected_engine: context.selected_engine,
-                        worker_images: context.worker_images,
-                        guest_image,
-                        resource_budget: budget,
-                        allocated_header: allocation.target(),
-                        admission_state: context.state,
-                    },
-                    &authorized,
-                )
-                .await?;
-                Ok(match admission {
-                    crate::launch::steps::ScopedProvisioningOutcome::NoStart => {
-                        PositiveAdmission::NoAcquire
-                    }
-                    crate::launch::steps::ScopedProvisioningOutcome::KnownNoAcquire(receipt) => {
-                        PositiveAdmission::KnownNoAcquire(receipt)
-                    }
-                    crate::launch::steps::ScopedProvisioningOutcome::Acquired(acquired) => {
-                        PositiveAdmission::Acquired(acquired)
-                    }
-                    crate::launch::steps::ScopedProvisioningOutcome::Recovered(recovery) => {
-                        PositiveAdmission::Acquired(recovery.into_acquired())
-                    }
-                })
-            })
-            .await?;
-            Ok(match admission {
-                PositiveAdmission::NoAcquire => PositiveAdmission::Deferred(authorized),
-                other => other,
-            })
+            admit_positive_offer(
+                &inputs,
+                link,
+                polled,
+                queue_origin,
+                queue_path,
+                queue_token,
+                admin_token,
+            )
+            .await
         },
     )
     .await
