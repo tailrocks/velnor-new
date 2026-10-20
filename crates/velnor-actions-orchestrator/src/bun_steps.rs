@@ -73,7 +73,7 @@ fn contract(problem: impl Into<String>) -> OrchestratorError {
     }
 }
 
-fn prepare_step(catalog: &ToolCatalog) -> Result<Step, OrchestratorError> {
+pub(crate) fn prepare_step(catalog: &ToolCatalog) -> Result<Step, OrchestratorError> {
     let prepare = PreparePinnedTools::new(vec![PinnedTool::Bun], ToolHomes::runner_temp())
         .map_err(|err| contract(err.to_string()))?;
     let run = strings_of(prepare.argv(catalog)).map_err(contract)?;
@@ -102,7 +102,10 @@ fn quote(text: &str) -> String {
 }
 
 /// `mise exec bun@<pin> -- bun <args>` as shell words.
-fn bun_words(catalog: &ToolCatalog, args: &[String]) -> Result<String, OrchestratorError> {
+pub(crate) fn bun_words(
+    catalog: &ToolCatalog,
+    args: &[String],
+) -> Result<String, OrchestratorError> {
     let request = PinnedToolExec::new(
         vec![PinnedTool::Bun],
         std::ffi::OsStr::new("bun"),
@@ -117,7 +120,7 @@ fn bun_words(catalog: &ToolCatalog, args: &[String]) -> Result<String, Orchestra
         .join(" "))
 }
 
-fn dir_arg(dir: &str) -> String {
+pub(crate) fn dir_arg(dir: &str) -> String {
     if dir.is_empty() {
         ".".to_owned()
     } else {

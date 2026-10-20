@@ -20,7 +20,7 @@ use crate::workflow::CHECKOUT_USES;
 #[path = "bun_inventory.rs"]
 pub(crate) mod bun_inventory;
 #[path = "bun_steps.rs"]
-mod bun_steps;
+pub(crate) mod bun_steps;
 #[path = "bun_tasks.rs"]
 mod bun_tasks;
 
