@@ -19,6 +19,7 @@ fn request() -> CleanupObserverRequest {
         operation_id: "a".repeat(32),
         binding_sha256: "b".repeat(64),
         binding: CleanupObserverBinding {
+            metadata_job_facts_inode: None,
             expected_guest_boot_id: "01234567-89ab-cdef-0123-456789abcdef".to_owned(),
             docker_root: CleanupDockerRootIdentity {
                 target: "/velnor/docker-root".to_owned(),

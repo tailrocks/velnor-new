@@ -5,8 +5,10 @@ use crate::error::HostError;
 use super::sql_normalization::normalize;
 mod migration_v27;
 mod migration_v30;
+mod migration_v31;
 pub(super) use migration_v27::upgrade_v27;
 pub(super) use migration_v30::upgrade_v30;
+pub(super) use migration_v31::upgrade_v31;
 #[cfg(test)]
 #[path = "storage_root_backing_tests.rs"]
 mod tests;
@@ -39,7 +41,7 @@ const TRIGGERS: [(&str, &str); 7] = [
     ),
     (
         "bound_storage_path_no_update",
-        "CREATE TRIGGER IF NOT EXISTS bound_storage_path_no_update BEFORE UPDATE ON capacity_reservation_bound_storage_paths BEGIN SELECT RAISE(ABORT, 'Do not change the observed storage path.'); END",
+        "CREATE TRIGGER IF NOT EXISTS bound_storage_path_no_update BEFORE UPDATE ON capacity_reservation_bound_storage_paths BEGIN SELECT RAISE(ABORT, 'The observed storage path cannot change.'); END",
     ),
     (
         "bound_storage_path_no_delete",
@@ -47,7 +49,42 @@ const TRIGGERS: [(&str, &str); 7] = [
     ),
 ];
 
+const PATH_INODE_TRIGGER: (&str, &str) = (
+    "bound_storage_path_inode_insert_guard",
+    "CREATE TRIGGER IF NOT EXISTS bound_storage_path_inode_insert_guard BEFORE INSERT ON capacity_reservation_bound_storage_paths WHEN NEW.statx_inode IS NULL OR NEW.statx_inode <= 0 BEGIN SELECT RAISE(ABORT, 'The storage path inode value must be more than zero.'); END",
+);
+
+pub(super) fn attachment_paths_with_inode() -> String {
+    ATTACHMENT_PATHS.replace(
+        "mount_root TEXT NOT NULL CHECK (length(mount_root) BETWEEN 1 AND 512), volume_subpath TEXT",
+        "mount_root TEXT NOT NULL CHECK (length(mount_root) BETWEEN 1 AND 512), statx_inode INTEGER CHECK (statx_inode IS NULL OR statx_inode > 0), volume_subpath TEXT",
+    )
+}
+
 pub(super) async fn bootstrap(connection: &turso::Connection) -> Result<(), HostError> {
+    let attachment_paths = attachment_paths_with_inode();
+    connection
+        .execute(&attachment_paths, ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(TABLE, ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    for (_, sql) in TRIGGERS {
+        connection
+            .execute(sql, ())
+            .await
+            .map_err(|_| HostError::Journal)?;
+    }
+    connection
+        .execute(PATH_INODE_TRIGGER.1, ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(())
+}
+
+pub(super) async fn bootstrap_v30(connection: &turso::Connection) -> Result<(), HostError> {
     connection
         .execute(ATTACHMENT_PATHS, ())
         .await
@@ -66,12 +103,26 @@ pub(super) async fn bootstrap(connection: &turso::Connection) -> Result<(), Host
 }
 
 pub(super) async fn validate(connection: &turso::Connection) -> Result<(), HostError> {
+    let attachment_paths = attachment_paths_with_inode();
+    validate_schema(connection, &attachment_paths, true).await
+}
+
+pub(super) async fn validate_v30(connection: &turso::Connection) -> Result<(), HostError> {
+    validate_schema(connection, ATTACHMENT_PATHS, false).await
+}
+
+async fn validate_schema(
+    connection: &turso::Connection,
+    attachment_paths: &str,
+    with_inode: bool,
+) -> Result<(), HostError> {
     for (name, expected) in [
         ("capacity_reservation_root_backing_mappings", TABLE),
-        ("capacity_reservation_bound_storage_paths", ATTACHMENT_PATHS),
+        ("capacity_reservation_bound_storage_paths", attachment_paths),
     ]
     .into_iter()
     .chain(TRIGGERS)
+    .chain(with_inode.then_some(PATH_INODE_TRIGGER))
     {
         let kind = if expected.starts_with("CREATE TRIGGER") {
             "trigger"

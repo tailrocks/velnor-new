@@ -177,8 +177,129 @@ pub(super) fn validate_attachments(
     if !has_expected_attachment_set(attachments) {
         return Err(HostError::Journal);
     }
+    validate_engine_metadata_views(roles, attachments)?;
     for item in attachments {
         validate_attachment(roles, item, runner_container_id, dind_container_id)?;
+    }
+    Ok(())
+}
+
+fn validate_engine_metadata_views(
+    roles: &[ObservedStorageRole],
+    attachments: &[ObservedStorageAttachment],
+) -> Result<(), HostError> {
+    let capacity = unique_role(roles, StorageRole::EngineMetadata)?;
+    let probe = unique_attachment(
+        attachments,
+        StorageRole::EngineMetadata,
+        StorageObserver::Probe,
+        None,
+        "/velnor/docker-root",
+    )?;
+    if probe.filesystem_instance_digest != capacity.filesystem_instance_digest {
+        return Err(HostError::Journal);
+    }
+    let views = attachments
+        .iter()
+        .filter(|item| {
+            item.role == StorageRole::EngineMetadata && item.observer != StorageObserver::Probe
+        })
+        .collect::<Vec<_>>();
+    if views.len() != 5 {
+        return Err(HostError::Journal);
+    }
+    let root = metadata_volume_root(views[0])?;
+    let first = views[0];
+    if views.iter().any(|item| {
+        metadata_volume_root(item).ok() != Some(root)
+            || item.device() != first.device()
+            || item.statx_device() != first.statx_device()
+            || item.fs_type_magic != first.fs_type_magic
+            || item.filesystem_id != first.filesystem_id
+            || item.filesystem_instance_digest != first.filesystem_instance_digest
+    }) {
+        return Err(HostError::Identity);
+    }
+    validate_metadata_view_pair(&views, "/.velnor-runtime-identity", "runtime-identity")?;
+    validate_metadata_view_pair(&views, "/opt/velnor/job-facts", "job-facts")?;
+    Ok(())
+}
+
+fn unique_role(
+    roles: &[ObservedStorageRole],
+    expected: StorageRole,
+) -> Result<&ObservedStorageRole, HostError> {
+    let mut matching = roles.iter().filter(|role| role.role == expected);
+    let role = matching.next().ok_or(HostError::Journal)?;
+    if matching.next().is_some() {
+        return Err(HostError::Journal);
+    }
+    Ok(role)
+}
+
+fn unique_attachment<'a>(
+    attachments: &'a [ObservedStorageAttachment],
+    role: StorageRole,
+    observer: StorageObserver,
+    container_id: Option<&str>,
+    target: &str,
+) -> Result<&'a ObservedStorageAttachment, HostError> {
+    let mut matching = attachments.iter().filter(|item| {
+        item.role == role
+            && item.observer == observer
+            && item.container_id.as_deref() == container_id
+            && item.target == target
+    });
+    let item = matching.next().ok_or(HostError::Journal)?;
+    if matching.next().is_some() {
+        return Err(HostError::Journal);
+    }
+    Ok(item)
+}
+
+fn metadata_volume_root(item: &ObservedStorageAttachment) -> Result<&str, HostError> {
+    let subpath = item.volume_subpath.as_deref().ok_or(HostError::Identity)?;
+    let suffix = format!("/{subpath}");
+    let root = item
+        .mount_root()
+        .strip_suffix(&suffix)
+        .filter(|root| !root.is_empty())
+        .ok_or(HostError::Identity)?;
+    Ok(root)
+}
+
+fn validate_metadata_view_pair(
+    views: &[&ObservedStorageAttachment],
+    target: &str,
+    subpath: &str,
+) -> Result<(), HostError> {
+    let runner = views
+        .iter()
+        .copied()
+        .find(|item| {
+            item.observer == StorageObserver::Runner
+                && item.target == target
+                && item.volume_subpath.as_deref() == Some(subpath)
+        })
+        .ok_or(HostError::Identity)?;
+    let dind = views
+        .iter()
+        .copied()
+        .find(|item| {
+            item.observer == StorageObserver::Dind
+                && item.target == target
+                && item.volume_subpath.as_deref() == Some(subpath)
+        })
+        .ok_or(HostError::Identity)?;
+    if runner.mount_root() != dind.mount_root()
+        || runner.statx_inode != dind.statx_inode
+        || runner.device() != dind.device()
+        || runner.statx_device() != dind.statx_device()
+        || runner.fs_type_magic != dind.fs_type_magic
+        || runner.filesystem_id != dind.filesystem_id
+        || runner.filesystem_instance_digest != dind.filesystem_instance_digest
+    {
+        return Err(HostError::Identity);
     }
     Ok(())
 }
@@ -231,7 +352,8 @@ fn validate_attachment(
         || item.filesystem_id == 0
         || !device_matches
         || !valid_digest(&item.filesystem_instance_digest)
-        || item.filesystem_instance_digest != observed_role.filesystem_instance_digest
+        || (item.role != StorageRole::EngineMetadata || item.observer == StorageObserver::Probe)
+            && item.filesystem_instance_digest != observed_role.filesystem_instance_digest
     {
         return Err(HostError::Journal);
     }
@@ -258,3 +380,7 @@ fn valid_mount_root(value: &str, volume_subpath: Option<&str>) -> bool {
             .is_some_and(|prefix| prefix.ends_with('/') && !prefix.is_empty())
     })
 }
+
+#[cfg(test)]
+#[path = "inventory_tests.rs"]
+mod tests;

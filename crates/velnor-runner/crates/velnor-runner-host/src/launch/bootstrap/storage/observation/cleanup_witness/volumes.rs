@@ -93,6 +93,15 @@ pub(in crate::launch::bootstrap::storage::observation) async fn capture_cleanup_
     let dind = container_witness(owned, WorkerRole::Dind)?;
     let binding = CleanupObserverBinding {
         expected_guest_boot_id: owned.guest_boot_id.clone(),
+        metadata_job_facts_inode: if plan
+            .roles()
+            .iter()
+            .any(|role| role.role() == StorageRole::EngineMetadata)
+        {
+            Some(initialization.job_facts().inode())
+        } else {
+            None
+        },
         docker_root: docker_root_identity(owned)?,
         daemon: process_identity(&owned.daemon)?,
         runner: process_identity(&runner.init)?,

@@ -139,14 +139,18 @@ impl ProvisioningFixture<'_> {
                 };
                 let disk = profile.role_limit(role)?.medium() == StorageMedium::Disk;
                 let (device, statx, magic, filesystem_id) = if disk {
-                    let device = if role == StorageRole::EngineMetadata
-                        && contract.observer == StorageObserver::Probe
+                    if role == StorageRole::EngineMetadata
+                        && contract.observer != StorageObserver::Probe
                     {
-                        (0, 41)
+                        ((0, 48), (0, 48), 0x9123_683e, 12_u64)
                     } else {
-                        (0, 38)
-                    };
-                    (device, (0, 41), 0x9123_683e, 11_u64)
+                        let device = if role == StorageRole::EngineMetadata {
+                            (0, 41)
+                        } else {
+                            (0, 38)
+                        };
+                        (device, (0, 41), 0x9123_683e, 11_u64)
+                    }
                 } else {
                     let role_index = StorageRole::PHYSICAL
                         .iter()
@@ -166,6 +170,28 @@ impl ProvisioningFixture<'_> {
                         u64::try_from(fs).map_err(|_| HostError::Journal)?,
                     )
                 };
+                let inode = if role == StorageRole::EngineMetadata {
+                    match contract.target {
+                        "/velnor/docker-root" => 41,
+                        "/.velnor-runtime-identity" => 64,
+                        "/opt/velnor/job-facts" => 65,
+                        "/opt/velnor/source-proof/control" => 67,
+                        _ => return Err(HostError::Journal),
+                    }
+                } else {
+                    500 + (role as u64 * 2)
+                        + match role {
+                            StorageRole::SharedRun => 0,
+                            _ => index as u64,
+                        }
+                };
+                let filesystem_digest = if role == StorageRole::EngineMetadata
+                    && contract.observer != StorageObserver::Probe
+                {
+                    "b".repeat(64)
+                } else {
+                    role_digests.get(&role).ok_or(HostError::Journal)?.clone()
+                };
                 attachments.push(test_observed_storage_attachment(
                     role,
                     contract.observer,
@@ -178,17 +204,12 @@ impl ProvisioningFixture<'_> {
                         .unwrap_or_else(|| "/".to_owned()),
                     contract.read_only,
                     100 + (role as u64 * 2) + index as u64,
-                    500 + (role as u64 * 2)
-                        + if role == StorageRole::SharedRun {
-                            0
-                        } else {
-                            index as u64
-                        },
+                    inode,
                     device,
                     statx,
                     magic,
                     filesystem_id,
-                    role_digests.get(&role).ok_or(HostError::Journal)?.clone(),
+                    filesystem_digest,
                 )?);
             }
         }

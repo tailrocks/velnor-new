@@ -10,6 +10,7 @@ const BINDING_SHA256: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 
 fn binding() -> CleanupObserverBinding {
     CleanupObserverBinding {
+        metadata_job_facts_inode: None,
         expected_guest_boot_id: "guest-boot".to_owned(),
         docker_root: CleanupDockerRootIdentity {
             target: "/velnor/docker-root".to_owned(),

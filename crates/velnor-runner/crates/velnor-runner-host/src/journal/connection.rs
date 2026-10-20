@@ -21,6 +21,14 @@ pub(crate) use reservation::JobFactsPublicationClaim;
 pub(crate) use reservation::ListenerDeliveryClaim;
 pub(crate) use reservation::MetadataSettlementResult;
 
+pub(in crate::journal) async fn validate_resources_bound(
+    connection: &turso::Connection,
+    connection_id: &str,
+    intent_id: i64,
+) -> Result<bool, crate::error::HostError> {
+    reservation::resources_bound(connection, connection_id, intent_id).await
+}
+
 pub(in crate::journal) async fn reservation_release_ready(
     connection: &turso::Connection,
     reservation_id: i64,

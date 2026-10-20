@@ -38,12 +38,17 @@ async fn cleanup_identity_requires_a_bound_held_reservation_and_reads_exact_owne
     let scratch = Scratch::new()?;
     let journal = Journal::open(&scratch.file()).await?;
     journal
-        .configure_capacity(crate::journal::CapacityLimits {
-            jobs: 2,
-            cpu_millicores: JOB_LIMIT.cpu_millicores * 2,
-            memory_bytes: 40 * 1024 * 1024 * 1024,
-            ..JOB_LIMIT
-        })
+        .configure_capacity_with_operational_limits(
+            crate::journal::CapacityLimits {
+                jobs: 2,
+                cpu_millicores: JOB_LIMIT.cpu_millicores * 2,
+                memory_bytes: 40 * 1024 * 1024 * 1024,
+            },
+            crate::journal::OperationalCapacityLimits {
+                cpu_millicores: 100,
+                memory_bytes: 128 * 1024 * 1024,
+            },
+        )
         .await?;
     let scope = created_scope(&journal, &binding("cleanup-identity", 1_401)?, 2_401).await?;
 
@@ -73,6 +78,35 @@ async fn cleanup_identity_requires_a_bound_held_reservation_and_reads_exact_owne
     );
     assert_eq!(identity.private_volume(), format!("w{}", provisioned.nonce));
     assert!(!identity.guest_boot_id().is_empty());
+    let connection = journal.connection().await?;
+    connection
+        .execute("DROP TRIGGER bound_storage_path_no_update", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let changed = connection
+        .execute(
+            "UPDATE capacity_reservation_bound_storage_paths SET statx_inode = 999 WHERE reservation_id = ?1 AND role = 'engine-metadata' AND mount_target = '/opt/velnor/job-facts'",
+            [provisioned.reservation_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    assert_eq!(changed, 2);
+    connection
+        .execute(
+            "CREATE TRIGGER bound_storage_path_no_update BEFORE UPDATE ON capacity_reservation_bound_storage_paths BEGIN SELECT RAISE(ABORT, 'The observed storage path cannot change.'); END",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    drop(connection);
+    assert!(
+        !crate::journal::connection::validate_resources_bound(
+            &journal.connection().await?,
+            scope.connection_id().as_str(),
+            provisioned.intent_id,
+        )
+        .await?
+    );
 
     match identity.topology_version() {
         1 => assert_eq!(identity.volumes().len(), 4),
@@ -114,3 +148,7 @@ async fn cleanup_identity_requires_a_bound_held_reservation_and_reads_exact_owne
     ));
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "cleanup_identity/legacy.rs"]
+mod legacy;

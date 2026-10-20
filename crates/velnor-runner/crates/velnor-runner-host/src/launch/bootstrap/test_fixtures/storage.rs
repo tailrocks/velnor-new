@@ -31,7 +31,13 @@ pub(crate) fn test_verified_storage_resource_binding(
     cgroups: Vec<ObservedContainerCgroup>,
     guest_boot_id: String,
 ) -> Result<super::VerifiedStorageResourceBinding, HostError> {
-    let cleanup_observer_binding = cleanup_binding(&guest_boot_id, &attachments, &cgroups)?;
+    let cleanup_observer_binding = cleanup_binding(
+        &guest_boot_id,
+        &runner_container_id,
+        &dind_container_id,
+        &attachments,
+        &cgroups,
+    )?;
     let root_backings = [
         (
             StorageRole::RunnerRoot,
@@ -104,6 +110,8 @@ pub(crate) fn test_verified_storage_resource_binding(
 
 fn cleanup_binding(
     boot_id: &str,
+    runner_id: &str,
+    dind_id: &str,
     attachments: &[ObservedStorageAttachment],
     cgroups: &[ObservedContainerCgroup],
 ) -> Result<velnor_resource_probe::cleanup_observer_wire::CleanupObserverBinding, HostError> {
@@ -216,6 +224,21 @@ fn cleanup_binding(
         None,
         "/velnor/docker-root",
     )?;
+    let job_facts = root(
+        StorageRole::EngineMetadata,
+        StorageObserver::Runner,
+        Some(runner_id),
+        "/opt/velnor/job-facts",
+    )?;
+    let dind_job_facts = root(
+        StorageRole::EngineMetadata,
+        StorageObserver::Dind,
+        Some(dind_id),
+        "/opt/velnor/job-facts",
+    )?;
+    if job_facts.statx_inode() == 0 || job_facts.statx_inode() != dind_job_facts.statx_inode() {
+        return Err(HostError::Identity);
+    }
     let paths = [
         cgroups
             .iter()
@@ -232,6 +255,7 @@ fn cleanup_binding(
     ];
     let binding = CleanupObserverBinding {
         expected_guest_boot_id: boot_id.to_owned(),
+        metadata_job_facts_inode: Some(job_facts.statx_inode()),
         docker_root: CleanupDockerRootIdentity {
             target: "/velnor/docker-root".to_owned(),
             mount_id: metadata.mount_id(),

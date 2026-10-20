@@ -115,3 +115,11 @@ pub(in crate::journal) async fn record_metadata_probe_cleanup(
     )
     .await
 }
+
+pub(in crate::journal) async fn resources_bound(
+    connection: &turso::Connection,
+    connection_id: &str,
+    intent_id: i64,
+) -> Result<bool, crate::error::HostError> {
+    provisioning::resources_bound(connection, connection_id, intent_id).await
+}

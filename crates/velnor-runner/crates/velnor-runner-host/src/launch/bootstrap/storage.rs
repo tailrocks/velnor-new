@@ -25,6 +25,7 @@ pub(crate) fn test_cleanup_observer_binding() -> CleanupObserverBinding {
     };
     CleanupObserverBinding {
         expected_guest_boot_id: "12345678-1234-1234-1234-123456789abc".to_owned(),
+        metadata_job_facts_inode: None,
         docker_root: CleanupDockerRootIdentity {
             target: "/velnor/docker-root".to_owned(),
             mount_id: 10,

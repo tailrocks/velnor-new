@@ -207,3 +207,191 @@ async fn claimed_jit_stays_one_shot_and_holds_capacity_after_restart() -> Result
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn jit_claim_rejects_consistent_metadata_inode_substitution() -> Result<(), HostError> {
+    let scratch = Scratch::new()?;
+    let journal = Journal::open(&scratch.file()).await?;
+    journal
+        .configure_capacity(CapacityLimits {
+            jobs: 1,
+            cpu_millicores: 2_000,
+            memory_bytes: 25_769_803_776,
+        })
+        .await?;
+    let binding = binding("essential", 101)?;
+    let scope = created_scope(&journal, &binding, 501).await?;
+    let initialized = provision_acquired_request_with_initialization(&scope, 100, 'f', 'f').await?;
+    let connection = journal.connection().await?;
+    connection
+        .execute("DROP TRIGGER bound_storage_path_no_update", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let changed = connection
+        .execute(
+            "UPDATE capacity_reservation_bound_storage_paths SET statx_inode = statx_inode + 1000 WHERE reservation_id = ?1 AND role = 'engine-metadata' AND observer != 'probe'",
+            [initialized.reservation_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    assert_eq!(changed, 5);
+    connection
+        .execute(
+            "CREATE TRIGGER bound_storage_path_no_update BEFORE UPDATE ON capacity_reservation_bound_storage_paths BEGIN SELECT RAISE(ABORT, 'The observed storage path cannot change.'); END",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    drop(connection);
+
+    let (generation, digest) = scope.test_active_authority_identity().await?;
+    assert!(
+        scope
+            .claim_runner_jit_for_request(
+                initialized.intent_id,
+                initialized.reservation_id,
+                100,
+                &runner_name('f'),
+                generation,
+                &digest,
+            )
+            .await?
+            .is_none()
+    );
+    let query = journal.connection().await?;
+    let mut rows = query
+        .query(
+            "SELECT COUNT(*) FROM connection_runner_jits WHERE intent_id = ?1",
+            [initialized.intent_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let row = rows
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?;
+    assert_eq!(row.get::<i64>(0).map_err(|_| HostError::Journal)?, 0);
+    Ok(())
+}
+
+#[tokio::test]
+async fn jit_claim_rejects_legacy_null_metadata_anchor() -> Result<(), HostError> {
+    let scratch = Scratch::new()?;
+    let journal = Journal::open(&scratch.file()).await?;
+    journal
+        .configure_capacity(CapacityLimits {
+            jobs: 1,
+            cpu_millicores: 2_000,
+            memory_bytes: 25_769_803_776,
+        })
+        .await?;
+    let binding = binding("essential", 101)?;
+    let scope = created_scope(&journal, &binding, 501).await?;
+    let initialized = provision_acquired_request_with_initialization(&scope, 100, 'e', 'e').await?;
+    let connection = journal.connection().await?;
+    clear_legacy_metadata_anchor(&connection, initialized.reservation_id).await?;
+    drop(connection);
+
+    let (generation, digest) = scope.test_active_authority_identity().await?;
+    assert!(
+        scope
+            .claim_runner_jit_for_request(
+                initialized.intent_id,
+                initialized.reservation_id,
+                100,
+                &runner_name('e'),
+                generation,
+                &digest,
+            )
+            .await?
+            .is_none()
+    );
+    let query = journal.connection().await?;
+    let mut rows = query
+        .query(
+            "SELECT COUNT(*) FROM connection_runner_jits WHERE intent_id = ?1",
+            [initialized.intent_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let row = rows
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?;
+    assert_eq!(row.get::<i64>(0).map_err(|_| HostError::Journal)?, 0);
+    Ok(())
+}
+
+async fn clear_legacy_metadata_anchor(
+    connection: &turso::Connection,
+    reservation_id: i64,
+) -> Result<(), HostError> {
+    use sha2::{Digest, Sha256};
+    use velnor_resource_probe::cleanup_observer_wire::CleanupObserverBinding;
+
+    let mut rows = connection
+        .query(
+            "SELECT binding_json FROM capacity_reservation_cleanup_observer_witnesses WHERE reservation_id = ?1",
+            [reservation_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let json = rows
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?
+        .get::<String>(0)
+        .map_err(|_| HostError::Journal)?;
+    let mut witness: CleanupObserverBinding =
+        serde_json::from_str(&json).map_err(|_| HostError::Journal)?;
+    witness.metadata_job_facts_inode = None;
+    let json = serde_json::to_string(&witness).map_err(|_| HostError::Journal)?;
+    let digest = Sha256::digest(json.as_bytes()).iter().fold(
+        String::with_capacity(64),
+        |mut output, byte| {
+            use std::fmt::Write as _;
+            let _ = write!(output, "{byte:02x}");
+            output
+        },
+    );
+    connection
+        .execute("DROP TRIGGER cleanup_observer_witness_no_update", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(
+            "UPDATE capacity_reservation_cleanup_observer_witnesses SET binding_json = ?1, binding_sha256 = ?2 WHERE reservation_id = ?3",
+            (json, digest, reservation_id),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute("DROP TRIGGER bound_storage_path_no_update", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(
+            "UPDATE capacity_reservation_bound_storage_paths SET statx_inode = NULL WHERE reservation_id = ?1 AND role = 'engine-metadata'",
+            [reservation_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(
+            "CREATE TRIGGER cleanup_observer_witness_no_update BEFORE UPDATE ON capacity_reservation_cleanup_observer_witnesses BEGIN SELECT RAISE(ABORT, 'cleanup observer witness is immutable'); END",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(
+            "CREATE TRIGGER bound_storage_path_no_update BEFORE UPDATE ON capacity_reservation_bound_storage_paths BEGIN SELECT RAISE(ABORT, 'The observed storage path cannot change.'); END",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(())
+}

@@ -10,6 +10,7 @@
 | Runner selector | A configuration value that selects the runner for a job. |
 | Named check | A task with its own name and workflow job. |
 | Probe request | A journal record that tracks one requested resource probe and its state. |
+| Inode | A number that identifies a file or directory within a file system. |
 | Journal | A database that keeps data about Velnor operations. |
 | Migration | A change from one specified database structure to another. |
 | Recursion | A function call that starts the same function directly or through other function calls. |

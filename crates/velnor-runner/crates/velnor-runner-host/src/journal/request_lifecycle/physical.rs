@@ -95,6 +95,12 @@ impl ConnectionJournal {
             if intent_rows.next().await.map_err(|_| HostError::Journal)?.is_some() { return Err(HostError::Journal); }
             if phase != "resources_bound"
                 || !physical_intent_is_fresh(connection, &connection_id, set_id, intent_id, &requested_name).await?
+                || !crate::journal::connection::validate_resources_bound(
+                    connection,
+                    &connection_id,
+                    intent_id,
+                )
+                .await?
             { return Ok(None); }
             let mut rows = connection.query(
                 "SELECT auth.request_id FROM connection_request_reservations AS link JOIN connection_request_authorizations AS auth ON auth.connection_id = link.connection_id AND auth.scale_set_id = link.scale_set_id AND auth.request_id = link.request_id AND auth.binding_digest = link.binding_digest WHERE link.connection_id = ?1 AND link.scale_set_id = ?2 AND link.request_id = ?3 AND link.reservation_id = ?4 AND link.binding_digest = ?5 AND auth.acquire_state = 'acquired' AND auth.started_event_digest IS NULL AND auth.completed_event_digest IS NULL AND EXISTS (SELECT 1 FROM capacity_reservations AS r WHERE r.id = link.reservation_id AND r.intent_id = ?6 AND r.connection_id = link.connection_id AND r.state = 'reserved')",

@@ -22,6 +22,7 @@ pub(super) fn validate_attachments(
     }
     let mut seen = BTreeMap::new();
     validate_expected_attachments(binding, roles, &mut seen)?;
+    validate_engine_metadata_views(binding.attachments(), roles)?;
     validate_shared_attachment_filesystems(&seen)?;
     Ok(())
 }
@@ -70,7 +71,12 @@ fn validate_expected_attachments<'a>(
                 || !super::super::super::storage_budget::valid_digest(
                     attachment.filesystem_instance_digest(),
                 )
-                || (!is_root && attachment.filesystem_instance_digest() != *expected_digest)
+                || (!is_root
+                    && contract.role != StorageRole::EngineMetadata
+                    && attachment.filesystem_instance_digest() != *expected_digest)
+                || (contract.role == StorageRole::EngineMetadata
+                    && contract.observer == StorageObserver::Probe
+                    && attachment.filesystem_instance_digest() != *expected_digest)
             {
                 return Err(HostError::Journal);
             }
@@ -84,6 +90,92 @@ fn validate_expected_attachments<'a>(
                 return Err(HostError::Journal);
             }
         }
+    }
+    Ok(())
+}
+
+fn validate_engine_metadata_views(
+    attachments: &[crate::launch::bootstrap::ObservedStorageAttachment],
+    roles: &BTreeMap<StorageRole, &str>,
+) -> Result<(), HostError> {
+    let capacity_digest = roles
+        .get(&StorageRole::EngineMetadata)
+        .ok_or(HostError::Journal)?;
+    let probe = unique_metadata_view(attachments, StorageObserver::Probe, "/velnor/docker-root")?;
+    if probe.filesystem_instance_digest() != *capacity_digest {
+        return Err(HostError::Identity);
+    }
+    let workers = attachments
+        .iter()
+        .filter(|item| {
+            item.role() == StorageRole::EngineMetadata && item.observer() != StorageObserver::Probe
+        })
+        .collect::<Vec<_>>();
+    if workers.len() != 5 {
+        return Err(HostError::Journal);
+    }
+    let first = workers[0];
+    let root = metadata_volume_root(first)?;
+    if workers.iter().any(|item| {
+        item.device() != first.device()
+            || item.statx_device() != first.statx_device()
+            || item.fs_type_magic() != first.fs_type_magic()
+            || item.filesystem_id() != first.filesystem_id()
+            || item.filesystem_instance_digest() != first.filesystem_instance_digest()
+            || metadata_volume_root(item).ok() != Some(root)
+    }) {
+        return Err(HostError::Identity);
+    }
+    validate_metadata_pair(attachments, "/.velnor-runtime-identity", "runtime-identity")?;
+    validate_metadata_pair(attachments, "/opt/velnor/job-facts", "job-facts")?;
+    Ok(())
+}
+
+fn unique_metadata_view<'a>(
+    attachments: &'a [crate::launch::bootstrap::ObservedStorageAttachment],
+    observer: StorageObserver,
+    target: &str,
+) -> Result<&'a crate::launch::bootstrap::ObservedStorageAttachment, HostError> {
+    let mut rows = attachments.iter().filter(|item| {
+        item.role() == StorageRole::EngineMetadata
+            && item.observer() == observer
+            && item.target() == target
+    });
+    let row = rows.next().ok_or(HostError::Journal)?;
+    if rows.next().is_some() {
+        return Err(HostError::Journal);
+    }
+    Ok(row)
+}
+
+fn metadata_volume_root(
+    item: &crate::launch::bootstrap::ObservedStorageAttachment,
+) -> Result<&str, HostError> {
+    let suffix = format!("/{}", item.volume_subpath().ok_or(HostError::Identity)?);
+    item.mount_root()
+        .strip_suffix(&suffix)
+        .filter(|root| !root.is_empty())
+        .ok_or(HostError::Identity)
+}
+
+fn validate_metadata_pair(
+    attachments: &[crate::launch::bootstrap::ObservedStorageAttachment],
+    target: &str,
+    subpath: &str,
+) -> Result<(), HostError> {
+    let runner = unique_metadata_view(attachments, StorageObserver::Runner, target)?;
+    let dind = unique_metadata_view(attachments, StorageObserver::Dind, target)?;
+    if runner.volume_subpath() != Some(subpath)
+        || dind.volume_subpath() != Some(subpath)
+        || runner.statx_inode() != dind.statx_inode()
+        || runner.mount_root() != dind.mount_root()
+        || runner.device() != dind.device()
+        || runner.statx_device() != dind.statx_device()
+        || runner.fs_type_magic() != dind.fs_type_magic()
+        || runner.filesystem_id() != dind.filesystem_id()
+        || runner.filesystem_instance_digest() != dind.filesystem_instance_digest()
+    {
+        return Err(HostError::Identity);
     }
     Ok(())
 }
@@ -239,8 +331,8 @@ pub(super) async fn insert_bound_rows(
             .map_err(|_| HostError::Journal)?;
         connection
             .execute(
-                "INSERT INTO capacity_reservation_bound_storage_paths (reservation_id, role, observer, mount_target, mount_root, volume_subpath) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                (reservation_id, attachment.role().as_str(), observer_text(attachment.observer()), attachment.target(), attachment.mount_root(), attachment.volume_subpath()),
+                "INSERT INTO capacity_reservation_bound_storage_paths (reservation_id, role, observer, mount_target, mount_root, statx_inode, volume_subpath) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                (reservation_id, attachment.role().as_str(), observer_text(attachment.observer()), attachment.target(), attachment.mount_root(), i64::try_from(attachment.statx_inode()).map_err(|_| HostError::Journal)?, attachment.volume_subpath()),
             )
             .await
             .map_err(|_| HostError::Journal)?;

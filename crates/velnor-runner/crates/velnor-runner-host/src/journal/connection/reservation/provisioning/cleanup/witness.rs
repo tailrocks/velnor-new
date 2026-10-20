@@ -60,6 +60,10 @@ impl StorageCleanupObserverWitness {
         &self.binding
     }
 
+    pub(crate) const fn metadata_job_facts_inode(&self) -> Option<u64> {
+        self.binding.metadata_job_facts_inode
+    }
+
     pub(crate) fn binding_sha256(&self) -> &str {
         &self.binding_sha256
     }
@@ -77,6 +81,9 @@ pub(super) async fn insert(
     let binding = verified.cleanup_observer_binding();
     velnor_resource_probe::cleanup_observer_wire::validate_binding(binding)
         .map_err(|_| HostError::Identity)?;
+    if binding.metadata_job_facts_inode != Some(verified.metadata_job_facts_inode()?) {
+        return Err(HostError::Identity);
+    }
     let binding_json = canonical_json(binding)?;
     let binding_sha256 = binding_sha256(binding_json.as_bytes());
     let changed = connection

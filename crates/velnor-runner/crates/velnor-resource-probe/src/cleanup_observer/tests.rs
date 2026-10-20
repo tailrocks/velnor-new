@@ -8,6 +8,7 @@ use super::{
 pub(super) fn request() -> CleanupObserverRequest {
     let binding = CleanupObserverBinding {
         expected_guest_boot_id: "01234567-89ab-cdef-0123-456789abcdef".to_owned(),
+        metadata_job_facts_inode: None,
         docker_root: super::CleanupDockerRootIdentity {
             target: "/velnor/docker-root".to_owned(),
             mount_id: 10,

@@ -183,6 +183,35 @@ impl VerifiedStorageResourceBinding {
         &self.attachments
     }
 
+    pub(crate) fn metadata_job_facts_inode(&self) -> Result<u64, HostError> {
+        let runner = unique_attachment(
+            self,
+            StorageRole::EngineMetadata,
+            StorageObserver::Runner,
+            Some(self.runner_container_id.as_str()),
+            "/opt/velnor/job-facts",
+        )?;
+        let dind = unique_attachment(
+            self,
+            StorageRole::EngineMetadata,
+            StorageObserver::Dind,
+            Some(self.dind_container_id.as_str()),
+            "/opt/velnor/job-facts",
+        )?;
+        if runner.volume_subpath() != Some("job-facts")
+            || dind.volume_subpath() != Some("job-facts")
+            || !runner.read_only()
+            || !dind.read_only()
+            || runner.statx_inode() == 0
+            || runner.statx_inode() != dind.statx_inode()
+            || runner.filesystem_instance_digest() != dind.filesystem_instance_digest()
+            || runner.mount_root() != dind.mount_root()
+        {
+            return Err(HostError::Identity);
+        }
+        Ok(runner.statx_inode())
+    }
+
     pub(crate) fn cgroups(&self) -> &[ObservedContainerCgroup] {
         &self.cgroups
     }

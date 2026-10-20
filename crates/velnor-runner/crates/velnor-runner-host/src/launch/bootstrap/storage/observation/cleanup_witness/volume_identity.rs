@@ -200,6 +200,7 @@ pub(super) fn volume_identity(
         || metadata.inode() == 0
         || job_facts.parent_mount_id() != metadata.mount_id()
         || job_facts.device() != metadata.device()
+        || root.statx_inode() != job_facts.inode()
         || root.device() != metadata.device()
         || root.statx_device() != metadata.device()
     {

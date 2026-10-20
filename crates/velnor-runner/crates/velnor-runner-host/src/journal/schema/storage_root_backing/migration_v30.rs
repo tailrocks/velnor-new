@@ -2,7 +2,7 @@ use crate::error::HostError;
 
 mod rebuild;
 
-use super::{ATTACHMENT_PATHS, V29_ATTACHMENT_PATHS};
+use super::{ATTACHMENT_PATHS, V29_ATTACHMENT_PATHS, attachment_paths_with_inode};
 use crate::journal::schema::provisioning::{
     BOUND_STORAGE_ATTACHMENTS, V29_BOUND_STORAGE_ATTACHMENTS,
 };
@@ -16,7 +16,8 @@ pub(in crate::journal::schema) async fn upgrade_v30(
     let attachment_sql = table_sql(connection, ATTACHMENTS).await?;
     let path_sql = table_sql(connection, PATHS).await?;
     let current = normalize(&attachment_sql) == normalize(BOUND_STORAGE_ATTACHMENTS)
-        && normalize(&path_sql) == normalize(ATTACHMENT_PATHS);
+        && (normalize(&path_sql) == normalize(ATTACHMENT_PATHS)
+            || normalize(&path_sql) == normalize(&attachment_paths_with_inode()));
     if current {
         return Ok(());
     }

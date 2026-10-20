@@ -1,8 +1,8 @@
 use crate::error::HostError;
 
 use super::{
-    ATTACHMENT_PATHS, LEGACY_ATTACHMENT_PATHS, TRIGGERS, V29_ATTACHMENT_PATHS, migration_v30,
-    normalize,
+    ATTACHMENT_PATHS, LEGACY_ATTACHMENT_PATHS, PATH_INODE_TRIGGER, TRIGGERS, V29_ATTACHMENT_PATHS,
+    attachment_paths_with_inode, migration_v30, normalize,
 };
 use crate::journal::schema::provisioning::{
     BOUND_STORAGE_ATTACHMENTS, LEGACY_BOUND_STORAGE_ATTACHMENTS, V29_BOUND_STORAGE_ATTACHMENTS,
@@ -16,6 +16,10 @@ pub(in crate::journal::schema) async fn upgrade_v27(
 ) -> Result<(), HostError> {
     let attachment_sql = table_sql(connection, ATTACHMENTS).await?;
     let path_sql = table_sql(connection, PATHS).await?;
+    if is_current_v31_pair(attachment_sql.as_deref(), path_sql.as_deref()) {
+        validate_current_v31_guards(connection).await?;
+        return Ok(());
+    }
     let Some(attachment_sql) = attachment_sql else {
         return absent_attachment(path_sql);
     };
@@ -29,6 +33,39 @@ pub(in crate::journal::schema) async fn upgrade_v27(
     let (rebuild_attachments, rebuild_paths) = rebuild_plan(&attachment_sql, path_sql.as_deref())?;
     if rebuild_attachments || rebuild_paths {
         rebuild_supported_schema(connection, rebuild_attachments, rebuild_paths).await?;
+    }
+    Ok(())
+}
+
+fn is_current_v31_pair(attachment_sql: Option<&str>, path_sql: Option<&str>) -> bool {
+    attachment_sql.is_some_and(|sql| normalize(sql) == normalize(BOUND_STORAGE_ATTACHMENTS))
+        && path_sql.is_some_and(|sql| normalize(sql) == normalize(&attachment_paths_with_inode()))
+}
+
+async fn validate_current_v31_guards(connection: &turso::Connection) -> Result<(), HostError> {
+    for (name, expected) in TRIGGERS
+        .iter()
+        .filter(|(name, _)| {
+            name.starts_with("bound_storage_path_") || *name == "root_backing_bound_guard"
+        })
+        .chain(std::iter::once(&PATH_INODE_TRIGGER))
+    {
+        let mut rows = connection
+            .query(
+                "SELECT sql FROM sqlite_schema WHERE type = 'trigger' AND name = ?1",
+                [*name],
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        let row = rows
+            .next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .ok_or(HostError::Journal)?;
+        let sql = row.get::<String>(0).map_err(|_| HostError::Journal)?;
+        if normalize(&sql) != normalize(expected) {
+            return Err(HostError::Journal);
+        }
     }
     Ok(())
 }
