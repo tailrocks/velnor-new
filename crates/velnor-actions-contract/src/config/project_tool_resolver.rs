@@ -12,11 +12,19 @@
 //! value, or two sources that disagree fail the step; otherwise it appends
 //! `NAME=<version>` to `$GITHUB_ENV`. The digits-and-dots check runs before
 //! the write, so a config value cannot inject another variable or line.
+//!
+//! A `NAME_LOCK` reference (the tools-cache identity reads one per
+//! installed project tool) also exports the SHA-256 of that tool's
+//! [`crate::config::project_tool_refs::PROJECT_TOOL_LOCK_FILES`] `checksum`/`url`
+//! rows for the runner platform at the resolved version, or `unlocked` when
+//! no lock has one. A fixed `awk` program reads each lock as text: it is
+//! never loaded or executed, and only the hex digest reaches `$GITHUB_ENV`.
 
 use std::collections::BTreeSet;
 
 use super::project_tool_refs::{
-    PROJECT_MISE_CONFIG_PATTERNS, PROJECT_TOOL_VERSIONS_FILE, RUST_TOOLCHAIN_SOURCE_FILES,
+    PROJECT_MISE_CONFIG_PATTERNS, PROJECT_TOOL_LOCK_FILES, PROJECT_TOOL_VERSIONS_FILE,
+    RUST_TOOLCHAIN_SOURCE_FILES, project_tool_lock_base, project_tool_lock_name,
 };
 
 /// `(variable, [tools] keys)` for every catalog tool; the first key is the
@@ -75,7 +83,7 @@ pub fn project_tool_keys(name: &str) -> &'static [&'static str] {
         .unwrap_or(&[])
 }
 
-const PRELUDE: &str = r#"set -eu
+const PRELUDE: &str = r##"set -eu
 : "${GITHUB_ENV:?missing GITHUB_ENV}"
 : "${RUNNER_TEMP:?missing RUNNER_TEMP}"
 velnor_dir="$RUNNER_TEMP/velnor-project-tool"
@@ -187,15 +195,77 @@ velnor_tool() {
   fi
   printf 'velnor: %s=%s\n' "$name" "$resolved"
 }
-"#;
+# shellcheck disable=SC2016 # awk program text: awk, not the shell, expands it
+velnor_lock_awk='BEGIN { q = "\""; e1 = "[[tools." key "]]"; e2 = "[[tools." q key q "]]"; e3 = "[tools." key "]"; e4 = "[tools." q key q "]"; s1 = "[tools." key "."; s2 = "[tools." q key q "."; p1 = s1 q "platforms." platform q "]"; p2 = s2 q "platforms." platform q "]"; p3 = s1 "platforms." platform "]"; p4 = s2 "platforms." platform "]"; want = "version = " q version q; inline = q "platforms." platform q " = {"; state = 0 }
+{ line = $0; sub(/^[ \t]+/, "", line); sub(/[ \t\r]+$/, "", line) }
+line == "" || substr(line, 1, 1) == "#" { next }
+substr(line, 1, 1) == "[" {
+  matched = state == 2 || state == 3 || state == 4; other = state == 1 || state == 5
+  if (line == e1 || line == e2 || line == e3 || line == e4) state = 1
+  else if (line == p1 || line == p2 || line == p3 || line == p4) state = matched ? 3 : (other ? 5 : 0)
+  else if (index(line, s1) == 1 || index(line, s2) == 1) state = matched ? 4 : (other ? 5 : 0)
+  else state = 0
+  next
+}
+state == 1 && line == want { state = 2; next }
+state == 3 && (index(line, "checksum = ") == 1 || index(line, "url = ") == 1) { print lock " " key " " line; next }
+state == 2 && index(line, inline) == 1 {
+  if (match(line, /checksum = "[^"]*"/)) print lock " " key " " substr(line, RSTART, RLENGTH)
+  if (match(line, /[{ ,]url = "[^"]*"/)) print lock " " key " " substr(line, RSTART + 1, RLENGTH - 1)
+}'
+velnor_lock() {
+  name=$1
+  shift
+  case "${RUNNER_OS-}:${RUNNER_ARCH-}" in
+    Linux:X64) platform=linux-x64 ;;
+    Linux:ARM64) platform=linux-arm64 ;;
+    macOS:X64) platform=macos-x64 ;;
+    macOS:ARM64) platform=macos-arm64 ;;
+    Windows:X64) platform=windows-x64 ;;
+    Windows:ARM64) platform=windows-arm64 ;;
+    *) velnor_fail "$name: unsupported runner platform '${RUNNER_OS-}:${RUNNER_ARCH-}'" ;;
+  esac
+  : > "$velnor_dir/lock"
+  for lock in $velnor_locks; do
+    if [ ! -e "$lock" ] && [ ! -L "$lock" ]; then continue; fi
+    velnor_regular "$lock"
+    for key in "$@"; do
+      awk -v lock="$lock" -v key="$key" -v version="$resolved" -v platform="$platform" "$velnor_lock_awk" "$lock" >> "$velnor_dir/lock" || velnor_fail "$lock could not be read"
+    done
+  done
+  lock_digest=unlocked
+  if [ -s "$velnor_dir/lock" ]; then
+    if command -v sha256sum >/dev/null 2>&1; then
+      lock_digest=$(sha256sum < "$velnor_dir/lock") || velnor_fail "$name: lock digest failed"
+    else
+      lock_digest=$(shasum -a 256 < "$velnor_dir/lock") || velnor_fail "$name: lock digest failed"
+    fi
+    lock_digest=${lock_digest%% *}
+    case "$lock_digest" in
+      *[!0-9a-f]*) velnor_fail "$name: lock digest is not hexadecimal" ;;
+    esac
+    [ "${#lock_digest}" -eq 64 ] || velnor_fail "$name: lock digest is not SHA-256"
+  fi
+  printf '%s=%s\n' "$name" "$lock_digest" >> "$GITHUB_ENV"
+  printf 'velnor: %s=%s\n' "$name" "$lock_digest"
+}
+"##;
 
 /// Fixed resolver script for the referenced variables, in sorted order.
 ///
-/// `export_rustup` also exports the resolved Rust channel as
+/// A `NAME_LOCK` reference resolves `NAME` too and then exports its lock
+/// digest. `export_rustup` also exports the resolved Rust channel as
 /// `RUSTUP_TOOLCHAIN` (job env cannot read the `env` context).
 #[must_use]
 pub fn project_tool_resolver_script(names: &BTreeSet<String>, export_rustup: bool) -> String {
+    let tools: BTreeSet<&str> = names
+        .iter()
+        .map(|name| project_tool_lock_base(name).unwrap_or(name))
+        .collect();
     let mut script = PRELUDE.to_owned();
+    script.push_str("velnor_locks='");
+    script.push_str(&PROJECT_TOOL_LOCK_FILES.join(" "));
+    script.push_str("'\n");
     if export_rustup {
         script.push_str("velnor_export_rustup=1\n");
     }
@@ -208,7 +278,7 @@ pub fn project_tool_resolver_script(names: &BTreeSet<String>, export_rustup: boo
     script.push_str("  velnor_regular \"$velnor_file\"\n  velnor_tools \"$velnor_file\"\ndone\n");
     for (file, loader) in std::iter::once((PROJECT_TOOL_VERSIONS_FILE, "velnor_tool_versions"))
         .chain(
-            names
+            tools
                 .contains("VELNOR_TOOL_RUST")
                 .then_some(RUST_TOOLCHAIN_SOURCE_FILES)
                 .into_iter()
@@ -232,15 +302,21 @@ pub fn project_tool_resolver_script(names: &BTreeSet<String>, export_rustup: boo
             script.push_str(part);
         }
     }
-    for name in names {
-        script.push_str("velnor_tool ");
-        script.push_str(name);
-        for key in project_tool_keys(name) {
-            script.push_str(" '");
-            script.push_str(key);
-            script.push('\'');
+    for name in tools {
+        let lock = project_tool_lock_name(name);
+        let lock = names.contains(&lock).then_some(lock);
+        for (function, variable) in std::iter::once(("velnor_tool ", name))
+            .chain(lock.as_deref().map(|lock| ("velnor_lock ", lock)))
+        {
+            script.push_str(function);
+            script.push_str(variable);
+            for key in project_tool_keys(name) {
+                script.push_str(" '");
+                script.push_str(key);
+                script.push('\'');
+            }
+            script.push('\n');
         }
-        script.push('\n');
     }
     script.push_str("rm -rf \"$velnor_dir\"\n");
     script

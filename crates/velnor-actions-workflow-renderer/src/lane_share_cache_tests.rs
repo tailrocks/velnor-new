@@ -14,8 +14,7 @@ fn elected_save_stays_on_the_winner_job() {
         .first()
         .expect("checkout")
         .clone();
-    let save = crate::cache_steps::tools_cache_step(
-        false,
+    let save = crate::cache_steps::tools_cache_save_step(
         crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION,
         Some(crate::cache_p08::tools_cache_save_condition(
             velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
@@ -69,27 +68,29 @@ fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
     jobs.get_mut(hosted_id)
         .expect("hosted lane")
         .steps
-        .splice(1..1, hosted_prelude);
+        .splice(2..2, hosted_prelude);
 
     let wrong_lane = with_wrong_identity_lane(&jobs, hosted_id);
     assert!(share_lanes(&wrong_lane, &ctx()).is_err());
 
     let shared = share_lanes(&jobs, &ctx()).expect("lane-specific prelude factors");
     let hosted_prelude = &shared.runtime_preludes[hosted_id];
-    assert_eq!(hosted_prelude.len(), 2);
+    assert_eq!(hosted_prelude.len(), 3);
+    assert_eq!(hosted_prelude[0].name, "Setup Mise");
     assert_eq!(
-        hosted_prelude[0].name,
+        hosted_prelude[1].name,
         crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME
     );
     assert_eq!(
-        hosted_prelude[1].name,
+        hosted_prelude[2].name,
         crate::cache_steps::TOOLS_RESTORE_NAME
     );
+    // The Scale Set lane renders the same Setup Mise outside the body.
     assert_eq!(
-        shared.runtime_preludes[local_id],
-        [] as [velnor_actions_contract::Step; 0]
+        shared.runtime_preludes[local_id].as_slice(),
+        &hosted_prelude[..1]
     );
-    let identity_uses = match &shared.runtime_preludes[hosted_id][0].kind {
+    let identity_uses = match &shared.runtime_preludes[hosted_id][1].kind {
         StepKind::Action { uses, .. } => Some(uses.as_str()),
         _ => None,
     };
@@ -97,7 +98,7 @@ fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
         identity_uses,
         crate::cache_p08::runtime_prelude_action_uses(HOSTED_RUNS)
     );
-    let restore_uses = match &hosted_prelude[1].kind {
+    let restore_uses = match &hosted_prelude[2].kind {
         StepKind::Action { uses, .. } => Some(uses.as_str()),
         _ => None,
     };
@@ -108,7 +109,7 @@ fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
         .iter()
         .find(|file| file.path == ".github/actions/rust-0/action.yml")
         .expect("shared action");
-    assert!(composite.bytes.contains("Setup Mise"));
+    assert!(!composite.bytes.contains("Setup Mise"));
     assert!(!composite.bytes.contains("V2 identity"));
     assert!(!composite.bytes.contains("Restore Mise tools"));
     let prelude_action = shared
@@ -195,6 +196,7 @@ fn assert_emitted_restore_is_hosted_only(
         1
     );
     let checkout = yaml.find("name: Checkout").expect("checkout");
+    let setup = yaml.find("name: Setup Mise").expect("setup");
     let identity = yaml.find("name: V2 identity").expect("identity");
     let restore = yaml.find("name: Restore Mise tools").expect("restore");
     let shared_id = hosted_id
@@ -203,9 +205,10 @@ fn assert_emitted_restore_is_hosted_only(
     let call = yaml
         .find(&format!("uses: ./.github/actions/{shared_id}"))
         .expect("call");
-    assert!(checkout < identity && identity < restore && restore < call);
+    assert!(checkout < setup && setup < identity && identity < restore && restore < call);
     let local_start = yaml.find(&format!("{local_id}:")).expect("Scale Set job");
     let local = &yaml[local_start..];
+    assert!(local.contains("Setup Mise"), "{local}");
     assert!(!local.contains("V2 identity"), "{local}");
     assert!(!local.contains("Restore Mise tools"), "{local}");
 }

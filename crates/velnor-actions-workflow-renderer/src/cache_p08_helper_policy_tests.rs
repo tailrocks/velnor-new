@@ -106,7 +106,7 @@ fn required_helper_missing_is_a_generation_error() {
 }
 
 #[test]
-fn cache_restore_runs_after_helper_and_before_mise_setup() -> Result<(), RenderError> {
+fn cache_restore_runs_after_mise_setup_and_before_mise_use() -> Result<(), RenderError> {
     let mut job = job_with(vec![
         crate::steps::checkout_step(CHECKOUT)?,
         super::verified_acquire_step()?,
@@ -143,8 +143,9 @@ fn cache_restore_runs_after_helper_and_before_mise_setup() -> Result<(), RenderE
 
     assert!(helper_index < cache_index);
     assert!(cache_index < restore_index);
-    assert!(restore_index < setup_index);
-    assert!(setup_index < task_index);
+    assert!(setup_index < cache_index);
+    assert!(cache_index < restore_index);
+    assert!(restore_index < task_index);
     assert_eq!(
         job.steps[cache_index].name,
         crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME

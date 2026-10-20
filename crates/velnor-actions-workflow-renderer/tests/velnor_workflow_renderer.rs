@@ -78,6 +78,8 @@ mod impl_renderer_preseed_strict;
 mod impl_renderer_preseed_verify;
 #[path = "impl_renderer_protocol.rs"]
 mod impl_renderer_protocol;
+#[path = "impl_renderer_publish_spec.rs"]
+mod impl_renderer_publish_spec;
 #[path = "impl_renderer_release_checkouts.rs"]
 mod impl_renderer_release_checkouts;
 #[path = "impl_renderer_release_config.rs"]

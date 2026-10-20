@@ -229,16 +229,26 @@ fn run_values(node: &Yaml) -> Vec<&Yaml> {
 }
 
 #[test]
-fn composite_reading_a_version_without_its_own_setup_fails_closed() {
+fn shared_lane_composite_without_its_own_setup_resolves_first() {
+    // Both lane jobs run Setup Mise before calling a shared-lane composite.
     let mut doc = composite(vec![step(&[(
         "run",
         "mise exec rust@${VELNOR_TOOL_RUST} -- cargo build",
     )])]);
-    let err = bind_workflow(&mut doc).expect_err("unbound composite");
-    assert!(err.to_string().contains("composite_no_mise_setup"), "{err}");
-    // No reference, no requirement.
+    bind_workflow(&mut doc).expect("bound");
+    bind_workflow(&mut doc).expect("rebound");
+    let text = render_yaml(&doc);
+    assert_eq!(text.matches("Resolve project tool versions").count(), 1);
+    assert!(
+        text.find("Resolve project tool versions")
+            .expect("resolver")
+            < text.find("cargo build").expect("payload"),
+        "{text}"
+    );
+    // No reference, no resolver.
     let mut inert = composite(vec![step(&[("run", "echo hi")])]);
     bind_workflow(&mut inert).expect("no references");
+    assert!(!render_yaml(&inert).contains("Resolve project tool versions"));
 }
 
 #[test]
@@ -253,4 +263,50 @@ fn case_commands_inside_substitutions_are_refused_not_guessed() {
     // A word that merely contains `case`, and a top-level case, are fine.
     assert!(quote_run_refs("v=$(showcase ${VELNOR_TOOL_RUST})").is_ok());
     assert!(quote_run_refs("case x in a) echo ${VELNOR_TOOL_RUST} ;; esac").is_ok());
+}
+
+#[test]
+fn identity_lock_references_resolve_their_tool_and_lock_digest() {
+    let mut doc = workflow(
+        Vec::new(),
+        vec![
+            step(&[("uses", "actions/checkout@0123")]),
+            step(&[("uses", SETUP)]),
+            Yaml::Map(vec![
+                (
+                    "uses".to_owned(),
+                    Yaml::str("./.github/actions/velnor-tools-prelude-u26"),
+                ),
+                (
+                    "with".to_owned(),
+                    Yaml::Map(vec![(
+                        "d".to_owned(),
+                        Yaml::str(format!(
+                            "{}-${{VELNOR_TOOL_RUST}}-${{VELNOR_TOOL_RUST_LOCK}}",
+                            "a".repeat(64)
+                        )),
+                    )]),
+                ),
+            ]),
+        ],
+    );
+    bind_workflow(&mut doc).expect("bound");
+    let text = render_yaml(&doc);
+    assert!(
+        text.contains("-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}"),
+        "{text}"
+    );
+    assert_eq!(
+        text.matches("velnor_tool VELNOR_TOOL_RUST '").count(),
+        1,
+        "{text}"
+    );
+    assert!(
+        text.contains("velnor_lock VELNOR_TOOL_RUST_LOCK 'rust' 'core:rust'"),
+        "{text}"
+    );
+    let resolver = text
+        .find("Resolve project tool versions")
+        .expect("resolver");
+    assert!(resolver < text.find("velnor-tools-prelude-u26").expect("identity"));
 }

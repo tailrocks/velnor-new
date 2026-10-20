@@ -1,0 +1,59 @@
+{
+  "result": "NOT_RUN",
+  "scope": "The final source gates remain necessary after the next main integration.",
+  "base_commit": "8af1469d93e468715299380285258b8228d9eb4b",
+  "merged_main_commit": "cdd6a486ed6549a0a93329996d9b9ee585e28b4e",
+  "pending_main_commit": "da1e509489740bfca12b2c6c8a6ef07db72cbf63",
+  "source_tree_before_this_record": "fb66c2aa196341ded1d5cdf8c6dcbdf7d145b72b",
+  "full_test_result": {
+    "result": "FAIL",
+    "passed": 5085,
+    "failed": 4,
+    "skipped": 4,
+    "log": "main-cdd6a486-full-root-nextest-final.log",
+    "sha256": "9a0e6f5d55369125b344e23c33db7e56b50df97cb3519874d5d9271a9b815058"
+  },
+  "subsequent_checks": {
+    "e2e_tests": {
+      "result": "PASS",
+      "passed": 3,
+      "run": "412dce50-a596-4a38-b7bc-49e3ed398d6e"
+    },
+    "seed_registration_and_size_tests": {
+      "result": "PASS",
+      "passed": 7,
+      "run": "7e034daf-dd74-4c6e-81a4-2b3ba22c61df"
+    },
+    "generation": {
+      "result": "PASS",
+      "files": 32,
+      "repeat_identical": true,
+      "checked_in_identical": true
+    },
+    "goldens": {
+      "result": "PASS",
+      "cases": 5
+    }
+  },
+  "check_logs": [
+    {
+      "log": "main-cdd6a486-relevant-nextest-final.log",
+      "sha256": "09299f95d8ce4021abd4e49485988b4a3e4d50bc0c47323c2c83c2980b27ad50"
+    },
+    {
+      "log": "main-cdd6a486-size-cache-final-nextest.log",
+      "sha256": "95469c74b34ae4bdc01eedf02325b614280ec783d0d451b1fbe33a1946055bd6"
+    },
+    {
+      "log": "main-cdd6a486-seed-registration-nextest.log",
+      "sha256": "2f684141a588fcac34af760e7557aadead5754e92c15da6a91d7eef14d12ea25"
+    }
+  ],
+  "review": "main-cdd6-conflict-resolution-independent-review-20261020.md",
+  "author": "/root",
+  "reviewers": [
+    "/root/execution_source_security_review",
+    "/root/helper_language_review"
+  ],
+  "live_installation": "NOT_RUN"
+}

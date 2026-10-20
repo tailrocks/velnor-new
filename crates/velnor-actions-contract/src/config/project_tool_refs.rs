@@ -13,20 +13,6 @@ pub const PROJECT_TOOL_REF_PREFIX: &str = "${VELNOR_TOOL_";
 /// Contract-fixed display name of the generated resolver step.
 pub const PROJECT_TOOLS_STEP_NAME: &str = "Resolve project tool versions";
 
-/// Root files the tools-cache identity hashes (`hashFiles`).
-///
-/// This is only the cache-identity input; it is not the list of places a
-/// version may be declared (see [`PROJECT_MISE_CONFIG_PATTERNS`]). The
-/// cache key is owned by the cache design, so this list is fixed here.
-pub const PROJECT_TOOL_SOURCE_FILES: [&str; 6] = [
-    "mise.toml",
-    ".mise.toml",
-    "mise.lock",
-    ".mise.lock",
-    "rust-toolchain.toml",
-    "rust-toolchain",
-];
-
 /// Every location Mise reads `[tools]` from in a project root.
 ///
 /// One entry is `dir/name`; `name` may hold one `*` that matches any
@@ -57,7 +43,8 @@ pub const PROJECT_TOOL_VERSIONS_FILE: &str = ".tool-versions";
 /// Rust toolchain files Mise (idiomatic version files) and rustup both read.
 pub const RUST_TOOLCHAIN_SOURCE_FILES: [&str; 2] = ["rust-toolchain.toml", "rust-toolchain"];
 
-/// Mise lock files: not parsed, so any change re-tests everything.
+/// Mise lock files. Change selection re-tests everything on any change;
+/// the resolver reads each installed tool's rows for the tools-cache identity.
 pub const PROJECT_TOOL_LOCK_FILES: [&str; 2] = ["mise.lock", ".mise.lock"];
 
 /// Whether `path` matches one `dir/name` pattern of
@@ -95,27 +82,71 @@ pub fn is_project_tool_lock(path: &str) -> bool {
     PROJECT_TOOL_LOCK_FILES.contains(&path)
 }
 
-/// `${{ hashFiles(...) }}` over [`PROJECT_TOOL_SOURCE_FILES`].
+/// Suffix of the variable carrying one project tool's `mise.lock` digest.
+///
+/// `${VELNOR_TOOL_<NAME>_LOCK}` is the SHA-256 of that tool's lock
+/// `checksum`/`url` entries for the runner platform (or `unlocked`), which
+/// the resolver step exports next to `VELNOR_TOOL_<NAME>`.
+pub const PROJECT_TOOL_LOCK_SUFFIX: &str = "_LOCK";
+
+/// Lock-digest variable of the tool behind `name`.
 #[must_use]
-pub fn project_tool_sources_hash() -> String {
-    let files = PROJECT_TOOL_SOURCE_FILES
-        .iter()
-        .map(|file| format!("'{file}'"))
-        .collect::<Vec<_>>()
-        .join(",");
-    format!("${{{{ hashFiles({files}) }}}}")
+pub fn project_tool_lock_name(name: &str) -> String {
+    format!("{name}{PROJECT_TOOL_LOCK_SUFFIX}")
 }
 
-/// Valid `d` input: a lower-case SHA-256 static digest, optionally bound to
-/// the project tool sources hash (hard decision 5).
+/// Tool variable a lock-digest variable belongs to, or `None` for a
+/// version variable.
 #[must_use]
-pub fn is_tools_cache_identity_input(digest: &str) -> bool {
-    let project_suffix = format!("-{}", project_tool_sources_hash());
-    let digest = digest.strip_suffix(&project_suffix).unwrap_or(digest);
-    digest.len() == 64
-        && digest
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+pub fn project_tool_lock_base(name: &str) -> Option<&str> {
+    name.strip_suffix(PROJECT_TOOL_LOCK_SUFFIX)
+        .filter(|base| !crate::config::project_tool_resolver::project_tool_keys(base).is_empty())
+}
+
+/// `d` input of the tools-cache identity: the static digest, then for each
+/// project-declared tool the job installs (sorted) its resolved version and
+/// its lock digest, both read from the resolver step's `env` exports.
+///
+/// Only the tools the job installs enter the identity: an unrelated Mise
+/// task, comment, or another tool's pin or lock entry never changes it.
+#[must_use]
+pub fn tools_identity_input<'a>(
+    static_digest: &str,
+    names: impl IntoIterator<Item = &'a str>,
+) -> String {
+    let mut names: Vec<&str> = names.into_iter().collect();
+    names.sort_unstable();
+    names.dedup();
+    let mut input = static_digest.to_owned();
+    for name in names {
+        for part in ["-${", name, "}-${", name, PROJECT_TOOL_LOCK_SUFFIX, "}"] {
+            input.push_str(part);
+        }
+    }
+    input
+}
+
+/// Valid `d` input: a lower-case SHA-256 static digest followed by exactly
+/// the [`tools_identity_input`] references of catalog tools.
+#[must_use]
+pub fn is_tools_identity_input(input: &str) -> bool {
+    let Some(digest) = input.get(..64) else {
+        return false;
+    };
+    if !digest
+        .bytes()
+        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return false;
+    }
+    let names: Vec<&str> = project_tool_ref_names(&input[64..])
+        .into_iter()
+        .filter(|name| project_tool_lock_base(name).is_none())
+        .collect();
+    names
+        .iter()
+        .all(|name| !crate::config::project_tool_resolver::project_tool_keys(name).is_empty())
+        && tools_identity_input(digest, names) == input
 }
 
 /// Byte span `(start, end, name)` of each project reference in `text`.
@@ -231,5 +262,41 @@ mod tests {
         );
         assert_eq!(without_project_tool_refs(text), "rust@0 0-a ${VELNOR_TOOL_");
         assert!(!has_project_tool_ref("rust@1.2.3"));
+    }
+
+    #[test]
+    fn identity_input_binds_exactly_the_installed_project_tools() {
+        let digest = "a".repeat(64);
+        let input = tools_identity_input(&digest, ["VELNOR_TOOL_RUST", "VELNOR_TOOL_NEXTEST"]);
+        assert_eq!(
+            input,
+            format!(
+                "{digest}-${{VELNOR_TOOL_NEXTEST}}-${{VELNOR_TOOL_NEXTEST_LOCK}}-${{VELNOR_TOOL_RUST}}-${{VELNOR_TOOL_RUST_LOCK}}"
+            )
+        );
+        assert!(is_tools_identity_input(&input));
+        assert!(is_tools_identity_input(&digest));
+        assert!(!input.contains("hashFiles"));
+        for bad in [
+            format!("{digest}-${{VELNOR_TOOL_RUST}}"),
+            format!("{digest}-${{VELNOR_TOOL_RUST_LOCK}}"),
+            format!("{digest}-${{VELNOR_TOOL_NODE}}-${{VELNOR_TOOL_NODE_LOCK}}"),
+            format!("{digest}-${{{{ hashFiles('mise.toml') }}}}"),
+            format!(
+                "{digest}-${{VELNOR_TOOL_RUST}}-${{VELNOR_TOOL_RUST_LOCK}}-${{VELNOR_TOOL_NEXTEST}}-${{VELNOR_TOOL_NEXTEST_LOCK}}"
+            ),
+            "A".repeat(64),
+            "a".repeat(63),
+        ] {
+            assert!(!is_tools_identity_input(&bad), "{bad}");
+        }
+        assert_eq!(
+            project_tool_lock_base("VELNOR_TOOL_RUST_LOCK"),
+            Some("VELNOR_TOOL_RUST")
+        );
+        assert_eq!(project_tool_lock_base("VELNOR_TOOL_RUST"), None);
+        for (name, _) in crate::config::project_tool_resolver::PROJECT_TOOL_KEYS {
+            assert!(!name.ends_with(PROJECT_TOOL_LOCK_SUFFIX), "{name}");
+        }
     }
 }
