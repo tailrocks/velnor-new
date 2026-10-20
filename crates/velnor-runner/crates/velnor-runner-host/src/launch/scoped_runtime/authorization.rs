@@ -68,6 +68,10 @@ impl AuthorizedScopedExecution {
     }
 }
 
+#[path = "authorization/context.rs"]
+mod context;
+pub(crate) use context::ScopedHostContext;
+
 #[path = "authorization/publication.rs"]
 mod publication;
 pub(crate) use publication::prepare_listener;

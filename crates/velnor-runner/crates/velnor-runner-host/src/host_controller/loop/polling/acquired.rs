@@ -83,14 +83,17 @@ async fn retain_scoped_channel(
     match channel {
         ScopedChannelOutcome::NoStart => {}
         ScopedChannelOutcome::Ready(ready) => {
+            let host_context = crate::launch::scoped_runtime::ScopedHostContext {
+                docker: context.docker,
+                host: context.journal,
+                scoped: &prepared.scope,
+                secret: context.release_read_secret,
+                engine: context.selected_engine,
+                images: context.worker_images,
+            };
             let runner = Box::pin(crate::launch::scoped_runtime::prepare_listener(
                 ready,
-                context.docker,
-                context.journal,
-                &prepared.scope,
-                context.release_read_secret,
-                context.selected_engine,
-                context.worker_images,
+                &host_context,
                 &prepared.binding,
                 &prepared.guest_image,
                 deadline,

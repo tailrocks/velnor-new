@@ -1600,5 +1600,16 @@
     "reviewer": "execution_source_security_review",
     "scope": "The fixtures use observed runner absence after completion. Replay keeps the released reservation and does not create a new current attempt.",
     "remaining": "The full runner gate remains incomplete."
+  },
+  "listener_host_context": {
+    "result": "PASS",
+    "tests": 3,
+    "run_id": "1bb00efb-6c4b-4599-a31f-00db819b9da6",
+    "log_sha256": "f70e0db02c7f0c2d3799c0589681a1575d3d6e7464fd4bf7a9b5066422849f8e",
+    "manifest_sha256": "aea0048f4d9252f1425cfe3a7a372ed6f519eb4a7331fe5acd118a974e777ed1",
+    "author": "replay_context_refactor",
+    "reviewer": "runner_context_review",
+    "scope": "The context holds borrowed references. The change keeps provider errors, publication order, and delivery order.",
+    "remaining": "The strict runner gate and the existing file size defect remain incomplete."
   }
 }

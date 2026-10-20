@@ -19,8 +19,8 @@ mod stale_acquired_tests;
 #[cfg(test)]
 pub(in crate::launch) use authorization::prepare_listener_with_test_provider;
 pub(crate) use authorization::{
-    AuthorizedScopedExecution, PendingScopedExecution, authorize_started_execution,
-    prepare_listener,
+    AuthorizedScopedExecution, PendingScopedExecution, ScopedHostContext,
+    authorize_started_execution, prepare_listener,
 };
 use binding::{bind_started, cleanup_failed_pair};
 pub(crate) use jit::{
