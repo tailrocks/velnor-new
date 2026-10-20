@@ -66,7 +66,7 @@ Workflow to generate
     - rust-velnor-runner-host (23 steps)
     - zizmor (7 steps)
     - 14 Rust crate jobs
-      Timeout: 5 minutes per crate job
+      Timeout: 8 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
       Entries:
         - rust-velnor-actions-actionlint

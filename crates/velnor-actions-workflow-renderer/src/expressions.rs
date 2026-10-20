@@ -95,6 +95,16 @@ const WITH_EXPRESSIONS: [&str; 16] = [
     "needs.plan.outputs.sources_restore_keys",
 ];
 
+/// True for an output of the image publication assemble step.
+///
+/// Digests only: the step id and the output names are generator constants,
+/// so no other step output can reach an attestation input.
+fn is_image_publish_output(inner: &str) -> bool {
+    inner
+        .strip_prefix("steps.image.outputs.")
+        .is_some_and(|name| matches!(name, "digest" | "digest_amd64" | "digest_arm64"))
+}
+
 /// True for a Plan-published per-root provider key (`tofu_providers_key_<n>`).
 fn is_tofu_providers_plan_key(inner: &str) -> bool {
     inner
@@ -266,6 +276,7 @@ pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError
             && !is_hash_files(inner)
             && !is_tofu_providers_plan_key(inner)
             && !is_private_mint_input(key, inner)
+            && !is_image_publish_output(inner)
         {
             return Err(RenderError::BadActionRef(format!(
                 "bad_with_expression:{key}"

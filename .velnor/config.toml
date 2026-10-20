@@ -6,6 +6,7 @@ policy = "velnor-repository-v1"
 default_branch = "main"
 generator_validation = "bootstrap"
 max_parallel_jobs = 2
+crate_timeout_minutes = 8
 pull_request_cache_policy = "same-repository-scoped"
 
 [dco]
@@ -113,6 +114,7 @@ inputs = [
   "crates/velnor-actions-freshness/src/inventory/mirror.rs",
   "crates/velnor-actions-freshness/src/inventory/pins.rs",
   "crates/velnor-actions-freshness/src/inventory/pins_mirrors.rs",
+  "crates/velnor-actions-freshness/src/inventory/shape.rs",
   "crates/velnor-actions-freshness/src/lib.rs",
   "crates/velnor-actions-freshness/src/members.rs",
   "crates/velnor-actions-freshness/src/patterns.rs",

@@ -20,34 +20,22 @@ use crate::publish_steps::{Inputs, bundle_job, plain, script_step};
 use crate::release_checkouts::{forge_env, policy_checkout};
 use crate::release_steps::{Phase, phase_argv};
 
-/// Default-branch authority job id; the tag release job needs it.
-const BRANCH_AUTHORITY_JOB: &str = "publish-branch-authority";
+/// Default-branch authority job id; every default-branch publication job needs it.
+pub(crate) const BRANCH_AUTHORITY_JOB: &str = "publish-branch-authority";
 /// Tag release job id.
 const TAG_RELEASE_JOB: &str = "rust-tag-release";
 /// Polls of the `Required` verdict and the pause between them.
 const REQUIRED_POLLS: (u16, u16) = (60, 30);
 
-/// Both release jobs, keyed by id.
-///
-/// With bundles the workflow also runs on tags, so the authority job is
-/// conditional on the pushed ref being a branch.
+/// The Rust tag release job, keyed by id.
 pub(crate) fn release_jobs(
     inputs: &Inputs<'_>,
-    gh: &str,
     manifest: &str,
-    mixed: bool,
 ) -> Result<BTreeMap<String, PublishJobSpec>, OrchestratorError> {
-    let mut authority = branch_authority_job(inputs, gh)?;
-    if mixed {
-        authority.condition = Some(event_kind("branch"));
-    }
-    Ok(BTreeMap::from([
-        (BRANCH_AUTHORITY_JOB.to_owned(), authority),
-        (
-            TAG_RELEASE_JOB.to_owned(),
-            tag_release_job(inputs, manifest)?,
-        ),
-    ]))
+    Ok(BTreeMap::from([(
+        TAG_RELEASE_JOB.to_owned(),
+        tag_release_job(inputs, manifest)?,
+    )]))
 }
 
 /// Condition selecting the authority job that matches the pushed ref type.
@@ -56,7 +44,7 @@ pub(crate) fn event_kind(kind: &str) -> String {
 }
 
 /// Branch authority: a default-branch push whose `Required` check is green.
-fn branch_authority_job(
+pub(crate) fn branch_authority_job(
     inputs: &Inputs<'_>,
     gh: &str,
 ) -> Result<PublishJobSpec, OrchestratorError> {

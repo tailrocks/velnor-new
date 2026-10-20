@@ -32,6 +32,7 @@ mod expressions;
 mod final_steps;
 pub mod freshness;
 pub mod guard;
+pub mod image_publish_scripts;
 mod lane_share;
 mod lane_share_sections;
 pub mod lane_target;
@@ -51,6 +52,7 @@ pub mod private_source_steps;
 /// Project tool-version resolver binding (hard decision 5).
 mod project_tool_resolver;
 pub mod publish_render;
+pub mod publish_roles;
 pub mod publish_scripts;
 pub mod publish_spec;
 pub mod release_checkout_gates;
