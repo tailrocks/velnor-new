@@ -175,6 +175,60 @@ fn binding_is_idempotent_and_emits_one_resolver_per_document() {
 }
 
 #[test]
+fn only_generated_resolver_writes_receive_the_same_narrow_annotation() {
+    let unsafe_write = "echo UNTRUSTED=$INPUT >> $GITHUB_ENV";
+    for mut doc in [
+        composite(vec![
+            step(&[("uses", SETUP)]),
+            step(&[("run", "echo ${VELNOR_TOOL_RUST}")]),
+            step(&[("run", unsafe_write)]),
+        ]),
+        workflow(
+            Vec::new(),
+            vec![
+                step(&[("uses", "actions/checkout@0123")]),
+                step(&[("uses", SETUP)]),
+                step(&[("run", "echo ${VELNOR_TOOL_RUST}")]),
+                step(&[("run", unsafe_write)]),
+            ],
+        ),
+    ] {
+        bind_workflow(&mut doc).expect("resolver binds");
+        let text = render_yaml(&doc);
+        assert_eq!(text.matches("zizmor: ignore[github-env]").count(), 1);
+        assert!(text.contains(unsafe_write));
+        // The arbitrary caller step remains an ordinary scalar: the
+        // exception belongs to the generated resolver, not the document.
+        assert!(
+            run_values(&doc)
+                .iter()
+                .any(|value| { matches!(value, Yaml::Str(script) if script == unsafe_write) })
+        );
+        assert!(run_values(&doc).iter().any(|value| {
+            matches!(value, Yaml::Annotated { value, comment }
+                if value.contains("velnor_exact()") && comment == "zizmor: ignore[github-env]")
+        }));
+    }
+}
+
+fn run_values(node: &Yaml) -> Vec<&Yaml> {
+    match node {
+        Yaml::Map(fields) => fields
+            .iter()
+            .flat_map(|(key, value)| {
+                if key == "run" {
+                    vec![value]
+                } else {
+                    run_values(value)
+                }
+            })
+            .collect(),
+        Yaml::Seq(items) => items.iter().flat_map(run_values).collect(),
+        _ => Vec::new(),
+    }
+}
+
+#[test]
 fn shared_lane_composite_without_its_own_setup_resolves_first() {
     // Both lane jobs run Setup Mise before calling a shared-lane composite.
     let mut doc = composite(vec![step(&[(
