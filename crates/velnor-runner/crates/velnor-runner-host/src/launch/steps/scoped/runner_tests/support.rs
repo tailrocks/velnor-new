@@ -22,7 +22,7 @@ use crate::launch::{
 
 pub(super) const SET_ID: i64 = 501;
 pub(super) const REQUEST_ID: i64 = 41;
-const MESSAGE_ID: i64 = 77;
+pub(super) const MESSAGE_ID: i64 = 77;
 pub(super) const DOCKER_ROOT: &str = "/var/lib/docker";
 
 pub(super) struct Fixture {
@@ -138,6 +138,40 @@ impl Fixture {
             authority_policy,
         })
     }
+
+    pub(super) async fn reopen(self) -> Result<Self, String> {
+        let Self {
+            _scratch,
+            journal,
+            scope,
+            request: _,
+            binding,
+            authority_policy,
+        } = self;
+        drop(scope);
+        drop(journal);
+        let journal = Journal::open(&_scratch.file())
+            .await
+            .map_err(|error| error.to_string())?;
+        let scope = journal
+            .connection_scope(&binding)
+            .await
+            .map_err(|error| error.to_string())?;
+        let request = scope
+            .assignment_identity(AssignmentKey::AssignedRequest {
+                request_id: REQUEST_ID,
+            })
+            .await
+            .map_err(|error| error.to_string())?;
+        Ok(Self {
+            _scratch,
+            journal,
+            scope,
+            request,
+            binding,
+            authority_policy,
+        })
+    }
 }
 
 pub(super) fn fixture_storage(permit: &StartPermit) -> Result<StorageAdmission, String> {
@@ -240,7 +274,7 @@ fn binding() -> Result<RepositoryConnection, String> {
     .map_err(|error| error.to_string())
 }
 
-fn verified_source() -> velnor_runner_github::workflow_run::VerifiedWorkflowSource {
+pub(super) fn verified_source() -> velnor_runner_github::workflow_run::VerifiedWorkflowSource {
     use velnor_runner_github::workflow_run::{VerifiedJobWorkflowRef, VerifiedWorkflowSource};
 
     let workflow_ref = "owner/repository/.github/workflows/build.yml@refs/heads/main".to_owned();

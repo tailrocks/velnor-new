@@ -4,7 +4,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use bollard::Docker;
-use velnor_runner_github::{InnerKind, Poll};
+use velnor_runner_github::Poll;
 
 use crate::config::{ApprovedJobAuthorityPolicy, RepositoryConnection};
 use crate::journal::{ConnectionJournal, Journal};
@@ -16,6 +16,12 @@ use super::{HostLane, ReleaseReadSecret, SelectedEngineContext, VerifiedWorkerIm
 use crate::scale_set::EnsureError;
 use crate::worker::ResourceBudget;
 
+mod offer_authorization;
+#[cfg(test)]
+pub(crate) use offer_authorization::authorize_positive_offer_with;
+pub(crate) use offer_authorization::{
+    PositiveOfferAuthorization, authorize_deferred_offers, authorize_positive_offer,
+};
 mod deferred_offer;
 pub(crate) use deferred_offer::{DeferredAuthorizedOffer, DeferredAuthorizedOffers};
 mod recovery;
@@ -186,90 +192,6 @@ pub(crate) struct ScopedAdmissionInput<'a> {
     pub(crate) resource_budget: ResourceBudget,
     pub(crate) allocated_header: u32,
     pub(crate) admission_state: &'a Path,
-}
-
-/// Persist exact source authorization for an offer that cannot be acquired now.
-pub(crate) async fn authorize_deferred_offer(
-    connection: &RepositoryConnection,
-    scoped_journal: &ConnectionJournal,
-    pat: &str,
-    set_id: i64,
-    polled: &Poll,
-) -> Result<DeferredAuthorizedOffer, EnsureError> {
-    let (batch, request_id) =
-        super::steps::assignment(polled)?.ok_or(EnsureError::AdmissionClosed)?;
-    if batch.message_id < 0 || request_id <= 0 {
-        return Err(EnsureError::AdmissionClosed);
-    }
-    let source_receipt = super::steps::authorize_offer(
-        Some(connection),
-        Some(scoped_journal),
-        pat,
-        batch,
-        request_id,
-    )
-    .await?
-    .ok_or(EnsureError::Uncertain)?;
-    DeferredAuthorizedOffer::from_poll_receipt(
-        connection,
-        scoped_journal,
-        set_id,
-        polled,
-        request_id,
-        source_receipt,
-    )
-    .await
-}
-
-/// Save source approval for each Available request when capacity is zero.
-pub(crate) async fn authorize_deferred_offers(
-    connection: &RepositoryConnection,
-    scoped_journal: &ConnectionJournal,
-    pat: &str,
-    set_id: i64,
-    polled: &Poll,
-) -> Result<DeferredAuthorizedOffers, EnsureError> {
-    let Poll::Batch(batch) = polled else {
-        return DeferredAuthorizedOffers::from_receipts(
-            connection,
-            scoped_journal,
-            set_id,
-            polled,
-            Vec::new(),
-        )
-        .await;
-    };
-    if batch.jobs.len() > velnor_runner_github::MAX_POLL_MESSAGES {
-        return Err(EnsureError::Uncertain);
-    }
-    let mut request_ids = std::collections::BTreeSet::new();
-    for job in batch
-        .jobs
-        .iter()
-        .filter(|job| job.kind == InnerKind::Available)
-    {
-        let Some(request_id) = job.request_id.filter(|request_id| *request_id > 0) else {
-            return Err(EnsureError::Uncertain);
-        };
-        if !request_ids.insert(request_id) {
-            return Err(EnsureError::Uncertain);
-        }
-    }
-    let mut receipts = Vec::with_capacity(request_ids.len());
-    for request_id in request_ids {
-        let receipt = super::steps::authorize_offer(
-            Some(connection),
-            Some(scoped_journal),
-            pat,
-            batch,
-            request_id,
-        )
-        .await?
-        .ok_or(EnsureError::Uncertain)?;
-        receipts.push((request_id, receipt));
-    }
-    DeferredAuthorizedOffers::from_receipts(connection, scoped_journal, set_id, polled, receipts)
-        .await
 }
 
 /// Authorize one available request, obtain a fresh permit, then acquire it.

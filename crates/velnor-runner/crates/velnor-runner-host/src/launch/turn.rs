@@ -12,6 +12,12 @@ pub(crate) use admission::admission;
 use scoped::finish_scoped_poll_response;
 use scoped::poll_scoped_queue;
 
+#[cfg(test)]
+pub(crate) use completion_intake::IntakeDecision;
+#[cfg(test)]
+pub(crate) use positive_poll::Acknowledgement;
+#[cfg(test)]
+pub(crate) use positive_poll::finish_positive_poll_with_ack;
 pub(crate) use positive_poll::{
     CursorDisposition, PositiveAdmission, PositivePollOutcome, Settlement, admit_when_ready,
     positive_poll_once,

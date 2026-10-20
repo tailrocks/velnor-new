@@ -5,6 +5,13 @@ mod enumerate;
 mod lifecycle;
 mod limits;
 mod provisioning;
+
+pub(in crate::journal) async fn release_ready(
+    connection: &turso::Connection,
+    reservation_id: i64,
+) -> Result<bool, crate::error::HostError> {
+    provisioning::release_ready(connection, reservation_id).await
+}
 mod read;
 mod storage;
 mod storage_budget;

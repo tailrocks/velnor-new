@@ -44,6 +44,7 @@ pub(crate) async fn prepare_acquired(
 ) -> Result<Option<PreparedAcquiredBootstrap>, HostError> {
     let acquired = match outcome {
         ScopedProvisioningOutcome::NoStart => return Ok(None),
+        ScopedProvisioningOutcome::KnownNoAcquire(_) => return Ok(None),
         ScopedProvisioningOutcome::Acquired(acquired) => acquired,
         ScopedProvisioningOutcome::Recovered(recovery) => recovery.into_acquired(),
     };

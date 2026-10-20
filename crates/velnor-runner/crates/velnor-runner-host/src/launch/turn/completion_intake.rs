@@ -10,11 +10,11 @@ use crate::journal::{AssignmentKey, ConnectionCompletionInboxEntry, ConnectionJo
 use crate::scale_set::EnsureError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct IntakeDecision {
-    pub(super) completion_only: bool,
-    pub(super) wake_cleanup: bool,
-    pub(super) session_delete_candidate: bool,
-    pub(super) started_request_ids: Vec<i64>,
+pub(crate) struct IntakeDecision {
+    pub(crate) completion_only: bool,
+    pub(crate) wake_cleanup: bool,
+    pub(crate) session_delete_candidate: bool,
+    pub(crate) started_request_ids: Vec<i64>,
 }
 
 #[derive(Default)]

@@ -15,7 +15,11 @@ use crate::scale_set::EnsureError;
 pub(super) enum AcquireDisposition {
     Acquired,
     NoEffect,
+    NoEffectSettled,
+    NoEffectHeld,
     Rejected,
+    RejectedSettled,
+    RejectedHeld,
     Uncertain,
 }
 
@@ -157,10 +161,37 @@ where
     } else {
         classify(&result, request_id)
     };
-    scoped
-        .record_request_acquire(&identity, durable)
-        .await
-        .map_err(super::super::map_journal)?;
+    let disposition = match disposition {
+        AcquireDisposition::NoEffect => {
+            if scoped
+                .record_request_acquire_and_settle_unused(&identity, durable)
+                .await
+                .map_err(super::super::map_journal)?
+            {
+                AcquireDisposition::NoEffectSettled
+            } else {
+                AcquireDisposition::NoEffectHeld
+            }
+        }
+        AcquireDisposition::Rejected => {
+            if scoped
+                .record_request_acquire_and_settle_unused(&identity, durable)
+                .await
+                .map_err(super::super::map_journal)?
+            {
+                AcquireDisposition::RejectedSettled
+            } else {
+                AcquireDisposition::RejectedHeld
+            }
+        }
+        _ => {
+            scoped
+                .record_request_acquire(&identity, durable)
+                .await
+                .map_err(super::super::map_journal)?;
+            disposition
+        }
+    };
     match disposition {
         AcquireDisposition::Uncertain if refresh_requested.get() => Err(EnsureError::Uncertain),
         AcquireDisposition::Uncertain => match result {

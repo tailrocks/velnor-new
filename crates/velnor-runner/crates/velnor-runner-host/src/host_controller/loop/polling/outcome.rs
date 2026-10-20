@@ -32,6 +32,15 @@ impl ControllerPollOutcome {
 
     pub(crate) fn from_positive(outcome: crate::launch::PositivePollOutcome) -> Self {
         let positive_poll_settled = outcome.settlement == crate::launch::Settlement::Settled;
+        if let Some(PositiveAdmission::KnownNoAcquire(receipt)) = &outcome.admission {
+            if receipt.state() == crate::journal::RequestAcquireState::Rejected {
+                eprintln!("GitHub rejected AcquireJobs. Velnor did not send an ACK.");
+            } else if !receipt.reservation_released() {
+                eprintln!(
+                    "Velnor kept the physical reservation because it could not prove that the job had no effects."
+                );
+            }
+        }
         Self {
             assigned_total: outcome.assigned_total,
             started_request_ids: outcome.started_request_ids,
@@ -39,7 +48,12 @@ impl ControllerPollOutcome {
             session_delete_candidate: outcome.session_delete_candidate,
             acquired: match outcome.admission {
                 Some(PositiveAdmission::Acquired(acquired)) => Some(acquired),
-                None | Some(PositiveAdmission::Deferred(_) | PositiveAdmission::NoAcquire) => None,
+                None
+                | Some(
+                    PositiveAdmission::Deferred(_)
+                    | PositiveAdmission::NoAcquire
+                    | PositiveAdmission::KnownNoAcquire(_),
+                ) => None,
             },
             positive_poll_settled,
             poll_kind: PollKind::Positive,

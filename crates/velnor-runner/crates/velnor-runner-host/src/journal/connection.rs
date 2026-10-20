@@ -19,6 +19,13 @@ pub(crate) use completion::ConnectionCompletionInboxEntry;
 pub(crate) use identity::{AssignmentIdentity, AssignmentKey};
 pub(crate) use reservation::JobFactsPublicationClaim;
 pub(crate) use reservation::ListenerDeliveryClaim;
+
+pub(in crate::journal) async fn reservation_release_ready(
+    connection: &turso::Connection,
+    reservation_id: i64,
+) -> Result<bool, crate::error::HostError> {
+    reservation::release_ready(connection, reservation_id).await
+}
 pub(crate) use reservation::{
     BootstrapContainerCreateClaim, BootstrapStartClaim, BoundJobFactsSnapshot, CapacityLimits,
     CreateInterruptionOutcome, OperationalCapacityLimits, RecordedStorageNetwork,

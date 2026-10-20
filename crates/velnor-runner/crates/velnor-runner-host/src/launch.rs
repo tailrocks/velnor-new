@@ -39,10 +39,12 @@ pub(crate) mod scoped_runtime;
 pub(crate) use admission_gate::lock_connection;
 #[cfg(test)]
 pub(crate) use drive::acquire_scoped_offer;
+#[cfg(test)]
+pub(crate) use drive::authorize_positive_offer_with;
 pub(crate) use drive::{
-    DeferredAuthorizedOffer, DeferredAuthorizedOffers, Drive, GuestAdmission, Lane, Rest,
-    ScopedAdmissionInput, acquire_authorized_scoped_offer, authorize_deferred_offer,
-    authorize_deferred_offers, recover_acquired_scoped_offer,
+    DeferredAuthorizedOffer, DeferredAuthorizedOffers, Drive, GuestAdmission, Lane,
+    PositiveOfferAuthorization, Rest, ScopedAdmissionInput, acquire_authorized_scoped_offer,
+    authorize_deferred_offers, authorize_positive_offer, recover_acquired_scoped_offer,
 };
 pub(crate) use engine_context::SelectedEngineContext;
 pub(crate) use inspect::classify_inspect;
@@ -60,9 +62,13 @@ pub(crate) use session::{
     delete_removed_connection_session, open_connection_session,
 };
 pub(crate) use slot::HOLDS_ROWS_SQL;
+#[cfg(test)]
+pub(crate) use turn::Acknowledgement;
 pub(crate) use turn::{
     CursorDisposition, PositiveAdmission, PositivePollOutcome, admit_when_ready, positive_poll_once,
 };
+#[cfg(test)]
+pub(crate) use turn::{IntakeDecision, finish_positive_poll_with_ack};
 pub(crate) use turn::{
     ScopedPollOutcome, Settlement, ZeroHeaderMode, poll_scoped_connection_once_with_mode,
 };

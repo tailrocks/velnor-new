@@ -9,9 +9,9 @@ use crate::{
     error::HostError,
     journal::Journal,
     launch::{
-        Drive, GuestAdmission, PositiveAdmission, ReleaseReadSecret, Rest, ScopedAdmissionInput,
-        SelectedEngineContext, VerifiedWorkerImages, ZeroHeaderMode,
-        acquire_authorized_scoped_offer, admit_when_ready, authorize_deferred_offer,
+        Drive, GuestAdmission, PositiveAdmission, PositiveOfferAuthorization, ReleaseReadSecret,
+        Rest, ScopedAdmissionInput, SelectedEngineContext, VerifiedWorkerImages, ZeroHeaderMode,
+        acquire_authorized_scoped_offer, admit_when_ready, authorize_positive_offer,
         positive_poll_once,
     },
 };
@@ -205,6 +205,7 @@ pub(super) async fn reconcile_assigned_population(
                 start_acquired(prepared, recovery.into_acquired(), context).await?;
             }
             Ok(crate::launch::steps::ScopedProvisioningOutcome::NoStart) => {}
+            Ok(crate::launch::steps::ScopedProvisioningOutcome::KnownNoAcquire(_)) => {}
             Ok(crate::launch::steps::ScopedProvisioningOutcome::Acquired(_)) => {
                 return Err(HostError::Ownership);
             }
@@ -343,7 +344,12 @@ async fn positive_poll_message(
         cursor,
         async |link, polled, queue_origin, queue_path, queue_token, admin_token| {
             let authorized =
-                authorize_deferred_offer(connection, scoped, pat, set_id, polled).await?;
+                match authorize_positive_offer(connection, scoped, pat, set_id, polled).await? {
+                    PositiveOfferAuthorization::Deferred(authorized) => authorized,
+                    PositiveOfferAuthorization::TerminalNoAcquire(receipt) => {
+                        return Ok(PositiveAdmission::KnownNoAcquire(receipt));
+                    }
+                };
             let admission = admit_when_ready(context.admission_ready, || async {
                 let admission = acquire_authorized_scoped_offer(
                     ScopedAdmissionInput {
@@ -374,6 +380,9 @@ async fn positive_poll_message(
                 Ok(match admission {
                     crate::launch::steps::ScopedProvisioningOutcome::NoStart => {
                         PositiveAdmission::NoAcquire
+                    }
+                    crate::launch::steps::ScopedProvisioningOutcome::KnownNoAcquire(receipt) => {
+                        PositiveAdmission::KnownNoAcquire(receipt)
                     }
                     crate::launch::steps::ScopedProvisioningOutcome::Acquired(acquired) => {
                         PositiveAdmission::Acquired(acquired)

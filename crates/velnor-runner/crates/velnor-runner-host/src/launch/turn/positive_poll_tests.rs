@@ -57,6 +57,80 @@ async fn available_poll_calls_admission_once_and_no_acquire_stays_unacknowledged
 }
 
 #[tokio::test]
+async fn terminal_acquire_results_keep_ack_and_cursor_rules() -> Result<(), String> {
+    use crate::journal::{AssignmentKey, RequestAcquireState};
+    use crate::launch::turn::scoped_poll_tests::support::{Scratch, session_scope};
+    use velnor_runner_github::{Exchange, Method, SessionRequest, Transport, TransportFail};
+
+    struct SessionReply;
+
+    impl Transport for SessionReply {
+        fn exchange(&mut self, request: &SessionRequest) -> Result<Exchange, TransportFail> {
+            assert_eq!(request.method, Method::Post);
+            Ok(Exchange {
+                status: 200,
+                body: br#"{"sessionId":"session-scoped-poll","messageQueueUrl":"https://queue.example.invalid/","messageQueueAccessToken":"queue-token"}"#.to_vec(),
+            })
+        }
+    }
+
+    for (state, expected_ack) in [
+        (RequestAcquireState::Rejected, Acknowledgement::Deferred),
+        (RequestAcquireState::NoEffect, Acknowledgement::Uncertain),
+    ] {
+        let scratch = Scratch::new()?;
+        let (scope, intent_id, allocation) = session_scope(&scratch).await?;
+        let mut reply = SessionReply;
+        let session =
+            velnor_runner_github::create_session(&mut reply, 10_101, "owner", "admin-token")
+                .map_err(|error| error.to_string())?;
+        let request = scope
+            .assignment_identity(AssignmentKey::AssignedRequest { request_id: 91 })
+            .await
+            .map_err(|error| error.to_string())?;
+        let receipt = crate::launch::steps::KnownNoAcquire::test_fixture(request, state, true);
+        let attempt = scope
+            .begin_session_poll(intent_id, &allocation)
+            .await
+            .map_err(|error| error.to_string())?;
+        let mut link = crate::listen::inert_link_for_offline_test();
+        let admin_base = "https://127.0.0.1:1/".to_owned();
+        link.set_base(&admin_base)
+            .map_err(|error| error.to_string())?;
+        let outcome = super::finish_positive_poll(
+            &mut link,
+            &session,
+            &scope,
+            intent_id,
+            10_101,
+            &allocation,
+            0,
+            attempt,
+            available_poll(),
+            admin_base,
+            None,
+            "https://127.0.0.1:1/".to_owned(),
+            IntakeDecision {
+                completion_only: false,
+                wake_cleanup: false,
+                session_delete_candidate: false,
+                started_request_ids: Vec::new(),
+            },
+            Some(PositiveAdmission::KnownNoAcquire(receipt)),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+        assert_eq!(outcome.acknowledgement, expected_ack);
+        assert_eq!(outcome.settlement, Settlement::Settled);
+        assert_eq!(
+            outcome.cursor_disposition,
+            CursorDisposition::Deferred { message_id: 17 }
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn closed_admission_keeps_available_unacked_and_records_lifecycle() -> Result<(), String> {
     use crate::journal::request_lifecycle::tests::native_started_intake_fixture;
     use crate::launch::turn::completion_intake::intake_and_ack_if_only_scoped;

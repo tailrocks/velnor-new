@@ -15,8 +15,64 @@ pub(crate) use runner::{AcquiredProvisioning, CheckedAcquiredRecovery};
 
 pub(crate) enum ScopedProvisioningOutcome {
     NoStart,
+    KnownNoAcquire(KnownNoAcquire),
     Acquired(runner::AcquiredProvisioning),
     Recovered(runner::CheckedAcquiredRecovery),
+}
+
+pub(crate) struct KnownNoAcquire {
+    request: crate::journal::AssignmentIdentity,
+    state: crate::journal::RequestAcquireState,
+    reservation_released: bool,
+}
+
+impl KnownNoAcquire {
+    pub(crate) fn new(
+        request: crate::journal::AssignmentIdentity,
+        state: crate::journal::RequestAcquireState,
+        reservation_released: bool,
+    ) -> Self {
+        Self {
+            request,
+            state,
+            reservation_released,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_fixture(
+        request: crate::journal::AssignmentIdentity,
+        state: crate::journal::RequestAcquireState,
+        reservation_released: bool,
+    ) -> Self {
+        Self::new(request, state, reservation_released)
+    }
+
+    pub(crate) fn request(&self) -> &crate::journal::AssignmentIdentity {
+        &self.request
+    }
+
+    pub(crate) const fn state(&self) -> crate::journal::RequestAcquireState {
+        self.state
+    }
+
+    pub(crate) const fn reservation_released(&self) -> bool {
+        self.reservation_released
+    }
+
+    pub(crate) fn matches_poll(
+        &self,
+        polled: &Poll,
+        scoped: &ConnectionJournal,
+        set_id: i64,
+    ) -> bool {
+        let Ok(Some((_, request_id))) = assignment(polled) else {
+            return false;
+        };
+        self.request.connection_id() == scoped.connection_id()
+            && self.request.scale_set_id() == set_id
+            && self.request.request_id() == Some(request_id)
+    }
 }
 
 pub(crate) async fn acquire_scoped<T>(
@@ -67,6 +123,15 @@ where
         .assignment_identity(AssignmentKey::AssignedRequest { request_id })
         .await
         .map_err(super::map_journal)?;
+    if let Some((state, reservation_released)) = scoped
+        .known_no_acquire_disposition(&request)
+        .await
+        .map_err(super::map_journal)?
+    {
+        return Ok(ScopedProvisioningOutcome::KnownNoAcquire(
+            KnownNoAcquire::new(request, state, reservation_released),
+        ));
+    }
     acquire::require_authorized(scoped, &request).await?;
     let Some(profile) = scoped
         .current_storage_profile()
@@ -89,7 +154,16 @@ where
     let runner::ReservationOutcome::AcquireClaimed(physical, claim) = outcome else {
         return Ok(ScopedProvisioningOutcome::NoStart);
     };
-    match acquire::run_claimed(lane, &ctx.queue_token, scoped, claim).await? {
+    let disposition = acquire::run_claimed(lane, &ctx.queue_token, scoped, claim).await?;
+    map_acquire_disposition(disposition, physical, request)
+}
+
+fn map_acquire_disposition(
+    disposition: acquire::AcquireDisposition,
+    physical: runner::PhysicalIntent,
+    request: crate::journal::AssignmentIdentity,
+) -> Result<ScopedProvisioningOutcome, EnsureError> {
+    match disposition {
         acquire::AcquireDisposition::Acquired => Ok(ScopedProvisioningOutcome::Acquired(
             runner::AcquiredProvisioning::after_recorded_acquire(physical, request),
         )),
@@ -97,7 +171,31 @@ where
             status: 0,
             step: "acquire",
         }),
+        acquire::AcquireDisposition::NoEffectSettled => {
+            Ok(ScopedProvisioningOutcome::KnownNoAcquire(
+                KnownNoAcquire::new(request, crate::journal::RequestAcquireState::NoEffect, true),
+            ))
+        }
+        acquire::AcquireDisposition::NoEffectHeld => Ok(ScopedProvisioningOutcome::KnownNoAcquire(
+            KnownNoAcquire::new(
+                request,
+                crate::journal::RequestAcquireState::NoEffect,
+                false,
+            ),
+        )),
         acquire::AcquireDisposition::Rejected => Err(EnsureError::Rejected),
+        acquire::AcquireDisposition::RejectedSettled => {
+            Ok(ScopedProvisioningOutcome::KnownNoAcquire(
+                KnownNoAcquire::new(request, crate::journal::RequestAcquireState::Rejected, true),
+            ))
+        }
+        acquire::AcquireDisposition::RejectedHeld => Ok(ScopedProvisioningOutcome::KnownNoAcquire(
+            KnownNoAcquire::new(
+                request,
+                crate::journal::RequestAcquireState::Rejected,
+                false,
+            ),
+        )),
         acquire::AcquireDisposition::Uncertain => Err(EnsureError::Uncertain),
     }
 }

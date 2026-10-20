@@ -13,6 +13,8 @@ use crate::journal::source_authorization::created_set_matches;
 
 mod recovery;
 pub(crate) use recovery::AcquiredRecoveryCandidate;
+mod settlement;
+mod terminal;
 
 const AUTHORITY_MODEL: &str = "created_empty_exclusive_admin_session_v1";
 const MAX_ACQUIRE_RESPONSE_BYTES: usize = 4_096;

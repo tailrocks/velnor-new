@@ -149,7 +149,7 @@ pub(super) fn authorize_job(
     )
 }
 
-fn authorize_job_with_transport<T: Transport + ?Sized>(
+pub(super) fn authorize_job_with_transport<T: Transport + ?Sized>(
     connection: &RepositoryConnection,
     binding: &SourceAuthorizationBinding,
     source: &SourceMetadata,

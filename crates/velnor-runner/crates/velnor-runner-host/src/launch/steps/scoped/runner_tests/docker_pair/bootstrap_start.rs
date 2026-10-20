@@ -252,6 +252,9 @@ async fn initializer_for(
         crate::launch::steps::ScopedProvisioningOutcome::NoStart => {
             return Err("The Acquire result has no start.".to_owned());
         }
+        crate::launch::steps::ScopedProvisioningOutcome::KnownNoAcquire(_) => {
+            return Err("The Acquire result proves no start.".to_owned());
+        }
     };
     let nonce = acquired
         .runner_name()

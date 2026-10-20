@@ -1,5 +1,6 @@
 //! Request and physical runner journal regressions.
 
+mod acquire_settlement;
 mod acquired_population_read;
 mod acquired_recovery;
 mod admission;

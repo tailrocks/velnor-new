@@ -95,7 +95,6 @@ pub(crate) use scale_set_create::{
     ScaleSetCreateRecord, ScaleSetCreateRequest, ScaleSetCreateState,
 };
 pub(crate) use source_authorization::AssignedAcquireResult;
-#[cfg(test)]
 pub(crate) use source_authorization::SourceAuthorizationResult;
 use sql::{intent_row, one_row, same_ids, token_rejected};
 

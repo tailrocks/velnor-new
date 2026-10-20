@@ -3,8 +3,8 @@
 use std::future::Future;
 
 use velnor_runner_github::{
-    Ack, AckScope, AcquireOutcome, Certainty, Poll, RefreshGate, SessionError, WireError, ack,
-    acquire, may_ack,
+    Ack, AckScope, AcquireOutcome, Certainty, Poll, RefreshGate, SessionError, Transport,
+    WireError, ack, acquire, may_ack,
 };
 
 use crate::Offer;
@@ -32,7 +32,7 @@ pub(super) use scale::scale_id;
 pub(super) use scale::scale_unacked;
 
 pub(crate) use scoped::{
-    AcquiredProvisioning, CheckedAcquiredRecovery, ScopedProvisioningOutcome,
+    AcquiredProvisioning, CheckedAcquiredRecovery, KnownNoAcquire, ScopedProvisioningOutcome,
     acquire_authorized_request, acquire_scoped,
 };
 
@@ -249,6 +249,20 @@ pub(super) async fn authorize_offer(
     batch: &velnor_runner_github::ParsedBatch,
     request_id: i64,
 ) -> Result<Option<source::AuthorizedSourceReceipt>, EnsureError> {
+    let mut transport = crate::https::HttpsTransport::new(crate::listen::GITHUB_API)
+        .map_err(|_| source_blocked(source::SourceBlock::ApiUnavailable))?;
+    authorize_offer_with_transport(connection, scoped, token, batch, request_id, &mut transport)
+        .await
+}
+
+pub(super) async fn authorize_offer_with_transport<T: Transport + ?Sized>(
+    connection: Option<&crate::config::RepositoryConnection>,
+    scoped: Option<&ConnectionJournal>,
+    token: &str,
+    batch: &velnor_runner_github::ParsedBatch,
+    request_id: i64,
+    transport: &mut T,
+) -> Result<Option<source::AuthorizedSourceReceipt>, EnsureError> {
     let Some(connection) = connection else {
         return if scoped.is_some() {
             Err(source_blocked(source::SourceBlock::Missing))
@@ -273,13 +287,14 @@ pub(super) async fn authorize_offer(
         .source_authorization_binding()
         .await
         .map_err(|_| source_blocked(source::SourceBlock::ClosedWorldUnproven))?;
-    let receipt = source::authorize_job(
+    let receipt = source::authorize_job_with_transport(
         connection,
         &binding,
         source,
         request_id,
         batch.message_id,
         token,
+        transport,
     )
     .map_err(source_blocked)?;
     let identity = scoped
