@@ -91,7 +91,7 @@ fn observe_linux(request: &OwnedCgroupRequest) -> Result<OwnedCgroupObservation,
     }
     Ok(OwnedCgroupObservation {
         wire_mode: "owned_container_cgroup".to_owned(),
-        schema_version: 3,
+        schema_version: OwnedCgroupObservation::SCHEMA_VERSION,
         operation_id: request.operation_id.clone(),
         guest_boot_id: boot_id,
         engine_metadata,

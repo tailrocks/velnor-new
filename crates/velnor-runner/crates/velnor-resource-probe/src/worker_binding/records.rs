@@ -310,6 +310,11 @@ pub struct OwnedCgroupObservation {
     pub root_backings: Vec<RootBackingObservation>,
 }
 
+impl OwnedCgroupObservation {
+    /// Schema version for the cgroup observation response.
+    pub const SCHEMA_VERSION: u8 = 3;
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 /// Docker-root object identity selected for this engine.

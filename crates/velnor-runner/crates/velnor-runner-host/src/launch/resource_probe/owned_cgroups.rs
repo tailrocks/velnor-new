@@ -218,7 +218,7 @@ pub(super) fn validate_observation(
         return Err(HostError::Identity);
     };
     if observation.wire_mode != "owned_container_cgroup"
-        || observation.schema_version != 2
+        || observation.schema_version != OwnedCgroupObservation::SCHEMA_VERSION
         || observation.operation_id != request.operation_id
         || observation.guest_boot_id.is_empty()
         || runner.role != WorkerRole::Runner
@@ -287,113 +287,5 @@ fn valid_container_id(value: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{OwnedCgroupSubjects, OwnedContainerSubjects};
-    use crate::launch::resource_probe::projection::{
-        ProbeProjection, VerifiedProbeImage, expected_image_config,
-    };
-    use sha2::{Digest, Sha256};
-
-    fn subject(
-        id: char,
-        init: u32,
-        helper: u32,
-    ) -> Result<OwnedContainerSubjects, crate::error::HostError> {
-        OwnedContainerSubjects::new(id.to_string().repeat(64), init, 1, helper, 2)
-    }
-
-    #[test]
-    fn container_subjects_reject_invalid_identity() {
-        assert!(OwnedContainerSubjects::new("short".to_owned(), 1, 1, 2, 2).is_err());
-        assert!(OwnedContainerSubjects::new("a".repeat(64), 1, 1, 1, 2).is_err());
-        assert!(OwnedContainerSubjects::new("a".repeat(64), 1, 0, 2, 2).is_err());
-    }
-
-    #[test]
-    fn pair_subjects_reject_duplicate_containers_and_processes() {
-        let runner = subject('a', 10, 11);
-        let same_container = subject('a', 12, 13);
-        let same_process = subject('b', 10, 13);
-        assert!(runner.is_ok());
-        assert!(same_container.is_ok());
-        assert!(same_process.is_ok());
-        if let (Ok(runner), Ok(dind)) = (runner, same_container) {
-            assert!(OwnedCgroupSubjects::new(runner, dind).is_err());
-        }
-        if let (Ok(runner), Ok(dind)) = (subject('a', 10, 11), same_process) {
-            assert!(OwnedCgroupSubjects::new(runner, dind).is_err());
-        }
-    }
-
-    #[test]
-    fn owned_request_is_one_canonical_bounded_line() {
-        let runner = subject('a', 10, 11);
-        let dind = subject('b', 20, 21);
-        assert!(runner.is_ok());
-        assert!(dind.is_ok());
-        if let (Ok(runner), Ok(dind)) = (runner, dind)
-            && let Ok(subjects) = OwnedCgroupSubjects::new(runner, dind)
-            && let Ok(line) = subjects.request_line(&"c".repeat(32), "/var/lib/docker")
-        {
-            assert_eq!(line.last(), Some(&b'\n'));
-            assert_eq!(line.iter().filter(|byte| **byte == b'\n').count(), 1);
-            assert!(line.len() <= velnor_resource_probe::worker_binding::WORKER_REQUEST_LIMIT);
-            assert!(serde_json::from_slice::<velnor_resource_probe::worker_binding::OwnedCgroupRequest>(&line[..line.len() - 1]).is_ok());
-            let expected = Sha256::digest(
-                [
-                    b"velnor-owned-cgroups-request-v1\0".as_slice(),
-                    line.as_slice(),
-                ]
-                .concat(),
-            );
-            assert_eq!(
-                subjects.request_sha256(&"c".repeat(32), "/var/lib/docker"),
-                Ok(expected
-                    .iter()
-                    .map(|byte| format!("{byte:02x}"))
-                    .collect::<String>())
-            );
-        }
-    }
-
-    #[test]
-    fn owned_projection_uses_fixed_main_mode_and_private_host_pid_access() {
-        let revision = "b".repeat(40);
-        let image = VerifiedProbeImage::from_verified_provider(
-            format!("sha256:{}", "a".repeat(64)),
-            "linux/amd64".to_owned(),
-            "aarch64".to_owned(),
-            revision.clone(),
-            "c".repeat(64),
-            &expected_image_config(&revision),
-        );
-        assert!(image.is_ok());
-        if let Ok(image) = image {
-            let projection = ProbeProjection::build_owned_cgroups(
-                "d".repeat(32),
-                "e".repeat(32),
-                "selected-engine".to_owned(),
-                "/var/lib/docker",
-                image,
-                "f".repeat(64),
-            );
-            assert!(projection.is_ok());
-            if let Ok(projection) = projection {
-                assert_eq!(
-                    projection.config.cmd.as_deref(),
-                    Some(["--mode".to_owned(), "owned_container_cgroup".to_owned()].as_slice())
-                );
-                assert_eq!(projection.config.attach_stdin, Some(true));
-                assert_eq!(projection.config.open_stdin, Some(true));
-                assert_eq!(projection.config.stdin_once, Some(true));
-                let host = projection.config.host_config.as_ref();
-                assert!(host.is_some_and(|config| {
-                    config.pid_mode.as_deref() == Some("host")
-                        && config.privileged == Some(false)
-                        && config.network_mode.as_deref() == Some("none")
-                        && config.readonly_rootfs == Some(true)
-                }));
-            }
-        }
-    }
-}
+#[path = "owned_cgroups/tests.rs"]
+mod tests;
