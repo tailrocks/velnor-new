@@ -16,8 +16,6 @@ pub enum QualificationRuntimeIdentityField {
     RunnerArch,
     /// Actual provisioned image family.
     ImageOs,
-    /// Actual provisioned image version.
-    ImageVersion,
     /// Toolchain identity observed after pinned tool setup.
     ToolchainId,
     /// Cache-format identity reported by its producer.
@@ -40,8 +38,6 @@ pub struct QualificationRuntimePlatform {
     pub runs_on: String,
     /// Provisioned image family.
     pub image_os: String,
-    /// Provisioned image version.
-    pub image_version: String,
     /// Execution target (`host` or a triple).
     pub target: String,
 }
@@ -181,7 +177,6 @@ pub(crate) fn validate_runtime_identity(
         ("runner_os", platform.os.as_str()),
         ("runner_arch", platform.arch.as_str()),
         ("image_os", platform.image_os.as_str()),
-        ("image_version", platform.image_version.as_str()),
     ] {
         validate_semantic_text(field, value)?;
         if value == crate::UNOBSERVED_IMAGE_VALUE {
@@ -210,7 +205,6 @@ pub(crate) fn validate_runtime_identity(
         arch: platform.arch.clone(),
         runs_on: platform.runs_on.clone(),
         image_os: platform.image_os.clone(),
-        image_version: platform.image_version.clone(),
         target: platform.target.clone(),
     };
     let _ = platform_id(&platform_inputs)?;
