@@ -7,13 +7,13 @@ use crate::journal::{Journal, request_lifecycle::tests::NativePreChallengeFixtur
 async fn orphan_cleanup_observer_operation_blocks_journal_reopen() -> Result<(), HostError> {
     let fixture = crate::journal::request_lifecycle::tests::native_pre_challenge_fixture().await?;
     let NativePreChallengeFixture {
-        _scratch,
-        _journal,
+        _scratch: scratch,
+        _journal: journal,
         database_path,
         scope,
         ..
     } = fixture;
-    let connection = _journal.connection().await?;
+    let connection = journal.connection().await?;
     let request_sha = "a".repeat(64);
     connection
         .execute(
@@ -24,12 +24,12 @@ async fn orphan_cleanup_observer_operation_blocks_journal_reopen() -> Result<(),
         .map_err(|_| HostError::Journal)?;
     drop(connection);
     drop(scope);
-    drop(_journal);
+    drop(journal);
 
     assert!(matches!(
         Journal::open(&database_path).await,
         Err(HostError::Journal)
     ));
-    drop(_scratch);
+    drop(scratch);
     Ok(())
 }

@@ -99,8 +99,8 @@ async fn restore_v23_schema(path: &std::path::Path) {
 }
 
 async fn assert_v23_migration(path: &std::path::Path, operation_id: &str) {
-    drop(Journal::open(&path).await.expect("migrate v23 schema"));
-    drop(Journal::open(&path).await.expect("reopen current schema"));
+    drop(Journal::open(path).await.expect("migrate v23 schema"));
+    drop(Journal::open(path).await.expect("reopen current schema"));
     let database = turso::Builder::new_local(
         path.to_str()
             .expect("The temporary database path must use UTF-8."),
@@ -171,14 +171,12 @@ async fn assert_v23_publication_schema(connection: &turso::Connection) -> String
         )
         .await
         .expect("read insert guard SQL");
-    let insert_guard_sql = rows
-        .next()
+    rows.next()
         .await
         .expect("read insert guard")
         .expect("insert guard exists")
         .get::<String>(0)
-        .expect("insert guard SQL");
-    insert_guard_sql
+        .expect("insert guard SQL")
 }
 
 async fn assert_v23_guard_rejections(
@@ -262,5 +260,5 @@ async fn assert_v23_probe_survives_reopen(path: &std::path::Path, operation_id: 
     assert!(rows.next().await.expect("unique probe row").is_none());
     drop(connection);
     drop(database);
-    assert!(Journal::open(&path).await.is_err());
+    assert!(Journal::open(path).await.is_err());
 }

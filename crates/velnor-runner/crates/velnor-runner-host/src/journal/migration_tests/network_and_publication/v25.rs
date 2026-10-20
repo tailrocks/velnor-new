@@ -12,7 +12,7 @@ async fn version_twenty_five_migration_installs_initializer_handoff_guards() {
 
 async fn assert_v25_migration(path: &std::path::Path) {
     drop(
-        Journal::open(&path)
+        Journal::open(path)
             .await
             .expect("migrate version twenty-five"),
     );

@@ -1,17 +1,21 @@
 //! Database guarantees for the persisted cleanup observer witness.
 
 use crate::error::HostError;
+use crate::journal::request_lifecycle::tests::NativePreChallengeFixture;
 
 #[tokio::test]
 async fn persisted_witness_rejects_digest_and_context_tampering() -> Result<(), HostError> {
     let fixture = crate::journal::request_lifecycle::tests::native_pre_challenge_fixture().await?;
+    let NativePreChallengeFixture {
+        _journal: journal, ..
+    } = &fixture;
     let reservation_id = fixture.initialized.reservation_id;
     let before = fixture
         .scope
         .storage_cleanup_witness(reservation_id)
         .await?
         .ok_or(HostError::Journal)?;
-    let connection = fixture._journal.connection().await?;
+    let connection = journal.connection().await?;
 
     let digest_tamper = "0".repeat(64);
     if digest_tamper == before.binding_sha256() {

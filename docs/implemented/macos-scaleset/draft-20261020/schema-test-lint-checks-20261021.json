@@ -1,0 +1,17 @@
+{
+  "base_commit": "b72cf2a38",
+  "source_manifest_sha256": "96c96f584d1d704c591cc4ab56d289499d56114b4fd981f6f4b962cc6797ca49",
+  "independent_review_sha256": "fcd61df1edc50016339591b1f431d15e00e38a222d3f87594bd11467d6015ec6",
+  "language_review": "PASS",
+  "nextest": {
+    "result": "PASS",
+    "passed": 6,
+    "run_id": "3e5d2cfd-5998-4a64-976b-2279dbf38734",
+    "log_sha256": "8ac9c3462f7d162e78e9970723a5da25eca6d23cbc9bd7c0ea64d9d064744585"
+  },
+  "format": "PASS",
+  "owned_file_diagnostics_before": 13,
+  "owned_file_diagnostics_after": 0,
+  "full_strict_clippy": "FAIL",
+  "activation": "NOT_RUN"
+}

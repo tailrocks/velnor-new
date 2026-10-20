@@ -165,16 +165,16 @@ async fn create_v29_storage_tables(
 }
 
 async fn seed_v29_storage_rows(connection: &turso::Connection) -> Result<(), HostError> {
-    insert_attachment(&connection, "runner-home", "runner", "/home/runner").await?;
+    insert_attachment(connection, "runner-home", "runner", "/home/runner").await?;
     insert_attachment(
-        &connection,
+        connection,
         "engine-metadata",
         "runner",
         "/.velnor-runtime-identity",
     )
     .await?;
     insert_path(
-        &connection,
+        connection,
         "runner-home",
         "runner",
         "/home/runner",
@@ -183,7 +183,7 @@ async fn seed_v29_storage_rows(connection: &turso::Connection) -> Result<(), Hos
     )
     .await?;
     insert_path(
-        &connection,
+        connection,
         "engine-metadata",
         "runner",
         "/.velnor-runtime-identity",
