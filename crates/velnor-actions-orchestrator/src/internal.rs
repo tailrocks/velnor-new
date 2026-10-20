@@ -33,7 +33,7 @@ use crate::internal_request::{PlanRequest, checked_plan_request};
 
 pub use self::plan_response::validate_plan_response;
 use crate::prepare::{prepare, prepare_with_phase_timings};
-use crate::select::{classify_changed, select_universe};
+use crate::select::{ChangeEvidence, classify_changed, select_universe};
 use crate::select_edges::plan_task_graph;
 
 pub use crate::internal_request::{
@@ -111,6 +111,7 @@ fn plan_internal_inner(
         &prep.runner_label,
     ));
     let universe = select_universe(&prep.discovery, &mut warnings)?;
+    let mut evidence = ChangeEvidence::default();
     let changed = classify_changed(
         &prep.root,
         request.event,
@@ -118,8 +119,9 @@ fn plan_internal_inner(
         &request.head,
         &prep.discovery,
         &mut warnings,
+        &mut evidence,
     );
-    let plan = build_plan(
+    let mut plan = build_plan(
         &request,
         &prep.discovery,
         &prep.root,
@@ -138,6 +140,16 @@ fn plan_internal_inner(
         &plan,
         scale_set_image_source_sha.as_deref(),
     )?;
+    plan.jobs.extend(crate::select::images::dispositions(
+        &prep.root,
+        &prep.config.images,
+        &prep.discovery,
+        request.event,
+        changed.as_ref(),
+        &evidence,
+    ));
+    plan.jobs
+        .sort_by(|left, right| left.job_id.cmp(&right.job_id));
     plan.validate().map_err(internal_contract)?;
     check_matrix_budget(&plan.matrix)?;
     let response = plan_response(plan);

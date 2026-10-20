@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 use std::process::Command;
 
-use super::classify_changed;
+use super::{ChangeEvidence, classify_changed};
 use crate::discover::{Discovery, PlannedWorkspace};
 use velnor_actions_contract::WorkflowEvent;
 use velnor_actions_rust::{
@@ -34,6 +34,7 @@ fn pull_request_keeps_earlier_changes_and_transitive_dependents() {
         &head,
         &discovery(),
         &mut warnings,
+        &mut ChangeEvidence::default(),
     )
     .expect("valid pull request range");
 

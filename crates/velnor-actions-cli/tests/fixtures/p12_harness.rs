@@ -358,6 +358,8 @@ const PROBE_DATA: &[&str] = &[
     "https://api.github.com/repos/jdx/mr-boxington-action/releases\tmbx-action.json\t[{\"tag_name\": \"v1.5.0\"}]",
     "https://api.github.com/repos/asamarts/alint/releases/latest\talint.json\t{\"tag_name\": \"v0.19.0\"}",
     "https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest\taws-credentials.json\t{\"tag_name\": \"v6.3.0\"}",
+    "https://api.github.com/repos/google/go-containerregistry/releases/latest\tcrane.json\t{\"tag_name\": \"v0.22.1\"}",
+    "https://api.github.com/repos/actions/attest/releases/latest\tattest.json\t{\"tag_name\": \"v4.2.2\"}",
     "https://api.github.com/repos/sigstore/cosign/releases/latest\tcosign.json\t{\"tag_name\": \"v3.1.3\"}",
     "https://api.github.com/repos/actions/attest-build-provenance/releases/latest\tattest-build-provenance.json\t{\"tag_name\": \"v4.2.2\"}",
     "https://api.github.com/repos/actions/create-github-app-token/releases/latest\tcreate-github-app-token.json\t{\"tag_name\": \"v3.3.0\"}",

@@ -42,6 +42,11 @@ fn probe_tool_rows() -> Vec<ProbeRow> {
             "[{\"tag_name\": \"v1.20.0-beta\", \"prerelease\": true}, {\"tag_name\": \"v1.24.1\"}]",
         ),
         (
+            "https://api.github.com/repos/google/go-containerregistry/releases/latest",
+            "crane.json",
+            "{\"tag_name\": \"v0.22.1\"}",
+        ),
+        (
             "https://api.github.com/repos/sigstore/cosign/releases/latest",
             "cosign.json",
             "{\"tag_name\": \"v3.1.3\"}",
@@ -126,6 +131,11 @@ fn probe_action_rows() -> Vec<ProbeRow> {
             "https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest",
             "aws-credentials.json",
             "{\"tag_name\": \"v6.3.0\"}",
+        ),
+        (
+            "https://api.github.com/repos/actions/attest/releases/latest",
+            "attest.json",
+            "{\"tag_name\": \"v4.2.2\"}",
         ),
         (
             "https://api.github.com/repos/actions/attest-build-provenance/releases/latest",
@@ -225,7 +235,7 @@ fn probe_rows_carry_source_and_check_time() -> Result<(), Box<dyn Error>> {
         .iter()
         .filter(|line| line.contains("\"check\":\"upstream-probe\""))
         .collect();
-    assert_eq!(probe.len(), 24, "23 rows + runner note:\n{}", run.stdout);
+    assert_eq!(probe.len(), 26, "25 rows + runner note:\n{}", run.stdout);
     for line in probe {
         if line.contains("\"subject\":\"runner\"") {
             assert!(

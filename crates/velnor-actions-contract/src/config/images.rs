@@ -4,15 +4,15 @@
 //! and registry ownership are checked by the orchestrator and by the
 //! generated jobs; this module accepts no shell, argv, YAML or `uses:` fields.
 
-use super::workflow_task::is_valid_workflow_task_id;
+use super::image_grammar::{
+    is_cargo_name, is_valid_image_id, is_valid_image_repository, require_safe_path,
+};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Registry host every image repository must live under.
 pub const IMAGE_REGISTRY_HOST: &str = "ghcr.io";
-/// Longest accepted image id; job ids add `image-` and a platform suffix.
-const MAX_IMAGE_ID_BYTES: usize = 40;
 
 /// Closed native image platform catalog; one hosted runner per platform.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -162,6 +162,24 @@ impl ImageConfig {
         format!("image-publish-{}", self.id)
     }
 
+    /// Generated promote job id.
+    #[must_use]
+    pub fn promote_job_id(&self) -> String {
+        format!("image-promote-{}", self.id)
+    }
+
+    /// Every job id this image generates, in a stable order.
+    fn generated_job_ids(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self
+            .platforms
+            .iter()
+            .map(|platform| self.build_job_id(*platform))
+            .collect();
+        ids.push(self.publish_job_id());
+        ids.push(self.promote_job_id());
+        ids
+    }
+
     /// Validate one entry; `index` locates it in error key paths.
     /// # Errors
     pub fn validate(&self, file: &str, index: usize) -> Result<(), ContractError> {
@@ -228,6 +246,13 @@ impl ImageConfig {
         require_safe_path(file, at("context"), &self.context, true)?;
         if let Some(version_file) = &self.version_file {
             require_safe_path(file, at("version_file"), version_file, false)?;
+            if super::publish::VersionSource::for_path(version_file).is_none() {
+                return Err(ContractError::config(
+                    file,
+                    at("version_file"),
+                    format!("unsupported_image_version_file:{version_file}"),
+                ));
+            }
         }
         Ok(())
     }
@@ -269,8 +294,18 @@ impl ImagePrebuilt {
 pub fn validate_images(images: &[ImageConfig], file: &str) -> Result<(), ContractError> {
     let mut ids = BTreeSet::new();
     let mut repositories = BTreeSet::new();
+    let mut job_ids = BTreeSet::new();
     for (index, image) in images.iter().enumerate() {
         image.validate(file, index)?;
+        for job_id in image.generated_job_ids() {
+            if !job_ids.insert(job_id.clone()) {
+                return Err(ContractError::config(
+                    file,
+                    format!("images[{index}].id"),
+                    format!("image_job_id_collision:{job_id}"),
+                ));
+            }
+        }
         if !ids.insert(image.id.as_str()) {
             return Err(ContractError::config(
                 file,
@@ -285,89 +320,6 @@ pub fn validate_images(images: &[ImageConfig], file: &str) -> Result<(), Contrac
                 "duplicate_image_repository",
             ));
         }
-    }
-    Ok(())
-}
-
-/// Image id: workflow-task grammar, bounded so job ids stay short.
-#[must_use]
-pub fn is_valid_image_id(id: &str) -> bool {
-    id.len() <= MAX_IMAGE_ID_BYTES && is_valid_workflow_task_id(id)
-}
-
-/// `ghcr.io/<owner>/<name>[/<name>...]`, lowercase, no tag or digest.
-#[must_use]
-pub fn is_valid_image_repository(repository: &str) -> bool {
-    let Some(rest) = repository
-        .strip_prefix(IMAGE_REGISTRY_HOST)
-        .and_then(|rest| rest.strip_prefix('/'))
-    else {
-        return false;
-    };
-    let segments = rest.split('/').collect::<Vec<_>>();
-    segments.len() >= 2
-        && segments.iter().enumerate().all(|(position, segment)| {
-            if position == 0 {
-                is_owner_segment(segment)
-            } else {
-                is_name_segment(segment)
-            }
-        })
-}
-
-fn is_owner_segment(segment: &str) -> bool {
-    !segment.is_empty()
-        && !segment.starts_with('-')
-        && !segment.ends_with('-')
-        && segment
-            .bytes()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
-}
-
-fn is_name_segment(segment: &str) -> bool {
-    let bytes = segment.as_bytes();
-    !bytes.is_empty()
-        && bytes[0].is_ascii_alphanumeric()
-        && bytes[bytes.len() - 1].is_ascii_alphanumeric()
-        && !segment.contains("..")
-        && bytes.iter().all(|b| {
-            b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'-' | b'_' | b'.')
-        })
-}
-
-fn is_cargo_name(name: &str) -> bool {
-    !name.is_empty()
-        && name.len() <= 64
-        && name
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
-        && !name.starts_with('-')
-}
-
-/// Lexical repo-relative path check shared by every image path field.
-fn require_safe_path(
-    file: &str,
-    key: String,
-    path: &str,
-    allow_dot: bool,
-) -> Result<(), ContractError> {
-    if allow_dot && path == "." {
-        return Ok(());
-    }
-    let bad = path.is_empty()
-        || path.len() > 256
-        || path.starts_with('/')
-        || path.ends_with('/')
-        || path.split('/').any(|c| matches!(c, "" | "." | ".."))
-        || !path.bytes().all(|b| {
-            b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'/' | b'+' | b'@')
-        });
-    if bad {
-        return Err(ContractError::config(
-            file,
-            key,
-            format!("bad_image_path:{path}"),
-        ));
     }
     Ok(())
 }

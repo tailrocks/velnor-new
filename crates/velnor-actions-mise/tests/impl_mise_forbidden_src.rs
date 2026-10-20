@@ -26,6 +26,7 @@ const EXPECTED_MODULES: &[&str] = &[
     "catalog_project_tests.rs",
     "catalog_source_build_bootstrap.rs",
     "catalog_source_build_bootstrap_tests.rs",
+    "catalog_tool.rs",
     "catalog_versions.rs",
     "check_capabilities.rs",
     "check_capabilities_encoding_tests.rs",

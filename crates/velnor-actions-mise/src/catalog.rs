@@ -45,6 +45,11 @@ pub use versions::{
     check_freshness_requirements, validate_concrete_exact_version, validate_exact_version,
 };
 
+/// The typed catalog tool names (`PinnedTool`).
+#[path = "catalog_tool.rs"]
+mod tool;
+pub use tool::PinnedTool;
+
 /// Project-declared versions and their run-time references (hard decision 5).
 #[path = "catalog_project.rs"]
 pub mod project;
@@ -101,6 +106,12 @@ pub const OPENTOFU_SHA256_DARWIN_ARM64: &str =
 /// Selected release-plz coordinator release (tag `release-plz-v0.3.173`).
 /// Source: `https://crates.io/api/v1/crates/release-plz`; published 2026-10-19, checked 2026-10-20.
 pub const RELEASE_PLZ_VERSION: &str = "0.3.173";
+/// Qualified `crane` (`google/go-containerregistry` tag `v0.22.1`, published
+/// 2026-09-04): pushes OCI layouts and tags digests in the image publication jobs.
+/// Source: `https://api.github.com/repos/google/go-containerregistry/releases/latest`; checked 2026-10-20.
+/// Install: Mise registry name `crane` through the aqua backend, which checks
+/// the release `checksums.txt` before the binary is used.
+pub const CRANE_VERSION: &str = "0.22.1";
 /// Fixed Cosign signer helper (release tag `v3.1.3`), not installed by Mise.
 /// Source release assets and GitHub API SHA-256 digest were verified 2026-10-18.
 pub const COSIGN_VERSION: &str = "3.1.3";
@@ -125,77 +136,6 @@ const TOOL_PLATFORMS: [&str; 2] = ["ubuntu-24.04", "ubuntu-26.04"];
 /// upstream artifact sha256. Trusted validation rejects this value.
 const PLACEHOLDER_DIGEST: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
-/// Tools Velnor may select through mise, by registry name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum PinnedTool {
-    /// Rust toolchain (`rust`, invoked as `cargo`/`rustc`).
-    Rust,
-    /// Mr Boxington compiler cache (`mr-boxington`, invoked as `mbx`).
-    MrBoxington,
-    /// GitHub CLI (`gh`).
-    Gh,
-    /// Workflow linter (`actionlint`).
-    Actionlint,
-    /// Shell linter (`shellcheck`).
-    Shellcheck,
-    /// Workflow security linter (`zizmor`).
-    Zizmor,
-    /// Nextest test runner (`nextest`, invoked as `cargo nextest`).
-    Nextest,
-    /// `OpenTofu` engine (`opentofu`, invoked as `tofu`).
-    Opentofu,
-    /// Release coordinator (`release-plz`, const-pinned: no catalog slot).
-    ReleasePlz,
-}
-
-impl PinnedTool {
-    /// Every catalog tool in stable order.
-    pub const ALL: [Self; 9] = [
-        Self::Rust,
-        Self::MrBoxington,
-        Self::Gh,
-        Self::Actionlint,
-        Self::Shellcheck,
-        Self::Zizmor,
-        Self::Nextest,
-        Self::Opentofu,
-        Self::ReleasePlz,
-    ];
-
-    /// Mise registry name used in `<tool>@<version>` selectors.
-    #[must_use]
-    pub const fn tool_name(self) -> &'static str {
-        match self {
-            Self::Rust => "rust",
-            Self::MrBoxington => "mr-boxington",
-            Self::Gh => "gh",
-            Self::Actionlint => "actionlint",
-            Self::Shellcheck => "shellcheck",
-            Self::Zizmor => "zizmor",
-            Self::Nextest => "nextest",
-            Self::Opentofu => "opentofu",
-            Self::ReleasePlz => "release-plz",
-        }
-    }
-
-    /// Resolve a registry name to its typed tool.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::UnknownTool`] for names outside the catalog.
-    /// `mbx` and `mr_boxington` are rejected: the tool is `mr-boxington`.
-    /// `cargo-nextest` is rejected: the tool is `nextest`.
-    pub fn from_tool_name(name: &str) -> Result<Self, MiseError> {
-        Self::ALL
-            .iter()
-            .find(|tool| tool.tool_name() == name)
-            .copied()
-            .ok_or_else(|| MiseError::UnknownTool {
-                tool: name.to_owned(),
-            })
-    }
-}
-
 /// Exact version pins for every catalog tool.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolCatalog {
@@ -217,6 +157,8 @@ pub struct ToolCatalog {
     opentofu: String,
     /// Pinned release-plz coordinator version.
     release_plz: String,
+    /// Pinned `crane` registry client version.
+    crane: String,
     /// Project-declared tools and the sources declaring them.
     project: std::collections::BTreeSet<PinnedTool>,
     /// Whether project versions render as run-time references.
@@ -245,6 +187,7 @@ impl ToolCatalog {
             nextest: NEXTEST_VERSION.to_owned(),
             opentofu: OPENTOFU_VERSION.to_owned(),
             release_plz: RELEASE_PLZ_VERSION.to_owned(),
+            crane: CRANE_VERSION.to_owned(),
             project: std::collections::BTreeSet::new(),
             emission: false,
             export_rustup_toolchain: true,
@@ -294,6 +237,7 @@ impl ToolCatalog {
             nextest: nextest.to_owned(),
             opentofu: opentofu.to_owned(),
             release_plz: RELEASE_PLZ_VERSION.to_owned(),
+            crane: CRANE_VERSION.to_owned(),
             project: std::collections::BTreeSet::new(),
             emission: false,
             export_rustup_toolchain: true,
@@ -314,6 +258,7 @@ impl ToolCatalog {
             PinnedTool::Nextest => &self.nextest,
             PinnedTool::Opentofu => &self.opentofu,
             PinnedTool::ReleasePlz => &self.release_plz,
+            PinnedTool::Crane => &self.crane,
         }
     }
 

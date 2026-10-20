@@ -140,3 +140,32 @@ fn publishing_job_requires_exactly_one_publisher_role() -> Result<(), Box<dyn Er
     assert!(compose_job(id, duplicated, Family::Images, &pins).is_err());
     Ok(())
 }
+
+/// The macOS binary job compiles `velnor-host` under the release workflow's
+/// environment. A build-script input that shares a name with a release
+/// workflow variable would be silently fed by the release (this broke the
+/// v0.1.29 host release), so the names must stay disjoint.
+#[test]
+fn binary_release_environment_never_feeds_host_build_script_inputs() -> Result<(), Box<dyn Error>> {
+    let build_script = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../velnor-runner/crates/velnor-runner-host/build.rs"),
+    )?;
+    let inputs: Vec<&str> = build_script
+        .lines()
+        .filter(|line| line.starts_with("const SOURCE_ENV") || line.starts_with("const HELPER_ENV"))
+        .filter_map(|line| line.split('"').nth(1))
+        .collect();
+    assert_eq!(inputs.len(), 2, "host build script inputs not found");
+    let jobs = take_jobs(family_document(Family::Binary, &request(test_pins())?)?)?;
+    let document =
+        crate::schema2::product_release::workflows::family_document_for_call(Family::Binary, jobs);
+    let rendered = crate::yaml::render_yaml(&document);
+    for input in inputs {
+        assert!(
+            !rendered.contains(&format!("{input}:")) && !rendered.contains(&format!("${input}")),
+            "release workflow env collides with host build-script input {input}"
+        );
+    }
+    Ok(())
+}
