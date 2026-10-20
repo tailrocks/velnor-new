@@ -46,6 +46,7 @@ fn already_promoted_case() -> (WriterInputs, BotIdentity, ExpectedPromotion) {
         policy: fixture.policy,
         plan: fixture.plan,
         release: fixture.release,
+        formula_path: fixture.formula_path.clone(),
         proof,
         proposed: fixture.proposed_formula,
         api,
@@ -59,10 +60,11 @@ fn already_promoted_case() -> (WriterInputs, BotIdentity, ExpectedPromotion) {
 fn current_proof(fixture: &tap_test_support::TapFixture) -> HomebrewTapPreparationProof {
     let formula_sha = sha256(&fixture.proposed_formula);
     HomebrewTapPreparationProof {
-        schema: "velnor.homebrew-candidate.v2".to_owned(),
+        schema: "velnor.homebrew-candidate.v3".to_owned(),
+        channel: fixture.release.receipt.channel,
         disposition: TapPreparationDisposition::FormulaAlreadyCurrent,
         base_sha: "a".repeat(40),
-        formula_path: fixture.policy.formula.clone(),
+        formula_path: fixture.formula_path.clone(),
         old_formula_sha256: formula_sha.clone(),
         new_formula_sha256: formula_sha,
         receipt_digest: fixture.release.receipt_digest.clone(),
@@ -111,7 +113,12 @@ fn historical_identity(fixture: &tap_test_support::TapFixture) -> HistoricalIden
         login: "tap-writer[bot]".to_owned(),
         user_id: 77,
     };
-    let branch = branch_name(&fixture.release.receipt_digest, &base_sha).expect("branch");
+    let branch = branch_name(
+        &fixture.release.receipt_digest,
+        &base_sha,
+        fixture.release.receipt.channel,
+    )
+    .expect("branch");
     let title = expected_pr_title(&fixture.release);
     let body = expected_pr_body(&fixture.release, &proof_digest, &base_sha);
     HistoricalIdentity {
@@ -184,7 +191,7 @@ fn historical_responses(
             head_tree_route,
             tree_json(
                 &original.head_tree_sha,
-                &fixture.policy.formula,
+                &fixture.formula_path,
                 &original.head_blob_sha,
             ),
         ),
@@ -193,7 +200,7 @@ fn historical_responses(
             base_tree_route,
             tree_json(
                 &original.base_tree_sha,
-                &fixture.policy.formula,
+                &fixture.formula_path,
                 &original.base_blob_sha,
             ),
         ),
@@ -272,6 +279,7 @@ fn current_formula_without_historical_pull_is_not_already_promoted() {
         policy: fixture.policy,
         plan: fixture.plan,
         release: fixture.release,
+        formula_path: fixture.formula_path.clone(),
         proof,
         proposed: current_formula,
         api,

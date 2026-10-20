@@ -68,7 +68,7 @@ fn validate_version(receipt: &PackageReleaseReceipt) -> Result<(), ContractError
                 || !hex_string(sha7, 7)
                 || !receipt.source.commit_sha.starts_with(sha7)
                 || version.value != format!("{}-preview.{count}+{sha7}", version.base)
-                || receipt.tag != format!("v{}", version.value)
+                || receipt.tag != "preview"
             {
                 return Err(invalid("version_does_not_match_preview_policy"));
             }
@@ -77,8 +77,7 @@ fn validate_version(receipt: &PackageReleaseReceipt) -> Result<(), ContractError
             if version.commit_count.is_some()
                 || version.source_sha7.is_some()
                 || version.value != version.base
-                || receipt.products.len() != 1
-                || receipt.tag != format!("{}-v{}", receipt.products[0].package, version.base)
+                || receipt.tag != format!("v{}", version.base)
             {
                 return Err(invalid("version_does_not_match_stable_policy"));
             }
@@ -93,3 +92,7 @@ fn hex_string(value: &str, len: usize) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
+
+#[cfg(test)]
+#[path = "package_release_identity_tests.rs"]
+mod tests;

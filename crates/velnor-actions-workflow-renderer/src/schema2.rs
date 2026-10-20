@@ -32,8 +32,8 @@ use runner_spec::RunnerSpec;
 #[path = "schema2_consumer_preview.rs"]
 mod consumer_preview;
 pub use consumer_preview::{
-    ConsumerPreviewSpec, ConsumerPreviewTapSpec, render_consumer_preview,
-    render_preview_tap_reconcile,
+    ConsumerReleaseSpec, ConsumerReleaseTapSpec, ConsumerRollingPreviewSpec,
+    render_consumer_preview, render_release_tap_reconcile,
 };
 #[path = "schema2_basic_workflows.rs"]
 mod basic_workflows;
@@ -70,30 +70,19 @@ mod schema2_image_release;
 pub mod schema2_job_image_candidate;
 pub use product_release_pins::ProductReleasePins;
 
-/// Render the generic one-package consumer binary release workflow.
+/// Render the native stable-release workflow under the effective placement policy.
 ///
 /// # Errors
 ///
-/// Returns render errors for invalid identities, pins, or commands.
+/// Invalid release inventory, pins, runners, or workflow rendering errors fail.
 pub fn render_consumer_binary_release(
-    spec: &consumer_binary_release::ConsumerBinaryReleaseSpec,
-) -> Result<RenderedFile, RenderError> {
-    consumer_binary_release::render_consumer_binary_release(spec)
-}
-
-/// Render the consumer binary release workflow under the effective placement policy.
-///
-/// # Errors
-///
-/// Invalid release inputs, unsupported runners, and workflow rendering errors fail.
-pub fn render_consumer_binary_release_with_routing(
-    spec: &consumer_binary_release::ConsumerBinaryReleaseSpec,
+    spec: &ConsumerReleaseSpec,
     routing: &WorkflowRoutingPolicy,
 ) -> Result<RenderedFile, RenderError> {
-    consumer_binary_release::render_consumer_binary_release_with_routing(spec, routing)
+    consumer_binary_release::render_consumer_binary_release(spec, routing)
 }
 
-pub use consumer_binary_release::ConsumerBinaryReleaseSpec;
+pub use consumer_binary_release::ConsumerStableReleaseSpec;
 
 #[cfg(test)]
 #[path = "schema2_runner_shell_tests.rs"]

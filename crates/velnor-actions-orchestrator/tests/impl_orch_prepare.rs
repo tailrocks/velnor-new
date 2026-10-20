@@ -151,7 +151,7 @@ fn preview_budget_admission_passes_one_validated_config_to_shared_preparation() 
     assert_eq!(entry.matches("prepare_with_config(").count(), 1);
     let compact = entry.split_whitespace().collect::<String>();
     assert!(compact.contains(
-        "deadline.scope(||{letplan=read_plan(&temp,deadline)?;letprep=prepare_with_config(&workspace,config)?;"
+        "deadline.scope(||{let(policy,plan)=crate::release_policy_admission::admitted_policy_plan(&temp,deadline)?;letprep=prepare_with_config(&workspace,config)?;"
     ));
     assert!(compact.contains("execution::execute(&prep,&temp,&preview,&request,deadline,guard)"));
     assert!(!entry.contains("let mut config"));

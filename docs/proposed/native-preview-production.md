@@ -54,9 +54,9 @@ No caller may fabricate a reduced plan to invoke the complete verifier.
 ## Source task handoff
 
 The declared qualified Mise task receives one additional fixed variable:
-`VELNOR_PREVIEW_REQUEST_FILE`, an owned absolute path to
-`$RUNNER_TEMP/velnor/preview-task-request.json`. Its canonical
-`velnor.preview-task.v1` object contains `schema`, the full production `request`,
+`VELNOR_RELEASE_TASK_REQUEST_FILE`, an owned absolute path to
+`$RUNNER_TEMP/velnor/release-task-request.json`. Its canonical
+`velnor.release-task.v1` object contains `schema`, the full production `request`,
 and `inputs`. Each input row contains `pair`, `name`, `sha256`, `size` and an
 admitted absolute `path`. Payload inputs are empty. Assembly has precisely one
 archive and one SBOM row per pair. Runtime retains original file identities and

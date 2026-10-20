@@ -1,12 +1,10 @@
 //! Closed preview workflow steps; no source code executes in privileged jobs.
 
-use super::{ConsumerPreviewSpec, MiseSetup, PackageReleasePlan, RenderError, Yaml};
-use crate::steps::{
-    ATTEST_BUILD_PROVENANCE_USES, CHECKOUT_USES, DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES,
-};
+use super::{ConsumerReleaseSpec, MiseSetup, PackageReleasePolicy, RenderError, Yaml};
+use crate::steps::CHECKOUT_USES;
 
 // runner.temp expressions are supported at step env scope, never job env scope.
-pub(super) fn with_producer_homes(
+pub(in crate::schema2) fn with_producer_homes(
     step: &mut Yaml,
     homes: &std::collections::BTreeMap<String, String>,
 ) -> Result<(), RenderError> {
@@ -38,7 +36,7 @@ pub(super) fn with_producer_homes(
     Ok(())
 }
 
-pub(super) fn permissions(values: &[(&str, &str)]) -> Yaml {
+pub(in crate::schema2) fn permissions(values: &[(&str, &str)]) -> Yaml {
     Yaml::Map(
         values
             .iter()
@@ -47,11 +45,11 @@ pub(super) fn permissions(values: &[(&str, &str)]) -> Yaml {
     )
 }
 
-pub(super) fn needs(values: &[&str]) -> Yaml {
+pub(in crate::schema2) fn needs(values: &[&str]) -> Yaml {
     Yaml::Seq(values.iter().map(|value| Yaml::str(*value)).collect())
 }
 
-pub(super) fn outputs(values: &[&str]) -> Yaml {
+pub(in crate::schema2) fn outputs(values: &[&str]) -> Yaml {
     Yaml::Map(
         values
             .iter()
@@ -65,7 +63,7 @@ pub(super) fn outputs(values: &[&str]) -> Yaml {
     )
 }
 
-pub(super) fn setup(setup: &MiseSetup) -> Yaml {
+pub(in crate::schema2) fn setup(setup: &MiseSetup) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Set up Velnor-owned Mise")),
         ("uses".to_owned(), Yaml::str(&setup.uses)),
@@ -83,7 +81,7 @@ pub(super) fn setup(setup: &MiseSetup) -> Yaml {
     ])
 }
 
-pub(super) fn script(name: &str, id: &str, run: &str, env: &[(&str, &str)]) -> Yaml {
+pub(in crate::schema2) fn script(name: &str, id: &str, run: &str, env: &[(&str, &str)]) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
         ("id".to_owned(), Yaml::str(id)),
@@ -93,205 +91,111 @@ pub(super) fn script(name: &str, id: &str, run: &str, env: &[(&str, &str)]) -> Y
     ])
 }
 
-pub(super) fn checkout(source_ref: &str) -> Yaml {
+pub(in crate::schema2) fn checkout(spec: &ConsumerReleaseSpec, source_ref: &str) -> Yaml {
+    let mut inputs = vec![
+        ("ref".to_owned(), Yaml::str(source_ref)),
+        ("fetch-depth".to_owned(), Yaml::Int(0)),
+        ("persist-credentials".to_owned(), Yaml::Bool(false)),
+    ];
+    if spec.checkout_lfs {
+        inputs.push(("lfs".to_owned(), Yaml::str("true")));
+    }
     Yaml::Map(vec![
         (
             "name".to_owned(),
             Yaml::str("Check out exact source with complete history"),
         ),
         ("uses".to_owned(), Yaml::str(CHECKOUT_USES)),
-        (
-            "with".to_owned(),
-            Yaml::Map(vec![
-                ("ref".to_owned(), Yaml::str(source_ref)),
-                ("fetch-depth".to_owned(), Yaml::Int(0)),
-                ("persist-credentials".to_owned(), Yaml::Bool(false)),
-            ]),
-        ),
+        ("with".to_owned(), Yaml::Map(inputs)),
     ])
 }
 
-pub(super) fn operation(
-    spec: &ConsumerPreviewSpec,
+#[path = "schema2_consumer_release_env.rs"]
+mod native_env;
+
+pub(in crate::schema2) fn operation(
+    spec: &ConsumerReleaseSpec,
     op: &str,
     authenticated: bool,
     context: super::TapInvocationContext,
 ) -> Result<Yaml, RenderError> {
-    let plan = String::from_utf8(
-        spec.plan
-            .canonical_bytes()
-            .map_err(|error| RenderError::InvalidWorkflow(error.to_string()))?,
-    )
-    .map_err(|error| RenderError::InvalidWorkflow(error.to_string()))?;
-    let mut env = vec![
-        ("VELNOR_RELEASE_PLAN", plan.as_str()),
-        ("VELNOR_INTERNAL_OP", op),
-        (
-            "VELNOR_REQUEST_FILE",
-            "${{ runner.temp }}/velnor/package-release-plan.json",
-        ),
-    ];
-    env.extend(context.release_inputs());
-    if matches!(
-        op,
-        "recover-package-release-v1"
-            | "admit-homebrew-tap-v1"
-            | "prepare-homebrew-tap-v1"
-            | "write-homebrew-tap-pr-v1"
-            | "merge-homebrew-tap-pr-v1"
-    ) {
-        env.extend(context.original());
-    }
-    if authenticated {
-        env.push(("GH_TOKEN", "${{ github.token }}"));
-    }
-    if matches!(
-        op,
-        "publish-package-release-v1" | "recover-package-release-v1"
-    ) {
-        env.push((
-            "VELNOR_RELEASE_STATUS_TOKEN",
-            "${{ secrets.PREVIEW_IMMUTABILITY_READ_TOKEN }}",
-        ));
-    }
+    let environment = native_env::environment(spec, op, authenticated, context)?;
     // JSON is an environment value, never interpolated into the command source.
-    let materialize = if matches!(op, "sign-package-release-v1" | "prepare-homebrew-tap-v1") {
+    let materialize = if matches!(
+        op,
+        "sign-package-release-v1"
+            | "prepare-homebrew-tap-v1"
+            | "execute-release-producer-v1"
+            | "acquire-release-leaves-v1"
+            | "admit-release-aggregate-v1"
+            | "publish-package-release-v1"
+    ) || (spec.policy.channel
+        == velnor_actions_contract::package_release::PackageReleaseChannel::Stable
+        && matches!(
+            op,
+            "write-stable-tag-origin-v1"
+                | "admit-release-aggregate-v1"
+                | "publish-package-release-v1"
+        )) {
         // The preceding native admission already created and validated this file.
         ""
     } else {
-        "(set -C; printf '%s' \"$VELNOR_RELEASE_PLAN\" > \"$VELNOR_REQUEST_FILE\")\n"
+        "(set -C; printf '%s' \"$VELNOR_RELEASE_POLICY\" > \"$VELNOR_REQUEST_FILE\")\n"
     };
     let run = format!(
         "set -euo pipefail\numask 077\nmkdir -p \"$RUNNER_TEMP/velnor\"\n{materialize}\"$RUNNER_TEMP/velnor/bin/velnor-actions-{}\"\n",
         spec.generator_version
     );
     let run = source_operation_script(op, run);
-    Ok(script(
-        "Execute native release operation",
-        "release",
-        &run,
-        &env,
-    ))
+    let mut step = script("Execute native release operation", "release", &run, &[]);
+    if let Yaml::Map(fields) = &mut step
+        && let Some((_, env)) = fields.iter_mut().find(|(key, _)| key == "env")
+    {
+        *env = environment;
+    }
+    Ok(step)
 }
 
 fn source_operation_script(op: &str, run: String) -> String {
     if matches!(
         op,
-        "execute-preview-producer-v1" | "prepare-homebrew-tap-v1"
+        "execute-release-producer-v1" | "prepare-homebrew-tap-v1"
     ) {
         // Source preparation may have written runner environment files. Remove
         // credentials before the native source executor itself is spawned.
-        crate::toolchain_env::with_credential_unset_script(&run)
+        crate::toolchain_env::with_credential_unset_script(&format!(
+            "unset VELNOR_RELEASE_STATUS_TOKEN; {run}"
+        ))
     } else {
         run
     }
 }
 
-#[derive(Clone, Copy)]
-pub(super) enum Artifact {
-    Signed,
-    TapCandidate,
-    TapPr,
+#[path = "schema2_consumer_release_evidence.rs"]
+mod evidence;
+pub(in crate::schema2) use evidence::{Artifact, attest, transfer};
+
+pub(in crate::schema2) fn history_checkout(spec: &ConsumerReleaseSpec) -> Yaml {
+    checkout(spec, "${{ github.sha }}")
 }
 
-pub(super) fn transfer(download: bool, artifact: Artifact) -> Yaml {
-    let (suffix, directory) = match (download, artifact) {
-        (true, Artifact::Signed) => ("signed", "preview-publish-input"),
-        (false, Artifact::Signed) => ("signed", "preview-signed"),
-        (_, Artifact::TapCandidate) => ("tap-candidate", "tap-candidate"),
-        (true, Artifact::TapPr) => ("tap-pr", ""),
-        (false, Artifact::TapPr) => ("tap-pr", "tap-pr.json"),
-    };
-    let mut with = vec![
-        (
-            "name".to_owned(),
-            Yaml::str(format!(
-                "velnor-preview-{suffix}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}"
-            )),
-        ),
-        (
-            "path".to_owned(),
-            Yaml::str(format!("${{{{ runner.temp }}}}/velnor/{directory}")),
-        ),
-    ];
-    if !download {
-        with.extend([
-            ("if-no-files-found".to_owned(), Yaml::str("error")),
-            ("retention-days".to_owned(), Yaml::Int(30)),
-            ("overwrite".to_owned(), Yaml::Bool(false)),
-            ("include-hidden-files".to_owned(), Yaml::Bool(false)),
-        ]);
+pub(in crate::schema2) fn history_count(context: super::TapInvocationContext) -> Yaml {
+    if matches!(
+        context,
+        super::TapInvocationContext::Stable
+            | super::TapInvocationContext::StableAuthority
+            | super::TapInvocationContext::StableReconcile
+    ) {
+        return script(
+            "Bind the stable source version",
+            "history",
+            r#"set -euo pipefail
+printf 'commit_count=0\n' >> "$GITHUB_OUTPUT"
+"#,
+            &[],
+        );
     }
-    Yaml::Map(vec![
-        (
-            "name".to_owned(),
-            Yaml::str(if download {
-                "Download exact release evidence"
-            } else {
-                "Retain original release evidence"
-            }),
-        ),
-        (
-            "uses".to_owned(),
-            Yaml::str(if download {
-                DOWNLOAD_ARTIFACT_USES
-            } else {
-                UPLOAD_ARTIFACT_USES
-            }),
-        ),
-        ("with".to_owned(), Yaml::Map(with)),
-    ])
-}
 
-pub(super) fn attest(plan: &PackageReleasePlan) -> Yaml {
-    let prefix = "${{ runner.temp }}/velnor/preview-signed";
-    let mut names: Vec<String> = plan
-        .products
-        .iter()
-        .flat_map(|product| {
-            product
-                .targets
-                .iter()
-                .map(move |target| format!("{}-{target}.tar.gz", product.id))
-        })
-        .collect();
-    names.extend(
-        plan.companions
-            .iter()
-            .map(|companion| companion.asset_name.clone()),
-    );
-    names.push("release.json".to_owned());
-    names.sort();
-    Yaml::Map(vec![
-        (
-            "name".to_owned(),
-            Yaml::str("Attest exact native release subjects"),
-        ),
-        ("uses".to_owned(), Yaml::str(ATTEST_BUILD_PROVENANCE_USES)),
-        (
-            "with".to_owned(),
-            Yaml::Map(vec![
-                ("create-storage-record".to_owned(), Yaml::Bool(false)),
-                (
-                    "subject-path".to_owned(),
-                    Yaml::str(
-                        names
-                            .iter()
-                            .map(|name| format!("{prefix}/{name}"))
-                            .collect::<Vec<_>>()
-                            .join("\n"),
-                    ),
-                ),
-            ]),
-        ),
-    ])
-}
-
-pub(super) fn history_checkout() -> Yaml {
-    checkout("${{ github.sha }}")
-}
-
-pub(super) fn history_count(context: super::TapInvocationContext) -> Yaml {
     script(
         "Count complete source history",
         "history",
@@ -305,14 +209,19 @@ printf 'commit_count=%s\n' "$count" >> "$GITHUB_OUTPUT"
         &[(
             "EXPECTED_SOURCE_SHA",
             match context {
-                super::TapInvocationContext::Preview => "${{ steps.source.outputs.source_sha }}",
-                super::TapInvocationContext::Reconcile => "${{ github.sha }}",
+                super::TapInvocationContext::Preview
+                | super::TapInvocationContext::Stable
+                | super::TapInvocationContext::StableAuthority => {
+                    "${{ steps.source.outputs.source_sha }}"
+                }
+                super::TapInvocationContext::Reconcile
+                | super::TapInvocationContext::StableReconcile => "${{ github.sha }}",
             },
         )],
     )
 }
 
-pub(super) fn recovery_inputs() -> Yaml {
+pub(in crate::schema2) fn recovery_inputs() -> Yaml {
     let inputs = [
         (
             "original_run_id",

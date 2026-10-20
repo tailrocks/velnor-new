@@ -25,7 +25,12 @@ fn accepted_pr_create_with_lost_response_reconciles_without_a_second_post() {
     .expect("validated candidate proof");
     let proof_digest = sha256(&canonical_json_bytes(&proof).expect("proof JSON"));
     assert_eq!(proof.disposition, TapPreparationDisposition::Changed);
-    let branch = branch_name(&fixture.release.receipt_digest, &base_sha).expect("branch");
+    let branch = branch_name(
+        &fixture.release.receipt_digest,
+        &base_sha,
+        fixture.release.receipt.channel,
+    )
+    .expect("branch");
     let bot = BotIdentity {
         login: "tap-writer[bot]".to_owned(),
         user_id: 77,
@@ -85,7 +90,7 @@ fn expected_open_pr(
     head_sha: &str,
     base_sha: &str,
     proof_digest: &str,
-    release: &crate::tap_prepare::writer::VerifiedPreviewRelease,
+    release: &crate::tap_prepare::writer::VerifiedPackageRelease,
     bot: &BotIdentity,
 ) -> serde_json::Value {
     let owner = repository.split_once('/').expect("repository owner").0;

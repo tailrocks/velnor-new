@@ -1,34 +1,3 @@
-use std::{fs::File, io::Read, path::Path, time::Instant};
-
-use super::{MAX_EXECUTABLE_BYTES, check_deadline, invalid};
-use crate::OrchestratorError;
-
-pub(super) fn inspect_raw_binary(
-    path: &Path,
-    target: &str,
-    started: Instant,
-) -> Result<(), OrchestratorError> {
-    check_deadline(started)?;
-    let mut file = File::open(path)
-        .map_err(|error| OrchestratorError::io(path.display().to_string(), error.to_string()))?;
-    let size = file
-        .metadata()
-        .map_err(|error| OrchestratorError::io(path.display().to_string(), error.to_string()))?
-        .len();
-    let mut prefix = [0u8; 64];
-    let read = file
-        .read(&mut prefix)
-        .map_err(|error| OrchestratorError::io(path.display().to_string(), error.to_string()))?;
-    if size == 0
-        || size > MAX_EXECUTABLE_BYTES
-        || read < 20
-        || !is_expected_executable(&prefix[..read], target)
-    {
-        return Err(invalid("raw_binary_format_or_target_mismatch"));
-    }
-    Ok(())
-}
-
 pub(super) fn is_expected_executable(bytes: &[u8], target: &str) -> bool {
     if target.contains("apple-darwin") {
         return mach_o_arch(bytes).is_some_and(|arch| target.starts_with(arch));

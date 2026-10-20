@@ -49,20 +49,41 @@ fn admits_one_pair_with_full_request_and_exact_original_archive_sbom_bytes() {
 }
 
 #[test]
+fn admits_stable_leaf_without_changing_shared_archive_inventory() {
+    let mut fixture = support::fixture();
+    fixture.request.plan.channel =
+        velnor_actions_contract::package_release::PackageReleaseChannel::Stable;
+    fixture.request.plan_sha256 =
+        velnor_actions_contract::preview_production::release_plan_sha256(&fixture.request.plan)
+            .expect("stable plan digest");
+    fixture.request.context.commit_count = 0;
+    fixture.request.context.version = fixture.request.plan.base_version.clone();
+    write_manifest(&fixture);
+    let verified = verify(&fixture).expect("shared stable tar.gz leaf");
+    assert_eq!(verified.request, fixture.request);
+    assert_eq!(verified.archive.name, ARCHIVE);
+    assert_eq!(verified.sbom.name, SBOM);
+    assert_eq!(
+        verified.archive.sha256,
+        hash_file(&fixture.producer.join(ARCHIVE))
+    );
+}
+
+#[test]
 fn rejects_assembly_stage_unknown_pair_and_changed_full_plan_digest() {
     for mutate in [
-        |request: &mut PreviewProductionRequest| {
-            request.stage = PreviewProductionStage::Assemble { inputs: Vec::new() }
+        |request: &mut ReleaseProductionRequest| {
+            request.stage = ReleaseProductionStage::Assemble { inputs: Vec::new() }
         },
-        |request: &mut PreviewProductionRequest| {
-            request.stage = PreviewProductionStage::Payload {
-                pair: velnor_actions_contract::preview_production::PreviewPayloadPair {
+        |request: &mut ReleaseProductionRequest| {
+            request.stage = ReleaseProductionStage::Payload {
+                pair: velnor_actions_contract::preview_production::ReleasePayloadPair {
                     product_id: "other".to_owned(),
                     target: "x86_64-unknown-linux-gnu".to_owned(),
                 },
             };
         },
-        |request: &mut PreviewProductionRequest| {
+        |request: &mut ReleaseProductionRequest| {
             request.plan.products[0].targets.remove(0);
         },
     ] {

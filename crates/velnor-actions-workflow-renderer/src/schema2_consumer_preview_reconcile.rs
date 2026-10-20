@@ -1,35 +1,49 @@
 //! Fixed retained-release tap continuation; no publication or producer route.
 use super::{
-    ConsumerPreviewSpec, RenderError, RenderedFile, TapInvocationContext, Yaml, acquire, base,
+    ConsumerReleaseSpec, RenderError, RenderedFile, TapInvocationContext, Yaml, acquire, base,
     finish, run_step, steps, tap,
 };
 use crate::commands::join_argv_for_run;
 use velnor_actions_contract::{JobTimeout, package_release::PackageReleaseChannel};
 /// Fixed default-branch continuation workflow filename.
-pub(super) const PREVIEW_TAP_RECONCILE_PATH: &str = ".github/workflows/preview-tap-reconcile.yml";
+fn path(spec: &ConsumerReleaseSpec) -> &'static str {
+    match spec.policy.channel {
+        PackageReleaseChannel::Preview => ".github/workflows/preview-tap-reconcile.yml",
+        PackageReleaseChannel::Stable => ".github/workflows/stable-tap-reconcile.yml",
+    }
+}
+fn context(spec: &ConsumerReleaseSpec) -> TapInvocationContext {
+    match spec.policy.channel {
+        PackageReleaseChannel::Preview => TapInvocationContext::Reconcile,
+        PackageReleaseChannel::Stable => TapInvocationContext::StableReconcile,
+    }
+}
 /// Render only read-only selection and existing independently gated tap stages.
 /// # Errors
 /// Rejects missing promotion policy, malformed inventory or unsupported pins.
-pub fn render_preview_tap_reconcile(
-    spec: &ConsumerPreviewSpec,
+pub fn render_release_tap_reconcile(
+    spec: &ConsumerReleaseSpec,
     routing: &crate::workflow_routing::WorkflowRoutingPolicy,
 ) -> Result<RenderedFile, RenderError> {
-    spec.plan
+    spec.policy
         .validate()
         .map_err(|e| RenderError::InvalidWorkflow(e.to_string()))?;
     let tap = spec
         .homebrew_tap
         .as_ref()
         .ok_or_else(|| RenderError::InvalidWorkflow("tap_reconcile_policy_missing".to_owned()))?;
-    if spec.plan.channel != PackageReleaseChannel::Preview || spec.plan.default_branch != "main" {
+    if spec.policy.default_branch != "main" {
         return Err(RenderError::InvalidWorkflow(
             "tap_reconcile_plan_invalid".to_owned(),
         ));
     }
     let mut jobs = vec![selection(spec)?];
-    jobs.extend(tap::jobs(spec, tap, TapInvocationContext::Reconcile)?);
+    jobs.extend(tap::jobs(spec, tap, context(spec))?);
     let document = Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Preview tap reconciliation")),
+        (
+            "name".to_owned(),
+            Yaml::str(format!("{} tap reconciliation", context(spec).prefix())),
+        ),
         (
             "on".to_owned(),
             Yaml::Map(vec![
@@ -49,31 +63,34 @@ pub fn render_preview_tap_reconcile(
             Yaml::Map(vec![
                 (
                     "group".to_owned(),
-                    Yaml::str("native-preview-tap-reconcile-${{ github.repository }}"),
+                    Yaml::str(format!(
+                        "native-{}-tap-reconcile-${{{{ github.repository }}}}",
+                        context(spec).prefix()
+                    )),
                 ),
                 ("cancel-in-progress".to_owned(), Yaml::Bool(false)),
             ]),
         ),
         ("jobs".to_owned(), Yaml::Map(jobs)),
     ]);
-    let document = crate::workflow_routing::route_workflow_yaml(
-        PREVIEW_TAP_RECONCILE_PATH,
-        document,
-        routing,
-    )?;
+    let path = path(spec);
+    let document = crate::workflow_routing::route_workflow_yaml(path, document, routing)?;
     Ok(RenderedFile {
-        path: PREVIEW_TAP_RECONCILE_PATH.to_owned(),
+        path: path.to_owned(),
         bytes: crate::render::fallback::render_checked_workflow(
-            PREVIEW_TAP_RECONCILE_PATH,
+            path,
             &document,
             &spec.generator_version,
         )?,
     })
 }
-fn selection(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
-    let id = "preview-tap-selection";
+fn selection(spec: &ConsumerReleaseSpec) -> Result<(String, Yaml), RenderError> {
+    let id = context(spec).selection();
     let mut fields = base(
-        "Select the current immutable preview",
+        match spec.policy.channel {
+            PackageReleaseChannel::Preview => "Select the current committed rolling preview",
+            PackageReleaseChannel::Stable => "Select the authenticated permanent stable release",
+        },
         Yaml::str("ubuntu-26.04"),
         JobTimeout::DEFAULT,
     );
@@ -112,45 +129,69 @@ fn selection(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> 
         id,
         fields,
         vec![
-            steps::history_checkout(),
+            steps::history_checkout(spec),
             steps::setup(&spec.linux_setup),
             run_step(
                 "Install pinned GitHub CLI",
                 &join_argv_for_run(&spec.install_gh_argv)?,
             ),
             acquire(&spec.linux_acquire, id, "ubuntu-26.04")?,
-            steps::history_count(TapInvocationContext::Reconcile),
+            steps::history_count(context(spec)),
             selector_operation(spec)?,
         ],
     ))
 }
-fn selector_operation(spec: &ConsumerPreviewSpec) -> Result<Yaml, RenderError> {
+fn selector_operation(spec: &ConsumerReleaseSpec) -> Result<Yaml, RenderError> {
     let plan = String::from_utf8(
-        spec.plan
+        spec.policy
             .canonical_bytes()
             .map_err(|e| RenderError::InvalidWorkflow(e.to_string()))?,
     )
     .map_err(|e| RenderError::InvalidWorkflow(e.to_string()))?;
     let run = format!(
-        "set -euo pipefail\numask 077\nmkdir -p \"$RUNNER_TEMP/velnor\"\n(set -C; printf '%s' \"$VELNOR_RELEASE_PLAN\" > \"$VELNOR_REQUEST_FILE\")\n\"$RUNNER_TEMP/velnor/bin/velnor-actions-{}\"\n",
+        "set -euo pipefail\numask 077\nmkdir -p \"$RUNNER_TEMP/velnor\"\n(set -C; printf '%s' \"$VELNOR_RELEASE_POLICY\" > \"$VELNOR_REQUEST_FILE\")\n\"$RUNNER_TEMP/velnor/bin/velnor-actions-{}\"\n",
         spec.generator_version
     );
+    let release_id = spec
+        .preview
+        .as_ref()
+        .map(|preview| preview.release_id.to_string());
+    let mut env = vec![
+        ("VELNOR_INTERNAL_OP", "select-release-tap-continuation-v1"),
+        ("VELNOR_RELEASE_POLICY", plan.as_str()),
+        (
+            "VELNOR_REQUEST_FILE",
+            "${{ runner.temp }}/velnor/package-release-policy.json",
+        ),
+        (
+            "VELNOR_RELEASE_COMMIT_COUNT",
+            "${{ steps.history.outputs.commit_count }}",
+        ),
+        ("GH_TOKEN", "${{ github.token }}"),
+        (
+            "VELNOR_RELEASE_STATUS_TOKEN",
+            "${{ secrets.RELEASE_STATUS_READ_TOKEN }}",
+        ),
+    ];
+    if let Some(preview) = &spec.preview {
+        env.push((
+            "VELNOR_PREVIEW_RELEASE_ID",
+            release_id.as_deref().unwrap_or_default(),
+        ));
+        if let Some(snapshot) = &preview.bootstrap_snapshot_sha256 {
+            env.push(("VELNOR_PREVIEW_BOOTSTRAP_SNAPSHOT_SHA256", snapshot));
+        }
+    }
+    if let Some(stable) = &spec.stable {
+        env.push((
+            "VELNOR_STABLE_VERSION_PACKAGE",
+            stable.version_package.as_str(),
+        ));
+    }
     Ok(steps::script(
-        "Authenticate current main and retained immutable preview",
+        "Authenticate the committed signed channel generation",
         "selection",
         &run,
-        &[
-            ("VELNOR_INTERNAL_OP", "select-preview-tap-continuation-v1"),
-            ("VELNOR_RELEASE_PLAN", &plan),
-            (
-                "VELNOR_REQUEST_FILE",
-                "${{ runner.temp }}/velnor/package-release-plan.json",
-            ),
-            (
-                "VELNOR_RELEASE_COMMIT_COUNT",
-                "${{ steps.history.outputs.commit_count }}",
-            ),
-            ("GH_TOKEN", "${{ github.token }}"),
-        ],
+        &env,
     ))
 }

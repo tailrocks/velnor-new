@@ -10,7 +10,7 @@ use flate2::write::GzEncoder;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use tar::{Builder, Header};
-use velnor_actions_contract::config::RustBinaryPreviewCompanion;
+use velnor_actions_contract::config::RustBinaryReleaseCompanion;
 use velnor_actions_contract::{
     PackageReleasePlanProduct, package_release::PackageReleasePayloadFormat,
 };
@@ -22,7 +22,7 @@ pub(super) struct Fixture {
     pub producer: PathBuf,
     pub staging: PathBuf,
     pub products: Vec<PackageReleasePlanProduct>,
-    pub companions: Vec<RustBinaryPreviewCompanion>,
+    pub companions: Vec<RustBinaryReleaseCompanion>,
     pub commit: String,
     pub source_ref: String,
     pub version: String,
@@ -50,7 +50,7 @@ pub(super) fn fixture() -> Fixture {
             targets: vec!["x86_64-unknown-linux-gnu".to_owned()],
             format: PackageReleasePayloadFormat::TarGz,
         }],
-        companions: vec![RustBinaryPreviewCompanion {
+        companions: vec![RustBinaryReleaseCompanion {
             id: "license".to_owned(),
             path: "licenses/LICENSE".to_owned(),
             asset_name: "LICENSE".to_owned(),
@@ -102,29 +102,6 @@ pub(super) fn write_source_files(fixture: &Fixture, arch: &str, version: &str) {
         fixture,
         &serde_json::to_value(manifest).expect("manifest value"),
     );
-}
-
-pub(super) fn write_raw_source_files(fixture: &Fixture) {
-    let payload_name = "cli-x86_64-unknown-linux-gnu";
-    let payload_path = fixture.producer.join(payload_name);
-    fs::write(&payload_path, fake_executable("x86_64")).expect("raw binary");
-    let payload_digest = sha256_file(&payload_path);
-    let sbom_name = format!("{payload_name}.sbom.json");
-    write_sbom(
-        &fixture.producer.join(&sbom_name),
-        payload_name,
-        &payload_digest,
-    );
-    let companion_path = fixture.producer.join(&fixture.companions[0].path);
-    fs::create_dir_all(companion_path.parent().expect("companion parent"))
-        .expect("companion directory");
-    fs::write(&companion_path, b"license").expect("companion");
-    let manifest = make_manifest(fixture, &fixture.version);
-    fs::write(
-        fixture.producer.join("package-output.json"),
-        serde_json::to_vec(&manifest).expect("manifest JSON"),
-    )
-    .expect("write package output");
 }
 
 pub(super) fn write_archive(path: &std::path::Path, entries: &[(&str, &str)], executable: bool) {
@@ -289,12 +266,11 @@ pub(super) fn write_manifest(fixture: &Fixture, value: &Value) {
     .expect("write package output");
 }
 
-fn make_manifest(fixture: &Fixture, version: &str) -> PackageOutputManifest {
+pub(super) fn make_manifest(fixture: &Fixture, version: &str) -> PackageOutputManifest {
     let format = fixture.products[0].format;
     let target = &fixture.products[0].targets[0];
     let payload_name = match format {
         PackageReleasePayloadFormat::TarGz => format!("cli-{target}.tar.gz"),
-        PackageReleasePayloadFormat::RawBinary => format!("cli-{target}"),
     };
     let sbom_name = format!("{payload_name}.sbom.json");
     let archive_path = fixture.producer.join(&payload_name);
@@ -326,7 +302,7 @@ fn make_manifest(fixture: &Fixture, version: &str) -> PackageOutputManifest {
     }
 }
 
-fn fake_executable(arch: &str) -> Vec<u8> {
+pub(super) fn fake_executable(arch: &str) -> Vec<u8> {
     let mut bytes = vec![0u8; 64];
     bytes[..4].copy_from_slice(b"\x7fELF");
     bytes[4] = 2;

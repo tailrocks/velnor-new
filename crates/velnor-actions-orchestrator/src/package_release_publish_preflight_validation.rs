@@ -210,8 +210,17 @@ pub(super) fn validate_stable_environment_settings(
     settings: &Value,
     branch: &str,
 ) -> Result<(), ()> {
+    validate_human_environment_settings(settings, branch, STABLE_ENVIRONMENT)
+}
+
+pub(super) fn validate_human_environment_settings(
+    settings: &Value,
+    branch: &str,
+    expected_name: &str,
+) -> Result<(), ()> {
     if !is_valid_branch_name(branch)
-        || settings.get("name").and_then(Value::as_str) != Some(STABLE_ENVIRONMENT)
+        || settings.get("name").and_then(Value::as_str) != Some(expected_name)
+        || settings.get("can_admins_bypass").and_then(Value::as_bool) != Some(false)
         || settings
             .get("deployment_branch_policy")
             .and_then(|policy| policy.get("protected_branches"))

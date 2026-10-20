@@ -40,6 +40,12 @@ pub struct Workspace {
     pub members: Vec<Member>,
 }
 
+/// The member of `workspace` named `name`.
+#[must_use]
+pub fn resolve_member_dir<'a>(workspace: &'a Workspace, name: &str) -> Option<&'a Member> {
+    workspace.members.iter().find(|member| member.name == name)
+}
+
 /// Slug of a package name: lowercase alphanumeric words joined by `-`.
 #[must_use]
 pub fn slug(name: &str) -> String {

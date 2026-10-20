@@ -1,7 +1,7 @@
 # Native Homebrew merge contract
 
 This document defines the exact-head merge admission boundary of the
-[native preview release and Homebrew contract](native-preview-contract.md).
+[native release channels and Homebrew contract](native-preview-contract.md).
 Release production, receipt, retry, and credential-custody requirements remain
 in that parent contract; this boundary does not authorize publication or merge
 by itself.
@@ -82,3 +82,22 @@ Required-check contexts must also bind an explicit numeric integration/App ID in
 repository protection. An unbound context cannot establish trusted CI merely by
 matching a display name, so native merge admission rejects it. Duplicate matching
 checks are ambiguous and block promotion.
+
+## Channel and committed-generation binding
+
+The signed receipt channel selects one of the two closed configured formula
+paths and a channel-distinct deterministic branch. The shared W/O/C/R identities
+and exact-head feedback/protection requirements above apply independently to both
+channels. A preview receipt cannot authorize a stable formula, stable tag or
+stable asset URL; a stable receipt cannot replace preview metadata. Formula paths
+must differ and both must belong to the captured updater input closure.
+
+Preview uses only the latest authenticated committed rolling generation. Before
+candidate admission and immediately before the head-matched merge, reauthenticate
+its fixed release ID, actual tag target, original signed receipt, complete asset
+inventory and generation digest. Reobserve after merge and reconcile a concurrent
+supersession. GitHub provides no atomic merge precondition covering a generation
+in a different repository: this is fail-closed observation and repair, not an
+instantaneous cross-repository latestness guarantee. A mutable URL changing after
+formula validation produces a checksum failure, never permission to accept new
+bytes. Stable uses permanent version-tagged assets and cannot be downgraded.

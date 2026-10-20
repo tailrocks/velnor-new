@@ -97,9 +97,6 @@ fn release_products(plan: &PackageReleasePlan) -> Vec<PackageReleaseProduct> {
                             PackageReleasePayloadFormat::TarGz => {
                                 format!("{}-{target}.tar.gz", product.id)
                             }
-                            PackageReleasePayloadFormat::RawBinary => {
-                                format!("{}-{target}", product.bins[0])
-                            }
                         },
                         target,
                         members: sorted(product.bins.clone()),
@@ -186,9 +183,6 @@ pub(super) fn require_expected_identity(
                         PackageReleasePayloadFormat::TarGz => {
                             format!("{}-{target}.tar.gz", declared.id)
                         }
-                        PackageReleasePayloadFormat::RawBinary => {
-                            format!("{}-{target}", declared.bins[0])
-                        }
                     };
                     archive.format != declared.format
                         || archive.target != target
@@ -243,15 +237,7 @@ fn expected_tag(
             .map_err(|_| internal("package_receipt_preview_identity_invalid"))?;
             Ok(identity.tag)
         }
-        PackageReleaseChannel::Stable => {
-            let package = plan
-                .products
-                .first()
-                .ok_or_else(|| internal("package_receipt_empty_products"))?
-                .package
-                .as_str();
-            Ok(format!("{package}-v{}", plan.base_version))
-        }
+        PackageReleaseChannel::Stable => Ok(format!("v{}", plan.base_version)),
     }
 }
 

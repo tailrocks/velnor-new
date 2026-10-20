@@ -6,7 +6,7 @@ use velnor_actions_contract::{
     package_release::{PackageReleaseChannel, PackageReleasePayloadFormat},
 };
 
-fn fixture() -> PreviewProductionRequest {
+fn fixture() -> ReleaseProductionRequest {
     let plan = PackageReleasePlan {
         schema: PACKAGE_RELEASE_PLAN_SCHEMA_V1.to_owned(),
         channel: PackageReleaseChannel::Preview,
@@ -25,11 +25,12 @@ fn fixture() -> PreviewProductionRequest {
         }],
         companions: Vec::new(),
     };
-    PreviewProductionRequest {
-        schema: PREVIEW_PRODUCTION_SCHEMA_V1.to_owned(),
-        plan_sha256: preview_plan_sha256(&plan).expect("digest"),
+    ReleaseProductionRequest {
+        schema: RELEASE_PRODUCTION_SCHEMA_V1.to_owned(),
+        policy_sha256: "d".repeat(64),
+        plan_sha256: release_plan_sha256(&plan).expect("digest"),
         plan,
-        context: PreviewProductionContext {
+        context: ReleaseProductionContext {
             repository_id: 1,
             head_repository_id: 1,
             source_sha: "a".repeat(40),
@@ -42,11 +43,11 @@ fn fixture() -> PreviewProductionRequest {
             commit_count: 10,
             version: "1.2.3-preview.10+aaaaaaa".to_owned(),
         },
-        stage: PreviewProductionStage::Assemble { inputs: Vec::new() },
+        stage: ReleaseProductionStage::Assemble { inputs: Vec::new() },
     }
 }
 
-fn needs(request: &PreviewProductionRequest) -> Value {
+fn needs(request: &ReleaseProductionRequest) -> Value {
     let mut map = serde_json::Map::new();
     map.insert(
         "preview-eligibility".to_owned(),
@@ -56,13 +57,13 @@ fn needs(request: &PreviewProductionRequest) -> Value {
             "ci_run_id":"2", "ci_attempt":"1", "commit_count":"10"
         }}),
     );
-    for (index, pair) in expected_preview_payload_pairs(&request.plan)
+    for (index, pair) in expected_release_payload_pairs(&request.plan)
         .expect("pairs")
         .iter()
         .enumerate()
     {
         map.insert(
-            preview_payload_job_id(&request.plan, pair).expect("job"),
+            release_payload_job_id(&request.plan, pair).expect("job"),
             json!({"result":"success", "outputs":{
                 "artifact_id":(index+100).to_string(), "artifact_digest":"b".repeat(64)
             }}),
@@ -72,7 +73,7 @@ fn needs(request: &PreviewProductionRequest) -> Value {
 }
 
 fn parse(
-    request: &PreviewProductionRequest,
+    request: &ReleaseProductionRequest,
     value: &Value,
 ) -> Result<Vec<PayloadArtifactRef>, OrchestratorError> {
     parse_needs(&value.to_string(), &request.plan, &request.context)
@@ -121,7 +122,7 @@ fn needs_rejects_duplicate_json_noncanonical_ids_and_request_duplicate_artifacts
     }
     let mut duplicated = good.clone();
     duplicated["preview-payload-001"]["outputs"]["artifact_id"] = json!("100");
-    request.stage = PreviewProductionStage::Assemble {
+    request.stage = ReleaseProductionStage::Assemble {
         inputs: parse(&request, &duplicated).expect("syntax"),
     };
     assert!(request.validate().is_err());
@@ -132,8 +133,8 @@ fn job_role_is_bound_to_selected_pair_or_complete_assembler() {
     let mut request = fixture();
     assert!(validate_role(&request, "preview-assemble").is_ok());
     assert!(validate_role(&request, "preview-signer").is_err());
-    request.stage = PreviewProductionStage::Payload {
-        pair: expected_preview_payload_pairs(&request.plan)
+    request.stage = ReleaseProductionStage::Payload {
+        pair: expected_release_payload_pairs(&request.plan)
             .expect("pairs")
             .remove(0),
     };

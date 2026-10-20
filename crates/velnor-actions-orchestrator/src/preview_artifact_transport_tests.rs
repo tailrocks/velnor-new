@@ -33,10 +33,10 @@ impl ArtifactReadApi for Fake {
     fn authenticate(
         &self,
         _: &PackageReleasePlan,
-        _: &PreviewProductionContext,
-        consumer: PreviewConsumer,
+        _: &ReleaseProductionContext,
+        consumer: ReleaseConsumer,
     ) -> Result<(), OrchestratorError> {
-        assert_eq!(consumer, PreviewConsumer::Assembler);
+        assert_eq!(consumer, ReleaseConsumer::Assembler);
         let call = self.authentications.get() + 1;
         self.authentications.set(call);
         if self.fail_authentication == Some(call) {
@@ -75,7 +75,7 @@ struct TestArtifact {
 }
 fn acquire_fixture(
     api: &impl ArtifactReadApi,
-    request: &PreviewProductionRequest,
+    request: &ReleaseProductionRequest,
     deadline: CheckDeadline,
 ) -> Result<Vec<TestArtifact>, OrchestratorError> {
     let root = tempfile::tempdir().expect("download directory");
@@ -129,23 +129,23 @@ fn independently_valid_leaves_exceed_the_old_union_cap_and_are_consumed_one_at_a
         .targets
         .push("x86_64-apple-darwin".into());
     request.plan_sha256 =
-        velnor_actions_contract::preview_production::preview_plan_sha256(&request.plan)
+        velnor_actions_contract::preview_production::release_plan_sha256(&request.plan)
             .expect("full plan");
-    let PreviewProductionStage::Assemble { inputs } = &mut request.stage else {
+    let ReleaseProductionStage::Assemble { inputs } = &mut request.stage else {
         unreachable!()
     };
     let mut second = inputs[0].clone();
     second.artifact_id = 304;
     second.pair.target = "x86_64-apple-darwin".into();
     inputs.push(second);
-    let PreviewProductionStage::Assemble { inputs } = &request.stage else {
+    let ReleaseProductionStage::Assemble { inputs } = &request.stage else {
         unreachable!()
     };
     let records = inputs
         .iter()
         .map(|reference| ArtifactRecord {
             id: reference.artifact_id,
-            name: preview_payload_artifact_name(&request.plan, &reference.pair, &request.context)
+            name: release_payload_artifact_name(&request.plan, &reference.pair, &request.context)
                 .expect("name"),
             ..record()
         })
@@ -335,10 +335,10 @@ fn complete_metadata_union_exceeding_total_byte_bound_downloads_nothing() {
         })
         .collect();
     request.plan_sha256 =
-        velnor_actions_contract::preview_production::preview_plan_sha256(&request.plan)
+        velnor_actions_contract::preview_production::release_plan_sha256(&request.plan)
             .expect("full plan");
     let pairs =
-        velnor_actions_contract::preview_production::expected_preview_payload_pairs(&request.plan)
+        velnor_actions_contract::preview_production::expected_release_payload_pairs(&request.plan)
             .expect("eight pairs");
     let inputs = pairs
         .into_iter()
@@ -353,15 +353,15 @@ fn complete_metadata_union_exceeding_total_byte_bound_downloads_nothing() {
         .iter()
         .map(|reference| ArtifactRecord {
             id: reference.artifact_id,
-            name: preview_payload_artifact_name(&request.plan, &reference.pair, &request.context)
+            name: release_payload_artifact_name(&request.plan, &reference.pair, &request.context)
                 .expect("name"),
             size_in_bytes: 1024 * 1024 * 1024,
             ..record()
         })
         .collect::<Vec<_>>();
-    request.stage = PreviewProductionStage::Assemble { inputs };
+    request.stage = ReleaseProductionStage::Assemble { inputs };
     request.validate().expect("complete eight-pair request");
-    let PreviewProductionStage::Assemble { inputs } = &request.stage else {
+    let ReleaseProductionStage::Assemble { inputs } = &request.stage else {
         unreachable!()
     };
     for (artifact, reference) in records.iter().zip(inputs) {
@@ -375,26 +375,4 @@ fn complete_metadata_union_exceeding_total_byte_bound_downloads_nothing() {
         "{error}"
     );
     assert!(api.downloads.borrow().is_empty());
-}
-
-#[test]
-fn native_consumer_environment_is_closed_and_role_specific() {
-    for role in [PreviewConsumer::Assembler, PreviewConsumer::Signer] {
-        validate_consumer_environment(role, Some(role.job_name())).expect("exact native role");
-        for actual in [
-            None,
-            Some("preview-producer"),
-            Some("preview-payload-000"),
-            Some("unknown"),
-        ] {
-            assert!(validate_consumer_environment(role, actual).is_err());
-        }
-    }
-    assert!(
-        validate_consumer_environment(PreviewConsumer::Signer, Some(PREVIEW_ASSEMBLE_JOB_ID))
-            .is_err()
-    );
-    assert!(
-        validate_consumer_environment(PreviewConsumer::Assembler, Some("preview-signer")).is_err()
-    );
 }

@@ -290,7 +290,7 @@ fn release_repo(config: &str) -> Result<tempfile::TempDir, Box<dyn std::error::E
 
 fn both_config() -> String {
     format!(
-        "schema = 2\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\n{}\nmode = \"both\"\n{}",
+        "schema = 2\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\nregistry = \"crates-io\"\npackages = [\"demo\"]\n{}\nmode = \"both\"\n{}",
         execution_ids(),
         profiles()
     )

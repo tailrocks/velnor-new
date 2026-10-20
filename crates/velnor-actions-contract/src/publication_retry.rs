@@ -7,8 +7,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "rolling_publication.rs"]
+pub mod rolling;
+
 /// Authenticated immutable receipt identity, including its complete asset set.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PublicationIdentity {
     /// Exact source commit expected at the owned version tag.
     pub source_sha: String,
@@ -29,6 +33,12 @@ pub enum PublicationState {
         source_sha: String,
         /// Receipt digest embedded in the authenticated annotated tag message.
         original_receipt_digest: Option<String>,
+    },
+    /// Existing permanent tag authenticated through retained pre-tag intent and
+    /// observed post-tag origin, independently bound to the signed generation.
+    AuthorizedStableTag {
+        /// Verified signed generation admitted by the original manual tag job.
+        identity: PublicationIdentity,
     },
     /// Unpublished draft; unknown original authority is represented by `None`.
     Draft {
@@ -138,6 +148,19 @@ pub fn publication_action(
                 } else {
                     Reject(Rejection::ConflictingIdentity)
                 }
+            } else if expected
+                .assets
+                .keys()
+                .all(|name| available_original_assets.contains(name))
+            {
+                PublicationAction::CreateDraft
+            } else {
+                Reject(Rejection::UnavailableOriginalAssets)
+            }
+        }
+        PublicationState::AuthorizedStableTag { identity } => {
+            if identity != expected {
+                Reject(Rejection::ConflictingIdentity)
             } else if expected
                 .assets
                 .keys()

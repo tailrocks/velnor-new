@@ -65,6 +65,8 @@ pub const PRIVATE_NPM_READ_TOKEN_ENV: &str = "VELNOR_NPM_READ_TOKEN";
 pub const PRIVATE_FETCH_OPERATION: &str = "private-fetch-v1";
 /// Internal operation of the token revocation step (HD-7).
 pub const PRIVATE_REVOKE_OPERATION: &str = "private-revoke-v1";
+/// Internal operation of the Bun registry phase (HD-6, HD-7).
+pub const BUN_REGISTRY_INSTALL_OPERATION: &str = "bun-registry-install-v1";
 /// Pinned-action prefix of the private token mint step (HD-7).
 pub const PRIVATE_TOKEN_MINT_ACTION_PREFIX: &str = "actions/create-github-app-token@";
 

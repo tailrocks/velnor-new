@@ -60,6 +60,9 @@ impl PackagePublicationBackend for Backend {
         Ok(self.current)
     }
     fn create_tag(&mut self) -> Result<(), OrchestratorError> {
+        if !self.candidate_current()? {
+            return Err(internal("package_publication_refused:StaleCandidate"));
+        }
         assert_eq!(self.state, PublicationState::Absent);
         self.state = PublicationState::TagOnly {
             source_sha: self.identity.source_sha.clone(),
@@ -68,6 +71,9 @@ impl PackagePublicationBackend for Backend {
         self.mutated("tag")
     }
     fn create_draft(&mut self) -> Result<(), OrchestratorError> {
+        if !self.candidate_current()? {
+            return Err(internal("package_publication_refused:StaleCandidate"));
+        }
         assert!(matches!(self.state, PublicationState::TagOnly { .. }));
         self.state = PublicationState::Draft {
             source_sha: self.identity.source_sha.clone(),
@@ -77,6 +83,9 @@ impl PackagePublicationBackend for Backend {
         self.mutated("draft")
     }
     fn upload_original_asset(&mut self, name: &str) -> Result<(), OrchestratorError> {
+        if !self.candidate_current()? {
+            return Err(internal("package_publication_refused:StaleCandidate"));
+        }
         let PublicationState::Draft { assets, .. } = &mut self.state else {
             panic!("draft required")
         };
@@ -88,6 +97,9 @@ impl PackagePublicationBackend for Backend {
         self.mutated(name)
     }
     fn publish_draft(&mut self) -> Result<(), OrchestratorError> {
+        if !self.candidate_current()? {
+            return Err(internal("package_publication_refused:StaleCandidate"));
+        }
         let PublicationState::Draft { assets, .. } = &self.state else {
             panic!("draft required")
         };
@@ -118,7 +130,7 @@ fn publication_rechecks_every_mutation_and_verifies_terminal_state() {
             "publish"
         ]
     );
-    assert_eq!(backend.gate_calls, 12);
+    assert_eq!(backend.gate_calls, 6);
     backend.current = false;
     assert_eq!(
         publish_package_release(&mut backend).expect("reconcile"),
@@ -166,4 +178,26 @@ fn conflict_or_mutable_publication_blocks_reconciliation() {
         assert!(publish_package_release(&mut backend).is_err());
         assert_eq!(backend.mutations, [] as [String; 0]);
     }
+}
+
+#[test]
+fn complete_twenty_nine_asset_stable_transaction_has_one_guard_per_write() {
+    let mut backend = Backend::new();
+    for n in 0..26 {
+        backend
+            .identity
+            .assets
+            .insert(format!("payload-{n:02}.tar.gz"), "d".repeat(64));
+    }
+    backend.state = PublicationState::TagOnly {
+        source_sha: backend.identity.source_sha.clone(),
+        original_receipt_digest: Some(backend.identity.receipt_digest.clone()),
+    };
+    assert_eq!(backend.identity.assets.len(), 29);
+    publish_package_release(&mut backend).expect("full stable transaction");
+    assert_eq!(backend.mutations.len(), 31);
+    assert_eq!(
+        backend.gate_calls, 31,
+        "every transport operation owns exactly one fresh guard"
+    );
 }

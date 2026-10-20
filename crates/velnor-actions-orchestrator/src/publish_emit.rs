@@ -33,6 +33,8 @@ pub(crate) mod baseline;
 #[path = "publish_release_steps.rs"]
 pub(crate) mod release;
 
+#[path = "publish_npm_emit.rs"]
+mod npm_emit;
 #[cfg(test)]
 #[path = "publish_scripts_tests.rs"]
 mod script_tests;
@@ -56,21 +58,25 @@ pub(crate) fn publish_files(
     routing: &WorkflowRoutingPolicy,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
     let bundles = &prep.config.publish.bundles;
+    let npm = &prep.config.publish.npm;
     let images = &prep.config.images;
     let git_tag = crate::release_emit::git_tag_release(prep)?;
-    if bundles.is_empty() && git_tag.is_none() && images.is_empty() {
+    if bundles.is_empty() && npm.is_empty() && git_tag.is_none() && images.is_empty() {
         return Ok(Vec::new());
     }
-    if (!bundles.is_empty() || !images.is_empty())
+    if (!bundles.is_empty() || !npm.is_empty() || !images.is_empty())
         && prep.config.workflow.policy != WorkflowPolicy::ConsumerV1
     {
+        let key = if !bundles.is_empty() {
+            "publish.bundles"
+        } else if !npm.is_empty() {
+            "publish.npm"
+        } else {
+            "images"
+        };
         return Err(OrchestratorError::config(
             CONFIG_REL,
-            if bundles.is_empty() {
-                "images"
-            } else {
-                "publish.bundles"
-            },
+            key,
             "publish_requires_consumer_policy",
         ));
     }
@@ -86,6 +92,11 @@ pub(crate) fn publish_files(
         .map(|release| git_tag_config(prep, release, &repository))
         .transpose()?;
     let catalog = prep.emission_catalog();
+    let npm_plans = npm
+        .iter()
+        .enumerate()
+        .map(|(index, entry)| npm_emit::resolve(prep, index, entry, &catalog))
+        .collect::<Result<Vec<_>, _>>()?;
     let jobs = assemble_jobs(&Inputs {
         repository: &repository,
         branch: &prep.default_branch,
@@ -94,6 +105,7 @@ pub(crate) fn publish_files(
         mise,
         catalog: &catalog,
         bundles: &plans,
+        npm: &npm_plans,
         git_tag_manifest: git_tag.map(|release| release.manifest_path.as_str()),
         images,
         promotions: &promotions,
@@ -107,7 +119,7 @@ pub(crate) fn publish_files(
             } else {
                 Vec::new()
             },
-            tag_glob: (!plans.is_empty() || !promotions.is_empty())
+            tag_glob: (!plans.is_empty() || !npm_plans.is_empty() || !promotions.is_empty())
                 .then(|| RELEASE_TAG_GLOB.to_owned()),
         },
         jobs,
@@ -288,13 +300,19 @@ fn check_tag_collisions(prep: &GenerationPreparation) -> Result<(), Orchestrator
         .bundles
         .iter()
         .map(|b| ("publish.bundles", &b.id));
+    let npm = prep
+        .config
+        .publish
+        .npm
+        .iter()
+        .map(|e| ("publish.npm", &e.id));
     let images = prep
         .config
         .images
         .iter()
         .filter(|image| image.version_file.is_some())
         .map(|image| ("images", &image.id));
-    for (key, id) in bundles.chain(images) {
+    for (key, id) in bundles.chain(npm).chain(images) {
         if packages.contains(id.as_str()) {
             return Err(OrchestratorError::config(
                 CONFIG_REL,

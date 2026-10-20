@@ -30,6 +30,7 @@ pub(crate) mod manifest_checks;
 pub mod marker;
 pub mod package_release;
 pub mod package_release_plan;
+pub mod package_release_policy;
 pub mod policy;
 pub mod preview_identity;
 pub mod preview_production;

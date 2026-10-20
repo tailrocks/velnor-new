@@ -5,12 +5,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use base64::{Engine as _, engine::general_purpose::STANDARD};
 use velnor_actions_contract::{
     PackageReleasePlan, canonical_json_bytes,
     config::HomebrewTapConfig,
     homebrew_formula::{
-        HomebrewFormulaCandidate, VerifiedPreviewRelease, validate_homebrew_formula_candidate,
+        HomebrewFormulaCandidate, VerifiedPackageRelease, validate_homebrew_formula_candidate,
     },
 };
 
@@ -30,9 +29,7 @@ mod identity;
 mod receipt;
 #[path = "tap_writer_result.rs"]
 mod result;
-use github::{
-    BlobResponse, CommitResponse, RefResponse, TapGitHubApi, TreeResponse, encode_segment,
-};
+use github::{TapGitHubApi, encode_segment};
 use gitops::{
     BranchRequest, PullRequestRequest, create_or_reconcile_branch, create_or_reconcile_pr,
 };
@@ -44,8 +41,8 @@ mod helpers;
 #[path = "tap_writer_history.rs"]
 mod history;
 use helpers::{
-    branch_name, is_full_sha, is_sha256, parse_decimal_id, real_directory, required_env,
-    safe_app_slug, sha256,
+    branch_name, is_sha256, parse_decimal_id, read_formula_base, real_directory, required_env,
+    safe_app_slug, sha256, verify_repository_base,
 };
 
 const CANDIDATE_LIMIT: u64 = 1024 * 1024;
@@ -69,7 +66,7 @@ pub fn write_homebrew_tap_pr_from_env() -> Result<TapPromotionReceipt, Orchestra
         &inputs.app_slug,
     )?;
     let base_sha = verify_repository_base(&inputs.api, &inputs.policy, &inputs.proof)?;
-    let base_tree = read_formula_base(&inputs.api, &inputs.policy.formula, &base_sha)?;
+    let base_tree = read_formula_base(&inputs.api, &inputs.formula_path, &base_sha)?;
     if sha256(&base_tree.bytes) != inputs.proof.old_formula_sha256 {
         return Err(internal("tap_candidate_base_digest_mismatch"));
     }
@@ -77,7 +74,7 @@ pub fn write_homebrew_tap_pr_from_env() -> Result<TapPromotionReceipt, Orchestra
         source_repository: &inputs.proof.source_repository,
         plan: &inputs.plan,
         tap_repository: &inputs.policy.repository,
-        formula_path: &inputs.policy.formula,
+        formula_path: &inputs.formula_path,
         captured_base_sha: &base_sha,
         base_bytes: &base_tree.bytes,
         proposed_bytes: &inputs.proposed,
@@ -94,12 +91,15 @@ pub fn write_homebrew_tap_pr_from_env() -> Result<TapPromotionReceipt, Orchestra
     {
         return Ok(result);
     }
-    let branch = branch_name(&inputs.release.receipt_digest, &base_sha)?;
+    let branch = branch_name(
+        &inputs.release.receipt_digest,
+        &base_sha,
+        inputs.plan.channel,
+    )?;
     let mut verify_current = || verify_promotion_authority(&inputs);
     let head_sha = create_or_reconcile_branch(
         &inputs.api,
         &mut BranchRequest {
-            policy: &inputs.policy,
             proof: &inputs.proof,
             formula: &inputs.proposed,
             base_sha: &base_sha,
@@ -174,22 +174,35 @@ fn already_promoted(
 }
 
 fn verify_promotion_authority(inputs: &WriterInputs) -> Result<(), OrchestratorError> {
+    let signed = verify_attested_signed_package_from_env()?;
+    crate::package_release_publish::verify_published_release(&signed)?;
+    if signed.receipt().canonical_digest().ok().as_deref()
+        != Some(inputs.release.receipt_digest.as_str())
+    {
+        return Err(internal("tap_writer_release_changed"));
+    }
     crate::package_release_publish::verify_tap_update_environment(
         &inputs.plan.repository,
         &inputs.plan.default_branch,
     )?;
-    crate::tap_source_freshness::verify_preview_source_is_current(
-        &inputs.plan.repository,
-        &inputs.plan.default_branch,
-        &inputs.release.receipt.source.commit_sha,
-    )
+    if inputs.plan.channel
+        == velnor_actions_contract::package_release::PackageReleaseChannel::Preview
+    {
+        crate::tap_source_freshness::verify_preview_source_is_current(
+            &inputs.plan.repository,
+            &inputs.plan.default_branch,
+            &inputs.release.receipt.source.commit_sha,
+        )?;
+    }
+    Ok(())
 }
 
 struct WriterInputs {
     root: PathBuf,
     policy: HomebrewTapConfig,
     plan: PackageReleasePlan,
-    release: VerifiedPreviewRelease,
+    release: VerifiedPackageRelease,
+    formula_path: String,
     proof: HomebrewTapPreparationProof,
     proposed: Vec<u8>,
     api: TapGitHubApi,
@@ -200,9 +213,13 @@ struct WriterInputs {
 
 fn load_writer_inputs() -> Result<WriterInputs, OrchestratorError> {
     let signed = verify_attested_signed_package_from_env()?;
+    crate::package_release_publish::verify_published_release(&signed)?;
     let plan = signed.plan().clone();
+    crate::tap_prepare::release_policy_from_env()?
+        .validate_plan(&plan)
+        .map_err(|_| internal("tap_writer_release_policy_plan"))?;
     let receipt = signed.receipt().clone();
-    let release = VerifiedPreviewRelease {
+    let release = VerifiedPackageRelease {
         receipt_digest: receipt
             .canonical_digest()
             .map_err(|_| internal("tap_writer_receipt_digest"))?,
@@ -210,6 +227,7 @@ fn load_writer_inputs() -> Result<WriterInputs, OrchestratorError> {
     };
     let root = runner_root()?;
     let policy = super::execute::static_tap_policy()?;
+    let formula_path = crate::tap_prepare::formula_path(&policy, plan.channel)?.to_owned();
     let proof = read_candidate_proof(&root)?;
     validate_proof(&proof, &policy, &plan, &release)?;
     let candidate_path = root.join(CANDIDATE_DIR).join("formula.rb");
@@ -231,6 +249,7 @@ fn load_writer_inputs() -> Result<WriterInputs, OrchestratorError> {
         policy,
         plan,
         release,
+        formula_path,
         proof,
         proposed,
         api,
@@ -268,11 +287,12 @@ fn validate_proof(
     proof: &HomebrewTapPreparationProof,
     policy: &HomebrewTapConfig,
     plan: &PackageReleasePlan,
-    release: &VerifiedPreviewRelease,
+    release: &VerifiedPackageRelease,
 ) -> Result<(), OrchestratorError> {
-    if proof.schema != "velnor.homebrew-candidate.v2"
+    if proof.schema != "velnor.homebrew-candidate.v3"
+        || proof.channel != plan.channel
         || proof.candidate_formula != "formula.rb"
-        || proof.formula_path != policy.formula
+        || proof.formula_path != crate::tap_prepare::formula_path(policy, plan.channel)?
         || proof.tap_repository != policy.repository
         || proof.source_repository != release.receipt.repository.slug
         || proof.source_sha != release.receipt.source.commit_sha
@@ -317,61 +337,6 @@ fn read_regular_limited(
         return Err(internal("tap_writer_file_invalid"));
     }
     fs::read(path).map_err(|_| internal("tap_writer_file_read"))
-}
-
-fn verify_repository_base(
-    api: &TapGitHubApi,
-    policy: &HomebrewTapConfig,
-    proof: &HomebrewTapPreparationProof,
-) -> Result<String, OrchestratorError> {
-    if policy.repository != proof.tap_repository {
-        return Err(internal("tap_writer_target_mismatch"));
-    }
-    let current: RefResponse = api.get_json(&api.repo_route("git/ref/heads/main"))?;
-    if current.object.object_type != "commit" || current.object.sha != proof.base_sha {
-        return Err(internal("tap_writer_stale_tap_main"));
-    }
-    Ok(current.object.sha)
-}
-
-struct FormulaBase {
-    bytes: Vec<u8>,
-    tree_sha: String,
-}
-
-fn read_formula_base(
-    api: &TapGitHubApi,
-    formula: &str,
-    base_sha: &str,
-) -> Result<FormulaBase, OrchestratorError> {
-    let commit: CommitResponse =
-        api.get_json(&api.repo_route(&format!("git/commits/{base_sha}")))?;
-    if commit.sha != base_sha || !is_full_sha(&commit.tree.sha) {
-        return Err(internal("tap_writer_base_commit_invalid"));
-    }
-    let tree: TreeResponse =
-        api.get_json(&api.repo_route(&format!("git/trees/{}?recursive=1", commit.tree.sha)))?;
-    if tree.truncated || tree.sha != commit.tree.sha {
-        return Err(internal("tap_writer_tree_truncated"));
-    }
-    let mut entries = tree.tree.iter().filter(|entry| entry.path == formula);
-    let entry = entries
-        .next()
-        .ok_or_else(|| internal("tap_writer_formula_missing"))?;
-    if entries.next().is_some() || entry.mode != "100644" || entry.object_type != "blob" {
-        return Err(internal("tap_writer_formula_mode_invalid"));
-    }
-    let blob: BlobResponse = api.get_json(&api.repo_route(&format!("git/blobs/{}", entry.sha)))?;
-    if blob.sha != entry.sha || blob.encoding != "base64" {
-        return Err(internal("tap_writer_formula_blob_invalid"));
-    }
-    let bytes = STANDARD
-        .decode(blob.content.replace('\n', ""))
-        .map_err(|_| internal("tap_writer_formula_blob_encoding"))?;
-    Ok(FormulaBase {
-        bytes,
-        tree_sha: tree.sha,
-    })
 }
 
 #[cfg(test)]

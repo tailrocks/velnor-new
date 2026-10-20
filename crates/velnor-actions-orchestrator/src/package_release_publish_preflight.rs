@@ -18,43 +18,46 @@ use crate::{OrchestratorError, internal::internal};
 const API_TIMEOUT: Duration = Duration::from_secs(90);
 const PREVIEW_ENVIRONMENT: &str = "preview-publish";
 const TAP_ENVIRONMENT: &str = "tap-update";
-const STABLE_ENVIRONMENT: &str = "consumer-binary-release";
+const STABLE_ENVIRONMENT: &str = "release";
 
 pub(super) fn verify_main_protection(
     api: &GitHubApi,
     branch: &str,
-) -> Result<(), OrchestratorError> {
+) -> Result<String, OrchestratorError> {
     if branch != "main" {
         return Err(internal("package_publish_default_branch_not_main"));
     }
     let status_token = status_token()?;
-    let branch_route = format!("repos/{}/branches/main", api.repository);
-    let branch_json = api_json(&api.catalog, &status_token, &branch_route)?;
-    if branch_json.get("protected").and_then(Value::as_bool) != Some(true) {
-        return Err(internal("package_publish_main_not_protected"));
-    }
     let rules_route = format!("repos/{}/rules/branches/main", api.repository);
-    let rules = api_json(&api.catalog, &status_token, &rules_route)?;
+    let rules = api_json(&api.catalog, &status_token, &api.repository, &rules_route)?;
     let classic_route = format!("repos/{}/branches/main/protection", api.repository);
-    let classic = api_json_or_not_found(&api.catalog, &status_token, &classic_route)?;
+    let classic =
+        api_json_or_not_found(&api.catalog, &status_token, &api.repository, &classic_route)?;
     validate_main_protection_sources(&rules, classic.as_ref())
         .map_err(|()| internal("package_publish_main_protection_incomplete"))?;
-    verify_named_environment(&api.repository, PREVIEW_ENVIRONMENT, branch)
+    verify_named_environment(&api.repository, PREVIEW_ENVIRONMENT, branch)?;
+    // This combined protection/source snapshot is the decisive final remote read.
+    let branch_route = format!("repos/{}/branches/main", api.repository);
+    let branch_json = api_json(&api.catalog, &status_token, &api.repository, &branch_route)?;
+    let source_sha = protected_branch_sha(&branch_json)?;
+    Ok(source_sha)
 }
 
 pub(super) fn verify_release_channel_environment(
     channel: PackageReleaseChannel,
     api: &GitHubApi,
     default_branch: &str,
-) -> Result<(), OrchestratorError> {
+) -> Result<Option<String>, OrchestratorError> {
     match channel {
         PackageReleaseChannel::Preview => {
             if default_branch != "main" {
                 return Err(internal("package_publish_default_branch_not_main"));
             }
-            verify_main_protection(api, default_branch)
+            verify_main_protection(api, default_branch).map(Some)
         }
-        PackageReleaseChannel::Stable => verify_stable_environment(&api.repository, default_branch),
+        PackageReleaseChannel::Stable => {
+            verify_stable_environment(&api.repository, default_branch).map(|()| None)
+        }
     }
 }
 
@@ -82,16 +85,13 @@ fn verify_stable_environment(repository: &str, branch: &str) -> Result<(), Orche
     if branch.is_empty() || !is_safe_github_repository(repository) {
         return Err(internal("package_publish_environment_identity_invalid"));
     }
-    let token = env::var("GH_TOKEN")
-        .ok()
-        .filter(|token| !token.is_empty())
-        .ok_or_else(|| internal("package_publish_source_read_token_missing"))?;
+    let token = status_token()?;
     let catalog = velnor_actions_mise::ToolCatalog::pinned();
     let route = format!(
         "repos/{repository}/environments/{}",
         encode_segment(STABLE_ENVIRONMENT)
     );
-    let settings = api_json(&catalog, &token, &route)?;
+    let settings = api_json(&catalog, &token, repository, &route)?;
     validate_stable_environment_settings(&settings, branch)
         .map_err(|()| internal("package_publish_stable_environment_policy_invalid"))
 }
@@ -114,47 +114,103 @@ fn verify_named_environment(
     {
         return Err(internal("package_publish_environment_identity_invalid"));
     }
-    let token = env::var("GH_TOKEN")
-        .ok()
-        .filter(|token| !token.is_empty())
-        .ok_or_else(|| internal("package_publish_source_read_token_missing"))?;
-    if ["VELNOR_TAP_TOKEN", "VELNOR_TAP_MERGE_TOKEN"]
-        .into_iter()
-        .filter_map(|name| env::var(name).ok())
-        .any(|tap| tap == token)
-    {
-        return Err(internal("package_publish_source_read_token_reused"));
-    }
+    let token = status_token()?;
     let catalog = velnor_actions_mise::ToolCatalog::pinned();
     let env_route = format!(
         "repos/{repository}/environments/{}",
         encode_segment(environment)
     );
-    let settings = api_json(&catalog, &token, &env_route)?;
+    let settings = api_json(&catalog, &token, repository, &env_route)?;
     validate_environment_settings(&settings, environment)
         .map_err(|()| internal("package_publish_environment_policy_invalid"))?;
     let policies_route = format!(
         "repos/{repository}/environments/{}/deployment-branch-policies?per_page=100&page=1",
         encode_segment(environment)
     );
-    let policies = api_json(&catalog, &token, &policies_route)?;
+    let policies = api_json(&catalog, &token, repository, &policies_route)?;
     validate_environment_branch_policy(&policies, branch)
         .map_err(|()| internal("package_publish_environment_branch_policy_invalid"))
 }
 
 fn status_token() -> Result<String, OrchestratorError> {
-    super::immutable_status::immutable_status_token(
+    let token = super::immutable_status::immutable_status_token(
         env::var("VELNOR_RELEASE_STATUS_TOKEN").ok().as_deref(),
         env::var("GH_TOKEN").ok().as_deref(),
         env::var("VELNOR_TAP_TOKEN").ok().as_deref(),
-    )
+    )?;
+    if env::var("VELNOR_TAP_MERGE_TOKEN").ok().as_deref() == Some(token.as_str()) {
+        return Err(internal("package_publish_immutable_status_token_reused"));
+    }
+    Ok(token)
+}
+
+pub(super) fn verify_repository_identity(
+    api: &GitHubApi,
+    expected_id: u64,
+) -> Result<(), OrchestratorError> {
+    let token = status_token()?;
+    let response = api_json(
+        &api.catalog,
+        &token,
+        &api.repository,
+        &format!("repos/{}", api.repository),
+    )?;
+    if response.get("id").and_then(Value::as_u64) != Some(expected_id)
+        || response.get("full_name").and_then(Value::as_str) != Some(api.repository.as_str())
+    {
+        return Err(internal("package_publish_repository_mismatch"));
+    }
+    Ok(())
+}
+
+fn protected_branch_sha(response: &Value) -> Result<String, OrchestratorError> {
+    if response.get("protected").and_then(Value::as_bool) != Some(true)
+        || response.get("name").and_then(Value::as_str) != Some("main")
+    {
+        return Err(internal("package_publish_main_not_protected"));
+    }
+    response
+        .pointer("/commit/sha")
+        .and_then(Value::as_str)
+        .filter(|sha| super::super::identity::is_git_sha(sha))
+        .map(str::to_owned)
+        .ok_or_else(|| internal("package_publish_main_source_invalid"))
+}
+
+fn validate_status_route(repository: &str, route: &str) -> Result<(), OrchestratorError> {
+    if !is_safe_github_repository(repository) {
+        return Err(internal("package_status_repository_invalid"));
+    }
+    let base = format!("repos/{repository}");
+    if route == base
+        || [
+            "branches/main",
+            "rules/branches/main",
+            "branches/main/protection",
+        ]
+        .iter()
+        .any(|suffix| route == format!("{base}/{suffix}"))
+    {
+        return Ok(());
+    }
+    for environment in [PREVIEW_ENVIRONMENT, STABLE_ENVIRONMENT, TAP_ENVIRONMENT] {
+        let path = format!("{base}/environments/{environment}");
+        if route == path
+            || route == format!("{path}/deployment-branch-policies?per_page=100&page=1")
+        {
+            return Ok(());
+        }
+    }
+    Err(internal("package_status_route_not_allowed"))
 }
 
 fn api_json(
     catalog: &velnor_actions_mise::ToolCatalog,
     token: &str,
+    repository: &str,
     route: &str,
 ) -> Result<Value, OrchestratorError> {
+    validate_status_route(repository, route)?;
     let args = vec![
         OsString::from("api"),
         OsString::from("-H"),
@@ -179,8 +235,10 @@ fn api_json(
 fn api_json_or_not_found(
     catalog: &velnor_actions_mise::ToolCatalog,
     token: &str,
+    repository: &str,
     route: &str,
 ) -> Result<Option<Value>, OrchestratorError> {
+    validate_status_route(repository, route)?;
     let args = vec![
         OsString::from("api"),
         OsString::from("-H"),
@@ -216,4 +274,13 @@ fn github_api_not_found(stderr: &[u8], stdout: &[u8]) -> bool {
 
 fn encode_segment(value: &str) -> String {
     value.replace('%', "%25").replace('/', "%2F")
+}
+
+/// Require the metadata/tag environment's human approval and self-review guard.
+pub(super) fn verify_stable_tag_environment(
+    api: &GitHubApi,
+    branch: &str,
+) -> Result<(), OrchestratorError> {
+    verify_stable_environment(&api.repository, branch)
+        .map_err(|_| internal("stable_tag_environment_unprotected"))
 }

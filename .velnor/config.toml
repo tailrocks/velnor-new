@@ -62,7 +62,6 @@ manifest_path = "Cargo.toml"
 packages = []
 publishable_workspace = false
 environment = "release"
-authentication = "trusted-publishing"
 release_pr = true
 tag_name = "{{ package }}-v{{ version }}"
 

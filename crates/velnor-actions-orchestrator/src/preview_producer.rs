@@ -5,14 +5,14 @@ use crate::check_evidence::reject_link_components;
 use crate::check_runtime::preparation::prepare_check;
 use crate::exclusive_write::create_dir_no_symlink;
 use crate::internal::internal;
+use crate::release_task_identity::ReleaseTaskIdentity;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::fs;
 use std::path::Path;
 use std::time::Instant;
-use velnor_actions_contract::config::RustBinaryPreviewConfig;
-use velnor_actions_contract::preview_identity::PreviewIdentity;
+use velnor_actions_contract::config::RustBinaryReleaseConfig;
 use velnor_actions_mise::{CheckDeadline, GitRequest, IsolatedCommand, ProcessOutput};
 
 #[path = "preview_producer_inputs.rs"]
@@ -29,15 +29,23 @@ const MAX_TASK_OUTPUT: usize = 8 * 1024 * 1024;
 #[path = "preview_producer_entry.rs"]
 mod entry;
 pub use entry::{
-    ACQUIRE_PREVIEW_LEAVES_OP, ADMIT_PREVIEW_AGGREGATE_OP, EXECUTE_PREVIEW_PRODUCER_OP,
-    acquire_preview_leaves, admit_preview_aggregate, execute_preview_producer,
+    ACQUIRE_RELEASE_LEAVES_OP, ADMIT_RELEASE_AGGREGATE_OP, EXECUTE_RELEASE_PRODUCER_OP,
+    acquire_release_leaves, admit_release_aggregate, execute_release_producer,
 };
+
+pub(crate) fn release_workflow_context(
+    plan: &velnor_actions_contract::PackageReleasePlan,
+    deadline: CheckDeadline,
+) -> Result<velnor_actions_contract::preview_production::ReleaseProductionContext, OrchestratorError>
+{
+    entry::release_workflow_context(plan, deadline)
+}
 
 #[derive(Clone, Copy)]
 struct PreviewTaskSpec<'a> {
-    identity: &'a PreviewIdentity,
+    identity: &'a ReleaseTaskIdentity,
     source_ref: &'a str,
-    preview: &'a RustBinaryPreviewConfig,
+    preview: &'a RustBinaryReleaseConfig,
     handoff: &'a Path,
 }
 
@@ -85,7 +93,7 @@ fn execute_preview_task(
     progress.mark(progress::Phase::Discovery);
     checkpoint(deadline)?;
     preview.validate(".velnor/config.toml")?;
-    if !preview.enabled || !valid_source_ref(source_ref) || !canonical_identity(identity) {
+    if !preview.enabled() || !valid_source_ref(source_ref) || !canonical_identity(identity) {
         return Err(internal("preview_producer_identity"));
     }
     let producer = &preview.producer;
@@ -202,7 +210,7 @@ fn producer_handoff(
         ("VELNOR_RELEASE_VERSION", identity.version.as_str()),
         ("VELNOR_RELEASE_OUTPUT_DIRECTORY", output_directory),
         ("VELNOR_RELEASE_OUTPUT_MANIFEST", output_manifest),
-        ("VELNOR_PREVIEW_REQUEST_FILE", handoff),
+        ("VELNOR_RELEASE_TASK_REQUEST_FILE", handoff),
     ]
     .into_iter()
     .map(|(key, value)| (key.into(), value.into()))
@@ -254,7 +262,7 @@ fn validate_inputs(
 
 fn validate_preview_source(
     root: &Path,
-    identity: &PreviewIdentity,
+    identity: &ReleaseTaskIdentity,
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     if current_head(root, deadline)? != identity.source_sha {
@@ -289,6 +297,9 @@ fn validate_preview_source(
             != "false"
     {
         return Err(internal("preview_requires_full_git_history"));
+    }
+    if identity.channel == velnor_actions_contract::package_release::PackageReleaseChannel::Stable {
+        return Ok(());
     }
     let count = GitRequest::rev_list_count(&identity.source_sha)
         .map_err(|error| internal(&error.to_string()))?
@@ -361,16 +372,8 @@ fn current_head(root: &Path, deadline: CheckDeadline) -> Result<String, Orchestr
         .to_owned())
 }
 
-fn canonical_identity(identity: &PreviewIdentity) -> bool {
-    let suffix = format!(
-        "-preview.{}+{}",
-        identity.commit_count,
-        identity.source_sha.get(..7).unwrap_or_default()
-    );
-    identity.version.strip_suffix(&suffix).is_some_and(|base| {
-        PreviewIdentity::derive(base, &identity.source_sha, identity.commit_count)
-            .is_ok_and(|expected| expected == *identity)
-    })
+fn canonical_identity(identity: &ReleaseTaskIdentity) -> bool {
+    identity.canonical()
 }
 
 fn valid_source_ref(source_ref: &str) -> bool {

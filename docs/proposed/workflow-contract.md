@@ -170,7 +170,7 @@ permissions:
   contents: read
 ```
 
-All other permissions MUST be absent or `none`. Release publication uses a separate workflow with explicit permissions; fork pull requests receive no write access. `[stacks.rust.release]` adds `release.yml` (see [release contract](release-contract.md)) with per-job permissions that MUST NOT weaken this default. `[stacks.rust.binary_release]` adds the optional `binary-release.yml` workflow; see the [binary release contract](binary-release-contract.md), which specifies per-job least privilege.
+All other permissions MUST be absent or `none`. Release publication uses a separate workflow with explicit permissions; fork pull requests receive no write access. `[stacks.rust.release]` selects the registry/tag release family or native stable version preparation (see [release contract](release-contract.md)); its per-job permissions MUST NOT weaken this default. `[stacks.rust.binary_release.stable].enabled` independently adds manual `binary-release.yml`, while `[stacks.rust.binary_release.preview].enabled` adds automatic rolling `binary-preview.yml`. Their configured Homebrew destinations add channel-specific reconciliation workflows. See the [binary release contract](binary-release-contract.md) and [native preview contract](native-preview-contract.md) for per-job least privilege and source-free publication boundaries.
 
 The workflow concurrency group MUST be:
 

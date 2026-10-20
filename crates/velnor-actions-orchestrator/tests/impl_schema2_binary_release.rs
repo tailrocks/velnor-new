@@ -9,17 +9,112 @@ use crate::impl_common::{TestResult, anchor_repo, git, make_repo};
 
 const CONSUMER: &str =
     "schema = 1\n[workflow]\npolicy = \"consumer-v1\"\ndefault_branch = \"testmain\"\n";
-const ENABLED: &str = "schema = 1\n[workflow]\npolicy = \"consumer-v1\"\ndefault_branch = \"testmain\"\n[stacks.rust.binary_release]\nenabled = true\npackage = \"demo\"\nbin = \"demo\"\n";
-const SCALE_SET_ENABLED: &str = "schema = 2\n[workflow]\npolicy = \"consumer-v1\"\ndefault_branch = \"testmain\"\n[stacks.rust.binary_release]\nenabled = true\npackage = \"demo\"\nbin = \"demo\"\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\n[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\"]\nplatform = \"linux/amd64\"\njob_container_image = \"ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n";
+const ENABLED: &str = r#"schema = 1
+[workflow]
+policy = "consumer-v1"
+default_branch = "main"
+[stacks.rust.release]
+enabled = true
+registry = "git-tag"
+packages = ["demo"]
+tag_name = "v{{version}}"
+[stacks.rust.binary_release]
+version_package = "demo"
+version_env = "DEMO_VERSION_OVERRIDE"
+[stacks.rust.binary_release.evidence]
+profile = "signed-sbom-v1"
+[stacks.rust.binary_release.stable]
+enabled = true
+[stacks.rust.binary_release.producer]
+task = "release-preview"
+tools = ["rust"]
+inputs = ["mise.toml", "Cargo.toml", "Cargo.lock", "src/main.rs"]
+[[stacks.rust.binary_release.products]]
+id = "demo"
+package = "demo"
+bins = ["demo"]
+targets = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin"]
+archive = "tar.gz"
+"#;
+
+const SCALE_SET_ENABLED: &str = r#"schema = 2
+[workflow]
+policy = "consumer-v1"
+default_branch = "main"
+[stacks.rust.release]
+enabled = true
+registry = "git-tag"
+packages = ["demo"]
+tag_name = "v{{version}}"
+[stacks.rust.binary_release]
+version_package = "demo"
+version_env = "DEMO_VERSION_OVERRIDE"
+[stacks.rust.binary_release.evidence]
+profile = "signed-sbom-v1"
+[stacks.rust.binary_release.stable]
+enabled = true
+[stacks.rust.binary_release.producer]
+task = "release-preview"
+runner = "xcode-27-arm64"
+tools = ["rust"]
+inputs = ["mise.toml", "Cargo.toml", "Cargo.lock", "src/main.rs"]
+[[stacks.rust.binary_release.products]]
+id = "demo"
+package = "demo"
+bins = ["demo"]
+targets = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin"]
+archive = "tar.gz"
+[execution]
+default_profile = "hosted"
+hosted_profile = "hosted"
+scale_set_profile = "local"
+[execution.profiles.hosted]
+kind = "github-hosted"
+label = "ubuntu-26.04"
+platform = "linux/amd64"
+[execution.profiles.local]
+kind = "github-scale-set"
+name = "ubuntu-26.04-scale-set"
+labels = ["ubuntu-26.04-scale-set", "velnor"]
+platform = "linux/amd64"
+job_container_image = "ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+"#;
+
+fn qualified_tool_config(config: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let macos = config.contains("runner = \"xcode-27-arm64\"");
+    let platform = if macos { "macos_arm64" } else { "linux_x64" };
+    let target = if macos {
+        "aarch64-apple-darwin"
+    } else {
+        "x86_64-unknown-linux-gnu"
+    };
+    let tool = serde_json::json!({"qualified_tools":[{
+        "id":"rust","version":"1.98.1","backend":{"kind":"core","tool":"rust"},
+        "options":{"kind":"rust","components":[],"targets":[]},"depends_on":[],
+        "platforms":[{"platform":platform,"artifacts":[{"url":format!("https://static.rust-lang.org/dist/rust-1.98.1-{target}.tar.xz"),"sha256":"a".repeat(64)}],"dependency_artifacts":[],"install_tree_sha256":"b".repeat(64),
+            "executables":[{"name":"rustc","path":"bin/rustc","sha256":"c".repeat(64),"probe":{"kind":"version","expected":"rustc 1.98.1"}}]}]
+    }]});
+    Ok(toml::to_string(&tool)?)
+}
 
 fn binary_repo(config: &str) -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
-    let repo = make_repo(config)?;
+    let repo = make_repo(&format!("{config}\n{}", qualified_tool_config(config)?))?;
+    fs::write(
+        repo.path().join("mise.toml"),
+        format!(
+            "[tools]\nrust = '{}'\n[tasks.release-preview]\nrun = 'true'\n",
+            velnor_actions_mise::RUST_VERSION
+        ),
+    )?;
     fs::write(repo.path().join("src/main.rs"), "fn main() {}\n")?;
     fs::write(
         repo.path().join("Cargo.lock"),
         "version = 4\n\n[[package]]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )?;
-    git(&["add", "Cargo.lock"], repo.path())?;
+    git(
+        &["add", "Cargo.lock", "mise.toml", "src/main.rs"],
+        repo.path(),
+    )?;
     anchor_repo(repo.path())?;
     Ok(repo)
 }
@@ -44,16 +139,27 @@ fn binary_release_is_default_off_and_generated_through_render_tree() -> TestResu
         "# Generated by Velnor Actions {};",
         env!("CARGO_PKG_VERSION")
     )));
-    assert!(workflow.contains("name: Rust binary release"));
-    assert!(workflow.contains("--package demo --bin demo --target aarch64-apple-darwin"));
+    assert!(workflow.contains("name: Stable binary release"));
+    assert!(workflow.contains("execute-release-producer-v1"));
+    assert!(workflow.contains("stable-payload-000:"));
+    assert!(workflow.contains("stable-payload-001:"));
+    assert!(workflow.contains("write-stable-tag-intent-v1"));
+    assert!(workflow.contains("write-stable-tag-origin-v1"));
+    assert!(workflow.contains("select-stable-release-source-v1"));
+    assert!(workflow.contains("VELNOR_RELEASE_POLICY:"));
+    assert!(!workflow.contains("base_version"));
     assert!(workflow.contains("contents: write"));
     assert!(workflow.contains("attestations: write"));
     assert!(workflow.contains("sign-package-release-v1"));
     assert!(workflow.contains("publish-package-release-v1"));
-    assert!(workflow.contains("raw-binary"));
+    assert!(workflow.contains("tar.gz"));
+    assert!(!workflow.contains("raw-binary"));
     assert!(!workflow.contains("gh release create"));
     assert!(!workflow.contains("gh release edit"));
-    assert!(workflow.contains("workflow_dispatch: {}"));
+    assert!(workflow.contains("workflow_dispatch:"));
+    assert!(workflow.contains("prepare"));
+    assert!(workflow.contains("release-pr"));
+    assert!(!workflow.contains("-- release-plz release "));
     assert!(workflow.contains("environment:"));
 
     let preview = tempfile::TempDir::new()?;
@@ -83,7 +189,7 @@ fn scale_set_dispatch_rejects_the_binary_workflows_macos_job() -> TestResult {
         .expect_err("the Apple Silicon build cannot use the Linux Scale Set");
     assert!(
         error.to_string().contains(
-            "unsupported_darwin_workload:.github/workflows/binary-release.yml:build-binary:macos-15"
+            "unsupported_darwin_workload:.github/workflows/binary-release.yml:stable-payload-000:xcode-27"
         ),
         "{error}"
     );
@@ -92,14 +198,11 @@ fn scale_set_dispatch_rejects_the_binary_workflows_macos_job() -> TestResult {
 
 #[test]
 fn binary_release_rejects_missing_binary_and_required_features() -> TestResult {
-    let missing = binary_repo(&ENABLED.replace("bin = \"demo\"", "bin = \"missing\""))?;
+    let missing = binary_repo(&ENABLED.replace("bins = [\"demo\"]", "bins = [\"missing\"]"))?;
     let err = render_staged_tree(&prepare(missing.path())?)
         .err()
         .ok_or("missing bin must be rejected")?;
-    assert!(
-        err.to_string()
-            .contains("binary_release_target_not_discovered")
-    );
+    assert!(err.to_string().contains("missing_binary_target"));
 
     let required = binary_repo(ENABLED)?;
     fs::write(
@@ -109,7 +212,7 @@ fn binary_release_rejects_missing_binary_and_required_features() -> TestResult {
     let err = render_staged_tree(&prepare(required.path())?)
         .err()
         .ok_or("required features are unsupported")?;
-    assert!(err.to_string().contains("binary_required_features"));
+    assert!(err.to_string().contains("binary_requires_features"));
     Ok(())
 }
 
@@ -141,7 +244,7 @@ fn binary_release_uses_native_github_cli_pin_despite_source_mise_override() -> T
         repo.path().join("mise.toml"),
         // Generation inventory runs the declared Rust: use the generator pin.
         format!(
-            "[tools]\nrust = '{}'\ngh = '2.0.0'\n",
+            "[tools]\nrust = '{}'\ngh = '2.0.0'\n[tasks.release-preview]\nrun = 'true'\n",
             velnor_actions_mise::RUST_VERSION
         ),
     )?;
@@ -154,7 +257,7 @@ fn binary_release_uses_native_github_cli_pin_despite_source_mise_override() -> T
         .get(".github/workflows/binary-release.yml")
         .ok_or("enabled binary workflow missing")?;
     let publisher = workflow
-        .split("  publish-binary:")
+        .split("  stable-publisher:")
         .nth(1)
         .ok_or("stable publisher job missing")?;
     assert!(publisher.contains("gh@2.102.0"));
@@ -167,8 +270,12 @@ fn binary_release_uses_native_github_cli_pin_despite_source_mise_override() -> T
 #[test]
 fn binary_release_rejects_dash_leading_workspace_path() -> TestResult {
     let config = ENABLED.replace(
-        "[stacks.rust.binary_release]\nenabled = true\n",
-        "[stacks.rust.binary_release]\nenabled = true\nmanifest_path = \"-workspace/Cargo.toml\"\n",
+        "[stacks.rust.binary_release]\n",
+        "[stacks.rust.binary_release]\nmanifest_path = \"-workspace/Cargo.toml\"\n",
+    );
+    let config = config.replace(
+        "[stacks.rust.release]\n",
+        "[stacks.rust.release]\nmanifest_path = \"-workspace/Cargo.toml\"\n",
     );
     let repo = binary_repo(&config)?;
     let workspace = repo.path().join("-workspace");

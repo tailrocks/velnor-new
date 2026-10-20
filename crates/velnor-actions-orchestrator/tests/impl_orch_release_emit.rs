@@ -14,7 +14,7 @@ use crate::impl_common::{
 };
 
 /// Release-enabled consumer config selecting the fixture crate.
-const OIDC_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\n";
+const OIDC_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\nregistry = \"crates-io\"\npackages = [\"demo\"]\n";
 
 const SCALE_SET_OIDC_CONFIG: &str = "schema = 2\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\n[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\"]\nplatform = \"linux/amd64\"\njob_container_image = \"ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n";
 
@@ -253,7 +253,7 @@ fn release_bootstrap_mode_adds_token_job() -> TestResult {
     git(&["commit", "-m", "bootstrap fixture"], root)?;
     let head = git_line(&["rev-parse", "HEAD"], root)?;
     let config = format!(
-        "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\nauthentication = \"bootstrap-token\"\n[stacks.rust.release.bootstrap]\npackage = \"demo\"\nversion = \"0.1.0\"\nsource_sha = \"{head}\"\n"
+        "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\nregistry = \"crates-io\"\npackages = [\"demo\"]\nauthentication = \"bootstrap-token\"\n[stacks.rust.release.bootstrap]\npackage = \"demo\"\nversion = \"0.1.0\"\nsource_sha = \"{head}\"\n"
     );
     fs::write(root.join(".velnor/config.toml"), config)?;
     let prep = prepare(root)?;
@@ -319,7 +319,7 @@ fn release_bootstrap_mode_adds_token_job() -> TestResult {
 
 #[test]
 fn release_without_release_pr_validates_instead() -> TestResult {
-    let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\nrelease_pr = false\n";
+    let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\nregistry = \"crates-io\"\npackages = [\"demo\"]\nrelease_pr = false\n";
     let repo = release_repo(config)?;
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     let yaml = tree
@@ -347,7 +347,7 @@ fn release_requires_origin_identity() -> TestResult {
 
 #[test]
 fn release_unknown_package_fails_closed() -> TestResult {
-    let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\npackages = [\"nope\"]\n";
+    let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\nregistry = \"crates-io\"\npackages = [\"nope\"]\n";
     let repo = release_repo(config)?;
     let prep = prepare(repo.path())?;
     let err = err_of(render_staged_tree(&prep), "unknown package")?;
@@ -366,7 +366,7 @@ fn release_bootstrap_mismatch_fails_closed() -> TestResult {
         ("demo", "9.9.9", "bootstrap_version_mismatch"),
     ] {
         let config = format!(
-            "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\nauthentication = \"bootstrap-token\"\n[stacks.rust.release.bootstrap]\npackage = \"{package}\"\nversion = \"{version}\"\nsource_sha = \"{head}\"\n"
+            "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\nregistry = \"crates-io\"\npackages = [\"demo\"]\nauthentication = \"bootstrap-token\"\n[stacks.rust.release.bootstrap]\npackage = \"{package}\"\nversion = \"{version}\"\nsource_sha = \"{head}\"\n"
         );
         let repo = release_repo(&config)?;
         let prep = prepare(repo.path())?;
@@ -379,7 +379,7 @@ fn release_bootstrap_mismatch_fails_closed() -> TestResult {
 #[test]
 fn release_velnor_policy_rejects_enabled() -> TestResult {
     without_ambient_identity("release_velnor_policy_rejects_enabled", || {
-        let config = "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\npolicy = \"velnor-repository-v1\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\n";
+        let config = "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\npolicy = \"velnor-repository-v1\"\n[stacks.rust.release]\nenabled = true\nregistry = \"crates-io\"\npackages = [\"demo\"]\n";
         let repo = make_repo(config)?;
         let git_config = repo.path().join(".git/config");
         let mut text = fs::read_to_string(&git_config)?;

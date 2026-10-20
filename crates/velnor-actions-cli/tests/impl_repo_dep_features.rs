@@ -57,13 +57,14 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
             }
             let archive_decoder = reviewed_archive_dependency(dir, key, line);
             let workflow_yaml = reviewed_workflow_yaml_dependency(dir, key, line);
+            let checked_git_hash = reviewed_git_object_hash_dependency(dir, key, line);
             assert!(
-                allowed.contains(&key) || archive_decoder || workflow_yaml,
+                allowed.contains(&key) || archive_decoder || workflow_yaml || checked_git_hash,
                 "{dir} uses {key}"
             );
             if let Some(index) = line
                 .find("features")
-                .filter(|_| !archive_decoder && !workflow_yaml)
+                .filter(|_| !archive_decoder && !workflow_yaml && !checked_git_hash)
             {
                 let quoted: Vec<&str> = line[index..].split('"').collect();
                 for feature in quoted.into_iter().skip(1).step_by(2) {
@@ -113,4 +114,54 @@ fn allowed_feature(dir: &str, key: &str, feature: &str) -> bool {
         || (dir == "crates/velnor-actions-orchestrator"
             && ((key == "syn" && matches!(feature, "full" | "parsing" | "printing" | "visit"))
                 || (key == "proc-macro2" && feature == "span-locations")))
+}
+
+// Git's object format fixes SHA-1; this owner verifies the Git blob OID only
+// with collision detection. OID metadata and std IO integration are unused.
+fn reviewed_git_object_hash_dependency(dir: &str, key: &str, line: &str) -> bool {
+    if dir != "crates/velnor-actions-orchestrator" || key != "sha1-checked" {
+        return false;
+    }
+    let Some((_, value)) = line.split_once('=') else {
+        return false;
+    };
+    let fields = crate::impl_repo_policy::p11_toml::inline_pairs(value);
+    fields.len() == 2
+        && fields
+            .iter()
+            .any(|(key, value)| key == "version" && value == "=0.10.0")
+        && fields
+            .iter()
+            .any(|(key, value)| key == "default-features" && value == "false")
+}
+
+#[test]
+fn git_object_hash_dependency_requires_exact_owner_pin_and_no_optional_features() {
+    let owner = "crates/velnor-actions-orchestrator";
+    let line = "sha1-checked = { version = \"=0.10.0\", default-features = false }";
+    assert!(reviewed_git_object_hash_dependency(
+        owner,
+        "sha1-checked",
+        line
+    ));
+    for altered in [
+        line.replace("=0.10.0", "=0.10.1"),
+        line.replace("false", "true"),
+        line.replace(", default-features = false", ""),
+        line.replace(" }", ", features = [\"std\"] }"),
+        line.replace(" }", ", features = [\"oid\"] }"),
+        line.replace(" }", ", optional = true }"),
+    ] {
+        assert!(!reviewed_git_object_hash_dependency(
+            owner,
+            "sha1-checked",
+            &altered
+        ));
+    }
+    assert!(!reviewed_git_object_hash_dependency(
+        "crates/velnor-actions-cli",
+        "sha1-checked",
+        line
+    ));
+    assert!(!reviewed_git_object_hash_dependency(owner, "sha1", line));
 }

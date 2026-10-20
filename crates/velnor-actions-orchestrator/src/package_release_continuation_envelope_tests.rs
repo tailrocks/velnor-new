@@ -1,36 +1,54 @@
 use super::*;
 use serde_json::{Value, json};
-fn fixture() -> (PackageReleasePlan, PreviewIdentity, String, Value) {
+use velnor_actions_contract::package_release::PackageReleaseEvent;
+
+fn fixture() -> (PackageReleasePlan, String, Value) {
     let fixture = crate::tap_test_support::fixture();
-    let receipt = fixture.release.receipt;
+    let mut plan = fixture.plan;
+    plan.channel = PackageReleaseChannel::Stable;
+    let mut receipt = fixture.release.receipt;
+    receipt.channel = PackageReleaseChannel::Stable;
+    receipt.source.event = PackageReleaseEvent::WorkflowDispatch;
+    receipt.version.value = receipt.version.base.clone();
+    receipt.version.commit_count = None;
+    receipt.version.source_sha7 = None;
+    receipt.tag = format!("v{}", receipt.version.base);
+    receipt.workflow.path = PackageReleaseChannel::Stable.workflow_path().to_owned();
+    receipt.workflow.signer_job_id = PackageReleaseChannel::Stable.signer_job_id().to_owned();
+    receipt.workflow.signer_workflow = PackageReleaseChannel::Stable.workflow_path().to_owned();
+    receipt.evidence.signer_workflow_ref = format!(
+        "{}/{}@{}",
+        receipt.repository.slug, receipt.workflow.path, receipt.workflow.workflow_ref,
+    );
+    receipt.validate().expect("stable receipt");
     let bytes = receipt.canonical_bytes().expect("canonical receipt");
-    let identity =
-        PreviewIdentity::derive(&fixture.plan.base_version, &receipt.source.commit_sha, 9)
-            .expect("preview identity");
-    let body = make_recovery_body(&bytes, b"untrusted-signature-hint", &sha256(&bytes))
+    let digest = sha256(&bytes);
+    let body = make_recovery_body(&bytes, b"untrusted-signature-hint", &digest)
         .expect("canonical discovery envelope");
-    let release = json!({"id":12,"tag_name":receipt.tag,"draft":false,"prerelease":true,
+    let release = json!({"id":12,"tag_name":receipt.tag,"draft":false,"prerelease":false,
         "immutable":true,"body":body,"author":{"id":41_898_282,"login":"github-actions[bot]"},"assets":[]});
-    (fixture.plan, identity, body, release)
+    (plan, body, release)
 }
+
 #[test]
-fn continuation_canonical_envelope_yields_only_original_run_hints() {
-    let (plan, identity, body, release) = fixture();
+fn continuation_canonical_envelope_yields_only_stable_original_run_hints() {
+    let (plan, body, release) = fixture();
     let parsed = serde_json::from_value(release).expect("release response");
-    let receipt = receipt_hint(&parsed, &plan, &identity, 41, &body).expect("discovery hint");
+    let receipt = stable_receipt_hint(&parsed, &plan, 41, &body).expect("discovery hint");
     assert_eq!(
         (receipt.workflow.run_id, receipt.workflow.run_attempt),
         (8, 1)
     );
-    // This is deliberately not a signature test: the next job authenticates retained bytes.
+    assert_eq!(receipt.version.commit_count, None);
 }
+
 #[test]
-fn continuation_refuses_mutable_foreign_or_noncanonical_publication_hints() {
-    let (plan, identity, body, release) = fixture();
+fn continuation_refuses_mutable_foreign_or_noncanonical_stable_hints() {
+    let (plan, body, release) = fixture();
     for (pointer, value) in [
         ("/immutable", json!(false)),
         ("/draft", json!(true)),
-        ("/prerelease", Value::Null),
+        ("/prerelease", json!(true)),
         ("/author/id", json!(1)),
         ("/author/login", json!("other")),
         ("/tag_name", json!("other")),
@@ -40,13 +58,13 @@ fn continuation_refuses_mutable_foreign_or_noncanonical_publication_hints() {
         *changed.pointer_mut(pointer).expect("existing field") = value;
         let parsed = serde_json::from_value(changed).expect("release response");
         assert!(
-            receipt_hint(&parsed, &plan, &identity, 41, &body).is_err(),
+            stable_receipt_hint(&parsed, &plan, 41, &body).is_err(),
             "{pointer}"
         );
     }
     let parsed = serde_json::from_value(release).expect("release response");
-    assert!(receipt_hint(&parsed, &plan, &identity, 42, &body).is_err());
+    assert!(stable_receipt_hint(&parsed, &plan, 42, &body).is_err());
     let mut changed = plan;
     changed.products[0].bins.push("unexpected".to_owned());
-    assert!(receipt_hint(&parsed, &changed, &identity, 41, &body).is_err());
+    assert!(stable_receipt_hint(&parsed, &changed, 41, &body).is_err());
 }

@@ -54,18 +54,12 @@ fn prepare_admitted(
     {
         return Err(internal("tap_static_policy_mismatch"));
     }
-    let preview = config
-        .stacks
-        .rust
-        .as_ref()
-        .map(|rust| &rust.binary_release.preview)
-        .ok_or_else(|| internal("tap_prepare_preview_policy_missing"))?;
     let source_repository = crate::release_identity::origin_repository(&workspace)?;
-    let release = super::VerifiedPreviewRelease {
+    let release = super::VerifiedPackageRelease {
         receipt_digest,
         receipt,
     };
-    prepare_homebrew_tap(&source_repository, tap, preview, &plan, &release, &root)
+    prepare_homebrew_tap(&source_repository, tap, &plan, &release, &root)
 }
 
 pub(super) fn static_tap_policy() -> Result<HomebrewTapConfig, OrchestratorError> {

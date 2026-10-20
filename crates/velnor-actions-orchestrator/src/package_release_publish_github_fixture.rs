@@ -19,6 +19,33 @@ impl JsonFixture {
         Ok(response)
     }
 
+    pub(super) fn mutate(
+        &self,
+        method: &str,
+        route: &str,
+        fields: &[(&str, String)],
+    ) -> Result<Vec<u8>, OrchestratorError> {
+        let expectation = self.read(&format!("{method} {route}"))?;
+        let actual = serde_json::Value::Object(
+            fields
+                .iter()
+                .map(|(key, value)| ((*key).to_owned(), Value::String(value.clone())))
+                .collect(),
+        );
+        assert_eq!(
+            expectation.get("expected_fields"),
+            Some(&actual),
+            "native mutation fields changed"
+        );
+        if expectation.get("transport_error") == Some(&Value::Bool(true)) {
+            return Err(internal("fixture_ambiguous_transport_error"));
+        }
+        let response = expectation
+            .get("response")
+            .expect("mutation fixture response");
+        serde_json::to_vec(response).map_err(|_| internal("fixture_response_json"))
+    }
+
     pub(crate) fn assert_drained(&self) {
         assert!(
             self.responses.borrow().is_empty(),

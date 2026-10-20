@@ -52,6 +52,7 @@ mod fixtures;
 #[test]
 fn canonical_admission_binds_full_plan_receipt_policy_and_original_context() {
     let plan = fixtures::plan();
+    let release_policy = fixtures::release_policy();
     let policy = fixtures::policy();
     policy.validate("fixture").expect("valid policy");
     let context = BTreeMap::from([
@@ -64,54 +65,88 @@ fn canonical_admission_binds_full_plan_receipt_policy_and_original_context() {
     let record = Admission {
         schema: SCHEMA.to_owned(),
         plan: plan.clone(),
+        release_policy: release_policy.clone(),
         receipt: fixtures::receipt(),
         policy: policy.clone(),
         context: context.clone(),
     };
     let bytes = canonical_json_bytes(&record).expect("bytes");
     let digest = super::super::super::sha256(&bytes);
-    assert!(parse_record(&bytes, &digest, &plan, &policy, &context).is_ok());
+    assert!(parse_record(&bytes, &digest, &release_policy, &policy, &context).is_ok());
     let mut changed_plan = plan.clone();
-    changed_plan.base_version = "1.2.4".to_owned();
-    assert!(parse_record(&bytes, &digest, &changed_plan, &policy, &context).is_err());
+    changed_plan.products[0].bins = vec!["other".to_owned()];
+    let mut changed_record = serde_json::to_value(&record).expect("record");
+    changed_record["plan"] = serde_json::to_value(&changed_plan).expect("plan");
+    let changed_bytes = canonical_json_bytes(&changed_record).expect("encode changed plan");
+    assert!(
+        parse_record(
+            &changed_bytes,
+            &super::super::super::sha256(&changed_bytes),
+            &release_policy,
+            &policy,
+            &context
+        )
+        .is_err()
+    );
     let mut changed_policy = policy.clone();
-    changed_policy.formula = "Formula/other.rb".to_owned();
-    assert!(parse_record(&bytes, &digest, &plan, &changed_policy, &context).is_err());
+    changed_policy
+        .destinations
+        .preview
+        .as_mut()
+        .expect("preview")
+        .formula = "Formula/other.rb".to_owned();
+    assert!(parse_record(&bytes, &digest, &release_policy, &changed_policy, &context).is_err());
     let mut changed_context = context.clone();
     changed_context.remove("VELNOR_RELEASE_ORIGINAL_RUN_ATTEMPT");
-    assert!(parse_record(&bytes, &digest, &plan, &policy, &changed_context).is_err());
+    assert!(parse_record(&bytes, &digest, &release_policy, &policy, &changed_context).is_err());
     changed_context.insert(
         "VELNOR_RELEASE_ORIGINAL_RUN_ATTEMPT".to_owned(),
         Some("3".to_owned()),
     );
-    assert!(parse_record(&bytes, &digest, &plan, &policy, &changed_context).is_err());
-    for field in ["schema", "plan", "receipt", "policy", "context"] {
-        let mut missing = serde_json::to_value(&record).expect("value");
+    assert!(parse_record(&bytes, &digest, &release_policy, &policy, &changed_context).is_err());
+    assert_missing_admission_fields(&record, &release_policy, &policy, &context);
+    let mut altered = record;
+    altered.receipt.source.commit_sha = "b".repeat(40);
+    let bad = canonical_json_bytes(&altered).expect("changed receipt");
+    assert!(parse_record(&bad, &digest, &release_policy, &policy, &context).is_err());
+    assert!(
+        parse_record(
+            &bad,
+            &super::super::super::sha256(&bad),
+            &release_policy,
+            &policy,
+            &context
+        )
+        .is_err()
+    );
+}
+
+fn assert_missing_admission_fields(
+    record: &Admission,
+    release_policy: &PackageReleasePolicy,
+    policy: &HomebrewTapConfig,
+    context: &BTreeMap<String, Option<String>>,
+) {
+    for field in [
+        "schema",
+        "plan",
+        "release_policy",
+        "receipt",
+        "policy",
+        "context",
+    ] {
+        let mut missing = serde_json::to_value(record).expect("value");
         missing.as_object_mut().expect("object").remove(field);
         let bad = canonical_json_bytes(&missing).expect("encode");
         assert!(
             parse_record(
                 &bad,
                 &super::super::super::sha256(&bad),
-                &plan,
-                &policy,
-                &context
+                release_policy,
+                policy,
+                context
             )
             .is_err()
         );
     }
-    let mut altered = record;
-    altered.receipt.source.commit_sha = "b".repeat(40);
-    let bad = canonical_json_bytes(&altered).expect("changed receipt");
-    assert!(parse_record(&bad, &digest, &plan, &policy, &context).is_err());
-    assert!(
-        parse_record(
-            &bad,
-            &super::super::super::sha256(&bad),
-            &plan,
-            &policy,
-            &context
-        )
-        .is_err()
-    );
 }

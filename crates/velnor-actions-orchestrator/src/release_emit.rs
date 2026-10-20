@@ -14,7 +14,7 @@ use std::collections::BTreeSet;
 
 #[path = "release_emit/spec.rs"]
 mod spec;
-use spec::{bootstrap_plan, plz_config, release_triggers};
+use spec::{bootstrap_plan, release_triggers};
 
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{ReleaseAuthentication, ReleaseRegistry, RustReleaseConfig};
@@ -40,6 +40,10 @@ use crate::release_identity::{
     common_registry, head_sha, origin_repository, plan_id_for_source, workspace_slug,
 };
 use crate::release_steps::{JobInputs, assemble_jobs};
+
+#[path = "release_emit_config.rs"]
+mod config;
+use config::plz_config;
 
 /// Release workflow display name (fixed; config carries no workflow name).
 const RELEASE_WORKFLOW_NAME: &str = "Velnor Release";
@@ -171,6 +175,16 @@ pub(crate) fn enabled_release(
 pub(crate) fn git_tag_release(
     prep: &GenerationPreparation,
 ) -> Result<Option<&RustReleaseConfig>, OrchestratorError> {
+    // Native stable has one manual coordinator; never add an automatic tag writer.
+    if prep
+        .config
+        .stacks
+        .rust
+        .as_ref()
+        .is_some_and(|rust| rust.binary_release.stable.enabled)
+    {
+        return Ok(None);
+    }
     Ok(enabled_release(prep)?.filter(|release| release.registry == ReleaseRegistry::GitTag))
 }
 

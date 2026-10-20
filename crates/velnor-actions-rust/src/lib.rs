@@ -18,7 +18,6 @@ pub mod identity;
 mod manifest_edges;
 pub mod metadata;
 pub mod metadata_edges;
-pub mod preview_products;
 pub mod profile;
 mod profile_select;
 pub mod propose;
@@ -26,8 +25,10 @@ pub mod release_config;
 pub mod release_error;
 pub mod release_facts;
 pub mod release_graph;
+pub mod release_products;
 pub mod release_select;
 pub mod release_semver;
+pub mod release_versions;
 pub mod resolved_graph;
 pub mod scan;
 pub mod stability;
@@ -61,7 +62,6 @@ pub use metadata::{
     WorkspaceRecord, parse_metadata_json,
 };
 pub use metadata_edges::{DepKind, LocalEdge, SkippedPathEdge, local_edge_pairs};
-pub use preview_products::{ResolvedPreviewProducts, resolve_preview_products};
 pub use profile::{
     AMBIGUOUS_DRIVER_CODE, AMBIGUOUS_RUNNER_CODE, CompileDriver, NextestProfile,
     PROFILE_CONFLICT_CODE, ProfileError, ProfileFinding, ProfileInputs, ProfileOutcome,
@@ -80,6 +80,9 @@ pub use release_config::{
 pub use release_error::ReleaseError;
 pub use release_facts::{DepFact, DepSource, PublishSetting, ReleaseFacts};
 pub use release_graph::{PackagingEdge, PublicationGraph, RegistryState, publication_graph};
+pub use release_products::{
+    ResolvedReleaseProducts, release_version_policy, resolve_release_products,
+};
 pub use release_select::{
     DEFAULT_REGISTRY, ReleaseRequest, ReleaseScope, ReleaseSelection, ResolvedScope,
     SelectedPackage, select_release_set,
@@ -87,6 +90,7 @@ pub use release_select::{
 pub use release_semver::{
     PreIdent, SemVersion, VersionReq, parse_req, parse_version, req_matches, version_satisfies,
 };
+pub use release_versions::resolve_release_policy;
 pub use resolved_graph::{ResolvedGraph, ResolvedPathPackage, parse_resolved_graph};
 pub use stability::{
     CommittedProfile, committed_profile_differs, read_committed_profile_for_comparison,

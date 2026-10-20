@@ -72,7 +72,7 @@ fn release_disabled_by_default_and_enabled_needs_allowlist() {
         default.effective_authentication(),
         ReleaseAuthentication::TrustedPublishing
     );
-    assert_eq!(default.registry, ReleaseRegistry::CratesIo);
+    assert_eq!(default.registry, ReleaseRegistry::GitTag);
     assert_eq!(valid_release().validate(FILE), Ok(()));
     let mut empty = valid_release();
     empty.packages.clear();
@@ -191,7 +191,7 @@ fn release_validates_manifest_environment_and_tag() {
                 .starts_with("stacks.rust.release.environment ")
         );
     }
-    for tag in "v{{ version }}|{{ package }}-v1.0||{{ package }}-$(x)-{{ version }}|{{ package }}-`x`-{{ version }}|{{ package }}-v{{ version }".split('|') {
+    for tag in "release-{{ version }}|{{ package }}-v1.0||{{ package }}-$(x)-{{ version }}|{{ package }}-`x`-{{ version }}|{{ package }}-v{{ version }".split('|') {
         let mut bad = valid_release();
         bad.tag_name = tag.to_owned();
         assert!(config_problem(&bad).expect("must reject").starts_with("stacks.rust.release.tag_name "));

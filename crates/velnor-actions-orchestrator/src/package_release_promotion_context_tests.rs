@@ -11,6 +11,12 @@ fn plan() -> PackageReleasePlan {
         companions: vec![],
     }
 }
+fn stable_plan() -> PackageReleasePlan {
+    PackageReleasePlan {
+        channel: PackageReleaseChannel::Stable,
+        ..plan()
+    }
+}
 fn invocation(event: &str, path: &str) -> Invocation {
     Invocation {
         repository: "example/app".to_owned(),
@@ -36,6 +42,31 @@ fn continuation_never_grants_publication_recovery_authority() {
     assert!(
         caller
             .validate(&plan(), Purpose::PublicationRecovery)
+            .is_ok()
+    );
+}
+#[test]
+fn stable_continuation_uses_only_its_channel_workflow_identity() {
+    let stable = stable_plan();
+    let stable_path = stable.channel.workflow_path();
+    let caller = invocation("schedule", ".github/workflows/stable-tap-reconcile.yml");
+    assert!(caller.validate(&stable, Purpose::TapPromotion).is_ok());
+    assert!(
+        caller
+            .validate(&stable, Purpose::PublicationRecovery)
+            .is_err()
+    );
+
+    let wrong_workflow = invocation("schedule", CONTINUATION_PATH);
+    assert!(
+        wrong_workflow
+            .validate(&stable, Purpose::TapPromotion)
+            .is_err()
+    );
+    let manual = invocation("workflow_dispatch", stable_path);
+    assert!(
+        manual
+            .validate(&stable, Purpose::PublicationRecovery)
             .is_ok()
     );
 }

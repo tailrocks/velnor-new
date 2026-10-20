@@ -39,6 +39,10 @@ const OWNED_KEYS: [&str; 9] = [
 /// jobs that consume them.
 const RUST_JOB_KINDS: [SourceKind; 2] = [SourceKind::Cargo, SourceKind::ReleaseAssets];
 
+/// Source kinds a Bun member job retrieves: pinned release-asset bundles. Cargo
+/// sources, git trees and Maven bundles are not Bun inputs.
+const BUN_JOB_KINDS: [SourceKind; 1] = [SourceKind::ReleaseAssets];
+
 /// Everything needed to render the block for any set of workspace roots.
 #[derive(Debug)]
 pub(crate) struct PrivateWiring {
@@ -98,7 +102,23 @@ impl PrivateWiring {
     /// # Errors
     /// Lock read and render-spec failures.
     pub(crate) fn steps_for_roots(&self, roots: &[String]) -> Result<Vec<Step>, OrchestratorError> {
-        let kinds: BTreeSet<SourceKind> = RUST_JOB_KINDS.into_iter().collect();
+        self.steps_for_kinds(roots, &RUST_JOB_KINDS)
+    }
+
+    /// The block for a Bun member job rooted at `root`; empty without release assets.
+    ///
+    /// # Errors
+    /// Lock read and render-spec failures.
+    pub(crate) fn steps_for_bun(&self, root: &str) -> Result<Vec<Step>, OrchestratorError> {
+        self.steps_for_kinds(&[root.to_owned()], &BUN_JOB_KINDS)
+    }
+
+    fn steps_for_kinds(
+        &self,
+        roots: &[String],
+        kinds: &[SourceKind],
+    ) -> Result<Vec<Step>, OrchestratorError> {
+        let kinds: BTreeSet<SourceKind> = kinds.iter().copied().collect();
         let repositories = job_allowlist(
             &self.workspace,
             &self.config,
@@ -140,13 +160,20 @@ impl PrivateWiring {
     /// Jobs that stage the helper later (the plan job) get it moved up to just
     /// before the block, so the internal operations have their binary.
     ///
+    /// A job with no Cargo roots (a Bun-only repository) fetches no Cargo
+    /// source, and release assets are consumed by the jobs that name them, so
+    /// it gets no block.
+    ///
     /// # Errors
-    /// Fails when the job has no Cargo source fetch to precede.
+    /// Fails when the job has Cargo roots but no Cargo source fetch to precede.
     pub(crate) fn insert_into_job(
         &self,
         job: &mut Job,
         roots: &[String],
     ) -> Result<(), OrchestratorError> {
+        if roots.is_empty() {
+            return Ok(());
+        }
         let block = self.steps_for_roots(roots)?;
         if block.is_empty() {
             return Ok(());

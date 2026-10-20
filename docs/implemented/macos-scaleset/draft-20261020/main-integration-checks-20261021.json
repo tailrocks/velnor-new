@@ -1,0 +1,55 @@
+{
+  "scope": "These checks cover the current main source integration. They do not prove a release or a live installation.",
+  "branch": "fix/private-scaleset-installation",
+  "base_commit": "b60788227df0a6eec032bc95b54ab728728d2ea6",
+  "incoming_commit": "8e12af05465e07eb37a9f4d602116363ab97b4a9",
+  "checked_tree_without_this_record": "95560815899db5de68a6c2869adff524d22aea28",
+  "next_main_commit": "8bafebe431a2b73a913b40022eb84173d03ee4f5",
+  "checks": {
+    "root_strict_clippy": {
+      "result": "PASS",
+      "command": "mbx clippy --workspace --all-targets --all-features --locked -- -D warnings",
+      "rust": "1.99.1",
+      "mbx": "1.25.0",
+      "log_sha256": "4230a7b0c10484e5007bfe2f3b95aaeead2022521ba2b81855224dbdee459e79"
+    },
+    "root_format": {
+      "result": "PASS",
+      "command": "cargo fmt --all --check",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "renderer": {
+      "result": "PASS",
+      "tests": 39,
+      "run_id": "94d79b32-9834-4100-97a9-e1648c6cb1a7"
+    },
+    "cli_and_orchestrator": {
+      "result": "PASS",
+      "tests": 18,
+      "run_id": "f39b146d-16ef-40f4-860a-4ea4e8e7de5e",
+      "log_sha256": "5b2101eef8e25e56a47aa591d2098bdbdb2c0eea1e969a02d6da2f4c9293279a"
+    },
+    "parity": {
+      "result": "PASS",
+      "tests": 4,
+      "log_sha256": "a7c021d7a1d883b74db68985a8b438438a91dd7018c4e7dc463b742848f52599"
+    },
+    "generated_files": {
+      "result": "PASS",
+      "files": 32,
+      "scope": "Two generated trees have identical bytes. The final source also produces the checked-in generated tree."
+    },
+    "golden_files": {
+      "result": "PASS",
+      "cases": 5,
+      "log_sha256": "f9f7d45211fe7c6caa15ae755fa743666289054d857f8937a2c263a8fa537d54"
+    }
+  },
+  "independent_review": {
+    "result": "PASS",
+    "reviewer": "execution_source_security_review",
+    "source_files": 25,
+    "receipt_sha256": "849bf015dbe0cf96589526aaf17c7b00d61dd3bc39e750885267e3d116ff15d4"
+  },
+  "remaining": "The later main commits, full source gates, release, and live installations remain incomplete."
+}

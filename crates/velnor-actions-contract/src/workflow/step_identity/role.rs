@@ -144,6 +144,8 @@ pub enum StepRole {
     QualificationCacheReceipt,
     /// Reads the configured roots for one cache layer.
     QualificationCacheRoots,
+    /// Bun registry install using the workflow-scoped npm token.
+    BunRegistryInstall,
 }
 
 impl StepRole {
@@ -295,6 +297,7 @@ fn internal_operation_for_role(role: StepRole) -> Option<&'static str> {
         StepRole::NormalToolsCacheExport => Some(NORMAL_TOOLS_CACHE_EXPORT_OPERATION),
         StepRole::PrivateFetch => Some(PRIVATE_FETCH_OPERATION),
         StepRole::PrivateRevoke => Some(PRIVATE_REVOKE_OPERATION),
+        StepRole::BunRegistryInstall => Some(super::BUN_REGISTRY_INSTALL_OPERATION),
         StepRole::QualificationRuntimeIdentity => Some("observe-qualification-cache-runtime-v1"),
         StepRole::QualificationCacheRoots => Some("observe-qualification-cache-roots-v1"),
         StepRole::QualificationCacheBind => Some("bind-qualification-cache-v1"),

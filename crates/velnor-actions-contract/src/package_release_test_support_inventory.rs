@@ -5,19 +5,24 @@ use super::super::{
 use super::asset;
 use super::fixture;
 use crate::config::{
-    RustBinaryPreviewArchive, RustBinaryPreviewCompanion, RustBinaryPreviewConfig,
-    RustBinaryPreviewProducer, RustBinaryPreviewProduct,
+    RustBinaryReleaseArchive, RustBinaryReleaseCompanion, RustBinaryReleaseConfig,
+    RustBinaryReleaseProducer, RustBinaryReleaseProduct,
 };
 
-pub(crate) fn jackin_preview() -> RustBinaryPreviewConfig {
-    RustBinaryPreviewConfig {
-        enabled: true,
+pub(crate) fn jackin_preview() -> RustBinaryReleaseConfig {
+    RustBinaryReleaseConfig {
+        version_package: "jackin".to_owned(),
+        preview: crate::config::RustBinaryPreviewConfig {
+            enabled: true,
+            release_id: 328_385_904,
+            ..crate::config::RustBinaryPreviewConfig::default()
+        },
         version_env: "JACKIN_VERSION_OVERRIDE".to_owned(),
-        producer: RustBinaryPreviewProducer {
+        producer: RustBinaryReleaseProducer {
             task: "release:preview-package".to_owned(),
             tools: vec!["rust".to_owned()],
             inputs: vec!["Cargo.lock".to_owned(), "mise.toml".to_owned()],
-            ..RustBinaryPreviewProducer::default()
+            ..RustBinaryReleaseProducer::default()
         },
         products: vec![
             preview_product(
@@ -38,16 +43,16 @@ pub(crate) fn jackin_preview() -> RustBinaryPreviewConfig {
                 &["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"],
             ),
         ],
-        companions: vec![RustBinaryPreviewCompanion {
+        companions: vec![RustBinaryReleaseCompanion {
             id: "capsule-manifest".to_owned(),
             path: "capsule-manifest.json".to_owned(),
             asset_name: "capsule-manifest.json".to_owned(),
         }],
-        ..RustBinaryPreviewConfig::default()
+        ..RustBinaryReleaseConfig::default()
     }
 }
 
-pub(crate) fn jackin_receipt(preview: &RustBinaryPreviewConfig) -> PackageReleaseReceipt {
+pub(crate) fn jackin_receipt(preview: &RustBinaryReleaseConfig) -> PackageReleaseReceipt {
     let mut receipt = fixture(PackageReleaseChannel::Preview);
     receipt.products = jackin_products(preview, &receipt.version.base);
     receipt.assets = jackin_assets(&receipt.products);
@@ -56,7 +61,7 @@ pub(crate) fn jackin_receipt(preview: &RustBinaryPreviewConfig) -> PackageReleas
 }
 
 pub(crate) fn jackin_products(
-    preview: &RustBinaryPreviewConfig,
+    preview: &RustBinaryReleaseConfig,
     base: &str,
 ) -> Vec<PackageReleaseProduct> {
     let mut products: Vec<_> = preview
@@ -191,12 +196,12 @@ pub(crate) fn preview_product(
     package: &str,
     bins: &[&str],
     targets: &[&str],
-) -> RustBinaryPreviewProduct {
-    RustBinaryPreviewProduct {
+) -> RustBinaryReleaseProduct {
+    RustBinaryReleaseProduct {
         id: id.to_owned(),
         package: package.to_owned(),
         bins: bins.iter().map(|bin| (*bin).to_owned()).collect(),
         targets: targets.iter().map(|target| (*target).to_owned()).collect(),
-        archive: RustBinaryPreviewArchive::TarGz,
+        archive: RustBinaryReleaseArchive::TarGz,
     }
 }

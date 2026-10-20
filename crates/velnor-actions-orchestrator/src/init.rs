@@ -161,12 +161,27 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # allow_remediation_commits = { individual = true, third_party = true }  # third_party requires individual.
 # require = { members = false }     # members = false exempts organization members from sign-off.
 
-# Optional single-package native binary release workflow (consumer-v1 only).
+# Optional shared native binary inventory (consumer-v1 only).
+# Configure the producer and capture qualified_tools before enabling a channel.
+# See docs/proposed/native-preview-contract.md and
+# docs/proposed/binary-release-contract.md.
 # [stacks.rust.binary_release]
-# enabled = true
 # manifest_path = "Cargo.toml"      # Workspace-root manifest with a tracked Cargo.lock.
-# package = "repo-scan"             # Exact package discovered in this workspace.
-# bin = "repo-scan"                 # One binary target without required-features.
+# version_package = "repo-scan"    # Exact product package owning the Cargo version.
+# version_env = "REPO_SCAN_VERSION_OVERRIDE"
+# [stacks.rust.binary_release.evidence]
+# profile = "signed-sbom-v1"
+# [[stacks.rust.binary_release.products]]
+# id = "repo-scan"
+# package = "repo-scan"
+# bins = ["repo-scan"]             # Binary targets without required-features.
+# targets = ["aarch64-apple-darwin"]
+# archive = "tar.gz"
+# [stacks.rust.binary_release.preview]
+# enabled = false                 # Enable only after qualification and existing release admission.
+# release_id = 0                  # Replace with the actual existing mutable preview release ID.
+# [stacks.rust.binary_release.stable]
+# enabled = false                 # Requires matching manual git-tag release-plz version policy.
 
 # Optional repository-relative POSIX globs excluded before detector input.
 # [discovery]

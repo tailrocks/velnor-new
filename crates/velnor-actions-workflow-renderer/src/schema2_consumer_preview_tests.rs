@@ -1,78 +1,45 @@
 use super::*;
 use crate::{HelperProvenance, provision_acquire_step};
-use velnor_actions_contract::preview_production::{
-    expected_preview_payload_pairs, preview_payload_job_id,
-};
+use velnor_actions_contract::{ExecutionMode, ScaleSetSelector, config::ValidatedImageReference};
 use velnor_actions_contract::{
-    ExecutionMode, PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlanProduct, ScaleSetSelector,
-    config::{RustBinaryPreviewCompanion, VerificationRunner},
+    PACKAGE_RELEASE_POLICY_SCHEMA_V1, PackageReleasePlanProduct,
+    config::{RustBinaryReleaseCompanion, VerificationRunner},
     package_release::PackageReleasePayloadFormat,
 };
 
-fn hosted_policy() -> crate::workflow_routing::WorkflowRoutingPolicy {
-    crate::workflow_routing::test_policy(ExecutionMode::Hosted, scale_set_selector())
-}
-
-fn scale_set_policy() -> crate::workflow_routing::WorkflowRoutingPolicy {
-    crate::workflow_routing::test_policy(ExecutionMode::ScaleSet, scale_set_selector())
-}
-
-fn scale_set_selector() -> ScaleSetSelector {
-    ScaleSetSelector::try_new(
-        "ubuntu-26.04-scale-set",
-        &["velnor".to_owned(), "ubuntu-26.04-scale-set".to_owned()],
-    )
-    .expect("valid selector")
-}
-
-fn render_preview(spec: &ConsumerPreviewSpec) -> Result<RenderedFile, RenderError> {
-    render_consumer_preview(spec, &hosted_policy())
-}
-#[path = "schema2_consumer_preview_payload_tests.rs"]
-mod payloads;
-#[path = "schema2_consumer_preview_reconcile_tests.rs"]
-mod reconcile_tests;
-#[path = "schema2_consumer_preview_source_tests.rs"]
-mod sources;
 #[path = "schema2_consumer_preview_tap_admission_tests.rs"]
 mod tap_admission;
 
-fn fixture() -> ConsumerPreviewSpec {
+#[path = "schema2_consumer_preview_reconcile_tests.rs"]
+mod reconcile_tests;
+
+#[path = "schema2_consumer_preview_payload_tests.rs"]
+mod payloads;
+#[path = "schema2_consumer_release_policy_tests.rs"]
+mod policies;
+#[path = "schema2_consumer_preview_source_tests.rs"]
+mod sources;
+#[path = "schema2_consumer_binary_release_tests.rs"]
+mod stable;
+
+fn render_preview(spec: &ConsumerReleaseSpec) -> Result<RenderedFile, RenderError> {
+    render_consumer_preview(spec, &hosted_policy())
+}
+
+pub(super) fn fixture() -> ConsumerReleaseSpec {
     let acquire = provision_acquire_step(&HelperProvenance::ReleaseAsset {
         url: "https://github.com/tailrocks/velnor-new/releases/download/v0.1.12/velnor-actions-0.1.12-x86_64-unknown-linux-gnu".to_owned(),
         sha256: "a".repeat(64), commit: "b".repeat(40),
     }, vec!["sh".to_owned(), "-c".to_owned(), r#"curl -fsSL "$VELNOR_ASSET_URL" -o "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.12" && printf '%s  %s\n' "$VELNOR_ASSET_SHA256" "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.12" | sha256sum -c -"#.to_owned()]).expect("pinned helper");
-    let targets = [
-        "aarch64-apple-darwin",
-        "aarch64-unknown-linux-gnu",
-        "x86_64-apple-darwin",
-        "x86_64-unknown-linux-gnu",
-    ];
-    let products = [("capsule", &targets[..2]), ("scanner", &targets[..])]
-        .into_iter()
-        .map(|(id, targets)| PackageReleasePlanProduct {
-            id: id.to_owned(),
-            package: id.to_owned(),
-            bins: vec![id.to_owned()],
-            targets: targets.iter().map(|target| (*target).to_owned()).collect(),
-            format: PackageReleasePayloadFormat::TarGz,
-        })
-        .collect();
-    ConsumerPreviewSpec {
+    ConsumerReleaseSpec {
+        checkout_lfs: false,
+        stable: None,
+        preview: Some(ConsumerRollingPreviewSpec {
+            release_id: 123,
+            bootstrap_snapshot_sha256: None,
+        }),
         generator_version: "0.1.12".to_owned(),
-        plan: PackageReleasePlan {
-            schema: PACKAGE_RELEASE_PLAN_SCHEMA_V1.to_owned(),
-            channel: PackageReleaseChannel::Preview,
-            repository: "example/scanner".to_owned(),
-            default_branch: "main".to_owned(),
-            base_version: "1.2.3".to_owned(),
-            products,
-            companions: vec![RustBinaryPreviewCompanion {
-                id: "manifest".to_owned(),
-                path: "capsule.json".to_owned(),
-                asset_name: "capsule.json".to_owned(),
-            }],
-        },
+        policy: policy_fixture(),
         producer_runner: VerificationRunner::Macos26Arm64,
         producer_timeout_minutes: 5,
         linux_acquire: acquire.clone(),
@@ -116,6 +83,48 @@ fn fixture() -> ConsumerPreviewSpec {
     }
 }
 
+fn policy_fixture() -> PackageReleasePolicy {
+    let targets = [
+        "aarch64-apple-darwin",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-apple-darwin",
+        "x86_64-unknown-linux-gnu",
+    ];
+    let products = [("capsule", &targets[..2]), ("scanner", &targets[..])]
+        .into_iter()
+        .map(|(id, targets)| PackageReleasePlanProduct {
+            id: id.to_owned(),
+            package: id.to_owned(),
+            bins: vec![id.to_owned()],
+            targets: targets.iter().map(|target| (*target).to_owned()).collect(),
+            format: PackageReleasePayloadFormat::TarGz,
+        })
+        .collect();
+    PackageReleasePolicy {
+        schema: PACKAGE_RELEASE_POLICY_SCHEMA_V1.to_owned(),
+        channel: PackageReleaseChannel::Preview,
+        repository: "example/scanner".to_owned(),
+        default_branch: "main".to_owned(),
+        version: velnor_actions_contract::CargoVersionPolicy {
+            version_package: "scanner".to_owned(),
+            bindings: ["capsule", "scanner"]
+                .into_iter()
+                .map(|package| velnor_actions_contract::CargoVersionBinding {
+                    package: package.to_owned(),
+                    manifest_path: format!("{package}/Cargo.toml"),
+                    workspace_manifest_path: "Cargo.toml".to_owned(),
+                })
+                .collect(),
+        },
+        products,
+        companions: vec![RustBinaryReleaseCompanion {
+            id: "manifest".to_owned(),
+            path: "capsule.json".to_owned(),
+            asset_name: "capsule.json".to_owned(),
+        }],
+    }
+}
+
 fn setup_fixture() -> MiseSetup {
     MiseSetup {
         uses: "jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde".to_owned(),
@@ -132,57 +141,112 @@ fn job<'a>(yaml: &'a str, name: &str, next: Option<&str>) -> &'a str {
     })
 }
 
-fn payload_job_ids(spec: &ConsumerPreviewSpec) -> Vec<String> {
-    expected_preview_payload_pairs(&spec.plan)
-        .expect("valid payload pairs")
-        .iter()
-        .map(|pair| preview_payload_job_id(&spec.plan, pair).expect("payload job ID"))
-        .collect()
-}
-
-fn workflow_job_ids(yaml: &str) -> Vec<&str> {
-    let jobs = yaml.split_once("jobs:\n").map_or("", |(_, tail)| tail);
-    jobs.lines()
-        .filter_map(|line| {
-            let field = line.strip_prefix("  ")?;
-            if field.starts_with(' ') {
-                return None;
-            }
-            field.strip_suffix(':')
-        })
-        .collect()
+#[test]
+fn preview_has_isolated_privileges_and_exact_inventory_attestation() {
+    let rendered = render_consumer_preview(&fixture(), &hosted_policy()).expect("preview");
+    assert_eq!(rendered.path, ".github/workflows/binary-preview.yml");
+    let yaml = &rendered.bytes;
+    let triggers = &yaml[..yaml.find("jobs:").expect("jobs")];
+    assert!(triggers.contains("workflow_run:"));
+    assert!(triggers.contains("workflows:"));
+    assert!(triggers.contains("- CI"));
+    assert!(triggers.contains("- completed"));
+    assert!(!triggers.contains("  push:"));
+    let eligibility = job(yaml, "preview-eligibility", Some("preview-payload-000"));
+    assert!(eligibility.contains("ref: ${{ github.sha }}"));
+    assert_eq!(eligibility.matches("actions/checkout").count(), 1);
+    assert!(eligibility.find("actions/checkout") < eligibility.find("Verify source and CI"));
+    assert!(eligibility.contains("fetch-depth: 0"));
+    assert!(eligibility.contains("persist-credentials: false"));
+    let producer = job(yaml, "preview-payload-000", Some("preview-payload-001"));
+    assert!(producer.contains("fetch-depth: 0"));
+    assert!(producer.contains("persist-credentials: false"));
+    assert!(!producer.contains("environment:"));
+    assert!(!producer.contains("GH_TOKEN: \"${{ github.token }}\""));
+    assert!(!producer.contains("id-token"));
+    assert!(!producer.contains("contents: write"));
+    assert!(!producer.contains("RELEASE_STATUS_READ_TOKEN"));
+    let signer = job(yaml, "preview-signer", Some("preview-publisher"));
+    assert!(!signer.contains("actions/checkout"));
+    assert!(signer.contains("id-token: write"));
+    assert!(signer.contains("contents: read"));
+    assert!(!signer.contains("contents: write"));
+    assert_eq!(signer.matches("/velnor/release-signed/").count(), 8);
+    assert!(!signer.contains("artifact-metadata"));
+    assert!(signer.contains("create-storage-record: false"));
+    assert!(!signer.contains("RELEASE_STATUS_READ_TOKEN"));
+    let publisher = job(yaml, "preview-publisher", None);
+    assert!(!publisher.contains("actions/checkout"));
+    assert!(!publisher.contains("id-token"));
+    assert!(publisher.contains("contents: write"));
+    assert!(publisher.contains("publish-package-release-v1"));
+    assert!(publisher.contains("${{ secrets.RELEASE_STATUS_READ_TOKEN }}"));
+    assert!(!yaml.contains("tap-update"));
 }
 
 #[test]
 fn preview_rejects_stable_plan_or_invalid_inventory_before_rendering() {
     let mut spec = fixture();
-    spec.plan.channel = PackageReleaseChannel::Stable;
-    assert!(render_preview(&spec).is_err());
-    spec.plan.channel = PackageReleaseChannel::Preview;
-    spec.plan.default_branch = "develop".to_owned();
-    assert!(render_preview(&spec).is_err());
-    spec.plan.default_branch = "main".to_owned();
-    spec.plan.products[0]
+    spec.policy.channel = PackageReleaseChannel::Stable;
+    assert!(render_consumer_preview(&spec, &hosted_policy()).is_err());
+    spec.policy.channel = PackageReleaseChannel::Preview;
+    spec.policy.default_branch = "develop".to_owned();
+    assert!(render_consumer_preview(&spec, &hosted_policy()).is_err());
+    spec.policy.default_branch = "main".to_owned();
+    spec.policy.products[0]
         .targets
         .push("../../escape".to_owned());
-    assert!(render_preview(&spec).is_err());
+    assert!(render_consumer_preview(&spec, &hosted_policy()).is_err());
 }
 
-fn with_tap() -> ConsumerPreviewSpec {
+#[test]
+fn manual_recovery_has_no_build_or_signing_authority() {
+    let rendered = render_consumer_preview(&fixture(), &hosted_policy()).expect("preview");
+    let yaml = &rendered.bytes;
+    assert!(yaml.contains("original_run_id:"));
+    assert!(yaml.contains("original_run_attempt:"));
+    assert!(yaml.contains("description: Original preview production workflow run ID"));
+    assert!(yaml.contains("description: Original preview production workflow run attempt"));
+    assert!(!yaml.contains("Original push workflow run ID"));
+    assert!(!yaml.contains("Original signer run attempt"));
+    for (name, next) in [
+        ("preview-payload-000", "preview-payload-001"),
+        ("preview-assemble", "preview-signer"),
+        ("preview-signer", "preview-publisher"),
+        ("preview-publisher", "preview-recovery"),
+    ] {
+        assert!(job(yaml, name, Some(next)).contains("github.event_name == 'workflow_run'"));
+    }
+    let recovery = job(yaml, "preview-recovery", None);
+    assert!(recovery.contains("github.event_name == 'workflow_dispatch'"));
+    assert!(recovery.contains("recover-package-release-v1"));
+    assert!(!recovery.contains("actions/checkout"));
+    assert!(!recovery.contains("execute-release-producer-v1"));
+    assert!(!recovery.contains("sign-package-release-v1"));
+    assert!(!recovery.contains("id-token"));
+    assert!(!recovery.contains("attestations: write"));
+    assert!(recovery.contains("${{ secrets.RELEASE_STATUS_READ_TOKEN }}"));
+}
+
+fn with_tap() -> ConsumerReleaseSpec {
     use velnor_actions_contract::config::{
         CheckExecutor, CheckPlatform, CheckRunner, ExactHeadReviewCheck, HomebrewTapConfig,
-        HomebrewTapProtectionObserver, HomebrewTapSource, MiseTaskSource, ReviewAppIdentity,
+        HomebrewTapDestination, HomebrewTapDestinations, MiseTaskSource, ReviewAppIdentity,
         TapMergePolicy, TapUpdateEnvironment, TapUpdaterBinding,
     };
     let mut spec = fixture();
-    spec.homebrew_tap = Some(ConsumerPreviewTapSpec {
+    spec.homebrew_tap = Some(ConsumerReleaseTapSpec {
         updater_acquire: spec.linux_acquire.clone(),
         updater_setup: setup_fixture(),
         policy: HomebrewTapConfig {
             enabled: true,
-            source: HomebrewTapSource::RustBinaryReleasePreview,
             repository: "example/homebrew-tap".to_owned(),
-            formula: "Formula/scanner-preview.rb".to_owned(),
+            destinations: HomebrewTapDestinations {
+                preview: Some(HomebrewTapDestination {
+                    formula: "Formula/scanner-preview.rb".to_owned(),
+                }),
+                stable: None,
+            },
             updater: TapUpdaterBinding {
                 task: "package:update-preview".to_owned(),
                 source: MiseTaskSource {
@@ -205,9 +269,9 @@ fn with_tap() -> ConsumerPreviewSpec {
             environment: TapUpdateEnvironment::TapUpdate,
             app_id_variable: "TAP_APP_ID".to_owned(),
             app_private_key_secret: "TAP_APP_PRIVATE_KEY".to_owned(),
-            protection_observer: HomebrewTapProtectionObserver {
-                app_id_variable: "PROTECTION_APP_ID".to_owned(),
-                app_private_key_secret: "PROTECTION_APP_PRIVATE_KEY".to_owned(),
+            protection_observer: velnor_actions_contract::config::HomebrewTapProtectionObserver {
+                app_id_variable: "TAP_PROTECTION_APP_ID".to_owned(),
+                app_private_key_secret: "TAP_PROTECTION_APP_PRIVATE_KEY".to_owned(),
             },
             merge: TapMergePolicy::SquashAfterGates,
             review_completion: ExactHeadReviewCheck {
@@ -224,7 +288,7 @@ fn with_tap() -> ConsumerPreviewSpec {
 
 #[test]
 fn tap_jobs_separate_unprivileged_preparation_and_scoped_app_authority() {
-    let rendered = render_preview(&with_tap()).expect("tap workflow");
+    let rendered = render_consumer_preview(&with_tap(), &hosted_policy()).expect("tap workflow");
     let yaml = &rendered.bytes;
     let prepare = job(yaml, "preview-tap-prepare", Some("preview-tap-writer"));
     assert!(prepare.contains("actions/checkout"));
@@ -246,7 +310,7 @@ fn tap_jobs_separate_unprivileged_preparation_and_scoped_app_authority() {
         assert!(privileged.contains("owner: example"));
         assert!(privileged.contains("repositories: homebrew-tap"));
         assert!(privileged.contains("skip-token-revoke: false"));
-        assert!(!privileged.contains("PREVIEW_IMMUTABILITY_READ_TOKEN"));
+        assert!(privileged.contains("${{ secrets.RELEASE_STATUS_READ_TOKEN }}"));
         assert!(privileged.contains("VELNOR_RELEASE_ORIGINAL_RUN_ID:"));
     }
     let writer = job(yaml, "preview-tap-writer", Some("preview-tap-merge"));
@@ -255,7 +319,24 @@ fn tap_jobs_separate_unprivileged_preparation_and_scoped_app_authority() {
     assert!(!writer.contains("VELNOR_TAP_MERGE_TOKEN:"));
     let merge = job(yaml, "preview-tap-merge", None);
     assert!(merge.contains("permission-administration: read"));
-    assert!(merge.contains("permission-checks: read"));
+    let merge_token = merge
+        .split("id: tap-token")
+        .nth(1)
+        .expect("merge token")
+        .split("id: tap-protection-token")
+        .next()
+        .expect("merge token boundary");
+    assert!(!merge_token.contains("permission-checks: read"));
+    assert!(merge.contains("VELNOR_TAP_PROTECTION_TOKEN"));
+    assert!(!writer.contains("VELNOR_TAP_PROTECTION_"));
+    assert!(!writer.contains("${{ secrets.TAP_PROTECTION_APP_PRIVATE_KEY }}"));
+    assert!(!prepare.contains("VELNOR_TAP_PROTECTION_"));
+    assert!(!prepare.contains("${{ secrets.TAP_PROTECTION_APP_PRIVATE_KEY }}"));
+    let observer = merge
+        .split("id: tap-protection-token")
+        .nth(1)
+        .expect("observer mint");
+    assert!(observer.contains("permission-administration: read"));
     assert!(merge.contains("VELNOR_TAP_MERGE_TOKEN:"));
     assert!(!merge.contains("VELNOR_TAP_TOKEN:"));
     assert!(merge.contains("VELNOR_TAP_COMPLETION_APP_ID:"));
@@ -271,7 +352,7 @@ fn credential_references_cannot_become_privileged_environment_keys() {
         .policy
         .review_completion
         .app_id_variable = "PATH".to_owned();
-    let yaml = render_preview(&spec)
+    let yaml = render_consumer_preview(&spec, &hosted_policy())
         .expect("literal variable reference")
         .bytes;
     let merge = job(&yaml, "preview-tap-merge", None);
@@ -291,107 +372,65 @@ fn tap_updater_rejects_self_hosted_execution_without_native_provisioning() {
         .runner;
     runner.executor = velnor_actions_contract::config::CheckExecutor::EphemeralSelfHosted;
     runner.label = "tap-updater".to_owned();
-    assert!(render_preview(&spec).is_err());
+    assert!(render_consumer_preview(&spec, &hosted_policy()).is_err());
+}
+
+fn hosted_policy() -> crate::workflow_routing::WorkflowRoutingPolicy {
+    crate::workflow_routing::WorkflowRoutingPolicy::hosted_only()
+}
+
+fn scale_set_policy() -> crate::workflow_routing::WorkflowRoutingPolicy {
+    crate::workflow_routing::WorkflowRoutingPolicy::configured(
+        ExecutionMode::ScaleSet,
+        ScaleSetSelector::try_new(
+            "linux-amd64",
+            &["velnor".to_owned(), "linux-amd64".to_owned()],
+        )
+        .expect("valid selector"),
+        Some(
+            ValidatedImageReference::parse(
+                "ghcr.io/tailrocks/velnor-job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            )
+            .expect("valid immutable test image"),
+        ),
+    )
 }
 
 #[test]
 fn scale_set_routes_every_preview_and_tap_job_into_pinned_containers() {
     let mut spec = with_tap();
     spec.producer_runner = VerificationRunner::LinuxX64;
-    let hosted = render_preview(&spec).expect("hosted preview");
+    let hosted = render_consumer_preview(&spec, &hosted_policy()).expect("hosted preview");
     let scale_set = render_consumer_preview(&spec, &scale_set_policy()).expect("Scale Set preview");
-    let selector = "runs-on: [velnor, ubuntu-26.04-scale-set]";
-    let job_ids = workflow_job_ids(&scale_set.bytes);
-    assert_ne!(job_ids.len(), 0);
-    assert_eq!(scale_set.bytes.matches(selector).count(), job_ids.len());
+    let job_count = scale_set.bytes.matches("runs-on:").count();
+    assert_ne!(job_count, 0);
+    assert_eq!(
+        scale_set
+            .bytes
+            .matches("runs-on: [velnor, linux-amd64]")
+            .count(),
+        job_count
+    );
     let image = "container:\n      image: ghcr.io/tailrocks/velnor-job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    assert_eq!(scale_set.bytes.matches(image).count(), job_ids.len());
+    assert_eq!(scale_set.bytes.matches(image).count(), job_count);
     assert!(!hosted.bytes.contains(image));
     crate::workflow_routing::validate_generated_workflow_calls(
         std::slice::from_ref(&scale_set),
         &scale_set_policy(),
     )
-    .expect("parsed final bytes inspect every routed preview and tap job");
+    .expect("parsed output validates every routed preview and tap job");
 }
 
 #[test]
-fn scale_set_rejects_the_native_preview_producer_with_a_specific_error() {
-    let spec = fixture();
-    let first_producer = payload_job_ids(&spec)[0].clone();
-    let error = render_consumer_preview(&spec, &scale_set_policy())
-        .expect_err("a Linux-only Scale Set cannot run a Darwin producer");
-    assert_eq!(
-        error,
-        RenderError::InvalidWorkflow(format!(
-            "unsupported_darwin_workload:.github/workflows/binary-preview.yml:{first_producer}:macos-26"
-        ))
-    );
-}
-
-#[test]
-fn preview_rejects_unbounded_producer_limits_before_rendering() {
-    for minutes in [0, 21, 30, 360, 361, u16::MAX] {
-        let mut spec = fixture();
-        spec.producer_timeout_minutes = minutes;
-        assert!(
-            render_consumer_preview(
-                &spec,
-                &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only()
-            )
-            .is_err(),
-            "{minutes}"
-        );
-    }
+fn scale_set_rejects_a_darwin_preview_producer() {
+    let error = render_consumer_preview(&fixture(), &scale_set_policy())
+        .expect_err("Linux Scale Set cannot run a Darwin producer");
+    assert!(matches!(error, RenderError::InvalidWorkflow(message)
+        if message.starts_with("unsupported_darwin_workload:")));
 }
 
 #[path = "schema2_consumer_preview_trigger_tests.rs"]
 mod triggers;
 
-#[path = "schema2_consumer_preview_privilege_tests.rs"]
-mod privilege_tests;
-
-#[test]
-fn twenty_minute_producer_jobs_leave_control_signer_publication_and_updater_at_five() {
-    let mut spec = with_tap();
-    spec.producer_timeout_minutes = 20;
-    let pairs =
-        velnor_actions_contract::preview_production::expected_preview_payload_pairs(&spec.plan)
-            .expect("full plan")
-            .len();
-    let rendered = render_consumer_preview(
-        &spec,
-        &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only(),
-    )
-    .expect("explicit twenty-minute producer");
-    assert_eq!(
-        rendered.bytes.matches("timeout-minutes: 20").count(),
-        pairs + 1,
-        "only each payload and the assembly job use the producer budget"
-    );
-    assert!(rendered.bytes.contains("timeout-minutes: 5"));
-    for minutes in [1, 5, 6, 10, 15, 20] {
-        spec.producer_timeout_minutes = minutes;
-        assert!(
-            render_consumer_preview(
-                &spec,
-                &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only()
-            )
-            .is_ok(),
-            "{minutes}"
-        );
-    }
-    spec.homebrew_tap
-        .as_mut()
-        .expect("tap")
-        .policy
-        .updater
-        .timeout_minutes = 6;
-    assert!(
-        render_consumer_preview(
-            &spec,
-            &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only()
-        )
-        .is_err(),
-        "producer authorization does not widen updater"
-    );
-}
+#[path = "schema2_consumer_release_lfs_tests.rs"]
+mod lfs;

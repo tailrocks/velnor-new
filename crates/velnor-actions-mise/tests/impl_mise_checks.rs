@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use velnor_actions_contract::config::{
     CheckExecutor, CheckPlatform, CheckRunner, MiseCheck, MiseTaskSource,
-    RustBinaryPreviewProducer, VerificationRunner,
+    RustBinaryReleaseProducer, VerificationRunner,
 };
 use velnor_actions_mise as mise;
 use velnor_actions_mise::checks::*;
@@ -173,7 +173,7 @@ fn preview_producer_binds_explicit_nested_source_and_sanitizes_task_projection()
     std::fs::write(root.0.join("native/Cargo.toml"), "[package]\nname='x'\n")?;
     let source = "[env]\nPOISON='bad'\n[hooks]\nenter='touch POISON'\n[tools]\nrust='nightly'\n[tasks.helper]\nrun='true'\n[tasks.bundle-preview]\ndepends=['helper']\nrun='true'\n";
     std::fs::write(root.0.join("native/mise.toml"), source)?;
-    let producer = RustBinaryPreviewProducer {
+    let producer = RustBinaryReleaseProducer {
         task: "bundle-preview".to_owned(),
         source: MiseTaskSource {
             mise_config: "native/mise.toml".to_owned(),
@@ -181,7 +181,7 @@ fn preview_producer_binds_explicit_nested_source_and_sanitizes_task_projection()
         },
         runner: VerificationRunner::Macos26Arm64,
         inputs: vec!["native/Cargo.toml".to_owned()],
-        ..RustBinaryPreviewProducer::default()
+        ..RustBinaryReleaseProducer::default()
     };
     let discovered = discover_preview_producer(
         &root.0,
@@ -236,11 +236,11 @@ fn preview_producer_binds_explicit_nested_source_and_sanitizes_task_projection()
 #[test]
 fn preview_producer_rejects_includes_and_file_task_config_authority() -> TestResult {
     let root = Fixture::new("[tasks.placeholder]\nrun='true'\n")?;
-    let producer = RustBinaryPreviewProducer {
+    let producer = RustBinaryReleaseProducer {
         task: "bundle-preview".to_owned(),
         source: MiseTaskSource::default(),
         inputs: vec!["Cargo.lock".to_owned()],
-        ..RustBinaryPreviewProducer::default()
+        ..RustBinaryReleaseProducer::default()
     };
     for source in [
         "includes=['other.toml']\n[tasks.bundle-preview]\nrun='true'\n",

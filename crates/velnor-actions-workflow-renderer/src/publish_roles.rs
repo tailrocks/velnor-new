@@ -21,6 +21,8 @@ pub enum PublishRole {
     ImagePublish,
     /// Re-tags an already attested image digest after verifying it; no checkout.
     ImagePromote,
+    /// Pushes an attested npm tarball to GitHub Packages; no checkout.
+    NpmPublish,
 }
 
 impl PublishRole {
@@ -36,6 +38,7 @@ impl PublishRole {
             Self::ArtifactPublish => "artifact-publish",
             Self::ImagePublish => "image-publish",
             Self::ImagePromote => "image-promote",
+            Self::NpmPublish => "npm-publish",
         }
     }
 
@@ -45,7 +48,7 @@ impl PublishRole {
             Self::Authority | Self::BranchAuthority => 0,
             Self::TagRelease | Self::ArtifactBuild | Self::ImagePublish | Self::ImagePromote => 1,
             Self::ArtifactAttest => 2,
-            Self::ArtifactPublish => 3,
+            Self::ArtifactPublish | Self::NpmPublish => 3,
         }
     }
 
@@ -70,6 +73,7 @@ impl PublishRole {
             Self::ArtifactBuild
             | Self::ArtifactAttest
             | Self::ArtifactPublish
+            | Self::NpmPublish
             | Self::ImagePromote => Some(Self::Authority),
         }
     }
@@ -108,6 +112,7 @@ impl PublishPermissions {
             }
             PublishRole::ImagePublish => (Read, None, Write, Write, Write, Read),
             PublishRole::ImagePromote => (Read, None, None, Read, Write, None),
+            PublishRole::NpmPublish => (Read, None, None, None, Write, None),
         };
         Self {
             contents,

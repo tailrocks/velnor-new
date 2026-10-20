@@ -70,7 +70,7 @@ pub use crate::graph::{
     validate_plan_edges,
 };
 pub use crate::homebrew_formula::{
-    HomebrewFormulaCandidate, VerifiedPreviewRelease, validate_homebrew_formula_candidate,
+    HomebrewFormulaCandidate, VerifiedPackageRelease, validate_homebrew_formula_candidate,
 };
 pub use crate::ids::{
     artifact_id_for_baseline, artifact_id_for_crate_job, artifact_id_for_final,
@@ -89,6 +89,10 @@ pub use crate::marker::{MARKER_PREFIX, OLD_MARKER_PREFIX, is_generated_marker_li
 pub use crate::package_release_plan::{
     PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlan, PackageReleasePlanProduct,
     parse_package_release_plan,
+};
+pub use crate::package_release_policy::{
+    CargoVersionBinding, CargoVersionPolicy, PACKAGE_RELEASE_POLICY_SCHEMA_V1,
+    PackageReleasePolicy, parse_package_release_policy,
 };
 pub use crate::policy::{
     FreshnessEntry, FreshnessStatus, GithubRunnerImages, NightlyRecord, PolicyException,

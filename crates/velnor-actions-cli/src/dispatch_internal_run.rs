@@ -7,12 +7,14 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
-    DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV, PlanOutputMode, execute_check,
-    execute_preview_producer, merge_internal, merge_passed, plan_internal,
-    plan_outputs_from_staged_admission, publish_final_report, publish_plan_files_with_outputs,
-    resolve_task_execution, response_path_for, retrieve_reports, run_private_fetch,
-    run_private_revoke, write_preseed_manifest, write_qualification_source_evidence, write_request,
-    write_task_report,
+    DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV, PlanOutputMode,
+    admit_release_policy_from_env, admit_stable_tag_origin_from_env, execute_check, merge_internal,
+    merge_passed, plan_internal, plan_outputs_from_staged_admission, publish_final_report,
+    publish_plan_files_with_outputs, resolve_task_execution, response_path_for, retrieve_reports,
+    run_bun_registry_install, run_private_fetch, run_private_revoke,
+    select_stable_release_source_from_env, write_preseed_manifest,
+    write_qualification_source_evidence, write_request, write_stable_tag_intent_from_env,
+    write_stable_tag_origin_from_env, write_task_report,
 };
 
 use super::{
@@ -28,42 +30,34 @@ pub(super) fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::TapContinuation => tap_continuation::run(),
         InternalOp::CaptureReviewCompletion => review_completion::capture(),
         InternalOp::EmitReviewCompletion => review_completion::emit(),
-        InternalOp::AcquirePreviewLeaves => preview_production::acquire(),
-        InternalOp::AdmitPreviewAggregate => preview_production::admit(),
-        InternalOp::ExecuteCheck => match execute_check() {
-            Ok(_) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
-        InternalOp::ExecutePreviewProducer => match execute_preview_producer() {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
-        InternalOp::WriteRequest => match write_request() {
-            Ok(_) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
+        InternalOp::AcquireReleaseLeaves => preview_production::acquire(),
+        InternalOp::AdmitReleaseAggregate => preview_production::admit(),
+        InternalOp::ExecuteCheck => finish_internal_result(execute_check()),
+        InternalOp::ExecuteReleaseProducer => preview_production::produce(),
+        InternalOp::StableSourceSelection => {
+            preview_production::native(select_stable_release_source_from_env())
+        }
+        InternalOp::ReleasePolicyAdmission => {
+            preview_production::native(admit_release_policy_from_env())
+        }
+        InternalOp::StableTagIntent => {
+            preview_production::native(write_stable_tag_intent_from_env())
+        }
+        InternalOp::StableTagOrigin => {
+            preview_production::native(write_stable_tag_origin_from_env())
+        }
+        InternalOp::StableTagAdmission => {
+            preview_production::native(admit_stable_tag_origin_from_env())
+        }
+        InternalOp::WriteRequest => finish_internal_result(write_request()),
         InternalOp::Plan => run_plan_internal(&request.path),
         InternalOp::Merge => run_merge_internal(&request.path),
-        InternalOp::Fetch => match retrieve_reports() {
-            Ok(_) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
-        InternalOp::Report => match write_task_report() {
-            Ok(_) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
-        InternalOp::PrivateFetch => match run_private_fetch() {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
-        InternalOp::PrivateRevoke => match run_private_revoke() {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
-        InternalOp::PreseedManifest => match write_preseed_manifest() {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
+        InternalOp::Fetch => finish_internal_result(retrieve_reports()),
+        InternalOp::Report => finish_internal_result(write_task_report()),
+        InternalOp::BunRegistryInstall => finish_internal_result(run_bun_registry_install()),
+        InternalOp::PrivateFetch => finish_internal_result(run_private_fetch()),
+        InternalOp::PrivateRevoke => finish_internal_result(run_private_revoke()),
+        InternalOp::PreseedManifest => finish_internal_result(write_preseed_manifest()),
         InternalOp::Publish => run_publish_internal(&request.path),
         InternalOp::RepoPolicy => crate::dispatch_repo_policy::run(&request.path),
         InternalOp::ResolveQualification => crate::dispatch_qualification::run(&request.path),
@@ -76,11 +70,9 @@ pub(super) fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::ExportNormalToolsCachePayload => cache_bind::transfer::normal::run_export(),
         InternalOp::InstallCacheTarLaunchers => cache_tar_launcher::run(),
         InternalOp::PreflightNormalTofuCacheRestore => super::normal_tofu_cache_preflight::run(),
-        InternalOp::WriteQualificationSourceEvidence => match write_qualification_source_evidence()
-        {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
+        InternalOp::WriteQualificationSourceEvidence => {
+            finish_internal_result(write_qualification_source_evidence())
+        }
         InternalOp::ResolveTaskExecution => match resolve_task_execution() {
             Ok(frame) => match std::io::stdout().lock().write_all(&frame) {
                 Ok(()) => ExitCode::SUCCESS,
@@ -95,6 +87,14 @@ pub(super) fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::TapAdmission => tap_prepare::run_admission(),
         InternalOp::TapWriter => tap_prepare::run_writer(),
         InternalOp::TapMerge => tap_merge::run(),
+    }
+}
+
+/// Preserve the private-operation success and diagnostic mapping for fallible handlers.
+fn finish_internal_result<T, E: std::fmt::Display>(result: Result<T, E>) -> ExitCode {
+    match result {
+        Ok(_) => ExitCode::SUCCESS,
+        Err(error) => fail_internal(&error.to_string()),
     }
 }
 

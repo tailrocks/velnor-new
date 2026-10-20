@@ -10,7 +10,7 @@ fn tap_recovery_gate_requires_positive_bounded_original_run_identity() -> Result
     let tmp = fresh_tempdir("tap-recovery-gate")?;
     let root = tmp.join("velnor");
     std::fs::create_dir_all(&root)?;
-    let request = root.join("package-release-plan.json");
+    let request = root.join("package-release-policy.json");
     std::fs::write(&request, "{}")?;
     std::fs::write(root.join("tap-admission.json"), "{}")?;
     for (event, run, attempt, expected) in [
@@ -48,7 +48,7 @@ fn tap_recovery_gate_requires_positive_bounded_original_run_identity() -> Result
         if expected == 1 {
             assert!(String::from_utf8_lossy(&output.stderr).contains("internal request failed"));
         }
-        assert!(!root.join("preview-publish-input").exists());
+        assert!(!root.join("release-publish-input").exists());
     }
     cleanup(&tmp);
     Ok(())
@@ -59,8 +59,8 @@ fn current_preview_gate_admits_workflow_run_and_rejects_obsolete_push() -> Resul
 {
     let tmp = fresh_tempdir("tap-current-event-gate")?;
     let root = tmp.join("velnor");
-    std::fs::create_dir_all(root.join("preview-publish-input"))?;
-    let request = root.join("package-release-plan.json");
+    std::fs::create_dir_all(root.join("release-publish-input"))?;
+    let request = root.join("package-release-policy.json");
     std::fs::write(&request, "{}")?;
     std::fs::write(root.join("tap-admission.json"), "{}")?;
     for (event, expected) in [("workflow_run", 1), ("push", 2)] {
@@ -97,8 +97,8 @@ fn tap_prepare_rejects_ambient_credentials_before_nonexistent_source_configurati
 -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("tap-parent-token-rejected")?;
     let root = tmp.join("velnor");
-    std::fs::create_dir_all(root.join("preview-publish-input"))?;
-    let request = root.join("package-release-plan.json");
+    std::fs::create_dir_all(root.join("release-publish-input"))?;
+    let request = root.join("package-release-policy.json");
     std::fs::write(&request, "{}")?;
     std::fs::write(root.join("tap-admission.json"), "{}")?;
     let workspace = tmp.join("nonexistent-source");

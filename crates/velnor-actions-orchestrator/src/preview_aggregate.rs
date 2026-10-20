@@ -1,7 +1,8 @@
 //! Authenticate the full leaf union before unprivileged source assembly.
+use crate::filesystem_owner::held_file::HeldFile;
 
 use super::{
-    handoff::{self, AssetProof, PinnedAsset, TaskInput},
+    handoff::{self, AssetProof, TaskInput},
     leaf_manifest::PreviewLeafManifest,
 };
 use crate::{
@@ -13,7 +14,7 @@ use crate::{
         preview_payload::verify_payload_output,
     },
     package_release_publish::{
-        acquire_preview_artifacts,
+        acquire_release_artifacts,
         artifact_zip::{self, ExpectedZipEntry, ZipProfile},
     },
 };
@@ -21,14 +22,14 @@ use std::path::Path;
 use velnor_actions_contract::{
     canonical_json_bytes,
     package_release::PackageReleasePayloadFormat,
-    preview_production::{PreviewProductionRequest, PreviewProductionStage},
+    preview_production::{ReleaseProductionRequest, ReleaseProductionStage},
 };
 use velnor_actions_mise::CheckDeadline;
 
 pub(super) struct AdmittedLeaves {
     pub(super) manifests: Vec<PreviewLeafManifest>,
     pub(super) inputs: Vec<TaskInput>,
-    pub(super) pinned: Vec<PinnedAsset>,
+    pub(super) pinned: Vec<HeldFile>,
     pub(super) manifest_bytes: u64,
     pub(super) asset_bytes: u64,
 }
@@ -58,7 +59,7 @@ impl AdmittedLeaves {
 
 pub(super) fn acquire(
     temp: &Path,
-    request: &PreviewProductionRequest,
+    request: &ReleaseProductionRequest,
     deadline: CheckDeadline,
 ) -> Result<AdmittedLeaves, OrchestratorError> {
     let root = handoff::fresh_directory(temp, "preview-leaves")?;
@@ -69,7 +70,7 @@ pub(super) fn acquire(
         manifest_bytes: 0,
         asset_bytes: 0,
     };
-    acquire_preview_artifacts(request, &root, deadline, |artifact| {
+    acquire_release_artifacts(request, &root, deadline, |artifact| {
         admit_leaf(&root, request, deadline, artifact, &mut admitted)
     })?;
     admitted.inputs.sort_by(|a, b| a.name.cmp(&b.name));
@@ -79,16 +80,16 @@ pub(super) fn acquire(
 
 fn admit_leaf(
     root: &Path,
-    request: &PreviewProductionRequest,
+    request: &ReleaseProductionRequest,
     deadline: CheckDeadline,
-    mut artifact: crate::package_release_publish::AdmittedPreviewArtifact,
+    mut artifact: crate::package_release_publish::AdmittedReleaseArtifact,
     admitted: &mut AdmittedLeaves,
 ) -> Result<(), OrchestratorError> {
     let index = admitted.manifests.len();
 
     handoff::checkpoint(deadline)?;
     let mut expected = request.clone();
-    expected.stage = PreviewProductionStage::Payload {
+    expected.stage = ReleaseProductionStage::Payload {
         pair: artifact.reference.pair,
     };
     let bytes = artifact_zip::read_manifest_file(
@@ -131,7 +132,7 @@ fn admit_leaf(
 
 fn retain_verified(
     admitted: &mut AdmittedLeaves,
-    expected: &PreviewProductionRequest,
+    expected: &ReleaseProductionRequest,
     verified: crate::package_release_artifacts::preview_payload::VerifiedPayload,
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
@@ -146,10 +147,13 @@ fn retain_verified(
             sha256: asset.sha256.clone(),
             size: asset.size,
         };
-        admitted
-            .pinned
-            .push(PinnedAsset::new(&asset.path, &proof, deadline)?);
-        let PreviewProductionStage::Payload { pair } = &expected.stage else {
+        admitted.pinned.push(HeldFile::new(
+            &asset.path,
+            &proof.sha256,
+            proof.size,
+            deadline,
+        )?);
+        let ReleaseProductionStage::Payload { pair } = &expected.stage else {
             return Err(internal("preview_leaf_stage"));
         };
         admitted.inputs.push(TaskInput {
@@ -216,7 +220,7 @@ fn reconstruct_input(
 }
 
 fn source_manifest(leaf: &PreviewLeafManifest) -> Result<PackageOutputManifest, OrchestratorError> {
-    let PreviewProductionStage::Payload { pair } = &leaf.request.stage else {
+    let ReleaseProductionStage::Payload { pair } = &leaf.request.stage else {
         return Err(internal("preview_leaf_stage"));
     };
     let archive = format!("{}-{}.tar.gz", pair.product_id, pair.target);

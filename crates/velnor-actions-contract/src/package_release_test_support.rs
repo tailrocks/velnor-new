@@ -1,20 +1,20 @@
 use super::super::{
     PACKAGE_RELEASE_EVIDENCE_PROFILE, PACKAGE_RELEASE_SCHEMA_V2, PackageReleaseAsset,
     PackageReleaseAssetKind, PackageReleaseChannel, PackageReleaseCompanion,
-    PackageReleaseEvidence, PackageReleasePayload, PackageReleasePayloadFormat,
-    PackageReleaseProduct, PackageReleaseReceipt, PackageReleaseRepository,
-    PackageReleaseSbomFormat, PackageReleaseSource, PackageReleaseVersion, PackageReleaseWorkflow,
+    PackageReleaseEvidence, PackageReleasePayload, PackageReleaseProduct, PackageReleaseReceipt,
+    PackageReleaseRepository, PackageReleaseSbomFormat, PackageReleaseSource,
+    PackageReleaseVersion, PackageReleaseWorkflow,
 };
 
-pub(super) fn fixture(channel: PackageReleaseChannel) -> PackageReleaseReceipt {
+pub(crate) fn fixture(channel: PackageReleaseChannel) -> PackageReleaseReceipt {
     let base = "1.2.3";
     let commit = "abcdef0123456789abcdef0123456789abcdef01";
     let source_sha7 = (channel == PackageReleaseChannel::Preview).then(|| commit[..7].to_owned());
     let commit_count = (channel == PackageReleaseChannel::Preview).then_some(9);
     let value = preview_value(base, commit_count, source_sha7.as_deref());
     let tag = match channel {
-        PackageReleaseChannel::Preview => format!("v{value}"),
-        PackageReleaseChannel::Stable => format!("jackin-v{base}"),
+        PackageReleaseChannel::Preview => "preview".to_owned(),
+        PackageReleaseChannel::Stable => format!("v{base}"),
     };
     PackageReleaseReceipt {
         schema: PACKAGE_RELEASE_SCHEMA_V2.to_owned(),
@@ -40,68 +40,6 @@ pub(super) fn fixture(channel: PackageReleaseChannel) -> PackageReleaseReceipt {
         assets: fixture_assets(),
         evidence: fixture_evidence(channel),
     }
-}
-
-pub(super) fn stable_raw_fixture() -> PackageReleaseReceipt {
-    let mut receipt = fixture(PackageReleaseChannel::Stable);
-    let name = "jackin-aarch64-apple-darwin";
-    let target = "aarch64-apple-darwin";
-    receipt.products = vec![PackageReleaseProduct {
-        id: "jackin".to_owned(),
-        package: "jackin".to_owned(),
-        package_version: receipt.version.base.clone(),
-        bins: vec!["jackin".to_owned()],
-        payloads: vec![PackageReleasePayload {
-            format: PackageReleasePayloadFormat::RawBinary,
-            target: target.to_owned(),
-            name: name.to_owned(),
-            members: vec!["jackin".to_owned()],
-        }],
-    }];
-    receipt.companions.clear();
-    receipt.assets = vec![
-        asset(
-            name,
-            PackageReleaseAssetKind::Payload,
-            Some("jackin"),
-            Some(target),
-            Some(name),
-        ),
-        asset(
-            &format!("{name}.sha256"),
-            PackageReleaseAssetKind::Sha256,
-            Some("jackin"),
-            Some(target),
-            Some(name),
-        ),
-        asset(
-            &format!("{name}.bundle"),
-            PackageReleaseAssetKind::SignatureBundle,
-            Some("jackin"),
-            Some(target),
-            Some(name),
-        ),
-        asset(
-            &format!("{name}.sbom.json"),
-            PackageReleaseAssetKind::Sbom,
-            Some("jackin"),
-            Some(target),
-            Some(name),
-        ),
-        asset(
-            "SHA256SUMS",
-            PackageReleaseAssetKind::ChecksumList,
-            None,
-            None,
-            None,
-        ),
-    ];
-    receipt
-        .assets
-        .sort_by(|left, right| left.name.cmp(&right.name));
-    receipt.evidence.attested_subject_names = vec![name.to_owned(), "release.json".to_owned()];
-    receipt.evidence.attested_subject_names.sort();
-    receipt
 }
 
 pub(super) fn preview_value(base: &str, count: Option<u64>, sha7: Option<&str>) -> String {
