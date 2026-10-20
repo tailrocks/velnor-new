@@ -100,6 +100,9 @@ pub(super) fn validate_tag_name(file: &str, tag: &str) -> Result<(), ContractErr
             format!("bad_charset:{tag}"),
         ));
     }
+    if is_stable_tag_name(tag) {
+        return Ok(());
+    }
     if tag.matches("{{").count() != tag.matches("}}").count() {
         return Err(ContractError::config(file, key, "unbalanced_braces"));
     }
@@ -111,6 +114,13 @@ pub(super) fn validate_tag_name(file: &str, tag: &str) -> Result<(), ContractErr
         return Err(ContractError::config(file, key, "missing_version_var"));
     }
     Ok(())
+}
+
+/// The one package-independent stable application tag template.
+pub(super) fn is_stable_tag_name(tag: &str) -> bool {
+    tag.strip_prefix("v{{")
+        .and_then(|body| body.strip_suffix("}}"))
+        .is_some_and(|body| body.trim_matches(' ') == "version")
 }
 
 /// Validate one bootstrap authorization record (fail closed).

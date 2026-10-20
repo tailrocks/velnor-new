@@ -7,8 +7,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "rolling_publication.rs"]
+pub mod rolling;
+
 /// Authenticated immutable receipt identity, including its complete asset set.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PublicationIdentity {
     /// Exact source commit expected at the owned version tag.
     pub source_sha: String,

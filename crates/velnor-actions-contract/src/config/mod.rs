@@ -47,10 +47,10 @@ pub(crate) use binary_release::validate_static_release_inventory;
 pub use actions::{ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
 pub use agents::{AgentsConfig, ClaudeMdMode};
 pub use binary_release::{
-    CONSUMER_BINARY_TARGET, RustBinaryPreviewArchive, RustBinaryPreviewCompanion,
-    RustBinaryPreviewConfig, RustBinaryPreviewEvidence, RustBinaryPreviewEvidenceProfile,
-    RustBinaryPreviewProducer, RustBinaryPreviewProduct, RustBinaryPreviewVersioning,
-    RustBinaryReleaseConfig,
+    RustBinaryPreviewConfig, RustBinaryPreviewVersioning, RustBinaryReleaseArchive,
+    RustBinaryReleaseCompanion, RustBinaryReleaseConfig, RustBinaryReleaseEvidence,
+    RustBinaryReleaseEvidenceProfile, RustBinaryReleaseProducer, RustBinaryReleaseProduct,
+    RustBinaryStableConfig,
 };
 pub use build_task::{
     BuildTask, BuildTaskRunner, BuildTaskXcodeCapability, is_valid_build_tool_key,
@@ -67,8 +67,9 @@ pub use check_receipt_budget::{
 pub use dco::{DCO_CONFIG_PATH, DcoConfig, DcoRemediationCommits, DcoRequire};
 pub use discovery::DiscoveryConfig;
 pub use distribution::{
-    DistributionConfig, ExactHeadReviewCheck, HomebrewTapConfig, HomebrewTapProtectionObserver,
-    HomebrewTapSource, ReviewAppIdentity, TapMergePolicy, TapUpdateEnvironment, TapUpdaterBinding,
+    DistributionConfig, ExactHeadReviewCheck, HomebrewTapConfig, HomebrewTapDestination,
+    HomebrewTapDestinations, HomebrewTapProtectionObserver, ReviewAppIdentity, TapMergePolicy,
+    TapUpdateEnvironment, TapUpdaterBinding,
 };
 pub use dockerfile::{DockerfileFacts, DockerfileProblem, analyze_dockerfile, is_digest_pinned};
 pub use execution::{
@@ -259,7 +260,7 @@ impl VelnorConfig {
         }
         self.publish.validate(file)?;
         self.check_distribution_source(file)?;
-        self.check_preview_tools(file)?;
+        self.check_binary_release_tools(file)?;
         self.check_crate_build_jobs(file)?;
         self.discovery.validate(file)?;
         self.actions.validate(file)?;

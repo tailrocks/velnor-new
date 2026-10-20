@@ -1,5 +1,5 @@
 use super::*;
-use support::{archive_count, fixture, jackin_preview, jackin_receipt, stable_raw_fixture};
+use support::{archive_count, fixture, jackin_preview, jackin_receipt};
 
 #[path = "package_release_test_support.rs"]
 pub(crate) mod support;
@@ -50,7 +50,7 @@ fn preview_receipt_requires_main_and_stable_receipt_keeps_custom_default_branch(
     );
     assert!(preview.validate().is_err());
 
-    let mut stable = stable_raw_fixture();
+    let mut stable = fixture(PackageReleaseChannel::Stable);
     stable.source.default_branch = "release/1.2".to_owned();
     stable.source.source_ref = "refs/heads/release/1.2".to_owned();
     stable.workflow.workflow_ref = stable.source.source_ref.clone();
@@ -73,25 +73,20 @@ fn preview_receipt_requires_main_and_stable_receipt_keeps_custom_default_branch(
 }
 
 #[test]
-fn stable_v2_receipt_preserves_raw_binary_payload_name_and_channel_identity() {
-    let receipt = stable_raw_fixture();
-    receipt.validate().expect("stable raw payload receipt");
+fn stable_receipt_uses_shared_archive_inventory_and_permanent_version_tag() {
+    let receipt = fixture(PackageReleaseChannel::Stable);
+    receipt.validate().expect("stable archive receipt");
     assert_eq!(receipt.source.event, PackageReleaseEvent::WorkflowDispatch);
-    assert_eq!(receipt.tag, "jackin-v1.2.3");
+    assert_eq!(receipt.tag, "v1.2.3");
     assert_eq!(receipt.version.commit_count, None);
     assert_eq!(receipt.version.source_sha7, None);
     assert_eq!(
         receipt.products[0].payloads[0].format,
-        PackageReleasePayloadFormat::RawBinary
+        PackageReleasePayloadFormat::TarGz
     );
-    assert_eq!(
-        receipt.products[0].payloads[0].name,
-        "jackin-aarch64-apple-darwin"
-    );
-
-    let mut invalid = receipt;
-    invalid.products[0].payloads[0].name.push_str(".tar.gz");
-    assert!(invalid.validate().is_err());
+    let mut raw = serde_json::to_value(receipt).expect("receipt");
+    raw["products"][0]["payloads"][0]["format"] = serde_json::json!("raw-binary");
+    assert!(serde_json::from_value::<PackageReleaseReceipt>(raw).is_err());
 }
 
 #[test]
@@ -183,11 +178,11 @@ fn validates_jackin_six_payloads_and_exact_twenty_seven_receipt_assets() {
     assert_eq!(archive_count(&receipt), 6);
     assert_eq!(receipt.assets.len(), 27);
     receipt
-        .validate_against_preview(&preview)
+        .validate_against_config(&preview)
         .expect("exact Jackin inventory");
     receipt.assets.pop();
     assert!(
-        receipt.validate_against_preview(&preview).is_err(),
+        receipt.validate_against_config(&preview).is_err(),
         "missing asset rejected"
     );
 }
@@ -197,5 +192,5 @@ fn preview_validation_rejects_malformed_receipt_even_when_inventory_matches() {
     let preview = jackin_preview();
     let mut receipt = jackin_receipt(&preview);
     receipt.assets[0].sha256 = "not-a-sha256".to_owned();
-    assert!(receipt.validate_against_preview(&preview).is_err());
+    assert!(receipt.validate_against_config(&preview).is_err());
 }

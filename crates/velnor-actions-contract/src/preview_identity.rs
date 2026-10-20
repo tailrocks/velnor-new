@@ -2,12 +2,12 @@
 
 use crate::{ContractError, config::is_exact_semver};
 
-/// Immutable version and tag for one full-history default-branch commit.
+/// Source version and rolling tag for one full-history default-branch commit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreviewIdentity {
     /// Application version supplied by Velnor to the producer.
     pub version: String,
-    /// Native immutable release tag; never a rolling locator.
+    /// Fixed rolling release locator; source identity remains independently bound.
     pub tag: String,
     /// Complete source identity, retained despite the abbreviated version suffix.
     pub source_sha: String,
@@ -54,7 +54,7 @@ impl PreviewIdentity {
         }
         let version = format!("{base}-preview.{commit_count}+{}", &source_sha[..7]);
         Ok(Self {
-            tag: format!("v{version}"),
+            tag: "preview".to_owned(),
             version,
             source_sha: source_sha.to_owned(),
             commit_count,
@@ -72,7 +72,7 @@ mod tests {
     fn retries_have_identical_version_and_owned_tag() {
         let identity = PreviewIdentity::derive("0.6.4", SHA, 1306).expect("qualified inputs");
         assert_eq!(identity.version, "0.6.4-preview.1306+a12e73a");
-        assert_eq!(identity.tag, "v0.6.4-preview.1306+a12e73a");
+        assert_eq!(identity.tag, "preview");
         assert_eq!(identity.source_sha, SHA);
         assert_eq!(
             identity,
@@ -104,7 +104,13 @@ mod tests {
         let first = PreviewIdentity::derive("0.6.4", SHA, 1306).expect("first");
         let second = PreviewIdentity::derive("0.6.4", &format!("a12e73a{}", "0".repeat(33)), 1307)
             .expect("second");
-        assert_ne!(first.tag, second.tag);
+        assert_eq!(first.tag, "preview");
+        assert_eq!(second.tag, "preview");
+        assert_ne!(first.version, second.version);
         assert_ne!(first.source_sha, second.source_sha);
+        let collision = PreviewIdentity::derive("0.6.4", &second.source_sha, 1306)
+            .expect("same abbreviated identity");
+        assert_eq!(first.version, collision.version);
+        assert_ne!(first, collision);
     }
 }

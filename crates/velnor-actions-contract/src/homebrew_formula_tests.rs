@@ -19,7 +19,7 @@ fn preview_release() -> VerifiedPreviewRelease {
     receipt.version.source_sha7 = Some(NEXT_SHA[..7].to_owned());
     receipt.version.commit_count = Some(10);
     receipt.version.value = format!("{}-preview.10+{}", receipt.version.base, &NEXT_SHA[..7]);
-    receipt.tag = format!("v{}", receipt.version.value);
+    receipt.tag = "preview".to_owned();
     receipt.validate().expect("well-formed receipt");
     let receipt_digest = receipt.canonical_digest().expect("digest");
     VerifiedPreviewRelease {
@@ -63,7 +63,7 @@ fn base_formula_subset(release: &VerifiedPreviewRelease) -> Vec<u8> {
     .into_bytes()
 }
 
-fn plan(policy: &crate::config::RustBinaryPreviewConfig) -> PackageReleasePlan {
+fn plan(policy: &crate::config::RustBinaryReleaseConfig) -> PackageReleasePlan {
     let mut products = policy
         .products
         .iter()

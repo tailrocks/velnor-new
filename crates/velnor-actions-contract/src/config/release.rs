@@ -28,13 +28,13 @@ pub enum ReleaseAuthentication {
 #[serde(rename_all = "kebab-case")]
 pub enum ReleaseRegistry {
     /// Publish to crates.io through release-plz.
-    #[default]
     CratesIo,
     /// Create tags and GitHub releases only (`publish = false`, git-only).
     ///
     /// Consumers pin `git` dependencies to the tag. A git dependency checks
     /// out the whole repository, which keeps paths such as
     /// `embed_migrations!("../../backend/eth-flyway/...")` valid.
+    #[default]
     GitTag,
 }
 
@@ -75,15 +75,14 @@ pub struct RustReleaseConfig {
     /// Protected GitHub environment bound to publishing jobs.
     #[serde(default = "default_environment")]
     pub environment: String,
-    /// Release destination (default crates.io).
+    /// Release destination; crates.io requires an explicit opt-in.
     #[serde(default, skip_serializing_if = "is_default_registry")]
     pub registry: ReleaseRegistry,
     /// Authentication mode; absent means trusted publishing on crates.io.
     /// Forbidden in `git-tag` mode, which holds no registry credential.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub authentication: Option<ReleaseAuthentication>,
-    /// Run release-plz release-pr preparation (default true; crates.io only,
-    /// `git-tag` releases are prepared by a maintainer's version bump).
+    /// Run manual release-plz release-pr preparation (default true).
     #[serde(default = "default_true")]
     pub release_pr: bool,
     /// Package-qualified tag template carrying package and version vars.
@@ -232,3 +231,7 @@ impl RustReleaseConfig {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "release_channel_tests.rs"]
+mod channel_tests;

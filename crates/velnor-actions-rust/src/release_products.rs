@@ -1,43 +1,43 @@
-//! Resolve the configured binary preview products against Cargo metadata.
+//! Resolve the shared native binary products against Cargo metadata.
 
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::{
     ContractError,
-    config::{RustBinaryPreviewConfig, RustBinaryPreviewProduct},
+    config::{RustBinaryReleaseConfig, RustBinaryReleaseProduct},
     is_exact_semver,
     package_release::{PackageReleasePayload, PackageReleaseProduct},
 };
 
 use crate::metadata::{PackageRecord, WorkspaceRecord};
 
-/// Resolved preview package inventory and its shared numeric base version.
+/// Resolved channel-neutral package inventory and its shared numeric base version.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ResolvedPreviewProducts {
+pub struct ResolvedReleaseProducts {
     /// Exact numeric Cargo package version shared by every product.
     pub base_version: String,
     /// Products sorted by receipt product ID, with sorted payload/member inventories.
     pub products: Vec<PackageReleaseProduct>,
 }
 
-/// Resolve preview products from one selected Cargo workspace's metadata.
+/// Resolve native release products from one selected Cargo workspace's metadata.
 ///
 /// This deliberately does not require Cargo publishability: binary products
 /// may be private, workspace-only packages. All configured packages and bins
 /// must resolve exactly within the selected workspace, and required-feature
-/// bins fail closed because the preview product schema has no feature contract.
-/// `config` must have passed [`RustBinaryPreviewConfig::validate`] first; the
+/// bins fail closed because the shared product schema has no feature contract.
+/// `config` must have passed [`RustBinaryReleaseConfig::validate`] first; the
 /// schema layer owns path, target, uniqueness, and resource-limit validation.
 ///
 /// # Errors
-/// Returns a contract error when the preview policy, workspace membership,
+/// Returns a contract error when the release policy, workspace membership,
 /// package/bin inventory, or shared numeric version is invalid.
-pub fn resolve_preview_products(
-    config: &RustBinaryPreviewConfig,
+pub fn resolve_release_products(
+    config: &RustBinaryReleaseConfig,
     workspace: &WorkspaceRecord,
-) -> Result<ResolvedPreviewProducts, ContractError> {
-    if !config.enabled {
-        return Err(invalid("preview_policy_disabled"));
+) -> Result<ResolvedReleaseProducts, ContractError> {
+    if !config.enabled() {
+        return Err(invalid("release_policy_disabled"));
     }
     if config.products.is_empty() {
         return Err(invalid("empty_product_inventory"));
@@ -45,7 +45,18 @@ pub fn resolve_preview_products(
 
     let mut products = Vec::with_capacity(config.products.len());
     let mut package_names = BTreeSet::new();
-    let mut base_version: Option<String> = None;
+    if !config
+        .products
+        .iter()
+        .any(|product| product.package == config.version_package)
+    {
+        return Err(invalid("version_package_not_a_product"));
+    }
+    let version_owner = resolve_package(workspace, &config.version_package)?;
+    if !is_exact_semver(&version_owner.version) {
+        return Err(invalid("package_version_not_numeric_base"));
+    }
+    let base_version = version_owner.version.clone();
 
     for declared in &config.products {
         if !package_names.insert(declared.package.as_str()) {
@@ -55,13 +66,9 @@ pub fn resolve_preview_products(
         if !is_exact_semver(&package.version) {
             return Err(invalid("package_version_not_numeric_base"));
         }
-        if base_version
-            .as_deref()
-            .is_some_and(|base| base != package.version)
-        {
+        if base_version != package.version {
             return Err(invalid("package_version_mismatch"));
         }
-        base_version.get_or_insert_with(|| package.version.clone());
 
         let bins = resolve_bins(package, declared)?;
         let mut targets = declared.targets.clone();
@@ -86,8 +93,8 @@ pub fn resolve_preview_products(
     }
 
     products.sort_by(|left, right| left.id.cmp(&right.id));
-    Ok(ResolvedPreviewProducts {
-        base_version: base_version.ok_or_else(|| invalid("empty_product_inventory"))?,
+    Ok(ResolvedReleaseProducts {
+        base_version,
         products,
     })
 }
@@ -120,7 +127,7 @@ fn resolve_package<'a>(
 
 fn resolve_bins(
     package: &PackageRecord,
-    declared: &RustBinaryPreviewProduct,
+    declared: &RustBinaryReleaseProduct,
 ) -> Result<Vec<String>, ContractError> {
     let mut resolved = Vec::with_capacity(declared.bins.len());
     for bin in &declared.bins {
@@ -146,9 +153,9 @@ fn resolve_bins(
 }
 
 fn invalid(problem: &'static str) -> ContractError {
-    ContractError::identity("preview_products", problem)
+    ContractError::identity("release_products", problem)
 }
 
 #[cfg(test)]
-#[path = "preview_products_tests.rs"]
+#[path = "release_products_tests.rs"]
 mod tests;

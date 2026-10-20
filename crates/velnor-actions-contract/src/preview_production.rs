@@ -15,19 +15,17 @@ mod tests;
 mod validation;
 
 /// Closed native production request schema.
-pub const PREVIEW_PRODUCTION_SCHEMA_V1: &str = "velnor.preview-production.v1";
-/// Fixed complete-union job identity.
-pub const PREVIEW_ASSEMBLE_JOB_ID: &str = "preview-assemble";
+pub const RELEASE_PRODUCTION_SCHEMA_V1: &str = "velnor.release-production.v1";
 /// Maximum encoded request size, including its complete static plan.
-pub const MAX_PREVIEW_PRODUCTION_BYTES: usize = 1024 * 1024;
+pub const MAX_RELEASE_PRODUCTION_BYTES: usize = 1024 * 1024;
 /// Maximum literal preview leaf jobs admitted by the bounded workflow graph.
 /// The separate full release archive limit remains unchanged.
-pub const MAX_PREVIEW_PAYLOAD_PAIRS: usize = 128;
+pub const MAX_RELEASE_PAYLOAD_PAIRS: usize = 128;
 
 /// Canonically ordered product/target identity, never a reduced release plan.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct PreviewPayloadPair {
+pub struct ReleasePayloadPair {
     /// Product identity from the complete source-bound plan.
     pub product_id: String,
     /// Exact target belonging to that product.
@@ -39,7 +37,7 @@ pub struct PreviewPayloadPair {
 #[serde(deny_unknown_fields)]
 pub struct PayloadArtifactRef {
     /// Exact expected leaf owner.
-    pub pair: PreviewPayloadPair,
+    pub pair: ReleasePayloadPair,
     /// Positive artifact database ID, never a name-based search locator.
     pub artifact_id: u64,
     /// Mandatory lowercase SHA-256 of the service archive bytes, without prefix.
@@ -49,7 +47,7 @@ pub struct PayloadArtifactRef {
 /// Claimed execution tuple. Its syntax is not remote authentication evidence.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct PreviewProductionContext {
+pub struct ReleaseProductionContext {
     /// Source repository database ID.
     pub repository_id: u64,
     /// Head repository ID, required to equal the source repository ID.
@@ -77,11 +75,11 @@ pub struct PreviewProductionContext {
 /// Closed source-task operation; neither branch carries executable code.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub enum PreviewProductionStage {
+pub enum ReleaseProductionStage {
     /// Produce the complete bin inventory for exactly one declared pair.
     Payload {
         /// Selected member of the full plan's canonical pair inventory.
-        pair: PreviewPayloadPair,
+        pair: ReleasePayloadPair,
     },
     /// Assemble every admitted leaf with the configured opaque companions.
     Assemble {
@@ -93,7 +91,7 @@ pub enum PreviewProductionStage {
 /// Complete static policy plus one closed operation and its execution tuple.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct PreviewProductionRequest {
+pub struct ReleaseProductionRequest {
     /// Exact versioned request schema.
     pub schema: String,
     /// Full unchanged static plan, including every product and companion.
@@ -101,12 +99,12 @@ pub struct PreviewProductionRequest {
     /// SHA-256 of the complete validated canonical static plan bytes.
     pub plan_sha256: String,
     /// Claimed execution identity, requiring independent runtime admission.
-    pub context: PreviewProductionContext,
+    pub context: ReleaseProductionContext,
     /// One leaf or the complete exact assembly operation.
-    pub stage: PreviewProductionStage,
+    pub stage: ReleaseProductionStage,
 }
 
-impl PreviewProductionRequest {
+impl ReleaseProductionRequest {
     /// Check bounds, internal consistency and the closed operation inventory.
     /// # Errors
     /// Rejects invalid plans, contexts, digests, pairs and assembly inventories.
@@ -121,7 +119,7 @@ impl PreviewProductionRequest {
     pub fn validate_against(
         &self,
         trusted_plan: &PackageReleasePlan,
-        authenticated_context: &PreviewProductionContext,
+        authenticated_context: &ReleaseProductionContext,
     ) -> Result<(), ContractError> {
         self.validate()?;
         if &self.plan != trusted_plan || &self.context != authenticated_context {
@@ -136,32 +134,29 @@ impl PreviewProductionRequest {
     pub fn canonical_bytes(&self) -> Result<Vec<u8>, ContractError> {
         self.validate()?;
         let bytes = canonical_json_bytes(self)?;
-        crate::strict_json::check_document_size(bytes.len(), MAX_PREVIEW_PRODUCTION_BYTES)?;
+        crate::strict_json::check_document_size(bytes.len(), MAX_RELEASE_PRODUCTION_BYTES)?;
         Ok(bytes)
     }
 }
 
 /// Derive the sole sorted literal leaf inventory from a validated full plan.
 /// # Errors
-/// Rejects non-preview, invalid, empty or oversized product/target inventories.
-pub fn expected_preview_payload_pairs(
+/// Rejects invalid, empty or oversized product/target inventories.
+pub fn expected_release_payload_pairs(
     plan: &PackageReleasePlan,
-) -> Result<Vec<PreviewPayloadPair>, ContractError> {
+) -> Result<Vec<ReleasePayloadPair>, ContractError> {
     plan.validate()?;
-    if plan.channel != crate::package_release::PackageReleaseChannel::Preview {
-        return Err(invalid("preview_plan_required"));
-    }
     let pairs = plan
         .products
         .iter()
         .flat_map(|product| {
-            product.targets.iter().map(|target| PreviewPayloadPair {
+            product.targets.iter().map(|target| ReleasePayloadPair {
                 product_id: product.id.clone(),
                 target: target.clone(),
             })
         })
         .collect::<Vec<_>>();
-    if pairs.is_empty() || pairs.len() > MAX_PREVIEW_PAYLOAD_PAIRS {
+    if pairs.is_empty() || pairs.len() > MAX_RELEASE_PAYLOAD_PAIRS {
         return Err(invalid("payload_pair_count"));
     }
     Ok(pairs)
@@ -170,7 +165,7 @@ pub fn expected_preview_payload_pairs(
 /// Compute SHA-256 from validated canonical full-plan bytes, never a leaf plan.
 /// # Errors
 /// Rejects invalid full plans or canonical encoding failures.
-pub fn preview_plan_sha256(plan: &PackageReleasePlan) -> Result<String, ContractError> {
+pub fn release_plan_sha256(plan: &PackageReleasePlan) -> Result<String, ContractError> {
     use sha2::{Digest as _, Sha256};
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let digest = Sha256::digest(plan.canonical_bytes()?);
@@ -185,39 +180,43 @@ pub fn preview_plan_sha256(plan: &PackageReleasePlan) -> Result<String, Contract
 /// Derive the fixed machine job ID from the pair's canonical full-plan index.
 /// # Errors
 /// Rejects invalid full plans and pairs outside their bounded inventory.
-pub fn preview_payload_job_id(
+pub fn release_payload_job_id(
     plan: &PackageReleasePlan,
-    pair: &PreviewPayloadPair,
+    pair: &ReleasePayloadPair,
 ) -> Result<String, ContractError> {
-    let pairs = expected_preview_payload_pairs(plan)?;
+    let pairs = expected_release_payload_pairs(plan)?;
     let index = pairs
         .binary_search(pair)
         .map_err(|_| invalid("unknown_payload_pair"))?;
-    Ok(format!("preview-payload-{index:03}"))
+    let prefix = match plan.channel {
+        crate::package_release::PackageReleaseChannel::Preview => "preview",
+        crate::package_release::PackageReleaseChannel::Stable => "stable",
+    };
+    Ok(format!("{prefix}-payload-{index:03}"))
 }
 
 /// Validate the claimed context against the complete preview plan's syntax.
 /// This does not authenticate GitHub, source history, CI success or currentness.
 /// # Errors
-/// Rejects non-preview/invalid full plans and inconsistent execution identities.
-pub fn validate_preview_production_context(
+/// Rejects invalid full plans and inconsistent execution identities.
+pub fn validate_release_production_context(
     plan: &PackageReleasePlan,
-    context: &PreviewProductionContext,
+    context: &ReleaseProductionContext,
 ) -> Result<(), ContractError> {
-    expected_preview_payload_pairs(plan)?;
+    expected_release_payload_pairs(plan)?;
     validation::validate_context(context, plan)
 }
 
 /// Derive the fixed aggregate locator, never artifact acquisition authority.
 /// # Errors
 /// Rejects invalid full plans and inconsistent execution identities.
-pub fn preview_aggregate_artifact_name(
+pub fn release_aggregate_artifact_name(
     plan: &PackageReleasePlan,
-    context: &PreviewProductionContext,
+    context: &ReleaseProductionContext,
 ) -> Result<String, ContractError> {
-    validate_preview_production_context(plan, context)?;
+    validate_release_production_context(plan, context)?;
     Ok(format!(
-        "velnor-preview-aggregate-r{}-a{}",
+        "velnor-release-aggregate-r{}-a{}",
         context.run_id, context.run_attempt
     ))
 }
@@ -225,18 +224,18 @@ pub fn preview_aggregate_artifact_name(
 /// Derive a deterministic leaf locator, never download or authentication authority.
 /// # Errors
 /// Rejects invalid context, full plan or a pair outside that plan.
-pub fn preview_payload_artifact_name(
+pub fn release_payload_artifact_name(
     plan: &PackageReleasePlan,
-    pair: &PreviewPayloadPair,
-    context: &PreviewProductionContext,
+    pair: &ReleasePayloadPair,
+    context: &ReleaseProductionContext,
 ) -> Result<String, ContractError> {
-    let pairs = expected_preview_payload_pairs(plan)?;
+    let pairs = expected_release_payload_pairs(plan)?;
     validation::validate_context(context, plan)?;
     if pairs.binary_search(pair).is_err() {
         return Err(invalid("unknown_payload_pair"));
     }
     Ok(format!(
-        "velnor-preview-payload-r{}-a{}-{}-{}",
+        "velnor-release-payload-r{}-a{}-{}-{}",
         context.run_id, context.run_attempt, pair.product_id, pair.target
     ))
 }
@@ -244,12 +243,12 @@ pub fn preview_payload_artifact_name(
 /// Parse strict, bounded, byte-for-byte canonical native production JSON.
 /// # Errors
 /// Rejects duplicate/unknown fields, invalid UTF-8, noncanonical bytes or values.
-pub fn parse_preview_production_request(
+pub fn parse_release_production_request(
     bytes: &[u8],
-) -> Result<PreviewProductionRequest, ContractError> {
-    let value = crate::strict_json::parse_strict_json_bytes(bytes, MAX_PREVIEW_PRODUCTION_BYTES)?;
-    let request: PreviewProductionRequest = serde_json::from_value(value)
-        .map_err(|error| ContractError::identity("preview_production", error.to_string()))?;
+) -> Result<ReleaseProductionRequest, ContractError> {
+    let value = crate::strict_json::parse_strict_json_bytes(bytes, MAX_RELEASE_PRODUCTION_BYTES)?;
+    let request: ReleaseProductionRequest = serde_json::from_value(value)
+        .map_err(|error| ContractError::identity("release_production", error.to_string()))?;
     if request.canonical_bytes()?.as_slice() != bytes {
         return Err(invalid("noncanonical_json"));
     }
@@ -257,5 +256,5 @@ pub fn parse_preview_production_request(
 }
 
 fn invalid(problem: &'static str) -> ContractError {
-    ContractError::identity("preview_production", problem)
+    ContractError::identity("release_production", problem)
 }

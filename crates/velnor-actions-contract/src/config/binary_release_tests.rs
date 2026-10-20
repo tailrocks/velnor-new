@@ -1,17 +1,22 @@
 use super::*;
-use crate::config::{CheckSystemTool, CheckSystemToolKind};
+use crate::config::{CheckSystemTool, CheckSystemToolKind, VerificationRunner};
 
-fn enabled_preview() -> RustBinaryPreviewConfig {
-    RustBinaryPreviewConfig {
-        enabled: true,
+pub(super) fn enabled_preview() -> RustBinaryReleaseConfig {
+    RustBinaryReleaseConfig {
+        version_package: "jackin".to_owned(),
+        preview: RustBinaryPreviewConfig {
+            enabled: true,
+            release_id: 328_385_904,
+            ..RustBinaryPreviewConfig::default()
+        },
         version_env: "JACKIN_VERSION_OVERRIDE".to_owned(),
-        producer: RustBinaryPreviewProducer {
+        producer: RustBinaryReleaseProducer {
             task: "release:preview-package".to_owned(),
             tools: vec!["rust".to_owned()],
             inputs: vec!["Cargo.lock".to_owned(), "mise.toml".to_owned()],
-            ..RustBinaryPreviewProducer::default()
+            ..RustBinaryReleaseProducer::default()
         },
-        products: vec![RustBinaryPreviewProduct {
+        products: vec![RustBinaryReleaseProduct {
             id: "jackin".to_owned(),
             package: "jackin".to_owned(),
             bins: vec!["jackin".to_owned(), "jackin-role".to_owned()],
@@ -19,26 +24,26 @@ fn enabled_preview() -> RustBinaryPreviewConfig {
                 "aarch64-apple-darwin".to_owned(),
                 "x86_64-unknown-linux-gnu".to_owned(),
             ],
-            archive: RustBinaryPreviewArchive::TarGz,
+            archive: RustBinaryReleaseArchive::TarGz,
         }],
-        companions: vec![RustBinaryPreviewCompanion {
+        companions: vec![RustBinaryReleaseCompanion {
             id: "capsule-manifest".to_owned(),
             path: "capsule/manifest.json".to_owned(),
             asset_name: "capsule-manifest.json".to_owned(),
         }],
-        ..RustBinaryPreviewConfig::default()
+        ..RustBinaryReleaseConfig::default()
     }
 }
 
 #[test]
 fn preview_defaults_independently_disabled_with_mandatory_evidence() {
-    let preview = RustBinaryPreviewConfig::default();
-    assert!(!preview.enabled);
+    let preview = RustBinaryReleaseConfig::default();
+    assert!(!preview.enabled());
     assert_eq!(preview.producer.timeout_minutes, 5);
     assert_eq!(preview.version_env, "");
     assert_eq!(
         preview.evidence.profile,
-        RustBinaryPreviewEvidenceProfile::SignedSbomV1
+        RustBinaryReleaseEvidenceProfile::SignedSbomV1
     );
     assert!(preview.validate("config.toml").is_ok());
 }
@@ -49,7 +54,7 @@ fn enabled_preview_accepts_explicit_product_matrix_and_companion_assets() {
     assert!(preview.validate("config.toml").is_ok());
     assert_eq!(preview.version_env, "JACKIN_VERSION_OVERRIDE");
     assert_eq!(
-        preview.versioning,
+        preview.preview.versioning,
         RustBinaryPreviewVersioning::PackagePreviewCommitCountSha7
     );
 }
@@ -103,23 +108,25 @@ fn preview_version_variable_cannot_name_control_environment() {
 
 #[test]
 fn evidence_profile_has_no_boolean_escape_hatches() {
-    let json = r#"{"enabled":true,"versioning":"package-preview-commit-count-sha7","version_env":"JACKIN_VERSION_OVERRIDE","environment":"preview-publish","producer":{"task":"release:preview-package","source":{"mise_config":"mise.toml","working_directory":"."},"output_directory":"dist/preview","manifest":"dist/preview/package-output.json","tools":["rust"],"inputs":["Cargo.lock","mise.toml"],"runner":"linux-x64","timeout_minutes":5,"build_jobs":2},"products":[{"id":"jackin","package":"jackin","bins":["jackin"],"targets":["aarch64-apple-darwin"],"archive":"tar.gz"}],"companions":[],"evidence":{"profile":"signed-sbom-v1","checksums":false}}"#;
-    assert!(serde_json::from_str::<RustBinaryPreviewConfig>(json).is_err());
-    let valid = json.replace(",\"checksums\":false", "");
-    let config = serde_json::from_str::<RustBinaryPreviewConfig>(&valid).expect("valid preview");
+    let valid = serde_json::to_value(enabled_preview()).expect("release config");
+    let mut invalid = valid.clone();
+    invalid["evidence"]["checksums"] = serde_json::json!(false);
+    assert!(serde_json::from_value::<RustBinaryReleaseConfig>(invalid).is_err());
+    let config =
+        serde_json::from_value::<RustBinaryReleaseConfig>(valid.clone()).expect("valid inventory");
     assert!(config.validate("config.toml").is_ok());
-    assert!(
-        serde_json::from_str::<RustBinaryPreviewConfig>(
-            &valid.replace(",\"evidence\":{\"profile\":\"signed-sbom-v1\"}", "")
-        )
-        .is_err()
-    );
-    assert!(
-        serde_json::from_str::<RustBinaryPreviewConfig>(
-            &valid.replace("\"profile\":\"signed-sbom-v1\"", "")
-        )
-        .is_err()
-    );
+    let mut missing = valid.clone();
+    missing
+        .as_object_mut()
+        .expect("config object")
+        .remove("evidence");
+    assert!(serde_json::from_value::<RustBinaryReleaseConfig>(missing).is_err());
+    let mut missing = valid;
+    missing["evidence"]
+        .as_object_mut()
+        .expect("evidence object")
+        .remove("profile");
+    assert!(serde_json::from_value::<RustBinaryReleaseConfig>(missing).is_err());
 }
 
 #[test]
@@ -134,7 +141,7 @@ fn rejects_unsupported_targets_manifest_escape_and_missing_source_input() {
     preview.producer.inputs.retain(|input| input != "mise.toml");
     assert!(preview.validate("config.toml").is_err());
     let mut preview = enabled_preview();
-    preview.environment = "consumer-binary-release".to_owned();
+    preview.preview.environment = "consumer-binary-release".to_owned();
     assert!(preview.validate("config.toml").is_err());
     let mut preview = enabled_preview();
     preview.companions[0].path = "jackin-aarch64-apple-darwin.tar.gz/child".to_owned();
@@ -201,7 +208,7 @@ fn system_tool(kind: CheckSystemToolKind, version: &str, build: &str) -> CheckSy
 fn jackin_product_inventory_derives_exact_29_asset_set() {
     let mut preview = enabled_preview();
     preview.products = vec![
-        RustBinaryPreviewProduct {
+        RustBinaryReleaseProduct {
             id: "jackin".to_owned(),
             package: "jackin".to_owned(),
             bins: vec![
@@ -215,9 +222,9 @@ fn jackin_product_inventory_derives_exact_29_asset_set() {
                 "aarch64-unknown-linux-gnu".to_owned(),
                 "x86_64-unknown-linux-gnu".to_owned(),
             ],
-            archive: RustBinaryPreviewArchive::TarGz,
+            archive: RustBinaryReleaseArchive::TarGz,
         },
-        RustBinaryPreviewProduct {
+        RustBinaryReleaseProduct {
             id: "jackin-capsule".to_owned(),
             package: "jackin-capsule".to_owned(),
             bins: vec!["jackin-capsule".to_owned()],
@@ -225,10 +232,10 @@ fn jackin_product_inventory_derives_exact_29_asset_set() {
                 "aarch64-unknown-linux-gnu".to_owned(),
                 "x86_64-unknown-linux-gnu".to_owned(),
             ],
-            archive: RustBinaryPreviewArchive::TarGz,
+            archive: RustBinaryReleaseArchive::TarGz,
         },
     ];
-    preview.companions = vec![RustBinaryPreviewCompanion {
+    preview.companions = vec![RustBinaryReleaseCompanion {
         id: "capsule-manifest".to_owned(),
         path: "capsule-manifest.json".to_owned(),
         asset_name: "capsule-manifest.json".to_owned(),
@@ -272,7 +279,7 @@ fn rejects_inventory_larger_than_canonical_receipt_limits() {
 
     let mut preview = enabled_preview();
     preview.companions = (0..1021)
-        .map(|index| RustBinaryPreviewCompanion {
+        .map(|index| RustBinaryReleaseCompanion {
             id: format!("asset-{index}"),
             path: format!("assets/{index}.json"),
             asset_name: format!("asset-{index}.json"),
@@ -298,7 +305,7 @@ fn native_producer_timeout_has_independent_twenty_minute_ceiling() {
 
 #[test]
 fn native_producer_timeout_rejects_malformed_and_duplicate_values() {
-    let producer = RustBinaryPreviewProducer::default();
+    let producer = RustBinaryReleaseProducer::default();
     let canonical = serde_json::to_string(&producer).expect("producer JSON");
     for value in ["\"20\"", "20.0", "-1", "null", "true"] {
         let malformed = canonical.replace(
@@ -307,7 +314,7 @@ fn native_producer_timeout_rejects_malformed_and_duplicate_values() {
         );
         assert_ne!(malformed, canonical);
         assert!(
-            serde_json::from_str::<RustBinaryPreviewProducer>(&malformed).is_err(),
+            serde_json::from_str::<RustBinaryReleaseProducer>(&malformed).is_err(),
             "{value}"
         );
     }
@@ -315,5 +322,5 @@ fn native_producer_timeout_rejects_malformed_and_duplicate_values() {
         "\"timeout_minutes\":5",
         "\"timeout_minutes\":20,\"timeout_minutes\":5",
     );
-    assert!(serde_json::from_str::<RustBinaryPreviewProducer>(&duplicate).is_err());
+    assert!(serde_json::from_str::<RustBinaryReleaseProducer>(&duplicate).is_err());
 }

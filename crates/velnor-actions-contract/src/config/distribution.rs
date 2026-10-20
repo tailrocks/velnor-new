@@ -5,8 +5,11 @@ use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
+#[path = "distribution_destinations.rs"]
+mod destinations;
 #[path = "distribution_protection_observer.rs"]
 mod protection_observer;
+pub use destinations::{HomebrewTapDestination, HomebrewTapDestinations};
 pub use protection_observer::HomebrewTapProtectionObserver;
 
 /// Optional distribution destinations outside `[stacks.rust]`.
@@ -38,19 +41,17 @@ impl DistributionConfig {
     }
 }
 
-/// PR promotion policy for an immutable Rust binary preview release.
+/// Shared PR promotion custody for both native binary release channels.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HomebrewTapConfig {
     /// Whether to generate tap preparation and PR promotion.
     #[serde(default)]
     pub enabled: bool,
-    /// Only supported source channel; not a user-defined release locator.
-    pub source: HomebrewTapSource,
+    /// Closed channel destinations selected only from authenticated receipt identity.
+    pub destinations: HomebrewTapDestinations,
     /// Owner/repository slug, never a URL or arbitrary API destination.
     pub repository: String,
-    /// Single formula path that updater and writer may change.
-    pub formula: String,
     /// Source-qualified updater executed without write credentials.
     pub updater: TapUpdaterBinding,
     /// Protected environment for the isolated App writer and merge boundary.
@@ -65,14 +66,6 @@ pub struct HomebrewTapConfig {
     pub merge: TapMergePolicy,
     /// Trusted App check that must complete against the exact PR head SHA.
     pub review_completion: ExactHeadReviewCheck,
-}
-
-/// Native release channel consumed by the tap adapter.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum HomebrewTapSource {
-    /// `[stacks.rust.binary_release.preview]`.
-    #[serde(rename = "rust.binary_release.preview")]
-    RustBinaryReleasePreview,
 }
 
 /// Qualified task boundary for generating a formula patch.
@@ -141,6 +134,15 @@ pub struct ReviewAppIdentity {
 }
 
 impl HomebrewTapConfig {
+    /// Formula authority selected from the signed release channel.
+    #[must_use]
+    pub const fn destination(
+        &self,
+        channel: crate::package_release::PackageReleaseChannel,
+    ) -> Option<&HomebrewTapDestination> {
+        self.destinations.get(channel)
+    }
+
     /// Validate the closed tap contract and its credential references.
     ///
     /// # Errors
@@ -152,9 +154,6 @@ impl HomebrewTapConfig {
         if !crate::vcs::is_safe_github_repository(&self.repository) {
             return Err(config_error(file, key, "repository", "bad_repository_slug"));
         }
-        if !valid_formula_path(&self.formula) {
-            return Err(config_error(file, key, "formula", "bad_formula_path"));
-        }
         self.updater.validate(file, key)?;
         if self.updater.runner.executor != super::CheckExecutor::Hosted {
             return Err(config_error(
@@ -164,14 +163,8 @@ impl HomebrewTapConfig {
                 "tap_updater_requires_hosted_runner",
             ));
         }
-        if !self.updater.inputs.iter().any(|path| path == &self.formula) {
-            return Err(config_error(
-                file,
-                key,
-                "updater.inputs",
-                "formula_base_not_an_input",
-            ));
-        }
+        self.destinations
+            .validate(file, self.enabled, &self.updater.inputs)?;
         if !valid_app_id_variable(&self.app_id_variable) {
             return Err(config_error(
                 file,

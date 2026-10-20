@@ -1,55 +1,120 @@
-//! Validation for the native Rust binary preview configuration.
+//! Shared producer and closed channel validation.
 
 use super::{
-    RustBinaryPreviewCompanion, RustBinaryPreviewConfig, RustBinaryPreviewProducer,
-    RustBinaryPreviewProduct,
+    RustBinaryReleaseCompanion, RustBinaryReleaseConfig, RustBinaryReleaseProducer,
+    RustBinaryReleaseProduct,
 };
 use crate::config::is_valid_mise_task_name;
-use crate::config::{CheckPlatform, CheckSystemTool};
+use crate::config::{CheckPlatform, CheckSystemTool, VerificationRunner};
 use crate::errors::ContractError;
 use std::collections::BTreeSet;
 
-#[path = "binary_release_preview_inventory.rs"]
+#[path = "binary_release_inventory.rs"]
 pub(super) mod inventory;
 use inventory::paths_overlap;
 pub(crate) use inventory::validate_static_release_inventory;
 
-impl RustBinaryPreviewConfig {
-    /// Validate all enabled preview policy fields and closed inventories.
+impl RustBinaryReleaseConfig {
+    /// Validate both channel policies and their one shared qualified inventory.
     ///
-    /// Disabled preview policies retain defaults and may be configured ahead
+    /// Disabled channel policies retain defaults and may be configured ahead
     /// of activation, but partial active policies fail closed.
     ///
     /// # Errors
     ///
     /// Returns a configuration error for an unsafe or incomplete policy.
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
-        let prefix = "stacks.rust.binary_release.preview";
-        if (self.enabled && !valid_version_env(&self.version_env))
-            || (!self.version_env.is_empty() && !valid_version_env(&self.version_env))
+        let prefix = "stacks.rust.binary_release";
+        let required = self.enabled();
+        if (required || !self.version_env.is_empty()) && !valid_version_env(&self.version_env) {
+            return Err(config_error(
+                file,
+                &format!("{prefix}.version_env"),
+                "bad_release_version_env",
+            ));
+        }
+        if !valid_repo_path(&self.manifest_path, false)
+            || !(self.manifest_path == "Cargo.toml" || self.manifest_path.ends_with("/Cargo.toml"))
         {
-            return Err(ContractError::config(
+            return Err(config_error(
                 file,
-                format!("{prefix}.version_env"),
-                "bad_preview_version_env",
+                &format!("{prefix}.manifest_path"),
+                "bad_manifest_path",
             ));
         }
-        if self.environment != "preview-publish" {
-            return Err(ContractError::config(
+        if (required || !self.version_package.is_empty())
+            && !valid_identifier(&self.version_package)
+        {
+            return Err(config_error(
                 file,
-                format!("{prefix}.environment"),
-                "preview_environment_must_be_preview_publish",
+                &format!("{prefix}.version_package"),
+                "required_version_package",
             ));
         }
-        self.producer.validate(file, self.enabled)?;
+        if required
+            && !self
+                .products
+                .iter()
+                .any(|product| product.package == self.version_package)
+        {
+            return Err(config_error(
+                file,
+                &format!("{prefix}.version_package"),
+                "version_package_not_a_product",
+            ));
+        }
+        self.validate_channels(file)?;
+        self.producer.validate(file, required)?;
         inventory::validate_inventory(file, self)?;
         Ok(())
     }
 }
 
-impl RustBinaryPreviewProducer {
+impl RustBinaryReleaseConfig {
+    fn validate_channels(&self, file: &str) -> Result<(), ContractError> {
+        let prefix = "stacks.rust.binary_release";
+        if self.preview.environment != "preview-publish" {
+            return Err(config_error(
+                file,
+                &format!("{prefix}.preview.environment"),
+                "preview_environment_must_be_preview_publish",
+            ));
+        }
+        if self.preview.enabled && self.preview.release_id == 0 {
+            return Err(config_error(
+                file,
+                &format!("{prefix}.preview.release_id"),
+                "existing_rolling_release_required",
+            ));
+        }
+        if let Some(digest) = &self.preview.bootstrap_snapshot_sha256
+            && (!self.preview.enabled
+                || self.preview.release_id == 0
+                || digest.len() != 64
+                || !digest
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f')))
+        {
+            return Err(config_error(
+                file,
+                &format!("{prefix}.preview.bootstrap_snapshot_sha256"),
+                "invalid_bootstrap_snapshot_binding",
+            ));
+        }
+        if self.stable.environment != "release" {
+            return Err(config_error(
+                file,
+                &format!("{prefix}.stable.environment"),
+                "stable_environment_must_be_release",
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl RustBinaryReleaseProducer {
     fn validate(&self, file: &str, required: bool) -> Result<(), ContractError> {
-        let key = "stacks.rust.binary_release.preview.producer";
+        let key = "stacks.rust.binary_release.producer";
         validate_task_name(file, &self.task, required, &format!("{key}.task"))?;
         validate_producer_paths(file, self, key)?;
         validate_producer_limits(file, self, key)?;
@@ -58,10 +123,10 @@ impl RustBinaryPreviewProducer {
         CheckSystemTool::validate_set(
             &self.system_tools,
             match self.runner {
-                super::VerificationRunner::LinuxX64 => CheckPlatform::LinuxX64,
-                super::VerificationRunner::MacosArm64
-                | super::VerificationRunner::Macos26Arm64
-                | super::VerificationRunner::Xcode27Arm64 => CheckPlatform::MacosArm64,
+                VerificationRunner::LinuxX64 => CheckPlatform::LinuxX64,
+                VerificationRunner::MacosArm64
+                | VerificationRunner::Macos26Arm64
+                | VerificationRunner::Xcode27Arm64 => CheckPlatform::MacosArm64,
             },
             file,
             key,
@@ -86,14 +151,14 @@ fn validate_task_name(
 
 fn validate_producer_paths(
     file: &str,
-    producer: &RustBinaryPreviewProducer,
+    producer: &RustBinaryReleaseProducer,
     key: &str,
 ) -> Result<(), ContractError> {
     if !producer.source.validate() {
         return Err(config_error(
             file,
             &format!("{key}.source"),
-            "bad_preview_source",
+            "bad_release_source",
         ));
     }
     for (field, path) in [
@@ -104,7 +169,7 @@ fn validate_producer_paths(
             return Err(config_error(
                 file,
                 &format!("{key}.{field}"),
-                "bad_preview_path",
+                "bad_release_path",
             ));
         }
     }
@@ -115,7 +180,7 @@ fn validate_producer_paths(
         return Err(config_error(
             file,
             &format!("{key}.manifest"),
-            "preview_manifest_outside_output_directory",
+            "release_manifest_outside_output_directory",
         ));
     }
     Ok(())
@@ -123,21 +188,21 @@ fn validate_producer_paths(
 
 fn validate_producer_limits(
     file: &str,
-    producer: &RustBinaryPreviewProducer,
+    producer: &RustBinaryReleaseProducer,
     key: &str,
 ) -> Result<(), ContractError> {
-    if !(1..=RustBinaryPreviewProducer::MAX_TIMEOUT_MINUTES).contains(&producer.timeout_minutes) {
+    if !(1..=RustBinaryReleaseProducer::MAX_TIMEOUT_MINUTES).contains(&producer.timeout_minutes) {
         return Err(config_error(
             file,
             &format!("{key}.timeout_minutes"),
-            "bad_preview_timeout",
+            "bad_release_timeout",
         ));
     }
     if !(1..=64).contains(&producer.build_jobs) {
         return Err(config_error(
             file,
             &format!("{key}.build_jobs"),
-            "bad_preview_build_jobs",
+            "bad_release_build_jobs",
         ));
     }
     Ok(())
@@ -145,7 +210,7 @@ fn validate_producer_limits(
 
 fn validate_producer_inputs(
     file: &str,
-    producer: &RustBinaryPreviewProducer,
+    producer: &RustBinaryReleaseProducer,
     required: bool,
     key: &str,
 ) -> Result<(), ContractError> {
@@ -158,7 +223,7 @@ fn validate_producer_inputs(
         return Err(config_error(
             file,
             &format!("{key}.inputs"),
-            "bad_preview_inputs",
+            "bad_release_inputs",
         ));
     }
     if producer
@@ -169,21 +234,21 @@ fn validate_producer_inputs(
         return Err(config_error(
             file,
             &format!("{key}.inputs"),
-            "preview_output_overlaps_source_inputs",
+            "release_output_overlaps_source_inputs",
         ));
     }
     if required && producer.inputs.is_empty() {
         return Err(config_error(
             file,
             key,
-            "preview_task_requires_declared_inputs_and_tools",
+            "release_task_requires_declared_inputs_and_tools",
         ));
     }
     if required && !producer.inputs.contains(&producer.source.mise_config) {
         return Err(config_error(
             file,
             &format!("{key}.inputs"),
-            "preview_inputs_must_include_mise_config",
+            "release_inputs_must_include_mise_config",
         ));
     }
     Ok(())
@@ -191,7 +256,7 @@ fn validate_producer_inputs(
 
 fn validate_producer_tools(
     file: &str,
-    producer: &RustBinaryPreviewProducer,
+    producer: &RustBinaryReleaseProducer,
     required: bool,
     key: &str,
 ) -> Result<(), ContractError> {
@@ -199,14 +264,14 @@ fn validate_producer_tools(
         return Err(config_error(
             file,
             &format!("{key}.tools"),
-            "bad_preview_tools",
+            "bad_release_tools",
         ));
     }
     if required && producer.tools.is_empty() {
         return Err(config_error(
             file,
             key,
-            "preview_task_requires_declared_inputs_and_tools",
+            "release_task_requires_declared_inputs_and_tools",
         ));
     }
     Ok(())
