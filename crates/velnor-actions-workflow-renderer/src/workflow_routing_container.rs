@@ -26,8 +26,16 @@ pub(super) fn ensure_job_container(
     if existing.is_none() {
         ensure_container_shell(fields, workflow_shell, path, job_id)?;
     }
+    let index = fields
+        .iter()
+        .position(|(key, _)| key == "container")
+        .ok_or_else(|| invalid(format!("job_container_missing:{path}:{job_id}")))?;
+    private_metadata::ensure_private_metadata_mounts(&mut fields[index].1, path, job_id)?;
     Ok(())
 }
+
+#[path = "workflow_routing_container/private_metadata.rs"]
+mod private_metadata;
 
 pub(super) fn workflow_run_shell(
     workflow: &Yaml,

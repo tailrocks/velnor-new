@@ -7,6 +7,8 @@ use crate::{RenderError, RenderedFile, yaml::Yaml};
 
 const MAX_MATRIX_COMBINATIONS: usize = 256;
 
+#[path = "workflow_routing_aliases.rs"]
+mod aliases;
 #[path = "workflow_routing_authority.rs"]
 mod authority;
 #[path = "workflow_routing_calls.rs"]
@@ -125,6 +127,7 @@ fn route_workflow_yaml_inner(
     policy: &WorkflowRoutingPolicy,
     typed_jobs: Option<&std::collections::BTreeMap<String, velnor_actions_contract::Job>>,
 ) -> Result<Yaml, RenderError> {
+    workflow = aliases::materialize(&workflow)?;
     let selector = policy.selector();
     let workflow_shell = container::workflow_run_shell(&workflow, path)?;
     let Yaml::Map(document) = &mut workflow else {
@@ -268,6 +271,9 @@ fn invalid(problem: String) -> RenderError {
     RenderError::InvalidWorkflow(problem)
 }
 
+#[cfg(test)]
+#[path = "workflow_routing_container_tests.rs"]
+mod container_tests;
 #[cfg(test)]
 #[path = "workflow_routing_tests.rs"]
 mod tests;

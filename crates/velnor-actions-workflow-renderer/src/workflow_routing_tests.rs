@@ -9,7 +9,7 @@ use velnor_actions_contract::{ExecutionMode, Job, JobTimeout, ScaleSetSelector};
 use super::{WorkflowRoutingPolicy, route_jobs, route_workflow_yaml};
 use crate::{RenderError, yaml::Yaml};
 
-fn selector() -> ScaleSetSelector {
+pub(super) fn selector() -> ScaleSetSelector {
     ScaleSetSelector::try_new(
         "linux-amd64",
         &["velnor".to_owned(), "linux-amd64".to_owned()],
@@ -21,18 +21,18 @@ fn policy(mode: ExecutionMode) -> WorkflowRoutingPolicy {
     configured(mode)
 }
 
-fn image() -> ValidatedImageReference {
+pub(super) fn image() -> ValidatedImageReference {
     ValidatedImageReference::parse(
         "ghcr.io/tailrocks/velnor-job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     )
     .expect("valid immutable test image")
 }
 
-fn configured(mode: ExecutionMode) -> WorkflowRoutingPolicy {
+pub(super) fn configured(mode: ExecutionMode) -> WorkflowRoutingPolicy {
     WorkflowRoutingPolicy::configured(mode, selector(), Some(image()))
 }
 
-fn workflow(jobs: Vec<(&str, Yaml)>) -> Yaml {
+pub(super) fn workflow(jobs: Vec<(&str, Yaml)>) -> Yaml {
     Yaml::Map(vec![(
         "jobs".to_owned(),
         Yaml::Map(
@@ -48,17 +48,6 @@ fn runner_job(runs_on: &str) -> Yaml {
 }
 
 #[test]
-fn hosted_and_both_preserve_existing_placement() {
-    for mode in [ExecutionMode::Hosted, ExecutionMode::Both] {
-        let input = workflow(vec![("build", runner_job("ubuntu-26.04"))]);
-        assert_eq!(
-            route_workflow_yaml("ci.yml", input.clone(), &policy(mode)),
-            Ok(input)
-        );
-    }
-}
-
-#[test]
 fn linux_amd64_runner_is_routed_to_the_validated_selector() {
     let input = workflow(vec![("build", runner_job("ubuntu-24.04"))]);
     let expected = workflow(vec![(
@@ -70,7 +59,16 @@ fn linux_amd64_runner_is_routed_to_the_validated_selector() {
             ),
             (
                 "container".to_owned(),
-                Yaml::Map(vec![("image".to_owned(), Yaml::str(image().as_str()))]),
+                Yaml::Map(vec![
+                    ("image".to_owned(), Yaml::str(image().as_str())),
+                    (
+                        "volumes".to_owned(),
+                        Yaml::Seq(vec![
+                            Yaml::str("/opt/velnor/job-facts:/opt/velnor/job-facts:ro"),
+                            Yaml::str("/.velnor-runtime-identity:/.velnor-runtime-identity:ro"),
+                        ]),
+                    ),
+                ]),
             ),
             (
                 "defaults".to_owned(),
@@ -219,7 +217,17 @@ fn selector_leaf_gets_a_container_in_every_configured_mode() {
         };
         assert!(fields.iter().any(|(key, value)| {
             key == "container"
-                && *value == Yaml::Map(vec![("image".to_owned(), Yaml::str(image().as_str()))])
+                && *value
+                    == Yaml::Map(vec![
+                        ("image".to_owned(), Yaml::str(image().as_str())),
+                        (
+                            "volumes".to_owned(),
+                            Yaml::Seq(vec![
+                                Yaml::str("/opt/velnor/job-facts:/opt/velnor/job-facts:ro"),
+                                Yaml::str("/.velnor-runtime-identity:/.velnor-runtime-identity:ro"),
+                            ]),
+                        ),
+                    ])
         }));
     }
 }
@@ -251,6 +259,20 @@ fn scale_set_routing_injects_image_and_preserves_bash_shell() {
                     "run".to_owned(),
                     Yaml::Map(vec![("shell".to_owned(), Yaml::str("bash -e {0}"))]),
                 )])
+    }));
+    assert!(fields.iter().any(|(key, value)| {
+        key == "container"
+            && value
+                == &Yaml::Map(vec![
+                    ("image".to_owned(), Yaml::str(image().as_str())),
+                    (
+                        "volumes".to_owned(),
+                        Yaml::Seq(vec![
+                            Yaml::str("/opt/velnor/job-facts:/opt/velnor/job-facts:ro"),
+                            Yaml::str("/.velnor-runtime-identity:/.velnor-runtime-identity:ro"),
+                        ]),
+                    ),
+                ])
     }));
 }
 
@@ -317,7 +339,33 @@ fn explicit_container_fields_are_preserved_and_validated() {
     )]);
     let routed = route_workflow_yaml("ci.yml", original.clone(), &configured(ExecutionMode::Both))
         .expect("supported explicit container fields remain valid");
-    assert_eq!(routed, original);
+    let Yaml::Map(document) = routed else {
+        panic!("workflow map")
+    };
+    let Some((_, Yaml::Map(jobs))) = document.iter().find(|(key, _)| key == "jobs") else {
+        panic!("jobs map")
+    };
+    let Some((_, Yaml::Map(fields))) = jobs.first() else {
+        panic!("job map")
+    };
+    let Some((_, Yaml::Map(container))) = fields.iter().find(|(key, _)| key == "container") else {
+        panic!("container map")
+    };
+    assert!(container.iter().any(|(key, value)| {
+        key == "volumes"
+            && value
+                == &Yaml::Seq(vec![
+                    Yaml::str("data:/data"),
+                    Yaml::str("/opt/velnor/job-facts:/opt/velnor/job-facts:ro"),
+                    Yaml::str("/.velnor-runtime-identity:/.velnor-runtime-identity:ro"),
+                ])
+    }));
+    assert!(
+        container
+            .iter()
+            .any(|(key, value)| key == "options" && value == &Yaml::str("--cpus 2"))
+    );
+    let _ = original;
 }
 
 #[test]
