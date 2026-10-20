@@ -278,7 +278,6 @@ fn cache_key_shape_and_bound() -> Result<(), ContractError> {
             arch: "x86_64".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             image_os: "ubuntu26".to_owned(),
-            image_version: "20260928.1.0".to_owned(),
             target: "host".to_owned(),
         })
         .is_ok()

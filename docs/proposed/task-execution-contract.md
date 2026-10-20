@@ -119,7 +119,7 @@ removes managed workspace outputs while leaving the action-owned object store
 and receipts available to the action's post export.
 
 This generation does not yet bind the canonical `platform_id` from the exact
-runner label, runtime `ImageOS`/`ImageVersion`, and execution target required by
+runner label, runtime `ImageOS`, and execution target required by
 the cache contract. Current MBX cache hits are therefore unqualified across
 image changes; a bounded runtime identity bridge and fail-cold behavior are
 still required before those hits can be treated as compatible.

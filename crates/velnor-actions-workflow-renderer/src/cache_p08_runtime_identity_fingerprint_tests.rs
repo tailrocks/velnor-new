@@ -3,7 +3,7 @@ use std::{error::Error, fs};
 use super::*;
 
 #[test]
-fn runtime_fingerprint_is_stable_and_binds_image_and_absolute_roots() -> Result<(), Box<dyn Error>>
+fn runtime_fingerprint_is_stable_and_binds_image_os_and_absolute_roots() -> Result<(), Box<dyn Error>>
 {
     let fixture = Fixture::new()?;
     let hosted = payload("ubuntu-26.04");
@@ -21,7 +21,11 @@ fn runtime_fingerprint_is_stable_and_binds_image_and_absolute_roots() -> Result<
         &[("ImageVersion", "20261005.1".to_owned())],
     );
     assert!(output.status.success(), "{output:?}");
-    assert_ne!(identity(&image_changed), baseline_identity);
+    assert_eq!(
+        identity(&image_changed),
+        baseline_identity,
+        "ImageVersion is not part of the tools identity"
+    );
 
     let alternative_home = fixture.root.join("alternate home");
     fs::create_dir_all(alternative_home.join(".local/share"))?;

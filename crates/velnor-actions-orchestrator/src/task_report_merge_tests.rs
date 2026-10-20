@@ -196,7 +196,6 @@ fn merge_rejects_hosted_observation_for_custom_plan_entry() {
         arch: "x86_64".to_owned(),
         runs_on: custom.runs_on.clone(),
         image_os: "ubuntu26".to_owned(),
-        image_version: "20261005.1.0".to_owned(),
         target: custom.target.clone(),
     };
     report.platform_binding = PlatformBinding::Observed {

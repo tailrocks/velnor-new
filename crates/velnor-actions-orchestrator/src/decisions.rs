@@ -234,8 +234,8 @@ pub fn not_selected_report(inputs: &NotSelectedInputs<'_>) -> Result<TaskReport,
 /// Runner-image evidence at generation time (VER-4.2).
 ///
 /// Explicitly unobserved: the generator never sees the provisioned
-/// runner, so label text is never split into `ImageOS`/`ImageVersion`
-/// facts. Observed provisioner values bind later through
+/// runner, so label text is never split into an `ImageOS`
+/// fact. Observed provisioner values bind later through
 /// [`RunnerImageEvidence::observed`], which rejects this marker, so
 /// the two states stay disjoint by construction (P03-4).
 pub(crate) fn runner_image_evidence() -> RunnerImageEvidence {

@@ -206,7 +206,6 @@ pub(super) fn runtime_identity(
             arch: "x86_64".to_owned(),
             runs_on: requirements.runner_label.clone(),
             image_os: "ubuntu".to_owned(),
-            image_version: "26.04".to_owned(),
             target: requirements.target.clone(),
         },
         toolchain_id: requirements.toolchain_id.clone(),

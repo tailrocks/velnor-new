@@ -18,13 +18,11 @@ pub struct PlatformInputs {
     pub runs_on: String,
     /// Runner `ImageOS` value; `unknown` when unobserved.
     pub image_os: String,
-    /// Runner `ImageVersion` value; `unknown` when unobserved.
-    pub image_version: String,
     /// Execution target (`host` or triple).
     pub target: String,
 }
 
-/// Compute `platform_id` over OS/arch/label/image/target.
+/// Compute `platform_id` over OS/arch/label/`ImageOS`/target.
 /// # Errors
 pub fn platform_id(inputs: &PlatformInputs) -> Result<String, ContractError> {
     for (field, value) in [
@@ -32,7 +30,6 @@ pub fn platform_id(inputs: &PlatformInputs) -> Result<String, ContractError> {
         ("arch", inputs.arch.as_str()),
         ("runs_on", inputs.runs_on.as_str()),
         ("image_os", inputs.image_os.as_str()),
-        ("image_version", inputs.image_version.as_str()),
         ("target", inputs.target.as_str()),
     ] {
         validate_semantic_text(field, value)?;

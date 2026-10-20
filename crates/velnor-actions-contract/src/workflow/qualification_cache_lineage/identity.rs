@@ -308,7 +308,6 @@ pub(crate) fn runtime_requirements(
             QualificationRuntimeIdentityField::RunnerOs,
             QualificationRuntimeIdentityField::RunnerArch,
             QualificationRuntimeIdentityField::ImageOs,
-            QualificationRuntimeIdentityField::ImageVersion,
             QualificationRuntimeIdentityField::ToolchainId,
             QualificationRuntimeIdentityField::CacheFormatId,
             QualificationRuntimeIdentityField::AbiId,

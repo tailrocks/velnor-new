@@ -264,7 +264,6 @@ impl PlatformBinding {
             let mut planned = inputs.clone();
             let unknown = RunnerImageEvidence::unobserved();
             planned.image_os = unknown.image_os;
-            planned.image_version = unknown.image_version;
             if platform_id(&planned)? != self.planned_platform_id() {
                 return Err(ContractError::identity(
                     "platform_binding.inputs",
@@ -326,7 +325,6 @@ fn planned_inputs(runs_on: &str, target: &str) -> Result<PlatformInputs, Contrac
         arch: arch.to_owned(),
         runs_on: runs_on.to_owned(),
         image_os: unobserved.image_os,
-        image_version: unobserved.image_version,
         target: target.to_owned(),
     })
 }
