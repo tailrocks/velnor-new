@@ -1,0 +1,45 @@
+# Cache redesign decisions
+
+Status: adopted by the human owner for the CI cache redesign (seven decisions,
+recorded 2026-10-20). Each decision below states what main implements now and
+what the follow-up PRs deliver. This page is the decision record that
+[`cache-contract.md`](cache-contract.md) section 2 and
+[`hard-decisions.md`](../hard-decisions.md) decision 1 cite. A change to any
+entry needs the owner's explicit approval.
+
+Budget rule (applies to every entry): the repository cache quota is 10 GB.
+Hot families plus the allowance for superseded entries stay at or below 85 %
+of the configured quota, sizes come from
+[`cache-measurements.md`](../implemented/cache-measurements.md), and a save that
+would exceed its family ceiling is refused and reported, never attempted.
+Successful and failed jobs are both covered: see decision 1 and the cases table.
+
+## Decisions
+
+| # | Decision | State on main | Remaining |
+|---|---|---|---|
+| 1 | **Save on build success even when tests fail.** A family saves when its producer step succeeded on a trusted run, regardless of test, lint or doc verdicts. It never saves on cancellation or a failed producer. | Sources (Plan job) and tools already save on producer success. Compiled transport is still MBX `target` mode, whose post step is `success()`-gated. | Compiled saves move to the dependency-seed family (2) and the opaque MBX bundle (3), whose save step is `if: always() && !cancelled()` gated on the producer step outcome. |
+| 2 | **Dependency-seed family (D).** One Velnor-owned family archives the compiled dependency closure of the three fixed lane trees, minus `incremental/`, `examples/`, `tmp/`, `doc/` and every Cargo-reported executable. Written only by a non-crate seed job on a trusted main push; crate jobs restore read-only. | Not implemented. | Seed job, family spec, key schema, size ceiling. |
+| 3 | **Opaque `mbx cache export` bundles.** Velnor may archive the output of `mbx cache export --format directory`. It treats the bundle as opaque bytes; MBX owns the format and `mbx cache import` restores it. Velnor never parses or composes MBX objects. | Not implemented; the contract forbids archiving MBX objects. | Contract wording (done here), export and import steps, drop of `github-cache-mode: target`. |
+| 4 | **Per-family pruning of superseded entries.** Deleting older exact keys of the same family on a trusted default-branch run, with `actions: write` scoped to that job, is not "global pruning". Other families and other trust scopes are never touched. | Not implemented; LRU eviction only. | Prune step and permission, keep newest K per family. |
+| 5 | **PR-scoped sources writes for same-repo PRs, with cleanup on close.** A same-repo PR writes a `pr` trust sources entry visible only to that PR; the default branch never restores `pr` entries; forks and merge groups never write. A `pull_request: closed` handler deletes the PR's refs entries. | Writes are implemented (`cache_family.rs`, fork-pr-trust-model). | Cleanup-on-close handler. |
+| 6 | **Drop ImageVersion from keys.** Runner image version is not part of any cache identity. `ImageOS`, runner OS and architecture, and the toolchain digest remain. | Present in the platform identity and the tools runtime identity. | Remove the field everywhere it feeds a key. |
+| 7 | **Reword hard decision 1.** Lanes live in the dependency-seed family and the MBX bundle, not in a target-mode payload. The seed job is not a crate job: it runs no checks, is excluded from Required, and the one-job-per-crate rule governs crate jobs only. | Wording updated with this record. | None. |
+
+## Cases the design covers
+
+| Case | Behavior |
+|---|---|
+| Main green | Seed job saves D on dependency change; sources saved by Plan. |
+| Main red because tests fail | Producer steps (fetch, dependency compile) succeeded, so sources and D still save. A red main no longer starves the cache. |
+| Dependency compile fails | No D save (producer failed); the previous entry stays valid. |
+| Cancelled run | Nothing saves. |
+| Same-repo PR | Restores trusted entries; writes only a PR-scoped sources entry; cleaned up on close. |
+| Fork PR, merge group | Read-only. |
+| Over ceiling | Save refused and reported as `over_ceiling`; older entries untouched. |
+
+## Source notes
+
+Design notes and measurements: the cache research notes in the internal
+scratchpad (designs A, B, C and review rounds 1 and 2). The adopted shape is
+review 2's hybrid H with the owner's decisions above.

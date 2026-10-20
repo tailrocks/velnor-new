@@ -16,7 +16,8 @@ editing the decision away.
 **Decision.** Each Rust package/configuration owns exactly one generated CI
 job named `Rust / <crate>` (job id `rust-<crate>`, for example
 `Rust / eth-processor-app`). The job prepares checkout, pinned tools, Cargo
-sources and the MBX cache once and builds the test executables once. Format,
+sources and the compiled dependency cache once and builds the test executables
+once. Format,
 Clippy, Documentation, Unit and integration tests, and Doctests then run as
 parallel steps inside that job, using GitHub Actions native step concurrency
 (`background: true` members joined by one `wait-all`).
@@ -36,13 +37,18 @@ and overlaps the independent checks.
   schedules; a crate job the plan marks `not_affected` must be skipped
   (decision 4).
 - Clippy and Documentation compile in their own Cargo target lanes
-  (`target/velnor-clippy`, `target/velnor-doc`, inside the MBX target cache
-  payload) so Cargo's target-directory lock never serializes test execution
+  (`target/velnor-clippy`, `target/velnor-doc`, seeded from the
+  dependency-seed family) so Cargo's target-directory lock never serializes test execution
   and doctests behind them. Tests and doctests reuse the built executables.
 - `workflow.crate_timeout_minutes` bounds the one crate job (decision 2).
 - The pinned actionlint does not parse the native step keys yet; the narrow,
   documented bridge in `velnor-actions-actionlint` (`STEP_PARALLELISM_IGNORES`)
   suppresses only the unknown `background` key and the body-less join step.
+
+- The dependency-seed job is not a crate job: it runs no checks and is not in
+  Required, so this decision governs crate jobs only. Crate jobs restore
+  compiled caches read-only. See the
+  [cache decisions](proposed/cache-decisions.md) (owner-approved 2026-10-20).
 
 **Must not be reintroduced without owner approval:** per-phase crate jobs
 (`-lint`, `-tests`, `-docs` or any other split of one crate's checks across

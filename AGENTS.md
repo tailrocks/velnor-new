@@ -9,6 +9,7 @@
 - No legacy code. Finish every migration: remove old paths completely—no compatibility shims, aliases, or deprecation periods. Breaking changes are preferred.
 - Research project: unsafe, breaking changes expected, never production-ready. Break things when needed; deliver fast.
 - Requirements and adopted contracts: read `docs/reviews/pr-1.md`, `docs/reviews/pr-1-adoption.md`, and `docs/reviews/pr-1-disposition.md`. Specifications live in `docs/proposed/*` (OpenTofu: `docs/proposed/opentofu-contract.md`), and procedures live in `docs/implemented/*`. Pins and exceptions: `.velnor/version-policy.toml` and `.velnor/freshness-inventory.json`.
+- Cache design: read `docs/proposed/cache-decisions.md` (owner-adopted decisions, 10 GB budget, success and failure cases) and `docs/proposed/cache-contract.md` before touching cache keys, families, saves, or pruning.
 - Quality and proof invariants: enforced by CI and compiler gates; read `docs/proposed/rust-quality-contract.md` for quality contracts.
 - Work principles:
   - Judge by correctness, consistency, and goal fit. Never defer a known-wrong state for ROI, cost, effort, or edge-case claims.
