@@ -1731,5 +1731,16 @@
     "scope": "Test fixtures use the current schema version and the production clock. Production rules remain unchanged.",
     "full_runner_gate": "FAIL",
     "full_runner_reason": "The earlier full test run has five failures. This test run does not replace that record."
+  },
+  "polling_module_split_20261021": {
+    "status": "PASS",
+    "source_parent": "724c68cde2b0f4bf86d530ffc77024b54fd7bc31",
+    "result": "31 controller tests passed. Other tests were outside this test filter.",
+    "run_id": "b2071e9e-e692-4072-bdc2-4c9d22c3c754",
+    "log_sha256": "3e9727155bbb0e8e77415ddbb4c68be96358dacd0eb1239f5286028bab9d42ac",
+    "review_sha256": "e28310c3bf3ca227bba8660f92d1c1cc928b0ea243d1f49308f980ffd1d683ce",
+    "format": "PASS",
+    "full_runner_gate": "FAIL",
+    "scope": "The split preserves polling order and capacity rules. Full release checks remain incomplete."
   }
 }
