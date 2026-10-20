@@ -6,11 +6,12 @@ use std::fs;
 use std::path::{Component, Path};
 
 use velnor_actions_contract::config::analyze_dockerfile;
-use velnor_actions_contract::{ImageConfig, VelnorConfig};
-use velnor_actions_mise::GitRequest;
+use velnor_actions_contract::{ImageConfig, ImagePrebuilt, VelnorConfig};
+use velnor_actions_mise::{GitRequest, ToolCatalog};
 use velnor_actions_workflow_renderer::verification_jobs::ImageBuildPolicy;
 
 use crate::OrchestratorError;
+use crate::discover::Discovery;
 use crate::safe_read::{RepoRead, read_repo_file};
 
 const MAX_DOCKERFILE_BYTES: u64 = 1024 * 1024;
@@ -19,15 +20,27 @@ const MAX_DOCKERFILE_BYTES: u64 = 1024 * 1024;
 pub(crate) fn policies(
     root: &Path,
     config: &VelnorConfig,
+    prebuilt: &PrebuiltInputs<'_>,
 ) -> Result<Vec<ImageBuildPolicy>, OrchestratorError> {
     config
         .images
         .iter()
-        .map(|image| resolve(root, image))
+        .map(|image| resolve(root, image, prebuilt))
         .collect()
 }
 
-fn resolve(root: &Path, image: &ImageConfig) -> Result<ImageBuildPolicy, OrchestratorError> {
+/// Planning inputs the prebuilt (`cargo_bin`) steps need.
+pub(crate) struct PrebuiltInputs<'a> {
+    pub(crate) discovery: &'a Discovery,
+    pub(crate) catalog: &'a ToolCatalog,
+    pub(crate) fetch_roots: &'a [String],
+}
+
+fn resolve(
+    root: &Path,
+    image: &ImageConfig,
+    prebuilt: &PrebuiltInputs<'_>,
+) -> Result<ImageBuildPolicy, OrchestratorError> {
     let mut dockerfile_sha256 = BTreeMap::new();
     for platform in &image.platforms {
         let path = image
@@ -40,16 +53,59 @@ fn resolve(root: &Path, image: &ImageConfig) -> Result<ImageBuildPolicy, Orchest
             RepoRead::Text(text) => text,
             RepoRead::Absent => return Err(failure(&image.id, "image_dockerfile_missing")),
         };
-        analyze_dockerfile(&text).map_err(|problem| failure(&image.id, &problem.code()))?;
+        let facts =
+            analyze_dockerfile(&text).map_err(|problem| failure(&image.id, &problem.code()))?;
+        require_stage_copied(image, &facts.context_sources)?;
         dockerfile_sha256.insert(*platform, crate::generator::sha256_hex(text.as_bytes()));
     }
     if image.context != "." {
         require_plain_path(root, &image.context, false, &image.id)?;
     }
+    if let Some(ImagePrebuilt::CargoBin { stage, .. }) = &image.prebuilt
+        && fs::symlink_metadata(root.join(stage)).is_ok()
+    {
+        return Err(failure(&image.id, "image_prebuilt_stage_exists"));
+    }
+    let prebuilt_steps = crate::image_prebuilt::steps(
+        image,
+        prebuilt.discovery,
+        prebuilt.catalog,
+        prebuilt.fetch_roots,
+    )?;
     Ok(ImageBuildPolicy {
         image: image.clone(),
         dockerfile_sha256,
+        prebuilt_steps,
     })
+}
+
+/// A prebuilt artifact must not pre-exist and the Dockerfile must copy it.
+fn require_stage_copied(
+    image: &ImageConfig,
+    sources: &std::collections::BTreeSet<String>,
+) -> Result<(), OrchestratorError> {
+    let Some(ImagePrebuilt::CargoBin { stage, .. }) = &image.prebuilt else {
+        return Ok(());
+    };
+    let relative = if image.context == "." {
+        stage.as_str()
+    } else {
+        stage
+            .strip_prefix(&format!("{}/", image.context))
+            .unwrap_or(stage)
+    };
+    let copied = sources.iter().any(|source| {
+        let source = source.trim_end_matches('/');
+        source == relative
+            || source == "."
+            || source.is_empty()
+            || relative.starts_with(&format!("{source}/"))
+    });
+    if copied {
+        Ok(())
+    } else {
+        Err(failure(&image.id, "image_prebuilt_stage_not_copied"))
+    }
 }
 
 /// Every component exists, is not a symlink, and the leaf has the right type.

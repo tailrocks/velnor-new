@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 
+use crate::shell_step;
+
 use velnor_actions_contract::{
     ImageConfig, ImageDockerfile, ImagePlatform, PermissionLevel, StepKind,
 };
@@ -31,6 +33,7 @@ fn policy() -> ImageBuildPolicy {
             (ImagePlatform::LinuxAmd64, "a".repeat(64)),
             (ImagePlatform::LinuxArm64, "b".repeat(64)),
         ]),
+        prebuilt_steps: Vec::new(),
     }
 }
 
@@ -165,4 +168,41 @@ fn validation_rejects_missing_altered_and_bad_digest_jobs() {
     bad.dockerfile_sha256
         .insert(ImagePlatform::LinuxAmd64, "xyz".to_owned());
     assert!(build_image_build_job(&bad, ImagePlatform::LinuxAmd64, CHECKOUT).is_err());
+}
+
+#[test]
+fn prebuilt_steps_sit_between_host_check_and_builder_and_need_the_plan() {
+    let mut policy = policy();
+    let prebuilt = shell_step(
+        "Build release binary",
+        vec!["true".to_owned()],
+        BTreeMap::new(),
+    )
+    .expect("step");
+    policy.prebuilt_steps = vec![prebuilt];
+    assert!(policy.uses_pinned_tools());
+    let job = build_image_build_job(&policy, ImagePlatform::LinuxAmd64, CHECKOUT).expect("job");
+    assert_eq!(job.needs, ["plan"]);
+    let names = job
+        .steps
+        .iter()
+        .map(|s| s.name.as_str())
+        .collect::<Vec<_>>();
+    let host = names
+        .iter()
+        .position(|n| *n == VERIFY_IMAGE_HOST_NAME)
+        .expect("host");
+    let build = names
+        .iter()
+        .position(|n| *n == "Build release binary")
+        .expect("prebuilt");
+    let builder = names
+        .iter()
+        .position(|n| *n == CREATE_IMAGE_BUILDER_NAME)
+        .expect("builder");
+    assert!(host < build && build < builder);
+    let plain = self::policy();
+    assert!(!plain.uses_pinned_tools());
+    let job = build_image_build_job(&plain, ImagePlatform::LinuxAmd64, CHECKOUT).expect("job");
+    assert_eq!(job.needs.len(), 0);
 }

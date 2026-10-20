@@ -133,7 +133,11 @@ pub fn finalize_jobs(
     mise.validate()?;
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
     for (id, job) in &mut jobs {
-        if ctx.workflow_tasks.iter().any(|task| task.owns_job_id(id)) {
+        if ctx
+            .workflow_tasks
+            .iter()
+            .any(|task| task.owns_job_id(id) && !task.uses_pinned_tools())
+        {
             closure::check_internal_staged(id, job, ctx.preseed)?;
             continue;
         }
