@@ -11,6 +11,10 @@
 
 use velnor_actions_contract::config::VersionSource;
 
+/// npm publication scripts (hard decision 8).
+#[path = "publish_npm_scripts.rs"]
+pub mod npm;
+
 /// Pattern a strict `X.Y.Z` version must match (POSIX ERE, whole line).
 const SEMVER_ERE: &str = r"(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*)){2}";
 /// Pattern an artifact id must match (POSIX ERE, whole line).

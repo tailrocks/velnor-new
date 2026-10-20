@@ -206,3 +206,113 @@ app_private_key_secret = \"VELNOR_DEPS_APP_PRIVATE_KEY\"\nnpm_scopes = [\"@chain
     assert!(ui.contains("packages: read"), "{ui}");
     Ok(())
 }
+
+fn npm_config(extra: &str) -> String {
+    format!(
+        "{}[[publish.npm]]\nid = \"ui\"\nroot = \"frontend\"\nmember = \"@chainargos/ui\"\n\
+pack_script = \"pack\"\ntarballs = \"frontend/.portable/tarballs\"\nregistry = \"github\"\n{extra}",
+        bun_config("")
+    )
+}
+
+fn write_publishable(root: &Path, member_json: &str) -> TestResult {
+    write_workspace(root, MISE)?;
+    fs::write(root.join("frontend/package.json"), ROOT_WITH_PACK)?;
+    fs::write(root.join("frontend/packages/ui/package.json"), member_json)?;
+    git(
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/acme/widgets.git",
+        ],
+        root,
+    )?;
+    git(&["add", "."], root)
+}
+
+const ROOT_WITH_PACK: &str = r#"{"name":"frontend","private":true,"packageManager":"bun@1.4.2","workspaces":["docs","packages/*"],"scripts":{"pack":"bun scripts/pack.ts"}}"#;
+const UI_PUBLISHABLE: &str = r#"{"name":"@chainargos/ui","version":"1.4.0","publishConfig":{"registry":"https://npm.pkg.github.com"},"scripts":{"test":"vitest run"}}"#;
+
+#[test]
+fn npm_entries_generate_the_build_attest_publish_chain() -> TestResult {
+    let repo = make_repo(&npm_config(""))?;
+    write_publishable(repo.path(), UI_PUBLISHABLE)?;
+    let tree = render_staged_tree(&prepare(repo.path())?)?;
+    let publish = required_file(&tree, ".github/workflows/publish.yml")?;
+    let build = job_body(publish, "npm-build-ui")?;
+    assert!(build.contains("contents: read"), "{build}");
+    assert!(!build.contains("packages:"), "{build}");
+    assert!(build.contains("actions/checkout@"), "{build}");
+    assert!(
+        build.contains("tarballs differ between two packs"),
+        "{build}"
+    );
+    assert!(build.contains("chainargos-ui"), "{build}");
+    let attest = job_body(publish, "npm-attest-ui")?;
+    assert!(attest.contains("id-token: write"), "{attest}");
+    assert!(!attest.contains("actions/checkout@"), "{attest}");
+    let push = job_body(publish, "npm-publish-ui")?;
+    assert!(push.contains("packages: write"), "{push}");
+    assert!(push.contains("environment: release"), "{push}");
+    assert!(!push.contains("actions/checkout@"), "{push}");
+    assert!(push.contains("https://npm.pkg.github.com"), "{push}");
+    assert!(
+        !push.contains("bun@") && !push.contains("npm publish --"),
+        "{push}"
+    );
+    let authority = job_body(publish, "publish-authority")?;
+    assert!(
+        authority.contains("frontend/packages/ui/package.json"),
+        "{authority}"
+    );
+    Ok(())
+}
+
+#[test]
+fn npm_entries_fail_closed_on_policy_violations() -> TestResult {
+    let cases = [
+        (
+            npm_config(""),
+            r#"{"name":"@chainargos/ui","version":"1.4.0","private":true,"publishConfig":{"registry":"https://npm.pkg.github.com"},"scripts":{"test":"x"}}"#,
+            "npm_member_private",
+        ),
+        (
+            npm_config(""),
+            r#"{"name":"@chainargos/ui","version":"1.4.0","publishConfig":{"registry":"https://registry.npmjs.org"},"scripts":{"test":"x"}}"#,
+            "npm_publish_registry",
+        ),
+        (
+            npm_config(""),
+            r#"{"name":"@chainargos/ui","version":"^1.4.0","publishConfig":{"registry":"https://npm.pkg.github.com"},"scripts":{"test":"x"}}"#,
+            "version_not_literal",
+        ),
+        (
+            npm_config("").replace(
+                "member = \"@chainargos/ui\"",
+                "member = \"@chainargos/nope\"",
+            ),
+            UI_PUBLISHABLE,
+            "unknown_bun_member",
+        ),
+        (
+            npm_config("").replace("pack_script = \"pack\"", "pack_script = \"missing\""),
+            UI_PUBLISHABLE,
+            "npm_pack_script_missing",
+        ),
+        (
+            npm_config("").replace("root = \"frontend\"", "root = \"elsewhere\""),
+            UI_PUBLISHABLE,
+            "not_a_stacks_bun_root",
+        ),
+    ];
+    for (config, member, code) in cases {
+        let repo = make_repo(&config)?;
+        write_publishable(repo.path(), member)?;
+        let error = prepare(repo.path())
+            .and_then(|prepared| render_staged_tree(&prepared))
+            .expect_err(code);
+        assert!(error.to_string().contains(code), "{code}: {error}");
+    }
+    Ok(())
+}
