@@ -469,6 +469,35 @@
       "scope": "The journal integration remains under investigation.",
       "author": "/root",
       "reviewer": "/root/journal_restart_repair"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "648ca40e621f898ae01aa556c91e78074c5f3b75",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml -p velnor-runner-host --lib --locked --offline -E 'test(host_controller)' --no-fail-fast",
+      "nextest_run": "295444ab-4592-40ad-a3a2-a0ed3c1ae792",
+      "passed": 29,
+      "exit_status": 0,
+      "log": "controller-test-quality-shipping-20261020.log",
+      "log_sha256": "b1c830eb417b5775998324485ccdc5d53a8a10ef7ef28cd394642c131a69688f",
+      "scope": "Controller tests passed. Uncommitted journal integration files were present. These tests do not qualify journal cleanup.",
+      "author": "/root",
+      "reviewer": "/root"
+    },
+    {
+      "result": "FAIL",
+      "source_commit": "f6a642ca868a0053552d1e7c8e47035e0800835e",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --locked --offline --workspace --all-targets --all-features --no-fail-fast",
+      "nextest_run": "b7abe16b-4389-45a8-8f6d-8a294c321b91",
+      "passed": 4495,
+      "failed": 19,
+      "skipped": 5,
+      "not_run": 518,
+      "exit_status": 100,
+      "log": "build/root-nextest-029-integrated-20261020.log",
+      "log_sha256": "fa1b34843a9516acd6d753e2a5393e7e2456becc803fd9795d1f43f5ee2923be",
+      "scope": "The release harness rejected unstaged tracked changes. Eighteen tests received SIGTERM. This was not a clean-source gate.",
+      "author": "/root",
+      "reviewer": "/root/obsolete_capacity_cleanup"
     }
   ],
   "broader_pair_check": {
