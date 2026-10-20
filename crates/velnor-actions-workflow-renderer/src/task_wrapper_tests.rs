@@ -197,6 +197,7 @@ fn task_step(index: usize) -> Step {
 
 fn simple_job(steps: Vec<Step>) -> Job {
     Job {
+        services: Vec::new(),
         display_name: "Rust / demo".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,
