@@ -3,8 +3,13 @@ use std::path::{Path, PathBuf};
 use super::request_checks::verify_pair_requests;
 use super::*;
 
+#[path = "bootstrap_start/preflight.rs"]
+mod preflight;
+use preflight::assert_verified_preflight_before_mutations;
+
 const ENGINE_ID: &str = "bc9058a0-c807-412b-a088-6c1d96ddd462";
 const MEMORY_BYTES: u64 = 32 * 1024 * 1024 * 1024;
+const INITIALIZER_ID: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 
 struct BootstrapAdmissionState {
     path: PathBuf,
@@ -64,6 +69,7 @@ async fn production_bootstrap_starts_private_pair_and_keeps_jit_withheld() -> Re
     let budget = setup.prepared.acquired().resource_budget();
     let network_name = setup.network.network_name().to_owned();
     let network_id = setup.network.network_id().to_owned();
+    let images = setup.images.clone();
     let started = match setup.start().await {
         Ok(started) => started,
         Err(error) => {
@@ -109,6 +115,7 @@ async fn production_bootstrap_starts_private_pair_and_keeps_jit_withheld() -> Re
     assert!(captured.jit_input.is_empty());
     assert_no_storage_observation(&captured.requests)?;
     verify_pair_requests(&captured.requests, &network_name, budget)?;
+    assert_verified_preflight_before_mutations(&captured.requests, &images)?;
     assert_eq!(
         network_id,
         "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
