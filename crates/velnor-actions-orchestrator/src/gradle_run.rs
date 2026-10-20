@@ -7,8 +7,14 @@
 //! Maven-bundle init script), and runs one `--continue` Gradle invocation
 //! with a cleared environment. Its whole input is the generated step env.
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::ffi::OsString;
+use std::io::Write as _;
+use std::path::PathBuf;
+use std::time::Duration;
+
+use velnor_actions_mise::MiseError;
+use velnor_actions_mise::ProcessOutput;
+use velnor_actions_mise::command::{IsolatedCommand, OUTPUT_CAPTURE_LIMIT_BYTES};
 
 use velnor_actions_gradle::script::{INIT_SCRIPT_NAME, init_script, user_home_properties};
 use velnor_actions_gradle::version::parse_java;
@@ -97,42 +103,44 @@ impl GradleRunSpec {
 pub(crate) struct Machine {
     pub(crate) workspace: PathBuf,
     pub(crate) runner_temp: PathBuf,
-    pub(crate) mise: PathBuf,
-    pub(crate) path: String,
 }
+
+/// Executes one isolated command (the real one spawns; tests record).
+pub(crate) type Exec<'a> = &'a dyn Fn(&IsolatedCommand) -> Result<ProcessOutput, MiseError>;
+
+/// Gradle may legitimately run for hours; the job timeout is the real bound.
+const RUN_TIMEOUT: Duration = Duration::from_hours(6);
 
 fn io_err(what: &str, err: &std::io::Error) -> OrchestratorError {
     OrchestratorError::io(what.to_owned(), err.to_string())
 }
 
-fn mise_output(machine: &Machine, args: &[&str]) -> Result<String, OrchestratorError> {
-    let out = Command::new(&machine.mise)
-        .args(["--no-config", "--no-env", "--no-hooks"])
-        .args(args)
-        .env_clear()
-        .env("PATH", &machine.path)
-        .env("HOME", machine.runner_temp.join("velnor/home"))
-        .output()
-        .map_err(|err| io_err("mise", &err))?;
-    if !out.status.success() {
-        return Err(fail(&format!("mise_failed:{}", args.join(" "))));
+fn mise_err(err: &MiseError) -> OrchestratorError {
+    OrchestratorError::Contract {
+        problem: err.to_string(),
     }
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_owned())
 }
 
-/// Run the step.
-pub(crate) fn run(spec: &GradleRunSpec, machine: &Machine) -> Result<(), OrchestratorError> {
+fn os(text: impl Into<OsString>) -> OsString {
+    text.into()
+}
+
+/// Run the step. Every child goes through [`IsolatedCommand`]: cleared
+/// environment, owned Mise globals, no shell.
+pub(crate) fn run(
+    spec: &GradleRunSpec,
+    machine: &Machine,
+    exec: Exec<'_>,
+) -> Result<(), OrchestratorError> {
     let root = machine.workspace.join(&spec.root);
     let properties = std::fs::read_to_string(root.join(PROPERTIES_PATH)).ok();
     let jar = std::fs::read(root.join(JAR_PATH)).unwrap_or_default();
     wrapper::verify(properties.as_deref(), &jar).map_err(|finding| fail(finding.code()))?;
-    let home = machine.runner_temp.join("velnor/home");
-    std::fs::create_dir_all(&home).map_err(|err| io_err("home", &err))?;
-    let target = format!("java@{}", spec.java);
-    mise_output(machine, &["install", &target])?;
-    let java_home = mise_output(machine, &["where", &target])?;
-    if !Path::new(&java_home).join("bin/java").exists() {
-        return Err(fail("jdk_missing_bin_java"));
+    let target = vec![format!("java@{}", spec.java)];
+    let install = IsolatedCommand::mise_install(&target).map_err(|err| mise_err(&err))?;
+    let installed = exec(&install).map_err(|err| mise_err(&err))?;
+    if !installed.success {
+        return Err(fail("jdk_install_failed"));
     }
     let gradle_home = machine.runner_temp.join("velnor/gradle");
     let init_dir = gradle_home.join("init.d");
@@ -144,49 +152,41 @@ pub(crate) fn run(spec: &GradleRunSpec, machine: &Machine) -> Result<(), Orchest
     .map_err(|err| io_err("gradle.properties", &err))?;
     std::fs::write(init_dir.join(INIT_SCRIPT_NAME), init_script())
         .map_err(|err| io_err("init script", &err))?;
-    let mut command = Command::new(root.join("gradlew"));
-    command
-        .current_dir(&root)
-        .env_clear()
-        .env("PATH", format!("{java_home}/bin:{}", machine.path))
-        .env("HOME", &home)
-        .env("JAVA_HOME", &java_home)
-        .env("GRADLE_USER_HOME", &gradle_home)
-        .env(
-            "VELNOR_MAVEN_ROOT",
-            machine.runner_temp.join("velnor/deps/maven"),
-        )
-        .args([
-            "--console=plain",
-            "--no-daemon",
-            "--continue",
-            "--dependency-verification",
-            "strict",
-        ])
-        .arg(format!("--max-workers={}", spec.workers))
-        .args(&spec.tasks);
-    for key in [
-        "HTTP_PROXY",
-        "HTTPS_PROXY",
-        "NO_PROXY",
-        "http_proxy",
-        "https_proxy",
-        "no_proxy",
-    ] {
-        if let Ok(value) = std::env::var(key) {
-            command.env(key, value);
-        }
-    }
+    let mut payload = vec![
+        os(root.join("gradlew")),
+        os("--console=plain"),
+        os("--no-daemon"),
+        os("--continue"),
+        os("--dependency-verification"),
+        os("strict"),
+        os(format!("--max-workers={}", spec.workers)),
+    ];
+    payload.extend(spec.tasks.iter().map(os));
+    let mut env = vec![
+        (os("GRADLE_USER_HOME"), os(&gradle_home)),
+        (
+            os("VELNOR_MAVEN_ROOT"),
+            os(machine.runner_temp.join("velnor/deps/maven")),
+        ),
+    ];
     if spec.database {
-        command
-            .env("POSTGRESQL_DB_HOST", "127.0.0.1")
-            .env("POSTGRESQL_DB_PORT", "40000");
+        env.push((os("POSTGRESQL_DB_HOST"), os("127.0.0.1")));
+        env.push((os("POSTGRESQL_DB_PORT"), os("40000")));
     }
-    let status = command.status().map_err(|err| io_err("gradlew", &err))?;
-    if status.success() {
+    let command = IsolatedCommand::mise_exec(&target, &payload)
+        .map_err(|err| mise_err(&err))?
+        .with_cwd(root)
+        .with_env(&env)
+        .map_err(|err| mise_err(&err))?;
+    let output = exec(&command).map_err(|err| mise_err(&err))?;
+    std::io::stdout()
+        .write_all(&output.stdout)
+        .and_then(|()| std::io::stderr().write_all(&output.stderr))
+        .map_err(|err| io_err("gradle output", &err))?;
+    if output.success {
         Ok(())
     } else {
-        Err(fail(&format!("gradle_failed:{status}")))
+        Err(fail(&format!("gradle_failed:{:?}", output.code)))
     }
 }
 
@@ -200,10 +200,10 @@ pub fn run_gradle_run() -> Result<(), OrchestratorError> {
     let machine = Machine {
         workspace: std::env::current_dir().map_err(|err| io_err("cwd", &err))?,
         runner_temp: PathBuf::from(get("RUNNER_TEMP").ok_or_else(|| fail("runner_temp_missing"))?),
-        mise: PathBuf::from("mise"),
-        path: get("PATH").unwrap_or_default(),
     };
-    run(&spec, &machine)
+    run(&spec, &machine, &|command| {
+        command.run_bounded(OUTPUT_CAPTURE_LIMIT_BYTES, RUN_TIMEOUT)
+    })
 }
 
 #[cfg(test)]
