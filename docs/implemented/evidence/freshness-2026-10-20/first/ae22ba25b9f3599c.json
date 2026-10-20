@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+    "api",
+    "--method",
+    "GET",
+    "https://api.github.com/repos/actions/github-script/releases/latest"
+  ],
+  "body_file": "ae22ba25b9f3599c.body",
+  "checked_at": "2026-10-20T07:01:32.939121+00:00",
+  "exit_code": 0,
+  "rust_prefix_only": false,
+  "sha256": "ece1bb204fd8c668ab3f71e3e77fa201cbd41f670095f9f4d91a7219b8397417",
+  "size": 4189,
+  "url": "https://api.github.com/repos/actions/github-script/releases/latest"
+}

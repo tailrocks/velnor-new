@@ -88,8 +88,8 @@ pub(crate) fn release_files(
     );
     let gate = publish_gate_condition(&repository, &bootstrap);
     let catalog = &prep.emission_catalog();
-    // Omit `--registry` for the cargo-implicit default: release-plz 0.3.172
-    // resolves the flag value from Cargo config, where that name is absent.
+    // Keep Cargo’s implicit default implicit; pass `--registry` only for an
+    // explicitly selected alternative registry.
     let registry_arg = (registry != DEFAULT_REGISTRY).then_some(registry.as_str());
     let jobs = assemble_jobs(&JobInputs {
         release,

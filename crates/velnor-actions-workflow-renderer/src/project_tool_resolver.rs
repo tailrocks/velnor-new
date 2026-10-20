@@ -5,7 +5,7 @@
 //! rendered workflow before node sharing:
 //!
 //! - each job that references a project version gains the fixed resolver
-//!   step directly after its Mise setup, and no earlier step may read one;
+//!   step after both Mise setup and source checkout; no earlier step may read one;
 //! - `run:` text keeps the shell form; every other value (`with:`, `env:`,
 //!   cache keys) takes the `${{ env.NAME }}` expression form;
 //! - a job-level `RUSTUP_TOOLCHAIN` reference moves into the resolver,
@@ -29,7 +29,7 @@ use quote::quote_run_refs;
 /// # Errors
 ///
 /// Returns [`RenderError::InvalidWorkflow`] when a job reads a project
-/// version without a preceding Mise setup, a step before the setup reads
+/// version without preceding Mise and checkout steps, an earlier step reads
 /// one, or workflow/job env carries one outside `RUSTUP_TOOLCHAIN`.
 pub(crate) fn bind_workflow(document: &mut Yaml) -> Result<(), RenderError> {
     let Yaml::Map(entries) = document else {
@@ -79,7 +79,7 @@ fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
     let Some((_, Yaml::Seq(steps))) = fields.iter_mut().find(|(key, _)| key == "steps") else {
         return Err(invalid(id));
     };
-    if !steps.iter().any(is_checkout) {
+    let Some(checkout) = steps.iter().position(is_checkout) else {
         // Without a checkout the project config is unreadable. Such a job
         // installs no Rust, so a hoisted `RUSTUP_TOOLCHAIN` is inert there and
         // is dropped; any other reference fails closed.
@@ -96,13 +96,35 @@ fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
         } else {
             Err(invalid(&format!("{id}:no_checkout")))
         };
-    }
+    };
     let Some(setup) = steps.iter().position(is_mise_setup) else {
         return Err(invalid(&format!("{id}:no_mise_setup")));
     };
-    // A pre-setup step cannot read the resolved channel; the resolver
+    let prerequisites = setup.max(checkout);
+    export_rustup |= hoist_early_rustup(id, &mut steps[..=prerequisites])?;
+    let already_bound = resolver_at(id, steps, prerequisites + 1)?;
+    for step in steps.iter_mut() {
+        rewrite_mappings(step, false)?;
+    }
+    if already_bound {
+        return Ok(());
+    }
+    steps.insert(
+        prerequisites + 1,
+        Yaml::Map(vec![
+            ("name".to_owned(), Yaml::str(PROJECT_TOOLS_STEP_NAME)),
+            ("run".to_owned(), resolver_run(&referenced, export_rustup)),
+        ]),
+    );
+    Ok(())
+}
+
+fn hoist_early_rustup(id: &str, steps: &mut [Yaml]) -> Result<bool, RenderError> {
+    // Before both prerequisites, only the inert Rustup value may be hoisted.
+    // The resolver
     // exports `RUSTUP_TOOLCHAIN` for every later step instead.
-    for step in &mut steps[..=setup] {
+    let mut export_rustup = false;
+    for step in steps.iter_mut() {
         if let Yaml::Map(fields) = step
             && let Some((_, env)) = fields.iter_mut().find(|(key, _)| key == "env")
         {
@@ -110,7 +132,7 @@ fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
         }
         drop_empty_env(step);
     }
-    if let Some(early) = steps[..=setup].iter().find(|step| !names(step).is_empty()) {
+    if let Some(early) = steps.iter().find(|step| !names(step).is_empty()) {
         let name = match early {
             Yaml::Map(fields) => fields
                 .iter()
@@ -121,20 +143,23 @@ fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
         };
         return Err(invalid(&format!("{id}:read_before_setup:{name}")));
     }
-    for step in steps.iter_mut() {
-        rewrite_mappings(step, false)?;
+    Ok(export_rustup)
+}
+
+fn resolver_at(id: &str, steps: &[Yaml], insertion: usize) -> Result<bool, RenderError> {
+    let positions = steps
+        .iter()
+        .enumerate()
+        .filter(|(_, step)| is_resolver_step(step))
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    if positions.is_empty() {
+        return Ok(false);
     }
-    if steps.iter().any(is_resolver_step) {
-        return Ok(());
+    if positions != [insertion] {
+        return Err(invalid(&format!("{id}:resolver_prerequisite_order")));
     }
-    steps.insert(
-        setup + 1,
-        Yaml::Map(vec![
-            ("name".to_owned(), Yaml::str(PROJECT_TOOLS_STEP_NAME)),
-            ("run".to_owned(), resolver_run(&referenced, export_rustup)),
-        ]),
-    );
-    Ok(())
+    Ok(true)
 }
 
 /// Bind one composite action's steps: insert the resolver after its own Mise

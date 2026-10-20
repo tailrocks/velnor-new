@@ -1,0 +1,273 @@
+{
+  "no_archive_extraction": true,
+  "no_downloaded_binary_execution": true,
+  "measurements": [
+    {
+      "raw": {
+        "name": "mise-v2026.10.15-linux-x64",
+        "size": 168019312,
+        "sha256": "e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9",
+        "started_at": "2026-10-20T07:09:42.177904+00:00",
+        "source": "https://github.com/jdx/mise/releases/download/v2026.10.15/mise-v2026.10.15-linux-x64",
+        "api_digest_matches": true
+      },
+      "abi": {
+        "format": "ELF64LE",
+        "machine": 62
+      }
+    },
+    {
+      "raw": {
+        "name": "mise-v2026.10.15-macos-x64",
+        "size": 164421392,
+        "sha256": "ea45cc6e787d412deb8e069eec57875c71863e33a36acf69dd59791c27c9c073",
+        "started_at": "2026-10-20T07:09:42.178456+00:00",
+        "source": "https://github.com/jdx/mise/releases/download/v2026.10.15/mise-v2026.10.15-macos-x64",
+        "api_digest_matches": true
+      },
+      "abi": {
+        "format": "MachO64LE",
+        "cpu_type": 16777223
+      }
+    },
+    {
+      "raw": {
+        "name": "mise-v2026.10.15-macos-arm64",
+        "size": 135143184,
+        "sha256": "826c4833fa7437a63f6027b86bc10c8b61b1163dc793c03ecde92f68ad167890",
+        "started_at": "2026-10-20T07:09:42.178589+00:00",
+        "source": "https://github.com/jdx/mise/releases/download/v2026.10.15/mise-v2026.10.15-macos-arm64",
+        "api_digest_matches": true
+      },
+      "abi": {
+        "format": "MachO64LE",
+        "cpu_type": 16777228
+      }
+    },
+    {
+      "archive": {
+        "name": "mise-v2026.10.15-linux-arm64.tar.gz",
+        "size": 57643697,
+        "sha256": "ae36e72ea72d337ab7b367edb0f7016fa1502aa0e36ccb705acad7902c60677b",
+        "started_at": "2026-10-20T07:09:42.178658+00:00",
+        "source": "https://github.com/jdx/mise/releases/download/v2026.10.15/mise-v2026.10.15-linux-arm64.tar.gz",
+        "api_digest_matches": true
+      },
+      "member": {
+        "name": "mise/bin/mise",
+        "size": 146679224,
+        "mode": 493,
+        "kind": "file",
+        "sha256": "3abbaac305a465ef038eb4ea07b961c037a8b639108005e43f8e2c00a8f67c11",
+        "abi": {
+          "format": "ELF64LE",
+          "machine": 183
+        }
+      },
+      "entry_count": 13,
+      "regular_size_sum": 147414132,
+      "members": [
+        {
+          "name": "mise",
+          "size": 0,
+          "mode": 493,
+          "kind": "directory"
+        },
+        {
+          "name": "mise/man",
+          "size": 0,
+          "mode": 493,
+          "kind": "directory"
+        },
+        {
+          "name": "mise/man/man1",
+          "size": 0,
+          "mode": 493,
+          "kind": "directory"
+        },
+        {
+          "name": "mise/man/man1/mise.1",
+          "size": 334794,
+          "mode": 420,
+          "kind": "file",
+          "sha256": "8eefc6e4f120cae2e7bfef9959eaf6992987e7ae81e4e3dae2c23bfbf3fd9a97"
+        },
+        {
+          "name": "mise/share",
+          "size": 0,
+          "mode": 493,
+          "kind": "directory"
+        },
+        {
+          "name": "mise/share/fish",
+          "size": 0,
+          "mode": 493,
+          "kind": "directory"
+        },
+        {
+          "name": "mise/share/fish/vendor_conf.d",
+          "size": 0,
+          "mode": 493,
+          "kind": "directory"
+        },
+        {
+          "name": "mise/share/fish/vendor_conf.d/mise-activate.fish",
+          "size": 75,
+          "mode": 420,
+          "kind": "file",
+          "sha256": "84624eccfe46c60dafdf98ac5715f44719fdbc2f67b0001246bae75a01be3424"
+        },
+        {
+          "name": "mise/LICENSE",
+          "size": 1068,
+          "mode": 420,
+          "kind": "file",
+          "sha256": "4d22d6f9222adef0a45ef895bfdd6f71d6394b1784b1001a4bebb4298b8ddc69"
+        },
+        {
+          "name": "mise/bin",
+          "size": 0,
+          "mode": 493,
+          "kind": "directory"
+        },
+        {
+          "name": "mise/bin/mise.d",
+          "size": 387982,
+          "mode": 420,
+          "kind": "file",
+          "sha256": "106f06357c8892880d9f0e86c31e38c3665646ada7d05e91ec14d4d375b1ed32"
+        },
+        {
+          "name": "mise/bin/mise",
+          "size": 146679224,
+          "mode": 493,
+          "kind": "file",
+          "sha256": "3abbaac305a465ef038eb4ea07b961c037a8b639108005e43f8e2c00a8f67c11"
+        },
+        {
+          "name": "mise/README.md",
+          "size": 10989,
+          "mode": 420,
+          "kind": "file",
+          "sha256": "3d86b32780e21293581754d311d2ae473ec7cc28a52299924ab8f50c8626b9ee"
+        }
+      ]
+    },
+    {
+      "archive": {
+        "name": "mise-v2026.10.15-macos-arm64.tar.gz",
+        "size": 46203887,
+        "sha256": "8a44a56f72323c777298a1d5abd88ffd21d0fca19fab1ccccd389a912374f69c",
+        "started_at": "2026-10-20T07:09:49.288173+00:00",
+        "source": "https://github.com/jdx/mise/releases/download/v2026.10.15/mise-v2026.10.15-macos-arm64.tar.gz",
+        "api_digest_matches": true
+      },
+      "member": {
+        "name": "mise/bin/mise",
+        "size": 135143184,
+        "mode": 493,
+        "kind": "file",
+        "sha256": "826c4833fa7437a63f6027b86bc10c8b61b1163dc793c03ecde92f68ad167890",
+        "abi": {
+          "format": "MachO64LE",
+          "cpu_type": 16777228
+        }
+      },
+      "entry_count": 13,
+      "regular_size_sum": 135978195,
+      "members": [
+        {
+          "name": "mise",
+          "size": 0,
+          "mode": 493,
+          "kind": "directory"
+        },
+        {
+          "name": "mise/man",
+          "size": 0,
+          "mode": 493,
+          "kind": "directory"
+        },
+        {
+          "name": "mise/LICENSE",
+          "size": 1068,
+          "mode": 420,
+          "kind": "file",
+          "sha256": "4d22d6f9222adef0a45ef895bfdd6f71d6394b1784b1001a4bebb4298b8ddc69"
+        },
+        {
+          "name": "mise/bin",
+          "size": 0,
+          "mode": 493,
+          "kind": "directory"
+        },
+        {
+          "name": "mise/README.md",
+          "size": 10989,
+          "mode": 420,
+          "kind": "file",
+          "sha256": "3d86b32780e21293581754d311d2ae473ec7cc28a52299924ab8f50c8626b9ee"
+        },
+        {
+          "name": "mise/share",
+          "size": 0,
+          "mode": 493,
+          "kind": "directory"
+        },
+        {
+          "name": "mise/share/fish",
+          "size": 0,
+          "mode": 493,
+          "kind": "directory"
+        },
+        {
+          "name": "mise/share/fish/vendor_conf.d",
+          "size": 0,
+          "mode": 493,
+          "kind": "directory"
+        },
+        {
+          "name": "mise/share/fish/vendor_conf.d/mise-activate.fish",
+          "size": 75,
+          "mode": 420,
+          "kind": "file",
+          "sha256": "84624eccfe46c60dafdf98ac5715f44719fdbc2f67b0001246bae75a01be3424"
+        },
+        {
+          "name": "mise/bin/mise",
+          "size": 135143184,
+          "mode": 493,
+          "kind": "file",
+          "sha256": "826c4833fa7437a63f6027b86bc10c8b61b1163dc793c03ecde92f68ad167890"
+        },
+        {
+          "name": "mise/bin/mise.d",
+          "size": 488085,
+          "mode": 420,
+          "kind": "file",
+          "sha256": "8144bd60a8e0f90e5f8f098d13c70eeea0577873fba1382f5ae09fd8a8c3c9aa"
+        },
+        {
+          "name": "mise/man/man1",
+          "size": 0,
+          "mode": 493,
+          "kind": "directory"
+        },
+        {
+          "name": "mise/man/man1/mise.1",
+          "size": 334794,
+          "mode": 420,
+          "kind": "file",
+          "sha256": "8eefc6e4f120cae2e7bfef9959eaf6992987e7ae81e4e3dae2c23bfbf3fd9a97"
+        }
+      ]
+    }
+  ],
+  "private_mac_arm_raw": {
+    "path": "/Users/donbeave/.cache/velnor/mise15-qualification-preparation-uufzbppm/mise-v2026.10.15-macos-arm64",
+    "size": 135143184,
+    "sha256": "826c4833fa7437a63f6027b86bc10c8b61b1163dc793c03ecde92f68ad167890",
+    "equals_archive_member": true,
+    "equals_api_raw_identity": true
+  }
+}

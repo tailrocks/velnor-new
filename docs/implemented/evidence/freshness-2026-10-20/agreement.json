@@ -1,0 +1,237 @@
+{
+  "rows": [
+    {
+      "key": "mise",
+      "latest": "v2026.10.15",
+      "latest_sha": null,
+      "agreeing_observations": 2,
+      "first": "cbcf9a6cd0015891.body",
+      "second": "second/cbcf9a6cd0015891.body",
+      "pinned": "2026.10.14",
+      "version_changed": true
+    },
+    {
+      "key": "rust",
+      "latest": "1.99.1",
+      "latest_sha": null,
+      "agreeing_observations": 2,
+      "first": "33b454381578874a.body",
+      "second": "second/33b454381578874a.body",
+      "pinned": "1.99.1",
+      "version_changed": false
+    },
+    {
+      "key": "mr-boxington",
+      "latest": "v1.25.0",
+      "latest_sha": null,
+      "agreeing_observations": 2,
+      "first": "9e0afae45c7e2f14.body",
+      "second": "second/9e0afae45c7e2f14.body",
+      "pinned": "1.24.1",
+      "version_changed": true
+    },
+    {
+      "key": "gh",
+      "latest": "v2.102.0",
+      "latest_sha": null,
+      "agreeing_observations": 2,
+      "first": "26d341f2530f210b.body",
+      "second": "second/26d341f2530f210b.body",
+      "pinned": "2.102.0",
+      "version_changed": false
+    },
+    {
+      "key": "actionlint",
+      "latest": "v1.7.12",
+      "latest_sha": null,
+      "agreeing_observations": 2,
+      "first": "ac646f4918eb9eee.body",
+      "second": "second/ac646f4918eb9eee.body",
+      "pinned": "1.7.12",
+      "version_changed": false
+    },
+    {
+      "key": "shellcheck",
+      "latest": "v0.11.0",
+      "latest_sha": null,
+      "agreeing_observations": 2,
+      "first": "88576d7cda0a4052.body",
+      "second": "second/88576d7cda0a4052.body",
+      "pinned": "0.11.0",
+      "version_changed": false
+    },
+    {
+      "key": "zizmor",
+      "latest": "v1.31.1",
+      "latest_sha": null,
+      "agreeing_observations": 2,
+      "first": "edb59db018f13a3c.body",
+      "second": "second/edb59db018f13a3c.body",
+      "pinned": "1.31.1",
+      "version_changed": false
+    },
+    {
+      "key": "nextest",
+      "latest": "0.9.148",
+      "latest_sha": null,
+      "agreeing_observations": 2,
+      "first": "nextest-identified.json",
+      "second": "second/a55d4dd113da0c0c.body",
+      "pinned": "0.9.148",
+      "version_changed": false
+    },
+    {
+      "key": "opentofu",
+      "latest": "v1.13.1",
+      "latest_sha": null,
+      "agreeing_observations": 2,
+      "first": "bdcfc083f89000b2.body",
+      "second": "second/bdcfc083f89000b2.body",
+      "pinned": "1.13.1",
+      "version_changed": false
+    },
+    {
+      "key": "release-plz",
+      "latest": "0.3.173",
+      "latest_sha": null,
+      "agreeing_observations": 2,
+      "first": "release-plz-identified.json",
+      "second": "second/dccab394fbaddb94.body",
+      "pinned": "0.3.172",
+      "version_changed": true
+    },
+    {
+      "key": "cosign",
+      "latest": "v3.1.3",
+      "latest_sha": null,
+      "agreeing_observations": 2,
+      "first": "74ebd08d5f85fc97.body",
+      "second": "second/74ebd08d5f85fc97.body",
+      "pinned": "3.1.3",
+      "version_changed": false
+    },
+    {
+      "key": "actions/attest-build-provenance",
+      "latest": "v4.2.2",
+      "latest_sha": "4d101475d8b20a2381f78447822ac1eab6504dd8",
+      "agreeing_observations": 2,
+      "first": "035fc4486c0e2b8c.body",
+      "second": "second/035fc4486c0e2b8c.body",
+      "pinned": "v4.2.2",
+      "version_changed": false
+    },
+    {
+      "key": "actions/cache/restore",
+      "latest": "v6.1.0",
+      "latest_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+      "agreeing_observations": 2,
+      "first": "7790011daec93e1c.body",
+      "second": "second/7790011daec93e1c.body",
+      "pinned": "v6.1.0",
+      "version_changed": false
+    },
+    {
+      "key": "actions/cache/save",
+      "latest": "v6.1.0",
+      "latest_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+      "agreeing_observations": 2,
+      "first": "7790011daec93e1c.body",
+      "second": "second/7790011daec93e1c.body",
+      "pinned": "v6.1.0",
+      "version_changed": false
+    },
+    {
+      "key": "actions/checkout",
+      "latest": "v7.0.1",
+      "latest_sha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+      "agreeing_observations": 2,
+      "first": "23ee79dd411ea730.body",
+      "second": "second/23ee79dd411ea730.body",
+      "pinned": "v7.0.1",
+      "version_changed": false
+    },
+    {
+      "key": "actions/create-github-app-token",
+      "latest": "v3.3.0",
+      "latest_sha": "64ab729a6294000f5aa4a4bc0b73d1f32bc45510",
+      "agreeing_observations": 2,
+      "first": "54402be693f2ceb9.body",
+      "second": "second/54402be693f2ceb9.body",
+      "pinned": "v3.3.0",
+      "version_changed": false
+    },
+    {
+      "key": "actions/download-artifact",
+      "latest": "v8.0.2",
+      "latest_sha": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
+      "agreeing_observations": 2,
+      "first": "e7bcb9aa10aaebf4.body",
+      "second": "second/e7bcb9aa10aaebf4.body",
+      "pinned": "v8.0.2",
+      "version_changed": false
+    },
+    {
+      "key": "actions/github-script",
+      "latest": "v9.0.0",
+      "latest_sha": "3a2844b7e9c422d3c10d287c895573f7108da1b3",
+      "agreeing_observations": 2,
+      "first": "ae22ba25b9f3599c.body",
+      "second": "second/ae22ba25b9f3599c.body",
+      "pinned": "v9.0.0",
+      "version_changed": false
+    },
+    {
+      "key": "actions/upload-artifact",
+      "latest": "v7.0.2",
+      "latest_sha": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+      "agreeing_observations": 2,
+      "first": "dbc3083e44b5bba2.body",
+      "second": "second/dbc3083e44b5bba2.body",
+      "pinned": "v7.0.2",
+      "version_changed": false
+    },
+    {
+      "key": "asamarts/alint",
+      "latest": "v0.19.0",
+      "latest_sha": "f39a25a7e061bb8738a87372561d8b9a6a29ca87",
+      "agreeing_observations": 2,
+      "first": "d52d5c72605a24ce.body",
+      "second": "second/d52d5c72605a24ce.body",
+      "pinned": "v0.19.0",
+      "version_changed": false
+    },
+    {
+      "key": "aws-actions/configure-aws-credentials",
+      "latest": "v6.3.0",
+      "latest_sha": "e1253824e5c10ff9df46874f81ed3ec929e19cfd",
+      "agreeing_observations": 2,
+      "first": "daf4a7d368406d19.body",
+      "second": "second/daf4a7d368406d19.body",
+      "pinned": "v6.3.0",
+      "version_changed": false
+    },
+    {
+      "key": "jdx/mise-action",
+      "latest": "v5.2.1",
+      "latest_sha": "fc42bcc7ddbf51124c30f95a877a0c5168a3bfde",
+      "agreeing_observations": 2,
+      "first": "b2f2bb1e797aab1f.body",
+      "second": "second/b2f2bb1e797aab1f.body",
+      "pinned": "v5.2.0",
+      "version_changed": true
+    },
+    {
+      "key": "jdx/mr-boxington-action",
+      "latest": "v1.7.2",
+      "latest_sha": "47ce49b32025d93a7a2f4570815afaa2b7092240",
+      "agreeing_observations": 2,
+      "first": "90805b82ed2a948b.body",
+      "second": "second/90805b82ed2a948b.body",
+      "pinned": "v1.7.2",
+      "version_changed": false
+    }
+  ],
+  "count": 23,
+  "all_agree": true,
+  "native_global_timeout_preserved": "/Users/donbeave/.cache/velnor/preview-resolver-order-proof-uw4d85p2/freshness-live.log"
+}

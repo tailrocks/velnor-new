@@ -34,7 +34,7 @@ fn scratch() -> Result<Scratch, Box<dyn Error>> {
 
 #[test]
 fn manifest_bundle_uses_the_created_and_attested_file() {
-    let create = manifest_script("1.99.1", "1.24.1");
+    let create = manifest_script("1.99.1", "1.25.0");
     let fetch = manifest_attestation_bundle_script();
     assert!(create.contains("create-release-manifest.sh"));
     assert!(

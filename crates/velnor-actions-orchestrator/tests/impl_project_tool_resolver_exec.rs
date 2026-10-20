@@ -132,14 +132,14 @@ fn every_backend_spelling_and_table_form_resolves() -> TestResult {
     passes(
         &[(
             "mise.toml",
-            "[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = { version = \"0.9.148\", os = [\"linux\"] }\n\"packslip:github.com/jdx/mr-boxington\" = \"1.24.1\"\n\n[tools.zizmor]\nversion = \"1.31.1\"\npostinstall = \"echo\"\n",
+            "[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = { version = \"0.9.148\", os = [\"linux\"] }\n\"packslip:github.com/jdx/mr-boxington\" = \"1.25.0\"\n\n[tools.zizmor]\nversion = \"1.31.1\"\npostinstall = \"echo\"\n",
         )],
         &[
             "VELNOR_TOOL_MR_BOXINGTON",
             "VELNOR_TOOL_NEXTEST",
             "VELNOR_TOOL_ZIZMOR",
         ],
-        "VELNOR_TOOL_MR_BOXINGTON=1.24.1\nVELNOR_TOOL_NEXTEST=0.9.148\nVELNOR_TOOL_ZIZMOR=1.31.1\n",
+        "VELNOR_TOOL_MR_BOXINGTON=1.25.0\nVELNOR_TOOL_NEXTEST=0.9.148\nVELNOR_TOOL_ZIZMOR=1.31.1\n",
     )?;
     passes(
         &[("mise.toml", "[tools]\n\"core:rust\" = \"1.99.1\"\n")],

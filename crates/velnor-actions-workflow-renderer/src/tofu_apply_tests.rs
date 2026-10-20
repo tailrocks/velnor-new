@@ -8,7 +8,7 @@ use velnor_actions_contract::{
 };
 
 const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
-const MISE: &str = "jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7";
+const MISE: &str = "jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde";
 
 fn spec() -> TofuApplySpec {
     TofuApplySpec {
@@ -37,7 +37,7 @@ fn spec() -> TofuApplySpec {
         checkout_uses: CHECKOUT.to_owned(),
         mise_setup: MiseSetup {
             uses: MISE.to_owned(),
-            version: "2026.10.14".to_owned(),
+            version: "2026.10.15".to_owned(),
             sha256: crate::setup::MISE_BINARY_SHA256_LINUX_X64.to_owned(),
         },
         opentofu_version: "1.13.1".to_owned(),
