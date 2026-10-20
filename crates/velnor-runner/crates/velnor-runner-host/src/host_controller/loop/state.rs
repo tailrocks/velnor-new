@@ -47,7 +47,7 @@ pub(super) struct PreparedConnection {
     pub(super) ready_intents: BTreeMap<i64, i64>,
     pub(super) authorizing: BTreeMap<
         i64,
-        tokio::task::JoinHandle<Result<AuthorizedScopedExecution, PendingScopedExecution>>,
+        tokio::task::JoinHandle<Result<AuthorizedScopedExecution, Box<PendingScopedExecution>>>,
     >,
     pub(super) pending_bootstrap: BTreeMap<i64, Vec<ScopedChannelOutcome>>,
     pub(super) unkeyed_bootstrap: Vec<ScopedChannelOutcome>,
@@ -88,6 +88,15 @@ pub(super) struct SessionCredentials {
     pub(super) github_pat: Secret,
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct AuthorizationContext<'a> {
+    pub(super) config: &'a HostConfig,
+    pub(super) journal: &'a Journal,
+    pub(super) docker: &'a Docker,
+    pub(super) selected_engine: &'a SelectedEngineContext,
+    pub(super) worker_images: &'a VerifiedWorkerImages,
+}
+
 impl PreparedConnection {
     pub(super) fn is_for(&self, binding: &RepositoryConnection) -> bool {
         self.binding == *binding
@@ -96,9 +105,9 @@ impl PreparedConnection {
     pub(super) fn retain_runner_ready(
         &mut self,
         runner: RunnerReadyBootstrap,
-    ) -> Result<i64, RunnerReadyBootstrap> {
+    ) -> Result<i64, Box<RunnerReadyBootstrap>> {
         let Some(request_id) = runner.request_id() else {
-            return Err(runner);
+            return Err(Box::new(runner));
         };
         let intent_id = runner.intent_id();
         match self.runner_ready.insert(request_id, runner) {
@@ -106,7 +115,7 @@ impl PreparedConnection {
                 self.ready_intents.insert(request_id, intent_id);
                 Ok(request_id)
             }
-            Err(runner) => Err(runner),
+            Err(runner) => Err(Box::new(runner)),
         }
     }
 
@@ -114,44 +123,35 @@ impl PreparedConnection {
         &mut self,
         request_id: i64,
         runner: RunnerReadyBootstrap,
-        config: &HostConfig,
-        journal: &Journal,
-        docker: &Docker,
-        selected_engine: &SelectedEngineContext,
-        worker_images: &VerifiedWorkerImages,
+        context: AuthorizationContext<'_>,
     ) -> Result<(), HostError> {
+        let AuthorizationContext {
+            config,
+            journal,
+            docker,
+            selected_engine,
+            worker_images,
+        } = context;
         let Some(connection) = config.connection(&self.binding.connection_id).cloned() else {
-            self.retain_pending(
-                request_id,
-                PendingScopedExecution::Runner(runner, None, HostError::Config),
-            );
+            self.defer_authorization(request_id, runner, HostError::Config);
             return Ok(());
         };
         let Some(policy) = config
             .validated_job_authority_policy(&self.binding.connection_id)?
             .cloned()
         else {
-            self.retain_pending(
-                request_id,
-                PendingScopedExecution::Runner(runner, None, HostError::Config),
-            );
+            self.defer_authorization(request_id, runner, HostError::Config);
             return Ok(());
         };
         let Some(credentials) = self.credentials.as_ref() else {
-            self.retain_pending(
-                request_id,
-                PendingScopedExecution::Runner(runner, None, HostError::Keychain),
-            );
+            self.defer_authorization(request_id, runner, HostError::Keychain);
             return Ok(());
         };
         if self.authorizing.contains_key(&request_id)
             || self.authorized.contains_key(&request_id)
             || self.pending_authorization.contains_key(&request_id)
         {
-            self.retain_pending(
-                request_id,
-                PendingScopedExecution::Runner(runner, None, HostError::Ownership),
-            );
+            self.defer_authorization(request_id, runner, HostError::Ownership);
             return Ok(());
         }
         let host = journal.clone();
@@ -162,41 +162,54 @@ impl PreparedConnection {
         let config = config.clone();
         let github_token = crate::listen::Secret::new(credentials.github_pat.expose());
         let handle = tokio::task::spawn_blocking(move || {
-            let runtime = match tokio::runtime::Builder::new_current_thread()
+            let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
-            {
-                Ok(runtime) => runtime,
-                Err(_) => {
-                    return Err(PendingScopedExecution::Runner(
-                        runner,
-                        None,
-                        HostError::Journal,
-                    ));
-                }
+            else {
+                return Err(Box::new(PendingScopedExecution::Runner(
+                    runner,
+                    None,
+                    HostError::Journal,
+                )));
             };
             let secret = match ReleaseReadSecret::load(&config) {
                 Ok(secret) => secret,
                 Err(error) => {
-                    return Err(PendingScopedExecution::Runner(runner, None, error));
+                    return Err(Box::new(PendingScopedExecution::Runner(
+                        runner, None, error,
+                    )));
                 }
             };
-            runtime.block_on(crate::launch::scoped_runtime::authorize_started_execution(
-                runner,
-                &docker,
-                &host,
-                &scoped,
-                &secret,
-                &engine,
-                &images,
-                &connection,
-                &policy,
-                github_token.expose(),
-                std::time::Instant::now() + Duration::from_secs(120),
-            ))
+            runtime
+                .block_on(crate::launch::scoped_runtime::authorize_started_execution(
+                    runner,
+                    &docker,
+                    &host,
+                    &scoped,
+                    &secret,
+                    &engine,
+                    &images,
+                    &connection,
+                    &policy,
+                    github_token.expose(),
+                    std::time::Instant::now() + Duration::from_secs(120),
+                ))
+                .map_err(Box::new)
         });
         self.authorizing.insert(request_id, handle);
         Ok(())
+    }
+
+    fn defer_authorization(
+        &mut self,
+        request_id: i64,
+        runner: RunnerReadyBootstrap,
+        error: HostError,
+    ) {
+        self.retain_pending(
+            request_id,
+            PendingScopedExecution::Runner(runner, None, error),
+        );
     }
 
     pub(super) async fn collect_authorization(&mut self) -> Result<(), HostError> {
@@ -218,6 +231,7 @@ impl PreparedConnection {
                         .push(authorized);
                 }
                 Err(pending) => {
+                    let pending = *pending;
                     let wake_cleanup = pending.requires_cleanup_wake();
                     self.retain_pending(request_id, pending);
                     if wake_cleanup && let Some(completion) = self.completion.as_ref() {

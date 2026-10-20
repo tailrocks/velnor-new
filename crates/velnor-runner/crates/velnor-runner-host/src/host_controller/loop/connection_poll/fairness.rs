@@ -2,6 +2,26 @@
 
 use super::super::polling::PollKind;
 
+#[derive(Clone, Copy)]
+pub(crate) enum BindingDisposition {
+    Active,
+    Removed,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum ExecutionDisposition {
+    Live,
+    Idle,
+}
+
+pub(crate) struct DeleteReadiness {
+    pub(crate) binding: BindingDisposition,
+    pub(crate) poll_kind: PollKind,
+    pub(crate) drained: bool,
+    pub(crate) candidate: bool,
+    pub(crate) execution: ExecutionDisposition,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum HeaderPollPlan {
     Positive,
@@ -50,19 +70,12 @@ impl FairnessTurn {
         }
     }
 
-    pub(crate) const fn should_delete(
-        &self,
-        removed: bool,
-        poll_kind: PollKind,
-        drained: bool,
-        delete_candidate: bool,
-        no_live_execution: bool,
-    ) -> bool {
-        (removed || self.retiring)
-            && matches!(poll_kind, PollKind::ZeroHeader)
-            && drained
-            && delete_candidate
-            && no_live_execution
+    pub(crate) const fn should_delete(&self, readiness: &DeleteReadiness) -> bool {
+        (matches!(readiness.binding, BindingDisposition::Removed) || self.retiring)
+            && matches!(readiness.poll_kind, PollKind::ZeroHeader)
+            && readiness.drained
+            && readiness.candidate
+            && matches!(readiness.execution, ExecutionDisposition::Idle)
     }
 
     pub(crate) const fn rotation_complete(&self, no_connections: bool) -> bool {

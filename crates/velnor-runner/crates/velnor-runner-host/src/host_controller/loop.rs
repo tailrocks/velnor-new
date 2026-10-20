@@ -22,6 +22,10 @@ mod state;
 mod transitions;
 
 #[cfg(test)]
+pub(crate) use connection_poll::fairness::{
+    BindingDisposition, DeleteReadiness, ExecutionDisposition,
+};
+#[cfg(test)]
 pub(crate) use connection_poll::fairness::{FairnessTurn, HeaderPollPlan};
 use controller::run_controller;
 #[cfg(test)]

@@ -18,7 +18,7 @@ use crate::{
 };
 
 use super::{
-    connection_poll::poll_active_connections,
+    connection_poll::{ConnectionPollContext, poll_active_connections},
     setup,
     transitions::{JournalEffects, apply_config_transition, retire_pending},
 };
@@ -40,7 +40,7 @@ pub(super) async fn run_controller(
 ) -> Result<(), ListenFault> {
     let controller =
         ControllerLoop::initialize(current, state, daemon_lock, release_read_secret).await?;
-    controller.run().await
+    Box::pin(controller.run()).await
 }
 
 struct ControllerBase {
@@ -196,7 +196,7 @@ impl<'a> ControllerLoop<'a> {
             self.start_doctor_probe().await;
             self.refresh_storage_profile().await;
             self.refresh_config_and_retire().await?;
-            self.poll_connections().await;
+            Box::pin(self.poll_connections()).await;
         }
     }
 
@@ -251,20 +251,24 @@ impl<'a> ControllerLoop<'a> {
     async fn poll_connections(&mut self) {
         let fairness_enabled = u32::try_from(self.current.connections().len())
             .is_ok_and(|count| count > self.current.max_jobs());
-        let outcome = poll_active_connections(
-            &self.current,
+        let outcome = Box::pin(poll_active_connections(
+            ConnectionPollContext {
+                config: &self.current,
+                journal: &self.journal,
+                docker: &self.docker,
+                selected_engine: &self.selected_engine,
+                worker_images: &self.worker_images,
+                state: &self.state,
+                release_read_secret: &self.release_read_secret,
+                admission_ready: self.admission_ready,
+            },
             &self.pending_retirements,
             &mut self.connection_sessions,
-            &self.journal,
-            &self.docker,
-            &self.selected_engine,
-            &self.worker_images,
-            &self.state,
-            &self.release_read_secret,
-            self.admission_ready,
-            fairness_enabled,
-            self.rotation_due,
-        )
+            super::connection_poll::fairness::FairnessTurn::new(
+                fairness_enabled,
+                self.rotation_due,
+            ),
+        ))
         .await;
         let outcome = match outcome {
             Ok(outcome) => outcome,

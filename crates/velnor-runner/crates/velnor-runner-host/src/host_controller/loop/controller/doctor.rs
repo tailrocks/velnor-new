@@ -56,11 +56,11 @@ impl ControllerLoop<'_> {
             .name("velnor-doctor-probe".to_owned())
             .spawn(move || {
                 run_doctor_probe_worker(
-                    worker_config,
-                    worker_docker,
-                    worker_journal,
-                    worker_state,
-                    ticket,
+                    &worker_config,
+                    &worker_docker,
+                    &worker_journal,
+                    &worker_state,
+                    &ticket,
                 );
             });
         self.doctor_worker = match spawned {
@@ -83,23 +83,23 @@ impl ControllerLoop<'_> {
 }
 
 fn run_doctor_probe_worker(
-    config: HostConfig,
-    docker: bollard::Docker,
-    journal: Journal,
-    state: crate::controller_ipc::ControlState,
-    ticket: crate::journal::DoctorProbeTicket,
+    config: &HostConfig,
+    docker: &bollard::Docker,
+    journal: &Journal,
+    state: &crate::controller_ipc::ControlState,
+    ticket: &crate::journal::DoctorProbeTicket,
 ) {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build();
     let result = match runtime {
-        Ok(runtime) => match crate::launch::ReleaseReadSecret::load(&config) {
+        Ok(runtime) => match crate::launch::ReleaseReadSecret::load(config) {
             Ok(secret) => runtime.block_on(crate::launch::run_doctor_probe(
-                &docker, &journal, &secret, &ticket,
+                docker, journal, &secret, ticket,
             )),
             Err(error) => {
                 if let Err(failure) =
-                    runtime.block_on(journal.fail_queued_doctor_probe_request(&ticket))
+                    runtime.block_on(journal.fail_queued_doctor_probe_request(ticket))
                 {
                     eprintln!(
                         "The host could not set the probe request to failed. Error: {failure}."

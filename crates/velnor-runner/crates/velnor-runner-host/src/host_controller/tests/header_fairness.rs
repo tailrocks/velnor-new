@@ -4,7 +4,10 @@ use crate::launch::{CompletedHeaderPoll, DeletedSession204};
 use crate::{HostConfig, HostError, Journal};
 
 use super::requested_header_capacity_after;
-use crate::host_controller::loop_driver::{FairnessTurn, HeaderPollPlan, PollKind};
+use crate::host_controller::loop_driver::{
+    BindingDisposition, DeleteReadiness, ExecutionDisposition, FairnessTurn, HeaderPollPlan,
+    PollKind,
+};
 
 #[tokio::test]
 async fn production_poll_turn_rotates_durable_sessions_after_drain_and_exact_delete()
@@ -17,18 +20,24 @@ async fn production_poll_turn_rotates_durable_sessions_after_drain_and_exact_del
         1,
     ))?;
     let scratch = HeaderScratch::new()?;
-    let journal = open_journal(&scratch).await?;
+    exercise_initial_rotation(&config, &scratch).await?;
+    reopen_and_retire_positive_session(&config, &scratch).await?;
+    verify_next_cursor_and_uncertain_delete(&config, &scratch).await
+}
+
+async fn exercise_initial_rotation(
+    config: &HostConfig,
+    scratch: &HeaderScratch,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let journal = open_journal(scratch).await?;
     let alpha = config.connections()[0].connection_id.clone();
     let beta = config.connections()[1].connection_id.clone();
     let positive = journal
-        .reserve_header_allocation(alpha.clone(), 101, "session-a", 1)
+        .reserve_header_allocation(alpha, 101, "session-a", 1)
         .await?;
     let waiting = journal
-        .reserve_header_allocation(beta.clone(), 202, "session-b", 0)
+        .reserve_header_allocation(beta, 202, "session-b", 0)
         .await?;
-
-    // This test uses the controller turn from `poll_active_connections`.
-    // A poll with a positive capacity header ends admission for this pass.
     let mut first_turn = FairnessTurn::new(true, false);
     assert_eq!(
         first_turn.poll_plan(false, positive.target(), || 91),
@@ -44,69 +53,70 @@ async fn production_poll_turn_rotates_durable_sessions_after_drain_and_exact_del
         first_turn.poll_plan(false, waiting.target(), || 44),
         HeaderPollPlan::Zero { cursor: 0 }
     );
-
-    // The mock first returns an Available request. Do not delete its session.
-    // The next empty response has a zero header.
-    let available_head_deferred = true;
     let zero_poll = journal.begin_zero_header_poll(&waiting).await?;
     assert_eq!(zero_poll.header_value(), 0);
     journal
         .settle_header_poll(CompletedHeaderPoll::test_only(zero_poll))
         .await?;
-    assert!(!first_turn.should_delete(
-        false,
-        PollKind::ZeroHeader,
-        true,
-        !available_head_deferred,
-        true,
-    ));
+    assert!(!first_turn.should_delete(&delete_readiness(false, true, false)));
     let empty_zero_poll = journal.begin_zero_header_poll(&waiting).await?;
     journal
         .settle_header_poll(CompletedHeaderPoll::test_only(empty_zero_poll))
         .await?;
-    assert!(first_turn.should_delete(false, PollKind::ZeroHeader, true, true, true,));
+    assert!(first_turn.should_delete(&delete_readiness(false, true, true)));
     let delete = journal.begin_header_session_delete(&waiting).await?;
     journal
         .retire_header_allocation(DeletedSession204::test_only(delete))
         .await?;
     assert!(!first_turn.rotation_complete(false));
-    drop(journal);
+    Ok(())
+}
 
-    // The test opens the journal again between turns. The allocation and cursor
-    // remain after the zero-capacity connection stops.
-    let reopened = open_journal(&scratch).await?;
+async fn reopen_and_retire_positive_session(
+    config: &HostConfig,
+    scratch: &HeaderScratch,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let reopened = open_journal(scratch).await?;
+    let alpha = &config.connections()[0].connection_id;
+    let allocations = reopened.header_allocations().await?;
+    assert_eq!(allocations.len(), 1);
+    assert_eq!(allocations[0].connection_id(), alpha);
     assert_eq!(
         reopened.header_fairness_cursor().await?,
         Some(alpha.clone())
     );
     assert_eq!(reopened.charged_header_capacity().await?, 1);
-    let allocations = reopened.header_allocations().await?;
-    assert_eq!(allocations.len(), 1);
-    assert_eq!(allocations[0].connection_id(), &alpha);
+    let positive = &allocations[0];
     let mut retiring_turn = FairnessTurn::new(true, true);
     assert_eq!(
         retiring_turn.poll_plan(false, positive.target(), || 17),
         HeaderPollPlan::Zero { cursor: 0 }
     );
-    let alpha_zero = reopened.begin_zero_header_poll(&positive).await?;
+    let alpha_zero = reopened.begin_zero_header_poll(positive).await?;
     reopened
         .settle_header_poll(CompletedHeaderPoll::test_only(alpha_zero))
         .await?;
-    let alpha_delete = reopened.begin_header_session_delete(&positive).await?;
+    let alpha_delete = reopened.begin_header_session_delete(positive).await?;
     reopened
         .retire_header_allocation(DeletedSession204::test_only(alpha_delete))
         .await?;
     retiring_turn.observe_positive_poll(false);
     assert!(retiring_turn.rotation_complete(true));
-    drop(reopened);
+    Ok(())
+}
 
-    // Setup reads the saved cursor. It gives the next header to beta.
-    let next_journal = open_journal(&scratch).await?;
+async fn verify_next_cursor_and_uncertain_delete(
+    config: &HostConfig,
+    scratch: &HeaderScratch,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let next_journal = open_journal(scratch).await?;
+    let alpha = config.connections()[0].connection_id.clone();
+    let beta = config.connections()[1].connection_id.clone();
     let cursor = next_journal.header_fairness_cursor().await?;
     let next = config
         .connections()
         .iter()
-        .map(|binding| requested_header_capacity_after(&config, binding, cursor.as_ref()))
+        .map(|binding| requested_header_capacity_after(config, binding, cursor.as_ref()))
         .collect::<Result<Vec<_>, _>>()?;
     assert_eq!(next, [0, 1]);
     let next_positive = next_journal
@@ -121,8 +131,8 @@ async fn production_poll_turn_rotates_durable_sessions_after_drain_and_exact_del
     next_journal
         .settle_header_poll(CompletedHeaderPoll::test_only(beta_zero))
         .await?;
-    assert!(!uncertain_turn.should_delete(false, PollKind::ZeroHeader, false, true, true,));
-    assert!(uncertain_turn.should_delete(false, PollKind::ZeroHeader, true, true, true,));
+    assert!(!uncertain_turn.should_delete(&delete_readiness(false, false, true)));
+    assert!(uncertain_turn.should_delete(&delete_readiness(false, true, true)));
     let unknown = next_journal
         .begin_header_session_delete(&next_positive)
         .await?;
@@ -135,6 +145,20 @@ async fn production_poll_turn_rotates_durable_sessions_after_drain_and_exact_del
             .is_err()
     );
     Ok(())
+}
+
+fn delete_readiness(removed: bool, drained: bool, candidate: bool) -> DeleteReadiness {
+    DeleteReadiness {
+        binding: if removed {
+            BindingDisposition::Removed
+        } else {
+            BindingDisposition::Active
+        },
+        poll_kind: PollKind::ZeroHeader,
+        drained,
+        candidate,
+        execution: ExecutionDisposition::Idle,
+    }
 }
 
 struct HeaderScratch(std::path::PathBuf);

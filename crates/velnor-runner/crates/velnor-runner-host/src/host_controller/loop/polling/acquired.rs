@@ -16,14 +16,14 @@ pub(super) async fn start_acquired(
     let request_id = acquired.request().request_id();
     remember_acquired_recovery(prepared, request_id, &acquired);
     let deadline = std::time::Instant::now() + Duration::from_secs(120);
-    let channel = match measure_acquired(prepared, acquired, context, deadline).await {
+    let channel = match Box::pin(measure_acquired(prepared, acquired, context, deadline)).await {
         Ok(channel) => channel,
         Err(error) => {
             report_acquired_recovery(prepared, request_id, error);
             return Ok(());
         }
     };
-    retain_scoped_channel(prepared, channel, context, deadline).await
+    Box::pin(retain_scoped_channel(prepared, channel, context, deadline)).await
 }
 
 async fn measure_acquired(
@@ -38,17 +38,19 @@ async fn measure_acquired(
     let admin = credentials.link.base().to_owned();
     let admin_token = credentials.link.token().to_owned();
     let mut lane = crate::launch::HostLane::new(&mut credentials.link, admin, None);
-    crate::launch::scoped_runtime::prepare_jit_and_measure_scoped(
-        crate::launch::steps::ScopedProvisioningOutcome::Acquired(acquired),
-        context.docker,
-        &prepared.scope,
-        context.journal,
-        context.release_read_secret,
-        context.selected_engine,
-        context.worker_images,
-        &mut lane,
-        &admin_token,
-        deadline,
+    Box::pin(
+        crate::launch::scoped_runtime::prepare_jit_and_measure_scoped(
+            crate::launch::steps::ScopedProvisioningOutcome::Acquired(acquired),
+            context.docker,
+            &prepared.scope,
+            context.journal,
+            context.release_read_secret,
+            context.selected_engine,
+            context.worker_images,
+            &mut lane,
+            &admin_token,
+            deadline,
+        ),
     )
     .await
 }
@@ -63,7 +65,7 @@ async fn retain_scoped_channel(
     match channel {
         ScopedChannelOutcome::NoStart => {}
         ScopedChannelOutcome::Ready(ready) => {
-            let runner = crate::launch::scoped_runtime::prepare_listener(
+            let runner = Box::pin(crate::launch::scoped_runtime::prepare_listener(
                 ready,
                 context.docker,
                 context.journal,
@@ -74,7 +76,7 @@ async fn retain_scoped_channel(
                 &prepared.binding,
                 &prepared.guest_image,
                 deadline,
-            )
+            ))
             .await;
             match runner {
                 Ok(runner) => retain_ready_or_pending(prepared, runner),
