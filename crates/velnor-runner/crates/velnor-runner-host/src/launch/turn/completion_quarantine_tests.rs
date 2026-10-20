@@ -299,6 +299,7 @@ fn unmatched_mixed_event(message_id: i64) -> Poll {
         statistics: None,
         jobs: vec![
             InnerJob {
+                source: velnor_runner_github::SourceMetadata::default(),
                 kind: InnerKind::Available,
                 request_id: Some(62),
                 job_id: Some("1001".to_owned()),
@@ -309,6 +310,7 @@ fn unmatched_mixed_event(message_id: i64) -> Poll {
                 fields: Vec::new(),
             },
             InnerJob {
+                source: velnor_runner_github::SourceMetadata::default(),
                 kind: InnerKind::Completed,
                 request_id: Some(0),
                 job_id: None,

@@ -8,7 +8,7 @@ use crate::paths::query_escape;
 use crate::session::{API_QUERY, bearer, execute, json_content, user_agent};
 use crate::{Method, SessionError, SessionRequest, Transport, WireError, scale_set_path};
 
-use super::{CreateLabel, ScaleSetView, accept_scale_set, other_status, outgoing_json};
+use super::{CreateLabel, ScaleSetView, accept_scale_set_labels, other_status, outgoing_json};
 
 /// Get-by-name inputs. `Debug` hides `admin_token`.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -18,6 +18,8 @@ pub struct ScaleSetByName<'a> {
     pub runner_group_id: i64,
     /// Expected scale-set name.
     pub name: &'a str,
+    /// Expected labels in the configured selector.
+    pub expected_labels: &'a [String],
     /// Actions admin bearer.
     pub admin_token: &'a str,
 }
@@ -28,6 +30,7 @@ impl fmt::Debug for ScaleSetByName<'_> {
             .debug_struct("ScaleSetByName")
             .field("runner_group_id", &self.runner_group_id)
             .field("name", &self.name)
+            .field("expected_labels", &self.expected_labels)
             .field("admin_token", &"[redacted]")
             .finish()
     }
@@ -41,6 +44,8 @@ pub struct ScaleSetById<'a> {
     pub scale_set_id: i64,
     /// Name [`accept_scale_set`](crate::accept_scale_set) must see.
     pub name: &'a str,
+    /// Expected labels in the configured selector.
+    pub expected_labels: &'a [String],
     /// Actions admin bearer.
     pub admin_token: &'a str,
 }
@@ -51,6 +56,7 @@ impl fmt::Debug for ScaleSetById<'_> {
             .debug_struct("ScaleSetById")
             .field("scale_set_id", &self.scale_set_id)
             .field("name", &self.name)
+            .field("expected_labels", &self.expected_labels)
             .field("admin_token", &"[redacted]")
             .finish()
     }
@@ -124,7 +130,7 @@ where
     if exchange.status != 200 {
         return Err(other_status(exchange.status));
     }
-    decode_page(&exchange.body, call.name)
+    decode_page(&exchange.body, call.name, call.expected_labels)
 }
 
 /// `GET .../runnerscalesets/{id}?api-version=6.0-preview`, then adopt checks.
@@ -152,7 +158,7 @@ where
     if exchange.status != 200 {
         return Err(other_status(exchange.status));
     }
-    decode_one(&exchange.body, call.name)
+    decode_one(&exchange.body, call.name, call.expected_labels)
 }
 
 /// `POST` a scale set. Empty labels become one `System` label named `name`
@@ -164,7 +170,7 @@ where
 /// Returns [`WireError::RegistrationRejected`] for an empty admin token, or
 /// when the name and the labels are both empty. Any status other than 200 is
 /// [`WireError::UnexpectedStatus`]. The 200 body must pass
-/// [`accept_scale_set`](crate::accept_scale_set).
+/// The returned name and labels must match the request.
 pub fn create_runner_scale_set<T>(
     transport: &mut T,
     call: &ScaleSetCreate<'_>,
@@ -184,7 +190,12 @@ where
     if exchange.status != 200 {
         return Err(SessionError::Wire(WireError::UnexpectedStatus));
     }
-    decode_one(&exchange.body, call.name)
+    let expected_labels = if call.labels.is_empty() {
+        vec![call.name.to_owned()]
+    } else {
+        call.labels.iter().map(|label| label.name.clone()).collect()
+    };
+    decode_one(&exchange.body, call.name, &expected_labels)
 }
 
 fn admin_headers(admin_token: &str) -> Result<Vec<(String, String)>, SessionError> {
@@ -200,7 +211,11 @@ fn name_query(runner_group_id: i64, name: &str) -> String {
     )
 }
 
-fn decode_page(body: &[u8], expected_name: &str) -> Result<ScaleSetFound, SessionError> {
+fn decode_page(
+    body: &[u8],
+    expected_name: &str,
+    expected_labels: &[String],
+) -> Result<ScaleSetFound, SessionError> {
     let page: ScaleSetPage = serde_json::from_slice(body).map_err(|_| WireError::Malformed)?;
     let len = i64::try_from(page.value.len()).map_err(|_| WireError::Malformed)?;
     if page.count != len {
@@ -211,16 +226,20 @@ fn decode_page(body: &[u8], expected_name: &str) -> Result<ScaleSetFound, Sessio
         0 => Ok(ScaleSetFound::NotFound),
         1 => {
             let view = sets.pop().ok_or(WireError::Malformed)?;
-            accept_scale_set(&view, expected_name)?;
+            accept_scale_set_labels(&view, expected_name, expected_labels)?;
             Ok(ScaleSetFound::Found(view))
         }
         _ => Err(SessionError::from(WireError::RegistrationRejected)),
     }
 }
 
-fn decode_one(body: &[u8], expected_name: &str) -> Result<ScaleSetView, SessionError> {
+fn decode_one(
+    body: &[u8],
+    expected_name: &str,
+    expected_labels: &[String],
+) -> Result<ScaleSetView, SessionError> {
     let view: ScaleSetView = serde_json::from_slice(body).map_err(|_| WireError::Malformed)?;
-    accept_scale_set(&view, expected_name)?;
+    accept_scale_set_labels(&view, expected_name, expected_labels)?;
     Ok(view)
 }
 

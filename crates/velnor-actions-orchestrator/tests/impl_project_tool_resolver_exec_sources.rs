@@ -134,3 +134,20 @@ fn rustup_toolchain_is_exported_only_on_request() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn an_unmaterialized_checkout_cannot_resolve_the_project_rust_channel() -> TestResult {
+    fails(&[], &[RUST], "project config no longer declares this tool")?;
+    let materialized = run(
+        &[("rust-toolchain.toml", "[toolchain]\nchannel = \"1.99.1\"\n")],
+        &[],
+        &[RUST],
+        true,
+    )?;
+    assert!(materialized.ok, "{}", materialized.stderr);
+    assert_eq!(
+        materialized.env,
+        "VELNOR_TOOL_RUST=1.99.1\nRUSTUP_TOOLCHAIN=1.99.1\n"
+    );
+    Ok(())
+}

@@ -1,0 +1,93 @@
+{
+  "source": "d30b50c493ba589ce15dfec55928fbb37cd4f2a2",
+  "run_id": 39350286471,
+  "attempt": 1,
+  "event": "push",
+  "workflow_path": ".github/workflows/ci.yml",
+  "run_conclusion": "success",
+  "plan_job": {
+    "id": 118392603367,
+    "name": "Plan",
+    "conclusion": "success",
+    "labels": [
+      "ubuntu-26.04"
+    ],
+    "runner_name": "GitHub Actions 1000141486"
+  },
+  "supported_labels_present": [
+    "ubuntu-26.04",
+    "ubuntu-24.04",
+    "ubuntu-22.04"
+  ],
+  "image_log_excerpt": [
+    "2026-10-20T00:53:20.6345317Z ##[group]Runner Image Provisioner",
+    "2026-10-20T00:53:20.6348041Z Version: 20261012.601",
+    "2026-10-20T00:53:20.6357974Z ##[group]Operating System",
+    "2026-10-20T00:53:20.6359454Z Ubuntu",
+    "2026-10-20T00:53:20.6360402Z 26.04.1",
+    "2026-10-20T00:53:20.6363686Z ##[group]Runner Image",
+    "2026-10-20T00:53:20.6364914Z Image: ubuntu-26.04",
+    "2026-10-20T00:53:20.6366028Z Version: 20261012.163.1",
+    "2026-10-20T00:53:20.6368440Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261012.163/images/ubuntu/Ubuntu2604-Readme.md",
+    "2026-10-20T00:53:20.6371333Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261012.163",
+    "2026-10-20T00:53:32.9397684Z   VELNOR_CACHE_LANE: ubuntu-26.04",
+    "2026-10-20T00:53:33.5908292Z ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43"
+  ],
+  "captures": [
+    {
+      "name": "main-ci-plan.log",
+      "checked_at": "2026-10-20T07:21:22.740604+00:00",
+      "argv": [
+        "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+        "api",
+        "--allow-escape-sequences",
+        "--method",
+        "GET",
+        "repos/tailrocks/velnor-new/actions/jobs/118392603367/logs"
+      ],
+      "size": 228516,
+      "sha256": "bded3eeb6737265fd1a55fb7a7c8ae27c1652d8bb6eb12f0d08004f0d12d3519"
+    },
+    {
+      "name": "hosted-runners.html",
+      "checked_at": "2026-10-20T07:21:25.156955+00:00",
+      "url": "https://docs.github.com/en/actions/reference/runners/github-hosted-runners",
+      "final_url": "https://docs.github.com/en/actions/reference/runners/github-hosted-runners",
+      "headers": {
+        "Connection": "close",
+        "Content-Length": "435472",
+        "Access-Control-Allow-Origin": "*",
+        "Content-Security-Policy": "default-src 'none';prefetch-src 'self';connect-src 'self' https://collector.githubapp.com;font-src 'self' data:;img-src 'self' github.com *.github.com *.githubusercontent.com *.githubassets.com data: placehold.it;object-src 'self';script-src 'self' github.com *.github.com *.githubusercontent.com *.githubassets.com 'self' data: 'sha256-U3LWw3Ab3GkeLl43emMGkOL69tCBBkGDB4UldMshHq0=';script-src-attr 'self';frame-src 'self' github.com *.github.com *.githubusercontent.com *.githubassets.com https://support.github.com;frame-ancestors 'self' github.com *.github.com *.githubusercontent.com *.githubassets.com;style-src 'self' github.com *.github.com *.githubusercontent.com *.githubassets.com 'self' 'unsafe-inline' data:;child-src 'self';manifest-src 'self';upgrade-insecure-requests;base-uri 'self';form-action 'self'",
+        "cross-origin-opener-policy": "same-origin",
+        "cross-origin-resource-policy": "same-origin",
+        "origin-agent-cluster": "?1",
+        "Referrer-Policy": "no-referrer-when-downgrade",
+        "X-Content-Type-Options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-download-options": "noopen",
+        "X-Frame-Options": "SAMEORIGIN",
+        "x-permitted-cross-domain-policies": "none",
+        "X-XSS-Protection": "0",
+        "Cache-Control": "public, max-age=60",
+        "x-powered-by": "Next.js",
+        "Content-Type": "text/html; charset=utf-8",
+        "x-github-backend": "Kubernetes",
+        "X-GitHub-Request-Id": "406A:2ED4C0:239DDF:2A0C5C:6AD70DF3",
+        "x-github-edge-region": "iad",
+        "Via": "1.1 varnish, 1.1 varnish",
+        "Accept-Ranges": "bytes",
+        "Age": "2171",
+        "Date": "Tue, 20 Oct 2026 07:21:25 GMT",
+        "X-Served-By": "cache-iad-kiad7000050-IAD, cache-sin-wsap440070-SIN",
+        "X-Cache": "MISS, HIT",
+        "X-Cache-Hits": "0, 0",
+        "X-Timer": "S1792480885.385549,VS0,VE1",
+        "Vary": "x-user-version, accept, Accept-Encoding",
+        "Strict-Transport-Security": "max-age=31557600"
+      },
+      "size": 435472,
+      "sha256": "b49609f1e414cbb74067d052cf8872493f1e27372300f9c529fd8b04fe91138c"
+    }
+  ],
+  "capture_notes": "GH ANSI safety required api-scoped allow-escape-sequences flag; failed flagplacement preserved"
+}

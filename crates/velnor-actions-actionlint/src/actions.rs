@@ -75,14 +75,15 @@ pub const ALINT_ACTION_SHA: &str = "f39a25a7e061bb8738a87372561d8b9a6a29ca87";
 
 /// Selected `jdx/mise-action` candidate; the updated action is checked by CI.
 ///
-/// v5.2.0 retains every input Velnor uses. Its cache key changes have no
-/// effect because Velnor disables the cache, and monorepo behavior activates
+/// v5.2.1 retains every input Velnor uses. It rejects a missing signed
+/// packslip for Mise releases from 2026.9.3 onward. Existing cache key changes
+/// have no effect because Velnor disables the cache, and monorepo behavior activates
 /// only for Mise configs declaring `monorepo.config_roots`; ours do not.
 /// Explicit version and SHA inputs remain supported. Source:
-/// `https://api.github.com/repos/jdx/mise-action/releases/tags/v5.2.0`.
-pub const MISE_ACTION_VERSION: &str = "v5.2.0";
+/// `https://api.github.com/repos/jdx/mise-action/releases/tags/v5.2.1`.
+pub const MISE_ACTION_VERSION: &str = "v5.2.1";
 /// Full commit SHA for [`MISE_ACTION_VERSION`] from its immutable tag ref.
-pub const MISE_ACTION_SHA: &str = "9b200bcecbfd6303e69a4a261b2e09e3757440a7";
+pub const MISE_ACTION_SHA: &str = "fc42bcc7ddbf51124c30f95a877a0c5168a3bfde";
 /// Qualified `actions/checkout` release.
 /// Source: `https://api.github.com/repos/actions/checkout/releases/latest`; checked 2026-09-28.
 pub const CHECKOUT_ACTION_VERSION: &str = "v7.0.1";

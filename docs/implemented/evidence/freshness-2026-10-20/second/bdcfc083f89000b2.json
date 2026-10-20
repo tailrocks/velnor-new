@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+    "api",
+    "--method",
+    "GET",
+    "https://api.github.com/repos/opentofu/opentofu/releases/latest"
+  ],
+  "body_file": "bdcfc083f89000b2.body",
+  "checked_at": "2026-10-20T07:02:59.514265+00:00",
+  "exit_code": 0,
+  "rust_prefix_only": false,
+  "sha256": "0ff3fe6d0c5bfca56394ee30a8234e9f17b7719d8d87d050e84a24f668c02151",
+  "size": 288538,
+  "url": "https://api.github.com/repos/opentofu/opentofu/releases/latest"
+}

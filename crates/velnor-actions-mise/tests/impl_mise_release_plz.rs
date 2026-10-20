@@ -25,11 +25,11 @@ fn pinned() -> ToolCatalog {
 
 #[test]
 fn release_plz_pin_is_exact() {
-    assert_eq!(RELEASE_PLZ_VERSION, "0.3.172");
-    assert_eq!(pinned().version(PinnedTool::ReleasePlz), "0.3.172");
+    assert_eq!(RELEASE_PLZ_VERSION, "0.3.173");
+    assert_eq!(pinned().version(PinnedTool::ReleasePlz), "0.3.173");
     assert_eq!(
         pinned().tool_spec(PinnedTool::ReleasePlz),
-        "release-plz@0.3.172"
+        "release-plz@0.3.173"
     );
     assert_eq!(PinnedTool::ReleasePlz.tool_name(), "release-plz");
     assert_eq!(
@@ -48,7 +48,7 @@ fn release_plz_pin_is_exact() {
 fn release_plz_cksum_is_full_sha256() {
     assert_eq!(
         RELEASE_PLZ_CKSUM,
-        "ca9813f5aff1fbfb88d016a5b6685257caad6270d6a667a9ea23c99d749ab81e"
+        "581521a1d9c8a490cbbd184764774f61a27e5ca0a98d12f764ebeafdb938627d"
     );
     assert_eq!(RELEASE_PLZ_CKSUM.len(), 64);
     assert!(
@@ -319,7 +319,7 @@ fn coordinator_command_selects_pinned_tools() {
         .iter()
         .position(|arg| arg == "--")
         .expect("payload separator");
-    for spec in ["rust@1.99.1", "release-plz@0.3.172"] {
+    for spec in ["rust@1.99.1", "release-plz@0.3.173"] {
         assert!(
             argv[..separator].iter().any(|arg| arg == spec),
             "missing tool spec before --: {spec}"
@@ -340,7 +340,7 @@ fn repo_policy_mirror_covers_release_plz() {
     );
     let text = std::fs::read_to_string(path).expect("repo version-policy exists");
     assert!(
-        text.contains("release-plz = \"0.3.172\""),
+        text.contains("release-plz = \"0.3.173\""),
         "policy pins release-plz"
     );
     verify_version_policy(&text, &pinned()).expect("policy mirrors catalog");
@@ -355,8 +355,8 @@ fn freshness_inventory_mirrors_release_plz() {
     let text = std::fs::read_to_string(path).expect("freshness inventory exists");
     for needle in [
         "\"name\": \"release-plz\"",
-        "\"pinned\": \"0.3.172\"",
-        "\"qualified\": \"0.3.172\"",
+        "\"pinned\": \"0.3.173\"",
+        "\"qualified\": \"0.3.173\"",
         "\"source\": \"https://crates.io/api/v1/crates/release-plz\"",
         "\"status\": \"current\"",
     ] {
