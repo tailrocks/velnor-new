@@ -35,7 +35,7 @@ pub(super) fn verify_native_pair_requests(
     super::request_checks::verify_worker_image_ids(requests, images)?;
     assert_jit_is_absent_from_docker_requests(requests, jit_input)?;
     assert_volume_roles(requests);
-    super::request_checks::verify_pair_requests(requests, expected_network_name, budget)?;
+    super::request_checks::verify_pair_requests(requests, expected_network_name, budget, true)?;
     Ok(())
 }
 

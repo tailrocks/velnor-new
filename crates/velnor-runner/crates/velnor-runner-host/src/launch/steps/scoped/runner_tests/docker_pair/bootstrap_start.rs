@@ -122,7 +122,7 @@ async fn production_bootstrap_starts_private_pair_and_keeps_jit_withheld() -> Re
     );
     assert!(captured.jit_input.is_empty());
     assert_no_storage_observation(&captured.requests)?;
-    verify_pair_requests(&captured.requests, &network_name, budget)?;
+    verify_pair_requests(&captured.requests, &network_name, budget, false)?;
     assert_verified_preflight_before_mutations(&captured.requests, &images)?;
     assert_eq!(
         network_id,

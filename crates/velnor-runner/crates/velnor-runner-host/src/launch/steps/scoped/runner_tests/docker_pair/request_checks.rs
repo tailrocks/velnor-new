@@ -47,6 +47,7 @@ pub(super) fn verify_pair_requests(
     requests: &[CapturedRequest],
     network_name: &str,
     budget: crate::worker::ResourceBudget,
+    initializer_released: bool,
 ) -> Result<(), String> {
     let creates = requests
         .iter()
@@ -79,7 +80,13 @@ pub(super) fn verify_pair_requests(
     ));
     assert!(runner["OpenStdin"].as_bool().unwrap_or(false));
     assert!(runner["StdinOnce"].as_bool().unwrap_or(false));
-    assert_pair_event_order(requests, dind_index, runner_index, &initializer_id)?;
+    assert_pair_event_order(
+        requests,
+        dind_index,
+        runner_index,
+        &initializer_id,
+        initializer_released,
+    )?;
     Ok(())
 }
 
@@ -131,6 +138,7 @@ fn assert_pair_event_order(
     dind_create: usize,
     runner_create: usize,
     initializer_id: &str,
+    initializer_released: bool,
 ) -> Result<(), String> {
     let attaches = requests
         .iter()
@@ -159,13 +167,28 @@ fn assert_pair_event_order(
     let dind_start = event_index(requests, &format!("/containers/{DIND_ID}/start"))?;
     let runner_start = event_index(requests, &format!("/containers/{RUNNER_ID}/start"))?;
     let initializer_start = event_index(requests, &format!("/containers/{initializer_id}/start"))?;
-    let initializer_wait = event_index(requests, &format!("/containers/{initializer_id}/wait"))?;
+    let initializer_waits = requests
+        .iter()
+        .enumerate()
+        .filter(|(_, request)| {
+            request.method == "POST"
+                && route(request) == format!("/containers/{initializer_id}/wait")
+        })
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    if initializer_waits.len() != usize::from(initializer_released) {
+        return Err(
+            "The initializer release state does not match the requested handoff.".to_owned(),
+        );
+    }
     if !(initializer_start < dind_create
         && dind_create < runner_create
         && runner_create < runner_attach
         && runner_attach < dind_start
         && dind_start < runner_start
-        && runner_start < initializer_wait)
+        && initializer_waits
+            .first()
+            .is_none_or(|wait| runner_start < *wait))
     {
         return Err("The pair create, attach, and start order is invalid.".to_owned());
     }

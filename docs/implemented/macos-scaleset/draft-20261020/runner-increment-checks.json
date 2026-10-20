@@ -1197,5 +1197,21 @@
       "failed": 1,
       "cause": "The bootstrap fixture expects initializer cleanup before the runner handoff finishes. The fixture repair is separate."
     }
+  },
+  "initializer_wait_stage": {
+    "result": "PASS",
+    "source_base": "a35d976239ccba276a422ee544ebba1b3f7548ce",
+    "tests": 2,
+    "checks": [
+      {
+        "log": "initializer-wait-parent-nextest-20261020.log",
+        "sha256": "975eba4d5aa61e2985c3b24f1b934d2580be5192bf6d5f696b17d86ba5d62086",
+        "exit_status": 0,
+        "run_id": "c710adc1-8747-4481-aea7-655b8843a658"
+      }
+    ],
+    "review_sha256": "8dcf6ccf21a434237569ac6d13cbb934bc26fcbbdcd9649964ebcdcf8db4c05f",
+    "language_reviewer": "helper_language_review",
+    "scope": "The bootstrap fixture requires no initializer wait. The full composition fixture requires one wait after the runner starts. Full runner tests remain necessary."
   }
 }
