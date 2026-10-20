@@ -16,6 +16,8 @@ use super::{Family, ProductRelease, render};
 mod exec_tests;
 #[path = "schema2_product_release_rerun_tests.rs"]
 mod rerun_tests;
+#[path = "schema2_product_release_timeout_tests.rs"]
+mod timeout_tests;
 use super::super::product_release_test_pins::test_pins;
 
 fn product(families: &[RoutingWorkflow]) -> Result<ProductRelease, Box<dyn Error>> {

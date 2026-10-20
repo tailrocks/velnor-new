@@ -45,6 +45,8 @@ impl JobTimeout {
     pub const MSRV: Self = Self::DEFAULT;
     /// Publish job.
     pub const PUBLISH: Self = Self::DEFAULT;
+    /// Native product compiler jobs need a bounded cold-build allowance.
+    pub const PRODUCT_COMPILER: Self = Self(10);
 
     /// Validate minutes without narrowing wider configuration fields.
     #[must_use]
