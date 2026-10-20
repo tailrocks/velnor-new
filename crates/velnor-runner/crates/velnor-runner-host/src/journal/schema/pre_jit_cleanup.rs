@@ -1,4 +1,4 @@
-//! Journal receipts for completed pre-JIT container-create requests.
+//! This module defines journal receipts for container create requests that finish before JIT configuration delivery.
 
 use crate::error::HostError;
 

@@ -33,29 +33,29 @@ impl Drop for Scratch {
 
 async fn rejects_missing_v32_trigger(trigger: &str) -> Result<(), String> {
     let scratch = Scratch::new();
-    std::fs::create_dir_all(&scratch.0).map_err(|_| "Could not create test directory")?;
+    std::fs::create_dir_all(&scratch.0).map_err(|_| "The test directory could not be created.")?;
     let path = scratch.database();
     drop(
         Journal::open(&path)
             .await
-            .map_err(|_| "Could not create journal")?,
+            .map_err(|_| "The journal could not be created.")?,
     );
-    let path_text = path.to_str().ok_or("Journal path is not UTF-8")?;
+    let path_text = path.to_str().ok_or("The journal path is not UTF-8.")?;
     let database = turso::Builder::new_local(path_text)
         .build()
         .await
-        .map_err(|_| "Could not open test database")?;
+        .map_err(|_| "The test database could not be opened.")?;
     let connection = database
         .connect()
-        .map_err(|_| "Could not open test connection")?;
+        .map_err(|_| "The test connection could not be opened.")?;
     connection
         .execute(&format!("DROP TRIGGER {trigger}"), ())
         .await
-        .map_err(|_| "Could not remove test trigger")?;
+        .map_err(|_| "The test trigger could not be removed.")?;
     drop(connection);
     drop(database);
     if Journal::open(&path).await.is_ok() {
-        return Err("The current-schema check repaired a missing v32 trigger".to_owned());
+        return Err("The current-schema check repaired a missing v32 trigger.".to_owned());
     }
     Ok(())
 }
@@ -69,12 +69,12 @@ async fn remove_v32_pre_jit_schema(connection: &turso::Connection) -> Result<(),
         connection
             .execute(&format!("DROP TRIGGER {trigger}"), ())
             .await
-            .map_err(|_| "Could not remove test create-spec trigger")?;
+            .map_err(|_| "The test create-spec trigger could not be removed.")?;
     }
     connection
         .execute("DROP TABLE capacity_reservation_pre_jit_create_specs", ())
         .await
-        .map_err(|_| "Could not remove test create-spec table")?;
+        .map_err(|_| "The test create-spec table could not be removed.")?;
     for trigger in [
         "pre_jit_cleanup_claim_insert_guard",
         "pre_jit_cleanup_claim_update_guard",
@@ -86,7 +86,7 @@ async fn remove_v32_pre_jit_schema(connection: &turso::Connection) -> Result<(),
         connection
             .execute(&format!("DROP TRIGGER {trigger}"), ())
             .await
-            .map_err(|_| "Could not remove test trigger")?;
+            .map_err(|_| "The test trigger could not be removed.")?;
     }
     connection
         .execute(
@@ -94,55 +94,55 @@ async fn remove_v32_pre_jit_schema(connection: &turso::Connection) -> Result<(),
             (),
         )
         .await
-        .map_err(|_| "Could not remove test progress table")?;
+        .map_err(|_| "The test progress table could not be removed.")?;
     connection
         .execute("DROP TABLE capacity_reservation_pre_jit_cleanup_claims", ())
         .await
-        .map_err(|_| "Could not remove test claim table")?;
+        .map_err(|_| "The test claim table could not be removed.")?;
     connection
         .execute("PRAGMA user_version = 31", ())
         .await
-        .map_err(|_| "Could not set prior schema version")?;
+        .map_err(|_| "The prior schema version could not be set.")?;
     Ok(())
 }
 
 #[tokio::test]
 async fn version_thirty_one_upgrade_installs_only_the_typed_create_receipt() -> Result<(), String> {
     let scratch = Scratch::new();
-    std::fs::create_dir_all(&scratch.0).map_err(|_| "Could not create test directory")?;
+    std::fs::create_dir_all(&scratch.0).map_err(|_| "The test directory could not be created.")?;
     let path = scratch.database();
     drop(
         Journal::open(&path)
             .await
-            .map_err(|_| "Could not create journal")?,
+            .map_err(|_| "The journal could not be created.")?,
     );
-    let path_text = path.to_str().ok_or("Journal path is not UTF-8")?;
+    let path_text = path.to_str().ok_or("The journal path is not UTF-8.")?;
     let database = turso::Builder::new_local(path_text)
         .build()
         .await
-        .map_err(|_| "Could not open test database")?;
+        .map_err(|_| "The test database could not be opened.")?;
     let connection = database
         .connect()
-        .map_err(|_| "Could not open test connection")?;
+        .map_err(|_| "The test connection could not be opened.")?;
     connection
         .execute("DROP TRIGGER pre_jit_create_response_insert_guard", ())
         .await
-        .map_err(|_| "Could not remove test trigger")?;
+        .map_err(|_| "The test trigger could not be removed.")?;
     connection
         .execute("DROP TRIGGER pre_jit_create_response_no_update", ())
         .await
-        .map_err(|_| "Could not remove test trigger")?;
+        .map_err(|_| "The test trigger could not be removed.")?;
     connection
         .execute("DROP TRIGGER pre_jit_create_response_no_delete", ())
         .await
-        .map_err(|_| "Could not remove test trigger")?;
+        .map_err(|_| "The test trigger could not be removed.")?;
     connection
         .execute(
             "DROP TABLE capacity_reservation_pre_jit_create_responses",
             (),
         )
         .await
-        .map_err(|_| "Could not remove test table")?;
+        .map_err(|_| "The test table could not be removed.")?;
     remove_v32_pre_jit_schema(&connection).await?;
     drop(connection);
     drop(database);
@@ -150,34 +150,34 @@ async fn version_thirty_one_upgrade_installs_only_the_typed_create_receipt() -> 
     drop(
         Journal::open(&path)
             .await
-            .map_err(|_| "Could not upgrade journal")?,
+            .map_err(|_| "The journal could not be upgraded.")?,
     );
     let database = turso::Builder::new_local(path_text)
         .build()
         .await
-        .map_err(|_| "Could not reopen test database")?;
+        .map_err(|_| "The test database could not be reopened.")?;
     let connection = database
         .connect()
-        .map_err(|_| "Could not reopen test connection")?;
+        .map_err(|_| "The test connection could not be reopened.")?;
     super::validate(&connection)
         .await
-        .map_err(|_| "The upgraded schema did not validate")?;
+        .map_err(|_| "The upgraded schema did not validate.")?;
     let mut rows = connection
         .query(
             "SELECT COUNT(*) FROM capacity_reservation_pre_jit_create_responses",
             (),
         )
         .await
-        .map_err(|_| "Could not count create receipts")?;
+        .map_err(|_| "The create receipt count could not be read.")?;
     let count: i64 = rows
         .next()
         .await
-        .map_err(|_| "Could not read create receipt count")?
-        .ok_or("Create receipt count is missing")?
+        .map_err(|_| "The create receipt count could not be read.")?
+        .ok_or("The create receipt count is missing.")?
         .get(0)
-        .map_err(|_| "Create receipt count is invalid")?;
+        .map_err(|_| "The create receipt count is invalid.")?;
     if count != 0 {
-        return Err("The upgrade must not invent create receipts".to_owned());
+        return Err("The upgrade must not invent create receipts.".to_owned());
     }
     Ok(())
 }
@@ -185,47 +185,50 @@ async fn version_thirty_one_upgrade_installs_only_the_typed_create_receipt() -> 
 #[tokio::test]
 async fn create_receipt_rejects_unsupported_response_status() -> Result<(), String> {
     let scratch = Scratch::new();
-    std::fs::create_dir_all(&scratch.0).map_err(|_| "Could not create test directory")?;
+    std::fs::create_dir_all(&scratch.0).map_err(|_| "The test directory could not be created.")?;
     let path = scratch.database();
     drop(
         Journal::open(&path)
             .await
-            .map_err(|_| "Could not create journal")?,
+            .map_err(|_| "The journal could not be created.")?,
     );
-    let path_text = path.to_str().ok_or("Journal path is not UTF-8")?.to_owned();
+    let path_text = path
+        .to_str()
+        .ok_or("The journal path is not UTF-8.")?
+        .to_owned();
     let database = turso::Builder::new_local(&path_text)
         .build()
         .await
-        .map_err(|_| "Could not open test database")?;
+        .map_err(|_| "The test database could not be opened.")?;
     let connection = database
         .connect()
-        .map_err(|_| "Could not open test connection")?;
+        .map_err(|_| "The test connection could not be opened.")?;
     connection
         .execute("PRAGMA foreign_keys = OFF", ())
         .await
-        .map_err(|_| "Could not configure test connection")?;
+        .map_err(|_| "The test connection could not be configured.")?;
     connection
         .execute("DROP TRIGGER pre_jit_create_response_insert_guard", ())
         .await
-        .map_err(|_| "Could not remove the receipt insert guard")?;
+        .map_err(|_| "The receipt insert guard could not be removed.")?;
     connection
         .execute(
             "INSERT INTO capacity_reservation_pre_jit_create_responses (reservation_id, role, connection_id, operation_id, engine_id, docker_root_digest, container_name, client_api_major, client_api_minor, response_status) VALUES (1, 'runner', 'connection', 1, 'engine', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'runner', 1, 53, 409)",
             (),
         )
         .await
-        .map_err(|_| "The schema rejected supported receipt fields")?;
+        .map_err(|_| "The schema rejected supported receipt fields.")?;
     connection
         .execute("DROP TRIGGER pre_jit_create_response_no_delete", ())
         .await
-        .map_err(|_| "Could not remove the receipt retention guard")?;
+        .map_err(|_| "The receipt retention guard could not be removed.")?;
     connection
         .execute(
             "DELETE FROM capacity_reservation_pre_jit_create_responses WHERE reservation_id = 1",
             (),
         )
         .await
-        .map_err(|_| "Could not clear the supported receipt")?;
+        .map_err(|_| "The supported receipt could not be cleared.")?;
     let rejected = connection
         .execute(
             "INSERT INTO capacity_reservation_pre_jit_create_responses (reservation_id, role, connection_id, operation_id, engine_id, docker_root_digest, container_name, client_api_major, client_api_minor, response_status) VALUES (1, 'runner', 'connection', 1, 'engine', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'runner', 1, 53, 408)",
@@ -233,7 +236,7 @@ async fn create_receipt_rejects_unsupported_response_status() -> Result<(), Stri
         )
         .await;
     if rejected.is_ok() {
-        return Err("The schema accepted an unsupported daemon status".to_owned());
+        return Err("The schema accepted an unsupported daemon status.".to_owned());
     }
     Ok(())
 }
@@ -257,7 +260,7 @@ async fn current_schema_rejects_missing_create_spec_guard() -> Result<(), String
 async fn runner_create_terminal_reply_allows_one_live_pre_jit_claim() -> Result<(), String> {
     let failure = crate::launch::runner_create_409().await?;
     if failure.error().is_empty() {
-        return Err("The production Runner create path returned no failure".to_owned());
+        return Err("The production runner create path returned no failure.".to_owned());
     }
     let reservation_id = failure.reservation_id();
     let scope = failure.scope().clone();
@@ -267,16 +270,16 @@ async fn runner_create_terminal_reply_allows_one_live_pre_jit_claim() -> Result<
             crate::launch::bootstrap::BootstrapContainerRole::Runner,
         )
         .await
-        .map_err(|_| "The journal could not read the Runner create response".to_owned())?
-        .ok_or_else(|| "The journal did not retain the Runner create response".to_owned())?;
+        .map_err(|_| "The journal could not read the Runner create response.".to_owned())?
+        .ok_or_else(|| "The journal did not retain the Runner create response.".to_owned())?;
     assert_eq!(receipt.status_code(), 409);
     assert_eq!(receipt.client_api_version(), (1, 53));
 
     let claim = scope
         .claim_pre_jit_cleanup(reservation_id)
         .await
-        .map_err(|_| "The journal could not claim pre-JIT cleanup".to_owned())?
-        .ok_or_else(|| "The terminal Runner create did not permit cleanup".to_owned())?;
+        .map_err(|_| "The journal could not claim pre-JIT cleanup.".to_owned())?
+        .ok_or_else(|| "The terminal Runner create did not permit cleanup.".to_owned())?;
     assert_eq!(claim.operation_id(), receipt.operation_id());
     assert_eq!(claim.engine_id(), receipt.engine_id());
     assert!(claim.lease_until() > 0);
@@ -284,13 +287,13 @@ async fn runner_create_terminal_reply_allows_one_live_pre_jit_claim() -> Result<
         scope
             .validate_pre_jit_cleanup_claim(&claim)
             .await
-            .map_err(|_| "The journal could not validate its cleanup claim".to_owned())?
+            .map_err(|_| "The journal could not validate its cleanup claim.".to_owned())?
     );
     assert!(
         scope
             .claim_pre_jit_cleanup(reservation_id)
             .await
-            .map_err(|_| "The journal could not check a competing cleanup claim".to_owned())?
+            .map_err(|_| "The journal could not check a competing cleanup claim.".to_owned())?
             .is_none()
     );
 
@@ -308,7 +311,7 @@ async fn runner_create_terminal_reply_allows_one_live_pre_jit_claim() -> Result<
         || !captured.jit_input.is_empty()
     {
         return Err(format!(
-            "The test server did not record one Runner 409 with JIT withheld: error={:?}, creates={:?}, jit_bytes={}",
+            "The test server did not record one Runner 409 while JIT configuration was withheld. Error: {:?}; create requests: {:?}; JIT bytes: {}.",
             captured.server_error,
             captured
                 .requests
@@ -332,8 +335,8 @@ async fn claimed_pre_jit_recovery_accepts_progress_without_changing_reservation_
     let claim = scope
         .claim_pre_jit_cleanup(reservation_id)
         .await
-        .map_err(|_| "The journal could not claim pre-JIT cleanup".to_owned())?
-        .ok_or_else(|| "The terminal Runner create did not permit cleanup".to_owned())?;
+        .map_err(|_| "The journal could not claim pre-JIT cleanup.".to_owned())?
+        .ok_or_else(|| "The terminal Runner create did not permit cleanup.".to_owned())?;
 
     crate::journal::connection::storage::in_transaction(scope.journal_ref(), async |connection| {
         let updated = connection
@@ -349,14 +352,14 @@ async fn claimed_pre_jit_recovery_accepts_progress_without_changing_reservation_
         Ok(())
     })
     .await
-    .map_err(|_| "The active claim did not accept phase-compatible source state".to_owned())?;
+    .map_err(|_| "The active claim did not accept the source state for its phase.".to_owned())?;
 
     if !scope
         .validate_pre_jit_cleanup_claim(&claim)
         .await
-        .map_err(|_| "The journal could not validate its progressed cleanup claim".to_owned())?
+        .map_err(|_| "The journal could not validate its progressed cleanup claim.".to_owned())?
     {
-        return Err("The active claim became invalid after cleanup progress".to_owned());
+        return Err("The active claim became invalid after cleanup progress.".to_owned());
     }
     crate::journal::connection::storage::in_transaction(scope.journal_ref(), async |connection| {
         for phase in ["initializer_absent", "storage_absent", "network_absent", "settled"] {
@@ -374,21 +377,21 @@ async fn claimed_pre_jit_recovery_accepts_progress_without_changing_reservation_
         Ok(())
     })
     .await
-    .map_err(|_| "The progress record rejected its ordered completion stages".to_owned())?;
+    .map_err(|_| "The progress record rejected its ordered completion stages.".to_owned())?;
     if scope
         .validate_pre_jit_cleanup_claim(&claim)
         .await
-        .map_err(|_| "The journal could not validate a terminal cleanup claim".to_owned())?
+        .map_err(|_| "The journal could not validate a terminal cleanup claim.".to_owned())?
     {
-        return Err("The settled claim remained available for more effects".to_owned());
+        return Err("The settled claim remained available for more effects.".to_owned());
     }
     if scope
         .claim_pre_jit_cleanup(reservation_id)
         .await
-        .map_err(|_| "The journal could not reject a settled cleanup claim".to_owned())?
+        .map_err(|_| "The journal could not reject a settled cleanup claim.".to_owned())?
         .is_some()
     {
-        return Err("The journal reissued a settled cleanup claim".to_owned());
+        return Err("The journal reissued a settled cleanup claim.".to_owned());
     }
     let _captured = failure.finish().await?;
     Ok(())

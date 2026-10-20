@@ -115,18 +115,18 @@ impl RunnerCreateFailure {
     pub(crate) async fn finish_and_assert_capacity_probe(self) -> Result<(), String> {
         let captured = self.finish().await?;
         if let Some(error) = captured.server_error {
-            return Err(format!("The Docker fixture failed: {error}"));
+            return Err(format!("The Docker fixture failed. Error: {error}."));
         }
         let probe = captured
             .requests
             .iter()
             .find(|request| is_probe_create(request))
-            .ok_or_else(|| "The Capacity probe create request is absent.".to_owned())?;
+            .ok_or_else(|| "The capacity probe create request is missing.".to_owned())?;
         let response: serde_json::Value =
             serde_json::from_slice(&probe.response_body).map_err(|error| error.to_string())?;
         let id = response["Id"]
             .as_str()
-            .ok_or_else(|| "The Capacity probe response has no container ID.".to_owned())?;
+            .ok_or_else(|| "The capacity probe response has no container ID.".to_owned())?;
         let logs: Vec<_> = captured
             .requests
             .iter()
@@ -149,7 +149,7 @@ impl RunnerCreateFailure {
                     .map_err(|error| error.to_string())?
         {
             return Err(
-                "The Capacity probe must read one canonical record and remove its container."
+                "The test must read one canonical record from the capacity probe and remove its container."
                     .to_owned(),
             );
         }

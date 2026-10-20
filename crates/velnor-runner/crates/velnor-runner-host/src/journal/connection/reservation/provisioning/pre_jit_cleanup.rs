@@ -23,7 +23,7 @@ use super::{HoldContext, hold_context};
 
 const CLAIM_SECONDS: i64 = 45;
 
-/// This lease permits one cleanup after Docker returns a final container-create response before JIT configuration delivery.
+/// This lease allows one cleanup after Docker returns a final response to a container create request and before JIT configuration delivery.
 #[must_use]
 #[derive(Clone)]
 pub(crate) struct PreJitCleanupClaim {
@@ -37,7 +37,7 @@ pub(crate) struct PreJitCleanupClaim {
     lease_until: i64,
 }
 
-/// This capacity probe belongs to the exact pre-JIT cleanup claim.
+/// This record links the capacity probe to one pre-JIT cleanup claim.
 #[must_use]
 pub(crate) struct PreJitCapacityProbeClaim {
     cleanup: PreJitCleanupClaim,
@@ -160,7 +160,7 @@ impl ConnectionJournal {
             .await
     }
 
-    /// Lease exact pre-JIT cleanup only after a direct terminal Docker response.
+    /// This function leases pre-JIT cleanup only after it receives a final Docker response.
     pub(crate) async fn claim_pre_jit_cleanup(
         &self,
         reservation_id: i64,
@@ -235,7 +235,7 @@ impl ConnectionJournal {
         .await
     }
 
-    /// Make sure the lease and original object snapshot remain current before effects.
+    /// Check that the lease and original object snapshot are current before cleanup starts.
     pub(crate) async fn validate_pre_jit_cleanup_claim(
         &self,
         claim: &PreJitCleanupClaim,
