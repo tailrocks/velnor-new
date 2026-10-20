@@ -32,15 +32,24 @@ impl PreparationFailure {
 
 #[tokio::test]
 async fn production_claim_and_inspect_failures_stop_later_storage_creates() -> Result<(), String> {
-    assert_storage_prefix_stops_at_each_role(FailurePoint::JournalClaim).await?;
-    assert_storage_prefix_stops_at_each_role(FailurePoint::DockerInspect).await?;
-    assert_storage_prefix_stops_at_each_role(FailurePoint::ExistingOwnedVolume).await?;
-    assert_http_inspection_statuses_stop_first_storage_create().await
+    Box::pin(assert_storage_prefix_stops_at_each_role(
+        FailurePoint::JournalClaim,
+    ))
+    .await?;
+    Box::pin(assert_storage_prefix_stops_at_each_role(
+        FailurePoint::DockerInspect,
+    ))
+    .await?;
+    Box::pin(assert_storage_prefix_stops_at_each_role(
+        FailurePoint::ExistingOwnedVolume,
+    ))
+    .await?;
+    Box::pin(assert_http_inspection_statuses_stop_first_storage_create()).await
 }
 
 async fn assert_storage_prefix_stops_at_each_role(point: FailurePoint) -> Result<(), String> {
     for (role, expected_prefix) in storage_role_prefixes() {
-        assert_failed_storage_role(role, expected_prefix, point).await?;
+        Box::pin(assert_failed_storage_role(role, expected_prefix, point)).await?;
     }
     Ok(())
 }
@@ -74,7 +83,7 @@ async fn assert_failed_storage_role(
     expected_prefix: Vec<&str>,
     point: FailurePoint,
 ) -> Result<(), String> {
-    let failure = preparation_failure_for(role, point).await?;
+    let failure = Box::pin(preparation_failure_for(role, point)).await?;
     assert_failure_error(&failure, role, point)?;
     let expected_volume = failure.expected_volume.clone();
     let captured = failure.finish().await?;
@@ -139,7 +148,7 @@ async fn preparation_failure_for(
     };
     Ok(PreparationFailure {
         api,
-        error: error.to_string(),
+        error: error.clone(),
         ownership_error,
         expected_volume,
     })
@@ -186,10 +195,10 @@ async fn inject_storage_failure(
 
 async fn assert_http_inspection_statuses_stop_first_storage_create() -> Result<(), String> {
     for status in [401, 403, 500, 503] {
-        let failure = preparation_failure_for(
+        let failure = Box::pin(preparation_failure_for(
             StorageRole::EngineMetadata,
             FailurePoint::InspectStatus(status),
-        )
+        ))
         .await?;
         let expected_volume = failure
             .expected_volume
