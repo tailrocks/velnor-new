@@ -185,6 +185,7 @@ qualification use fixtures.
 ## CLI
 
 `velnor-actions deps lock` resolves every declaration to a commit and
-SHA-256 and writes `.velnor/deps.lock`; `velnor-actions deps fetch` is the
-fetch operation the generated step runs. See the
+SHA-256 and writes `.velnor/deps.lock`. The fetch is the internal operation
+`private-fetch-v1` that the generated step runs (the design's `deps fetch`); it
+is deliberately not a public subcommand. See the
 [CLI contract](cli-contract.md).
