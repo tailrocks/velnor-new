@@ -3,8 +3,8 @@ use std::{error::Error, fs};
 use super::*;
 
 #[test]
-fn runtime_fingerprint_is_stable_and_binds_image_os_and_absolute_roots() -> Result<(), Box<dyn Error>>
-{
+fn runtime_fingerprint_is_stable_and_binds_image_os_and_absolute_roots()
+-> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new()?;
     let hosted = payload("ubuntu-26.04");
     let (output, baseline) = run_and_read(&hosted, &fixture, &[]);
