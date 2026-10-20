@@ -33,6 +33,7 @@ enum SuiteName {
     Rust,
     Tofu,
     Bun,
+    Gradle,
     WorkflowRenderer,
     Actionlint,
     ArchiveGuard,
@@ -50,6 +51,7 @@ impl SuiteName {
             Self::Rust => "velnor-actions-rust",
             Self::Tofu => "velnor-actions-tofu",
             Self::Bun => "velnor-actions-bun",
+            Self::Gradle => "velnor-actions-gradle",
             Self::WorkflowRenderer => "velnor-actions-workflow-renderer",
             Self::Actionlint => "velnor-actions-actionlint",
             Self::ArchiveGuard => "velnor-archive-guard",
@@ -89,7 +91,7 @@ const GENERATE_VALIDATOR_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators];
 const OPENTOFU_TOOLS: &[SuiteTool] = &[SuiteTool::OpenTofuExecution];
 
 /// Single source of truth for typed suite identities and owned tool needs.
-const SUITE_TOOL_OWNERS: [CrateSuite; 11] = [
+const SUITE_TOOL_OWNERS: [CrateSuite; 12] = [
     CrateSuite {
         name: SuiteName::Orchestrator,
         tools: GENERATE_VALIDATOR_TOOLS,
@@ -116,6 +118,10 @@ const SUITE_TOOL_OWNERS: [CrateSuite; 11] = [
     },
     CrateSuite {
         name: SuiteName::Bun,
+        tools: NO_SUITE_TOOLS,
+    },
+    CrateSuite {
+        name: SuiteName::Gradle,
         tools: NO_SUITE_TOOLS,
     },
     CrateSuite {
