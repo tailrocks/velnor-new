@@ -109,6 +109,19 @@ official release:
    byte-identical to the published release and that `commit` equals
    the release tag's commit.
 
+Re-dispatch on an unchanged version. The generator tag `vX.Y.Z` is fixed per
+version and keeps the commit it was published from. When the release workflow
+runs on a later commit of the default branch and that release already exists,
+the prepare job validates the release against its own recorded commit
+(immutable, published, exact asset set, tag resolving to that commit, release
+signature, and the recorded commit being an ancestor of the dispatched
+source), then reports `action=complete` as a no-op with a workflow warning and
+step summary stating that the dispatched source was NOT released. It never
+rebuilds, never re-points the tag, and never fails the run; releasing changed
+generator source requires bumping the version. A recorded commit that is not
+an ancestor of the source, or a release that fails any check above, still
+fails the job.
+
 Residual risks, explicitly scoped as future work (not silently
 dropped). Same-version seed rollback: URL binding proves an artifact
 URL names this version's official asset, but a committed seed

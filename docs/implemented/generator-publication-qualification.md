@@ -280,3 +280,23 @@ asset download URLs use the temporary
 [`untagged-6899c9b4aa4e941dadba` draft](https://github.com/tailrocks/velnor-new/releases/tag/untagged-6899c9b4aa4e941dadba)
 path. The `v0.1.6` tag and release lookups returned 404; PR #122 is an open
 version-preparation change, not an official release or qualification result.
+
+## Re-dispatch on an already published version
+
+Run 39429134110 (dispatched on 5eaabb91e) failed `Prepare velnor-actions generator
+release` with "existing release metadata, immutability, or asset set does not
+match" because v0.1.29 was published and attested from e7b2f088: the prepare
+job required the fixed version tag's `target_commitish`, tag object, and
+attestation digests to equal the later dispatched commit. The fixed version tag
+is immutable, so any later commit with an unchanged version could never match.
+Prepare now compares the release with its own recorded commit and reports a
+warned no-op (`action=complete`) when that commit is an ancestor of the source.
+Regression test:
+
+```sh
+cargo nextest run --locked -p velnor-actions-workflow-renderer -E 'test(generator_prepare_reports_published_version_at_earlier_commit_as_noop)'
+```
+
+Decision (adopted per the split brief; owner may revisit): a no-op with a loud
+warning rather than a failure, because tags are immutable and the contract
+forbids re-publishing; a new patch version is the only way to release new source.
