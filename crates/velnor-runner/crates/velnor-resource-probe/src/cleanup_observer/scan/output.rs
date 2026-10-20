@@ -3,6 +3,7 @@ use crate::cleanup_observation::GuestDockerRootIdentity;
 use super::super::{
     CleanupDockerRootIdentity, CleanupObserverRecord, CleanupObserverRequest, NamespaceIdentity,
 };
+use crate::cleanup_observer_wire::docker_root_matches;
 
 pub(super) struct ScanEvidence {
     pub guest_boot_id: Option<String>,
@@ -78,15 +79,7 @@ pub(super) fn guest_root_matches(
     guest: &GuestDockerRootIdentity,
     binding: &CleanupDockerRootIdentity,
 ) -> bool {
-    guest.target == binding.target
-        && guest.mount_id == binding.mount_id
-        && guest.statx_mount_id == binding.statx_mount_id
-        && guest.mount_root == binding.mount_root
-        && guest.mount_device == binding.mount_device
-        && guest.statx_device == binding.statx_device
-        && guest.filesystem_type_magic == binding.filesystem_type_magic
-        && guest.filesystem_id == binding.filesystem_id
-        && guest.read_only == binding.read_only
+    docker_root_matches(binding, &wire_root(guest.clone()))
 }
 
 fn absence_list<T>(complete: bool, values: Vec<T>) -> Vec<T> {

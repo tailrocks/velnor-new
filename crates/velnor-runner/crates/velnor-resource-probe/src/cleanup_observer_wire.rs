@@ -205,6 +205,33 @@ pub struct CleanupDockerRootIdentity {
     pub read_only: bool,
 }
 
+/// Compare Docker root records from two mount namespaces.
+///
+/// Check that each record's mount ID matches its statx mount ID.
+/// Check that each record's mount device pair matches its statx device pair.
+/// Then compare the target, mount root, file system type, file system ID, mount device pair, and read-only state.
+#[must_use]
+pub fn docker_root_matches(
+    expected: &CleanupDockerRootIdentity,
+    observed: &CleanupDockerRootIdentity,
+) -> bool {
+    valid_local_docker_root(expected)
+        && valid_local_docker_root(observed)
+        && expected.target == observed.target
+        && expected.mount_root == observed.mount_root
+        && expected.mount_device == observed.mount_device
+        && expected.filesystem_type_magic == observed.filesystem_type_magic
+        && expected.filesystem_id == observed.filesystem_id
+        && expected.read_only == observed.read_only
+}
+
+fn valid_local_docker_root(root: &CleanupDockerRootIdentity) -> bool {
+    root.mount_id != 0
+        && root.mount_id == root.statx_mount_id
+        && root.mount_device == root.statx_device
+        && root.filesystem_id != 0
+}
+
 /// Data from one read-only cleanup inventory.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -257,7 +284,7 @@ pub struct NamespaceIdentity {
 mod tests {
     use super::{
         CleanupDockerRootIdentity, CleanupObserverBinding, CleanupVolume, ProcessIdentity,
-        validate_binding,
+        docker_root_matches, validate_binding,
     };
 
     fn process(pid: u32, inode: u64) -> ProcessIdentity {
@@ -340,5 +367,25 @@ mod tests {
         value = binding();
         value.runner.pid = value.daemon.pid;
         assert_eq!(validate_binding(&value), Err("cleanup_binding_shape"));
+    }
+
+    #[test]
+    fn compares_stable_root_and_checks_local_identity_pairs() {
+        let expected = binding().docker_root;
+        let mut observed = expected.clone();
+        observed.mount_id += 20;
+        observed.statx_mount_id += 20;
+        assert!(docker_root_matches(&expected, &observed));
+
+        observed.filesystem_id += 1;
+        assert!(!docker_root_matches(&expected, &observed));
+
+        observed = expected.clone();
+        observed.statx_mount_id += 1;
+        assert!(!docker_root_matches(&expected, &observed));
+
+        observed = expected.clone();
+        observed.statx_device[1] += 1;
+        assert!(!docker_root_matches(&expected, &observed));
     }
 }

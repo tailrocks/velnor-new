@@ -42,3 +42,9 @@
 | Task binding digest | A digest that identifies a generated task command with project tool references. |
 | Catalog tool | A tool that Velnor can set in generated workflows. |
 | Mount handoff | The transfer of volume and directory identity records from the storage initializer to the controller. |
+| Docker root | The directory that the selected Docker engine uses to store Docker data. |
+| Mount namespace | A Linux group of mount records with one view of mounted file systems. |
+| Mount ID | The Linux identifier for one mount in a mount namespace. |
+| statx | The Linux operation that reads file identity and mount data. |
+| File system ID | The number that identifies a file system. |
+| Device pair | The Linux major and minor device numbers. |

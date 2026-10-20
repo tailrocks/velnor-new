@@ -58,3 +58,29 @@ fn partial_inventory_never_lists_resources_as_absent() {
     );
     assert!(record.absent_cgroup_paths.is_none());
 }
+
+#[test]
+fn root_match_uses_stable_identity_across_mount_namespaces() {
+    let request = super::super::tests::request();
+    let binding = &request.binding.docker_root;
+    let guest = crate::cleanup_observation::GuestDockerRootIdentity {
+        target: binding.target.clone(),
+        mount_id: binding.mount_id + 20,
+        statx_mount_id: binding.statx_mount_id + 20,
+        mount_root: binding.mount_root.clone(),
+        mount_device: binding.mount_device,
+        statx_device: binding.statx_device,
+        filesystem_type_magic: binding.filesystem_type_magic,
+        filesystem_id: binding.filesystem_id,
+        read_only: binding.read_only,
+    };
+    assert!(super::output::guest_root_matches(&guest, binding));
+
+    let mut foreign = guest.clone();
+    foreign.filesystem_id += 1;
+    assert!(!super::output::guest_root_matches(&foreign, binding));
+
+    let mut inconsistent = guest;
+    inconsistent.statx_mount_id += 1;
+    assert!(!super::output::guest_root_matches(&inconsistent, binding));
+}
