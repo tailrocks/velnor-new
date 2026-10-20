@@ -10,6 +10,7 @@ use velnor_actions_rust::{CompileDriver, TestRunner};
 /// Identity extension for one Nextest package task.
 fn extension() -> RustTaskIdentityExtension {
     RustTaskIdentityExtension {
+        all_features: false,
         package_id: "demo 0.1.0".to_owned(),
         workspace_id: "workspace".to_owned(),
         profile: "default".to_owned(),
@@ -129,6 +130,7 @@ fn constructor_inputs<'a>(
     declared: &'a [String],
 ) -> ExtensionInputs<'a> {
     ExtensionInputs {
+        all_features: false,
         package_id: "demo 0.1.0",
         workspace_id: "workspace",
         profile: "default",

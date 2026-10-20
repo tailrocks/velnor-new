@@ -43,9 +43,15 @@ impl PlanRustNeed {
 }
 
 /// Named planner tool needs; named fields prevent resolver/tool roles swapping.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent opt-in planner tool signals"
+)]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct PlanJobToolNeeds {
     pub(crate) rust: PlanRustNeed,
+    /// A task runs `--all-features`; the source probe must resolve them.
+    pub(crate) all_features: bool,
     pub(crate) nextest: bool,
     pub(crate) opentofu: bool,
     pub(crate) gh: bool,
@@ -96,7 +102,7 @@ pub(crate) fn plan_job(
     let cached =
         crate::workflow_jobs_cache::cache_steps_for_plan(catalog, fetch_roots, tofu_roots)?;
     steps.extend(cached.restore);
-    let mut source_steps = fetch_steps_for_plan(catalog, fetch_roots)?;
+    let mut source_steps = fetch_steps_for_plan(catalog, fetch_roots, needs.all_features)?;
     crate::workflow_jobs_cache::mark_writer_gate(&mut source_steps);
     steps.extend(source_steps);
     steps.extend(acquire);

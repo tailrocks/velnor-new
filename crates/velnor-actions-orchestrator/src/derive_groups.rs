@@ -10,6 +10,8 @@
 //! otherwise healthy crate, so fallback keeps the cell with a recorded
 //! [`FeatureFallback`] rendered in the plan. A requested feature no
 //! workspace crate declares is a typo and fails closed, naming the crate.
+//! An `all_features` configuration skips the intersection: each crate
+//! records its complete declared feature set and runs `--all-features`.
 
 use std::collections::BTreeSet;
 
@@ -96,6 +98,11 @@ pub(crate) fn derive_for_config(
 ) -> Result<(Vec<TaskGroup>, Vec<FeatureFallback>), OrchestratorError> {
     let record = &workspace.record;
     let profile = &workspace.profile;
+    let clippy_all_features = config
+        .stacks
+        .rust
+        .as_ref()
+        .is_some_and(|rust| rust.clippy_all_features);
     let mut groups = Vec::new();
     let mut fallbacks = Vec::new();
     for package in &record.packages {
@@ -110,14 +117,19 @@ pub(crate) fn derive_for_config(
         {
             continue;
         }
-        let (features, fallback) =
-            resolve_features(package, &rust_config.features, union, &rust_config.name)?;
+        let (features, fallback) = if rust_config.all_features {
+            (package.features.clone(), None)
+        } else {
+            resolve_features(package, &rust_config.features, union, &rust_config.name)?
+        };
         fallbacks.extend(fallback);
         let inputs = DeriveInputs {
             package,
             profile,
             configuration: &rust_config.name,
             features: &features,
+            all_features: rust_config.all_features,
+            clippy_all_features,
             target: &rust_config.target,
             explicit_fmt,
         };
@@ -317,83 +329,5 @@ fn manifest_for_key(key: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use velnor_actions_mise::ArchivePlan;
-    use velnor_actions_rust::{
-        CompileDriver, NextestProfile, ProfileSource, RustExecutionProfile, TaskGroup, TaskKind,
-        TestRunner,
-    };
-
-    use super::plan_shard_archive;
-
-    /// Minimal group with driver, target, and package selectors.
-    fn group(driver: CompileDriver, target: &str) -> TaskGroup {
-        TaskGroup {
-            task_id: "stack/rust/root/nextest/default".to_owned(),
-            package_id: "demo".to_owned(),
-            package_name: "demo".to_owned(),
-            manifest_key: "root".to_owned(),
-            kind: TaskKind::Nextest,
-            configuration: "default".to_owned(),
-            features: Vec::new(),
-            target: target.to_owned(),
-            gated_by: Vec::new(),
-            depends_on: Vec::new(),
-            target_flags: Vec::new(),
-            no_test_targets: false,
-            package_arg: None,
-            compile_driver: driver,
-            test_runner: TestRunner::CargoNextest,
-            declared_inputs: Vec::new(),
-            undeclared_reads: false,
-            uses_network: false,
-            uses_clock: false,
-            uses_random: false,
-            run_ignored: None,
-            nextest_profile: NextestProfile::Default,
-        }
-    }
-
-    /// Detected Cargo/Nextest profile selecting the default Nextest profile.
-    fn profile() -> RustExecutionProfile {
-        RustExecutionProfile {
-            compile_driver: CompileDriver::Cargo,
-            test_runner: TestRunner::CargoNextest,
-            evidence: Vec::new(),
-            driver_source: ProfileSource::Detected,
-            runner_source: ProfileSource::Detected,
-            nextest_profile: NextestProfile::Default,
-            nextest_config: None,
-            run_ignored: None,
-        }
-    }
-
-    #[test]
-    fn archive_planning_errors_instead_of_skipping() {
-        let profile = profile();
-        let mut archives = ArchivePlan::new();
-        let err = plan_shard_archive(
-            &group(CompileDriver::Cargo, "${{ x }}"),
-            &profile,
-            &mut archives,
-        )
-        .expect_err("bad target fails");
-        assert!(err.to_string().contains("archive_plan"), "{err}");
-        assert!(archives.is_empty());
-        plan_shard_archive(
-            &group(CompileDriver::Cargo, "host"),
-            &profile,
-            &mut archives,
-        )
-        .expect("planned");
-        assert_eq!(archives.len(), 1);
-        // Re-planning the same configuration dedupes without error.
-        plan_shard_archive(
-            &group(CompileDriver::Cargo, "host"),
-            &profile,
-            &mut archives,
-        )
-        .expect("dedupe");
-        assert_eq!(archives.len(), 1);
-    }
-}
+#[path = "derive_groups_shard_tests.rs"]
+mod tests;

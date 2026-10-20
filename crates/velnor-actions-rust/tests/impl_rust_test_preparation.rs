@@ -5,6 +5,7 @@ use velnor_actions_rust::{CompileDriver, NextestProfile, TestRunner};
 
 fn group(kind: TaskKind) -> TaskGroup {
     TaskGroup {
+        all_features: false,
         task_id: "t".to_owned(),
         package_id: "p".to_owned(),
         package_name: "demo".to_owned(),
