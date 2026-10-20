@@ -103,6 +103,31 @@ fn crate_timeout_defaults_to_five_and_follows_explicit_values() -> Result<(), Bo
     Ok(())
 }
 
+#[test]
+fn private_sources_parse_from_toml_and_reject_unknown_keys() -> Result<(), Box<dyn Error>> {
+    let header = "schema = 1\n[workflow]\nname = \"CI\"\n[private_sources]\nowner = \"ChainArgos\"\napp_id_variable = \"VELNOR_DEPS_APP_ID\"\napp_private_key_secret = \"VELNOR_DEPS_APP_PRIVATE_KEY\"\nnpm_scopes = [\"@chainargos\"]\n";
+    let config = parse_config(&format!(
+        "{header}[[private_sources.release_assets]]\nid = \"explorer-schema\"\nrepository = \"ChainArgos/blockchain-explorer\"\ntag = \"explorer-schema-v1.4.0\"\nasset = \"explorer-schema-1.4.0.tar.gz\"\nextract_to = \"explorer-schema\"\n"
+    ))?;
+    let private = config.private_sources.expect("declared");
+    assert_eq!(private.owner, "ChainArgos");
+    assert_eq!(private.release_assets.len(), 1);
+    assert!(
+        parse_config("schema = 1\n[workflow]\nname = \"CI\"\n")?
+            .private_sources
+            .is_none()
+    );
+    let unknown =
+        parse_config(&format!("{header}token = \"x\"\n")).expect_err("unknown key must fail");
+    assert!(unknown.to_string().contains("token"), "{unknown}");
+    let escape = parse_config(&format!(
+        "{header}[[private_sources.release_assets]]\nid = \"a\"\nrepository = \"ChainArgos/x\"\ntag = \"t\"\nasset = \"a.tgz\"\nextract_to = \"../up\"\n"
+    ))
+    .expect_err("escaping extract_to must fail");
+    assert!(escape.to_string().contains("extract_to"), "{escape}");
+    Ok(())
+}
+
 fn mise_quiet_source(mise_quiet: Option<&str>) -> String {
     let value = mise_quiet.map_or_else(String::new, |value| format!("mise_quiet = {value}\n"));
     format!("schema = 1\n[workflow]\nname = \"CI\"\n{value}")

@@ -129,6 +129,9 @@ struct PartialConfig {
     /// Optional downstream package promotion.
     #[serde(default)]
     distribution: velnor_actions_contract::config::DistributionConfig,
+    /// Private cross-repository dependency credentials (HD-7).
+    #[serde(default)]
+    private_sources: Option<velnor_actions_contract::config::PrivateSourcesConfig>,
     /// Container images built on every run and published from the default branch.
     #[serde(default)]
     images: Vec<velnor_actions_contract::config::ImageConfig>,
@@ -240,6 +243,7 @@ impl PartialConfig {
             checks: self.checks,
             qualified_tools: self.qualified_tools,
             distribution: self.distribution,
+            private_sources: self.private_sources,
             images: self.images,
             publish: self.publish,
             tools: self.tools,
