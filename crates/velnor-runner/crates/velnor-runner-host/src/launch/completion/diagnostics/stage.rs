@@ -72,7 +72,7 @@ pub(super) fn write_request(
             | OFlags::NOFOLLOW
             | OFlags::NONBLOCK
             | OFlags::CLOEXEC,
-        Mode::from_raw_mode(FILE_MODE),
+        expected_mode(FILE_MODE),
     ) {
         Ok(file) => file,
         Err(error) if error == rustix::io::Errno::EXIST => {
@@ -98,7 +98,7 @@ pub(super) fn open_private_child(
     cancelled: &AtomicBool,
 ) -> Result<OwnedFd, HostError> {
     check_capture_state(started, deadline, cancelled)?;
-    match mkdirat(parent, name, Mode::from_raw_mode(DIRECTORY_MODE)) {
+    match mkdirat(parent, name, expected_mode(DIRECTORY_MODE)) {
         Ok(()) => {
             check_capture_state(started, deadline, cancelled)?;
             fsync(parent).map_err(|_| HostError::Path)?;
@@ -148,7 +148,8 @@ pub(super) fn validate_private_directory(directory: &OwnedFd) -> Result<(), Host
     let metadata = fstat(directory).map_err(|_| HostError::Path)?;
     if FileType::from_raw_mode(metadata.st_mode) != FileType::Directory
         || metadata.st_uid != rustix::process::geteuid().as_raw()
-        || metadata.st_mode & 0o777 != DIRECTORY_MODE
+        || Mode::from_raw_mode(metadata.st_mode) & Mode::from_raw_mode(0o777)
+            != expected_mode(DIRECTORY_MODE)
     {
         return Err(HostError::Path);
     }
@@ -175,7 +176,8 @@ fn verify_existing(
     let stat = fstat(&file).map_err(|_| HostError::Path)?;
     if FileType::from_raw_mode(stat.st_mode) != FileType::RegularFile
         || stat.st_uid != rustix::process::geteuid().as_raw()
-        || stat.st_mode & 0o777 != FILE_MODE
+        || Mode::from_raw_mode(stat.st_mode) & Mode::from_raw_mode(0o777)
+            != expected_mode(FILE_MODE)
         || stat.st_size < 0
         || usize::try_from(stat.st_size).map_err(|_| HostError::Path)? > MAX_RECORD_BYTES
     {
@@ -202,4 +204,14 @@ fn verify_existing(
     check_capture_state(started, deadline, cancelled)?;
     fsync(directory).map_err(|_| HostError::Path)?;
     check_capture_state(started, deadline, cancelled)
+}
+
+#[cfg(target_os = "linux")]
+fn expected_mode(mode: u16) -> Mode {
+    Mode::from_raw_mode(u32::from(mode))
+}
+
+#[cfg(not(target_os = "linux"))]
+fn expected_mode(mode: u16) -> Mode {
+    Mode::from_raw_mode(mode)
 }
