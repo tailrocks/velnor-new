@@ -194,29 +194,59 @@ that name `..`. Such a member is always selected until a
 statement that its declared inputs list everything it reads outside its
 directory.
 
-## Playwright browsers (PW, not yet generated)
+## Playwright browsers (PW)
 
-`[stacks.bun.members."<name>"] browsers = [...]` is accepted and validated, but
-no browser provisioning step is generated yet; a member that needs one fails at
-run time. Design decisions already taken:
+`[stacks.bun.members."<name>"] browsers = ["chromium", ...]` installs Playwright's
+own browser build for the Playwright version `bun.lock` resolves, from a
+hash-pinned lock. Decisions:
 
 - Never `playwright install --with-deps` and never repository-resolved code with
   `sudo`; system dependencies come from the hosted image.
-- The Playwright version is the one `bun.lock` resolves for `@playwright/test`
-  (`Member.playwright`); its `playwright-core` tarball integrity in the lock is
-  the trust anchor for the browser revision table (`browsers.json`).
-- Archives come from `cdn.playwright.dev` and are verified against SHA-256 values
-  pinned in a reviewable Velnor lock (written by a CLI subcommand, like
-  `deps.lock`); upstream publishes no checksums, so the first computation is
-  trust-on-first-use, and every later run verifies it. The install lands in the
-  `playwright-browsers` cache family (path
-  `$RUNNER_TEMP/velnor/ms-playwright`, trusted writers only).
+- `velnor-actions playwright lock` (operator-run, like `deps lock`) writes
+  `.velnor/playwright.lock`. For each Playwright version it downloads the
+  `playwright-core` tarball from the npm registry, verifies it against the
+  integrity `bun.lock` records (`playwright_core_integrity_mismatch`), and runs
+  its `install --dry-run <browser>` under the project Bun with
+  `PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu26.04-x64` to read each archive's
+  directory and URL. That keeps the URL table Playwright's own and runs only
+  integrity-verified code. Every archive is downloaded and hashed (SHA-256,
+  size); upstream publishes no checksums, so the first computation is
+  trust-on-first-use of the download host and every later run verifies it.
+  Entries record `core_integrity`, so a `bun.lock` bump without a re-lock fails.
+  Chromium pulls `chromium`, `chromium_headless_shell` and `ffmpeg`.
+- Generation requires, per member with browsers: a resolved Playwright
+  (`bun_playwright_missing:<member>`), the lock's `playwright-core` to be that
+  version (`bun_playwright_core_mismatch:<member>`), a lock file
+  (`playwright_lock_missing:<member>`) with an archive per browser
+  (`playwright_lock_missing:<version>:<browser>:<member>`) whose
+  `core_integrity` equals `bun.lock`'s (`playwright_lock_drift:<version>:<member>`).
+- The job step `Install Playwright browsers` is the internal operation
+  `playwright-browsers-install-v1` (role `PlaywrightInstall`, after the staged
+  helper). It carries the sorted `directory:sha256` pins literally, recomputes
+  them from the checked-out lock and `bun.lock`, and refuses on any difference
+  (`playwright_pin_drift`, `playwright_core_integrity_drift`). It downloads each
+  archive with `curl` (https only, 1 GiB cap), verifies SHA-256 and size before
+  extracting (`playwright_sha256_mismatch:<directory>` deletes the file and
+  installs nothing), extracts through the hardened archive reader (a browser
+  entry may be up to 1 GiB; Chrome is about 300 MB) into
+  `$RUNNER_TEMP/velnor/ms-playwright/<directory>`, and writes
+  `INSTALLATION_COMPLETE` and `velnor-sha256`. A directory that already carries
+  the pinned digest (a restored cache) is reused; any other is replaced. URLs
+  must be https on `cdn.playwright.dev` or
+  `playwright.download.prss.microsoft.com`. It holds no credential.
+- Script steps of such a member get `PLAYWRIGHT_BROWSERS_PATH`,
+  `PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu26.04-x64` and
+  `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`, so Playwright cannot fetch or choose
+  another build. Only `ubuntu-26.04` x86-64 is supported
+  (`unsupported_platform` in the lock).
+- The install lands in `$RUNNER_TEMP/velnor/ms-playwright`, the path of the
+  `playwright-browsers` [cache family](cache-families.md) (trusted writers only;
+  its restore and save steps are not generated yet).
 
 ## Remaining work
 
 - `bun-install` and `playwright-browsers` cache families (design 3.4): the Bun
-  package cache is currently cold in every job.
-- Playwright provisioning as above.
+  package cache and the browsers are currently cold in every job.
 - Members of an npm publication that depend on private npm scopes (the
   unprivileged build holds no registry credential).
 - Live qualification against the private fixture repositories: the lifecycle phase
@@ -230,3 +260,9 @@ run time. Design decisions already taken:
 - Renderer: job shape, permissions and role gates (`impl_renderer_bun.rs`).
 - Orchestrator: generated jobs, determinism, project-policy and lockfile
   failures (`impl_bun.rs`) and plan dispositions (`impl_bun_select.rs`).
+- Playwright: lock grammar and selection (`playwright_lock_tests.rs`), lock
+  resolution and install fixtures with real zip and tar.gz archives
+  (`playwright_lock_tests.rs`, `playwright_install_tests.rs` in the
+  orchestrator), job shape and failures (`impl_bun.rs`, `impl_renderer_bun.rs`).
+  A real-network run of `playwright lock` and the install against Playwright
+  1.64.1 (Chromium, 3 archives) was checked by hand on macOS.

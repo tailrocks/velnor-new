@@ -16,6 +16,7 @@ pub(super) fn uses_runner_temp_gate(op: InternalOp) -> bool {
             | InternalOp::PrivateFetch
             | InternalOp::BunRegistryInstall
             | InternalOp::GradleRun
+            | InternalOp::PlaywrightInstall
             | InternalOp::PrivateRevoke
             | InternalOp::PreseedManifest
             | InternalOp::RepoPolicy
@@ -38,6 +39,7 @@ pub(super) fn gate_runner_temp_operation(op: InternalOp) -> Option<InternalReque
         | InternalOp::PrivateRevoke
         | InternalOp::BunRegistryInstall
         | InternalOp::GradleRun
+        | InternalOp::PlaywrightInstall
         | InternalOp::PreseedManifest => {
             runner_velnor_dir().map(|path| InternalRequest { op, path })
         }

@@ -247,7 +247,12 @@ fn check_paths(job: &str, step: &Step, cache: &CacheUse<'_>) -> Result<(), Rende
                     path == CacheFamily::TofuProviders.spec().path_input(Some(slug))
                 })
         }
-        (Family::Runtime(_), None) => false,
+        // No generated step uses the Bun families yet (the contract and specs
+        // exist first); a hand-written step on one fails closed.
+        (Family::Runtime(_), None)
+        | (Family::Runtime(CacheFamily::BunInstall | CacheFamily::PlaywrightBrowsers), Some(_)) => {
+            false
+        }
     };
     if ok {
         Ok(())
@@ -289,6 +294,7 @@ fn check_save(job: &str, step: &Step, family: Family) -> Result<(), RenderError>
             condition == SOURCES_SAVE_CONDITION && job == crate::render::PLAN_JOB_ID
         }
         Family::Runtime(CacheFamily::TofuProviders) => condition == TOFU_PROVIDERS_SAVE_CONDITION,
+        Family::Runtime(CacheFamily::BunInstall | CacheFamily::PlaywrightBrowsers) => false,
         Family::Tools => [
             PullRequestCachePolicy::ReadOnly,
             PullRequestCachePolicy::SameRepositoryScoped,

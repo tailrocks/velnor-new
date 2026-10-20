@@ -93,7 +93,7 @@ jobs:
         run: "gh() {\n  (\n    mise --no-config --no-env --no-hooks exec gh@2.102.0 -- gh \"$@\" & _velnor_gh_pid=$!\n    ( sleep 60; kill -TERM \"$_velnor_gh_pid\" 2>/dev/null; sleep 5; kill -KILL \"$_velnor_gh_pid\" 2>/dev/null ) </dev/null >/dev/null 2>&1 & _velnor_gh_watch=$!\n    _velnor_gh_status=0\n    wait \"$_velnor_gh_pid\" || _velnor_gh_status=$?\n    kill -KILL \"$_velnor_gh_watch\" 2>/dev/null || true\n    wait \"$_velnor_gh_watch\" 2>/dev/null || true\n    exit \"$_velnor_gh_status\"\n  ) </dev/null\n}\nexport -f gh\nset -eu\ntest \"$GITHUB_REF\" = \"refs/heads/main\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(gh api repos/tailrocks/velnor-new/commits/main --jq .sha)\" = \"$GITHUB_SHA\""
   build-linux:
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       actions: write
       contents: read
@@ -171,7 +171,7 @@ jobs:
           artifact_id: ${{ needs.build-linux.outputs.artifact_id }}
   build-macos:
     runs-on: macos-15
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       actions: write
       contents: read
@@ -249,7 +249,7 @@ jobs:
           artifact_id: ${{ needs.build-macos.outputs.artifact_id }}
   build-macos-intel:
     runs-on: macos-15
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       actions: write
       contents: read

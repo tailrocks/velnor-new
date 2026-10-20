@@ -8,6 +8,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_bun::{Member, velnor_bunfig};
+use velnor_actions_contract::config::playwright_lock::PLAYWRIGHT_HOST_PLATFORM;
 use velnor_actions_contract::{Step, StepRole};
 use velnor_actions_mise::{
     PREPARE_PINNED_TOOLS_STEP, PinnedTool, PinnedToolExec, PreparePinnedTools, ToolCatalog,
@@ -17,6 +18,7 @@ use velnor_actions_workflow_renderer::verification_jobs::bun_registry_step;
 use velnor_actions_workflow_renderer::{ambient_shell_step, shell_step};
 
 use crate::OrchestratorError;
+use crate::config::playwright_install::BROWSERS_SUBDIR;
 use crate::utf8::{strings_of, strings_of_env};
 
 /// Cache directory of Bun's package cache (`BUN_INSTALL_CACHE_DIR`).
@@ -46,11 +48,14 @@ pub(crate) struct MemberInputs<'a> {
     /// Mint, fetch and revoke steps for pinned private release assets (HD-7);
     /// empty when the member consumes none. They run before every other step.
     pub(crate) private: &'a [Step],
+    /// Hash-verified Playwright browser install, when the member declares browsers.
+    pub(crate) playwright: Option<&'a Step>,
 }
 
 /// Every step after checkout, in execution order.
 pub(crate) fn member_steps(input: &MemberInputs<'_>) -> Result<Vec<Step>, OrchestratorError> {
-    let staged = !input.scopes.is_empty() || !input.private.is_empty();
+    let staged =
+        !input.scopes.is_empty() || !input.private.is_empty() || input.playwright.is_some();
     let mut steps = Vec::new();
     if staged {
         steps.extend(input.acquire.cloned());
@@ -68,6 +73,7 @@ pub(crate) fn member_steps(input: &MemberInputs<'_>) -> Result<Vec<Step>, Orches
         )?);
         steps.push(lifecycle_step(input)?);
     }
+    steps.extend(input.playwright.cloned());
     for script in input.scripts {
         let mut step = script_step(input, script)?;
         step.parallel = true;
@@ -204,6 +210,28 @@ fn lifecycle_step(input: &MemberInputs<'_>) -> Result<Step, OrchestratorError> {
     )?)
 }
 
+/// Environment that points Playwright at the Velnor-installed browsers only.
+fn browser_env(input: &MemberInputs<'_>) -> Result<BTreeMap<String, String>, OrchestratorError> {
+    let mut env = step_env(input.catalog)?;
+    if input.playwright.is_some() {
+        env.extend([
+            (
+                "PLAYWRIGHT_BROWSERS_PATH".to_owned(),
+                format!("${{{{ runner.temp }}}}/{BROWSERS_SUBDIR}"),
+            ),
+            (
+                "PLAYWRIGHT_HOST_PLATFORM_OVERRIDE".to_owned(),
+                PLAYWRIGHT_HOST_PLATFORM.to_owned(),
+            ),
+            (
+                "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD".to_owned(),
+                "1".to_owned(),
+            ),
+        ]);
+    }
+    Ok(env)
+}
+
 fn script_step(input: &MemberInputs<'_>, script: &str) -> Result<Step, OrchestratorError> {
     let run = bun_words(
         input.catalog,
@@ -217,7 +245,7 @@ fn script_step(input: &MemberInputs<'_>, script: &str) -> Result<Step, Orchestra
     Ok(shell_step(
         &step_name(script),
         bash(&body),
-        step_env(input.catalog)?,
+        browser_env(input)?,
     )?)
 }
 

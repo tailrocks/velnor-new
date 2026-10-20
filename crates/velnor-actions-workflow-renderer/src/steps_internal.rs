@@ -31,6 +31,8 @@ pub(crate) fn split_internal_operation(operation: &str) -> Result<(&str, &str), 
         || operation == velnor_actions_contract::PRIVATE_REVOKE_OPERATION
         || operation == velnor_actions_contract::GRADLE_RUN_OPERATION
         || operation == velnor_actions_contract::BUN_REGISTRY_INSTALL_OPERATION
+        || operation
+            == velnor_actions_contract::config::playwright_lock::PLAYWRIGHT_INSTALL_OPERATION
     {
         return Ok((operation, operation));
     }

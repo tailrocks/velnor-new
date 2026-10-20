@@ -22,7 +22,7 @@ pub(super) fn build_job(
 ) -> Result<(String, Yaml), RenderError> {
     let call = local_action(action, name, steps, actions)?;
     let mut fields = workflow_steps::with_permissions(
-        base(name, runs_on, JobTimeout::DEFAULT),
+        base(name, runs_on, JobTimeout::PRODUCT_COMPILER),
         workflow_steps::build_permissions(),
     );
     fields.retain(|(key, _)| key != "name");

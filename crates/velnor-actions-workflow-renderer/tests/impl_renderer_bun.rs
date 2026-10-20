@@ -9,8 +9,9 @@ use velnor_actions_workflow_renderer::private_source_steps::{
     PrivateSourcesSpec, private_source_steps,
 };
 use velnor_actions_workflow_renderer::verification_jobs::{
-    BUN_ROOT_ENV, BUN_RUNNER, BUN_SCOPES_ENV, BunMemberPolicy, build_bun_member_job,
-    bun_registry_step,
+    BUN_ROOT_ENV, BUN_RUNNER, BUN_SCOPES_ENV, BunMemberPolicy, PLAYWRIGHT_PINS_ENV,
+    PLAYWRIGHT_ROOT_ENV, PLAYWRIGHT_VERSION_ENV, build_bun_member_job, bun_registry_step,
+    playwright_install_step,
 };
 use velnor_actions_workflow_renderer::{RenderError, shell_step};
 
@@ -172,4 +173,58 @@ fn the_registry_step_rejects_malformed_inputs_and_credentials() {
     }
     let credential = BTreeMap::from([("GH_TOKEN".to_owned(), "x".to_owned())]);
     assert!(bun_registry_step(".", &scopes, &credential).is_err());
+}
+
+#[test]
+fn the_playwright_install_is_single_validated_and_ahead_of_the_scripts() -> Result<(), RenderError>
+{
+    let pins = format!(
+        "chromium-1248:{},ffmpeg-1013:{}",
+        "a".repeat(64),
+        "b".repeat(64)
+    );
+    let install = playwright_install_step("frontend", "1.64.1", &pins)?;
+    assert_eq!(install.role, Some(StepRole::PlaywrightInstall));
+    let StepKind::Internal { operation, env } = &install.kind else {
+        return Err(RenderError::BadCommand("not internal".to_owned()));
+    };
+    assert_eq!(operation, "playwright-browsers-install-v1");
+    assert_eq!(env[PLAYWRIGHT_PINS_ENV], pins);
+    assert_eq!(env[PLAYWRIGHT_VERSION_ENV], "1.64.1");
+    assert_eq!(env[PLAYWRIGHT_ROOT_ENV], "frontend");
+    assert_eq!(env.len(), 3, "no credential and no toolchain env");
+    let root = playwright_install_step("", "1.64.1", &pins)?;
+    let StepKind::Internal { env, .. } = &root.kind else {
+        return Err(RenderError::BadCommand("not internal".to_owned()));
+    };
+    assert_eq!(env[PLAYWRIGHT_ROOT_ENV], ".");
+    build_bun_member_job(
+        &policy(vec![install.clone(), step("Test", true)?]),
+        CHECKOUT,
+    )?;
+    let reject = |steps: Vec<Step>, code: &str| {
+        let error = build_bun_member_job(&policy(steps), CHECKOUT).expect_err(code);
+        assert!(error.to_string().contains(code), "{code}: {error}");
+    };
+    reject(
+        vec![install.clone(), install.clone()],
+        "bun_playwright_install_repeated",
+    );
+    reject(
+        vec![step("Test", true)?, install],
+        "bun_playwright_install_late",
+    );
+    for (version, pins) in [
+        ("latest", pins.as_str()),
+        ("1.64.1", ""),
+        ("1.64.1", "chromium-1248:short"),
+        (
+            "1.64.1",
+            &format!("b-1:{},a-1:{}", "a".repeat(64), "a".repeat(64)),
+        ),
+    ] {
+        assert!(playwright_install_step("frontend", version, pins).is_err());
+    }
+    assert!(playwright_install_step("../x", "1.64.1", &pins).is_err());
+    Ok(())
 }

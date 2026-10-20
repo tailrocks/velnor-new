@@ -19,6 +19,12 @@ pub(crate) mod bun_registry_install;
 pub(crate) mod deps_lock;
 #[path = "gradle_run.rs"]
 pub(crate) mod gradle_run;
+#[path = "playwright_install.rs"]
+pub(crate) mod playwright_install;
+#[path = "playwright_lock.rs"]
+pub(crate) mod playwright_lock;
+#[path = "playwright_resolve.rs"]
+pub(crate) mod playwright_resolve;
 #[path = "private_fetch.rs"]
 pub(crate) mod private_fetch;
 #[path = "private_fetch_session.rs"]
