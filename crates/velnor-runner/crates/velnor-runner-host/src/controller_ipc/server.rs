@@ -14,11 +14,13 @@ use crate::daemon_lock::DaemonLock;
 use crate::error::HostError;
 use crate::journal::Journal;
 
-use super::wire::{DoctorProbeReply, Request, Response, SOCKET_NAME, Target};
+use super::wire::{Request, Response, SOCKET_NAME, Target};
 use transport::{
-    marker_exists, private_state_directory, read_request, remove_owned_socket, remove_stale_socket,
-    trusted_peer, write_response,
+    private_state_directory, read_request, remove_owned_socket, remove_stale_socket, trusted_peer,
+    write_response,
 };
+#[path = "server/requests.rs"]
+mod requests;
 #[path = "server/transport.rs"]
 mod transport;
 pub(super) use transport::{read_drain_token, valid_token};
@@ -223,130 +225,15 @@ async fn handle_request(
     docker_root_digest: &str,
 ) -> Result<Response, HostError> {
     let _admission = DaemonLock::try_acquire(&state_path.join("admission.lock"))?;
-    match request {
-        Request::DrainStatus { target, token } => {
-            let marker = target_marker(state_path, &target);
-            if read_drain_token(&marker).as_deref() != Some(token.as_str()) {
-                return Ok(Response {
-                    value: Some(false),
-                    doctor_probe: None,
-                });
-            }
-            let drained = match target {
-                Target::Host => journal.is_drained().await?,
-                Target::Connection {
-                    connection_id,
-                    binding,
-                } => {
-                    if connection_id != binding.connection_id
-                        || !configured_exactly(state, &binding)?
-                    {
-                        return Ok(Response {
-                            value: Some(false),
-                            doctor_probe: None,
-                        });
-                    }
-                    journal
-                        .connection_scope(&binding)
-                        .await?
-                        .is_drained()
-                        .await?
-                }
-            };
-            Ok(Response {
-                value: Some(
-                    drained && read_drain_token(&marker).as_deref() == Some(token.as_str()),
-                ),
-                doctor_probe: None,
-            })
-        }
-        Request::Reactivate { binding, token } => {
-            let marker = state_path
-                .join("connection-drain")
-                .join(binding.connection_id.as_str());
-            let global_drain = state_path.join("drain");
-            if marker_exists(&global_drain)?
-                || read_drain_token(&marker).as_deref() != Some(token.as_str())
-                || connection_id_present(state, &binding)?
-            {
-                return Ok(Response {
-                    value: Some(false),
-                    doctor_probe: None,
-                });
-            }
-            let reactivated = journal.reactivate_if_drained(&binding).await?;
-            Ok(Response {
-                value: Some(reactivated),
-                doctor_probe: None,
-            })
-        }
-        Request::Detached { binding, token } => {
-            let marker = state_path
-                .join("connection-drain")
-                .join(binding.connection_id.as_str());
-            if read_drain_token(&marker).as_deref() != Some(token.as_str())
-                || connection_id_present(state, &binding)?
-            {
-                return Ok(Response {
-                    value: Some(false),
-                    doctor_probe: None,
-                });
-            }
-            let detached = journal.is_retired_and_drained(&binding).await?;
-            Ok(Response {
-                value: Some(
-                    detached && read_drain_token(&marker).as_deref() == Some(token.as_str()),
-                ),
-                doctor_probe: None,
-            })
-        }
-        Request::DoctorProbeStart { nonce } => {
-            let reply = match journal
-                .start_doctor_probe_request(&nonce, engine_id, docker_root_digest)
-                .await?
-            {
-                crate::journal::DoctorProbeStartResult::Created(ticket)
-                | crate::journal::DoctorProbeStartResult::Replayed(ticket) => DoctorProbeReply {
-                    request_id: Some(ticket.request_id()),
-                    state: "queued".to_owned(),
-                    report: None,
-                },
-                crate::journal::DoctorProbeStartResult::Busy { active_request_id } => {
-                    DoctorProbeReply {
-                        request_id: Some(active_request_id),
-                        state: "busy".to_owned(),
-                        report: None,
-                    }
-                }
-            };
-            Ok(Response {
-                value: None,
-                doctor_probe: Some(reply),
-            })
-        }
-        Request::DoctorProbeStatus { nonce } => {
-            let reply = match journal.doctor_probe_request_by_nonce(&nonce).await? {
-                Some(record) => DoctorProbeReply {
-                    request_id: Some(record.request_id()),
-                    state: record.state().as_str().to_owned(),
-                    report: if record.state() == crate::journal::DoctorProbeState::Completed {
-                        state.doctor_report(&nonce)?
-                    } else {
-                        None
-                    },
-                },
-                None => DoctorProbeReply {
-                    request_id: None,
-                    state: "missing".to_owned(),
-                    report: None,
-                },
-            };
-            Ok(Response {
-                value: None,
-                doctor_probe: Some(reply),
-            })
-        }
-    }
+    requests::handle(
+        journal,
+        state,
+        state_path,
+        request,
+        engine_id,
+        docker_root_digest,
+    )
+    .await
 }
 
 fn configured_exactly(

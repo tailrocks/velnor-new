@@ -1,6 +1,6 @@
 //! Connection binding and session setup used by the controller.
 
-use std::{collections::BTreeMap, path::Path, str, sync::Arc};
+use std::{path::Path, str, sync::Arc};
 
 use bollard::Docker;
 
@@ -9,16 +9,15 @@ use crate::{
     error::HostError,
     journal::{CapacityLimits, EngineContext, Journal, OperationalCapacityLimits},
     launch::{
-        CompletionWorker, ReleaseReadSecret, SelectedEngineContext, VerifiedWorkerImages,
-        bootstrap::NativeCleanupRuntime, open_connection_session, retained_tmpfs_memory_bytes,
-        scoped_runtime::RunnerReadyRegistry,
+        ReleaseReadSecret, SelectedEngineContext, VerifiedWorkerImages, retained_tmpfs_memory_bytes,
     },
     launch_blocking::ListenFault,
-    scale_set::{ConnectionSetup, ensure_connection_scale_set},
-    worker::guest_image::write_guest_image,
 };
 
-use super::state::{PreparedConnection, SessionCredentials, session_assigned_total};
+use super::state::PreparedConnection;
+
+#[path = "setup/connection.rs"]
+mod connection;
 
 pub(super) fn discover_retirements(
     state: &Path,
@@ -112,6 +111,31 @@ pub(super) async fn prepare_active_connections(
     Ok(prepared)
 }
 
+/// Keep durable identifiers when preparation fails after acquire.
+#[must_use = "handle preparation failure to retain durable identifiers"]
+pub(super) async fn prepare_connection(
+    state: &Path,
+    journal: &Journal,
+    binding: &RepositoryConnection,
+    config: &HostConfig,
+    selected_engine: &SelectedEngineContext,
+    worker_images: &VerifiedWorkerImages,
+    docker: &Docker,
+    options: ConnectionLaunchOptions<'_>,
+) -> Result<PreparedConnection, ListenFault> {
+    connection::prepare_connection(connection::PrepareConnectionRequest {
+        state,
+        journal,
+        binding,
+        config,
+        selected_engine,
+        worker_images,
+        docker,
+        options,
+    })
+    .await
+}
+
 pub(super) async fn bind_connection(
     journal: &Journal,
     binding: &RepositoryConnection,
@@ -135,99 +159,6 @@ pub(super) async fn bind_connection(
         )
         .await?;
     scoped.install_job_authority_policy(config).await
-}
-
-/// Keep durable identifiers when preparation fails after acquire.
-#[must_use]
-pub(super) async fn prepare_connection(
-    state: &Path,
-    journal: &Journal,
-    binding: &RepositoryConnection,
-    config: &HostConfig,
-    selected_engine: &SelectedEngineContext,
-    worker_images: &VerifiedWorkerImages,
-    docker: &Docker,
-    options: ConnectionLaunchOptions<'_>,
-) -> Result<PreparedConnection, ListenFault> {
-    bind_connection(journal, binding, config, selected_engine).await?;
-    let credential = crate::keychain::load_secret(
-        binding.credential_ref.service(),
-        binding.credential_ref.account(),
-    )?;
-    let pat = connection_pat(&credential)?;
-    let github_pat = crate::listen::Secret::new(pat);
-    let ConnectionSetup {
-        set,
-        mut link,
-        scoped,
-    } = ensure_connection_scale_set(pat, binding, journal).await?;
-    drop(credential);
-    let stored = scoped.scale_set().await?.ok_or(HostError::Ownership)?;
-    let source_binding = scoped.source_authorization_binding().await?;
-    if stored.id != set.id
-        || stored.name != set.name
-        || stored.ownership != set.ownership
-        || source_binding.scale_set_id() != set.id
-    {
-        return Err(HostError::Ownership.into());
-    }
-    let guest_image = write_guest_image(state, binding, worker_images)?;
-    guest_image.runner_bind(binding, worker_images)?;
-    let native_cleanup = NativeCleanupRuntime::new(
-        docker.clone(),
-        journal.clone(),
-        EngineContext {
-            engine_id: selected_engine.engine_id().to_owned(),
-            endpoint: selected_engine.endpoint().to_owned(),
-            platform: selected_engine.platform().to_owned(),
-        },
-        selected_engine.clone(),
-        worker_images.clone(),
-        Arc::clone(options.release_read_secret),
-    )?;
-    let completion = CompletionWorker::start_scoped(
-        scoped.clone(),
-        native_cleanup,
-        docker.clone(),
-        selected_engine.clone(),
-        link.base(),
-        link.token().to_owned(),
-        state,
-    )?;
-    let (session, session_intent, _header_allocation) = open_connection_session(
-        &mut link,
-        set.id,
-        &scoped,
-        options.requested_header_capacity,
-    )
-    .await?;
-    let assigned_total = session_assigned_total(session.statistics());
-    Ok(PreparedConnection {
-        binding: binding.clone(),
-        scope: scoped,
-        set_id: set.id,
-        session_intent,
-        assigned_total,
-        poll_cursor: 0,
-        poll_retry_at: None,
-        guest_image,
-        completion: Some(completion),
-        credentials: Some(SessionCredentials {
-            link,
-            session,
-            github_pat,
-        }),
-        runner_ready: RunnerReadyRegistry::new(),
-        ready_intents: BTreeMap::new(),
-        authorizing: BTreeMap::new(),
-        pending_bootstrap: BTreeMap::new(),
-        unkeyed_bootstrap: Vec::new(),
-        authorized: BTreeMap::new(),
-        pending_authorization: BTreeMap::new(),
-        unkeyed_authorization: Vec::new(),
-        pending_acquired_recovery: BTreeMap::new(),
-        unkeyed_acquired_recovery: Vec::new(),
-    })
 }
 
 pub(super) struct ConnectionLaunchOptions<'a> {

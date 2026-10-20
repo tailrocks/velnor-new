@@ -13,10 +13,7 @@ use crate::{
     docker_client::{connect_unix, docker_deadline},
     error::HostError,
     journal::{EngineContext, Journal},
-    launch::{
-        ReleaseReadSecret, SelectedEngineContext, SessionRefreshStartupAuthority,
-        prepare_worker_images, startup_storage_profile,
-    },
+    launch::{ReleaseReadSecret, SelectedEngineContext, startup_storage_profile},
     launch_blocking::ListenFault,
 };
 
@@ -27,6 +24,8 @@ use super::{
 };
 #[path = "controller/doctor.rs"]
 mod doctor;
+#[path = "controller/startup.rs"]
+mod startup;
 
 use doctor::DoctorProbeWorker;
 
@@ -138,55 +137,18 @@ impl<'a> ControllerLoop<'a> {
             journal,
             lineage,
         } = base;
-        let legacy_reconcile = crate::launch::reconcile_gate(&journal, &docker).await?;
-        eprintln!(
-            "legacy_reconcile={}",
-            crate::launch::gate_line(&legacy_reconcile)
-        );
-        setup::configure_shared_capacity(&journal, &current).await?;
-        journal.bootstrap_header_authority().await?;
-        journal.validate_header_authority().await?;
-        let fresh_info = docker_deadline(docker.info())
-            .await?
-            .map_err(|_| HostError::Docker)?;
-        let startup_authority = SessionRefreshStartupAuthority::after_validated_startup(
+        let startup = startup::prepare_startup(startup::StartupInputs {
+            current: &current,
             daemon_lock,
-            &state,
-            &lineage,
-            &journal,
-            &selected_engine,
-            &fresh_info,
-        )
+            state: &state,
+            docker: &docker,
+            selected_engine: &selected_engine,
+            journal: &journal,
+            lineage: &lineage,
+            release_read_secret: &release_read_secret,
+        })
         .await?;
-        journal
-            .recover_interrupted_host_work(startup_authority)
-            .await?;
-        let worker_images =
-            prepare_worker_images(&docker, &journal, &selected_engine, &release_read_secret)
-                .await?;
-        let profile = startup_storage_profile(
-            &docker,
-            &journal,
-            current.resource_budget()?,
-            current.max_jobs(),
-            &release_read_secret,
-            &worker_images,
-        )
-        .await;
-        let admission_ready = if let Some(profile) = profile {
-            match journal.configure_storage_profile(profile).await {
-                Ok(()) => true,
-                Err(error) => {
-                    eprintln!("host controller storage profile persistence held: {error}");
-                    false
-                }
-            }
-        } else {
-            eprintln!(
-                "host controller storage profile unavailable; positive acquisition remains closed"
-            );
-            false
-        };
+        let worker_images = startup.worker_images;
         let connection_sessions = setup::prepare_active_connections(
             &state,
             &journal,
@@ -221,7 +183,7 @@ impl<'a> ControllerLoop<'a> {
             doctor_worker: None,
             doctor_attempted_request_id: None,
             release_read_secret,
-            admission_ready,
+            admission_ready: startup.admission_ready,
             rotation_due: false,
             next_profile_attempt: tokio::time::Instant::now() + STORAGE_PROFILE_RETRY,
         })

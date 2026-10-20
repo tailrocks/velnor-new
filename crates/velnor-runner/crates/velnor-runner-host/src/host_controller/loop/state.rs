@@ -7,6 +7,8 @@ use std::{
 
 use super::PendingAcquiredRecovery;
 use cursor::record_assigned_total;
+#[path = "state/cleanup.rs"]
+mod cleanup;
 #[path = "state/cursor.rs"]
 mod cursor;
 use bollard::Docker;
@@ -250,141 +252,7 @@ impl PreparedConnection {
     }
 
     pub(super) async fn collect_proven_pending_cleanup(&mut self) -> Result<(), HostError> {
-        let ready = self
-            .ready_intents
-            .iter()
-            .map(|(request_id, intent_id)| (*request_id, *intent_id))
-            .collect::<Vec<_>>();
-        for (request_id, intent_id) in ready {
-            if self.scope.intent(intent_id).await?.cleanup_proven
-                && self
-                    .runner_ready
-                    .take_ready_after_cleanup(request_id)
-                    .is_some()
-            {
-                self.ready_intents.remove(&request_id);
-            }
-        }
-
-        let pending_bootstrap = self
-            .pending_bootstrap
-            .iter()
-            .map(|(request_id, values)| {
-                (
-                    *request_id,
-                    values
-                        .iter()
-                        .map(ScopedChannelOutcome::intent_id)
-                        .collect::<Vec<_>>(),
-                )
-            })
-            .collect::<Vec<_>>();
-        for (request_id, intents) in pending_bootstrap {
-            let mut keep = Vec::with_capacity(intents.len());
-            for intent_id in intents {
-                keep.push(match intent_id {
-                    Some(intent_id) => !self.scope.intent(intent_id).await?.cleanup_proven,
-                    None => true,
-                });
-            }
-            if let Some(values) = self.pending_bootstrap.get_mut(&request_id) {
-                *values = std::mem::take(values)
-                    .into_iter()
-                    .zip(keep)
-                    .filter_map(|(value, keep)| keep.then_some(value))
-                    .collect();
-                if values.is_empty() {
-                    self.pending_bootstrap.remove(&request_id);
-                }
-            }
-        }
-        let unkeyed_bootstrap = self
-            .unkeyed_bootstrap
-            .iter()
-            .map(ScopedChannelOutcome::intent_id)
-            .collect::<Vec<_>>();
-        let mut keep_unkeyed_bootstrap = Vec::with_capacity(unkeyed_bootstrap.len());
-        for intent_id in unkeyed_bootstrap {
-            keep_unkeyed_bootstrap.push(match intent_id {
-                Some(intent_id) => !self.scope.intent(intent_id).await?.cleanup_proven,
-                None => true,
-            });
-        }
-        self.unkeyed_bootstrap = std::mem::take(&mut self.unkeyed_bootstrap)
-            .into_iter()
-            .zip(keep_unkeyed_bootstrap)
-            .filter_map(|(value, keep)| keep.then_some(value))
-            .collect();
-
-        let pending_authorization = self
-            .pending_authorization
-            .iter()
-            .map(|(request_id, values)| {
-                (
-                    *request_id,
-                    values
-                        .iter()
-                        .map(PendingScopedExecution::intent_id)
-                        .collect::<Vec<_>>(),
-                )
-            })
-            .collect::<Vec<_>>();
-        for (request_id, intents) in pending_authorization {
-            let mut keep = Vec::with_capacity(intents.len());
-            for intent_id in intents {
-                keep.push(!self.scope.intent(intent_id).await?.cleanup_proven);
-            }
-            if let Some(values) = self.pending_authorization.get_mut(&request_id) {
-                *values = std::mem::take(values)
-                    .into_iter()
-                    .zip(keep)
-                    .filter_map(|(value, keep)| keep.then_some(value))
-                    .collect();
-                if values.is_empty() {
-                    self.pending_authorization.remove(&request_id);
-                }
-            }
-        }
-        let unkeyed_authorization = self
-            .unkeyed_authorization
-            .iter()
-            .map(PendingScopedExecution::intent_id)
-            .collect::<Vec<_>>();
-        let mut keep_unkeyed_authorization = Vec::with_capacity(unkeyed_authorization.len());
-        for intent_id in unkeyed_authorization {
-            keep_unkeyed_authorization.push(!self.scope.intent(intent_id).await?.cleanup_proven);
-        }
-        self.unkeyed_authorization = std::mem::take(&mut self.unkeyed_authorization)
-            .into_iter()
-            .zip(keep_unkeyed_authorization)
-            .filter_map(|(value, keep)| keep.then_some(value))
-            .collect();
-
-        let pending_acquired = self
-            .pending_acquired_recovery
-            .iter()
-            .map(|(request_id, value)| (*request_id, value.intent_id))
-            .collect::<Vec<_>>();
-        for (request_id, intent_id) in pending_acquired {
-            if self.scope.intent(intent_id).await?.cleanup_proven {
-                self.pending_acquired_recovery.remove(&request_id);
-            }
-        }
-        let unkeyed_acquired = self
-            .unkeyed_acquired_recovery
-            .iter()
-            .map(|value| value.intent_id)
-            .collect::<Vec<_>>();
-        let mut keep_unkeyed_acquired = Vec::with_capacity(unkeyed_acquired.len());
-        for intent_id in unkeyed_acquired {
-            keep_unkeyed_acquired.push(!self.scope.intent(intent_id).await?.cleanup_proven);
-        }
-        self.unkeyed_acquired_recovery = std::mem::take(&mut self.unkeyed_acquired_recovery)
-            .into_iter()
-            .zip(keep_unkeyed_acquired)
-            .filter_map(|(value, keep)| keep.then_some(value))
-            .collect();
-        Ok(())
+        cleanup::collect_proven_pending_cleanup(self).await
     }
 
     pub(super) fn retain_pending(&mut self, request_id: i64, pending: PendingScopedExecution) {
