@@ -1023,5 +1023,32 @@
     "review": "f40-two-proven-fixes-independent-review-20261020.md",
     "review_sha256": "8aa9e5ee6671325f5201bc1c54b434d189fae73ef3d77f1ba51cd5f8bc48a850",
     "scope": "The tests check missing cleanup evidence and stale resource evidence. They do not prove a live installation."
+  },
+  "anchored_runtime_identity": {
+    "result": "PASS",
+    "source_base": "78e0c163df2cd60fe8d98e22cba6d7e6ae2701fd",
+    "tests": 8,
+    "run_id": "e6ec0025-de37-4437-902e-c91a35cba56d",
+    "checks": [
+      {
+        "log": "qualification-cache-path-parent-integrated-20261020.log",
+        "sha256": "5fdedd3d58d1e0ed2af30cb3fe7ca39ac9036faca4ed2190bb89fdbada977a80",
+        "exit_status": 0
+      },
+      {
+        "log": "qualification-cache-path-parent-clippy-20261020.log",
+        "sha256": "fba9d332dc5fbf5503be8e1ca10efd812c7640fa3fe07f021c6c45624f3deb92",
+        "exit_status": 0
+      },
+      {
+        "log": "qualification-cache-path-parent-language-final-20261020.log",
+        "sha256": "bb2ee55b4236c72a5fb89f27d7ad6d9a4649f49c6bde378334e226ea0a191d1f",
+        "exit_status": 0
+      }
+    ],
+    "manifest_sha256": "8f840cb5869dba5fef6bb342e252a048dc4999a61c8bf08a06fdae75e28d6c7d",
+    "review_sha256": "9b1302e26abf913d977d674e8cc110adab15d5b57d3662a8c24e59ba6d34f3d4",
+    "scope": "The tests check runtime file ownership and directory identity. Live cache tests remain NOT_RUN.",
+    "integration_review_sha256": "932a5745e50775ecba7b5d7bbfc635ba156afd6f94c0e7bc838beb7c9327c420"
   }
 }

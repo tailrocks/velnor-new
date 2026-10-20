@@ -20,6 +20,44 @@ fn cold_binding_emits_one_exact_restore_and_save_key() {
     assert!(!outputs.save_if_state_changes);
 }
 
+#[cfg(unix)]
+#[test]
+fn runtime_identity_must_be_private_and_at_the_run_owned_path() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let fixture = Fixture::cold();
+    let mut request = fixture.request();
+    let outside_path = fixture.runner_temp.path().join("runtime-identity.json");
+    request.runtime_identity_path = &outside_path;
+    assert!(bind_result(&request).is_err());
+
+    let path = fixture.runtime_identity_path.clone();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o644))
+        .expect("The test could not set the runtime identity file permissions.");
+    assert!(bind_result(&fixture.request()).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn runtime_identity_symlinks_are_rejected_without_reading_the_target() {
+    let fixture = Fixture::cold();
+    let path = fixture.runtime_identity_path.clone();
+    let target = fixture
+        .runner_temp
+        .path()
+        .join("runtime-identity-target.json");
+    fs::write(
+        &target,
+        fs::read(&path).expect("The test could not read the original runtime identity file."),
+    )
+    .expect("The test could not write the runtime identity target file.");
+    fs::remove_file(&path).expect("The test could not remove the original runtime identity file.");
+    std::os::unix::fs::symlink(target, &path)
+        .expect("The test could not create the runtime identity symbolic link.");
+
+    assert!(bind_result(&fixture.request()).is_err());
+}
+
 #[test]
 fn plan_artifact_uses_the_four_mib_plan_limit() {
     let fixture = Fixture::cold();

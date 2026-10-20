@@ -2,6 +2,8 @@
 
 | Term | Definition |
 | --- | --- |
+| Canonical JSON | JSON data with one specified byte representation. |
+| Symbolic link | A file system entry that names another path. |
 | Rust crate | A Rust source unit for one library or program. |
 | Cargo feature | A named option that selects code or dependencies in a Rust package. |
 | Rust package | A Cargo project with one manifest and one or more Rust crates. |

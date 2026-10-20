@@ -19,12 +19,11 @@ pub(crate) mod transfer;
 /// Operation tag for one validated cache binding.
 pub(crate) const OP: &str = QUALIFICATION_CACHE_BIND_OP;
 
-const MAX_RUNTIME_IDENTITY_BYTES: usize = 65_536;
 pub(crate) const GITHUB_OUTPUT_ENV: &str = "GITHUB_OUTPUT";
 const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
 const MATRIX_KEY_ENV: &str = "VELNOR_QUALIFICATION_CACHE_MATRIX_KEY";
 const LAYER_ENV: &str = "VELNOR_QUALIFICATION_CACHE_LAYER";
-const RUNTIME_IDENTITY_ENV: &str = "VELNOR_QUALIFICATION_RUNTIME_IDENTITY";
+const RUNTIME_IDENTITY_PATH_ENV: &str = "VELNOR_QUALIFICATION_RUNTIME_IDENTITY_FILE";
 const ROOTS_ENV: &str = "VELNOR_QUALIFICATION_CACHE_ROOTS";
 
 #[derive(Debug)]
@@ -44,7 +43,7 @@ pub(crate) struct BindInputs {
     image_os: Option<String>,
     matrix_key: String,
     layer: String,
-    runtime_identity_json: String,
+    runtime_identity_path: PathBuf,
 }
 
 impl BindInputs {
@@ -65,7 +64,7 @@ impl BindInputs {
             image_os: self.image_os.as_deref(),
             matrix_key: &self.matrix_key,
             layer: &self.layer,
-            runtime_identity_json: &self.runtime_identity_json,
+            runtime_identity_path: &self.runtime_identity_path,
         }
     }
 }
@@ -157,14 +156,7 @@ where
         "false" => false,
         _ => return Err("bad_ref_protected".to_owned()),
     };
-    let runtime_identity_json = required(&mut get, RUNTIME_IDENTITY_ENV)?;
-    if runtime_identity_json.len() > MAX_RUNTIME_IDENTITY_BYTES
-        || runtime_identity_json
-            .chars()
-            .any(|value| matches!(value, '\n' | '\r'))
-    {
-        return Err("cache_binding_input_json_invalid".to_owned());
-    }
+    let runtime_identity_path = required_path(&mut get, RUNTIME_IDENTITY_PATH_ENV)?;
     Ok(BindInputs {
         runner_temp,
         run_id,
@@ -181,7 +173,7 @@ where
         image_os: optional(&mut get, "ImageOS"),
         matrix_key: required(&mut get, MATRIX_KEY_ENV)?,
         layer: required(&mut get, LAYER_ENV)?,
-        runtime_identity_json,
+        runtime_identity_path,
     })
 }
 

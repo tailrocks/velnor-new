@@ -17,10 +17,12 @@ pub(crate) mod closure;
 
 #[path = "qualification_cache_runtime_files.rs"]
 mod files;
+#[cfg(test)]
+use self::files::read_owned_runner_file;
 use self::files::{
-    checked_run_dir, parse_canonical, parse_layer, read_admission, read_guest_image_projection,
-    read_owned_runner_file, read_plan, validate_dispatch_context, validate_runner_temp,
-    validate_runtime_environment, verified_scale_set_image_identity,
+    RunDirectory, parse_canonical, parse_layer, read_admission, read_guest_image_projection,
+    read_plan, validate_dispatch_context, validate_runner_temp, validate_runtime_environment,
+    verified_scale_set_image_identity,
 };
 
 /// Private operation tag for binding one validated cache layer.
@@ -34,10 +36,7 @@ pub(crate) const QUALIFICATION_CACHE_DIRECTIVE_FILENAME: &str =
 /// The largest UTF-8 representation is three bytes per UTF-16 code unit.
 pub(crate) const QUALIFICATION_CACHE_DIRECTIVE_MAX_BYTES: usize =
     crate::plan_output_limits::JOB_OUTPUTS_BUDGET_UTF16_BYTES * 3 / 2;
-/// Maximum JSON passed through the runtime-identity environment value.
-///
-/// This stays below common per-environment-entry `exec` limits after the
-/// variable name and separators are included.
+/// This is the maximum size of the canonical JSON in the runtime identity file.
 const MAX_RUNTIME_IDENTITY_JSON_BYTES: usize = 65_536;
 
 /// Current runner facts checked against the staged qualification plan.
@@ -73,8 +72,8 @@ pub struct QualificationCacheBindingRequest<'a> {
     pub matrix_key: &'a str,
     /// Closed layer wire name.
     pub layer: &'a str,
-    /// Canonical runtime identity collected by the consumer job.
-    pub runtime_identity_json: &'a str,
+    /// This path names the runtime identity file for the current consumer run.
+    pub runtime_identity_path: &'a Path,
 }
 
 /// Exact keys and predecessor evidence for one cache layer.
@@ -223,23 +222,40 @@ fn read_binding_documents(
     request: &QualificationCacheBindingRequest<'_>,
 ) -> Result<BindingDocuments, OrchestratorError> {
     let run_key = run_key_for_ci(request.run_id, u64::from(request.run_attempt));
-    let run_dir = checked_run_dir(request.runner_temp, &run_key)?;
+    let run_dir = RunDirectory::open(request.runner_temp, &run_key)?;
     let plan = read_plan(&run_dir, &run_key)?;
     validate_dispatch_context(&plan, request)?;
-    let admission_path =
-        run_dir.join(crate::qualification_resolver::QUALIFICATION_ADMISSION_FILENAME);
-    let admission = read_admission(&admission_path, &plan)?;
-    let directive_path = run_dir.join(QUALIFICATION_CACHE_DIRECTIVE_FILENAME);
-    let directive_bytes =
-        read_owned_runner_file(&directive_path, QUALIFICATION_CACHE_DIRECTIVE_MAX_BYTES)?;
+    let admission = read_admission(&run_dir, &plan)?;
+    let directive_bytes = run_dir.read_owned_file(
+        QUALIFICATION_CACHE_DIRECTIVE_FILENAME,
+        QUALIFICATION_CACHE_DIRECTIVE_MAX_BYTES,
+        None,
+        "qualification_cache_file",
+    )?;
     let directive_text = std::str::from_utf8(&directive_bytes)
         .map_err(|_| internal("qualification_cache_directive_encoding"))?;
     let directive = parse_canonical::<QualificationCacheDirective>(
         directive_text,
         QUALIFICATION_CACHE_DIRECTIVE_MAX_BYTES,
     )?;
+    let runtime_identity_path = request
+        .runner_temp
+        .join("velnor")
+        .join(&run_key)
+        .join("runtime-identity.json");
+    if request.runtime_identity_path != runtime_identity_path {
+        return Err(internal("qualification_cache_runtime_identity_path"));
+    }
+    let runtime_identity_bytes = run_dir.read_owned_file(
+        "runtime-identity.json",
+        MAX_RUNTIME_IDENTITY_JSON_BYTES,
+        Some(0o600),
+        "qualification_cache_runtime_identity",
+    )?;
+    let runtime_identity_text = std::str::from_utf8(&runtime_identity_bytes)
+        .map_err(|_| internal("qualification_cache_runtime_identity_encoding"))?;
     let evidence = parse_canonical::<QualificationRuntimeIdentity>(
-        request.runtime_identity_json,
+        runtime_identity_text,
         MAX_RUNTIME_IDENTITY_JSON_BYTES,
     )?;
     Ok(BindingDocuments {

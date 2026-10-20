@@ -4,6 +4,7 @@ use super::files::{
 use super::*;
 
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -30,7 +31,7 @@ struct Fixture {
     runner_temp: tempfile::TempDir,
     plan: Plan,
     directive_json: String,
-    runtime_identity_json: String,
+    runtime_identity_path: std::path::PathBuf,
     matrix_key: String,
     layer: String,
 }
@@ -61,7 +62,7 @@ impl Fixture {
         let runner_temp = tempfile::tempdir().expect("runner temp");
         let plan = qualification_plan(phase, run_id, predecessor);
         let run_dir = runner_temp.path().join("velnor").join(&plan.run_key);
-        fs::create_dir_all(&run_dir).expect("run directory");
+        fs::create_dir_all(&run_dir).expect("The test could not create the run directory.");
         fs::write(
             run_dir.join("plan.json"),
             serde_json::to_vec(&plan).expect("plan JSON"),
@@ -99,11 +100,18 @@ impl Fixture {
             )
             .expect("directive artifact");
         }
+        let runtime_identity_path = run_dir.join("runtime-identity.json");
+        if !runtime_identity_json.is_empty() {
+            fs::write(&runtime_identity_path, runtime_identity_json)
+                .expect("The test could not write the runtime identity file.");
+            fs::set_permissions(&runtime_identity_path, fs::Permissions::from_mode(0o600))
+                .expect("The test could not set the runtime identity file permissions.");
+        }
         Self {
             runner_temp,
             plan,
             directive_json,
-            runtime_identity_json,
+            runtime_identity_path,
             matrix_key,
             layer: layer.to_owned(),
         }
@@ -127,7 +135,7 @@ impl Fixture {
             image_os: Some("ubuntu26"),
             matrix_key: &self.matrix_key,
             layer: &self.layer,
-            runtime_identity_json: &self.runtime_identity_json,
+            runtime_identity_path: &self.runtime_identity_path,
         }
     }
 
