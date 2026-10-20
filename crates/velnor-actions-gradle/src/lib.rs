@@ -17,6 +17,7 @@ pub mod catalog;
 pub mod edges;
 pub mod integrity;
 pub mod lex;
+pub mod script;
 pub mod settings;
 pub mod version;
 pub mod wrapper;

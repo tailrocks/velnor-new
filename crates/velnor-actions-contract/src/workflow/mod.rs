@@ -23,6 +23,7 @@ pub mod report;
 mod report_validate;
 pub mod step;
 mod step_id;
+pub use step_id::GRADLE_RUN_OPERATION;
 pub mod step_identity;
 mod step_mbx_lifecycle;
 mod step_protocol;

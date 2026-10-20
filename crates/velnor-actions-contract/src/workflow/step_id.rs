@@ -2,6 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Internal operation of the Gradle run step (verify wrapper, install JDK, run Gradle).
+pub const GRADLE_RUN_OPERATION: &str = "gradle-run-v1";
+
 /// Stable GitHub Actions id for a step whose outputs or outcome have consumers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
