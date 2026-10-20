@@ -3,6 +3,7 @@ use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, Te
 
 fn task(package: &str, kind: TaskKind) -> ProposedTask {
     velnor_actions_rust::propose_task(&TaskGroup {
+        all_features: false,
         task_id: format!("stack/rust/{package}/{}/default", kind.as_str()),
         package_id: format!("{package} 0.1.0"),
         package_name: package.to_owned(),

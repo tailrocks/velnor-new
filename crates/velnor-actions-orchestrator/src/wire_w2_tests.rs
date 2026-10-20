@@ -11,6 +11,7 @@ use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, Te
 /// Minimal proposal with kind, task ID, and nondeterminism flags.
 fn group(kind: TaskKind, task_id: &str) -> ProposedTask {
     let group = TaskGroup {
+        all_features: false,
         task_id: task_id.to_owned(),
         package_id: "demo".to_owned(),
         package_name: "demo".to_owned(),

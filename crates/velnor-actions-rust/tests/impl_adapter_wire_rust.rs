@@ -54,6 +54,8 @@ fn groups_for(package: &PackageRecord) -> Result<Vec<TaskGroup>, ContractError> 
     let profile = profile();
     let features = vec!["default".to_owned()];
     let inputs = DeriveInputs {
+        all_features: false,
+        clippy_all_features: false,
         package,
         profile: &profile,
         configuration: "default",
@@ -66,6 +68,7 @@ fn groups_for(package: &PackageRecord) -> Result<Vec<TaskGroup>, ContractError> 
 
 fn group(kind: TaskKind) -> TaskGroup {
     TaskGroup {
+        all_features: false,
         task_id: "t".to_owned(),
         package_id: "p".to_owned(),
         package_name: "demo".to_owned(),
@@ -106,6 +109,7 @@ fn extension_carries_workspace_and_profile() {
     let graph = digest_b3(b"graph");
     let config = digest_b3(b"config");
     let inputs = ExtensionInputs {
+        all_features: false,
         package_id: "demo 0.1.0",
         workspace_id: "workspace",
         profile: "default",

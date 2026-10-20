@@ -77,6 +77,8 @@ fn inputs<'a>(
     features: &'a [String],
 ) -> DeriveInputs<'a> {
     DeriveInputs {
+        all_features: false,
+        clippy_all_features: false,
         package,
         profile,
         configuration: "default",
@@ -240,6 +242,7 @@ fn archive_trust_follows_source_build() {
     let features = vec!["default".to_owned()];
     let declared: Vec<String> = Vec::new();
     let base = ExtensionInputs {
+        all_features: false,
         package_id: "demo 0.1.0",
         workspace_id: "workspace",
         profile: "default",

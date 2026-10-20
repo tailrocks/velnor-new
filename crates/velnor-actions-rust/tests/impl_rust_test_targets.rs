@@ -77,6 +77,8 @@ fn inputs<'a>(
     features: &'a [String],
 ) -> DeriveInputs<'a> {
     DeriveInputs {
+        all_features: false,
+        clippy_all_features: false,
         package,
         profile,
         configuration: "default",

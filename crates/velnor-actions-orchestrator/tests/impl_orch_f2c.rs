@@ -202,6 +202,7 @@ fn lookup_failures_are_distinct_from_current() {
 /// Minimal task proposal for identity-extension cases.
 fn clippy_task() -> Result<velnor_actions_contract::ProposedTask, Box<dyn std::error::Error>> {
     let group = velnor_actions_rust::TaskGroup {
+        all_features: false,
         task_id: "stack/rust/root/clippy/default".to_owned(),
         package_id: "demo".to_owned(),
         package_name: "demo".to_owned(),

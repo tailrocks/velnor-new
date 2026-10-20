@@ -69,6 +69,10 @@ pub struct RustStackConfig {
     /// Existing target lanes are preserved; disabled by default.
     #[serde(default, skip_serializing_if = "is_false")]
     pub seed_parallel_targets: bool,
+    /// Activate every package feature for Clippy only (`--all-features`);
+    /// test, build, and documentation tasks keep their configured features.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub clippy_all_features: bool,
     /// Rust release policy (`[stacks.rust.release]`); disabled by default.
     #[serde(default)]
     pub release: RustReleaseConfig,
@@ -118,6 +122,7 @@ fn default_configurations() -> Vec<RustConfiguration> {
     vec![RustConfiguration {
         name: "default".to_owned(),
         features: vec!["default".to_owned()],
+        all_features: false,
         target: "host".to_owned(),
     }]
 }
@@ -131,6 +136,10 @@ pub struct RustConfiguration {
     /// Cargo features for this variant.
     #[serde(default)]
     pub features: Vec<String>,
+    /// Activate every feature each package declares (`--all-features`).
+    /// Conflicts with a `features` list other than empty or `["default"]`.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub all_features: bool,
     /// Target triple or `host`.
     pub target: String,
 }
@@ -178,6 +187,7 @@ impl RustStackConfig {
             test_runner: None,
             run_ignored: None,
             seed_parallel_targets: false,
+            clippy_all_features: false,
             release: RustReleaseConfig::default(),
             binary_release: RustBinaryReleaseConfig::default(),
             suites: Vec::new(),
@@ -288,6 +298,14 @@ impl RustStackConfig {
                         format!("bad_feature:{feature}"),
                     ));
                 }
+            }
+            let default_features = config.features.is_empty() || config.features == ["default"];
+            if config.all_features && !default_features {
+                return Err(ContractError::config(
+                    file,
+                    "stacks.rust.configurations.features",
+                    "features_conflict_all_features",
+                ));
             }
         }
         if let Some(mode) = &self.run_ignored

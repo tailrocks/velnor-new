@@ -41,6 +41,8 @@ pub(crate) struct PartialRustStack {
     run_ignored: Option<String>,
     /// Optional cold parallel-target initialization after the test build.
     seed_parallel_targets: Option<bool>,
+    /// Clippy-only all-features mode; disabled by default.
+    clippy_all_features: Option<bool>,
     /// Rust release policy; disabled by default.
     release: Option<RustReleaseConfig>,
     /// Single-package binary release policy; disabled by default.
@@ -78,6 +80,7 @@ impl PartialStacks {
                 test_runner: stack.test_runner,
                 run_ignored: stack.run_ignored,
                 seed_parallel_targets: stack.seed_parallel_targets.unwrap_or(false),
+                clippy_all_features: stack.clippy_all_features.unwrap_or(false),
                 release: stack.release.unwrap_or_default(),
                 binary_release: stack.binary_release.unwrap_or_default(),
                 suites: stack.suites,

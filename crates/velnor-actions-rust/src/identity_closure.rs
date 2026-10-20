@@ -171,6 +171,7 @@ mod tests {
     /// Minimal group of `kind` with the Nextest runner.
     fn group(kind: crate::tasks::TaskKind) -> TaskGroup {
         TaskGroup {
+            all_features: false,
             task_id: "stack/rust/root/nextest/default".to_owned(),
             package_id: "demo".to_owned(),
             package_name: "demo".to_owned(),

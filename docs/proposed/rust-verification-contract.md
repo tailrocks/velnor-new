@@ -44,7 +44,8 @@ compile/test MAY run as an explicit release or diagnostic audit, but MUST NOT
 be the default PR task.
 
 The default feature/target matrix MUST be explicit. Do not use `--all-features`
-as a substitute for a supported matrix. `cargo-hack` MAY enumerate feature
+as a substitute for a supported matrix; it is emitted only for an explicit
+`all_features` configuration or the Clippy-only `clippy_all_features` opt-in. `cargo-hack` MAY enumerate feature
 combinations in an isolated checkout. Each product crate MUST be checked on
 MSRV in the toolchain-update qualification workflow using the Mise-managed
 tool version equal to workspace `rust-version`; it MUST use `--locked`. Action
