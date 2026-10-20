@@ -120,7 +120,8 @@ exact MBX binary and owns the object format, cache transport, and post step. Vel
 not transport MBX objects.
 
 Cache save is allowed only after its producer succeeded, the current run is trusted for that namespace, and
-the export has a useful delta. Sources have one writer, the Plan job, saving when not cancelled, after the
+the export has a useful delta and the family's size ceiling holds (10 GB quota, 85 % budget; see
+[cache decisions](cache-decisions.md)). The platform identity excludes the runner `ImageVersion` (decision 6). Sources have one writer, the Plan job, saving when not cancelled, after the
 last fetch succeeded, with `trusted` or `pr` trust (a PR-scoped entry visible only to that PR), and unless the
 restore already holds the snapshot; crate jobs restore read-only, forks and merge groups never write. A task-result cache hit, failed/cancelled task, untrusted PR, empty export, or
 unavailable producer MUST NOT trigger a trusted save. Restore and save destinations MUST not overlap active
@@ -144,8 +145,11 @@ the listed index, registry-cache, and Git-database paths, never credentials, bin
 `$MISE_TASK_CACHE_DIR/task-artifacts/v2`; CI sets that environment variable before Mise starts and archives
 only that directory.
 
-Velnor's cache steps MAY archive only `CARGO_SOURCE_PATHS` and qualified `MISE_TASK_ARTIFACTS`; they MUST NOT
-archive MBX objects or manual bundles. The protected-push writer rule applies to ordinary task workflows. A
+Velnor's cache steps MAY archive only `CARGO_SOURCE_PATHS`, qualified `MISE_TASK_ARTIFACTS`, and, per the
+[adopted cache decisions](cache-decisions.md) (2 and 3), the opaque output of `mbx cache export --format
+directory`; they MUST NOT parse, compose, or hand-build MBX objects or bundles. Restoring that output uses only
+`mbx cache import`. Until the generator emits these steps, the MBX action `target` mode above remains the
+compiled transport. The protected-push writer rule applies to ordinary task workflows. A
 separately authorized `workflow_dispatch` qualification job grants `actions:write`, enables its action save,
 and uses a run/attempt/source-SHA-bound generation.
 
@@ -175,8 +179,8 @@ be enabled only with Gate 6 qualification fixtures; no task-cache behavior is im
 
 Pull requests and merge groups MAY restore trusted default-branch archives but MUST NOT write trusted or
 release archives. They MUST NOT promote PR-produced executable contents. Fork pull requests are read-only.
-Protected default-branch pushes MAY write trusted archives only after the task passes and its report is
-complete. Release jobs MUST reject PR archives and MUST NOT restore or save MBX or task-result archives;
+Protected default-branch pushes MAY write trusted archives only after the family's producer step passes and the
+run is not cancelled; test, lint, and documentation verdicts do not gate a save (adopted decision 1). Release jobs MUST reject PR archives and MUST NOT restore or save MBX or task-result archives;
 release outputs use a clean or trusted-source-only path.
 
 Cache restore MUST verify compatibility and ownership before use. A missing archive is `no_entry`; a GitHub
@@ -185,7 +189,9 @@ read/write is a Mise-reported miss. Corrupt, incomplete, or mismatched data MUST
 MUST execute when otherwise eligible. A cache miss MUST never fail a task by itself. A cache save failure MUST
 leave a successful task successful and report `cache_write_disabled` or `cache_unavailable`.
 
-Velnor MUST NOT save unchanged data, use an unbounded stable key, globally prune caches, or restore one cache
+Velnor MUST NOT save unchanged data, use an unbounded stable key, globally prune caches (deleting superseded
+exact keys of one family within one trust scope on a trusted default-branch run is family pruning, not global
+pruning; adopted decision 4), or restore one cache
 layer through two mechanisms. MBX objects, Cargo sources, and Mise task artifacts MUST remain independently
 restorable. The default branch MUST produce warm snapshots through ordinary CI; no unconditional warm-up
 workflow is allowed.
