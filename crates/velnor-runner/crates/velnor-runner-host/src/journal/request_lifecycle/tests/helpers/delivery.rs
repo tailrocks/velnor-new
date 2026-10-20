@@ -169,21 +169,21 @@ pub(super) async fn prepare_initialized_listener_delivery(
         return Err(HostError::Identity);
     }
     prepare_jit_and_job_facts(scope, &initialized.provisioned, runner, request_id).await?;
-    let channel = test_channel_for_ready_job_facts(
-        initialized.reservation_id,
-        initialized.intent_id,
-        scope.connection_id().as_str().to_owned(),
-        runner.runner_scale_set_id,
-        request_id,
-        TEST_ENGINE_ID.to_owned(),
-        initialized.docker_root_digest.clone(),
-        runner.id,
-        runner.name.clone(),
-        initialized.runner_container_id.clone(),
-        initialized.dind_container_id.clone(),
-        initialized.instance_binding_digest.clone(),
-        &initialized.ready,
-    )?;
+    let channel = test_channel_for_ready_job_facts(crate::worker::execution_authorization::TestProofChannelIdentity {
+    reservation_id: initialized.reservation_id,
+    operation_id: initialized.intent_id,
+    connection_id: scope.connection_id().as_str().to_owned(),
+    scale_set_id: runner.runner_scale_set_id,
+    witness_request_id: request_id,
+    engine_id: TEST_ENGINE_ID.to_owned(),
+    docker_root_digest: initialized.docker_root_digest.clone(),
+    runner_id: runner.id,
+    runner_name: runner.name.clone(),
+    runner_container_id: initialized.runner_container_id.clone(),
+    dind_container_id: initialized.dind_container_id.clone(),
+    instance_binding_digest: initialized.instance_binding_digest.clone(),
+},
+&initialized.ready)?;
     let config = HostConfig::test_with_job_authority_policy(binding)?;
     scope.install_job_authority_policy(&config).await?;
     publish_test_execution_challenge(scope, &channel).await?;

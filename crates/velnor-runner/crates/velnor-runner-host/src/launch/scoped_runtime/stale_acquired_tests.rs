@@ -36,13 +36,21 @@ async fn assert_stale_acquired_path() -> Result<(), String> {
 
     let images = test_images();
     let engine = selected_engine(&images)?;
+    let crate::launch::steps::ScopedProvisioningOutcome::Acquired(acquired) = &outcome else {
+        return Err("The result does not contain an acquired request.".to_owned());
+    };
+    assert!(!acquired.observation().is_fresh_for_admission(
+        engine.engine_id(),
+        engine.docker_root_digest(),
+        acquired.sample_generation_id(),
+    ));
     let docker = DockerStub::open(Vec::new()).map_err(|error| error.to_string())?;
     let result = super::prepare_jit_and_measure_scoped(
         outcome,
         &docker.docker,
         &fixture.scope,
         &fixture.journal,
-        &ReleaseReadSecret::test_inert(),
+        &ReleaseReadSecret::test_token(),
         &engine,
         &images,
         &mut lane,
@@ -124,7 +132,7 @@ async fn assert_fresh_control_reaches_docker() -> Result<(), String> {
         &docker.docker,
         &fixture.scope,
         &fixture.journal,
-        &ReleaseReadSecret::test_inert(),
+        &ReleaseReadSecret::test_token(),
         &engine,
         &images,
         &mut lane,

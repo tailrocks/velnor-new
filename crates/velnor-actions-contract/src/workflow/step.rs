@@ -109,65 +109,9 @@ pub enum StepKind {
 impl Step {
     /// Validate one step payload and its typed authority.
     pub(crate) fn validate(&self, job: &str) -> Result<(), ContractError> {
-        if self.name.trim().is_empty() {
-            return Err(ContractError::identity(
-                "step.name",
-                format!("empty_name:{job}"),
-            ));
-        }
-        if let Some(condition) = &self.condition
-            && (condition.trim().is_empty() || condition.bytes().any(|b| b == b'\n' || b == b'\r'))
-        {
-            return Err(ContractError::identity(
-                "step.condition",
-                format!("bad_condition:{job}"),
-            ));
-        }
-        if matches!(&self.kind, StepKind::TaskExecution { .. })
-            && (self.id.is_some() || self.role.is_some() || self.condition.is_some())
-        {
-            return Err(ContractError::identity(
-                "step.task",
-                format!("task_execution_authority_mismatch:{job}"),
-            ));
-        }
-        // Concurrent members publish no outputs (none are visible before the
-        // join), own no typed role such as a cache save, and never run an
-        // internal planner operation.
-        if self.parallel
-            && (self.id.is_some()
-                || self.role.is_some()
-                || matches!(&self.kind, StepKind::Internal { .. }))
-        {
-            return Err(ContractError::identity(
-                "step.parallel",
-                format!("parallel_step_authority:{job}"),
-            ));
-        }
+        validate_step_basics(self, job)?;
         if let Some(role) = self.role {
-            role.validate(&self.kind, job)?;
-            if role == StepRole::ToolSeed && self.condition.is_some() {
-                return Err(ContractError::identity(
-                    "step.role",
-                    format!("tool_seed_conditional:{job}"),
-                ));
-            }
-            if role == StepRole::MbxWorkspaceCleanup
-                && self.condition.as_deref() != Some(MBX_WORKSPACE_CLEAN_CONDITION)
-            {
-                return Err(ContractError::identity(
-                    "step.condition",
-                    format!("mbx_cleanup_condition_mismatch:{job}"),
-                ));
-            }
-            if let Some(expected) = role.required_id()
-                && self.id != Some(expected)
-            {
-                return Err(ContractError::identity(
-                    "step.id",
-                    format!("role_id_mismatch:{job}:{role:?}"),
-                ));
-            }
+            validate_step_role(self, role, job)?;
         }
         if let Some(id) = self.id
             && self.role != Some(StepRole::for_id(id))
@@ -177,9 +121,96 @@ impl Step {
                 format!("id_role_mismatch:{job}:{}", id.as_str()),
             ));
         }
+        if let Some(StepId::QualificationCache(identity)) = self.id
+            && !identity.belongs_to(job)
+        {
+            return Err(ContractError::identity(
+                "step.id",
+                format!("qualification_cache_owner_mismatch:{job}"),
+            ));
+        }
         validate_id_kind(self.id, &self.kind, job)?;
         validate_kind(&self.kind, job)
     }
+}
+
+fn validate_step_basics(step: &Step, job: &str) -> Result<(), ContractError> {
+    if step.name.trim().is_empty() {
+        return Err(ContractError::identity(
+            "step.name",
+            format!("empty_name:{job}"),
+        ));
+    }
+    if step.condition.as_ref().is_some_and(|condition| {
+        condition.trim().is_empty() || condition.bytes().any(|byte| matches!(byte, b'\n' | b'\r'))
+    }) {
+        return Err(ContractError::identity(
+            "step.condition",
+            format!("bad_condition:{job}"),
+        ));
+    }
+    if matches!(step.kind, StepKind::TaskExecution { .. })
+        && (step.id.is_some() || step.role.is_some() || step.condition.is_some())
+    {
+        return Err(ContractError::identity(
+            "step.task",
+            format!("task_execution_authority_mismatch:{job}"),
+        ));
+    }
+    if step.parallel
+        && (step.id.is_some()
+            || step.role.is_some()
+            || matches!(step.kind, StepKind::Internal { .. }))
+    {
+        return Err(ContractError::identity(
+            "step.parallel",
+            format!("parallel_step_authority:{job}"),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_step_role(step: &Step, role: StepRole, job: &str) -> Result<(), ContractError> {
+    role.validate(&step.kind, job)?;
+    if role == StepRole::ToolSeed && step.condition.is_some() {
+        return Err(ContractError::identity(
+            "step.role",
+            format!("tool_seed_conditional:{job}"),
+        ));
+    }
+    if role == StepRole::MbxWorkspaceCleanup
+        && step.condition.as_deref() != Some(MBX_WORKSPACE_CLEAN_CONDITION)
+    {
+        return Err(ContractError::identity(
+            "step.condition",
+            format!("mbx_cleanup_condition_mismatch:{job}"),
+        ));
+    }
+    if let Some(expected) = role.required_id()
+        && step.id != Some(expected)
+    {
+        return Err(ContractError::identity(
+            "step.id",
+            format!("role_id_mismatch:{job}:{role:?}"),
+        ));
+    }
+    if matches!(
+        role,
+        StepRole::QualificationCacheBind
+            | StepRole::QualificationCacheRestore
+            | StepRole::QualificationCacheSave
+            | StepRole::QualificationCacheRoots
+            | StepRole::QualificationRuntimeIdentity
+    ) && !matches!(step.id, Some(StepId::QualificationCache(_)))
+        && !(role == StepRole::QualificationRuntimeIdentity
+            && step.id == Some(StepId::QualificationRuntimeIdentity))
+    {
+        return Err(ContractError::identity(
+            "step.id",
+            format!("qualification_cache_dynamic_id_missing:{job}:{role:?}"),
+        ));
+    }
+    Ok(())
 }
 /// Require an output id to belong to its typed payload kind.
 fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<(), ContractError> {
@@ -221,6 +252,39 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
         StepId::ToolsRestore => {
             matches!(kind, StepKind::Action { uses, .. } if uses == super::step_identity::TOOLS_CACHE_RESTORE_USES)
         }
+        StepId::QualificationCache(identity) => {
+            use super::step_id::QualificationCacheStepStage;
+            match identity.stage() {
+                QualificationCacheStepStage::Bind => matches!(
+                    kind,
+                    StepKind::Internal { operation, .. }
+                        if operation == "bind-qualification-cache-v1"
+                ),
+                QualificationCacheStepStage::Restore => matches!(
+                    kind,
+                    StepKind::Action { uses, .. } if uses.starts_with("actions/cache/restore@")
+                ),
+                QualificationCacheStepStage::Save => matches!(
+                    kind,
+                    StepKind::Action { uses, .. } if uses.starts_with("actions/cache/save@")
+                ),
+                QualificationCacheStepStage::RuntimeIdentity => matches!(
+                    kind,
+                    StepKind::Internal { operation, .. }
+                        if operation == "observe-qualification-cache-runtime-v1"
+                ),
+                QualificationCacheStepStage::Roots => matches!(
+                    kind,
+                    StepKind::Internal { operation, .. }
+                        if operation == "observe-qualification-cache-roots-v1"
+                ),
+            }
+        }
+        StepId::QualificationRuntimeIdentity => matches!(
+            kind,
+            StepKind::Internal { operation, .. }
+                if operation == "observe-qualification-cache-runtime-v1"
+        ),
     };
     if valid {
         Ok(())

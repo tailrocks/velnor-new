@@ -318,6 +318,7 @@ impl PublicationContext<'_> {
                 .control()
                 .filesystem_instance_digest()
                 .to_owned(),
+            #[cfg(test)]
             mount_source: file.mount_source,
             read_only: self.channel.control().read_only(),
             no_copy: self.channel.control().no_copy(),

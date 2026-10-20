@@ -19,7 +19,7 @@ pub use super::runtime::{
 pub const MAX_QUALIFICATION_CACHE_LANES: usize = 256;
 
 /// Closed set of cache transports used by the current V1 qualification path.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum QualificationCacheLayer {
     /// MBX action-owned object store.
@@ -77,11 +77,16 @@ impl QualificationCacheSlot {
 mod cache_key;
 mod commitment;
 mod configuration;
+mod owner;
 mod runtime_requirements;
 
 pub(crate) use cache_key::key_for_slot;
 pub(crate) use commitment::identity_commitment;
 pub(crate) use configuration::configuration_commitment;
+pub use owner::QualificationCacheOwnerMemberRef;
+pub(crate) use owner::{
+    QualificationCacheOwner, owner_for_plan, owner_layer_identity, owner_runtime_requirements,
+};
 pub(crate) use runtime_requirements::runtime_requirements;
 
 fn logical_package_id(package: &crate::workflow::PlanPackage) -> String {

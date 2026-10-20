@@ -38,7 +38,7 @@ fn mbx_cargo_source_and_tofu_layers_roundtrip_isolated_roots() {
 }
 
 fn roundtrip(layer: QualificationCacheLayer, name: &str, ids: &[CacheRootId]) {
-    let key = format!("velnor-qcache-v3-campaign-1-{name}-runtime-k1");
+    let key = format!("velnor-qcache-v4-campaign-1-{name}-runtime-k1");
     let cold = tempfile::tempdir().expect("cold runner temp");
     let cold_temp = runner_temp(&cold);
     let cold_roots = root_set(&cold_temp, layer, ids);

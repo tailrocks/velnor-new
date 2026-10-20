@@ -104,18 +104,20 @@ pub(crate) async fn native_pre_challenge_fixture()
     };
     helpers::prepare_jit_and_job_facts(&scope, provisioned, &runner, REQUEST_ID).await?;
     let channel = crate::worker::execution_authorization::test_channel_for_ready_job_facts(
-        initialized.reservation_id,
-        initialized.intent_id,
-        scope.connection_id().as_str().to_owned(),
-        SET_ID,
-        REQUEST_ID,
-        helpers::TEST_ENGINE_ID.to_owned(),
-        initialized.docker_root_digest.clone(),
-        runner.id,
-        runner.name.clone(),
-        initialized.runner_container_id.clone(),
-        initialized.dind_container_id.clone(),
-        initialized.instance_binding_digest.clone(),
+        crate::worker::execution_authorization::TestProofChannelIdentity {
+            reservation_id: initialized.reservation_id,
+            operation_id: initialized.intent_id,
+            connection_id: scope.connection_id().as_str().to_owned(),
+            scale_set_id: SET_ID,
+            witness_request_id: REQUEST_ID,
+            engine_id: helpers::TEST_ENGINE_ID.to_owned(),
+            docker_root_digest: initialized.docker_root_digest.clone(),
+            runner_id: runner.id,
+            runner_name: runner.name.clone(),
+            runner_container_id: initialized.runner_container_id.clone(),
+            dind_container_id: initialized.dind_container_id.clone(),
+            instance_binding_digest: initialized.instance_binding_digest.clone(),
+        },
         &initialized.ready,
     )?;
     let config = crate::config::HostConfig::test_with_job_authority_policy(&binding)?;
@@ -208,18 +210,20 @@ pub(crate) async fn native_started_intake_fixture_with_filesystem_digest(
         helpers::prepare_jit_and_job_facts(&scope, provisioned, &runner, REQUEST_ID).await?;
     }
     let channel = crate::worker::execution_authorization::test_channel_for_ready_job_facts(
-        initialized.reservation_id,
-        initialized.intent_id,
-        scope.connection_id().as_str().to_owned(),
-        SET_ID,
-        REQUEST_ID,
-        helpers::TEST_ENGINE_ID.to_owned(),
-        initialized.docker_root_digest.clone(),
-        runner.id,
-        runner.name.clone(),
-        initialized.runner_container_id.clone(),
-        initialized.dind_container_id.clone(),
-        initialized.instance_binding_digest.clone(),
+        crate::worker::execution_authorization::TestProofChannelIdentity {
+            reservation_id: initialized.reservation_id,
+            operation_id: initialized.intent_id,
+            connection_id: scope.connection_id().as_str().to_owned(),
+            scale_set_id: SET_ID,
+            witness_request_id: REQUEST_ID,
+            engine_id: helpers::TEST_ENGINE_ID.to_owned(),
+            docker_root_digest: initialized.docker_root_digest.clone(),
+            runner_id: runner.id,
+            runner_name: runner.name.clone(),
+            runner_container_id: initialized.runner_container_id.clone(),
+            dind_container_id: initialized.dind_container_id.clone(),
+            instance_binding_digest: initialized.instance_binding_digest.clone(),
+        },
         &initialized.ready,
     )?;
     let config = crate::config::HostConfig::test_with_job_authority_policy(&binding)?;

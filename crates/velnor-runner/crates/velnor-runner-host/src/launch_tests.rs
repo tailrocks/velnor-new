@@ -1,20 +1,13 @@
-//! Launch ordering. The scripted transport is the acquire, JIT, and ack path.
-
-use std::sync::{Arc, Mutex};
+//! Poll classification and legacy-row cleanup guards.
 
 use velnor_runner_github::{InnerJob, InnerKind, ParsedBatch, Poll, Statistics};
 
+use crate::IntentState;
 use crate::journal::Outcome;
-use crate::launch::{Idle, drive_offer, fail_unstarted, idle};
+use crate::launch::{Idle, fail_unstarted, idle};
 use crate::launch_harness::{
-    CANARY, Mode, Script, absent, assigned_wait, available, ctx, open, started_progress,
-    started_wait,
+    absent, assigned_wait, available, open, started_progress, started_wait,
 };
-use crate::launch_test_support::valid_worker_volume;
-use crate::{EnsureError, HostError, IntentState, Started};
-
-#[path = "launch_drive_tests.rs"]
-mod drive;
 
 #[test]
 fn statistics_advance_and_offers_stay() {
@@ -218,152 +211,4 @@ async fn name_taken_keeps_a_row_that_has_a_container() -> Result<(), String> {
         return Err(format!("state {state:?}"));
     }
     absent(&scratch.file())
-}
-
-#[tokio::test]
-async fn launch_acks_only_after_start_and_hides_jit() -> Result<(), String> {
-    let (scratch, journal) = open("ok").await?;
-    let seen = Arc::new(Mutex::new(Vec::new()));
-    let captured = Arc::clone(&seen);
-    let mut script = Script {
-        calls: Vec::new(),
-        mode: Mode::Ok,
-    };
-    let started = drive_offer(
-        &mut script,
-        &ctx(),
-        &available(&[3]),
-        &journal,
-        |volume, jit, _bind| {
-            let volume = volume.to_owned();
-            let jit = jit.to_vec();
-            let captured = Arc::clone(&captured);
-            async move {
-                if !valid_worker_volume(&volume) {
-                    return Err(HostError::ForbiddenMount);
-                }
-                let mut slot = captured.lock().map_err(|_| HostError::Docker)?;
-                *slot = jit;
-                Ok(Started {
-                    dind_id: "dind-1".to_owned(),
-                    runner_id: "runner-1".to_owned(),
-                })
-            }
-        },
-    )
-    .await
-    .map_err(|err| err.to_string())?;
-    let started = started.ok_or_else(|| "missing worker".to_owned())?;
-    assert_eq!(started.runner_id, "runner-1");
-    assert_eq!(script.calls, ["acquire", "jit", "ack"]);
-    {
-        let slot = seen.lock().map_err(|err| err.to_string())?;
-        assert_eq!(slot.as_slice(), CANARY.as_bytes());
-    }
-    let rows = journal.rows().await.map_err(|err| err.to_string())?;
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].state, IntentState::Done);
-    assert_eq!(rows[0].docker_id.as_deref(), Some("runner-1"));
-    assert_eq!(rows[0].dind_id.as_deref(), Some("dind-1"));
-    assert_eq!(
-        journal
-            .record_runner_completed(1, 3, 901, "v3")
-            .await
-            .map_err(|error| error.to_string())?,
-        Some(rows[0].id)
-    );
-    absent(&scratch.file())
-}
-
-#[tokio::test]
-async fn uncertain_acquire_does_not_ack() -> Result<(), String> {
-    let (scratch, journal) = open("timeout").await?;
-    let mut script = Script {
-        calls: Vec::new(),
-        mode: Mode::Timeout,
-    };
-    let error = drive_offer(
-        &mut script,
-        &ctx(),
-        &available(&[3]),
-        &journal,
-        |_volume, _jit, _bind| async { Err(HostError::Docker) },
-    )
-    .await
-    .map_err(|err| err.to_string());
-    assert_eq!(error, Err("effect uncertain".to_owned()));
-    assert_eq!(script.calls, ["acquire"]);
-    let rows = journal.rows().await.map_err(|err| err.to_string())?;
-    assert_eq!(rows[0].state, IntentState::Uncertain);
-    assert_eq!(rows[0].docker_id, None);
-    let id = rows[0].id;
-    let mut replay = Script {
-        calls: Vec::new(),
-        mode: Mode::Ok,
-    };
-    let replayed = drive_offer(
-        &mut replay,
-        &ctx(),
-        &available(&[3]),
-        &journal,
-        |_volume, _jit, _bind| async { Err(HostError::Docker) },
-    )
-    .await;
-    assert_eq!(replayed, Err(EnsureError::Uncertain));
-    assert_eq!(replay.calls, Vec::<&str>::new());
-    let rows = journal.rows().await.map_err(|err| err.to_string())?;
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].id, id);
-    assert_eq!(rows[0].state, IntentState::Uncertain);
-    absent(&scratch.file())
-}
-
-#[tokio::test]
-async fn forbidden_acquire_is_failed_and_not_acked() -> Result<(), String> {
-    let (_scratch, journal) = open("forbidden").await?;
-    let mut script = Script {
-        calls: Vec::new(),
-        mode: Mode::Forbidden,
-    };
-    let error = drive_offer(
-        &mut script,
-        &ctx(),
-        &available(&[3]),
-        &journal,
-        |_volume, _jit, _bind| async { Err(HostError::Docker) },
-    )
-    .await;
-    assert_eq!(error, Err(EnsureError::Forbidden));
-    assert_eq!(script.calls, ["acquire"]);
-    let rows = journal.rows().await.map_err(|err| err.to_string())?;
-    assert_eq!(rows[0].state, IntentState::Failed);
-    Ok(())
-}
-
-#[tokio::test]
-async fn empty_acquire_is_not_acked() -> Result<(), String> {
-    let (_scratch, journal) = open("empty").await?;
-    let mut script = Script {
-        calls: Vec::new(),
-        mode: Mode::Empty,
-    };
-    let error = drive_offer(
-        &mut script,
-        &ctx(),
-        &available(&[3]),
-        &journal,
-        |_volume, _jit, _bind| async { Err(HostError::Docker) },
-    )
-    .await;
-    assert_eq!(
-        error,
-        Err(EnsureError::Unexpected {
-            status: 0,
-            step: "acquire",
-        })
-    );
-    assert_eq!(script.calls, ["acquire"]);
-    let rows = journal.rows().await.map_err(|err| err.to_string())?;
-    assert_eq!(rows[0].state, IntentState::Failed);
-    Ok(())
 }

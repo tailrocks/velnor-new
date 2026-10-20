@@ -133,7 +133,7 @@ async fn metadata_volume_is_inventory_only_and_cannot_be_mounted_directly() -> R
     let requests = stub.finish().await?;
 
     assert_eq!(result, Err(crate::HostError::ForbiddenMount));
-    assert!(requests.is_empty());
+    assert_eq!(requests, Vec::<String>::new());
     Ok(())
 }
 
@@ -153,7 +153,7 @@ async fn malformed_home_or_work_mount_plan_is_rejected_before_docker() -> Result
         let requests = stub.finish().await?;
 
         assert_eq!(result, Err(crate::HostError::ForbiddenMount));
-        assert!(requests.is_empty());
+        assert_eq!(requests, Vec::<String>::new());
     }
     Ok(())
 }

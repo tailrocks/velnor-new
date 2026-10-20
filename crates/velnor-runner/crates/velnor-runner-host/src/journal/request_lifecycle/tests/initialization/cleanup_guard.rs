@@ -14,8 +14,7 @@ async fn topology_two_cleanup_proof_passes_the_split_guards() -> Result<(), Host
 async fn version_nineteen_migration_replaces_the_legacy_cleanup_guard() -> Result<(), HostError> {
     let scratch = Scratch::new()?;
     let path = scratch.file();
-    let journal = Journal::open(&path).await?;
-    drop(journal);
+    crate::journal::schema::historical_fixture::install(&path, 19).await?;
 
     let database = turso::Builder::new_local(path.to_str().ok_or(HostError::Path)?)
         .build()

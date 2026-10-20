@@ -1,19 +1,13 @@
-//! Acquire jobs up to capacity, mint JIT, and start one paired worker each.
-//!
-//! The journal row is committed before acquire, JIT, and Docker. JIT bytes are
-//! passed to the starter and are not written to the journal.
-
-use std::future::Future;
+//! This module controls host launch state, queue polling, and worker life cycles.
 
 use velnor_runner_github::{
     Exchange, Poll, QueueSession, SessionRequest, Transport, TransportFail,
 };
 
-use crate::error::HostError;
 use crate::journal::{ConnectionJournal, HeaderAllocation, Journal};
 use crate::listen::Link;
 use crate::scale_set::EnsureError;
-use crate::worker::{ResourceBudget, Started};
+use crate::worker::ResourceBudget;
 
 mod admission_gate;
 mod bind;
@@ -23,8 +17,6 @@ mod busy_slot_tests;
 mod capacity;
 mod completion;
 mod drive;
-#[cfg(all(test, unix))]
-mod effect_tests;
 mod engine_context;
 pub(crate) mod execution_authorization;
 mod gate;
@@ -33,7 +25,6 @@ mod inspect;
 mod inspect_tests;
 mod name_taken;
 mod resource_probe;
-mod runner_dir;
 pub(crate) mod scoped_runtime;
 
 pub(crate) use admission_gate::lock_connection;
@@ -41,6 +32,8 @@ pub(crate) use admission_gate::lock_connection;
 pub(crate) use drive::acquire_scoped_offer;
 #[cfg(test)]
 pub(crate) use drive::authorize_positive_offer_with;
+#[cfg(test)]
+pub(crate) use drive::recover_acquired_scoped_offer_with_test_observation;
 pub(crate) use drive::{
     DeferredAuthorizedOffer, DeferredAuthorizedOffers, Drive, GuestAdmission, Lane,
     PositiveOfferAuthorization, Rest, ScopedAdmissionInput, acquire_authorized_scoped_offer,
@@ -55,6 +48,7 @@ pub(crate) use resource_probe::build_pin_status;
 pub(crate) use resource_probe::publication::VerifiedExecutionPublicationCleanup;
 pub(crate) use resource_probe::run_doctor_probe;
 pub(crate) use resource_probe::start_permit;
+pub(in crate::launch) use resource_probe::{PreJitCapacityObservation, measure_pre_jit_capacity};
 pub(crate) use resource_probe::{RecoveryObservation, ReleaseReadSecret};
 pub(crate) use session::{
     CompletedHeaderPoll, DeletedSession204, ReturnedSessionRefreshTransportError,
@@ -78,7 +72,6 @@ pub(crate) use turn::{IntakeDecision, finish_positive_poll_with_ack};
 pub(crate) use turn::{
     ScopedPollOutcome, Settlement, ZeroHeaderMode, poll_scoped_connection_once_with_mode,
 };
-mod mint_origin;
 #[cfg(test)]
 mod pressure;
 mod session;
@@ -89,7 +82,7 @@ mod source_order_tests;
 pub(crate) mod steady;
 pub(crate) mod steps;
 #[cfg(test)]
-mod subject_tests;
+pub(crate) use steps::{RunnerCreateFailure, runner_create_409};
 mod trace;
 mod turn;
 pub(crate) mod verified_images;
@@ -155,36 +148,6 @@ pub(crate) use steps::run_native_quarantine_composition;
 pub(crate) use steps::{Idle, idle};
 #[cfg(test)]
 pub(crate) use turn::admission;
-
-/// Acquire, JIT, and start for one poll. No session create.
-///
-/// # Errors
-///
-/// Returns [`EnsureError`] when more than one job is offered, or a later step fails.
-/// An uncertain acquire is not acknowledged.
-pub(crate) async fn drive_offer<T, S, F>(
-    lane: &mut T,
-    ctx: &Drive,
-    polled: &Poll,
-    journal: &Journal,
-    start: S,
-) -> Result<Option<Started>, EnsureError>
-where
-    T: velnor_runner_github::Transport + Lane,
-    S: Fn(&str, &[u8], bind::Bind) -> F,
-    F: Future<Output = Result<Started, HostError>>,
-{
-    if matches!(steps::idle(polled), steps::Idle::Scale) {
-        let Poll::Batch(batch) = polled else {
-            return Ok(None);
-        };
-        return steps::scale_id(lane, ctx, batch, journal, start).await;
-    }
-    let Some((batch, request_id)) = steps::assignment(polled)? else {
-        return Ok(None);
-    };
-    steps::launch_id(lane, ctx, batch, journal, request_id, start).await
-}
 
 fn ack_ready(
     link: &mut Link,

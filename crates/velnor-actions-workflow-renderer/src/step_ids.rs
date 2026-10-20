@@ -6,10 +6,10 @@ use crate::yaml::Yaml;
 
 /// Append the output ID authorized by a typed step identity.
 pub(crate) fn push_step_id(entries: &mut Vec<(String, Yaml)>, step: &Step) {
-    let Some(id) = step.id.map(StepId::as_str) else {
+    let Some(id) = step.id.map(StepId::as_string) else {
         return;
     };
-    push_explicit_step_id(entries, id);
+    push_explicit_step_id(entries, &id);
 }
 
 /// Append an output ID for a fixed generated action whose ID has no contract

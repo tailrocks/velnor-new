@@ -34,21 +34,21 @@ fn complete_cold_warm_third_useful_delta_and_control_admission_paths() -> TestRe
     assert_eq!(useful.receipt.source_delta, Some(delta));
 
     let directive = QualificationCacheDirective::for_plan(&useful_plan, Some(&third_admission))?
-        .ok_or_else(|| std::io::Error::other("useful-delta directive missing"))?;
+        .ok_or_else(|| std::io::Error::other("The UsefulDelta directive is missing."))?;
     let entry = &useful_plan.matrix.include[0];
     let sources = directive
         .layer(&entry.matrix_key, QualificationCacheLayer::CargoSources)
         .ok_or_else(|| std::io::Error::other("Cargo sources directive missing"))?;
-    let keys = directive.bind_runtime(
+    let keys = directive.bind_runtime_owner(
         &useful_plan,
         Some(&third_admission),
-        &entry.matrix_key,
+        &entry.job_id,
         QualificationCacheLayer::CargoSources,
         &super::directive_tests::runtime_identity(
             sources
                 .runtime
                 .as_ref()
-                .ok_or_else(|| std::io::Error::other("runtime requirements missing"))?,
+                .ok_or_else(|| std::io::Error::other("The runtime requirements are missing."))?,
         ),
     )?;
     assert!(
@@ -65,14 +65,123 @@ fn complete_cold_warm_third_useful_delta_and_control_admission_paths() -> TestRe
         .ok_or_else(|| std::io::Error::other("control directive missing"))?;
     assert!(
         control_directive
-            .lanes
+            .owners
             .iter()
-            .flat_map(|lane| &lane.layers)
+            .flat_map(|owner| &owner.layers)
             .all(|layer| !layer.active
                 && layer.restore_policy == QualificationCacheRestorePolicy::Disabled
                 && layer.save_policy == QualificationCacheSavePolicy::Disabled)
     );
     Ok(())
+}
+
+#[test]
+fn useful_delta_keeps_portable_owner_cache_identity() -> TestResult {
+    let cold_plan = qualification_plan(QualificationPhase::Cold, 760, SOURCE_A, None)?;
+    let cold = completed_node(&cold_plan, None, None)?;
+    let warm_plan = phase_plan(QualificationPhase::Warm, 761, SOURCE_A, 760)?;
+    let warm = completed_node(&warm_plan, Some(&cold), None)?;
+    let third_plan = phase_plan(QualificationPhase::Third, 762, SOURCE_A, 761)?;
+    let third = completed_node(&third_plan, Some(&warm), None)?;
+    let delta = useful_delta(SOURCE_A, SOURCE_B)?;
+    let mut useful_plan = phase_plan(QualificationPhase::UsefulDelta, 763, SOURCE_B, 762)?;
+    let changed_input = crate::digest_b3(b"useful source edit input");
+    useful_plan.matrix.include[0].input_digest = changed_input.clone();
+    useful_plan.obligations[0].input_digest = changed_input;
+    useful_plan.validate()?;
+
+    let warm_admission = admission_for(&warm, None)?;
+    let third_admission = admission_for(&third, Some(&delta))?;
+    third_admission.validate_for_plan(&useful_plan)?;
+    let useful = completed_node(&useful_plan, Some(&third), Some(delta))?;
+    let third_directive =
+        QualificationCacheDirective::for_plan(&third_plan, Some(&warm_admission))?
+            .ok_or_else(|| std::io::Error::other("The third directive is missing."))?;
+    let directive = QualificationCacheDirective::for_plan(&useful_plan, Some(&third_admission))?
+        .ok_or_else(|| std::io::Error::other("The UsefulDelta directive is missing."))?;
+    let third_owner = &third_directive.owners[0];
+    let useful_owner = &directive.owners[0];
+    assert_ne!(third_owner.member_digest, useful_owner.member_digest);
+    assert_eq!(
+        third_owner.layers[1].identity_digest,
+        useful_owner.layers[1].identity_digest
+    );
+    assert_eq!(
+        useful.receipt.owners[0].member_digest,
+        useful_owner.member_digest
+    );
+    let runtime = super::super::directive_tests::runtime_identity(
+        directive.owners[0].layers[1]
+            .runtime
+            .as_ref()
+            .ok_or_else(|| std::io::Error::other("The owner runtime is missing."))?,
+    );
+    let bound = directive.bind_runtime_owner(
+        &useful_plan,
+        Some(&third_admission),
+        "rust-demo",
+        QualificationCacheLayer::CargoSources,
+        &runtime,
+    )?;
+    assert!(
+        bound
+            .restore
+            .is_some_and(|restore| restore.expected_cache.is_some())
+    );
+    Ok(())
+}
+
+#[test]
+fn same_source_relocated_checkout_admits_and_binds_prior_owner_cache() -> TestResult {
+    let mut cold_plan = qualification_plan(QualificationPhase::Cold, 770, SOURCE_A, None)?;
+    relocate_demo_plan(&mut cold_plan, "/home/runner/work/velnor/velnor");
+    let cold = completed_node(&cold_plan, None, None)?;
+    let mut warm_plan = phase_plan(QualificationPhase::Warm, 771, SOURCE_A, 770)?;
+    relocate_demo_plan(&mut warm_plan, "/tmp/agent/_work/velnor/velnor");
+    warm_plan.validate()?;
+
+    let admission = admission_for(&cold, None)?;
+    admission.validate_for_plan(&warm_plan)?;
+    let warm = completed_node(&warm_plan, Some(&cold), None)?;
+    let directive = QualificationCacheDirective::for_plan(&warm_plan, Some(&admission))?
+        .ok_or_else(|| std::io::Error::other("The warm directive is missing."))?;
+    let layer = directive
+        .owner_layer("rust-demo", QualificationCacheLayer::CargoSources)
+        .ok_or_else(|| std::io::Error::other("The warm owner layer is missing."))?;
+    assert_eq!(
+        layer.identity_digest,
+        cold.receipt.owners[0].layers[1].identity_digest
+    );
+    let runtime = super::super::directive_tests::runtime_identity(
+        layer
+            .runtime
+            .as_ref()
+            .ok_or_else(|| std::io::Error::other("The warm runtime requirements are missing."))?,
+    );
+    let bound = directive.bind_runtime_owner(
+        &warm_plan,
+        Some(&admission),
+        "rust-demo",
+        QualificationCacheLayer::CargoSources,
+        &runtime,
+    )?;
+    assert!(
+        bound
+            .restore
+            .is_some_and(|restore| restore.expected_cache.is_some())
+    );
+    assert_eq!(
+        warm.receipt.owners[0].member_digest,
+        cold.receipt.owners[0].member_digest
+    );
+    Ok(())
+}
+
+fn relocate_demo_plan(plan: &mut crate::workflow::Plan, checkout: &str) {
+    let package_id = format!("path+file://{checkout}/crates/demo#demo@0.1.0");
+    plan.packages[0].package_id = package_id.clone();
+    plan.matrix.include[0].adapter_metadata["package_id"] = package_id.clone().into();
+    plan.matrix.include[0].adapter_metadata["unit_id"] = package_id.into();
 }
 
 #[test]
@@ -160,9 +269,9 @@ fn assert_warm_successor_is_selected(
     third_plan: &crate::workflow::Plan,
     warm_admission: &QualificationCacheAdmission,
 ) -> TestResult {
-    let cold_layers = &cold.receipt.lanes[0].layers;
-    let warm_layers = &warm.receipt.lanes[0].layers;
-    let third_layers = &third.receipt.lanes[0].layers;
+    let cold_layers = &cold.receipt.owners[0].layers;
+    let warm_layers = &warm.receipt.owners[0].layers;
+    let third_layers = &third.receipt.owners[0].layers;
     let cold_sources = &cold_layers[1];
     let cold_tools = &cold_layers[2];
     let warm_sources = &warm_layers[1];
@@ -183,7 +292,7 @@ fn assert_warm_successor_is_selected(
     );
 
     let directive = QualificationCacheDirective::for_plan(third_plan, Some(warm_admission))?
-        .ok_or_else(|| std::io::Error::other("third directive missing"))?;
+        .ok_or_else(|| std::io::Error::other("The third directive is missing."))?;
     let matrix_key = &third_plan.matrix.include[0].matrix_key;
     let sources = directive
         .layer(matrix_key, QualificationCacheLayer::CargoSources)

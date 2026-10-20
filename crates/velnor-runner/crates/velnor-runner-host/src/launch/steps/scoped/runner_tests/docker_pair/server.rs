@@ -1,5 +1,8 @@
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicU8, Ordering},
+};
 use std::time::Duration;
 
 use bollard::Docker;
@@ -28,18 +31,18 @@ mod publication_fixture;
 mod responses;
 
 #[derive(Clone)]
-pub(super) struct CapturedRequest {
-    pub(super) method: String,
-    pub(super) target: String,
-    pub(super) body: Vec<u8>,
-    pub(super) response_status: Option<u16>,
-    pub(super) response_body: Vec<u8>,
+pub(crate) struct CapturedRequest {
+    pub(crate) method: String,
+    pub(crate) target: String,
+    pub(crate) body: Vec<u8>,
+    pub(crate) response_status: Option<u16>,
+    pub(crate) response_body: Vec<u8>,
 }
 
-pub(super) struct CapturedApi {
-    pub(super) requests: Vec<CapturedRequest>,
-    pub(super) jit_input: Vec<u8>,
-    pub(super) server_error: Option<String>,
+pub(crate) struct CapturedApi {
+    pub(crate) requests: Vec<CapturedRequest>,
+    pub(crate) jit_input: Vec<u8>,
+    pub(crate) server_error: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -57,13 +60,14 @@ pub(super) struct PairDockerApi {
     path: PathBuf,
     requests: Arc<Mutex<Vec<CapturedRequest>>>,
     jit_input: Arc<Mutex<Vec<u8>>>,
-    stop: Option<oneshot::Sender<()>>,
+    tamper_channel_response: Arc<AtomicU8>,
+    stop: Option<oneshot::Sender<bool>>,
     task: Option<tokio::task::JoinHandle<Result<(), String>>>,
 }
 
 impl PairDockerApi {
     pub(super) fn open(images: crate::launch::VerifiedWorkerImages) -> Result<Self, String> {
-        Self::open_with_optional_initializer(images, None)
+        Self::open_with_optional_initializer(images, None, None)
     }
 
     pub(super) fn open_with_initializer(
@@ -71,10 +75,45 @@ impl PairDockerApi {
         initializer_image_id: String,
         initializer: crate::worker::storage_initialization::InitializationTestResponder,
     ) -> Result<Self, String> {
+        Self::open_with_initializer_and_runner_create_status(
+            images,
+            initializer_image_id,
+            initializer,
+            None,
+        )
+    }
+
+    pub(super) fn open_with_runner_create_rejection(
+        images: crate::launch::VerifiedWorkerImages,
+        initializer_image_id: String,
+        initializer: crate::worker::storage_initialization::InitializationTestResponder,
+        status: u16,
+    ) -> Result<Self, String> {
+        if !matches!(status, 400 | 404 | 409) {
+            return Err(
+                "A rejected Runner container request must return a direct Docker 400, 404, or 409 response."
+                    .to_owned(),
+            );
+        }
+        Self::open_with_initializer_and_runner_create_status(
+            images,
+            initializer_image_id,
+            initializer,
+            Some(status),
+        )
+    }
+
+    fn open_with_initializer_and_runner_create_status(
+        images: crate::launch::VerifiedWorkerImages,
+        initializer_image_id: String,
+        initializer: crate::worker::storage_initialization::InitializationTestResponder,
+        runner_create_status: Option<u16>,
+    ) -> Result<Self, String> {
         let initializer = Arc::new(AsyncMutex::new(initializer));
         Self::open_with_optional_initializer(
             images,
             Some((initializer_image_id, Arc::clone(&initializer))),
+            runner_create_status,
         )
     }
 
@@ -84,21 +123,26 @@ impl PairDockerApi {
             String,
             Arc<AsyncMutex<crate::worker::storage_initialization::InitializationTestResponder>>,
         )>,
+        runner_create_status: Option<u16>,
     ) -> Result<Self, String> {
         let path = std::env::temp_dir().join(format!("vp-{}.sock", uuid::Uuid::new_v4()));
         let listener = UnixListener::bind(&path).map_err(|error| error.to_string())?;
         let requests = Arc::new(Mutex::new(Vec::new()));
         let jit_input = Arc::new(Mutex::new(Vec::new()));
+        let tamper_channel_response = Arc::new(AtomicU8::new(0));
         let (stop, stopped) = oneshot::channel();
         let server_requests = Arc::clone(&requests);
         let server_jit = Arc::clone(&jit_input);
+        let server_tamper_channel = Arc::clone(&tamper_channel_response);
         let task = tokio::spawn(async move {
             daemon::serve(
                 listener,
                 images,
                 initializer,
+                runner_create_status,
                 server_requests,
                 server_jit,
+                server_tamper_channel,
                 stopped,
             )
             .await
@@ -113,29 +157,51 @@ impl PairDockerApi {
             path,
             requests,
             jit_input,
+            tamper_channel_response,
             stop: Some(stop),
             task: Some(task),
         })
     }
 
-    pub(super) async fn finish(mut self) -> Result<CapturedApi, String> {
+    pub(super) fn tamper_next_channel_operation_id(&self) {
+        self.tamper_channel_response.store(1, Ordering::SeqCst);
+    }
+
+    pub(super) fn tamper_next_channel_attachment_inode(&self) {
+        self.tamper_channel_response.store(2, Ordering::SeqCst);
+    }
+
+    pub(super) async fn finish(self) -> Result<CapturedApi, String> {
+        self.finish_with_attach_drain(true).await
+    }
+
+    pub(super) async fn finish_partial_start(self) -> Result<CapturedApi, String> {
+        self.finish_with_attach_drain(false).await
+    }
+
+    async fn finish_with_attach_drain(
+        mut self,
+        drain_open_attachments: bool,
+    ) -> Result<CapturedApi, String> {
         if let Some(stop) = self.stop.take() {
-            let _sent = stop.send(());
+            let _sent = stop.send(drain_open_attachments);
         }
         let mut task = self
             .task
             .take()
-            .ok_or_else(|| "Docker API test server stopped".to_owned())?;
+            .ok_or_else(|| "The Docker API test server stopped.".to_owned())?;
         let server_error = match tokio::time::timeout(TIMEOUT, &mut task).await {
             Ok(Ok(Ok(()))) => None,
             Ok(Ok(Err(error))) => Some(error),
-            Ok(Err(error)) => Some(format!("Docker API task error: {error}")),
-            Err(_) => Some("Docker API test server timed out".to_owned()),
+            Ok(Err(error)) => Some(format!("The Docker API task failed. Error: {error}.")),
+            Err(_) => Some("The Docker API test server timed out.".to_owned()),
         };
-        std::fs::remove_file(&self.path).map_err(|error| error.to_string())?;
+        std::fs::remove_file(&self.path).map_err(|error| {
+            format!("The Docker API socket could not be removed. Error: {error}.")
+        })?;
         Ok(CapturedApi {
-            requests: take(&self.requests, "Docker request list is poisoned")?,
-            jit_input: take(&self.jit_input, "JIT input is poisoned")?,
+            requests: take(&self.requests, "The Docker request list lock failed.")?,
+            jit_input: take(&self.jit_input, "The JIT configuration lock failed.")?,
             server_error,
         })
     }
@@ -143,7 +209,7 @@ impl PairDockerApi {
     pub(super) fn request_summary(&self) -> Result<Vec<String>, String> {
         self.requests
             .lock()
-            .map_err(|_| "Docker request list is poisoned".to_owned())
+            .map_err(|_| "The Docker request list lock failed.".to_owned())
             .map(|requests| {
                 let mut summary: Vec<String> = requests
                     .iter()
@@ -165,7 +231,7 @@ impl PairDockerApi {
         let requests = self
             .requests
             .lock()
-            .map_err(|_| "Docker request list is poisoned".to_owned())?;
+            .map_err(|_| "The Docker request list lock failed.".to_owned())?;
         let publisher_containers = requests
             .iter()
             .filter(|request| {
@@ -204,7 +270,7 @@ impl PairDockerApi {
             jit_input_bytes: self
                 .jit_input
                 .lock()
-                .map_err(|_| "JIT input is poisoned".to_owned())?
+                .map_err(|_| "The JIT configuration lock failed.".to_owned())?
                 .len(),
         };
         Ok(snapshot)
@@ -214,7 +280,7 @@ impl PairDockerApi {
 impl Drop for PairDockerApi {
     fn drop(&mut self) {
         if let Some(stop) = self.stop.take() {
-            let _sent = stop.send(());
+            let _sent = stop.send(false);
         }
         if let Some(task) = self.task.take() {
             task.abort();

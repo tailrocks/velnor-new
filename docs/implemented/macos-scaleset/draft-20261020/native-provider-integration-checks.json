@@ -310,5 +310,32 @@
   "full_runner_strict_clippy": "FAIL",
   "release": "NOT_RUN",
   "live_installation": "NOT_RUN",
-  "hook_fix": "The hook removed unused imports and made the child imports and lifetime explicit. The focused provider suite passed again."
+  "hook_fix": "The hook removed unused imports and made the child imports and lifetime explicit. The focused provider suite passed again.",
+  "delivery_branch_integration": {
+    "source_base": "021677c413a99e768f4f099b18805c8b21b90f87",
+    "merged_source": "3bbeb6da2d4b7710b03d09b6eb5dd666db6d047f",
+    "root_tests": 311,
+    "runner_tests": 125,
+    "strict_root_clippy": "PASS",
+    "checks": [
+      {
+        "log": "shipping-e7-integrated-root-clippy-20261020.log",
+        "sha256": "a082584200b566ca870c4edc7061e9c08d5b648a6c5fd9d43dc3ccfcbff50869",
+        "exit_status": 0
+      },
+      {
+        "log": "shipping-e7-integrated-root-nextest-20261020.log",
+        "sha256": "14d863b21512230c26dfb2d744c9b430151f881b9ae986ba03e45547461b283b",
+        "exit_status": 0,
+        "run_id": "6b02163b-f751-4eca-8da4-95722b4a8f2c"
+      },
+      {
+        "log": "shipping-e7-integrated-runner-nextest-20261020.log",
+        "sha256": "babaedb994eb7bdc217aac5f878d7e6aa57005a211e186d1116c74da7a302d6f",
+        "exit_status": 0,
+        "run_id": "94fc07b1-6386-4b5f-b0ce-abdd69126f71"
+      }
+    ],
+    "scope": "The tests check the combined source. Full runner Clippy, release, and live installation gates remain necessary."
+  }
 }

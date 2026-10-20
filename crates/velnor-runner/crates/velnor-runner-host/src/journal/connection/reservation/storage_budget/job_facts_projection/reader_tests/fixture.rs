@@ -55,18 +55,20 @@ pub(super) async fn bound_fixture(nonce: char) -> Result<BoundFixture, HostError
         .ok_or(HostError::Journal)?;
     scope.bind_jit_runner(jit, &runner).await?;
     let channel = test_channel_for_ready_job_facts(
-        ready.reservation_id,
-        ready.intent_id,
-        scope.connection_id().as_str().to_owned(),
-        501,
-        70,
-        crate::journal::request_lifecycle::tests::helpers::TEST_ENGINE_ID.to_owned(),
-        ready.docker_root_digest.clone(),
-        runner.id,
-        runner.name,
-        ready.runner_container_id.clone(),
-        ready.dind_container_id.clone(),
-        ready.instance_binding_digest.clone(),
+        crate::worker::execution_authorization::TestProofChannelIdentity {
+            reservation_id: ready.reservation_id,
+            operation_id: ready.intent_id,
+            connection_id: scope.connection_id().as_str().to_owned(),
+            scale_set_id: 501,
+            witness_request_id: 70,
+            engine_id: crate::journal::request_lifecycle::tests::helpers::TEST_ENGINE_ID.to_owned(),
+            docker_root_digest: ready.docker_root_digest.clone(),
+            runner_id: runner.id,
+            runner_name: runner.name,
+            runner_container_id: ready.runner_container_id.clone(),
+            dind_container_id: ready.dind_container_id.clone(),
+            instance_binding_digest: ready.instance_binding_digest.clone(),
+        },
         &ready.ready,
     )?;
     let claim = scope

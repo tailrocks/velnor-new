@@ -12,6 +12,21 @@ pub(in crate::launch::steps::scoped::runner::tests::docker_pair) struct PollSess
     pub(super) intent_id: i64,
     pub(super) allocation: HeaderAllocation,
     acquire_calls: std::rc::Rc<std::cell::Cell<usize>>,
+    acknowledgement_calls: std::rc::Rc<std::cell::Cell<usize>>,
+}
+
+impl PollSession {
+    pub(in crate::launch::steps::scoped::runner::tests::docker_pair) fn acquire_calls(
+        &self,
+    ) -> usize {
+        self.acquire_calls.get()
+    }
+
+    pub(in crate::launch::steps::scoped::runner::tests::docker_pair) fn acknowledgement_calls(
+        &self,
+    ) -> usize {
+        self.acknowledgement_calls.get()
+    }
 }
 
 #[path = "native_intake/acquisition.rs"]

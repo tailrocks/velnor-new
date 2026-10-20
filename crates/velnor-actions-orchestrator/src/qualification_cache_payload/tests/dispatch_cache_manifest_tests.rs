@@ -5,7 +5,7 @@ use velnor_actions_contract::{canonical_json_str, workflow::QualificationCacheBa
 
 use super::super::roots::{CacheRootId, CacheRootSet};
 
-const CACHE_KEY: &str = "velnor-qcache-v3-campaign-1-mbx_objects-k1";
+const CACHE_KEY: &str = "velnor-qcache-v4-campaign-1-mbx_objects-k1";
 const ROOT_DIGEST: &str = "b3-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 #[test]

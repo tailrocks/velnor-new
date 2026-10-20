@@ -20,6 +20,13 @@ use quarantine_inbox::verify_quarantined_inbox;
 #[path = "native_intake_composition/pre_delivery.rs"]
 mod pre_delivery;
 use pre_delivery::assert_pre_delivery_snapshot;
+#[path = "native_intake_composition/ack_recovery.rs"]
+mod ack_recovery;
+#[path = "native_intake_composition/pair_assertions.rs"]
+mod pair_assertions;
+#[path = "native_intake_composition/tampered_channel.rs"]
+mod tampered_channel;
+use pair_assertions::{assert_bound_identity, assert_jit_persistence, verify_native_pair_requests};
 
 #[test]
 fn acquired_request_reaches_measured_storage_bound() -> Result<(), String> {
@@ -93,17 +100,32 @@ async fn continue_native_composition(
         .take()
         .ok_or_else(|| "The Acquire outcome was already consumed.".to_owned())?;
     let bound = Box::pin(bind_acquired(&setup, &provider, outcome)).await?;
+    let reservation_id = bound.prepared().acquired().reservation_id();
+    let resource_budget = bound.prepared().acquired().resource_budget();
     assert_bound_identity(&setup, &bound, request_id).await?;
     let ready = Box::pin(jit_and_deliver(&setup, bound, request_id, &provider))
         .await
-        .map_err(|error| format!("JIT and listener: {error}"))?;
+        .map_err(|error| format!("The JIT or listener step failed: {error}."))?;
     assert_eq!(ready.request_id(), Some(request_id));
     assert_eq!(ready.runner().id, 9001);
     bootstrap_start::authorize_actual_started_request(&setup.fixture, actual_started_request_id())
         .await?;
     assert_jit_persistence(&setup.fixture, ready.intent_id(), &ready.runner().name)
         .await
-        .map_err(|error| format!("JIT persistence: {error}"))?;
+        .map_err(|error| format!("The saved JIT state check failed: {error}."))?;
+    let network = setup
+        .fixture
+        .scope
+        .storage_network_recovery_identity(reservation_id)
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "The owned storage network record is absent.".to_owned())?;
+    let network_name = network.network_name().to_owned();
+    let network_id = network
+        .network_id()
+        .ok_or_else(|| "The owned storage network ID is absent.".to_owned())?
+        .to_owned();
+    let network_labels = network.labels().clone();
     let before_started = setup.api.activity_snapshot()?;
     record_started_and_replay(&setup.fixture, actual_started_request_id(), &ready)
         .await
@@ -139,99 +161,15 @@ async fn continue_native_composition(
         evidence.server_error
     );
     assert_eq!(evidence.jit_input, b"opaque-intake-jit");
-    Ok(())
-}
-
-async fn assert_bound_identity(
-    setup: &bootstrap_start::CompositionSetup,
-    bound: &crate::launch::scoped_runtime::BoundScopedBootstrap,
-    request_id: i64,
-) -> Result<(), String> {
-    assert_eq!(
-        bound.prepared().acquired().request().request_id(),
-        Some(request_id)
-    );
-    assert_eq!(bound.started().runner_container_id(), RUNNER_ID);
-    assert_eq!(bound.started().dind_container_id(), DIND_ID);
-    let acquired = bound.prepared().acquired();
-    let binding = bound.binding();
-    assert_eq!(binding.reservation_id(), acquired.reservation_id());
-    assert_eq!(binding.operation_id(), acquired.intent_id());
-    assert_eq!(binding.engine_id(), setup.engine.engine_id());
-    assert_eq!(
-        binding.docker_root_digest(),
-        setup.engine.docker_root_digest()
-    );
-    assert_eq!(binding.runner_container_id(), RUNNER_ID);
-    assert_eq!(binding.dind_container_id(), DIND_ID);
-    assert_bound_persistence(&setup.fixture, acquired.reservation_id(), request_id)
-        .await
-        .map_err(|error| format!("bound persistence: {error}"))
-}
-
-async fn assert_bound_persistence(
-    fixture: &Fixture,
-    reservation_id: i64,
-    request_id: i64,
-) -> Result<(), String> {
-    let rows = fixture
-        .scope
-        .physical_runner_reservations()
-        .await
-        .map_err(|error| error.to_string())?;
-    let row = rows
-        .iter()
-        .find(|row| row.reservation_id == reservation_id)
-        .ok_or_else(|| "Bound reservation is not durable.".to_owned())?;
-    assert_eq!(
-        row.launch_phase,
-        Some(crate::reconcile::LaunchPhase::ResourcesBound)
-    );
-    assert_eq!(
-        row.jit_state,
-        crate::journal::PhysicalRunnerJitState::Absent
-    );
-    assert_eq!(row.runner_container_id.as_deref(), Some(RUNNER_ID));
-    assert_eq!(row.dind_container_id.as_deref(), Some(DIND_ID));
-    assert_eq!(
-        row.acquired_request
-            .as_ref()
-            .and_then(crate::journal::AssignmentIdentity::request_id),
-        Some(request_id)
-    );
-    Ok(())
-}
-
-async fn assert_jit_persistence(
-    fixture: &Fixture,
-    intent_id: i64,
-    runner_name: &str,
-) -> Result<(), String> {
-    let rows = fixture
-        .scope
-        .physical_runner_reservations()
-        .await
-        .map_err(|error| error.to_string())?;
-    let row = rows
-        .iter()
-        .find(|row| row.intent_id == intent_id)
-        .ok_or_else(|| "JIT reservation is not durable.".to_owned())?;
-    assert_eq!(row.jit_state, crate::journal::PhysicalRunnerJitState::Ready);
-    assert_eq!(row.runner.as_ref().map(|runner| runner.id), Some(9001));
-    assert_eq!(
-        row.runner.as_ref().map(|runner| runner.name.as_str()),
-        Some(runner_name)
-    );
-    let publication = fixture
-        .scope
-        .native_publication_snapshot(row.reservation_id)
-        .await
-        .map_err(|error| error.to_string())?
-        .ok_or_else(|| "Listener delivery state is not durable.".to_owned())?;
-    assert_eq!(publication.jit_state, "bound");
-    assert_eq!(publication.publication_state, "published");
-    assert_eq!(publication.challenge_state.as_deref(), Some("published"));
-    assert_eq!(publication.delivery_state, "delivered");
+    verify_native_pair_requests(
+        &evidence.requests,
+        &network_name,
+        &network_id,
+        &network_labels,
+        resource_budget,
+        &setup.images,
+        &evidence.jit_input,
+    )?;
     Ok(())
 }
 
@@ -250,14 +188,14 @@ async fn bind_acquired<P: crate::launch::resource_probe::ImageProvider>(
         &setup.images,
     )
     .await
-    .map_err(|error| format!("Production bind path failed: {error}"))?;
+    .map_err(|error| format!("The production bind step failed: {error}."))?;
     match result {
         crate::launch::scoped_runtime::ScopedRuntimeOutcome::Bound(bound) => Ok(bound),
         crate::launch::scoped_runtime::ScopedRuntimeOutcome::Pending(pending) => {
             pending_bind_error(pending)
         }
         crate::launch::scoped_runtime::ScopedRuntimeOutcome::NoStart => {
-            Err("Production bind path returned NoStart.".to_owned())
+            Err("The production bind step returned NoStart.".to_owned())
         }
     }
 }
@@ -267,7 +205,9 @@ fn pending_bind_error(
 ) -> Result<crate::launch::scoped_runtime::BoundScopedBootstrap, String> {
     let failure = pending.failure().to_string();
     drop(pending);
-    Err(format!("Production bind path returned Pending: {failure}"))
+    Err(format!(
+        "The production bind step returned Pending: {failure}."
+    ))
 }
 
 async fn jit_and_deliver<P: crate::launch::resource_probe::ImageProvider>(
@@ -324,7 +264,7 @@ async fn jit_and_deliver<P: crate::launch::resource_probe::ImageProvider>(
         Err(pending) => {
             let requests = setup.api.request_summary()?;
             return Err(format!(
-                "Production prepare_listener failed: {}; requests={requests:?}",
+                "The production listener step failed: {}. Requests: {requests:?}",
                 listener_failure(pending)
             ));
         }
@@ -361,7 +301,12 @@ async fn create_and_measure_channel(
         &setup.fixture.scope,
     )
     .await
-    .map_err(|pending| format!("Production JIT bind failed: {:?}", pending.failure()))?;
+    .map_err(|pending| {
+        format!(
+            "The production JIT bind step failed: {:?}.",
+            pending.failure()
+        )
+    })?;
     assert_eq!(lane.paths.len(), 1);
     assert!(lane.paths[0].contains("/generatejitconfig"));
     Box::pin(jit.measure_channel(
@@ -373,7 +318,7 @@ async fn create_and_measure_channel(
     .await
     .map_err(|pending| {
         format!(
-            "Production channel measurement failed: {:?}",
+            "The production channel measurement failed: {:?}.",
             pending.failure()
         )
     })

@@ -201,7 +201,7 @@ mod tests {
                 .and_then(|options| options.create_mountpoint),
             Some(false)
         );
-        assert!(spec.env.is_empty());
+        assert_eq!(spec.env, Vec::<String>::new());
         Ok(())
     }
 

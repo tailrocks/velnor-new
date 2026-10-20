@@ -2,23 +2,18 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::config::ConnectionId;
-use crate::journal::{
-    AssignedAcquireResult, CapacityLimits, OperationalCapacityLimits, RequestAcquireState,
-    fixture_provisioning_profile,
-};
+use crate::journal::{AssignedAcquireResult, RequestAcquireState};
 use crate::journal::{AssignmentIdentity, AssignmentKey};
 use crate::launch::inspect_tests::DockerStub;
 use crate::launch::resource_probe::StartPermit;
 use crate::worker::Started;
-use serde_json::json;
 use velnor_runner_github::Method;
 
 use super::super::acquire::{self, AcquireDisposition};
-use super::super::runner::{self, ReservationOutcome};
+use super::super::runner;
 use super::super::validate_scope_binding;
 use support::{
-    FakeLane, Fixture, REQUEST_ID, SET_ID, assert_runner_name, docker_identity_stub, exchange,
-    fixture_storage, selected_engine, test_images, test_images_for_engine,
+    FakeLane, Fixture, REQUEST_ID, SET_ID, exchange, fixture_storage, selected_engine, test_images,
 };
 
 #[path = "runner_tests/adverse_acquire.rs"]
@@ -27,10 +22,9 @@ mod adverse_acquire;
 mod atomic_acquire;
 #[path = "runner_tests/docker_pair.rs"]
 mod docker_pair;
-#[cfg(test)]
-pub(crate) use docker_pair::run_native_quarantine_composition;
-#[path = "runner_tests/exact_acquire.rs"]
-mod exact_acquire;
+pub(crate) use docker_pair::{
+    RunnerCreateFailure, run_native_quarantine_composition, runner_create_409,
+};
 #[path = "runner_tests/policy_change.rs"]
 mod policy_change;
 #[path = "runner_tests/provisioning.rs"]
@@ -191,7 +185,7 @@ async fn expiry_after_acquire_keeps_charge_and_sends_no_jit_or_docker_request() 
                 fixture
                     .request
                     .request_id()
-                    .ok_or_else(|| "The request ID is missing.".to_owned())?,
+                    .ok_or_else(|| "Request ID is missing.".to_owned())?,
                 &physical.runner_name,
                 physical.authority_generation,
                 &physical.authority_digest,
@@ -267,7 +261,7 @@ async fn uncertain_acquire_keeps_charge_and_blocks_jit_replay() -> Result<(), St
                 fixture
                     .request
                     .request_id()
-                    .ok_or_else(|| "The request ID is missing.".to_owned())?,
+                    .ok_or_else(|| "Request ID is missing.".to_owned())?,
                 &physical.runner_name,
                 physical.authority_generation,
                 &physical.authority_digest,
@@ -318,7 +312,7 @@ async fn already_acquired_request_never_authorizes_a_new_runner() -> Result<(), 
                 fixture
                     .request
                     .request_id()
-                    .ok_or_else(|| "The request ID is missing.".to_owned())?,
+                    .ok_or_else(|| "Request ID is missing.".to_owned())?,
                 &physical.runner_name,
                 physical.authority_generation,
                 &physical.authority_digest,

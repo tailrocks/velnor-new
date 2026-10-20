@@ -6,6 +6,59 @@ use super::StorageProvisioningPlan;
 mod create;
 mod start;
 
+/// This type stores the terminal reply to one exact pre-JIT Docker create request.
+#[must_use]
+pub(crate) struct BootstrapContainerCreateTerminalResponse {
+    connection_id: String,
+    reservation_id: i64,
+    operation_id: i64,
+    engine_id: String,
+    docker_root_digest: String,
+    role: BootstrapContainerRole,
+    container_name: String,
+    client_api_major: u16,
+    client_api_minor: u16,
+    status_code: u16,
+}
+
+impl BootstrapContainerCreateTerminalResponse {
+    pub(crate) fn connection_id(&self) -> &str {
+        &self.connection_id
+    }
+
+    pub(crate) const fn reservation_id(&self) -> i64 {
+        self.reservation_id
+    }
+
+    pub(crate) const fn operation_id(&self) -> i64 {
+        self.operation_id
+    }
+
+    pub(crate) const fn role(&self) -> BootstrapContainerRole {
+        self.role
+    }
+
+    pub(crate) fn container_name(&self) -> &str {
+        &self.container_name
+    }
+
+    pub(crate) fn engine_id(&self) -> &str {
+        &self.engine_id
+    }
+
+    pub(crate) fn docker_root_digest(&self) -> &str {
+        &self.docker_root_digest
+    }
+
+    pub(crate) const fn client_api_version(&self) -> (u16, u16) {
+        (self.client_api_major, self.client_api_minor)
+    }
+
+    pub(crate) const fn status_code(&self) -> u16 {
+        self.status_code
+    }
+}
+
 /// One durable container create attempt.
 pub(crate) struct BootstrapContainerCreateClaim {
     connection_id: String,
@@ -19,6 +72,10 @@ pub(crate) struct BootstrapContainerCreateClaim {
 }
 
 impl BootstrapContainerCreateClaim {
+    pub(crate) fn connection_id(&self) -> &str {
+        &self.connection_id
+    }
+
     pub(crate) const fn reservation_id(&self) -> i64 {
         self.reservation_id
     }

@@ -1,20 +1,21 @@
 use super::{validate_document, verify_artifact_run};
 use velnor_actions_contract::{
-    QualificationCacheArtifact, QualificationCacheLaneReceipt, QualificationCacheProducerContext,
+    QualificationCacheArtifact, QualificationCacheLaneReceipt, QualificationCacheOwnerMemberRef,
+    QualificationCacheOwnerReceipt, QualificationCacheProducerContext,
     QualificationCacheProducerEvidence, QualificationCacheReceiptArtifactDocument,
     QualificationCacheRunMetadata, QualificationDispatchMode, QualificationPhase,
-    QualificationRunRef, qualification_cache_receipt_artifact_name,
+    QualificationRunRef, qualification_cache_receipt_artifact_name, run_key_for_ci,
 };
 
 #[test]
-fn resolver_accepts_only_attempt_scoped_schema_three_documents() {
+fn resolver_accepts_only_attempt_scoped_schema_four_documents() {
     let run = QualificationRunRef {
         run_id: 12,
         run_attempt: 1,
     };
     let run_metadata = metadata(run);
-    assert!(validate_document(&document(3, run), run, &run_metadata).is_ok());
-    assert!(validate_document(&document(2, run), run, &run_metadata).is_err());
+    assert!(validate_document(&document(4, run), run, &run_metadata).is_ok());
+    assert!(validate_document(&document(3, run), run, &run_metadata).is_err());
 
     let old = artifact(run, "velnor-qualification-cache-receipt-v1");
     assert!(verify_artifact_run(&old, &run_metadata).is_err());
@@ -59,6 +60,7 @@ fn api_completion_must_succeed_and_match_the_producer_context() {
 
 fn document(schema: u32, run: QualificationRunRef) -> QualificationCacheReceiptArtifactDocument {
     let source_sha = "a".repeat(40);
+    let run_key = run_key_for_ci(run.run_id, u64::from(run.run_attempt));
     QualificationCacheReceiptArtifactDocument {
         schema,
         producer: QualificationCacheProducerContext {
@@ -73,7 +75,7 @@ fn document(schema: u32, run: QualificationRunRef) -> QualificationCacheReceiptA
             run,
         },
         evidence: QualificationCacheProducerEvidence {
-            plan_id: "plan-r12-a1".to_owned(),
+            plan_id: format!("plan-{run_key}"),
             campaign: "campaign".to_owned(),
             phase: QualificationPhase::Cold,
             source_sha,
@@ -87,6 +89,19 @@ fn document(schema: u32, run: QualificationRunRef) -> QualificationCacheReceiptA
                 completed_task_ids: Vec::new(),
                 closure_digest: format!("b3-{}", "c".repeat(64)),
                 useful_state_digest: format!("b3-{}", "d".repeat(64)),
+                layers: Vec::new(),
+            }],
+            owners: vec![QualificationCacheOwnerReceipt {
+                owner_id: "rust-job".to_owned(),
+                platform_id: "ubuntu-latest".to_owned(),
+                member_digest: format!("b3-{}", "e".repeat(64)),
+                members: vec![QualificationCacheOwnerMemberRef {
+                    matrix_key: "matrix-rust".to_owned(),
+                    stack_id: "rust".to_owned(),
+                    task_id: "task-rust".to_owned(),
+                    task_digest: format!("b3-{}", "f".repeat(64)),
+                    input_digest: format!("b3-{}", "1".repeat(64)),
+                }],
                 layers: Vec::new(),
             }],
         },

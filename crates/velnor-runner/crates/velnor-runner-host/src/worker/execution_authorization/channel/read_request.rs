@@ -22,6 +22,9 @@ use crate::{
     launch::{SelectedEngineContext, VerifiedWorkerImages},
 };
 
+mod encoding;
+use encoding::{REQUEST_LIMIT, decode_lower_hex, lower_hex};
+
 use super::{
     VerifiedProofChannelBinding,
     measure::{decode_line, drain_empty_output, encode_line, read_stdout_line, within},
@@ -113,14 +116,16 @@ async fn run_request_exec(
         &context.expected_channel,
     )?;
     acknowledge_read(
-        docker,
-        channel,
-        &exec_id,
-        &operation_id,
+        ReadAcknowledgement {
+            docker,
+            channel,
+            exec_id: &exec_id,
+            operation_id: &operation_id,
+            images,
+            deadline,
+        },
         &mut input,
         &mut output,
-        images,
-        deadline,
     )
     .await?;
     Ok(result)
@@ -170,19 +175,31 @@ async fn start_request_exec(
     Ok((exec.id, attached))
 }
 
+struct ReadAcknowledgement<'a> {
+    docker: &'a Docker,
+    channel: &'a VerifiedProofChannelBinding,
+    exec_id: &'a str,
+    operation_id: &'a str,
+    images: &'a VerifiedWorkerImages,
+    deadline: Instant,
+}
+
 async fn acknowledge_read<S>(
-    docker: &Docker,
-    channel: &VerifiedProofChannelBinding,
-    exec_id: &str,
-    operation_id: &str,
+    acknowledgement_context: ReadAcknowledgement<'_>,
     input: &mut (impl tokio::io::AsyncWrite + Unpin),
     output: &mut Pin<Box<S>>,
-    images: &VerifiedWorkerImages,
-    deadline: Instant,
 ) -> Result<(), HostError>
 where
     S: Stream<Item = Result<LogOutput, bollard::errors::Error>> + Send + ?Sized,
 {
+    let ReadAcknowledgement {
+        docker,
+        channel,
+        exec_id,
+        operation_id,
+        images,
+        deadline,
+    } = acknowledgement_context;
     let acknowledgement = encode_line(
         &AcknowledgeRequest {
             operation_id: operation_id.to_owned(),
@@ -273,43 +290,6 @@ async fn inspect_runner(
     }
     Ok(())
 }
-
-fn decode_lower_hex(value: &str) -> Result<Vec<u8>, HostError> {
-    if !value.len().is_multiple_of(2) || value.len() > REQUEST_LIMIT * 2 {
-        return Err(HostError::Frame);
-    }
-    let mut output = Vec::with_capacity(value.len() / 2);
-    let (pairs, remainder) = value.as_bytes().as_chunks::<2>();
-    if !remainder.is_empty() {
-        return Err(HostError::Frame);
-    }
-    for pair in pairs {
-        let high = hex_nibble(pair[0]).ok_or(HostError::Frame)?;
-        let low = hex_nibble(pair[1]).ok_or(HostError::Frame)?;
-        output.push((high << 4) | low);
-    }
-    Ok(output)
-}
-
-fn hex_nibble(value: u8) -> Option<u8> {
-    match value {
-        b'0'..=b'9' => Some(value - b'0'),
-        b'a'..=b'f' => Some(value - b'a' + 10),
-        _ => None,
-    }
-}
-
-fn lower_hex(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut output = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        output.push(char::from(HEX[usize::from(byte >> 4)]));
-        output.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
-    output
-}
-
-const REQUEST_LIMIT: usize = 16 * 1024;
 
 #[cfg(test)]
 mod tests {

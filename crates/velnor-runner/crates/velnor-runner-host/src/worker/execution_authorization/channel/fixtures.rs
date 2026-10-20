@@ -8,43 +8,89 @@ use velnor_resource_probe::execution_channel_wire::{
     ExecutionChannelDirectory, ExecutionChannelObservation,
 };
 
+pub(crate) struct TestProofChannelIdentity {
+    pub(crate) reservation_id: i64,
+    pub(crate) operation_id: i64,
+    pub(crate) connection_id: String,
+    pub(crate) scale_set_id: i64,
+    pub(crate) witness_request_id: i64,
+    pub(crate) engine_id: String,
+    pub(crate) docker_root_digest: String,
+    pub(crate) runner_id: i64,
+    pub(crate) runner_name: String,
+    pub(crate) runner_container_id: String,
+    pub(crate) dind_container_id: String,
+    pub(crate) instance_binding_digest: String,
+}
+
+pub(crate) struct TestProofChannelBindingFields {
+    pub(crate) identity: TestProofChannelIdentity,
+    pub(crate) metadata_volume_name: String,
+    pub(crate) metadata_volume_id: String,
+    pub(crate) control: ProofChannelMount,
+    pub(crate) inbox: ProofChannelMount,
+    pub(crate) dind_attachment_absent: bool,
+}
+
+pub(crate) struct TestProofChannelMount {
+    pub(crate) target: String,
+    pub(crate) subpath: String,
+    pub(crate) mount_id: u64,
+    pub(crate) device: (u32, u32),
+    pub(crate) statx_device: (u32, u32),
+    pub(crate) fs_type_magic: u64,
+    pub(crate) filesystem_id: u64,
+    pub(crate) filesystem_instance_digest: String,
+    pub(crate) directory_inode: u64,
+    pub(crate) owner: (u32, u32),
+    pub(crate) mode: u32,
+    pub(crate) read_only: bool,
+    pub(crate) no_copy: bool,
+}
+
 pub(crate) fn test_verified_proof_channel_binding(
-    reservation_id: i64,
-    operation_id: i64,
-    connection_id: String,
-    scale_set_id: i64,
-    witness_request_id: i64,
-    engine_id: String,
-    docker_root_digest: String,
-    runner_id: i64,
-    runner_name: String,
-    runner_container_id: String,
-    dind_container_id: String,
-    instance_binding_digest: String,
-    metadata_volume_name: String,
-    metadata_volume_id: String,
-    control: ProofChannelMount,
-    inbox: ProofChannelMount,
-    dind_attachment_absent: bool,
+    fields: TestProofChannelBindingFields,
 ) -> Result<VerifiedProofChannelBinding, HostError> {
+    let TestProofChannelBindingFields {
+        identity,
+        metadata_volume_name,
+        metadata_volume_id,
+        control,
+        inbox,
+        dind_attachment_absent,
+    } = fields;
+    let TestProofChannelIdentity {
+        reservation_id,
+        operation_id,
+        connection_id,
+        scale_set_id,
+        witness_request_id,
+        engine_id,
+        docker_root_digest,
+        runner_id,
+        runner_name,
+        runner_container_id,
+        dind_container_id,
+        instance_binding_digest,
+    } = identity;
     let control_directory =
         directory_from_mount(&control, "/source-proof/control", "/dev/metadata", "ext4");
     let inbox_directory = directory_from_mount(&inbox, "/source-proof/inbox", "tmpfs", "tmpfs");
-    let job_facts = test_proof_channel_mount(
-        "/opt/velnor/job-facts".to_owned(),
-        "job-facts".to_owned(),
-        23,
-        (8, 1),
-        (8, 1),
-        0xef53,
-        33,
-        "d".repeat(64),
-        103,
-        (0, 0),
-        0o555,
-        true,
-        true,
-    )?;
+    let job_facts = test_proof_channel_mount(TestProofChannelMount {
+        target: "/opt/velnor/job-facts".to_owned(),
+        subpath: "job-facts".to_owned(),
+        mount_id: 23,
+        device: (8, 1),
+        statx_device: (8, 1),
+        fs_type_magic: 0xef53,
+        filesystem_id: 33,
+        filesystem_instance_digest: "d".repeat(64),
+        directory_inode: 103,
+        owner: (0, 0),
+        mode: 0o555,
+        read_only: true,
+        no_copy: true,
+    })?;
     let job_facts_directory =
         directory_from_mount(&job_facts, "/volume/job-facts", "/dev/metadata", "ext4");
     let mut binding = VerifiedProofChannelBinding {
@@ -86,87 +132,65 @@ pub(crate) fn test_verified_proof_channel_binding(
     }
 }
 
-/// Bind a test channel to the exact JobFacts directory in a ready receipt.
+/// Make a test channel use the `JobFacts` directory from the verified storage result.
 pub(crate) fn test_channel_for_ready_job_facts(
-    reservation_id: i64,
-    operation_id: i64,
-    connection_id: String,
-    scale_set_id: i64,
-    witness_request_id: i64,
-    engine_id: String,
-    docker_root_digest: String,
-    runner_id: i64,
-    runner_name: String,
-    runner_container_id: String,
-    dind_container_id: String,
-    instance_binding_digest: String,
+    identity: TestProofChannelIdentity,
     ready: &VerifiedStorageInitializationReady,
 ) -> Result<VerifiedProofChannelBinding, HostError> {
-    let mut binding = test_verified_proof_channel_binding(
-        reservation_id,
-        operation_id,
-        connection_id,
-        scale_set_id,
-        witness_request_id,
-        engine_id,
-        docker_root_digest,
-        runner_id,
-        runner_name,
-        runner_container_id,
-        dind_container_id,
-        instance_binding_digest,
-        ready.metadata_volume_name().to_owned(),
-        ready.metadata_volume_id().to_owned(),
-        test_proof_channel_mount(
-            "/opt/velnor/source-proof/control".to_owned(),
-            "source-proof/control".to_owned(),
-            21,
-            (8, 1),
-            (8, 1),
-            0xef53,
-            31,
-            "c".repeat(64),
-            101,
-            (0, 0),
-            0o555,
-            true,
-            true,
-        )?,
-        test_proof_channel_mount(
-            "/opt/velnor/source-proof/inbox".to_owned(),
-            "source-proof/inbox".to_owned(),
-            22,
-            (0, 77),
-            (0, 77),
-            0x0102_1994,
-            32,
-            "d".repeat(64),
-            102,
-            (1000, 1000),
-            0o700,
-            false,
-            true,
-        )?,
-        true,
-    )?;
+    let mut binding = test_verified_proof_channel_binding(TestProofChannelBindingFields {
+        identity,
+        metadata_volume_name: ready.metadata_volume_name().to_owned(),
+        metadata_volume_id: ready.metadata_volume_id().to_owned(),
+        control: test_proof_channel_mount(TestProofChannelMount {
+            target: "/opt/velnor/source-proof/control".to_owned(),
+            subpath: "source-proof/control".to_owned(),
+            mount_id: 21,
+            device: (8, 1),
+            statx_device: (8, 1),
+            fs_type_magic: 0xef53,
+            filesystem_id: 31,
+            filesystem_instance_digest: "c".repeat(64),
+            directory_inode: 101,
+            owner: (0, 0),
+            mode: 0o555,
+            read_only: true,
+            no_copy: true,
+        })?,
+        inbox: test_proof_channel_mount(TestProofChannelMount {
+            target: "/opt/velnor/source-proof/inbox".to_owned(),
+            subpath: "source-proof/inbox".to_owned(),
+            mount_id: 22,
+            device: (0, 77),
+            statx_device: (0, 77),
+            fs_type_magic: 0x0102_1994,
+            filesystem_id: 32,
+            filesystem_instance_digest: "d".repeat(64),
+            directory_inode: 102,
+            owner: (1000, 1000),
+            mode: 0o700,
+            read_only: false,
+            no_copy: true,
+        })?,
+        dind_attachment_absent: true,
+    })?;
 
     let source = ready.job_facts();
     let device = source.device();
-    let job_facts = test_proof_channel_mount(
-        "/opt/velnor/job-facts".to_owned(),
-        "job-facts".to_owned(),
-        23,
+    let job_facts = test_proof_channel_mount(TestProofChannelMount {
+        target: "/opt/velnor/job-facts".to_owned(),
+        subpath: "job-facts".to_owned(),
+        mount_id: 23,
         device,
-        device,
-        0xef53,
-        33,
-        "e".repeat(64),
-        source.inode(),
-        source.owner(),
-        source.mode() & 0o7777,
-        true,
-        true,
-    )?;
+        statx_device: device,
+        fs_type_magic: 0xef53,
+        filesystem_id: 33,
+        filesystem_instance_digest: "e".repeat(64),
+        directory_inode: source.inode(),
+        owner: source.owner(),
+        mode: source.mode() & 0o7777,
+        read_only: true,
+        no_copy: true,
+    })?;
     let job_facts_directory = directory_from_mount(&job_facts, "/job-facts", "/dev/vda", "ext4");
     binding.job_facts = job_facts;
     binding.observation.job_facts = job_facts_directory;
@@ -206,85 +230,24 @@ fn directory_from_mount(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn executable_read_only_job_facts_mount_is_valid() {
-        let mut binding = test_verified_proof_channel_binding(
-            1,
-            1,
-            "connection".to_owned(),
-            1,
-            1,
-            "docker-context".to_owned(),
-            "a".repeat(64),
-            1,
-            "runner".to_owned(),
-            "runner-container-0001".to_owned(),
-            "dind-container-00001".to_owned(),
-            "b".repeat(64),
-            "wmetadata".to_owned(),
-            "metadata-volume-0001".to_owned(),
-            test_proof_channel_mount(
-                "/opt/velnor/source-proof/control".to_owned(),
-                "source-proof/control".to_owned(),
-                21,
-                (8, 1),
-                (8, 1),
-                0xef53,
-                31,
-                "c".repeat(64),
-                101,
-                (0, 0),
-                0o555,
-                true,
-                true,
-            )
-            .expect("valid control mount"),
-            test_proof_channel_mount(
-                "/opt/velnor/source-proof/inbox".to_owned(),
-                "source-proof/inbox".to_owned(),
-                22,
-                (0, 77),
-                (0, 77),
-                0x0102_1994,
-                32,
-                "d".repeat(64),
-                102,
-                (1000, 1000),
-                0o700,
-                false,
-                true,
-            )
-            .expect("valid inbox mount"),
-            true,
-        )
-        .expect("valid channel binding");
-
-        binding.observation.job_facts.executable_mount = true;
-        binding.channel_digest = binding.computed_digest().expect("channel digest");
-
-        assert!(binding.valid());
-    }
-}
-
 pub(crate) fn test_proof_channel_mount(
-    target: String,
-    subpath: String,
-    mount_id: u64,
-    device: (u32, u32),
-    statx_device: (u32, u32),
-    fs_type_magic: u64,
-    filesystem_id: u64,
-    filesystem_instance_digest: String,
-    directory_inode: u64,
-    owner: (u32, u32),
-    mode: u32,
-    read_only: bool,
-    no_copy: bool,
+    fields: TestProofChannelMount,
 ) -> Result<ProofChannelMount, HostError> {
+    let TestProofChannelMount {
+        target,
+        subpath,
+        mount_id,
+        device,
+        statx_device,
+        fs_type_magic,
+        filesystem_id,
+        filesystem_instance_digest,
+        directory_inode,
+        owner,
+        mode,
+        read_only,
+        no_copy,
+    } = fields;
     let mount = ProofChannelMount {
         target,
         subpath,
@@ -308,4 +271,78 @@ pub(crate) fn test_proof_channel_mount(
         return Err(HostError::Journal);
     }
     Ok(mount)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn executable_read_only_job_facts_mount_is_valid() {
+        let mut binding = test_verified_proof_channel_binding(
+            crate::worker::execution_authorization::TestProofChannelBindingFields {
+                identity: crate::worker::execution_authorization::TestProofChannelIdentity {
+                    reservation_id: 1,
+                    operation_id: 1,
+                    connection_id: "connection".to_owned(),
+                    scale_set_id: 1,
+                    witness_request_id: 1,
+                    engine_id: "docker-context".to_owned(),
+                    docker_root_digest: "a".repeat(64),
+                    runner_id: 1,
+                    runner_name: "runner".to_owned(),
+                    runner_container_id: "runner-container-0001".to_owned(),
+                    dind_container_id: "dind-container-00001".to_owned(),
+                    instance_binding_digest: "b".repeat(64),
+                },
+                metadata_volume_name: "wmetadata".to_owned(),
+                metadata_volume_id: "metadata-volume-0001".to_owned(),
+                control: test_proof_channel_mount(
+                    crate::worker::execution_authorization::TestProofChannelMount {
+                        target: "/opt/velnor/source-proof/control".to_owned(),
+                        subpath: "source-proof/control".to_owned(),
+                        mount_id: 21,
+                        device: (8, 1),
+                        statx_device: (8, 1),
+                        fs_type_magic: 0xef53,
+                        filesystem_id: 31,
+                        filesystem_instance_digest: "c".repeat(64),
+                        directory_inode: 101,
+                        owner: (0, 0),
+                        mode: 0o555,
+                        read_only: true,
+                        no_copy: true,
+                    },
+                )
+                .expect("The control mount is invalid."),
+                inbox: test_proof_channel_mount(
+                    crate::worker::execution_authorization::TestProofChannelMount {
+                        target: "/opt/velnor/source-proof/inbox".to_owned(),
+                        subpath: "source-proof/inbox".to_owned(),
+                        mount_id: 22,
+                        device: (0, 77),
+                        statx_device: (0, 77),
+                        fs_type_magic: 0x0102_1994,
+                        filesystem_id: 32,
+                        filesystem_instance_digest: "d".repeat(64),
+                        directory_inode: 102,
+                        owner: (1000, 1000),
+                        mode: 0o700,
+                        read_only: false,
+                        no_copy: true,
+                    },
+                )
+                .expect("The inbox mount is invalid."),
+                dind_attachment_absent: true,
+            },
+        )
+        .expect("The channel binding is invalid.");
+
+        binding.observation.job_facts.executable_mount = true;
+        binding.channel_digest = binding
+            .computed_digest()
+            .expect("Could not compute the channel digest.");
+
+        assert!(binding.valid());
+    }
 }

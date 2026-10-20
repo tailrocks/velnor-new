@@ -40,6 +40,7 @@ pub(super) fn answer(
                 None => Ok((404, br#"{"message":"missing"}"#.to_vec())),
             }
         }
+        ("DELETE", path) if path.starts_with("/volumes/") => Ok((204, Vec::new())),
         ("GET", path) if path.starts_with("/networks/") => {
             let name = path.trim_start_matches("/networks/");
             match networks.get(name) {
@@ -47,6 +48,7 @@ pub(super) fn answer(
                 None => Ok((404, br#"{"message":"missing"}"#.to_vec())),
             }
         }
+        ("DELETE", path) if path.starts_with("/networks/") => Ok((204, Vec::new())),
         ("GET", path) if path.starts_with("/containers/") && path.ends_with("/json") => {
             let name = path
                 .trim_start_matches("/containers/")
@@ -56,10 +58,27 @@ pub(super) fn answer(
                 None => Ok((404, br#"{"message":"missing"}"#.to_vec())),
             }
         }
+        ("GET", path) if path.starts_with("/containers/") && path.ends_with("/logs") => {
+            let id = path
+                .strip_prefix("/containers/")
+                .and_then(|path| path.strip_suffix("/logs"))
+                .ok_or_else(|| "The probe log route has no container ID.".to_owned())?;
+            let pid = containers
+                .get(id)
+                .and_then(|container| container["State"]["Pid"].as_u64())
+                .and_then(|pid| u32::try_from(pid).ok())
+                .ok_or_else(|| "The probe log target has no inspected process ID.".to_owned())?;
+            crate::launch::resource_probe::canonical_logs_response(pid, 1_u64 << 30)
+                .map(|response| (200, response))
+                .map_err(|error| {
+                    format!("The canonical probe logs could not be encoded. Error: {error}.")
+                })
+        }
         ("POST", "/networks/create") => create_network_response(&request.body),
         ("POST", "/volumes/create") => create_volume_response(&request.body),
         ("POST", "/containers/create") => create_container_response(images, &request.body),
         ("POST", path) if path.ends_with("/start") => Ok((204, Vec::new())),
+        ("POST", path) if path.ends_with("/stop") => Ok((204, Vec::new())),
         ("POST", path) if path.starts_with("/containers/") && path.ends_with("/wait") => {
             Ok((200, br#"{"StatusCode":0}"#.to_vec()))
         }

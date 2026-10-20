@@ -778,6 +778,67 @@
       "author": "/root/native_intake_composition",
       "reviewer": "/root/execution_source_security_review",
       "scope": "These fixture tests do not prove live job execution."
+    },
+    {
+      "result": "PASS",
+      "source_base_commit": "7270441ed059b633971658fd8ff18637bf05bd9b",
+      "source_delta": "The ACK recovery fixture uses the production recovery core. It tests the current policy generation.",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 rustup run 1.99.1 mbx nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host -E 'test(acknowledged_acquire_reopens_and_rechecks_before_jit)' --no-tests fail",
+      "exit_status": 0,
+      "nextest_run": "9a4cb114-64a6-4c3b-99d9-ee109514d4c7",
+      "passed": 1,
+      "log": "native-ack-recovery-parent-integrated-20261020.log",
+      "log_sha256": "e60dbb83cc581956e3101d2609cd8af8191e78ff7cc0f2cefbdc254f744ad30b",
+      "manifest_sha256": "4082d81ff0fa4fdef33c3438eb136442b25a119f00dbd3c84741bd9e48c7b8bf",
+      "author": "/root/obsolete_capacity_cleanup",
+      "reviewer": "/root/execution_source_security_review",
+      "scope": "The fixture does not test the production image provider or a policy that revokes source access."
+    },
+    {
+      "result": "PASS",
+      "source_base_commit": "c6fcf68c8503f9c4f0517799bf3e06358bb90e88",
+      "source_delta": "The V32 cleanup change retains capacity after physical cleanup. The parent also applied the reviewed language changes.",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 rustup run 1.99.1 mbx nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host -E 'test(saved_container_id_blocks_absence_when_name_lookup_misses) | test(current_schema_rejects_missing_create_spec_table) | test(current_schema_rejects_missing_pre_jit_settlement_guard) | test(native_cleanup_runtime_uses_persisted_witness_and_real_observer_lifecycle) | test(claimed_pre_jit_recovery_accepts_progress_without_changing_reservation_identity) | test(runner_create_terminal_reply_allows_one_live_pre_jit_claim) | test(terminal_runner_rejection_runs_owned_cleanup_and_capacity_probe) | test(acknowledged_acquire_reopens_and_rechecks_before_jit) | test(completed_available_remains_owned_after_observed_cleanup_and_reopen) | test(overflow_body_survives_restart_and_mixed_offer_starts_once)' --no-tests fail --no-fail-fast",
+      "exit_status": 0,
+      "nextest_run": "17ef45c3-b237-4148-b89e-55b53df23d66",
+      "passed": 10,
+      "log": "prejit-v32-parent-integrated-20261020.log",
+      "log_sha256": "8571b866422caf751d0e33d28e4c8dace19d73b7806dbbbc7466026b7399661e",
+      "manifest_sha256": "23cfc2d597ff22ada6cd55cc0b9b75bf1ef08b303acd413be55b0b5d4967ad03",
+      "author": "/root/native_intake_composition",
+      "reviewer": "/root/execution_source_security_review",
+      "scope": "The tests do not prove capacity release, a live provider, or a live installation."
+    },
+    {
+      "result": "PASS",
+      "source_base_commit": "c6fcf68c8503f9c4f0517799bf3e06358bb90e88",
+      "source_delta": "The V32 cleanup change retains capacity after physical cleanup. The parent also applied the reviewed language changes.",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 rustup run 1.99.1 mbx nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host -E 'test(saved_container_id_blocks_absence_when_name_lookup_misses) | test(current_schema_rejects_missing_create_spec_table) | test(current_schema_rejects_missing_pre_jit_settlement_guard) | test(native_cleanup_runtime_uses_persisted_witness_and_real_observer_lifecycle) | test(claimed_pre_jit_recovery_accepts_progress_without_changing_reservation_identity) | test(runner_create_terminal_reply_allows_one_live_pre_jit_claim) | test(terminal_runner_rejection_runs_owned_cleanup_and_capacity_probe) | test(acknowledged_acquire_reopens_and_rechecks_before_jit) | test(completed_available_remains_owned_after_observed_cleanup_and_reopen) | test(overflow_body_survives_restart_and_mixed_offer_starts_once)' --no-tests fail --no-fail-fast",
+      "exit_status": 0,
+      "nextest_run": "50f1bbb7-d89d-423c-bd26-42f3b060a93c",
+      "passed": 10,
+      "log": "prejit-v32-parent-after-hook-20261020.log",
+      "log_sha256": "bca050a80974c811f67fdc4c6e969d85185e976d3831528fb22d1c5b496a9c67",
+      "manifest_sha256": "23cfc2d597ff22ada6cd55cc0b9b75bf1ef08b303acd413be55b0b5d4967ad03",
+      "author": "/root/native_intake_composition",
+      "reviewer": "/root/execution_source_security_review",
+      "scope": "The tests do not prove capacity release, a live provider, or a live installation.",
+      "phase": "after_hook"
+    },
+    {
+      "result": "PASS",
+      "source_parent": "e7525ba732e0132e041fee1c3a9fe96bbc66f2b9",
+      "scope": "Remove unused connection authorization writers. Keep the active request authorization checks.",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02 mise --no-config exec rust@1.99.1 mr-boxington@1.25.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.148 -- mbx nextest run --locked -p velnor-runner-host -E 'test(source_authorization) | test(uncreated_or_unreceipted_acquire) | test(version_eight_receipts)' --no-tests fail --jobs 2",
+      "working_directory": "crates/velnor-runner",
+      "exit_status": 0,
+      "passed": 6,
+      "log": "shipping-source-auth-six-nextest-20261020.log",
+      "log_sha256": "c81840aae3d357d0b21abc58c7f27a0b2db7ef2404ce8c72d06faeae1c1e1f38",
+      "author": "/root/obsolete_capacity_cleanup",
+      "reviewer": "/root/execution_source_security_review",
+      "review": "source-auth6-independent-review-20261020.md",
+      "full_strict_gate": "FAIL. Separate repairs remain necessary."
     }
   ],
   "broader_pair_check": {
@@ -931,5 +992,241 @@
     "author": "/root/container_metadata_repair",
     "reviewer": "/root",
     "earlier_attempts": "The record keeps the failed extraction attempts and the earlier host mount. The passing test used no host mounts."
+  },
+  "pre_jit_cleanup_final_facades": {
+    "result": "PASS",
+    "tests_passed": 10,
+    "exit_status": 0,
+    "log": "prejit-v32-parent-facade-final-20261020.log",
+    "log_sha256": "fb099e0d806e0e5fe27429357d85b2d09210bc384523b081c563140e9e139f26",
+    "scope": "The focused tests check cleanup and acquired request recovery. Release and live installation checks remain NOT_RUN."
+  },
+  "legacy_launch_driver_retirement": {
+    "result": "PASS",
+    "scope": "The removed driver had no production callers. The new tests check active offer replay and acquisition guards.",
+    "source_base": "d3235ddfec38a193f017c576766201e770d85deb",
+    "checks": [
+      {
+        "result": "PASS",
+        "tests": 12,
+        "run_id": "ce86d7b8-a304-4947-8343-6c6fe333c3b0",
+        "log": "legacy-native-parent-integrated-20261020.log",
+        "log_sha256": "3d4bade1985c2800b083178a0d52fb6b1a3d3f9fb2466173042d344cf13a663f"
+      },
+      {
+        "result": "PASS",
+        "tests": 7,
+        "run_id": "765a262c-095e-431e-a048-1ce4309ee129",
+        "log": "legacy-native-parent-cap-registration-20261020.log",
+        "log_sha256": "18c05621ae85e470de2c0e50db379d6c397d7c0230f9dbd00db969e2a0523494"
+      }
+    ],
+    "review": "native-legacy-retirement-independent-review-20261020.md",
+    "review_sha256": "ad724d4a7a35b02a8d7287214cb9f750a0a909830fb7cbef36ee62d1f90961f3",
+    "replacement_test_manifest_sha256": "61b2c2add9c67a9bfe08e2398f58fe0f900ddd5f17f0ff48155fa3362d0738d5",
+    "full_runner_gates": "NOT_RUN",
+    "live_installation": "NOT_RUN"
+  },
+  "historical_and_stale_fixture_fixes": {
+    "result": "PASS",
+    "tests": 2,
+    "source_base": "d3c0215b1f6ba83944c1d59d5eb38e84c49d775f",
+    "compile_source_pin": "d3c0215b1f6ba83944c1d59d5eb38e84c49d775f",
+    "run_id": "bd2726dc-5c89-4b24-9d80-bfdb940ef73b",
+    "log": "f40-two-fixes-parent-source-pin-20261020.log",
+    "log_sha256": "26deacd11177a89ce90756f73c26f6d225b370893cf62bdcda200a57903ce772",
+    "review": "f40-two-proven-fixes-independent-review-20261020.md",
+    "review_sha256": "8aa9e5ee6671325f5201bc1c54b434d189fae73ef3d77f1ba51cd5f8bc48a850",
+    "scope": "The tests check missing cleanup evidence and stale resource evidence. They do not prove a live installation."
+  },
+  "anchored_runtime_identity": {
+    "result": "PASS",
+    "source_base": "78e0c163df2cd60fe8d98e22cba6d7e6ae2701fd",
+    "tests": 8,
+    "run_id": "e6ec0025-de37-4437-902e-c91a35cba56d",
+    "checks": [
+      {
+        "log": "qualification-cache-path-parent-integrated-20261020.log",
+        "sha256": "5fdedd3d58d1e0ed2af30cb3fe7ca39ac9036faca4ed2190bb89fdbada977a80",
+        "exit_status": 0
+      },
+      {
+        "log": "qualification-cache-path-parent-clippy-20261020.log",
+        "sha256": "fba9d332dc5fbf5503be8e1ca10efd812c7640fa3fe07f021c6c45624f3deb92",
+        "exit_status": 0
+      },
+      {
+        "log": "qualification-cache-path-parent-language-final-20261020.log",
+        "sha256": "bb2ee55b4236c72a5fb89f27d7ad6d9a4649f49c6bde378334e226ea0a191d1f",
+        "exit_status": 0
+      }
+    ],
+    "manifest_sha256": "8f840cb5869dba5fef6bb342e252a048dc4999a61c8bf08a06fdae75e28d6c7d",
+    "review_sha256": "9b1302e26abf913d977d674e8cc110adab15d5b57d3662a8c24e59ba6d34f3d4",
+    "scope": "The tests check runtime file ownership and directory identity. Live cache tests remain NOT_RUN.",
+    "integration_review_sha256": "932a5745e50775ecba7b5d7bbfc635ba156afd6f94c0e7bc838beb7c9327c420"
+  },
+  "mise_executable_lookup": {
+    "result": "PASS",
+    "source_base": "539fd6627afcf7b9ef3f3b11511cb2339f4eb49b",
+    "tests": 6,
+    "checks": [
+      {
+        "log": "qualification-cache-mise-lookup-parent-final-20261020.log",
+        "sha256": "6e58537512ce139ff7e7813fcdb1af2e5ebf015d2f8ad54273f416b6dcb29f82",
+        "exit_status": 0,
+        "run_id": "c9312d27-3242-4bce-9070-e42b45dc0f93"
+      },
+      {
+        "log": "qualification-cache-mise-lookup-parent-clippy-20261020.log",
+        "sha256": "c0373ab1ed79d95d8f11240cece754dbfda5e3116391bbb11c89bd94a94100dd",
+        "exit_status": 0
+      }
+    ],
+    "review_sha256": "6009b931d231555f2d2a19e111ac4bcb95d6151916b60021e33d59f572f650c6",
+    "scope": "The lookup checks executable paths and hashes. Runtime cache production and live installation tests remain NOT_RUN."
+  },
+  "cache_step_identity": {
+    "result": "PASS",
+    "source_base": "80c30ff665861074467c85a6ea1a8f127a7b4be2",
+    "tests": 15,
+    "checks": [
+      {
+        "log": "qualification-cache-stepid-capped-parent-20261020.log",
+        "sha256": "bce9eea372c7b71ea47f20ff965d4ddbccc0f2b2d2ec29c6f4163835ee1dc14d",
+        "exit_status": 0,
+        "run_id": "1421a81d-1fac-4915-8bfe-ba59eb08126b"
+      },
+      {
+        "log": "qualification-cache-stepid-capped-parent-clippy-20261020.log",
+        "sha256": "7afb2acaca6b7f5fc8011f49bc065efc8b6fd0d518449366bd7732f3d6860cf2",
+        "exit_status": 0
+      }
+    ],
+    "reviewer": "obsolete_capacity_cleanup",
+    "language_reviewer": "helper_language_review",
+    "scope": "The tests check step IDs, job IDs, file sizes, and test registration. Generated cache steps and live tests remain necessary."
+  },
+  "native_pair_assertion_rehost": {
+    "result": "PASS",
+    "source_base": "32b3b2194fe461952ef3a143006d006dd8e202de",
+    "compile_source_pin": "32b3b2194fe461952ef3a143006d006dd8e202de",
+    "focused_tests": 7,
+    "registration_tests": 5,
+    "checks": [
+      {
+        "log": "native-retirement-parent-language-final-20261020.log",
+        "sha256": "5a48e1960d8cdca9a7694b377835535981f8e416d639f14d5f59eaa24bbbfa40",
+        "exit_status": 0,
+        "run_id": "1ea67ec3-d8af-46a5-9882-a340ef54ef93"
+      },
+      {
+        "log": "native-retirement-parent-registration-20261020.log",
+        "sha256": "732942c400baa28ee38fb94056cd5a7593214e4198bc0a33f53eb3af009b3b29",
+        "exit_status": 0,
+        "run_id": "7252fbe4-361d-4dfa-841d-6fec89e450d2"
+      }
+    ],
+    "review_sha256": "10f60bd9dacb54d70c290db2dd5fcc40d7c8e488825546bf0052be50f91c52bb",
+    "merge_note": "Two candidate files came from 5ef492. The merge keeps the V32 recovery exports and current diagnostic text.",
+    "scope": "The active tests check pair resources, image IDs, JIT privacy, and recovery. Two obsolete direct start tests are removed. Full runner and live gates remain necessary."
+  },
+  "cache_owner_contract": {
+    "result": "PASS",
+    "source_base": "981f812c8504c0a7e7a82af4f89f5dd3fe148f23",
+    "tests": 174,
+    "checks": [
+      {
+        "log": "qualification-owner-v4-parent-integrated-20261020.log",
+        "sha256": "6029e0b333c0a543df42e49fc56be8d3fa398d00dc80316082de667c5f18fc51",
+        "exit_status": 0,
+        "run_id": "63fca716-9a7e-4187-92aa-f3cc8da24ac8"
+      },
+      {
+        "log": "qualification-owner-v4-parent-language-final-20261020.log",
+        "sha256": "19ed312a2fa5e3fdf54e83b16446142349dea3e5b4a75640b9abe5eca6bbe5b4",
+        "exit_status": 0,
+        "run_id": "a78975aa-a594-4426-bf55-33afab2b2666"
+      },
+      {
+        "log": "qualification-owner-v4-parent-clippy-20261020.log",
+        "sha256": "4d6efccfd71604302da355e07af5aa68e9b1d20ba5fca7614d7aa9f9efb3e1fc",
+        "exit_status": 0
+      }
+    ],
+    "review_sha256": "24841fb6909a6a0d64860ec6f2c85612c2a3e59108d55bb9318e0e3308cac431",
+    "language_reviewer": "helper_language_review",
+    "scope": "The tests check cache owner identity, receipts, runtime file access, and step validation. Live cache production and installation tests remain NOT_RUN."
+  },
+  "native_channel_adverse_validation": {
+    "result": "PASS",
+    "source_base": "98abe7100f6f48ccfbdc2ac7ba1b8c14c38fdcd2",
+    "compile_source_pin": "98abe7100f6f48ccfbdc2ac7ba1b8c14c38fdcd2",
+    "focused_tests": 33,
+    "registration_and_size_tests": 6,
+    "checks": [
+      {
+        "log": "native-worker-v3-parent-language-final-20261020.log",
+        "sha256": "a6653d64974c52c8617b200d7121b4f61ccbaf093e1fc4f414d3f0cc2c7d1331",
+        "exit_status": 0,
+        "run_id": "6cbeb703-bbd7-49ba-8ec9-db70ab93c96b"
+      },
+      {
+        "log": "native-worker-v3-parent-registration-20261020.log",
+        "sha256": "23f838920c4ea8b0b75f2230b0c3359e72a2eabaa0d5a363d1bb4bfe30a916fd",
+        "exit_status": 0,
+        "run_id": "11c6e369-61d1-4af5-a918-0cf24215594c"
+      }
+    ],
+    "review_sha256": "f2174cc5323db9f27a5e8eb174580d93aa52615918643609c2cb260d3d196f2e",
+    "language_reviewer": "helper_language_review",
+    "integration_note": "The merge keeps the current pair resource assertions. The parent applied Rust formatting and the reviewed diagnostic text.",
+    "scope": "Invalid operation and directory identities stop before ACK. The tests keep the acquired reservation and capacity charge. Full strict Clippy and live tests remain necessary."
+  },
+  "historical_fixture_shapes": {
+    "result": "PASS",
+    "source_base": "ca75229f1b094e57e92400484dbd759d46104578",
+    "focused_tests": 17,
+    "checks": [
+      {
+        "log": "migration-fixture14-parent-language-final-20261020.log",
+        "sha256": "8198fe697e5a37aef5f6dd572e1508006fc76dfaf6a6c0606cdb7ead1f2e2f22",
+        "exit_status": 0,
+        "run_id": "a54a34ef-b95a-481d-8b30-72ca2cea5342"
+      },
+      {
+        "log": "migration-fixture14-parent-final-diagnostics-20261020.log",
+        "sha256": "698d94c5b6430f76522de2251d38b94ef2802d8ac38d564ceeb5b9a0c78e6cc2",
+        "exit_status": 0,
+        "run_id": "deea6313-f59a-45e9-b4ad-d47161a9c416"
+      }
+    ],
+    "manifest_sha256": "73f5f4e84795119f02f16ee13da7222ddf6d3972cf53cb6447774de13f42f1b6",
+    "review_sha256": "06582173c410eb3a427fc7a43def56915ed7b0503482a31b9415c292d33ce5c4",
+    "scope": "The tests check migration dispatch, rollback, guard validation, and saved publication proof. The V31 input is a static empty SQL fixture. It is not a database export.",
+    "language_reviewer": "helper_language_review",
+    "full_suite": {
+      "result": "FAIL",
+      "tests": 1461,
+      "passed": 1460,
+      "failed": 1,
+      "cause": "The bootstrap fixture expects initializer cleanup before the runner handoff finishes. The fixture repair is separate."
+    }
+  },
+  "initializer_wait_stage": {
+    "result": "PASS",
+    "source_base": "a35d976239ccba276a422ee544ebba1b3f7548ce",
+    "tests": 2,
+    "checks": [
+      {
+        "log": "initializer-wait-parent-nextest-20261020.log",
+        "sha256": "975eba4d5aa61e2985c3b24f1b934d2580be5192bf6d5f696b17d86ba5d62086",
+        "exit_status": 0,
+        "run_id": "c710adc1-8747-4481-aea7-655b8843a658"
+      }
+    ],
+    "review_sha256": "8dcf6ccf21a434237569ac6d13cbb934bc26fcbbdcd9649964ebcdcf8db4c05f",
+    "language_reviewer": "helper_language_review",
+    "scope": "The bootstrap fixture requires no initializer wait. The full composition fixture requires one wait after the runner starts. Full runner tests remain necessary."
   }
 }

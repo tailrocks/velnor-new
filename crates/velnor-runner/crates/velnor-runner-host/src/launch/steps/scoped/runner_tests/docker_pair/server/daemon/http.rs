@@ -1,4 +1,7 @@
-use tokio::{io::AsyncReadExt, net::UnixStream};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::UnixStream,
+};
 
 use super::super::CapturedRequest;
 
@@ -34,6 +37,32 @@ pub(super) async fn read_request(stream: &mut UnixStream) -> Result<CapturedRequ
         response_status: None,
         response_body: Vec::new(),
     })
+}
+
+pub(super) async fn write_response(
+    stream: &mut UnixStream,
+    status: u16,
+    body: &[u8],
+) -> Result<(), String> {
+    let reason = match status {
+        200 => "OK",
+        201 => "Created",
+        204 => "No Content",
+        404 => "Not Found",
+        _ => "Error",
+    };
+    let header = format!(
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
+    );
+    stream
+        .write_all(header.as_bytes())
+        .await
+        .map_err(|error| error.to_string())?;
+    stream
+        .write_all(body)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 async fn read_headers(stream: &mut UnixStream, bytes: &mut Vec<u8>) -> Result<usize, String> {

@@ -1,7 +1,7 @@
 //! Stack-neutral workflow IR, matrix, plan, and report types.
 
 /// Version marker for the qualification cache key and payload format.
-pub const QUALIFICATION_CACHE_FORMAT_VERSION: u8 = 3;
+pub const QUALIFICATION_CACHE_FORMAT_VERSION: u8 = 4;
 
 pub mod artifacts;
 pub mod baseline_publication;
@@ -91,11 +91,14 @@ pub use qualification_cache_lineage::{
     QUALIFICATION_CACHE_RECEIPT_ARTIFACT, QUALIFICATION_CACHE_RECEIPT_FILENAME,
     QualificationCacheAdmission, QualificationCacheArtifact, QualificationCacheBackendEntry,
     QualificationCacheBackendObservation, QualificationCacheDirective,
-    QualificationCacheLaneDirective, QualificationCacheLaneReceipt, QualificationCacheLayer,
+    QualificationCacheLaneDirective, QualificationCacheLaneLayerDirective,
+    QualificationCacheLaneLayerReceipt, QualificationCacheLaneReceipt, QualificationCacheLayer,
     QualificationCacheLayerDirective, QualificationCacheLayerReceipt,
-    QualificationCacheProducerContext, QualificationCacheProducerEvidence,
-    QualificationCacheReceipt, QualificationCacheReceiptArtifactDocument,
-    QualificationCacheReceiptLink, QualificationCacheRestore, QualificationCacheRestoreDirective,
+    QualificationCacheOwnerDirective, QualificationCacheOwnerMemberRef,
+    QualificationCacheOwnerReceipt, QualificationCacheProducerContext,
+    QualificationCacheProducerEvidence, QualificationCacheReceipt,
+    QualificationCacheReceiptArtifactDocument, QualificationCacheReceiptLink,
+    QualificationCacheRestore, QualificationCacheRestoreDirective,
     QualificationCacheRestoreExpectation, QualificationCacheRestorePolicy,
     QualificationCacheRestoreResult, QualificationCacheRunMetadata, QualificationCacheSave,
     QualificationCacheSaveActionResult, QualificationCacheSavePolicy, QualificationCacheSlot,
@@ -122,7 +125,8 @@ pub use step::{MAX_TASK_EXECUTION_ARGV, MAX_TASK_EXECUTION_ENV, Step, StepKind};
 pub use step_identity::{
     MBX_WORKSPACE_CLEAN_CONDITION, PRIVATE_FETCH_OPERATION, PRIVATE_FETCH_TOKEN_ENV,
     PRIVATE_NPM_READ_EXPR, PRIVATE_NPM_READ_TOKEN_ENV, PRIVATE_REVOKE_OPERATION,
-    PRIVATE_TOKEN_MINT_ACTION_PREFIX, PRIVATE_TOKEN_OUTPUT_EXPR, StepId, StepRole,
+    PRIVATE_TOKEN_MINT_ACTION_PREFIX, PRIVATE_TOKEN_OUTPUT_EXPR, QualificationCacheStepId,
+    QualificationCacheStepStage, StepId, StepRole,
 };
 pub use task_binding_digest::TaskBindingDigest;
 pub use task_execution_manifest::{

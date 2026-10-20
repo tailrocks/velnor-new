@@ -103,6 +103,35 @@ fn settlement_sample(
     {
         return Err(HostError::Identity);
     }
+    settlement_sample_for_identity(
+        output,
+        profile,
+        claim.probe_operation_id(),
+        claim.profile_generation_id(),
+        claim.profile_digest(),
+        claim.engine_id(),
+        claim.docker_root_digest(),
+    )
+}
+
+pub(super) fn settlement_sample_for_identity(
+    output: &super::super::execute::ObservedProbeRecord,
+    profile: &StorageProfile,
+    operation_id: &str,
+    profile_generation_id: &str,
+    profile_digest: &str,
+    engine_id: &str,
+    docker_root_digest: &str,
+) -> Result<StorageAdmissionSample, HostError> {
+    if Instant::now()
+        .checked_duration_since(output.observed_at)
+        .is_none_or(|age| age > Duration::from_secs(30))
+        || output.sample_generation_id != operation_id
+        || profile_generation_id != profile.generation_id()
+        || profile_digest != profile.profile_digest()
+    {
+        return Err(HostError::Identity);
+    }
     let pool = metadata_pool(profile)?;
     let record = &output.record;
     let filesystem_kind = match record.docker_root_fs_type_magic {
@@ -119,15 +148,15 @@ fn settlement_sample(
         return Err(HostError::Identity);
     }
     let identity = StorageSampleIdentity::new(
-        claim.probe_operation_id().to_owned(),
-        claim.profile_generation_id().to_owned(),
-        claim.profile_digest().to_owned(),
-        claim.engine_id().to_owned(),
-        claim.docker_root_digest().to_owned(),
+        operation_id.to_owned(),
+        profile_generation_id.to_owned(),
+        profile_digest.to_owned(),
+        engine_id.to_owned(),
+        docker_root_digest.to_owned(),
     )?;
     let filesystem_instance_digest = super::super::filesystem_instance_digest(
-        claim.engine_id(),
-        claim.docker_root_digest(),
+        engine_id,
+        docker_root_digest,
         record.guest_boot_id.as_bytes(),
         record.docker_root_mount_source.as_bytes(),
         record.docker_root_fs_type_name.as_bytes(),
@@ -152,9 +181,9 @@ fn settlement_sample(
         StorageAdmissionSample::new(identity, output.observed_at, vec![pool_observation], None)?;
     sample.validate_metadata_settlement_for(
         profile,
-        claim.probe_operation_id(),
-        claim.engine_id(),
-        claim.docker_root_digest(),
+        operation_id,
+        engine_id,
+        docker_root_digest,
         Instant::now(),
     )?;
     Ok(sample)

@@ -2,6 +2,8 @@
 
 | Term | Definition |
 | --- | --- |
+| Canonical JSON | JSON data with one specified byte representation. |
+| Symbolic link | A file system entry that names another path. |
 | Rust crate | A Rust source unit for one library or program. |
 | Cargo feature | A named option that selects code or dependencies in a Rust package. |
 | Rust package | A Cargo project with one manifest and one or more Rust crates. |
@@ -65,4 +67,9 @@
 | Repository binding | A digest of one repository connection and its source policy. |
 | Policy generation | A positive integer that identifies one policy version. |
 | JIT configuration | Configuration data that registers one runner for one job. |
+| Capacity probe | A probe that measures available host capacity. |
+| Pre-JIT cleanup | Cleanup after Docker returns a final response to a container create request and before JIT configuration delivery. |
 | Parser | Software that reads input data and checks its structure. |
+| Cache owner | A generated job that owns cache layers for its matrix members. |
+| Cache layer | One type of data stored in the qualification cache. |
+| Matrix member | A plan entry that belongs to one generated job. |

@@ -82,7 +82,8 @@ async fn uncreated_or_unreceipted_acquire_is_blocked_before_remote_effect() -> R
     };
     let (intent_id, fresh) = scope.begin_assigned_launch(&identity, "v33").await?;
     assert!(fresh);
-    assert!(!scope.claim_assigned_acquire(intent_id).await?);
+    assert!(intent_id > 0);
+    assert!(!scope.claim_request_acquire(&identity).await?);
 
     let generation = "d".repeat(32);
     let permit = permit_with_generation(&generation);

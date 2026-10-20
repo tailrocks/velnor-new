@@ -3,7 +3,7 @@
 use std::fs;
 use std::io::Read;
 use std::os::unix::fs::MetadataExt;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Component, Path};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::strict_json::parse_strict_json_bytes;
@@ -18,6 +18,10 @@ use crate::internal::internal;
 
 use super::QualificationCacheBindingRequest;
 
+#[path = "qualification_cache_runtime_files/anchored.rs"]
+mod anchored;
+pub(super) use anchored::RunDirectory;
+
 pub(super) const MAX_PLAN_JSON_BYTES: u64 = crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES;
 const GUEST_IMAGE_PROJECTION_PATH: &str = "/.velnor-runtime-identity/guest-image.json";
 const GUEST_IMAGE_RUNTIME_DIRECTORY: &str = "/.velnor-runtime-identity";
@@ -25,13 +29,13 @@ pub(super) const GUEST_IMAGE_PROJECTION_SCHEMA: &str = "velnor.guest-image/v1";
 const MAX_GUEST_IMAGE_PROJECTION_BYTES: usize = 65_536;
 
 pub(super) fn read_plan(
-    run_dir: &Path,
+    run_dir: &RunDirectory,
     expected_run_key: &str,
 ) -> Result<velnor_actions_contract::Plan, OrchestratorError> {
-    let plan_path = run_dir.join("plan.json");
     let plan_limit = usize::try_from(MAX_PLAN_JSON_BYTES)
         .map_err(|_| internal("qualification_cache_plan_limit"))?;
-    let plan_bytes = read_owned_runner_file(&plan_path, plan_limit)?;
+    let plan_bytes =
+        run_dir.read_owned_file("plan.json", plan_limit, None, "qualification_cache_file")?;
     let plan_value = parse_strict_json_bytes(&plan_bytes, plan_limit)
         .map_err(|_| internal("qualification_cache_plan_json"))?;
     let plan: velnor_actions_contract::Plan = serde_json::from_value(plan_value)
@@ -74,7 +78,7 @@ pub(super) fn validate_dispatch_context(
 }
 
 pub(super) fn read_admission(
-    path: &Path,
+    run_dir: &RunDirectory,
     plan: &velnor_actions_contract::Plan,
 ) -> Result<Option<QualificationCacheAdmission>, OrchestratorError> {
     let predecessor_required = plan
@@ -82,14 +86,19 @@ pub(super) fn read_admission(
         .as_ref()
         .is_some_and(|context| context.phase.predecessor().is_some());
     if !predecessor_required {
-        return match fs::symlink_metadata(path) {
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            _ => Err(internal("unexpected_qualification_cache_admission")),
+        return if run_dir
+            .file_exists(crate::qualification_resolver::QUALIFICATION_ADMISSION_FILENAME)?
+        {
+            Err(internal("unexpected_qualification_cache_admission"))
+        } else {
+            Ok(None)
         };
     }
-    let bytes = read_owned_runner_file(
-        path,
+    let bytes = run_dir.read_owned_file(
+        crate::qualification_resolver::QUALIFICATION_ADMISSION_FILENAME,
         velnor_actions_contract::MAX_QUALIFICATION_RECEIPT_BYTES,
+        None,
+        "qualification_cache_file",
     )?;
     let _ = parse_strict_json_bytes(
         &bytes,
@@ -327,27 +336,7 @@ pub(super) fn validate_runner_temp(path: &Path) -> Result<(), OrchestratorError>
     Ok(())
 }
 
-pub(super) fn checked_run_dir(
-    runner_temp: &Path,
-    run_key: &str,
-) -> Result<PathBuf, OrchestratorError> {
-    velnor_actions_contract::validate_run_key(run_key)
-        .map_err(crate::internal::internal_contract)?;
-    let velnor_dir = runner_temp.join("velnor");
-    let run_dir = velnor_dir.join(run_key);
-    for path in [&velnor_dir, &run_dir] {
-        let metadata = fs::symlink_metadata(path)
-            .map_err(|_| internal("qualification_cache_plan_directory_missing"))?;
-        if metadata.file_type().is_symlink()
-            || !metadata.is_dir()
-            || !owned_by_current_user(&metadata)
-        {
-            return Err(internal("qualification_cache_plan_directory_untrusted"));
-        }
-    }
-    Ok(run_dir)
-}
-
+#[cfg(test)]
 pub(super) fn read_owned_runner_file(
     path: &Path,
     limit: usize,

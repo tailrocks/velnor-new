@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test]
-async fn v27_reopen_upgrades_exact_historical_transition_guards() -> Result<(), HostError> {
+async fn synthetic_v27_pair_rebuild_preserves_published_proof() -> Result<(), HostError> {
     let fixture = crate::journal::request_lifecycle::tests::native_pre_challenge_fixture().await?;
     crate::journal::request_lifecycle::tests::publish_native_fixture_challenge(&fixture).await?;
     let reservation_id = fixture.initialized.reservation_id;
@@ -9,10 +9,10 @@ async fn v27_reopen_upgrades_exact_historical_transition_guards() -> Result<(), 
     let connection = fixture._journal.connection().await?;
     let before = proof_facts(&connection, reservation_id).await?;
     recreate_pair_as_v27(&connection).await?;
-    connection
-        .execute("PRAGMA user_version = 27", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
+    crate::journal::schema::execution_authorization::upgrade_v28(&connection).await?;
+    if proof_facts(&connection, reservation_id).await? != before {
+        return Err(HostError::Journal);
+    }
     drop(connection);
     let crate::journal::request_lifecycle::tests::NativePreChallengeFixture {
         _scratch,
@@ -28,6 +28,24 @@ async fn v27_reopen_upgrades_exact_historical_transition_guards() -> Result<(), 
     }
     super::super::validate_objects(&connection).await?;
     drop(_scratch);
+    Ok(())
+}
+
+#[tokio::test]
+async fn v27_journal_open_runs_historical_upgrade_dispatch() -> Result<(), HostError> {
+    let scratch = crate::journal::request_lifecycle::tests::helpers::Scratch::new()?;
+    let path = scratch.file();
+    crate::journal::schema::historical_fixture::install(&path, 27)
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let journal = crate::journal::Journal::open(&path).await?;
+    let connection = journal.connection().await?;
+    if crate::journal::schema::journal_version(&connection).await?
+        != crate::journal::schema::JOURNAL_VERSION
+    {
+        return Err(HostError::Journal);
+    }
+    super::super::validate_objects(&connection).await?;
     Ok(())
 }
 
@@ -223,7 +241,7 @@ async fn verify_rollback(
         .ok_or(HostError::Journal)?
         .get::<i64>(0)
         .map_err(|_| HostError::Journal)?;
-    if !failed || version != 23 || &proof_facts(connection, reservation_id).await? != before {
+    if !failed || version != 32 || &proof_facts(connection, reservation_id).await? != before {
         return Err(HostError::Journal);
     }
     super::super::guards::bootstrap_decision_transition_guards(connection, true).await?;

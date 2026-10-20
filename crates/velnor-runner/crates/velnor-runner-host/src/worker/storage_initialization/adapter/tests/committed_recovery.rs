@@ -185,18 +185,7 @@ async fn run_committed_result_recovery(nonce: char) -> Result<(), HostError> {
     let phase = helpers::storage_initializer_phase(&observer, reservation_id).await?;
     assert_eq!(phase.result, "confirmed");
 
-    let initialize_result =
-        match tokio::time::timeout(Duration::from_secs(5), &mut initialize).await {
-            Ok(join_result) => join_result.map_err(|_| HostError::Journal)?,
-            Err(_) => {
-                initialize.abort();
-                let join_result = initialize.await;
-                if !join_result.is_err_and(|error| error.is_cancelled()) {
-                    return Err(HostError::Journal);
-                }
-                Err(HostError::DockerTimeout)
-            }
-        };
+    let initialize_result = await_committed_initialize(&mut initialize).await;
     drop(release);
     assert_eq!(initialize_result.err(), Some(HostError::DockerTimeout));
     assert_eq!(
@@ -212,6 +201,25 @@ async fn run_committed_result_recovery(nonce: char) -> Result<(), HostError> {
     let settled = helpers::storage_initializer_phase(&observer, reservation_id).await?;
     assert_eq!(settled.result, "confirmed");
     assert_eq!(settled.abort, "absent");
+    assert_helper_deleted(api).await?;
+    Ok(())
+}
+
+async fn await_committed_initialize<T>(
+    initialize: &mut tokio::task::JoinHandle<Result<T, HostError>>,
+) -> Result<T, HostError> {
+    if let Ok(join_result) = tokio::time::timeout(Duration::from_secs(5), &mut *initialize).await {
+        return join_result.map_err(|_| HostError::Journal)?;
+    }
+    initialize.abort();
+    let join_result = initialize.await;
+    if !join_result.is_err_and(|error| error.is_cancelled()) {
+        return Err(HostError::Journal);
+    }
+    Err(HostError::DockerTimeout)
+}
+
+async fn assert_helper_deleted(api: InitializationDockerApi) -> Result<(), HostError> {
     let capture = api.finish().await?;
     assert!(
         capture

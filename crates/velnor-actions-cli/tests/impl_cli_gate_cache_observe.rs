@@ -51,7 +51,10 @@ fn cache_observation_requires_runner_temp_and_both_run_coordinates() -> Result<(
             ("GITHUB_RUN_ID", "700"),
             ("GITHUB_RUN_ATTEMPT", "1"),
             ("GITHUB_REF_PROTECTED", "false"),
-            ("VELNOR_QUALIFICATION_RUNTIME_IDENTITY", "{}"),
+            (
+                "VELNOR_QUALIFICATION_RUNTIME_IDENTITY_FILE",
+                "/tmp/runtime-identity.json",
+            ),
         ],
         &temp,
     )?;

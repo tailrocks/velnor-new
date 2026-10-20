@@ -22,6 +22,14 @@ pub(crate) use identity::{AssignmentIdentity, AssignmentKey};
 pub(crate) use reservation::JobFactsPublicationClaim;
 pub(crate) use reservation::ListenerDeliveryClaim;
 pub(crate) use reservation::MetadataSettlementResult;
+pub(crate) use reservation::PreJitCapacityProbeClaim;
+pub(crate) use reservation::PreJitCleanupClaim;
+#[cfg(test)]
+pub(crate) use reservation::PreJitCleanupSettlementResult;
+pub(crate) use reservation::{
+    PreJitBootstrapContainer, PreJitCleanupInventory, PreJitCreateSpec, PreJitInitializerIdentity,
+    PreJitNetworkIdentity, PreJitStorageObject,
+};
 
 pub(in crate::journal) async fn validate_resources_bound(
     connection: &turso::Connection,

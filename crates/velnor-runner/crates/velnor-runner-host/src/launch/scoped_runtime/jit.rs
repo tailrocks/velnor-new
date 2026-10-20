@@ -6,7 +6,9 @@ use crate::{journal::ConnectionJournal, launch::Lane, scale_set::EnsureError};
 
 use super::BoundScopedBootstrap;
 use crate::launch::VerifiedWorkerImages;
-use crate::worker::execution_authorization::{VerifiedProofChannelBinding, measure_proof_channel};
+use crate::worker::execution_authorization::{
+    ProofChannelMeasurement, VerifiedProofChannelBinding, measure_proof_channel,
+};
 
 #[cfg(test)]
 #[path = "jit/acquired_resume_tests.rs"]
@@ -208,14 +210,16 @@ impl JitReadyBootstrap {
     ) -> Result<ChannelReadyBootstrap, PendingChannelBootstrap> {
         let channel = measure_proof_channel(
             docker,
-            engine,
-            images,
-            self.bound.prepared.acquired(),
-            self.bound.started.receipt(),
-            &self.bound.binding,
-            self.bound.prepared.metadata(),
-            &self.runner,
-            deadline,
+            ProofChannelMeasurement {
+                engine,
+                images,
+                acquired: self.bound.prepared.acquired(),
+                started: self.bound.started.receipt(),
+                storage: &self.bound.binding,
+                metadata: self.bound.prepared.metadata(),
+                runner: &self.runner,
+                deadline,
+            },
         )
         .await;
         match channel {

@@ -113,9 +113,41 @@
       "log": "main-da1-final-cap-registration-20261020.log"
     },
     "opt_in_checks": {
-      "result": "NOT_RUN",
-      "count": 4,
-      "reason": "These checks require separate inputs or external tools. The test list records their requirements."
+      "live_tofu": {
+        "result": "PASS",
+        "run_id": "530af8f9-7604-41c3-85b1-79633fba0aa5",
+        "log_sha256": "981d5ec49b79f2697ef17bc4bfe4de0f672245aa08ca21c58b7cb0155a611930"
+      },
+      "psych_roundtrip": {
+        "result": "PASS",
+        "values": 12,
+        "run_id": "cbf4098c-a82f-4b04-9d9a-90cf9f220641",
+        "log_sha256": "bc670aebe645299df46290b65c74e04efed36e4c9dce2f99f80fe9edbc27b317"
+      },
+      "jackin_artifacts": {
+        "result": "NOT_RUN",
+        "reason": "The required producer output is unavailable."
+      },
+      "official_archive_parity": {
+        "result": "NOT_RUN",
+        "reason": "The verified archive request is unavailable."
+      }
+    },
+    "shipping_merge_checks": {
+      "caps_registration": {
+        "result": "PASS",
+        "tests": 7,
+        "run_id": "76a36deb-fbc9-45f5-befd-b13a2cac8d6b",
+        "log": "main-da1-shipping-cap-registration-20261020.log",
+        "log_sha256": "e69877c1ea5a4667339f7490c6dabe369c2780c157079c0ff7a74e985cdd2257"
+      },
+      "runner_recovery": {
+        "result": "PASS",
+        "tests": 10,
+        "run_id": "7c194ca2-283b-4e1b-bf62-e20f52b6514c",
+        "log": "main-da1-shipping-runner-ten-20261020.log",
+        "log_sha256": "16e59057cf14b2aaed71c76bf25ba408bd879ae12e2c7b086a036f8737558681"
+      }
     }
   }
 }

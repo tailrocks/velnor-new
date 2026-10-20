@@ -3,10 +3,10 @@ use std::collections::BTreeMap;
 use super::{
     CACHE_TAR_LAUNCHER_SHA256_INPUT, CACHE_TAR_LAUNCHER_USES, NORMAL_TOOLS_CACHE_EXPORT_OPERATION,
     NORMAL_TOOLS_CACHE_IMPORT_OPERATION, NORMAL_TOOLS_CACHE_STAGE_OPERATION,
-    PRESEED_HELPER_SHA256_OUTPUT_EXPR, StepId, StepRole, TOOLS_CACHE_RESTORE_USES,
-    validate_step_sequence,
+    PRESEED_HELPER_SHA256_OUTPUT_EXPR, QualificationCacheStepId, QualificationCacheStepStage,
+    StepId, StepRole, TOOLS_CACHE_RESTORE_USES, validate_step_sequence,
 };
-use crate::workflow::{Step, StepKind};
+use crate::workflow::{QualificationCacheLayer, Step, StepKind};
 
 fn restore_step(id: Option<StepId>, role: Option<StepRole>, uses: &str) -> Step {
     Step {
@@ -118,6 +118,107 @@ fn normal_cache_operations_reject_wrong_operation_and_missing_id() {
 
     assert!(validate_step_sequence(&[wrong_operation], "normal-tools-cache").is_err());
     assert!(validate_step_sequence(&[missing_id], "normal-tools-cache").is_err());
+}
+
+#[test]
+fn qualification_cache_ids_bind_one_job_layer_and_stage() {
+    let owner = "rust-example";
+    let identity = QualificationCacheStepId::new(
+        QualificationCacheStepStage::Restore,
+        QualificationCacheLayer::CargoSources,
+        owner,
+    )
+    .expect("valid generated job ID");
+    let step = Step {
+        name: "Restore qualification sources".to_owned(),
+        id: Some(StepId::QualificationCache(identity)),
+        role: Some(StepRole::QualificationCacheRestore),
+        condition: None,
+        parallel: false,
+        kind: StepKind::Action {
+            uses: "actions/cache/restore@v4".to_owned(),
+            with: BTreeMap::new(),
+            env: BTreeMap::new(),
+        },
+    };
+
+    assert!(
+        identity
+            .as_string()
+            .starts_with("qualification-cache-restore-cargo_sources-")
+    );
+    assert!(validate_step_sequence(std::slice::from_ref(&step), owner).is_ok());
+    assert!(validate_step_sequence(&[step], "different-job").is_err());
+}
+
+#[test]
+fn qualification_cache_ids_reject_invalid_owner_and_wrong_stage_payload() {
+    assert!(
+        QualificationCacheStepId::new(
+            QualificationCacheStepStage::Restore,
+            QualificationCacheLayer::CargoSources,
+            "invalid/job",
+        )
+        .is_err()
+    );
+
+    let identity = QualificationCacheStepId::new(
+        QualificationCacheStepStage::Save,
+        QualificationCacheLayer::MbxObjects,
+        "rust-example",
+    )
+    .expect("valid generated job ID");
+    let wrong_payload = Step {
+        name: "Wrong qualification cache action".to_owned(),
+        id: Some(StepId::QualificationCache(identity)),
+        role: Some(StepRole::QualificationCacheSave),
+        condition: None,
+        parallel: false,
+        kind: StepKind::Action {
+            uses: "actions/cache/restore@v4".to_owned(),
+            with: BTreeMap::new(),
+            env: BTreeMap::new(),
+        },
+    };
+
+    assert!(validate_step_sequence(&[wrong_payload], "qualification-cache").is_err());
+}
+
+#[test]
+fn qualification_cache_observation_ids_are_bound_to_the_containing_job() {
+    let owner = "rust-example";
+    let cases = [
+        (
+            QualificationCacheStepStage::RuntimeIdentity,
+            StepRole::QualificationRuntimeIdentity,
+            "observe-qualification-cache-runtime-v1",
+        ),
+        (
+            QualificationCacheStepStage::Roots,
+            StepRole::QualificationCacheRoots,
+            "observe-qualification-cache-roots-v1",
+        ),
+    ];
+
+    for (stage, role, operation) in cases {
+        let identity =
+            QualificationCacheStepId::new(stage, QualificationCacheLayer::CargoSources, owner)
+                .expect("valid owner");
+        let step = Step {
+            name: "Observe qualification cache inputs".to_owned(),
+            id: Some(StepId::QualificationCache(identity)),
+            role: Some(role),
+            condition: None,
+            parallel: false,
+            kind: StepKind::Internal {
+                operation: operation.to_owned(),
+                env: BTreeMap::new(),
+            },
+        };
+
+        assert!(validate_step_sequence(std::slice::from_ref(&step), owner).is_ok());
+        assert!(validate_step_sequence(&[step], "different-job").is_err());
+    }
 }
 
 #[test]

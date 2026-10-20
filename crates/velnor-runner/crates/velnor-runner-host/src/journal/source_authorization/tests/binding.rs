@@ -197,9 +197,6 @@ async fn assert_migrated_receipt_stays_closed(
     assert!(fresh);
     assert_null_receipt_binding(&journal, binding).await?;
     assert!(!scope.claim_request_acquire(assignment).await?);
-    assert!(!scope.claim_assigned_acquire(intent_id).await?);
-    mark_legacy_request_acquired(&journal, binding, intent_id).await?;
-    assert!(!scope.claim_launch_jit(intent_id).await?);
     assert!(!journal.is_drained().await?);
     Ok(())
 }
@@ -225,23 +222,6 @@ async fn assert_null_receipt_binding(
             .map_err(|_| HostError::Journal)?,
         None
     );
-    Ok(())
-}
-
-async fn mark_legacy_request_acquired(
-    journal: &Journal,
-    binding: &RepositoryConnection,
-    intent_id: i64,
-) -> Result<(), HostError> {
-    journal
-        .connection()
-        .await?
-        .execute(
-            "UPDATE connection_intents SET acquire_attempted = 1, acquire_resolved = 1, acquired = 1, launch_phase = 'acquired' WHERE id = ?1 AND connection_id = ?2",
-            (intent_id, binding.connection_id.as_str()),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
     Ok(())
 }
 

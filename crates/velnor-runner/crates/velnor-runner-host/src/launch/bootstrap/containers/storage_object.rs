@@ -13,7 +13,10 @@ use bollard::errors::Error as DockerError;
 use bollard::models::{Volume, VolumeCreateRequest, VolumeScopeEnum};
 
 use crate::error::HostError;
-use crate::journal::{ConnectionJournal, EngineContext, StorageObjectCreateClaim, StorageRole};
+use crate::journal::{
+    ConnectionJournal, EngineContext, StorageFilesystemKind, StorageInodePolicy, StorageMedium,
+    StorageObjectCreateClaim, StorageProvisioningRole, StorageRole,
+};
 use crate::launch::{SelectedEngineContext, StartObservationWitness, VerifiedWorkerImages};
 
 use super::super::VerifiedCreatedStorageObject;
@@ -252,6 +255,40 @@ fn verify_volume(
         return Err(HostError::Ownership);
     }
     Ok(())
+}
+
+pub(in crate::launch::bootstrap) fn verify_pre_jit_volume(
+    volume: &Volume,
+    name: &str,
+    plan: &StorageProvisioningRole,
+    labels: &HashMap<String, String>,
+) -> Result<(), HostError> {
+    let options = match (
+        plan.role(),
+        plan.medium(),
+        plan.filesystem_kind(),
+        plan.inode_policy(),
+    ) {
+        (
+            StorageRole::RunnerHome
+            | StorageRole::RunnerWork
+            | StorageRole::SharedRun
+            | StorageRole::DindData,
+            StorageMedium::Tmpfs,
+            StorageFilesystemKind::Tmpfs,
+            StorageInodePolicy::Finite,
+        ) if plan.retained_memory_bytes() == plan.charge_bytes() => {
+            tmpfs_options(plan.charge_bytes(), plan.charge_inodes())?
+        }
+        (
+            StorageRole::EngineMetadata,
+            StorageMedium::Disk,
+            StorageFilesystemKind::Btrfs,
+            StorageInodePolicy::DynamicBtrfs,
+        ) if plan.retained_memory_bytes() == 0 => HashMap::new(),
+        _ => return Err(HostError::Ownership),
+    };
+    verify_volume(volume, name, &options, labels)
 }
 
 async fn within<F: Future>(deadline: Instant, future: F) -> Result<F::Output, HostError> {

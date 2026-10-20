@@ -46,6 +46,10 @@ pub(crate) use limits::{CapacityLimits, OperationalCapacityLimits};
 pub(crate) use provisioning::JobFactsPublicationClaim;
 pub(crate) use provisioning::ListenerDeliveryClaim;
 pub(crate) use provisioning::MetadataSettlementResult;
+pub(crate) use provisioning::PreJitCapacityProbeClaim;
+pub(crate) use provisioning::PreJitCleanupClaim;
+#[cfg(test)]
+pub(crate) use provisioning::PreJitCleanupSettlementResult;
 pub(crate) use provisioning::StorageCleanupObserverWitness;
 pub(crate) use provisioning::{
     BootstrapContainerCreateClaim, BootstrapStartClaim, RecordedStorageNetwork,
@@ -57,6 +61,10 @@ pub(crate) use provisioning::{
     StorageInitializationClaim, StorageMetadataSettlementClaim, StorageNetworkCreateClaim,
     StorageNetworkRemovalClaim, StorageObjectCreateClaim, StorageProvisioningPlan,
     StorageProvisioningRole, VerifiedMetadataInitialization, VerifiedMetadataInitializationHandoff,
+};
+pub(crate) use provisioning::{
+    PreJitBootstrapContainer, PreJitCleanupInventory, PreJitCreateSpec, PreJitInitializerIdentity,
+    PreJitNetworkIdentity, PreJitStorageObject,
 };
 #[cfg(test)]
 pub(crate) use provisioning::{

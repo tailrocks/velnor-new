@@ -159,16 +159,19 @@ fn valid_cache_version(value: &str) -> bool {
 
 pub(super) fn validate_useful_delta_progress(
     lanes: &[QualificationCacheLaneReceipt],
+    owners: &[super::super::super::types::QualificationCacheOwnerReceipt],
     previous: Option<&AdmissionNode>,
 ) -> Result<(), ContractError> {
     let previous = previous.ok_or_else(|| invalid("useful_delta_missing_third_receipt"))?;
-    let persisted = lanes.iter().any(|current| {
+    let persisted = owners.iter().any(|current| {
         previous
             .receipt
-            .lanes
+            .owners
             .iter()
-            .find(|prior| prior.matrix_key == current.matrix_key)
-            .is_some_and(|prior| lane_delta_persisted(current, prior))
+            .find(|prior| prior.owner_id == current.owner_id)
+            .is_some_and(|prior| {
+                owner_delta_persisted(lanes, &previous.receipt.lanes, current, prior)
+            })
     });
     if persisted {
         Ok(())
@@ -177,12 +180,29 @@ pub(super) fn validate_useful_delta_progress(
     }
 }
 
-fn lane_delta_persisted(
-    current: &super::super::super::types::QualificationCacheLaneReceipt,
-    previous: &super::super::super::types::QualificationCacheLaneReceipt,
+fn owner_delta_persisted(
+    lanes: &[QualificationCacheLaneReceipt],
+    previous_lanes: &[QualificationCacheLaneReceipt],
+    current: &super::super::super::types::QualificationCacheOwnerReceipt,
+    previous: &super::super::super::types::QualificationCacheOwnerReceipt,
 ) -> bool {
-    current.closure_digest != previous.closure_digest
-        && current.useful_state_digest != previous.useful_state_digest
+    let changed_member = current.members.iter().any(|member| {
+        let Some(now) = lanes
+            .iter()
+            .find(|lane| lane.matrix_key == member.matrix_key)
+        else {
+            return false;
+        };
+        let Some(before) = previous_lanes
+            .iter()
+            .find(|lane| lane.matrix_key == member.matrix_key)
+        else {
+            return false;
+        };
+        now.closure_digest != before.closure_digest
+            && now.useful_state_digest != before.useful_state_digest
+    });
+    changed_member
         && current.layers.iter().any(|layer| {
             previous
                 .layers
@@ -202,6 +222,7 @@ fn lane_delta_persisted(
 
 pub(super) fn validate_third_observations(
     lanes: &[QualificationCacheLaneReceipt],
+    owners: &[super::super::super::types::QualificationCacheOwnerReceipt],
     previous: Option<&AdmissionNode>,
 ) -> Result<(), ContractError> {
     let previous = previous.ok_or_else(|| invalid("third_missing_warm_receipt"))?;
@@ -217,6 +238,14 @@ pub(super) fn validate_third_observations(
         {
             return Err(invalid("third_run_changed_useful_state"));
         }
+    }
+    for current in owners {
+        let prior = previous
+            .receipt
+            .owners
+            .iter()
+            .find(|owner| owner.owner_id == current.owner_id)
+            .ok_or_else(|| invalid("third_missing_warm_owner"))?;
         for layer in &current.layers {
             let prior_layer = prior
                 .layers

@@ -9,18 +9,12 @@ use crate::journal::schema::provisioning::{
 async fn version_twenty_eight_migrates_exact_old_guards_and_reopens() {
     let scratch = Scratch::new();
     let path = scratch.file();
-    drop(
-        Journal::open(&path)
-            .await
-            .expect("Could not open the current journal."),
-    );
+    crate::journal::schema::historical_fixture::install(&path, 28)
+        .await
+        .expect("Could not install the version 28 journal fixture.");
     let (database, connection) = open_database(&path).await;
     remove_current_guards(&connection).await;
     install_legacy_guards(&connection).await;
-    connection
-        .execute("PRAGMA user_version = 28", ())
-        .await
-        .expect("Could not set the journal to version 28.");
     drop(connection);
     drop(database);
 
@@ -41,20 +35,14 @@ async fn version_twenty_eight_migrates_exact_old_guards_and_reopens() {
 async fn version_twenty_eight_rejects_partial_guard_set_without_advancing() {
     let scratch = Scratch::new();
     let path = scratch.file();
-    drop(
-        Journal::open(&path)
-            .await
-            .expect("Could not open the current journal."),
-    );
+    crate::journal::schema::historical_fixture::install(&path, 28)
+        .await
+        .expect("Could not install the version 28 journal fixture.");
     let (database, connection) = open_database(&path).await;
     connection
         .execute("DROP TRIGGER provisioning_container_created_transition", ())
         .await
         .expect("Could not remove one transition guard.");
-    connection
-        .execute("PRAGMA user_version = 28", ())
-        .await
-        .expect("Could not set the journal to version 28.");
     drop(connection);
     drop(database);
 
@@ -68,11 +56,9 @@ async fn version_twenty_eight_rejects_partial_guard_set_without_advancing() {
 async fn version_twenty_eight_rejects_unknown_guard_sql() {
     let scratch = Scratch::new();
     let path = scratch.file();
-    drop(
-        Journal::open(&path)
-            .await
-            .expect("Could not open the current journal."),
-    );
+    crate::journal::schema::historical_fixture::install(&path, 28)
+        .await
+        .expect("Could not install the version 28 journal fixture.");
     let (database, connection) = open_database(&path).await;
     remove_current_guards(&connection).await;
     install_legacy_guards(&connection).await;
@@ -86,10 +72,6 @@ async fn version_twenty_eight_rejects_unknown_guard_sql() {
         .execute(&changed, ())
         .await
         .expect("Could not add the altered old guard.");
-    connection
-        .execute("PRAGMA user_version = 28", ())
-        .await
-        .expect("Could not set the journal to version 28.");
     drop(connection);
     drop(database);
 
@@ -103,28 +85,14 @@ async fn version_twenty_eight_rejects_unknown_guard_sql() {
 async fn version_twenty_eight_rejects_mixed_guard_generations() {
     let scratch = Scratch::new();
     let path = scratch.file();
-    drop(
-        Journal::open(&path)
-            .await
-            .expect("Could not open the current journal."),
-    );
+    crate::journal::schema::historical_fixture::install(&path, 28)
+        .await
+        .expect("Could not install the version 28 journal fixture.");
     let (database, connection) = open_database(&path).await;
-    for (name, _) in TRIGGERS.iter().filter(|(name, _)| {
-        name.starts_with("provisioning_container_") && is_transition_guard(name)
-    }) {
-        connection
-            .execute(&format!("DROP TRIGGER {name}"), ())
-            .await
-            .expect("Could not remove the current container guard.");
-    }
     connection
         .execute(LEGACY_CONTAINER_TRANSITION, ())
         .await
-        .expect("Could not add the old container guard.");
-    connection
-        .execute("PRAGMA user_version = 28", ())
-        .await
-        .expect("Could not set the journal to version 28.");
+        .expect("Could not add the legacy container guard.");
     drop(connection);
     drop(database);
 
@@ -138,11 +106,9 @@ async fn version_twenty_eight_rejects_mixed_guard_generations() {
 async fn version_twenty_eight_rolls_back_when_owned_trigger_name_is_taken() {
     let scratch = Scratch::new();
     let path = scratch.file();
-    drop(
-        Journal::open(&path)
-            .await
-            .expect("Could not open the current journal."),
-    );
+    crate::journal::schema::historical_fixture::install(&path, 28)
+        .await
+        .expect("Could not install the version 28 journal fixture.");
     let (database, connection) = open_database(&path).await;
     remove_current_guards(&connection).await;
     install_legacy_guards(&connection).await;
@@ -151,10 +117,6 @@ async fn version_twenty_eight_rolls_back_when_owned_trigger_name_is_taken() {
         .await
         .expect("Could not add the conflict target table.");
     connection.execute("CREATE TRIGGER provisioning_container_created_transition BEFORE UPDATE ON unrelated_trigger_target BEGIN SELECT RAISE(ABORT, 'unrelated trigger'); END", ()).await.expect("Could not add the conflicting unrelated trigger.");
-    connection
-        .execute("PRAGMA user_version = 28", ())
-        .await
-        .expect("Could not set the journal to version 28.");
     drop(connection);
     drop(database);
 
@@ -172,7 +134,7 @@ async fn current_schema_rejects_extra_legacy_transition_guards() {
     drop(
         Journal::open(&path)
             .await
-            .expect("Could not open the current journal."),
+            .expect("Could not create the current journal fixture."),
     );
     let (database, connection) = open_database(&path).await;
     connection

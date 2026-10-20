@@ -65,6 +65,105 @@ fn cache_identity_survives_checkout_relocation_and_useful_source_edit() {
         identity_commitment(&after, after_matrix, QualificationCacheLayer::CargoSources)
             .expect("after key identity")
     );
+    let before_owner =
+        owner_for_plan(&before, "rust-demo").expect("The owner before the change must exist.");
+    let after_owner =
+        owner_for_plan(&after, "rust-demo").expect("The owner after the change must exist.");
+    assert_ne!(before_owner.member_digest, after_owner.member_digest);
+    assert_eq!(
+        owner_layer_identity(
+            &before,
+            &before_owner,
+            QualificationCacheLayer::CargoSources
+        )
+        .expect("The owner layer identity before the change must exist."),
+        owner_layer_identity(&after, &after_owner, QualificationCacheLayer::CargoSources)
+            .expect("The owner layer identity after the change must exist.")
+    );
+}
+
+#[test]
+fn physical_owner_digest_commits_every_ordered_member() {
+    let mut plan = plan_for_checkout(
+        "/workspace/velnor",
+        44,
+        "a".repeat(40),
+        "input-before",
+        "closure-before",
+    );
+    let mut second = plan.matrix.include[0].clone();
+    second.id = "stack:rust|task:demo-lint".to_owned();
+    second.matrix_key = "matrix-demo-lint".to_owned();
+    second.task_id = "demo-lint".to_owned();
+    second.input_digest = digest_b3(b"second member input");
+    plan.matrix.include.push(second);
+
+    let owner_id = plan.matrix.include[0].job_id.clone();
+    let owner = owner_for_plan(&plan, &owner_id).expect("The complete owner must exist.");
+    assert_eq!(owner.members.len(), 2);
+    assert_eq!(owner.members[0].matrix_key, "matrix-demo-lint");
+    assert_eq!(owner.members[1].matrix_key, "matrix-demo-test");
+
+    let mut reordered = plan.clone();
+    reordered.matrix.include.reverse();
+    assert_eq!(
+        owner.member_digest,
+        owner_for_plan(&reordered, &owner_id)
+            .expect("The reordered owner must exist.")
+            .member_digest
+    );
+
+    let mut changed = plan;
+    changed.matrix.include[0].input_digest = digest_b3(b"changed second member input");
+    assert_ne!(
+        owner.member_digest,
+        owner_for_plan(&changed, &owner_id)
+            .expect("The changed owner must exist.")
+            .member_digest
+    );
+
+    let mut changed_task = plan_for_checkout(
+        "/workspace/velnor",
+        44,
+        "a".repeat(40),
+        "input-before",
+        "closure-before",
+    );
+    let mut second = changed_task.matrix.include[0].clone();
+    second.id = "stack:rust|task:demo-lint".to_owned();
+    second.matrix_key = "matrix-demo-lint".to_owned();
+    second.task_id = "demo-lint".to_owned();
+    second.input_digest = digest_b3(b"second member input");
+    changed_task.matrix.include.push(second);
+    let baseline = owner_for_plan(&changed_task, &owner_id).expect("The task owner must exist.");
+    changed_task.obligations[0].closure_digest = digest_b3(b"changed task closure");
+    assert_ne!(
+        baseline.member_digest,
+        owner_for_plan(&changed_task, &owner_id)
+            .expect("The changed task owner must exist.")
+            .member_digest
+    );
+}
+
+#[test]
+fn physical_owner_rejects_members_with_different_platforms() {
+    let mut plan = plan_for_checkout(
+        "/workspace/velnor",
+        44,
+        "a".repeat(40),
+        "input-before",
+        "closure-before",
+    );
+    let mut second = plan.matrix.include[0].clone();
+    second.id = "stack:rust|task:demo-lint".to_owned();
+    second.matrix_key = "matrix-demo-lint".to_owned();
+    second.task_id = "demo-lint".to_owned();
+    second.planned_platform =
+        PlannedPlatform::new("macos-26", "aarch64-apple-darwin").expect("platform");
+    plan.matrix.include.push(second);
+
+    let owner_id = plan.matrix.include[0].job_id.clone();
+    assert!(owner_for_plan(&plan, &owner_id).is_err());
 }
 
 fn plan_for_checkout(
@@ -107,10 +206,10 @@ fn plan_for_checkout(
             graph_digest: digest_b3(b"graph"),
             mbx_digest: digest_b3(b"mbx"),
             profile: "default".to_owned(),
-            job_id: "velnor-crate-demo".to_owned(),
+            job_id: "rust-demo".to_owned(),
         }],
         jobs: vec![crate::workflow::PlanJob {
-            job_id: "velnor-crate-demo".to_owned(),
+            job_id: "rust-demo".to_owned(),
             disposition: crate::workflow::JobDisposition::Run,
         }],
         matrix: PlanMatrix {
@@ -154,7 +253,7 @@ fn matrix_for_id(package_id: &str, input: &str) -> MatrixEntry {
         execute_task_ids: ExecuteTaskIds::default(),
         input_digest: digest_b3(input.as_bytes()),
         report_id: "matrix-report-demo".to_owned(),
-        job_id: "velnor-crate-demo".to_owned(),
+        job_id: "rust-demo".to_owned(),
         artifact_id: "velnor-crate-demo-a1".to_owned(),
         planned_platform: PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu")
             .expect("planned platform"),

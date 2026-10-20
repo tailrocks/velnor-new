@@ -141,6 +141,25 @@ impl IsolatedCommand {
         }
     }
 
+    /// Build a read-only lookup for the executable selected by one exact Mise
+    /// tool version. The caller validates and consumes the returned path.
+    pub(crate) fn mise_which(executable: &str, selector: &str) -> Self {
+        let mut args: Vec<OsString> = MISE_GLOBAL_FLAGS.iter().map(OsString::from).collect();
+        args.extend([
+            OsString::from("which"),
+            OsString::from(executable),
+            OsString::from("--tool"),
+            OsString::from(selector),
+        ]);
+        Self {
+            program: OsString::from("mise"),
+            args,
+            cwd: None,
+            extra_env: pairs_of(&NO_AUTO_INSTALL_ENV),
+            policy: EnvPolicy::Verify,
+        }
+    }
+
     /// Build a repo-task child: cleared env plus declared inputs.
     /// # Errors
     /// Returns [`MiseError::InvalidStepInput`] on a reserved declared key.
