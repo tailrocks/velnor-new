@@ -35,7 +35,7 @@ const BOOTSTRAP_TOKEN_ENV: &str = "CARGO_REGISTRY_TOKEN";
 const BOOTSTRAP_SECRET_REF: &str = "${{ secrets.CARGO_REGISTRY_TOKEN }}";
 
 /// Release-plz invocation kind per job.
-enum Phase {
+pub(crate) enum Phase {
     /// `release-pr`: preparation only, never publishes.
     PreparePr,
     /// `release`: the publish jobs.
@@ -106,7 +106,8 @@ pub(crate) fn assemble_jobs(
         gate: &inputs.gate,
         environment: &inputs.release.environment,
     };
-    let bootstrap = inputs.release.authentication == ReleaseAuthentication::BootstrapToken;
+    let bootstrap =
+        inputs.release.effective_authentication() == ReleaseAuthentication::BootstrapToken;
     let manifest = inputs.release.manifest_path.as_str();
     let sourced = source_manifest(manifest);
     let mut jobs = BTreeMap::new();
@@ -179,7 +180,7 @@ pub(crate) fn assemble_jobs(
 /// # Errors
 ///
 /// Returns contract errors when argv construction or UTF-8 fails.
-fn phase_argv(
+pub(crate) fn phase_argv(
     phase: &Phase,
     config: &str,
     manifest: &str,

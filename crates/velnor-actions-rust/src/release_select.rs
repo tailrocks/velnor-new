@@ -20,11 +20,17 @@ use crate::release_semver::parse_version;
 /// Registry assumed when a package declares no restriction.
 pub const DEFAULT_REGISTRY: &str = "crates-io";
 
+/// Pseudo-registry name of tag-only releases (no registry upload).
+pub const GIT_TAG_REGISTRY: &str = "git-tag";
+
 /// Declared release scope.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReleaseScope {
     /// Explicit package allowlist (one root package or a selected list).
     Packages(Vec<String>),
+    /// Explicit allowlist released as git tags only: `publish` settings and
+    /// registry restrictions do not apply because nothing is uploaded.
+    GitTagPackages(Vec<String>),
     /// Explicit opt-in: every publishable workspace member.
     PublishableWorkspace,
 }
@@ -159,7 +165,10 @@ pub fn select_release_set(request: &ReleaseRequest<'_>) -> Result<ReleaseSelecti
     }
     match request.scope {
         ReleaseScope::Packages(names) => {
-            select_explicit(names, &record, &members, &facts, &supported)
+            select_explicit(names, &record, &members, &facts, Some(&supported))
+        }
+        ReleaseScope::GitTagPackages(names) => {
+            select_explicit(names, &record, &members, &facts, None)
         }
         ReleaseScope::PublishableWorkspace => select_publishable(&members, &facts, &supported),
     }
@@ -212,7 +221,7 @@ fn select_explicit(
     record: &WorkspaceRecord,
     members: &BTreeMap<String, &PackageRecord>,
     facts: &ReleaseFacts,
-    supported: &[String],
+    supported: Option<&[String]>,
 ) -> Result<ReleaseSelection, ReleaseError> {
     let mut seen = BTreeSet::new();
     for name in names {
@@ -228,7 +237,10 @@ fn select_explicit(
         let Some(member) = members.get(name) else {
             return Err(member_error(record, name));
         };
-        packages.push(check_member(member, facts, supported)?);
+        packages.push(match supported {
+            Some(supported) => check_member(member, facts, supported)?,
+            None => selected(member, vec![GIT_TAG_REGISTRY.to_owned()]),
+        });
     }
     packages.sort_by(|left: &SelectedPackage, right: &SelectedPackage| left.name.cmp(&right.name));
     Ok(ReleaseSelection {

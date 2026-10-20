@@ -23,7 +23,7 @@ fn shell(name: &str) -> Result<PublishStep, RenderError> {
 }
 
 fn job(role: PublishRole, needs: &[&str]) -> Result<PublishJobSpec, RenderError> {
-    let publishing = role == PublishRole::ArtifactPublish;
+    let publishing = matches!(role, PublishRole::ArtifactPublish | PublishRole::TagRelease);
     Ok(PublishJobSpec {
         role,
         display_name: role.as_str().to_owned(),
@@ -222,5 +222,91 @@ fn conditions_cannot_carry_secret_handles() -> Result<(), RenderError> {
         job.condition = Some("secrets.TOKEN != ''".to_owned());
     }
     assert!(rejection(&gated).starts_with("bad_condition:"));
+    Ok(())
+}
+
+fn release_spec() -> Result<PublishWorkflowSpec, RenderError> {
+    let jobs = BTreeMap::from([
+        (
+            "publish-branch-authority".to_owned(),
+            job(PublishRole::BranchAuthority, &[])?,
+        ),
+        (
+            "rust-tag-release".to_owned(),
+            job(PublishRole::TagRelease, &["publish-branch-authority"])?,
+        ),
+    ]);
+    Ok(PublishWorkflowSpec {
+        name: "Publish".to_owned(),
+        repository: "acme/widgets".to_owned(),
+        triggers: PublishTriggers {
+            branches: vec!["main".to_owned()],
+            tag_glob: None,
+        },
+        jobs,
+    })
+}
+
+#[test]
+fn the_tag_release_chain_validates_and_may_check_out() -> Result<(), RenderError> {
+    let mut spec = release_spec()?;
+    spec.validate()?;
+    let uses = format!("actions/checkout@{:040x}", 1);
+    if let Some(release) = spec.jobs.get_mut("rust-tag-release") {
+        release.steps.insert(
+            0,
+            PublishStep {
+                id: None,
+                step: action_step("Checkout", &uses, BTreeMap::new())?,
+            },
+        );
+    }
+    spec.validate()?;
+    let ctx = ReleaseRenderContext {
+        generator_version: "0.1.28".to_owned(),
+        runs_on: LABEL.to_owned(),
+    };
+    let file = render_publish_workflow(&spec, &ctx)?;
+    assert!(file.bytes.contains("branches:"), "{}", file.bytes);
+    assert!(!file.bytes.contains("tags:"), "{}", file.bytes);
+    Ok(())
+}
+
+#[test]
+fn the_tag_release_needs_the_branch_authority_not_the_tag_authority() -> Result<(), RenderError> {
+    let mut spec = release_spec()?;
+    spec.jobs.insert(
+        "publish-authority".to_owned(),
+        job(PublishRole::Authority, &[])?,
+    );
+    if let Some(release) = spec.jobs.get_mut("rust-tag-release") {
+        release.needs = vec!["publish-authority".to_owned()];
+    }
+    assert_eq!(rejection(&spec), "ungated_job:rust-tag-release");
+    let mut open = release_spec()?;
+    if let Some(release) = open.jobs.get_mut("rust-tag-release") {
+        release.permissions.id_token = PermissionLevel::Write;
+    }
+    assert!(rejection(&open).starts_with("permission_matrix:"));
+    let mut unpinned = release_spec()?;
+    if let Some(release) = unpinned.jobs.get_mut("rust-tag-release") {
+        release.environment = None;
+    }
+    assert!(rejection(&unpinned).starts_with("environment_binding:"));
+    Ok(())
+}
+
+#[test]
+fn each_authority_role_appears_at_most_once_and_may_be_conditional() -> Result<(), RenderError> {
+    let mut spec = release_spec()?;
+    if let Some(authority) = spec.jobs.get_mut("publish-branch-authority") {
+        authority.condition = Some("github.ref_type == 'branch'".to_owned());
+    }
+    spec.validate()?;
+    spec.jobs.insert(
+        "second-branch-authority".to_owned(),
+        job(PublishRole::BranchAuthority, &[])?,
+    );
+    assert_eq!(rejection(&spec), "publish_authority_count");
     Ok(())
 }

@@ -24,10 +24,11 @@ use velnor_actions_workflow_renderer::{
 };
 
 use crate::OrchestratorError;
+use crate::publish_release_steps::{event_kind, release_jobs};
 use crate::utf8::strings_of;
 use crate::workflow::CHECKOUT_USES;
 
-/// Authority job id; every other publication job needs it.
+/// Tag authority job id; every bundle job needs it.
 pub(crate) const AUTHORITY_JOB: &str = "publish-authority";
 /// Step id whose outputs carry the parsed tag.
 const TAG_STEP: &str = "tag";
@@ -66,6 +67,8 @@ pub(crate) struct Inputs<'a> {
     pub(crate) catalog: &'a ToolCatalog,
     /// Resolved bundles, sorted by id.
     pub(crate) bundles: &'a [BundlePlan<'a>],
+    /// Manifest for the `git-tag` release job; `None` without that mode.
+    pub(crate) git_tag_manifest: Option<&'a str>,
 }
 
 /// Assemble the authority job and every bundle chain.
@@ -78,7 +81,14 @@ pub(crate) fn assemble_jobs(
 ) -> Result<BTreeMap<String, PublishJobSpec>, OrchestratorError> {
     let gh = gh_function(inputs.catalog)?;
     let mut jobs = BTreeMap::new();
-    jobs.insert(AUTHORITY_JOB.to_owned(), authority_job(inputs, &gh)?);
+    let mixed = !inputs.bundles.is_empty() && inputs.git_tag_manifest.is_some();
+    if !inputs.bundles.is_empty() {
+        let mut authority = authority_job(inputs, &gh)?;
+        if mixed {
+            authority.condition = Some(event_kind("tag"));
+        }
+        jobs.insert(AUTHORITY_JOB.to_owned(), authority);
+    }
     for plan in inputs.bundles {
         let id = plan.bundle.id.as_str();
         jobs.insert(
@@ -91,11 +101,14 @@ pub(crate) fn assemble_jobs(
             publish_job(inputs, id, &gh)?,
         );
     }
+    if let Some(manifest) = inputs.git_tag_manifest {
+        jobs.extend(release_jobs(inputs, &gh, manifest, mixed)?);
+    }
     Ok(jobs)
 }
 
 /// `gh` shell function body through the pinned Mise tool.
-fn gh_function(catalog: &ToolCatalog) -> Result<String, OrchestratorError> {
+pub(crate) fn gh_function(catalog: &ToolCatalog) -> Result<String, OrchestratorError> {
     let exec =
         PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), Vec::new()).map_err(|err| {
             OrchestratorError::Contract {
@@ -108,12 +121,16 @@ fn gh_function(catalog: &ToolCatalog) -> Result<String, OrchestratorError> {
 }
 
 /// Plain step without an id.
-fn plain(step: Step) -> PublishStep {
+pub(crate) fn plain(step: Step) -> PublishStep {
     PublishStep { id: None, step }
 }
 
 /// `sh -c` step running a fixed script with optional token binding.
-fn script_step(name: &str, body: String, token: bool) -> Result<Step, OrchestratorError> {
+pub(crate) fn script_step(
+    name: &str,
+    body: String,
+    token: bool,
+) -> Result<Step, OrchestratorError> {
     let env = if token {
         BTreeMap::from([(TOKEN_ENV.0.to_owned(), TOKEN_ENV.1.to_owned())])
     } else {
@@ -205,14 +222,14 @@ fn authority_job(inputs: &Inputs<'_>, gh: &str) -> Result<PublishJobSpec, Orches
 }
 
 /// Common job shell for the three bundle roles.
-fn bundle_job(
+pub(crate) fn bundle_job(
     inputs: &Inputs<'_>,
     role: PublishRole,
     name: String,
     needs: String,
     steps: Vec<PublishStep>,
 ) -> PublishJobSpec {
-    let publishing = role == PublishRole::ArtifactPublish;
+    let publishing = matches!(role, PublishRole::ArtifactPublish | PublishRole::TagRelease);
     PublishJobSpec {
         role,
         display_name: name,
