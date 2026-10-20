@@ -41,6 +41,11 @@ crate_timeout_minutes = 20 # every Rust crate job and OpenTofu root job
 plan_timeout_minutes = 15  # planning job only
 ```
 
+The public Rust `WorkflowConfig` struct now has a `plan_timeout_minutes`
+field. Downstream Rust struct literals must provide it; TOML and Serde inputs
+that omit it continue to default to five, and default generated workflow bytes
+remain unchanged. Explicitly setting five is equivalent to omitting the key.
+
 The contract owns the range and defaults. Typed workflow factories use that
 contract, and final workflow admission rejects missing, dynamic, or oversized
 limits. Reusable workflow callers cannot declare a job timeout; their exact
