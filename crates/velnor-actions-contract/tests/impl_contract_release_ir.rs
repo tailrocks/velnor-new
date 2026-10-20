@@ -140,6 +140,7 @@ fn ir_rejects_permission_violations() {
         pull_requests: PermissionLevel::Write,
         id_token: PermissionLevel::Write,
         actions: PermissionLevel::Write,
+        packages: PermissionLevel::None,
     };
     let mut workflow_all = ci_workflow();
     workflow_all.permissions = write_all.clone();

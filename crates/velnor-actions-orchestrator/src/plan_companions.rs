@@ -67,7 +67,7 @@ fn publish_file_lines(out: &mut String, prep: &GenerationPreparation) {
     if git_tag {
         push(out, &format!("  {RELEASE_CONFIG_PATH}"));
     }
-    if git_tag || !prep.config.publish.bundles.is_empty() {
+    if git_tag || !prep.config.publish.is_empty() {
         push(
             out,
             &format!(

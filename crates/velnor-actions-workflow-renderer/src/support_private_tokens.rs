@@ -28,7 +28,10 @@ const MINT_INPUTS: [&str; 6] = [
 
 /// True for the roles allowed to bind a private-source credential.
 pub(super) fn is_private_binding_role(role: Option<StepRole>) -> bool {
-    matches!(role, Some(StepRole::PrivateFetch | StepRole::PrivateRevoke))
+    matches!(
+        role,
+        Some(StepRole::PrivateFetch | StepRole::PrivateRevoke | StepRole::BunRegistryInstall)
+    )
 }
 
 fn step_env(step: &Step) -> &BTreeMap<String, String> {
@@ -77,12 +80,13 @@ pub(super) fn check_private_binding(id: &str, step: &Step) -> Result<(), RenderE
         return Ok(());
     }
     for (key, value) in env {
+        let registry = step.role == Some(StepRole::BunRegistryInstall);
         let expected = match key.as_str() {
-            PRIVATE_FETCH_TOKEN_ENV => PRIVATE_TOKEN_OUTPUT_EXPR,
-            PRIVATE_NPM_READ_TOKEN_ENV if step.role == Some(StepRole::PrivateFetch) => {
-                PRIVATE_NPM_READ_EXPR
+            PRIVATE_FETCH_TOKEN_ENV if !registry => PRIVATE_TOKEN_OUTPUT_EXPR,
+            PRIVATE_NPM_READ_TOKEN_ENV if registry => PRIVATE_NPM_READ_EXPR,
+            PRIVATE_FETCH_TOKEN_ENV | PRIVATE_NPM_READ_TOKEN_ENV => {
+                return Err(outside(&step.name));
             }
-            PRIVATE_NPM_READ_TOKEN_ENV => return Err(outside(&step.name)),
             _ => continue,
         };
         if value != expected {

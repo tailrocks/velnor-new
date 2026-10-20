@@ -50,6 +50,14 @@ that each root holds `package.json` and `bun.lock`.
   of `bun@<x.y.z>` must equal it (`conflicting_project_tool_versions:bun`);
   any other manager is `unsupported_package_manager`.
 
+Bun is the catalog tool `PinnedTool::Bun` (Mise core `bun`). A project's
+`[tools] bun` (or `core:bun`) is read at run time into `VELNOR_TOOL_BUN` like
+every project-declared tool (hard decision 4); the catalog pin
+(`BUN_VERSION`, freshness-gated against the `oven-sh/bun` release feed) applies
+only to callers that declare none. Node is not a catalog tool: `bun run`
+provides a `node` alias for scripts, and a repository that needs a real Node
+runs that check as a Mise check.
+
 ## Workspace members
 
 The members of a root are the entries of `bun.lock` `workspaces` other than
@@ -94,6 +102,67 @@ be green.
   `token = "$VELNOR_NPM_READ_TOKEN"`. The lifecycle phase uses a second file
   without the scope section.
 
+## Generated job
+
+`bun-<slug>` runs on `ubuntu-26.04` with `contents: read`, needs the plan job
+and joins `Required`; the plan marks it `not_affected` like any other job
+(`!contains(needs.plan.outputs.not_affected_jobs, ',bun-<slug>,')`). The tools
+cache prelude (Setup Mise, resolver, restore) is inserted around the member's
+steps like every pinned-tool job. Steps:
+
+1. `Prepare pinned tools`: `mise install bun@${VELNOR_TOOL_BUN}`.
+2. `Verify Bun workspace`: `bun.lock` is a regular file, no foreign lockfile
+   sits beside it, and `packageManager` (if present) equals the Mise-declared
+   Bun. Generation checks the same agreement; the run-time check covers edits
+   after generation.
+3. `Install dependencies`: writes the Velnor bunfig under
+   `$RUNNER_TEMP/velnor/bun/` and runs
+   `bun install --frozen-lockfile --cwd=<root> --config=<file>` under
+   `mise exec`. Bun parses `--config <path>` with a space as a package name, so
+   both flags use the `=` spelling; `--config` replaces the `bunfig.toml` found in
+   the working directory (measured with Bun 1.4.2), which is why a repository
+   registry setting cannot redirect the install even before generation rejects it.
+4. One `background: true` step per script (`bun run --cwd=<member dir>
+   <script>`), joined by one `wait-all`. Display names are `Typecheck`,
+   `Lint`, `Test`, `Build`; any other script is `Script <name>`.
+
+Every Bun invocation runs under `mise exec` with the isolation environment and
+`BUN_INSTALL_CACHE_DIR=$RUNNER_TEMP/velnor/bun-cache`.
+
+### Registry phase (`bun_registry_install`)
+
+When `[private_sources] npm_scopes` is non-empty, step 3 becomes two phases
+and the job holds `packages: read`:
+
+1. `Install dependencies (registry phase)` is the internal operation
+   `bun-registry-install-v1` (step role `BunRegistryInstall`, after the staged
+   helper under consumer policy). It is the only step that binds
+   `${{ github.token }}`, and only as `VELNOR_NPM_READ_TOKEN`; the renderer
+   rejects the binding anywhere else (`credential_binding_outside_private_fetch`).
+   The operation reads the repository `bunfig.toml` at run time, fails with
+   `bunfig_registry_override` on a registry, scope, token or certificate, writes
+   `$RUNNER_TEMP/velnor/bun/registry.toml` (each scope mapped to
+   `https://npm.pkg.github.com/` with `token = "$VELNOR_NPM_READ_TOKEN"`) and
+   `lifecycle.toml` (the same without the scopes), then starts
+   `mise exec bun@<pin> -- bun install --frozen-lockfile --ignore-scripts
+   --cwd=<root> --config=<registry.toml>` under the private-fetch policy: a
+   cleared environment, `PATH`/`HOME`/`TMPDIR`, the Mise isolation keys,
+   `BUN_INSTALL_CACHE_DIR` and the one credential. `--ignore-scripts` means no
+   repository code runs while the token exists.
+2. `Install dependencies (lifecycle phase)` holds no credential. It removes every
+   `node_modules` under the root and runs `bun install --frozen-lockfile
+   --config=<lifecycle.toml>` from the cache the first phase filled, which runs
+   the `trustedDependencies` lifecycle scripts. Measured with Bun 1.4.2: a
+   plain `bun install` over an existing `node_modules` is a no-op and runs no
+   scripts, while the same install after removing `node_modules` completes from the
+   warm cache with the network unreachable and runs them. Whether Bun refetches
+   scoped package metadata in this phase against the real registry is a
+   qualification item; the fallback is for the registry operation to pre-fetch
+   the scoped tarballs itself.
+
+The org admin must grant "Manage Actions access" read on each npm package to the
+consuming repository after its first publish; there is no API for it.
+
 ## Affected selection (hard decision 3)
 
 A member is selected by a changed path in its directory (the deepest member
@@ -114,4 +183,7 @@ directory.
 
 - Contract: strict-table, grammar and bound tests (`config/bun_tests.rs`).
 - Adapter: lockfile policy, JSONC, workspace resolution, `bunfig`, tool
-  agreement, reads and claims (`velnor-actions-bun` unit tests).
+  agreement, reads and claims (`velnor-actions-bun` tests).
+- Renderer: job shape, permissions and role gates (`impl_renderer_bun.rs`).
+- Orchestrator: generated jobs, determinism, project-policy and lockfile
+  failures (`impl_bun.rs`) and plan dispositions (`impl_bun_select.rs`).

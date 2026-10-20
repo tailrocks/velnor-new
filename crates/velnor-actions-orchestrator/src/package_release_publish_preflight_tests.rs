@@ -198,6 +198,7 @@ fn malformed_present_protection_fields_fail_even_when_other_source_is_complete()
 fn stable_environment_preserves_human_reviewer_and_protected_branch_requirements() {
     let stable = json!({
         "name":"release",
+        "can_admins_bypass":false,
         "protection_rules":[{"type":"required_reviewers","reviewers":[{"type":"User","reviewer":{"id":17,"login":"release-reviewer"}}],"prevent_self_review":true}],
         "deployment_branch_policy":{"protected_branches":true,"custom_branch_policies":false}
     });
@@ -303,7 +304,7 @@ fn environment_branch_policy_must_be_the_only_exact_main_pattern() {
 
 #[test]
 fn permanent_tag_release_environment_requires_human_review_without_self_approval() {
-    let settings = json!({"name":"release", "deployment_branch_policy":{
+    let settings = json!({"name":"release", "can_admins_bypass":false, "deployment_branch_policy":{
         "protected_branches":true,"custom_branch_policies":false},
         "protection_rules":[{"type":"required_reviewers","prevent_self_review":true,
             "reviewers":[{"type":"User","reviewer":{"id":17}}]}]});
@@ -311,6 +312,17 @@ fn permanent_tag_release_environment_requires_human_review_without_self_approval
         super::validation::validate_human_environment_settings(&settings, "main", "release")
             .is_ok()
     );
+    for bypass in [None, Some(json!(null)), Some(json!(true))] {
+        let mut changed = settings.clone();
+        changed
+            .as_object_mut()
+            .expect("environment")
+            .remove("can_admins_bypass");
+        if let Some(value) = bypass {
+            changed["can_admins_bypass"] = value;
+        }
+        assert!(super::validate_stable_environment_settings(&changed, "main").is_err());
+    }
     for mutate in [
         |value: &mut serde_json::Value| value["name"] = json!("other"),
         |value: &mut serde_json::Value| {

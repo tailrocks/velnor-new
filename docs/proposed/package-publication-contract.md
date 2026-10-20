@@ -2,8 +2,9 @@
 
 **Status:** Proposed. Implements items RF (release and tag flow, versioning)
 and RA (release-asset bundles) of the ChainArgos split design (§4.0, §4.4),
-under [hard decision 8](../hard-decisions.md). Maven bundles (M), npm (N) and image
-promotion (I.promote) build on this flow and are specified when they land.
+under [hard decision 8](../hard-decisions.md). Maven bundles (M) and image promotion
+(I.promote) build on this flow and are specified when they land; npm (N) is
+section 8.
 Every choice marked *adopted per the split brief; owner may revisit* was
 taken from the split design without a separate owner review.
 
@@ -157,3 +158,38 @@ Rust crates consumed as `git` dependencies release by tag. The same
 - A protected `release` environment in each producer repository.
 - `velnor-deps` GitHub App (contents: read) for consumers to fetch bundles
   is item P and does not exist yet.
+
+## 8. npm packages (N)
+
+```toml
+[[publish.npm]]
+id = "ui"                                    # tag ui-v1.4.0
+root = "frontend"                            # a [stacks.bun] root
+member = "@chainargos/ui"                    # workspace member published at the tag
+pack_script = "pack"                         # root script writing the tarballs
+tarballs = "frontend/.portable/tarballs"     # directory it writes <scope>-<name>-<version>.tgz into
+registry = "github"                          # closed: npm.pkg.github.com
+```
+
+The version source is the member's `package.json`; the authority job reads it
+through the contents API at the tagged commit like any manifest. Generation
+refuses a member that is `private`, whose `publishConfig.registry` is not
+`https://npm.pkg.github.com`, whose version is not a literal `X.Y.Z`, that
+depends directly on a package of a `[private_sources] npm_scopes` scope
+(`npm_private_dependency_unsupported`: the unprivileged build has no registry
+credential yet), or whose root lacks the pack script. Ids share the tag
+namespace with bundles, promotable images and released Rust packages.
+
+Per entry, three jobs:
+
+| Job | Authority | Rule |
+|---|---|---|
+| `npm-build-<id>` | `contents: read` | `if` the authority's `artifact` output equals the id. The only checkout. Installs with the pinned Bun, runs the pack script **twice**, requires the `sha256` of every tarball to be identical between the runs, checks the member's tarball (`name`, `version`, not `private`, registry) with `jq`, and uploads it with a sidecar checksum |
+| `npm-attest-<id>` | `contents: read`, `id-token: write`, `attestations: write` | No checkout. Re-verifies the checksum, then `actions/attest-build-provenance` on the tarball. npm's own `--provenance` works only on npmjs.com |
+| `npm-publish-<id>` | `contents: read`, `packages: write`, environment `release` | No checkout, no package manager and no lifecycle script. Re-verifies the checksum, assembles the registry document with `jq` (manifest, sha1, sha512 integrity, base64 attachment) and `PUT`s it with `curl` and the job token. An existing version fails the job |
+
+After a package's first publish, an org admin grants "Manage Actions access"
+read to every consumer repository; GitHub offers no API for it.
+
+Tests: `impl_bun.rs` (generated chain, role permissions, fail-closed
+policy), `publish_npm_tests.rs` and the role matrix in the renderer.

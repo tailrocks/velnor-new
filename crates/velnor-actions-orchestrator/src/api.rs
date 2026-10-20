@@ -2,6 +2,7 @@
 
 pub use super::check_runtime::{EXECUTE_CHECK_OP, execute_check};
 pub use super::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
+pub use super::config::bun_registry_install::{BUN_REGISTRY_INSTALL_OP, run_bun_registry_install};
 pub use super::config::deps_lock::{lock_private_sources, read_deps_lock, render_lock};
 pub use super::config::private_fetch::{PRIVATE_FETCH_OP, PRIVATE_REVOKE_OP, run_private_fetch};
 pub use super::config::private_revoke::run_private_revoke;

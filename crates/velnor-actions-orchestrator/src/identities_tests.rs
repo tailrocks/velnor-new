@@ -310,6 +310,7 @@ fn empty_discovery() -> crate::discover::Discovery {
         tofu_note: None,
         tofu_units: Vec::new(),
         affected: crate::affected_inputs::AffectedInputs::default(),
+        bun: crate::workflow_task_jobs::bun_inventory::BunInventory::default(),
     }
 }
 

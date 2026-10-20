@@ -220,6 +220,7 @@ pub(super) fn validate_human_environment_settings(
 ) -> Result<(), ()> {
     if !is_valid_branch_name(branch)
         || settings.get("name").and_then(Value::as_str) != Some(expected_name)
+        || settings.get("can_admins_bypass").and_then(Value::as_bool) != Some(false)
         || settings
             .get("deployment_branch_policy")
             .and_then(|policy| policy.get("protected_branches"))

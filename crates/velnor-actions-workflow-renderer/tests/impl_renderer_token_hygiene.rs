@@ -110,6 +110,7 @@ fn token_hygiene_allows_final_fetch_token() -> Result<(), RenderError> {
         pull_requests: PermissionLevel::None,
         id_token: PermissionLevel::None,
         actions: PermissionLevel::Read,
+        packages: PermissionLevel::None,
     });
     let text = render_workflow_ir(
         &fixture_ir(vec![minimal_plan_job()?, (id, final_job)]),

@@ -14,6 +14,7 @@ pub(super) fn uses_runner_temp_gate(op: InternalOp) -> bool {
             | InternalOp::Report
             | InternalOp::ExecuteCheck
             | InternalOp::PrivateFetch
+            | InternalOp::BunRegistryInstall
             | InternalOp::PrivateRevoke
             | InternalOp::PreseedManifest
             | InternalOp::RepoPolicy
@@ -32,7 +33,10 @@ pub(super) fn gate_runner_temp_operation(op: InternalOp) -> Option<InternalReque
         {
             runner_velnor_dir().map(|path| InternalRequest { op, path })
         }
-        InternalOp::PrivateFetch | InternalOp::PrivateRevoke | InternalOp::PreseedManifest => {
+        InternalOp::PrivateFetch
+        | InternalOp::PrivateRevoke
+        | InternalOp::BunRegistryInstall
+        | InternalOp::PreseedManifest => {
             runner_velnor_dir().map(|path| InternalRequest { op, path })
         }
         InternalOp::RepoPolicy => {

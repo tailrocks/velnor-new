@@ -26,6 +26,7 @@ pub mod project_tool_refs;
 /// Generated run-time resolver for project-declared versions (hard decision 5).
 pub mod project_tool_resolver;
 mod publish;
+mod publish_npm;
 mod qualified_tools;
 mod release;
 mod release_validation;
@@ -105,6 +106,7 @@ pub use publish::{
     PublishBundle, PublishConfig, RELEASE_TAG_GLOB, ReleaseTag, VersionSource, is_artifact_id,
     is_strict_semver,
 };
+pub use publish_npm::{NPM_PUBLISH_REGISTRY_URL, NpmRegistry, PublishNpm};
 pub use qualified_tools::{
     QualifiedCargoInstallation, QualifiedTool, QualifiedToolArtifact, QualifiedToolArtifactRecipe,
     QualifiedToolBackend, QualifiedToolExecutable, QualifiedToolExecutableRecipe,

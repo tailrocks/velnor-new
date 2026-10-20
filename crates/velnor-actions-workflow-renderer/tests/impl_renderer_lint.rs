@@ -101,6 +101,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
             permissions: Some(Permissions {
                 contents: PermissionLevel::Read,
                 actions: PermissionLevel::Read,
+                packages: PermissionLevel::None,
                 pull_requests: PermissionLevel::None,
                 id_token: PermissionLevel::None,
             }),
