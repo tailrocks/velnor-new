@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 use super::super::state::PreparedConnection;
 
@@ -121,14 +124,14 @@ fn prepared_state(
         completion: None,
         credentials: None,
         runner_ready: crate::launch::scoped_runtime::RunnerReadyRegistry::new(),
-        ready_intents: Default::default(),
-        authorizing: Default::default(),
-        pending_bootstrap: Default::default(),
+        ready_intents: BTreeMap::default(),
+        authorizing: BTreeMap::default(),
+        pending_bootstrap: BTreeMap::default(),
         unkeyed_bootstrap: Vec::new(),
-        authorized: Default::default(),
-        pending_authorization: Default::default(),
+        authorized: BTreeMap::default(),
+        pending_authorization: BTreeMap::default(),
         unkeyed_authorization: Vec::new(),
-        pending_acquired_recovery: Default::default(),
+        pending_acquired_recovery: BTreeMap::default(),
         unkeyed_acquired_recovery: Vec::new(),
     })
 }

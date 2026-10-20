@@ -165,8 +165,7 @@ impl FailedAttempt {
                         .next()
                         .is_some_and(|path| path.ends_with("/containers/create"))
                     && serde_json::from_slice::<serde_json::Value>(&request.body)
-                        .ok()
-                        .is_some_and(|body| body["Labels"]["io.velnor.role"] == "runner")
+                        .is_ok_and(|body| body["Labels"]["io.velnor.role"] == "runner")
             })
             .collect();
         assert_eq!(
@@ -176,7 +175,7 @@ impl FailedAttempt {
         );
         assert_eq!(creates[0].response_status, Some(409));
         assert_eq!(creates[1].response_status, Some(201));
-        assert!(captured.jit_input.is_empty());
+        assert_eq!(captured.jit_input, Vec::<u8>::new());
         Ok(())
     }
 }

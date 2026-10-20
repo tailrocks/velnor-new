@@ -15,11 +15,15 @@ const LAYER_SHA: &str = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 fn derived_load_rewrites_only_tag_metadata_and_is_deterministic() -> Result<(), String> {
     let archive = source_archive(IMAGE_TAG, &format!("docker.io/library/{IMAGE_TAG}"))?;
     let original_sha = sha256(&archive);
-    let first = derive(&archive, SOURCE_SHA, &original_sha).map_err(|error| error.code())?;
-    let second = derive(&archive, SOURCE_SHA, &original_sha).map_err(|error| error.code())?;
+    let first = derive(&archive, SOURCE_SHA, &original_sha)
+        .map_err(crate::launch::resource_probe::provider::failure::ProviderFailure::code)?;
+    let second = derive(&archive, SOURCE_SHA, &original_sha)
+        .map_err(crate::launch::resource_probe::provider::failure::ProviderFailure::code)?;
     let reference = format!("velnor-resource-probe:v{SOURCE_SHA}-{original_sha}");
-    let original_files = unpack(&archive).map_err(|error| error.code())?;
-    let derived_files = unpack(&first.bytes).map_err(|error| error.code())?;
+    let original_files = unpack(&archive)
+        .map_err(crate::launch::resource_probe::provider::failure::ProviderFailure::code)?;
+    let derived_files = unpack(&first.bytes)
+        .map_err(crate::launch::resource_probe::provider::failure::ProviderFailure::code)?;
 
     assert_eq!(first.image_reference, reference);
     assert_eq!(second.bytes, first.bytes);
