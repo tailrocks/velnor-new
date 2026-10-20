@@ -54,12 +54,21 @@ fn plan_timeout_defaults_to_five_and_round_trips_explicit_value() {
     });
     let config: WorkflowConfig = serde_json::from_value(value.clone()).expect("default workflow");
     assert_eq!(config.plan_timeout_minutes, 5);
+    let default_serialized = serde_json::to_value(&config).expect("serialize default workflow");
     assert_eq!(
-        serde_json::to_value(&config)
-            .expect("serialize workflow")
-            .get("plan_timeout_minutes"),
+        default_serialized.get("plan_timeout_minutes"),
         None,
         "the default planner timeout stays out of emitted config"
+    );
+
+    let mut explicit_default = value.clone();
+    explicit_default["plan_timeout_minutes"] = serde_json::json!(5);
+    let explicit_default: WorkflowConfig =
+        serde_json::from_value(explicit_default).expect("explicit default timeout");
+    assert_eq!(
+        serde_json::to_value(explicit_default).expect("serialize explicit default"),
+        default_serialized,
+        "omitted and explicit default planner budgets have the same config output"
     );
 
     let mut opted = value;

@@ -101,7 +101,6 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # max_parallel_jobs = 2                # Maximum generated matrix concurrency.
 # plan_timeout_minutes = 5              # timeout-minutes for the workflow planning job; bounded 1..=360.
 # crate_timeout_minutes = 5            # timeout-minutes for every Rust crate job and OpenTofu root job; bounded 1..=360.
-# plan_timeout_minutes = 5             # timeout-minutes for the plan job only; bounded 1..=360.
 
 # Optional verification jobs, one support job per entry, all covered by the
 # required gate. Unknown names fail generate. Enabled jobs may need

@@ -54,7 +54,35 @@ fn complete_workflow_runs_one_crate_job_with_parallel_checks() {
     }
     assert!(jobs["required"].needs.iter().any(|need| need == owner));
     assert_eq!(jobs[owner].timeout_minutes.minutes(), 5);
-    let tasks: Vec<_> = jobs[owner]
+    assert_parallel_task_steps(&jobs[owner]);
+    let emitted = assert_task_owners(jobs, &proposals);
+    let rendered = velnor_actions_workflow_renderer::render::render_workflow_ir(
+        &workflow.ir,
+        WorkflowPolicy::VelnorRepositoryV1,
+        workflow.support.as_ref(),
+        &workflow.context,
+    )
+    .expect("render the production graph and final fan-in");
+    assert_plan_timeout_only_changes_rendered_workflow(
+        root.path(),
+        &config,
+        &proposals,
+        &lock,
+        &rendered,
+    );
+    assert!(rendered.contains(owner), "rendered crate job");
+    assert_eq!(rendered.matches("background: true").count(), 4);
+    assert_eq!(rendered.matches("wait-all:").count(), 1);
+    let inventory =
+        velnor_actions_contract::NeedsConclusions::from_finalized_jobs("required", jobs)
+            .expect("committed Required inventory");
+    assert!(inventory.inventory.iter().any(|job| job == owner));
+    assert_unsuccessful_owners_fail(&inventory, [owner]);
+    assert_eq!(emitted.values().collect::<BTreeSet<_>>().len(), 1);
+}
+
+fn assert_parallel_task_steps(job: &velnor_actions_contract::Job) {
+    let tasks: Vec<_> = job
         .steps
         .iter()
         .filter(|step| {
@@ -75,23 +103,6 @@ fn complete_workflow_runs_one_crate_job_with_parallel_checks() {
             ("Documentation", true),
         ]
     );
-    let emitted = assert_task_owners(jobs, &proposals);
-    let rendered = velnor_actions_workflow_renderer::render::render_workflow_ir(
-        &workflow.ir,
-        WorkflowPolicy::VelnorRepositoryV1,
-        workflow.support.as_ref(),
-        &workflow.context,
-    )
-    .expect("render the production graph and final fan-in");
-    assert!(rendered.contains(owner), "rendered crate job");
-    assert_eq!(rendered.matches("background: true").count(), 4);
-    assert_eq!(rendered.matches("wait-all:").count(), 1);
-    let inventory =
-        velnor_actions_contract::NeedsConclusions::from_finalized_jobs("required", jobs)
-            .expect("committed Required inventory");
-    assert!(inventory.inventory.iter().any(|job| job == owner));
-    assert_unsuccessful_owners_fail(&inventory, [owner]);
-    assert_eq!(emitted.values().collect::<BTreeSet<_>>().len(), 1);
 }
 
 fn assert_plan_timeout_is_independent(
@@ -101,6 +112,50 @@ fn assert_plan_timeout_is_independent(
     assert_eq!(jobs["actionlint"].timeout_minutes.minutes(), 5);
     assert_eq!(jobs["required"].timeout_minutes.minutes(), 5);
     assert_eq!(jobs["rust-demo"].timeout_minutes.minutes(), 5);
+}
+
+fn assert_plan_timeout_only_changes_rendered_workflow(
+    root: &std::path::Path,
+    config: &velnor_actions_contract::VelnorConfig,
+    proposals: &[velnor_actions_contract::ProposedTask],
+    lock: &velnor_actions_contract::GeneratorLock,
+    custom_rendered: &str,
+) {
+    let mut default_config = config.clone();
+    default_config.workflow.plan_timeout_minutes = 5;
+    let mut default_workflow = crate::workflow::build_workflow(
+        root,
+        &default_config,
+        "main",
+        "ubuntu-26.04",
+        &discovery(proposals.to_vec()),
+        &[],
+    )
+    .expect("default timeout workflow");
+    crate::attach::attach_lock_acquire(
+        &mut default_workflow.ir,
+        lock,
+        "ubuntu-26.04",
+        env!("CARGO_PKG_VERSION"),
+    )
+    .expect("stage the same helper in the default workflow");
+    let default_rendered = velnor_actions_workflow_renderer::render::render_workflow_ir(
+        &default_workflow.ir,
+        WorkflowPolicy::VelnorRepositoryV1,
+        default_workflow.support.as_ref(),
+        &default_workflow.context,
+    )
+    .expect("render the default production graph and final fan-in");
+    assert_eq!(
+        custom_rendered.matches("timeout-minutes: 15").count(),
+        1,
+        "the configured timeout appears only on the Plan job"
+    );
+    assert_eq!(
+        custom_rendered.replacen("timeout-minutes: 15", "timeout-minutes: 5", 1),
+        default_rendered,
+        "all generated workflow bytes remain identical except the Plan timeout scalar"
+    );
 }
 
 fn fixture_generator_lock() -> velnor_actions_contract::GeneratorLock {
