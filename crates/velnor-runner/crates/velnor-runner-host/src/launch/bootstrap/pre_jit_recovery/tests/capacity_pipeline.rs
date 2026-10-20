@@ -1,8 +1,16 @@
 #[path = "capacity_pipeline/failures.rs"]
 mod failures;
 
-#[tokio::test]
-async fn terminal_runner_rejection_runs_owned_cleanup_and_capacity_probe() -> Result<(), String> {
+#[test]
+fn terminal_runner_rejection_runs_owned_cleanup_and_capacity_probe() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "pre-jit-terminal-runner-rejection",
+        || Box::pin(terminal_runner_rejection_runs_owned_cleanup_and_capacity_probe_inner()),
+    )
+}
+
+async fn terminal_runner_rejection_runs_owned_cleanup_and_capacity_probe_inner()
+-> Result<(), String> {
     let failure = Box::pin(crate::launch::steps::runner_create_409()).await?;
     let provider = crate::launch::resource_probe::IntakeCompositionProvider::new(
         failure.engine(),
@@ -74,8 +82,15 @@ async fn terminal_runner_rejection_runs_owned_cleanup_and_capacity_probe() -> Re
     Ok(())
 }
 
-#[tokio::test]
-async fn available_capacity_releases_the_pre_jit_reservation() -> Result<(), String> {
+#[test]
+fn available_capacity_releases_the_pre_jit_reservation() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "pre-jit-available-capacity-release",
+        || Box::pin(available_capacity_releases_the_pre_jit_reservation_inner()),
+    )
+}
+
+async fn available_capacity_releases_the_pre_jit_reservation_inner() -> Result<(), String> {
     let failure = crate::launch::steps::runner_create_409().await?;
     failure.set_probe_available_bytes(35 * 1024 * 1024 * 1024);
     let provider = crate::launch::resource_probe::IntakeCompositionProvider::new(
@@ -145,8 +160,16 @@ async fn available_capacity_releases_the_pre_jit_reservation() -> Result<(), Str
     Ok(())
 }
 
-#[tokio::test]
-async fn rejected_release_rolls_back_outcome_charge_and_current_pointer() -> Result<(), String> {
+#[test]
+fn rejected_release_rolls_back_outcome_charge_and_current_pointer() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "pre-jit-rejected-release-rollback",
+        || Box::pin(rejected_release_rolls_back_outcome_charge_and_current_pointer_inner()),
+    )
+}
+
+async fn rejected_release_rolls_back_outcome_charge_and_current_pointer_inner() -> Result<(), String>
+{
     let failure = crate::launch::steps::runner_create_409().await?;
     failure.set_probe_available_bytes(35 * 1024 * 1024 * 1024);
     let connection = failure

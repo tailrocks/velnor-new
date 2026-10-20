@@ -1,8 +1,15 @@
 use crate::journal::{AssignmentKey, ReservationState};
 
-#[tokio::test]
-async fn started_witness_does_not_block_cleanup_of_another_physical_lineage() -> Result<(), String>
-{
+#[test]
+fn started_witness_does_not_block_cleanup_of_another_physical_lineage() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "pre-jit-crossed-assignment",
+        || Box::pin(started_witness_does_not_block_cleanup_of_another_physical_lineage_inner()),
+    )
+}
+
+async fn started_witness_does_not_block_cleanup_of_another_physical_lineage_inner()
+-> Result<(), String> {
     const OTHER_WITNESS: i64 = 9_101;
     let failure = Box::pin(crate::launch::runner_create_409_with_jobs(2)).await?;
     failure.set_probe_available_bytes(35 * 1024 * 1024 * 1024);

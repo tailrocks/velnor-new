@@ -72,8 +72,16 @@ fn bootstrap_drive(fixture: &Fixture, path: &Path) -> crate::launch::Drive {
     }
 }
 
-#[tokio::test]
-async fn production_bootstrap_starts_private_pair_and_keeps_jit_withheld() -> Result<(), String> {
+#[test]
+fn production_bootstrap_starts_private_pair_and_keeps_jit_withheld() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "production-bootstrap-private-pair",
+        || Box::pin(production_bootstrap_starts_private_pair_and_keeps_jit_withheld_inner()),
+    )
+}
+
+async fn production_bootstrap_starts_private_pair_and_keeps_jit_withheld_inner()
+-> Result<(), String> {
     let setup = BootstrapSetup::open().await?;
     let reservation_id = setup.prepared.acquired().reservation_id();
     let operation_id = setup.prepared.acquired().intent_id();

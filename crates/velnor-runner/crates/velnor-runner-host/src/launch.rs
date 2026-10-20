@@ -86,6 +86,9 @@ pub(crate) mod steady;
 pub(crate) mod steps;
 #[cfg(test)]
 pub(crate) use steps::{RunnerCreateFailure, runner_create_409, runner_create_409_with_jobs};
+#[cfg(test)]
+#[cfg(test)]
+pub(crate) mod test_harness_stack;
 mod trace;
 mod turn;
 pub(crate) mod verified_images;

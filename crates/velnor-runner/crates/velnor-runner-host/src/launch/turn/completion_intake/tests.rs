@@ -11,10 +11,18 @@ use crate::journal::request_lifecycle::tests::post_jit_retirement::late_events;
 use crate::launch::turn::completion_intake::intake_and_ack_if_only_scoped;
 use crate::scale_set::EnsureError;
 
-#[tokio::test]
-async fn late_lifecycle_batch_acks_without_resuming_or_scheduling_cleanup() -> Result<(), HostError>
-{
-    Box::pin(late_lifecycle_batch_acks_without_resuming_or_scheduling_cleanup_inner()).await
+#[test]
+fn late_lifecycle_batch_acks_without_resuming_or_scheduling_cleanup() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "late-lifecycle-batch-intake",
+        || {
+            Box::pin(async {
+                late_lifecycle_batch_acks_without_resuming_or_scheduling_cleanup_inner()
+                    .await
+                    .map_err(|error| error.to_string())
+            })
+        },
+    )
 }
 
 async fn late_lifecycle_batch_acks_without_resuming_or_scheduling_cleanup_inner()
