@@ -126,12 +126,10 @@ pub fn build_image_build_job(
         ),
         runs_on: platform.runs_on().to_owned(),
         timeout_minutes: timeout,
-        needs: if policy.uses_pinned_tools() {
-            vec![crate::render::PLAN_JOB_ID.to_owned()]
-        } else {
-            Vec::new()
-        },
-        condition: None,
+        needs: vec![crate::render::PLAN_JOB_ID.to_owned()],
+        condition: Some(crate::plan_gate::not_affected_gate(
+            &policy.image.build_job_id(platform),
+        )),
         permissions: Some(image_build_permissions()),
         cache_mode: None,
         environment: None,

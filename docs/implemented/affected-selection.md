@@ -236,6 +236,41 @@ matrix entry; every obligation names a planned job.
   crate report uploads use `overwrite: true` so a re-run replaces the failed
   attempt's report.
 
+## Container image jobs
+
+`image-<id>-<platform>` build jobs ([image publication
+contract](../proposed/image-publication-contract.md)) own no obligations, so
+they are planned from what an image build reads instead of from Rust
+ownership. `plan.jobs` lists each image job with the image's disposition, the
+same `not_affected_jobs` output gates the job (`needs: [plan]`, the shared
+`!contains(...)` condition) and `Required` folds it with the table below. An
+image job owns no obligation or matrix entry (`image-` prefix); `Plan::validate`
+rejects one that does.
+
+An image on an affected-mode event (`pull_request`, fork, local) is selected
+when any of these holds, and otherwise `not_affected`:
+
+- a changed path is one of its Dockerfiles, a `.dockerignore` (in the context
+  root or beside the Dockerfile), or a path a context `COPY`/`ADD` source
+  names (the static Dockerfile parse; a glob claims the directory before its
+  first wildcard, `.` claims the whole context);
+- its Dockerfile contains any `--mount` (it can read any context path), which
+  claims the whole context;
+- for `prebuilt.kind = "cargo_bin"`, its package is in the affected package
+  set, so a changed dependency, declared input or package file selects the
+  image exactly as it selects the crate job; an undiscovered package selects;
+- the classification broadened for a global-config path (`.velnor/**`,
+  `.github/**`, an outside-project path) or the comparison is unknown (missing
+  or stale base, git failure, dirty worktree, declared tool version change).
+
+Rust-only broadening (an unowned file, `Cargo.lock`, root `Cargo.toml`, a
+tool-config file) does not select a plain image: an image's inputs are fully
+described by its own claims, so editing documentation never rebuilds it. It
+does select a `cargo_bin` image, because the broadening marks every package
+affected and the prebuilt compile is Rust work. An unreadable or
+unanalyzable Dockerfile selects the image. Pushes, merge groups and
+qualification runs never skip an image (`not_affected_on_full_event`).
+
 ## Required verdict
 
 The protected check `Required` is the `required-gate` job. It needs only the
@@ -263,8 +298,9 @@ group starts only after that and reports its own gate later.
 | plan missing, invalid, or failed | any | fail (`planning_failed`) |
 | any `not_affected` work on a full-run event | any | fail (`not_affected_on_full_event`) |
 
-Jobs the plan does not list (plan, actionlint, named checks, OpenTofu roots)
-keep the existing rule: skipped is never success. `fetch-reports-v1` downloads
+Image build jobs use the same table. Jobs the plan does not list (plan,
+actionlint, named checks, OpenTofu roots) keep the existing rule: skipped is
+never success. `fetch-reports-v1` downloads
 only the artifacts of matrix entries, which exist only for `run` jobs.
 
 ## Phase 1b (deferred, tracked here)

@@ -74,7 +74,9 @@ library used by one app runs exactly those two crate jobs; touching one app runs
 only that app's job. `push`, `merge_group`, and `workflow_dispatch` run every
 job. The baseline-coverage skip path (trusted-baseline artifacts and
 `covered_tasks` step gates) is removed completely; it is not a second skip
-mechanism. See [affected selection](implemented/affected-selection.md).
+mechanism. Container image build jobs join the same disposition table, keyed
+on their Dockerfile, context inputs and prebuilt crate (adopted per the split
+brief; owner may revisit). See [affected selection](implemented/affected-selection.md).
 Approved by the human owner on 2026-10-19, together with the decision 1
 amendment ("every crate job the plan schedules").
 The `complete = true` input rule, which lets a package with an unbounded

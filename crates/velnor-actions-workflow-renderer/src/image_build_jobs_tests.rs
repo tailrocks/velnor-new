@@ -58,7 +58,12 @@ fn job_is_native_unprivileged_and_ordered() {
     let job = build_image_build_job(&policy, ImagePlatform::LinuxArm64, CHECKOUT).expect("job");
     assert_eq!(job.runs_on, "ubuntu-26.04-arm");
     assert_eq!(job.timeout_minutes.minutes(), 30);
-    assert!(job.needs.is_empty() && job.condition.is_none() && job.environment.is_none());
+    assert!(job.environment.is_none());
+    assert_eq!(job.needs, ["plan"]);
+    assert_eq!(
+        job.condition.as_deref(),
+        Some("!contains(needs.plan.outputs.not_affected_jobs, ',image-eth-app-arm64,')")
+    );
     let permissions = job.permissions.as_ref().expect("permissions");
     assert_eq!(permissions.contents, PermissionLevel::Read);
     assert_eq!(permissions.id_token, PermissionLevel::None);
@@ -204,5 +209,9 @@ fn prebuilt_steps_sit_between_host_check_and_builder_and_need_the_plan() {
     let plain = self::policy();
     assert!(!plain.uses_pinned_tools());
     let job = build_image_build_job(&plain, ImagePlatform::LinuxAmd64, CHECKOUT).expect("job");
-    assert_eq!(job.needs.len(), 0);
+    assert_eq!(
+        job.needs,
+        ["plan"],
+        "plain images still read the plan's gate"
+    );
 }

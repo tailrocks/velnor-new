@@ -7,7 +7,7 @@ use velnor_actions_rust::{
 
 use super::*;
 use crate::discover::PlannedWorkspace;
-use crate::select::classify_changed;
+use crate::select::{ChangeEvidence, classify_changed};
 
 /// Discovery with packages `a` and `b` under `a/` and `b/`.
 fn two_package_discovery() -> Discovery {
@@ -312,6 +312,7 @@ fn skipped_index_names_broaden_with_explicit_tag() {
         "head",
         &discovery,
         &mut warnings,
+        &mut ChangeEvidence::default(),
     );
     assert_eq!(changed, None, "skipped names broaden to all");
     assert!(

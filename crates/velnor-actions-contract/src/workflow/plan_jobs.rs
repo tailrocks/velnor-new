@@ -8,7 +8,8 @@
 //! entry; a `run` job owns no `not_affected` obligation and at least one
 //! matrix entry; every obligation and entry names a planned job, and every
 //! planned job owns an obligation or an entry (a paired named-check lane
-//! owns only entries). Only affected-selection events may carry
+//! owns only entries; a container image build job, id prefix `image-`, owns
+//! neither, and is planned by image selection alone). Only affected-selection events may carry
 //! `not_affected` work: a full-run event (push, merge group,
 //! qualification) never skips anything.
 
@@ -17,6 +18,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 use super::plan::{ObligationDecision, Plan, WorkflowEvent};
+use crate::config::IMAGE_JOB_PREFIX;
 use crate::errors::ContractError;
 use crate::graph::check_sorted_by;
 
@@ -122,6 +124,12 @@ pub(crate) fn validate_plan_jobs(plan: &Plan) -> Result<(), ContractError> {
         }
     }
     for (job_id, disposition) in &jobs {
+        if job_id.starts_with(IMAGE_JOB_PREFIX) {
+            if owning.contains(job_id) || entries.contains(job_id) {
+                return Err(ContractError::identity("jobs", "image_job_owns_work"));
+            }
+            continue;
+        }
         let owns = match disposition {
             JobDisposition::Run => entries.contains(job_id),
             JobDisposition::NotAffected => owning.contains(job_id),
