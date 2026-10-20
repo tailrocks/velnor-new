@@ -34,7 +34,7 @@ use super::project_tool_refs::{
 /// `(variable, [tools] keys)` for every catalog tool; the first key is the
 /// canonical spelling, the rest are other backends' spellings of the
 /// same tool, which declare its version just the same.
-pub const PROJECT_TOOL_KEYS: [(&str, &[&str]); 13] = [
+pub const PROJECT_TOOL_KEYS: [(&str, &[&str]); 15] = [
     ("VELNOR_TOOL_RUST", &["rust", "core:rust"]),
     (
         "VELNOR_TOOL_MR_BOXINGTON",
@@ -86,6 +86,8 @@ pub const PROJECT_TOOL_KEYS: [(&str, &[&str]); 13] = [
         "VELNOR_TOOL_DBT_FUSION",
         &["dbt-fusion", "aqua:getdbt.com/dbt-fusion"],
     ),
+    ("VELNOR_TOOL_PYTHON", &["python", "core:python"]),
+    ("VELNOR_TOOL_UV", &["uv", "aqua:astral-sh/uv"]),
 ];
 
 /// `[tools]` keys declaring the tool behind one reference variable.
