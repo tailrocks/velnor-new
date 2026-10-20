@@ -46,72 +46,72 @@ impl ControllerPublicationBound {
         lower_hex(&self.digest)
     }
 
-    pub(crate) const fn runtime_identity_max_bytes(&self) -> u64 {
+    pub(crate) const fn runtime_identity_max_bytes() -> u64 {
         LARGE_DOCUMENT_MAX_BYTES + GUEST_IMAGE_DOCUMENT_MAX_BYTES
     }
 
-    pub(crate) const fn job_facts_max_bytes(&self) -> u64 {
+    pub(crate) const fn job_facts_max_bytes() -> u64 {
         LARGE_DOCUMENT_MAX_BYTES
     }
 
-    pub(crate) const fn challenge_max_bytes(&self) -> u64 {
+    pub(crate) const fn challenge_max_bytes() -> u64 {
         CONTROL_DOCUMENT_MAX_BYTES
     }
 
-    pub(crate) const fn decision_max_bytes(&self) -> u64 {
+    pub(crate) const fn decision_max_bytes() -> u64 {
         CONTROL_DOCUMENT_MAX_BYTES
     }
 
-    pub(crate) const fn request_max_bytes(&self) -> u64 {
+    pub(crate) const fn request_max_bytes() -> u64 {
         REQUEST_DOCUMENT_MAX_BYTES
     }
 
     /// Bound metadata documents and their temporary files.
-    pub(crate) const fn peak_payload_bytes(&self) -> u64 {
-        self.runtime_identity_max_bytes()
-            + self.job_facts_max_bytes()
-            + self.challenge_max_bytes()
-            + self.decision_max_bytes()
+    pub(crate) const fn peak_payload_bytes() -> u64 {
+        Self::runtime_identity_max_bytes()
+            + Self::job_facts_max_bytes()
+            + Self::challenge_max_bytes()
+            + Self::decision_max_bytes()
             + LARGE_DOCUMENT_MAX_BYTES
             + GUEST_IMAGE_DOCUMENT_MAX_BYTES
             + CONTROL_DOCUMENT_MAX_BYTES
     }
 
-    pub(crate) const fn final_file_count(&self) -> u64 {
+    pub(crate) const fn final_file_count() -> u64 {
         5
     }
 
-    pub(crate) const fn temporary_file_count(&self) -> u64 {
+    pub(crate) const fn temporary_file_count() -> u64 {
         3
     }
 
-    pub(crate) const fn directory_count(&self) -> u64 {
+    pub(crate) const fn directory_count() -> u64 {
         METADATA_DIRECTORIES.len() as u64
     }
 
     /// Count the volume root, initialized directories, final entries, and temporary entries.
-    pub(crate) const fn object_count(&self) -> u64 {
-        1 + self.final_file_count() + self.temporary_file_count() + self.directory_count()
+    pub(crate) const fn object_count() -> u64 {
+        1 + Self::final_file_count() + Self::temporary_file_count() + Self::directory_count()
     }
 
     /// The request file and its atomic temporary are charged to the existing `RunnerHome` volume.
-    pub(crate) const fn home_inbox_peak_payload_bytes(&self) -> u64 {
-        2 * self.request_max_bytes()
+    pub(crate) const fn home_inbox_peak_payload_bytes() -> u64 {
+        2 * Self::request_max_bytes()
     }
 
     /// Count `RunnerHome`'s root, inbox directories, final request, and atomic temporary entry.
-    pub(crate) const fn home_inbox_object_count(&self) -> u64 {
+    pub(crate) const fn home_inbox_object_count() -> u64 {
         1 + HOME_INBOX_DIRECTORIES.len() as u64 + 2
     }
 
     pub(crate) fn validate(&self) -> Result<(), HostError> {
         if self.digest != fixed_policy_digest()
-            || self.peak_payload_bytes() > i64::MAX as u64
-            || self.home_inbox_peak_payload_bytes() > i64::MAX as u64
-            || self.object_count()
-                != 1 + self.final_file_count()
-                    + self.temporary_file_count()
-                    + self.directory_count()
+            || Self::peak_payload_bytes() > i64::MAX as u64
+            || Self::home_inbox_peak_payload_bytes() > i64::MAX as u64
+            || Self::object_count()
+                != 1 + Self::final_file_count()
+                    + Self::temporary_file_count()
+                    + Self::directory_count()
         {
             return Err(HostError::Journal);
         }
@@ -187,18 +187,24 @@ mod tests {
     #[test]
     fn fixed_publication_bound_matches_reader_limits_and_overlap() {
         let bound = ControllerPublicationBound::fixed();
-        assert_eq!(bound.runtime_identity_max_bytes(), 81_920);
-        assert_eq!(bound.job_facts_max_bytes(), 65_536);
-        assert_eq!(bound.challenge_max_bytes(), 8_192);
-        assert_eq!(bound.decision_max_bytes(), 8_192);
-        assert_eq!(bound.request_max_bytes(), 16_384);
-        assert_eq!(bound.peak_payload_bytes(), 253_952);
-        assert_eq!(bound.final_file_count(), 5);
-        assert_eq!(bound.temporary_file_count(), 3);
-        assert_eq!(bound.directory_count(), 4);
-        assert_eq!(bound.object_count(), 13);
-        assert_eq!(bound.home_inbox_peak_payload_bytes(), 32_768);
-        assert_eq!(bound.home_inbox_object_count(), 5);
+        assert_eq!(
+            ControllerPublicationBound::runtime_identity_max_bytes(),
+            81_920
+        );
+        assert_eq!(ControllerPublicationBound::job_facts_max_bytes(), 65_536);
+        assert_eq!(ControllerPublicationBound::challenge_max_bytes(), 8_192);
+        assert_eq!(ControllerPublicationBound::decision_max_bytes(), 8_192);
+        assert_eq!(ControllerPublicationBound::request_max_bytes(), 16_384);
+        assert_eq!(ControllerPublicationBound::peak_payload_bytes(), 253_952);
+        assert_eq!(ControllerPublicationBound::final_file_count(), 5);
+        assert_eq!(ControllerPublicationBound::temporary_file_count(), 3);
+        assert_eq!(ControllerPublicationBound::directory_count(), 4);
+        assert_eq!(ControllerPublicationBound::object_count(), 13);
+        assert_eq!(
+            ControllerPublicationBound::home_inbox_peak_payload_bytes(),
+            32_768
+        );
+        assert_eq!(ControllerPublicationBound::home_inbox_object_count(), 5);
         assert_eq!(
             bound.digest(),
             "a2b779c3cdd63b136d6e9d7898912576a3104dcbafc7c89c6ab1f4185002eb76"

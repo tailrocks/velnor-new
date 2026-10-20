@@ -14,12 +14,27 @@ mod identity;
 mod record_validation;
 #[path = "cleanup/terminal.rs"]
 mod terminal;
+pub(in crate::journal) use terminal::validate_retirement_digest;
 #[path = "cleanup/witness.rs"]
 mod witness;
 pub(crate) use identity::StorageCleanupIdentity;
 #[cfg(test)]
 pub(crate) use identity::{StorageCleanupCgroup, StorageCleanupMount};
 pub(crate) use witness::StorageCleanupObserverWitness;
+
+pub(super) async fn post_jit_retirement_claim_exists(
+    connection: &turso::Connection,
+    reservation_id: i64,
+) -> Result<bool, HostError> {
+    let mut rows = connection
+        .query(
+            "SELECT 1 FROM physical_attempt_post_jit_retirement_claims WHERE reservation_id=?1 LIMIT 1",
+            [reservation_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(rows.next().await.map_err(|_| HostError::Journal)?.is_some())
+}
 
 pub(super) async fn record(
     journal: &ConnectionJournal,
@@ -258,6 +273,9 @@ async fn settle_if_fully_cleaned(
     reservation_id: i64,
     context: &HoldContext,
 ) -> Result<(), HostError> {
+    if post_jit_retirement_claim_exists(connection, reservation_id).await? {
+        return Ok(());
+    }
     let mut rows = connection
         .query(
             "SELECT remote_cleanup_proven, local_cleanup_proven, state FROM capacity_reservations WHERE id = ?1 AND connection_id = ?2",

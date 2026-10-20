@@ -1,11 +1,18 @@
 use crate::error::HostError;
 
+#[path = "terminal/post_jit.rs"]
+mod post_jit;
+pub(in crate::journal) use post_jit::validate_retirement_digest;
+
 pub(super) async fn settle_reservation(
     connection: &turso::Connection,
     connection_id: &str,
     intent_id: i64,
     reservation_id: i64,
 ) -> Result<(), HostError> {
+    if post_jit::settle_if_claimed(connection, connection_id, intent_id, reservation_id).await? {
+        return Ok(());
+    }
     let mut rows = connection
         .query(
             "SELECT 1 FROM physical_attempt_current WHERE reservation_id = ?1",

@@ -114,6 +114,8 @@ impl ConnectionJournal {
                 && local_proven == 1
                 && storage_ready
                 && state != "released"
+                && !super::provisioning::post_jit_retirement_claim_exists(connection, reservation_id)
+                .await?
                 && super::provisioning::release_ready(connection, reservation_id).await?
             {
                 let changed = connection

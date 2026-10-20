@@ -26,6 +26,7 @@ mod physical_attempts_tests;
 #[cfg(test)]
 #[path = "schema/physical_attempts_v34_migration_tests.rs"]
 mod physical_attempts_v34_migration_tests;
+mod post_jit_retirement;
 mod pre_jit_cleanup;
 #[cfg(test)]
 pub(in crate::journal) mod provisioning;
@@ -48,7 +49,7 @@ mod storage_root_backing;
 #[path = "schema/execution_publication/v30_migration_tests.rs"]
 mod v30_migration_tests;
 
-pub(super) const JOURNAL_VERSION: i64 = 34;
+pub(super) const JOURNAL_VERSION: i64 = 35;
 use current_columns::CURRENT_COLUMNS;
 
 pub(super) struct ColumnInfo {
@@ -97,6 +98,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
         storage_root_backing::upgrade_v31(conn).await?;
         storage_handoff::bootstrap(conn).await?;
         cleanup_observer_witness::bootstrap(conn).await?;
+        post_jit_retirement::validate(conn).await?;
     } else {
         while version != JOURNAL_VERSION {
             let expected = expected_next_version(version).ok_or(HostError::Journal)?;
@@ -135,6 +137,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
                 31 => migration::from_version_thirty_one(conn).await?,
                 32 => migration::from_version_thirty_two(conn).await?,
                 33 => migration::from_version_thirty_three(conn).await?,
+                34 => migration::from_version_thirty_four(conn).await?,
                 _ => return Err(HostError::Journal),
             }
             version = journal_version(conn).await?;
@@ -148,7 +151,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
 
 fn expected_next_version(version: i64) -> Option<i64> {
     match version {
-        0..=8 | 10..=33 => Some(version + 1),
+        0..=8 | 10..=34 => Some(version + 1),
         9 => Some(11),
         _ => None,
     }
@@ -165,7 +168,8 @@ pub(crate) mod historical_fixture;
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
     validate_persisted_schema_v32_core(conn).await?;
     storage_network::validate_v33(conn).await?;
-    physical_attempts::validate(conn).await
+    physical_attempts::validate_v35(conn).await?;
+    post_jit_retirement::validate(conn).await
 }
 
 pub(super) async fn validate_persisted_schema_v33(
@@ -174,6 +178,14 @@ pub(super) async fn validate_persisted_schema_v33(
     validate_persisted_schema_v32_core(conn).await?;
     storage_network::validate_v33(conn).await?;
     physical_attempts::validate_v33(conn).await
+}
+
+pub(super) async fn validate_persisted_schema_v34(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
+    validate_persisted_schema_v32_core(conn).await?;
+    storage_network::validate_v33(conn).await?;
+    physical_attempts::validate(conn).await
 }
 
 pub(super) async fn validate_persisted_schema_v32(
