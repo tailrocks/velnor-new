@@ -132,7 +132,7 @@ fn create_temporary(directory: &Path, bytes: &[u8]) -> Result<TemporaryFile, Hos
                 temporary.file.sync_all().map_err(|_| HostError::Path)?;
                 return Ok(temporary);
             }
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
             Err(_) => return Err(HostError::Path),
         }
     }

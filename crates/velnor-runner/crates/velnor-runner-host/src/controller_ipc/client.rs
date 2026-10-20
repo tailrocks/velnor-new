@@ -19,18 +19,24 @@ const RETRY: Duration = Duration::from_millis(100);
 const CALL_TIMEOUT: Duration = Duration::from_secs(5);
 const DOCTOR_TIMEOUT_MAX: Duration = Duration::from_secs(300);
 const MAX_CONFIG_BYTES: u64 = 1_048_576;
+const HEX: &[u8; 16] = b"0123456789abcdef";
 
 /// Run one bounded Doctor probe through the active controller.
+///
+/// # Errors
+///
+/// Returns an error if the request is invalid or the controller, journal, or probe operation fails.
 pub fn run_doctor_probe(state: &Path, timeout: Duration) -> Result<serde_json::Value, HostError> {
     let mut bytes = [0_u8; 16];
     getrandom::fill(&mut bytes).map_err(|_| HostError::Identity)?;
     let nonce = bytes
         .iter()
-        .map(|byte| format!("{byte:02x}"))
+        .flat_map(|byte| [HEX[usize::from(byte >> 4)], HEX[usize::from(byte & 0x0f)]])
+        .map(char::from)
         .collect::<String>();
     let start = doctor_call(
         state,
-        Request::DoctorProbeStart {
+        &Request::DoctorProbeStart {
             nonce: nonce.clone(),
         },
     )?;
@@ -43,7 +49,7 @@ pub fn run_doctor_probe(state: &Path, timeout: Duration) -> Result<serde_json::V
     loop {
         let reply = doctor_call(
             state,
-            Request::DoctorProbeStatus {
+            &Request::DoctorProbeStatus {
                 nonce: nonce.clone(),
             },
         )?;
@@ -67,12 +73,12 @@ pub fn run_doctor_probe(state: &Path, timeout: Duration) -> Result<serde_json::V
     }
 }
 
-fn doctor_call(state: &Path, request: Request) -> Result<DoctorProbeReply, HostError> {
-    if !valid_request(&request) {
+fn doctor_call(state: &Path, request: &Request) -> Result<DoctorProbeReply, HostError> {
+    if !valid_request(request) {
         return Err(HostError::Frame);
     }
     let path = state.join(SOCKET_NAME);
-    let response = call_socket_response(&path, &request)?;
+    let response = call_socket_response(&path, request)?;
     response.doctor_probe.ok_or(HostError::Journal)
 }
 

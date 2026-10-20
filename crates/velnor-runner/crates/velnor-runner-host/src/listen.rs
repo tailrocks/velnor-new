@@ -348,12 +348,13 @@ pub(crate) fn annotate(error: SessionError, step: &'static str) -> EnsureError {
 #[must_use]
 pub(crate) fn map_listen(error: SessionError) -> EnsureError {
     match error {
-        SessionError::Uncertain => EnsureError::Uncertain,
+        SessionError::Uncertain | SessionError::Wire(WireError::RefreshExhausted) => {
+            EnsureError::Uncertain
+        }
         SessionError::Conflict => EnsureError::Conflict,
         SessionError::Wire(WireError::RegistrationRejected) => EnsureError::Rejected,
         SessionError::Wire(WireError::Forbidden) => EnsureError::Forbidden,
         SessionError::Wire(WireError::Malformed) => EnsureError::Malformed,
-        SessionError::Wire(WireError::RefreshExhausted) => EnsureError::Uncertain,
         SessionError::Wire(_) => EnsureError::Unexpected {
             status: 0,
             step: "session",

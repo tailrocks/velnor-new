@@ -55,7 +55,9 @@ fn bounded_requests_share_the_original_absolute_deadline() {
 #[test]
 fn expired_absolute_deadline_has_no_remaining_request_time() {
     let now = Instant::now();
-    let deadline = now - Duration::from_millis(1);
+    let deadline = now.checked_sub(Duration::from_millis(1));
+    assert!(deadline.is_some());
+    let deadline = deadline.unwrap_or(now);
     let request = request_deadline_at(Some(deadline), 60, now).expect("deadline remains absolute");
     assert_eq!(request, deadline);
     assert!(deadline.checked_duration_since(now).is_none());

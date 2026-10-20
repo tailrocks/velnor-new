@@ -133,8 +133,11 @@ pub(crate) fn runner_create_verified(
 ) -> Result<CreateProjection, HostError> {
     let metadata_mount = guest_image.runner_bind(connection, images)?;
     let mut projection = runner_create(plan, resource_budget)?;
-    projection.image = images.runner().runtime_id().to_owned();
-    projection.platform = images.platform().to_owned();
+    images
+        .runner()
+        .runtime_id()
+        .clone_into(&mut projection.image);
+    images.platform().clone_into(&mut projection.platform);
     projection.bind_mounts.push(metadata_mount);
     Ok(projection)
 }
@@ -216,8 +219,8 @@ pub(crate) fn dind_create_verified(
 ) -> Result<CreateProjection, HostError> {
     guest_image::validate_worker_images(images)?;
     let mut projection = dind_create(private_volume, resource_budget)?;
-    projection.image = images.dind().runtime_id().to_owned();
-    projection.platform = images.platform().to_owned();
+    images.dind().runtime_id().clone_into(&mut projection.image);
+    images.platform().clone_into(&mut projection.platform);
     Ok(projection)
 }
 

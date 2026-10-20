@@ -59,11 +59,7 @@ fn write_config_until(child: &mut Child, config: &[u8], deadline: Instant) -> Re
             }
             match receiver.try_recv() {
                 Ok(Ok(())) => return Ok(()),
-                Ok(Err(_)) => {
-                    stop_child(child);
-                    return Err(CurlFail::Reset);
-                }
-                Err(TryRecvError::Disconnected) => {
+                Ok(Err(_)) | Err(TryRecvError::Disconnected) => {
                     stop_child(child);
                     return Err(CurlFail::Reset);
                 }
