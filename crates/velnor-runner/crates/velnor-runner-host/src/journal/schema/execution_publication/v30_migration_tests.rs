@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::journal::Journal;
 
+#[path = "publication_fixture.rs"]
 mod publication_fixture;
 
 struct Scratch(PathBuf);

@@ -32,6 +32,9 @@ mod storage_handoff;
 mod storage_initialization;
 mod storage_network;
 mod storage_root_backing;
+#[cfg(test)]
+#[path = "schema/execution_publication/v30_migration_tests.rs"]
+mod v30_migration_tests;
 
 pub(super) const JOURNAL_VERSION: i64 = 30;
 const CURRENT_COLUMNS: [ColumnShape; 23] = [
