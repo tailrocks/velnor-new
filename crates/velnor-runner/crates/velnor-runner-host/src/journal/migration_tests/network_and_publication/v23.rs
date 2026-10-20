@@ -10,70 +10,90 @@ async fn version_twenty_three_migration_installs_publication_guards() {
 }
 
 async fn prepare_v23_probe(path: &std::path::Path) -> String {
-    let journal = Journal::open(&path).await.expect("initial schema");
-    journal
-        .bind_engine("probe-engine")
+    crate::journal::schema::historical_fixture::install(path, 23)
         .await
-        .expect("bind engine");
-    journal
-        .configure_capacity_with_operational_limits(
-            super::super::super::CapacityLimits {
-                jobs: 1,
-                cpu_millicores: 1_000,
-                memory_bytes: 4 * 1024 * 1024 * 1024,
-            },
-            super::super::super::OperationalCapacityLimits {
-                cpu_millicores: 100,
-                memory_bytes: 128 * 1024 * 1024,
-            },
+        .expect("Could not create the version 23 schema.");
+    let database = turso::Builder::new_local(
+        path.to_str()
+            .expect("The temporary database path must use UTF-8."),
+    )
+    .build()
+    .await
+    .expect("Could not open the version 23 database.");
+    let connection = database
+        .connect()
+        .expect("Could not connect to the version 23 database.");
+    let operation_id = "a".repeat(32);
+    let mut rows = connection
+        .query(
+            "SELECT instance_id FROM journal_meta WHERE singleton = 1",
+            (),
         )
         .await
-        .expect("configure capacity");
-    let operation_id = "a".repeat(32);
-    let seed = super::super::super::ProbeSeed {
-        operation_id: operation_id.clone(),
-        instance_id: journal.instance_id().await.expect("instance ID"),
-        engine_id: "probe-engine".to_owned(),
-        docker_root_digest: "b".repeat(64),
-        source_revision: "c".repeat(40),
-        runtime_image_id: format!("sha256:{}", "d".repeat(64)),
-        image_binding_digest: "e".repeat(64),
-        operation_name: format!("velnor-resource-probe-{operation_id}"),
-        projection_digest: "f".repeat(64),
-        purpose: super::super::super::ResourceProbePurpose::Capacity,
-        request_sha256: super::super::super::resource_probe::capacity_request_sha256(),
-    };
-    journal.prepare_probe(seed).await.expect("prepare probe");
-    drop(journal);
+        .expect("Could not read the journal instance ID.");
+    let instance_id: String = rows
+        .next()
+        .await
+        .expect("Could not read a row from the journal instance table.")
+        .expect("The journal instance table has no row.")
+        .get(0)
+        .expect("The journal instance row has no instance ID.");
+    connection
+        .execute(
+            "UPDATE journal_meta SET engine_id = 'probe-engine' WHERE singleton = 1",
+            (),
+        )
+        .await
+        .expect("Could not set the probe engine.");
+    connection
+        .execute(
+            "UPDATE host_capacity_policy SET operational_cpu_millicores = 100, operational_memory_bytes = 134217728 WHERE singleton = 1",
+            (),
+        )
+        .await
+        .expect("Could not set the probe capacity.");
+    connection
+        .execute(
+            "INSERT INTO host_operation_leases (singleton, operation_id, engine_id, docker_root_digest, operation_name, container_id, cpu_millicores, memory_bytes, state) VALUES (1, ?1, 'probe-engine', ?2, ?3, NULL, 100, 134217728, 'reserved')",
+            (
+                operation_id.as_str(),
+                "b".repeat(64),
+                format!("velnor-resource-probe-{operation_id}"),
+            ),
+        )
+        .await
+        .expect("Could not save the probe lease.");
+    connection
+        .execute(
+            "INSERT INTO resource_probe_operations (operation_id, instance_id, engine_id, docker_root_digest, source_revision, runtime_image_id, image_binding_digest, operation_name, role, projection_digest, phase, container_id) VALUES (?1, ?2, 'probe-engine', ?3, ?4, ?5, ?6, ?7, 'resource-probe', ?8, 'prepared', NULL)",
+            (
+                operation_id.as_str(),
+                instance_id,
+                "b".repeat(64),
+                "c".repeat(40),
+                format!("sha256:{}", "d".repeat(64)),
+                "e".repeat(64),
+                format!("velnor-resource-probe-{operation_id}"),
+                "f".repeat(64),
+            ),
+        )
+        .await
+        .expect("Could not record the version 23 probe.");
+    drop(connection);
+    drop(database);
     operation_id
 }
 
 async fn restore_v23_schema(path: &std::path::Path) {
-    let database = turso::Builder::new_local(path.to_str().expect("UTF-8 temp path"))
-        .build()
-        .await
-        .expect("open SQLite");
+    let database = turso::Builder::new_local(
+        path.to_str()
+            .expect("The temporary database path must use UTF-8."),
+    )
+    .build()
+    .await
+    .expect("open SQLite");
     let connection = database.connect().expect("connect SQLite");
-    for name in [
-        "execution_publication_context_insert_guard",
-        "execution_publication_context_update_guard",
-        "execution_publication_context_delete_guard",
-        "execution_publication_parent_cleanup_guard",
-        "execution_publication_parent_release_guard",
-    ] {
-        connection
-            .execute(&format!("DROP TRIGGER IF EXISTS {name}"), ())
-            .await
-            .expect("remove v24 trigger");
-    }
-    connection
-        .execute("DROP TABLE execution_publication_operations", ())
-        .await
-        .expect("restore v23 schema");
-    connection
-        .execute("PRAGMA user_version = 23", ())
-        .await
-        .expect("mark v23 schema");
+    assert_eq!(read_version(&connection).await, 23);
     drop(connection);
     drop(database);
 }
@@ -81,10 +101,13 @@ async fn restore_v23_schema(path: &std::path::Path) {
 async fn assert_v23_migration(path: &std::path::Path, operation_id: &str) {
     drop(Journal::open(&path).await.expect("migrate v23 schema"));
     drop(Journal::open(&path).await.expect("reopen current schema"));
-    let database = turso::Builder::new_local(path.to_str().expect("UTF-8 temp path"))
-        .build()
-        .await
-        .expect("reopen SQLite");
+    let database = turso::Builder::new_local(
+        path.to_str()
+            .expect("The temporary database path must use UTF-8."),
+    )
+    .build()
+    .await
+    .expect("reopen SQLite");
     let connection = database.connect().expect("connect SQLite");
     let insert_guard_sql = assert_v23_publication_schema(&connection).await;
     assert_v23_guard_rejections(&connection, operation_id, &insert_guard_sql).await;
@@ -205,10 +228,13 @@ async fn assert_v23_guard_rejections(
 }
 
 async fn assert_v23_probe_survives_reopen(path: &std::path::Path, operation_id: &str) {
-    let database = turso::Builder::new_local(path.to_str().expect("UTF-8 temp path"))
-        .build()
-        .await
-        .expect("reopen migrated database");
+    let database = turso::Builder::new_local(
+        path.to_str()
+            .expect("The temporary database path must use UTF-8."),
+    )
+    .build()
+    .await
+    .expect("reopen migrated database");
     let connection = database.connect().expect("connect migrated database");
     assert_eq!(
         read_version(&connection).await,

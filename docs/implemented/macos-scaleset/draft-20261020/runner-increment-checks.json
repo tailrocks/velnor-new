@@ -1167,5 +1167,35 @@
     "language_reviewer": "helper_language_review",
     "integration_note": "The merge keeps the current pair resource assertions. The parent applied Rust formatting and the reviewed diagnostic text.",
     "scope": "Invalid operation and directory identities stop before ACK. The tests keep the acquired reservation and capacity charge. Full strict Clippy and live tests remain necessary."
+  },
+  "historical_fixture_shapes": {
+    "result": "PASS",
+    "source_base": "ca75229f1b094e57e92400484dbd759d46104578",
+    "focused_tests": 17,
+    "checks": [
+      {
+        "log": "migration-fixture14-parent-language-final-20261020.log",
+        "sha256": "8198fe697e5a37aef5f6dd572e1508006fc76dfaf6a6c0606cdb7ead1f2e2f22",
+        "exit_status": 0,
+        "run_id": "a54a34ef-b95a-481d-8b30-72ca2cea5342"
+      },
+      {
+        "log": "migration-fixture14-parent-final-diagnostics-20261020.log",
+        "sha256": "698d94c5b6430f76522de2251d38b94ef2802d8ac38d564ceeb5b9a0c78e6cc2",
+        "exit_status": 0,
+        "run_id": "deea6313-f59a-45e9-b4ad-d47161a9c416"
+      }
+    ],
+    "manifest_sha256": "73f5f4e84795119f02f16ee13da7222ddf6d3972cf53cb6447774de13f42f1b6",
+    "review_sha256": "06582173c410eb3a427fc7a43def56915ed7b0503482a31b9415c292d33ce5c4",
+    "scope": "The tests check migration dispatch, rollback, guard validation, and saved publication proof. The V31 input is a static empty SQL fixture. It is not a database export.",
+    "language_reviewer": "helper_language_review",
+    "full_suite": {
+      "result": "FAIL",
+      "tests": 1461,
+      "passed": 1460,
+      "failed": 1,
+      "cause": "The bootstrap fixture expects initializer cleanup before the runner handoff finishes. The fixture repair is separate."
+    }
   }
 }

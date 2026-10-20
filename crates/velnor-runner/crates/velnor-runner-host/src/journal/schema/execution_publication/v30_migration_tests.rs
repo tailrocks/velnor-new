@@ -5,6 +5,8 @@ use crate::journal::Journal;
 
 #[path = "publication_fixture.rs"]
 mod publication_fixture;
+#[path = "v30_migration_tests/published_parent.rs"]
+mod published_parent;
 
 struct Scratch(PathBuf);
 
@@ -35,85 +37,18 @@ impl Drop for Scratch {
 async fn version_twenty_nine_probe_constraints_migrate_without_losing_rows() {
     let scratch = Scratch::new();
     let path = scratch.file();
-    drop(Journal::open(&path).await.expect("create current journal"));
-    let publication_id = publication_fixture::create(&path).await;
-    create_v29_fixture(&path).await;
-    migrate_and_assert_v30(&path, &publication_id).await;
-}
-
-async fn create_v29_fixture(path: &std::path::Path) {
-    let (database, connection) = open_database(path).await;
-    let table_sql = schema_sql(&connection, "resource_probe_operations").await;
-    let indexes = index_sql(&connection, "resource_probe_operations").await;
-    let triggers = triggers_referencing(&connection, "resource_probe_operations").await;
-    connection
-        .execute(
-            "DROP TRIGGER execution_publication_context_insert_guard",
-            (),
-        )
+    crate::journal::schema::historical_fixture::install(&path, 29)
         .await
-        .expect("drop trigger for column change");
-    for (name, _) in &triggers {
-        connection
-            .execute(&format!("DROP TRIGGER IF EXISTS {name}"), ())
-            .await
-            .expect("remove probe guard for table replacement");
-    }
-    let old_sql = version_twenty_nine_table(&table_sql);
-    connection
-        .execute(&old_sql, ())
-        .await
-        .expect("create v29 table");
-    connection
-        .execute(
-            "INSERT INTO resource_probe_operations_v29 SELECT * FROM resource_probe_operations",
-            (),
-        )
-        .await
-        .expect("preserve existing probe operations");
+        .expect("Could not install the version 29 journal fixture.");
+    let (database, connection) = open_database(&path).await;
     let operation_id = "0123456789abcdef0123456789abcdef";
-    insert_probe(&connection, operation_id).await;
+    insert_probe(&connection, "resource_probe_operations", operation_id).await;
     insert_doctor_child(&connection, operation_id).await;
-    connection
-        .execute("DROP TABLE resource_probe_operations", ())
-        .await
-        .expect("drop current probe table");
-    connection
-        .execute(
-            "ALTER TABLE resource_probe_operations_v29 RENAME TO resource_probe_operations",
-            (),
-        )
-        .await
-        .expect("restore v29 table name");
-    restore_probe_objects(&connection, indexes, triggers).await;
-    connection
-        .execute("PRAGMA user_version = 29", ())
-        .await
-        .expect("mark v29");
     assert_doctor_reference_is_intact(&connection).await;
     drop(connection);
     drop(database);
-}
 
-async fn restore_probe_objects(
-    connection: &turso::Connection,
-    indexes: Vec<String>,
-    triggers: Vec<(String, String)>,
-) {
-    for index in indexes {
-        connection
-            .execute(&index, ())
-            .await
-            .expect("restore probe index");
-    }
-    for (name, sql) in triggers {
-        if !name.starts_with("cleanup_observer_") {
-            connection
-                .execute(&sql, ())
-                .await
-                .expect("restore pre-v30 probe guard");
-        }
-    }
+    migrate_and_assert_v30(&path, None).await;
 }
 
 async fn assert_doctor_reference_is_intact(connection: &turso::Connection) {
@@ -125,8 +60,12 @@ async fn assert_doctor_reference_is_intact(connection: &turso::Connection) {
     assert_eq!(invalid, 0, "doctor child rows should be consistent");
 }
 
-async fn migrate_and_assert_v30(path: &std::path::Path, publication_id: &str) {
-    drop(Journal::open(path).await.expect("upgrade v29 journal"));
+async fn migrate_and_assert_v30(path: &std::path::Path, publication_id: Option<&str>) {
+    drop(
+        Journal::open(path)
+            .await
+            .expect("Could not upgrade the journal."),
+    );
     let (database, connection) = open_database(path).await;
     assert_eq!(
         scalar(&connection, "PRAGMA user_version").await,
@@ -148,14 +87,16 @@ async fn migrate_and_assert_v30(path: &std::path::Path, publication_id: &str) {
         .await,
         1
     );
-    assert_eq!(
-        scalar(
-            &connection,
-            &format!("SELECT COUNT(*) FROM execution_publication_operations WHERE operation_id = '{publication_id}' AND parent_kind = 'job-facts'"),
-        )
-        .await,
-        1
-    );
+    if let Some(publication_id) = publication_id {
+        assert_eq!(
+            scalar(
+                &connection,
+                &format!("SELECT COUNT(*) FROM execution_publication_operations WHERE operation_id = '{publication_id}' AND parent_kind = 'job-facts'"),
+            )
+            .await,
+            1
+        );
+    }
     assert_no_foreign_key_errors(&connection).await;
     drop(connection);
     drop(database);
@@ -285,7 +226,7 @@ fn version_twenty_nine_table(table_sql: &str) -> String {
     old
 }
 
-async fn insert_probe(connection: &turso::Connection, operation_id: &str) {
+async fn insert_probe(connection: &turso::Connection, table: &str, operation_id: &str) {
     let mut rows = connection
         .query(
             "SELECT instance_id FROM journal_meta WHERE singleton = 1",
@@ -310,7 +251,7 @@ async fn insert_probe(connection: &turso::Connection, operation_id: &str) {
     let request_sha256 = crate::journal::capacity_request_sha256();
     connection
         .execute(
-            "INSERT INTO resource_probe_operations_v29 (operation_id, instance_id, engine_id, docker_root_digest, source_revision, runtime_image_id, image_binding_digest, operation_name, role, projection_digest, phase, container_id, helper_role, probe_purpose, request_sha256, request_context) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'resource-probe', ?9, 'removed', NULL, 'resource-probe', 'capacity', ?10, NULL)",
+            &format!("INSERT INTO {table} (operation_id, instance_id, engine_id, docker_root_digest, source_revision, runtime_image_id, image_binding_digest, operation_name, role, projection_digest, phase, container_id, helper_role, probe_purpose, request_sha256, request_context) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'resource-probe', ?9, 'removed', NULL, 'resource-probe', 'capacity', ?10, NULL)"),
             (
                 operation_id,
                 instance_id.as_str(),

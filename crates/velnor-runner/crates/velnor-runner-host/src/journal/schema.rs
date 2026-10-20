@@ -193,6 +193,10 @@ fn expected_next_version(version: i64) -> Option<i64> {
 #[path = "schema/migration_driver_tests.rs"]
 mod migration_driver_tests;
 
+#[cfg(test)]
+#[path = "schema/historical_fixture.rs"]
+pub(crate) mod historical_fixture;
+
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
     validate_persisted_schema_v27_core(conn).await?;
     storage_root_backing::validate(conn).await?;

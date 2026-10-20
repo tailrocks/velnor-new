@@ -60,62 +60,7 @@ async fn rejects_missing_v32_trigger(trigger: &str) -> Result<(), String> {
     Ok(())
 }
 
-async fn remove_v32_pre_jit_schema(connection: &turso::Connection) -> Result<(), String> {
-    for trigger in [
-        "pre_jit_create_spec_insert_guard",
-        "pre_jit_create_spec_no_update",
-        "pre_jit_create_spec_no_delete",
-    ] {
-        connection
-            .execute(&format!("DROP TRIGGER {trigger}"), ())
-            .await
-            .map_err(|_| "The test create-spec trigger could not be removed.")?;
-    }
-    connection
-        .execute("DROP TABLE capacity_reservation_pre_jit_create_specs", ())
-        .await
-        .map_err(|_| "The test create-spec table could not be removed.")?;
-    for trigger in [
-        "pre_jit_cleanup_claim_insert_guard",
-        "pre_jit_cleanup_claim_update_guard",
-        "pre_jit_cleanup_claim_no_delete",
-        "pre_jit_cleanup_progress_insert_guard",
-        "pre_jit_cleanup_progress_update_guard",
-        "pre_jit_cleanup_progress_no_delete",
-    ] {
-        connection
-            .execute(&format!("DROP TRIGGER {trigger}"), ())
-            .await
-            .map_err(|_| "The test trigger could not be removed.")?;
-    }
-    connection
-        .execute(
-            "DROP TABLE capacity_reservation_pre_jit_cleanup_progress",
-            (),
-        )
-        .await
-        .map_err(|_| "The test progress table could not be removed.")?;
-    connection
-        .execute("DROP TABLE capacity_reservation_pre_jit_cleanup_claims", ())
-        .await
-        .map_err(|_| "The test claim table could not be removed.")?;
-    connection
-        .execute("PRAGMA user_version = 31", ())
-        .await
-        .map_err(|_| "The prior schema version could not be set.")?;
-    Ok(())
-}
-
-#[tokio::test]
-async fn version_thirty_one_upgrade_installs_only_the_typed_create_receipt() -> Result<(), String> {
-    let scratch = Scratch::new();
-    std::fs::create_dir_all(&scratch.0).map_err(|_| "The test directory could not be created.")?;
-    let path = scratch.database();
-    drop(
-        Journal::open(&path)
-            .await
-            .map_err(|_| "The journal could not be created.")?,
-    );
+async fn create_v31_database(path: &std::path::Path) -> Result<(), String> {
     let path_text = path.to_str().ok_or("The journal path is not UTF-8.")?;
     let database = turso::Builder::new_local(path_text)
         .build()
@@ -125,27 +70,27 @@ async fn version_thirty_one_upgrade_installs_only_the_typed_create_receipt() -> 
         .connect()
         .map_err(|_| "The test connection could not be opened.")?;
     connection
-        .execute("DROP TRIGGER pre_jit_create_response_insert_guard", ())
+        .execute_batch(include_str!("pre_jit_cleanup_tests/v31_empty.sql"))
         .await
-        .map_err(|_| "The test trigger could not be removed.")?;
-    connection
-        .execute("DROP TRIGGER pre_jit_create_response_no_update", ())
+        .map_err(|error| format!("The version 31 fixture could not be loaded: {error}"))?;
+    let version = super::super::journal_version(&connection)
         .await
-        .map_err(|_| "The test trigger could not be removed.")?;
-    connection
-        .execute("DROP TRIGGER pre_jit_create_response_no_delete", ())
-        .await
-        .map_err(|_| "The test trigger could not be removed.")?;
-    connection
-        .execute(
-            "DROP TABLE capacity_reservation_pre_jit_create_responses",
-            (),
-        )
-        .await
-        .map_err(|_| "The test table could not be removed.")?;
-    remove_v32_pre_jit_schema(&connection).await?;
+        .map_err(|_| "The fixture version could not be read.")?;
+    if version != 31 {
+        return Err("The fixture must use journal version 31.".to_owned());
+    }
     drop(connection);
     drop(database);
+    Ok(())
+}
+
+#[tokio::test]
+async fn version_thirty_one_upgrade_installs_only_the_typed_create_receipt() -> Result<(), String> {
+    let scratch = Scratch::new();
+    std::fs::create_dir_all(&scratch.0).map_err(|_| "The test directory could not be created.")?;
+    let path = scratch.database();
+    create_v31_database(&path).await?;
+    let path_text = path.to_str().ok_or("The journal path is not UTF-8.")?;
 
     drop(
         Journal::open(&path)

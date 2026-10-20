@@ -110,11 +110,11 @@ async fn v28_rebuild_preserves_published_proof_and_reopens() -> Result<(), HostE
 
     let before = migration::proof_facts(&connection, reservation_id).await?;
     migration::recreate_pair_as_v27(&connection).await?;
-    connection
-        .execute("PRAGMA user_version = 23", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
     migration::verify_failed_upgrades(&connection, reservation_id, &before).await?;
+    crate::journal::schema::execution_authorization::upgrade_v28(&connection).await?;
+    if migration::proof_facts(&connection, reservation_id).await? != before {
+        return Err(HostError::Journal);
+    }
     drop(connection);
     let crate::journal::request_lifecycle::tests::NativePreChallengeFixture {
         _scratch,
