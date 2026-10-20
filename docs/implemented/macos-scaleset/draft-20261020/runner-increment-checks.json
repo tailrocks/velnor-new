@@ -438,6 +438,37 @@
       "scope": "Controller checks passed focused tests. Strict workspace Clippy remains failed.",
       "author": "/root",
       "reviewer": "/root/journal_restart_repair"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "f6a642ca868a0053552d1e7c8e47035e0800835e",
+      "scope": "Version 0.1.29 parity and OpenTofu records match the generator. This does not prove release qualification.",
+      "commands": [
+        "VELNOR_UPDATE_GOLDENS=1 cargo nextest run --locked --offline --manifest-path Cargo.toml -p velnor-actions-cli --test velnor_cli -E 'test(parity_artifacts_match_goldens)' --no-fail-fast",
+        "scripts/capture-opentofu-goldens.sh capture <verified-local-generator>",
+        "env -u VELNOR_UPDATE_GOLDENS cargo nextest run --locked --offline --manifest-path Cargo.toml -p velnor-actions-cli --test velnor_cli -E 'test(parity_artifacts_match_goldens)' --no-fail-fast",
+        "scripts/capture-opentofu-goldens.sh check <verified-local-generator>"
+      ],
+      "exit_status": 0,
+      "parity_check_run": "f4fe99de-4cd1-4605-8d44-7dedbe0a8590",
+      "opentofu_cases": 5,
+      "manifest_sha256": "cef6cb4866656668d8cd642553928669dad4f60e56b5b9da41753fbe1d1f6c3c",
+      "generator_sha256": "0f0bc461607cec3267579af1ffe407df51284f46f855c38a7b70dfae80fa5694",
+      "author": "/root/execution_channel_helper",
+      "reviewer": "/root/journal_restart_repair"
+    },
+    {
+      "result": "FAIL",
+      "source_commit": "8eacc5f0c15902e52ac13cfd03c1912575c4c913",
+      "source_delta": "The four-file cleanup observer increment was present.",
+      "passed": 0,
+      "failed": 3,
+      "exit_status": 100,
+      "log": "cleanup-observer-shipping-20261020.log",
+      "log_sha256": "9a5eda1f7d971f1098b57036ecdd1f11f213d3829e5c5de9f365279a810ecc08",
+      "scope": "The journal integration remains under investigation.",
+      "author": "/root",
+      "reviewer": "/root/journal_restart_repair"
     }
   ],
   "broader_pair_check": {
