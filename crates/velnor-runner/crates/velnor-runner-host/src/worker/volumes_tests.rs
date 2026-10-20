@@ -9,166 +9,13 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 
 use crate::HostError;
-use crate::worker::{create_named_volumes, remove_worker_volumes, worker_id_for_name};
+use crate::worker::worker_id_for_name;
 
 #[path = "volumes_effect_tests.rs"]
 mod effect_tests;
-#[path = "volumes_fresh_tests.rs"]
-mod fresh;
-#[path = "volumes_post_delete_tests.rs"]
-mod post_delete;
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 const WORKER: &str = "wtransport";
-
-#[tokio::test]
-async fn only_exactly_owned_volumes_are_removed() -> Result<(), String> {
-    let foreign = DockerStub::open(vec![http(
-        200,
-        &volume_json("wtransport", "another-worker", "socket"),
-    )])?;
-    let refused = remove_worker_volumes(&foreign.docker, WORKER).await;
-    let foreign_requests = foreign.finish().await?;
-    assert_eq!(refused, Ok(false));
-    assert_eq!(foreign_requests.len(), 1);
-    assert!(foreign_requests[0].starts_with("GET "));
-
-    let mut responses = Vec::new();
-    for (name, role) in volume_names() {
-        responses.push(http(200, &volume_json(name, WORKER, role)));
-        responses.push(http(204, ""));
-        responses.push(http(404, r#"{"message":"missing"}"#));
-    }
-    let owned = DockerStub::open(responses)?;
-    let removed = remove_worker_volumes(&owned.docker, WORKER).await;
-    let requests = owned.finish().await?;
-
-    assert_eq!(removed, Ok(true));
-    assert_eq!(requests.len(), 15);
-    assert_eq!(
-        requests
-            .iter()
-            .filter(|line| line.starts_with("DELETE "))
-            .count(),
-        5
-    );
-    Ok(())
-}
-
-#[tokio::test]
-async fn unlabeled_matching_volume_is_not_removed() -> Result<(), String> {
-    let unlabeled = serde_json::json!({
-        "Name": "wtransport",
-        "Driver": "local",
-        "Mountpoint": "/var/lib/docker/volumes/wtransport/_data",
-        "Labels": {},
-        "Options": {},
-        "Scope": "local"
-    })
-    .to_string();
-    let stub = DockerStub::open(vec![http(200, &unlabeled)])?;
-    let result = remove_worker_volumes(&stub.docker, WORKER).await;
-    let requests = stub.finish().await?;
-
-    assert_eq!(result, Ok(false));
-    assert_eq!(requests.len(), 1);
-    assert!(requests[0].starts_with("GET "));
-    Ok(())
-}
-
-#[tokio::test]
-async fn created_volumes_have_exact_worker_and_role_labels() -> Result<(), String> {
-    let expected = volume_names();
-    let responses = expected
-        .iter()
-        .map(|_| http(404, r#"{"message":"missing"}"#))
-        .chain(
-            expected
-                .iter()
-                .map(|(name, role)| http(201, &volume_json(name, WORKER, role))),
-        )
-        .collect();
-    let stub = DockerStub::open(responses)?;
-    let mounts = crate::worker::dind_mounts(WORKER).map_err(|error| error.to_string())?;
-    let created = create_named_volumes(&stub.docker, WORKER, &mounts, || async { Ok(()) }).await;
-    let requests = stub.finish().await?;
-
-    assert_eq!(created, Ok(()));
-    assert_eq!(requests.len(), expected.len() * 2);
-    assert!(
-        requests[..expected.len()]
-            .iter()
-            .all(|request| request.starts_with("GET "))
-    );
-    for (request, (name, role)) in requests[expected.len()..].iter().zip(expected) {
-        assert!(request.starts_with("POST "));
-        let body = request_body(request)?;
-        let value: serde_json::Value =
-            serde_json::from_str(body).map_err(|error| error.to_string())?;
-        assert_eq!(
-            value.get("Name").and_then(serde_json::Value::as_str),
-            Some(name)
-        );
-        assert_eq!(
-            value.get("Labels"),
-            Some(&serde_json::json!({"velnor.worker": WORKER, "velnor.role": role}))
-        );
-    }
-    Ok(())
-}
-
-#[tokio::test]
-async fn metadata_volume_is_inventory_only_and_cannot_be_mounted_directly() -> Result<(), String> {
-    let stub = DockerStub::open(Vec::new())?;
-    let mut mounts = crate::worker::dind_mounts(WORKER).map_err(|error| error.to_string())?;
-    mounts.push(crate::docker_spec::Mount {
-        source: format!("volume:{WORKER}-metadata"),
-        target: "/opt/velnor/job-facts".to_owned(),
-    });
-
-    let result = create_named_volumes(&stub.docker, WORKER, &mounts, || async { Ok(()) }).await;
-    let requests = stub.finish().await?;
-
-    assert_eq!(result, Err(crate::HostError::ForbiddenMount));
-    assert_eq!(requests, Vec::<String>::new());
-    Ok(())
-}
-
-#[tokio::test]
-async fn malformed_home_or_work_mount_plan_is_rejected_before_docker() -> Result<(), String> {
-    let work_path = velnor_runner_core::runner_work_path();
-    let mut invalid_plans = vec![Vec::new()];
-    for target in ["/home/runner", work_path.as_str()] {
-        let mut mounts = crate::worker::dind_mounts(WORKER).map_err(|error| error.to_string())?;
-        mounts.retain(|mount| mount.target != target);
-        invalid_plans.push(mounts);
-    }
-    for mounts in invalid_plans {
-        let stub = DockerStub::open(Vec::new())?;
-
-        let result = create_named_volumes(&stub.docker, WORKER, &mounts, || async { Ok(()) }).await;
-        let requests = stub.finish().await?;
-
-        assert_eq!(result, Err(crate::HostError::ForbiddenMount));
-        assert_eq!(requests, Vec::<String>::new());
-    }
-    Ok(())
-}
-
-#[tokio::test]
-async fn volume_delete_error_fails_closed() -> Result<(), String> {
-    let stub = DockerStub::open(vec![
-        http(200, &volume_json("wtransport", WORKER, "socket")),
-        http(500, r#"{"message":"busy"}"#),
-    ])?;
-    let result = remove_worker_volumes(&stub.docker, WORKER).await;
-    let requests = stub.finish().await?;
-
-    assert_eq!(result, Err(HostError::Docker));
-    assert_eq!(requests.len(), 2);
-    assert!(requests[1].starts_with("DELETE "));
-    Ok(())
-}
 
 #[tokio::test]
 async fn container_identity_requires_id_and_exact_labels() -> Result<(), String> {
@@ -205,16 +52,6 @@ async fn container_identity_requires_id_and_exact_labels() -> Result<(), String>
     );
     assert_eq!(stub.finish().await?.len(), 5);
     Ok(())
-}
-
-fn volume_names() -> [(&'static str, &'static str); 5] {
-    [
-        ("wtransport", "socket"),
-        ("wtransport-home", "home"),
-        ("wtransport-work", "work"),
-        ("wtransport-docker", "dind-data"),
-        ("wtransport-metadata", "engine-metadata"),
-    ]
 }
 
 fn volume_json(name: &str, worker: &str, role: &str) -> String {
@@ -356,13 +193,6 @@ fn content_length(headers: &str) -> Result<usize, String> {
         }
     }
     Ok(0)
-}
-
-fn request_body(request: &str) -> Result<&str, String> {
-    request
-        .split_once("\r\n\r\n")
-        .map(|(_, body)| body)
-        .ok_or_else(|| "Docker request omitted HTTP headers".to_owned())
 }
 
 async fn send_response(stream: &mut UnixStream, response: Response) -> Result<(), String> {

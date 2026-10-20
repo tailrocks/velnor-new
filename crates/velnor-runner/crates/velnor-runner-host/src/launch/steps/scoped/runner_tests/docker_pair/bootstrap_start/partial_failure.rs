@@ -1,5 +1,8 @@
 use super::*;
 
+#[path = "partial_failure/storage_claim_prefix.rs"]
+mod storage_claim_prefix;
+
 impl BootstrapSetup {
     pub(super) async fn open() -> Result<Self, String> {
         Self::open_with_runner_create_status(None).await
@@ -98,6 +101,114 @@ impl RunnerCreateFailure {
     }
     pub(crate) fn set_probe_available_bytes(&self, available_bytes: u64) {
         self.setup.api.set_probe_available_bytes(available_bytes);
+    }
+
+    pub(crate) async fn storage_volume_names(&self) -> Result<Vec<String>, String> {
+        let connection = self
+            .setup
+            .fixture
+            .journal
+            .connection()
+            .await
+            .map_err(|error| error.to_string())?;
+        let mut rows = connection
+            .query(
+                "SELECT docker_name FROM capacity_reservation_provisioning_objects WHERE reservation_id = ?1 ORDER BY role",
+                [self.reservation_id()],
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        let mut names = Vec::new();
+        while let Some(row) = rows.next().await.map_err(|error| error.to_string())? {
+            names.push(row.get(0).map_err(|error| error.to_string())?);
+        }
+        Ok(names)
+    }
+
+    pub(crate) async fn journaled_volume_expectations(
+        &self,
+    ) -> Result<Vec<(String, String, i64)>, String> {
+        let connection = self
+            .setup
+            .fixture
+            .journal
+            .connection()
+            .await
+            .map_err(|error| error.to_string())?;
+        let mut rows = connection
+            .query(
+                "SELECT objects.docker_name, objects.role, provisioning.operation_id FROM capacity_reservation_provisioning_objects AS objects JOIN capacity_reservation_provisioning AS provisioning ON provisioning.reservation_id = objects.reservation_id WHERE objects.reservation_id = ?1 ORDER BY objects.role",
+                [self.reservation_id()],
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        let mut expected = Vec::new();
+        while let Some(row) = rows.next().await.map_err(|error| error.to_string())? {
+            expected.push((
+                row.get::<String>(0).map_err(|error| error.to_string())?,
+                row.get::<String>(1).map_err(|error| error.to_string())?,
+                row.get::<i64>(2).map_err(|error| error.to_string())?,
+            ));
+        }
+        if expected.len() != 5 {
+            return Err(
+                "The acquired reservation must retain five journaled storage identities."
+                    .to_owned(),
+            );
+        }
+        expected.sort_by(|left, right| left.0.cmp(&right.0));
+        Ok(expected)
+    }
+
+    pub(crate) fn assert_journaled_volume_create_requests(
+        expected: &[(String, String, i64)],
+        connection_id: &str,
+        reservation_id: i64,
+        requests: &[CapturedRequest],
+    ) -> Result<(), String> {
+        let mut actual = requests
+            .iter()
+            .filter(|request| {
+                request.method == "POST" && request.target.starts_with("/volumes/create")
+            })
+            .map(|request| {
+                let body: serde_json::Value =
+                    serde_json::from_slice(&request.body).map_err(|error| error.to_string())?;
+                Ok((
+                    body["Name"]
+                        .as_str()
+                        .ok_or_else(|| "A volume create omitted its name.".to_owned())?
+                        .to_owned(),
+                    body["Labels"].clone(),
+                ))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        actual.sort_by(|left, right| left.0.cmp(&right.0));
+        if actual.len() != expected.len() {
+            return Err("Bootstrap must create each journaled storage volume once.".to_owned());
+        }
+        for ((name, role, operation_id), (actual_name, labels)) in expected.iter().zip(actual) {
+            let expected_labels = serde_json::json!({
+                "velnor.connection": connection_id,
+                "velnor.reservation": reservation_id.to_string(),
+                "velnor.operation": operation_id.to_string(),
+                "velnor.role": role.as_str(),
+            });
+            if name != &actual_name || labels != expected_labels {
+                return Err(format!(
+                    "The volume create for {name} did not use its exact journaled identity: {actual_name} {labels:?} {expected_labels}."
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn inject_volume_delete_transport_failure(&self, name: &str) {
+        CapturedRequest::inject_volume_delete_transport_failure(name);
+    }
+
+    pub(crate) fn inject_volume_inspect_transport_failure(&self, name: &str) {
+        CapturedRequest::inject_volume_inspect_transport_failure(name);
     }
 
     pub(crate) fn host_journal(&self) -> &crate::journal::Journal {

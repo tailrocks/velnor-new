@@ -2,17 +2,13 @@ use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::PathBuf;
 
-use bollard::models::MountType;
 use serde_json::Value;
 
 use crate::config_test_support::{basic_connection, host_config};
 use crate::launch::verified_images::{
     TestWorkerImageMutation, test_worker_images, test_worker_images_with,
 };
-use crate::worker::{
-    bollard_create, dind_create_verified, runner_create_verified, test_resource_budget,
-};
-use crate::{HostConfig, HostError, RepositoryConnection, runner_plan};
+use crate::{HostConfig, HostError, RepositoryConnection};
 
 use super::write_guest_image;
 
@@ -89,64 +85,78 @@ fn writer_publishes_canonical_read_only_guest_claims_only() -> Result<(), HostEr
     Ok(())
 }
 
-#[test]
-fn verified_immutable_image_ids_and_metadata_reach_runner_docker_config() -> Result<(), HostError> {
-    let state = TestState::new()?;
-    let connection = test_connection("build-main", "acme/project", "cache-account", "linux-build")?;
-    let images = test_worker_images();
-    let guest_file = write_guest_image(&state.0, &connection, &images)?;
-    let budget = test_resource_budget()?;
-    let plan = runner_plan("worker_a")?;
-    let runner = runner_create_verified(&plan, budget, &connection, &images, &guest_file)?;
-    let dind = dind_create_verified("worker_a", budget, &images)?;
-    let runner = bollard_create(&runner)?;
-    let dind = bollard_create(&dind)?;
-
-    assert_eq!(
-        runner.config.image.as_deref(),
-        Some(images.runner().runtime_id())
-    );
-    assert_eq!(
-        dind.config.image.as_deref(),
-        Some(images.dind().runtime_id())
-    );
-    assert!(runner.config.env.is_none());
-    let host = runner
-        .config
-        .host_config
-        .as_ref()
-        .ok_or(HostError::Docker)?;
-    let mounts = host.mounts.as_ref().ok_or(HostError::Docker)?;
-    let guest = mounts
+#[tokio::test]
+async fn verified_immutable_image_ids_and_metadata_reach_bootstrap_docker_config()
+-> Result<(), String> {
+    let failure = crate::launch::steps::runner_create_409().await?;
+    let images = failure.images().clone();
+    let captured = failure.finish().await?;
+    if let Some(error) = captured.server_error {
+        return Err(format!("The Docker fixture failed. Error: {error}."));
+    }
+    let creates = captured
+        .requests
         .iter()
-        .find(|mount| mount.target.as_deref() == Some("/opt/velnor/guest-image.json"))
-        .ok_or(HostError::Docker)?;
-    assert_eq!(guest.typ, Some(MountType::BIND));
-    assert_eq!(guest.source.as_deref(), guest_file.path().to_str());
-    assert_eq!(guest.read_only, Some(true));
-    assert!(mounts.iter().all(|mount| {
-        mount.typ == Some(MountType::VOLUME)
-            || mount.target.as_deref() == Some("/opt/velnor/guest-image.json")
-    }));
-    assert!(mounts.iter().all(|mount| {
-        mount.source.as_deref().is_none_or(|source| {
-            !source.contains("/Users/")
-                && !source.contains("/home/")
-                && !source.contains("docker.sock")
+        .filter(|request| {
+            request.method == "POST" && request.target.starts_with("/containers/create")
         })
-    }));
-    let dind_mounts = dind
-        .config
-        .host_config
-        .as_ref()
-        .and_then(|host| host.mounts.as_ref())
-        .ok_or(HostError::Docker)?;
-    assert!(
-        dind_mounts
-            .iter()
-            .all(|mount| { mount.target.as_deref() != Some("/opt/velnor/guest-image.json") })
-    );
+        .map(|request| serde_json::from_slice::<Value>(&request.body))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    let dind = created_config(&creates, "dind")?;
+    let runner = created_config(&creates, "runner")?;
+    if dind["Image"] != images.dind().runtime_id()
+        || runner["Image"] != images.runner().runtime_id()
+    {
+        return Err("Bootstrap did not use the verified runtime image IDs.".to_owned());
+    }
+    if runner
+        .get("Env")
+        .is_some_and(|environment| !environment.is_null())
+    {
+        return Err("Bootstrap supplied Runner environment values.".to_owned());
+    }
+    let runner_mounts = runner["HostConfig"]["Mounts"]
+        .as_array()
+        .ok_or_else(|| "The Runner storage mounts are absent.".to_owned())?;
+    if runner_mounts.iter().any(|mount| {
+        mount["Type"] != "volume"
+            || mount["Source"].as_str().is_none_or(|source| {
+                source.contains("/Users/")
+                    || source.contains("/home/")
+                    || source.contains("docker.sock")
+            })
+    }) {
+        return Err("Bootstrap supplied a host path instead of a journaled volume.".to_owned());
+    }
+    let facts = runner_mounts
+        .iter()
+        .find(|mount| mount["Target"] == "/opt/velnor/job-facts")
+        .ok_or_else(|| "The Runner JobFacts volume mount is absent.".to_owned())?;
+    if facts["ReadOnly"] != true || facts["VolumeOptions"]["NoCopy"] != true {
+        return Err("The Runner JobFacts mount is not read-only and no-copy.".to_owned());
+    }
+    let dind_mounts = dind["HostConfig"]["Mounts"]
+        .as_array()
+        .ok_or_else(|| "The DinD storage mounts are absent.".to_owned())?;
+    if dind_mounts
+        .iter()
+        .any(|mount| mount["Target"] == "/opt/velnor/guest-image.json")
+    {
+        return Err("DinD unexpectedly received the Runner guest metadata file.".to_owned());
+    }
     Ok(())
+}
+
+fn created_config(creates: &[Value], role: &str) -> Result<Value, String> {
+    let matching = creates
+        .iter()
+        .filter(|config| config["Labels"]["io.velnor.role"].as_str() == Some(role))
+        .collect::<Vec<_>>();
+    if matching.len() != 1 {
+        return Err(format!("Expected one {role} create request."));
+    }
+    Ok(matching[0].clone())
 }
 
 #[test]

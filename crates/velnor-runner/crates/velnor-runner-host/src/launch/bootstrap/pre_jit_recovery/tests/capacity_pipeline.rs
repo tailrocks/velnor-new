@@ -1,3 +1,6 @@
+#[path = "capacity_pipeline/failures.rs"]
+mod failures;
+
 #[tokio::test]
 async fn terminal_runner_rejection_runs_owned_cleanup_and_capacity_probe() -> Result<(), String> {
     let failure = Box::pin(crate::launch::steps::runner_create_409()).await?;
@@ -67,7 +70,7 @@ async fn terminal_runner_rejection_runs_owned_cleanup_and_capacity_probe() -> Re
         !retry,
         "An active cleanup lease must prevent duplicate effects."
     );
-    failure.finish_and_assert_capacity_probe().await?;
+    finish_and_assert_storage_volumes_removed(failure).await?;
     Ok(())
 }
 
@@ -270,6 +273,84 @@ async fn assert_capacity_probe_retired(
         .map_err(|error| error.to_string())?;
     if active.is_some() {
         return Err("The Capacity probe stayed active after observation.".to_owned());
+    }
+    Ok(())
+}
+
+async fn finish_and_assert_storage_volumes_removed(
+    failure: crate::launch::steps::RunnerCreateFailure,
+) -> Result<(), String> {
+    let expected = failure.journaled_volume_expectations().await?;
+    let connection_id = failure.binding().connection_id.as_str().to_owned();
+    let reservation_id = failure.reservation_id();
+    let captured = failure.finish().await?;
+    if let Some(error) = captured.server_error {
+        return Err(format!("The Docker fixture failed. Error: {error}."));
+    }
+    crate::launch::steps::RunnerCreateFailure::assert_journaled_volume_create_requests(
+        &expected,
+        &connection_id,
+        reservation_id,
+        &captured.requests,
+    )?;
+    let mut created = captured
+        .requests
+        .iter()
+        .filter(|request| request.method == "POST" && request.target.starts_with("/volumes/create"))
+        .map(|request| {
+            let body: serde_json::Value =
+                serde_json::from_slice(&request.body).map_err(|error| error.to_string())?;
+            body["Name"]
+                .as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| "A journaled storage create has no volume name.".to_owned())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    created.sort_unstable();
+    created.dedup();
+    if created.len() != 5 {
+        return Err(format!(
+            "The acquired bootstrap must create each of its five journaled volumes once; found {}.",
+            created.len()
+        ));
+    }
+    let mut removed = captured
+        .requests
+        .iter()
+        .filter(|request| request.method == "DELETE" && request.target.starts_with("/volumes/"))
+        .map(|request| {
+            if request.response_status != Some(204) {
+                return Err(format!(
+                    "The journaled volume delete did not succeed: {} returned {:?}.",
+                    request.target, request.response_status
+                ));
+            }
+            let name = request
+                .target
+                .strip_prefix("/volumes/")
+                .ok_or_else(|| "The volume delete path is invalid.".to_owned())?;
+            let index = captured
+                .requests
+                .iter()
+                .position(|candidate| std::ptr::eq(candidate, request))
+                .ok_or_else(|| "The volume delete request disappeared.".to_owned())?;
+            if !captured.requests[index + 1..].iter().any(|candidate| {
+                candidate.method == "GET"
+                    && candidate.target == format!("/volumes/{name}")
+                    && candidate.response_status == Some(404)
+            }) {
+                return Err(format!(
+                    "The journaled volume {name} was not inspected absent after deletion."
+                ));
+            }
+            Ok(name.to_owned())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    removed.sort_unstable();
+    if removed != created {
+        return Err(format!(
+            "Cleanup did not delete exactly the five journaled storage volumes: {removed:?}."
+        ));
     }
     Ok(())
 }

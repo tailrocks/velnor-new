@@ -102,10 +102,6 @@ pub(crate) fn write_guest_image(
     })
 }
 
-pub(crate) fn validate_worker_images(images: &VerifiedWorkerImages) -> Result<(), HostError> {
-    GuestImageDocument::validate_images(images)
-}
-
 fn encode_document(document: &GuestImageDocument) -> Result<Vec<u8>, HostError> {
     let bytes = serde_json::to_vec(document).map_err(|_| HostError::ForbiddenMount)?;
     if bytes.is_empty()

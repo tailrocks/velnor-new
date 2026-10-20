@@ -1666,5 +1666,16 @@
     ],
     "scope": "The moved function bodies stay the same. Only module paths and function visibility change. Both files meet the size limit.",
     "remaining": "This test checks the no-start path and future size. The full runner gate remains incomplete."
+  },
+  "worker_helper_retirement": {
+    "result": "PASS",
+    "tests": 24,
+    "run_id": "ab93a733-b592-4b35-8ede-f1f1208672da",
+    "log_sha256": "01aa669551b620be13de1e1c2890753a5995783fc64fb5e385fcb6e73ccdf911",
+    "manifest_sha256": "bba680295f433e642800aa6d1d38d4f66763fb59cb323a99541d78c3355b15e7",
+    "author": "grouped_source_evidence",
+    "reviewer": "execution_source_security_review",
+    "scope": "The tests use the active storage path. Ownership checks reject an existing volume. Failed cleanup keeps the reservation charged.",
+    "remaining": "These tests use a local HTTP server. Live Docker tests and the full runner gate remain incomplete."
   }
 }
