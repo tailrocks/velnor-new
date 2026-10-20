@@ -12,24 +12,15 @@ pub(super) fn validate_image_identity(
     use crate::config::RunsOn;
 
     match (RunsOn::parse(&platform.runs_on)?, &platform.image_identity) {
-        (
-            RunsOn::Hosted(label),
-            QualificationRuntimeImageIdentity::Hosted {
-                image_os,
-                image_version,
-            },
-        ) if label == platform.runner_label => {
-            for (field, value) in [
-                ("image_os", image_os.as_str()),
-                ("image_version", image_version.as_str()),
-            ] {
-                validate_semantic_text(field, value)?;
-                if value == crate::UNOBSERVED_IMAGE_VALUE {
-                    return Err(ContractError::identity(
-                        "qualification.runtime_identity",
-                        format!("unobserved:{field}"),
-                    ));
-                }
+        (RunsOn::Hosted(label), QualificationRuntimeImageIdentity::Hosted { image_os })
+            if label == platform.runner_label =>
+        {
+            validate_semantic_text("image_os", image_os)?;
+            if image_os == crate::UNOBSERVED_IMAGE_VALUE {
+                return Err(ContractError::identity(
+                    "qualification.runtime_identity",
+                    "unobserved:image_os",
+                ));
             }
         }
         (

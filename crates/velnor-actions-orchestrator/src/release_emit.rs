@@ -10,22 +10,23 @@
 //! registry state stays a runtime preflight concern: generation runs
 //! no registry queries.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
+
+#[path = "release_emit/spec.rs"]
+mod spec;
+use spec::{bootstrap_plan, plz_config, release_triggers};
 
 use velnor_actions_contract::WorkflowPolicy;
-use velnor_actions_contract::config::{ReleaseAuthentication, RustReleaseConfig};
+use velnor_actions_contract::config::{ReleaseAuthentication, ReleaseRegistry, RustReleaseConfig};
 use velnor_actions_mise::{MetadataDiscovery, ToolCatalog};
 use velnor_actions_rust::release_select::{
     DEFAULT_REGISTRY, ReleaseRequest as SelectRequest, ReleaseScope, ReleaseSelection,
     select_release_set,
 };
-use velnor_actions_workflow_renderer::release_config::{
-    BootstrapReleasePlzConfig, ReleasePlzConfig, ReleasePlzPackage,
-};
+use velnor_actions_workflow_renderer::release_config::BootstrapReleasePlzConfig;
 use velnor_actions_workflow_renderer::release_jobs::ReleaseWorkflowSpec;
 use velnor_actions_workflow_renderer::release_spec::{
-    BootstrapPlan, DispatchInput, ReleaseTriggers, lock::stable_lock_group, publish_gate_condition,
-    validate_source_sha,
+    lock::stable_lock_group, publish_gate_condition, validate_source_sha,
 };
 use velnor_actions_workflow_renderer::release_tree::{
     ReleaseRenderContext, render_release_files_with_routing,
@@ -60,6 +61,10 @@ pub(crate) fn release_files(
     let Some(release) = enabled_release(prep)? else {
         return Ok(Vec::new());
     };
+    if release.registry == ReleaseRegistry::GitTag {
+        // Tag-only releases are generated with the publication workflow.
+        return Ok(Vec::new());
+    }
     if !release.version_groups.is_empty() {
         return Err(OrchestratorError::unsupported(
             "version_groups",
@@ -91,8 +96,8 @@ pub(crate) fn release_files(
     );
     let gate = publish_gate_condition(&repository, &bootstrap);
     let catalog = &prep.emission_catalog();
-    // Omit `--registry` for the cargo-implicit default: release-plz 0.3.172
-    // resolves the flag value from Cargo config, where that name is absent.
+    // Do not pass `--registry` for the Cargo default. Pass it only when the
+    // release configuration selects an alternative registry.
     let registry_arg = (registry != DEFAULT_REGISTRY).then_some(registry.as_str());
     let jobs = assemble_jobs(&JobInputs {
         release,
@@ -158,6 +163,17 @@ pub(crate) fn enabled_release(
     Ok(Some(release))
 }
 
+/// Active `git-tag` release section, if enabled under `consumer-v1`.
+///
+/// # Errors
+///
+/// Returns the policy error of [`enabled_release`].
+pub(crate) fn git_tag_release(
+    prep: &GenerationPreparation,
+) -> Result<Option<&RustReleaseConfig>, OrchestratorError> {
+    Ok(enabled_release(prep)?.filter(|release| release.registry == ReleaseRegistry::GitTag))
+}
+
 /// Resolve the release set over pinned `cargo metadata`.
 ///
 /// # Errors
@@ -168,17 +184,32 @@ fn select_packages(
     prep: &GenerationPreparation,
     release: &RustReleaseConfig,
 ) -> Result<ReleaseSelection, OrchestratorError> {
+    let json = release_metadata_json(&prep.root, release.manifest_path.as_str(), &prep.catalog)?;
+    select_from_json(prep, release, &json)
+}
+
+/// Resolve the release set from already-fetched `cargo metadata` JSON.
+///
+/// # Errors
+///
+/// Returns contract errors for unknown, forbidden, or unsupported selections.
+pub(crate) fn select_from_json(
+    prep: &GenerationPreparation,
+    release: &RustReleaseConfig,
+    json: &str,
+) -> Result<ReleaseSelection, OrchestratorError> {
     let manifest = release.manifest_path.as_str();
-    let json = release_metadata_json(&prep.root, manifest, &prep.catalog)?;
     let scope = if release.publishable_workspace {
         ReleaseScope::PublishableWorkspace
+    } else if release.registry == ReleaseRegistry::GitTag {
+        ReleaseScope::GitTagPackages(release.packages.clone())
     } else {
         ReleaseScope::Packages(release.packages.clone())
     };
     let affected = BTreeSet::new();
     let supported: &[String] = &[];
     let request = SelectRequest {
-        metadata_json: &json,
+        metadata_json: json,
         repo_root: &prep.root,
         manifest_hint: manifest,
         scope: &scope,
@@ -198,7 +229,7 @@ fn select_packages(
 /// Returns [`OrchestratorError::PreparationIncomplete`] when the pinned
 /// toolchain is absent (fail closed, before any spawn), the tool cannot
 /// run, or the manifest read fails.
-fn release_metadata_json(
+pub(crate) fn release_metadata_json(
     root: &std::path::Path,
     manifest: &str,
     catalog: &ToolCatalog,
@@ -240,7 +271,7 @@ fn check_bootstrap_record(
     release: &RustReleaseConfig,
     selection: &ReleaseSelection,
 ) -> Result<(), OrchestratorError> {
-    if release.authentication != ReleaseAuthentication::BootstrapToken {
+    if release.effective_authentication() != ReleaseAuthentication::BootstrapToken {
         return Ok(());
     }
     let Some(record) = release.bootstrap.as_ref() else {
@@ -281,7 +312,7 @@ fn approved_source(
     root: &std::path::Path,
     release: &RustReleaseConfig,
 ) -> Result<String, OrchestratorError> {
-    if release.authentication == ReleaseAuthentication::BootstrapToken {
+    if release.effective_authentication() == ReleaseAuthentication::BootstrapToken {
         let Some(record) = release.bootstrap.as_ref() else {
             return Err(OrchestratorError::config(
                 CONFIG_REL,
@@ -293,83 +324,4 @@ fn approved_source(
         return Ok(record.source_sha.clone());
     }
     head_sha(root)
-}
-
-/// Assemble the approved exact-source plan from selection plus identity.
-///
-/// `version` is the configured bootstrap version, present only in
-/// bootstrap-token mode (config validation forbids the record under
-/// trusted publishing); routine publishers resolve versions at runtime.
-fn bootstrap_plan(
-    selection: &ReleaseSelection,
-    repository: &str,
-    sha: &str,
-    plan_id: &str,
-    registry: &str,
-    version: Option<&str>,
-) -> BootstrapPlan {
-    let packages: BTreeMap<String, String> = selection
-        .packages
-        .iter()
-        .map(|package| (package.name.clone(), package.version.clone()))
-        .collect();
-    BootstrapPlan {
-        plan_id: plan_id.to_owned(),
-        repository: repository.to_owned(),
-        source_sha: sha.to_owned(),
-        registry: registry.to_owned(),
-        packages,
-        version: version.map(str::to_owned),
-    }
-}
-
-/// Trusted-branch push plus plan-bound dispatch (no schedule: the config
-/// schema carries no cron field, so emission invents none).
-fn release_triggers(branch: &str, bootstrap: &BootstrapPlan) -> ReleaseTriggers {
-    let mut dispatch_inputs = vec![
-        DispatchInput {
-            name: "plan".to_owned(),
-            description: "Approved release plan".to_owned(),
-            required: true,
-            default: Some(bootstrap.plan_id.clone()),
-        },
-        DispatchInput {
-            name: "source_sha".to_owned(),
-            description: "Approved source SHA".to_owned(),
-            required: true,
-            default: Some(bootstrap.source_sha.clone()),
-        },
-    ];
-    if let Some(version) = &bootstrap.version {
-        dispatch_inputs.push(DispatchInput {
-            name: "version".to_owned(),
-            description: "Approved crate version".to_owned(),
-            required: true,
-            default: Some(version.clone()),
-        });
-    }
-    ReleaseTriggers {
-        push_branches: vec![branch.to_owned()],
-        schedule: None,
-        dispatch_inputs,
-    }
-}
-
-/// Effective normal-policy config: tag plus allowlist, no features.
-///
-/// The schema carries no `publish_features`, so emission sets none;
-/// `semver_check` stays true per the release contract.
-fn plz_config(release: &RustReleaseConfig, selection: &ReleaseSelection) -> ReleasePlzConfig {
-    ReleasePlzConfig {
-        tag_pattern: release.tag_name.clone(),
-        semver_check: true,
-        packages: selection
-            .packages
-            .iter()
-            .map(|package| ReleasePlzPackage {
-                name: package.name.clone(),
-                publish_features: Vec::new(),
-            })
-            .collect(),
-    }
 }

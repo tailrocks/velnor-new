@@ -17,6 +17,7 @@ fn image(id: &str) -> ImageConfig {
             bin: id.to_owned(),
             stage: format!("dist/{id}"),
         }),
+        timeout_minutes: 30,
     }
 }
 
@@ -158,4 +159,15 @@ fn job_ids_are_deterministic() {
         "image-eth-arm64"
     );
     assert_eq!(image.publish_job_id(), "image-publish-eth");
+}
+
+#[test]
+fn timeout_is_bounded() {
+    let mut bad = image("ok-id");
+    for minutes in [0, 361] {
+        bad.timeout_minutes = minutes;
+        assert!(problem(&bad).contains("bad_image_timeout"));
+    }
+    bad.timeout_minutes = 360;
+    assert!(bad.validate("c", 0).is_ok());
 }

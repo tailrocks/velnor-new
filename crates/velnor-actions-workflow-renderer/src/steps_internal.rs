@@ -28,6 +28,8 @@ pub(crate) fn split_internal_operation(operation: &str) -> Result<(&str, &str), 
         || operation == MERGE_OPERATION
         || operation == FETCH_OPERATION
         || operation == PUBLISH_OPERATION
+        || operation == velnor_actions_contract::PRIVATE_FETCH_OPERATION
+        || operation == velnor_actions_contract::PRIVATE_REVOKE_OPERATION
     {
         return Ok((operation, operation));
     }

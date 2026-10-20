@@ -34,6 +34,8 @@ pub enum StepId {
     SourcesFetch,
     /// V2 tools restore whose exact-hit output gates the tools save.
     ToolsRestore,
+    /// Private-source App token mint whose output feeds the fetch and revoke steps.
+    DepsToken,
 }
 
 impl StepId {
@@ -55,6 +57,7 @@ impl StepId {
             Self::SourcesRestore => "sources-restore",
             Self::SourcesFetch => "sources-fetch",
             Self::ToolsRestore => "tools-restore",
+            Self::DepsToken => "deps-token",
         }
     }
 }

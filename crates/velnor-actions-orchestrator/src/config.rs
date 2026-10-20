@@ -132,6 +132,9 @@ struct PartialConfig {
     /// Reviewed job roles for explicit authority inventory generation.
     #[serde(default)]
     job_authority: Vec<velnor_actions_contract::config::JobAuthorityBinding>,
+    /// Private cross-repository dependency credentials (HD-7).
+    #[serde(default)]
+    private_sources: Option<velnor_actions_contract::config::PrivateSourcesConfig>,
     /// Container images built on every run and published from the default branch.
     #[serde(default)]
     images: Vec<velnor_actions_contract::config::ImageConfig>,
@@ -246,6 +249,7 @@ impl PartialConfig {
             qualified_tools: self.qualified_tools,
             distribution: self.distribution,
             job_authority: self.job_authority,
+            private_sources: self.private_sources,
             images: self.images,
             publish: self.publish,
             tools: self.tools,

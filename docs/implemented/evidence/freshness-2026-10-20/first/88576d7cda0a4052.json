@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+    "api",
+    "--method",
+    "GET",
+    "https://api.github.com/repos/koalaman/shellcheck/releases/latest"
+  ],
+  "body_file": "88576d7cda0a4052.body",
+  "checked_at": "2026-10-20T07:01:33.989919+00:00",
+  "exit_code": 0,
+  "rust_prefix_only": false,
+  "sha256": "ea7c51ed2e8ff00dfde36056fb8b52355c138b7b1a56c0f3d98f5ff463267a29",
+  "size": 24735,
+  "url": "https://api.github.com/repos/koalaman/shellcheck/releases/latest"
+}

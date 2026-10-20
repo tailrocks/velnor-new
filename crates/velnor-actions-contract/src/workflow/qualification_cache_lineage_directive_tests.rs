@@ -300,7 +300,6 @@ pub(super) fn runtime_identity(
             runs_on: requirements.runs_on.clone(),
             image_identity: QualificationRuntimeImageIdentity::Hosted {
                 image_os: "ubuntu".to_owned(),
-                image_version: "26.04".to_owned(),
             },
             target: requirements.target.clone(),
         },

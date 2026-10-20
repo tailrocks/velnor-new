@@ -3,9 +3,12 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, VelnorConfig};
+use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::{
     build_verification_task_job,
-    verification_jobs::{WorkflowTaskPolicy, build_build_task_job, build_native_image_job},
+    verification_jobs::{
+        WorkflowTaskPolicy, build_build_task_job, build_image_build_job, build_native_image_job,
+    },
 };
 
 use crate::OrchestratorError;
@@ -17,10 +20,21 @@ pub(crate) fn policies(
     root: &std::path::Path,
     config: &VelnorConfig,
     discovery: &Discovery,
+    catalog: &ToolCatalog,
+    fetch_roots: &[String],
 ) -> Result<Vec<WorkflowTaskPolicy>, OrchestratorError> {
     let verification_policies = crate::verification_tasks::policies(config, discovery)?;
     let build_policies = crate::build_tasks::policies(config, discovery)?;
     let native_image_policies = crate::native_image_tasks::policies(root, config)?;
+    let image_policies = crate::image_build_tasks::policies(
+        root,
+        config,
+        &crate::image_build_tasks::PrebuiltInputs {
+            discovery,
+            catalog,
+            fetch_roots,
+        },
+    )?;
     let mut workflow_tasks = verification_policies
         .iter()
         .cloned()
@@ -37,6 +51,7 @@ pub(crate) fn policies(
                 .cloned()
                 .map(WorkflowTaskPolicy::NativeImage),
         )
+        .chain(image_policies.into_iter().map(WorkflowTaskPolicy::Image))
         .collect::<Vec<_>>();
     workflow_tasks.sort_by(|left, right| left.id().cmp(right.id()));
     Ok(workflow_tasks)
@@ -48,24 +63,37 @@ pub(crate) fn insert_jobs(
     tasks: &[WorkflowTaskPolicy],
 ) -> Result<(), OrchestratorError> {
     for task in tasks {
-        let (id, job) = match task {
-            WorkflowTaskPolicy::Verification(policy) => (
+        let built = match task {
+            WorkflowTaskPolicy::Verification(policy) => vec![(
                 policy.job_id(),
                 build_verification_task_job(policy, CHECKOUT_USES)?,
-            ),
-            WorkflowTaskPolicy::Build(policy) => (
+            )],
+            WorkflowTaskPolicy::Build(policy) => vec![(
                 policy.job_id(),
                 build_build_task_job(policy, CHECKOUT_USES)?,
-            ),
-            WorkflowTaskPolicy::NativeImage(policy) => (
+            )],
+            WorkflowTaskPolicy::NativeImage(policy) => vec![(
                 policy.job_id(),
                 build_native_image_job(policy, CHECKOUT_USES)?,
-            ),
+            )],
+            WorkflowTaskPolicy::Image(policy) => policy
+                .image
+                .platforms
+                .iter()
+                .map(|platform| {
+                    Ok((
+                        policy.image.build_job_id(*platform),
+                        build_image_build_job(policy, *platform, CHECKOUT_USES)?,
+                    ))
+                })
+                .collect::<Result<Vec<_>, OrchestratorError>>()?,
         };
-        if jobs.insert(id.clone(), job).is_some() {
-            return Err(OrchestratorError::Contract {
-                problem: format!("workflow_task_job_collision:{id}"),
-            });
+        for (id, job) in built {
+            if jobs.insert(id.clone(), job).is_some() {
+                return Err(OrchestratorError::Contract {
+                    problem: format!("workflow_task_job_collision:{id}"),
+                });
+            }
         }
     }
     Ok(())

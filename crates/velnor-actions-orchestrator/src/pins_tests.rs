@@ -13,6 +13,7 @@ pub(crate) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> Vel
         qualified_tools: Vec::new(),
         distribution: velnor_actions_contract::config::DistributionConfig::default(),
         job_authority: Vec::new(),
+        private_sources: None,
         images: Vec::new(),
         publish: velnor_actions_contract::config::PublishConfig::default(),
         schema: 1,

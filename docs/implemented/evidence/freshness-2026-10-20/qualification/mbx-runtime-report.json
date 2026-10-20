@@ -1,0 +1,131 @@
+{
+  "rows": [
+    {
+      "case": "runtime-version",
+      "argv": [
+        "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/runtime-prefix/mbx",
+        "--version"
+      ],
+      "exit_code": 0,
+      "elapsed": 0.3919131659786217
+    },
+    {
+      "case": "runtime-help",
+      "argv": [
+        "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/runtime-prefix/mbx",
+        "--help"
+      ],
+      "exit_code": 0,
+      "elapsed": 0.007834500021999702
+    },
+    {
+      "case": "runtime-cache-dir",
+      "argv": [
+        "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/runtime-prefix/mbx",
+        "cache",
+        "dir",
+        "--json"
+      ],
+      "exit_code": 0,
+      "elapsed": 0.007855125004425645
+    },
+    {
+      "case": "runtime-empty-cache-verify",
+      "argv": [
+        "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/runtime-prefix/mbx",
+        "cache",
+        "verify"
+      ],
+      "exit_code": 0,
+      "elapsed": 0.007694333005929366
+    },
+    {
+      "case": "runtime-cold-build",
+      "argv": [
+        "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/runtime-prefix/mbx",
+        "build",
+        "--locked",
+        "--offline",
+        "-j",
+        "2"
+      ],
+      "exit_code": 0,
+      "elapsed": 0.31599870798527263
+    },
+    {
+      "case": "runtime-cold-build-binary",
+      "argv": [
+        "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/runtime-smoke/target/debug/mbx125_qualification"
+      ],
+      "exit_code": 0,
+      "elapsed": 0.27812199998879805
+    },
+    {
+      "case": "runtime-repeat-build",
+      "argv": [
+        "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/runtime-prefix/mbx",
+        "build",
+        "--locked",
+        "--offline",
+        "-j",
+        "2"
+      ],
+      "exit_code": 0,
+      "elapsed": 0.023001499997917563
+    },
+    {
+      "case": "runtime-repeat-build-binary",
+      "argv": [
+        "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/runtime-smoke/target/debug/mbx125_qualification"
+      ],
+      "exit_code": 0,
+      "elapsed": 0.07225029202527367
+    },
+    {
+      "case": "runtime-cache-verify",
+      "argv": [
+        "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/runtime-prefix/mbx",
+        "cache",
+        "verify"
+      ],
+      "exit_code": 0,
+      "elapsed": 0.009732667007483542
+    },
+    {
+      "case": "runtime-stats",
+      "argv": [
+        "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/runtime-prefix/mbx",
+        "stats",
+        "--json"
+      ],
+      "exit_code": 0,
+      "elapsed": 0.0076062089938204736
+    }
+  ],
+  "version": "mbx 1.25.0",
+  "binary_sha256": "2d957002c399d77670c7222fc4475c021adacfa0b63eb709af9437b63de08e2d",
+  "environment_names": [
+    "CARGO_BUILD_JOBS",
+    "CARGO_HOME",
+    "CARGO_TARGET_DIR",
+    "GIT_CONFIG_GLOBAL",
+    "GIT_CONFIG_NOSYSTEM",
+    "GIT_TERMINAL_PROMPT",
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "MBX_CACHE_DIR",
+    "MBX_GC_AUTO",
+    "MBX_SHARE_OUT_DIR",
+    "PATH",
+    "RUSTC",
+    "RUSTDOC",
+    "RUSTUP_TOOLCHAIN",
+    "XDG_CACHE_HOME",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME"
+  ],
+  "official_upstream_smoke_only": true,
+  "hosted_or_linux_execution_qualified": false,
+  "unchanged_HOME": true
+}

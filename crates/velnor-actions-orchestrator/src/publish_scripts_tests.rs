@@ -8,7 +8,8 @@ use tempfile::TempDir;
 use velnor_actions_contract::config::VersionSource;
 
 use velnor_actions_workflow_renderer::publish_scripts::{
-    inline_version_script, manifest_program, pack_script, parse_tag_script,
+    branch_push_script, inline_version_script, manifest_program, pack_script, parse_tag_script,
+    required_wait_script,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -261,4 +262,86 @@ fn manifest_programs_match_the_rust_reader() -> TestResult {
 fn base64_of(text: &str) -> String {
     use base64::Engine as _;
     base64::engine::general_purpose::STANDARD.encode(text)
+}
+
+fn has_jq() -> bool {
+    Command::new("jq").arg("--version").output().is_ok()
+}
+
+/// Run the wait script against a fake `gh` that applies the real jq program
+/// to a canned check-run document.
+fn wait(runs: &str, attempts: u16) -> Result<bool, Box<dyn std::error::Error>> {
+    let dir = TempDir::new()?;
+    let doc = dir.path().join("runs.json");
+    fs::write(&doc, format!("{{\"check_runs\":{runs}}}"))?;
+    let fake = "gh() { jq -r \"$4\" < \"$FAKE_RUNS\"; }";
+    let script = required_wait_script(fake, attempts, 0);
+    let temp = dir.path().to_str().ok_or("path")?;
+    let env = [
+        ("RUNNER_TEMP", temp),
+        ("GITHUB_REPOSITORY", "acme/widgets"),
+        ("GITHUB_SHA", "abc"),
+        ("FAKE_RUNS", doc.to_str().ok_or("path")?),
+    ];
+    Ok(sh(&script, dir.path(), &env)?.status.success())
+}
+
+#[test]
+fn the_required_wait_settles_on_the_newest_check_run() -> TestResult {
+    if !has_jq() {
+        return Ok(());
+    }
+    let run = |id: u32, status: &str, conclusion: &str, app: &str| {
+        format!(
+            "{{\"id\":{id},\"name\":\"Required\",\"status\":\"{status}\",\"conclusion\":\"{conclusion}\",\"app\":{{\"slug\":\"{app}\"}}}}"
+        )
+    };
+    let green = format!("[{}]", run(2, "completed", "success", "github-actions"));
+    assert!(wait(&green, 3)?);
+    let rerun = format!(
+        "[{},{}]",
+        run(1, "completed", "failure", "github-actions"),
+        run(2, "completed", "success", "github-actions")
+    );
+    assert!(
+        wait(&rerun, 3)?,
+        "a successful re-run supersedes the failure"
+    );
+    let red = format!("[{}]", run(2, "completed", "failure", "github-actions"));
+    assert!(!wait(&red, 3)?);
+    let spoofed = format!("[{}]", run(2, "completed", "success", "evil-app"));
+    assert!(!wait(&spoofed, 2)?, "only the GitHub Actions check counts");
+    let running = format!("[{}]", run(2, "in_progress", "", "github-actions"));
+    assert!(
+        !wait(&running, 2)?,
+        "an unsettled verdict exhausts the budget"
+    );
+    assert!(!wait("[]", 2)?, "no verdict yet exhausts the budget");
+    Ok(())
+}
+
+#[test]
+fn branch_push_gate_requires_the_exact_ref() -> TestResult {
+    let dir = TempDir::new()?;
+    let script = branch_push_script("acme/widgets", "main");
+    let base = [
+        ("GITHUB_EVENT_NAME", "push"),
+        ("GITHUB_REF_TYPE", "branch"),
+        ("GITHUB_REPOSITORY", "acme/widgets"),
+        ("GITHUB_REF", "refs/heads/main"),
+    ];
+    assert!(sh(&script, dir.path(), &base)?.status.success());
+    for (key, value) in [
+        ("GITHUB_EVENT_NAME", "workflow_dispatch"),
+        ("GITHUB_REF_TYPE", "tag"),
+        ("GITHUB_REPOSITORY", "evil/widgets"),
+        ("GITHUB_REF", "refs/heads/other"),
+    ] {
+        let env: Vec<(&str, &str)> = base
+            .iter()
+            .map(|(k, v)| if *k == key { (*k, value) } else { (*k, *v) })
+            .collect();
+        assert!(!sh(&script, dir.path(), &env)?.status.success(), "{key}");
+    }
+    Ok(())
 }

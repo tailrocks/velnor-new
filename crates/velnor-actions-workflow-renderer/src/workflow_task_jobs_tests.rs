@@ -164,6 +164,7 @@ fn jobs_for(policies: &[WorkflowTaskPolicy]) -> BTreeMap<String, Job> {
                 task.job_id(),
                 build_native_image_job(task, CHECKOUT).expect("image job"),
             ),
+            WorkflowTaskPolicy::Image(_) => unreachable!("not part of this fixture"),
         };
         jobs.insert(id, job);
     }
@@ -175,7 +176,13 @@ fn jobs_for(policies: &[WorkflowTaskPolicy]) -> BTreeMap<String, Job> {
 fn mixed_variants_validate_and_join_required_fan_in() {
     let policies = sorted_policies();
     let mut jobs = jobs_for(&policies);
-    let ids = validate_workflow_task_jobs(&jobs, &policies, CHECKOUT).expect("mixed task graph");
+    let ids = validate_workflow_task_jobs(
+        &jobs,
+        &policies,
+        CHECKOUT,
+        &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only(),
+    )
+    .expect("mixed task graph");
     assert_eq!(
         ids,
         [
@@ -198,8 +205,13 @@ fn undeclared_task_prefixed_jobs_fail_closed() {
     let mut jobs = jobs_for(&policies);
     let extra = jobs["task-native-format"].clone();
     jobs.insert("task-extra".to_owned(), extra);
-    let error = validate_workflow_task_jobs(&jobs, &policies, CHECKOUT)
-        .expect_err("undeclared task job cannot pass");
+    let error = validate_workflow_task_jobs(
+        &jobs,
+        &policies,
+        CHECKOUT,
+        &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only(),
+    )
+    .expect_err("undeclared task job cannot pass");
     assert!(
         error.to_string().contains("undeclared_workflow_task_job"),
         "{error}"
@@ -212,10 +224,26 @@ fn unsorted_or_duplicate_policies_fail_closed() {
     let jobs = jobs_for(&policies);
     let mut reversed = policies.clone();
     reversed.reverse();
-    assert!(validate_workflow_task_jobs(&jobs, &reversed, CHECKOUT).is_err());
+    assert!(
+        validate_workflow_task_jobs(
+            &jobs,
+            &reversed,
+            CHECKOUT,
+            &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only(),
+        )
+        .is_err()
+    );
     let duplicated = vec![
         WorkflowTaskPolicy::Verification(verification_policy()),
         WorkflowTaskPolicy::Verification(verification_policy()),
     ];
-    assert!(validate_workflow_task_jobs(&jobs, &duplicated, CHECKOUT).is_err());
+    assert!(
+        validate_workflow_task_jobs(
+            &jobs,
+            &duplicated,
+            CHECKOUT,
+            &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only(),
+        )
+        .is_err()
+    );
 }

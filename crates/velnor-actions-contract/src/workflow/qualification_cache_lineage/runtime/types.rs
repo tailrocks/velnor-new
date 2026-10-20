@@ -58,12 +58,10 @@ pub struct QualificationRuntimeScaleSet {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "source", rename_all = "snake_case", deny_unknown_fields)]
 pub enum QualificationRuntimeImageIdentity {
-    /// Image family and version supplied by a GitHub-hosted runner.
+    /// Image family supplied by a GitHub-hosted runner.
     Hosted {
         /// Hosted image family.
         image_os: String,
-        /// Hosted image version.
-        image_version: String,
     },
     /// Image data from the runner host's read-only guest projection.
     ScaleSet {

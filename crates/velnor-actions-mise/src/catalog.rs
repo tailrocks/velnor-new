@@ -51,17 +51,16 @@ pub mod project;
 use versions::tool_source;
 
 /// Selected Mise release (tag `v2026.10.15`); official asset bytes, signed
-/// checksums and signed inventory were verified 2026-10-19. Runtime and hosted
+/// checksums and signed inventory were verified 2026-10-20. Runtime and hosted
 /// qualification remain part of the release gates.
 /// Source: `https://api.github.com/repos/jdx/mise/releases/tags/v2026.10.15`.
 pub const MISE_VERSION: &str = "2026.10.15";
 /// Selected Rust stable toolchain (2026-10-15 official stable manifest).
 /// Source: `https://static.rust-lang.org/dist/channel-rust-stable.toml`; checked 2026-10-18.
 pub const RUST_VERSION: &str = "1.99.1";
-/// Selected current `mr-boxington` release (binary on PATH is `mbx`; tag `v1.24.1`).
-/// Official release/source commit and assets verified 2026-10-18.
-/// Source: `https://github.com/jdx/mr-boxington/releases/tag/v1.24.1`.
-pub const MR_BOXINGTON_VERSION: &str = "1.24.1";
+/// Selected `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.25.0`).
+/// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-10-20.
+pub const MR_BOXINGTON_VERSION: &str = "1.25.0";
 /// Qualified GitHub CLI (tag `v2.102.0`).
 /// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-09-30.
 pub const GH_VERSION: &str = "2.102.0";
@@ -99,9 +98,9 @@ pub const OPENTOFU_SHA256_DARWIN_AMD64: &str =
 /// sha256 of `tofu_1.13.1_darwin_arm64.tar.gz` (same `SHA256SUMS`, verified 2026-10-02).
 pub const OPENTOFU_SHA256_DARWIN_ARM64: &str =
     "be78f659f04ef06a9dbd9b3934d46af95d787a3aa38396d459dea395261816a9";
-/// Selected release-plz coordinator release (tag `release-plz-v0.3.172`).
-/// Source: `https://crates.io/api/v1/crates/release-plz`; published 2026-10-12, checked 2026-10-12.
-pub const RELEASE_PLZ_VERSION: &str = "0.3.172";
+/// Selected release-plz coordinator release (tag `release-plz-v0.3.173`).
+/// Source: `https://crates.io/api/v1/crates/release-plz`; published 2026-10-19, checked 2026-10-20.
+pub const RELEASE_PLZ_VERSION: &str = "0.3.173";
 /// Fixed Cosign signer helper (release tag `v3.1.3`), not installed by Mise.
 /// Source release assets and GitHub API SHA-256 digest were verified 2026-10-18.
 pub const COSIGN_VERSION: &str = "3.1.3";

@@ -61,7 +61,7 @@ jobs:
           NPM_TOKEN: ""
         run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; guard_dir=\"${{ runner.temp }}/velnor-tofu-guard\"; mkdir -p -- \"$guard_dir\"; git rev-parse --verify HEAD >\"$guard_dir/checked-out\"; printf '\\''%s\\n'\\'' \"$GITHUB_SHA\" >\"$guard_dir/requested\"; git ls-remote --exit-code --refs origin '\\''refs/heads/main'\\'' | cut -f1 >\"$guard_dir/remote\"; cmp -s -- \"$guard_dir/checked-out\" \"$guard_dir/requested\" && cmp -s -- \"$guard_dir/checked-out\" \"$guard_dir/remote\"'"
       - name: Setup Mise
-        uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
+        uses: jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde
         with:
           cache: "false"
           cache_save: "false"

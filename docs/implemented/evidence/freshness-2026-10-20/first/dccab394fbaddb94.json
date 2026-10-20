@@ -1,0 +1,21 @@
+{
+  "argv": [
+    "/usr/bin/curl",
+    "--fail",
+    "--silent",
+    "--show-error",
+    "--location",
+    "--max-time",
+    "25",
+    "--max-filesize",
+    "8388608",
+    "https://crates.io/api/v1/crates/release-plz"
+  ],
+  "body_file": "dccab394fbaddb94.body",
+  "checked_at": "2026-10-20T07:01:34.904424+00:00",
+  "exit_code": 56,
+  "rust_prefix_only": false,
+  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "size": 0,
+  "url": "https://crates.io/api/v1/crates/release-plz"
+}

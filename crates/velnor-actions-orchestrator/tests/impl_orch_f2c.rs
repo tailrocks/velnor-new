@@ -285,23 +285,22 @@ fn identity_extension_carries_no_tool_inputs() -> TestResult {
 }
 
 #[test]
-fn platform_image_changes_invalidate_identity() -> TestResult {
+fn platform_image_os_changes_invalidate_identity() -> TestResult {
     use velnor_actions_contract::cachekey::{PlatformInputs, platform_id};
-    let inputs = |image_version: &str| PlatformInputs {
+    let inputs = |image_os: &str| PlatformInputs {
         os: "linux".to_owned(),
         arch: "x86_64".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
-        image_os: "ubuntu26".to_owned(),
-        image_version: image_version.to_owned(),
+        image_os: image_os.to_owned(),
         target: "host".to_owned(),
     };
     assert_eq!(
-        platform_id(&inputs("20260101.1"))?,
-        platform_id(&inputs("20260101.1"))?
+        platform_id(&inputs("ubuntu26"))?,
+        platform_id(&inputs("ubuntu26"))?
     );
     assert_ne!(
-        platform_id(&inputs("20260101.1"))?,
-        platform_id(&inputs("20260201.1"))?
+        platform_id(&inputs("ubuntu26"))?,
+        platform_id(&inputs("ubuntu24"))?
     );
     Ok(())
 }

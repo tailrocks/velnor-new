@@ -12,6 +12,7 @@ mod closure_probes;
 pub mod detect;
 pub mod evidence;
 mod evidence_text;
+pub mod git_pins;
 pub mod graph;
 pub mod identity;
 mod manifest_edges;

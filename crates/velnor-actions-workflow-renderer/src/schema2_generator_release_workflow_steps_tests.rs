@@ -184,7 +184,7 @@ fn mise_install_requires_the_scoped_workflow_token_before_invocation() -> Result
             "--no-env".to_owned(),
             "--no-hooks".to_owned(),
             "install".to_owned(),
-            "mr-boxington@1.24.1".to_owned(),
+            "mr-boxington@1.25.0".to_owned(),
         ],
     )?;
     let Yaml::Map(fields) = step else {
@@ -209,7 +209,7 @@ fn mise_install_requires_the_scoped_workflow_token_before_invocation() -> Result
         run.starts_with("set -eu\n: \"${GITHUB_TOKEN:?missing workflow token}\"\n"),
         "token guard must precede the install command"
     );
-    assert!(run.contains("mise --no-config --no-env --no-hooks install mr-boxington@1.24.1"));
+    assert!(run.contains("mise --no-config --no-env --no-hooks install mr-boxington@1.25.0"));
 
     let scratch = Scratch::new()?;
     let mock_bin = scratch.0.join("mock-bin");

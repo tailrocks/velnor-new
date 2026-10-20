@@ -15,7 +15,7 @@ pub(super) fn assert_intel_cross_build(
     assert!(intel.contains("runs-on: macos-15\n"), "{intel}");
     let intel_action = action(actions, "generator-release-build-macos-intel")?;
     assert!(
-        (intel_action.contains("mr-boxington@1.24.1")
+        (intel_action.contains("mr-boxington@1.25.0")
             || intel_action.contains(r#"'mr-boxington@'\"${VELNOR_TOOL_MR_BOXINGTON}\""#))
             && intel_action.contains("mbx build --release --locked")
             && intel_action.contains("--target x86_64-apple-darwin"),
@@ -30,7 +30,7 @@ pub(super) fn assert_intel_cross_build(
     assert!(mbx_lock.contains("[tools.mr-boxington.\"platforms.macos-arm64\"]"));
     assert!(
         !mbx_lock.contains("platforms.macos-x64"),
-        "MBX 1.24.1 has no macOS-x64 artifact; the Intel target must stay on the ARM build host"
+        "MBX 1.25.0 has no macOS-x64 artifact; the Intel target must stay on the ARM build host"
     );
     assert!(intel_action.contains("*Mach-O*x86_64*"), "{intel_action}");
     assert!(intel_action.contains("shasum -a 256"), "{intel_action}");

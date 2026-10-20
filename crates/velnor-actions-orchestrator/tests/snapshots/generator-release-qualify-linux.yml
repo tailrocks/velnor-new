@@ -14,7 +14,7 @@ runs:
   using: composite
   steps:
     - name: Setup Mise
-      uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
+      uses: jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde
       with:
         version: 2026.10.15
         sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
@@ -43,7 +43,7 @@ runs:
         path: manifest-assets
     - name: Verify candidate provenance record
       shell: bash
-      run: "set -eu\ndigest=\"$(awk -v expected='velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu' 'NR == 1 { if (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != expected) exit 1; print $1; next } { exit 1 } END { if (NR != 1) exit 1 }' 'linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.sha256')\"\njq -e --arg version \"@COMPILED_RELEASE_VERSION@\" --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"x86_64-unknown-linux-gnu\" --arg asset \"velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu\" --arg sha256 \"$digest\" --arg rust '1.99.1' --arg mr_boxington '1.24.1' '.schema == 1 and .version == $version and .repository == $repository and .commit == $commit and .target == $target and .asset == $asset and .sha256 == $sha256 and .toolchain.rust == $rust and .toolchain[\"mr-boxington\"] == $mr_boxington' linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.provenance.json > /dev/null"
+      run: "set -eu\ndigest=\"$(awk -v expected='velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu' 'NR == 1 { if (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != expected) exit 1; print $1; next } { exit 1 } END { if (NR != 1) exit 1 }' 'linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.sha256')\"\njq -e --arg version \"@COMPILED_RELEASE_VERSION@\" --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"x86_64-unknown-linux-gnu\" --arg asset \"velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu\" --arg sha256 \"$digest\" --arg rust '1.99.1' --arg mr_boxington '1.25.0' '.schema == 1 and .version == $version and .repository == $repository and .commit == $commit and .target == $target and .asset == $asset and .sha256 == $sha256 and .toolchain.rust == $rust and .toolchain[\"mr-boxington\"] == $mr_boxington' linux-assets/velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.provenance.json > /dev/null"
     - name: Verify downloaded checksum sidecar
       shell: bash
       run: "set -eu\ncd linux-assets\nsha256sum --check velnor-actions-@COMPILED_RELEASE_VERSION@-x86_64-unknown-linux-gnu.sha256"

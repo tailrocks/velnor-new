@@ -4,12 +4,12 @@
 //! source-build path. It is separate from runtime distribution qualification:
 //! an asset here does not establish Velnor-owned behavior or installation.
 //!
-//! Mise evidence was captured 2026-10-19 from release `v2026.10.15`; the
+//! Mise evidence was captured 2026-10-20 from release `v2026.10.15`; the
 //! official source commit is `597c1897dfed28d1c0dea9f98fba581059e42cd3` with
 //! tree `4786f2724d63cb59e06226bde8d3d58c09cb80dd`. MBX evidence was captured
-//! 2026-10-18 from release `v1.24.1`; its source commit is
-//! `ebb2b61b193d9ea487b67152d459e8332e8cf87e` with tree
-//! `9a416015df0ce5db6fc05b41e20de65f75f0915d`. Official archive digests
+//! from release `v1.25.0`; its source commit is
+//! `2ade2bc6b661f1b40a55cfa7083fa9a4efc9348d` with tree
+//! `54170d2d1f8fa99bbd7f1bbce328cd69562e6305`. Official archive digests
 //! matched fetched bytes; extracted executable members were hashed without execution.
 
 /// Closed upstream bootstrap tool identities.
@@ -206,36 +206,36 @@ const fn mise(host: SourceBuildBootstrapHost) -> SourceBuildBootstrapAsset {
 const fn mbx(host: SourceBuildBootstrapHost) -> SourceBuildBootstrapAsset {
     let (asset_url, archive_sha256, binary_sha256) = match host {
         SourceBuildBootstrapHost::LinuxAmd64 => (
-            "https://github.com/jdx/mr-boxington/releases/download/v1.24.1/mbx-x86_64-unknown-linux-gnu.tar.gz",
-            "d019fd3695d39549cd3eeb48b9518f0b43850d4d0bd9c49b955a8de9d30299fb",
-            "3e646c39bf7ef50e09ad2e46ae7efc63ac65ce8c89dc01cb27a0307960ae4a33",
+            "https://github.com/jdx/mr-boxington/releases/download/v1.25.0/mbx-x86_64-unknown-linux-gnu.tar.gz",
+            "2b4efb2ef340d38ed2d840d32b5535e45be7541224378ff353c7a83f85744195",
+            "48424ca46f5f3b984f0d8b0c2dcafaaaaf8dbde50464b6ecfcef1b324bfc251d",
         ),
         SourceBuildBootstrapHost::LinuxArm64 => (
-            "https://github.com/jdx/mr-boxington/releases/download/v1.24.1/mbx-aarch64-unknown-linux-gnu.tar.gz",
-            "0699be8e61116ff6c8e45b95c031bf69e3781cccfee18072952d4efe81b35611",
-            "f5ac3fe542fe3cafff598bbb474a7a03d55998d67463b17c394daa5e9287d3ce",
+            "https://github.com/jdx/mr-boxington/releases/download/v1.25.0/mbx-aarch64-unknown-linux-gnu.tar.gz",
+            "26adcf79262395e7fb355203afa7deda0f18fd790585f6e49e51994b9d32b55c",
+            "aef1baabde6a1eb6299fcf03c33e61a15538426aa7e82c9204e5ff7419ec1c3b",
         ),
         SourceBuildBootstrapHost::MacosArm64 => (
-            "https://github.com/jdx/mr-boxington/releases/download/v1.24.1/mbx-aarch64-apple-darwin.tar.gz",
-            "3ddb7d86b644275db140c9ae76f57bf72c5a10b7657f930466aad5ff7e025a85",
-            "5e4a52b4480bdefb663b6937250a1136012238a8c1452103e0dabefdd7f222a6",
+            "https://github.com/jdx/mr-boxington/releases/download/v1.25.0/mbx-aarch64-apple-darwin.tar.gz",
+            "47630813d15a001cfceceeeb1f35008421fb22b8ba132106067d217e000b1b68",
+            "2d957002c399d77670c7222fc4475c021adacfa0b63eb709af9437b63de08e2d",
         ),
     };
     SourceBuildBootstrapAsset {
         tool: SourceBuildBootstrapTool::Mbx,
         host,
-        selector: "github:jdx/mr-boxington@1.24.1",
+        selector: "github:jdx/mr-boxington@1.25.0",
         asset_url,
         archive_sha256,
         binary_sha256,
         asset_format: SourceBuildBootstrapFormat::TarGzip,
         binary_member: "mbx",
         source_repository: "https://github.com/jdx/mr-boxington",
-        source_commit: "ebb2b61b193d9ea487b67152d459e8332e8cf87e",
-        source_tree: "9a416015df0ce5db6fc05b41e20de65f75f0915d",
+        source_commit: "2ade2bc6b661f1b40a55cfa7083fa9a4efc9348d",
+        source_tree: "54170d2d1f8fa99bbd7f1bbce328cd69562e6305",
         owner: "jdx/mr-boxington",
-        version: "1.24.1",
-        abi: "mbx-cli-v1.24.1",
+        version: "1.25.0",
+        abi: "mbx-cli-v1.25.0",
     }
 }
 

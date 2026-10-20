@@ -1,0 +1,23 @@
+{
+  "argv": [
+    "/usr/bin/curl",
+    "--fail",
+    "--silent",
+    "--show-error",
+    "--location",
+    "--max-time",
+    "25",
+    "--max-filesize",
+    "8388608",
+    "--user-agent",
+    "velnor-freshness-qualification/0.1 (https://github.com/tailrocks/velnor-new)",
+    "https://crates.io/api/v1/crates/release-plz"
+  ],
+  "body_file": "dccab394fbaddb94.body",
+  "checked_at": "2026-10-20T07:03:00.559081+00:00",
+  "exit_code": 0,
+  "rust_prefix_only": false,
+  "sha256": "a08d291999b75de21652ad6dc5429cf53be91ee088b5641c17e4152ea2393a2c",
+  "size": 401823,
+  "url": "https://crates.io/api/v1/crates/release-plz"
+}

@@ -159,7 +159,23 @@ pub(crate) fn fetch_steps_for_crate_with_all_features(
     all_features: bool,
 ) -> Result<Vec<Step>, OrchestratorError> {
     let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
-    fetch_steps_with(catalog, roots, &env, false, all_features)
+    fetch_steps_for_crate_with_env(catalog, roots, &env, all_features)
+}
+
+/// Fetch steps for crate jobs using the caller's validated task environment.
+///
+/// This keeps source acquisition on the same Cargo and Rustup homes as the
+/// following build while retaining the ambient-auth Cargo fetch role.
+/// # Errors
+///
+/// Returns contract errors for rejected roots or step environments.
+pub(crate) fn fetch_steps_for_crate_with_env(
+    catalog: &ToolCatalog,
+    roots: &[String],
+    env: &BTreeMap<String, String>,
+    all_features: bool,
+) -> Result<Vec<Step>, OrchestratorError> {
+    fetch_steps_with(catalog, roots, env, false, all_features)
 }
 
 /// Fetch steps for the plan job (trusted writer): same owned homes.

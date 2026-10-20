@@ -47,6 +47,9 @@ pub const CARGO_AUTO_CLEAN_ENV: (&str, &str) = ("CARGO_CACHE_AUTO_CLEAN_FREQUENC
 /// the two lists equal by test.
 pub const STEP_ENDPOINT_DENYLIST: [&str; 2] = ["GH_HOST", "GH_CONFIG_DIR"];
 
+#[path = "toolchain_env_fetch.rs"]
+mod fetch;
+pub use fetch::*;
 /// True for a credential-shaped env key: the denylisted nine, any
 /// `CARGO_REGISTRIES_*` entry (per-registry tokens the fixed list can
 /// never enumerate), or any `*_TOKEN` name. Rejection is fail-closed:
@@ -145,7 +148,7 @@ pub fn reject_denied_step_keys(env: &BTreeMap<String, String>) -> Result<(), Ren
                 "credential_step_env:{key}"
             )));
         }
-        if is_denied_endpoint_key(key) {
+        if is_denied_endpoint_key(key) || is_fetch_redirect_key(key) {
             return Err(RenderError::BadCommand(format!("endpoint_step_env:{key}")));
         }
     }

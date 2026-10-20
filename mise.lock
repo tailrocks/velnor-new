@@ -73,18 +73,18 @@ url = "https://github.com/jdx/hk/releases/download/v2.7.0/hk-x86_64-pc-windows-m
 signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
 
 [[tools.mr-boxington]]
-version = "1.24.1"
+version = "1.25.0"
 backend = "packslip:github.com/jdx/mr-boxington"
-specifiers = ["1.24.1"]
+specifiers = ["1.25.0"]
 
 [tools.mr-boxington."platforms.linux-x64"]
-checksum = "sha256:d019fd3695d39549cd3eeb48b9518f0b43850d4d0bd9c49b955a8de9d30299fb"
-url = "https://github.com/jdx/mr-boxington/releases/download/v1.24.1/mbx-x86_64-unknown-linux-gnu.tar.gz"
+checksum = "sha256:2b4efb2ef340d38ed2d840d32b5535e45be7541224378ff353c7a83f85744195"
+url = "https://github.com/jdx/mr-boxington/releases/download/v1.25.0/mbx-x86_64-unknown-linux-gnu.tar.gz"
 signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
 
 [tools.mr-boxington."platforms.macos-arm64"]
-checksum = "sha256:3ddb7d86b644275db140c9ae76f57bf72c5a10b7657f930466aad5ff7e025a85"
-url = "https://github.com/jdx/mr-boxington/releases/download/v1.24.1/mbx-aarch64-apple-darwin.tar.gz"
+checksum = "sha256:47630813d15a001cfceceeeb1f35008421fb22b8ba132106067d217e000b1b68"
+url = "https://github.com/jdx/mr-boxington/releases/download/v1.25.0/mbx-aarch64-apple-darwin.tar.gz"
 signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
 
 [[tools.rust]]

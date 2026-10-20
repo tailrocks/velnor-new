@@ -258,24 +258,19 @@ pub(super) fn validate_runtime_environment(
         .map_err(crate::internal::internal_contract)?
     {
         RunsOn::Hosted(_) => {
-            let QualificationRuntimeImageIdentity::Hosted {
-                image_os,
-                image_version,
-            } = &evidence.platform.image_identity
+            let QualificationRuntimeImageIdentity::Hosted { image_os } =
+                &evidence.platform.image_identity
             else {
                 return Err(internal(
                     "qualification_cache_runtime_image_source_mismatch",
                 ));
             };
-            if request.image_os != Some(image_os.as_str())
-                || request.image_version != Some(image_version.as_str())
-            {
+            if request.image_os != Some(image_os.as_str()) {
                 return Err(internal("qualification_cache_runtime_image_mismatch"));
             }
         }
         RunsOn::ScaleSet(_) => {
             if request.image_os.is_some()
-                || request.image_version.is_some()
                 || scale_set_image != Some(&evidence.platform.image_identity)
             {
                 return Err(internal("qualification_cache_runtime_image_mismatch"));

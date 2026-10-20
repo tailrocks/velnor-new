@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+    "api",
+    "--method",
+    "GET",
+    "https://api.github.com/repos/aws-actions/configure-aws-credentials/git/ref/tags/v6.3.0"
+  ],
+  "body_file": "8590f30d3b43085c.body",
+  "checked_at": "2026-10-20T07:01:36.207440+00:00",
+  "exit_code": 0,
+  "rust_prefix_only": false,
+  "sha256": "fa5f57ff89d1a239166a2e837cec53bf4eebc4a392dd8778ad8b08288d3fb1b0",
+  "size": 383,
+  "url": "https://api.github.com/repos/aws-actions/configure-aws-credentials/git/ref/tags/v6.3.0"
+}
