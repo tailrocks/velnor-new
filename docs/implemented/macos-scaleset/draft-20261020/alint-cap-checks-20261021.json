@@ -1,0 +1,36 @@
+{
+  "base_commit": "9d10ca3efd384afe0feb30d9f40ca3bc3e6ace03",
+  "source_manifest_sha256": "acaff372fc8dd4117164d5ef8a4f67eabccb56b1d7aeb4fffe2ae9e30c1c350e",
+  "independent_reviewer": "/root/runner_context_review",
+  "review": "PASS",
+  "checks": {
+    "clippy": {
+      "result": "PASS",
+      "log_sha256": "3a5419f7806e1812a09faed61255b3a5847f60e8e9ed10d41a92103524956648"
+    },
+    "format": {
+      "result": "PASS",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "alint": {
+      "result": "PASS",
+      "log_sha256": "c5957a5cc162f430bc9bb1b8dad09fe6fda2d5b5cd59e2c62f4b4b64051f1ccb"
+    },
+    "nextest": {
+      "result": "PASS",
+      "log_sha256": "c2467686e0263a771ece56f6eef07019425529a9cd90e8fe908aa7b5adc5ebe2",
+      "passed": 39,
+      "run_id": "1a4cadb1-a8c6-435e-8e1e-9dd654ce4d1d"
+    }
+  },
+  "retained_orchestrator_tests": {
+    "result": "PASS",
+    "passed": 105,
+    "run_id": "d3ba6be5-f725-448d-b5f3-61bd5077ea04"
+  },
+  "generated_files_equal": 230,
+  "initial_nextest": "FAIL. The filter selected no tests. The corrected filter passed 39 tests.",
+  "initial_alint": "FAIL. The hook created an untracked build directory. The build directory was moved outside the repository.",
+  "baseline_full_renderer": "FAIL. The archive lacks the candidate source SHA for one checksum fixture.",
+  "release_gate": "NOT_RUN"
+}

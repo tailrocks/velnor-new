@@ -141,15 +141,9 @@ mod workflow_jobs;
 mod workflow_jobs_cache;
 mod workflow_task_jobs;
 
-#[cfg(all(feature = "test-render-capture", test))]
-#[path = "test_render_capture_harness.rs"]
-mod test_render_capture_harness;
-
 #[cfg(test)]
-pub(crate) mod tap_test_support;
-
+mod test_support_modules;
 #[cfg(test)]
-#[path = "../../test_support/git_fixture.rs"]
-pub(crate) mod git_fixture;
+pub(crate) use test_support_modules::{git_fixture, tap_test_support};
 
 pub use api::*;
