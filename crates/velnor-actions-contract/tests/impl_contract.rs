@@ -70,6 +70,7 @@ fn config_validation_reports_key_paths() {
                 inputs: Vec::new(),
             }),
             tofu: None,
+            bun: None,
         },
         discovery: DiscoveryConfig {
             exclude: vec!["vendor/**".to_owned()],
@@ -150,6 +151,7 @@ fn runner_label_uses_exact_catalog_match() {
             ignore: vec![],
             rust: None,
             tofu: None,
+            bun: None,
         },
         discovery: DiscoveryConfig { exclude: vec![] },
         actions: ActionsConfig::default(),

@@ -34,11 +34,12 @@ mod p12_policy_b;
 mod p12_upstream;
 
 /// Expected members as (directory, package name).
-pub(crate) const MEMBERS: [(&str, &str); 9] = [
+pub(crate) const MEMBERS: [(&str, &str); 10] = [
     (
         "crates/velnor-actions-actionlint",
         "velnor-actions-actionlint",
     ),
+    ("crates/velnor-actions-bun", "velnor-actions-bun"),
     ("crates/velnor-actions-cli", "velnor-actions-cli"),
     ("crates/velnor-actions-contract", "velnor-actions-contract"),
     (
