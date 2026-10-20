@@ -2,7 +2,7 @@
 
 use super::super::{
     preview_artifacts::{ArtifactPage, ArtifactReadApi, ReleaseConsumer},
-    run_identity::{RunSource, run_matches},
+    run_identity::{CurrentRun, RunSource, run_matches},
 };
 use super::{GitHubApi, GitRefResponse, RepositoryResponse, WorkflowRunResponse};
 use crate::{OrchestratorError, internal::internal};
@@ -70,7 +70,16 @@ impl ArtifactReadApi for ReleaseArtifactApi {
                 return Err(internal("preview_artifact_current_run"));
             }
         }
-        self.require_active_consumer(plan.channel, context, consumer)?;
+        api.require_active_job(
+            &CurrentRun {
+                id: context.run_id,
+                attempt: context.run_attempt,
+                source,
+                workflow: &workflow,
+                event: channel.event().as_str(),
+            },
+            consumer.job_name(channel),
+        )?;
         if channel == PackageReleaseChannel::Preview {
             let head: GitRefResponse = api.get_json(&api.route(&format!(
                 "git/ref/heads/{}",
@@ -116,68 +125,3 @@ impl ArtifactReadApi for ReleaseArtifactApi {
 #[cfg(test)]
 #[path = "preview_artifact_transport_api_tests.rs"]
 mod tests;
-
-#[derive(serde::Deserialize)]
-struct ConsumerJobPage {
-    total_count: usize,
-    jobs: Vec<ConsumerJob>,
-}
-#[derive(serde::Deserialize)]
-struct ConsumerJob {
-    id: u64,
-    run_id: u64,
-    name: String,
-    head_sha: Option<String>,
-    status: String,
-    conclusion: Option<String>,
-}
-
-impl ReleaseArtifactApi {
-    fn require_active_consumer(
-        &self,
-        channel: velnor_actions_contract::package_release::PackageReleaseChannel,
-        context: &ReleaseProductionContext,
-        consumer: ReleaseConsumer,
-    ) -> Result<(), OrchestratorError> {
-        let mut total = None;
-        let mut ids = std::collections::BTreeSet::new();
-        let mut consumers = Vec::new();
-        for page in 1..=20 {
-            let response: ConsumerJobPage = self.api.get_json(&self.api.route(&format!(
-                "actions/runs/{}/attempts/{}/jobs?per_page=100&page={page}",
-                context.run_id, context.run_attempt
-            )))?;
-            if response.total_count > 2000 || total.is_some_and(|n| n != response.total_count) {
-                return Err(internal("preview_artifact_job_inventory"));
-            }
-            total = Some(response.total_count);
-            let remaining = response
-                .total_count
-                .checked_sub(ids.len())
-                .ok_or_else(|| internal("preview_artifact_job_inventory"))?;
-            if response.jobs.len() != remaining.min(100) {
-                return Err(internal("preview_artifact_job_inventory"));
-            }
-            for job in response.jobs {
-                if job.id == 0 || !ids.insert(job.id) {
-                    return Err(internal("preview_artifact_job_inventory"));
-                }
-                if job.name == consumer.job_name(channel) {
-                    consumers.push(job);
-                }
-            }
-            if ids.len() == response.total_count {
-                if consumers.len() != 1
-                    || consumers[0].run_id != context.run_id
-                    || consumers[0].head_sha.as_deref() != Some(context.source_sha.as_str())
-                    || consumers[0].status != "in_progress"
-                    || consumers[0].conclusion.is_some()
-                {
-                    return Err(internal("preview_artifact_consumer_job"));
-                }
-                return Ok(());
-            }
-        }
-        Err(internal("preview_artifact_job_inventory"))
-    }
-}
