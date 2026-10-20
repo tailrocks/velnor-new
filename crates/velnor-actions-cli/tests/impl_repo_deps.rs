@@ -8,6 +8,8 @@ use std::error::Error;
 
 #[path = "impl_repo_archive_deps.rs"]
 pub(crate) mod archive_deps;
+#[path = "impl_repo_deps_process_policy.rs"]
+mod process_policy;
 #[path = "impl_repo_size_limits.rs"]
 mod size_limits;
 
@@ -177,35 +179,10 @@ fn lockfile_committed_and_locked_used() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn cli_invokes_no_tools_directly() -> Result<(), Box<dyn Error>> {
-    let banned = [
-        "process::Command",
-        "Command::new",
-        ".spawn(",
-        ".status()",
-        ".output()",
-        "cargo",
-        // "mise" stays unbanned: repo-policy names a mise-version operation.
-        "mbx",
-        "nextest",
-        "rustup",
-        "\"gh\"",
-        "shell",
-        "Shell",
-        "sh -c",
-    ];
     for path in tree_files("crates/velnor-actions-cli/src", "rs")? {
         let body = std::fs::read_to_string(&path)?;
-        for token in banned {
-            assert!(!body.contains(token), "{} leaks {token}", path.display());
-        }
-        for (index, _) in body.match_indices("std::process::") {
-            let rest = &body[index + "std::process::".len()..];
-            assert!(
-                rest.starts_with("ExitCode"),
-                "{} uses {rest:?}",
-                path.display()
-            );
-        }
+        let violation = process_policy::direct_tool_policy_violation(&body);
+        assert_eq!(violation, None, "{} leaks a process launch", path.display());
     }
     Ok(())
 }

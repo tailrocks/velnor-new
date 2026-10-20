@@ -294,11 +294,22 @@ fn inspect_mise_file_never_fails_never_writes() {
 
 #[test]
 fn lock_tool_versions_exposes_map() {
-    let versions = lock_tool_versions("[tools]\nrust = \"1.98.1\"\ngh = \"2.101.0\"\n");
+    let lock = "lockfile_version = 3\n\n[[tools.rust]]\nversion = \"1.98.1\"\nbackend = \"core:rust\"\n\n[tools.rust.\"platforms.linux-x64\"]\nchecksum = \"sha256:00\"\n\n[[tools.gh]]\nversion = \"2.101.0\"\n";
+    let versions = lock_tool_versions(lock);
     assert_eq!(versions.len(), 2);
     assert_eq!(versions.get("rust").map(String::as_str), Some("1.98.1"));
+    assert_eq!(versions.get("gh").map(String::as_str), Some("2.101.0"));
     assert!(lock_tool_versions("[tools\nrust = ").is_empty());
     assert!(lock_tool_versions("[other]\nrust = \"1.98.1\"\n").is_empty());
+    // A config-grammar `[tools]` table is not the lock format.
+    assert!(lock_tool_versions("[tools]\nrust = \"1.98.1\"\n").is_empty());
+    let repo_lock = std::fs::read_to_string(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../mise.lock"),
+    )
+    .expect("read the repository lock");
+    let inspection = inspect_mise_file("mise.lock", Some(&repo_lock)).expect("owned");
+    assert!(inspection.findings.is_empty(), "{:?}", inspection.findings);
+    assert!(!lock_tool_versions(&repo_lock).is_empty());
 }
 
 #[test]

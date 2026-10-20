@@ -50,6 +50,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         config_calls,
         [
             "check_runtime.rs",
+            "deps_lock.rs",
             "owned_tool_preview.rs",
             "prepare.rs",
             "preview_producer_entry.rs",
@@ -58,7 +59,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
             "tap_prepare.rs",
             "tap_prepare_execute.rs",
         ],
-        "preparation, execution, preview budget admission, routing, owned preview, qualification admission, and captured tap preparation load configuration at their boundaries"
+        "preparation, execution, preview budget admission, routing, owned preview, qualification admission, captured tap preparation, and the private dependency lock load configuration at their boundaries"
     );
     Ok(())
 }

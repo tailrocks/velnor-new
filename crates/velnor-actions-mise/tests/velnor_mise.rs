@@ -82,6 +82,8 @@ mod impl_mise_tofu_exec;
 mod impl_mise_tofu_t27;
 #[path = "impl_mise_tofu_t27_realbin.rs"]
 mod impl_mise_tofu_t27_realbin;
+#[path = "impl_mise_tool_tables.rs"]
+mod impl_mise_tool_tables;
 #[path = "impl_mise_verify.rs"]
 mod impl_mise_verify;
 

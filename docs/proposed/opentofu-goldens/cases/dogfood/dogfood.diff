@@ -1,0 +1,802 @@
+diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
+68,73d67
+<         name: Record optional cache budget
+<         id: velnor-cache-clock
+<         run: "set -eu\nunavailable() { printf '%s\\n' '::warning::cache_unavailable: invalid first-step clock or output'; }\noutput=${GITHUB_OUTPUT-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$now\" \"$seconds\"; do\n  case \"$value\" in ''|*[!0-9]*) unavailable; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) unavailable; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { unavailable; exit 0; }\ndone\nif [ -z \"$output\" ] || ! printf 'started=%s\\ndeadline=%s\\n' \"$now\" \"$((now + seconds))\" 2>/dev/null >> \"$output\"; then\n  unavailable\nfi\n"
+<         env:
+<           VELNOR_CACHE_JOB_SECONDS: "300"
+<       - &s2
+78c72
+<       - &s3
+---
+>       - &s2
+93c87
+<       - &s4
+---
+>       - &s3
+106,116c100
+<       - &s5
+<         name: Admit optional cache save
+<         id: velnor-optional-tools-save-budget
+<         if: success() && ((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+<         run: &r2 "set -eu\noutput=${GITHUB_OUTPUT-}\nemit() { [ -n \"$output\" ] && printf '%s\\n' \"$1\" 2>/dev/null >> \"$output\"; }\nrefuse() {\n  emit 'admitted=false' || :\n  printf '%s\\n' '::warning::cache_unavailable: optional save has no safe remaining job budget or output'\n}\nstarted=${VELNOR_CACHE_STARTED-}\ndeadline=${VELNOR_CACHE_DEADLINE-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nrequired=${VELNOR_CACHE_REQUIRED_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$started\" \"$deadline\" \"$now\" \"$seconds\" \"$required\"; do\n  case \"$value\" in ''|*[!0-9]*) refuse; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) refuse; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { refuse; exit 0; }\ndone\nif [ \"$now\" -lt \"$started\" ] || [ \"$deadline\" -lt \"$started\" ] ||\n   [ \"$((deadline - started))\" -ne \"$seconds\" ] ||\n   [ \"$((deadline - now))\" -lt \"$required\" ]; then\n  refuse\nelif ! emit 'admitted=true'; then\n  refuse\nfi\n"
+<         env: &m6
+<           VELNOR_CACHE_JOB_SECONDS: "300"
+<           VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
+<           VELNOR_CACHE_DEADLINE: ${{ steps.velnor-cache-clock.outputs.deadline }}
+<           VELNOR_CACHE_REQUIRED_SECONDS: "90"
+<       - &s6
+---
+>       - &s4
+118,121c102
+<         if: (success() && ((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true') && steps.velnor-optional-tools-save-budget.outputs.admitted == 'true'
+<         id: velnor-optional-tools-save
+<         timeout-minutes: 1
+<         continue-on-error: true
+---
+>         if: success() && ((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+126,129d106
+<       - &s7
+<         name: Report optional cache save failure
+<         if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
+<         run: &r3 "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
+136c113
+<       - *s2
+---
+>       - *s1
+153d129
+<       - *s3
+159c135
+<       - *s4
+---
+>       - *s3
+162,164c138
+<       - *s5
+<       - *s6
+<       - *s7
+---
+>       - *s4
+173d146
+<       - *s3
+179c152
+<       - *s4
+---
+>       - *s3
+184,186c157
+<       - *s5
+<       - *s6
+<       - *s7
+---
+>       - *s4
+198c169
+<       - &s8
+---
+>       - &s5
+204,205c175,176
+<       - *s3
+<       - &s9
+---
+>       - *s2
+>       - &s6
+211c182
+<       - &s10
+---
+>       - &s7
+214c185
+<       - &s11
+---
+>       - &s8
+217c188
+<       - &s12
+---
+>       - &s9
+220c191
+<         with: &m10
+---
+>         with: &m8
+266,269c237,239
+<       - *s1
+<       - *s8
+<       - *s3
+<       - &s13
+---
+>       - *s5
+>       - *s2
+>       - &s10
+277c247
+<       - *s4
+---
+>       - *s3
+279c249
+<         env: &m11
+---
+>         env: &m9
+297c267
+<       - &s14
+---
+>       - &s11
+299c269
+<         env: &m12
+---
+>         env: &m10
+306c276
+<       - &s15
+---
+>       - &s12
+320c290
+<         env: &m14
+---
+>         env: &m12
+327c297
+<       - &s16
+---
+>       - &s13
+330c300
+<         env: *m14
+---
+>         env: *m12
+332c302
+<       - &s17
+---
+>       - &s14
+334c304
+<         env: *m11
+---
+>         env: *m9
+338,339c308,309
+<         env: *m11
+<         run: &r9 "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; echo \"velnor: sources downloaded=0\"; else echo \"velnor: sources miss (source_missing), fetching\"; status=0; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" 2> \"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\" || status=$?; cat \"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\" >&2; grep -Ec '\\''^ *Downloaded [^ ]+ v[0-9]'\\'' \"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\" > \"$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads\" || true; n=; read -r n < \"$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads\" || true; echo \"velnor: sources downloaded=${n:-0}\"; exit $status; fi'"
+---
+>         env: *m9
+>         run: &r6 "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; echo \"velnor: sources downloaded=0\"; else echo \"velnor: sources miss (source_missing), fetching\"; status=0; mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" 2> \"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\" || status=$?; cat \"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\" >&2; grep -Ec '\\''^ *Downloaded [^ ]+ v[0-9]'\\'' \"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\" > \"$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads\" || true; n=; read -r n < \"$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads\" || true; echo \"velnor: sources downloaded=${n:-0}\"; exit $status; fi'"
+341c311
+<         env: *m11
+---
+>         env: *m9
+344c314
+<         env: *m11
+---
+>         env: *m9
+363a334,339
+>       - name: Save Cargo sources
+>         if: always() && !cancelled() && steps.sources-fetch.outcome == 'success' && steps.cache-keys.outputs.sources_save == 'true' && steps.sources-restore.outputs.cache-hit != 'true' && !endsWith(steps.sources-restore.outputs.cache-matched-key, steps.cache-keys.outputs.sources_snapshot)
+>         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+>         with:
+>           key: ${{steps.cache-keys.outputs.sources_key}}
+>           path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+369c345
+<         run: &r10 "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.29'"
+---
+>         run: &r7 "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.29'"
+376c352
+<         run: *r10
+---
+>         run: *r7
+378c354
+<         env: *m11
+---
+>         env: *m9
+387c363
+<         run: *r10
+---
+>         run: *r7
+396,416c372,373
+<       - name: Admit optional cache save
+<         id: velnor-optional-sources-save-budget
+<         if: always() && !cancelled() && steps.sources-fetch.outcome == 'success' && steps.cache-keys.outputs.sources_save == 'true' && steps.sources-restore.outputs.cache-hit != 'true' && !endsWith(steps.sources-restore.outputs.cache-matched-key, steps.cache-keys.outputs.sources_snapshot)
+<         run: *r2
+<         env: *m6
+<       - name: Save Cargo sources
+<         if: (always() && !cancelled() && steps.sources-fetch.outcome == 'success' && steps.cache-keys.outputs.sources_save == 'true' && steps.sources-restore.outputs.cache-hit != 'true' && !endsWith(steps.sources-restore.outputs.cache-matched-key, steps.cache-keys.outputs.sources_snapshot)) && steps.velnor-optional-sources-save-budget.outputs.admitted == 'true'
+<         id: velnor-optional-sources-save
+<         timeout-minutes: 1
+<         continue-on-error: true
+<         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+<         with:
+<           key: ${{steps.cache-keys.outputs.sources_key}}
+<           path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+<       - name: Report optional cache save failure
+<         if: always() && !cancelled() && steps.velnor-optional-sources-save.outcome == 'failure'
+<         run: *r3
+<       - *s5
+<       - *s6
+<       - *s7
+<       - &s18
+---
+>       - *s4
+>       - &s15
+419c376
+<         env: *m12
+---
+>         env: *m10
+455,458c412,415
+<       - *s3
+<       - *s9
+<       - *s10
+<       - *s11
+---
+>       - *s2
+>       - *s6
+>       - *s7
+>       - *s8
+460c417
+<         env: *m11
+---
+>         env: *m9
+465c422
+<         with: *m10
+---
+>         with: *m8
+471c428
+<         run: *r10
+---
+>         run: *r7
+478c435
+<         run: *r10
+---
+>         run: *r7
+485c442
+<         run: *r10
+---
+>         run: *r7
+510c467
+<     env: &m15
+---
+>     env: &m13
+523,525c480,481
+<       - *s3
+<       - *s13
+<       - &s19
+---
+>       - *s10
+>       - &s16
+531c487,490
+<       - *s4
+---
+>       - *s3
+>       - *s6
+>       - *s7
+>       - *s8
+533,536c492
+<       - *s10
+<       - *s11
+<       - *s12
+<       - &s20
+---
+>       - &s17
+538c494
+<         env: *m11
+---
+>         env: *m9
+540c496
+<       - &s21
+---
+>       - &s18
+548c504
+<       - &s22
+---
+>       - &s19
+555a512,514
+>       - *s11
+>       - *s12
+>       - *s13
+557,559d515
+<       - *s15
+<       - *s16
+<       - *s17
+594,597c550,551
+<       - *s5
+<       - *s6
+<       - *s7
+<       - *s18
+---
+>       - *s4
+>       - *s15
+602c556
+<     env: *m15
+---
+>     env: *m13
+609,611c563,564
+<       - *s3
+<       - *s13
+<       - &s23
+---
+>       - *s10
+>       - &s20
+617c570,573
+<       - *s4
+---
+>       - *s3
+>       - *s6
+>       - *s7
+>       - *s8
+619,622c575
+<       - *s10
+<       - *s11
+<       - *s12
+<       - &s24
+---
+>       - &s21
+624c577
+<         env: *m11
+---
+>         env: *m9
+626,627c579,583
+<       - *s21
+<       - *s22
+---
+>       - *s18
+>       - *s19
+>       - *s11
+>       - *s12
+>       - *s13
+629,632c585
+<       - *s15
+<       - *s16
+<       - *s17
+<       - &s25
+---
+>       - &s22
+634,635c587,588
+<         env: *m11
+<         run: *r9
+---
+>         env: *m9
+>         run: *r6
+666,669c619,620
+<       - *s5
+<       - *s6
+<       - *s7
+<       - *s18
+---
+>       - *s4
+>       - *s15
+674c625
+<     env: *m15
+---
+>     env: *m13
+678a630
+>       - *s1
+679a632,633
+>       - *s10
+>       - *s16
+681,683c635,637
+<       - *s13
+<       - *s19
+<       - *s4
+---
+>       - *s6
+>       - *s7
+>       - *s8
+685c639,641
+<       - *s10
+---
+>       - *s17
+>       - *s18
+>       - *s19
+688,690c644
+<       - *s20
+<       - *s21
+<       - *s22
+---
+>       - *s13
+692,694d645
+<       - *s15
+<       - *s16
+<       - *s17
+729c680
+<       - *s18
+---
+>       - *s15
+734c685
+<     env: *m15
+---
+>     env: *m13
+741,742c692
+<       - *s3
+<       - *s13
+---
+>       - *s10
+748c698,701
+<       - *s4
+---
+>       - *s3
+>       - *s6
+>       - *s7
+>       - *s8
+750,752d702
+<       - *s10
+<       - *s11
+<       - *s12
+754c704
+<         env: *m11
+---
+>         env: *m9
+756,757c706,710
+<       - *s21
+<       - *s22
+---
+>       - *s18
+>       - *s19
+>       - *s11
+>       - *s12
+>       - *s13
+759,761d711
+<       - *s15
+<       - *s16
+<       - *s17
+796,799c746,747
+<       - *s5
+<       - *s6
+<       - *s7
+<       - *s18
+---
+>       - *s4
+>       - *s15
+804c752
+<     env: *m15
+---
+>     env: *m13
+808a757
+>       - *s1
+809a759,760
+>       - *s10
+>       - *s20
+811,813c762,764
+<       - *s13
+<       - *s23
+<       - *s4
+---
+>       - *s6
+>       - *s7
+>       - *s8
+815c766,768
+<       - *s10
+---
+>       - *s21
+>       - *s18
+>       - *s19
+818,820c771
+<       - *s24
+<       - *s21
+<       - *s22
+---
+>       - *s13
+822,825c773
+<       - *s15
+<       - *s16
+<       - *s17
+<       - *s25
+---
+>       - *s22
+860c808
+<       - *s18
+---
+>       - *s15
+865c813
+<     env: *m15
+---
+>     env: *m13
+869a818
+>       - *s1
+870a820,821
+>       - *s10
+>       - *s16
+872,874c823,825
+<       - *s13
+<       - *s19
+<       - *s4
+---
+>       - *s6
+>       - *s7
+>       - *s8
+876c827,829
+<       - *s10
+---
+>       - *s17
+>       - *s18
+>       - *s19
+879,881c832
+<       - *s20
+<       - *s21
+<       - *s22
+---
+>       - *s13
+883,885d833
+<       - *s15
+<       - *s16
+<       - *s17
+920c868
+<       - *s18
+---
+>       - *s15
+925c873
+<     env: *m15
+---
+>     env: *m13
+929a878
+>       - *s1
+930a880,881
+>       - *s10
+>       - *s16
+932,934c883,885
+<       - *s13
+<       - *s19
+<       - *s4
+---
+>       - *s6
+>       - *s7
+>       - *s8
+936c887,889
+<       - *s10
+---
+>       - *s17
+>       - *s18
+>       - *s19
+939,941c892
+<       - *s20
+<       - *s21
+<       - *s22
+---
+>       - *s13
+943,945d893
+<       - *s15
+<       - *s16
+<       - *s17
+980c928
+<       - *s18
+---
+>       - *s15
+985c933
+<     env: *m15
+---
+>     env: *m13
+989a938
+>       - *s1
+990a940,941
+>       - *s10
+>       - *s16
+992,994c943,945
+<       - *s13
+<       - *s19
+<       - *s4
+---
+>       - *s6
+>       - *s7
+>       - *s8
+996c947,949
+<       - *s10
+---
+>       - *s17
+>       - *s18
+>       - *s19
+999,1001c952
+<       - *s20
+<       - *s21
+<       - *s22
+---
+>       - *s13
+1003,1005d953
+<       - *s15
+<       - *s16
+<       - *s17
+1040c988
+<       - *s18
+---
+>       - *s15
+1045c993
+<     env: *m15
+---
+>     env: *m13
+1049a998
+>       - *s1
+1050a1000,1001
+>       - *s10
+>       - *s16
+1052,1054c1003,1005
+<       - *s13
+<       - *s19
+<       - *s4
+---
+>       - *s6
+>       - *s7
+>       - *s8
+1056c1007,1009
+<       - *s10
+---
+>       - *s17
+>       - *s18
+>       - *s19
+1058,1063c1011
+<       - *s12
+<       - *s20
+<       - *s21
+<       - *s22
+<       - *s14
+<       - &s26
+---
+>       - &s23
+1078,1080c1026,1028
+<         env: *m14
+<       - *s16
+<       - *s25
+---
+>         env: *m12
+>       - *s13
+>       - *s22
+1115c1063
+<       - &s27
+---
+>       - &s24
+1118c1066
+<         env: *m12
+---
+>         env: *m10
+1180c1128
+<     env: *m15
+---
+>     env: *m13
+1184a1133
+>       - *s1
+1185a1135,1136
+>       - *s10
+>       - *s16
+1187,1189c1138,1140
+<       - *s13
+<       - *s19
+<       - *s4
+---
+>       - *s6
+>       - *s7
+>       - *s8
+1191c1142,1144
+<       - *s10
+---
+>       - *s17
+>       - *s18
+>       - *s19
+1193,1195c1146,1147
+<       - *s12
+<       - *s20
+<       - *s21
+---
+>       - *s23
+>       - *s13
+1197,1200d1148
+<       - *s14
+<       - *s26
+<       - *s16
+<       - *s25
+1235c1183
+<       - *s27
+---
+>       - *s24
+1240c1188
+<     env: *m15
+---
+>     env: *m13
+1244a1193
+>       - *s1
+1245a1195,1196
+>       - *s10
+>       - *s16
+1247,1249c1198,1200
+<       - *s13
+<       - *s19
+<       - *s4
+---
+>       - *s6
+>       - *s7
+>       - *s8
+1251c1202,1204
+<       - *s10
+---
+>       - *s17
+>       - *s18
+>       - *s19
+1253,1255c1206,1207
+<       - *s12
+<       - *s20
+<       - *s21
+---
+>       - *s23
+>       - *s13
+1257,1260d1208
+<       - *s14
+<       - *s26
+<       - *s16
+<       - *s25
+1295c1243
+<       - *s27
+---
+>       - *s24
+1300c1248
+<     env: *m15
+---
+>     env: *m13
+1304a1253
+>       - *s1
+1305a1255,1256
+>       - *s10
+>       - *s16
+1307,1309c1258,1260
+<       - *s13
+<       - *s19
+<       - *s4
+---
+>       - *s6
+>       - *s7
+>       - *s8
+1311c1262,1264
+<       - *s10
+---
+>       - *s17
+>       - *s18
+>       - *s19
+1313,1315c1266,1267
+<       - *s12
+<       - *s20
+<       - *s21
+---
+>       - *s23
+>       - *s13
+1317,1320d1268
+<       - *s14
+<       - *s26
+<       - *s16
+<       - *s25
+1355c1303
+<       - *s27
+---
+>       - *s24
+1360c1308
+<     env: *m15
+---
+>     env: *m13
+1364a1313
+>       - *s1
+1365a1315,1316
+>       - *s10
+>       - *s16
+1367,1369c1318,1320
+<       - *s13
+<       - *s19
+<       - *s4
+---
+>       - *s6
+>       - *s7
+>       - *s8
+1371c1322,1324
+<       - *s10
+---
+>       - *s17
+>       - *s18
+>       - *s19
+1373,1375c1326,1327
+<       - *s12
+<       - *s20
+<       - *s21
+---
+>       - *s23
+>       - *s13
+1377,1380d1328
+<       - *s14
+<       - *s26
+<       - *s16
+<       - *s25
+1415c1363
+<       - *s27
+---
+>       - *s24
+1424d1371
+<       - *s3
+1430c1377
+<       - *s4
+---
+>       - *s3
+1435,1437c1382
+<       - *s5
+<       - *s6
+<       - *s7
+---
+>       - *s4
