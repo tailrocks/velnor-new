@@ -5,8 +5,10 @@
 //! group is one fixed string per ref that never cancels, so a queued
 //! release can neither be dropped nor overlap another run of the same tag.
 
+use velnor_actions_contract::{Step, StepKind};
+
 use crate::{
-    RenderError, guard,
+    RenderError, commands, guard,
     publish_spec::{PublishJobSpec, PublishStep, PublishTriggers, PublishWorkflowSpec},
     release_permissions::PermissionLevel,
     release_tree::ReleaseRenderContext,
@@ -40,7 +42,7 @@ pub fn render_publish_workflow(
     }
     let mut jobs = Vec::with_capacity(spec.jobs.len());
     for (id, job) in &spec.jobs {
-        jobs.push((id.clone(), job_to_yaml(job)?));
+        jobs.push((id.clone(), job_to_yaml(job, spec.staged_binary.as_deref())?));
     }
     let document = Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(spec.name.clone())),
@@ -103,9 +105,46 @@ fn permissions_to_yaml(job: &PublishJobSpec) -> Yaml {
     )
 }
 
+/// Render one build-side internal step: the operation travels in env, the
+/// staged helper is the only command (never argv from config text).
+fn internal_step_to_yaml(step: &Step, staged: &str) -> Result<Yaml, RenderError> {
+    let StepKind::Internal { operation, env } = &step.kind else {
+        return Err(RenderError::InvalidWorkflow(
+            "internal_step_required".to_owned(),
+        ));
+    };
+    steps::split_internal_operation(operation)?;
+    commands::validate_env(env)?;
+    steps::scan_for_private_subcommands(&step.name)?;
+    let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+    if let Some(condition) = &step.condition {
+        steps::scan_for_private_subcommands(condition)?;
+        entries.push(("if".to_owned(), Yaml::str(condition.clone())));
+    }
+    if env.contains_key(steps::INTERNAL_OP_ENV) {
+        return Err(RenderError::InvalidWorkflow(
+            "duplicate_internal_env".to_owned(),
+        ));
+    }
+    let mut vars = vec![(
+        steps::INTERNAL_OP_ENV.to_owned(),
+        Yaml::str(operation.clone()),
+    )];
+    vars.extend(env.iter().map(|(k, v)| (k.clone(), Yaml::str(v.clone()))));
+    entries.push(("env".to_owned(), Yaml::Map(vars)));
+    entries.push((
+        "run".to_owned(),
+        Yaml::str(commands::quote_run_arg(staged)?),
+    ));
+    Ok(Yaml::Map(entries))
+}
+
 /// Render one step, inserting its explicit id after the name.
-fn step_to_yaml(step: &PublishStep) -> Result<Yaml, RenderError> {
-    let rendered = crate::steps_plain::plain_step_to_yaml(&step.step)?;
+fn step_to_yaml(step: &PublishStep, staged: Option<&str>) -> Result<Yaml, RenderError> {
+    let rendered = match (&step.step.kind, staged) {
+        (StepKind::Internal { .. }, Some(staged)) => internal_step_to_yaml(&step.step, staged)?,
+        _ => crate::steps_plain::plain_step_to_yaml(&step.step)?,
+    };
     let (Some(id), Yaml::Map(mut entries)) = (&step.id, rendered.clone()) else {
         return Ok(rendered);
     };
@@ -116,7 +155,7 @@ fn step_to_yaml(step: &PublishStep) -> Result<Yaml, RenderError> {
 }
 
 /// Render one job with environment, permissions, needs, outputs and steps.
-fn job_to_yaml(job: &PublishJobSpec) -> Result<Yaml, RenderError> {
+fn job_to_yaml(job: &PublishJobSpec, staged: Option<&str>) -> Result<Yaml, RenderError> {
     let mut entries = vec![
         ("name".to_owned(), Yaml::str(job.display_name.clone())),
         ("runs-on".to_owned(), Yaml::str(job.runs_on.clone())),
@@ -146,7 +185,7 @@ fn job_to_yaml(job: &PublishJobSpec) -> Result<Yaml, RenderError> {
     }
     let mut rendered = Vec::with_capacity(job.steps.len());
     for step in &job.steps {
-        rendered.push(step_to_yaml(step)?);
+        rendered.push(step_to_yaml(step, staged)?);
     }
     entries.push(("steps".to_owned(), Yaml::Seq(rendered)));
     Ok(Yaml::Map(entries))

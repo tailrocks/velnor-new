@@ -19,7 +19,7 @@ pub const RELEASE_TAG_GLOB: &str = "*-v[0-9]*.[0-9]*.[0-9]*";
 /// Longest accepted artifact id.
 const MAX_ID_BYTES: usize = 64;
 /// Most bundles one repository may declare.
-const MAX_BUNDLES: usize = 64;
+pub(super) const MAX_BUNDLES: usize = 64;
 /// Most paths one bundle may list.
 const MAX_PATHS: usize = 64;
 
@@ -175,13 +175,16 @@ pub struct PublishConfig {
     /// npm packages published to GitHub Packages, sorted by id.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub npm: Vec<super::publish_npm::PublishNpm>,
+    /// Gradle Maven bundles published as release assets, sorted by id.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub maven: Vec<super::publish_maven::PublishMaven>,
 }
 
 impl PublishConfig {
     /// True when nothing is declared (serialization skip predicate).
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.bundles.is_empty() && self.npm.is_empty()
+        self.bundles.is_empty() && self.npm.is_empty() && self.maven.is_empty()
     }
 
     /// Validate every declaration.
@@ -214,7 +217,8 @@ impl PublishConfig {
                 "must_be_sorted_by_id",
             ));
         }
-        self.validate_npm(file, &mut seen)
+        self.validate_npm(file, &mut seen)?;
+        super::publish_maven::validate_entries(&self.maven, file, &mut seen)
     }
 }
 

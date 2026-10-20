@@ -60,6 +60,7 @@ fn image_spec() -> Result<PublishWorkflowSpec, RenderError> {
             tag_glob: None,
         },
         jobs,
+        staged_binary: None,
     })
 }
 

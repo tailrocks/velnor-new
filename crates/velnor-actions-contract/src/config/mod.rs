@@ -31,6 +31,7 @@ mod project_tool_grammar;
 pub mod project_tool_refs;
 pub mod project_tool_resolver;
 mod publish;
+mod publish_maven;
 mod publish_npm;
 mod qualified_tools;
 mod release;
@@ -106,6 +107,9 @@ pub use private_sources::{
 pub use publish::{
     PublishBundle, PublishConfig, RELEASE_TAG_GLOB, ReleaseTag, VersionSource, is_artifact_id,
     is_strict_semver,
+};
+pub use publish_maven::{
+    MAVEN_BUNDLE_OUTPUT_DIR, MAVEN_BUNDLE_TASK, MAVEN_VERSION_FILE, PublishMaven,
 };
 pub use publish_npm::{NPM_PUBLISH_REGISTRY_URL, NpmRegistry, PublishNpm};
 pub use qualified_tools::{

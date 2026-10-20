@@ -22,7 +22,7 @@ fn put(root: &Path, rel: &str, text: &str) -> TestResult {
 }
 
 /// A compliant two-project Gradle root in `backend/`; `core` reads the database.
-fn gradle_root(repo: &Path) -> TestResult {
+pub(crate) fn gradle_root(repo: &Path) -> TestResult {
     put(
         repo,
         "backend/settings.gradle.kts",
