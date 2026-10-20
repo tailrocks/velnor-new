@@ -57,6 +57,7 @@ fn internal_env(
     if op == velnor_actions_contract::PRIVATE_FETCH_OPERATION
         || op == velnor_actions_contract::PRIVATE_REVOKE_OPERATION
         || op == velnor_actions_contract::BUN_REGISTRY_INSTALL_OPERATION
+        || op == velnor_actions_contract::config::playwright_lock::PLAYWRIGHT_INSTALL_OPERATION
     {
         // Private-source operations take no request file: their whole input
         // is the fixed step env (token binding plus the literal allowlist).

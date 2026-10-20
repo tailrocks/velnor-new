@@ -61,10 +61,34 @@ impl BunInventory {
         let mut inventory = Self::default();
         for configured in &config.roots {
             let prefix = configured.unit_prefix();
-            let loaded = load_root(root, index, prefix).map_err(|error| adapter_error(&error))?;
+            let loaded =
+                load_root(root, Some(index), prefix).map_err(|error| adapter_error(&error))?;
             inventory
                 .reads
                 .extend(root_reads(root, index, &loaded.workspace)?);
+            inventory.roots.push(loaded);
+        }
+        inventory.check_names(config)?;
+        Ok(inventory)
+    }
+
+    /// Load the workspaces `config` names without a repository file index.
+    ///
+    /// For commands that read the locks and manifests only (`playwright lock`);
+    /// the foreign-lockfile scan and the outside-read evidence need the index
+    /// and run when the workflow is generated.
+    ///
+    /// # Errors
+    ///
+    /// The same adapter codes as [`Self::load`], without the index checks.
+    pub(crate) fn load_unindexed(
+        root: &Path,
+        config: &BunStackConfig,
+    ) -> Result<Self, OrchestratorError> {
+        let mut inventory = Self::default();
+        for configured in &config.roots {
+            let loaded = load_root(root, None, configured.unit_prefix())
+                .map_err(|error| adapter_error(&error))?;
             inventory.roots.push(loaded);
         }
         inventory.check_names(config)?;
@@ -98,13 +122,15 @@ impl BunInventory {
     }
 }
 
-fn load_root(root: &Path, index: &FileIndex, prefix: &str) -> Result<BunRoot, BunError> {
-    let direct: Vec<&str> = index
-        .files()
-        .iter()
-        .filter_map(|file| direct_child(file, prefix))
-        .collect();
-    check_js_lockfiles(&direct)?;
+fn load_root(root: &Path, index: Option<&FileIndex>, prefix: &str) -> Result<BunRoot, BunError> {
+    if let Some(index) = index {
+        let direct: Vec<&str> = index
+            .files()
+            .iter()
+            .filter_map(|file| direct_child(file, prefix))
+            .collect();
+        check_js_lockfiles(&direct)?;
+    }
     let package = required(root, &under_root(prefix, "package.json"))?;
     let lock = required(root, &under_root(prefix, "bun.lock"))?;
     let mut members = BTreeMap::new();

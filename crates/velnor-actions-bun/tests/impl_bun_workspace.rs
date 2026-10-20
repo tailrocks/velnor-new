@@ -170,3 +170,18 @@ fn scripts_default_to_the_closed_intersection_and_honour_overrides() {
         "bun_script_missing:@chainargos/ui:nope"
     );
 }
+
+#[test]
+fn playwright_core_is_the_lock_trust_anchor() {
+    let integrity = format!("sha512-{}==", "A".repeat(86));
+    let lock = LOCK.replace(
+        r#""packages": {"#,
+        &format!(r#""packages": {{"playwright-core": ["playwright-core@1.63.0", "", {{}}, "{integrity}"],"#),
+    );
+    let workspace = resolve("frontend", ROOT, &lock, &members()).expect("workspace");
+    let core = workspace.playwright_core.expect("core");
+    assert_eq!(core.version, "1.63.0");
+    assert_eq!(core.integrity, integrity);
+    let bare = resolve("frontend", ROOT, LOCK, &members()).expect("workspace");
+    assert!(bare.playwright_core.is_none());
+}

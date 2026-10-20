@@ -25,6 +25,8 @@ pub(crate) mod bun_registry_step;
 pub(crate) mod image_build_jobs;
 #[path = "native_image_jobs.rs"]
 pub(crate) mod native_image_jobs;
+#[path = "playwright_install_step.rs"]
+pub(crate) mod playwright_install_step;
 #[path = "task_script.rs"]
 pub(crate) mod task_script;
 #[path = "verification_task_mise.rs"]
@@ -43,6 +45,10 @@ pub use image_build_jobs::{
     BUILDKIT_IMAGE, ImageBuildPolicy, artifact_name, artifact_path, build_image_build_job,
 };
 pub use native_image_jobs::{NativeImageTaskPolicy, build_native_image_job};
+pub use playwright_install_step::{
+    PLAYWRIGHT_INSTALL_STEP_NAME, PLAYWRIGHT_PINS_ENV, PLAYWRIGHT_ROOT_ENV, PLAYWRIGHT_VERSION_ENV,
+    playwright_install_step,
+};
 pub use workflow_task_jobs::WorkflowTaskPolicy;
 
 #[cfg(test)]

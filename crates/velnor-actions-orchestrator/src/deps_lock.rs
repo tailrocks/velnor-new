@@ -157,7 +157,15 @@ pub fn lock_private_sources(root: &Path) -> Result<String, OrchestratorError> {
 }
 
 fn write_lock(root: &Path, text: &str) -> Result<(), OrchestratorError> {
-    let path = root.join(DEPS_LOCK_PATH);
+    write_repo_file(root, DEPS_LOCK_PATH, text)
+}
+
+/// Atomically replace the generated file `rel` (inside an existing directory of `root`).
+///
+/// # Errors
+/// Fails on IO errors.
+pub(crate) fn write_repo_file(root: &Path, rel: &str, text: &str) -> Result<(), OrchestratorError> {
+    let path = root.join(rel);
     let directory = path
         .parent()
         .ok_or_else(|| OrchestratorError::io(path.display().to_string(), "no_parent"))?;

@@ -49,6 +49,12 @@ pub(crate) enum Command {
         #[command(subcommand)]
         command: DepsCommand,
     },
+    /// Pin the Playwright browsers Bun workspace members need.
+    Playwright {
+        /// Playwright subcommand.
+        #[command(subcommand)]
+        command: PlaywrightCommand,
+    },
     /// Author qualified-tool candidates offline from independently pinned local archives.
     ///
     /// Supply archive SHA-256 values independently. Runs fixed version probes on
@@ -100,6 +106,16 @@ impl Command {
 pub(crate) enum DepsCommand {
     /// Resolve every `[private_sources]` declaration to a commit and SHA-256 and
     /// write `.velnor/deps.lock`. Uses your own `GH_TOKEN` or `GITHUB_TOKEN`.
+    Lock,
+}
+
+/// Playwright browser subcommands.
+#[derive(Debug, Subcommand)]
+pub(crate) enum PlaywrightCommand {
+    /// Resolve the browsers each Bun workspace member declares to
+    /// SHA-256-pinned archives and write `.velnor/playwright.lock`. Downloads
+    /// the `playwright-core` version `bun.lock` pins (verified against its
+    /// integrity) and every browser archive; the digests are trust-on-first-use.
     Lock,
 }
 
