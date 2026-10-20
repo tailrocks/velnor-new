@@ -19,25 +19,17 @@ use velnor_actions_workflow_renderer::publish_scripts as script;
 use velnor_actions_workflow_renderer::publish_spec::{
     PublishJobSpec, PublishPermissions, PublishRole, PublishStep,
 };
-use velnor_actions_workflow_renderer::release_tree::RELEASE_CONFIG_PATH;
 use velnor_actions_workflow_renderer::{
     MiseSetup, action_step, ambient_shell_step, checkout_step, mise_setup_step,
 };
 
 use crate::OrchestratorError;
-use crate::release_checkouts::{forge_env, policy_checkout};
-use crate::release_steps::{Phase, phase_argv};
+use crate::publish_release_steps::{event_kind, release_jobs};
 use crate::utf8::strings_of;
 use crate::workflow::CHECKOUT_USES;
 
 /// Tag authority job id; every bundle job needs it.
 pub(crate) const AUTHORITY_JOB: &str = "publish-authority";
-/// Default-branch authority job id; the tag release job needs it.
-pub(crate) const BRANCH_AUTHORITY_JOB: &str = "publish-branch-authority";
-/// Tag release job id.
-const TAG_RELEASE_JOB: &str = "rust-tag-release";
-/// Polls of the `Required` verdict and the pause between them.
-const REQUIRED_POLLS: (u16, u16) = (60, 30);
 /// Step id whose outputs carry the parsed tag.
 const TAG_STEP: &str = "tag";
 /// Token binding for GitHub API reads and release uploads.
@@ -110,21 +102,13 @@ pub(crate) fn assemble_jobs(
         );
     }
     if let Some(manifest) = inputs.git_tag_manifest {
-        let mut authority = branch_authority_job(inputs, &gh)?;
-        if mixed {
-            authority.condition = Some(event_kind("branch"));
-        }
-        jobs.insert(BRANCH_AUTHORITY_JOB.to_owned(), authority);
-        jobs.insert(
-            TAG_RELEASE_JOB.to_owned(),
-            tag_release_job(inputs, manifest)?,
-        );
+        jobs.extend(release_jobs(inputs, &gh, manifest, mixed)?);
     }
     Ok(jobs)
 }
 
 /// `gh` shell function body through the pinned Mise tool.
-fn gh_function(catalog: &ToolCatalog) -> Result<String, OrchestratorError> {
+pub(crate) fn gh_function(catalog: &ToolCatalog) -> Result<String, OrchestratorError> {
     let exec =
         PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), Vec::new()).map_err(|err| {
             OrchestratorError::Contract {
@@ -137,12 +121,16 @@ fn gh_function(catalog: &ToolCatalog) -> Result<String, OrchestratorError> {
 }
 
 /// Plain step without an id.
-fn plain(step: Step) -> PublishStep {
+pub(crate) fn plain(step: Step) -> PublishStep {
     PublishStep { id: None, step }
 }
 
 /// `sh -c` step running a fixed script with optional token binding.
-fn script_step(name: &str, body: String, token: bool) -> Result<Step, OrchestratorError> {
+pub(crate) fn script_step(
+    name: &str,
+    body: String,
+    token: bool,
+) -> Result<Step, OrchestratorError> {
     let env = if token {
         BTreeMap::from([(TOKEN_ENV.0.to_owned(), TOKEN_ENV.1.to_owned())])
     } else {
@@ -234,7 +222,7 @@ fn authority_job(inputs: &Inputs<'_>, gh: &str) -> Result<PublishJobSpec, Orches
 }
 
 /// Common job shell for the three bundle roles.
-fn bundle_job(
+pub(crate) fn bundle_job(
     inputs: &Inputs<'_>,
     role: PublishRole,
     name: String,
@@ -362,76 +350,6 @@ fn publish_job(
         PublishRole::ArtifactPublish,
         format!("Bundle publish ({id})"),
         format!("bundle-attest-{id}"),
-        steps,
-    ))
-}
-
-/// Condition selecting the authority job that matches the pushed ref type.
-fn event_kind(kind: &str) -> String {
-    format!("github.ref_type == '{kind}'")
-}
-
-/// Branch authority: a default-branch push whose `Required` check is green.
-fn branch_authority_job(
-    inputs: &Inputs<'_>,
-    gh: &str,
-) -> Result<PublishJobSpec, OrchestratorError> {
-    let (polls, pause) = REQUIRED_POLLS;
-    let steps = vec![
-        plain(mise_setup_step(inputs.mise)?),
-        plain(script_step(
-            "Verify default branch push",
-            script::branch_push_script(inputs.repository, inputs.branch),
-            false,
-        )?),
-        plain(script_step(
-            "Wait for Required check",
-            script::required_wait_script(gh, polls, pause),
-            true,
-        )?),
-    ];
-    // Budget: every poll plus its pause, and a margin for setup.
-    let minutes = u32::from(polls) * u32::from(pause) / 60 + 5;
-    Ok(PublishJobSpec {
-        role: PublishRole::BranchAuthority,
-        display_name: "Verify default branch authority".to_owned(),
-        runs_on: inputs.label.to_owned(),
-        timeout_minutes: JobTimeout::try_from(minutes)?,
-        needs: Vec::new(),
-        condition: None,
-        environment: None,
-        outputs: BTreeMap::new(),
-        permissions: PublishPermissions::expected(PublishRole::BranchAuthority),
-        steps,
-    })
-}
-
-/// Tag release: pinned release-plz creates tags and GitHub releases only.
-fn tag_release_job(
-    inputs: &Inputs<'_>,
-    manifest: &str,
-) -> Result<PublishJobSpec, OrchestratorError> {
-    let argv = phase_argv(
-        &Phase::Publish,
-        RELEASE_CONFIG_PATH,
-        manifest,
-        None,
-        inputs.catalog,
-    )?;
-    let steps = vec![
-        plain(policy_checkout(true)?),
-        plain(mise_setup_step(inputs.mise)?),
-        plain(ambient_shell_step(
-            "Create tags and releases",
-            argv,
-            forge_env(),
-        )?),
-    ];
-    Ok(bundle_job(
-        inputs,
-        PublishRole::TagRelease,
-        "Create tags and releases".to_owned(),
-        BRANCH_AUTHORITY_JOB.to_owned(),
         steps,
     ))
 }

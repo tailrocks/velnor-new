@@ -24,6 +24,7 @@ pub mod project_tool_resolver;
 mod publish;
 mod qualified_tools;
 mod release;
+mod release_validation;
 mod resources;
 mod runs_on;
 mod rust_inputs;

@@ -72,6 +72,7 @@ mod product_release_pins;
 pub(crate) mod project_tool_sources;
 mod provenance;
 mod publish_emit;
+mod publish_release_steps;
 #[cfg(test)]
 mod publish_scripts_tests;
 mod publish_steps;
