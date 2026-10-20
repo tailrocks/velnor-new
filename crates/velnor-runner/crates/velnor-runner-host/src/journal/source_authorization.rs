@@ -69,25 +69,6 @@ pub(in crate::journal) fn source_policy_mode_name(
     }
 }
 
-pub(in crate::journal) async fn source_authorized_for_intent(
-    connection: &turso::Connection,
-    connection_id: &str,
-    scale_set_id: i64,
-    request_id: i64,
-    intent_id: i64,
-    binding_digest: &str,
-) -> Result<bool, HostError> {
-    storage::matches_intent(
-        connection,
-        connection_id,
-        scale_set_id,
-        request_id,
-        intent_id,
-        binding_digest,
-    )
-    .await
-}
-
 pub(in crate::journal) async fn event_source_matches(
     connection: &turso::Connection,
     connection_id: &str,
@@ -114,21 +95,4 @@ pub(in crate::journal) async fn created_set_matches(
     binding_digest: &str,
 ) -> Result<bool, HostError> {
     storage::created_set_matches(connection, connection_id, scale_set_id, binding_digest).await
-}
-
-pub(in crate::journal) async fn closed_world_allows_jit(
-    connection: &turso::Connection,
-    connection_id: &str,
-    scale_set_id: i64,
-    intent_id: i64,
-    binding_digest: &str,
-) -> Result<bool, HostError> {
-    storage::closed_world_allows_jit(
-        connection,
-        connection_id,
-        scale_set_id,
-        intent_id,
-        binding_digest,
-    )
-    .await
 }

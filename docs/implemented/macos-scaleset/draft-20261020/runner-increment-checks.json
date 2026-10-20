@@ -824,6 +824,21 @@
       "reviewer": "/root/execution_source_security_review",
       "scope": "The tests do not prove capacity release, a live provider, or a live installation.",
       "phase": "after_hook"
+    },
+    {
+      "result": "PASS",
+      "source_parent": "e7525ba732e0132e041fee1c3a9fe96bbc66f2b9",
+      "scope": "Remove unused connection authorization writers. Keep the active request authorization checks.",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02 mise --no-config exec rust@1.99.1 mr-boxington@1.25.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.148 -- mbx nextest run --locked -p velnor-runner-host -E 'test(source_authorization) | test(uncreated_or_unreceipted_acquire) | test(version_eight_receipts)' --no-tests fail --jobs 2",
+      "working_directory": "crates/velnor-runner",
+      "exit_status": 0,
+      "passed": 6,
+      "log": "shipping-source-auth-six-nextest-20261020.log",
+      "log_sha256": "c81840aae3d357d0b21abc58c7f27a0b2db7ef2404ce8c72d06faeae1c1e1f38",
+      "author": "/root/obsolete_capacity_cleanup",
+      "reviewer": "/root/execution_source_security_review",
+      "review": "source-auth6-independent-review-20261020.md",
+      "full_strict_gate": "FAIL. Separate repairs remain necessary."
     }
   ],
   "broader_pair_check": {
