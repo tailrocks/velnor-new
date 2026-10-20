@@ -2,9 +2,9 @@
 
 **Status:** Proposed. Implements items RF (release and tag flow, versioning)
 and RA (release-asset bundles) of the ChainArgos split design (§4.0, §4.4),
-under [hard decision 8](../hard-decisions.md). Maven bundles (M) and image promotion
-(I.promote) build on this flow and are specified when they land; npm (N) is
-section 8.
+under [hard decision 8](../hard-decisions.md). Image promotion (I.promote)
+builds on this flow and is specified when it lands; npm (N) is section 8 and
+Maven bundles (M) are section 9.
 Every choice marked *adopted per the split brief; owner may revisit* was
 taken from the split design without a separate owner review.
 
@@ -193,3 +193,53 @@ read to every consumer repository; GitHub offers no API for it.
 
 Tests: `impl_bun.rs` (generated chain, role permissions, fail-closed
 policy), `publish_npm_tests.rs` and the role matrix in the renderer.
+
+## 9. Maven bundles (M)
+
+GitHub Packages Maven is repository-scoped, so no scoped CI credential can
+serve a private cross-repository consumer. A Maven library therefore ships as a
+release-asset bundle, the same mechanism as section 3 with a zip in place of
+the tarball (*adopted per the split brief; owner may revisit*).
+
+```toml
+[[publish.maven]]
+id = "processor-shared-libs"     # tag processor-shared-libs-v2.3.0, zip name stem
+root = "backend"                 # a [stacks.gradle] root
+```
+
+The root's own convention plugin owns the bundle: `./gradlew :mavenBundle`
+stages every published project and writes
+`<root>/build/maven-bundle/<id>-<version>-maven.zip` (a `repository/` Maven
+tree) plus `<zip>.sha256` in `sha256sum` format. The version source is the
+root's `gradle.properties` (`version=X.Y.Z`); generation refuses a root that is
+not a configured `[stacks.gradle]` root or whose version is not a literal. Ids
+share the tag namespace with bundles, npm packages, promotable images and
+released Rust packages.
+
+Per entry, three jobs and the same authority, role split, environment, tag and
+immutability rules as the other kinds (hard decision 8):
+
+| Job | Authority | Rule |
+|---|---|---|
+| `maven-build-<id>` | `contents: read` | `if` the authority's `artifact` output equals the id. The only checkout. Acquires the staged helper, mints, fetches and revokes the private-source token for the lock's Maven bundles (`PrivateWiring::steps_for_gradle`; the token is revoked before any repository build logic runs), sets up Mise, then runs `gradle-run-v1` with task `:mavenBundle` (the Gradle wrapper gates, strict dependency verification and the Velnor-owned Gradle home apply as in CI). A fixed script then re-checks the checksum, requires every zip entry under `repository/` and every POM at the tag's version, and moves exactly the zip and its checksum into `$RUNNER_TEMP/bundle` for upload. Its timeout is the Gradle stack's |
+| `maven-attest-<id>` | `contents: read`, `id-token: write`, `attestations: write` | No checkout. Re-verifies the checksum, then `actions/attest-build-provenance` on the zip |
+| `maven-publish-<id>` | `contents: write`, environment `release` | No checkout. Re-verifies the checksum, then `gh release create --verify-tag` or `gh release upload` (never `--clobber`) of the zip and checksum, so an existing asset fails the job |
+
+The build job is the only one that runs a Velnor internal operation. The
+publication renderer allows exactly `gradle-run-v1`, `private-fetch-v1` and
+`private-revoke-v1`, only in the `ArtifactBuild` role, and requires the staged
+helper path whenever one is present; every privileged role still rejects any
+internal operation. No role or permission is added: Maven reuses
+`ArtifactBuild`, `ArtifactAttest` and `ArtifactPublish`.
+
+Consumers lock the zip with its sha256 in `.velnor/deps.lock` (item P) and
+pin each jar a second time in `verification-metadata.xml`.
+
+Tests: `impl_orch_publish_maven.rs` (generated chain, roles, private-source
+ordering, determinism, stale declarations), `publish_maven_scripts_tests.rs`
+(the collect, verify and upload scripts run for real against fixture zips),
+`impl_renderer_publish_spec.rs` (internal operations by role, staged helper)
+and `publish_maven_tests.rs` (config grammar). Owner blockers: the same tag
+rulesets and protected `release` environment as section 7, and the
+`velnor-deps` GitHub App that does not exist yet (item P) before a consumer can
+fetch a private bundle.

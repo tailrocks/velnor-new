@@ -151,3 +151,7 @@ pub(super) fn publish_job(
         steps,
     ))
 }
+
+#[cfg(test)]
+#[path = "publish_maven_scripts_tests.rs"]
+mod scripts_tests;

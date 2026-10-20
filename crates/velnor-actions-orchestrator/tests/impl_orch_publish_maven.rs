@@ -74,7 +74,7 @@ fn a_maven_entry_emits_the_three_role_chain_behind_the_tag_authority() -> TestRe
         "version read at the tagged commit:\n{yaml}"
     );
     let build = section(&yaml, "maven-build-processor-shared-libs")?;
-    assert!(build.contains("needs: publish-authority"), "{build}");
+    assert!(build.contains("- publish-authority"), "{build}");
     assert!(
         build.contains("needs.publish-authority.outputs.artifact == 'processor-shared-libs'"),
         "{build}"
@@ -113,7 +113,7 @@ fn a_maven_entry_emits_the_three_role_chain_behind_the_tag_authority() -> TestRe
 
     let attest = section(&yaml, "maven-attest-processor-shared-libs")?;
     assert!(
-        attest.contains("needs: maven-build-processor-shared-libs"),
+        attest.contains("- maven-build-processor-shared-libs"),
         "{attest}"
     );
     assert!(
@@ -128,7 +128,7 @@ fn a_maven_entry_emits_the_three_role_chain_behind_the_tag_authority() -> TestRe
 
     let publish = section(&yaml, "maven-publish-processor-shared-libs")?;
     assert!(
-        publish.contains("needs: maven-attest-processor-shared-libs"),
+        publish.contains("- maven-attest-processor-shared-libs"),
         "{publish}"
     );
     assert!(publish.contains("environment: release"), "{publish}");
@@ -171,5 +171,69 @@ fn a_stale_or_inconsistent_declaration_fails_generation() -> TestResult {
         PROPERTIES,
     )?;
     assert!(text.contains("not_a_stacks_gradle_root"), "{text}");
+    Ok(())
+}
+
+const PRIVATE_CONFIG: &str = "[private_sources]\nowner = \"ChainArgos\"\napp_id_variable = \"VELNOR_DEPS_APP_ID\"\n\
+app_private_key_secret = \"VELNOR_DEPS_APP_PRIVATE_KEY\"\n\
+[[private_sources.maven_bundles]]\nid = \"libs\"\nrepository = \"ChainArgos/processor-shared-java\"\n\
+tag = \"processor-shared-libs-v1.0.0\"\nasset = \"processor-shared-libs-1.0.0-maven.zip\"\n";
+
+fn lock() -> String {
+    format!(
+        "schema = 1\n[[maven_bundles]]\nid = \"libs\"\nrepository = \"ChainArgos/processor-shared-java\"\n\
+         tag = \"processor-shared-libs-v1.0.0\"\ncommit = \"{}\"\nasset = \"processor-shared-libs-1.0.0-maven.zip\"\n\
+         sha256 = \"{}\"\n",
+        "0123456789abcdef0123456789abcdef01234567",
+        "89abcdef0123456789abcdef0123456789abcdef0123456789abcdef01234567"
+    )
+}
+
+#[test]
+fn private_maven_bundles_are_minted_fetched_and_revoked_around_the_build_only() -> TestResult {
+    let config = format!("{CONFIG}{PRIVATE_CONFIG}");
+    let repo = make_repo(&config)?;
+    gradle_root(repo.path())?;
+    fs::write(repo.path().join("backend/gradle.properties"), PROPERTIES)?;
+    fs::write(repo.path().join(".velnor/deps.lock"), lock())?;
+    git(
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/acme/widgets.git",
+        ],
+        repo.path(),
+    )?;
+    git(&["add", "."], repo.path())?;
+    git(&["commit", "-m", "private maven fixture"], repo.path())?;
+    let yaml = preview(repo.path())?;
+    let build = section(&yaml, "maven-build-processor-shared-libs")?;
+    let at = |needle: &str| build.find(needle).ok_or(format!("{needle} in {build}"));
+    // The token is revoked before any repository build logic runs.
+    assert!(
+        at("create-github-app-token")? < at("private-fetch-v1")?,
+        "{build}"
+    );
+    assert!(
+        at("private-fetch-v1")? < at("private-revoke-v1")?,
+        "{build}"
+    );
+    assert!(
+        at("private-revoke-v1")? < at("Gradle mavenBundle")?,
+        "{build}"
+    );
+    assert!(build.contains("steps.deps-token.outputs.token"), "{build}");
+    assert!(build.contains("permission-contents: read"), "{build}");
+    for job in [
+        "maven-attest-processor-shared-libs",
+        "maven-publish-processor-shared-libs",
+    ] {
+        let text = section(&yaml, job)?;
+        assert!(
+            !text.contains("create-github-app-token") && !text.contains("VELNOR_DEPS"),
+            "{job}: no private-source token outside the build: {text}"
+        );
+    }
     Ok(())
 }
