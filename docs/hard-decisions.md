@@ -255,3 +255,26 @@ pin.
 project-declared version into any generated file, loading the project's
 Mise config (or trusting it) in a generated step to resolve versions, or
 letting a Velnor pin override a project declaration.
+
+## 8. Publication only from the default branch or a release tag
+
+**Decision.** Container images (and later packages) are published only from a
+`push` to the default branch or from a release tag, after `Required` succeeded
+for that SHA, by jobs that check out and execute no repository code. Tags
+promote the digest built and attested on the default branch; a tag never
+rebuilds an image. Pull requests build and validate images but hold neither
+`packages: write` nor `id-token: write`.
+
+**Rationale.** Publication is a new authority boundary. Keeping every
+repository-controlled step (Dockerfile `RUN`, prebuilt compilation) in
+unprivileged jobs, and consuming only same-run artifacts with verified digests
+in the privileged ones, keeps provenance bound to one source SHA and workflow.
+
+**Status.** Adopted per the split brief; owner may revisit. Specification:
+[image publication contract](proposed/image-publication-contract.md).
+
+**Must not be reintroduced without owner approval:** publishing from a pull
+request or fork event, a privileged job that checks out or runs repository
+code, a release tag that rebuilds instead of promoting, or BuildKit cache
+backends and mounts that hand a credential to the build.
+
