@@ -180,6 +180,75 @@ pub(crate) async fn prepare_physical_initializer(
     nonce: char,
 ) -> Result<i64, HostError> {
     use crate::journal::{
+        AssignedAcquireResult, AssignmentKey, RequestPhysicalReservationResult, ReservationRequest,
+        fixture_storage_provisioning_admission,
+    };
+    use crate::launch::StartPermit;
+
+    const JOB_MEMORY: u64 = 8_589_934_592;
+    let nonce_text = nonce.to_string().repeat(32);
+    let assignment = scope
+        .assignment_identity(AssignmentKey::Remote {
+            kind: "runner".to_owned(),
+            subject: nonce_text,
+        })
+        .await?;
+    let sample = sample_generation_for_test(nonce);
+    let permit = StartPermit::test_fixture_with_engine_id(&sample, TEST_ENGINE_ID);
+    let sample_generation_id = permit.sample_generation_id().to_owned();
+    let docker_root_digest = permit.docker_root_digest().to_owned();
+    let admission = fixture_storage_provisioning_admission(&permit)?;
+    let request = acquired_physical_fixture_request(scope).await?;
+    let result = scope
+        .try_reserve_and_claim_request_acquire(
+            ReservationRequest {
+                assignment: &assignment,
+                engine_id: TEST_ENGINE_ID,
+                docker_root_digest: &docker_root_digest,
+                cpu_millicores: 2_000,
+                memory_bytes: JOB_MEMORY,
+                sample_generation_id: &sample_generation_id,
+            },
+            permit,
+            admission,
+            &request,
+        )
+        .await?;
+    let RequestPhysicalReservationResult::AcquireClaimed {
+        reservation_id,
+        intent_id: acquired_intent_id,
+    } = result
+    else {
+        return Err(HostError::Journal);
+    };
+    scope
+        .record_request_acquire(
+            &request,
+            AssignedAcquireResult::Returned(vec![request.request_id().ok_or(HostError::Identity)?]),
+        )
+        .await?;
+    let (intent_id, fresh) = scope.begin_launch(&assignment).await?;
+    if fresh || intent_id != acquired_intent_id {
+        return Err(HostError::Journal);
+    }
+    provisioning::prepare_initializer_state(
+        scope,
+        assignment,
+        nonce,
+        reservation_id,
+        intent_id,
+        docker_root_digest,
+        sample_generation_id,
+    )
+    .await?;
+    Ok(reservation_id)
+}
+
+pub(crate) async fn prepare_legacy_physical_initializer(
+    scope: &ConnectionJournal,
+    nonce: char,
+) -> Result<i64, HostError> {
+    use crate::journal::{
         AssignmentKey, ReservationRequest, ReservationResult,
         fixture_storage_provisioning_admission,
     };

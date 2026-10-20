@@ -75,7 +75,7 @@ async fn reserve_handoff_fixture(
     nonce: char,
 ) -> Result<HandoffFixtureSetup, HostError> {
     use crate::journal::{
-        AssignmentKey, ReservationRequest, ReservationResult,
+        AssignedAcquireResult, AssignmentKey, RequestPhysicalReservationResult, ReservationRequest,
         fixture_storage_provisioning_admission,
     };
     use crate::launch::StartPermit;
@@ -91,8 +91,9 @@ async fn reserve_handoff_fixture(
     let sample_generation_id = permit.sample_generation_id().to_owned();
     let docker_root_digest = permit.docker_root_digest().to_owned();
     let admission = fixture_storage_provisioning_admission(&permit)?;
+    let request = helpers::acquired_physical_fixture_request(scope).await?;
     let reservation = scope
-        .try_reserve_with_provisioning(
+        .try_reserve_and_claim_request_acquire(
             ReservationRequest {
                 assignment: &assignment,
                 engine_id: helpers::TEST_ENGINE_ID,
@@ -103,13 +104,24 @@ async fn reserve_handoff_fixture(
             },
             permit,
             admission,
+            &request,
         )
         .await?;
-    let ReservationResult::Reserved { reservation_id } = reservation else {
+    let RequestPhysicalReservationResult::AcquireClaimed {
+        reservation_id,
+        intent_id: acquired_intent_id,
+    } = reservation
+    else {
         return Err(HostError::Journal);
     };
+    scope
+        .record_request_acquire(
+            &request,
+            AssignedAcquireResult::Returned(vec![request.request_id().ok_or(HostError::Identity)?]),
+        )
+        .await?;
     let (intent_id, fresh) = scope.begin_launch(&assignment).await?;
-    if fresh {
+    if fresh || intent_id != acquired_intent_id {
         return Err(HostError::Journal);
     }
     Ok(HandoffFixtureSetup {

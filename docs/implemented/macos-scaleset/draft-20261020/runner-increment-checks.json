@@ -1419,5 +1419,28 @@
     "review_sha256": "8dcf6ccf21a434237569ac6d13cbb934bc26fcbbdcd9649964ebcdcf8db4c05f",
     "language_reviewer": "helper_language_review",
     "scope": "The bootstrap fixture requires no initializer wait. The full composition fixture requires one wait after the runner starts. Full runner tests remain necessary."
+  },
+  "storage_initializer_fixtures": {
+    "source_base": "e7059ca5284f068bd47fd8946e18f8be7a4443e8",
+    "author": "container_metadata_repair",
+    "reviewer": "runner_context_review",
+    "checks": [
+      {
+        "result": "PASS",
+        "tests": 15,
+        "log": "shipping-storage-init-fixtures-20261020.log",
+        "sha256": "fa21df18d475e2c839e6f123a596f68b77a956bb228e32129705caf85337e22b",
+        "run_id": "2c8fa2e1-7ce5-4011-952a-844e6dbb135e"
+      },
+      {
+        "result": "PASS",
+        "tests": 1,
+        "log": "shipping-storage-init-identity-20261020.log",
+        "sha256": "9d4fbcb91fc3a62dad05f127f59293aea66924aacc34270d548528a6fa159ae0",
+        "run_id": "41c29b0f-0a10-4878-a81c-c740e0554aa9"
+      }
+    ],
+    "scope": "The fixtures use acquired requests and current physical attempts. The two historical cleanup tests keep their failure assertions.",
+    "remaining": "Full source gates and live installation remain necessary."
   }
 }

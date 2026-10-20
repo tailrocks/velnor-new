@@ -3,7 +3,7 @@ use crate::journal::Journal;
 
 use super::admission::JOB_LIMIT;
 use super::helpers::{
-    Scratch, binding, created_scope, prepare_physical_initializer, provision_physical_intent,
+    Scratch, binding, created_scope, prepare_legacy_physical_initializer, provision_physical_intent,
 };
 
 async fn add_excess_attachment(journal: &Journal, reservation_id: i64) -> Result<usize, HostError> {
@@ -52,7 +52,7 @@ async fn cleanup_identity_requires_a_bound_held_reservation_and_reads_exact_owne
         .await?;
     let scope = created_scope(&journal, &binding("cleanup-identity", 1_401)?, 2_401).await?;
 
-    let unbound = prepare_physical_initializer(&scope, 'c').await?;
+    let unbound = prepare_legacy_physical_initializer(&scope, 'c').await?;
     assert!(scope.storage_cleanup_identity(unbound).await?.is_none());
 
     let provisioned = provision_physical_intent(&scope, 'd').await?;
