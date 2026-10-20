@@ -60,3 +60,4 @@
 | Repository binding | A digest of one repository connection and its source policy. |
 | Policy generation | A positive integer that identifies one policy version. |
 | JIT configuration | Configuration data that registers one runner for one job. |
+| Parser | Software that reads input data and checks its structure. |

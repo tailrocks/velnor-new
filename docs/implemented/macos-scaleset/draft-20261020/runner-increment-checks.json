@@ -697,7 +697,7 @@
       "nextest_run": "c28d4450-8d96-4607-82b4-ef05988c8d02",
       "log": "parser-device-shipping-final-20261020.log",
       "log_sha256": "7ee89311aacf7db6a14a975458b92dd7defd82aee7c20ba9259d47435e3bc9d4",
-      "scope": "The tests now construct unequal device numbers. Production parser checks did not change.",
+      "scope": "The tests use unequal device numbers. They do not change the production parser.",
       "author": "/root/native_intake_composition",
       "reviewer": "/root"
     },
