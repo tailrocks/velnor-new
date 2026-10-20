@@ -111,6 +111,42 @@
       "log_sha256": "d71a5e7998a8c323d3304876da9d0b7c4669780fb05503a8cf05b2c572ba2e6b",
       "author": "/root",
       "reviewer": "/root/bounded_integration_review"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "1bef130648762d64f76216397daef323cb0c5881",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host --lib -E 'test(session) | test(channel_record) | test(request_lifecycle)'",
+      "exit_status": 0,
+      "nextest_run": "c75703c4-bccc-4771-9808-91cfb99c7f4b",
+      "passed": 139,
+      "log": "file-cap-shipping-20261020.log",
+      "log_sha256": "e45b626d19890ffdf69020c3d9e2a5f8661b69796d61dd882140929df8196a62",
+      "author": "/root",
+      "reviewer": "/root/execution_source_security_review"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "48658d022681fa2bf91171012a79c2a2b1b5df4d",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-resource-probe",
+      "exit_status": 0,
+      "nextest_run": "ac8ce1b8-1380-4304-bb13-4c67a1a2d546",
+      "passed": 79,
+      "log": "publication-probe-shipping-20261020.log",
+      "log_sha256": "ace29c03f27d8071515ee326b6e1f90028e9d63e664359162d0db62fa3ea3a53",
+      "author": "/root",
+      "reviewer": "/root/bounded_integration_review"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "b0cf4e84089204e3f755fadbb6b0eff85279b7b4",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host --lib -E 'test(launch::resource_probe)'",
+      "exit_status": 0,
+      "nextest_run": "d8926b65-f8bb-4594-bbe7-479a9bf86cc9",
+      "passed": 140,
+      "log": "record-cap-shipping-20261020.log",
+      "log_sha256": "1ba78abeb7d6c55dedfa6905494c28eadeba7eeca73417a65ff982e78043d54c",
+      "author": "/root",
+      "reviewer": "/root"
     }
   ],
   "broader_pair_check": {
