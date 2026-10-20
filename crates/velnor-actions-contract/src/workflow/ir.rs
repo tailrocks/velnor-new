@@ -146,6 +146,9 @@ pub struct Job {
     /// Optional protected environment bound to this job.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub environment: Option<String>,
+    /// Catalog service containers started beside the job.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub services: Vec<super::services::ServiceContainer>,
     /// Ordered steps.
     pub steps: Vec<Step>,
 }

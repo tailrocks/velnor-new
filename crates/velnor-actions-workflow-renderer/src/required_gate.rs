@@ -36,6 +36,7 @@ pub(crate) fn insert_required_gate(jobs: &mut BTreeMap<String, Job>) -> Result<(
         crate::steps::shell_step(GATE_STEP_NAME, vec!["false".to_owned()], BTreeMap::new())?;
     step.condition = Some(REQUIRED_GATE_FAIL_CONDITION.to_owned());
     let gate = Job {
+        services: Vec::new(),
         display_name: REQUIRED_DISPLAY_NAME.to_owned(),
         runs_on: verdict.runs_on.clone(),
         check_runner: None,

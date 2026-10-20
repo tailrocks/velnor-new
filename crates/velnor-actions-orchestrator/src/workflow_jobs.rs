@@ -122,6 +122,7 @@ pub(crate) fn plan_job(
     // Optional writes follow planning; the renderer inserts Publish plan first.
     steps.extend(cached.save);
     Ok(Job {
+        services: Vec::new(),
         display_name: "Plan".to_owned(),
         runs_on: label.to_owned(),
         check_runner: None,
@@ -164,6 +165,7 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
             })?;
     lint.role = Some(StepRole::Actionlint);
     Ok(Job {
+        services: Vec::new(),
         display_name: LINT_DISPLAY_NAME.to_owned(),
         runs_on: label.to_owned(),
         check_runner: None,
@@ -212,6 +214,7 @@ pub(crate) fn final_job(
     steps.push(request_step(MERGE_OPERATION)?);
     steps.push(merge_step());
     Ok(Job {
+        services: Vec::new(),
         display_name: FINAL_DISPLAY_NAME.to_owned(),
         runs_on: label.to_owned(),
         check_runner: None,
