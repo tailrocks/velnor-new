@@ -116,8 +116,8 @@ not assume that Docker's runtime image ID always equals the config digest.
 ### Implemented provider (source only, unqualified)
 
 - **Build identity.** `velnor-runner-host`'s build script reads
-  `VELNOR_SOURCE_SHA` (40 lowercase hex) and
-  `VELNOR_ATTESTATION_HELPER_SHA256` (64 lowercase hex) and writes them into
+  `VELNOR_RUNNER_BUILD_SOURCE_SHA` (40 lowercase hex) and
+  `VELNOR_RUNNER_BUILD_HELPER_SHA256` (64 lowercase hex) and writes them into
   `OUT_DIR/compile_identity.rs`, which `compile_identity.rs` includes. Both or
   neither must be set; one alone, or a malformed value, fails the build. With
   neither, the identity is `None` and `provider_for_build` in
