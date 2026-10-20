@@ -280,9 +280,14 @@ fn render_job(
             fetch_roots,
             policy == WorkflowPolicy::VelnorRepositoryV1 && needs_validators,
         );
+        let all_features = model
+            .obligations
+            .iter()
+            .any(|obligation| obligation.run.iter().any(|arg| arg == "--all-features"));
         steps.extend(crate::source_prep::fetch_steps_for_crate(
             catalog,
             &scoped_roots,
+            all_features,
         )?);
     }
     steps.extend(crate::workflow::wire_w1::maybe_task_cache_steps(

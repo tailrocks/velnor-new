@@ -86,6 +86,9 @@ pub struct RustTaskIdentityExtension {
     pub targets: Vec<String>,
     /// Enabled features, sorted.
     pub features: Vec<String>,
+    /// Whether Cargo all-features mode is active; omitted when false.
+    #[serde(skip_serializing_if = "is_false")]
+    pub all_features: bool,
     /// Rust target and profile.
     pub target: String,
     /// Compile driver plus test runner (`driver+runner`).
@@ -144,6 +147,8 @@ pub struct ExtensionInputs<'a> {
     pub targets: &'a [String],
     /// Enabled features.
     pub features: &'a [String],
+    /// Whether Cargo all-features mode is active.
+    pub all_features: bool,
     /// Rust target and profile.
     pub target: &'a str,
     /// Compile driver.
@@ -222,6 +227,7 @@ impl RustTaskIdentityExtension {
             graph_digest: inputs.graph_digest.to_owned(),
             targets: sorted_unique(inputs.targets),
             features: sorted_unique(inputs.features),
+            all_features: inputs.all_features,
             target: inputs.target.to_owned(),
             driver: format!("{}+{}", inputs.driver.as_str(), inputs.runner.as_str()),
             compile_driver: inputs.driver,
@@ -241,6 +247,14 @@ impl RustTaskIdentityExtension {
             declared_inputs: sorted_unique(inputs.declared_inputs),
         }
     }
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if requires a borrowed boolean"
+)]
+fn is_false(value: &bool) -> bool {
+    !value
 }
 
 /// Sorted deduped copy for identity stability.

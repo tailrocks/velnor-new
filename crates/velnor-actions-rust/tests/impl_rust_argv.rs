@@ -8,6 +8,7 @@ use velnor_actions_rust::{CompileDriver, Evidence, EvidenceStrength, NextestProf
 
 fn group(kind: TaskKind) -> TaskGroup {
     TaskGroup {
+        all_features: false,
         task_id: "t".to_owned(),
         package_id: "p".to_owned(),
         package_name: "demo".to_owned(),
@@ -199,8 +200,11 @@ fn cargo_kinds_carry_features_without_separator() -> Result<(), ContractError> {
     Ok(())
 }
 
+#[path = "impl_rust_argv/all_features.rs"]
+mod all_features;
+
 #[test]
-fn payloads_never_emit_all_features() -> Result<(), ContractError> {
+fn default_mode_payloads_never_emit_all_features() -> Result<(), ContractError> {
     let kinds = [
         TaskKind::Fmt,
         TaskKind::Clippy,

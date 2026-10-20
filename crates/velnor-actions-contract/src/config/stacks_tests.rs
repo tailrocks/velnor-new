@@ -50,12 +50,58 @@ fn target_grammar_accepts_host_and_triples_only() {
 fn hostile_target_fails_validation() {
     let mut stack = RustStackConfig::default_config();
     stack.configurations = vec![RustConfiguration {
+        all_features: false,
         name: "default".to_owned(),
         features: Vec::new(),
         target: "${{ secrets.CARGO_REGISTRY_TOKEN }}".to_owned(),
     }];
     let err = stack.validate("config.toml").expect_err("PoC target fails");
     assert!(err.to_string().contains("bad_target"), "{err}");
+}
+
+#[test]
+fn omitted_all_features_preserves_existing_configuration_bytes() {
+    let existing = r#"{"name":"default","features":["default"],"target":"host"}"#;
+    let config: RustConfiguration = serde_json::from_str(existing).expect("existing config");
+    assert!(!config.all_features);
+    assert_eq!(serde_json::to_string(&config).expect("serialize"), existing);
+}
+
+#[test]
+fn clippy_all_features_defaults_off_and_is_omitted_from_serialization() {
+    let stack = RustStackConfig::default_config();
+    assert!(!stack.clippy_all_features);
+    let value = serde_json::to_value(stack).expect("stack JSON");
+    assert_eq!(value.get("clippy_all_features"), None);
+}
+
+#[test]
+fn all_features_rejects_a_conflicting_feature_subset() {
+    for features in [
+        vec!["serde".to_owned()],
+        vec!["default".to_owned(), "serde".to_owned()],
+    ] {
+        let mut stack = RustStackConfig::default_config();
+        stack.configurations[0].all_features = true;
+        stack.configurations[0].features = features;
+        let err = stack
+            .validate("config.toml")
+            .expect_err("conflicting subset");
+        assert!(
+            err.to_string().contains("features_conflict_all_features"),
+            "{err}"
+        );
+    }
+}
+
+#[test]
+fn all_features_accepts_empty_list_and_default_sentinel() {
+    for features in [Vec::new(), vec!["default".to_owned()]] {
+        let mut stack = RustStackConfig::default_config();
+        stack.configurations[0].all_features = true;
+        stack.configurations[0].features = features;
+        assert!(stack.validate("config.toml").is_ok());
+    }
 }
 #[test]
 fn ignore_admission_uses_typed_stack_eligibility() {

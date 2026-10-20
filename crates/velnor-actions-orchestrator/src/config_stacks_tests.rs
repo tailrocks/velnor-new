@@ -35,6 +35,53 @@ fn parallel_target_seeding_loads_only_as_explicit_rust_boolean() {
 }
 
 #[test]
+fn all_features_configuration_is_preserved_during_stack_materialization() {
+    let root = rooted(
+        "schema = 1\n[[stacks.rust.configurations]]\nname = \"all\"\nall_features = true\ntarget = \"host\"\n",
+    );
+    let rust = load_config(root.path())
+        .expect("all-features configuration")
+        .stacks
+        .rust
+        .expect("Rust stack");
+    assert_eq!(rust.configurations[0].name, "all");
+    assert!(rust.configurations[0].all_features);
+    assert_eq!(rust.configurations[0].features, [] as [String; 0]);
+    assert!(!rust.clippy_all_features);
+
+    let root = rooted("schema = 1\n[stacks.rust]\n");
+    let rust = load_config(root.path())
+        .expect("default Rust configuration")
+        .stacks
+        .rust
+        .expect("Rust stack");
+    assert!(!rust.configurations[0].all_features);
+}
+
+#[test]
+fn clippy_all_features_is_an_independent_optional_stack_setting() {
+    let root = rooted("schema = 1\n[stacks.rust]\nclippy_all_features = true\n");
+    let rust = load_config(root.path())
+        .expect("Clippy feature policy")
+        .stacks
+        .rust
+        .expect("Rust stack");
+    assert!(rust.clippy_all_features);
+    assert!(!rust.configurations[0].all_features);
+
+    let root = rooted("schema = 1\n[stacks.rust]\n");
+    let rust = load_config(root.path())
+        .expect("default feature policy")
+        .stacks
+        .rust
+        .expect("Rust stack");
+    assert!(!rust.clippy_all_features);
+
+    let root = rooted("schema = 1\n[stacks.rust]\nclippy_all_features = \"true\"\n");
+    assert!(load_config(root.path()).is_err(), "not a string option");
+}
+
+#[test]
 fn release_section_parses_and_defaults_disabled() {
     // Bind once: the f2a gate textually requires a single production
     // `load_config` call site (prepare.rs); test calls use the alias.
