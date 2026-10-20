@@ -44,6 +44,8 @@ pub(super) struct PositivePollContext<'a> {
     pub(super) state: &'a Path,
     pub(super) release_read_secret: &'a ReleaseReadSecret,
     pub(super) admission_ready: bool,
+    #[cfg(test)]
+    pub(super) start_permit_provider: Option<&'a crate::launch::IntakeCompositionProvider>,
 }
 
 pub(super) async fn poll_zero_header_connection(

@@ -80,6 +80,7 @@ struct ServerState {
         Arc<AsyncMutex<crate::worker::storage_initialization::InitializationTestResponder>>,
     )>,
     runner_create_status: Option<u16>,
+    runner_create_rejected: bool,
     probe_available_bytes: Arc<AtomicU64>,
     initializer_container_id: Option<String>,
     requests: Arc<Mutex<Vec<CapturedRequest>>>,
@@ -117,6 +118,7 @@ impl ServerState {
             images,
             initializer,
             runner_create_status,
+            runner_create_rejected: false,
             probe_available_bytes,
             initializer_container_id: None,
             requests,
@@ -250,9 +252,13 @@ impl ServerState {
     }
 
     fn reply_docker(&mut self, request: &CapturedRequest) -> Result<(u16, Vec<u8>), String> {
-        if let Some(response) = runner_failure::create_rejection(self.runner_create_status, request)
-        {
-            return Ok(response);
+        if !self.runner_create_rejected {
+            if let Some(response) =
+                runner_failure::create_rejection(self.runner_create_status, request)
+            {
+                self.runner_create_rejected = true;
+                return Ok(response);
+            }
         }
         if request.method == "POST"
             && route(request).starts_with("/containers/")

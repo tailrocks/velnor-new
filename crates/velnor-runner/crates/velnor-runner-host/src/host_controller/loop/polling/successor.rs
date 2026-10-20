@@ -15,21 +15,66 @@ pub(super) async fn reserve_and_start(
     if !context.admission_ready || assigned_total <= 0 {
         return Ok(());
     }
-    let scale_set_id = prepared.set_id;
+    let connection_id = &prepared.binding.connection_id;
     let connection = context
         .config
-        .connection(&prepared.binding.connection_id)
+        .connection(connection_id)
         .ok_or(HostError::Config)?;
     let policy = context
         .config
-        .validated_job_authority_policy(&prepared.binding.connection_id)?
+        .validated_job_authority_policy(connection_id)?
         .ok_or(HostError::Config)?;
-    if request.connection_id() != &prepared.binding.connection_id
-        || request.scale_set_id() != scale_set_id
+    if request.connection_id() != connection_id
+        || request.scale_set_id() != prepared.set_id
         || request.request_id().is_none()
     {
         return Err(HostError::Identity);
     }
+    let Some(reservation_id) =
+        reserve_physical_successor(prepared, context, request, assigned_total, policy).await?
+    else {
+        return Ok(());
+    };
+    continue_reserved(
+        prepared,
+        context,
+        connection,
+        request,
+        reservation_id,
+        policy,
+    )
+    .await
+}
+
+async fn reserve_physical_successor(
+    prepared: &PreparedConnection,
+    context: &PositivePollContext<'_>,
+    request: &AssignmentIdentity,
+    assigned_total: i64,
+    policy: &crate::config::ApprovedJobAuthorityPolicy,
+) -> Result<Option<i64>, HostError> {
+    #[cfg(test)]
+    let permit = match context.start_permit_provider {
+        Some(provider) => {
+            crate::launch::start_permit_with_test_provider(
+                context.docker,
+                context.journal,
+                context.config.resource_budget()?,
+                provider,
+            )
+            .await
+        }
+        None => {
+            start_permit(
+                context.docker,
+                context.journal,
+                context.config.resource_budget()?,
+                context.release_read_secret,
+            )
+            .await
+        }
+    };
+    #[cfg(not(test))]
     let permit = start_permit(
         context.docker,
         context.journal,
@@ -38,15 +83,16 @@ pub(super) async fn reserve_and_start(
     )
     .await;
     let Some(permit) = permit else {
-        return Ok(());
+        return Ok(None);
     };
     let assigned_limit = u32::try_from(assigned_total).map_err(|_| HostError::Config)?;
     let physical = physical_reservation(request, &permit)?;
+    let Some(profile) = prepared.scope.current_storage_profile().await? else {
+        return Ok(None);
+    };
     let admission = storage_admission(
         &permit,
-        context.worker_images,
-        context.config.resource_budget()?,
-        assigned_limit,
+        &profile,
         &physical.engine_id,
         &physical.docker_root_digest,
     )?;
@@ -69,18 +115,12 @@ pub(super) async fn reserve_and_start(
             assigned_limit,
         )
         .await?;
-    let PhysicalSuccessorReservationResult::Reserved { reservation_id, .. } = result else {
-        return Ok(());
-    };
-    continue_reserved(
-        prepared,
-        context,
-        connection,
-        request,
-        reservation_id,
-        policy,
-    )
-    .await
+    match result {
+        PhysicalSuccessorReservationResult::Reserved { reservation_id, .. } => {
+            Ok(Some(reservation_id))
+        }
+        _ => Ok(None),
+    }
 }
 
 struct SuccessorReservation {
@@ -128,17 +168,12 @@ fn request_identity(
 
 fn storage_admission(
     permit: &crate::launch::StartPermit,
-    images: &crate::launch::VerifiedWorkerImages,
-    budget: crate::worker::ResourceBudget,
-    max_jobs: u32,
+    profile: &crate::journal::StorageProfile,
     engine_id: &str,
     root_digest: &str,
 ) -> Result<crate::journal::StorageProvisioningAdmission, HostError> {
-    let profile = permit
-        .storage_profile(images, budget, max_jobs)
-        .ok_or(HostError::Identity)?;
     permit
-        .storage_provisioning_admission(&profile, engine_id, root_digest)
+        .storage_provisioning_admission(profile, engine_id, root_digest)
         .ok_or(HostError::Identity)
 }
 
@@ -162,18 +197,9 @@ async fn continue_reserved(
     else {
         return Err(HostError::Ownership);
     };
-    let outcome = crate::launch::recover_acquired_scoped_offer(
-        connection,
-        policy,
-        context.state,
-        &prepared.scope,
-        context.journal,
-        request,
-        candidate.reservation_id(),
-        context.config.resource_budget()?,
-        context.docker,
-        context.release_read_secret,
-        context.selected_engine,
+    let budget = context.config.resource_budget()?;
+    let outcome = recover_candidate(
+        prepared, context, connection, request, policy, &candidate, budget,
     )
     .await;
     match outcome {
@@ -197,4 +223,46 @@ async fn continue_reserved(
             Ok(())
         }
     }
+}
+
+async fn recover_candidate(
+    prepared: &PreparedConnection,
+    context: &PositivePollContext<'_>,
+    connection: &crate::config::RepositoryConnection,
+    request: &AssignmentIdentity,
+    policy: &crate::config::ApprovedJobAuthorityPolicy,
+    candidate: &crate::journal::AcquiredRecoveryCandidate,
+    budget: crate::worker::ResourceBudget,
+) -> Result<crate::launch::steps::ScopedProvisioningOutcome, crate::scale_set::EnsureError> {
+    #[cfg(test)]
+    if let Some(provider) = context.start_permit_provider {
+        return crate::launch::recover_acquired_scoped_offer_with_test_provider(
+            connection,
+            policy,
+            context.state,
+            &prepared.scope,
+            request,
+            candidate.reservation_id(),
+            budget,
+            context.docker,
+            context.journal,
+            context.selected_engine,
+            provider,
+        )
+        .await;
+    }
+    crate::launch::recover_acquired_scoped_offer(
+        connection,
+        policy,
+        context.state,
+        &prepared.scope,
+        context.journal,
+        request,
+        candidate.reservation_id(),
+        budget,
+        context.docker,
+        context.release_read_secret,
+        context.selected_engine,
+    )
+    .await
 }

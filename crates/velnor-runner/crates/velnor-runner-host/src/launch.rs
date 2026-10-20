@@ -32,6 +32,8 @@ pub(crate) use drive::acquire_scoped_offer;
 pub(crate) use drive::authorize_positive_offer_with;
 #[cfg(test)]
 pub(crate) use drive::recover_acquired_scoped_offer_with_test_observation;
+#[cfg(test)]
+pub(crate) use drive::recover_acquired_scoped_offer_with_test_provider;
 pub(crate) use drive::{
     DeferredAuthorizedOffer, DeferredAuthorizedOffers, Drive, GuestAdmission, Lane,
     PositiveOfferAuthorization, Rest, ScopedAdmissionInput, acquire_authorized_scoped_offer,
@@ -47,6 +49,8 @@ pub(crate) use resource_probe::build_pin_status;
 pub(crate) use resource_probe::publication::VerifiedExecutionPublicationCleanup;
 pub(crate) use resource_probe::run_doctor_probe;
 pub(crate) use resource_probe::start_permit;
+#[cfg(test)]
+pub(crate) use resource_probe::start_permit_with_test_provider;
 pub(in crate::launch) use resource_probe::{PreJitCapacityObservation, measure_pre_jit_capacity};
 pub(crate) use resource_probe::{RecoveryObservation, ReleaseReadSecret};
 pub(crate) use session::{

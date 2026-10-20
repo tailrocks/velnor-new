@@ -308,5 +308,7 @@ fn positive_poll_context<'a>(context: &ConnectionPollContext<'a>) -> PositivePol
         state: context.state,
         release_read_secret: context.release_read_secret,
         admission_ready: context.admission_ready,
+        #[cfg(test)]
+        start_permit_provider: None,
     }
 }

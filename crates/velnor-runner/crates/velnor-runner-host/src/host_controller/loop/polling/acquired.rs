@@ -38,6 +38,24 @@ async fn measure_acquired(
     let admin = credentials.link.base().to_owned();
     let admin_token = credentials.link.token().to_owned();
     let mut lane = crate::launch::HostLane::new(&mut credentials.link, admin, None);
+    #[cfg(test)]
+    if let Some(provider) = context.start_permit_provider {
+        return Box::pin(
+            crate::launch::scoped_runtime::prepare_jit_and_measure_scoped_with_provider(
+                crate::launch::steps::ScopedProvisioningOutcome::Acquired(acquired),
+                context.docker,
+                &prepared.scope,
+                context.journal,
+                provider,
+                context.selected_engine,
+                context.worker_images,
+                &mut lane,
+                &admin_token,
+                deadline,
+            ),
+        )
+        .await;
+    }
     Box::pin(
         crate::launch::scoped_runtime::prepare_jit_and_measure_scoped(
             crate::launch::steps::ScopedProvisioningOutcome::Acquired(acquired),

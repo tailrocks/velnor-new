@@ -259,7 +259,26 @@ fn volume_response(state: &ApiState, path: &str) -> Result<(u16, String), String
 }
 
 fn create_response(state: &mut ApiState, body: &[u8]) -> Result<(u16, String), String> {
-    state.create_config = Some(serde_json::from_slice(body).map_err(|error| error.to_string())?);
+    let config: Value = serde_json::from_slice(body).map_err(|error| error.to_string())?;
+    for mount in config["HostConfig"]["Mounts"]
+        .as_array()
+        .ok_or_else(|| "Initializer mounts are absent.".to_owned())?
+    {
+        let target = mount["Target"]
+            .as_str()
+            .ok_or_else(|| "Initializer mount target is absent.".to_owned())?;
+        let source = mount["Source"]
+            .as_str()
+            .ok_or_else(|| "Initializer mount source is absent.".to_owned())?;
+        match target {
+            "/velnor/init/home" => state.home_volume = source.to_owned(),
+            "/velnor/init/work" => state.work_volume = source.to_owned(),
+            "/velnor/init/metadata" => state.metadata_volume = source.to_owned(),
+            _ => return Err("Initializer mount target is outside the fixture.".to_owned()),
+        }
+    }
+    state.create_config = Some(config);
+    state.lifecycle = ContainerLifecycle::Created;
     let operation = state
         .create_config
         .as_ref()

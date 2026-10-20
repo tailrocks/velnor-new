@@ -955,6 +955,33 @@
         "log_sha256": "d51f8ecdd5e9ee24cd101328a9d2de629a6baf9c73a1d7823db62dd8f78cc9a0"
       },
       "hook_repair": "Keep test-only volume exports under cfg(test)."
+    },
+    {
+      "result": "PASS",
+      "base_commit": "e58f16846e40843c6a55ea4251b97cde3141b2b9",
+      "change": "Use a new physical attempt for an acquired request after recovery.",
+      "source_manifest": "native-prejit-successor-6b-port-final-manifest.json",
+      "source_manifest_sha256": "40b70327ac7406f4a09b801719e2acb0396e496dc64774e8bce60aefa6f01adb",
+      "passed": 23,
+      "nextest_run": "0bb7a8fc-f4dd-4b4a-83a7-47efab36bd52",
+      "exit_status": 0,
+      "log": "shipping-successor-focused-20261020.log",
+      "log_sha256": "be54c503b394933e76b0e17e8d96ed64d3b2e9ad265ee41e5de6aeaa869669d5",
+      "author": "/root/grouped_source_evidence",
+      "reviewer": "/root/execution_source_security_review",
+      "limits": "The component test uses an 8 MiB thread stack. These checks do not prove a live installation.",
+      "integration_changes": [
+        "Keep the unused export removal in launch.rs.",
+        "Use the format from the shipping workspace."
+      ],
+      "post_hook_check": {
+        "result": "PASS",
+        "passed": 3,
+        "nextest_run": "7209e179-42f5-43b0-907b-3850531e5ef8",
+        "exit_status": 0,
+        "log": "shipping-successor-post-hook-20261020.log",
+        "log_sha256": "b73c9fef5a10306d2f8296cfd725a671701443013970381ecb2299ed2d930ce3"
+      }
     }
   ],
   "broader_pair_check": {

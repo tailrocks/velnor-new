@@ -17,6 +17,13 @@ impl BootstrapSetup {
     ) -> Result<Self, String> {
         let fixture = Fixture::open_with_engine("native-bootstrap-pair", ENGINE_ID).await?;
         configure_capacity(&fixture).await?;
+        let authority = crate::config::HostConfig::test_with_job_authority_policy(&fixture.binding)
+            .map_err(|error| error.to_string())?;
+        fixture
+            .scope
+            .install_job_authority_policy(&authority)
+            .await
+            .map_err(|error| error.to_string())?;
         let permit = StartPermit::test_fixture_with_engine_and_available_memory(
             &"a".repeat(32),
             ENGINE_ID,

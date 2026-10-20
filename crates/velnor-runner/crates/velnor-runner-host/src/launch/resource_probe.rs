@@ -39,10 +39,16 @@ pub(in crate::launch) use record::http_fixture::canonical_logs_response;
 mod recover;
 mod sample;
 #[cfg(test)]
+mod test_provider;
+#[cfg(test)]
 pub(crate) use intake_composition::IntakeCompositionProvider;
 #[cfg(test)]
 pub(in crate::launch) use intake_composition::intake_composition_image_inspect;
 pub(in crate::launch) use sample::retained_tmpfs_bytes as retained_tmpfs_memory_bytes;
+#[cfg(test)]
+pub(crate) use test_provider::{
+    recovery_observation_with_provider, start_permit_with_test_provider,
+};
 
 pub(in crate::launch) use cleanup_observer::{
     CleanupObserverContext, VerifiedCleanupObserverRecord, observe_cleanup_binding,

@@ -1,10 +1,13 @@
 //! Prepare one acquired job through measured storage binding.
 
 mod authorization;
+mod binding;
 mod channel_outcome;
 mod jit;
 mod provider_entry;
 mod registry;
+#[cfg(test)]
+mod test_provider;
 
 #[cfg(test)]
 #[path = "scoped_runtime/stale_acquired_tests.rs"]
@@ -16,6 +19,7 @@ pub(crate) use authorization::{
     AuthorizedScopedExecution, PendingScopedExecution, authorize_started_execution,
     prepare_listener,
 };
+use binding::{bind_started, cleanup_failed_pair};
 pub(crate) use jit::{
     ChannelReadyBootstrap, PendingChannelBootstrap, PendingJitBootstrap, RunnerReadyBootstrap,
     create_and_bind,
@@ -24,6 +28,8 @@ pub(crate) use provider_entry::prepare_and_bind_scoped;
 #[cfg(test)]
 pub(in crate::launch) use provider_entry::prepare_and_bind_scoped_with_test_provider;
 pub(crate) use registry::RunnerReadyRegistry;
+#[cfg(test)]
+pub(crate) use test_provider::prepare_jit_and_measure_scoped_with_provider;
 
 use bollard::Docker;
 use std::time::Instant;
@@ -147,10 +153,14 @@ async fn prepare_and_bind_scoped_with_provider<P: ImageProvider>(
     engine: &SelectedEngineContext,
     images: &VerifiedWorkerImages,
 ) -> Result<ScopedRuntimeOutcome, HostError> {
-    let Some(prepared) =
-        super::bootstrap::adapter::prepare_acquired(outcome, docker, scoped, engine, images)
-            .await?
-    else {
+    let prepared =
+        match super::bootstrap::adapter::prepare_acquired(outcome, docker, scoped, engine, images)
+            .await
+        {
+            Ok(prepared) => prepared,
+            Err(error) => return Err(error),
+        };
+    let Some(prepared) = prepared else {
         return Ok(ScopedRuntimeOutcome::NoStart);
     };
     prepare_started_and_bound(prepared, docker, scoped, host, provider, engine, images).await
@@ -200,7 +210,7 @@ where
 }
 
 async fn prepare_started_and_bound<P: ImageProvider>(
-    mut prepared: PreparedAcquiredBootstrap,
+    prepared: PreparedAcquiredBootstrap,
     docker: &Docker,
     scoped: &ConnectionJournal,
     host: &Journal,
@@ -208,57 +218,19 @@ async fn prepare_started_and_bound<P: ImageProvider>(
     engine: &SelectedEngineContext,
     images: &VerifiedWorkerImages,
 ) -> Result<ScopedRuntimeOutcome, HostError> {
+    let StartedPairPreparation {
+        mut prepared,
+        network,
+        started,
+    } = match prepare_network_and_started_pair(
+        prepared, docker, scoped, host, provider, engine, images,
+    )
+    .await
+    {
+        Ok(preparation) => preparation,
+        Err(pending) => return Ok(pending),
+    };
     let reservation_id = prepared.acquired().reservation_id();
-    let Some(initializer) = prepared.storage().pending_initialization() else {
-        return Ok(pending(prepared, None, None, None, HostError::Journal));
-    };
-    let metadata_handoff = initializer.metadata_handoff();
-    let network = match super::bootstrap::create_owned_network(
-        docker,
-        scoped,
-        engine,
-        reservation_id,
-    )
-    .await
-    {
-        Ok(network) => network,
-        Err(error) => return Ok(pending(prepared, None, None, None, error)),
-    };
-    let started = match super::bootstrap::start_bootstrap_pair(
-        &prepared,
-        &network,
-        metadata_handoff,
-        initializer,
-        docker,
-        scoped,
-        engine,
-        images,
-    )
-    .await
-    {
-        Ok(started) => started,
-        Err(failure) => {
-            let (error, pending_pair) = failure.into_parts();
-            let cleaned = super::bootstrap::remove_bootstrap_after_terminal_failure(
-                docker,
-                scoped,
-                host,
-                engine,
-                images,
-                reservation_id,
-                provider,
-            )
-            .await
-            .unwrap_or(false);
-            return Ok(pending(
-                prepared,
-                Some(network),
-                None,
-                if cleaned { None } else { pending_pair },
-                error,
-            ));
-        }
-    };
     let initialization = match crate::worker::storage_initialization::finish_after_pair_mounts(
         docker,
         scoped,
@@ -309,53 +281,72 @@ async fn prepare_started_and_bound<P: ImageProvider>(
     .await
 }
 
-async fn bind_started<P: ImageProvider>(
+struct StartedPairPreparation {
     prepared: PreparedAcquiredBootstrap,
     network: RecordedStorageNetwork,
     started: StartedBootstrapPair,
-    metadata: VerifiedMetadataInitialization,
-    initialization: VerifiedStorageInitializationReady,
+}
+
+async fn prepare_network_and_started_pair<P: ImageProvider>(
+    prepared: PreparedAcquiredBootstrap,
     docker: &Docker,
     scoped: &ConnectionJournal,
     host: &Journal,
     provider: &P,
     engine: &SelectedEngineContext,
     images: &VerifiedWorkerImages,
-) -> Result<ScopedRuntimeOutcome, HostError> {
-    let binding = match super::bootstrap::observe_storage_resources_with_provider(
+) -> Result<StartedPairPreparation, ScopedRuntimeOutcome> {
+    let reservation_id = prepared.acquired().reservation_id();
+    let Some(initializer) = prepared.storage().pending_initialization() else {
+        return Err(pending(prepared, None, None, None, HostError::Journal));
+    };
+    let network = match super::bootstrap::create_owned_network(
         docker,
         scoped,
-        host,
-        provider,
         engine,
-        images,
-        &prepared,
-        &started,
-        &initialization,
+        reservation_id,
     )
     .await
     {
-        Ok(binding) => binding,
-        Err(error) => {
-            return Ok(pending(prepared, Some(network), Some(started), None, error));
+        Ok(network) => network,
+        Err(error) => return Err(pending(prepared, None, None, None, error)),
+    };
+    let started = match super::bootstrap::start_bootstrap_pair(
+        &prepared,
+        &network,
+        initializer.metadata_handoff(),
+        initializer,
+        docker,
+        scoped,
+        engine,
+        images,
+    )
+    .await
+    {
+        Ok(started) => started,
+        Err(failure) => {
+            let (error, pending_pair) = failure.into_parts();
+            return Err(cleanup_failed_pair(
+                prepared,
+                network,
+                error,
+                pending_pair,
+                docker,
+                scoped,
+                host,
+                provider,
+                engine,
+                images,
+                reservation_id,
+            )
+            .await);
         }
     };
-    let guest_boot_id = binding.guest_boot_id().to_owned();
-    if let Err(error) = scoped
-        .bind_storage_resources(prepared.acquired().reservation_id(), &binding)
-        .await
-    {
-        return Ok(pending(prepared, Some(network), Some(started), None, error));
-    }
-    Ok(ScopedRuntimeOutcome::Bound(BoundScopedBootstrap {
+    Ok(StartedPairPreparation {
         prepared,
         network,
         started,
-        metadata,
-        initialization,
-        binding,
-        guest_boot_id,
-    }))
+    })
 }
 
 fn pending(

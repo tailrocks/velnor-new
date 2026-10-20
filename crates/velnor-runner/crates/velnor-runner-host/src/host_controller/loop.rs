@@ -18,6 +18,9 @@ mod polling;
 mod setup;
 #[path = "loop/state.rs"]
 mod state;
+#[cfg(test)]
+#[path = "loop/successor_recovery_tests.rs"]
+mod successor_recovery_tests;
 #[path = "loop/transitions.rs"]
 mod transitions;
 
