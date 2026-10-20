@@ -50,7 +50,10 @@ pub(super) async fn collect_owned_cgroups<P: ImageProvider>(
     let before = info(docker, &initial).await?;
     let (engine_id, root, _, _) = bind_info(&before, journal, &initial).await?;
     if let Some(row) = active {
-        recover::active(docker, journal, &before, &root, &initial, row).await?;
+        Box::pin(recover::active(
+            docker, journal, &before, &root, &initial, row,
+        ))
+        .await?;
     }
     let Some(candidate) = provider
         .verified_candidate(docker, journal, &engine_id, &before)
@@ -120,7 +123,15 @@ pub(super) async fn recover_doctor_request(
     if engine_id != row.engine_id || root.digest() != row.docker_root_digest {
         return Err(HostError::Identity);
     }
-    recover::active(docker, journal, &current, &root, &deadline, row.clone()).await?;
+    Box::pin(recover::active(
+        docker,
+        journal,
+        &current,
+        &root,
+        &deadline,
+        row.clone(),
+    ))
+    .await?;
     journal
         .finish_doctor_probe_request(
             ticket,
@@ -187,14 +198,14 @@ async fn collect_for_request<P: ImageProvider>(
     let image = verified_image(candidate)?;
     let projection =
         projection(journal, &root, &engine_id, image, &deadline, doctor_ticket).await?;
-    let output = execute::run(
+    let output = Box::pin(execute::run(
         docker,
         journal,
         &projection,
         image_evidence,
         memory_total,
         &deadline,
-    )
+    ))
     .await?;
     let after = info(docker, &deadline).await?;
     if !same_guest(&after, &engine_id, &root, &daemon_architecture)? {

@@ -29,14 +29,20 @@ pub(super) async fn run(
                 .await?;
             return Ok(None);
         }
-        super::lifecycle::recover_doctor_request(docker, journal, ticket).await?;
+        Box::pin(super::lifecycle::recover_doctor_request(
+            docker, journal, ticket,
+        ))
+        .await?;
         return Ok(None);
     }
     let result = async {
         let token = secret.as_provider_token()?;
         let provider = ReleaseImageProvider::from_compiled_source(token, journal)
             .map_err(|_| HostError::Docker)?;
-        super::lifecycle::collect_for_doctor(docker, journal, &provider, ticket).await
+        Box::pin(super::lifecycle::collect_for_doctor(
+            docker, journal, &provider, ticket,
+        ))
+        .await
     }
     .await;
     match result {
