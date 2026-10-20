@@ -11,6 +11,8 @@ mod impl_contract;
 mod impl_contract_conclusions;
 #[path = "impl_contract_crates.rs"]
 mod impl_contract_crates;
+#[path = "impl_contract_fusion_resolver.rs"]
+mod impl_contract_fusion_resolver;
 #[path = "impl_contract_ids.rs"]
 mod impl_contract_ids;
 #[path = "impl_contract_ids_b.rs"]

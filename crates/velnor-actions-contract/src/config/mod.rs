@@ -22,9 +22,10 @@ mod mise;
 pub mod playwright_lock;
 mod preview_policy;
 mod private_sources;
+/// Generated run-time resolver for project-declared versions (hard decision 5).
+mod project_tool_grammar;
 /// Run-time references to project-declared tool versions (hard decision 5).
 pub mod project_tool_refs;
-/// Generated run-time resolver for project-declared versions (hard decision 5).
 pub mod project_tool_resolver;
 mod publish;
 mod publish_npm;
