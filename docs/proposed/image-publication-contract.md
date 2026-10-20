@@ -89,6 +89,13 @@ discovered, the binary needs `required-features`, or the Dockerfile never
 the unprivileged job; BuildKit only sees the staged file, so cargo-chef-in-Docker
 and any credential for private sources stay out of the image build.
 
+When the package's lock closure contains private sources
+([private sources contract](private-sources-contract.md)), the job stages the
+Velnor helper and runs the same mint, fetch and revoke block as a Rust crate
+job, immediately before the Cargo source fetch: the installation token is
+revoked before the compile, the Dockerfile `RUN` steps or any other repository
+step runs. A closure without private sources adds no credential step.
+
 Not yet implemented for this mode: the MBX target cache (plain `cargo` is used),
 and `linux_arm64`. The shared Mise tools cache is qualified only for the Ubuntu
 x86-64 hosted images (runtime identity script, composite prelude and Mise pins);
