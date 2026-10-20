@@ -18,17 +18,17 @@ pub(super) fn config(
     purpose: ResourceProbePurpose,
     request_sha256: &str,
 ) -> ContainerCreateBody {
+    let purpose_config = PurposeConfig::for_purpose(purpose, request_sha256);
     let engine_digest = digest_text(engine_id.as_bytes());
     let mut labels = std::collections::HashMap::new();
     labels.insert("velnor.role".to_owned(), "resource-probe".to_owned());
     labels.insert("velnor.operation".to_owned(), operation_id.to_owned());
     labels.insert("velnor.instance".to_owned(), instance_id.to_owned());
     labels.insert("velnor.engine".to_owned(), engine_digest);
-    if purpose == ResourceProbePurpose::OwnedCgroups {
-        labels.insert(
-            "velnor.probe.purpose".to_owned(),
-            purpose.as_str().to_owned(),
-        );
+    if let Some(label) = purpose_config.purpose_label {
+        labels.insert("velnor.probe.purpose".to_owned(), label.to_owned());
+    }
+    if let Some(request_sha256) = purpose_config.request_sha256 {
         labels.insert("velnor.probe.request".to_owned(), request_sha256.to_owned());
     }
     labels.insert(
@@ -47,17 +47,47 @@ pub(super) fn config(
         entrypoint: None,
         working_dir: None,
         labels: Some(labels),
-        attach_stdin: Some(purpose == ResourceProbePurpose::OwnedCgroups),
-        open_stdin: Some(purpose == ResourceProbePurpose::OwnedCgroups),
-        stdin_once: Some(purpose == ResourceProbePurpose::OwnedCgroups),
+        attach_stdin: Some(purpose_config.attach_stdin),
+        open_stdin: Some(purpose_config.open_stdin),
+        stdin_once: Some(purpose_config.stdin_once),
         attach_stdout: Some(true),
         attach_stderr: Some(false),
         tty: Some(false),
         network_disabled: Some(true),
         host_config: Some(host_config(root)),
-        cmd: (purpose == ResourceProbePurpose::OwnedCgroups)
-            .then(|| vec!["--mode".to_owned(), "owned_container_cgroup".to_owned()]),
+        cmd: purpose_config.cmd,
         ..Default::default()
+    }
+}
+
+struct PurposeConfig<'a> {
+    purpose_label: Option<&'static str>,
+    request_sha256: Option<&'a str>,
+    attach_stdin: bool,
+    open_stdin: bool,
+    stdin_once: bool,
+    cmd: Option<Vec<String>>,
+}
+
+impl<'a> PurposeConfig<'a> {
+    fn for_purpose(purpose: ResourceProbePurpose, request_sha256: &'a str) -> Self {
+        let (purpose_label, accepts_input, mode) = match purpose {
+            ResourceProbePurpose::Capacity => (None, false, None),
+            ResourceProbePurpose::OwnedCgroups => {
+                (Some("owned-cgroups"), true, Some("owned_container_cgroup"))
+            }
+            ResourceProbePurpose::CleanupObserver => {
+                (Some("cleanup-observer"), true, Some("cleanup_observer"))
+            }
+        };
+        Self {
+            purpose_label,
+            request_sha256: purpose_label.map(|_| request_sha256),
+            attach_stdin: accepts_input,
+            open_stdin: accepts_input,
+            stdin_once: accepts_input,
+            cmd: mode.map(|mode| vec!["--mode".to_owned(), mode.to_owned()]),
+        }
     }
 }
 
@@ -97,3 +127,7 @@ fn read_only_bind(source: &str, target: &str) -> Mount {
         ..Default::default()
     }
 }
+
+#[cfg(test)]
+#[path = "container_config/tests.rs"]
+mod tests;

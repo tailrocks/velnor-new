@@ -227,7 +227,7 @@ async fn closed_admission_keeps_available_unacked_and_records_lifecycle() -> Res
     );
     assert_eq!(
         fixture
-            ._journal
+            .journal
             .occupied_reservation_count()
             .await
             .map_err(|error| error.to_string())?,

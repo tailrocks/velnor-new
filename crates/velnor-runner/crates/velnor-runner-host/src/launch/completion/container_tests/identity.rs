@@ -42,6 +42,8 @@ async fn retry_accepts_runner_absent_by_recorded_id_and_name_after_dind_failure(
         transport: &mut transport,
         admin: &admin,
         diagnostics: &diagnostics,
+        native_cleanup: None,
+        selected_engine: None,
     };
 
     let first_result = run_cleanup(&context, &launch, claim).await;
@@ -101,6 +103,8 @@ async fn retry_rejects_a_different_container_at_the_durable_name() -> Result<(),
         transport: &mut transport,
         admin: &admin,
         diagnostics: &diagnostics,
+        native_cleanup: None,
+        selected_engine: None,
     };
     let result = run_cleanup(&context, &launch, claim).await;
     assert_eq!(result, Err(Failure::not_proven("container name identity")));
@@ -134,6 +138,8 @@ async fn diagnostic_capture_failure_keeps_container_and_capacity() -> Result<(),
         transport: &mut transport,
         admin: &admin,
         diagnostics: &diagnostics,
+        native_cleanup: None,
+        selected_engine: None,
     };
 
     let result = run_cleanup(&context, &launch, claim).await;

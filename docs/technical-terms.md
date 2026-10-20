@@ -52,3 +52,4 @@
 | statx | The Linux operation that reads file identity and mount data. |
 | File system ID | The number that identifies a file system. |
 | Device pair | The Linux major and minor device numbers. |
+| Cleanup proof | A record that shows that the job’s Docker and guest resources are not present after cleanup. |

@@ -11,7 +11,7 @@ pub(crate) async fn provision_physical_intent_with_initialization(
             subject: nonce_text.clone(),
         })
         .await?;
-    provision_assignment_with_initialization(scope, assignment, None, nonce, sample_nonce).await
+    provision_assignment_with_initialization(scope, assignment, None, nonce, sample_nonce, None).await
 }
 
 pub(crate) async fn provision_acquired_request_with_initialization(
@@ -53,8 +53,50 @@ pub(crate) async fn provision_acquired_request_with_initialization_for_repositor
             subject: nonce.to_string().repeat(32),
         })
         .await?;
-    provision_assignment_with_initialization(scope, assignment, Some(request), nonce, sample_nonce)
-        .await
+    provision_assignment_with_initialization(
+        scope,
+        assignment,
+        Some(request),
+        nonce,
+        sample_nonce,
+        None,
+    )
+    .await
+}
+
+pub(crate) async fn provision_acquired_request_with_initialization_and_filesystem_digest(
+    scope: &ConnectionJournal,
+    request_id: i64,
+    nonce: char,
+    sample_nonce: char,
+    filesystem_instance_digest: String,
+) -> Result<JobFactsReaderFixture, HostError> {
+    use crate::journal::AssignmentKey;
+
+    let request = scope
+        .assignment_identity(AssignmentKey::AssignedRequest { request_id })
+        .await?;
+    let source = receipt(scope, request_id, request_id + 100, 101).await?;
+    if scope.record_source_authorization(&request, &source).await?
+        != crate::journal::SourceAuthorizationResult::Recorded
+    {
+        return Err(HostError::Journal);
+    }
+    let assignment = scope
+        .assignment_identity(AssignmentKey::Remote {
+            kind: "runner".to_owned(),
+            subject: nonce.to_string().repeat(32),
+        })
+        .await?;
+    provision_assignment_with_initialization(
+        scope,
+        assignment,
+        Some(request),
+        nonce,
+        sample_nonce,
+        Some(filesystem_instance_digest),
+    )
+    .await
 }
 
 async fn provision_assignment_with_initialization(
@@ -63,9 +105,11 @@ async fn provision_assignment_with_initialization(
     request: Option<crate::journal::AssignmentIdentity>,
     nonce: char,
     sample_nonce: char,
+    filesystem_instance_digest: Option<String>,
 ) -> Result<JobFactsReaderFixture, HostError> {
     use crate::journal::{
         ReservationRequest, ReservationResult, fixture_storage_provisioning_admission,
+        fixture_storage_provisioning_admission_with_filesystem_digest,
     };
     use crate::launch::StartPermit;
 
@@ -74,7 +118,13 @@ async fn provision_assignment_with_initialization(
     let permit = StartPermit::test_fixture_with_engine_id(&sample_generation, TEST_ENGINE_ID);
     let sample_generation_id = permit.sample_generation_id().to_owned();
     let docker_root_digest = permit.docker_root_digest().to_owned();
-    let admission = fixture_storage_provisioning_admission(&permit)?;
+    let admission = match filesystem_instance_digest.as_ref() {
+        Some(digest) => fixture_storage_provisioning_admission_with_filesystem_digest(
+            &permit,
+            digest.clone(),
+        )?,
+        None => fixture_storage_provisioning_admission(&permit)?,
+    };
     let physical = ReservationRequest {
         assignment: &assignment,
         engine_id: TEST_ENGINE_ID,
@@ -114,16 +164,31 @@ async fn provision_assignment_with_initialization(
     if fresh {
         return Err(HostError::Journal);
     }
-    let artifacts = Box::pin(provisioning::provision_with_initialization(
-        scope,
-        assignment,
-        nonce,
-        reservation_id,
-        intent_id,
-        docker_root_digest,
-        sample_generation_id,
-    ))
-    .await?;
+    let artifacts = match filesystem_instance_digest {
+        Some(digest) => Box::pin(
+            provisioning::provision_with_initialization_and_filesystem_digest(
+                scope,
+                assignment,
+                nonce,
+                reservation_id,
+                intent_id,
+                docker_root_digest,
+                sample_generation_id,
+                digest,
+            ),
+        )
+        .await?,
+        None => Box::pin(provisioning::provision_with_initialization(
+            scope,
+            assignment,
+            nonce,
+            reservation_id,
+            intent_id,
+            docker_root_digest,
+            sample_generation_id,
+        ))
+        .await?,
+    };
     let provisioned = artifacts.provisioned;
     Ok(JobFactsReaderFixture {
         // Physical reservation stays bound to the Remote assignment, while

@@ -52,7 +52,7 @@ async fn timeout_api_loses_to_a_real_completed_event() -> Result<(), HostError> 
     let fixture = crate::journal::request_lifecycle::tests::native_started_intake_fixture().await?;
     fixture.record_started().await?;
     let crate::journal::request_lifecycle::tests::NativeStartedIntakeFixture {
-        _journal: journal,
+        journal,
         scope,
         request_id,
         message_id,

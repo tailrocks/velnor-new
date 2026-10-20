@@ -15,10 +15,11 @@ mod scope;
 mod session;
 pub(super) mod storage;
 
-pub(crate) use completion::ConnectionCompletionInboxEntry;
+pub(crate) use completion::{ConnectionCompletionInboxEntry, NativeCompletionReservation};
 pub(crate) use identity::{AssignmentIdentity, AssignmentKey};
 pub(crate) use reservation::JobFactsPublicationClaim;
 pub(crate) use reservation::ListenerDeliveryClaim;
+pub(crate) use reservation::MetadataSettlementResult;
 
 pub(in crate::journal) async fn reservation_release_ready(
     connection: &turso::Connection,
@@ -42,17 +43,16 @@ pub(crate) use reservation::{
 pub(crate) use reservation::{CreateCommitStage, arm_create_commit_gate};
 #[cfg(test)]
 pub(crate) use reservation::{
-    MetadataSettlementResult, StorageCacheProjection, StorageReservationPlan, StorageRoleCharge,
-};
-#[cfg(test)]
-pub(crate) use reservation::{
     ReservationResult, StorageAdmission, StorageCleanupCgroup, StorageCleanupMount,
     StorageNetworkRecoveryIdentity,
 };
 #[cfg(test)]
+pub(crate) use reservation::{StorageCacheProjection, StorageReservationPlan, StorageRoleCharge};
+#[cfg(test)]
 pub(crate) use reservation::{
     fixture_admission, fixture_profile, fixture_provisioning_profile,
     fixture_storage_provisioning_admission,
+    fixture_storage_provisioning_admission_with_filesystem_digest,
 };
 pub(crate) use runtime::{EngineContext, SourceAuthorizationBinding};
 #[cfg(test)]

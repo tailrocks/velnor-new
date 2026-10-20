@@ -125,6 +125,13 @@ pub(crate) fn fixture_provisioning_profile() -> StorageProfile {
 pub(crate) fn fixture_storage_provisioning_admission(
     permit: &StartPermit,
 ) -> Result<StorageProvisioningAdmission, HostError> {
+    fixture_storage_provisioning_admission_with_filesystem_digest(permit, "a".repeat(64))
+}
+
+pub(crate) fn fixture_storage_provisioning_admission_with_filesystem_digest(
+    permit: &StartPermit,
+    filesystem_instance_digest: String,
+) -> Result<StorageProvisioningAdmission, HostError> {
     let profile = fixture_provisioning_profile();
     let sample = StorageAdmissionSample::new(
         StorageSampleIdentity::new(
@@ -137,7 +144,7 @@ pub(crate) fn fixture_storage_provisioning_admission(
         Instant::now(),
         vec![StoragePoolObservation::new_with_filesystem(
             "1".repeat(64),
-            "a".repeat(64),
+            filesystem_instance_digest,
             StorageMedium::Disk,
             StorageFilesystemKind::Btrfs,
             64_u64 << 30,

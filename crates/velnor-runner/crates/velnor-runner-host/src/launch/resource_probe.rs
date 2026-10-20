@@ -12,11 +12,13 @@ pub(crate) use self::sample::RecoveryObservation;
 pub(crate) use self::sample::{StartObservationWitness, StartPermit};
 pub(in crate::launch) use sample::filesystem_instance_digest;
 
+mod cleanup_observer;
 mod doctor;
 mod execute;
 pub(in crate::launch) use execute::ProbeStartupEvidence;
 mod inspect;
 mod lifecycle;
+mod metadata_settlement;
 mod ops;
 mod owned_cgroups;
 mod projection;
@@ -31,6 +33,17 @@ mod record;
 mod recover;
 mod sample;
 pub(in crate::launch) use sample::retained_tmpfs_bytes as retained_tmpfs_memory_bytes;
+
+pub(in crate::launch) use cleanup_observer::{
+    CleanupObserverContext, VerifiedCleanupObserverRecord, observe_cleanup_binding,
+};
+#[cfg(test)]
+pub(in crate::launch) use cleanup_observer::{
+    CleanupObserverTestProvider, observe_cleanup_binding_with_test_provider,
+};
+pub(in crate::launch) use metadata_settlement::settle_storage_metadata_after_cleanup;
+#[cfg(test)]
+pub(in crate::launch) use metadata_settlement::settle_storage_metadata_after_cleanup_with_test_provider;
 
 pub(crate) use owned_cgroups::{OwnedCgroupSubjects, OwnedContainerSubjects, VerifiedOwnedCgroups};
 pub(crate) use release_secret::ReleaseReadSecret;

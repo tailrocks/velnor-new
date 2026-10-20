@@ -326,6 +326,8 @@ impl Harness {
             transport: &mut self.transport,
             admin: &self.admin,
             diagnostics: &self.diagnostics,
+            native_cleanup: None,
+            selected_engine: None,
         }
     }
 }

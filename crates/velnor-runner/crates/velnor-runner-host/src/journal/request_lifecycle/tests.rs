@@ -30,7 +30,7 @@ mod worker_ready;
 /// A source-authorized request with a durable acquired state and JIT-ready runner.
 pub(crate) struct NativeStartedIntakeFixture {
     pub(crate) _scratch: helpers::Scratch,
-    pub(crate) _journal: crate::journal::Journal,
+    pub(crate) journal: crate::journal::Journal,
     pub(crate) database_path: std::path::PathBuf,
     pub(crate) scope: crate::journal::ConnectionJournal,
     pub(crate) request_id: i64,
@@ -145,7 +145,13 @@ pub(crate) async fn publish_native_fixture_challenge(
 /// Build the durable state required for a native Started message.
 pub(crate) async fn native_started_intake_fixture()
 -> Result<NativeStartedIntakeFixture, crate::error::HostError> {
-    use crate::journal::{CapacityLimits, Journal};
+    native_started_intake_fixture_with_filesystem_digest(None).await
+}
+
+pub(crate) async fn native_started_intake_fixture_with_filesystem_digest(
+    filesystem_instance_digest: Option<String>,
+) -> Result<NativeStartedIntakeFixture, crate::error::HostError> {
+    use crate::journal::{CapacityLimits, Journal, OperationalCapacityLimits};
 
     const REQUEST_ID: i64 = 101;
     const MESSAGE_ID: i64 = 1_501;
@@ -156,24 +162,51 @@ pub(crate) async fn native_started_intake_fixture()
     let scratch = helpers::Scratch::new()?;
     let journal = Journal::open(&scratch.file()).await?;
     journal
-        .configure_capacity(CapacityLimits {
-            jobs: 1,
-            cpu_millicores: 2_000,
-            memory_bytes: 25_769_803_776,
-        })
+        .configure_capacity_with_operational_limits(
+            CapacityLimits {
+                jobs: 1,
+                cpu_millicores: 2_000,
+                memory_bytes: 25_769_803_776,
+            },
+            OperationalCapacityLimits {
+                cpu_millicores: 1_000,
+                memory_bytes: 128 * 1024 * 1024,
+            },
+        )
         .await?;
     let binding = helpers::binding("native-started-intake", REPOSITORY_ID)?;
     let scope = helpers::created_scope(&journal, &binding, SET_ID).await?;
-    let initialized =
+    let initialized = if let Some(digest) = filesystem_instance_digest.as_ref() {
+        helpers::provision_acquired_request_with_initialization_and_filesystem_digest(
+            &scope,
+            REQUEST_ID,
+            'a',
+            'a',
+            digest.clone(),
+        )
+        .await?
+    } else {
         helpers::provision_acquired_request_with_initialization(&scope, REQUEST_ID, 'a', 'a')
-            .await?;
+            .await?
+    };
     let provisioned = &initialized.provisioned;
     let runner = velnor_runner_github::RunnerReference {
         id: 701,
         name: helpers::runner_name('a'),
         runner_scale_set_id: SET_ID,
     };
-    helpers::prepare_jit_and_job_facts(&scope, provisioned, &runner, REQUEST_ID).await?;
+    if let Some(digest) = filesystem_instance_digest.as_deref() {
+        helpers::prepare_jit_and_job_facts_with_filesystem_digest(
+            &scope,
+            provisioned,
+            &runner,
+            REQUEST_ID,
+            digest,
+        )
+        .await?;
+    } else {
+        helpers::prepare_jit_and_job_facts(&scope, provisioned, &runner, REQUEST_ID).await?;
+    }
     let channel = crate::worker::execution_authorization::test_channel_for_ready_job_facts(
         initialized.reservation_id,
         initialized.intent_id,
@@ -198,7 +231,7 @@ pub(crate) async fn native_started_intake_fixture()
 
     Ok(NativeStartedIntakeFixture {
         _scratch: scratch,
-        _journal: journal,
+        journal,
         database_path,
         scope,
         request_id: REQUEST_ID,

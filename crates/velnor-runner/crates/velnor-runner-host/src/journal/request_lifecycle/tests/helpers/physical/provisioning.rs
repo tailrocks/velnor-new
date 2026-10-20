@@ -3,10 +3,10 @@ use crate::journal::connection::ConnectionJournal;
 use crate::journal::{
     AssignmentIdentity, StorageInitializationClaim, VerifiedMetadataInitializationHandoff,
 };
+use crate::worker::WorkerIdentityNames;
 use crate::worker::storage_initialization::{
     ObservedStorageInitialization, VerifiedStorageInitializationReady,
 };
-use crate::worker::WorkerIdentityNames;
 use sha2::{Digest, Sha256};
 
 use super::ProvisionedRunner;
@@ -25,6 +25,7 @@ struct ProvisioningFixture<'a> {
     intent_id: i64,
     docker_root_digest: String,
     sample_generation_id: String,
+    filesystem_instance_digest: String,
 }
 
 pub(crate) struct ProvisionedStorageInitialization {
@@ -74,6 +75,7 @@ pub(super) async fn provision(
         intent_id,
         docker_root_digest,
         sample_generation_id,
+        filesystem_instance_digest: "a".repeat(64),
     }
     .provision()
     .await
@@ -97,6 +99,32 @@ pub(crate) async fn provision_with_initialization(
         intent_id,
         docker_root_digest,
         sample_generation_id,
+        filesystem_instance_digest: "a".repeat(64),
+    }
+    .provision_with_initialization()
+    .await
+}
+
+pub(crate) async fn provision_with_initialization_and_filesystem_digest(
+    scope: &ConnectionJournal,
+    assignment: AssignmentIdentity,
+    nonce: char,
+    reservation_id: i64,
+    intent_id: i64,
+    docker_root_digest: String,
+    sample_generation_id: String,
+    filesystem_instance_digest: String,
+) -> Result<ProvisionedStorageInitialization, HostError> {
+    ProvisioningFixture {
+        scope,
+        engine_id: super::TEST_ENGINE_ID.to_owned(),
+        assignment,
+        nonce: nonce.to_string().repeat(32),
+        reservation_id,
+        intent_id,
+        docker_root_digest,
+        sample_generation_id,
+        filesystem_instance_digest,
     }
     .provision_with_initialization()
     .await
@@ -121,6 +149,7 @@ pub(super) async fn provision_with_nonce(
         intent_id,
         docker_root_digest,
         sample_generation_id,
+        filesystem_instance_digest: "a".repeat(64),
     }
     .provision()
     .await
@@ -145,6 +174,7 @@ pub(crate) async fn provision_with_nonce_and_initialization(
         intent_id,
         docker_root_digest,
         sample_generation_id,
+        filesystem_instance_digest: "a".repeat(64),
     }
     .provision_with_initialization()
     .await
@@ -175,6 +205,7 @@ pub(crate) async fn prepare_bootstrap_start_claim(
         intent_id,
         docker_root_digest,
         sample_generation_id,
+        filesystem_instance_digest: "a".repeat(64),
     };
     let names = WorkerIdentityNames::from_nonce(nonce)?;
     let profile = fixture.profile().await?;
@@ -239,6 +270,7 @@ pub(crate) async fn prepare_initializer_state(
         intent_id,
         docker_root_digest,
         sample_generation_id,
+        filesystem_instance_digest: "a".repeat(64),
     };
     let names = WorkerIdentityNames::from_nonce(&fixture.nonce)?;
     let profile = fixture.profile().await?;
@@ -246,11 +278,11 @@ pub(crate) async fn prepare_initializer_state(
     Ok(())
 }
 
-#[path = "provisioning/setup.rs"]
-mod setup;
-#[path = "provisioning/initializer.rs"]
-mod initializer;
-#[path = "provisioning/storage_objects.rs"]
-mod storage_objects;
 #[path = "provisioning/bootstrap.rs"]
 mod bootstrap;
+#[path = "provisioning/initializer.rs"]
+mod initializer;
+#[path = "provisioning/setup.rs"]
+mod setup;
+#[path = "provisioning/storage_objects.rs"]
+mod storage_objects;

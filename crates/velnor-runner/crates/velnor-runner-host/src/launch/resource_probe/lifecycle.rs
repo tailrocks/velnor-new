@@ -13,8 +13,8 @@ use super::sample::Observation;
 #[path = "lifecycle/support.rs"]
 mod support;
 use super::{execute, recover};
-pub(super) use support::{Deadline, observation};
-use support::{bind_info, guest_capacity, info, projection, same_guest, verified_image};
+pub(super) use support::{Deadline, bind_info, guest_capacity, info, observation, same_guest};
+use support::{projection, verified_image};
 
 const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 

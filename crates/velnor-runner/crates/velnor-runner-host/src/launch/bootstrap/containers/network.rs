@@ -19,7 +19,6 @@ mod create;
 mod remove;
 
 pub(crate) use create::create_owned_network;
-#[cfg(test)]
 pub(crate) use remove::remove_owned_network;
 
 /// Inspected identity of one private network created for a reservation.

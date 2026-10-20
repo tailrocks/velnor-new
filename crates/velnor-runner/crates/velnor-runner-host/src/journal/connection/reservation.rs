@@ -45,7 +45,6 @@ pub(crate) use admission::ReservationResult;
 pub(crate) use limits::{CapacityLimits, OperationalCapacityLimits};
 pub(crate) use provisioning::JobFactsPublicationClaim;
 pub(crate) use provisioning::ListenerDeliveryClaim;
-#[cfg(test)]
 pub(crate) use provisioning::MetadataSettlementResult;
 pub(crate) use provisioning::StorageCleanupObserverWitness;
 pub(crate) use provisioning::{
@@ -80,6 +79,7 @@ pub(crate) use storage_budget::{
 pub(crate) use storage_budget_tests::{
     fixture_admission, fixture_profile, fixture_provisioning_profile,
     fixture_storage_provisioning_admission,
+    fixture_storage_provisioning_admission_with_filesystem_digest,
 };
 
 pub(super) async fn validate_storage_budget_schema(

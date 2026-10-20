@@ -1,5 +1,5 @@
 use super::{
-    fixture_resource_id, ProvisionedRunner, ProvisionedStorageInitialization, ProvisioningFixture,
+    ProvisionedRunner, ProvisionedStorageInitialization, ProvisioningFixture, fixture_resource_id,
 };
 use crate::error::HostError;
 use crate::worker::WorkerIdentityNames;
@@ -58,14 +58,15 @@ impl ProvisioningFixture<'_> {
         let mount_handoff = crate::launch::bootstrap::test_bootstrap_mount_handoff(
             &initialization.handoff,
             &started,
-            &"a".repeat(64),
+            &self.filesystem_instance_digest,
         )?;
         Box::pin(
             self.scope
                 .record_storage_initializer_pair_mounted(&initialization.handoff, &mount_handoff),
         )
         .await?;
-        self.record_initializer_remove(&initialization.helper_id).await?;
+        self.record_initializer_remove(&initialization.helper_id)
+            .await?;
         let final_readiness = self
             .scope
             .metadata_initialization_ready(self.reservation_id)

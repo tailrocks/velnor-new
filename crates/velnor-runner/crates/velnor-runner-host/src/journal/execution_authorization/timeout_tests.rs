@@ -18,7 +18,7 @@ impl From<crate::journal::request_lifecycle::tests::NativeStartedIntakeFixture>
     fn from(fixture: crate::journal::request_lifecycle::tests::NativeStartedIntakeFixture) -> Self {
         let crate::journal::request_lifecycle::tests::NativeStartedIntakeFixture {
             _scratch: scratch,
-            _journal: journal,
+            journal,
             scope,
             request_id,
             channel,

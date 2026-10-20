@@ -1,9 +1,19 @@
 use crate::journal::StorageRole;
 
+mod observer;
 mod production;
+mod request;
+mod runtime;
+mod validation;
 
-/// Proof that the exact engine has no containers or named volumes for this capacity reservation.
-/// It does not show that shared `EngineMetadata` is gone.
+pub(crate) use runtime::{NativeCleanupRuntime, PendingStorageCleanupWitness};
+
+#[cfg(test)]
+#[path = "cleanup/runtime_tests.rs"]
+pub(crate) mod runtime_tests;
+
+/// This type records that the selected engine has no containers or named volumes for this capacity reservation.
+/// The proof does not cover shared `EngineMetadata`.
 pub(crate) struct VerifiedStorageCleanup {
     reservation_id: i64,
     operation_id: i64,

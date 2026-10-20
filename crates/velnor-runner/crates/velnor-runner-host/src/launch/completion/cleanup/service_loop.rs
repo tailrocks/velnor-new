@@ -24,6 +24,8 @@ pub(in crate::launch::completion) fn run(
         mut transport,
         admin,
         diagnostics,
+        native_cleanup,
+        selected_engine,
     } = resources;
     let mut context = Context {
         journal: &journal,
@@ -31,6 +33,8 @@ pub(in crate::launch::completion) fn run(
         transport: &mut transport,
         admin: &admin,
         diagnostics: &diagnostics,
+        native_cleanup: native_cleanup.as_ref(),
+        selected_engine: selected_engine.as_ref(),
     };
     let mut first_failure = None;
     loop {

@@ -1,6 +1,6 @@
 //! Connection binding and session setup used by the controller.
 
-use std::{collections::BTreeMap, path::Path, str};
+use std::{collections::BTreeMap, path::Path, str, sync::Arc};
 
 use bollard::Docker;
 
@@ -9,8 +9,9 @@ use crate::{
     error::HostError,
     journal::{CapacityLimits, EngineContext, Journal, OperationalCapacityLimits},
     launch::{
-        CompletionWorker, SelectedEngineContext, VerifiedWorkerImages, open_connection_session,
-        retained_tmpfs_memory_bytes, scoped_runtime::RunnerReadyRegistry,
+        CompletionWorker, ReleaseReadSecret, SelectedEngineContext, VerifiedWorkerImages,
+        bootstrap::NativeCleanupRuntime, open_connection_session, retained_tmpfs_memory_bytes,
+        scoped_runtime::RunnerReadyRegistry,
     },
     launch_blocking::ListenFault,
     scale_set::{ConnectionSetup, ensure_connection_scale_set},
@@ -75,6 +76,7 @@ pub(super) async fn prepare_active_connections(
     config: &HostConfig,
     selected_engine: &SelectedEngineContext,
     worker_images: &VerifiedWorkerImages,
+    release_read_secret: &Arc<ReleaseReadSecret>,
     docker: &Docker,
 ) -> Result<Vec<PreparedConnection>, ListenFault> {
     let allocations = journal.header_allocations().await?;
@@ -99,7 +101,10 @@ pub(super) async fn prepare_active_connections(
                 selected_engine,
                 worker_images,
                 docker,
-                target,
+                ConnectionLaunchOptions {
+                    release_read_secret,
+                    requested_header_capacity: target,
+                },
             )
             .await?,
         );
@@ -142,7 +147,7 @@ pub(super) async fn prepare_connection(
     selected_engine: &SelectedEngineContext,
     worker_images: &VerifiedWorkerImages,
     docker: &Docker,
-    requested_header_capacity: u32,
+    options: ConnectionLaunchOptions<'_>,
 ) -> Result<PreparedConnection, ListenFault> {
     bind_connection(journal, binding, config, selected_engine).await?;
     let credential = crate::keychain::load_secret(
@@ -168,15 +173,34 @@ pub(super) async fn prepare_connection(
     }
     let guest_image = write_guest_image(state, binding, worker_images)?;
     guest_image.runner_bind(binding, worker_images)?;
+    let native_cleanup = NativeCleanupRuntime::new(
+        docker.clone(),
+        journal.clone(),
+        EngineContext {
+            engine_id: selected_engine.engine_id().to_owned(),
+            endpoint: selected_engine.endpoint().to_owned(),
+            platform: selected_engine.platform().to_owned(),
+        },
+        selected_engine.clone(),
+        worker_images.clone(),
+        Arc::clone(options.release_read_secret),
+    )?;
     let completion = CompletionWorker::start_scoped(
         scoped.clone(),
+        native_cleanup,
         docker.clone(),
+        selected_engine.clone(),
         link.base(),
         link.token().to_owned(),
         state,
     )?;
-    let (session, session_intent, _header_allocation) =
-        open_connection_session(&mut link, set.id, &scoped, requested_header_capacity).await?;
+    let (session, session_intent, _header_allocation) = open_connection_session(
+        &mut link,
+        set.id,
+        &scoped,
+        options.requested_header_capacity,
+    )
+    .await?;
     let assigned_total = session_assigned_total(session.statistics());
     Ok(PreparedConnection {
         binding: binding.clone(),
@@ -204,6 +228,11 @@ pub(super) async fn prepare_connection(
         pending_acquired_recovery: BTreeMap::new(),
         unkeyed_acquired_recovery: Vec::new(),
     })
+}
+
+pub(super) struct ConnectionLaunchOptions<'a> {
+    pub(super) release_read_secret: &'a Arc<ReleaseReadSecret>,
+    pub(super) requested_header_capacity: u32,
 }
 
 #[cfg(test)]

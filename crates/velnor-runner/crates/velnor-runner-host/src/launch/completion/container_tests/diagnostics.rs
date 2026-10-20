@@ -33,6 +33,8 @@ async fn claim_loss_after_capture_prevents_container_delete() -> Result<(), Host
             transport: &mut transport,
             admin: &admin,
             diagnostics: &diagnostics,
+            native_cleanup: None,
+            selected_engine: None,
         };
         let cleanup = run_cleanup(&context, &launch, claim);
         tokio::pin!(cleanup);
@@ -99,6 +101,8 @@ async fn pending_diagnostics_worker_blocks_cleanup_after_containers_are_absent()
             transport: &mut transport,
             admin: &admin,
             diagnostics: &diagnostics,
+            native_cleanup: None,
+            selected_engine: None,
         };
         let stopping = AtomicBool::new(false);
         let mut budget = EffectBudget::new(&stopping);
@@ -117,6 +121,8 @@ async fn pending_diagnostics_worker_blocks_cleanup_after_containers_are_absent()
             transport: &mut transport,
             admin: &admin,
             diagnostics: &diagnostics,
+            native_cleanup: None,
+            selected_engine: None,
         };
         let stopping = AtomicBool::new(false);
         let mut budget = EffectBudget::new(&stopping);
@@ -170,6 +176,8 @@ async fn reopened_diagnostics_reject_partial_capture_before_container_delete()
         transport: &mut transport,
         admin: &admin,
         diagnostics: &diagnostics,
+        native_cleanup: None,
+        selected_engine: None,
     };
 
     let result = run_cleanup(&context, &launch, claim).await;
@@ -233,6 +241,8 @@ async fn partial_file_from_crashed_child_does_not_authorize_cleanup() -> Result<
         transport: &mut transport,
         admin: &admin,
         diagnostics: &diagnostics,
+        native_cleanup: None,
+        selected_engine: None,
     };
 
     let result = run_cleanup(&context, &launch, claim).await;
@@ -288,6 +298,8 @@ async fn delayed_production_capture_returns_before_blocked_diagnostics_io() -> R
         transport: &mut transport,
         admin: &admin,
         diagnostics: &diagnostics,
+        native_cleanup: None,
+        selected_engine: None,
     };
     let stopping = AtomicBool::new(false);
     let mut budget = EffectBudget::new(&stopping);
@@ -356,6 +368,8 @@ async fn home_volume_delete_failure_keeps_capacity_until_cleanup_proof() -> Resu
         transport: &mut transport,
         admin: &admin,
         diagnostics: &diagnostics,
+        native_cleanup: None,
+        selected_engine: None,
     };
     let stopping = AtomicBool::new(false);
     let mut budget = EffectBudget::new(&stopping);

@@ -51,14 +51,17 @@ pub(super) fn verified_image(
     )
 }
 
-pub(super) async fn info(docker: &Docker, deadline: &Deadline) -> Result<SystemInfo, HostError> {
+pub(in crate::launch::resource_probe) async fn info(
+    docker: &Docker,
+    deadline: &Deadline,
+) -> Result<SystemInfo, HostError> {
     deadline
         .docker(docker.info())
         .await?
         .map_err(|_| HostError::Docker)
 }
 
-pub(super) async fn bind_info(
+pub(in crate::launch::resource_probe) async fn bind_info(
     info: &SystemInfo,
     journal: &Journal,
     deadline: &Deadline,
@@ -77,7 +80,9 @@ pub(super) async fn bind_info(
     Ok((engine_id, root, cpu_count, memory_total))
 }
 
-pub(super) fn guest_capacity(info: &SystemInfo) -> Result<(u32, u64), HostError> {
+pub(in crate::launch::resource_probe) fn guest_capacity(
+    info: &SystemInfo,
+) -> Result<(u32, u64), HostError> {
     let cpu_count = u32::try_from(info.ncpu.ok_or(HostError::Docker)?)
         .ok()
         .filter(|value| *value > 0)
@@ -133,7 +138,7 @@ pub(super) async fn projection(
     Ok(projection)
 }
 
-pub(super) fn same_guest(
+pub(in crate::launch::resource_probe) fn same_guest(
     info: &SystemInfo,
     engine_id: &str,
     root: &DockerRoot,

@@ -8,6 +8,23 @@ pub(super) async fn prepare_jit_and_job_facts(
     runner: &velnor_runner_github::RunnerReference,
     request_id: i64,
 ) -> Result<(), HostError> {
+    prepare_jit_and_job_facts_with_filesystem_digest(
+        scope,
+        provisioned,
+        runner,
+        request_id,
+        &"a".repeat(64),
+    )
+    .await
+}
+
+pub(super) async fn prepare_jit_and_job_facts_with_filesystem_digest(
+    scope: &ConnectionJournal,
+    provisioned: &ProvisionedRunner,
+    runner: &velnor_runner_github::RunnerReference,
+    request_id: i64,
+    filesystem_instance_digest: &str,
+) -> Result<(), HostError> {
     use crate::launch::bootstrap::test_job_facts_publication;
 
     let (generation, digest) = scope.test_active_authority_identity().await?;
@@ -52,7 +69,7 @@ pub(super) async fn prepare_jit_and_job_facts(
         0x0102_1994,
         (0, 46, 77),
         46_u64,
-        "a".repeat(64),
+        filesystem_instance_digest.to_owned(),
         true,
     )?;
     scope

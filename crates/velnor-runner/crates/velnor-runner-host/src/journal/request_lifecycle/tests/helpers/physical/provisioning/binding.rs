@@ -12,7 +12,7 @@ impl ProvisioningFixture<'_> {
     ) -> Result<String, HostError> {
         use crate::launch::bootstrap::test_verified_storage_resource_binding;
 
-        let (roles, role_digests) = Self::observed_roles(profile)?;
+        let (roles, role_digests) = self.observed_roles(profile)?;
         let attachments = Self::observed_attachments(profile, runner_id, dind_id, &role_digests)?;
         let cgroups = Self::observed_cgroups(runner_id, dind_id)?;
         let instance_binding_digest = "f".repeat(64);
@@ -56,6 +56,7 @@ impl ProvisioningFixture<'_> {
     }
 
     fn observed_roles(
+        &self,
         profile: &StorageProfile,
     ) -> Result<
         (
@@ -74,7 +75,12 @@ impl ProvisioningFixture<'_> {
         for role in StorageRole::PHYSICAL {
             let limit = profile.role_limit(role)?;
             let pool = profile.pool_limit(limit.pool_id())?;
-            let digest = super::super::role_filesystem_digest(role);
+            let digest = match role {
+                StorageRole::RunnerRoot | StorageRole::DindRoot | StorageRole::EngineMetadata => {
+                    self.filesystem_instance_digest.clone()
+                }
+                _ => super::super::role_filesystem_digest(role),
+            };
             let (total, free, available) = match limit.medium() {
                 StorageMedium::Disk => (64_u64 << 30, 60_u64 << 30, 60_u64 << 30),
                 StorageMedium::Tmpfs => (limit.max_bytes(), limit.max_bytes(), limit.max_bytes()),

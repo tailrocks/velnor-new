@@ -1,4 +1,4 @@
-//! Read-only proof that one held reservation has no Docker objects.
+//! This module reads the selected engine to make sure that no Docker objects for one held reservation are present.
 
 use bollard::{
     Docker, errors::Error as DockerError, query_parameters::InspectContainerOptionsBuilder,
@@ -12,7 +12,7 @@ use crate::{
     worker::{WorkerContainerRole, WorkerIdentityNames, WorkerVolumeRole},
 };
 
-/// Exact objects confirmed absent from one selected Docker engine.
+/// This type lists Docker objects that are missing on one selected engine.
 pub(crate) struct ObservedDockerCleanupAbsence {
     reservation_id: i64,
     operation_id: i64,
@@ -68,13 +68,13 @@ impl ObservedDockerCleanupAbsence {
     }
 }
 
-/// Observe exact Docker object absence on the recorded engine.
+/// This function reads the recorded engine to make sure that the specified Docker objects are missing.
 ///
-/// This function does not prove guest cgroup or mount absence.
+/// This function does not make sure that the guest cgroup or mount is missing.
 ///
 /// # Errors
 ///
-/// Returns an error when engine identity or any exact Docker object is uncertain.
+/// Returns an error if the engine identity or a specified Docker object is uncertain.
 pub(crate) async fn observe_docker_cleanup_absence(
     docker: &Docker,
     selected: &EngineContext,

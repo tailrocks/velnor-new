@@ -2,6 +2,7 @@
 
 #[path = "container.rs"]
 mod container;
+mod native;
 #[path = "runner.rs"]
 mod runner;
 #[path = "cleanup/service_loop.rs"]
@@ -22,6 +23,8 @@ use bollard::Docker;
 use crate::error::HostError;
 use crate::https::HttpsTransport;
 use crate::journal::{CleanupClaim, CompletedLaunch};
+use crate::launch::SelectedEngineContext;
+use crate::launch::bootstrap::NativeCleanupRuntime;
 use crate::listen::Secret;
 
 use super::journal_ref::CompletionJournal;
@@ -39,6 +42,8 @@ const VOLUME_COUNT: u64 = crate::worker::WorkerVolumeRole::ALL.len() as u64;
 const VOLUME_REQUESTS: u64 = 3;
 const MAX_CLEANUP_EFFECTS: u64 =
     RUNNER_REQUESTS + CONTAINER_COUNT * CONTAINER_REQUESTS + VOLUME_COUNT * VOLUME_REQUESTS;
+const MAX_NATIVE_CLEANUP_EFFECTS: u64 =
+    RUNNER_REQUESTS + CONTAINER_COUNT * 4 * 2 + VOLUME_COUNT * 3 * 2 + 7;
 #[cfg(test)]
 const MAX_EXTERNAL_CHAIN_SECONDS: u64 = RUNNER_REQUESTS * CURL_REQUEST_TIMEOUT_SECONDS
     + (CONTAINER_COUNT * CONTAINER_REQUESTS + VOLUME_COUNT * VOLUME_REQUESTS)
@@ -54,6 +59,8 @@ pub(super) struct Context<'a> {
     pub(super) transport: &'a mut HttpsTransport,
     pub(super) admin: &'a Secret,
     pub(super) diagnostics: &'a super::diagnostics::DiagnosticsRoot,
+    pub(super) native_cleanup: Option<&'a NativeCleanupRuntime>,
+    pub(super) selected_engine: Option<&'a SelectedEngineContext>,
 }
 
 /// One bounded cleanup uses three GitHub calls, eighteen container calls, and three calls per volume role.
@@ -67,6 +74,13 @@ impl<'a> EffectBudget<'a> {
     pub(super) fn new(stopping: &'a AtomicBool) -> Self {
         Self {
             remaining: MAX_CLEANUP_EFFECTS,
+            stopping,
+        }
+    }
+
+    fn new_native(stopping: &'a AtomicBool) -> Self {
+        Self {
+            remaining: MAX_NATIVE_CLEANUP_EFFECTS,
             stopping,
         }
     }
@@ -210,7 +224,11 @@ async fn reconcile_one(
             return Some(failure);
         }
     };
-    let mut budget = EffectBudget::new(stopping);
+    let mut budget = if launch.intent.worker_volume.is_none() {
+        EffectBudget::new_native(stopping)
+    } else {
+        EffectBudget::new(stopping)
+    };
     let result = reconcile_claimed(context, &launch, claim, &mut budget).await;
     let Err(failure) = result else {
         return None;
@@ -257,12 +275,18 @@ async fn reconcile_claimed(
     {
         return Err(Failure::not_proven("diagnostic write pending"));
     }
-    if !valid_completion(launch) {
+    if launch.intent.worker_volume.is_some() && !valid_completion(launch) {
         return Err(Failure::not_proven("completion identity"));
     }
-    runner::reconcile(context, launch, claim, budget).await?;
-    container::cleanup(context, launch, claim, budget).await?;
-    volume::cleanup(context, launch, claim, budget).await?;
+    if launch.intent.worker_volume.is_some() {
+        runner::reconcile(context, launch, claim, budget).await?;
+        container::cleanup(context, launch, claim, budget).await?;
+        volume::cleanup(context, launch, claim, budget).await?;
+    } else if context.journal.scoped_connection().is_none() {
+        return Err(Failure::not_proven("completion identity"));
+    } else {
+        native::cleanup(context, launch, claim, budget).await?;
+    }
     let recorded = context
         .journal
         .record_completion_cleanup(launch.intent.id, claim.generation)

@@ -3,7 +3,9 @@
 use std::future::Future;
 
 use crate::error::HostError;
-use crate::journal::{CleanupClaim, CompletedLaunch, ConnectionJournal, Journal};
+use crate::journal::{
+    CleanupClaim, CompletedLaunch, ConnectionJournal, Journal, NativeCompletionReservation,
+};
 
 pub(in crate::launch) enum CompletionJournal {
     Root(Journal),
@@ -17,6 +19,23 @@ impl CompletionJournal {
 
     pub(super) const fn scoped(journal: ConnectionJournal) -> Self {
         Self::Scoped(journal)
+    }
+
+    pub(super) fn scoped_connection(&self) -> Option<&ConnectionJournal> {
+        match self {
+            Self::Root(_) => None,
+            Self::Scoped(journal) => Some(journal),
+        }
+    }
+
+    pub(super) async fn native_completion_reservation(
+        &self,
+        launch: &CompletedLaunch,
+    ) -> Result<Option<NativeCompletionReservation>, HostError> {
+        match self {
+            Self::Root(_) => Ok(None),
+            Self::Scoped(journal) => journal.native_completion_reservation(launch).await,
+        }
     }
 
     pub(super) fn instance_identity(&self) -> String {

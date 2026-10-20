@@ -11,12 +11,14 @@ mod publication;
 mod storage;
 
 pub(crate) use adapter::PreparedAcquiredBootstrap;
-pub(crate) use cleanup::VerifiedStorageCleanup;
+pub(crate) use cleanup::{
+    NativeCleanupRuntime, PendingStorageCleanupWitness, VerifiedStorageCleanup,
+};
 pub(crate) use containers::{
     BootstrapContainerRole, BootstrapStartReceipt, PendingBootstrapPair, StartedBootstrapPair,
     VerifiedBootstrapContainerCreated, VerifiedBootstrapMountHandoff, VerifiedCreatedStorageObject,
     VerifiedStorageNetworkCreated, VerifiedStorageNetworkRemoved, create_owned_network,
-    start_bootstrap_pair,
+    remove_owned_network, start_bootstrap_pair,
 };
 pub(crate) use delivery::ListenerDeliveryReceipt;
 pub(crate) use publication::JobFactsPublication;
@@ -37,3 +39,8 @@ pub(crate) use test_fixtures::{
 
 #[cfg(test)]
 pub(crate) use containers::test_bootstrap_mount_handoff;
+
+#[cfg(test)]
+pub(crate) use cleanup::runtime_tests::{
+    CleanupRuntimeFixture, cleanup_runtime_fixture, cleanup_runtime_fixture_for_base,
+};

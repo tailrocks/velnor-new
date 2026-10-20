@@ -1,7 +1,6 @@
 mod network;
 mod pair;
 mod storage_object;
-#[cfg(test)]
 pub(crate) use network::remove_owned_network;
 #[cfg(test)]
 pub(crate) use pair::PairStartFailure;

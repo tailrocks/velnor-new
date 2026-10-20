@@ -1,0 +1,103 @@
+use serde::Serialize;
+
+#[derive(Serialize)]
+pub(super) struct CapacityRecord {
+    schema_version: u8,
+    docker_root_mount_target: String,
+    docker_root_mount_source: String,
+    docker_root_mount_root: String,
+    docker_root_mount_id: u64,
+    docker_root_device_major: u32,
+    docker_root_device_minor: u32,
+    docker_root_statx_device_major: u32,
+    docker_root_statx_device_minor: u32,
+    docker_root_fs_type_magic: u64,
+    docker_root_fs_type_name: String,
+    docker_root_filesystem_id: u64,
+    guest_boot_id: String,
+    docker_root_free_bytes: u64,
+    docker_root_total_bytes: u64,
+    docker_root_available_bytes: u64,
+    docker_root_inode_total: u64,
+    docker_root_inode_free: u64,
+    docker_root_inode_available: u64,
+    docker_root_inode_policy: &'static str,
+    memory_available_bytes: u64,
+    load_milli: u64,
+    memory_psi_some_avg10_bps: Option<u64>,
+    probe_cgroup_path: String,
+    probe_cgroup_memory_max_bytes: Option<u64>,
+    probe_cgroup_memory_current_bytes: u64,
+    probe_cgroup_swap_max_bytes: Option<u64>,
+    probe_cgroup_swap_current_bytes: u64,
+    probe_cgroup_cpu_quota_micros: Option<u64>,
+    probe_cgroup_cpu_period_micros: u64,
+    probe_cgroup_cpuset_cpus_count: u32,
+    cpu_ancestor_limits: [CapacityCpuAncestor; 2],
+    probe_host_pid: u32,
+    probe_namespace_pid: u32,
+    probe_cgroup_pids_max: Option<u64>,
+}
+
+#[derive(Serialize)]
+struct CapacityCpuAncestor {
+    path: &'static str,
+    cpuset_cpus_count: u32,
+    cpu_quota_micros: Option<u64>,
+    cpu_period_micros: u64,
+}
+
+impl CapacityRecord {
+    pub(super) fn new(available: u64) -> Self {
+        Self {
+            schema_version: 5,
+            docker_root_mount_target: "/velnor/docker-root".to_owned(),
+            docker_root_mount_source: "/dev/vdb".to_owned(),
+            docker_root_mount_root: "/_data".to_owned(),
+            docker_root_mount_id: 5,
+            docker_root_device_major: 0,
+            docker_root_device_minor: 38,
+            docker_root_statx_device_major: 0,
+            docker_root_statx_device_minor: 41,
+            docker_root_fs_type_magic: 0x9123_683e,
+            docker_root_fs_type_name: "btrfs".to_owned(),
+            docker_root_filesystem_id: 17,
+            guest_boot_id: "12345678-1234-1234-1234-123456789abc".to_owned(),
+            docker_root_free_bytes: 20 * 1024 * 1024 * 1024,
+            docker_root_total_bytes: 40 * 1024 * 1024 * 1024,
+            docker_root_available_bytes: available,
+            docker_root_inode_total: 0,
+            docker_root_inode_free: 0,
+            docker_root_inode_available: 0,
+            docker_root_inode_policy: "dynamic_btrfs",
+            memory_available_bytes: 8 * 1024 * 1024 * 1024,
+            load_milli: 125,
+            memory_psi_some_avg10_bps: None,
+            probe_cgroup_path: "/system.slice/velnor-resource-probe.service".to_owned(),
+            probe_cgroup_memory_max_bytes: Some(512 * 1024 * 1024),
+            probe_cgroup_memory_current_bytes: 64 * 1024 * 1024,
+            probe_cgroup_swap_max_bytes: Some(0),
+            probe_cgroup_swap_current_bytes: 0,
+            probe_cgroup_cpu_quota_micros: Some(10_000),
+            probe_cgroup_cpu_period_micros: 100_000,
+            probe_cgroup_cpuset_cpus_count: 8,
+            cpu_ancestor_limits: [
+                CapacityCpuAncestor {
+                    path: "/",
+                    cpuset_cpus_count: 8,
+                    cpu_quota_micros: None,
+                    cpu_period_micros: 100_000,
+                },
+                CapacityCpuAncestor {
+                    path: "/system.slice",
+                    cpuset_cpus_count: 8,
+                    cpu_quota_micros: None,
+                    cpu_period_micros: 100_000,
+                },
+            ],
+            probe_host_pid: 1234,
+            probe_namespace_pid: 1234,
+            probe_cgroup_pids_max: Some(64),
+        }
+    }
+}

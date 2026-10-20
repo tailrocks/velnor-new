@@ -2,6 +2,7 @@
 
 use std::{
     path::{Path, PathBuf},
+    sync::Arc,
     time::Duration,
 };
 
@@ -106,7 +107,7 @@ struct ControllerLoop<'a> {
     pending_retirements: Vec<crate::config::RepositoryConnection>,
     doctor_worker: Option<DoctorProbeWorker>,
     doctor_attempted_request_id: Option<i64>,
-    release_read_secret: ReleaseReadSecret,
+    release_read_secret: Arc<ReleaseReadSecret>,
     admission_ready: bool,
     rotation_due: bool,
     next_profile_attempt: tokio::time::Instant,
@@ -129,6 +130,7 @@ impl<'a> ControllerLoop<'a> {
         release_read_secret: ReleaseReadSecret,
         base: ControllerBase,
     ) -> Result<Self, ListenFault> {
+        let release_read_secret = Arc::new(release_read_secret);
         let ControllerBase {
             state,
             docker,
@@ -191,6 +193,7 @@ impl<'a> ControllerLoop<'a> {
             &current,
             &selected_engine,
             &worker_images,
+            &release_read_secret,
             &docker,
         )
         .await?;
@@ -257,6 +260,7 @@ impl<'a> ControllerLoop<'a> {
             control_state: &self.control_state,
             selected_engine: &self.selected_engine,
             worker_images: &self.worker_images,
+            release_read_secret: &self.release_read_secret,
             docker: &self.docker,
             connection_sessions: &mut self.connection_sessions,
         };
@@ -317,6 +321,7 @@ impl<'a> ControllerLoop<'a> {
                 &self.current,
                 &self.selected_engine,
                 &self.worker_images,
+                &self.release_read_secret,
                 &self.docker,
             )
             .await

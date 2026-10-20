@@ -1,6 +1,6 @@
 //! Config transition ordering and durable retirement effects.
 
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use bollard::Docker;
 
@@ -9,7 +9,7 @@ use crate::{
     controller_ipc::ControlState,
     error::HostError,
     journal::Journal,
-    launch::{SelectedEngineContext, VerifiedWorkerImages},
+    launch::{ReleaseReadSecret, SelectedEngineContext, VerifiedWorkerImages},
 };
 
 use super::{setup, state::PreparedConnection};
@@ -80,6 +80,7 @@ pub(super) struct JournalEffects<'a> {
     pub(super) control_state: &'a ControlState,
     pub(super) selected_engine: &'a SelectedEngineContext,
     pub(super) worker_images: &'a VerifiedWorkerImages,
+    pub(super) release_read_secret: &'a Arc<ReleaseReadSecret>,
     pub(super) docker: &'a Docker,
     pub(super) connection_sessions: &'a mut Vec<PreparedConnection>,
 }
@@ -120,7 +121,10 @@ impl TransitionEffects for JournalEffects<'_> {
             self.selected_engine,
             self.worker_images,
             self.docker,
-            target,
+            setup::ConnectionLaunchOptions {
+                release_read_secret: self.release_read_secret,
+                requested_header_capacity: target,
+            },
         )
         .await
         .map_err(|_| HostError::Journal)?;
