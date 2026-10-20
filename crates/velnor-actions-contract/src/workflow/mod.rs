@@ -21,8 +21,10 @@ pub mod qualification_dispatch;
 pub mod qualification_phase;
 pub mod report;
 mod report_validate;
+pub mod services;
 pub mod step;
 mod step_id;
+pub use step_id::GRADLE_RUN_OPERATION;
 pub mod step_identity;
 mod step_mbx_lifecycle;
 mod step_protocol;
@@ -103,6 +105,7 @@ pub use report::{
     CacheLayer, CacheOutcome, CacheResult, MatrixReport, MatrixStatus, MatrixTaskEntry,
     NotSelectedReason, TaskReport, TaskStatus, TaskTiming,
 };
+pub use services::ServiceContainer;
 pub use step::{MAX_TASK_EXECUTION_ARGV, MAX_TASK_EXECUTION_ENV, Step, StepKind};
 pub use step_identity::{
     BUN_REGISTRY_INSTALL_OPERATION, MBX_WORKSPACE_CLEAN_CONDITION, PRIVATE_FETCH_OPERATION,

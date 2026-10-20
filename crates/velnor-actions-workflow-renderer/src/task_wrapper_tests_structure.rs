@@ -81,6 +81,7 @@ fn validated_crate_jobs() -> BTreeMap<String, Job> {
         .map(|index| {
             let id = format!("rust-crate-{index}");
             let job = Job {
+                services: Vec::new(),
                 display_name: format!("Rust / crate {index}"),
                 runs_on: "ubuntu-26.04".to_owned(),
                 check_runner: None,

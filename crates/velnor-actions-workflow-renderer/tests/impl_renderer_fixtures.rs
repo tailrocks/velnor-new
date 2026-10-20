@@ -128,6 +128,7 @@ pub(crate) fn job(id: &str, display: &str, needs: Vec<String>, steps: Vec<Step>)
     (
         id.to_owned(),
         Job {
+            services: Vec::new(),
             display_name: display.to_owned(),
             runs_on: LABEL.to_owned(),
             check_runner: None,
