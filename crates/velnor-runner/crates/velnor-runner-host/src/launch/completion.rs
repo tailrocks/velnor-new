@@ -5,6 +5,9 @@ mod diagnostics;
 mod journal_ref;
 mod reaper;
 
+#[cfg(test)]
+pub(crate) use cleanup::reconcile_for_test;
+
 use reaper::ReapTask;
 #[cfg(test)]
 use reaper::Reaper;

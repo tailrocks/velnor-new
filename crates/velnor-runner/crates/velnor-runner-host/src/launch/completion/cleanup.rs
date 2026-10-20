@@ -13,6 +13,8 @@ mod tests;
 #[path = "volume.rs"]
 mod volume;
 
+#[cfg(test)]
+pub(crate) use runner::reconcile_for_test;
 pub(super) use service_loop::run;
 
 use std::future::Future;

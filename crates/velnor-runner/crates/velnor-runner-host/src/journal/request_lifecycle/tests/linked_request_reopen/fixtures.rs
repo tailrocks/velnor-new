@@ -29,7 +29,7 @@ pub(super) struct LinkedLifecycle {
     journal: Journal,
     pub(super) scope: ConnectionJournal,
     witness: crate::journal::AssignmentIdentity,
-    physical: crate::journal::AssignmentIdentity,
+    pub(super) physical: crate::journal::AssignmentIdentity,
     pub(super) witness_request_id: i64,
     pub(super) actual_request_id: i64,
     pub(super) nonce: char,

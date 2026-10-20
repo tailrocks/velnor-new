@@ -10,6 +10,7 @@ use crate::launch::StartPermit;
 use velnor_runner_github::RunnerReference;
 
 mod fixtures;
+mod terminal_available_replay;
 
 const JOB_MEMORY: u64 = 8_589_934_592;
 const WITNESS_REQUEST_ID: i64 = 100;

@@ -734,6 +734,50 @@
       "author": "/root/container_metadata_repair",
       "reviewer": "/root/execution_source_security_review",
       "scope": "Five tests and their helper moved to a child module. Their code did not change."
+    },
+    {
+      "result": "FAIL",
+      "source_base_commit": "42329758a529e2c1733fc18c89ab265479ede8fe",
+      "source_delta": "The terminal Available replay change and its fixture correction.",
+      "command": "env -u RUST_MIN_STACK CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 rustup run 1.99.1 mbx nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host -E 'test(launch::turn::positive_poll_tests::) | test(launch::turn::completion_intake_tests::) | test(overflow_body_survives_restart_and_mixed_offer_starts_once) | test(acquired_request_reaches_measured_storage_bound)' --no-tests fail --no-fail-fast",
+      "exit_status": 100,
+      "nextest_run": "4c53de3a-9c99-4f7a-a515-012d63fa549b",
+      "passed": 7,
+      "failed": 1,
+      "log": "terminal-started-parent-integrated-20261020.log",
+      "log_sha256": "adc980a42c90d9006421573d8950d722bf526d09cad0a740212bcaf9d54d49e1",
+      "author": "/root/obsolete_capacity_cleanup",
+      "reviewer": "/root/execution_source_security_review",
+      "scope": "These fixture tests do not prove a live installation."
+    },
+    {
+      "result": "PASS",
+      "source_base_commit": "42329758a529e2c1733fc18c89ab265479ede8fe",
+      "source_delta": "The terminal Available replay change and its fixture correction.",
+      "command": "rustup run 1.99.1 mbx nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host -E 'test(overflow_body_survives_restart_and_mixed_offer_starts_once) | test(acquired_request_reaches_measured_storage_bound)' --no-tests fail",
+      "exit_status": 0,
+      "nextest_run": "5d9c3a22-1e6f-4bbc-af70-e2e210178a75",
+      "passed": 2,
+      "failed": 0,
+      "log": "terminal-started-after-hook-20261020.log",
+      "log_sha256": "73e3e4ab6e991fd2693f5232fa48586a3f1bb5ced834e49b77dd4ecc375b518b",
+      "author": "/root/obsolete_capacity_cleanup",
+      "reviewer": "/root/execution_source_security_review",
+      "scope": "These fixture tests do not prove a live installation."
+    },
+    {
+      "result": "PASS",
+      "source_base_commit": "ff900d4c3cb1a7f37e742a89ccefc6e99c9358dc",
+      "source_delta": "The Completed replay test uses the production cleanup reconciler. The changed request retains the valid source.",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 rustup run 1.99.1 mbx nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host -E 'test(completed_available_remains_owned_after_observed_cleanup_and_reopen) | test(overflow_body_survives_restart_and_mixed_offer_starts_once)' --no-tests fail",
+      "exit_status": 0,
+      "nextest_run": "be42f2be-a5ac-4c18-b59e-a1d8c31aa1da",
+      "passed": 2,
+      "log": "completed-replay-parent-integrated-final-20261020.log",
+      "log_sha256": "3e88099386c3cca615ae5402af78aac6eace7d8a6d26fa88b6def4dd83361aeb",
+      "author": "/root/native_intake_composition",
+      "reviewer": "/root/execution_source_security_review",
+      "scope": "These fixture tests do not prove live job execution."
     }
   ],
   "broader_pair_check": {

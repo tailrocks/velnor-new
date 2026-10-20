@@ -7,6 +7,22 @@ use super::{Context, EffectBudget, Failure, run_effect};
 use crate::error::HostError;
 use crate::journal::{CleanupClaim, CompletedLaunch, CompletionIdentity};
 
+#[cfg(test)]
+pub(crate) async fn reconcile_for_test<T: Transport + ?Sized>(
+    scope: &crate::journal::ConnectionJournal,
+    transport: &mut T,
+    admin: &crate::listen::Secret,
+    launch: &CompletedLaunch,
+    claim: CleanupClaim,
+) -> Result<(), HostError> {
+    let completion = super::super::journal_ref::CompletionJournal::scoped(scope.clone());
+    let stopping = std::sync::atomic::AtomicBool::new(false);
+    let mut budget = super::EffectBudget::new(&stopping);
+    reconcile_with_transport(&completion, transport, admin, launch, claim, &mut budget)
+        .await
+        .map_err(|failure| failure.error)
+}
+
 pub(super) async fn reconcile(
     context: &mut Context<'_>,
     launch: &CompletedLaunch,

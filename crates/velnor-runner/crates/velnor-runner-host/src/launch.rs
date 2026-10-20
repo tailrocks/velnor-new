@@ -269,3 +269,6 @@ impl Lane for HostLane<'_> {
         self.link.set_base(crate::listen::GITHUB_API)
     }
 }
+
+#[cfg(test)]
+pub(crate) use completion::reconcile_for_test;
