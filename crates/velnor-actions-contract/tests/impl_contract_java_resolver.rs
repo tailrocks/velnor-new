@@ -30,16 +30,15 @@ fn harness() -> Result<String, String> {
     Ok(format!("{safe}{fail}{exact}{java}"))
 }
 
-fn accepts(harness: &str, value: &str) -> bool {
-    Command::new("sh")
+fn accepts(harness: &str, value: &str) -> Result<bool, std::io::Error> {
+    Ok(Command::new("sh")
         .arg("-c")
         .arg(format!("{harness}\nvelnor_exact_java declared \"$1\""))
         .arg("sh")
         .arg(value)
-        .output()
-        .expect("sh")
+        .output()?
         .status
-        .success()
+        .success())
 }
 
 #[test]
@@ -53,7 +52,7 @@ fn accepts_the_documented_forms() {
         "zulu-21.0.4",
         "graalvm-community-21.0.2+13.1",
     ] {
-        assert!(accepts(&harness, ok), "{ok}");
+        assert!(accepts(&harness, ok).expect("sh"), "{ok}");
     }
 }
 
@@ -82,7 +81,7 @@ fn rejects_loose_unknown_and_hostile_declarations() {
         "temurin-21.0.8\nFOO=1",
         "",
     ] {
-        assert!(!accepts(&harness, bad), "{bad:?}");
+        assert!(!accepts(&harness, bad).expect("sh"), "{bad:?}");
     }
 }
 
