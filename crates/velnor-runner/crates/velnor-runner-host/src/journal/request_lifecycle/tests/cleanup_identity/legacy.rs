@@ -159,7 +159,7 @@ async fn run_legacy_cleanup_probe(
             .is_none()
     );
     retire_test_cleanup_probe(journal, provisioned, operation_id, operation_name).await?;
-    super::super::helpers::record_owned_storage_cleanup(scope, provisioned).await
+    super::super::helpers::record_owned_storage_cleanup_proof(scope, provisioned).await
 }
 
 async fn cleanup_seed(

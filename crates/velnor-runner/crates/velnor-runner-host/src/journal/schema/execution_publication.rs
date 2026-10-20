@@ -131,7 +131,7 @@ pub(super) async fn validate(connection: &turso::Connection) -> Result<(), HostE
     validate_context_columns(connection).await?;
     let mut rows = connection
         .query(
-            "SELECT COUNT(*) FROM resource_probe_operations AS operation LEFT JOIN execution_publication_operations AS publication ON publication.operation_id = operation.operation_id WHERE (operation.helper_role = 'resource-probe' AND (operation.probe_purpose NOT IN ('capacity', 'owned-cgroups') OR operation.request_sha256 IS NULL OR publication.operation_id IS NOT NULL)) OR (operation.helper_role = 'execution-publication' AND (operation.probe_purpose != 'none' OR operation.request_sha256 IS NOT NULL OR publication.operation_id IS NULL))",
+            "SELECT COUNT(*) FROM resource_probe_operations AS operation LEFT JOIN execution_publication_operations AS publication ON publication.operation_id = operation.operation_id WHERE (operation.helper_role = 'resource-probe' AND (operation.probe_purpose NOT IN ('capacity', 'owned-cgroups', 'cleanup-observer') OR operation.request_sha256 IS NULL OR publication.operation_id IS NOT NULL)) OR (operation.helper_role = 'execution-publication' AND (operation.probe_purpose != 'none' OR operation.request_sha256 IS NOT NULL OR publication.operation_id IS NULL))",
             (),
         )
         .await

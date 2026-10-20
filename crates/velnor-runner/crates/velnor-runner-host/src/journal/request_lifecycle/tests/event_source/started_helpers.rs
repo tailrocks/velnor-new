@@ -164,22 +164,23 @@ async fn clean_and_release_runner(fixture: &StartedFixture) -> Result<(), HostEr
             .record_completion_runner_absent_at(fixture.intent_id, claim.generation, 2)
             .await?
     );
-    assert!(
-        scope
-            .record_completion_cleanup_at(fixture.intent_id, claim.generation, 3)
-            .await?
-    );
     let reservation_id = scope
         .reservation(&fixture.physical)
         .await?
         .ok_or(HostError::Journal)?
         .reservation_id;
     record_owned_storage_cleanup(scope, &fixture.provisioned).await?;
+    assert!(
+        scope
+            .record_completion_cleanup_at(fixture.intent_id, claim.generation, 3)
+            .await?
+    );
     record_owned_network_cleanup(scope, reservation_id).await?;
     scope.record_remote_cleanup(reservation_id).await?;
     scope.record_local_cleanup(reservation_id).await?;
+    let settlement = settle_storage_metadata(scope, &fixture.provisioned, 'd').await?;
     assert_eq!(
-        settle_storage_metadata(scope, &fixture.provisioned, 'd').await?,
+        settlement,
         crate::journal::MetadataSettlementResult::Settled
     );
     Ok(())

@@ -2,6 +2,14 @@ pub(super) async fn record_owned_storage_cleanup(
     scope: &ConnectionJournal,
     provisioned: &ProvisionedRunner,
 ) -> Result<(), HostError> {
+    record_cleanup_observer_probe(scope, provisioned).await?;
+    record_owned_storage_cleanup_proof(scope, provisioned).await
+}
+
+pub(super) async fn record_owned_storage_cleanup_proof(
+    scope: &ConnectionJournal,
+    provisioned: &ProvisionedRunner,
+) -> Result<(), HostError> {
     use crate::journal::StorageRole;
     use crate::launch::bootstrap::test_verified_storage_cleanup;
     use crate::worker::{WorkerIdentityNames, WorkerVolumeRole};
@@ -29,6 +37,135 @@ pub(super) async fn record_owned_storage_cleanup(
         true,
     )?;
     scope.record_storage_cleanup(proof).await
+}
+
+async fn record_cleanup_observer_probe(
+    scope: &ConnectionJournal,
+    provisioned: &ProvisionedRunner,
+) -> Result<(), HostError> {
+    use crate::journal::{ProbePhase, ProbeSeed, ResourceProbePurpose};
+    use crate::launch::VerifiedProbeCleanup;
+    use sha2::{Digest, Sha256};
+    use velnor_resource_probe::cleanup_observer_wire::CleanupObserverRequest;
+
+    let journal = scope.journal_ref();
+    configure_cleanup_probe_capacity(journal).await?;
+    let witness = scope
+        .storage_cleanup_witness(provisioned.reservation_id)
+        .await?
+        .ok_or(HostError::Journal)?;
+    let operation_id = provisioned.nonce.clone();
+    let operation_name = format!("velnor-resource-probe-{operation_id}");
+    let request = CleanupObserverRequest {
+        schema_version: 1,
+        operation_id: operation_id.clone(),
+        binding_sha256: witness.binding_sha256().to_owned(),
+        binding: witness.binding().clone(),
+    };
+    let request_json = serde_json::to_vec(&request).map_err(|_| HostError::Journal)?;
+    let mut digest = Sha256::new();
+    digest.update(b"velnor-cleanup-observer-request-v1\0");
+    digest.update(&request_json);
+    digest.update(b"\n");
+    let request_sha256 = digest
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    let seed = ProbeSeed {
+        operation_id: operation_id.clone(),
+        instance_id: journal.instance_id().await?,
+        engine_id: TEST_ENGINE_ID.to_owned(),
+        docker_root_digest: provisioned.docker_root_digest.clone(),
+        source_revision: "b".repeat(40),
+        runtime_image_id: format!("sha256:{}", "c".repeat(64)),
+        image_binding_digest: "d".repeat(64),
+        operation_name: operation_name.clone(),
+        projection_digest: "e".repeat(64),
+        purpose: ResourceProbePurpose::CleanupObserver,
+        request_sha256,
+    };
+    journal
+        .prepare_cleanup_observer_probe(scope, provisioned.reservation_id, seed)
+        .await?;
+    retire_cleanup_observer_probe(journal, provisioned, operation_id, operation_name).await
+}
+
+async fn retire_cleanup_observer_probe(
+    journal: &crate::journal::Journal,
+    provisioned: &ProvisionedRunner,
+    operation_id: String,
+    operation_name: String,
+) -> Result<(), HostError> {
+    use crate::journal::ProbePhase;
+    use crate::launch::VerifiedProbeCleanup;
+
+    journal
+        .transition_probe(
+            &operation_id,
+            ProbePhase::Prepared,
+            ProbePhase::CreateRequested,
+        )
+        .await?;
+    let helper_id = "a".repeat(64);
+    journal.bind_probe_container(&operation_id, &helper_id).await?;
+    journal
+        .transition_probe(
+            &operation_id,
+            ProbePhase::ContainerCreated,
+            ProbePhase::RemoveRequested,
+        )
+        .await?;
+    journal
+        .retire_probe(VerifiedProbeCleanup::test_only(
+            operation_id,
+            TEST_ENGINE_ID.to_owned(),
+            provisioned.docker_root_digest.clone(),
+            ProbePhase::RemoveRequested,
+            operation_name,
+            Some(helper_id),
+        ))
+        .await
+}
+
+async fn configure_cleanup_probe_capacity(
+    journal: &crate::journal::Journal,
+) -> Result<(), HostError> {
+    use crate::journal::{CapacityLimits, OperationalCapacityLimits};
+    use crate::journal::connection::storage::read_transaction;
+
+    let limits = read_transaction(journal, async |connection| {
+        let mut rows = connection
+            .query(
+                "SELECT max_jobs, max_cpu_millicores, max_memory_bytes FROM host_capacity_policy WHERE singleton = 1",
+                (),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        let row = rows
+            .next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .ok_or(HostError::Journal)?;
+        Ok(CapacityLimits {
+            jobs: u32::try_from(row.get::<i64>(0).map_err(|_| HostError::Journal)?)
+                .map_err(|_| HostError::Journal)?,
+            cpu_millicores: u64::try_from(row.get::<i64>(1).map_err(|_| HostError::Journal)?)
+                .map_err(|_| HostError::Journal)?,
+            memory_bytes: u64::try_from(row.get::<i64>(2).map_err(|_| HostError::Journal)?)
+                .map_err(|_| HostError::Journal)?,
+        })
+    })
+    .await?;
+    journal
+        .configure_capacity_with_operational_limits(
+            limits,
+            OperationalCapacityLimits {
+                cpu_millicores: 1_000,
+                memory_bytes: 128 * 1024 * 1024,
+            },
+        )
+        .await
 }
 
 pub(super) async fn record_owned_network_cleanup(
