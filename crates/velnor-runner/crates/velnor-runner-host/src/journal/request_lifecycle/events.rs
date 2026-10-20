@@ -3,6 +3,9 @@
 use serde::Serialize;
 
 use crate::error::HostError;
+use crate::journal::connection::reservation::post_jit_retirement::{
+    EventRetirementDisposition, EventRetirementStatus,
+};
 use crate::journal::connection::storage::in_transaction;
 use crate::journal::connection::{AssignmentIdentity, ConnectionJournal};
 use crate::journal::source_authorization::EventSource;
@@ -54,6 +57,24 @@ struct CompletedRecord<'a> {
     job_id: Option<&'a str>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RecordedEventDisposition {
+    Active { intent_id: Option<i64> },
+    Historical { intent_id: i64 },
+}
+
+fn historical_intent_id(disposition: EventRetirementDisposition) -> i64 {
+    match disposition.status {
+        EventRetirementStatus::Claimed | EventRetirementStatus::Retired => disposition.intent_id,
+    }
+}
+
+impl RecordedEventDisposition {
+    pub(crate) fn active(self) -> bool {
+        matches!(self, Self::Active { .. })
+    }
+}
+
 impl ConnectionJournal {
     /// Correlate an actual `JobStarted` request with its exact JIT-created runner.
     pub(crate) async fn record_job_started(
@@ -64,6 +85,26 @@ impl ConnectionJournal {
         runner: &RunnerReference,
         job_id: Option<&str>,
     ) -> Result<i64, HostError> {
+        match self
+            .record_scoped_job_started(identity, message_id, source, runner, job_id)
+            .await?
+        {
+            RecordedEventDisposition::Active {
+                intent_id: Some(intent_id),
+            }
+            | RecordedEventDisposition::Historical { intent_id } => Ok(intent_id),
+            RecordedEventDisposition::Active { intent_id: None } => Err(HostError::Journal),
+        }
+    }
+
+    pub(crate) async fn record_scoped_job_started(
+        &self,
+        identity: &AssignmentIdentity,
+        message_id: i64,
+        source: &SourceMetadata,
+        runner: &RunnerReference,
+        job_id: Option<&str>,
+    ) -> Result<RecordedEventDisposition, HostError> {
         let request_id = request_id(identity, self)?;
         validate_event(message_id, runner, job_id)?;
         let source = validate_source(source)?;
@@ -103,6 +144,24 @@ impl ConnectionJournal {
         runner: Option<&RunnerReference>,
         job_id: Option<&str>,
     ) -> Result<Option<i64>, HostError> {
+        let disposition = self
+            .record_scoped_job_completed(identity, message_id, source, result, runner, job_id)
+            .await?;
+        Ok(match disposition {
+            RecordedEventDisposition::Active { intent_id } => intent_id,
+            RecordedEventDisposition::Historical { intent_id } => Some(intent_id),
+        })
+    }
+
+    pub(crate) async fn record_scoped_job_completed(
+        &self,
+        identity: &AssignmentIdentity,
+        message_id: i64,
+        source: &SourceMetadata,
+        result: Option<&str>,
+        runner: Option<&RunnerReference>,
+        job_id: Option<&str>,
+    ) -> Result<RecordedEventDisposition, HostError> {
         let request_id = request_id(identity, self)?;
         let source = validate_source(source)?;
         validate_optional_event_text(result)?;
@@ -144,73 +203,6 @@ impl ConnectionJournal {
         })
         .await
     }
-}
-
-async fn record_started(
-    journal: &ConnectionJournal,
-    connection: &turso::Connection,
-    identity: &AssignmentIdentity,
-    record: &StartedRecord<'_>,
-) -> Result<i64, HostError> {
-    validate_scope_identity(journal, connection, identity).await?;
-    let set_id = bound_set_id(connection, &record.connection_id).await?;
-    if set_id != record.runner.runner_scale_set_id {
-        return Err(HostError::Identity);
-    }
-    source_receipt_matches(
-        journal,
-        connection,
-        record.connection_id.as_str(),
-        set_id,
-        record.request_id,
-        record.source,
-    )
-    .await?;
-    let Some(state) =
-        request_event_state(connection, &record.connection_id, set_id, record.request_id).await?
-    else {
-        return Err(HostError::Journal);
-    };
-    validate_job_id_history(&state, record.job_id)?;
-    if let Some(existing) = state.started_digest.as_deref() {
-        return if existing == record.event_digest {
-            exact_started_intent(
-                connection,
-                &record.connection_id,
-                set_id,
-                record.request_id,
-                record.runner,
-            )
-            .await
-        } else {
-            Err(HostError::Identity)
-        };
-    }
-    if state.acquire_state != "acquired"
-        || request_completed_runnerless(
-            connection,
-            &record.connection_id,
-            set_id,
-            record.request_id,
-        )
-        .await?
-    {
-        return Err(HostError::Journal);
-    }
-    let intent_id = matching_runner_intent(
-        connection,
-        &record.connection_id,
-        set_id,
-        record.runner.id,
-        &record.runner.name,
-        record.request_id,
-        true,
-    )
-    .await?;
-    record_started_authorization(connection, record, set_id, intent_id).await?;
-    record_started_jit(connection, record, set_id, intent_id).await?;
-    record_started_intent(connection, record, set_id, intent_id).await?;
-    Ok(intent_id)
 }
 
 async fn source_receipt_matches(
@@ -286,6 +278,9 @@ fn require_one_change(changed: u64) -> Result<(), HostError> {
 
 mod completion;
 use completion::record_completed;
+
+mod started;
+use started::record_started;
 
 mod storage;
 use storage::{

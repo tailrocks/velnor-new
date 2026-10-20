@@ -7,6 +7,8 @@ use super::{NativeStartedIntakeFixture, helpers};
 
 #[path = "post_jit_retirement/digest_reopen.rs"]
 mod digest_reopen;
+#[path = "post_jit_retirement/late_events.rs"]
+pub(crate) mod late_events;
 #[path = "post_jit_retirement/reciprocal.rs"]
 mod reciprocal;
 

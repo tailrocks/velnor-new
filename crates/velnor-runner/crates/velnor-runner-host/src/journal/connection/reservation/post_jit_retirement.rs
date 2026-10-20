@@ -9,7 +9,7 @@ mod effect_fence_tests;
 mod identity;
 
 pub(crate) use claim::PostJitRetirementClaim;
-pub(in crate::journal) use disposition::EventRetirementDisposition;
+pub(in crate::journal) use disposition::{EventRetirementDisposition, EventRetirementStatus};
 
 use crate::error::HostError;
 use crate::journal::connection::ConnectionJournal;

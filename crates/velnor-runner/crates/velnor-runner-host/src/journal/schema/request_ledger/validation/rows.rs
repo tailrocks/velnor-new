@@ -4,6 +4,8 @@ use sha2::{Digest, Sha256};
 
 use crate::error::HostError;
 
+mod retired_completion;
+
 pub(super) async fn validate_auth_rows(conn: &turso::Connection) -> Result<(), HostError> {
     let mut rows = conn
         .query(
@@ -31,6 +33,8 @@ struct AuthorizationIdentity {
 
 struct AuthorizationEvents {
     completed_intent_id: Option<i64>,
+    completed_runner_id: Option<i64>,
+    completed_runner_name: Option<String>,
 }
 
 async fn validate_auth_row(conn: &turso::Connection, row: &turso::Row) -> Result<(), HostError> {
@@ -41,7 +45,14 @@ async fn validate_auth_row(conn: &turso::Connection, row: &turso::Row) -> Result
         &identity.source_json,
         identity.repository_id,
     )?;
-    validate_completed_jit(conn, &identity, events.completed_intent_id).await
+    validate_completed_jit(
+        conn,
+        &identity,
+        events.completed_intent_id,
+        events.completed_runner_id,
+        events.completed_runner_name.as_deref(),
+    )
+    .await
 }
 
 fn read_authorization_identity(row: &turso::Row) -> Result<AuthorizationIdentity, HostError> {
@@ -164,6 +175,8 @@ fn read_authorization_events(
     }
     Ok(AuthorizationEvents {
         completed_intent_id,
+        completed_runner_id,
+        completed_runner_name,
     })
 }
 
@@ -235,6 +248,8 @@ async fn validate_completed_jit(
     conn: &turso::Connection,
     authorization: &AuthorizationIdentity,
     intent_id: Option<i64>,
+    runner_id: Option<i64>,
+    runner_name: Option<&str>,
 ) -> Result<(), HostError> {
     let Some(intent_id) = intent_id else {
         return Ok(());
@@ -247,10 +262,9 @@ async fn validate_completed_jit(
         .await
         .map_err(|_| HostError::Journal)?;
     if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
-        Ok(())
-    } else {
-        Err(HostError::Journal)
+        return Ok(());
     }
+    retired_completion::validate(conn, authorization, intent_id, runner_id, runner_name).await
 }
 
 pub(super) async fn validate_legacy_jit_rows(conn: &turso::Connection) -> Result<(), HostError> {

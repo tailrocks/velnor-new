@@ -10,6 +10,9 @@ use crate::error::HostError;
 use crate::journal::{AssignmentKey, ConnectionCompletionInboxEntry, ConnectionJournal};
 use crate::scale_set::EnsureError;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct IntakeDecision {
     pub(crate) completion_only: bool,
@@ -22,19 +25,25 @@ pub(crate) struct IntakeDecision {
 struct ScopedEventRecords {
     started: Vec<i64>,
     completed: Vec<i64>,
+    active_completion: bool,
 }
 
 impl ScopedEventRecords {
     fn record(&mut self, event: RecordedScopedEvent) {
         match event {
             RecordedScopedEvent::Started(request_id) => self.started.push(request_id),
-            RecordedScopedEvent::Completed(request_id) => self.completed.push(request_id),
+            RecordedScopedEvent::HistoricalStarted => {}
+            RecordedScopedEvent::Completed(request_id, active) => {
+                self.completed.push(request_id);
+                self.active_completion |= active;
+            }
         }
     }
 
     fn append(&mut self, mut other: Self) {
         self.started.append(&mut other.started);
         self.completed.append(&mut other.completed);
+        self.active_completion |= other.active_completion;
     }
 
     fn resumable_started(mut self) -> Vec<i64> {
@@ -50,7 +59,8 @@ impl ScopedEventRecords {
 
 enum RecordedScopedEvent {
     Started(i64),
-    Completed(i64),
+    HistoricalStarted,
+    Completed(i64, bool),
 }
 
 /// Persist scoped Started/Completed events against their exact source receipts.
@@ -64,7 +74,7 @@ where
     F: FnOnce() -> Fut,
     Fut: Future<Output = Result<(), EnsureError>>,
 {
-    let (retried, mut events) = retry_scoped(journal).await?;
+    let (_, mut events) = retry_scoped(journal).await?;
     events.append(record_scoped_events(journal, set_id, polled).await?);
     let lifecycle_only = scoped_lifecycle_only(polled);
     if lifecycle_only {
@@ -74,7 +84,7 @@ where
         // Assigned does not change job state.
         // Save Started and Completed events before ACK.
         completion_only: lifecycle_only,
-        wake_cleanup: retried || has_completion(polled),
+        wake_cleanup: events.active_completion,
         session_delete_candidate: session_delete_candidate(polled),
         started_request_ids: events.resumable_started(),
     })
@@ -178,8 +188,8 @@ async fn record_scoped_event(
     let started_request_id = match job.kind {
         InnerKind::Started => {
             let runner = runner.as_ref().ok_or(HostError::Identity)?;
-            journal
-                .record_job_started(
+            let disposition = journal
+                .record_scoped_job_started(
                     &identity,
                     message_id,
                     &job.source,
@@ -187,11 +197,15 @@ async fn record_scoped_event(
                     job.job_id.as_deref(),
                 )
                 .await?;
-            Some(RecordedScopedEvent::Started(request_id))
+            Some(if disposition.active() {
+                RecordedScopedEvent::Started(request_id)
+            } else {
+                RecordedScopedEvent::HistoricalStarted
+            })
         }
         InnerKind::Completed => {
-            journal
-                .record_job_completed(
+            let disposition = journal
+                .record_scoped_job_completed(
                     &identity,
                     message_id,
                     &job.source,
@@ -200,7 +214,10 @@ async fn record_scoped_event(
                     job.job_id.as_deref(),
                 )
                 .await?;
-            Some(RecordedScopedEvent::Completed(request_id))
+            Some(RecordedScopedEvent::Completed(
+                request_id,
+                disposition.active(),
+            ))
         }
         InnerKind::Available | InnerKind::Assigned | InnerKind::Unsupported(_) => {
             return Err(HostError::Identity);
@@ -306,10 +323,6 @@ fn scoped_entry(
         raw_body: raw_body.to_owned(),
         attempts: 0,
     }
-}
-
-fn has_completion(polled: &Poll) -> bool {
-    matches!(polled, Poll::Batch(batch) if batch.jobs.iter().any(|job| matches!(job.kind, InnerKind::Completed)))
 }
 
 pub(super) fn completion_error() -> EnsureError {

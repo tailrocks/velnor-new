@@ -15,7 +15,7 @@ mod initialization;
 mod legacy_migration;
 mod linked_request_reopen;
 mod phase_recovery;
-mod post_jit_retirement;
+pub(crate) mod post_jit_retirement;
 mod pre_jit_crossed_assignment;
 mod profile_lifecycle;
 mod request_link;

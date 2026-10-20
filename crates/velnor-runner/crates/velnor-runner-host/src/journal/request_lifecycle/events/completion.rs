@@ -1,17 +1,45 @@
 //! Record completed request events and their cleanup records.
 
+use super::storage::RequestEventState;
 use super::{
-    AssignmentIdentity, CompletedRecord, ConnectionJournal, HostError, bind_completed_pair,
-    bound_set_id, insert_completion_cleanup, matching_runner_intent, request_event_state,
-    require_one_change, source_receipt_matches, validate_job_id_history, validate_scope_identity,
+    AssignmentIdentity, CompletedRecord, ConnectionJournal, HostError, RecordedEventDisposition,
+    bind_completed_pair, bound_set_id, insert_completion_cleanup, matching_runner_intent,
+    request_event_state, require_one_change, source_receipt_matches, validate_job_id_history,
+    validate_scope_identity,
 };
+use crate::journal::connection::reservation::post_jit_retirement::{
+    EventRetirementDisposition, disposition_for_event_in_transaction,
+};
+
+struct CompletedContext {
+    set_id: i64,
+    state: RequestEventState,
+    retirement: Option<EventRetirementDisposition>,
+}
 
 pub(super) async fn record_completed(
     journal: &ConnectionJournal,
     connection: &turso::Connection,
     identity: &AssignmentIdentity,
     record: &CompletedRecord<'_>,
-) -> Result<Option<i64>, HostError> {
+) -> Result<RecordedEventDisposition, HostError> {
+    let context = prepare_completed(journal, connection, identity, record).await?;
+    if let Some(existing) = context.state.completed_digest.clone() {
+        return replay_completed(record, context, &existing);
+    }
+    validate_completion_state(&context.state.acquire_state, record.runner.is_some())?;
+    if let Some(retirement) = context.retirement {
+        return record_historical_completed(connection, record, context.set_id, retirement).await;
+    }
+    record_active_completed(connection, record, context.set_id).await
+}
+
+async fn prepare_completed(
+    journal: &ConnectionJournal,
+    connection: &turso::Connection,
+    identity: &AssignmentIdentity,
+    record: &CompletedRecord<'_>,
+) -> Result<CompletedContext, HostError> {
     validate_scope_identity(journal, connection, identity).await?;
     let set_id = bound_set_id(connection, &record.connection_id).await?;
     source_receipt_matches(
@@ -29,14 +57,72 @@ pub(super) async fn record_completed(
         return Err(HostError::Journal);
     };
     validate_job_id_history(&state, record.job_id)?;
-    if let Some(existing) = state.completed_digest.as_deref() {
-        return if existing == record.event_digest {
-            Ok(state.intent_id)
-        } else {
-            Err(HostError::Identity)
-        };
+    let retirement = if let Some(runner) = record.runner {
+        if runner.runner_scale_set_id != set_id {
+            return Err(HostError::Identity);
+        }
+        disposition_for_event_in_transaction(
+            connection,
+            journal,
+            set_id,
+            record.request_id,
+            runner.id,
+            runner.name.as_str(),
+        )
+        .await?
+    } else {
+        None
+    };
+    Ok(CompletedContext {
+        set_id,
+        state,
+        retirement,
+    })
+}
+
+fn replay_completed(
+    record: &CompletedRecord<'_>,
+    context: CompletedContext,
+    existing: &str,
+) -> Result<RecordedEventDisposition, HostError> {
+    if existing != record.event_digest {
+        return Err(HostError::Identity);
     }
-    validate_completion_state(&state.acquire_state, record.runner.is_some())?;
+    if let Some(retirement) = context.retirement {
+        return Ok(RecordedEventDisposition::Historical {
+            intent_id: super::historical_intent_id(retirement),
+        });
+    }
+    Ok(RecordedEventDisposition::Active {
+        intent_id: context.state.intent_id,
+    })
+}
+
+async fn record_historical_completed(
+    connection: &turso::Connection,
+    record: &CompletedRecord<'_>,
+    set_id: i64,
+    retirement: EventRetirementDisposition,
+) -> Result<RecordedEventDisposition, HostError> {
+    let Some(runner) = record.runner else {
+        return Err(HostError::Journal);
+    };
+    let intent_id = super::historical_intent_id(retirement);
+    record_completed_authorization(
+        connection,
+        record,
+        set_id,
+        Some((intent_id, runner.id, runner.name.as_str())),
+    )
+    .await?;
+    Ok(RecordedEventDisposition::Historical { intent_id })
+}
+
+async fn record_active_completed(
+    connection: &turso::Connection,
+    record: &CompletedRecord<'_>,
+    set_id: i64,
+) -> Result<RecordedEventDisposition, HostError> {
     let pair = completed_pair(connection, record, set_id).await?;
     if let Some((intent_id, runner_id, runner_name)) = pair {
         bind_completed_pair(
@@ -62,7 +148,9 @@ pub(super) async fn record_completed(
         )
         .await?;
     }
-    Ok(pair.map(|(intent_id, _, _)| intent_id))
+    Ok(RecordedEventDisposition::Active {
+        intent_id: pair.map(|(intent_id, _, _)| intent_id),
+    })
 }
 
 fn validate_completion_state(state: &str, has_runner: bool) -> Result<(), HostError> {
