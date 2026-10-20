@@ -125,11 +125,28 @@ fn job_id(root: &str, project: &str) -> String {
     )
 }
 
-/// The `gradle-run-v1` step of one project.
+/// The `gradle-run-v1` step of one project (`assemble` and `check`).
 fn run_step(root: &str, project: &str, workers: u8, database: bool) -> Step {
+    run_step_for(
+        "Gradle assemble and check",
+        root,
+        &format!("{project}:assemble {project}:check"),
+        workers,
+        database,
+    )
+}
+
+/// A `gradle-run-v1` step running `tasks` (space-separated task paths) in `root`.
+pub(crate) fn run_step_for(
+    name: &str,
+    root: &str,
+    tasks: &str,
+    workers: u8,
+    database: bool,
+) -> Step {
     Step {
         parallel: false,
-        name: "Gradle assemble and check".to_owned(),
+        name: name.to_owned(),
         id: None,
         role: None,
         condition: None,
@@ -144,10 +161,7 @@ fn run_step(root: &str, project: &str, workers: u8, database: bool) -> Step {
                         root.to_owned()
                     },
                 ),
-                (
-                    TASKS_ENV.to_owned(),
-                    format!("{project}:assemble {project}:check"),
-                ),
+                (TASKS_ENV.to_owned(), tasks.to_owned()),
                 (WORKERS_ENV.to_owned(), workers.to_string()),
                 (
                     DATABASE_ENV.to_owned(),
