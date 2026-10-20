@@ -1,0 +1,58 @@
+{
+  "scope": "These checks use test fixtures. They do not prove a live installation.",
+  "rust_version": "1.99.1",
+  "nextest_version": "0.9.148",
+  "rust_min_stack": "UNSET",
+  "checks": [
+    {
+      "result": "PASS",
+      "source_commit": "6ae321d55c96d1554d75efd92c159e43213d2c89",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host -E 'test(storage_budget) | test(storage_budget_samples) | test(storage_cache_projection)'",
+      "exit_status": 0,
+      "nextest_run": "e47aef86-622c-4baf-b1bd-1a345e47ecf1",
+      "passed": 24,
+      "log": "storage-budget-shipping-20261020.log",
+      "log_sha256": "6fb73eca52c557c1191309ad5196ecd8515ced45833266a93f4d03823953f7cd",
+      "author": "/root",
+      "reviewer": "/root/journal_database_architecture"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "be043ca70a649a2fbe3cb2b4a73210c9e8bf0350",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-resource-probe",
+      "exit_status": 0,
+      "nextest_run": "ce8fa358-2958-4194-9426-8261dc33413b",
+      "passed": 78,
+      "log": "cleanup-validator-lint-shipping-20261020.log",
+      "log_sha256": "ba6619a0c78010e8d324e7c0929b76a616d69fdd489b0f57b1b19f9d9aa68a58",
+      "author": "/root",
+      "reviewer": "/root/execution_channel_helper"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "e049f47355017788cc88a9c2862cc3e8e9b3abb5",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host -E 'test(adverse_acquire) | test(acquire_settlement) | test(terminal_acquire_results) | test(production_bootstrap_starts_private_pair) | test(worker_create_requires_image_checks)'",
+      "exit_status": 0,
+      "nextest_run": "9f78f571-bede-4048-8fc2-7474581b4c98",
+      "passed": 9,
+      "log": "acquire-shipping-focused-20261020.log",
+      "log_sha256": "42bd3e65eebde32d08ad78b0eee174cb5cf91f2944c070cf6a5bd9d2df511533",
+      "author": "/root",
+      "reviewer": "/root/bounded_integration_review"
+    }
+  ],
+  "broader_pair_check": {
+    "result": "FAIL",
+    "nextest_run": "c8d96b4c-8b0f-44b9-85a0-9e820d6915ab",
+    "passed": 9,
+    "failed": 1,
+    "test": "launch::steps::scoped::runner::tests::docker_pair::scoped_start_uses_bollard_to_create_and_start_the_verified_pair",
+    "log": "acquire-shipping-final-20261020.log",
+    "log_sha256": "4ce19cbdeebdbaacf81c45114cd91c107a624853143f7e7ca9736e4072b846be",
+    "note": "The earlier fixture path still fails. The test remains in the source."
+  },
+  "full_integrated_gates": "NOT_RUN",
+  "release": "NOT_RUN",
+  "essential_mac_installation": "NOT_RUN",
+  "chainargos_installation": "NOT_RUN"
+}
