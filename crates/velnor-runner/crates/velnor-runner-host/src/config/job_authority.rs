@@ -233,15 +233,15 @@ impl ApprovedJobAuthorityPolicy {
 pub(crate) struct ApprovedWorkflowSource<'a>(&'a ApprovedWorkflow);
 
 impl<'a> ApprovedWorkflowSource<'a> {
-    pub(crate) const fn repository_id(&self) -> i64 {
+    pub(crate) const fn repository_id(self) -> i64 {
         self.0.repository_id
     }
 
-    pub(crate) fn path(&self) -> &'a str {
+    pub(crate) fn path(self) -> &'a str {
         &self.0.path
     }
 
-    pub(crate) fn content_sha256(&self) -> &'a str {
+    pub(crate) fn content_sha256(self) -> &'a str {
         &self.0.content_sha256
     }
 
@@ -255,15 +255,15 @@ impl<'a> ApprovedWorkflowSource<'a> {
 pub(crate) struct ApprovedWorkflowCall<'a>(&'a WorkflowCall);
 
 impl<'a> ApprovedWorkflowCall<'a> {
-    pub(crate) const fn repository_id(&self) -> i64 {
+    pub(crate) const fn repository_id(self) -> i64 {
         self.0.repository_id
     }
 
-    pub(crate) fn path(&self) -> &'a str {
+    pub(crate) fn path(self) -> &'a str {
         &self.0.path
     }
 
-    pub(crate) fn content_sha256(&self) -> &'a str {
+    pub(crate) fn content_sha256(self) -> &'a str {
         &self.0.content_sha256
     }
 }
