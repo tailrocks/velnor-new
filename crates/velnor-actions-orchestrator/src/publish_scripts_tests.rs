@@ -7,7 +7,9 @@ use std::process::{Command, Output};
 use tempfile::TempDir;
 use velnor_actions_contract::config::VersionSource;
 
-use super::{inline_version_script, manifest_program, pack_script, parse_tag_script};
+use velnor_actions_workflow_renderer::publish_scripts::{
+    inline_version_script, manifest_program, pack_script, parse_tag_script,
+};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 

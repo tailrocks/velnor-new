@@ -72,7 +72,8 @@ mod product_release_pins;
 pub(crate) mod project_tool_sources;
 mod provenance;
 mod publish_emit;
-mod publish_scripts;
+#[cfg(test)]
+mod publish_scripts_tests;
 mod publish_steps;
 mod qualification_candidate;
 mod qualification_resolver;

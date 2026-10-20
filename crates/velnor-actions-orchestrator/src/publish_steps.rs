@@ -15,6 +15,7 @@ use velnor_actions_actionlint::actions::{
 use velnor_actions_contract::config::{PublishBundle, VersionSource};
 use velnor_actions_contract::{JobTimeout, Step};
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
+use velnor_actions_workflow_renderer::publish_scripts as script;
 use velnor_actions_workflow_renderer::publish_spec::{
     PublishJobSpec, PublishPermissions, PublishRole, PublishStep,
 };
@@ -23,7 +24,6 @@ use velnor_actions_workflow_renderer::{
 };
 
 use crate::OrchestratorError;
-use crate::publish_scripts as script;
 use crate::utf8::strings_of;
 use crate::workflow::CHECKOUT_USES;
 
