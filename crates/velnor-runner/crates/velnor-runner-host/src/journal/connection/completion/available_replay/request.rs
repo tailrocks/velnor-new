@@ -1,4 +1,7 @@
 use super::AUTHORITY_MODEL;
+use super::context::{
+    CompletionEventContext, ReplayContext, RunnerLinkContext, StartedEventContext,
+};
 use super::events::{runner_link_matches, started_event_matches};
 use super::source::{
     completion_event, event_digest, event_source, valid_acquire_response, valid_digest,
@@ -87,16 +90,14 @@ pub(super) async fn request_is_terminal(
     else {
         return Ok(false);
     };
-    if !request_identity_matches(
-        connection,
+    let context = ReplayContext {
         connection_id,
         scale_set_id,
         request_id,
         binding_digest,
         source,
-        &record,
-    )
-    .await?
+    };
+    if !request_identity_matches(connection, &context, &record).await?
         || !record.event_shape_is_valid()
         || available_job_id.is_some_and(|job_id| !valid_optional_job_id(Some(job_id)))
         || !record.job_id_matches(available_job_id)
@@ -104,27 +105,9 @@ pub(super) async fn request_is_terminal(
         return Ok(false);
     }
     if record.has_completed() {
-        completed_request_is_terminal(
-            connection,
-            connection_id,
-            scale_set_id,
-            request_id,
-            binding_digest,
-            source,
-            &record,
-        )
-        .await
+        completed_request_is_terminal(connection, &context, &record).await
     } else {
-        started_request_is_terminal(
-            connection,
-            connection_id,
-            scale_set_id,
-            request_id,
-            binding_digest,
-            source,
-            &record,
-        )
-        .await
+        started_request_is_terminal(connection, &context, &record).await
     }
 }
 
@@ -172,43 +155,35 @@ async fn load_terminal_request(
 
 async fn request_identity_matches(
     connection: &turso::Connection,
-    connection_id: &str,
-    scale_set_id: i64,
-    request_id: i64,
-    binding_digest: &str,
-    source: CompleteSourceMetadata<'_>,
+    context: &ReplayContext<'_>,
     record: &TerminalRequest,
 ) -> Result<bool, HostError> {
     Ok(matches!(
         record.policy_mode.as_str(),
         "repository" | "branch_restricted"
     ) && record.authority_model == AUTHORITY_MODEL
-        && record.binding_digest == binding_digest
+        && record.binding_digest == context.binding_digest
         && valid_digest(&record.source_digest)
         && crate::journal::source_authorization::event_source_matches(
             connection,
-            connection_id,
-            scale_set_id,
-            request_id,
-            binding_digest,
-            event_source(source),
+            context.connection_id,
+            context.scale_set_id,
+            context.request_id,
+            context.binding_digest,
+            event_source(context.source),
         )
         .await?
         && valid_acquire_response(
             &record.acquire_state,
             record.acquire_json.as_deref(),
             record.acquire_digest.as_deref(),
-            request_id,
+            context.request_id,
         )?)
 }
 
 async fn started_request_is_terminal(
     connection: &turso::Connection,
-    connection_id: &str,
-    scale_set_id: i64,
-    request_id: i64,
-    binding_digest: &str,
-    source: CompleteSourceMetadata<'_>,
+    context: &ReplayContext<'_>,
     record: &TerminalRequest,
 ) -> Result<bool, HostError> {
     if !record.has_started()
@@ -221,61 +196,42 @@ async fn started_request_is_terminal(
     }
     started_event_matches(
         connection,
-        connection_id,
-        scale_set_id,
-        request_id,
-        binding_digest,
-        record.started_message_id,
-        record.started_digest.as_deref(),
-        record.started_job_id.as_deref(),
-        record.started_runner_id,
-        record.started_runner_name.as_deref(),
-        source,
-        false,
+        context,
+        &StartedEventContext {
+            message_id: record.started_message_id,
+            digest: record.started_digest.as_deref(),
+            job_id: record.started_job_id.as_deref(),
+            runner_id: record.started_runner_id,
+            runner_name: record.started_runner_name.as_deref(),
+            has_completed: false,
+        },
     )
     .await
 }
 
 async fn completed_request_is_terminal(
     connection: &turso::Connection,
-    connection_id: &str,
-    scale_set_id: i64,
-    request_id: i64,
-    binding_digest: &str,
-    source: CompleteSourceMetadata<'_>,
+    context: &ReplayContext<'_>,
     record: &TerminalRequest,
 ) -> Result<bool, HostError> {
-    if !completed_state_is_valid(record)
-        || !completion_record_matches(request_id, scale_set_id, source, record)?
-    {
+    if !completed_state_is_valid(record) || !completion_record_matches(context, record)? {
         return Ok(false);
     }
-    if !completed_runner_matches(
-        connection,
-        connection_id,
-        scale_set_id,
-        request_id,
-        binding_digest,
-        record,
-    )
-    .await?
-    {
+    if !completed_runner_matches(connection, context, record).await? {
         return Ok(false);
     }
     if record.has_started()
         && !started_event_matches(
             connection,
-            connection_id,
-            scale_set_id,
-            request_id,
-            binding_digest,
-            record.started_message_id,
-            record.started_digest.as_deref(),
-            record.started_job_id.as_deref(),
-            record.started_runner_id,
-            record.started_runner_name.as_deref(),
-            source,
-            true,
+            context,
+            &StartedEventContext {
+                message_id: record.started_message_id,
+                digest: record.started_digest.as_deref(),
+                job_id: record.started_job_id.as_deref(),
+                runner_id: record.started_runner_id,
+                runner_name: record.started_runner_name.as_deref(),
+                has_completed: true,
+            },
         )
         .await?
     {
@@ -296,9 +252,7 @@ fn completed_state_is_valid(record: &TerminalRequest) -> bool {
 }
 
 fn completion_record_matches(
-    request_id: i64,
-    scale_set_id: i64,
-    source: CompleteSourceMetadata<'_>,
+    context: &ReplayContext<'_>,
     record: &TerminalRequest,
 ) -> Result<bool, HostError> {
     let (Some(message_id), Some(digest)) = (
@@ -312,14 +266,14 @@ fn completion_record_matches(
         && event_digest(
             digest,
             &completion_event(
-                request_id,
-                message_id,
-                record.completed_result.as_deref(),
-                record.completed_runner_id,
-                record.completed_runner_name.as_deref(),
-                record.completed_job_id.as_deref(),
-                scale_set_id,
-                source,
+                context,
+                &CompletionEventContext {
+                    message_id,
+                    result: record.completed_result.as_deref(),
+                    runner_id: record.completed_runner_id,
+                    runner_name: record.completed_runner_name.as_deref(),
+                    job_id: record.completed_job_id.as_deref(),
+                },
             ),
         )
         .is_ok())
@@ -327,10 +281,7 @@ fn completion_record_matches(
 
 async fn completed_runner_matches(
     connection: &turso::Connection,
-    connection_id: &str,
-    scale_set_id: i64,
-    request_id: i64,
-    binding_digest: &str,
+    context: &ReplayContext<'_>,
     record: &TerminalRequest,
 ) -> Result<bool, HostError> {
     match (
@@ -342,16 +293,15 @@ async fn completed_runner_matches(
         (Some(runner_id), Some(runner_name), Some(intent_id), Some(digest)) => {
             runner_link_matches(
                 connection,
-                connection_id,
-                scale_set_id,
-                request_id,
-                binding_digest,
-                runner_id,
-                runner_name,
-                intent_id,
-                digest,
-                true,
-                true,
+                context,
+                &RunnerLinkContext {
+                    runner_id,
+                    runner_name,
+                    expected_intent_id: intent_id,
+                    event_digest: digest,
+                    has_completed: true,
+                    completed: true,
+                },
             )
             .await
         }

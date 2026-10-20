@@ -1,3 +1,4 @@
+use super::context::{CompletionEventContext, ReplayContext};
 use super::{AcquireResponse, CompletionEvent, RunnerEvent};
 use crate::error::HostError;
 use crate::journal::source_authorization::EventSource;
@@ -7,10 +8,11 @@ use velnor_runner_github::CompleteSourceMetadata;
 
 pub(super) async fn canonical_stored_source(
     connection: &turso::Connection,
-    connection_id: &str,
+    context: &ReplayContext<'_>,
     source_json: &str,
 ) -> Result<bool, HostError> {
-    let Some(repository_id) = connection_repository_id(connection, connection_id).await? else {
+    let Some(repository_id) = connection_repository_id(connection, context.connection_id).await?
+    else {
         return Ok(false);
     };
     Ok(
@@ -44,32 +46,27 @@ pub(super) async fn connection_repository_id(
 }
 
 pub(super) fn completion_event<'a>(
-    request_id: i64,
-    message_id: i64,
-    result: Option<&'a str>,
-    runner_id: Option<i64>,
-    runner_name: Option<&'a str>,
-    job_id: Option<&'a str>,
-    scale_set_id: i64,
-    source: CompleteSourceMetadata<'a>,
+    context: &ReplayContext<'a>,
+    event: &CompletionEventContext<'a>,
 ) -> CompletionEvent<'a> {
     CompletionEvent {
-        request_id,
-        message_id,
-        result,
-        runner: runner_id
-            .zip(runner_name)
+        request_id: context.request_id,
+        message_id: event.message_id,
+        result: event.result,
+        runner: event
+            .runner_id
+            .zip(event.runner_name)
             .map(|(runner_id, runner_name)| RunnerEvent {
-                request_id,
-                message_id,
+                request_id: context.request_id,
+                message_id: event.message_id,
                 runner_id,
                 runner_name,
-                scale_set_id,
-                job_id,
-                source: event_source(source),
+                scale_set_id: context.scale_set_id,
+                job_id: event.job_id,
+                source: event_source(context.source),
             }),
-        job_id,
-        source: event_source(source),
+        job_id: event.job_id,
+        source: event_source(context.source),
     }
 }
 
@@ -122,11 +119,11 @@ pub(super) fn valid_acquire_response(
 }
 
 pub(super) fn digest_hex(bytes: &[u8]) -> String {
-    let hash = Sha256::digest(bytes);
+    const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut value = String::with_capacity(64);
-    for byte in hash {
-        use std::fmt::Write as _;
-        let _ = write!(value, "{byte:02x}");
+    for byte in Sha256::digest(bytes) {
+        value.push(char::from(HEX[usize::from(byte >> 4)]));
+        value.push(char::from(HEX[usize::from(byte & 0x0f)]));
     }
     value
 }
@@ -152,4 +149,21 @@ pub(super) fn valid_optional_text(value: Option<&str>, limit: usize) -> bool {
 
 pub(super) fn valid_text(value: &str, limit: usize) -> bool {
     !value.is_empty() && value.len() <= limit && !value.chars().any(char::is_control)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::digest_hex;
+
+    #[test]
+    fn digest_hex_matches_standard_sha256_vectors() {
+        assert_eq!(
+            digest_hex(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            digest_hex(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
 }

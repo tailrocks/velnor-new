@@ -1,10 +1,11 @@
+use super::context::{ReplayContext, RunnerLinkContext, StartedEventContext};
 use super::source::{
     canonical_stored_source, digest_hex, event_source, valid_digest, valid_optional_job_id,
     valid_text,
 };
 use super::{AUTHORITY_MODEL, RunnerEvent};
 use crate::error::HostError;
-use velnor_runner_github::{CompleteSourceMetadata, InnerJob, InnerKind};
+use velnor_runner_github::{InnerJob, InnerKind};
 
 pub(super) async fn event_fields_match(
     connection: &turso::Connection,
@@ -69,25 +70,19 @@ pub(super) async fn current_scale_set_matches(
 
 pub(super) async fn started_event_matches(
     connection: &turso::Connection,
-    connection_id: &str,
-    scale_set_id: i64,
-    request_id: i64,
-    binding_digest: &str,
-    message_id: Option<i64>,
-    digest: Option<&str>,
-    job_id: Option<&str>,
-    runner_id: Option<i64>,
-    runner_name: Option<&str>,
-    source: CompleteSourceMetadata<'_>,
-    has_completed: bool,
+    context: &ReplayContext<'_>,
+    event: &StartedEventContext<'_>,
 ) -> Result<bool, HostError> {
-    let (Some(message_id), Some(digest), Some(runner_id), Some(runner_name)) =
-        (message_id, digest, runner_id, runner_name)
-    else {
+    let (Some(message_id), Some(digest), Some(runner_id), Some(runner_name)) = (
+        event.message_id,
+        event.digest,
+        event.runner_id,
+        event.runner_name,
+    ) else {
         return Ok(false);
     };
     if message_id < 0
-        || !valid_optional_job_id(job_id)
+        || !valid_optional_job_id(event.job_id)
         || runner_id <= 0
         || !valid_text(runner_name, 128)
     {
@@ -95,13 +90,13 @@ pub(super) async fn started_event_matches(
     }
     let expected = digest_hex(
         &serde_json::to_vec(&RunnerEvent {
-            request_id,
+            request_id: context.request_id,
             message_id,
             runner_id,
             runner_name,
-            scale_set_id,
-            job_id,
-            source: event_source(source),
+            scale_set_id: context.scale_set_id,
+            job_id: event.job_id,
+            source: event_source(context.source),
         })
         .map_err(|_| HostError::Journal)?,
     );
@@ -110,42 +105,37 @@ pub(super) async fn started_event_matches(
     }
     runner_link_matches(
         connection,
-        connection_id,
-        scale_set_id,
-        request_id,
-        binding_digest,
-        runner_id,
-        runner_name,
-        0,
-        digest,
-        has_completed,
-        false,
+        context,
+        &RunnerLinkContext {
+            runner_id,
+            runner_name,
+            expected_intent_id: 0,
+            event_digest: digest,
+            has_completed: event.has_completed,
+            completed: false,
+        },
     )
     .await
 }
 
 pub(super) async fn runner_link_matches(
     connection: &turso::Connection,
-    connection_id: &str,
-    scale_set_id: i64,
-    request_id: i64,
-    binding_digest: &str,
-    runner_id: i64,
-    runner_name: &str,
-    expected_intent_id: i64,
-    event_digest: &str,
-    has_completed: bool,
-    completed: bool,
+    context: &ReplayContext<'_>,
+    link: &RunnerLinkContext<'_>,
 ) -> Result<bool, HostError> {
-    let event_column = if completed {
+    let event_column = if link.completed {
         "completed_event_digest"
     } else {
         "started_event_digest"
     };
-    let jit_column = if completed { "completed" } else { "started" };
-    let jit_states = if completed {
+    let jit_column = if link.completed {
+        "completed"
+    } else {
+        "started"
+    };
+    let jit_states = if link.completed {
         "'completed', 'cleaned'"
-    } else if has_completed {
+    } else if link.has_completed {
         "'started', 'completed', 'cleaned'"
     } else {
         "'started'"
@@ -157,15 +147,15 @@ pub(super) async fn runner_link_matches(
         .query(
             &query,
             (
-                connection_id,
-                scale_set_id,
-                request_id,
-                binding_digest,
-                event_digest,
-                runner_id,
-                runner_name,
-                expected_intent_id,
-                i64::from(has_completed || completed),
+                context.connection_id,
+                context.scale_set_id,
+                context.request_id,
+                context.binding_digest,
+                link.event_digest,
+                link.runner_id,
+                link.runner_name,
+                link.expected_intent_id,
+                i64::from(link.has_completed || link.completed),
             ),
         )
         .await
@@ -177,27 +167,18 @@ pub(super) async fn runner_link_matches(
     if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
         return Ok(false);
     }
-    witness_is_acquired(
-        connection,
-        connection_id,
-        scale_set_id,
-        witness_request_id,
-        binding_digest,
-    )
-    .await
+    witness_is_acquired(connection, context, witness_request_id).await
 }
 
 pub(super) async fn witness_is_acquired(
     connection: &turso::Connection,
-    connection_id: &str,
-    scale_set_id: i64,
+    context: &ReplayContext<'_>,
     request_id: i64,
-    binding_digest: &str,
 ) -> Result<bool, HostError> {
     let mut rows = connection
         .query(
             "SELECT authority_model, binding_digest, source_digest, source_json, acquire_state, acquire_response_json, acquire_response_digest FROM connection_request_authorizations WHERE connection_id = ?1 AND scale_set_id = ?2 AND request_id = ?3",
-            (connection_id, scale_set_id, request_id),
+            (context.connection_id, context.scale_set_id, request_id),
         )
         .await
         .map_err(|_| HostError::Journal)?;
@@ -214,11 +195,11 @@ pub(super) async fn witness_is_acquired(
     if rows.next().await.map_err(|_| HostError::Journal)?.is_some()
         || request_id <= 0
         || authority != AUTHORITY_MODEL
-        || stored_binding != binding_digest
+        || stored_binding != context.binding_digest
         || acquire_state != "acquired"
         || !valid_digest(&source_digest)
         || digest_hex(source_json.as_bytes()) != source_digest
-        || !canonical_stored_source(connection, connection_id, &source_json).await?
+        || !canonical_stored_source(connection, context, &source_json).await?
     {
         return Ok(false);
     }

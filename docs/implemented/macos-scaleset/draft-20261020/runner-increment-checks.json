@@ -1467,7 +1467,20 @@
     "author": "obsolete_capacity_cleanup",
     "reviewer": "execution_source_security_review",
     "language_reviewer": "helper_language_review",
-    "scope": "The settlement transaction retires its completion lease after the terminal proof and capacity release. Replay requires the exact stored identities.",
+    "scope": "The settlement transaction sets the completion lease and retry schedule to zero after the terminal proof and capacity release.",
     "remaining": "The full runner gates and live tests remain necessary."
+  },
+  "completion_replay_contexts": {
+    "result": "PASS",
+    "source_base": "5228231b80af387a19550c7da8ed5ab1ccbc0ddf",
+    "tests": 5,
+    "run_id": "383bedc3-936b-42dd-98d4-218bd1de7882",
+    "log": "shipping-replay5-focused-20261020.log",
+    "log_sha256": "2e8f57c8ee18779566c3c0628b79f7c6a4f47f59ca4bacfb49d616137a0ae9f3",
+    "manifest_sha256": "51f9ed1d2810954dceca14f659e35e31d573ac3773b699f0e30c013aadcc5959",
+    "author": "replay_context_refactor",
+    "reviewer": "runner_context_review",
+    "scope": "Private context records keep the replay identities together. The digest uses lowercase hexadecimal characters.",
+    "remaining": "Full source gates and live tests remain necessary."
   }
 }
