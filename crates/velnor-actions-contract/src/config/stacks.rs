@@ -1,4 +1,5 @@
 //! Stack selection and per-stack options.
+use super::ansible::AnsibleStackConfig;
 use super::binary_release::RustBinaryReleaseConfig;
 use super::bun::BunStackConfig;
 use super::dbt::DbtStackConfig;
@@ -32,6 +33,9 @@ pub struct StacksConfig {
     /// dbt-fusion stack options; absent means no dbt projects.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dbt: Option<DbtStackConfig>,
+    /// Ansible stack options; absent means no Ansible roots.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ansible: Option<AnsibleStackConfig>,
 }
 
 /// Declared compile driver (`[stacks.rust] compile_driver`).
@@ -249,6 +253,9 @@ impl StacksConfig {
         }
         if let Some(dbt) = &self.dbt {
             dbt.validate(file)?;
+        }
+        if let Some(ansible) = &self.ansible {
+            ansible.validate(file)?;
         }
         Ok(())
     }
