@@ -1442,5 +1442,18 @@
     ],
     "scope": "The fixtures use acquired requests and current physical attempts. The two historical cleanup tests keep their failure assertions.",
     "remaining": "Full source gates and live installation remain necessary."
+  },
+  "unused_cache_projection": {
+    "result": "PASS",
+    "source_base": "02ff07b7764a86163e70de3ea29772a2ebe0c70d",
+    "tests": 10,
+    "run_id": "6cb2aa35-74d9-49b6-9979-5cff693ec93b",
+    "log": "shipping-cache-projection-retirement-20261020.log",
+    "log_sha256": "cc19dae460df29b03ae621aab9ab0595b144f4a1252315614be0ef7e514eba72",
+    "reviewer": "runner_context_review",
+    "language_reviewer": "helper_language_review",
+    "scope": "The change removes an unused projection. The active job facts and resource admission remain.",
+    "text_change": "After the test run, one assertion message uses change instead of mutate.",
+    "remaining": "Strict runner checks and live installation remain necessary."
   }
 }

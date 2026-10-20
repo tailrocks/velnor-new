@@ -1,6 +1,5 @@
 //! Typed, bounded storage charges carried with one host reservation.
 
-mod cache_projection;
 mod job_facts_projection;
 mod observations;
 mod plan;
@@ -17,8 +16,6 @@ pub(crate) use job_facts_projection::{
     BoundJobFactsSnapshot, JobFactsReadContext, read_job_facts_snapshot,
 };
 pub(crate) use observations::{StoragePoolObservation, StorageSampleIdentity};
-#[cfg(test)]
-pub(crate) use plan::StorageCacheProjection;
 #[cfg(test)]
 pub(crate) use plan::{StorageReservationPlan, StorageRoleCharge};
 pub(crate) use profile::StoragePoolLimit;

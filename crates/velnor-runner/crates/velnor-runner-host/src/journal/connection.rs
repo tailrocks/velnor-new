@@ -87,7 +87,7 @@ pub(crate) use reservation::{
     StorageNetworkRecoveryIdentity,
 };
 #[cfg(test)]
-pub(crate) use reservation::{StorageCacheProjection, StorageReservationPlan, StorageRoleCharge};
+pub(crate) use reservation::{StorageReservationPlan, StorageRoleCharge};
 #[cfg(test)]
 pub(crate) use reservation::{
     fixture_admission, fixture_profile, fixture_provisioning_profile,
