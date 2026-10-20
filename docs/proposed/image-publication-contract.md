@@ -102,7 +102,7 @@ extended. Plain Dockerfile images already build on arm64.
 |---|---|---|---|
 | `image-<id>-<platform>` (in `ci.yml`) | PR, push | `contents: read` | yes |
 | `image-publish-<id>` | `push` to the default branch after `Required` succeeded | `contents: read`, `actions: read`, `packages: write`, `id-token: write`, `attestations: write`; environment `images` | none |
-| `image-promote-<id>` | `publish.yml` on `<id>-v<X.Y.Z>` | `packages: write`, `attestations: read`; environment `images` | none |
+| `image-promote-<id>` | `publish.yml` on `<id>-v<X.Y.Z>`, images with a `version_file` | `contents: read`, `packages: write`, `attestations: read`; environment `images` | none |
 
 The privileged jobs live in `publish.yml`, not `ci.yml`, because the `ci.yml`
 token hygiene gate forbids any registry token in a step and its permission
@@ -146,12 +146,33 @@ pinned tool. `actions/attest` joins the action allowlist pinned by full SHA.
 The workflow has no registry credential outside these jobs; PRs run only the
 build jobs, which hold `contents: read`.
 
-Not yet implemented: promotion (`image-promote-<id>`), and the sections below.
+## Promotion (implemented, `publish.yml`)
 
-## Remaining plan
+An image with a `version_file` (a `Cargo.toml`, `gradle.properties` or
+`package.json`) is releasable: its id joins the declared artifact set of the
+tag authority job (`publish-authority`), which already verifies that the tag
+is annotated, reachable from the default branch, has a green `Required` check
+at the commit, and that the manifest version at the commit equals the tag
+version. Image ids, bundle ids and released Rust package names share the
+`<id>-v<X.Y.Z>` tag namespace and may not collide.
 
-Promotion adds the `<X.Y.Z>` tag to the digest already built on the default
-branch (hard decision 8); a tag never rebuilds.
+`image-promote-<id>` needs the tag authority job and runs only when the tag
+names its image. It never builds, downloads a layout or checks out code:
+
+1. resolves the digest behind `<repository>:sha-<tagged commit>`, which the
+   default-branch publish job pushed;
+2. runs `gh attestation verify` on that digest: the provenance must be signed
+   by this repository's `publish.yml`, for the tagged commit
+   (`--source-digest`) on the default branch (`--source-ref`), so a digest
+   that was retagged or pushed by anything else is refused;
+3. adds the tag `<X.Y.Z>` to the same digest with `crane tag`; an existing
+   release tag must already name that digest, so re-running is idempotent and
+   a moved tag fails.
+
+Mixed workflows (images with a version file plus bundles or Rust releases)
+condition the authority job on the pushed ref type, as bundles already do.
+
+## Credentials
 
 No private credential enters a BuildKit build: no secret mount, no `type=gha`
 cache (it hands `ACTIONS_RUNTIME_TOKEN` to BuildKit), no build argument that

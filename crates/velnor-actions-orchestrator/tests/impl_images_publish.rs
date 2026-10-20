@@ -118,3 +118,102 @@ fn the_ci_workflow_holds_no_publish_job_or_registry_scope() -> TestResult {
     assert!(!ci.contains("attestations:"), "{ci}");
     Ok(())
 }
+
+const PROMOTE_EXTRA: &str = "version_file = \"svc/package.json\"\n";
+
+fn promotable(extra: &str) -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
+    let repo = image_repo(&images_config(&format!("{PROMOTE_EXTRA}{extra}")))?;
+    fs::write(
+        repo.path().join("svc/package.json"),
+        "{\"name\": \"demo-app\", \"version\": \"1.2.3\"}\n",
+    )?;
+    git(&["add", "."], repo.path())?;
+    Ok(repo)
+}
+
+#[test]
+fn a_version_file_adds_the_tag_trigger_and_a_promote_job() -> TestResult {
+    let repo = promotable("")?;
+    let tree = render_staged_tree(&prepare(repo.path())?)?;
+    let yaml = required_file(&tree, PUBLISH_PATH)?;
+    assert!(yaml.contains("*-v[0-9]*.[0-9]*.[0-9]*"), "{yaml}");
+    assert!(yaml.contains("demo-app"), "declared set:\n{yaml}");
+    let authority = job_body(yaml, "publish-authority")?;
+    assert!(
+        authority.contains("steps.tag.outputs.artifact == 'demo-app'"),
+        "{authority}"
+    );
+    assert!(
+        authority.contains("contents/svc/package.json?ref=$GITHUB_SHA"),
+        "{authority}"
+    );
+    let branch = job_body(yaml, "publish-branch-authority")?;
+    assert!(
+        branch.contains("if: github.ref_type == 'branch'"),
+        "{branch}"
+    );
+    assert!(
+        authority.contains("if: github.ref_type == 'tag'"),
+        "{authority}"
+    );
+    Ok(())
+}
+
+#[test]
+fn promote_retags_the_attested_digest_and_never_builds() -> TestResult {
+    let repo = promotable("")?;
+    let tree = render_staged_tree(&prepare(repo.path())?)?;
+    let yaml = required_file(&tree, PUBLISH_PATH)?;
+    let job = job_body(yaml, "image-promote-demo-app")?;
+    assert!(job.contains("needs:\n      - publish-authority"), "{job}");
+    assert!(
+        job.contains("needs.publish-authority.outputs.artifact == 'demo-app'"),
+        "{job}"
+    );
+    assert!(job.contains("environment: images"), "{job}");
+    for scope in ["attestations: read", "packages: write", "contents: read"] {
+        assert!(job.contains(scope), "{scope}:\n{job}");
+    }
+    for forbidden in [
+        "id-token",
+        "actions/checkout",
+        "buildx",
+        "docker build",
+        "crane push",
+    ] {
+        assert!(!job.contains(forbidden), "{forbidden}:\n{job}");
+    }
+    assert!(job.contains("gh attestation verify"), "{job}");
+    assert!(job.contains("--source-digest"), "{job}");
+    assert!(job.contains("--source-ref refs/heads/testmain"), "{job}");
+    assert!(job.contains("sha-$GITHUB_SHA"), "{job}");
+    assert!(job.contains("crane tag"), "{job}");
+    Ok(())
+}
+
+#[test]
+fn an_unreadable_or_unsupported_version_file_fails_generation() -> TestResult {
+    let repo = image_repo(&images_config(PROMOTE_EXTRA))?;
+    let error = prepare(repo.path()).and_then(|prep| render_staged_tree(&prep));
+    let text = error.expect_err("missing manifest").to_string();
+    assert!(text.contains("unreadable_version_file"), "{text}");
+    let repo = image_repo(&images_config("version_file = \"svc/VERSION\"\n"))?;
+    let text = prepare(repo.path()).expect_err("unsupported").to_string();
+    assert!(text.contains("unsupported_image_version_file"), "{text}");
+    Ok(())
+}
+
+#[test]
+fn image_and_bundle_ids_share_one_tag_namespace() -> TestResult {
+    let config = images_config(&format!(
+        "{PROMOTE_EXTRA}[[publish.bundles]]\nid = \"demo-app\"\npaths = [\"svc\"]\nversion = \"1.0.0\"\n"
+    ));
+    let repo = promotable("")?;
+    fs::write(repo.path().join(".velnor/config.toml"), config)?;
+    git(&["add", "."], repo.path())?;
+    let text = render_staged_tree(&prepare(repo.path())?)
+        .expect_err("collision")
+        .to_string();
+    assert!(text.contains("artifact_id_collides:demo-app"), "{text}");
+    Ok(())
+}
