@@ -70,7 +70,7 @@ impl RunDirectory {
             rustix::fs::fstat(&file).map_err(|_| internal(&format!("{prefix}_unreadable")))?;
         if FileType::from_raw_mode(stat.st_mode) != FileType::RegularFile
             || stat.st_uid != crate::filesystem_owner::effective_uid()
-            || required_mode.is_some_and(|mode| stat.st_mode & 0o7777 != mode)
+            || required_mode.is_some_and(|mode| u64::from(stat.st_mode & 0o7777) != u64::from(mode))
         {
             return Err(internal(&format!("{prefix}_untrusted")));
         }

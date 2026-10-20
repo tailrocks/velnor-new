@@ -92,3 +92,45 @@ fn opened_run_directory_stays_pinned_after_path_replacement() {
         .expect("The test could not read the file through the open run directory.");
     assert_eq!(bytes, b"original");
 }
+
+#[cfg(unix)]
+#[test]
+fn owned_file_mode_check_accepts_expected_mode_and_rejects_a_different_mode() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = tempfile::tempdir().expect("The test cannot create a temporary directory.");
+    let run_dir = temp.path().join("velnor").join(RUN_KEY);
+    fs::create_dir_all(&run_dir).expect("The test cannot create the run directory.");
+    let file_path = run_dir.join("runtime-identity.json");
+    fs::write(&file_path, b"{}").expect("The test cannot write the identity file.");
+    fs::set_permissions(&file_path, fs::Permissions::from_mode(0o600))
+        .expect("The test cannot set file mode 0600.");
+
+    let opened =
+        RunDirectory::open(temp.path(), RUN_KEY).expect("The test cannot open the run directory.");
+    assert_eq!(
+        opened
+            .read_owned_file(
+                "runtime-identity.json",
+                16,
+                Some(0o600),
+                "qualification_cache_runtime_identity",
+            )
+            .expect("The reader must accept file mode 0600."),
+        b"{}"
+    );
+
+    fs::set_permissions(&file_path, fs::Permissions::from_mode(0o644))
+        .expect("The test cannot set file mode 0644.");
+    assert!(
+        opened
+            .read_owned_file(
+                "runtime-identity.json",
+                16,
+                Some(0o600),
+                "qualification_cache_runtime_identity",
+            )
+            .is_err(),
+        "The reader must reject file mode 0644 when it accepts only file mode 0600."
+    );
+}
