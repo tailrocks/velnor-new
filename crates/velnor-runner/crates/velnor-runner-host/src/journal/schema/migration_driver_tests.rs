@@ -6,10 +6,10 @@ fn migration_driver_accepts_only_known_next_versions() {
         assert_eq!(expected_next_version(version), Some(version + 1));
     }
     assert_eq!(expected_next_version(9), Some(11));
-    for version in 10..=32 {
+    for version in 10..=33 {
         assert_eq!(expected_next_version(version), Some(version + 1));
     }
-    for version in [-1, 33] {
+    for version in [-1, 34] {
         assert_eq!(expected_next_version(version), None);
     }
 }

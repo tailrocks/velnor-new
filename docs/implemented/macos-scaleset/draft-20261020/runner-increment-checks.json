@@ -1528,5 +1528,17 @@
     "reviewer": "runner_context_review",
     "scope": "Three calls use Box::pin before .await. The change keeps the operation order and ownership.",
     "remaining": "The full strict runner gate still has other failures."
+  },
+  "recovering_completion_reader": {
+    "result": "PASS",
+    "tests": 6,
+    "run_id": "b4961e97-d37a-4d8e-9131-97773b99037d",
+    "log_sha256": "897a7a05b421ca13ac98e56f776fd197573f8392a37d6cdaa10a738fb344b2dd",
+    "source_manifest_sha256": "65bf444cdbcdaa13ab3df250e78844aac81e025915f8d02302eb3ca74f48a2d3",
+    "author": "obsolete_capacity_cleanup",
+    "reviewer": "execution_source_security_review",
+    "language_reviewer": "runner_context_review",
+    "scope": "The migration keeps existing attempt rows. The completion query accepts a recovering reservation with the required identity and completion proof.",
+    "remaining": "Full cleanup and reopen tests remain necessary. The strict runner gate still has other failures."
   }
 }

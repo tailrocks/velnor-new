@@ -21,16 +21,31 @@ const OUTCOME_NO_DELETE: &str = "CREATE TRIGGER IF NOT EXISTS physical_attempt_o
 const CURRENT_INSERT_GUARD: &str = "CREATE TRIGGER IF NOT EXISTS physical_attempt_current_insert_guard BEFORE INSERT ON physical_attempt_current WHEN NOT EXISTS (SELECT 1 FROM physical_attempts AS attempt JOIN physical_attempt_lineages AS lineage ON lineage.lineage_id = attempt.lineage_id JOIN capacity_reservations AS reservation ON reservation.id = attempt.reservation_id JOIN connection_intents AS intent ON intent.id = attempt.intent_id JOIN connection_request_authorizations AS witness ON witness.connection_id = attempt.connection_id AND witness.scale_set_id = attempt.scale_set_id AND witness.request_id = attempt.witness_request_id WHERE attempt.lineage_id = NEW.lineage_id AND attempt.generation = NEW.generation AND attempt.reservation_id = NEW.reservation_id AND attempt.intent_id = NEW.intent_id AND lineage.connection_id = attempt.connection_id AND lineage.scale_set_id = attempt.scale_set_id AND lineage.binding_digest = attempt.binding_digest AND reservation.id = attempt.reservation_id AND reservation.state IN ('reserved', 'uncertain', 'recovering') AND reservation.connection_id = attempt.connection_id AND reservation.binding_digest = attempt.binding_digest AND reservation.engine_id = attempt.engine_id AND reservation.docker_root_digest = attempt.docker_root_digest AND intent.id = attempt.intent_id AND intent.connection_id = attempt.connection_id AND intent.scale_set_id = attempt.scale_set_id AND intent.kind = 'launch' AND intent.state IN ('pending', 'uncertain', 'done') AND witness.binding_digest = attempt.binding_digest AND witness.source_digest = attempt.source_digest AND witness.acquire_response_digest IS attempt.acquire_response_digest) BEGIN SELECT RAISE(ABORT, 'invalid current physical attempt'); END";
 const CURRENT_NO_UPDATE: &str = "CREATE TRIGGER IF NOT EXISTS physical_attempt_current_no_update BEFORE UPDATE ON physical_attempt_current BEGIN SELECT RAISE(ABORT, 'replace current physical attempt atomically'); END";
 const CURRENT_DELETE_GUARD: &str = "CREATE TRIGGER IF NOT EXISTS physical_attempt_current_delete_guard BEFORE DELETE ON physical_attempt_current WHEN NOT EXISTS (SELECT 1 FROM physical_attempt_outcomes AS outcome JOIN capacity_reservations AS reservation ON reservation.id = outcome.reservation_id WHERE outcome.lineage_id = OLD.lineage_id AND outcome.generation = OLD.generation AND outcome.reservation_id = OLD.reservation_id AND reservation.state = 'released' AND reservation.remote_cleanup_proven = 1 AND reservation.local_cleanup_proven = 1) BEGIN SELECT RAISE(ABORT, 'current attempt requires durable terminal release'); END";
-const OUTCOME_INSERT_GUARD: &str = concat!(
+macro_rules! outcome_insert_guard {
+    ($capacity_states:literal) => {
+        concat!(
     "CREATE TRIGGER IF NOT EXISTS physical_attempt_outcome_insert_guard BEFORE INSERT ON physical_attempt_outcomes WHEN NOT (",
     "EXISTS (SELECT 1 FROM physical_attempt_current AS current JOIN physical_attempts AS attempt ON attempt.lineage_id = current.lineage_id AND attempt.generation = current.generation AND attempt.reservation_id = current.reservation_id JOIN connection_request_authorizations AS auth ON auth.connection_id = attempt.connection_id AND auth.scale_set_id = attempt.scale_set_id AND auth.request_id = attempt.witness_request_id WHERE current.lineage_id = NEW.lineage_id AND current.generation = NEW.generation AND current.reservation_id = NEW.reservation_id AND NEW.outcome = 'acquire_no_effect' AND auth.acquire_state IN ('no_effect', 'rejected') AND auth.acquire_response_digest = NEW.proof_digest AND NEW.settlement_digest = NEW.proof_digest) OR ",
-    "EXISTS (SELECT 1 FROM physical_attempt_current AS current JOIN physical_attempts AS attempt ON attempt.lineage_id = current.lineage_id AND attempt.generation = current.generation AND attempt.reservation_id = current.reservation_id JOIN capacity_reservations AS reservation ON reservation.id = current.reservation_id JOIN connection_intents AS intent ON intent.id = current.intent_id JOIN capacity_reservation_provisioning_state AS state ON state.reservation_id = reservation.id JOIN capacity_reservation_provisioning_cleanups AS cleanup ON cleanup.reservation_id = reservation.id JOIN connection_completion_cleanup AS completion ON completion.intent_id = intent.id AND completion.connection_id = intent.connection_id AND completion.scale_set_id = intent.scale_set_id JOIN connection_request_authorizations AS auth ON auth.connection_id = completion.connection_id AND auth.scale_set_id = completion.scale_set_id AND auth.request_id = completion.runner_request_id WHERE current.lineage_id = NEW.lineage_id AND current.generation = NEW.generation AND current.reservation_id = NEW.reservation_id AND NEW.outcome = 'normal_completion' AND reservation.state IN ('reserved', 'uncertain') AND reservation.remote_cleanup_proven = 1 AND reservation.local_cleanup_proven = 1 AND intent.cleanup_proven = 1 AND state.resources_bound = 1 AND state.storage_cleanup_proven = 1 AND state.instance_binding_digest = cleanup.instance_binding_digest AND completion.runner_absent = 1 AND completion.lease_until > CAST(strftime('%s', 'now') AS INTEGER) AND auth.acquire_state = 'acquired' AND auth.completed_event_digest IS NOT NULL) OR ",
+    "EXISTS (SELECT 1 FROM physical_attempt_current AS current JOIN physical_attempts AS attempt ON attempt.lineage_id = current.lineage_id AND attempt.generation = current.generation AND attempt.reservation_id = current.reservation_id JOIN capacity_reservations AS reservation ON reservation.id = current.reservation_id JOIN connection_intents AS intent ON intent.id = current.intent_id JOIN capacity_reservation_provisioning_state AS state ON state.reservation_id = reservation.id JOIN capacity_reservation_provisioning_cleanups AS cleanup ON cleanup.reservation_id = reservation.id JOIN connection_completion_cleanup AS completion ON completion.intent_id = intent.id AND completion.connection_id = intent.connection_id AND completion.scale_set_id = intent.scale_set_id JOIN connection_request_authorizations AS auth ON auth.connection_id = completion.connection_id AND auth.scale_set_id = completion.scale_set_id AND auth.request_id = completion.runner_request_id WHERE current.lineage_id = NEW.lineage_id AND current.generation = NEW.generation AND current.reservation_id = NEW.reservation_id AND NEW.outcome = 'normal_completion' AND reservation.state IN (",
+    $capacity_states,
+    ") AND reservation.remote_cleanup_proven = 1 AND reservation.local_cleanup_proven = 1 AND intent.cleanup_proven = 1 AND state.resources_bound = 1 AND state.storage_cleanup_proven = 1 AND state.instance_binding_digest = cleanup.instance_binding_digest AND completion.runner_absent = 1 AND completion.lease_until > CAST(strftime('%s', 'now') AS INTEGER) AND auth.acquire_state = 'acquired' AND auth.completed_event_digest IS NOT NULL) OR ",
     "EXISTS (SELECT 1 FROM physical_attempt_current AS current JOIN physical_attempts AS attempt ON attempt.lineage_id = current.lineage_id AND attempt.generation = current.generation AND attempt.reservation_id = current.reservation_id JOIN capacity_reservations AS reservation ON reservation.id = current.reservation_id JOIN connection_intents AS intent ON intent.id = current.intent_id JOIN connection_request_authorizations AS auth ON auth.connection_id = attempt.connection_id AND auth.scale_set_id = attempt.scale_set_id AND auth.request_id = attempt.witness_request_id JOIN capacity_reservation_pre_jit_cleanup_claims AS claim ON claim.reservation_id = reservation.id JOIN capacity_reservation_pre_jit_cleanup_progress AS progress ON progress.reservation_id = claim.reservation_id AND progress.claim_generation = claim.claim_generation JOIN capacity_reservation_pre_jit_cleanup_settlements AS settlement ON settlement.reservation_id = claim.reservation_id AND settlement.claim_generation = claim.claim_generation JOIN resource_probe_operations AS probe ON probe.operation_id = settlement.probe_operation_id JOIN host_operation_leases AS lease ON lease.singleton = 1 AND lease.operation_id = probe.operation_id JOIN host_storage_profile_current AS current_profile ON current_profile.singleton = 1 AND current_profile.generation_id = settlement.profile_generation_id JOIN host_storage_profiles AS profile ON profile.generation_id = current_profile.generation_id WHERE current.lineage_id = NEW.lineage_id AND current.generation = NEW.generation AND current.reservation_id = NEW.reservation_id AND NEW.outcome = 'pre_jit_capacity_available' AND NEW.proof_digest = settlement.sample_evidence_sha256 AND NEW.settlement_digest = settlement.sample_evidence_sha256 AND settlement.outcome = 'capacity_available' AND settlement.connection_id = attempt.connection_id AND settlement.operation_id = attempt.intent_id AND settlement.engine_id = attempt.engine_id AND settlement.docker_root_digest = attempt.docker_root_digest AND claim.connection_id = attempt.connection_id AND claim.operation_id = attempt.intent_id AND claim.engine_id = attempt.engine_id AND claim.docker_root_digest = attempt.docker_root_digest AND settlement.snapshot_sha256 = claim.snapshot_sha256 AND settlement.profile_digest = profile.profile_digest AND progress.phase = 'network_absent' AND claim.phase = 'claimed' AND claim.lease_until > CAST(strftime('%s', 'now') AS INTEGER) AND reservation.state = 'uncertain' AND reservation.remote_cleanup_proven = 0 AND reservation.local_cleanup_proven = 0 AND intent.state = 'uncertain' AND intent.cleanup_proven = 0 AND intent.jit_requested = 0 AND intent.github_runner_id IS NULL AND auth.acquire_state = 'acquired' AND NOT EXISTS (SELECT 1 FROM connection_runner_jits AS jit WHERE jit.intent_id = attempt.intent_id) AND NOT EXISTS (SELECT 1 FROM execution_publication_operations AS publication WHERE publication.reservation_id = reservation.id) AND NOT EXISTS (SELECT 1 FROM connection_execution_proofs AS proof WHERE proof.reservation_id = reservation.id) AND EXISTS (SELECT 1 FROM capacity_reservation_pre_jit_create_responses AS response WHERE response.reservation_id = reservation.id AND response.role = 'runner' AND response.client_api_major = 1 AND response.client_api_minor = 53 AND response.response_status IN (400, 404, 409) AND response.engine_id = attempt.engine_id AND response.docker_root_digest = attempt.docker_root_digest) AND probe.probe_purpose = 'capacity' AND probe.phase = 'removed' AND probe.engine_id = attempt.engine_id AND probe.docker_root_digest = attempt.docker_root_digest AND lease.state = 'released' AND lease.engine_id = attempt.engine_id AND lease.docker_root_digest = attempt.docker_root_digest AND (SELECT COUNT(*) FROM capacity_reservation_pre_jit_cleanup_settlement_pools AS sampled WHERE sampled.reservation_id = reservation.id AND sampled.claim_generation = claim.claim_generation) = (SELECT COUNT(*) FROM capacity_reservation_provisioning_pools AS reserved_pool WHERE reserved_pool.reservation_id = reservation.id AND reserved_pool.scope = 'shared-disk' AND reserved_pool.medium = 'disk')) ",
     ") BEGIN SELECT RAISE(ABORT, 'outcome does not retire current physical attempt'); END"
-);
+        )
+    };
+}
+pub(super) const OUTCOME_INSERT_GUARD_V33: &str = outcome_insert_guard!("'reserved', 'uncertain'");
+const OUTCOME_INSERT_GUARD: &str = outcome_insert_guard!("'reserved', 'uncertain', 'recovering'");
 const REVISION_TABLES: [&str; 4] = [LINEAGE, ATTEMPT, CURRENT, OUTCOME];
 
 pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError> {
+    bootstrap_with_outcome_guard(conn, OUTCOME_INSERT_GUARD).await
+}
+
+async fn bootstrap_with_outcome_guard(
+    conn: &turso::Connection,
+    outcome_guard: &'static str,
+) -> Result<(), HostError> {
     for sql in [
         LINEAGE_DDL,
         ATTEMPT_DDL,
@@ -46,12 +61,14 @@ pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError>
         CURRENT_INSERT_GUARD,
         CURRENT_NO_UPDATE,
         CURRENT_DELETE_GUARD,
-        OUTCOME_INSERT_GUARD,
     ] {
         conn.execute(sql, ())
             .await
             .map_err(|_| HostError::Journal)?;
     }
+    conn.execute(outcome_guard, ())
+        .await
+        .map_err(|_| HostError::Journal)?;
     for table in REVISION_TABLES {
         for (suffix, action) in [
             ("insert", "AFTER INSERT"),
@@ -71,7 +88,7 @@ pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError>
 }
 
 pub(super) async fn upgrade_from_v32(conn: &turso::Connection) -> Result<(), HostError> {
-    bootstrap(conn).await?;
+    bootstrap_with_outcome_guard(conn, OUTCOME_INSERT_GUARD_V33).await?;
     let mut rows = conn
         .query(
             "SELECT link.connection_id, link.scale_set_id, link.request_id, link.reservation_id, link.physical_nonce, link.binding_digest, reservation.intent_id, reservation.engine_id, reservation.docker_root_digest, reservation.state, reservation.remote_cleanup_proven, reservation.local_cleanup_proven, intent.state, auth.source_digest, auth.acquire_response_digest FROM connection_request_reservations AS link JOIN capacity_reservations AS reservation ON reservation.id = link.reservation_id AND reservation.connection_id = link.connection_id JOIN connection_intents AS intent ON intent.id = reservation.intent_id AND intent.connection_id = reservation.connection_id JOIN connection_request_authorizations AS auth ON auth.connection_id = link.connection_id AND auth.scale_set_id = link.scale_set_id AND auth.request_id = link.request_id AND auth.binding_digest = link.binding_digest ORDER BY link.reservation_id",
@@ -146,11 +163,22 @@ pub(super) async fn upgrade_from_v32(conn: &turso::Connection) -> Result<(), Hos
             .map_err(|_| HostError::Journal)?;
         }
     }
-    validate(conn).await
+    validate_v33(conn).await
 }
 
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
-    for (kind, name, expected) in objects() {
+    validate_with_outcome_guard(conn, OUTCOME_INSERT_GUARD).await
+}
+
+pub(super) async fn validate_v33(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_with_outcome_guard(conn, OUTCOME_INSERT_GUARD_V33).await
+}
+
+async fn validate_with_outcome_guard(
+    conn: &turso::Connection,
+    outcome_guard: &'static str,
+) -> Result<(), HostError> {
+    for (kind, name, expected) in objects(outcome_guard) {
         let mut rows = conn
             .query(
                 "SELECT sql FROM sqlite_schema WHERE type = ?1 AND name = ?2",
@@ -170,6 +198,17 @@ pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> 
     }
     validate_revision_triggers(conn).await?;
     validate_rows(conn).await
+}
+
+pub(super) async fn upgrade_from_v33(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_v33(conn).await?;
+    conn.execute("DROP TRIGGER physical_attempt_outcome_insert_guard", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    conn.execute(OUTCOME_INSERT_GUARD, ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    validate(conn).await
 }
 
 async fn validate_revision_triggers(conn: &turso::Connection) -> Result<(), HostError> {
@@ -207,7 +246,7 @@ async fn validate_revision_triggers(conn: &turso::Connection) -> Result<(), Host
     Ok(())
 }
 
-fn objects() -> [(&'static str, &'static str, &'static str); 15] {
+fn objects(outcome_guard: &'static str) -> [(&'static str, &'static str, &'static str); 15] {
     [
         ("table", LINEAGE, LINEAGE_DDL),
         ("table", ATTEMPT, ATTEMPT_DDL),
@@ -258,7 +297,7 @@ fn objects() -> [(&'static str, &'static str, &'static str); 15] {
         (
             "trigger",
             "physical_attempt_outcome_insert_guard",
-            OUTCOME_INSERT_GUARD,
+            outcome_guard,
         ),
     ]
 }

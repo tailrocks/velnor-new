@@ -347,3 +347,12 @@ pub(super) async fn from_version_thirty_two(conn: &turso::Connection) -> Result<
         .map_err(|_| HostError::Journal)?;
     Ok(())
 }
+
+pub(super) async fn from_version_thirty_three(conn: &turso::Connection) -> Result<(), HostError> {
+    super::validate_persisted_schema_v33(conn).await?;
+    super::physical_attempts::upgrade_from_v33(conn).await?;
+    conn.execute("PRAGMA user_version = 34", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(())
+}
