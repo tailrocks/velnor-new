@@ -6,155 +6,13 @@ use crate::launch::bootstrap::{
     BootstrapContainerRole, ObservedContainerCgroup, ObservedStorageAttachment, ObservedStorageRole,
 };
 
-use crate::launch::bootstrap::test_fixtures::{
-    valid_bounded_text, valid_container_id, valid_digest,
+use crate::launch::bootstrap::test_fixtures::valid_digest;
+
+#[path = "storage/observed.rs"]
+mod observed;
+pub(crate) use observed::{
+    test_observed_container_cgroup, test_observed_storage_attachment, test_observed_storage_role,
 };
-
-pub(crate) fn test_observed_storage_role(
-    role: StorageRole,
-    pool_id: String,
-    filesystem_instance_digest: String,
-    medium: StorageMedium,
-    filesystem_kind: StorageFilesystemKind,
-    byte_counts: (u64, u64, u64),
-    inode_counts: (Option<u64>, Option<u64>, Option<u64>),
-    inode_policy: StorageInodePolicy,
-    charges: (u64, u64, u64),
-    owned_usage: (u64, u64),
-) -> Result<ObservedStorageRole, HostError> {
-    let value = ObservedStorageRole {
-        role,
-        pool_id,
-        filesystem_instance_digest,
-        medium,
-        filesystem_kind,
-        total_bytes: byte_counts.0,
-        free_bytes: byte_counts.1,
-        available_bytes: byte_counts.2,
-        inode_total: inode_counts.0,
-        inode_free: inode_counts.1,
-        inode_available: inode_counts.2,
-        inode_policy,
-        charge_bytes: charges.0,
-        charge_inodes: charges.1,
-        retained_memory_bytes: charges.2,
-        owned_usage_bytes: owned_usage.0,
-        owned_usage_inodes: owned_usage.1,
-    };
-    validate_storage_role(&value)?;
-    Ok(value)
-}
-
-pub(crate) fn test_observed_storage_attachment(
-    role: StorageRole,
-    observer: StorageObserver,
-    container_id: Option<String>,
-    target: String,
-    source_target: Option<String>,
-    mount_root: String,
-    read_only: bool,
-    mount_id: u64,
-    statx_inode: u64,
-    device: (u32, u32),
-    statx_device: (u32, u32),
-    fs_type_magic: u64,
-    filesystem_id: u64,
-    filesystem_instance_digest: String,
-) -> Result<ObservedStorageAttachment, HostError> {
-    let contract = role
-        .attachments()
-        .iter()
-        .find(|contract| contract.observer == observer && contract.target == target)
-        .ok_or(HostError::Journal)?;
-    let container_valid = match observer {
-        StorageObserver::Runner | StorageObserver::Dind => {
-            container_id.as_deref().is_some_and(valid_container_id)
-        }
-        StorageObserver::Probe => container_id.is_none(),
-    };
-    if !container_valid
-        || source_target.as_deref() != contract.source_target
-        || !valid_mount_root(&mount_root, contract.volume_subpath)
-        || read_only != contract.read_only
-        || mount_id == 0
-        || statx_inode == 0
-        || !valid_digest(&filesystem_instance_digest)
-        || (device == (0, 0) && statx_device == (0, 0))
-        || (fs_type_magic == 0)
-        || filesystem_id == 0
-    {
-        return Err(HostError::Journal);
-    }
-    Ok(ObservedStorageAttachment {
-        role,
-        observer,
-        container_id,
-        target,
-        source_target,
-        volume_subpath: contract.volume_subpath.map(str::to_owned),
-        mount_root,
-        read_only,
-        mount_id,
-        statx_inode,
-        device_major: device.0,
-        device_minor: device.1,
-        statx_device_major: statx_device.0,
-        statx_device_minor: statx_device.1,
-        fs_type_magic,
-        filesystem_id,
-        filesystem_instance_digest,
-    })
-}
-
-fn valid_mount_root(value: &str, volume_subpath: Option<&str>) -> bool {
-    if value == "/" {
-        return volume_subpath.is_none();
-    }
-    if value.is_empty()
-        || value.len() > 1024
-        || !value.starts_with('/')
-        || value.bytes().any(|byte| byte.is_ascii_control())
-        || value
-            .split('/')
-            .any(|component| component == "." || component == "..")
-    {
-        return false;
-    }
-    volume_subpath.is_none_or(|subpath| {
-        value
-            .strip_suffix(subpath)
-            .is_some_and(|prefix| prefix.ends_with('/') && !prefix.is_empty())
-    })
-}
-
-pub(crate) fn test_observed_container_cgroup(
-    role: BootstrapContainerRole,
-    container_id: String,
-    path: String,
-    memory: (Option<u64>, u64),
-    cpu: (Option<u64>, u64),
-    pids_max: Option<u64>,
-) -> Result<ObservedContainerCgroup, HostError> {
-    if !valid_container_id(&container_id)
-        || !valid_bounded_text(&path, 1024)
-        || memory.0.is_none_or(|limit| limit == 0 || limit < memory.1)
-        || cpu.0.is_none_or(|quota| quota == 0)
-        || cpu.1 == 0
-        || pids_max.is_none_or(|limit| limit == 0)
-    {
-        return Err(HostError::Journal);
-    }
-    Ok(ObservedContainerCgroup {
-        role,
-        container_id,
-        path,
-        memory_max_bytes: memory.0,
-        memory_current_bytes: memory.1,
-        cpu_quota_micros: cpu.0,
-        cpu_period_micros: cpu.1,
-        pids_max,
-    })
-}
 
 pub(crate) fn test_verified_storage_resource_binding(
     reservation_id: i64,
@@ -173,6 +31,7 @@ pub(crate) fn test_verified_storage_resource_binding(
     cgroups: Vec<ObservedContainerCgroup>,
     guest_boot_id: String,
 ) -> Result<super::VerifiedStorageResourceBinding, HostError> {
+    let cleanup_observer_binding = cleanup_binding(&guest_boot_id, &attachments, &cgroups)?;
     let root_backings = [
         (
             StorageRole::RunnerRoot,
@@ -237,8 +96,160 @@ pub(crate) fn test_verified_storage_resource_binding(
         cgroups,
         root_backings,
         guest_boot_id,
+        cleanup_observer_binding,
     };
     super::validation::validate_storage_resource_binding(&binding)?;
+    Ok(binding)
+}
+
+fn cleanup_binding(
+    boot_id: &str,
+    attachments: &[ObservedStorageAttachment],
+    cgroups: &[ObservedContainerCgroup],
+) -> Result<velnor_resource_probe::cleanup_observer_wire::CleanupObserverBinding, HostError> {
+    use velnor_resource_probe::cleanup_observer_wire::{
+        CleanupDockerRootIdentity, CleanupObserverBinding, CleanupVolume, ProcessIdentity,
+    };
+    let root = |role, observer, container: Option<&str>, target: &str| {
+        attachments
+            .iter()
+            .find(|row| {
+                row.role() == role
+                    && row.observer() == observer
+                    && row.container_id() == container
+                    && row.target() == target
+            })
+            .ok_or(HostError::Journal)
+    };
+    let roles = [
+        (StorageRole::SharedRun, StorageObserver::Runner, "/run"),
+        (
+            StorageRole::RunnerHome,
+            StorageObserver::Runner,
+            "/home/runner",
+        ),
+        (
+            StorageRole::RunnerWork,
+            StorageObserver::Runner,
+            "/home/runner/_work",
+        ),
+        (
+            StorageRole::DindData,
+            StorageObserver::Dind,
+            "/var/lib/docker",
+        ),
+        (
+            StorageRole::EngineMetadata,
+            StorageObserver::Runner,
+            "/opt/velnor/job-facts",
+        ),
+    ];
+    let names = [
+        "shared-run",
+        "runner-home",
+        "runner-work",
+        "dind-data",
+        "engine-metadata",
+    ];
+    let mut volumes = Vec::with_capacity(names.len());
+    for ((role, observer, target), name) in roles.into_iter().zip(names) {
+        let actual_container = attachments
+            .iter()
+            .find(|row| row.role() == role && row.observer() == observer && row.target() == target)
+            .and_then(ObservedStorageAttachment::container_id);
+        if (observer == StorageObserver::Probe) != actual_container.is_none() {
+            return Err(HostError::Journal);
+        }
+        let row = root(role, observer, actual_container, target)?;
+        volumes.push(CleanupVolume {
+            role: name.to_owned(),
+            mountpoint: format!("/var/lib/docker/volumes/test-{name}/_data"),
+            mount_device: [row.device().0, row.device().1],
+            statx_device: [row.statx_device().0, row.statx_device().1],
+            inode: if role == StorageRole::EngineMetadata {
+                row.statx_inode().saturating_add(1)
+            } else {
+                row.statx_inode()
+            },
+        });
+    }
+    let tmpfs = [
+        (StorageRole::SharedRun, StorageObserver::Runner, "/run"),
+        (
+            StorageRole::RunnerHome,
+            StorageObserver::Runner,
+            "/home/runner",
+        ),
+        (
+            StorageRole::RunnerWork,
+            StorageObserver::Runner,
+            "/home/runner/_work",
+        ),
+        (StorageRole::RunnerTmp, StorageObserver::Runner, "/tmp"),
+        (StorageRole::RunnerShm, StorageObserver::Runner, "/dev/shm"),
+        (
+            StorageRole::DindData,
+            StorageObserver::Dind,
+            "/var/lib/docker",
+        ),
+        (StorageRole::DindTmp, StorageObserver::Dind, "/tmp"),
+        (StorageRole::DindShm, StorageObserver::Dind, "/dev/shm"),
+    ];
+    let mut devices = [[0; 2]; 8];
+    for (index, (role, observer, target)) in tmpfs.into_iter().enumerate() {
+        let container = attachments
+            .iter()
+            .find(|row| row.role() == role && row.observer() == observer && row.target() == target)
+            .and_then(ObservedStorageAttachment::container_id);
+        let row = root(role, observer, container, target)?;
+        devices[index] = [row.device().0, row.device().1];
+    }
+    let process = |pid, inode| ProcessIdentity {
+        pid,
+        start_ticks: u64::from(pid) * 100,
+        namespace_device: [0, 6],
+        namespace_inode: inode,
+    };
+    let metadata = root(
+        StorageRole::EngineMetadata,
+        StorageObserver::Probe,
+        None,
+        "/velnor/docker-root",
+    )?;
+    let paths = [
+        cgroups
+            .iter()
+            .find(|row| row.role() == BootstrapContainerRole::Runner)
+            .ok_or(HostError::Journal)?
+            .path()
+            .to_owned(),
+        cgroups
+            .iter()
+            .find(|row| row.role() == BootstrapContainerRole::Dind)
+            .ok_or(HostError::Journal)?
+            .path()
+            .to_owned(),
+    ];
+    let binding = CleanupObserverBinding {
+        expected_guest_boot_id: boot_id.to_owned(),
+        docker_root: CleanupDockerRootIdentity {
+            target: "/velnor/docker-root".to_owned(),
+            mount_id: metadata.mount_id(),
+            statx_mount_id: metadata.mount_id(),
+            mount_root: metadata.mount_root().to_owned(),
+            mount_device: [metadata.device().0, metadata.device().1],
+            statx_device: [metadata.statx_device().0, metadata.statx_device().1],
+            filesystem_type_magic: metadata.fs_type_magic(),
+            filesystem_id: metadata.filesystem_id(),
+            read_only: metadata.read_only(),
+        },
+        daemon: process(1, 101),
+        runner: process(2, 102),
+        dind: process(3, 103),
+        cgroup_paths: paths,
+        volume_mountpoints: volumes,
+        owned_tmpfs_devices: devices,
+    };
     Ok(binding)
 }
 
@@ -303,108 +314,5 @@ fn validate_storage_role(value: &ObservedStorageRole) -> Result<(), HostError> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::test_observed_storage_attachment;
-    use crate::journal::{StorageObserver, StorageRole};
-
-    const BTRFS_SUPER_MAGIC: u64 = 0x9123_683e;
-
-    #[test]
-    fn engine_metadata_attachment_binds_exact_docker_root_source() {
-        let expected = test_observed_storage_attachment(
-            StorageRole::EngineMetadata,
-            StorageObserver::Probe,
-            None,
-            "/velnor/docker-root".to_owned(),
-            Some("/var/lib/docker".to_owned()),
-            "/".to_owned(),
-            true,
-            237,
-            1237,
-            (0, 38),
-            (0, 41),
-            BTRFS_SUPER_MAGIC,
-            u64::MAX,
-            "a".repeat(64),
-        );
-        assert!(expected.is_ok_and(|item| item.filesystem_id() == u64::MAX));
-
-        let wrong_source = test_observed_storage_attachment(
-            StorageRole::EngineMetadata,
-            StorageObserver::Probe,
-            None,
-            "/velnor/docker-root".to_owned(),
-            Some("/tmp/docker".to_owned()),
-            "/".to_owned(),
-            true,
-            237,
-            1237,
-            (0, 38),
-            (0, 41),
-            BTRFS_SUPER_MAGIC,
-            12,
-            "a".repeat(64),
-        );
-        assert!(wrong_source.is_err());
-    }
-
-    #[test]
-    fn worker_attachment_cannot_name_a_host_source_path() {
-        let attachment = test_observed_storage_attachment(
-            StorageRole::RunnerRoot,
-            StorageObserver::Runner,
-            Some("b".repeat(64)),
-            "/".to_owned(),
-            Some("/var/lib/docker".to_owned()),
-            "/".to_owned(),
-            true,
-            12,
-            1012,
-            (0, 41),
-            (0, 41),
-            BTRFS_SUPER_MAGIC,
-            12,
-            "a".repeat(64),
-        );
-        assert!(attachment.is_err());
-    }
-
-    #[test]
-    fn metadata_attachment_requires_its_exact_subpath_root() {
-        let valid = test_observed_storage_attachment(
-            StorageRole::EngineMetadata,
-            StorageObserver::Runner,
-            Some("b".repeat(64)),
-            "/.velnor-runtime-identity".to_owned(),
-            None,
-            "/volume/runtime-identity".to_owned(),
-            true,
-            12,
-            1012,
-            (0, 41),
-            (0, 41),
-            BTRFS_SUPER_MAGIC,
-            12,
-            "a".repeat(64),
-        );
-        assert!(valid.is_ok());
-
-        let wrong_root = test_observed_storage_attachment(
-            StorageRole::EngineMetadata,
-            StorageObserver::Runner,
-            Some("b".repeat(64)),
-            "/.velnor-runtime-identity".to_owned(),
-            None,
-            "/volume/job-facts".to_owned(),
-            true,
-            12,
-            1012,
-            (0, 41),
-            (0, 41),
-            BTRFS_SUPER_MAGIC,
-            12,
-            "a".repeat(64),
-        );
-        assert!(wrong_root.is_err());
-    }
-}
+#[path = "storage/tests.rs"]
+mod tests;

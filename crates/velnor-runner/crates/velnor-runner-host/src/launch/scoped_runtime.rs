@@ -341,6 +341,7 @@ async fn bind_started(
         images,
         &prepared,
         &started,
+        &initialization,
     )
     .await
     {

@@ -31,9 +31,10 @@ const INVALID_COUNTS_QUERIES: &[&str] = &[
     r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id WHERE s.resources_bound = 1 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_roles WHERE reservation_id = p.reservation_id) != 11",
     r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id WHERE s.resources_bound = 1 AND t.topology_version = 1 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id) != 14",
     r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id WHERE s.resources_bound = 1 AND t.topology_version = 1 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id AND role = 'engine-metadata') != 1",
-    r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id WHERE s.resources_bound = 1 AND t.topology_version = 2 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id) NOT IN (16, 18)",
+    r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id WHERE s.resources_bound = 1 AND t.topology_version = 2 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id) NOT IN (16, 18, 20)",
     r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id WHERE s.resources_bound = 1 AND t.topology_version = 2 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id) = 16 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id AND role = 'engine-metadata') != 3",
     r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id WHERE s.resources_bound = 1 AND t.topology_version = 2 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id) = 18 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id AND role = 'engine-metadata') NOT IN (4, 5)",
+    r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id WHERE s.resources_bound = 1 AND t.topology_version = 2 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id) = 20 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id AND role = 'engine-metadata') != 6",
     r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id WHERE s.resources_bound = 1 AND (SELECT COUNT(*) FROM capacity_reservation_bound_cgroups WHERE reservation_id = p.reservation_id) != 2",
     r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id WHERE ((SELECT publication_state FROM capacity_reservation_provisioning_state WHERE reservation_id = p.reservation_id) = 'published' AND (SELECT COUNT(*) FROM capacity_reservation_provisioning_publications WHERE reservation_id = p.reservation_id) != 1)",
     r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id WHERE ((SELECT publication_state FROM capacity_reservation_provisioning_state WHERE reservation_id = p.reservation_id) != 'published' AND (SELECT COUNT(*) FROM capacity_reservation_provisioning_publications WHERE reservation_id = p.reservation_id) != 0)",
@@ -96,7 +97,9 @@ async fn query_test_split_bound_resource_checks_reject_each_invalid_count_shape(
         (14, 2, 1, 11, 15, 0, 2),
         (15, 2, 1, 11, 16, 2, 2),
         (16, 2, 1, 11, 18, 3, 2),
-        (17, 1, 1, 11, 14, 1, 1),
+        (18, 1, 1, 11, 14, 1, 1),
+        (17, 2, 1, 11, 20, 5, 2),
+        (17, 2, 1, 11, 20, 7, 2),
     ] {
         query_test_insert_shape(
             &connection,
@@ -120,9 +123,11 @@ async fn query_test_split_bound_resource_checks_reject_each_invalid_count_shape(
         assert_eq!(query_test_count(&connection, query).await?, 0);
     }
 
-    for (topology, attachments, metadata) in [(1, 14, 1), (2, 16, 3), (2, 18, 4), (2, 18, 5)] {
+    for (topology, attachments, metadata) in
+        [(1, 14, 1), (2, 16, 3), (2, 18, 4), (2, 18, 5), (2, 20, 6)]
+    {
         query_test_insert_shape(&connection, topology, 1, 11, attachments, metadata, 2).await?;
-        for (query_index, query) in INVALID_COUNTS_QUERIES.iter().enumerate().take(18).skip(8) {
+        for (query_index, query) in INVALID_COUNTS_QUERIES.iter().enumerate().take(19).skip(8) {
             assert_eq!(
                 query_test_count(&connection, query).await?,
                 0,

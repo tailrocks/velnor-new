@@ -287,7 +287,7 @@ pub(super) async fn from_version_twenty_six(conn: &turso::Connection) -> Result<
     conn.execute("PRAGMA user_version = 27", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    super::validate_persisted_schema(conn).await
+    super::validate_persisted_schema_v27(conn).await
 }
 
 pub(super) async fn from_version_twenty_seven(conn: &turso::Connection) -> Result<(), HostError> {
@@ -301,6 +301,16 @@ pub(super) async fn from_version_twenty_seven(conn: &turso::Connection) -> Resul
 pub(super) async fn from_version_twenty_eight(conn: &turso::Connection) -> Result<(), HostError> {
     provisioning::upgrade_transition_guards(conn).await?;
     conn.execute("PRAGMA user_version = 29", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(())
+}
+
+pub(super) async fn from_version_twenty_nine(conn: &turso::Connection) -> Result<(), HostError> {
+    super::storage_root_backing::upgrade_v30(conn).await?;
+    super::execution_publication::upgrade_v30(conn).await?;
+    super::cleanup_observer_witness::bootstrap(conn).await?;
+    conn.execute("PRAGMA user_version = 30", ())
         .await
         .map_err(|_| HostError::Journal)?;
     Ok(())

@@ -47,6 +47,7 @@ pub(crate) use provisioning::JobFactsPublicationClaim;
 pub(crate) use provisioning::ListenerDeliveryClaim;
 #[cfg(test)]
 pub(crate) use provisioning::MetadataSettlementResult;
+pub(crate) use provisioning::StorageCleanupObserverWitness;
 pub(crate) use provisioning::{
     BootstrapContainerCreateClaim, BootstrapStartClaim, RecordedStorageNetwork,
 };

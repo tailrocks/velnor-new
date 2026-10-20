@@ -5,17 +5,8 @@ use velnor_resource_probe::execution_publication::ExecutionPublicationKind;
 use crate::{
     error::HostError,
     journal::{Journal, ProbeRow, ProbeWork},
-    journal::{
-        ProbePhase, VerifiedMetadataInitialization,
-        execution_authorization::{
-            ExecutionChallengePublicationClaim, ExecutionDecisionDeliveryClaim,
-        },
-    },
-    worker::execution_authorization::{
-        ExecutionChallengePublicationReceipt, ExecutionDecisionDeliveryReceipt,
-        VerifiedProofChannelBinding, challenge_publication_receipt, decision_delivery_receipt,
-        inspect_metadata_volume,
-    },
+    journal::{ProbePhase, VerifiedMetadataInitialization},
+    worker::execution_authorization::{VerifiedProofChannelBinding, inspect_metadata_volume},
 };
 
 use self::projection::{
@@ -49,119 +40,8 @@ pub(crate) struct ControlPublicationInput<'a> {
     pub(crate) deadline: Instant,
 }
 
-/// Publish the claimed challenge in the measured control directory.
-pub(crate) async fn publish_challenge(
-    input: ControlPublicationInput<'_>,
-    claim: &ExecutionChallengePublicationClaim,
-) -> Result<ExecutionChallengePublicationReceipt, HostError> {
-    let ControlPublicationInput {
-        docker,
-        journal,
-        selected,
-        images,
-        release_secret,
-        metadata,
-        channel,
-        guest_boot_id,
-        deadline,
-    } = input;
-    let probe = Box::pin(super::verify_publication_probe_image_until(
-        docker,
-        journal,
-        selected,
-        release_secret,
-        deadline,
-    ))
-    .await?;
-    let volume = Box::pin(inspect_metadata_volume(
-        docker, selected, images, metadata, deadline,
-    ))
-    .await?;
-    let operation_id = Uuid::new_v4().simple().to_string();
-    let request = challenge_request(claim, channel, guest_boot_id, operation_id.clone())?;
-    let parent = ExecutionPublicationParent::challenge(claim, metadata, guest_boot_id)?;
-    let record = Box::pin(execute::publish(
-        execute::PublisherExecution {
-            docker,
-            journal,
-            selected,
-            images,
-            probe: &probe,
-            metadata,
-            metadata_volume: &volume,
-            deadline,
-        },
-        request,
-        parent,
-    ))
-    .await?;
-    challenge_publication_receipt(
-        claim,
-        channel,
-        metadata,
-        record,
-        &operation_id,
-        guest_boot_id,
-        &volume,
-    )
-}
-
-/// Publish the claimed decision in the measured control directory.
-pub(crate) async fn publish_decision(
-    input: ControlPublicationInput<'_>,
-    claim: &ExecutionDecisionDeliveryClaim,
-) -> Result<ExecutionDecisionDeliveryReceipt, HostError> {
-    let ControlPublicationInput {
-        docker,
-        journal,
-        selected,
-        images,
-        release_secret,
-        metadata,
-        channel,
-        guest_boot_id,
-        deadline,
-    } = input;
-    let probe = Box::pin(super::verify_publication_probe_image_until(
-        docker,
-        journal,
-        selected,
-        release_secret,
-        deadline,
-    ))
-    .await?;
-    let volume = Box::pin(inspect_metadata_volume(
-        docker, selected, images, metadata, deadline,
-    ))
-    .await?;
-    let operation_id = Uuid::new_v4().simple().to_string();
-    let request = decision_request(claim, channel, guest_boot_id, operation_id.clone())?;
-    let parent = ExecutionPublicationParent::decision(claim, metadata, guest_boot_id)?;
-    let record = Box::pin(execute::publish(
-        execute::PublisherExecution {
-            docker,
-            journal,
-            selected,
-            images,
-            probe: &probe,
-            metadata,
-            metadata_volume: &volume,
-            deadline,
-        },
-        request,
-        parent,
-    ))
-    .await?;
-    decision_delivery_receipt(
-        claim,
-        channel,
-        metadata,
-        record,
-        &operation_id,
-        guest_boot_id,
-        &volume,
-    )
-}
+mod control;
+pub(crate) use control::{publish_challenge, publish_decision};
 
 fn validate_job_facts_binding(
     claim: &crate::journal::JobFactsPublicationClaim,
@@ -188,6 +68,8 @@ pub(crate) struct JobFactsPublicationInput<'a> {
     pub(crate) connection_journal: &'a crate::journal::ConnectionJournal,
     pub(crate) selected: &'a SelectedEngineContext,
     pub(crate) images: &'a VerifiedWorkerImages,
+    pub(crate) connection: &'a crate::config::RepositoryConnection,
+    pub(crate) guest_image: &'a crate::worker::guest_image::GuestImageFile,
     pub(crate) release_secret: &'a super::ReleaseReadSecret,
     pub(crate) ready: &'a crate::worker::storage_initialization::VerifiedStorageInitializationReady,
     pub(crate) claim: &'a crate::journal::JobFactsPublicationClaim,
@@ -198,79 +80,167 @@ pub(crate) struct JobFactsPublicationInput<'a> {
 pub(crate) async fn publish_job_facts(
     input: JobFactsPublicationInput<'_>,
 ) -> Result<crate::launch::bootstrap::JobFactsPublication, HostError> {
-    let JobFactsPublicationInput {
-        docker,
-        journal,
-        connection_journal,
-        selected,
-        images,
-        release_secret,
-        ready,
-        claim,
-        channel,
-        deadline,
-    } = input;
-    let publication = Box::pin(async {
-        validate_job_facts_binding(claim, ready, selected, channel)?;
-        let snapshot = connection_journal
-            .job_facts_snapshot(claim, ready, channel)
-            .await?;
-        if snapshot.physical_binding_digest() != claim.instance_binding_digest()
-            || channel.instance_binding_digest() != claim.instance_binding_digest()
-        {
-            return Err(HostError::Identity);
-        }
-        let probe = super::verify_publication_probe_image_until(
-            docker,
-            journal,
-            selected,
-            release_secret,
-            deadline,
-        )
-        .await?;
-        let volume =
-            inspect_metadata_volume(docker, selected, images, ready.final_readiness(), deadline)
-                .await?;
-        let operation_id = Uuid::new_v4().simple().to_string();
-        let request = request::job_facts_request(
-            &operation_id,
-            &channel.observation().guest_boot_id,
-            snapshot.bytes(),
-            channel.job_facts_directory(),
-        )?;
-        let parent = ExecutionPublicationParent::job_facts(
-            claim,
-            ready.final_readiness(),
-            &channel.observation().guest_boot_id,
-            &request.payload_sha256,
-        )?;
-        let record = execute::publish_job_facts(
-            execute::PublisherExecution {
-                docker,
-                journal,
-                selected,
-                images,
-                probe: &probe,
-                metadata: ready.final_readiness(),
-                metadata_volume: &volume,
-                deadline,
-            },
-            request,
-            parent,
-        )
-        .await?;
-        crate::launch::bootstrap::job_facts_publication(claim, &snapshot, ready, channel, record)
-    })
-    .await;
-    match publication {
+    let journal = input.connection_journal;
+    let claim = input.claim;
+    match publish_job_facts_inner(input).await {
         Ok(proof) => Ok(proof),
         Err(error) => {
-            connection_journal
-                .mark_job_facts_publication_uncertain(claim)
-                .await?;
+            journal.mark_job_facts_publication_uncertain(claim).await?;
             Err(error)
         }
     }
+}
+
+struct PreparedJobFactsPublication<'a> {
+    snapshot: crate::journal::BoundJobFactsSnapshot,
+    guest_image_bytes: &'a [u8],
+    runtime_identity: velnor_resource_probe::job_facts_wire::JobFactsRuntimeIdentityDirectory,
+    binding_sha256: String,
+}
+
+async fn prepare_job_facts_publication<'a>(
+    input: &'a JobFactsPublicationInput<'_>,
+) -> Result<PreparedJobFactsPublication<'a>, HostError> {
+    validate_job_facts_binding(input.claim, input.ready, input.selected, input.channel)?;
+    let snapshot = input
+        .connection_journal
+        .job_facts_snapshot(input.claim, input.ready, input.channel)
+        .await?;
+    if snapshot.physical_binding_digest() != input.claim.instance_binding_digest()
+        || input.channel.instance_binding_digest() != input.claim.instance_binding_digest()
+    {
+        return Err(HostError::Identity);
+    }
+    let guest_image_bytes = input
+        .guest_image
+        .verified_document_bytes(input.connection, input.images)?;
+    let runtime_identity = input.ready.runtime_identity();
+    let runtime_identity_directory =
+        velnor_resource_probe::job_facts_wire::JobFactsRuntimeIdentityDirectory {
+            device_major: runtime_identity.device().0,
+            device_minor: runtime_identity.device().1,
+            inode: runtime_identity.inode(),
+            owner_uid: runtime_identity.owner().0,
+            owner_gid: runtime_identity.owner().1,
+            mode: runtime_identity.mode(),
+        };
+    let binding_sha256 = job_facts_publication_binding(
+        input.claim,
+        input.ready,
+        input.connection,
+        guest_image_bytes,
+    )?;
+    Ok(PreparedJobFactsPublication {
+        snapshot,
+        guest_image_bytes,
+        runtime_identity: runtime_identity_directory,
+        binding_sha256,
+    })
+}
+
+async fn publish_job_facts_inner(
+    input: JobFactsPublicationInput<'_>,
+) -> Result<crate::launch::bootstrap::JobFactsPublication, HostError> {
+    let prepared = prepare_job_facts_publication(&input).await?;
+    let probe = super::verify_publication_probe_image_until(
+        input.docker,
+        input.journal,
+        input.selected,
+        input.release_secret,
+        input.deadline,
+    )
+    .await?;
+    let volume = inspect_metadata_volume(
+        input.docker,
+        input.selected,
+        input.images,
+        input.ready.final_readiness(),
+        input.deadline,
+    )
+    .await?;
+    let operation_id = Uuid::new_v4().simple().to_string();
+    let request = request::job_facts_request(
+        &operation_id,
+        &input.channel.observation().guest_boot_id,
+        prepared.snapshot.bytes(),
+        input.channel.job_facts_directory(),
+        prepared.guest_image_bytes,
+        prepared.runtime_identity.clone(),
+        &prepared.binding_sha256,
+    )?;
+    publish_prepared_job_facts(&input, prepared, probe, volume, request).await
+}
+
+async fn publish_prepared_job_facts(
+    input: &JobFactsPublicationInput<'_>,
+    prepared: PreparedJobFactsPublication<'_>,
+    probe: crate::launch::resource_probe::VerifiedPublicationProbeImage,
+    volume: crate::worker::execution_authorization::VerifiedMetadataVolume,
+    request: velnor_resource_probe::job_facts_wire::JobFactsPublicationContext,
+) -> Result<crate::launch::bootstrap::JobFactsPublication, HostError> {
+    let parent = ExecutionPublicationParent::job_facts(
+        input.claim,
+        input.ready.final_readiness(),
+        &input.channel.observation().guest_boot_id,
+        &request.payload_sha256,
+    )?;
+    let expected_request = request.clone();
+    let record = execute::publish_job_facts(
+        execute::PublisherExecution {
+            docker: input.docker,
+            journal: input.journal,
+            selected: input.selected,
+            images: input.images,
+            probe: &probe,
+            metadata: input.ready.final_readiness(),
+            metadata_volume: &volume,
+            deadline: input.deadline,
+        },
+        request,
+        parent,
+    )
+    .await?;
+    crate::launch::bootstrap::job_facts_publication(
+        input.claim,
+        &prepared.snapshot,
+        input.ready,
+        input.channel,
+        &expected_request,
+        record,
+    )
+}
+
+fn job_facts_publication_binding(
+    claim: &crate::journal::JobFactsPublicationClaim,
+    ready: &crate::worker::storage_initialization::VerifiedStorageInitializationReady,
+    connection: &crate::config::RepositoryConnection,
+    guest_image: &[u8],
+) -> Result<String, HostError> {
+    use sha2::{Digest as _, Sha256};
+    let connection_bytes = connection.canonical_identity_bytes()?;
+    let mut hasher = Sha256::new();
+    for value in [
+        b"velnor-job-facts-publication-binding-v1".as_slice(),
+        connection_bytes.as_slice(),
+        claim.instance_binding_digest().as_bytes(),
+        ready.layout_digest().as_bytes(),
+        claim.engine_id().as_bytes(),
+        claim.docker_root_digest().as_bytes(),
+        claim.runner_container_id().as_bytes(),
+        claim.dind_container_id().as_bytes(),
+        guest_image,
+    ] {
+        let length = u64::try_from(value.len()).map_err(|_| HostError::Frame)?;
+        hasher.update(length.to_be_bytes());
+        hasher.update(value);
+    }
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut output = String::with_capacity(64);
+    for byte in hasher.finalize() {
+        output.push(char::from(HEX[usize::from(byte >> 4)]));
+        output.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    Ok(output)
 }
 
 /// Proof that one exact publication helper was removed from its selected engine.

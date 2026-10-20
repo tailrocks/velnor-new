@@ -3,12 +3,17 @@ use sha2::{Digest, Sha256};
 use crate::error::HostError;
 
 use super::sql_normalization::normalize;
+mod migration_v27;
+mod migration_v30;
+pub(super) use migration_v27::upgrade_v27;
+pub(super) use migration_v30::upgrade_v30;
 #[cfg(test)]
 #[path = "storage_root_backing_tests.rs"]
 mod tests;
 
 const TABLE: &str = "CREATE TABLE IF NOT EXISTS capacity_reservation_root_backing_mappings (reservation_id INTEGER NOT NULL REFERENCES capacity_reservations(id), connection_id TEXT NOT NULL, operation_id INTEGER NOT NULL, engine_id TEXT NOT NULL, docker_root_digest TEXT NOT NULL, sample_generation_id TEXT NOT NULL, role TEXT NOT NULL CHECK (role IN ('runner-root', 'dind-root')), container_id TEXT NOT NULL, image_runtime_id TEXT NOT NULL CHECK (length(CAST(image_runtime_id AS BLOB)) BETWEEN 1 AND 255 AND instr(image_runtime_id, char(0)) = 0), image_source_sha TEXT NOT NULL CHECK (length(image_source_sha) = 40 AND image_source_sha NOT GLOB '*[^0-9a-f]*'), logical_mount_id INTEGER NOT NULL CHECK (logical_mount_id > 0), logical_filesystem_digest TEXT NOT NULL, backing_filesystem_digest TEXT NOT NULL, mapping_record TEXT NOT NULL, mapping_digest TEXT NOT NULL, PRIMARY KEY (reservation_id, role))";
-const ATTACHMENT_PATHS: &str = "CREATE TABLE IF NOT EXISTS capacity_reservation_bound_storage_paths (reservation_id INTEGER NOT NULL, role TEXT NOT NULL, observer TEXT NOT NULL, mount_target TEXT NOT NULL, mount_root TEXT NOT NULL CHECK (length(mount_root) BETWEEN 1 AND 512), volume_subpath TEXT, PRIMARY KEY (reservation_id, role, observer, mount_target), FOREIGN KEY (reservation_id, role, observer, mount_target) REFERENCES capacity_reservation_bound_storage_attachments(reservation_id, role, observer, mount_target), CHECK ((role = 'engine-metadata' AND observer = 'runner' AND ((mount_target = '/.velnor-runtime-identity' AND volume_subpath IS 'runtime-identity') OR (mount_target = '/opt/velnor/job-facts' AND volume_subpath IS 'job-facts') OR (mount_target = '/opt/velnor/source-proof/control' AND volume_subpath IS 'source-proof/control') OR (mount_target = '/opt/velnor/source-proof/inbox' AND volume_subpath IS 'source-proof/inbox'))) OR (role = 'runner-home' AND ((observer IN ('runner', 'dind') AND mount_target = '/home/runner' AND volume_subpath IS NULL) OR (observer = 'runner' AND mount_target = '/opt/velnor/source-proof/inbox' AND volume_subpath IS NOT NULL AND volume_subpath IS 'source-proof/inbox'))) OR (role = 'engine-metadata' AND observer = 'probe' AND volume_subpath IS NULL) OR (role != 'engine-metadata' AND role != 'runner-home' AND volume_subpath IS NULL)))";
+const ATTACHMENT_PATHS: &str = "CREATE TABLE IF NOT EXISTS capacity_reservation_bound_storage_paths (reservation_id INTEGER NOT NULL, role TEXT NOT NULL, observer TEXT NOT NULL, mount_target TEXT NOT NULL, mount_root TEXT NOT NULL CHECK (length(mount_root) BETWEEN 1 AND 512), volume_subpath TEXT, PRIMARY KEY (reservation_id, role, observer, mount_target), FOREIGN KEY (reservation_id, role, observer, mount_target) REFERENCES capacity_reservation_bound_storage_attachments(reservation_id, role, observer, mount_target), CHECK ((role = 'engine-metadata' AND observer = 'runner' AND ((mount_target = '/.velnor-runtime-identity' AND volume_subpath IS 'runtime-identity') OR (mount_target = '/opt/velnor/job-facts' AND volume_subpath IS 'job-facts') OR (mount_target = '/opt/velnor/source-proof/control' AND volume_subpath IS 'source-proof/control') OR (mount_target = '/opt/velnor/source-proof/inbox' AND volume_subpath IS 'source-proof/inbox'))) OR (role = 'engine-metadata' AND observer = 'dind' AND ((mount_target = '/.velnor-runtime-identity' AND volume_subpath IS 'runtime-identity') OR (mount_target = '/opt/velnor/job-facts' AND volume_subpath IS 'job-facts'))) OR (role = 'runner-home' AND ((observer IN ('runner', 'dind') AND mount_target = '/home/runner' AND volume_subpath IS NULL) OR (observer = 'runner' AND mount_target = '/opt/velnor/source-proof/inbox' AND volume_subpath IS NOT NULL AND volume_subpath IS 'source-proof/inbox'))) OR (role = 'engine-metadata' AND observer = 'probe' AND volume_subpath IS NULL) OR (role != 'engine-metadata' AND role != 'runner-home' AND volume_subpath IS NULL)))";
+const V29_ATTACHMENT_PATHS: &str = "CREATE TABLE IF NOT EXISTS capacity_reservation_bound_storage_paths (reservation_id INTEGER NOT NULL, role TEXT NOT NULL, observer TEXT NOT NULL, mount_target TEXT NOT NULL, mount_root TEXT NOT NULL CHECK (length(mount_root) BETWEEN 1 AND 512), volume_subpath TEXT, PRIMARY KEY (reservation_id, role, observer, mount_target), FOREIGN KEY (reservation_id, role, observer, mount_target) REFERENCES capacity_reservation_bound_storage_attachments(reservation_id, role, observer, mount_target), CHECK ((role = 'engine-metadata' AND observer = 'runner' AND ((mount_target = '/.velnor-runtime-identity' AND volume_subpath IS 'runtime-identity') OR (mount_target = '/opt/velnor/job-facts' AND volume_subpath IS 'job-facts') OR (mount_target = '/opt/velnor/source-proof/control' AND volume_subpath IS 'source-proof/control') OR (mount_target = '/opt/velnor/source-proof/inbox' AND volume_subpath IS 'source-proof/inbox'))) OR (role = 'runner-home' AND ((observer IN ('runner', 'dind') AND mount_target = '/home/runner' AND volume_subpath IS NULL) OR (observer = 'runner' AND mount_target = '/opt/velnor/source-proof/inbox' AND volume_subpath IS NOT NULL AND volume_subpath IS 'source-proof/inbox'))) OR (role = 'engine-metadata' AND observer = 'probe' AND volume_subpath IS NULL) OR (role != 'engine-metadata' AND role != 'runner-home' AND volume_subpath IS NULL)))";
 const LEGACY_ATTACHMENT_PATHS: &str = "CREATE TABLE IF NOT EXISTS capacity_reservation_bound_storage_paths (reservation_id INTEGER NOT NULL, role TEXT NOT NULL, observer TEXT NOT NULL, mount_target TEXT NOT NULL, mount_root TEXT NOT NULL CHECK (length(mount_root) BETWEEN 1 AND 512), volume_subpath TEXT, PRIMARY KEY (reservation_id, role, observer, mount_target), FOREIGN KEY (reservation_id, role, observer, mount_target) REFERENCES capacity_reservation_bound_storage_attachments(reservation_id, role, observer, mount_target), CHECK ((role = 'engine-metadata' AND observer = 'runner' AND ((mount_target = '/.velnor-runtime-identity' AND volume_subpath = 'runtime-identity') OR (mount_target = '/opt/velnor/job-facts' AND volume_subpath = 'job-facts') OR (mount_target = '/opt/velnor/source-proof/control' AND volume_subpath = 'source-proof/control') OR (mount_target = '/opt/velnor/source-proof/inbox' AND volume_subpath = 'source-proof/inbox'))) OR (role = 'engine-metadata' AND observer = 'probe' AND volume_subpath IS NULL) OR (role != 'engine-metadata' AND volume_subpath IS NULL)))";
 
 const TRIGGERS: [(&str, &str); 7] = [
@@ -58,188 +63,6 @@ pub(super) async fn bootstrap(connection: &turso::Connection) -> Result<(), Host
             .map_err(|_| HostError::Journal)?;
     }
     Ok(())
-}
-
-/// Upgrade unreleased v27 storage constraints without rewriting observed rows.
-/// Legacy metadata-inbox rows remain readable for recovery; launch eligibility
-/// separately requires the current `RunnerHome` inbox layout.
-pub(super) async fn upgrade_v27(connection: &turso::Connection) -> Result<(), HostError> {
-    let attachment_name = "capacity_reservation_bound_storage_attachments";
-    let path_name = "capacity_reservation_bound_storage_paths";
-    let attachment_sql = table_sql(connection, attachment_name).await?;
-    let path_sql = table_sql(connection, path_name).await?;
-    let Some(attachment_sql) = attachment_sql else {
-        if path_sql.is_some() {
-            return Err(HostError::Journal);
-        }
-        return Ok(());
-    };
-    let attachment_current =
-        normalize(&attachment_sql) == normalize(super::provisioning::BOUND_STORAGE_ATTACHMENTS);
-    let attachment_legacy = normalize(&attachment_sql)
-        == normalize(super::provisioning::LEGACY_BOUND_STORAGE_ATTACHMENTS);
-    if !attachment_current && !attachment_legacy {
-        return Err(HostError::Journal);
-    }
-    let path_current = path_sql
-        .as_deref()
-        .is_some_and(|sql| normalize(sql) == normalize(ATTACHMENT_PATHS));
-    let path_legacy = path_sql
-        .as_deref()
-        .is_some_and(|sql| normalize(sql) == normalize(LEGACY_ATTACHMENT_PATHS));
-    if path_sql.is_some() && !path_current && !path_legacy {
-        return Err(HostError::Journal);
-    }
-    let rebuild_attachments = attachment_legacy;
-    let rebuild_paths = path_sql.is_some() && (!path_current || rebuild_attachments);
-    if !rebuild_attachments && !rebuild_paths {
-        return Ok(());
-    }
-
-    let attachment_count = if rebuild_attachments {
-        scalar_count(
-            connection,
-            &format!("SELECT COUNT(*) FROM {attachment_name}"),
-        )
-        .await?
-    } else {
-        0
-    };
-    let path_count = if rebuild_paths {
-        scalar_count(connection, &format!("SELECT COUNT(*) FROM {path_name}")).await?
-    } else {
-        0
-    };
-    if rebuild_paths {
-        for trigger in [
-            "bound_storage_path_insert_guard",
-            "bound_storage_path_no_update",
-            "bound_storage_path_no_delete",
-        ] {
-            connection
-                .execute(&format!("DROP TRIGGER IF EXISTS {trigger}"), ())
-                .await
-                .map_err(|_| HostError::Journal)?;
-        }
-    }
-    if rebuild_attachments {
-        for object in [
-            "DROP TRIGGER IF EXISTS bound_attachment_no_update",
-            "DROP TRIGGER IF EXISTS bound_attachment_no_delete",
-            "DROP INDEX IF EXISTS capacity_bound_attachment_mount",
-        ] {
-            connection
-                .execute(object, ())
-                .await
-                .map_err(|_| HostError::Journal)?;
-        }
-        let replacement = super::provisioning::BOUND_STORAGE_ATTACHMENTS.replace(
-            attachment_name,
-            "capacity_reservation_bound_storage_attachments_v27",
-        );
-        connection
-            .execute(&replacement, ())
-            .await
-            .map_err(|_| HostError::Journal)?;
-        connection
-            .execute(
-                "INSERT INTO capacity_reservation_bound_storage_attachments_v27 (reservation_id, role, observer, container_id, mount_target, source_target, read_only, mount_id, device_major, device_minor, statx_device_major, statx_device_minor, fs_type_magic, v16_filesystem_id_0, v16_filesystem_id_1, filesystem_id, filesystem_instance_digest) SELECT reservation_id, role, observer, container_id, mount_target, source_target, read_only, mount_id, device_major, device_minor, statx_device_major, statx_device_minor, fs_type_magic, v16_filesystem_id_0, v16_filesystem_id_1, filesystem_id, filesystem_instance_digest FROM capacity_reservation_bound_storage_attachments",
-                (),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-    }
-    if rebuild_paths {
-        let mut replacement =
-            ATTACHMENT_PATHS.replace(path_name, "capacity_reservation_bound_storage_paths_v27");
-        if rebuild_attachments {
-            replacement = replacement.replace(
-                "REFERENCES capacity_reservation_bound_storage_attachments(",
-                "REFERENCES capacity_reservation_bound_storage_attachments_v27(",
-            );
-        }
-        connection
-            .execute(&replacement, ())
-            .await
-            .map_err(|_| HostError::Journal)?;
-        connection
-            .execute(
-                "INSERT INTO capacity_reservation_bound_storage_paths_v27 (reservation_id, role, observer, mount_target, mount_root, volume_subpath) SELECT reservation_id, role, observer, mount_target, mount_root, volume_subpath FROM capacity_reservation_bound_storage_paths",
-                (),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-        connection
-            .execute("DROP TABLE capacity_reservation_bound_storage_paths", ())
-            .await
-            .map_err(|_| HostError::Journal)?;
-    }
-    if rebuild_attachments {
-        connection
-            .execute(
-                "DROP TABLE capacity_reservation_bound_storage_attachments",
-                (),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-        connection
-            .execute(
-                "ALTER TABLE capacity_reservation_bound_storage_attachments_v27 RENAME TO capacity_reservation_bound_storage_attachments",
-                (),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-        super::provisioning::restore_bound_storage_attachment_guards(connection).await?;
-    }
-    if rebuild_paths {
-        connection
-            .execute(
-                "ALTER TABLE capacity_reservation_bound_storage_paths_v27 RENAME TO capacity_reservation_bound_storage_paths",
-                (),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-    }
-    if rebuild_paths {
-        for (_, sql) in TRIGGERS.iter().skip(4) {
-            connection
-                .execute(sql, ())
-                .await
-                .map_err(|_| HostError::Journal)?;
-        }
-    }
-    if rebuild_attachments
-        && scalar_count(
-            connection,
-            &format!("SELECT COUNT(*) FROM {attachment_name}"),
-        )
-        .await?
-            != attachment_count
-        || rebuild_paths
-            && scalar_count(connection, &format!("SELECT COUNT(*) FROM {path_name}")).await?
-                != path_count
-    {
-        return Err(HostError::Journal);
-    }
-    Ok(())
-}
-
-async fn table_sql(
-    connection: &turso::Connection,
-    name: &str,
-) -> Result<Option<String>, HostError> {
-    let mut rows = connection
-        .query(
-            "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?1",
-            [name],
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    rows.next()
-        .await
-        .map_err(|_| HostError::Journal)?
-        .map(|row| row.get::<String>(0).map_err(|_| HostError::Journal))
-        .transpose()
 }
 
 pub(super) async fn validate(connection: &turso::Connection) -> Result<(), HostError> {
@@ -307,7 +130,7 @@ pub(super) async fn validate(connection: &turso::Connection) -> Result<(), HostE
 }
 
 const VALIDATION: &[&str] = &[
-    "SELECT COUNT(*) FROM capacity_reservation_bound_storage_paths AS x LEFT JOIN capacity_reservation_bound_storage_attachments AS a ON a.reservation_id = x.reservation_id AND a.role = x.role AND a.observer = x.observer AND a.mount_target = x.mount_target WHERE a.reservation_id IS NULL OR length(x.mount_root) NOT BETWEEN 1 AND 512 OR (x.role = 'engine-metadata' AND x.observer = 'runner' AND NOT ((x.mount_target = '/.velnor-runtime-identity' AND x.volume_subpath IS 'runtime-identity') OR (x.mount_target = '/opt/velnor/job-facts' AND x.volume_subpath IS 'job-facts') OR (x.mount_target = '/opt/velnor/source-proof/control' AND x.volume_subpath IS 'source-proof/control') OR (x.mount_target = '/opt/velnor/source-proof/inbox' AND x.volume_subpath IS 'source-proof/inbox'))) OR (x.role = 'runner-home' AND NOT ((x.observer IN ('runner', 'dind') AND x.mount_target = '/home/runner' AND x.volume_subpath IS NULL) OR (x.observer = 'runner' AND x.mount_target = '/opt/velnor/source-proof/inbox' AND x.volume_subpath IS NOT NULL AND x.volume_subpath IS 'source-proof/inbox'))) OR ((x.role != 'engine-metadata' AND x.role != 'runner-home' OR x.observer = 'probe') AND x.volume_subpath IS NOT NULL)",
+    "SELECT COUNT(*) FROM capacity_reservation_bound_storage_paths AS x LEFT JOIN capacity_reservation_bound_storage_attachments AS a ON a.reservation_id = x.reservation_id AND a.role = x.role AND a.observer = x.observer AND a.mount_target = x.mount_target WHERE a.reservation_id IS NULL OR length(x.mount_root) NOT BETWEEN 1 AND 512 OR (x.role = 'engine-metadata' AND x.observer = 'runner' AND NOT ((x.mount_target = '/.velnor-runtime-identity' AND x.volume_subpath IS 'runtime-identity') OR (x.mount_target = '/opt/velnor/job-facts' AND x.volume_subpath IS 'job-facts') OR (x.mount_target = '/opt/velnor/source-proof/control' AND x.volume_subpath IS 'source-proof/control') OR (x.mount_target = '/opt/velnor/source-proof/inbox' AND x.volume_subpath IS 'source-proof/inbox'))) OR (x.role = 'engine-metadata' AND x.observer = 'dind' AND NOT ((x.mount_target = '/.velnor-runtime-identity' AND x.volume_subpath IS 'runtime-identity') OR (x.mount_target = '/opt/velnor/job-facts' AND x.volume_subpath IS 'job-facts'))) OR (x.role = 'runner-home' AND NOT ((x.observer IN ('runner', 'dind') AND x.mount_target = '/home/runner' AND x.volume_subpath IS NULL) OR (x.observer = 'runner' AND x.mount_target = '/opt/velnor/source-proof/inbox' AND x.volume_subpath IS NOT NULL AND x.volume_subpath IS 'source-proof/inbox'))) OR ((x.role != 'engine-metadata' AND x.role != 'runner-home' OR x.observer = 'probe') AND x.volume_subpath IS NOT NULL)",
     "SELECT COUNT(*) FROM (SELECT x.reservation_id FROM capacity_reservation_bound_storage_paths AS x GROUP BY x.reservation_id HAVING COUNT(*) != (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments AS a WHERE a.reservation_id = x.reservation_id))",
     "SELECT COUNT(*) FROM capacity_reservation_root_backing_mappings WHERE role NOT IN ('runner-root', 'dind-root') OR logical_mount_id <= 0 OR length(CAST(image_runtime_id AS BLOB)) NOT BETWEEN 1 AND 255 OR length(image_source_sha) != 40 OR image_source_sha GLOB '*[^0-9a-f]*'",
     "SELECT COUNT(*) FROM capacity_reservation_root_backing_mappings WHERE length(mapping_digest) != 64 OR mapping_digest GLOB '*[^0-9a-f]*' OR length(logical_filesystem_digest) != 64 OR logical_filesystem_digest GLOB '*[^0-9a-f]*' OR length(backing_filesystem_digest) != 64 OR backing_filesystem_digest GLOB '*[^0-9a-f]*'",
@@ -326,17 +149,4 @@ fn digest_bytes(bytes: &[u8]) -> String {
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect()
-}
-
-async fn scalar_count(connection: &turso::Connection, sql: &str) -> Result<i64, HostError> {
-    let mut rows = connection
-        .query(sql, ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    rows.next()
-        .await
-        .map_err(|_| HostError::Journal)?
-        .ok_or(HostError::Journal)?
-        .get(0)
-        .map_err(|_| HostError::Journal)
 }

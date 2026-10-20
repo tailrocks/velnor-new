@@ -6,9 +6,9 @@ use velnor_resource_probe::{
     },
 };
 
-fn directory() -> ExecutionChannelDirectory {
+fn directory(target: &str) -> ExecutionChannelDirectory {
     ExecutionChannelDirectory {
-        target: "/opt/velnor/job-facts".to_owned(),
+        target: target.to_owned(),
         inode: 23,
         owner_uid: 0,
         owner_gid: 0,
@@ -31,28 +31,57 @@ fn directory() -> ExecutionChannelDirectory {
 
 fn request() -> JobFactsPublicationContext {
     let payload_digest = "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a";
-    JobFactsPublicationContext {
-        schema_version: 1,
+    let mut value = JobFactsPublicationContext {
+        schema_version: 2,
         operation_id: "0123456789abcdef0123456789abcdef".to_owned(),
         expected_guest_boot_id: "123e4567-e89b-12d3-a456-426614174000".to_owned(),
         payload_hex: "7b7d".to_owned(),
-        payload_sha256: payload_digest.to_owned(),
-        expected_runner_job_facts: directory(),
-    }
+        job_facts_sha256: payload_digest.to_owned(),
+        payload_sha256: String::new(),
+        guest_image_hex: "7b7d".to_owned(),
+        guest_image_sha256: payload_digest.to_owned(),
+        publication_binding_sha256: "b".repeat(64),
+        expected_runner_job_facts: directory("/opt/velnor/job-facts"),
+        expected_runner_runtime_identity:
+            velnor_resource_probe::job_facts_wire::JobFactsRuntimeIdentityDirectory {
+                device_major: 0,
+                device_minor: 8,
+                inode: 25,
+                owner_uid: 0,
+                owner_gid: 0,
+                mode: 0o555,
+            },
+    };
+    value.payload_sha256 = velnor_resource_probe::job_facts_wire::paired_payload_sha256(&value)
+        .expect("paired digest");
+    value
 }
 
 fn record() -> JobFactsPublicationRecord {
+    let request = request();
     let payload_digest = "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a";
     JobFactsPublicationRecord {
-        schema_version: 1,
+        schema_version: 2,
         operation_id: "0123456789abcdef0123456789abcdef".to_owned(),
         guest_boot_id: "123e4567-e89b-12d3-a456-426614174000".to_owned(),
         mount_namespace_id: 10,
-        payload_sha256: payload_digest.to_owned(),
-        directory: directory(),
+        payload_sha256: request.payload_sha256,
+        guest_image_sha256: payload_digest.to_owned(),
+        publication_binding_sha256: "b".repeat(64),
+        directory: directory("/opt/velnor/job-facts"),
+        runtime_identity_directory: directory("/opt/velnor/runtime-identity"),
         file: JobFactsPublicationFile {
             path: "/opt/velnor/job-facts/storage-cache-admission.json".to_owned(),
             inode: 24,
+            bytes: 2,
+            owner_uid: 0,
+            owner_gid: 0,
+            mode: 0o444,
+            readback_sha256: payload_digest.to_owned(),
+        },
+        guest_image_file: JobFactsPublicationFile {
+            path: "/opt/velnor/runtime-identity/guest-image.json".to_owned(),
+            inode: 26,
             bytes: 2,
             owner_uid: 0,
             owner_gid: 0,
@@ -107,5 +136,16 @@ fn job_facts_request_rejects_changed_target_and_oversized_payload() {
 fn job_facts_request_rejects_payload_digest_mismatch() {
     let mut value = request();
     value.payload_sha256 = "a".repeat(64);
+    assert!(PublicationRequest::JobFacts(value).validate().is_err());
+}
+
+#[test]
+fn paired_request_rejects_changes_to_either_document_or_runtime_identity() {
+    let mut value = request();
+    value.guest_image_hex = "7b7d20".to_owned();
+    assert!(PublicationRequest::JobFacts(value).validate().is_err());
+
+    let mut value = request();
+    value.expected_runner_runtime_identity.inode += 1;
     assert!(PublicationRequest::JobFacts(value).validate().is_err());
 }

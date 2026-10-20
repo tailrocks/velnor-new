@@ -38,6 +38,26 @@ impl GuestImageFile {
         connection: &RepositoryConnection,
         images: &VerifiedWorkerImages,
     ) -> Result<BindMount, HostError> {
+        self.verify_current(connection, images)?;
+        let source = self.path.to_str().ok_or(HostError::Path)?.to_owned();
+        Ok(BindMount::guest_image(source))
+    }
+
+    /// Return canonical bytes after verification of the connection and image identities.
+    pub(crate) fn verified_document_bytes(
+        &self,
+        connection: &RepositoryConnection,
+        images: &VerifiedWorkerImages,
+    ) -> Result<&[u8], HostError> {
+        self.verify_current(connection, images)?;
+        Ok(&self.document_bytes)
+    }
+
+    fn verify_current(
+        &self,
+        connection: &RepositoryConnection,
+        images: &VerifiedWorkerImages,
+    ) -> Result<(), HostError> {
         let expected = GuestImageDocument::new(connection, images)?;
         let bytes = encode_document(&expected)?;
         let binding_digest = binding_digest(connection)?;
@@ -54,9 +74,7 @@ impl GuestImageFile {
             connection.connection_id.as_str(),
             &self.path,
             &bytes,
-        )?;
-        let source = self.path.to_str().ok_or(HostError::Path)?.to_owned();
-        Ok(BindMount::guest_image(source))
+        )
     }
 
     #[cfg(test)]

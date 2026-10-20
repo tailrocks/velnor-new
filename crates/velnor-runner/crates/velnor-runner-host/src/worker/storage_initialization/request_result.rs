@@ -136,12 +136,10 @@ impl ObservedStorageInitialization {
         &self.work
     }
 
-    #[cfg(test)]
     pub(crate) const fn metadata(&self) -> &ObservedDirectory {
         &self.metadata
     }
 
-    #[cfg(test)]
     pub(crate) const fn runtime_identity(&self) -> &ObservedDirectory {
         &self.runtime_identity
     }
@@ -179,7 +177,6 @@ impl ObservedDirectory {
         self.mount_id
     }
 
-    #[cfg(test)]
     pub(crate) const fn parent_mount_id(&self) -> u64 {
         self.parent_mount_id
     }

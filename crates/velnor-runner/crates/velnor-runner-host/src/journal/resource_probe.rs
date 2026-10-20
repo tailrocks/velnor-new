@@ -41,6 +41,30 @@ pub(crate) struct ProbeSeed {
     pub(crate) request_sha256: String,
 }
 
+/// One cleanup request and its prepared journal row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PreparedCleanupObserverProbe {
+    request: velnor_resource_probe::cleanup_observer_wire::CleanupObserverRequest,
+    request_json: String,
+    probe: ProbeRow,
+}
+
+impl PreparedCleanupObserverProbe {
+    pub(crate) fn request(
+        &self,
+    ) -> &velnor_resource_probe::cleanup_observer_wire::CleanupObserverRequest {
+        &self.request
+    }
+
+    pub(crate) fn request_json(&self) -> &str {
+        &self.request_json
+    }
+
+    pub(crate) fn probe(&self) -> &ProbeRow {
+        &self.probe
+    }
+}
+
 /// The only unresolved probe operation, if one is present.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ProbeRow {

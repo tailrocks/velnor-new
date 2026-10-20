@@ -133,7 +133,14 @@ impl ProvisioningFixture<'_> {
                 };
                 let disk = profile.role_limit(role)?.medium() == StorageMedium::Disk;
                 let (device, statx, magic, filesystem_id) = if disk {
-                    ((0, 38), (0, 41), 0x9123_683e, 11_u64)
+                    let device = if role == StorageRole::EngineMetadata
+                        && contract.observer == StorageObserver::Probe
+                    {
+                        (0, 41)
+                    } else {
+                        (0, 38)
+                    };
+                    (device, (0, 41), 0x9123_683e, 11_u64)
                 } else {
                     let role_index = StorageRole::PHYSICAL
                         .iter()
@@ -143,9 +150,12 @@ impl ProvisioningFixture<'_> {
                         .map_err(|_| HostError::Journal)?
                         .checked_add(30)
                         .ok_or(HostError::Journal)?;
+                    let device_minor = 45_u32
+                        .checked_add(u32::try_from(role_index).map_err(|_| HostError::Journal)?)
+                        .ok_or(HostError::Journal)?;
                     (
-                        (0, 45),
-                        (0, 45),
+                        (0, device_minor),
+                        (0, device_minor),
                         0x0102_1994,
                         u64::try_from(fs).map_err(|_| HostError::Journal)?,
                     )
@@ -162,7 +172,12 @@ impl ProvisioningFixture<'_> {
                         .unwrap_or_else(|| "/".to_owned()),
                     contract.read_only,
                     100 + (role as u64 * 2) + index as u64,
-                    500 + (role as u64 * 2) + index as u64,
+                    500 + (role as u64 * 2)
+                        + if role == StorageRole::SharedRun {
+                            0
+                        } else {
+                            index as u64
+                        },
                     device,
                     statx,
                     magic,

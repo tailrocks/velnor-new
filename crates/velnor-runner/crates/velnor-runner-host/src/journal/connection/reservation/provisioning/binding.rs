@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use crate::error::HostError;
-use crate::journal::connection::ConnectionJournal;
 use crate::journal::connection::storage::in_transaction;
+use crate::journal::connection::{ConnectionJournal, StorageRole};
 use crate::launch::bootstrap::VerifiedStorageResourceBinding;
 
 use super::{HoldContext, hold_context};
@@ -55,6 +55,13 @@ pub(super) async fn bind(
         .await?;
 
         attachments::insert_bound_rows(connection, reservation_id, binding).await?;
+        super::cleanup::insert_observer_witness(
+            connection,
+            &connection_id,
+            reservation_id,
+            binding,
+        )
+        .await?;
         let changed = connection
             .execute(
                 "UPDATE capacity_reservation_provisioning_state SET resources_bound = 1, instance_binding_digest = ?1, guest_boot_id = ?2 WHERE reservation_id = ?3 AND bootstrap_start_state = 'started' AND runner_container_id = ?4 AND dind_container_id = ?5 AND resources_bound = 0 AND instance_binding_digest IS NULL AND jit_state = 'not_requested'",
@@ -92,10 +99,19 @@ pub(super) async fn resources_bound(
     connection_id: &str,
     intent_id: i64,
 ) -> Result<bool, HostError> {
+    let expected_attachments = StorageRole::PHYSICAL
+        .iter()
+        .map(|role| role.attachments().len())
+        .sum::<usize>();
+    let expected_attachments =
+        i64::try_from(expected_attachments).map_err(|_| HostError::Journal)?;
+    let expected_metadata_attachments =
+        i64::try_from(StorageRole::EngineMetadata.attachments().len())
+            .map_err(|_| HostError::Journal)?;
     let mut rows = connection
         .query(
-            "SELECT 1 FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id JOIN capacity_reservations AS r ON r.id = p.reservation_id JOIN connection_intents AS i ON i.id = p.operation_id AND i.connection_id = r.connection_id WHERE p.operation_id = ?1 AND r.connection_id = ?2 AND r.state = 'reserved' AND i.state = 'pending' AND i.cleanup_proven = 0 AND i.launch_phase = 'resources_bound' AND s.bootstrap_start_state = 'started' AND s.resources_bound = 1 AND s.jit_state = 'not_requested' AND s.storage_cleanup_proven = 0 AND (SELECT COUNT(*) FROM capacity_reservation_root_backing_mappings AS m WHERE m.reservation_id = p.reservation_id AND m.connection_id = r.connection_id AND m.operation_id = p.operation_id AND m.role IN ('runner-root', 'dind-root')) = 2 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments AS a WHERE a.reservation_id = p.reservation_id) = 18 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments AS a WHERE a.reservation_id = p.reservation_id AND a.role = 'engine-metadata') = 4 AND EXISTS (SELECT 1 FROM capacity_reservation_bound_storage_paths AS x JOIN capacity_reservation_bound_storage_attachments AS a ON a.reservation_id = x.reservation_id AND a.role = x.role AND a.observer = x.observer AND a.mount_target = x.mount_target WHERE x.reservation_id = p.reservation_id AND x.role = 'runner-home' AND x.observer = 'runner' AND x.mount_target = '/opt/velnor/source-proof/inbox' AND x.volume_subpath IS NOT NULL AND x.volume_subpath = 'source-proof/inbox' AND a.read_only = 0) AND NOT EXISTS (SELECT 1 FROM capacity_reservation_bound_storage_paths AS x WHERE x.reservation_id = p.reservation_id AND x.role = 'engine-metadata' AND x.observer = 'runner' AND x.mount_target = '/opt/velnor/source-proof/inbox') AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_paths AS x WHERE x.reservation_id = p.reservation_id) = 18",
-            (intent_id, connection_id),
+            "SELECT 1 FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id JOIN capacity_reservations AS r ON r.id = p.reservation_id JOIN connection_intents AS i ON i.id = p.operation_id AND i.connection_id = r.connection_id WHERE p.operation_id = ?1 AND r.connection_id = ?2 AND r.state = 'reserved' AND i.state = 'pending' AND i.cleanup_proven = 0 AND i.launch_phase = 'resources_bound' AND s.bootstrap_start_state = 'started' AND s.resources_bound = 1 AND s.jit_state = 'not_requested' AND s.storage_cleanup_proven = 0 AND (SELECT COUNT(*) FROM capacity_reservation_root_backing_mappings AS m WHERE m.reservation_id = p.reservation_id AND m.connection_id = r.connection_id AND m.operation_id = p.operation_id AND m.role IN ('runner-root', 'dind-root')) = 2 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments AS a WHERE a.reservation_id = p.reservation_id) = ?3 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments AS a WHERE a.reservation_id = p.reservation_id AND a.role = 'engine-metadata') = ?4 AND EXISTS (SELECT 1 FROM capacity_reservation_bound_storage_paths AS x JOIN capacity_reservation_bound_storage_attachments AS a ON a.reservation_id = x.reservation_id AND a.role = x.role AND a.observer = x.observer AND a.mount_target = x.mount_target WHERE x.reservation_id = p.reservation_id AND x.role = 'runner-home' AND x.observer = 'runner' AND x.mount_target = '/opt/velnor/source-proof/inbox' AND x.volume_subpath IS NOT NULL AND x.volume_subpath = 'source-proof/inbox' AND a.read_only = 0) AND NOT EXISTS (SELECT 1 FROM capacity_reservation_bound_storage_paths AS x WHERE x.reservation_id = p.reservation_id AND x.role = 'engine-metadata' AND x.observer = 'runner' AND x.mount_target = '/opt/velnor/source-proof/inbox') AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_paths AS x WHERE x.reservation_id = p.reservation_id) = ?3 AND EXISTS (SELECT 1 FROM capacity_reservation_bound_storage_paths AS x JOIN capacity_reservation_bound_storage_attachments AS a ON a.reservation_id = x.reservation_id AND a.role = x.role AND a.observer = x.observer AND a.mount_target = x.mount_target WHERE x.reservation_id = p.reservation_id AND x.role = 'engine-metadata' AND x.observer = 'dind' AND x.mount_target = '/.velnor-runtime-identity' AND a.source_target IS NULL AND x.volume_subpath = 'runtime-identity' AND a.read_only = 1 AND a.container_id = s.dind_container_id) AND EXISTS (SELECT 1 FROM capacity_reservation_bound_storage_paths AS x JOIN capacity_reservation_bound_storage_attachments AS a ON a.reservation_id = x.reservation_id AND a.role = x.role AND a.observer = x.observer AND a.mount_target = x.mount_target WHERE x.reservation_id = p.reservation_id AND x.role = 'engine-metadata' AND x.observer = 'dind' AND x.mount_target = '/opt/velnor/job-facts' AND a.source_target IS NULL AND x.volume_subpath = 'job-facts' AND a.read_only = 1 AND a.container_id = s.dind_container_id)",
+            (intent_id, connection_id, expected_attachments, expected_metadata_attachments),
         )
         .await
         .map_err(|_| HostError::Journal)?;

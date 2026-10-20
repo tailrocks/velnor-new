@@ -2,12 +2,15 @@
 
 use crate::error::HostError;
 
+mod v30;
+pub(in crate::journal::schema) use v30::{upgrade_v30, validate_v30};
+
 use super::{
     CONTEXT_DELETE_GUARD, CONTEXT_INSERT_GUARD, CONTEXT_TABLE, CONTEXT_UPDATE_GUARD,
     PARENT_CLEANUP_GUARD, PARENT_RELEASE_GUARD, validate,
 };
 
-/// Add nullable recovery facts without inventing facts for earlier operations.
+/// This migration adds recovery facts that can be NULL. Earlier operations keep their existing values.
 pub(in crate::journal::schema) async fn upgrade_v25(
     connection: &turso::Connection,
 ) -> Result<(), HostError> {
@@ -26,7 +29,8 @@ pub(in crate::journal::schema) async fn upgrade_v25(
     validate_v25(connection).await
 }
 
-/// Check that every recovery projection is bounded and has a matching digest.
+/// This function makes sure recovery data and its digest are both present or both absent.
+/// Recovery data has a limit of 32,768 bytes, and its digest has 64 lowercase hexadecimal characters.
 pub(in crate::journal::schema) async fn validate_v25(
     connection: &turso::Connection,
 ) -> Result<(), HostError> {
@@ -52,7 +56,7 @@ pub(in crate::journal::schema) async fn validate_v25(
     }
 }
 
-/// Add the cache-admission parent kind and keep prior publication rows.
+/// This migration adds the cache-admission parent kind and keeps prior publication rows.
 pub(in crate::journal::schema) async fn upgrade_v27(
     connection: &turso::Connection,
 ) -> Result<(), HostError> {
@@ -109,7 +113,7 @@ pub(super) async fn rebuild_v27(connection: &turso::Connection) -> Result<(), Ho
     validate_v27(connection).await
 }
 
-/// Check the parent kinds and guards after migration.
+/// This function makes sure that parent kinds and guards are correct after migration.
 pub(in crate::journal::schema) async fn validate_v27(
     connection: &turso::Connection,
 ) -> Result<(), HostError> {

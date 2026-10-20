@@ -1,6 +1,9 @@
 use sha2::{Digest, Sha256};
 
-use crate::{ProbeError, job_facts_wire::JobFactsPublicationContext};
+use crate::{
+    ProbeError,
+    job_facts_wire::{JobFactsPublicationContext, paired_payload_sha256},
+};
 
 const DIRECTORY_TARGET: &str = "/opt/velnor/job-facts";
 const PAYLOAD_LIMIT: usize = 64 * 1024;
@@ -9,10 +12,13 @@ const ROOT_GID: u32 = 0;
 const DIRECTORY_MODE: u32 = 0o555;
 
 pub(super) fn validate_context(context: &JobFactsPublicationContext) -> Result<(), ProbeError> {
-    if context.schema_version != 1
+    if context.schema_version != 2
         || !valid_operation_id(&context.operation_id)
         || !valid_boot_id(&context.expected_guest_boot_id)
         || !valid_digest(&context.payload_sha256)
+        || !valid_digest(&context.job_facts_sha256)
+        || !valid_digest(&context.guest_image_sha256)
+        || !valid_digest(&context.publication_binding_sha256)
         || context.payload_hex.is_empty()
         || context.payload_hex.len() > PAYLOAD_LIMIT * 2
         || !context.payload_hex.len().is_multiple_of(2)
@@ -39,7 +45,13 @@ pub(super) fn validate_context(context: &JobFactsPublicationContext) -> Result<(
         return Err(ProbeError::Invalid("job_facts_runner_directory"));
     }
     let bytes = decode_payload(&context.payload_hex)?;
-    if lower_hex(&Sha256::digest(&bytes)) != context.payload_sha256 {
+    let guest_image = decode_payload_limit(&context.guest_image_hex, 16 * 1024)?;
+    if lower_hex(&Sha256::digest(&bytes)) != context.job_facts_sha256
+        || lower_hex(&Sha256::digest(&guest_image)) != context.guest_image_sha256
+        || paired_payload_sha256(context)
+            .map_err(|_| ProbeError::Invalid("job_facts_payload_digest"))?
+            != context.payload_sha256
+    {
         return Err(ProbeError::Invalid("job_facts_payload_digest"));
     }
     let document = serde_json::from_slice::<serde_json::Value>(&bytes)
@@ -47,7 +59,43 @@ pub(super) fn validate_context(context: &JobFactsPublicationContext) -> Result<(
     if !valid_document_shape(&document) {
         return Err(ProbeError::Invalid("job_facts_payload_json"));
     }
+    let guest_document = serde_json::from_slice::<serde_json::Value>(&guest_image)
+        .map_err(|_| ProbeError::Invalid("job_facts_guest_image_json"))?;
+    if !valid_guest_image_shape(&guest_document) {
+        return Err(ProbeError::Invalid("job_facts_guest_image_json"));
+    }
+    let identity = &context.expected_runner_runtime_identity;
+    if identity.inode == 0
+        || identity.owner_uid != ROOT_UID
+        || identity.owner_gid != ROOT_GID
+        || identity.mode != DIRECTORY_MODE
+    {
+        return Err(ProbeError::Invalid("job_facts_runtime_directory"));
+    }
     Ok(())
+}
+
+fn valid_guest_image_shape(document: &serde_json::Value) -> bool {
+    let Some(object) = document.as_object() else {
+        return false;
+    };
+    object.get("schema").and_then(serde_json::Value::as_str) == Some("velnor.guest-image/v1")
+        && object
+            .get("source_sha")
+            .and_then(serde_json::Value::as_str)
+            .is_some()
+        && object
+            .get("guest_platform")
+            .and_then(serde_json::Value::as_str)
+            == Some("linux/amd64")
+        && object
+            .get("scale_set")
+            .and_then(serde_json::Value::as_object)
+            .is_some()
+        && object
+            .get("images")
+            .and_then(serde_json::Value::as_object)
+            .is_some()
 }
 
 pub(super) fn valid_document_shape(document: &serde_json::Value) -> bool {
@@ -77,7 +125,11 @@ pub(super) fn valid_document_shape(document: &serde_json::Value) -> bool {
 }
 
 pub(super) fn decode_payload(value: &str) -> Result<Vec<u8>, ProbeError> {
-    if !value.len().is_multiple_of(2) || value.len() > PAYLOAD_LIMIT * 2 {
+    decode_payload_limit(value, PAYLOAD_LIMIT)
+}
+
+fn decode_payload_limit(value: &str, limit: usize) -> Result<Vec<u8>, ProbeError> {
+    if !value.len().is_multiple_of(2) || value.len() > limit * 2 {
         return Err(ProbeError::InputTooLarge("job_facts_payload"));
     }
     let mut output = Vec::with_capacity(value.len() / 2);
@@ -88,6 +140,10 @@ pub(super) fn decode_payload(value: &str) -> Result<Vec<u8>, ProbeError> {
         );
     }
     Ok(output)
+}
+
+pub(super) fn decode_guest_image(value: &str) -> Result<Vec<u8>, ProbeError> {
+    decode_payload_limit(value, 16 * 1024)
 }
 
 fn decode_hex(value: u8) -> Option<u8> {

@@ -71,6 +71,8 @@ async fn retain_scoped_channel(
                 context.release_read_secret,
                 context.selected_engine,
                 context.worker_images,
+                &prepared.binding,
+                &prepared.guest_image,
                 deadline,
             )
             .await;

@@ -35,6 +35,8 @@ pub(crate) enum ResourceProbePurpose {
     Capacity,
     /// Measure cgroup limits for an owned worker pair.
     OwnedCgroups,
+    /// Check that one recorded worker has no remaining references.
+    CleanupObserver,
 }
 
 impl ResourceProbePurpose {
@@ -42,6 +44,7 @@ impl ResourceProbePurpose {
         match self {
             Self::Capacity => "capacity",
             Self::OwnedCgroups => "owned-cgroups",
+            Self::CleanupObserver => "cleanup-observer",
         }
     }
 
@@ -49,6 +52,7 @@ impl ResourceProbePurpose {
         match value {
             "capacity" => Ok(Self::Capacity),
             "owned-cgroups" => Ok(Self::OwnedCgroups),
+            "cleanup-observer" => Ok(Self::CleanupObserver),
             _ => Err(HostError::Journal),
         }
     }

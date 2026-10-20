@@ -77,10 +77,21 @@ pub(crate) async fn prepare_listener(
     secret: &ReleaseReadSecret,
     engine: &SelectedEngineContext,
     images: &VerifiedWorkerImages,
+    connection: &RepositoryConnection,
+    guest_image: &crate::worker::guest_image::GuestImageFile,
     deadline: Instant,
 ) -> Result<RunnerReadyBootstrap, PendingScopedExecution> {
     if let Err(error) = publish_job_facts_proof(
-        &ready, docker, host, scoped, secret, engine, images, deadline,
+        &ready,
+        docker,
+        host,
+        scoped,
+        secret,
+        engine,
+        images,
+        connection,
+        guest_image,
+        deadline,
     )
     .await
     {
@@ -107,6 +118,8 @@ async fn publish_job_facts_proof(
     secret: &ReleaseReadSecret,
     engine: &SelectedEngineContext,
     images: &VerifiedWorkerImages,
+    connection: &RepositoryConnection,
+    guest_image: &crate::worker::guest_image::GuestImageFile,
     deadline: Instant,
 ) -> Result<(), HostError> {
     let reservation_id = ready.bound().prepared().acquired().reservation_id();
@@ -122,6 +135,8 @@ async fn publish_job_facts_proof(
             connection_journal: scoped,
             selected: engine,
             images,
+            connection,
+            guest_image,
             release_secret: secret,
             ready: ready.bound().initialization(),
             claim: &claim,
@@ -137,7 +152,7 @@ async fn publish_job_facts_proof(
         }
     };
     if let Err(error) = scoped.record_job_facts_published(&claim, &proof).await {
-        let _ = scoped.mark_job_facts_publication_uncertain(&claim).await;
+        scoped.mark_job_facts_publication_uncertain(&claim).await?;
         return Err(error);
     }
     Ok(())
@@ -182,7 +197,7 @@ async fn publish_challenge(
     {
         Ok(receipt) => receipt,
         Err(error) => {
-            let _ = scoped.mark_execution_challenge_uncertain(&claim).await;
+            scoped.mark_execution_challenge_uncertain(&claim).await?;
             return Err(error);
         }
     };
@@ -190,7 +205,7 @@ async fn publish_challenge(
         .record_execution_challenge_published(&claim, &receipt)
         .await
     {
-        let _ = scoped.mark_execution_challenge_uncertain(&claim).await;
+        scoped.mark_execution_challenge_uncertain(&claim).await?;
         return Err(error);
     }
     Ok(())
@@ -321,7 +336,7 @@ async fn publish_decision(
     {
         Ok(receipt) => receipt,
         Err(error) => {
-            let _ = scoped.mark_execution_decision_uncertain(&claim).await;
+            scoped.mark_execution_decision_uncertain(&claim).await?;
             return Err(error);
         }
     };
@@ -329,7 +344,7 @@ async fn publish_decision(
         .record_execution_decision_delivered(&claim, &receipt)
         .await
     {
-        let _ = scoped.mark_execution_decision_uncertain(&claim).await;
+        scoped.mark_execution_decision_uncertain(&claim).await?;
         return Err(error);
     }
     Ok(())

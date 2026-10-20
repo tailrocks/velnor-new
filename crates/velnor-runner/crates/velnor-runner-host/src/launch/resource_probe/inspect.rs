@@ -54,6 +54,9 @@ fn expected_arguments(purpose: crate::journal::ResourceProbePurpose) -> Vec<Stri
         crate::journal::ResourceProbePurpose::OwnedCgroups => {
             vec!["--mode".to_owned(), "owned_container_cgroup".to_owned()]
         }
+        crate::journal::ResourceProbePurpose::CleanupObserver => {
+            vec!["--mode".to_owned(), "cleanup_observer".to_owned()]
+        }
     }
 }
 

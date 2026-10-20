@@ -3,16 +3,20 @@ use sha2::{Digest, Sha256};
 use crate::error::HostError;
 
 const LARGE_DOCUMENT_MAX_BYTES: u64 = 64 * 1024;
+const GUEST_IMAGE_DOCUMENT_MAX_BYTES: u64 = 16 * 1024;
 const CONTROL_DOCUMENT_MAX_BYTES: u64 = 8 * 1024;
 const REQUEST_DOCUMENT_MAX_BYTES: u64 = 16 * 1024;
 const RUNTIME_IDENTITY_PATH: &str = "/.velnor-runtime-identity/runner.json";
+const GUEST_IMAGE_PATH: &str = "/.velnor-runtime-identity/guest-image.json";
 const JOB_FACTS_PATH: &str = "/opt/velnor/job-facts/storage-cache-admission.json";
 const CHALLENGE_PATH: &str = "/opt/velnor/source-proof/control/challenge.json";
 const DECISION_PATH: &str = "/opt/velnor/source-proof/control/decision.json";
 const REQUEST_PATH: &str = "/opt/velnor/source-proof/inbox/request.json";
 const HOME_INBOX_INIT_PATH: &str = "/velnor/init/home/source-proof/inbox";
 const HOME_INBOX_VOLUME_SUBPATH: &str = "source-proof/inbox";
-const TEMPORARY_PATHS: [&str; 3] = [
+const TEMPORARY_PATHS: [&str; 5] = [
+    "/opt/velnor/runtime-identity/.guest-image.json.<operation_id>.tmp",
+    "/opt/velnor/job-facts/.storage-cache-admission.json.<operation_id>.tmp",
     "/opt/velnor/source-proof/control/.challenge.<operation_id>.tmp",
     "/opt/velnor/source-proof/control/.decision.<operation_id>.tmp",
     "/opt/velnor/source-proof/inbox/request.<challenge>.tmp",
@@ -43,7 +47,7 @@ impl ControllerPublicationBound {
     }
 
     pub(crate) const fn runtime_identity_max_bytes(&self) -> u64 {
-        LARGE_DOCUMENT_MAX_BYTES
+        LARGE_DOCUMENT_MAX_BYTES + GUEST_IMAGE_DOCUMENT_MAX_BYTES
     }
 
     pub(crate) const fn job_facts_max_bytes(&self) -> u64 {
@@ -62,22 +66,23 @@ impl ControllerPublicationBound {
         REQUEST_DOCUMENT_MAX_BYTES
     }
 
-    /// Bound four metadata documents and the largest simultaneously retained temporaries.
+    /// Bound metadata documents and their temporary files.
     pub(crate) const fn peak_payload_bytes(&self) -> u64 {
         self.runtime_identity_max_bytes()
             + self.job_facts_max_bytes()
             + self.challenge_max_bytes()
             + self.decision_max_bytes()
             + LARGE_DOCUMENT_MAX_BYTES
+            + GUEST_IMAGE_DOCUMENT_MAX_BYTES
             + CONTROL_DOCUMENT_MAX_BYTES
     }
 
     pub(crate) const fn final_file_count(&self) -> u64 {
-        4
+        5
     }
 
     pub(crate) const fn temporary_file_count(&self) -> u64 {
-        2
+        3
     }
 
     pub(crate) const fn directory_count(&self) -> u64 {
@@ -120,6 +125,7 @@ fn fixed_policy_digest() -> [u8; 32] {
     digest.update(b"engine-metadata\0");
     for path in [
         RUNTIME_IDENTITY_PATH,
+        GUEST_IMAGE_PATH,
         JOB_FACTS_PATH,
         CHALLENGE_PATH,
         DECISION_PATH,
@@ -150,13 +156,14 @@ fn fixed_policy_digest() -> [u8; 32] {
     }
     for limit in [
         LARGE_DOCUMENT_MAX_BYTES,
+        GUEST_IMAGE_DOCUMENT_MAX_BYTES,
         CONTROL_DOCUMENT_MAX_BYTES,
         REQUEST_DOCUMENT_MAX_BYTES,
     ] {
         digest.update(limit.to_be_bytes());
     }
-    digest.update(4_u64.to_be_bytes());
-    digest.update(2_u64.to_be_bytes());
+    digest.update(5_u64.to_be_bytes());
+    digest.update(3_u64.to_be_bytes());
     digest.update(1_u64.to_be_bytes());
     digest.update(1_u64.to_be_bytes());
     digest.update(2_u64.to_be_bytes());
@@ -180,21 +187,21 @@ mod tests {
     #[test]
     fn fixed_publication_bound_matches_reader_limits_and_overlap() {
         let bound = ControllerPublicationBound::fixed();
-        assert_eq!(bound.runtime_identity_max_bytes(), 65_536);
+        assert_eq!(bound.runtime_identity_max_bytes(), 81_920);
         assert_eq!(bound.job_facts_max_bytes(), 65_536);
         assert_eq!(bound.challenge_max_bytes(), 8_192);
         assert_eq!(bound.decision_max_bytes(), 8_192);
         assert_eq!(bound.request_max_bytes(), 16_384);
-        assert_eq!(bound.peak_payload_bytes(), 221_184);
-        assert_eq!(bound.final_file_count(), 4);
-        assert_eq!(bound.temporary_file_count(), 2);
+        assert_eq!(bound.peak_payload_bytes(), 253_952);
+        assert_eq!(bound.final_file_count(), 5);
+        assert_eq!(bound.temporary_file_count(), 3);
         assert_eq!(bound.directory_count(), 4);
-        assert_eq!(bound.object_count(), 11);
+        assert_eq!(bound.object_count(), 13);
         assert_eq!(bound.home_inbox_peak_payload_bytes(), 32_768);
         assert_eq!(bound.home_inbox_object_count(), 5);
         assert_eq!(
             bound.digest(),
-            "01e2ed30590d4060486104922e6be6c776b116d977b906edb7c6511a310dccb1"
+            "a2b779c3cdd63b136d6e9d7898912576a3104dcbafc7c89c6ab1f4185002eb76"
         );
         assert!(bound.validate().is_ok());
     }

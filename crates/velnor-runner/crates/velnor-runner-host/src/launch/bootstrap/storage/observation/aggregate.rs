@@ -16,6 +16,7 @@ use crate::{
         },
         resource_probe::{OwnedCgroupSubjects, OwnedContainerSubjects, ReleaseReadSecret},
     },
+    worker::storage_initialization::VerifiedStorageInitializationReady,
 };
 
 const STORAGE_OBSERVATION_TIMEOUT: Duration = Duration::from_secs(45);
@@ -23,6 +24,8 @@ const STORAGE_OBSERVATION_TIMEOUT: Duration = Duration::from_secs(45);
 mod backing;
 #[path = "capacity.rs"]
 mod capacity;
+#[path = "cleanup_witness.rs"]
+mod cleanup_witness;
 #[path = "worker.rs"]
 mod worker;
 
@@ -49,6 +52,7 @@ pub(crate) async fn observe_storage_resources(
     images: &VerifiedWorkerImages,
     prepared: &PreparedAcquiredBootstrap,
     started: &StartedBootstrapPair,
+    initialization: &VerifiedStorageInitializationReady,
 ) -> Result<VerifiedStorageResourceBinding, HostError> {
     let deadline = Instant::now() + STORAGE_OBSERVATION_TIMEOUT;
     let acquired = prepared.acquired();
@@ -165,6 +169,21 @@ pub(crate) async fn observe_storage_resources(
     )?;
     apply_backing_capacity(&mut measured_attachments, &root_backings, owned_observation)?;
     let roles = observed_roles(&plan, &measured_attachments)?;
+    let cleanup_observer_binding = cleanup_witness::capture_cleanup_binding(
+        docker,
+        journal,
+        engine,
+        images,
+        prepared,
+        started.runner_container_id(),
+        started.dind_container_id(),
+        &plan,
+        owned_observation,
+        &measured_attachments,
+        initialization,
+        deadline,
+    )
+    .await?;
     let attachments = measured_attachments
         .into_iter()
         .map(|item| item.binding)
@@ -205,6 +224,7 @@ pub(crate) async fn observe_storage_resources(
         cgroups,
         root_backings,
         guest_boot_id: witness.storage_mount().guest_boot_id().to_owned(),
+        cleanup_observer_binding,
     };
     let runner_finished = super::finish_worker_storage_observation(docker, runner, deadline).await;
     let dind_finished = super::finish_worker_storage_observation(docker, dind, deadline).await;

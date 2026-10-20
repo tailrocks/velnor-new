@@ -76,9 +76,9 @@ const PARENT_CLEANUP_GUARD: &str = "CREATE TRIGGER IF NOT EXISTS execution_publi
 const PARENT_RELEASE_GUARD: &str = "CREATE TRIGGER IF NOT EXISTS execution_publication_parent_release_guard BEFORE UPDATE OF state ON capacity_reservations WHEN NEW.state = 'released' AND EXISTS (SELECT 1 FROM execution_publication_operations AS publication JOIN resource_probe_operations AS operation ON operation.operation_id = publication.operation_id WHERE publication.reservation_id = NEW.id AND operation.phase NOT IN ('removed', 'aborted')) BEGIN SELECT RAISE(ABORT, 'execution publication helper is not removed'); END";
 
 const HELPER_ROLE_COLUMN: &str = "helper_role TEXT NOT NULL DEFAULT 'resource-probe' CHECK (helper_role IN ('resource-probe', 'execution-publication'))";
-const PROBE_PURPOSE_COLUMN: &str = "probe_purpose TEXT NOT NULL DEFAULT 'capacity' CHECK (probe_purpose IN ('capacity', 'owned-cgroups', 'none'))";
+const PROBE_PURPOSE_COLUMN: &str = "probe_purpose TEXT NOT NULL DEFAULT 'capacity' CHECK (probe_purpose IN ('capacity', 'owned-cgroups', 'cleanup-observer', 'none'))";
 const REQUEST_SHA256_COLUMN: &str = "request_sha256 TEXT CHECK (request_sha256 IS NULL OR (length(request_sha256) = 64 AND request_sha256 NOT GLOB '*[^0-9a-f]*'))";
-const REQUEST_CONTEXT_COLUMN: &str = "request_context TEXT CHECK (request_context IS NULL OR length(CAST(request_context AS BLOB)) <= 8192)";
+const REQUEST_CONTEXT_COLUMN: &str = "request_context TEXT CHECK (request_context IS NULL OR ((probe_purpose = 'cleanup-observer' AND length(CAST(request_context AS BLOB)) <= 32768) OR (probe_purpose != 'cleanup-observer' AND length(CAST(request_context AS BLOB)) <= 8192)))";
 
 /// Add closed helper identity columns and the publication parent context.
 pub(super) async fn bootstrap(connection: &turso::Connection) -> Result<(), HostError> {
@@ -312,7 +312,9 @@ fn is_sql_punctuation(character: char) -> bool {
 
 mod migration;
 use migration::{ensure_column, ensure_context_column, validate_columns, validate_context_columns};
-pub(in crate::journal::schema) use migration::{upgrade_v25, upgrade_v27, validate_v27};
+pub(in crate::journal::schema) use migration::{
+    upgrade_v25, upgrade_v27, upgrade_v30, validate_v27, validate_v30,
+};
 
 #[cfg(test)]
 mod tests {

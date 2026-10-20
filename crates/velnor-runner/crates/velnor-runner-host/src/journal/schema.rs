@@ -4,6 +4,11 @@ use std::collections::HashMap;
 
 use crate::error::HostError;
 
+#[cfg(test)]
+mod cleanup_observer_orphan_tests;
+mod cleanup_observer_witness;
+#[cfg(test)]
+mod cleanup_observer_witness_tests;
 mod connection;
 mod doctor_probe;
 mod execution_authorization;
@@ -28,7 +33,7 @@ mod storage_initialization;
 mod storage_network;
 mod storage_root_backing;
 
-pub(super) const JOURNAL_VERSION: i64 = 29;
+pub(super) const JOURNAL_VERSION: i64 = 30;
 const CURRENT_COLUMNS: [ColumnShape; 23] = [
     ColumnShape::new("id", "INTEGER", false, None),
     ColumnShape::new("kind", "TEXT", true, None),
@@ -116,11 +121,14 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
         storage_network::bootstrap(conn).await?;
         storage_initialization::upgrade_v22(conn).await?;
         storage_root_backing::upgrade_v27(conn).await?;
+        storage_root_backing::upgrade_v30(conn).await?;
         storage_root_backing::bootstrap(conn).await?;
         execution_authorization::bootstrap(conn).await?;
         execution_publication::bootstrap(conn).await?;
         execution_publication::upgrade_v25(conn).await?;
+        execution_publication::upgrade_v30(conn).await?;
         storage_handoff::bootstrap(conn).await?;
+        cleanup_observer_witness::bootstrap(conn).await?;
     } else {
         while version != JOURNAL_VERSION {
             let expected = expected_next_version(version).ok_or(HostError::Journal)?;
@@ -154,6 +162,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
                 26 => migration::from_version_twenty_six(conn).await?,
                 27 => migration::from_version_twenty_seven(conn).await?,
                 28 => migration::from_version_twenty_eight(conn).await?,
+                29 => migration::from_version_twenty_nine(conn).await?,
                 _ => return Err(HostError::Journal),
             }
             version = journal_version(conn).await?;
@@ -167,7 +176,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
 
 fn expected_next_version(version: i64) -> Option<i64> {
     match version {
-        0..=8 | 10..=28 => Some(version + 1),
+        0..=8 | 10..=29 => Some(version + 1),
         9 => Some(11),
         _ => None,
     }
@@ -183,16 +192,24 @@ mod migration_driver_tests {
             assert_eq!(expected_next_version(version), Some(version + 1));
         }
         assert_eq!(expected_next_version(9), Some(11));
-        for version in 10..=28 {
+        for version in 10..=29 {
             assert_eq!(expected_next_version(version), Some(version + 1));
         }
-        for version in [-1, 29, 30] {
+        for version in [-1, 30, 31] {
             assert_eq!(expected_next_version(version), None);
         }
     }
 }
 
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_persisted_schema_v27(conn).await?;
+    execution_publication::validate_v30(conn).await?;
+    cleanup_observer_witness::validate(conn).await
+}
+
+pub(super) async fn validate_persisted_schema_v27(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
     validate_persisted_schema_v20(conn).await?;
     storage_network::validate(conn).await?;
     storage_initialization::validate_v22(conn).await?;
@@ -200,7 +217,8 @@ async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostE
     execution_authorization::validate(conn).await?;
     execution_publication::validate(conn).await?;
     execution_publication::validate_v27(conn).await?;
-    storage_handoff::validate(conn).await
+    storage_handoff::validate(conn).await?;
+    Ok(())
 }
 
 pub(super) async fn validate_persisted_schema_v20(

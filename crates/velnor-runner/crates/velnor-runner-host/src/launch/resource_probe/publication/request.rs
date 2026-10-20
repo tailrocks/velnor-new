@@ -85,7 +85,11 @@ impl PublicationRequest {
             ),
         };
         let encoded = self.encode()?;
-        if version != 1
+        let expected_version = match self {
+            Self::Control(_) => 1,
+            Self::JobFacts(_) => 2,
+        };
+        if version != expected_version
             || !lower_hex(self.operation_id(), 32)
             || !valid_boot_id(self.guest_boot_id())
             || !lower_hex(self.payload_sha256(), 64)
@@ -101,8 +105,24 @@ impl PublicationRequest {
             return Err(crate::error::HostError::Identity);
         }
         let payload = decode_lower_hex(hex)?;
-        if digest(&payload) != self.payload_sha256() {
-            return Err(crate::error::HostError::Identity);
+        match self {
+            Self::Control(_) if digest(&payload) != self.payload_sha256() => {
+                return Err(crate::error::HostError::Identity);
+            }
+            Self::JobFacts(value) => {
+                let guest = decode_lower_hex(&value.guest_image_hex)?;
+                if digest(&payload) != value.job_facts_sha256
+                    || digest(&guest) != value.guest_image_sha256
+                    || !lower_hex(&value.publication_binding_sha256, 64)
+                    || !lower_hex(&value.payload_sha256, 64)
+                    || velnor_resource_probe::job_facts_wire::paired_payload_sha256(value)
+                        .map_err(|_| crate::error::HostError::Frame)?
+                        != value.payload_sha256
+                {
+                    return Err(crate::error::HostError::Identity);
+                }
+            }
+            _ => {}
         }
         Ok(())
     }
@@ -135,10 +155,14 @@ impl PublicationRequest {
                     && record.payload_sha256 == request.payload_sha256
             }
             (PublicationRecord::JobFacts(record), Self::JobFacts(request)) => {
-                record.schema_version == 1
+                record.schema_version == 2
                     && record.operation_id == request.operation_id
                     && record.guest_boot_id == request.expected_guest_boot_id
                     && record.payload_sha256 == request.payload_sha256
+                    && record.guest_image_sha256 == request.guest_image_sha256
+                    && record.publication_binding_sha256 == request.publication_binding_sha256
+                    && record.file.readback_sha256 == request.job_facts_sha256
+                    && record.guest_image_file.readback_sha256 == request.guest_image_sha256
                     && record.mount_namespace_id > 0
             }
             _ => false,
@@ -155,9 +179,14 @@ pub(super) fn job_facts_request(
     guest_boot_id: &str,
     payload: &[u8],
     directory: &velnor_resource_probe::execution_channel_wire::ExecutionChannelDirectory,
+    guest_image: &[u8],
+    runtime_identity: velnor_resource_probe::job_facts_wire::JobFactsRuntimeIdentityDirectory,
+    publication_binding_sha256: &str,
 ) -> Result<JobFactsPublicationContext, crate::error::HostError> {
     if payload.is_empty()
         || payload.len() > 64 * 1024
+        || guest_image.is_empty()
+        || guest_image.len() > 16 * 1024
         || operation_id.len() != 32
         || !operation_id
             .bytes()
@@ -168,17 +197,26 @@ pub(super) fn job_facts_request(
         || directory.owner_gid != 0
         || directory.mode != 0o555
         || !directory.read_only
+        || !lower_hex(publication_binding_sha256, 64)
     {
         return Err(crate::error::HostError::Identity);
     }
     let context = JobFactsPublicationContext {
-        schema_version: 1,
+        schema_version: 2,
         operation_id: operation_id.to_owned(),
         expected_guest_boot_id: guest_boot_id.to_owned(),
         payload_hex: encode_hex(payload),
-        payload_sha256: digest(payload),
+        job_facts_sha256: digest(payload),
+        payload_sha256: String::new(),
+        guest_image_hex: encode_hex(guest_image),
+        guest_image_sha256: digest(guest_image),
+        publication_binding_sha256: publication_binding_sha256.to_owned(),
         expected_runner_job_facts: directory.clone(),
+        expected_runner_runtime_identity: runtime_identity,
     };
+    let mut context = context;
+    context.payload_sha256 = velnor_resource_probe::job_facts_wire::paired_payload_sha256(&context)
+        .map_err(|_| crate::error::HostError::Frame)?;
     let encoded = serde_json::to_vec(&context).map_err(|_| crate::error::HostError::Frame)?;
     if encoded.len() > velnor_resource_probe::job_facts::JOB_FACTS_REQUEST_LIMIT {
         return Err(crate::error::HostError::Frame);

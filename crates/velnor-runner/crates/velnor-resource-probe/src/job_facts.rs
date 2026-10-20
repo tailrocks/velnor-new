@@ -7,11 +7,11 @@ use crate::{ProbeError, job_facts_wire::JobFactsPublicationContext};
 
 pub use crate::job_facts_wire::{JobFactsPublicationFile, JobFactsPublicationRecord};
 
-/// Maximum serialized request size for one `JobFacts` publication.
-pub const JOB_FACTS_REQUEST_LIMIT: usize = 160 * 1024;
+/// Maximum serialized request size for one paired metadata publication.
+pub const JOB_FACTS_REQUEST_LIMIT: usize = 176 * 1024;
 
-/// Maximum serialized result size for one `JobFacts` publication.
-pub const JOB_FACTS_RECORD_LIMIT: usize = 16 * 1024;
+/// Maximum serialized result size for one paired metadata publication.
+pub const JOB_FACTS_RECORD_LIMIT: usize = 24 * 1024;
 
 /// Publish one storage cache admission document at the specified path.
 ///

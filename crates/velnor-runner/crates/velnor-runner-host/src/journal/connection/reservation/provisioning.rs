@@ -4,6 +4,7 @@ mod admission;
 mod binding;
 mod cleanup;
 pub(crate) use cleanup::StorageCleanupIdentity;
+pub(crate) use cleanup::StorageCleanupObserverWitness;
 #[cfg(test)]
 pub(crate) use cleanup::{StorageCleanupCgroup, StorageCleanupMount};
 mod containers;
@@ -147,6 +148,22 @@ impl ConnectionJournal {
         binding: &crate::launch::bootstrap::VerifiedStorageResourceBinding,
     ) -> Result<(), HostError> {
         binding::bind(self, reservation_id, binding).await
+    }
+
+    /// Read the saved facts for one cleanup observer.
+    pub(crate) async fn storage_cleanup_witness(
+        &self,
+        reservation_id: i64,
+    ) -> Result<Option<cleanup::StorageCleanupObserverWitness>, HostError> {
+        if reservation_id <= 0 {
+            return Err(HostError::Identity);
+        }
+        let connection_id = self.connection_id().as_str().to_owned();
+        read_transaction(self.journal_ref(), async |connection| {
+            self.validate_scope(connection).await?;
+            cleanup::read_observer_witness(connection, &connection_id, reservation_id).await
+        })
+        .await
     }
 
     /// Record exact container, mount, volume, and cgroup cleanup evidence.

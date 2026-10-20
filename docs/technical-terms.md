@@ -42,8 +42,12 @@
 | Task binding digest | A digest that identifies a generated task command with project tool references. |
 | Catalog tool | A tool that Velnor can set in generated workflows. |
 | Mount handoff | The transfer of volume and directory identity records from the storage initializer to the controller. |
+| Cleanup observer | A guest process that examines storage and process identities after cleanup. |
+| Cleanup observer witness | A journal record with guest identity data recorded before cleanup. |
+| Storage role | A named purpose for one runner storage volume or mount. |
+| Named volume | A Docker volume with a name that a container mounts. |
 | Docker root | The directory that the selected Docker engine uses to store Docker data. |
-| Mount namespace | A Linux group of mount records with one view of mounted file systems. |
+| Mount namespace | The Linux view of mounts used by one process. |
 | Mount ID | The Linux identifier for one mount in a mount namespace. |
 | statx | The Linux operation that reads file identity and mount data. |
 | File system ID | The number that identifies a file system. |

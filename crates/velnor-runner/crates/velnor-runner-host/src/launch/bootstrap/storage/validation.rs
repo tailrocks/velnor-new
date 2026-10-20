@@ -1,7 +1,7 @@
+mod inventory;
+
 use crate::error::HostError;
-use crate::journal::{
-    StorageFilesystemKind, StorageInodePolicy, StorageMedium, StorageObserver, StorageRole,
-};
+use crate::journal::{StorageObserver, StorageRole};
 
 use crate::launch::bootstrap::{BootstrapContainerRole, VerifiedStorageResourceBinding};
 
@@ -22,11 +22,16 @@ pub(super) fn validate_storage_resource_binding(
         || !valid_container_id(&binding.dind_container_id)
         || binding.runner_container_id == binding.dind_container_id
         || !valid_uuid(&binding.guest_boot_id)
+        || binding.cleanup_observer_binding.expected_guest_boot_id != binding.guest_boot_id
+        || velnor_resource_probe::cleanup_observer_wire::validate_binding(
+            &binding.cleanup_observer_binding,
+        )
+        .is_err()
     {
         return Err(HostError::Journal);
     }
-    validate_roles(&binding.roles)?;
-    validate_attachments(
+    inventory::validate_roles(&binding.roles)?;
+    inventory::validate_attachments(
         &binding.roles,
         &binding.attachments,
         &binding.runner_container_id,
@@ -36,236 +41,59 @@ pub(super) fn validate_storage_resource_binding(
         &binding.cgroups,
         &binding.runner_container_id,
         &binding.dind_container_id,
-    )
+    )?;
+    validate_cleanup_binding_matches_attachments(binding)
 }
 
-fn validate_roles(roles: &[super::ObservedStorageRole]) -> Result<(), HostError> {
-    const PHYSICAL: [StorageRole; 11] = [
-        StorageRole::RunnerRoot,
-        StorageRole::RunnerHome,
-        StorageRole::RunnerWork,
-        StorageRole::RunnerTmp,
-        StorageRole::RunnerShm,
-        StorageRole::SharedRun,
-        StorageRole::DindRoot,
-        StorageRole::DindData,
-        StorageRole::DindTmp,
-        StorageRole::DindShm,
-        StorageRole::EngineMetadata,
-    ];
-    if roles.len() != PHYSICAL.len()
-        || PHYSICAL.iter().any(|role| {
-            roles
-                .iter()
-                .filter(|observed| observed.role == *role)
-                .count()
-                != 1
-        })
-    {
-        return Err(HostError::Journal);
-    }
-    for observed in roles {
-        validate_role(observed)?;
-    }
-    Ok(())
-}
-
-fn validate_role(role: &super::ObservedStorageRole) -> Result<(), HostError> {
-    let contract = role.role.contract().ok_or(HostError::Journal)?;
-    let (total, free, available) = role.byte_counts();
-    let (inode_total, inode_free, inode_available) = role.inode_counts();
-    let (charge_bytes, charge_inodes, retained_memory_bytes) = role.charges();
-    let (owned_usage_bytes, owned_usage_inodes) = role.owned_usage();
-    let bytes_cover = available
-        .checked_add(owned_usage_bytes)
-        .is_some_and(|capacity| capacity >= charge_bytes);
-    let inode_shape = match role.inode_policy() {
-        StorageInodePolicy::Finite => match (inode_total, inode_free, inode_available) {
-            (Some(total), Some(free), Some(available)) => {
-                total > 0
-                    && free <= total
-                    && available <= free
-                    && charge_inodes > 0
-                    && available
-                        .checked_add(owned_usage_inodes)
-                        .is_some_and(|capacity| capacity >= charge_inodes)
-            }
-            _ => false,
-        },
-        StorageInodePolicy::DynamicBtrfs => {
-            role.medium() == StorageMedium::Disk
-                && role.filesystem_kind() == StorageFilesystemKind::Btrfs
-                && charge_inodes > 0
-                && owned_usage_inodes == 0
-                && inode_total == Some(0)
-                && inode_free == Some(0)
-                && inode_available == Some(0)
-        }
-        StorageInodePolicy::Unknown => false,
-    };
-    let medium_shape = match role.medium() {
-        StorageMedium::Tmpfs => {
-            role.filesystem_kind() == StorageFilesystemKind::Tmpfs
-                && role.inode_policy() == StorageInodePolicy::Finite
-                && retained_memory_bytes == charge_bytes
-        }
-        StorageMedium::Disk => {
-            role.filesystem_kind() != StorageFilesystemKind::Tmpfs && retained_memory_bytes == 0
-        }
-    };
-    if !valid_digest(role.pool_id())
-        || !valid_digest(role.filesystem_instance_digest())
-        || role.medium() != contract.medium
-        || total == 0
-        || free > total
-        || available > free
-        || charge_bytes == 0
-        || owned_usage_bytes > charge_bytes
-        || !bytes_cover
-        || !inode_shape
-        || !medium_shape
-    {
-        return Err(HostError::Journal);
-    }
-    Ok(())
-}
-
-fn validate_attachments(
-    roles: &[super::ObservedStorageRole],
-    attachments: &[super::ObservedStorageAttachment],
-    runner_container_id: &str,
-    dind_container_id: &str,
+fn validate_cleanup_binding_matches_attachments(
+    binding: &VerifiedStorageResourceBinding,
 ) -> Result<(), HostError> {
-    const ATTACHMENTS: [(StorageRole, StorageObserver, &str); 18] = [
-        (StorageRole::RunnerRoot, StorageObserver::Runner, "/"),
-        (
-            StorageRole::RunnerHome,
-            StorageObserver::Runner,
-            "/home/runner",
-        ),
-        (
-            StorageRole::RunnerHome,
-            StorageObserver::Dind,
-            "/home/runner",
-        ),
-        (
-            StorageRole::RunnerWork,
-            StorageObserver::Runner,
-            "/home/runner/_work",
-        ),
-        (
-            StorageRole::RunnerWork,
-            StorageObserver::Dind,
-            "/home/runner/_work",
-        ),
-        (StorageRole::RunnerTmp, StorageObserver::Runner, "/tmp"),
-        (StorageRole::RunnerShm, StorageObserver::Runner, "/dev/shm"),
-        (StorageRole::SharedRun, StorageObserver::Runner, "/run"),
-        (StorageRole::SharedRun, StorageObserver::Dind, "/run"),
-        (StorageRole::DindRoot, StorageObserver::Dind, "/"),
-        (
-            StorageRole::DindData,
-            StorageObserver::Dind,
-            "/var/lib/docker",
-        ),
-        (StorageRole::DindTmp, StorageObserver::Dind, "/tmp"),
-        (StorageRole::DindShm, StorageObserver::Dind, "/dev/shm"),
-        (
-            StorageRole::EngineMetadata,
-            StorageObserver::Probe,
-            "/velnor/docker-root",
-        ),
-        (
-            StorageRole::EngineMetadata,
-            StorageObserver::Runner,
-            "/.velnor-runtime-identity",
-        ),
-        (
-            StorageRole::EngineMetadata,
-            StorageObserver::Runner,
-            "/opt/velnor/job-facts",
-        ),
-        (
-            StorageRole::EngineMetadata,
-            StorageObserver::Runner,
-            "/opt/velnor/source-proof/control",
-        ),
-        (
-            StorageRole::RunnerHome,
-            StorageObserver::Runner,
-            "/opt/velnor/source-proof/inbox",
-        ),
-    ];
-    if attachments.len() != ATTACHMENTS.len()
-        || ATTACHMENTS.iter().any(|(role, observer, target)| {
-            attachments
-                .iter()
-                .filter(|item| {
-                    item.role == *role && item.observer == *observer && item.target == *target
-                })
-                .count()
-                != 1
-        })
-    {
-        return Err(HostError::Journal);
-    }
-    for item in attachments {
-        let contract = item
-            .role
-            .attachments()
-            .iter()
-            .find(|contract| contract.observer == item.observer && contract.target == item.target)
-            .ok_or(HostError::Journal)?;
-        let expected_container = match item.observer {
-            StorageObserver::Runner => Some(runner_container_id),
-            StorageObserver::Dind => Some(dind_container_id),
-            StorageObserver::Probe => None,
-        };
-        let observed_role = roles
-            .iter()
-            .find(|role| role.role == item.role)
-            .ok_or(HostError::Journal)?;
-        let device_matches = item.fs_type_magic == BTRFS_SUPER_MAGIC
-            || (item.device_major, item.device_minor)
-                == (item.statx_device_major, item.statx_device_minor);
-        if item.source_target.as_deref() != contract.source_target
-            || item.volume_subpath.as_deref() != contract.volume_subpath
-            || !valid_mount_root(item.mount_root(), contract.volume_subpath)
-            || item.read_only != contract.read_only
-            || item.container_id.as_deref() != expected_container
-            || item.mount_id == 0
-            || item.statx_inode == 0
-            || item.fs_type_magic == 0
-            || item.filesystem_id == 0
-            || !device_matches
-            || !valid_digest(&item.filesystem_instance_digest)
-            || item.filesystem_instance_digest != observed_role.filesystem_instance_digest
+    let cleanup = &binding.cleanup_observer_binding;
+    for volume in &cleanup.volume_mountpoints {
+        let role = StorageRole::parse(&volume.role).map_err(|_| HostError::Journal)?;
+        if role == StorageRole::EngineMetadata {
+            let root = metadata_subpath_attachment(binding)?;
+            if volume.mount_device != [root.device().0, root.device().1]
+                || volume.statx_device != [root.statx_device().0, root.statx_device().1]
+            {
+                return Err(HostError::Journal);
+            }
+            continue;
+        }
+        let root = binding.cleanup_volume_root_attachment(role)?;
+        if volume.mount_device != [root.device().0, root.device().1]
+            || volume.statx_device != [root.statx_device().0, root.statx_device().1]
+            || volume.inode != root.statx_inode()
         {
             return Err(HostError::Journal);
         }
     }
+    let docker_root = binding.cleanup_volume_root_attachment(StorageRole::EngineMetadata)?;
+    if cleanup.docker_root.mount_id != docker_root.mount_id()
+        || cleanup.docker_root.statx_device
+            != [docker_root.statx_device().0, docker_root.statx_device().1]
+    {
+        return Err(HostError::Journal);
+    }
     Ok(())
 }
 
-fn valid_mount_root(value: &str, volume_subpath: Option<&str>) -> bool {
-    if value == "/" {
-        return volume_subpath.is_none();
+fn metadata_subpath_attachment(
+    binding: &VerifiedStorageResourceBinding,
+) -> Result<&super::ObservedStorageAttachment, HostError> {
+    let mut matches = binding.attachments.iter().filter(|item| {
+        item.role() == StorageRole::EngineMetadata
+            && item.observer() == StorageObserver::Runner
+            && item.container_id() == Some(binding.runner_container_id.as_str())
+            && item.target() == "/opt/velnor/job-facts"
+            && item.volume_subpath() == Some("job-facts")
+            && item.read_only()
+    });
+    let row = matches.next().ok_or(HostError::Journal)?;
+    if matches.next().is_some() {
+        return Err(HostError::Journal);
     }
-    if value.is_empty()
-        || value.len() > 1024
-        || !value.starts_with('/')
-        || value.bytes().any(|byte| byte.is_ascii_control())
-        || value
-            .split('/')
-            .any(|component| component == "." || component == "..")
-    {
-        return false;
-    }
-    volume_subpath.is_none_or(|subpath| {
-        value
-            .strip_suffix(subpath)
-            .is_some_and(|prefix| prefix.ends_with('/') && !prefix.is_empty())
-    })
+    Ok(row)
 }
 
 fn validate_cgroups(

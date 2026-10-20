@@ -2,14 +2,18 @@
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use velnor_resource_probe::execution_channel_wire::ExecutionChannelDirectory;
+use velnor_resource_probe::{
+    execution_channel_wire::ExecutionChannelDirectory,
+    job_facts_wire::JobFactsRuntimeIdentityDirectory,
+};
 
 use crate::error::HostError;
 use crate::journal::{ExecutionPublicationParent, PublicationKind};
 
+use super::super::request::PublicationRequest;
 use super::PublicationProjection;
 
-const RECOVERY_SCHEMA: u8 = 1;
+const RECOVERY_SCHEMA: u8 = 2;
 pub(super) const MAX_RECOVERY_BYTES: usize = 32 * 1024;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -29,7 +33,9 @@ pub(in crate::launch::resource_probe::publication) struct PublicationRecoveryPro
     metadata_volume_name: String,
     metadata_volume_id: String,
     metadata_volume_mountpoint: String,
-    expected_file_sha256: String,
+    expected_payload_sha256: String,
+    expected_guest_image_sha256: Option<String>,
+    expected_runtime_identity: Option<JobFactsRuntimeIdentityDirectory>,
     parent_kind: String,
     parent_operation_id: i64,
     reservation_id: i64,
@@ -69,6 +75,13 @@ impl PublicationRecoveryProjection {
             .image
             .as_deref()
             .ok_or(HostError::Identity)?;
+        let (expected_guest_image_sha256, expected_runtime_identity) = match request {
+            PublicationRequest::Control(_) => (None, None),
+            PublicationRequest::JobFacts(value) => (
+                Some(value.guest_image_sha256.clone()),
+                Some(value.expected_runner_runtime_identity.clone()),
+            ),
+        };
         let value = Self {
             schema_version: RECOVERY_SCHEMA,
             operation_id: projection.operation_id.clone(),
@@ -84,7 +97,9 @@ impl PublicationRecoveryProjection {
             metadata_volume_name: projection.metadata_volume.clone(),
             metadata_volume_id: metadata_volume_id.to_owned(),
             metadata_volume_mountpoint: metadata_volume_mountpoint.to_owned(),
-            expected_file_sha256: request.payload_sha256().to_owned(),
+            expected_payload_sha256: request.payload_sha256().to_owned(),
+            expected_guest_image_sha256,
+            expected_runtime_identity,
             parent_kind: match parent.parent_kind() {
                 PublicationKind::Challenge => "challenge",
                 PublicationKind::Decision => "decision",
@@ -180,6 +195,60 @@ impl PublicationRecoveryProjection {
             crate::launch::resource_probe::projection::canonical::pair(&options, &self.config)
                 .map(|bytes| lower_hex(&Sha256::digest(bytes)))
                 .map_err(|_| HostError::Journal)?;
+        self.validate_projection_identity(&expected_name, expected_config, &digest)?;
+        self.validate_mount_and_payload()
+    }
+
+    fn validate_mount_and_payload(&self) -> Result<(), HostError> {
+        if match (
+            self.parent_kind.as_str(),
+            &self.expected_guest_image_sha256,
+            &self.expected_runtime_identity,
+        ) {
+            ("job-facts", Some(hash), Some(identity)) => {
+                !lower_hex_id(hash)
+                    || identity.inode == 0
+                    || identity.owner_uid != 0
+                    || identity.owner_gid != 0
+                    || identity.mode != 0o555
+            }
+            ("job-facts", _, _) => true,
+            (_, None, None) => false,
+            _ => true,
+        } || self.runner_directory.target
+            != if self.parent_kind == "job-facts" {
+                "/opt/velnor/job-facts"
+            } else {
+                "/opt/velnor/source-proof/control"
+            }
+            || self.runner_directory.inode == 0
+            || self.runner_directory.mount_id == 0
+            || self.runner_directory.statx_mount_id != self.runner_directory.mount_id
+            || self.runner_directory.owner_uid != 0
+            || self.runner_directory.owner_gid != 0
+            || self.runner_directory.mode != 0o555
+            || !self.runner_directory.read_only
+            || self.runner_directory.filesystem_type_magic == 0
+            || self.runner_directory.filesystem_id == 0
+            || !valid_mount_root(&self.runner_directory.mount_root)
+            || self.runner_directory.mount_source.is_empty()
+            || self
+                .runner_directory
+                .mount_source
+                .chars()
+                .any(char::is_control)
+        {
+            return Err(HostError::Identity);
+        }
+        Ok(())
+    }
+
+    fn validate_projection_identity(
+        &self,
+        expected_name: &str,
+        expected_config: &str,
+        digest: &str,
+    ) -> Result<(), HostError> {
         if self.schema_version != RECOVERY_SCHEMA
             || !lower_hex_id(&self.operation_id)
             || !lower_hex_id(&self.instance_id)
@@ -225,352 +294,20 @@ impl PublicationRecoveryProjection {
             || !lower_hex_id(&self.metadata_layout_digest)
             || !valid_boot_id(&self.guest_boot_id)
             || !valid_mountpoint(&self.metadata_volume_mountpoint)
-            || !lower_hex_id(&self.expected_file_sha256)
-            || self.runner_directory.target
-                != if self.parent_kind == "job-facts" {
-                    "/opt/velnor/job-facts"
-                } else {
-                    "/opt/velnor/source-proof/control"
-                }
-            || self.runner_directory.inode == 0
-            || self.runner_directory.mount_id == 0
-            || self.runner_directory.statx_mount_id != self.runner_directory.mount_id
-            || self.runner_directory.owner_uid != 0
-            || self.runner_directory.owner_gid != 0
-            || self.runner_directory.mode != 0o555
-            || !self.runner_directory.read_only
-            || self.runner_directory.filesystem_type_magic == 0
-            || self.runner_directory.filesystem_id == 0
-            || !valid_mount_root(&self.runner_directory.mount_root)
-            || self.runner_directory.mount_source.is_empty()
-            || self
-                .runner_directory
-                .mount_source
-                .chars()
-                .any(char::is_control)
+            || !lower_hex_id(&self.expected_payload_sha256)
         {
             return Err(HostError::Identity);
         }
         Ok(())
     }
-
-    pub(in crate::launch::resource_probe::publication) fn operation_id(&self) -> &str {
-        &self.operation_id
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn instance_id(&self) -> &str {
-        &self.instance_id
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn engine_id(&self) -> &str {
-        &self.engine_id
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn docker_root_digest(&self) -> &str {
-        &self.docker_root_digest
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn projection_digest(&self) -> &str {
-        &self.projection_digest
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn metadata_volume_name(&self) -> &str {
-        &self.metadata_volume_name
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn metadata_volume_id(&self) -> &str {
-        &self.metadata_volume_id
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn metadata_volume_mountpoint(
-        &self,
-    ) -> &str {
-        &self.metadata_volume_mountpoint
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn expected_file_sha256(&self) -> &str {
-        &self.expected_file_sha256
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn runner_directory(
-        &self,
-    ) -> &ExecutionChannelDirectory {
-        &self.runner_directory
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn matches_record(
-        &self,
-        record: &crate::journal::ExecutionPublicationRecoveryRecord,
-    ) -> bool {
-        self.operation_id == record.operation_id
-            && self.instance_id == record.instance_id
-            && self.engine_id == record.engine_id
-            && self.docker_root_digest == record.docker_root_digest
-            && self.source_revision == record.source_revision
-            && self.runtime_image_id == record.runtime_image_id
-            && self.image_binding_digest == record.image_binding_digest
-            && self.projection_digest == record.projection_digest
-            && self.parent_kind == record.parent_kind
-            && self.parent_operation_id == record.parent_operation_id
-            && self.reservation_id == record.reservation_id
-            && self.connection_id == record.connection_id
-            && self.runner_id == record.runner_id
-            && self.runner_container_id == record.runner_container_id
-            && self.dind_container_id == record.dind_container_id
-            && self.metadata_volume_name == record.metadata_volume_name
-            && self.metadata_volume_id == record.metadata_volume_id
-            && self.metadata_layout_version == record.metadata_layout_version
-            && self.metadata_layout_digest == record.metadata_layout_digest
-            && self.guest_boot_id == record.guest_boot_id
-            && self.expected_file_sha256 == record.payload_sha256
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn operation_name(&self) -> &str {
-        &self.operation_name
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn runtime_image_id(&self) -> &str {
-        &self.runtime_image_id
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn source_revision(&self) -> &str {
-        &self.source_revision
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn image_binding_digest(&self) -> &str {
-        &self.image_binding_digest
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn guest_boot_id(&self) -> &str {
-        &self.guest_boot_id
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn metadata_operation_id(&self) -> String {
-        self.parent_operation_id.to_string()
-    }
 }
 
-fn lower_hex_string(value: &str) -> bool {
-    value
-        .bytes()
-        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
-
-fn valid_mount_root(value: &str) -> bool {
-    value.starts_with('/')
-        && !value.chars().any(char::is_control)
-        && (value == "/"
-            || (!value.ends_with('/')
-                && !value.contains("//")
-                && value
-                    .split('/')
-                    .skip(1)
-                    .all(|part| !part.is_empty() && part != "." && part != "..")))
-}
-
-fn valid_mountpoint(value: &str) -> bool {
-    value.starts_with('/')
-        && value.len() <= 4096
-        && !value.chars().any(char::is_control)
-        && !value.contains("//")
-        && value
-            .split('/')
-            .skip(1)
-            .all(|part| !part.is_empty() && part != "." && part != "..")
-}
-
-fn valid_boot_id(value: &str) -> bool {
-    value.len() == 36
-        && value.bytes().enumerate().all(|(index, byte)| {
-            if matches!(index, 8 | 13 | 18 | 23) {
-                byte == b'-'
-            } else {
-                byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()
-            }
-        })
-}
-
-fn lower_hex_id(value: &str) -> bool {
-    (value.len() == 32 || value.len() == 64)
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
-
-fn lower_hex(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut value = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        value.push(char::from(HEX[usize::from(byte >> 4)]));
-        value.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
-    value
-}
+mod accessors;
+mod validation;
+use self::validation::{
+    lower_hex, lower_hex_id, lower_hex_string, valid_boot_id, valid_mount_root, valid_mountpoint,
+};
 
 #[cfg(test)]
-mod tests {
-    use super::{PublicationRecoveryProjection, lower_hex};
-    use sha2::{Digest, Sha256};
-    use velnor_resource_probe::execution_channel_wire::ExecutionChannelDirectory;
-
-    fn recovery() -> PublicationRecoveryProjection {
-        let operation_id = "0123456789abcdef0123456789abcdef".to_owned();
-        let image = format!("sha256:{}", "a".repeat(64));
-        let name = format!("velnor-execution-publication-{operation_id}");
-        let options = bollard::query_parameters::CreateContainerOptions {
-            name: Some(name.clone()),
-            platform: "linux/amd64".to_owned(),
-        };
-        let config = bollard::models::ContainerCreateBody {
-            image: Some(image.clone()),
-            ..Default::default()
-        };
-        let projection_digest = lower_hex(&Sha256::digest(
-            crate::launch::resource_probe::projection::canonical::pair(&options, &config)
-                .expect("projection"),
-        ));
-        let root = super::super::DockerRoot::parse("/var/lib/docker").expect("Docker root");
-        PublicationRecoveryProjection {
-            schema_version: 1,
-            operation_id,
-            instance_id: "b".repeat(32),
-            engine_id: "selected-engine".to_owned(),
-            docker_root_digest: root.digest().to_owned(),
-            operation_name: name,
-            platform: "linux/amd64".to_owned(),
-            source_revision: "c".repeat(40),
-            runtime_image_id: image,
-            image_binding_digest: "d".repeat(64),
-            projection_digest,
-            metadata_volume_name: "metadata-owned".to_owned(),
-            metadata_volume_id: "metadata-owned".to_owned(),
-            metadata_volume_mountpoint: "/var/lib/docker/volumes/metadata-owned/_data".to_owned(),
-            expected_file_sha256: "e".repeat(64),
-            parent_kind: "challenge".to_owned(),
-            parent_operation_id: 1,
-            reservation_id: 2,
-            connection_id: "private-connection".to_owned(),
-            runner_id: 3,
-            runner_container_id: "1".repeat(64),
-            dind_container_id: "2".repeat(64),
-            metadata_layout_version: 2,
-            metadata_layout_digest: "f".repeat(64),
-            guest_boot_id: "123e4567-e89b-12d3-a456-426614174000".to_owned(),
-            publisher_mode: "execution_publication".to_owned(),
-            runner_directory: ExecutionChannelDirectory {
-                target: "/opt/velnor/source-proof/control".to_owned(),
-                inode: 11,
-                owner_uid: 0,
-                owner_gid: 0,
-                mode: 0o555,
-                mount_id: 12,
-                statx_mount_id: 12,
-                mount_root: "/source-proof/control".to_owned(),
-                mount_source: "/dev/vda".to_owned(),
-                mount_device_major: 8,
-                mount_device_minor: 0,
-                statx_device_major: 8,
-                statx_device_minor: 0,
-                filesystem_type_magic: 0xef53,
-                filesystem_type_name: "ext4".to_owned(),
-                filesystem_id: 13,
-                read_only: true,
-                executable_mount: false,
-            },
-            config,
-            expected_config: bollard::models::ContainerConfig::default(),
-        }
-    }
-
-    #[test]
-    fn recovery_projection_is_canonical_bounded_and_tamper_evident() {
-        let value = recovery();
-        let encoded = value.encode().expect("bounded projection");
-        let sha = lower_hex(&Sha256::digest(encoded.as_bytes()));
-        let decoded = PublicationRecoveryProjection::decode(&encoded, &sha)
-            .expect("same projection after restart");
-        assert_eq!(decoded.encode().expect("canonical bytes"), encoded);
-        assert!(PublicationRecoveryProjection::decode(&encoded, &"0".repeat(64)).is_err());
-
-        let tampered = encoded.replace("metadata-owned", "foreign-volume");
-        assert!(PublicationRecoveryProjection::decode(&tampered, &sha).is_err());
-    }
-
-    #[test]
-    fn recovery_projection_rejects_bad_volume_and_parent_facts() {
-        let mut value = recovery();
-        value.metadata_volume_id = "foreign-volume".to_owned();
-        assert!(value.encode().is_err());
-
-        let mut value = recovery();
-        value.dind_container_id = value.runner_container_id.clone();
-        assert!(value.encode().is_err());
-    }
-
-    #[test]
-    fn job_facts_recovery_keeps_fixed_writer_mode_and_mount() {
-        let mut value = recovery();
-        value.parent_kind = "job-facts".to_owned();
-        value.publisher_mode = "job_facts_publication".to_owned();
-        value.runner_directory.target = "/opt/velnor/job-facts".to_owned();
-        value.runner_directory.mount_root = "/job-facts".to_owned();
-        value.config.cmd = Some(vec!["--mode".to_owned(), value.publisher_mode.clone()]);
-        let options = bollard::query_parameters::CreateContainerOptions {
-            name: Some(value.operation_name.clone()),
-            platform: value.platform.clone(),
-        };
-        value.projection_digest = lower_hex(&Sha256::digest(
-            crate::launch::resource_probe::projection::canonical::pair(&options, &value.config)
-                .expect("job facts projection bytes"),
-        ));
-
-        let encoded = value.encode().expect("valid JobFacts recovery projection");
-        let sha = lower_hex(&Sha256::digest(encoded.as_bytes()));
-        let restored = PublicationRecoveryProjection::decode(&encoded, &sha)
-            .expect("JobFacts recovery projection after restart");
-        let projected = restored
-            .into_projection("/var/lib/docker")
-            .expect("fixed JobFacts publisher projection");
-        assert_eq!(projected.publisher_mode, "job_facts_publication");
-        assert!(projected.request.is_none());
-    }
-
-    #[test]
-    fn recovery_bytes_are_stable_for_fresh_multilabel_maps() {
-        let mut expected = None;
-        for order in [
-            ["runner", "operation", "instance", "revision"],
-            ["revision", "instance", "operation", "runner"],
-            ["operation", "runner", "revision", "instance"],
-        ] {
-            let values = [
-                ("runner", "velnor".to_owned()),
-                ("operation", "execution-publication".to_owned()),
-                ("instance", "a".repeat(32)),
-                ("revision", "c".repeat(40)),
-            ];
-            let mut labels = std::collections::HashMap::new();
-            for key in order {
-                let value = &values.iter().find(|(label, _)| *label == key).unwrap().1;
-                labels.insert(key.to_owned(), value.clone());
-            }
-            let mut value = recovery();
-            value.config.labels = Some(labels.clone());
-            value.expected_config.labels = Some(labels);
-            let options = bollard::query_parameters::CreateContainerOptions {
-                name: Some(value.operation_name.clone()),
-                platform: value.platform.clone(),
-            };
-            value.projection_digest = lower_hex(&Sha256::digest(
-                crate::launch::resource_probe::projection::canonical::pair(&options, &value.config)
-                    .expect("projection digest bytes"),
-            ));
-            let bytes = value.encode().expect("canonical recovery projection");
-            if let Some(expected) = &expected {
-                assert_eq!(&bytes, expected);
-            } else {
-                expected = Some(bytes);
-            }
-        }
-    }
-}
+#[path = "recovery/tests.rs"]
+mod tests;

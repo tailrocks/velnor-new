@@ -155,6 +155,18 @@ pub(in crate::launch::bootstrap::containers) fn fixed_mounts(
                 "/var/lib/docker",
                 false,
             ));
+            let metadata = storage_volume(names, StorageRole::EngineMetadata)?;
+            for (subpath, target) in [
+                ("job-facts", "/opt/velnor/job-facts"),
+                ("runtime-identity", "/.velnor-runtime-identity"),
+            ] {
+                mounts.push(volume_subpath_mount(
+                    metadata.clone(),
+                    target,
+                    true,
+                    Some(subpath),
+                ));
+            }
         }
     }
     Ok(mounts)

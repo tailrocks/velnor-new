@@ -9,19 +9,31 @@ use crate::journal::schema::provisioning::{
 async fn version_twenty_eight_migrates_exact_old_guards_and_reopens() {
     let scratch = Scratch::new();
     let path = scratch.file();
-    drop(Journal::open(&path).await.expect("create current journal"));
+    drop(
+        Journal::open(&path)
+            .await
+            .expect("Could not open the current journal."),
+    );
     let (database, connection) = open_database(&path).await;
     remove_current_guards(&connection).await;
     install_legacy_guards(&connection).await;
     connection
         .execute("PRAGMA user_version = 28", ())
         .await
-        .expect("mark v28");
+        .expect("Could not set the journal to version 28.");
     drop(connection);
     drop(database);
 
-    drop(Journal::open(&path).await.expect("upgrade v28 journal"));
-    drop(Journal::open(&path).await.expect("reopen v29 journal"));
+    drop(
+        Journal::open(&path)
+            .await
+            .expect("Could not upgrade the version 28 journal."),
+    );
+    drop(
+        Journal::open(&path)
+            .await
+            .expect("Could not reopen the version 30 journal."),
+    );
     assert_current_guard_counts(&path).await;
 }
 
@@ -29,16 +41,20 @@ async fn version_twenty_eight_migrates_exact_old_guards_and_reopens() {
 async fn version_twenty_eight_rejects_partial_guard_set_without_advancing() {
     let scratch = Scratch::new();
     let path = scratch.file();
-    drop(Journal::open(&path).await.expect("create current journal"));
+    drop(
+        Journal::open(&path)
+            .await
+            .expect("Could not open the current journal."),
+    );
     let (database, connection) = open_database(&path).await;
     connection
         .execute("DROP TRIGGER provisioning_container_created_transition", ())
         .await
-        .expect("damage one transition guard");
+        .expect("Could not remove one transition guard.");
     connection
         .execute("PRAGMA user_version = 28", ())
         .await
-        .expect("mark v28");
+        .expect("Could not set the journal to version 28.");
     drop(connection);
     drop(database);
 
@@ -52,7 +68,11 @@ async fn version_twenty_eight_rejects_partial_guard_set_without_advancing() {
 async fn version_twenty_eight_rejects_unknown_guard_sql() {
     let scratch = Scratch::new();
     let path = scratch.file();
-    drop(Journal::open(&path).await.expect("create current journal"));
+    drop(
+        Journal::open(&path)
+            .await
+            .expect("Could not open the current journal."),
+    );
     let (database, connection) = open_database(&path).await;
     remove_current_guards(&connection).await;
     install_legacy_guards(&connection).await;
@@ -61,15 +81,15 @@ async fn version_twenty_eight_rejects_unknown_guard_sql() {
     connection
         .execute("DROP TRIGGER provisioning_container_transition", ())
         .await
-        .expect("remove known old container guard");
+        .expect("Could not remove the known old container guard.");
     connection
         .execute(&changed, ())
         .await
-        .expect("install altered old guard");
+        .expect("Could not add the altered old guard.");
     connection
         .execute("PRAGMA user_version = 28", ())
         .await
-        .expect("mark v28");
+        .expect("Could not set the journal to version 28.");
     drop(connection);
     drop(database);
 
@@ -83,7 +103,11 @@ async fn version_twenty_eight_rejects_unknown_guard_sql() {
 async fn version_twenty_eight_rejects_mixed_guard_generations() {
     let scratch = Scratch::new();
     let path = scratch.file();
-    drop(Journal::open(&path).await.expect("create current journal"));
+    drop(
+        Journal::open(&path)
+            .await
+            .expect("Could not open the current journal."),
+    );
     let (database, connection) = open_database(&path).await;
     for (name, _) in TRIGGERS.iter().filter(|(name, _)| {
         name.starts_with("provisioning_container_") && is_transition_guard(name)
@@ -91,16 +115,16 @@ async fn version_twenty_eight_rejects_mixed_guard_generations() {
         connection
             .execute(&format!("DROP TRIGGER {name}"), ())
             .await
-            .expect("remove current container guard");
+            .expect("Could not remove the current container guard.");
     }
     connection
         .execute(LEGACY_CONTAINER_TRANSITION, ())
         .await
-        .expect("install old container guard");
+        .expect("Could not add the old container guard.");
     connection
         .execute("PRAGMA user_version = 28", ())
         .await
-        .expect("mark v28");
+        .expect("Could not set the journal to version 28.");
     drop(connection);
     drop(database);
 
@@ -114,19 +138,23 @@ async fn version_twenty_eight_rejects_mixed_guard_generations() {
 async fn version_twenty_eight_rolls_back_when_owned_trigger_name_is_taken() {
     let scratch = Scratch::new();
     let path = scratch.file();
-    drop(Journal::open(&path).await.expect("create current journal"));
+    drop(
+        Journal::open(&path)
+            .await
+            .expect("Could not open the current journal."),
+    );
     let (database, connection) = open_database(&path).await;
     remove_current_guards(&connection).await;
     install_legacy_guards(&connection).await;
     connection
         .execute("CREATE TABLE unrelated_trigger_target (value INTEGER)", ())
         .await
-        .expect("create conflict target");
-    connection.execute("CREATE TRIGGER provisioning_container_created_transition BEFORE UPDATE ON unrelated_trigger_target BEGIN SELECT RAISE(ABORT, 'unrelated trigger'); END", ()).await.expect("create conflicting unrelated trigger");
+        .expect("Could not add the conflict target table.");
+    connection.execute("CREATE TRIGGER provisioning_container_created_transition BEFORE UPDATE ON unrelated_trigger_target BEGIN SELECT RAISE(ABORT, 'unrelated trigger'); END", ()).await.expect("Could not add the conflicting unrelated trigger.");
     connection
         .execute("PRAGMA user_version = 28", ())
         .await
-        .expect("mark v28");
+        .expect("Could not set the journal to version 28.");
     drop(connection);
     drop(database);
 
@@ -141,12 +169,16 @@ async fn version_twenty_eight_rolls_back_when_owned_trigger_name_is_taken() {
 async fn current_schema_rejects_extra_legacy_transition_guards() {
     let scratch = Scratch::new();
     let path = scratch.file();
-    drop(Journal::open(&path).await.expect("create current journal"));
+    drop(
+        Journal::open(&path)
+            .await
+            .expect("Could not open the current journal."),
+    );
     let (database, connection) = open_database(&path).await;
     connection
         .execute(LEGACY_CONTAINER_TRANSITION, ())
         .await
-        .expect("add stale legacy guard");
+        .expect("Could not add the stale legacy guard.");
     drop(connection);
     drop(database);
 
@@ -161,7 +193,7 @@ async fn remove_current_guards(connection: &turso::Connection) {
         connection
             .execute(&format!("DROP TRIGGER {name}"), ())
             .await
-            .expect("remove current transition guard");
+            .expect("Could not remove the current transition guard.");
     }
 }
 
@@ -169,16 +201,16 @@ async fn install_legacy_guards(connection: &turso::Connection) {
     connection
         .execute(LEGACY_CONTAINER_TRANSITION, ())
         .await
-        .expect("install v28 container guard");
+        .expect("Could not add the version 28 container guard.");
     connection
         .execute(LEGACY_STATE_TRANSITION, ())
         .await
-        .expect("install v28 state guard");
+        .expect("Could not add the version 28 state guard.");
 }
 
 async fn assert_current_guard_counts(path: &std::path::Path) {
     let (_database, connection) = open_database(path).await;
-    assert_eq!(scalar(&connection, "PRAGMA user_version").await, 29);
+    assert_eq!(scalar(&connection, "PRAGMA user_version").await, 30);
     assert_eq!(scalar(&connection, "SELECT COUNT(*) FROM sqlite_schema WHERE type='trigger' AND name IN ('provisioning_container_transition', 'provisioning_state_transition')").await, 0);
     assert_eq!(scalar(&connection, "SELECT COUNT(*) FROM sqlite_schema WHERE type='trigger' AND name GLOB 'provisioning_container_*'").await, 8);
     assert_eq!(scalar(&connection, "SELECT COUNT(*) FROM sqlite_schema WHERE type='trigger' AND name GLOB 'provisioning_state_*'").await, 8);

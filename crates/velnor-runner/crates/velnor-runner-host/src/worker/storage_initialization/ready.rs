@@ -110,4 +110,12 @@ impl VerifiedStorageInitializationReady {
     pub(crate) fn job_facts(&self) -> &super::request_result::ObservedDirectory {
         self.observed.job_facts()
     }
+
+    pub(crate) fn metadata_root(&self) -> &super::request_result::ObservedDirectory {
+        self.observed.metadata()
+    }
+
+    pub(crate) fn runtime_identity(&self) -> &super::request_result::ObservedDirectory {
+        self.observed.runtime_identity()
+    }
 }

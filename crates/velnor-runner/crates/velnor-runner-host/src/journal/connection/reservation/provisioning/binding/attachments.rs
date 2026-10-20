@@ -17,7 +17,7 @@ pub(super) fn validate_attachments(
         .iter()
         .map(|role| role.attachments().len())
         .sum::<usize>();
-    if expected_count != 18 || attachments.len() != 18 {
+    if attachments.len() != expected_count {
         return Err(HostError::Journal);
     }
     let mut seen = BTreeMap::new();
