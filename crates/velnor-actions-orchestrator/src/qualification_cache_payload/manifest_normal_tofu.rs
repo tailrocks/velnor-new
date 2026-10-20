@@ -17,7 +17,7 @@ impl PayloadManifest {
         validate_digest(state_digest)?;
         validate_payload_roots(roots, &payload_roots)?;
         if roots.layer.as_str() != "tofu_providers"
-            || roots.matrix_key != "normal-tofu-providers"
+            || roots.owner_id != "normal-tofu-providers"
             || super::super::normal_tofu::cache_key(
                 &runtime.target,
                 &runtime.tofu_version,

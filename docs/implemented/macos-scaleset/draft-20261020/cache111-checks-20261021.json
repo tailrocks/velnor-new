@@ -1,0 +1,525 @@
+{
+  "status": "PASS",
+  "scope": "The cache test filter passed. Full release and live installation gates remain incomplete.",
+  "source_parent": "8856fe3755be1ebb6b78d2c1a145020b01731e4b",
+  "reason": "The generated workflow exceeded the size limit. Shared action steps reduce its size and preserve native cache save controls.",
+  "source_files": [
+    {
+      "path": "crates/velnor-actions-cli/src/dispatch.rs",
+      "sha256": "e5bbf7ad89005d6814b8640f9aef1861b2d8d0a464a35a308d595ffd08493b72"
+    },
+    {
+      "path": "crates/velnor-actions-cli/src/dispatch/operation.rs",
+      "sha256": "9781840530d7f514d348153a8420c3cb03693d2311bbb5fb56bf389201aafb1c"
+    },
+    {
+      "path": "crates/velnor-actions-cli/src/dispatch_cache_bind.rs",
+      "sha256": "cbf0b7e8df835cc6e6b03d18a3df1c1d94fdd81538c8c08d2cbbe1f228ad18f7"
+    },
+    {
+      "path": "crates/velnor-actions-cli/src/dispatch_cache_bind_tests.rs",
+      "sha256": "55e3b80245e4b1aaefb9eb66fe72ee1c2b0ba8a8e5b5deeb752256ca54cc8a52"
+    },
+    {
+      "path": "crates/velnor-actions-cli/src/dispatch_cache_observe.rs",
+      "sha256": "f94263c49b5804543c954a804de33fb5281cd076df4d7f6b06d122096ce75037"
+    },
+    {
+      "path": "crates/velnor-actions-cli/src/dispatch_cache_owner_evidence.rs",
+      "sha256": "dc9bb5c3792e45c58d440b057f285525da523fe4dcd8f1e6c411ee3f34c7f9d6"
+    },
+    {
+      "path": "crates/velnor-actions-cli/src/dispatch_cache_owner_evidence_tests.rs",
+      "sha256": "e7a2d8b9d7880b6ac9c96a00a11c080e779b6f9b200a46f22b83cbe4dea7ed61"
+    },
+    {
+      "path": "crates/velnor-actions-cli/src/dispatch_cache_receipt.rs",
+      "sha256": "8e39feda58bd191abbeb4a82aac793bc998704c6193cadf95e3911b641a95909"
+    },
+    {
+      "path": "crates/velnor-actions-cli/src/dispatch_cache_runtime.rs",
+      "sha256": "ead131c64c68922afe70de9267acf55d8e2c6cf2deeeac6c608611a09b5a5a06"
+    },
+    {
+      "path": "crates/velnor-actions-cli/src/dispatch_cache_runtime_tests.rs",
+      "sha256": "ab27614b660ca607c27205e8cd7a9667d3a1650dc5df44c78f8cd411095c1e69"
+    },
+    {
+      "path": "crates/velnor-actions-cli/src/dispatch_internal_run.rs",
+      "sha256": "030a399b553749b7f19171e2c688b394c38def12ff216c2994033b63f716a753"
+    },
+    {
+      "path": "crates/velnor-actions-cli/tests/impl_cli_gate_cache_bind.rs",
+      "sha256": "fd9f4a5e1eb0e1b13522c5601c1aaa3f38b3c6ec3369be8b0a4087c529179890"
+    },
+    {
+      "path": "crates/velnor-actions-cli/tests/impl_cli_gate_cache_observe.rs",
+      "sha256": "d0af10e7941918aeb4081ac6624afcdadf9245cdf482f14543204d894fa9b35a"
+    },
+    {
+      "path": "crates/velnor-actions-cli/tests/impl_cli_gate_cache_receipt.rs",
+      "sha256": "ff02e0a1b1ee4bf8b17eba235a9c678a91d4386c70920cff44534f3315a2c1a0"
+    },
+    {
+      "path": "crates/velnor-actions-cli/tests/velnor_cli.rs",
+      "sha256": "6049d07f3a113f6cf42227ccb64ce20942c61d558345f8a897a4f87fc28dddd6"
+    },
+    {
+      "path": "crates/velnor-actions-contract/src/workflow/mod.rs",
+      "sha256": "f08ea747449934c9923fe6faba58367d45798cea790420fcb8b6fbd0bffa6637"
+    },
+    {
+      "path": "crates/velnor-actions-contract/src/workflow/qualification_cache_lineage/identity/owner.rs",
+      "sha256": "ad8c82f0a12ff69e56448d76e7f095ac94c1570e7c0c2f117d44caa827b84945"
+    },
+    {
+      "path": "crates/velnor-actions-contract/src/workflow/qualification_cache_lineage/receipt/admission.rs",
+      "sha256": "f3afcac60d089cc6b91e739217e56de08d773890869b8e625216475a335396db"
+    },
+    {
+      "path": "crates/velnor-actions-contract/src/workflow/qualification_cache_lineage/runtime/types.rs",
+      "sha256": "0a7d730a2b89a76d9af7ca1cd03f22a0574231be04968087d801ee111f1cd68a"
+    },
+    {
+      "path": "crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_admission_tests/campaigns.rs",
+      "sha256": "25244c4adec3f3c98a363543a2d8eca385b4137ece986cd2c7a4621f972144d1"
+    },
+    {
+      "path": "crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_directive_tests.rs",
+      "sha256": "7e6b6102493df5f7371f073c4448cb2a1c8ce2c354b0bce147a854b35e723991"
+    },
+    {
+      "path": "crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_identity_tests.rs",
+      "sha256": "60cb7e7d8279095b46f1ec5aea839e47322cc6253750f89e1f5ec666686a7d37"
+    },
+    {
+      "path": "crates/velnor-actions-contract/src/workflow/step.rs",
+      "sha256": "aefd66b1efafd6857ecec21ad99b6d1e2c8fa1dd695149dfc9fab85af8be1c31"
+    },
+    {
+      "path": "crates/velnor-actions-contract/src/workflow/step/qualification_cache.rs",
+      "sha256": "e38f0b61a0de1bba770e96b127a6252352db41ed724d7a7da361d3289fa0fb94"
+    },
+    {
+      "path": "crates/velnor-actions-contract/src/workflow/step/validation.rs",
+      "sha256": "e133eea9b4f44ceeeaaa634b384a352df8342cafec8f8137675b29123ee8add7"
+    },
+    {
+      "path": "crates/velnor-actions-contract/src/workflow/step/validation/qualification_cache.rs",
+      "sha256": "611494737cca7975c88274fa47803f7055122ffa7909d30707e1facfc648411b"
+    },
+    {
+      "path": "crates/velnor-actions-contract/src/workflow/step_id.rs",
+      "sha256": "89d2d9fea680cc0ac8d5cd059d28f99faa1c9320a8fde46d5d2fde9472ee4806"
+    },
+    {
+      "path": "crates/velnor-actions-contract/src/workflow/step_id/qualification_cache.rs",
+      "sha256": "5bfb409227b13fb8751354fbf5316ca10daf9c06b766929893f7f624f7c42a0e"
+    },
+    {
+      "path": "crates/velnor-actions-contract/src/workflow/step_identity.rs",
+      "sha256": "807a42f093da3eb597e292c296ccbe6bf0abd2a04955e639e62729fdcbe133e1"
+    },
+    {
+      "path": "crates/velnor-actions-contract/src/workflow/step_identity/role.rs",
+      "sha256": "c344c2a3a460708ffe45f295cb1545864d14fc6b96065158a8a5c9b04817e12d"
+    },
+    {
+      "path": "crates/velnor-actions-contract/src/workflow/step_identity_tests.rs",
+      "sha256": "b1094ddbcc83ac322cbecd7cbedc2cf051a07ecf9540362ceb3250f1a34a9c37"
+    },
+    {
+      "path": "crates/velnor-actions-contract/src/workflow_reexports.rs",
+      "sha256": "36182d9b69083e5e1fd7e6b49fb4c1d6797f059bbc84c0d463b9b5188d3e5acc"
+    },
+    {
+      "path": "crates/velnor-actions-mise/src/requests_executable_lookup.rs",
+      "sha256": "52e9f23d534ed13c1ed13372e4f5fb4000e3e638235144aa3846e637a0d8ff83"
+    },
+    {
+      "path": "crates/velnor-actions-mise/src/requests_executable_lookup_tests.rs",
+      "sha256": "d04f738dcf080c4cfef918bf4c8f7fee1aaa6fdffe1f19db83754d40ea6a1104"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/api.rs",
+      "sha256": "dbe5ee9e53f5290d021435bd15e004dd0511307e3c4bef940c070f7b64f37a4b"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/crate_jobs.rs",
+      "sha256": "cce7c0bf9b70932cd1c1fb766dfe95d51694ca796c67b04a2876e2283576fbd5"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/crate_jobs_qualification_cache.rs",
+      "sha256": "f33bde729592b2b15923da5908a05c4b267cfe29666a2e6e05645909fc293d42"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/crate_jobs_qualification_cache/evidence.rs",
+      "sha256": "c60ecfe3fb3e9fccdb26dd13796d8464d917a73b8c03edfc34460034495e40d5"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/crate_jobs_qualification_cache/restore.rs",
+      "sha256": "a76f016e5f215eac98077c7b225c7e43af534e23c1a6c45b8886b3a44f7aa66f"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/crate_jobs_qualification_cache_tests.rs",
+      "sha256": "f21f28d3e3f93acded1bd656841ceba42ebf8354d546c0428f9f023fa3c3f233"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/crate_jobs_render.rs",
+      "sha256": "a6cdb48f8c6c0cd6815cef0789a5e485c4fc0e1e5bf0b300d03381e73b2871ad"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/crate_jobs_tests/planning.rs",
+      "sha256": "32d6eee59e6285c62764ad95e0b255aa90f289113bd09e1d95d46088c98f99f3"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/crate_jobs_tests/planning/qualification_order.rs",
+      "sha256": "46a338b370b539818c0c9d588322fea55feffbedba593e9c3867263a76259149"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/lib.rs",
+      "sha256": "4350d23736e1285f36fd4bce65d2fa6224b22505b3e068c15a4219c2b5555237"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_payload.rs",
+      "sha256": "46c115054586ae6942c886e89b33207746c6a713e0443cbbf0c9eaaef0dce082"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_payload/manifest.rs",
+      "sha256": "52a5d616c95c406136301a3198b14ad021a99f732f80db2a2de3b9b98801d2cf"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_payload/manifest_normal_tofu.rs",
+      "sha256": "4a98f10fe39b7d2b4c069e8233cc687787e2740ee9cad08d6ee3c8cd000ef489"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_payload/manifest_parse.rs",
+      "sha256": "78621f33d474396ce1c12c7f5246706f49e52606a3811306224ff200c7d5a641"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_payload/normal_tofu_export.rs",
+      "sha256": "8881547ff3776d5edd0a8cabbdf57c146571f833ab1e462f112571e4e53aa0d4"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_payload/normal_tools.rs",
+      "sha256": "b87ef6f0b6eb45f138c44e3b88156570423f2ca340cae88f3903c31cd24309c8"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_payload/roots.rs",
+      "sha256": "7c53b72cc46f8708c8f75e0c997e660e966fa4cdc03ab59994faf7bc29e113a0"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_payload/tests/dispatch_cache_manifest_tests.rs",
+      "sha256": "cd45def8fe242cdbf40ce81a02bdd12071854d05b923095c0e1a61d1c39f33e4"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_payload/tests/dispatch_cache_roots_tests.rs",
+      "sha256": "8a0e338bfe45aad546c088645915437d3e99274d41e2a589570b3a91807eb7dd"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_payload/tests/dispatch_cache_source_absence_tests.rs",
+      "sha256": "db4699062a478055c19af8b13a1011debbd459ada2ebfae823874b5593529754"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_payload/tests/dispatch_cache_source_authority_tests.rs",
+      "sha256": "dfd1ebf5514aeee5ecbad975315f6d6939f034c47ec07efc472b21902a5055ef"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_payload/tests/dispatch_cache_transfer_layer_tests.rs",
+      "sha256": "616790ea9a9cf77ab11e39cf2df0e33b42990fa6f9c13b53314bbc3a80bf32af"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_payload/tests/dispatch_cache_transfer_support.rs",
+      "sha256": "8d78f32f8414041c02a12752bb3076b5bff22deabe0639b42c0053c74615a268"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_payload/tests/dispatch_cache_transfer_tests.rs",
+      "sha256": "7f22bfd0796138110594b095972ddcce63a3677e2e0efd2898b047d0d025d14c"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_payload/tests/dispatch_cache_transport_tar_write_tests.rs",
+      "sha256": "f340dd19d48c130d3c1da57af4a024f2722e829e7cfe173cdbc7819c726f3f80"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_payload/transfer_engine.rs",
+      "sha256": "06b0c9e550db517f34fe9ce6e6068f332767c5fff48a6ceacf4f4baa0756b961"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_payload/transfer_normal_engine.rs",
+      "sha256": "cc2533cb4c4d44c63ae971830da97c10d4a22c5f3ae14f26ed515d41110b6d87"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_runtime.rs",
+      "sha256": "282c25a212589c98752c7cd7249d6dc00c62ebc80fe10600db5681d662b78da0"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_runtime_cases_plan_tests.rs",
+      "sha256": "59721aa7ecd03fb642d6dc68ce6fe11e9634e7e619d72a05d901cf9217f24a0c"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_runtime_cases_tests.rs",
+      "sha256": "bd99b8b0cc79be87f93d7e66b8eb7e7f9ecfd57a8a29f13850e8345f33542188"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_runtime_documents.rs",
+      "sha256": "b5361b02ef82bc1a19a94af659d757aec8207c7a4f4f3c71853085845b6d80f9"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_runtime_files/anchored.rs",
+      "sha256": "ba8800806af7c06079fdde575024eb73f8309dc269bc88d09683df2d3a877911"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_runtime_files/anchored_tests.rs",
+      "sha256": "1c76ce62357bb0acb4055f8b5fa207f8ffed48753df51cd362744b0c23ce22b3"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_runtime_names.rs",
+      "sha256": "50fb3ecd285c31ee35e53f310d0ffce916de13214288036c44c49d6cc6b94962"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_runtime_observation.rs",
+      "sha256": "bae283958af108a0ae7475190182772533a883b94da5c56382e94cff776c32d3"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_runtime_observation/probe.rs",
+      "sha256": "2d7d5d9837935f4a8946f399f8019355671ba2a31ffad4d5766c6696da90d597"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_runtime_observer_writer.rs",
+      "sha256": "a47ef9994ef0e01c395c8c8ec397c6911746177ec6796a7bf2a725adbc56abdf"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_runtime_owner_evidence.rs",
+      "sha256": "d509caad61e5f8337bae708a93a9e3ba72c9b16eda00f2a7cd7db0bb818e5e15"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_runtime_owner_validation.rs",
+      "sha256": "ad0ef9e4419af4b751a6d16dd7585d452d70df5e036a99230269ac7f5c9e1a75"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_runtime_phase.rs",
+      "sha256": "d3866aeb4a335f20f03aa483490ebde02145d1cb6206bbdb0c162169ce927809"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_runtime_test_fixture.rs",
+      "sha256": "6707da442a969ea0d3118e74789ed845bc9820bfb1c8f6079196019909516cb0"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_cache_runtime_tests.rs",
+      "sha256": "2b898845e21221ff4c5e98166a065d61b41ec8674855cbab4c9355b1fbac9289"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_resolver.rs",
+      "sha256": "98f37c51795d8d003a9f029c4d450f11b1a04863b1866eda8a8e448d2f0b563d"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_source_evidence.rs",
+      "sha256": "f3bca9be01280fddab5db87021640fa019f6b274097af926a0aef9f8296f85e9"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_source_evidence/files.rs",
+      "sha256": "5d72a0bb633791c727020e15b4c8f047c203268898d691d5cca81d963d83b6c5"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_source_evidence/receipt_writer.rs",
+      "sha256": "107bec7f9db44d8e11225c62f80c84baae533384c01cb4d94f7f30175157edac"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_source_evidence/receipt_writer_test_fixture.rs",
+      "sha256": "c5b91047f8290ad86c7d80c95d0644d2bfaae70c06457e479d1b53e9267dbb43"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_source_evidence/receipt_writer_tests.rs",
+      "sha256": "3d29350ca0e533e07cade3198758306a8c77be81c4452eabde9ea14fac6e2e72"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_source_evidence_directory_tests.rs",
+      "sha256": "81682ab87ea0a40858f670711275dd8d8d4ba8a6da03a4299e5fa04730b10689"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/src/qualification_source_evidence_tests.rs",
+      "sha256": "d471032fc78d63595a9576e4c93f8403a2cfa9a0839d862cee61827dd1d93fc2"
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/tests/impl_protocol.rs",
+      "sha256": "528a827536471f8dea11cc9b37954d2a95970e02bef981134ecfe978f43e96ef"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/action_ref.rs",
+      "sha256": "3506b3d1afbafd5ab70c2721e7948eef3cc8b55e1c73f9c5a820e16d47a295f9"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/cache_doctor.rs",
+      "sha256": "7ae2edefd7f200578403cd5a06a05790f33620d195aa76794749ca9e3cc54f61"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/cache_doctor_qualification.rs",
+      "sha256": "fb62a753d73a788e33e804eed63cf3175a7863f746f801db7c618d120ca60ed9"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/cache_doctor_qualification_tests.rs",
+      "sha256": "f5bc30cf887832fb7526ecf5667ed591365cce02eba68597e9c76a732823a31a"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/cache_doctor_tests.rs",
+      "sha256": "a196499fd53c261dd7c10140766ab3f972f1fe8b33daba367f190585c24cfa15"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/cache_save_budget.rs",
+      "sha256": "0d99f683d478999ecf01aeb5808a198cc422bae4b83695f252c9aaf6d05de6fb"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/cache_save_budget_tests.rs",
+      "sha256": "5181ca30496d4b95a9fbe9e5134cf1f30fc7ed3ba3daff4f1b4df0bac1fb695b"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/cache_steps.rs",
+      "sha256": "8f8dfcd2702384dc39c3bb9921b148fdabe75a9fb47559cb15d17dc7f7d52b80"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/commands.rs",
+      "sha256": "0f7abb2add0594435cdded9b87c06bda91e61ea0610e6ae3327cd95e938a7075"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/commands_env.rs",
+      "sha256": "94b5e24cf770f48636c1b832925142d0f34930f6b8bc0f609fd8420821beec72"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/composite.rs",
+      "sha256": "08f8db46be7fb98abaa9027f311be78a31b3c044fde401021ae79b6db57cfc1f"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/dispatch_cache_boundary_group_tests.rs",
+      "sha256": "983253d28d7395af1ef48460c19237842ad33f0ee795ace7eebc47377a55e83d"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/dispatch_cache_boundary_qualification_tests.rs",
+      "sha256": "3ee0938b3db0f329517870bebf48ceed0cdc502c37149337af9781f0be56cdf7"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/document_steps.rs",
+      "sha256": "340200279bd32f57d9cd4390e5744aec60866313883678c339a47bd526ae0261"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/document_steps_action.rs",
+      "sha256": "a062261f365a7b4c318069380e2faa5d6c075583b3803dcb947b4c861f53b1d1"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/document_steps_cache_env.rs",
+      "sha256": "56477016f4d469dec3859aaf5108ea4c9f486c05b13c879ef52c88ebb1cb5a94"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/document_steps_qualification_cache_tests.rs",
+      "sha256": "5f5d0b52f9a4d45ca2d6c5048185647bb05495fddb1ec10998aeb17bf1cdce20"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/expressions.rs",
+      "sha256": "26b86d24366c07c8aaee7a9370643187fb14b59d6e0fbcc1f4fa391f3faee6bb"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/expressions_qualification_cache.rs",
+      "sha256": "d38a9d30e7f3c42a4ad4125fdb9bdfb0063ed08c342b588974bcd74d6a2a5b84"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/expressions_qualification_cache/composite_output.rs",
+      "sha256": "463add2ef90c20c093b5c361145a1efd497ffc8763b6906dd12d67699fba9d4e"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/expressions_qualification_cache/input.rs",
+      "sha256": "ca3673035a0cdef12ee58321383f956856c27eaddd08aac4b8a737658288aa65"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/expressions_qualification_cache/runtime_env.rs",
+      "sha256": "c52ca3f448773ba20a49e7bb01c75fec4c18db6efced8560ea762878e820260b"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/expressions_tests.rs",
+      "sha256": "d4d14934ed98df60fc09bb58d64d6436b0cc7212f25ea37963e575b7eed9277a"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/lib.rs",
+      "sha256": "5b9644fee2f1375c6a73c1f6470ab495684bbe909211045fa3ec648002bf789d"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/qualification_cache_composites.rs",
+      "sha256": "f06e89f86905e9ab962e9198282a17795baf5fe401b8ac064e034f31865c9333"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/qualification_cache_composites/actions.rs",
+      "sha256": "e8d7107acd420b77700a9e2a9c4bf928e05693f7c1dcead1546af09eafa912d6"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/qualification_cache_composites/output.rs",
+      "sha256": "e2fbe09ac98c3400b1b4f0d16a3e19b1edd09b93c98c7970dbcaa86c013a0eb6"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/qualification_cache_composites/rewrite.rs",
+      "sha256": "d1cced9d04c79883c1425c32348d893d04a51bf51f2e1934145b2dc760cc5aa9"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/render.rs",
+      "sha256": "d991d077193f2aea005d599854bbcecd81f882b358a9bab2eb616df7732e3fc0"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/render_validation.rs",
+      "sha256": "6ba601b4664b03570ca00d2e64e1cef2cd034da2f61b82a79ac5a0d05ee45472"
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/steps_internal.rs",
+      "sha256": "1e1875edfac7791ff6fecede985b03651e87a877ddc2b1d86f40d97405ca34cf"
+    },
+    {
+      "path": "docs/technical-terms.md",
+      "sha256": "93d49d6ba6a35581f0b56fdad40a8cc15fe4c5f55826bc42d6af7e160793ee2e"
+    }
+  ],
+  "checks": {
+    "shipping-cache111-nextest-20261021.log": {
+      "result": "195 tests passed; run 62212987-2c20-4820-a77b-3dd74a7112ec",
+      "sha256": "2d931cb69d5d81e2843ca47a1e60126f545e7c3e67833dab9129630fab8adb15"
+    },
+    "shipping-cache111-clippy-20261021.log": {
+      "result": "Strict Clippy passed for three changed packages.",
+      "sha256": "6ad1bcd49ef90981633df300bceeec6e8a932246cd499110ffa2710d5a6a210e"
+    },
+    "shipping-cache111-fmt-20261021.log": {
+      "result": "Format check passed.",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "shipping-cache111-build-20261021.log": {
+      "result": "CLI build passed.",
+      "sha256": "7f57b6e98aede0e2ae024fe75d7db6e92b4348898294f57ab648899776f1838c"
+    },
+    "shipping-cache111-generation-first-20261021.log": {
+      "result": "First generation passed.",
+      "sha256": "b4c4125694c73cf8ae6cb8ef29e3aab4afa33664fafdbe6c1e3dc067002c6c7f"
+    },
+    "shipping-cache111-generation-second-20261021.log": {
+      "result": "Second generation passed.",
+      "sha256": "d68afafc42dd3bc3d9da64b159b75d21a7a5a8f2195e88b1b4bd732373da0ea6"
+    },
+    "cache111-cli-parity-nextest-final-20261021.log": {
+      "status": "PASS",
+      "result": "3 tests passed. Expected output files were generated with the tested CLI.",
+      "run_id": "5f12cc50-4b47-46a5-9053-e1bc0ca6200c",
+      "sha256": "e1b26d33be13d327d4faaa4eeba5ddcc0834fc22d3bfd90e74a1ec08f9e913eb"
+    },
+    "cache111-opentofu-goldens-check-final2-20261021.log": {
+      "status": "PASS",
+      "result": "All five cases match. The repository output matches the generated output.",
+      "sha256": "f9f7d45211fe7c6caa15ae755fa743666289054d857f8937a2c263a8fa537d54"
+    }
+  },
+  "generated_files": 219,
+  "workflow_bytes": 423997,
+  "source_file_count": 117,
+  "prior_doctor_review_manifest_sha256": "84e32901a98c15fd95df634ab03cec130eea79ed42941228c7fd03ff4bf74945",
+  "independent_routing_review": {
+    "status": "PASS",
+    "receipt": "cache111-generated-routing-independent-review-20261021.md",
+    "sha256": "c3679e9a048556c07d0098e9db04c32f51accbe0de35c2a36183d7076cd44a02",
+    "crate_jobs": 17,
+    "native_cache_saves": 92,
+    "result": "Each crate has one job. Job routing and event rules remain unchanged."
+  }
+}

@@ -106,7 +106,7 @@ pub enum CompileDriver {
     Mbx,
 }
 
-/// Cache restore/save step over `actions/cache`; MBX never archives here.
+/// Cache restore/save step over `actions/cache`.
 /// # Errors
 pub fn cache_action_step(
     restore: bool,
@@ -125,10 +125,15 @@ pub fn cache_action_step(
     if !uses.starts_with(&format!("{want}@")) {
         return Err(RenderError::BadActionRef(format!("bad_cache_uses:{uses}")));
     }
-    if !matches!(layer, "sources" | "task" | "tools" | "tofu-providers") {
+    if !matches!(
+        layer,
+        "mbx-objects" | "sources" | "task" | "tools" | "tofu-providers"
+    ) {
         return Err(RenderError::BadCommand("mbx_needs_objects_mode".to_owned()));
     }
-    if key.trim().is_empty() || key.contains(' ') || key.contains('\n') {
+    if key.trim().is_empty()
+        || (key.contains(' ') || key.contains('\n')) && !valid_owner_key_expression(layer, key)
+    {
         return Err(RenderError::BadCommand("bad_cache_key".to_owned()));
     }
     if paths.is_empty() {
@@ -153,6 +158,12 @@ pub fn cache_action_step(
 }
 
 fn validate_cache_path(layer: &str, path: &str) -> Result<(), RenderError> {
+    if valid_owner_stage_path(layer, path) {
+        return Ok(());
+    }
+    if layer == "mbx-objects" {
+        return Err(RenderError::BadCommand(format!("bad_cache_path:{path}")));
+    }
     if layer == "sources" && sources_subset_ok(path)
         || layer == "task" && path == TASK_ARTIFACTS_DIR
         || layer == "tools" && tools::tools_cache_path_ok(path)
@@ -162,6 +173,63 @@ fn validate_cache_path(layer: &str, path: &str) -> Result<(), RenderError> {
     } else {
         Err(RenderError::BadCommand(format!("bad_cache_path:{path}")))
     }
+}
+
+fn valid_owner_stage_path(action_layer: &str, path: &str) -> bool {
+    let Some(step_id) = path.strip_prefix("${{ steps.").and_then(|value| {
+        [
+            ".outputs.restore_stage_path }}",
+            ".outputs.save_stage_path }}",
+        ]
+        .iter()
+        .find_map(|suffix| value.strip_suffix(suffix))
+    }) else {
+        return false;
+    };
+    let Some(tag) = step_id.strip_prefix("qualification-cache-bind-") else {
+        return false;
+    };
+    let Some((id_layer, owner_hash)) = tag.rsplit_once('-') else {
+        return false;
+    };
+    let expected = match action_layer {
+        "mbx-objects" => "mbx_objects",
+        "sources" => "cargo_sources",
+        "tools" => "mise_tools",
+        "tofu-providers" => "tofu_providers",
+        "task" => "task_result",
+        _ => return false,
+    };
+    id_layer == expected
+        && owner_hash.len() == 16
+        && owner_hash.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn valid_owner_key_expression(action_layer: &str, value: &str) -> bool {
+    let Some(rest) = value.strip_prefix("${{ steps.") else {
+        return false;
+    };
+    let Some((step, output)) = rest.split_once(".outputs.") else {
+        return false;
+    };
+    let Some(step) = step.strip_prefix("qualification-cache-bind-") else {
+        return false;
+    };
+    let Some((layer, hash)) = step.rsplit_once('-') else {
+        return false;
+    };
+    let expected = match action_layer {
+        "mbx-objects" => "mbx_objects",
+        "sources" => "cargo_sources",
+        "tools" => "mise_tools",
+        "tofu-providers" => "tofu_providers",
+        "task" => "task_result",
+        _ => return false,
+    };
+    layer == expected
+        && hash.len() == 16
+        && hash.bytes().all(|byte| byte.is_ascii_hexdigit())
+        && matches!(output.strip_suffix(" }}"), Some("restore_key" | "save_key"))
 }
 
 /// P08 sources subset under the owned Cargo home expression.
@@ -211,4 +279,51 @@ pub fn check_cache_step_order(steps: &[Step]) -> Result<(), RenderError> {
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod owner_stage_path_tests {
+    use super::cache_action_step;
+    use velnor_actions_actionlint::PinnedActionRef;
+    use velnor_actions_actionlint::actions::{CACHE_ACTION_SHA, CACHE_ACTION_VERSION};
+
+    #[test]
+    fn owner_bound_stage_path_is_accepted_only_for_matching_layer_and_key() {
+        let uses = PinnedActionRef::new(
+            "actions/cache",
+            Some("restore"),
+            CACHE_ACTION_SHA,
+            CACHE_ACTION_VERSION,
+        )
+        .expect("pinned cache restore")
+        .uses_value();
+        let path = "${{ steps.qualification-cache-bind-mbx_objects-0123456789abcdef.outputs.restore_stage_path }}";
+        let key = "${{ steps.qualification-cache-bind-mbx_objects-0123456789abcdef.outputs.restore_key }}";
+        assert!(
+            cache_action_step(true, &uses, "mbx-objects", key, &[], &[path.to_owned()]).is_ok()
+        );
+        assert!(cache_action_step(true, &uses, "sources", key, &[], &[path.to_owned()]).is_err());
+        assert!(
+            cache_action_step(
+                true,
+                &uses,
+                "mbx-objects",
+                "${{ steps.other.outputs.key }}",
+                &[],
+                &[path.to_owned()]
+            )
+            .is_err()
+        );
+        assert!(
+            cache_action_step(
+                true,
+                &uses,
+                "mbx-objects",
+                key,
+                &[],
+                &["${{ steps.other.outputs.stage_path }}".to_owned()]
+            )
+            .is_err()
+        );
+    }
 }

@@ -1,4 +1,4 @@
-//! This module finds the executable for one exact Mise tool version.
+//! Read-only lookup of the executable selected by one exact Mise tool.
 
 use crate::command::{IsolatedCommand, ProcessOutput};
 use crate::error::MiseError;
@@ -29,19 +29,18 @@ const CATALOG_EXECUTABLES: [(&str, &str, &str); 8] = [
     ("opentofu", "opentofu", "tofu"),
     ("release-plz", "release-plz", "release-plz"),
 ];
+const RUNTIME_EXECUTABLES: [(&str, &str); 3] = [("java", "java"), ("node", "node"), ("bun", "bun")];
 
 /// Resolve one binary from an exact Mise tool selector.
 ///
-/// The command returns a path only.
-/// The caller must confirm that the path is within an allowed directory.
-/// The caller must confirm that the path names a regular file owned by the current user.
-/// The caller must then hash the file.
+/// The command only reports a path. The caller must check its approved path
+/// boundary, file type and ownership, then hash the executable bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MiseExecutableLookup {
     command: IsolatedCommand,
 }
 
-/// Executable path and SHA-256 digest from the selected tool installation.
+/// Executable path and bytes measured from the selected tool installation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MiseExecutableObservation {
     /// Resolved executable path reported by Mise or Rustup.
@@ -54,17 +53,20 @@ impl MiseExecutableLookup {
     /// Resolve with `mise which <binary> --tool <selector>`.
     ///
     /// # Errors
-    /// Returns [`MiseError::InvalidStepInput`] for an incorrect selector or
+    /// Returns [`MiseError::InvalidStepInput`] for a malformed selector or
     /// executable name.
     pub fn mise(selector: &str, executable: &str) -> Result<Self, MiseError> {
         let (tool, version) = validate_selector(selector)?;
-        let (_, version_tool, _) = CATALOG_EXECUTABLES
+        if let Some((_, version_tool, _)) = CATALOG_EXECUTABLES
             .iter()
             .find(|(selector_tool, _, _)| *selector_tool == tool)
-            .ok_or_else(|| invalid("selector"))?;
-        crate::catalog::PinnedTool::from_tool_name(version_tool)?;
-        crate::catalog::validate_concrete_exact_version(version_tool, version)?;
-        validate_catalog_executable(tool, executable)?;
+        {
+            crate::catalog::PinnedTool::from_tool_name(version_tool)?;
+            crate::catalog::validate_concrete_exact_version(version_tool, version)?;
+            validate_catalog_executable(tool, executable)?;
+        } else {
+            validate_runtime_selector(tool, executable, version)?;
+        }
         Ok(Self {
             command: IsolatedCommand::mise_which(executable, selector),
         })
@@ -105,8 +107,8 @@ impl MiseExecutableLookup {
     /// Run the bounded lookup and parse its single absolute path.
     ///
     /// # Errors
-    /// Returns a command error or rejects output that is too large, does not contain one path, or gives a relative path.
-    /// This method does not authenticate or hash the returned file.
+    /// Returns a typed command error or rejects oversized, malformed, or
+    /// relative output. It does not authenticate or hash the returned file.
     pub fn resolve_path(&self) -> Result<PathBuf, MiseError> {
         let output = self
             .command
@@ -116,13 +118,14 @@ impl MiseExecutableLookup {
 
     /// Resolve and hash a regular executable beneath its trusted install root.
     ///
-    /// The code opens each path part from a fixed directory and does not follow symbolic links.
-    /// The opened file must belong to the current
+    /// Every path component is opened relative to a pinned directory with
+    /// symlink following disabled. The opened file must belong to the current
     /// user, have an executable mode bit, and remain below `install_root`.
     ///
     /// # Errors
-    /// Returns a `MiseError` if the lookup fails or a path part is unsafe.
-    /// The executable must belong to the current user and must not exceed the size limit.
+    /// Returns a typed error when lookup fails, the path escapes the root, a
+    /// component is a symlink, the file is not an owned executable, or its
+    /// bytes exceed the fixed bound.
     pub fn resolve_and_hash(
         &self,
         install_root: &Path,
@@ -131,6 +134,17 @@ impl MiseExecutableLookup {
         let sha256 = hash_owned_executable(&path, install_root)?;
         Ok(MiseExecutableObservation { path, sha256 })
     }
+}
+
+fn validate_runtime_selector(tool: &str, executable: &str, version: &str) -> Result<(), MiseError> {
+    if !RUNTIME_EXECUTABLES
+        .iter()
+        .any(|(selector_tool, expected)| *selector_tool == tool && *expected == executable)
+    {
+        return Err(invalid("runtime_selector"));
+    }
+    crate::catalog::validate_concrete_exact_version(tool, version)?;
+    Ok(())
 }
 
 fn validate_selector(selector: &str) -> Result<(&str, &str), MiseError> {

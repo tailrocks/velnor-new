@@ -83,3 +83,11 @@
 | Artifact attestation | A record that identifies an artifact and the workflow that produced it. |
 
 | Attestation helper | A program that does a check of artifact attestations for the host. |
+
+| ABI | Rules that software uses to communicate across a program boundary. |
+
+| Runtime identity | A record of the runner, image, tools, and ABI facts used to bind cache keys. |
+
+| Future | A Rust value for an operation that can finish later. |
+
+| Heap storage | Memory that a program allocates while it runs. |

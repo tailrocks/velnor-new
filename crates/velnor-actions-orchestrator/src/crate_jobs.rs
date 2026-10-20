@@ -47,6 +47,9 @@ mod stage;
 #[path = "crate_jobs_dependencies.rs"]
 mod crate_jobs_dependencies;
 
+#[path = "crate_jobs_qualification_cache.rs"]
+mod qualification_cache;
+
 #[cfg(test)]
 pub(crate) use stage::needs;
 pub(crate) use stage::{is_mbx, is_nextest, is_opentofu, is_rust};

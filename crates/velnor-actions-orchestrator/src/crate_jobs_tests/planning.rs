@@ -1,5 +1,8 @@
 use super::*;
 use crate::crate_job_ids::job_id_for_member;
+#[path = "planning/qualification_order.rs"]
+mod qualification_order;
+use qualification_order::assert_grouped_qualification_steps;
 
 #[test]
 fn groups_obligations_into_one_ordered_job_per_crate() {
@@ -149,37 +152,6 @@ fn rust_qualification_reuses_one_job_for_all_configurations_and_tasks() {
     assert_eq!(qualified.jobs.len(), 1);
     assert_eq!(qualified.jobs[0].0, "rust-demo");
     assert_grouped_qualification_steps(&qualified.jobs[0].1);
-}
-
-fn assert_grouped_qualification_steps(job: &Job) {
-    let execution_steps: Vec<_> = job
-        .steps
-        .iter()
-        .filter(|step| {
-            matches!(
-                step.kind,
-                velnor_actions_contract::StepKind::TaskExecution { .. }
-            )
-        })
-        .collect();
-    assert_eq!(
-        execution_steps.len(),
-        2,
-        "both task obligations stay in one job"
-    );
-    assert!(
-        execution_steps.iter().all(|step| step.condition.is_none()),
-        "affected selection is enforced once at the job level"
-    );
-    let evidence = job
-        .steps
-        .iter()
-        .find(|step| step.name == crate::qualification_source_evidence::SOURCE_EVIDENCE_STEP_NAME)
-        .expect("one aggregated source evidence step");
-    assert_eq!(
-        evidence.condition.as_deref(),
-        Some("needs.plan.outputs.qualification_campaign != ''")
-    );
 }
 
 #[test]

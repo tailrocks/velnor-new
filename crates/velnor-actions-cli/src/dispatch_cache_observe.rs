@@ -19,6 +19,7 @@ pub(crate) const OP: &str = "observe-qualification-cache-backend-v1";
 const WORKSPACE_ENV: &str = "GITHUB_WORKSPACE";
 const ACTION_HIT_ENV: &str = "VELNOR_QUALIFICATION_CACHE_HIT";
 const ACTION_MATCHED_KEY_ENV: &str = "VELNOR_QUALIFICATION_CACHE_MATCHED_KEY";
+const CENSUS_PHASE_ENV: &str = "VELNOR_QUALIFICATION_CACHE_CENSUS_PHASE";
 const MAX_ACTION_KEY_BYTES: usize = MAX_CACHE_KEY_BYTES;
 const MAX_WORKSPACE_PATH_BYTES: usize = 4_096;
 
@@ -30,23 +31,52 @@ pub(crate) fn run() -> ExitCode {
         Err(problem) => return fail(&problem),
     };
     let request = inputs.request();
+    let phase = match env::var(CENSUS_PHASE_ENV).as_deref() {
+        Ok("restore") => CensusPhase::Restore,
+        Ok("save_before") => CensusPhase::SaveBefore,
+        Ok("save_after") => CensusPhase::SaveAfter,
+        _ => return fail("qualification_cache_census_phase_invalid"),
+    };
     let binding = match bind_qualification_cache_runtime(&request) {
         Ok(binding) => binding,
         Err(error) => return fail(&error.to_string()),
     };
-    let keys = match bound_keys(&binding) {
+    match observe_and_emit(&request, &binding, phase) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(problem) => fail(&problem),
+    }
+}
+
+fn observe_and_emit(
+    request: &velnor_actions_orchestrator::QualificationCacheBindingRequest<'_>,
+    binding: &QualificationCacheBindingOutputs,
+    phase: CensusPhase,
+) -> Result<(), String> {
+    let keys = match bound_keys(binding) {
         Ok(keys) => keys,
-        Err(problem) => return fail(problem),
+        Err(problem) => return Err(problem.to_owned()),
     };
-    let action = match read_action_outputs(|name| env::var(name), binding.restore_key.is_some()) {
-        Ok(action) => action,
-        Err(problem) => return fail(problem),
+    let action = match phase {
+        CensusPhase::Restore => {
+            match read_action_outputs(|name| env::var(name), binding.restore_key.is_some()) {
+                Ok(action) => action,
+                Err(problem) => return Err(problem.to_owned()),
+            }
+        }
+        CensusPhase::SaveBefore | CensusPhase::SaveAfter => ActionOutputs {
+            hit: false,
+            matched_key: None,
+        },
     };
-    let observed = match binding.restore_key.as_deref() {
+    let observed_key = match phase {
+        CensusPhase::Restore => binding.restore_key.as_deref(),
+        CensusPhase::SaveBefore | CensusPhase::SaveAfter => binding.save_key.as_deref(),
+    };
+    let observed = match observed_key {
         Some(key) => {
             let workspace = match workspace_path(env::var(WORKSPACE_ENV)) {
                 Ok(path) => path,
-                Err(problem) => return fail(problem),
+                Err(problem) => return Err(problem.to_owned()),
             };
             match observe_qualification_cache_backend(
                 &workspace,
@@ -55,31 +85,59 @@ pub(crate) fn run() -> ExitCode {
                 request.git_ref,
             ) {
                 Ok(observed) => observed,
-                Err(error) => return fail(&error.to_string()),
+                Err(error) => return Err(error.to_string()),
             }
         }
         None => QualificationCacheBackendObservation::NotQueried,
     };
-    if let Err(error) = validate_qualification_cache_backend_observation(
-        &keys,
-        action.hit,
-        action.matched_key.as_deref(),
-        &observed,
-    ) {
-        return fail(&error.to_string());
+    match phase {
+        CensusPhase::Restore => {
+            if let Err(error) = validate_qualification_cache_backend_observation(
+                &keys,
+                action.hit,
+                action.matched_key.as_deref(),
+                &observed,
+            ) {
+                return Err(error.to_string());
+            }
+        }
+        CensusPhase::SaveBefore | CensusPhase::SaveAfter => {
+            if binding.save_key.is_none()
+                && observed != QualificationCacheBackendObservation::NotQueried
+            {
+                return Err("qualification_cache_save_census_unexpected".to_owned());
+            }
+        }
     }
     let Some(output_path) =
         env::var_os(cache_bind::GITHUB_OUTPUT_ENV).filter(|value| !value.is_empty())
     else {
-        return fail("missing_github_output");
+        return Err("missing_github_output".to_owned());
     };
-    let body = match output_body(&binding, &action, &observed) {
+    let body = match output_body(binding, phase, &action, &observed) {
         Ok(body) => body,
-        Err(problem) => return fail(problem),
+        Err(problem) => return Err(problem.to_owned()),
     };
     match cache_bind::append_owned_output(&output_path, body.as_bytes()) {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(error) => fail(&format!("append_github_output:{error}")),
+        Ok(()) => Ok(()),
+        Err(error) => Err(format!("append_github_output:{error}")),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CensusPhase {
+    Restore,
+    SaveBefore,
+    SaveAfter,
+}
+
+impl CensusPhase {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Restore => "restore",
+            Self::SaveBefore => "save_before",
+            Self::SaveAfter => "save_after",
+        }
     }
 }
 
@@ -160,6 +218,7 @@ fn workspace_path(value: Result<String, env::VarError>) -> Result<PathBuf, &'sta
 
 fn output_body(
     binding: &QualificationCacheBindingOutputs,
+    phase: CensusPhase,
     action: &ActionOutputs,
     observed: &QualificationCacheBackendObservation,
 ) -> Result<String, &'static str> {
@@ -176,8 +235,19 @@ fn output_body(
         ("phase", binding.phase.clone()),
         ("plan_id", binding.plan_id.clone()),
         ("run_key", binding.run_key.clone()),
+        ("owner_id", binding.owner_id.clone()),
         ("matrix_key", binding.matrix_key.clone()),
         ("layer", binding.layer.clone()),
+        ("census_phase", phase.as_str().to_owned()),
+        (
+            "census_key",
+            match phase {
+                CensusPhase::Restore => binding.restore_key.clone().unwrap_or_default(),
+                CensusPhase::SaveBefore | CensusPhase::SaveAfter => {
+                    binding.save_key.clone().unwrap_or_default()
+                }
+            },
+        ),
         (
             "restore_key",
             binding.restore_key.clone().unwrap_or_default(),

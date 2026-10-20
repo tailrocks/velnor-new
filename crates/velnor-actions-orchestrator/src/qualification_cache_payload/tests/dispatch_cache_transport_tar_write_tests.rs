@@ -75,7 +75,7 @@ fn writer_rejects_a_stale_root_digest_before_finishing() {
     fs::create_dir(&root).expect("cache root");
     fs::write(root.join("provider"), b"provider bytes").expect("provider file");
     let roots = CacheRootSet {
-        matrix_key: "normal-tofu".to_owned(),
+        owner_id: "normal-tofu".to_owned(),
         layer: QualificationCacheLayer::TofuProviders,
         roots: vec![CacheRootObservation {
             id: CacheRootId::TofuPlugins,
@@ -112,7 +112,7 @@ fn fixture() -> Fixture {
     symlink("primary-content.txt", nested.join("relative-alias")).expect("internal symbolic link");
 
     let roots = CacheRootSet {
-        matrix_key: "normal-tofu".to_owned(),
+        owner_id: "normal-tofu".to_owned(),
         layer: QualificationCacheLayer::TofuProviders,
         roots: vec![CacheRootObservation {
             id: CacheRootId::TofuPlugins,

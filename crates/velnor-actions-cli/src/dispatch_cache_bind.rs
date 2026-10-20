@@ -21,10 +21,11 @@ pub(crate) const OP: &str = QUALIFICATION_CACHE_BIND_OP;
 
 pub(crate) const GITHUB_OUTPUT_ENV: &str = "GITHUB_OUTPUT";
 const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
-const MATRIX_KEY_ENV: &str = "VELNOR_QUALIFICATION_CACHE_MATRIX_KEY";
+const OWNER_ID_ENV: &str = "VELNOR_QUALIFICATION_CACHE_OWNER_ID";
 const LAYER_ENV: &str = "VELNOR_QUALIFICATION_CACHE_LAYER";
 const RUNTIME_IDENTITY_PATH_ENV: &str = "VELNOR_QUALIFICATION_RUNTIME_IDENTITY_FILE";
-const ROOTS_ENV: &str = "VELNOR_QUALIFICATION_CACHE_ROOTS";
+const ROOTS_FILE_ENV: &str = "VELNOR_QUALIFICATION_CACHE_ROOTS_FILE";
+const RUNTIME_PHASE_ENV: &str = "VELNOR_QUALIFICATION_CACHE_RUNTIME_PHASE";
 
 #[derive(Debug)]
 pub(crate) struct BindInputs {
@@ -41,7 +42,7 @@ pub(crate) struct BindInputs {
     runner_os: String,
     runner_arch: String,
     image_os: Option<String>,
-    matrix_key: String,
+    owner_id: String,
     layer: String,
     runtime_identity_path: PathBuf,
 }
@@ -62,7 +63,7 @@ impl BindInputs {
             runner_os: &self.runner_os,
             runner_arch: &self.runner_arch,
             image_os: self.image_os.as_deref(),
-            matrix_key: &self.matrix_key,
+            owner_id: &self.owner_id,
             layer: &self.layer,
             runtime_identity_path: &self.runtime_identity_path,
         }
@@ -96,10 +97,16 @@ pub(crate) fn run() -> ExitCode {
 }
 
 fn validate_optional_root_observation(inputs: &BindInputs) -> Result<(), &'static str> {
-    let Ok(text) = env::var(ROOTS_ENV) else {
+    let Ok(path) = env::var(ROOTS_FILE_ENV) else {
         return Ok(());
     };
-    transfer::validate_root_observation(&inputs.request(), &text)
+    let request = inputs.request();
+    let text = velnor_actions_orchestrator::read_qualification_cache_roots(
+        &request,
+        PathBuf::from(path).as_path(),
+    )
+    .map_err(|_| "qualification_cache_roots_untrusted")?;
+    transfer::validate_root_observation(&request, &text)
 }
 
 pub(crate) fn append_owned_output(path: &std::ffi::OsStr, body: &[u8]) -> std::io::Result<()> {
@@ -156,7 +163,37 @@ where
         "false" => false,
         _ => return Err("bad_ref_protected".to_owned()),
     };
-    let runtime_identity_path = required_path(&mut get, RUNTIME_IDENTITY_PATH_ENV)?;
+    let owner_id = required(&mut get, OWNER_ID_ENV)?;
+    let layer = required(&mut get, LAYER_ENV)?;
+    let runtime_phase = required(&mut get, RUNTIME_PHASE_ENV)?;
+    let runtime_identity_filename = match runtime_phase.as_str() {
+        "before_import" => {
+            velnor_actions_orchestrator::qualification_cache_runtime_identity_filename(
+                &owner_id, &layer,
+            )
+        }
+        "after_import" => {
+            velnor_actions_orchestrator::qualification_cache_runtime_after_import_filename(
+                &owner_id, &layer,
+            )
+        }
+        _ => return Err("bad_runtime_phase".to_owned()),
+    }
+    .map_err(|_| "bad_runtime_identity_name".to_owned())?;
+    let expected_runtime_identity_path = runner_temp
+        .join("velnor")
+        .join(format!("r{run_id}-a{run_attempt}"))
+        .join(runtime_identity_filename);
+    let runtime_identity_path = match optional(&mut get, RUNTIME_IDENTITY_PATH_ENV) {
+        Some(path) => {
+            let path = required_path_value(path)?;
+            if path != expected_runtime_identity_path {
+                return Err("runtime_identity_path_mismatch".to_owned());
+            }
+            path
+        }
+        None => expected_runtime_identity_path,
+    };
     Ok(BindInputs {
         runner_temp,
         run_id,
@@ -171,11 +208,15 @@ where
         runner_os: required(&mut get, "RUNNER_OS")?,
         runner_arch: required(&mut get, "RUNNER_ARCH")?,
         image_os: optional(&mut get, "ImageOS"),
-        matrix_key: required(&mut get, MATRIX_KEY_ENV)?,
-        layer: required(&mut get, LAYER_ENV)?,
+        owner_id,
+        layer,
         runtime_identity_path,
     })
 }
+
+#[cfg(test)]
+#[path = "dispatch_cache_bind_tests.rs"]
+mod tests;
 
 fn optional<E>(get: &mut E, name: &str) -> Option<String>
 where
@@ -199,6 +240,10 @@ where
     E: FnMut(&str) -> Result<String, env::VarError>,
 {
     let text = required(get, name)?;
+    required_path_value(text)
+}
+
+fn required_path_value(text: String) -> Result<PathBuf, String> {
     if text.len() > 4_096
         || !text.starts_with('/')
         || text
@@ -245,40 +290,20 @@ fn output_fields(
     runner_temp: &std::path::Path,
 ) -> Result<Vec<(&'static str, String)>, &'static str> {
     let cache = outputs.expected_cache.as_ref();
-    let restore_stage_path = outputs
-        .restore_key
-        .as_deref()
-        .map(|key| {
-            velnor_actions_orchestrator::qualification_cache_stage_path(
-                runner_temp,
-                &outputs.campaign,
-                &outputs.layer,
-                key,
-            )
-            .map(|path| path.display().to_string())
-        })
-        .transpose()?
-        .unwrap_or_default();
-    let save_stage_path = outputs
-        .save_key
-        .as_deref()
-        .map(|key| {
-            velnor_actions_orchestrator::qualification_cache_stage_path(
-                runner_temp,
-                &outputs.campaign,
-                &outputs.layer,
-                key,
-            )
-            .map(|path| path.display().to_string())
-        })
-        .transpose()?
-        .unwrap_or_default();
+    let restore_stage_path = stage_path(outputs, runner_temp, outputs.restore_key.as_deref())?;
+    let save_stage_path = stage_path(outputs, runner_temp, outputs.save_key.as_deref())?;
+    let stage_path = if restore_stage_path.is_empty() {
+        save_stage_path.clone()
+    } else {
+        restore_stage_path.clone()
+    };
     Ok(vec![
         ("active", bool_text(outputs.active).to_owned()),
         ("campaign", outputs.campaign.clone()),
         ("phase", outputs.phase.clone()),
         ("plan_id", outputs.plan_id.clone()),
         ("run_key", outputs.run_key.clone()),
+        ("owner_id", outputs.owner_id.clone()),
         ("matrix_key", outputs.matrix_key.clone()),
         ("layer", outputs.layer.clone()),
         (
@@ -286,6 +311,7 @@ fn output_fields(
             outputs.restore_key.clone().unwrap_or_default(),
         ),
         ("restore_stage_path", restore_stage_path),
+        ("stage_path", stage_path),
         (
             "expected_cache_id",
             cache.map_or_else(String::new, |entry| entry.id.to_string()),
@@ -324,6 +350,24 @@ fn output_fields(
             outputs.runtime_identity_digest.clone().unwrap_or_default(),
         ),
     ])
+}
+
+fn stage_path(
+    outputs: &velnor_actions_orchestrator::QualificationCacheBindingOutputs,
+    runner_temp: &std::path::Path,
+    key: Option<&str>,
+) -> Result<String, &'static str> {
+    key.map(|key| {
+        velnor_actions_orchestrator::qualification_cache_stage_path(
+            runner_temp,
+            &outputs.campaign,
+            &outputs.layer,
+            key,
+        )
+        .map(|path| path.display().to_string())
+    })
+    .transpose()
+    .map(Option::unwrap_or_default)
 }
 
 fn bool_text(value: bool) -> &'static str {

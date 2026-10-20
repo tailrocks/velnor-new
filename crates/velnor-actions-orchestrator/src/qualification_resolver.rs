@@ -77,12 +77,18 @@ pub fn read_qualification_admission(
     runner_temp: &Path,
 ) -> Result<Option<QualificationCacheAdmission>, OrchestratorError> {
     let response = crate::internal::PlanResponse::parse(response_json)?;
-    let expected = response
-        .plan
+    read_qualification_admission_for_plan(&response.plan, runner_temp)
+}
+
+pub(crate) fn read_qualification_admission_for_plan(
+    plan: &velnor_actions_contract::Plan,
+    runner_temp: &Path,
+) -> Result<Option<QualificationCacheAdmission>, OrchestratorError> {
+    let expected = plan
         .qualification
         .as_ref()
         .is_some_and(|context| context.phase.predecessor().is_some());
-    let path = admission_path(runner_temp, &response.plan.run_key);
+    let path = admission_path(runner_temp, &plan.run_key);
     if !expected {
         return match std::fs::symlink_metadata(&path) {
             Ok(_) => Err(internal("unexpected_qualification_admission")),
@@ -94,9 +100,12 @@ pub fn read_qualification_admission(
         &path,
         velnor_actions_contract::MAX_QUALIFICATION_RECEIPT_BYTES as u64,
     )?;
-    QualificationCacheAdmission::parse_bounded(text.as_bytes())
-        .map(Some)
-        .map_err(crate::internal::internal_contract)
+    let admission = QualificationCacheAdmission::parse_bounded(text.as_bytes())
+        .map_err(crate::internal::internal_contract)?;
+    admission
+        .validate_for_plan(plan)
+        .map_err(crate::internal::internal_contract)?;
+    Ok(Some(admission))
 }
 
 fn checkout_root() -> Result<PathBuf, OrchestratorError> {

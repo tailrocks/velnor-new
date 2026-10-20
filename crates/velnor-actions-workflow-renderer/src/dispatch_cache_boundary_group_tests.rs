@@ -1,3 +1,6 @@
+#[path = "dispatch_cache_boundary_qualification_tests.rs"]
+mod qualification_tests;
+
 use super::*;
 
 #[test]

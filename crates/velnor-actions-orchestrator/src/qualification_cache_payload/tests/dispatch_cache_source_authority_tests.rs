@@ -38,7 +38,7 @@ fn payload_writer_rejects_a_nonsticky_writable_source_ancestor() {
         .expect("nonempty source");
     let mode = fs::metadata(&source_path).expect("root metadata").mode() & 0o777;
     let roots = CacheRootSet {
-        matrix_key: "source-check".to_owned(),
+        owner_id: "source-check".to_owned(),
         layer: QualificationCacheLayer::TofuProviders,
         roots: vec![CacheRootObservation {
             id: CacheRootId::TofuPlugins,

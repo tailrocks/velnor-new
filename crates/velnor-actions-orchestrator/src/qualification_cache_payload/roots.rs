@@ -5,6 +5,7 @@
 //! caller still validates each path against the generated job's live
 //! environment before it can be used for filesystem operations.
 
+use serde::Serialize;
 use std::path::{Component, Path, PathBuf};
 
 use velnor_actions_contract::{
@@ -15,6 +16,61 @@ const ROOTS_SCHEMA: &str = "velnor.qualification-cache-roots/v1";
 const MAX_ROOTS_JSON_BYTES: usize = 65_536;
 const MAX_ROOTS: usize = 8;
 const MAX_ROOT_PATH_BYTES: usize = 4_096;
+
+/// Collect the paths configured by the generated owner job for one layer.
+/// The result contains process environment values only; payload consumers
+/// validate those paths against the same environment before use.
+///
+/// # Errors
+/// Returns an error when the owner, layer, or configured root paths are invalid.
+pub fn collect_owner_roots<E>(
+    runner_temp: &Path,
+    owner_id: &str,
+    layer_name: &str,
+    mut get: E,
+) -> Result<String, &'static str>
+where
+    E: FnMut(&str) -> Option<String>,
+{
+    velnor_actions_contract::workflow::validate_job_id(owner_id)
+        .map_err(|_| "qualification_cache_owner_invalid")?;
+    let layer = parse_layer(layer_name).ok_or("qualification_cache_layer_invalid")?;
+    let roots = expected_paths_for_environment(layer, runner_temp, &mut get)?;
+    let observations = roots
+        .into_iter()
+        .map(|(id, path)| {
+            let path = path
+                .to_str()
+                .ok_or("qualification_cache_root_environment_invalid")?;
+            validate_absolute_path(path)?;
+            Ok(RootDocument {
+                id: id.as_str(),
+                path: path.to_owned(),
+            })
+        })
+        .collect::<Result<Vec<_>, &'static str>>()?;
+    let document = RootSetDocument {
+        schema: ROOTS_SCHEMA,
+        owner_id,
+        layer: layer.as_str(),
+        roots: observations,
+    };
+    canonical_json_str(&document).map_err(|_| "qualification_cache_roots_invalid")
+}
+
+#[derive(Serialize)]
+struct RootSetDocument<'a> {
+    schema: &'static str,
+    owner_id: &'a str,
+    layer: &'static str,
+    roots: Vec<RootDocument>,
+}
+
+#[derive(Serialize)]
+struct RootDocument {
+    id: &'static str,
+    path: String,
+}
 
 #[path = "roots_environment.rs"]
 mod environment;
@@ -89,7 +145,7 @@ pub(crate) struct CacheRootObservation {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CacheRootSet {
-    pub(crate) matrix_key: String,
+    pub(crate) owner_id: String,
     pub(crate) layer: QualificationCacheLayer,
     pub(crate) roots: Vec<CacheRootObservation>,
 }
@@ -98,7 +154,7 @@ impl CacheRootSet {
     /// Parse a bounded collector result with the required JSON spelling and bind it to this lane.
     pub(crate) fn parse(
         text: &str,
-        matrix_key: &str,
+        owner_id: &str,
         layer: QualificationCacheLayer,
     ) -> Result<Self, &'static str> {
         if text.len() > MAX_ROOTS_JSON_BYTES || text.chars().any(|ch| matches!(ch, '\n' | '\r')) {
@@ -111,7 +167,7 @@ impl CacheRootSet {
         if canonical != text {
             return Err("qualification_cache_roots_noncanonical");
         }
-        parse_value(&value, matrix_key, layer)
+        parse_value(&value, owner_id, layer)
     }
 
     /// Require every path to equal its generated job's current configured root.
@@ -137,15 +193,15 @@ impl CacheRootSet {
 
 fn parse_value(
     value: &serde_json::Value,
-    matrix_key: &str,
+    owner_id: &str,
     layer: QualificationCacheLayer,
 ) -> Result<CacheRootSet, &'static str> {
     let object = value
         .as_object()
-        .filter(|object| has_exact_keys(object, &["layer", "matrix_key", "roots", "schema"]))
+        .filter(|object| has_exact_keys(object, &["layer", "owner_id", "roots", "schema"]))
         .ok_or("qualification_cache_roots_invalid")?;
     if string_field(object, "schema")? != ROOTS_SCHEMA
-        || string_field(object, "matrix_key")? != matrix_key
+        || string_field(object, "owner_id")? != owner_id
         || string_field(object, "layer")? != layer.as_str()
     {
         return Err("qualification_cache_roots_stale");
@@ -161,7 +217,7 @@ fn parse_value(
     }
     validate_root_ids(layer, &roots)?;
     Ok(CacheRootSet {
-        matrix_key: matrix_key.to_owned(),
+        owner_id: owner_id.to_owned(),
         layer,
         roots,
     })

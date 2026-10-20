@@ -107,6 +107,39 @@ fn plan_reconstructed_cold_directive_binds_runtime_identity() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn serialized_owner_with_missing_member_cannot_bind_runtime_identity() -> TestResult {
+    let plan = qualification_plan(QualificationPhase::Cold, 702, &"a".repeat(40), None)?;
+    let entry = &plan.matrix.include[0];
+    let directive = QualificationCacheDirective::for_plan(&plan, None)?
+        .ok_or_else(|| std::io::Error::other("qualification directive missing"))?;
+    let layer = directive
+        .owner_layer(&entry.job_id, QualificationCacheLayer::CargoSources)
+        .ok_or_else(|| std::io::Error::other("owner layer directive missing"))?;
+    let evidence = runtime_identity(
+        layer
+            .runtime
+            .as_ref()
+            .ok_or_else(|| std::io::Error::other("runtime requirements missing"))?,
+    );
+
+    let mut serialized = serde_json::to_value(&directive)?;
+    serialized["owners"][0]["members"] = serde_json::json!([]);
+    let forged: QualificationCacheDirective = serde_json::from_value(serialized)?;
+    assert!(
+        forged
+            .bind_runtime_owner(
+                &plan,
+                None,
+                &entry.job_id,
+                QualificationCacheLayer::CargoSources,
+                &evidence,
+            )
+            .is_err()
+    );
+    Ok(())
+}
+
 pub(super) fn qualification_plan(
     phase: QualificationPhase,
     run_id: u64,

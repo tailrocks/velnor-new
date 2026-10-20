@@ -78,7 +78,7 @@ fn normal_tools_roots(
         return Err("normal_cache_roots_mismatch");
     }
     Ok(CacheRootSet {
-        matrix_key: "normal-tools".to_owned(),
+        owner_id: "normal-tools".to_owned(),
         layer: QualificationCacheLayer::MiseTools,
         roots: vec![
             CacheRootObservation {

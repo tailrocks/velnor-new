@@ -19,6 +19,8 @@ use crate::qualification_cache_runtime::closure::{
 
 #[path = "qualification_source_evidence_context.rs"]
 mod context;
+#[path = "qualification_source_evidence/receipt_writer.rs"]
+mod receipt_writer;
 #[path = "qualification_source_evidence_reports.rs"]
 mod reports;
 #[path = "qualification_source_evidence_types.rs"]
@@ -26,6 +28,8 @@ mod types;
 
 /// Fixed internal operation that writes one source evidence file.
 pub const SOURCE_EVIDENCE_OP: &str = "write-qualification-source-evidence-v1";
+/// Fixed operation that validates and writes one completed producer receipt.
+pub const CACHE_RECEIPT_OP: &str = "write-qualification-cache-receipt-v1";
 /// Fixed file name uploaded with one lane's task reports.
 pub(crate) const SOURCE_EVIDENCE_FILENAME: &str = "qualification-source-evidence.json";
 /// Generated step name used by Rust, `ToFu`, and named-check lanes.
@@ -79,6 +83,15 @@ pub fn write_qualification_source_evidence() -> Result<(), OrchestratorError> {
     }
 
     write_job_sidecars(&runner_temp, &plan, &authenticated, &generator, evidence)
+}
+
+/// Validate downloaded lane and owner evidence, then write one producer receipt.
+///
+/// # Errors
+///
+/// Returns an error if the staged plan, authenticated runner, reports, or cache evidence do not match.
+pub fn write_qualification_cache_receipt() -> Result<PathBuf, OrchestratorError> {
+    receipt_writer::write_receipt()
 }
 
 fn write_job_sidecars(

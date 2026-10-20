@@ -10,7 +10,9 @@ use crate::{
 };
 
 pub(crate) use crate::commands_env::validate_composite_env;
+pub(crate) use crate::commands_env::validate_composite_qualification_cache_env;
 pub use crate::commands_env::validate_env;
+pub(crate) use crate::commands_env::validate_qualification_cache_env;
 
 /// Validate a fixed argument vector: nonempty, no shell fragments.
 ///

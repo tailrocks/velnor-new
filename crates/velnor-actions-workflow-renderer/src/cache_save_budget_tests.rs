@@ -84,7 +84,7 @@ fn run_with_output(
 #[test]
 fn actual_scripts_share_one_clock_across_slow_and_successive_writes() {
     let (clock, _) = run_clock_script(CLOCK_SCRIPT, "1000", "", "");
-    assert_eq!(clock, "started=1000\ndeadline=1300\n");
+    assert_eq!(clock, "started=1000\ndeadline=1300\njob_seconds=300\n");
     for now in ["1100", "1150", "1210"] {
         let (out, warning) = run_clock_script(ADMISSION_SCRIPT, now, "1000", "1300");
         assert_eq!(out, "admitted=true\n", "{now}");
@@ -129,6 +129,29 @@ fn save(role: StepRole) -> Step {
         id: None,
         role: Some(role),
         condition: Some("always() && !cancelled() && producer == 'success'".to_owned()),
+        parallel: false,
+        kind: StepKind::Action {
+            uses: crate::steps::TOOLS_SAVE_USES.to_owned(),
+            with: BTreeMap::new(),
+            env: BTreeMap::new(),
+        },
+    }
+}
+
+fn owner_save(stage: QualificationCacheStepStage) -> Step {
+    use velnor_actions_contract::workflow::{QualificationCacheLayer, QualificationCacheStepId};
+
+    Step {
+        name: "Save qualification cache".to_owned(),
+        id: Some(StepId::QualificationCache(
+            QualificationCacheStepId::new(stage, QualificationCacheLayer::CargoSources, "rust-0")
+                .expect("valid owner identity"),
+        )),
+        role: Some(StepRole::QualificationCacheSave),
+        condition: Some(
+            "needs.plan.outputs.qualification_campaign != '' && save_requested == 'true'"
+                .to_owned(),
+        ),
         parallel: false,
         kind: StepKind::Action {
             uses: crate::steps::TOOLS_SAVE_USES.to_owned(),
@@ -202,6 +225,47 @@ fn actual_renderer_bounds_all_native_saves_and_preserves_their_original_gates() 
         assert!(crate::yaml::render_yaml(&steps[index]).contains("cache_unavailable"));
     }
     assert!(!crate::yaml::render_yaml(&steps[1]).contains("continue-on-error"));
+}
+
+#[test]
+fn owner_v4_save_keeps_timeout_and_shared_job_budget() {
+    let save = owner_save(QualificationCacheStepStage::Save);
+    let expected_id = match save.id.expect("typed save ID") {
+        StepId::QualificationCache(identity) => identity.as_string(),
+        _ => panic!("qualification cache ID"),
+    };
+    let yaml = rendered(&save).expect("typed owner save");
+    assert_eq!(field(&yaml, "id"), &Yaml::str(expected_id.clone()));
+    assert_eq!(field(&yaml, "timeout-minutes"), &Yaml::Int(1));
+    assert_eq!(field(&yaml, "continue-on-error"), &Yaml::Bool(true));
+
+    let mut steps = vec![Yaml::Map(vec![("run".to_owned(), Yaml::str("test"))]), yaml];
+    apply(&mut steps, 15).expect("owner save shares first-step deadline");
+    assert_eq!(steps.len(), 5);
+    assert_eq!(field(&steps[0], "id"), &Yaml::str(CLOCK_ID));
+    let admission = crate::yaml::render_yaml(&steps[2]);
+    assert!(admission.contains("VELNOR_CACHE_REQUIRED_SECONDS"));
+    assert!(admission.contains("90"));
+    let save_condition = field(&steps[3], "if");
+    let Yaml::Str(save_condition) = save_condition else {
+        panic!("save condition")
+    };
+    assert!(save_condition.contains("save_requested == 'true'"));
+    assert!(save_condition.contains(&expected_id));
+    assert!(save_condition.contains("-budget.outputs.admitted == 'true'"));
+    assert!(crate::yaml::render_yaml(&steps[4]).contains("cache_unavailable"));
+}
+
+#[test]
+fn owner_save_budget_rejects_wrong_stage_and_non_job_context() {
+    let restore = owner_save(QualificationCacheStepStage::Restore);
+    let mut entries = vec![("if".to_owned(), Yaml::str("always()"))];
+    assert!(decorate(&restore, &mut entries, true).is_err());
+    assert_eq!(entries.len(), 1);
+
+    let save = owner_save(QualificationCacheStepStage::Save);
+    assert!(decorate(&save, &mut entries, false).is_err());
+    assert_eq!(entries.len(), 1);
 }
 
 #[test]

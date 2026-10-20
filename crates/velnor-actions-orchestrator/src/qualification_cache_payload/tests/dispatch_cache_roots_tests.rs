@@ -4,10 +4,48 @@ use velnor_actions_contract::{QualificationCacheLayer, canonical_json_str};
 
 use super::{CacheRootId, CacheRootSet, MAX_ROOTS_JSON_BYTES, expected_paths_for_environment};
 
+#[test]
+fn owner_root_collector_emits_only_generated_paths_for_exact_layer() {
+    let runner_temp = PathBuf::from("/tmp/runner");
+    let roots =
+        super::super::collect_owner_roots(&runner_temp, "crate-demo-a1", "cargo_sources", |name| {
+            match name {
+                "CARGO_HOME" => Some("/tmp/runner/velnor/cargo".to_owned()),
+                _ => None,
+            }
+        })
+        .expect("generated owner roots");
+    let parsed = CacheRootSet::parse(
+        &roots,
+        "crate-demo-a1",
+        QualificationCacheLayer::CargoSources,
+    )
+    .expect("canonical owner roots");
+    assert_eq!(parsed.roots.len(), 3);
+    assert!(
+        parsed
+            .validate_expected_paths(&[
+                (
+                    CacheRootId::CargoGitDb,
+                    PathBuf::from("/tmp/runner/velnor/cargo/git/db")
+                ),
+                (
+                    CacheRootId::CargoRegistryCache,
+                    PathBuf::from("/tmp/runner/velnor/cargo/registry/cache"),
+                ),
+                (
+                    CacheRootId::CargoRegistryIndex,
+                    PathBuf::from("/tmp/runner/velnor/cargo/registry/index"),
+                ),
+            ])
+            .is_ok()
+    );
+}
+
 fn cargo_roots() -> serde_json::Value {
     serde_json::json!({
         "schema": "velnor.qualification-cache-roots/v1",
-        "matrix_key": "matrix-abc123",
+        "owner_id": "matrix-abc123",
         "layer": "cargo_sources",
         "roots": [
             { "id": "cargo_git_db", "path": "/tmp/runner/velnor/cargo/git/db" },
@@ -31,7 +69,7 @@ fn parses_and_binds_the_exact_layer_root_set() {
     )
     .expect("typed roots");
 
-    assert_eq!(roots.matrix_key, "matrix-abc123");
+    assert_eq!(roots.owner_id, "matrix-abc123");
     assert_eq!(roots.layer, QualificationCacheLayer::CargoSources);
     assert_eq!(roots.roots.len(), 3);
     roots

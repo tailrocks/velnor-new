@@ -33,8 +33,153 @@ fn runtime_identity_must_be_private_and_at_the_run_owned_path() {
 
     let path = fixture.runtime_identity_path.clone();
     fs::set_permissions(&path, fs::Permissions::from_mode(0o644))
-        .expect("The test could not set the runtime identity file permissions.");
+        .expect("make runtime identity too broad");
     assert!(bind_result(&fixture.request()).is_err());
+}
+
+#[test]
+fn observer_rejects_a_tool_home_outside_the_run_owned_root_before_probing() {
+    let fixture = Fixture::cold();
+    let mut request = fixture.request();
+    request.runner_os = match std::env::consts::OS {
+        "linux" => "Linux",
+        "macos" => "macOS",
+        "windows" => "Windows",
+        _ => panic!("supported host required"),
+    };
+    request.runner_arch = match std::env::consts::ARCH {
+        "x86_64" => "X64",
+        "aarch64" => "ARM64",
+        "x86" => "X86",
+        _ => panic!("supported host architecture required"),
+    };
+    let mut reads = Vec::new();
+    let error = observe_qualification_cache_runtime(&request, |name| {
+        reads.push(name.to_owned());
+        match name {
+            "MISE_DATA_DIR" => Some(
+                fixture
+                    .runner_temp
+                    .path()
+                    .join("unowned-mise")
+                    .display()
+                    .to_string(),
+            ),
+            "RUSTUP_HOME" | "MISE_RUSTUP_HOME" => Some(
+                fixture
+                    .runner_temp
+                    .path()
+                    .join("velnor/rustup")
+                    .display()
+                    .to_string(),
+            ),
+            _ => None,
+        }
+    })
+    .expect_err("a tool home outside the job-owned root must fail");
+
+    assert!(
+        error
+            .to_string()
+            .contains("qualification_runtime_tool_home_mismatch"),
+        "the home check must reject before a runtime probe: {error}"
+    );
+    assert_eq!(reads, ["MISE_DATA_DIR"]);
+}
+
+#[test]
+fn inactive_task_result_requires_the_canonical_absent_identity_path() {
+    let fixture = Fixture::cold();
+    let base = fixture.request();
+    let filename = qualification_cache_runtime_identity_filename(&fixture.owner_id, "task_result")
+        .expect("task result identity filename");
+    let path = fixture
+        .runner_temp
+        .path()
+        .join("velnor")
+        .join(&fixture.plan.run_key)
+        .join(filename);
+    assert!(!path.exists());
+    let request = QualificationCacheBindingRequest {
+        layer: "task_result",
+        runtime_identity_path: &path,
+        ..base
+    };
+    let mut probes = Vec::new();
+    let observed_path = observe_qualification_cache_runtime(&request, |name| {
+        probes.push(name.to_owned());
+        Some("unexpected-probe-value".to_owned())
+    })
+    .expect("inactive layer returns its canonical identity path without probing");
+    assert_eq!(observed_path, path.display().to_string());
+    assert!(
+        probes.is_empty(),
+        "inactive layer must not probe runtime facts"
+    );
+    assert!(
+        !path.exists(),
+        "inactive layer must not persist an identity file"
+    );
+    let outputs = bind(&request);
+    assert!(!outputs.active);
+    assert!(outputs.restore_key.is_none());
+    assert!(outputs.save_key.is_none());
+
+    std::fs::write(&path, b"{}").expect("unexpected inactive identity");
+    assert!(bind_result(&request).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn active_post_import_binding_requires_the_same_runtime_identity() {
+    let fixture = Fixture::cold();
+    let base = fixture.request();
+    let after_name =
+        qualification_cache_runtime_after_import_filename(&fixture.owner_id, &fixture.layer)
+            .expect("post-import identity filename");
+    let after_path = fixture
+        .runner_temp
+        .path()
+        .join("velnor")
+        .join(&fixture.plan.run_key)
+        .join(after_name);
+    std::fs::copy(&fixture.runtime_identity_path, &after_path)
+        .expect("copy matching post-import identity");
+    std::fs::set_permissions(&after_path, fs::Permissions::from_mode(0o600))
+        .expect("post-import identity permissions");
+    let request = QualificationCacheBindingRequest {
+        runtime_identity_path: &after_path,
+        ..base
+    };
+    assert!(bind_result(&request).is_ok());
+
+    let directive: QualificationCacheDirective =
+        serde_json::from_str(&fixture.directive_json).expect("directive");
+    let requirements = directive
+        .owner_layer(
+            &fixture.owner_id,
+            parse_layer(&fixture.layer).expect("layer"),
+        )
+        .and_then(|layer| layer.runtime.as_ref())
+        .expect("runtime requirements");
+    let mut changed = runtime_identity(requirements);
+    let host = changed
+        .abi
+        .iter_mut()
+        .find_map(|fact| match fact {
+            QualificationRuntimeAbiObservation::Host { kernel, .. } => Some(kernel),
+            _ => None,
+        })
+        .expect("host ABI observation");
+    *host = "6.13.0".to_owned();
+    fs::write(
+        &after_path,
+        canonical_json_str(&changed).expect("changed identity JSON"),
+    )
+    .expect("changed post-import identity");
+    fs::set_permissions(&after_path, fs::Permissions::from_mode(0o600))
+        .expect("changed identity permissions");
+    assert!(bind_result(&request).is_err());
 }
 
 #[cfg(unix)]
@@ -46,14 +191,9 @@ fn runtime_identity_symlinks_are_rejected_without_reading_the_target() {
         .runner_temp
         .path()
         .join("runtime-identity-target.json");
-    fs::write(
-        &target,
-        fs::read(&path).expect("The test could not read the original runtime identity file."),
-    )
-    .expect("The test could not write the runtime identity target file.");
-    fs::remove_file(&path).expect("The test could not remove the original runtime identity file.");
-    std::os::unix::fs::symlink(target, &path)
-        .expect("The test could not create the runtime identity symbolic link.");
+    fs::write(&target, fs::read(&path).expect("identity source")).expect("write identity target");
+    fs::remove_file(&path).expect("remove identity source");
+    std::os::unix::fs::symlink(target, &path).expect("identity symlink");
 
     assert!(bind_result(&fixture.request()).is_err());
 }
@@ -186,170 +326,5 @@ fn dispatch_source_ref_and_attempt_mismatches_fail_closed() {
     assert!(bind_result(&request).is_err());
 }
 
-#[test]
-fn trusted_plan_and_symlink_plan_fail_closed() {
-    let fixture = Fixture::cold();
-    let mut plan = fixture.plan.clone();
-    plan.trust = Trust::Trusted;
-    fixture.write_plan(&plan);
-    assert!(bind_result(&fixture.request()).is_err());
-
-    let plan = fixture.plan.clone();
-    let run_dir = fixture
-        .runner_temp
-        .path()
-        .join("velnor")
-        .join(&plan.run_key);
-    let plan_path = run_dir.join("plan.json");
-    let target = fixture.runner_temp.path().join("plan-target.json");
-    fs::write(&target, serde_json::to_vec(&plan).expect("plan JSON")).expect("target plan");
-    fs::remove_file(&plan_path).expect("remove plan");
-    #[cfg(unix)]
-    std::os::unix::fs::symlink(&target, &plan_path).expect("symlink plan");
-    assert!(bind_result(&fixture.request()).is_err());
-}
-
-#[cfg(unix)]
-#[test]
-fn symlink_directive_fails_closed() {
-    let fixture = Fixture::cold();
-    let run_dir = fixture
-        .runner_temp
-        .path()
-        .join("velnor")
-        .join(&fixture.plan.run_key);
-    let directive_path = run_dir.join(QUALIFICATION_CACHE_DIRECTIVE_FILENAME);
-    let target = fixture.runner_temp.path().join("directive-target.json");
-    fs::write(&target, &fixture.directive_json).expect("directive target");
-    fs::remove_file(&directive_path).expect("remove directive");
-    std::os::unix::fs::symlink(&target, &directive_path).expect("directive symlink");
-
-    assert!(bind_result(&fixture.request()).is_err());
-}
-
-#[test]
-fn missing_warm_predecessor_artifact_fails_closed() {
-    let fixture = Fixture::warm_without_admission();
-    let request = fixture.request();
-    assert!(bind_result(&request).is_err());
-}
-
-#[test]
-fn scale_set_without_configured_runner_image_source_fails_before_projection_read() {
-    let fixture = Fixture::cold();
-    let mut plan = fixture.plan.clone();
-    let selector = ScaleSetSelector::try_new(
-        "ubuntu-26.04-scale-set",
-        &["velnor".to_owned(), "ubuntu-26.04-scale-set".to_owned()],
-    )
-    .expect("Scale Set selector");
-    let planned = PlannedPlatform::new(&selector.token(), "x86_64-unknown-linux-gnu")
-        .expect("Scale Set platform");
-    let entry = &mut plan.matrix.include[0];
-    entry.planned_platform = planned.clone();
-    let toolchain_inputs = entry
-        .toolchain_inputs
-        .as_ref()
-        .expect("plan toolchain inputs");
-    entry.cache_ids = Some(
-        EntryCacheIds::new(
-            &digest_b3(b"workspace"),
-            &digest_b3(b"lane"),
-            &planned.platform_id,
-            &toolchain_id(toolchain_inputs).expect("toolchain identity"),
-            &digest_b3(b"cache format"),
-        )
-        .expect("cache identity"),
-    );
-    fixture.write_plan(&plan);
-
-    let error = bind_result(&fixture.request()).expect_err("Scale Set image source is absent");
-    assert!(
-        error
-            .to_string()
-            .contains("qualification_guest_image_source_authority_missing"),
-        "unexpected error: {error}"
-    );
-}
-
-#[test]
-fn guest_projection_uses_runner_image_source_separate_from_consumer_source() {
-    let consumer_source = "a".repeat(40);
-    let runner_image_source = "b".repeat(40);
-    let selector = ScaleSetSelector::try_new(
-        "ubuntu-26.04-scale-set",
-        &["velnor".to_owned(), "ubuntu-26.04-scale-set".to_owned()],
-    )
-    .expect("Scale Set selector");
-    let image = || QualificationRuntimeImageDigests {
-        archive_sha256: "1".repeat(64),
-        archive_index_digest: "2".repeat(64),
-        image_index_digest: None,
-        manifest_digest: format!("sha256:{}", "3".repeat(64)),
-        config_digest: format!("sha256:{}", "4".repeat(64)),
-    };
-    let projection = GuestImageProjection {
-        schema: GUEST_IMAGE_PROJECTION_SCHEMA.to_owned(),
-        source_sha: runner_image_source.clone(),
-        guest_platform: "linux/amd64".to_owned(),
-        scale_set: QualificationRuntimeScaleSet {
-            name: selector.name().to_owned(),
-            labels: selector.labels().to_vec(),
-        },
-        images: GuestImageDigests {
-            runner: image(),
-            dind: image(),
-        },
-    };
-
-    let identity = verified_scale_set_image_identity(&projection, &runner_image_source, &selector)
-        .expect("configured runner image source matches projection");
-    let QualificationRuntimeImageIdentity::ScaleSet { source_sha, .. } = identity else {
-        panic!("Scale Set projection creates Scale Set identity");
-    };
-    assert_eq!(source_sha, runner_image_source);
-    assert_ne!(source_sha, consumer_source);
-    assert!(verified_scale_set_image_identity(&projection, &consumer_source, &selector).is_err());
-}
-
-#[test]
-fn unknown_matrix_key_and_unknown_layer_fail_closed() {
-    let fixture = Fixture::cold();
-    let mut request = fixture.request();
-    request.matrix_key = "matrix-unknown";
-    assert!(bind_result(&request).is_err());
-
-    let mut request = fixture.request();
-    request.layer = "future_layer";
-    assert!(bind_result(&request).is_err());
-}
-
-#[cfg(unix)]
-#[test]
-fn plan_and_admission_fifos_are_rejected_without_blocking() {
-    let temp = tempfile::tempdir().expect("temporary directory");
-    for name in [
-        "plan.json",
-        crate::qualification_resolver::QUALIFICATION_ADMISSION_FILENAME,
-    ] {
-        let fifo = temp.path().join(name);
-        let status = std::process::Command::new("mkfifo")
-            .arg(&fifo)
-            .status()
-            .expect("mkfifo");
-        assert!(status.success(), "mkfifo returned {status}");
-
-        let (sender, receiver) = mpsc::channel();
-        std::thread::spawn(move || {
-            let result = read_owned_runner_file(&fifo, 128);
-            sender
-                .send(result.is_err())
-                .expect("test is waiting for the FIFO result");
-        });
-        assert!(
-            receiver
-                .recv_timeout(Duration::from_secs(2))
-                .expect("FIFO open must not block")
-        );
-    }
-}
+#[path = "qualification_cache_runtime_cases_plan_tests.rs"]
+mod plan;

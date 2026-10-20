@@ -1,4 +1,4 @@
-//! Runtime identity evidence and exact cache key binding.
+//! Runtime identity facts and cache key binding.
 
 use serde::{Deserialize, Serialize};
 
@@ -7,7 +7,7 @@ use crate::cachekey::ToolchainInputs;
 use crate::canonical::validate_digest;
 use crate::errors::ContractError;
 
-/// Runtime fact a cache producer must collect before binding a key.
+/// Runtime data that a cache producer must collect before it binds a key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum QualificationRuntimeIdentityField {
@@ -165,13 +165,13 @@ pub enum QualificationRuntimeAbiObservation {
     },
 }
 
-/// Runtime facts needed to bind a logical slot to one exact cache key.
+/// Runtime facts needed to bind one logical slot to one cache key.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct QualificationRuntimeIdentity {
     /// Runtime OS, architecture, label, image and target evidence.
     pub platform: QualificationRuntimePlatform,
-    /// Exact tool versions and executable bytes observed after trusted setup.
+    /// Tool versions and executable digests observed after the pinned tools are set up.
     pub tools: Vec<QualificationRuntimeToolObservation>,
     /// ABI facts reported by the host and selected runtime adapters.
     pub abi: Vec<QualificationRuntimeAbiObservation>,
@@ -183,7 +183,7 @@ pub struct QualificationRuntimeIdentity {
 pub struct QualificationRuntimeIdentityRequirements {
     /// Logical runner label from the plan.
     pub runner_label: String,
-    /// Exact hosted label or Scale Set selector from the plan lane.
+    /// Specified hosted label or Scale Set selector from the plan lane.
     pub runs_on: String,
     /// Expected Velnor source revision for a Scale Set guest image.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -192,13 +192,14 @@ pub struct QualificationRuntimeIdentityRequirements {
     pub target: String,
     /// Toolchain digest recorded by the matrix entry.
     pub toolchain_id: String,
-    /// Exact pins and driver inputs behind `toolchain_id`.
+    /// Specified pins and driver inputs behind `toolchain_id`.
     pub toolchain_inputs: ToolchainInputs,
     /// Cache-format digest recorded by the matrix entry.
     pub cache_format_id: String,
     /// ABI identity must be present and match the admitted predecessor.
     pub require_abi: bool,
-    /// Selected driver/configuration digest from the matrix entry.
+    /// Digest for one lane's driver and configuration, or for the sorted
+    /// (`matrix_key`, `driver_id`) pairs of one cache owner.
     pub driver_id: String,
     /// Fields that must be present in runtime evidence before cache access.
     pub required_fields: Vec<QualificationRuntimeIdentityField>,

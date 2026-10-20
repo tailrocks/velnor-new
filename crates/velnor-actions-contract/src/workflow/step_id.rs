@@ -2,95 +2,13 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::qualification_cache_lineage::QualificationCacheLayer;
-
-/// Step ID for one job, cache layer, and action stage.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum QualificationCacheStepStage {
-    /// Connect one job ID and cache layer to the checked directive.
-    Bind,
-    /// Restore the exact archive for this job and cache layer.
-    Restore,
-    /// Save the exact archive for this job and cache layer.
-    Save,
-    /// Read the runtime identity of one job's cache layer.
-    RuntimeIdentity,
-    /// Read the exact roots for one job's cache layer.
-    Roots,
-}
-
-/// Step ID for one job, cache layer, and action stage.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct QualificationCacheStepId {
-    stage: QualificationCacheStepStage,
-    layer: QualificationCacheLayer,
-    owner_tag: u64,
-}
-
-impl QualificationCacheStepId {
-    /// Build an output ID from a checked job ID, cache layer, and action stage.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when the job ID does not use the required format.
-    pub fn new(
-        stage: QualificationCacheStepStage,
-        layer: QualificationCacheLayer,
-        owner_id: &str,
-    ) -> Result<Self, crate::errors::ContractError> {
-        crate::workflow::validate_job_id(owner_id)?;
-        let digest = blake3::hash(owner_id.as_bytes());
-        let mut tag = [0_u8; 8];
-        tag.copy_from_slice(&digest.as_bytes()[..8]);
-        Ok(Self {
-            stage,
-            layer,
-            owner_tag: u64::from_be_bytes(tag),
-        })
-    }
-
-    /// Return the GitHub Actions step ID.
-    #[must_use]
-    pub fn as_string(self) -> String {
-        format!(
-            "qualification-cache-{}-{}-{:016x}",
-            self.stage.as_str(),
-            self.layer.as_str(),
-            self.owner_tag
-        )
-    }
-
-    /// Action stage named by this ID.
-    #[must_use]
-    pub const fn stage(self) -> QualificationCacheStepStage {
-        self.stage
-    }
-
-    /// Check whether this ID was made for the given job ID.
-    #[must_use]
-    pub fn belongs_to(self, owner_id: &str) -> bool {
-        let digest = blake3::hash(owner_id.as_bytes());
-        let mut tag = [0_u8; 8];
-        tag.copy_from_slice(&digest.as_bytes()[..8]);
-        self.owner_tag == u64::from_be_bytes(tag)
-    }
-}
-
-impl QualificationCacheStepStage {
-    /// Fixed text for this action stage.
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Bind => "bind",
-            Self::Restore => "restore",
-            Self::Save => "save",
-            Self::RuntimeIdentity => "runtime-identity",
-            Self::Roots => "roots",
-        }
-    }
-}
+mod qualification_cache;
+pub use qualification_cache::{
+    QualificationCacheCompositeId, QualificationCacheCompositePhase, QualificationCacheStepId,
+    QualificationCacheStepStage, qualification_cache_after_save_input_names,
+    qualification_cache_after_save_output_names, qualification_cache_before_save_output_names,
+    qualification_cache_composite_output_names, qualification_cache_layer_prepare_input_names,
+};
 
 /// Stable GitHub Actions id for a step whose outputs or outcome have consumers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -126,10 +44,14 @@ pub enum StepId {
     ToolsRestore,
     /// Private-source App token mint whose output feeds the fetch and revoke steps.
     DepsToken,
-    /// Qualification cache action ID for one lane and layer.
+    /// Lane/layer owner for a qualification cache action.
     QualificationCache(QualificationCacheStepId),
-    /// File with runtime identity data used to bind the qualification cache.
+    /// Typed output owner for one grouped qualification-cache composite.
+    QualificationCacheComposite(QualificationCacheCompositeId),
+    /// Runtime identity file consumed by qualification cache binding.
     QualificationRuntimeIdentity,
+    /// Qualification receipt file consumed by the Required artifact upload.
+    QualificationCacheReceipt,
 }
 
 impl StepId {
@@ -153,15 +75,18 @@ impl StepId {
             Self::ToolsRestore => "tools-restore",
             Self::DepsToken => "deps-token",
             Self::QualificationCache(_) => "qualification-cache",
+            Self::QualificationCacheComposite(_) => "qualification-cache-composite",
             Self::QualificationRuntimeIdentity => "qualification-runtime-identity",
+            Self::QualificationCacheReceipt => "qualification-cache-receipt",
         }
     }
 
-    /// Return the full YAML ID, including the job and cache layer.
+    /// Render the complete YAML ID, including a typed owner/layer identity.
     #[must_use]
     pub fn as_string(self) -> String {
         match self {
             Self::QualificationCache(identity) => identity.as_string(),
+            Self::QualificationCacheComposite(identity) => identity.as_string(),
             fixed => fixed.as_str().to_owned(),
         }
     }

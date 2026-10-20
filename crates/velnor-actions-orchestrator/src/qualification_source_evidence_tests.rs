@@ -4,14 +4,15 @@ use std::collections::BTreeMap;
 use std::fs;
 
 use tempfile::TempDir;
+use velnor_actions_contract::cachekey::ToolchainInputs;
 use velnor_actions_contract::workflow::{
-    ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, ObligationDecision, Plan, PlanGenerator,
-    PlanMatrix, PlanObligation, PlanRunner, QualificationCacheProducerContext,
+    EntryCacheIds, ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, ObligationDecision, Plan,
+    PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, QualificationCacheProducerContext,
     QualificationDispatch, QualificationDispatchMode, QualificationPhase, QualificationRunRef,
     TaskStatus, Trust, WorkflowEvent,
 };
 use velnor_actions_contract::{
-    PlannedPlatform, RunnerSelection, canonical_json_bytes, plan_id_for_run,
+    PlannedPlatform, RunnerSelection, canonical_json_bytes, digest_b3, plan_id_for_run,
 };
 
 use super::reports::read_successful_lane_reports;
@@ -20,6 +21,8 @@ use super::{SOURCE_EVIDENCE_FILENAME, validate_runner_directories};
 use crate::qualification_cache_runtime::closure::ObservedLaneClosure;
 use crate::task_report::{single_task_aggregate, terminal_task_report, write_entry_reports};
 
+#[path = "qualification_source_evidence_directory_tests.rs"]
+mod directory_tests;
 #[path = "qualification_source_evidence_group_tests.rs"]
 mod group_tests;
 #[path = "qualification_source_evidence_mode_tests.rs"]
@@ -38,7 +41,7 @@ fn entry_and_obligation() -> (MatrixEntry, PlanObligation) {
     let task_digest = digest(1);
     let input_digest = digest(2);
     let closure_digest = digest(3);
-    let entry = MatrixEntry::derive(
+    let mut entry = MatrixEntry::derive(
         "rust",
         TASK_ID,
         "true",
@@ -56,6 +59,26 @@ fn entry_and_obligation() -> (MatrixEntry, PlanObligation) {
         PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu").expect("platform"),
     )
     .expect("entry");
+    let toolchain_inputs = ToolchainInputs {
+        tools: vec!["rust@1.98.1".to_owned()],
+        components: vec!["clippy".to_owned(), "rustfmt".to_owned()],
+        compile_driver: "cargo".to_owned(),
+        test_runner: "cargo_test".to_owned(),
+    };
+    let toolchain_id = velnor_actions_contract::cachekey::toolchain_id(&toolchain_inputs)
+        .expect("toolchain identity");
+    entry.toolchain_id = Some(toolchain_id.clone());
+    entry.toolchain_inputs = Some(toolchain_inputs);
+    entry.cache_ids = Some(
+        EntryCacheIds::new(
+            &digest_b3(b"workspace"),
+            &digest_b3(b"lane"),
+            &entry.planned_platform.platform_id,
+            &toolchain_id,
+            &digest_b3(b"cache format"),
+        )
+        .expect("cache IDs"),
+    );
     let obligation = PlanObligation {
         task_id: TASK_ID.to_owned(),
         decision: ObligationDecision::Execute,
@@ -75,7 +98,7 @@ fn entry_and_obligation() -> (MatrixEntry, PlanObligation) {
     (entry, obligation)
 }
 
-fn fixture() -> (TempDir, Plan, MatrixEntry, PlanObligation) {
+pub(super) fn fixture() -> (TempDir, Plan, MatrixEntry, PlanObligation) {
     let (entry, obligation) = entry_and_obligation();
     let source = "0123456789abcdef0123456789abcdef01234567".to_owned();
     let plan = Plan {
@@ -126,14 +149,17 @@ fn fixture() -> (TempDir, Plan, MatrixEntry, PlanObligation) {
     };
     plan.validate().expect("plan validates");
     (
-        TempDir::new().expect("runner temp"),
+        TempDir::new_in(
+            fs::canonicalize(std::env::temp_dir()).expect("canonical system temp directory"),
+        )
+        .expect("runner temp"),
         plan,
         entry,
         obligation,
     )
 }
 
-fn write_reports(temp: &TempDir, plan: &Plan, entry: &MatrixEntry, exit_code: i32) {
+pub(super) fn write_reports(temp: &TempDir, plan: &Plan, entry: &MatrixEntry, exit_code: i32) {
     let task = terminal_task_report(plan, entry, &entry.task_digest, exit_code, Some(1))
         .expect("task report");
     let matrix = single_task_aggregate(plan, entry, &task).expect("matrix report");
@@ -196,7 +222,36 @@ fn noncanonical_or_mismatched_matrix_report_is_rejected() {
 fn source_sidecar_records_observations_but_never_claims_cache_completion() {
     let (temp, plan, entry, obligation) = fixture();
     write_reports(&temp, &plan, &entry, 0);
-    let reports = read_successful_lane_reports(temp.path(), &plan, &entry, &entry.task_digest)
+    let (value, _) = write_fixture_sidecar(&temp, &plan, &entry, &obligation);
+    assert_eq!(value.evidence.source_sha, plan.head);
+    assert_eq!(
+        value.evidence.closure.observed_input_digest,
+        entry.input_digest
+    );
+    assert!(!value.evidence.cache_evidence_complete);
+    let path = temp
+        .path()
+        .join("velnor")
+        .join(RUN_KEY)
+        .join(&entry.matrix_key)
+        .join(SOURCE_EVIDENCE_FILENAME);
+    let bytes = fs::read(path).expect("source evidence file");
+    assert_eq!(
+        canonical_json_bytes(&value).expect("required source evidence file JSON"),
+        bytes
+    );
+}
+
+pub(super) fn write_fixture_sidecar(
+    temp: &TempDir,
+    plan: &Plan,
+    entry: &MatrixEntry,
+    obligation: &PlanObligation,
+) -> (
+    QualificationSourceEvidenceDocument,
+    super::context::AuthenticatedProducerContext,
+) {
+    let reports = read_successful_lane_reports(temp.path(), plan, entry, &entry.task_digest)
         .expect("reports");
     let producer = QualificationCacheProducerContext {
         mode: QualificationDispatchMode::Controlled,
@@ -229,8 +284,8 @@ fn source_sidecar_records_observations_but_never_claims_cache_completion() {
 
     super::write_sidecar(
         temp.path(),
-        &plan,
-        &entry,
+        plan,
+        entry,
         &authenticated,
         &plan.generator,
         &observed,
@@ -245,18 +300,10 @@ fn source_sidecar_records_observations_but_never_claims_cache_completion() {
         .join(&entry.matrix_key)
         .join(SOURCE_EVIDENCE_FILENAME);
     let bytes = fs::read(path).expect("source evidence file");
-    let value: QualificationSourceEvidenceDocument =
-        serde_json::from_slice(&bytes).expect("source evidence file JSON");
-    assert_eq!(value.evidence.source_sha, plan.head);
-    assert_eq!(
-        value.evidence.closure.observed_input_digest,
-        entry.input_digest
-    );
-    assert!(!value.evidence.cache_evidence_complete);
-    assert_eq!(
-        canonical_json_bytes(&value).expect("required source evidence file JSON"),
-        bytes
-    );
+    (
+        serde_json::from_slice(&bytes).expect("source evidence file JSON"),
+        authenticated,
+    )
 }
 
 #[test]
@@ -323,57 +370,5 @@ fn source_sidecar_refuses_a_second_write() {
         error
             .to_string()
             .contains("qualification_source_evidence_exists")
-    );
-}
-
-#[test]
-fn staged_tree_directory_links_are_rejected() {
-    let (temp, _, _, _) = fixture();
-    fs::create_dir(temp.path().join("velnor")).expect("parent");
-    #[cfg(unix)]
-    std::os::unix::fs::symlink(temp.path(), temp.path().join("velnor/r720-a1"))
-        .expect("run symlink");
-    #[cfg(unix)]
-    let error =
-        validate_runner_directories(temp.path(), RUN_KEY, None).expect_err("run symlink rejected");
-    #[cfg(unix)]
-    assert!(
-        error
-            .to_string()
-            .contains("qualification_source_directory_untrusted")
-    );
-}
-
-#[cfg(unix)]
-#[test]
-fn matrix_and_task_directories_cannot_redirect_report_reads() {
-    use std::os::unix::fs::symlink;
-
-    let (matrix_temp, _, entry, _) = fixture();
-    let run_dir = matrix_temp.path().join("velnor").join(RUN_KEY);
-    fs::create_dir_all(&run_dir).expect("run directory");
-    symlink(matrix_temp.path(), run_dir.join(&entry.matrix_key)).expect("matrix symlink");
-    let error = validate_runner_directories(matrix_temp.path(), RUN_KEY, Some(&entry.matrix_key))
-        .expect_err("matrix symlink is rejected");
-    assert!(
-        error
-            .to_string()
-            .contains("qualification_source_directory_untrusted")
-    );
-
-    let (task_temp, _, entry, _) = fixture();
-    let matrix_dir = task_temp
-        .path()
-        .join("velnor")
-        .join(RUN_KEY)
-        .join(&entry.matrix_key);
-    fs::create_dir_all(&matrix_dir).expect("matrix directory");
-    symlink(task_temp.path(), matrix_dir.join("tasks")).expect("task symlink");
-    let error = validate_runner_directories(task_temp.path(), RUN_KEY, Some(&entry.matrix_key))
-        .expect_err("task symlink is rejected");
-    assert!(
-        error
-            .to_string()
-            .contains("qualification_source_directory_untrusted")
     );
 }

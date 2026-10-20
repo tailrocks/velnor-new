@@ -9,6 +9,9 @@
 
 use crate::RenderError;
 
+#[path = "expressions_qualification_cache.rs"]
+mod qualification_cache;
+
 /// Reject `${{` plus control characters in a step display name.
 ///
 /// Shared by shell, action, and internal constructors: names are fixed
@@ -78,7 +81,7 @@ const ENV_EXPRESSIONS: [&str; 16] = [
 /// Run-scoped names, runner paths, matrix coordinates, the
 /// push-gated cache-save flag, and runtime cache identities. Notably absent: every `secrets.*` handle (rejected
 /// separately as `secret_in_action_input`).
-const WITH_EXPRESSIONS: [&str; 18] = [
+const WITH_EXPRESSIONS: [&str; 19] = [
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
@@ -97,17 +100,8 @@ const WITH_EXPRESSIONS: [&str; 18] = [
     "steps.cache-keys.outputs.sources_restore_keys",
     "needs.plan.outputs.sources_key",
     "needs.plan.outputs.sources_restore_keys",
+    "steps.qualification-cache-receipt.outputs.receipt_path",
 ];
-
-/// True for an output of the image publication assemble step.
-///
-/// Digests only: the step id and the output names are generator constants,
-/// so no other step output can reach an attestation input.
-fn is_image_publish_output(inner: &str) -> bool {
-    inner
-        .strip_prefix("steps.image.outputs.")
-        .is_some_and(|name| matches!(name, "digest" | "digest_amd64" | "digest_arm64"))
-}
 
 /// True for a Plan-published per-root provider key (`tofu_providers_key_<n>`).
 fn is_tofu_providers_plan_key(inner: &str) -> bool {
@@ -159,34 +153,79 @@ fn is_hash_files(inner: &str) -> bool {
 /// Reject unlisted `${{ }}` spans in one shell-step env value.
 /// # Errors
 pub(crate) fn check_env_value(key: &str, value: &str) -> Result<(), RenderError> {
-    check_env_value_with_scope(key, value, false)
+    check_env_value_with_scope(key, value, false, false)
 }
 
 /// Validate env expressions scoped to a generated composite action body.
 pub(crate) fn check_composite_env_value(key: &str, value: &str) -> Result<(), RenderError> {
-    check_env_value_with_scope(key, value, true)
+    check_env_value_with_scope(key, value, true, false)
 }
 
-fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result<(), RenderError> {
+/// Validate one closed qualification-cache operation environment value.
+pub(crate) fn check_qualification_cache_env_value(
+    key: &str,
+    value: &str,
+) -> Result<(), RenderError> {
+    check_env_value_with_scope(key, value, false, true)
+}
+
+pub(crate) fn check_composite_qualification_cache_env_value(
+    key: &str,
+    value: &str,
+) -> Result<(), RenderError> {
+    check_env_value_checked(key, value, true, true)
+}
+
+fn check_env_value_with_scope(
+    key: &str,
+    value: &str,
+    composite: bool,
+    qualification_cache: bool,
+) -> Result<(), RenderError> {
+    if !composite && !qualification_cache {
+        return check_env_value_standard(key, value);
+    }
+    check_env_value_checked(key, value, composite, qualification_cache)
+}
+
+fn check_env_value_standard(key: &str, value: &str) -> Result<(), RenderError> {
+    check_env_value_checked(key, value, false, false)
+}
+
+fn check_env_value_checked(
+    key: &str,
+    value: &str,
+    composite: bool,
+    qualification_cache: bool,
+) -> Result<(), RenderError> {
     let Some(spans) = expression_spans(value) else {
         return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
     };
     for inner in spans {
         let composite_input = composite
-            && inner.strip_prefix("inputs.").is_some_and(|name| {
+            && (inner.strip_prefix("inputs.").is_some_and(|name| {
                 name == crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT
                     || name == "scale-set-image-source-sha"
                     || name == "helper-sha256"
                     || is_task_execution_input(name)
-            });
+            }) || qualification_cache::is_composite_input(key, inner)
+                || qualification_cache::is_composite_boundary_output(key, inner));
         let workflow_input = !composite && is_workflow_input(inner);
-        if !ENV_EXPRESSIONS.contains(&inner)
-            && !is_matrix_field(inner)
-            && !composite_input
-            && !workflow_input
-            && !is_github_token_secret(inner)
-            && !is_private_env_binding(key, inner)
-        {
+        let accepted = if qualification_cache {
+            qualification_cache::is_env_output(key, inner)
+                || qualification_cache::is_operation_output(key, inner)
+                || qualification_cache::is_composite_boundary_output(key, inner)
+                || (composite && composite_input)
+        } else {
+            ENV_EXPRESSIONS.contains(&inner)
+                || is_matrix_field(inner)
+                || composite_input
+                || workflow_input
+                || is_github_token_secret(inner)
+                || is_private_env_binding(key, inner)
+                || qualification_cache::is_env_output(key, inner)
+        };
+        if !accepted {
             return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
         }
     }
@@ -268,6 +307,14 @@ pub(crate) fn check_with_key(key: &str) -> Result<(), RenderError> {
 /// never legitimate input content.
 /// # Errors
 pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError> {
+    check_with_value_scoped(key, value, false)
+}
+
+pub(crate) fn check_composite_with_value(key: &str, value: &str) -> Result<(), RenderError> {
+    check_with_value_scoped(key, value, true)
+}
+
+fn check_with_value_scoped(key: &str, value: &str, composite: bool) -> Result<(), RenderError> {
     if value.chars().any(|ch| ch == '\0' || ch == '\r') {
         return Err(RenderError::BadActionRef(format!("bad_with_value:{key}")));
     }
@@ -282,7 +329,15 @@ pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError
             && !is_hash_files(inner)
             && !is_tofu_providers_plan_key(inner)
             && !is_private_mint_input(key, inner)
-            && !is_image_publish_output(inner)
+            && !qualification_cache::is_action_output(key, inner)
+            && !(composite && qualification_cache::is_composite_with_input(key, inner))
+            && !(key.starts_with("cache_")
+                && qualification_cache::is_prepare_composite_output(inner))
+            && !qualification_cache::is_composite_boundary_output(key, inner)
+            && !qualification_cache::is_typed_save_outcome_input(key, inner)
+            && !qualification_cache::is_prepare_save_output(key, inner)
+            && !qualification_cache::is_clock_output(key, inner)
+            && !qualification_cache::is_composite_output_map(key, inner)
         {
             return Err(RenderError::BadActionRef(format!(
                 "bad_with_expression:{key}"
@@ -293,63 +348,5 @@ pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{check_composite_env_value, check_with_value};
-
-    #[test]
-    fn check_with_value_accepts_glob_hash_files() {
-        assert!(
-            check_with_value(
-                "cache-key",
-                "prefix-${{ hashFiles('**/Cargo.lock','**/Cargo.toml') }}"
-            )
-            .is_ok()
-        );
-    }
-
-    #[test]
-    fn cache_tar_launcher_accepts_only_its_fixed_digest_inputs() {
-        assert!(
-            check_with_value(
-                "helper-sha256",
-                "${{ steps.preseed-stage.outputs.helper-sha256 }}"
-            )
-            .is_ok()
-        );
-        assert!(
-            check_composite_env_value("VELNOR_CACHE_TAR_SHA256", "${{ inputs.helper-sha256 }}")
-                .is_ok()
-        );
-        assert!(
-            check_composite_env_value("VELNOR_CACHE_TAR_SHA256", "${{ inputs.other }}").is_err()
-        );
-    }
-
-    #[test]
-    fn check_with_value_accepts_quoted_hash_file_exclusions() {
-        assert!(
-            check_with_value(
-                "cache-key",
-                "prefix-${{ hashFiles('**/Cargo.toml','!target/**') }}"
-            )
-            .is_ok()
-        );
-    }
-
-    #[test]
-    fn check_with_value_rejects_nonliteral_hash_file_arguments() {
-        for arguments in [
-            "",
-            "''",
-            "'!'",
-            "'!!target/**'",
-            "!'Cargo.toml'",
-            "'Cargo.toml',",
-            "'Cargo.toml'||'other'",
-            "github.token",
-        ] {
-            let value = format!("prefix-${{{{ hashFiles({arguments}) }}}}");
-            assert!(check_with_value("cache-key", &value).is_err(), "{value}");
-        }
-    }
-}
+#[path = "expressions_tests.rs"]
+mod tests;

@@ -21,39 +21,13 @@ const QUALIFICATION_CACHE_OPERATIONS: &[&str] = &[
     "import-qualification-cache-payload-v1",
     "export-qualification-cache-payload-v1",
     "write-qualification-cache-receipt-v1",
+    "record-qualification-cache-owner-layer-v1",
+    "aggregate-qualification-cache-owner-v1",
 ];
 
 pub(crate) fn is_qualification_cache_operation(operation: &str) -> bool {
     QUALIFICATION_CACHE_OPERATIONS.contains(&operation)
 }
-
-pub(crate) fn validate_qualification_cache_env(
-    operation: &str,
-    step_env: &std::collections::BTreeMap<String, String>,
-) -> Result<(), RenderError> {
-    for (key, value) in step_env {
-        if key == "GH_TOKEN" {
-            if operation != "observe-qualification-cache-backend-v1"
-                || value != "${{ github.token }}"
-            {
-                return Err(RenderError::InvalidWorkflow(
-                    "qualification_cache_token_scope_invalid".to_owned(),
-                ));
-            }
-        } else if key != "VELNOR_QUALIFICATION_RUNTIME_IDENTITY_FILE"
-            && !key.starts_with("VELNOR_QUALIFICATION_CACHE_")
-        {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "qualification_cache_env_not_supported:{key}"
-            )));
-        }
-    }
-    Ok(())
-}
-
-#[cfg(test)]
-#[path = "document_steps_qualification_cache_tests.rs"]
-mod qualification_cache_tests;
 
 /// Split an internal operation into env op plus request-file target op.
 ///

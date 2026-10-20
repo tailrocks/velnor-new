@@ -1,8 +1,10 @@
-//! Closed private operation identities; no public dispatch aliases.
+//! Internal operation and validated request types.
+
+use std::path::PathBuf;
 
 /// Private operation selected by the gate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum InternalOp {
+pub(crate) enum InternalOp {
     /// Select the retained preview candidate for tap continuation.
     TapContinuation,
     /// Capture the independent review proposal.
@@ -39,6 +41,14 @@ pub(super) enum InternalOp {
     ResolveQualification,
     /// Select one cache layer for the validated qualification plan.
     BindQualificationCache,
+    /// Observe exact runtime identity for one generated cache owner.
+    ObserveQualificationCacheRuntime,
+    /// Observe one owner/layer's configured roots.
+    ObserveQualificationCacheRoots,
+    /// Persist one plan-bound physical owner/layer result.
+    RecordQualificationCacheOwnerLayer,
+    /// Combine all physical owner/layer records for one generated job.
+    AggregateQualificationCacheOwner,
     /// Validate one restored cache against the backend census.
     ObserveQualificationCacheBackend,
     /// Import one admitted qualification cache payload.
@@ -57,6 +67,12 @@ pub(super) enum InternalOp {
     PreflightNormalTofuCacheRestore,
     /// Record source and report observations for one Qualification lane.
     WriteQualificationSourceEvidence,
+    /// Validate downloaded producer evidence and write the final receipt.
+    WriteQualificationCacheReceipt,
+    /// Fetch private source with the installation token.
+    PrivateFetch,
+    /// Revoke the installation token after the private fetch.
+    PrivateRevoke,
     /// Data-only task execution record resolution for a generated wrapper.
     ResolveTaskExecution,
     /// Isolated, credentialed signing of a plan-bound package release.
@@ -69,10 +85,15 @@ pub(super) enum InternalOp {
     TapPrepare,
     /// Isolated App-authenticated PR writer for a validated tap candidate.
     TapWriter,
-    /// Fetch private source with the installation token.
-    PrivateFetch,
-    /// Revoke the installation token after the private fetch.
-    PrivateRevoke,
     /// Isolated exact-head App-authenticated tap promotion merge.
     TapMerge,
+}
+
+/// Validated private request: operation plus exact request-file path.
+#[derive(Debug)]
+pub(crate) struct InternalRequest {
+    /// Operation to run.
+    pub(crate) op: InternalOp,
+    /// Exact request-file path from the environment.
+    pub(crate) path: PathBuf,
 }

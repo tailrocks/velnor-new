@@ -166,6 +166,89 @@ fn physical_owner_rejects_members_with_different_platforms() {
     assert!(owner_for_plan(&plan, &owner_id).is_err());
 }
 
+#[test]
+fn owner_driver_digest_is_sorted_and_commits_each_member_driver() {
+    let plan = plan_with_two_owner_members();
+    let owner_id = plan.matrix.include[0].job_id.clone();
+    let owner = owner_for_plan(&plan, &owner_id).expect("The owner must exist.");
+    let requirements = owner_runtime_requirements(&plan, &owner)
+        .expect("The owner runtime requirements must be valid.")
+        .expect("The owner must have runtime requirements.");
+
+    let mut reordered = plan.clone();
+    reordered.matrix.include.reverse();
+    let reordered_owner = owner_for_plan(&reordered, &owner_id).expect("The owner must exist.");
+    assert_eq!(
+        requirements,
+        owner_runtime_requirements(&reordered, &reordered_owner)
+            .expect("The reordered owner requirements must be valid.")
+            .expect("The owner must have runtime requirements.")
+    );
+
+    let mut changed_driver = plan.clone();
+    changed_driver.matrix.include[0].adapter_metadata["compile_driver"] =
+        serde_json::json!("nextest");
+    let changed_owner = owner_for_plan(&changed_driver, &owner_id).expect("The owner must exist.");
+    assert_ne!(
+        requirements.driver_id,
+        owner_runtime_requirements(&changed_driver, &changed_owner)
+            .expect("The changed owner requirements must be valid.")
+            .expect("The owner must have runtime requirements.")
+            .driver_id
+    );
+}
+
+#[test]
+fn owner_rejects_duplicate_members_and_incompatible_toolchain_pins() {
+    let mut duplicate = plan_with_two_owner_members();
+    duplicate.matrix.include[1].matrix_key = duplicate.matrix.include[0].matrix_key.clone();
+    let owner_id = duplicate.matrix.include[0].job_id.clone();
+    assert!(owner_for_plan(&duplicate, &owner_id).is_err());
+
+    let mut changed_pin = plan_with_two_owner_members();
+    let entry = &mut changed_pin.matrix.include[1];
+    let changed_inputs = ToolchainInputs {
+        tools: vec!["rust@1.99.1".to_owned()],
+        components: vec!["clippy".to_owned(), "rustfmt".to_owned()],
+        compile_driver: "cargo".to_owned(),
+        test_runner: "cargo_test".to_owned(),
+    };
+    let changed_toolchain = toolchain_id(&changed_inputs).expect("toolchain identity");
+    let ids = entry.cache_ids.as_ref().expect("cache ids");
+    entry.cache_ids = Some(
+        EntryCacheIds::new(
+            ids.workspace_id(),
+            ids.lane_id(),
+            ids.platform_id(),
+            &changed_toolchain,
+            ids.cache_format_id(),
+        )
+        .expect("cache identity"),
+    );
+    entry.toolchain_inputs = Some(changed_inputs);
+    entry.toolchain_id = Some(changed_toolchain);
+    let owner = owner_for_plan(&changed_pin, &owner_id).expect("The owner must exist.");
+    assert!(owner_runtime_requirements(&changed_pin, &owner).is_err());
+}
+
+fn plan_with_two_owner_members() -> Plan {
+    let mut plan = plan_for_checkout(
+        "/workspace/velnor",
+        44,
+        "a".repeat(40),
+        "input-before",
+        "closure-before",
+    );
+    let mut second = plan.matrix.include[0].clone();
+    second.id = "stack:rust|task:demo-lint".to_owned();
+    second.matrix_key = "matrix-demo-lint".to_owned();
+    second.task_id = "demo-lint".to_owned();
+    second.input_digest = digest_b3(b"second member input");
+    second.adapter_metadata["task_mode"] = serde_json::json!("lint");
+    plan.matrix.include.push(second);
+    plan
+}
+
 fn plan_for_checkout(
     checkout: &str,
     run_id: u64,

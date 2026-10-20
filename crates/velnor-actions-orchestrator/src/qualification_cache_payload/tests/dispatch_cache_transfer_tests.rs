@@ -290,7 +290,7 @@ fn source_root_symlink_escape_is_rejected_before_stage_creation() {
     let temp = tempfile::tempdir().expect("runner temp");
     let runner_temp = runner_temp(&temp, "runner-temp");
     let roots = CacheRootSet {
-        matrix_key: "lane-1".to_owned(),
+        owner_id: "lane-1".to_owned(),
         layer: QualificationCacheLayer::MbxObjects,
         roots: vec![CacheRootObservation {
             id: CacheRootId::MbxActions,

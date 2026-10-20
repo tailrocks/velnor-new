@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
-    ACQUIRE_PREVIEW_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP, ADMIT_PREVIEW_AGGREGATE_OP,
+    ACQUIRE_PREVIEW_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP, ADMIT_PREVIEW_AGGREGATE_OP, CACHE_RECEIPT_OP,
     CAPTURE_REVIEW_COMPLETION_OP, EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP,
     EXECUTE_PREVIEW_PRODUCER_OP, FETCH_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, PLAN_OP,
     PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP, PRIVATE_REVOKE_OP, PUBLISH_OP,
@@ -43,6 +43,12 @@ pub(crate) use public::run_public;
 mod cache_bind;
 #[path = "dispatch_cache_observe.rs"]
 mod cache_observe;
+#[path = "dispatch_cache_owner_evidence.rs"]
+mod cache_owner_evidence;
+#[path = "dispatch_cache_receipt.rs"]
+mod cache_receipt;
+#[path = "dispatch_cache_runtime.rs"]
+mod cache_runtime;
 #[path = "dispatch_cache_tar.rs"]
 mod cache_tar;
 #[path = "dispatch_cache_tar_launcher.rs"]
@@ -79,18 +85,10 @@ const GITHUB_EVENT_ENV: &str = "GITHUB_EVENT_NAME";
 /// Environment variable carrying the event payload path. Never printed.
 const GITHUB_EVENT_PATH_ENV: &str = "GITHUB_EVENT_PATH";
 
+/// Internal operation types.
 #[path = "dispatch/operation.rs"]
 mod operation;
-use operation::InternalOp;
-
-/// Validated private request: operation plus exact request-file path.
-#[derive(Debug)]
-struct InternalRequest {
-    /// Operation to run.
-    op: InternalOp,
-    /// Exact request-file path from the environment.
-    path: PathBuf,
-}
+pub(super) use operation::{InternalOp, InternalRequest};
 
 /// Run the private file entrypoint when the gate is satisfied.
 ///
@@ -150,6 +148,14 @@ fn internal_op() -> Option<InternalOp> {
             InternalOp::ResolveQualification
         }
         Ok(tag) if tag == cache_bind::OP => InternalOp::BindQualificationCache,
+        Ok(tag) if tag == cache_runtime::RUNTIME_OP => InternalOp::ObserveQualificationCacheRuntime,
+        Ok(tag) if tag == cache_runtime::ROOTS_OP => InternalOp::ObserveQualificationCacheRoots,
+        Ok(tag) if tag == cache_owner_evidence::LAYER_OP => {
+            InternalOp::RecordQualificationCacheOwnerLayer
+        }
+        Ok(tag) if tag == cache_owner_evidence::OWNER_OP => {
+            InternalOp::AggregateQualificationCacheOwner
+        }
         Ok(tag) if tag == cache_observe::OP => InternalOp::ObserveQualificationCacheBackend,
         Ok(tag) if tag == cache_bind::transfer::IMPORT_OP => {
             InternalOp::ImportQualificationCachePayload
@@ -169,6 +175,7 @@ fn internal_op() -> Option<InternalOp> {
             InternalOp::PreflightNormalTofuCacheRestore
         }
         Ok(tag) if tag == SOURCE_EVIDENCE_OP => InternalOp::WriteQualificationSourceEvidence,
+        Ok(tag) if tag == CACHE_RECEIPT_OP => InternalOp::WriteQualificationCacheReceipt,
         Ok(tag) if tag == TASK_EXECUTION_RESOLVER_OP => InternalOp::ResolveTaskExecution,
         Ok(tag) if tag == PRIVATE_FETCH_OP => InternalOp::PrivateFetch,
         Ok(tag) if tag == PRIVATE_REVOKE_OP => InternalOp::PrivateRevoke,
@@ -192,6 +199,10 @@ fn gate_request() -> Option<InternalRequest> {
     if matches!(
         op,
         InternalOp::BindQualificationCache
+            | InternalOp::ObserveQualificationCacheRuntime
+            | InternalOp::ObserveQualificationCacheRoots
+            | InternalOp::RecordQualificationCacheOwnerLayer
+            | InternalOp::AggregateQualificationCacheOwner
             | InternalOp::ObserveQualificationCacheBackend
             | InternalOp::ImportQualificationCachePayload
             | InternalOp::ExportQualificationCachePayload
@@ -200,6 +211,7 @@ fn gate_request() -> Option<InternalRequest> {
             | InternalOp::ExportNormalToolsCachePayload
             | InternalOp::InstallCacheTarLaunchers
             | InternalOp::PreflightNormalTofuCacheRestore
+            | InternalOp::WriteQualificationCacheReceipt
     ) {
         return cache_runner_request(op);
     }
@@ -212,14 +224,14 @@ fn gate_request() -> Option<InternalRequest> {
         }
         return runner_velnor_dir().map(|path| InternalRequest { op, path });
     }
+    if matches!(op, InternalOp::PrivateFetch | InternalOp::PrivateRevoke) {
+        return runner_velnor_dir().map(|path| InternalRequest { op, path });
+    }
     if op == InternalOp::Fetch || op == InternalOp::Report || op == InternalOp::ExecuteCheck {
         if env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
             return runner_velnor_dir().map(|path| InternalRequest { op, path });
         }
         return None;
-    }
-    if matches!(op, InternalOp::PrivateFetch | InternalOp::PrivateRevoke) {
-        return runner_velnor_dir().map(|path| InternalRequest { op, path });
     }
     if op == InternalOp::PreseedManifest {
         return runner_velnor_dir().map(|path| InternalRequest { op, path });
@@ -294,6 +306,10 @@ fn gate_request_file(op: InternalOp) -> Option<InternalRequest> {
         | InternalOp::RepoPolicy
         | InternalOp::ExecuteCheck
         | InternalOp::BindQualificationCache
+        | InternalOp::ObserveQualificationCacheRuntime
+        | InternalOp::ObserveQualificationCacheRoots
+        | InternalOp::RecordQualificationCacheOwnerLayer
+        | InternalOp::AggregateQualificationCacheOwner
         | InternalOp::ObserveQualificationCacheBackend
         | InternalOp::ImportQualificationCachePayload
         | InternalOp::ExportQualificationCachePayload
@@ -303,6 +319,7 @@ fn gate_request_file(op: InternalOp) -> Option<InternalRequest> {
         | InternalOp::InstallCacheTarLaunchers
         | InternalOp::PreflightNormalTofuCacheRestore
         | InternalOp::WriteQualificationSourceEvidence
+        | InternalOp::WriteQualificationCacheReceipt
         | InternalOp::ResolveTaskExecution => {}
     }
     Some(InternalRequest { op, path })

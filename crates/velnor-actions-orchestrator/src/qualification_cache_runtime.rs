@@ -4,8 +4,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::workflow::{
-    QualificationCacheBackendEntry, QualificationCacheDirective, QualificationCacheLayer,
-    QualificationRuntimeIdentity,
+    QualificationCacheBackendEntry, QualificationCacheDirective, QualificationRuntimeIdentity,
 };
 use velnor_actions_contract::{RunsOn, run_key_for_ci};
 
@@ -17,16 +16,25 @@ pub(crate) mod closure;
 
 #[path = "qualification_cache_runtime_files.rs"]
 mod files;
+#[path = "qualification_cache_runtime_names.rs"]
+mod names;
+#[path = "qualification_cache_runtime_observation.rs"]
+mod observation;
+#[path = "qualification_cache_runtime_observer_writer.rs"]
+mod observer_writer;
+#[path = "qualification_cache_runtime_owner_evidence.rs"]
+mod owner_evidence;
 #[cfg(test)]
 use self::files::read_owned_runner_file;
 use self::files::{
-    RunDirectory, parse_canonical, parse_layer, read_admission, read_guest_image_projection,
-    read_plan, validate_dispatch_context, validate_runner_temp, validate_runtime_environment,
-    verified_scale_set_image_identity,
+    RunDirectory, parse_layer, read_guest_image_projection, validate_runner_temp,
+    validate_runtime_environment, verified_scale_set_image_identity,
 };
 
 /// Private operation tag for binding one validated cache layer.
 pub const QUALIFICATION_CACHE_BIND_OP: &str = "bind-qualification-cache-v1";
+/// Private operation tag for observing generated owner roots.
+pub const QUALIFICATION_CACHE_ROOTS_OP: &str = "observe-qualification-cache-roots-v1";
 
 /// Fixed canonical directive artifact in the admitted run directory.
 pub(crate) const QUALIFICATION_CACHE_DIRECTIVE_FILENAME: &str =
@@ -36,8 +44,9 @@ pub(crate) const QUALIFICATION_CACHE_DIRECTIVE_FILENAME: &str =
 /// The largest UTF-8 representation is three bytes per UTF-16 code unit.
 pub(crate) const QUALIFICATION_CACHE_DIRECTIVE_MAX_BYTES: usize =
     crate::plan_output_limits::JOB_OUTPUTS_BUDGET_UTF16_BYTES * 3 / 2;
-/// This is the maximum size of the canonical JSON in the runtime identity file.
+/// Maximum canonical JSON stored in the runtime-identity file.
 const MAX_RUNTIME_IDENTITY_JSON_BYTES: usize = 65_536;
+const MAX_ROOTS_JSON_BYTES: usize = 65_536;
 
 /// Current runner facts checked against the staged qualification plan.
 #[derive(Debug, Clone)]
@@ -68,11 +77,11 @@ pub struct QualificationCacheBindingRequest<'a> {
     pub runner_arch: &'a str,
     /// Verified runner image family.
     pub image_os: Option<&'a str>,
-    /// Selected plan matrix key.
-    pub matrix_key: &'a str,
+    /// Exact generated job that owns the physical cache layer.
+    pub owner_id: &'a str,
     /// Closed layer wire name.
     pub layer: &'a str,
-    /// This path names the runtime identity file for the current consumer run.
+    /// Exact run-owned runtime identity file collected by the consumer job.
     pub runtime_identity_path: &'a Path,
 }
 
@@ -90,7 +99,9 @@ pub struct QualificationCacheBindingOutputs {
     pub plan_id: String,
     /// Current run key.
     pub run_key: String,
-    /// Selected matrix key.
+    /// Exact generated job that owns this cache layer.
+    pub owner_id: String,
+    /// Representative plan matrix key for legacy report bookkeeping.
     pub matrix_key: String,
     /// Selected layer wire name.
     pub layer: String,
@@ -119,13 +130,68 @@ pub fn bind_qualification_cache_runtime(
     validate_runner_temp(request.runner_temp)?;
     let layer = parse_layer(request.layer)?;
     let documents = read_binding_documents(request)?;
+    velnor_actions_contract::workflow::validate_job_id(request.owner_id)
+        .map_err(crate::internal::internal_contract)?;
     let entry = documents
         .plan
         .matrix
         .include
         .iter()
-        .find(|entry| entry.matrix_key == request.matrix_key)
-        .ok_or_else(|| internal("qualification_cache_matrix_key_missing"))?;
+        .find(|entry| entry.job_id == request.owner_id)
+        .ok_or_else(|| internal("qualification_cache_owner_missing"))?;
+    let active = documents
+        .directive
+        .owner_layer(request.owner_id, layer)
+        .map(|record| record.active)
+        .ok_or_else(|| internal("qualification_cache_owner_layer_missing"))?;
+    let expected_directive =
+        QualificationCacheDirective::for_plan(&documents.plan, documents.admission.as_ref())
+            .map_err(crate::internal::internal_contract)?
+            .ok_or_else(|| internal("qualification_cache_plan_directive_missing"))?;
+    if documents.directive != expected_directive {
+        return Err(internal("qualification_cache_directive_mismatch"));
+    }
+    if !active {
+        return Ok(disabled_binding(request, &documents, entry, layer));
+    }
+    let evidence = documents
+        .evidence
+        .as_ref()
+        .ok_or_else(|| internal("qualification_cache_runtime_identity_missing"))?;
+    bind_active_runtime(request, &documents, entry, layer, evidence)
+}
+
+fn disabled_binding(
+    request: &QualificationCacheBindingRequest<'_>,
+    documents: &documents::BindingDocuments,
+    entry: &velnor_actions_contract::MatrixEntry,
+    layer: velnor_actions_contract::workflow::QualificationCacheLayer,
+) -> QualificationCacheBindingOutputs {
+    QualificationCacheBindingOutputs {
+        active: false,
+        campaign: documents.directive.campaign.clone(),
+        phase: documents.directive.phase.as_str().to_owned(),
+        plan_id: documents.plan.plan_id.clone(),
+        run_key: documents.plan.run_key.clone(),
+        owner_id: request.owner_id.to_owned(),
+        matrix_key: entry.matrix_key.clone(),
+        layer: layer.as_str().to_owned(),
+        restore_key: None,
+        expected_cache: None,
+        save_key: None,
+        save_if_state_changes: false,
+        expected_prior_state_digest: None,
+        runtime_identity_digest: None,
+    }
+}
+
+fn bind_active_runtime(
+    request: &QualificationCacheBindingRequest<'_>,
+    documents: &documents::BindingDocuments,
+    entry: &velnor_actions_contract::MatrixEntry,
+    layer: velnor_actions_contract::workflow::QualificationCacheLayer,
+    evidence: &QualificationRuntimeIdentity,
+) -> Result<QualificationCacheBindingOutputs, OrchestratorError> {
     let image_identity = match RunsOn::parse(&entry.planned_platform.runs_on)
         .map_err(crate::internal::internal_contract)?
     {
@@ -146,13 +212,12 @@ pub fn bind_qualification_cache_runtime(
         }
     };
     validate_runtime_environment(
-        &documents.evidence,
+        evidence,
         &documents.plan,
         entry,
         request,
         image_identity.as_ref(),
     )?;
-    let active = validate_cache_lane(&documents.directive, entry, request.matrix_key, layer)?;
     let bound = documents
         .directive
         .bind_runtime_owner(
@@ -160,12 +225,9 @@ pub fn bind_qualification_cache_runtime(
             documents.admission.as_ref(),
             &entry.job_id,
             layer,
-            &documents.evidence,
+            evidence,
         )
         .map_err(crate::internal::internal_contract)?;
-    if !active && (bound.restore.is_some() || bound.save_key.is_some()) {
-        return Err(internal("qualification_cache_disabled_layer_bound"));
-    }
     let restore_key = bound
         .restore
         .as_ref()
@@ -175,12 +237,13 @@ pub fn bind_qualification_cache_runtime(
         .as_ref()
         .and_then(|restore| restore.expected_cache.clone());
     Ok(QualificationCacheBindingOutputs {
-        active,
-        campaign: documents.directive.campaign,
+        active: true,
+        campaign: documents.directive.campaign.clone(),
         phase: documents.directive.phase.as_str().to_owned(),
-        plan_id: documents.plan.plan_id,
-        run_key: documents.plan.run_key,
-        matrix_key: request.matrix_key.to_owned(),
+        plan_id: documents.plan.plan_id.clone(),
+        run_key: documents.plan.run_key.clone(),
+        owner_id: request.owner_id.to_owned(),
+        matrix_key: entry.matrix_key.clone(),
         layer: layer.as_str().to_owned(),
         restore_key,
         expected_cache,
@@ -191,79 +254,127 @@ pub fn bind_qualification_cache_runtime(
     })
 }
 
-fn validate_cache_lane(
-    directive: &QualificationCacheDirective,
-    entry: &velnor_actions_contract::workflow::MatrixEntry,
-    matrix_key: &str,
-    layer: QualificationCacheLayer,
-) -> Result<bool, OrchestratorError> {
-    let lane = directive
-        .lanes
-        .iter()
-        .find(|lane| lane.matrix_key == matrix_key)
-        .ok_or_else(|| internal("qualification_cache_lane_missing"))?;
-    if lane.stack_id != entry.stack_id || lane.task_id != entry.task_id {
-        return Err(internal("qualification_cache_lane_identity_mismatch"));
-    }
-    directive
-        .layer(matrix_key, layer)
-        .map(|layer| layer.active)
-        .ok_or_else(|| internal("qualification_cache_layer_missing"))
-}
-
-struct BindingDocuments {
-    plan: velnor_actions_contract::Plan,
-    admission: Option<velnor_actions_contract::workflow::QualificationCacheAdmission>,
-    directive: QualificationCacheDirective,
-    evidence: QualificationRuntimeIdentity,
-}
-
-fn read_binding_documents(
+/// Observe and persist actual runtime identity for one generated owner.
+///
+/// # Errors
+/// Returns an error when runner context, tool observations, or owner binding is invalid.
+pub fn observe_qualification_cache_runtime<E>(
     request: &QualificationCacheBindingRequest<'_>,
-) -> Result<BindingDocuments, OrchestratorError> {
+    get: E,
+) -> Result<String, OrchestratorError>
+where
+    E: FnMut(&str) -> Option<String>,
+{
+    observer_writer::observe_and_write(request, get)
+}
+
+/// Observe the runtime after import and require the same identity as before import.
+///
+/// # Errors
+/// Returns an error if the runtime changes or the pinned identity record is invalid.
+pub fn observe_qualification_cache_runtime_after_import<E>(
+    request: &QualificationCacheBindingRequest<'_>,
+    get: E,
+) -> Result<(String, bool), OrchestratorError>
+where
+    E: FnMut(&str) -> Option<String>,
+{
+    observer_writer::observe_after_import(request, get)
+}
+
+#[path = "qualification_cache_runtime_documents.rs"]
+mod documents;
+use documents::read_binding_documents;
+
+/// Return the owner-and-layer-specific runtime identity filename.
+///
+/// # Errors
+/// Returns an error when the owner ID or layer is outside its closed contract.
+pub use names::{
+    qualification_cache_runtime_after_import_filename,
+    qualification_cache_runtime_identity_filename,
+};
+
+pub use owner_evidence::{
+    QualificationCacheOwnerLayerContext, aggregate_qualification_cache_owner_evidence,
+    qualification_cache_owner_layer_context, read_qualification_cache_owner_evidence,
+    write_qualification_cache_owner_layer_evidence,
+};
+
+/// Write one canonical environment-derived root record into the pinned run directory.
+///
+/// # Errors
+/// Returns an error when owner context or configured root paths are invalid.
+pub fn write_qualification_cache_roots<E>(
+    runner_temp: &Path,
+    run_id: u64,
+    run_attempt: u32,
+    owner_id: &str,
+    layer: &str,
+    get: E,
+) -> Result<String, OrchestratorError>
+where
+    E: FnMut(&str) -> Option<String>,
+{
+    let run_key = run_key_for_ci(run_id, u64::from(run_attempt));
+    let bytes =
+        crate::qualification_cache_payload::collect_owner_roots(runner_temp, owner_id, layer, get)
+            .map_err(internal)?;
+    if bytes.len() > MAX_ROOTS_JSON_BYTES {
+        return Err(internal("qualification_cache_roots_oversize"));
+    }
+    let filename = qualification_cache_roots_filename(owner_id, layer)?;
+    let run_dir = RunDirectory::open(runner_temp, &run_key)?;
+    run_dir.write_owned_file(&filename, bytes.as_bytes(), "qualification_cache_roots")?;
+    Ok(runner_temp
+        .join("velnor")
+        .join(run_key)
+        .join(filename)
+        .display()
+        .to_string())
+}
+
+/// Read the owner-root file only from the run directory derived from context.
+///
+/// # Errors
+/// Returns an error when the path, owner context, or root record is invalid.
+pub fn read_qualification_cache_roots(
+    request: &QualificationCacheBindingRequest<'_>,
+    path: &Path,
+) -> Result<String, OrchestratorError> {
+    let layer = parse_layer(request.layer)?;
     let run_key = run_key_for_ci(request.run_id, u64::from(request.run_attempt));
-    let run_dir = RunDirectory::open(request.runner_temp, &run_key)?;
-    let plan = read_plan(&run_dir, &run_key)?;
-    validate_dispatch_context(&plan, request)?;
-    let admission = read_admission(&run_dir, &plan)?;
-    let directive_bytes = run_dir.read_owned_file(
-        QUALIFICATION_CACHE_DIRECTIVE_FILENAME,
-        QUALIFICATION_CACHE_DIRECTIVE_MAX_BYTES,
-        None,
-        "qualification_cache_file",
-    )?;
-    let directive_text = std::str::from_utf8(&directive_bytes)
-        .map_err(|_| internal("qualification_cache_directive_encoding"))?;
-    let directive = parse_canonical::<QualificationCacheDirective>(
-        directive_text,
-        QUALIFICATION_CACHE_DIRECTIVE_MAX_BYTES,
-    )?;
-    let runtime_identity_path = request
+    let filename = qualification_cache_roots_filename(request.owner_id, layer.as_str())?;
+    let expected = request
         .runner_temp
         .join("velnor")
         .join(&run_key)
-        .join("runtime-identity.json");
-    if request.runtime_identity_path != runtime_identity_path {
-        return Err(internal("qualification_cache_runtime_identity_path"));
+        .join(&filename);
+    if path != expected {
+        return Err(internal("qualification_cache_roots_path"));
     }
-    let runtime_identity_bytes = run_dir.read_owned_file(
-        "runtime-identity.json",
-        MAX_RUNTIME_IDENTITY_JSON_BYTES,
+    let run_dir = RunDirectory::open(request.runner_temp, &run_key)?;
+    let bytes = run_dir.read_owned_file(
+        &filename,
+        MAX_ROOTS_JSON_BYTES,
         Some(0o600),
-        "qualification_cache_runtime_identity",
+        "qualification_cache_roots",
     )?;
-    let runtime_identity_text = std::str::from_utf8(&runtime_identity_bytes)
-        .map_err(|_| internal("qualification_cache_runtime_identity_encoding"))?;
-    let evidence = parse_canonical::<QualificationRuntimeIdentity>(
-        runtime_identity_text,
-        MAX_RUNTIME_IDENTITY_JSON_BYTES,
-    )?;
-    Ok(BindingDocuments {
-        plan,
-        admission,
-        directive,
-        evidence,
-    })
+    String::from_utf8(bytes).map_err(|_| internal("qualification_cache_roots_encoding"))
+}
+
+/// Return a validated owner/layer-specific root file name.
+///
+/// # Errors
+/// Returns an error when the owner ID or layer is outside its closed contract.
+pub fn qualification_cache_roots_filename(
+    owner_id: &str,
+    layer: &str,
+) -> Result<String, OrchestratorError> {
+    velnor_actions_contract::workflow::validate_job_id(owner_id)
+        .map_err(crate::internal::internal_contract)?;
+    let layer = parse_layer(layer)?;
+    Ok(format!("cache-roots-{}-{}.json", owner_id, layer.as_str()))
 }
 
 #[cfg(test)]

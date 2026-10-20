@@ -42,6 +42,11 @@ pub(super) fn render_job(
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     }
+    if qualification {
+        steps.extend(crate::crate_jobs::qualification_cache::owner_binding_steps(
+            &model.job_id,
+        )?);
+    }
     steps.extend(crate::source_cache::restore_step_for_crate(
         fetch_roots,
         use_rust,
@@ -106,14 +111,19 @@ fn render_terminal_steps(
     qualification: bool,
 ) -> Result<Vec<Step>, OrchestratorError> {
     let mut steps = crate::workflow::wire_w1::maybe_task_cache_steps(None, TaskCacheMode::Off, "")?;
-    steps.extend(render_obligation_steps(
+    let obligation_steps = render_obligation_steps(
         model,
         catalog,
         use_opentofu,
         max_parallel_jobs,
         helper_version,
-    )?);
+    )?;
+    // Keep task-execution steps unconditional. Ordered post-import identity
+    // checks fail the job when runtime facts change, so GitHub skips later
+    // task steps through its normal success() condition.
+    steps.extend(obligation_steps);
     if qualification {
+        steps.extend(crate::crate_jobs::qualification_cache::owner_evidence_steps(&model.job_id)?);
         let mut source_evidence =
             crate::qualification_source_evidence::source_evidence_step(catalog)?;
         source_evidence.condition =

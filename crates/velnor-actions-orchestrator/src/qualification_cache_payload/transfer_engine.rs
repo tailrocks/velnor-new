@@ -154,7 +154,7 @@ pub(crate) fn validate_binding_roots(
     binding: &QualificationCacheBindingOutputs,
     roots: &CacheRootSet,
 ) -> Result<(), &'static str> {
-    if binding.matrix_key != roots.matrix_key || binding.layer != roots.layer.as_str() {
+    if binding.owner_id != roots.owner_id || binding.layer != roots.layer.as_str() {
         return Err("qualification_cache_roots_binding_mismatch");
     }
     Ok(())

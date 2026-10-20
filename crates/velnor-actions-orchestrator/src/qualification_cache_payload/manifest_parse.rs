@@ -35,7 +35,7 @@ pub(super) fn parse_value(value: &Value) -> Result<PayloadManifest, &'static str
                     "cache_key",
                     "campaign",
                     "layer",
-                    "matrix_key",
+                    "owner_id",
                     "namespace",
                     "roots",
                     "runtime_identity_digest",
@@ -46,7 +46,7 @@ pub(super) fn parse_value(value: &Value) -> Result<PayloadManifest, &'static str
         {
             PayloadScope::Qualification {
                 campaign: string_field(object, "campaign")?.to_owned(),
-                matrix_key: string_field(object, "matrix_key")?.to_owned(),
+                owner_id: string_field(object, "owner_id")?.to_owned(),
                 layer: string_field(object, "layer")?.to_owned(),
             }
         }

@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use super::{
     CACHE_TAR_LAUNCHER_SHA256_INPUT, CACHE_TAR_LAUNCHER_USES, NORMAL_TOOLS_CACHE_EXPORT_OPERATION,
     NORMAL_TOOLS_CACHE_IMPORT_OPERATION, NORMAL_TOOLS_CACHE_STAGE_OPERATION,
-    PRESEED_HELPER_SHA256_OUTPUT_EXPR, QualificationCacheStepId, QualificationCacheStepStage,
+    PRESEED_HELPER_SHA256_OUTPUT_EXPR, QualificationCacheCompositeId,
+    QualificationCacheCompositePhase, QualificationCacheStepId, QualificationCacheStepStage,
     StepId, StepRole, TOOLS_CACHE_RESTORE_USES, validate_step_sequence,
 };
 use crate::workflow::{QualificationCacheLayer, Step, StepKind};
@@ -121,6 +122,44 @@ fn normal_cache_operations_reject_wrong_operation_and_missing_id() {
 }
 
 #[test]
+fn qualification_cache_observation_outputs_have_unique_owner_layer_ids() {
+    let layer = QualificationCacheLayer::CargoSources;
+    let owner = "rust-example";
+    let runtime =
+        QualificationCacheStepId::new(QualificationCacheStepStage::RuntimeIdentity, layer, owner)
+            .expect("runtime output id");
+    let roots = QualificationCacheStepId::new(QualificationCacheStepStage::Roots, layer, owner)
+        .expect("roots output id");
+    assert_ne!(runtime.as_string(), roots.as_string());
+
+    for (id, role, operation) in [
+        (
+            runtime,
+            StepRole::QualificationRuntimeIdentity,
+            "observe-qualification-cache-runtime-v1",
+        ),
+        (
+            roots,
+            StepRole::QualificationCacheRoots,
+            "observe-qualification-cache-roots-v1",
+        ),
+    ] {
+        let step = Step {
+            name: "Observe qualification cache inputs".to_owned(),
+            id: Some(StepId::QualificationCache(id)),
+            role: Some(role),
+            condition: None,
+            parallel: false,
+            kind: StepKind::Internal {
+                operation: operation.to_owned(),
+                env: BTreeMap::new(),
+            },
+        };
+        assert!(validate_step_sequence(&[step], owner).is_ok());
+    }
+}
+
+#[test]
 fn qualification_cache_ids_bind_one_job_layer_and_stage() {
     let owner = "rust-example";
     let identity = QualificationCacheStepId::new(
@@ -137,7 +176,26 @@ fn qualification_cache_ids_bind_one_job_layer_and_stage() {
         parallel: false,
         kind: StepKind::Action {
             uses: "actions/cache/restore@v4".to_owned(),
-            with: BTreeMap::new(),
+            with: BTreeMap::from([
+                (
+                    "key".to_owned(),
+                    format!(
+                        "${{{{ steps.{}.outputs.restore_key }}}}",
+                        identity
+                            .for_stage(QualificationCacheStepStage::Bind)
+                            .as_string()
+                    ),
+                ),
+                (
+                    "path".to_owned(),
+                    format!(
+                        "${{{{ steps.{}.outputs.restore_stage_path }}}}",
+                        identity
+                            .for_stage(QualificationCacheStepStage::Bind)
+                            .as_string()
+                    ),
+                ),
+            ]),
             env: BTreeMap::new(),
         },
     };
@@ -185,40 +243,45 @@ fn qualification_cache_ids_reject_invalid_owner_and_wrong_stage_payload() {
 }
 
 #[test]
-fn qualification_cache_observation_ids_are_bound_to_the_containing_job() {
+fn qualification_cache_composite_ids_bind_exact_phase_owner_and_inputs() {
     let owner = "rust-example";
-    let cases = [
-        (
-            QualificationCacheStepStage::RuntimeIdentity,
-            StepRole::QualificationRuntimeIdentity,
-            "observe-qualification-cache-runtime-v1",
-        ),
-        (
-            QualificationCacheStepStage::Roots,
-            StepRole::QualificationCacheRoots,
-            "observe-qualification-cache-roots-v1",
-        ),
-    ];
+    let prepare =
+        QualificationCacheCompositeId::new(QualificationCacheCompositePhase::Prepare, owner)
+            .expect("prepare identity");
+    let step = Step {
+        name: "Prepare qualification cache".to_owned(),
+        id: Some(StepId::QualificationCacheComposite(prepare)),
+        role: Some(StepRole::QualificationCachePrepareComposite),
+        condition: Some("needs.plan.outputs.qualification_campaign != ''".to_owned()),
+        parallel: false,
+        kind: StepKind::Action {
+            uses: format!("./.github/actions/qualification-cache-prepare-{owner}"),
+            with: BTreeMap::from([(
+                "qualification_campaign".to_owned(),
+                "${{ needs.plan.outputs.qualification_campaign }}".to_owned(),
+            )]),
+            env: BTreeMap::new(),
+        },
+    };
+    assert!(validate_step_sequence(std::slice::from_ref(&step), owner).is_ok());
+    assert!(validate_step_sequence(std::slice::from_ref(&step), "other-job").is_err());
 
-    for (stage, role, operation) in cases {
-        let identity =
-            QualificationCacheStepId::new(stage, QualificationCacheLayer::CargoSources, owner)
-                .expect("valid owner");
-        let step = Step {
-            name: "Observe qualification cache inputs".to_owned(),
-            id: Some(StepId::QualificationCache(identity)),
-            role: Some(role),
-            condition: None,
-            parallel: false,
-            kind: StepKind::Internal {
-                operation: operation.to_owned(),
-                env: BTreeMap::new(),
-            },
-        };
+    let mut wrong_uses = step.clone();
+    let StepKind::Action { uses, .. } = &mut wrong_uses.kind else {
+        panic!("composite call is an action");
+    };
+    *uses = format!("./.github/actions/qualification-cache-finish-{owner}");
+    assert!(validate_step_sequence(&[wrong_uses], owner).is_err());
 
-        assert!(validate_step_sequence(std::slice::from_ref(&step), owner).is_ok());
-        assert!(validate_step_sequence(&[step], "different-job").is_err());
-    }
+    let mut wrong_input = step;
+    let StepKind::Action { with, .. } = &mut wrong_input.kind else {
+        panic!("composite call is an action");
+    };
+    with.insert(
+        "arbitrary-output".to_owned(),
+        "${{ github.token }}".to_owned(),
+    );
+    assert!(validate_step_sequence(&[wrong_input], owner).is_err());
 }
 
 #[test]

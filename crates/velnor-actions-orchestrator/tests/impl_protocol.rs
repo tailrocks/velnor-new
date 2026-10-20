@@ -281,8 +281,20 @@ fn plan_outputs_bind_qualification_phase_and_cache_policy() -> TestResult {
 
 fn check_cold_cache_directives(raw: &str) -> TestResult {
     let directives: serde_json::Value = serde_json::from_str(raw)?;
-    assert_eq!(directives["schema"], 2);
+    assert_eq!(directives["schema"], 4);
     assert_eq!(directives["phase"], "cold");
+    let owners = directives["owners"]
+        .as_array()
+        .ok_or("qualification cache owners are not an array")?;
+    assert_ne!(owners.as_slice(), [] as [serde_json::Value; 0]);
+    assert!(owners.iter().all(|owner| {
+        owner["members"]
+            .as_array()
+            .is_some_and(|members| !members.is_empty())
+            && owner["layers"]
+                .as_array()
+                .is_some_and(|layers| layers.len() == 5)
+    }));
     let lanes = directives["lanes"]
         .as_array()
         .ok_or("qualification cache lanes are not an array")?;
@@ -291,6 +303,11 @@ fn check_cold_cache_directives(raw: &str) -> TestResult {
         lane["layers"]
             .as_array()
             .is_some_and(|layers| layers.len() == 5)
+            && lane["layers"].as_array().is_some_and(|layers| {
+                layers
+                    .iter()
+                    .all(|layer| (layer["active"] == true) == layer["owner_id"].as_str().is_some())
+            })
     }));
     assert!(!raw.contains("mbx_bundle"));
     Ok(())
