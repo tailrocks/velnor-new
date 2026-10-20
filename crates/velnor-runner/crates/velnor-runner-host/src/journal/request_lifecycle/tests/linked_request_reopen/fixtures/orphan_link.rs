@@ -18,10 +18,19 @@ pub(in super::super) async fn reject_orphaned_reservation_link(
         scope,
         actual_request_id,
         physical,
+        reservation_id,
+        intent_id,
         ..
     } = fixture;
     insert_orphaned_reservation_link(&path, actual_request_id).await?;
-    assert_orphaned_link_replay_rejected(&scope, &physical, actual_request_id).await?;
+    assert_orphaned_link_replay_requires_reconciliation(
+        &scope,
+        &physical,
+        actual_request_id,
+        reservation_id,
+        intent_id,
+    )
+    .await?;
     drop(scope);
     drop(journal);
     assert!(Journal::open(&path).await.is_err());
@@ -107,10 +116,12 @@ async fn insert_orphaned_reservation_link(
     Ok(())
 }
 
-async fn assert_orphaned_link_replay_rejected(
+async fn assert_orphaned_link_replay_requires_reconciliation(
     scope: &ConnectionJournal,
     physical: &crate::journal::AssignmentIdentity,
     actual_request_id: i64,
+    expected_reservation_id: i64,
+    expected_intent_id: i64,
 ) -> Result<(), HostError> {
     let sample_generation = "9".repeat(32);
     let permit = StartPermit::test_fixture_with_engine_id(&sample_generation, TEST_ENGINE_ID);
@@ -122,24 +133,30 @@ async fn assert_orphaned_link_replay_rejected(
             request_id: actual_request_id,
         })
         .await?;
+    let result = scope
+        .try_reserve_and_claim_request_acquire(
+            ReservationRequest {
+                assignment: physical,
+                engine_id: TEST_ENGINE_ID,
+                docker_root_digest: &root_digest,
+                cpu_millicores: 2_000,
+                memory_bytes: super::super::JOB_MEMORY,
+                sample_generation_id: &sample_generation_id,
+            },
+            permit,
+            admission,
+            &actual_request,
+        )
+        .await?;
     assert!(
-        scope
-            .try_reserve_and_claim_request_acquire(
-                ReservationRequest {
-                    assignment: physical,
-                    engine_id: TEST_ENGINE_ID,
-                    docker_root_digest: &root_digest,
-                    cpu_millicores: 2_000,
-                    memory_bytes: super::super::JOB_MEMORY,
-                    sample_generation_id: &sample_generation_id,
-                },
-                permit,
-                admission,
-                &actual_request,
-            )
-            .await
-            .is_err(),
-        "The journal must reject the request link without a reservation."
+        matches!(
+            result,
+            crate::journal::RequestPhysicalReservationResult::ReconcileRequired {
+                reservation_id,
+                intent_id,
+            } if reservation_id == expected_reservation_id && intent_id == expected_intent_id
+        ),
+        "The orphaned request link must block another physical acquisition and require reconciliation."
     );
     Ok(())
 }

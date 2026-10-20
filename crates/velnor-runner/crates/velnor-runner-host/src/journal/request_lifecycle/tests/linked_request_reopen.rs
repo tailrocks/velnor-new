@@ -45,6 +45,7 @@ async fn exercise_linked_lifecycle(
     let fixture = fixtures::reopen(fixture).await?;
     fixtures::check_completed_replay(&fixture).await?;
     let fixture = fixtures::reopen(fixture).await?;
+    terminal_available_replay::record_runner_absence(&fixture).await?;
     fixtures::check_cleanup_and_settlement(&fixture).await?;
     let fixture = fixtures::reopen(fixture).await?;
     fixtures::check_final_replay(&fixture).await
@@ -99,6 +100,7 @@ async fn linked_reservation_reopens_when_completed_precedes_started() -> Result<
         .await?;
     record_completed(&fixture, &actual).await?;
     record_started(&fixture, &actual).await?;
+    terminal_available_replay::record_runner_absence(&fixture).await?;
     fixtures::check_cleanup_and_settlement(&fixture).await?;
 
     let fixture = fixtures::reopen(fixture).await?;

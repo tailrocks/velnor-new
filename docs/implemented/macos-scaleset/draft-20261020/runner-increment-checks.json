@@ -1589,5 +1589,16 @@
     "reviewer": "runner_context_review",
     "scope": "The eight files name the same Default implementation. The source and dependencies match the checked runner workspace.",
     "remaining": "The strict runner gate still has other failures."
+  },
+  "linked_request_cleanup_replay": {
+    "result": "PASS",
+    "tests": 6,
+    "run_id": "9dfe32d9-bc43-4a12-875f-bc02b7648d00",
+    "log_sha256": "867519e1dd7cb04c63598a46cec861b1edba416e145b576c802dd362111ecfbc",
+    "manifest_sha256": "e07c02d47b08375e63f0a9b81d0758803e84b8d46ff279e4ad0b77451ab245b5",
+    "author": "native_intake_composition",
+    "reviewer": "execution_source_security_review",
+    "scope": "The fixtures use observed runner absence after completion. Replay keeps the released reservation and does not create a new current attempt.",
+    "remaining": "The full runner gate remains incomplete."
   }
 }
