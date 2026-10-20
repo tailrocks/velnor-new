@@ -1,4 +1,3 @@
-
 //! Serde helpers for boolean `[workflow]` flags.
 
 /// Default `mise_quiet` value: silence stays on.
