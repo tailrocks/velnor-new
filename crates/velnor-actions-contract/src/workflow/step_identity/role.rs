@@ -142,6 +142,8 @@ pub enum StepRole {
     QualificationCacheSave,
     /// Writes the qualification cache receipt in the required aggregation job.
     QualificationCacheReceipt,
+    /// Reads the configured roots for one cache layer.
+    QualificationCacheRoots,
 }
 
 impl StepRole {
@@ -239,7 +241,6 @@ impl StepRole {
             Self::MbxVersionCheck => Some(StepId::MbxReady),
             Self::CacheKeys => Some(StepId::CacheKeys),
             Self::PrivateTokenMint => Some(StepId::DepsToken),
-            Self::QualificationRuntimeIdentity => Some(StepId::QualificationRuntimeIdentity),
             _ => None,
         }
     }
@@ -272,6 +273,12 @@ impl StepRole {
                 super::super::step_id::QualificationCacheStepStage::Save => {
                     Self::QualificationCacheSave
                 }
+                super::super::step_id::QualificationCacheStepStage::RuntimeIdentity => {
+                    Self::QualificationRuntimeIdentity
+                }
+                super::super::step_id::QualificationCacheStepStage::Roots => {
+                    Self::QualificationCacheRoots
+                }
             },
             StepId::QualificationRuntimeIdentity => Self::QualificationRuntimeIdentity,
         }
@@ -289,6 +296,7 @@ fn internal_operation_for_role(role: StepRole) -> Option<&'static str> {
         StepRole::PrivateFetch => Some(PRIVATE_FETCH_OPERATION),
         StepRole::PrivateRevoke => Some(PRIVATE_REVOKE_OPERATION),
         StepRole::QualificationRuntimeIdentity => Some("observe-qualification-cache-runtime-v1"),
+        StepRole::QualificationCacheRoots => Some("observe-qualification-cache-roots-v1"),
         StepRole::QualificationCacheBind => Some("bind-qualification-cache-v1"),
         StepRole::QualificationCacheImport => Some("import-qualification-cache-payload-v1"),
         StepRole::QualificationCacheObservation => Some("observe-qualification-cache-backend-v1"),

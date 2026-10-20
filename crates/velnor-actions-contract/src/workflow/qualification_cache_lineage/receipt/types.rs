@@ -8,7 +8,7 @@ use crate::errors::ContractError;
 use crate::workflow::{QualificationDispatchMode, QualificationPhase, QualificationRunRef};
 
 /// Prefix for immutable receipt artifact names consumed by the dispatcher.
-pub const QUALIFICATION_CACHE_RECEIPT_ARTIFACT: &str = "velnor-qualification-cache-receipt-v3";
+pub const QUALIFICATION_CACHE_RECEIPT_ARTIFACT: &str = "velnor-qualification-cache-receipt-v4";
 /// The sole file inside each immutable qualification receipt artifact.
 pub const QUALIFICATION_CACHE_RECEIPT_FILENAME: &str = "qualification-cache-receipt.json";
 /// Maximum staged receipt document size before deserialization.
@@ -119,15 +119,21 @@ pub struct QualificationCacheSave {
     pub after: QualificationCacheBackendObservation,
 }
 
-/// One layer's actual restore and save observations for one matrix lane.
+/// Restore and save results for one cache layer owned by a generated job.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct QualificationCacheLayerReceipt {
+    /// Exact generated job that owns this physical layer.
+    pub owner_id: String,
+    /// Platform identity shared by all members of this job.
+    pub platform_id: String,
+    /// Digest of the full sorted member list.
+    pub member_digest: String,
     /// Closed cache layer.
     pub layer: QualificationCacheLayer,
     /// Whether this layer is applicable to the selected lane.
     pub active: bool,
-    /// Identity commitment for this lane and layer.
+    /// Digest that identifies this owner's cache layer.
     pub identity_digest: String,
     /// Actual runtime image, ABI and toolchain evidence.
     pub runtime_identity: Option<QualificationRuntimeIdentity>,
@@ -137,6 +143,36 @@ pub struct QualificationCacheLayerReceipt {
     pub restore: QualificationCacheRestore,
     /// Save action plus immutable backend creation evidence.
     pub save: QualificationCacheSave,
+}
+
+/// One lane's link to its owner's cache layer result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct QualificationCacheLaneLayerReceipt {
+    /// Closed cache layer.
+    pub layer: QualificationCacheLayer,
+    /// Whether this logical lane participates in the shared owner layer.
+    pub active: bool,
+    /// Job-level physical identity shared with all owner members.
+    pub identity_digest: String,
+    /// Exact generated job that owns the physical cache state.
+    pub owner_id: Option<String>,
+}
+
+/// One generated job and the results for each cache layer it owns.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct QualificationCacheOwnerReceipt {
+    /// Exact generated job ID.
+    pub owner_id: String,
+    /// Common planned platform identity.
+    pub platform_id: String,
+    /// Digest of the full sorted member list.
+    pub member_digest: String,
+    /// All member records, in sorted order.
+    pub members: Vec<super::super::identity::QualificationCacheOwnerMemberRef>,
+    /// One result for each allowed cache layer.
+    pub layers: Vec<QualificationCacheLayerReceipt>,
 }
 
 /// Per-lane completed work and cache observations.
@@ -156,7 +192,7 @@ pub struct QualificationCacheLaneReceipt {
     /// Actual useful cache-state digest after job completion.
     pub useful_state_digest: String,
     /// Closed layer records, including explicit disabled `TaskResult` evidence.
-    pub layers: Vec<QualificationCacheLayerReceipt>,
+    pub layers: Vec<QualificationCacheLaneLayerReceipt>,
 }
 
 /// Link to the immutable receipt artifact admitted as a predecessor.
@@ -198,6 +234,8 @@ pub struct QualificationCacheReceipt {
     pub predecessor: Option<QualificationCacheReceiptLink>,
     /// Actual completed matrix lanes.
     pub lanes: Vec<QualificationCacheLaneReceipt>,
+    /// One actual physical cache observation per generated job and layer.
+    pub owners: Vec<QualificationCacheOwnerReceipt>,
 }
 
 /// Bounded checked-out source change used only by `UsefulDelta`.
@@ -314,6 +352,8 @@ pub struct QualificationCacheProducerEvidence {
     pub predecessor: Option<QualificationCacheReceiptLink>,
     /// Task and cache observations for each matrix lane.
     pub lanes: Vec<QualificationCacheLaneReceipt>,
+    /// One actual physical cache observation per generated job and layer.
+    pub owners: Vec<QualificationCacheOwnerReceipt>,
 }
 
 /// One immutable producer artifact file uploaded before run completion.

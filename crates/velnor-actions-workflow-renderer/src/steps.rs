@@ -37,9 +37,11 @@ pub use crate::steps_artifact::{
     download_suite_archive_step, matrix_report_upload_step, upload_artifact_step,
     upload_suite_archive_step, upload_suite_artifact_step,
 };
-pub(crate) use crate::steps_internal::split_internal_operation;
 pub use crate::steps_internal::{
     internal_step, merge_step, plan_step, publish_step, write_request_step,
+};
+pub(crate) use crate::steps_internal::{
+    is_qualification_cache_operation, split_internal_operation,
 };
 
 /// Env key selecting the staged-binary internal operation.

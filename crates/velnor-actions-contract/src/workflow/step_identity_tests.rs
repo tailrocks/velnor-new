@@ -185,6 +185,43 @@ fn qualification_cache_ids_reject_invalid_owner_and_wrong_stage_payload() {
 }
 
 #[test]
+fn qualification_cache_observation_ids_are_bound_to_the_containing_job() {
+    let owner = "rust-example";
+    let cases = [
+        (
+            QualificationCacheStepStage::RuntimeIdentity,
+            StepRole::QualificationRuntimeIdentity,
+            "observe-qualification-cache-runtime-v1",
+        ),
+        (
+            QualificationCacheStepStage::Roots,
+            StepRole::QualificationCacheRoots,
+            "observe-qualification-cache-roots-v1",
+        ),
+    ];
+
+    for (stage, role, operation) in cases {
+        let identity =
+            QualificationCacheStepId::new(stage, QualificationCacheLayer::CargoSources, owner)
+                .expect("valid owner");
+        let step = Step {
+            name: "Observe qualification cache inputs".to_owned(),
+            id: Some(StepId::QualificationCache(identity)),
+            role: Some(role),
+            condition: None,
+            parallel: false,
+            kind: StepKind::Internal {
+                operation: operation.to_owned(),
+                env: BTreeMap::new(),
+            },
+        };
+
+        assert!(validate_step_sequence(std::slice::from_ref(&step), owner).is_ok());
+        assert!(validate_step_sequence(&[step], "different-job").is_err());
+    }
+}
+
+#[test]
 fn cache_tar_launcher_output_has_one_typed_owner() {
     let step = Step {
         name: "Install cache tar adapters".to_owned(),

@@ -4,7 +4,7 @@ use super::*;
 fn receipt_artifact_name_is_stable() {
     assert_eq!(
         QUALIFICATION_CACHE_RECEIPT_ARTIFACT,
-        "velnor-qualification-cache-receipt-v3"
+        "velnor-qualification-cache-receipt-v4"
     );
     let first = qualification_cache_receipt_artifact_name(crate::workflow::QualificationRunRef {
         run_id: 42,
@@ -16,8 +16,8 @@ fn receipt_artifact_name_is_stable() {
         run_attempt: 2,
     })
     .expect("second attempt name");
-    assert_eq!(first, "velnor-qualification-cache-receipt-v3-a1");
-    assert_eq!(second, "velnor-qualification-cache-receipt-v3-a2");
+    assert_eq!(first, "velnor-qualification-cache-receipt-v4-a1");
+    assert_eq!(second, "velnor-qualification-cache-receipt-v4-a2");
     assert_ne!(first, second);
     assert!(
         qualification_cache_receipt_artifact_name(crate::workflow::QualificationRunRef {

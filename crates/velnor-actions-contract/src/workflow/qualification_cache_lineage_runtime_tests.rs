@@ -19,7 +19,7 @@ fn runtime_identity_binds_actual_tools_and_abi_facts() -> TestResult {
         .ok_or_else(|| std::io::Error::other("cache layer missing"))?
         .runtime
         .as_ref()
-        .ok_or_else(|| std::io::Error::other("runtime requirements missing"))?;
+        .ok_or_else(|| std::io::Error::other("The runtime requirements are missing."))?;
     let mut evidence = runtime_identity(runtime);
     let digest = validate_runtime_identity(runtime, &evidence)?;
 
@@ -102,6 +102,7 @@ fn scale_set_image_source_is_expected_independently_of_consumer_source() -> Test
     let consumer_source = "a".repeat(40);
     let image_source = "b".repeat(40);
     let mut plan = qualification_plan(QualificationPhase::Cold, 700, &consumer_source, None)?;
+    let owner_id = plan.matrix.include[0].job_id.clone();
     let selector = crate::config::ScaleSetSelector::try_new(
         "ubuntu-26.04-scale-set",
         &["velnor".to_owned(), "ubuntu-26.04-scale-set".to_owned()],
@@ -137,7 +138,7 @@ fn scale_set_image_source_is_expected_independently_of_consumer_source() -> Test
         .ok_or_else(|| std::io::Error::other("cache layer missing"))?
         .runtime
         .as_ref()
-        .ok_or_else(|| std::io::Error::other("runtime requirements missing"))?;
+        .ok_or_else(|| std::io::Error::other("The runtime requirements are missing."))?;
     assert_eq!(
         runtime.scale_set_image_source_sha.as_deref(),
         Some(image_source.as_str())
@@ -147,7 +148,7 @@ fn scale_set_image_source_is_expected_independently_of_consumer_source() -> Test
     let identity = scale_set_runtime_identity(runtime, &selector, &image_source);
     assert!(
         directive
-            .bind_runtime(&plan, None, &matrix_key, layer, &identity)
+            .bind_runtime_owner(&plan, None, &owner_id, layer, &identity)
             .is_ok()
     );
 
@@ -155,10 +156,29 @@ fn scale_set_image_source_is_expected_independently_of_consumer_source() -> Test
     let wrong_identity = scale_set_runtime_identity(runtime, &selector, &wrong_image_source);
     assert!(
         directive
-            .bind_runtime(&plan, None, &matrix_key, layer, &wrong_identity)
+            .bind_runtime_owner(&plan, None, &owner_id, layer, &wrong_identity)
             .is_err()
     );
 
+    assert_missing_scale_set_source_rejected(
+        plan,
+        &owner_id,
+        &matrix_key,
+        &selector,
+        layer,
+        &image_source,
+    )?;
+    Ok(())
+}
+
+fn assert_missing_scale_set_source_rejected(
+    mut plan: crate::workflow::Plan,
+    owner_id: &str,
+    matrix_key: &str,
+    selector: &crate::config::ScaleSetSelector,
+    layer: QualificationCacheLayer,
+    image_source: &str,
+) -> TestResult {
     plan.qualification
         .as_mut()
         .ok_or_else(|| std::io::Error::other("qualification context missing"))?
@@ -166,19 +186,19 @@ fn scale_set_image_source_is_expected_independently_of_consumer_source() -> Test
     let missing_source_directive = QualificationCacheDirective::for_plan(&plan, None)?
         .ok_or_else(|| std::io::Error::other("qualification directive missing"))?;
     let missing_runtime = missing_source_directive
-        .layer(&matrix_key, layer)
+        .layer(matrix_key, layer)
         .ok_or_else(|| std::io::Error::other("cache layer missing"))?
         .runtime
         .as_ref()
-        .ok_or_else(|| std::io::Error::other("runtime requirements missing"))?;
+        .ok_or_else(|| std::io::Error::other("The runtime requirements are missing."))?;
     assert!(
         missing_source_directive
-            .bind_runtime(
+            .bind_runtime_owner(
                 &plan,
                 None,
-                &matrix_key,
+                owner_id,
                 layer,
-                &scale_set_runtime_identity(missing_runtime, &selector, &image_source),
+                &scale_set_runtime_identity(missing_runtime, selector, image_source),
             )
             .is_err()
     );

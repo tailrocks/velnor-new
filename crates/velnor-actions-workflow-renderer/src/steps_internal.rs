@@ -13,6 +13,48 @@ use crate::{
     },
 };
 
+const QUALIFICATION_CACHE_OPERATIONS: &[&str] = &[
+    "observe-qualification-cache-runtime-v1",
+    "observe-qualification-cache-roots-v1",
+    "bind-qualification-cache-v1",
+    "observe-qualification-cache-backend-v1",
+    "import-qualification-cache-payload-v1",
+    "export-qualification-cache-payload-v1",
+    "write-qualification-cache-receipt-v1",
+];
+
+pub(crate) fn is_qualification_cache_operation(operation: &str) -> bool {
+    QUALIFICATION_CACHE_OPERATIONS.contains(&operation)
+}
+
+pub(crate) fn validate_qualification_cache_env(
+    operation: &str,
+    step_env: &std::collections::BTreeMap<String, String>,
+) -> Result<(), RenderError> {
+    for (key, value) in step_env {
+        if key == "GH_TOKEN" {
+            if operation != "observe-qualification-cache-backend-v1"
+                || value != "${{ github.token }}"
+            {
+                return Err(RenderError::InvalidWorkflow(
+                    "qualification_cache_token_scope_invalid".to_owned(),
+                ));
+            }
+        } else if key != "VELNOR_QUALIFICATION_RUNTIME_IDENTITY_FILE"
+            && !key.starts_with("VELNOR_QUALIFICATION_CACHE_")
+        {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "qualification_cache_env_not_supported:{key}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "document_steps_qualification_cache_tests.rs"]
+mod qualification_cache_tests;
+
 /// Split an internal operation into env op plus request-file target op.
 ///
 /// `plan-v1`/`merge-v1`/`fetch-reports-v1`/`publish-baseline-v1` target
@@ -21,6 +63,9 @@ use crate::{
 /// `write-request-v1` while materializing the target's request file.
 /// # Errors
 pub(crate) fn split_internal_operation(operation: &str) -> Result<(&str, &str), RenderError> {
+    if is_qualification_cache_operation(operation) {
+        return Ok((operation, operation));
+    }
     if operation == RESOLVE_QUALIFICATION_OPERATION {
         return Ok((operation, PLAN_OPERATION));
     }
@@ -134,5 +179,29 @@ pub fn publish_step() -> Step {
             operation: PUBLISH_OPERATION.to_owned(),
             env: std::collections::BTreeMap::new(),
         },
+    }
+}
+
+#[cfg(test)]
+mod qualification_cache_operation_tests {
+    use super::split_internal_operation;
+
+    #[test]
+    fn qualification_cache_operations_do_not_take_request_files() {
+        for operation in [
+            "observe-qualification-cache-runtime-v1",
+            "observe-qualification-cache-roots-v1",
+            "bind-qualification-cache-v1",
+            "observe-qualification-cache-backend-v1",
+            "import-qualification-cache-payload-v1",
+            "export-qualification-cache-payload-v1",
+            "write-qualification-cache-receipt-v1",
+        ] {
+            assert_eq!(
+                split_internal_operation(operation).expect("fixed operation"),
+                (operation, operation)
+            );
+        }
+        assert!(split_internal_operation("write-qualification-cache-receipt-v2").is_err());
     }
 }

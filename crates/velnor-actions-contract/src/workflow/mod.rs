@@ -1,7 +1,7 @@
 //! Stack-neutral workflow IR, matrix, plan, and report types.
 
 /// Version marker for the qualification cache key and payload format.
-pub const QUALIFICATION_CACHE_FORMAT_VERSION: u8 = 3;
+pub const QUALIFICATION_CACHE_FORMAT_VERSION: u8 = 4;
 
 pub mod artifacts;
 pub mod baseline_publication;
@@ -91,11 +91,14 @@ pub use qualification_cache_lineage::{
     QUALIFICATION_CACHE_RECEIPT_ARTIFACT, QUALIFICATION_CACHE_RECEIPT_FILENAME,
     QualificationCacheAdmission, QualificationCacheArtifact, QualificationCacheBackendEntry,
     QualificationCacheBackendObservation, QualificationCacheDirective,
-    QualificationCacheLaneDirective, QualificationCacheLaneReceipt, QualificationCacheLayer,
+    QualificationCacheLaneDirective, QualificationCacheLaneLayerDirective,
+    QualificationCacheLaneLayerReceipt, QualificationCacheLaneReceipt, QualificationCacheLayer,
     QualificationCacheLayerDirective, QualificationCacheLayerReceipt,
-    QualificationCacheProducerContext, QualificationCacheProducerEvidence,
-    QualificationCacheReceipt, QualificationCacheReceiptArtifactDocument,
-    QualificationCacheReceiptLink, QualificationCacheRestore, QualificationCacheRestoreDirective,
+    QualificationCacheOwnerDirective, QualificationCacheOwnerMemberRef,
+    QualificationCacheOwnerReceipt, QualificationCacheProducerContext,
+    QualificationCacheProducerEvidence, QualificationCacheReceipt,
+    QualificationCacheReceiptArtifactDocument, QualificationCacheReceiptLink,
+    QualificationCacheRestore, QualificationCacheRestoreDirective,
     QualificationCacheRestoreExpectation, QualificationCacheRestorePolicy,
     QualificationCacheRestoreResult, QualificationCacheRunMetadata, QualificationCacheSave,
     QualificationCacheSaveActionResult, QualificationCacheSavePolicy, QualificationCacheSlot,

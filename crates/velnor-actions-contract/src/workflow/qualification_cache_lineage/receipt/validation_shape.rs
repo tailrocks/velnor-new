@@ -10,9 +10,9 @@ use super::super::errors::{check_text, invalid};
 use super::super::source_delta::validate_source_delta;
 use super::super::types::{
     AdmissionNode, MAX_QUALIFICATION_RECEIPT_BYTES, QualificationCacheLaneReceipt,
-    QualificationCacheProducerContext, QualificationCacheProducerEvidence,
-    QualificationCacheReceipt, QualificationCacheReceiptLink, QualificationSourceDelta,
-    qualification_cache_receipt_artifact_name,
+    QualificationCacheOwnerReceipt, QualificationCacheProducerContext,
+    QualificationCacheProducerEvidence, QualificationCacheReceipt, QualificationCacheReceiptLink,
+    QualificationSourceDelta, qualification_cache_receipt_artifact_name,
 };
 
 struct ReceiptShape<'a> {
@@ -25,6 +25,7 @@ struct ReceiptShape<'a> {
     source_delta: Option<&'a QualificationSourceDelta>,
     predecessor: Option<&'a QualificationCacheReceiptLink>,
     lanes: &'a [QualificationCacheLaneReceipt],
+    owners: &'a [QualificationCacheOwnerReceipt],
     run: crate::workflow::QualificationRunRef,
 }
 
@@ -154,6 +155,7 @@ pub(in crate::workflow::qualification_cache_lineage::receipt) fn validate_receip
         source_delta: receipt.source_delta.as_ref(),
         predecessor: receipt.predecessor.as_ref(),
         lanes: &receipt.lanes,
+        owners: &receipt.owners,
         run: receipt.run,
     })
 }
@@ -163,7 +165,7 @@ pub(in crate::workflow::qualification_cache_lineage::receipt) fn validate_produc
     producer: &QualificationCacheProducerContext,
 ) -> Result<(), ContractError> {
     validate_receipt_parts(&ReceiptShape {
-        schema: 2,
+        schema: 4,
         plan_id: &evidence.plan_id,
         campaign: &evidence.campaign,
         phase: evidence.phase,
@@ -172,14 +174,16 @@ pub(in crate::workflow::qualification_cache_lineage::receipt) fn validate_produc
         source_delta: evidence.source_delta.as_ref(),
         predecessor: evidence.predecessor.as_ref(),
         lanes: &evidence.lanes,
+        owners: &evidence.owners,
         run: producer.run,
     })
 }
 
 fn validate_receipt_parts(parts: &ReceiptShape<'_>) -> Result<(), ContractError> {
-    if parts.schema != 2
+    if parts.schema != 4
         || parts.lanes.len() > MAX_QUALIFICATION_CACHE_LANES
         || parts.lanes.is_empty()
+        || parts.owners.is_empty()
     {
         return Err(invalid("receipt_schema_or_lane_count"));
     }
@@ -212,6 +216,11 @@ fn validate_receipt_parts(parts: &ReceiptShape<'_>) -> Result<(), ContractError>
     for pair in parts.lanes.windows(2) {
         if pair[0].matrix_key >= pair[1].matrix_key {
             return Err(invalid("lanes_not_sorted_unique"));
+        }
+    }
+    for pair in parts.owners.windows(2) {
+        if pair[0].owner_id >= pair[1].owner_id {
+            return Err(invalid("owners_not_sorted_unique"));
         }
     }
     Ok(())

@@ -12,7 +12,7 @@ use super::types::{
 
 pub(super) fn find_saved_entry(
     mut node: Option<&AdmissionNode>,
-    matrix_key: &str,
+    owner_id: &str,
     layer: QualificationCacheLayer,
     slot: QualificationCacheSlot,
 ) -> Result<QualificationCacheBackendEntry, ContractError> {
@@ -23,7 +23,7 @@ pub(super) fn find_saved_entry(
     };
     while let Some(current) = node {
         if current.receipt.phase == expected_phase {
-            let observed = find_layer_receipt(Some(current), matrix_key, layer)?;
+            let observed = find_layer_receipt(Some(current), owner_id, layer)?;
             return saved_entry(observed);
         }
         node = current.previous.as_deref();
@@ -33,12 +33,12 @@ pub(super) fn find_saved_entry(
 
 pub(super) fn find_latest_saved_entry(
     mut node: Option<&AdmissionNode>,
-    matrix_key: &str,
+    owner_id: &str,
     layer: QualificationCacheLayer,
 ) -> Result<(QualificationCacheSlot, QualificationCacheBackendEntry), ContractError> {
     while let Some(current) = node {
         if let Some(slot) = save_slot(current.receipt.phase) {
-            let observed = find_layer_receipt(Some(current), matrix_key, layer)?;
+            let observed = find_layer_receipt(Some(current), owner_id, layer)?;
             if observed.save.action == QualificationCacheSaveActionResult::Succeeded {
                 return Ok((slot, saved_entry(observed)?));
             }
@@ -68,17 +68,18 @@ fn save_slot(phase: QualificationPhase) -> Option<QualificationCacheSlot> {
 
 pub(super) fn find_layer_receipt<'a>(
     node: Option<&'a AdmissionNode>,
-    matrix_key: &str,
+    owner_id: &str,
     layer: QualificationCacheLayer,
 ) -> Result<&'a QualificationCacheLayerReceipt, ContractError> {
     let node = node.ok_or_else(|| invalid("predecessor_receipt_missing"))?;
-    let lane = node
+    let owner = node
         .receipt
-        .lanes
+        .owners
         .iter()
-        .find(|lane| lane.matrix_key == matrix_key)
-        .ok_or_else(|| invalid("predecessor_lane_missing"))?;
-    lane.layers
+        .find(|owner| owner.owner_id == owner_id)
+        .ok_or_else(|| invalid("predecessor_owner_missing"))?;
+    owner
+        .layers
         .iter()
         .find(|record| record.layer == layer)
         .ok_or_else(|| invalid("predecessor_layer_missing"))

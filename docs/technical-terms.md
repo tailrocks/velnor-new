@@ -70,3 +70,6 @@
 | Capacity probe | A probe that measures available host capacity. |
 | Pre-JIT cleanup | Cleanup after Docker returns a final response to a container create request and before JIT configuration delivery. |
 | Parser | Software that reads input data and checks its structure. |
+| Cache owner | A generated job that owns cache layers for its matrix members. |
+| Cache layer | One type of data stored in the qualification cache. |
+| Matrix member | A plan entry that belongs to one generated job. |

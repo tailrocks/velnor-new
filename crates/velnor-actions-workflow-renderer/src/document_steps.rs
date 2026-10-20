@@ -67,6 +67,16 @@ fn internal_env(
         );
         return Ok(Yaml::Map(env));
     }
+    if steps::is_qualification_cache_operation(op) {
+        crate::steps_internal::validate_qualification_cache_env(op, step_env)?;
+        let mut env = vec![(INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned()))];
+        env.extend(
+            step_env
+                .iter()
+                .map(|(key, value)| (key.clone(), Yaml::str(value.clone()))),
+        );
+        return Ok(Yaml::Map(env));
+    }
     let request = format!("{}/{target}-request.json", ctx.request_dir);
     let mut env = Vec::new();
     if op == steps::RESOLVE_QUALIFICATION_OPERATION {

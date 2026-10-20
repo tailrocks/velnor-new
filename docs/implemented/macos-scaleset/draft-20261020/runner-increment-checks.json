@@ -1115,5 +1115,32 @@
     "review_sha256": "10f60bd9dacb54d70c290db2dd5fcc40d7c8e488825546bf0052be50f91c52bb",
     "merge_note": "Two candidate files came from 5ef492. The merge keeps the V32 recovery exports and current diagnostic text.",
     "scope": "The active tests check pair resources, image IDs, JIT privacy, and recovery. Two obsolete direct start tests are removed. Full runner and live gates remain necessary."
+  },
+  "cache_owner_contract": {
+    "result": "PASS",
+    "source_base": "981f812c8504c0a7e7a82af4f89f5dd3fe148f23",
+    "tests": 174,
+    "checks": [
+      {
+        "log": "qualification-owner-v4-parent-integrated-20261020.log",
+        "sha256": "6029e0b333c0a543df42e49fc56be8d3fa398d00dc80316082de667c5f18fc51",
+        "exit_status": 0,
+        "run_id": "63fca716-9a7e-4187-92aa-f3cc8da24ac8"
+      },
+      {
+        "log": "qualification-owner-v4-parent-language-final-20261020.log",
+        "sha256": "19ed312a2fa5e3fdf54e83b16446142349dea3e5b4a75640b9abe5eca6bbe5b4",
+        "exit_status": 0,
+        "run_id": "a78975aa-a594-4426-bf55-33afab2b2666"
+      },
+      {
+        "log": "qualification-owner-v4-parent-clippy-20261020.log",
+        "sha256": "4d6efccfd71604302da355e07af5aa68e9b1d20ba5fca7614d7aa9f9efb3e1fc",
+        "exit_status": 0
+      }
+    ],
+    "review_sha256": "24841fb6909a6a0d64860ec6f2c85612c2a3e59108d55bb9318e0e3308cac431",
+    "language_reviewer": "helper_language_review",
+    "scope": "The tests check cache owner identity, receipts, runtime file access, and step validation. Live cache production and installation tests remain NOT_RUN."
   }
 }

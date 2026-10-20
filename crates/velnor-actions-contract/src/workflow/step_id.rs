@@ -14,6 +14,10 @@ pub enum QualificationCacheStepStage {
     Restore,
     /// Save the exact archive for this job and cache layer.
     Save,
+    /// Read the runtime identity of one job's cache layer.
+    RuntimeIdentity,
+    /// Read the exact roots for one job's cache layer.
+    Roots,
 }
 
 /// Step ID for one job, cache layer, and action stage.
@@ -82,6 +86,8 @@ impl QualificationCacheStepStage {
             Self::Bind => "bind",
             Self::Restore => "restore",
             Self::Save => "save",
+            Self::RuntimeIdentity => "runtime-identity",
+            Self::Roots => "roots",
         }
     }
 }

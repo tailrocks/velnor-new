@@ -20,6 +20,20 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn serialized_disabled_layers_cannot_authorize_cache_access() -> TestResult {
+    let active_plan = qualification_plan(QualificationPhase::Cold, 701, &"a".repeat(40), None)?;
+    let active_entry = &active_plan.matrix.include[0];
+    let active_directive = QualificationCacheDirective::for_plan(&active_plan, None)?
+        .ok_or_else(|| std::io::Error::other("The active qualification directive is missing."))?;
+    let active_layer = active_directive
+        .layer(
+            &active_entry.matrix_key,
+            QualificationCacheLayer::CargoSources,
+        )
+        .ok_or_else(|| std::io::Error::other("The active Cargo directive is missing."))?;
+    let evidence =
+        runtime_identity(active_layer.runtime.as_ref().ok_or_else(|| {
+            std::io::Error::other("The active runtime requirements are missing.")
+        })?);
     for (phase, layer) in [
         (
             QualificationPhase::Control,
@@ -42,14 +56,8 @@ fn serialized_disabled_layers_cannot_authorize_cache_access() -> TestResult {
             .layer(&entry.matrix_key, layer)
             .ok_or_else(|| std::io::Error::other("layer directive missing"))?;
         assert!(!layer_directive.active);
-        let evidence = runtime_identity(
-            layer_directive
-                .runtime
-                .as_ref()
-                .ok_or_else(|| std::io::Error::other("runtime requirements missing"))?,
-        );
         let mut serialized = serde_json::to_value(&directive)?;
-        let layers = serialized["lanes"][0]["layers"]
+        let layers = serialized["owners"][0]["layers"]
             .as_array_mut()
             .ok_or_else(|| std::io::Error::other("layers are not an array"))?;
         let forged = layers
@@ -64,7 +72,7 @@ fn serialized_disabled_layers_cannot_authorize_cache_access() -> TestResult {
         let forged: QualificationCacheDirective = serde_json::from_value(serialized)?;
         assert!(
             forged
-                .bind_runtime(&plan, None, &entry.matrix_key, layer, &evidence)
+                .bind_runtime_owner(&plan, None, &entry.job_id, layer, &evidence)
                 .is_err(),
             "{phase:?} forged {layer:?} directive must fail plan reconstruction"
         );
@@ -82,16 +90,16 @@ fn plan_reconstructed_cold_directive_binds_runtime_identity() -> TestResult {
     let layer_directive = directive
         .layer(&entry.matrix_key, QualificationCacheLayer::CargoSources)
         .ok_or_else(|| std::io::Error::other("layer directive missing"))?;
-    let keys = directive.bind_runtime(
+    let keys = directive.bind_runtime_owner(
         &plan,
         None,
-        &entry.matrix_key,
+        &entry.job_id,
         QualificationCacheLayer::CargoSources,
         &runtime_identity(
             layer_directive
                 .runtime
                 .as_ref()
-                .ok_or_else(|| std::io::Error::other("runtime requirements missing"))?,
+                .ok_or_else(|| std::io::Error::other("The runtime requirements are missing."))?,
         ),
     )?;
     assert!(keys.restore.is_some());

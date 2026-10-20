@@ -155,10 +155,10 @@ pub fn bind_qualification_cache_runtime(
     let active = validate_cache_lane(&documents.directive, entry, request.matrix_key, layer)?;
     let bound = documents
         .directive
-        .bind_runtime(
+        .bind_runtime_owner(
             &documents.plan,
             documents.admission.as_ref(),
-            &entry.matrix_key,
+            &entry.job_id,
             layer,
             &documents.evidence,
         )

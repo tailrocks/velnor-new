@@ -204,7 +204,7 @@ fn validate_document(
     run: QualificationRunRef,
     metadata: &QualificationCacheRunMetadata,
 ) -> Result<QualificationCacheReceipt, OrchestratorError> {
-    if document.schema != 3 || document.producer.run != run {
+    if document.schema != 4 || document.producer.run != run {
         return Err(internal("qualification_producer_run_mismatch"));
     }
     document

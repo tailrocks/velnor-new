@@ -199,7 +199,11 @@ fn validate_step_role(step: &Step, role: StepRole, job: &str) -> Result<(), Cont
         StepRole::QualificationCacheBind
             | StepRole::QualificationCacheRestore
             | StepRole::QualificationCacheSave
+            | StepRole::QualificationCacheRoots
+            | StepRole::QualificationRuntimeIdentity
     ) && !matches!(step.id, Some(StepId::QualificationCache(_)))
+        && !(role == StepRole::QualificationRuntimeIdentity
+            && step.id == Some(StepId::QualificationRuntimeIdentity))
     {
         return Err(ContractError::identity(
             "step.id",
@@ -263,6 +267,16 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
                 QualificationCacheStepStage::Save => matches!(
                     kind,
                     StepKind::Action { uses, .. } if uses.starts_with("actions/cache/save@")
+                ),
+                QualificationCacheStepStage::RuntimeIdentity => matches!(
+                    kind,
+                    StepKind::Internal { operation, .. }
+                        if operation == "observe-qualification-cache-runtime-v1"
+                ),
+                QualificationCacheStepStage::Roots => matches!(
+                    kind,
+                    StepKind::Internal { operation, .. }
+                        if operation == "observe-qualification-cache-roots-v1"
                 ),
             }
         }

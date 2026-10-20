@@ -77,7 +77,7 @@ impl QualificationCacheReceiptArtifactDocument {
         }
         validate_producer_evidence_shape(&self.evidence, &self.producer)?;
         let receipt = QualificationCacheReceipt {
-            schema: 2,
+            schema: 4,
             plan_id: self.evidence.plan_id.clone(),
             run: self.producer.run,
             campaign: self.evidence.campaign.clone(),
@@ -87,6 +87,7 @@ impl QualificationCacheReceiptArtifactDocument {
             source_delta: self.evidence.source_delta.clone(),
             predecessor: self.evidence.predecessor.clone(),
             lanes: self.evidence.lanes.clone(),
+            owners: self.evidence.owners.clone(),
         };
         super::validation::validate_receipt_shape(&receipt)?;
         Ok(receipt)
@@ -104,7 +105,7 @@ impl QualificationCacheReceiptArtifactDocument {
             .filter(|branch| crate::is_valid_branch_name(branch))
             .ok_or_else(|| invalid("producer_dispatch_ref_invalid"))?;
         workflow_path(&context.workflow_ref, &context.repository)?;
-        if self.schema != 3
+        if self.schema != 4
             || self.producer.mode != context.mode
             || self.producer.repository != context.repository
             || self.producer.default_branch != context.default_branch
@@ -138,7 +139,7 @@ impl QualificationCacheReceiptArtifactDocument {
             .filter(|branch| crate::is_valid_branch_name(branch))
             .ok_or_else(|| invalid("producer_dispatch_ref_invalid"))?;
         let workflow = workflow_path(&self.producer.workflow_ref, &self.producer.repository)?;
-        if self.schema != 3
+        if self.schema != 4
             || metadata.conclusion != "success"
             || metadata.event != "workflow_dispatch"
             || metadata.run != self.producer.run
