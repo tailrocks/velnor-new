@@ -1677,5 +1677,17 @@
     "reviewer": "execution_source_security_review",
     "scope": "The tests use the active storage path. Ownership checks reject an existing volume. Failed cleanup keeps the reservation charged.",
     "remaining": "These tests use a local HTTP server. Live Docker tests and the full runner gate remain incomplete."
+  },
+  "polling_future_allocation": {
+    "result": "PASS",
+    "tests": 39,
+    "run_id": "464187fc-5c74-4f74-8c06-62a3bb669993",
+    "log_sha256": "946075b79d9d3ccfe0372638d771e07b4dfeaf26885853a088de3be901c3ea09",
+    "manifest_sha256": "f26c33c8d8c69665743fa5091e1bbaa1fd596491029bf518858b5e3ee4843370",
+    "author": "native_intake_composition",
+    "reviewer": "runtime_stack_architecture",
+    "scope": "Four awaited operations use heap storage. The change keeps ownership, cancellation, and operation order.",
+    "strict_result": "FAIL",
+    "remaining": "The strict check has other failures. These tests do not prove live operation."
   }
 }
