@@ -19,6 +19,7 @@ mod preview_policy;
 pub mod project_tool_refs;
 /// Generated run-time resolver for project-declared versions (hard decision 5).
 pub mod project_tool_resolver;
+mod publish;
 mod qualified_tools;
 mod release;
 mod resources;
@@ -75,6 +76,10 @@ pub use image_task::{NativeImageCachePolicy, NativeImagePlatform, NativeImageTas
 pub use mise::{
     CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind,
     MiseCheck, is_valid_check_system_build, is_valid_check_system_version, is_valid_mise_task_name,
+};
+pub use publish::{
+    PublishBundle, PublishConfig, RELEASE_TAG_GLOB, ReleaseTag, VersionSource, is_artifact_id,
+    is_strict_semver,
 };
 pub use qualified_tools::{
     QualifiedCargoInstallation, QualifiedTool, QualifiedToolArtifact, QualifiedToolArtifactRecipe,
@@ -167,6 +172,9 @@ pub struct VelnorConfig {
     /// Optional downstream package promotion policy.
     #[serde(default, skip_serializing_if = "DistributionConfig::is_empty")]
     pub distribution: DistributionConfig,
+    /// Tag-driven publication (`[[publish.bundles]]`).
+    #[serde(default, skip_serializing_if = "PublishConfig::is_empty")]
+    pub publish: PublishConfig,
 }
 
 impl VelnorConfig {
@@ -223,6 +231,7 @@ impl VelnorConfig {
             }
         }
         self.distribution.validate(file)?;
+        self.publish.validate(file)?;
         self.check_distribution_source(file)?;
         self.check_preview_tools(file)?;
         self.check_crate_build_jobs(file)?;

@@ -249,3 +249,56 @@ pin.
 project-declared version into any generated file, loading the project's
 Mise config (or trusting it) in a generated step to resolve versions, or
 letting a Velnor pin override a project declaration.
+
+## HD-8. Publication runs only from trusted pushes
+
+**Status.** Adopted per the split brief; owner may revisit. Proposed in the
+ChainArgos split design (§1.2, HD-8) and adopted by the owner's standing
+instruction for the split work (2026-10-20). It adds an authority boundary
+analogous to the release contract's workflow-boundary table (release
+contract §7).
+
+**Decision.** A generated workflow that publishes anything (release assets,
+tags, images, packages) runs only from a `push` to the default branch or a
+release tag. It runs only after the `Required` check concluded `success` for
+that exact SHA, and its privileged jobs check out and execute no repository
+code. A tag *promotes* image digests that were built and attested on `main`;
+it never rebuilds them. Release-asset bundles are the one tag-time build: a
+deterministic archive (sorted entries, zero mtimes, root owner) of files at a
+commit reachable from `main`, by a read-only job that only reads them. The
+trigger set is closed in the typed IR: there is no
+`pull_request`, `pull_request_target`, `workflow_run`, `workflow_dispatch` or
+`schedule` variant, so no config field can add one.
+
+**Invariants.**
+
+- Every publication job transitively needs one authority job. The authority
+  job holds `contents: read` and `checks: read`, has no checkout, and
+  verifies the tag is annotated, targets the pushed commit, is reachable
+  from the default branch, has a green `Required` check run from GitHub
+  Actions at that SHA, names a declared artifact, and carries the manifest
+  version the tag claims.
+- The roles are fixed: build (read-only, the only role that checks out
+  code, and it runs no repository code), attest (OIDC and attestation authority, no checkout) and publish
+  (`contents: write`, protected environment, no checkout). Permissions equal
+  the role matrix exactly; any drift fails generation.
+- Release assets are immutable: an existing asset fails the job and is never
+  overwritten.
+- The concurrency group is one fixed string per pushed ref and never
+  cancels. A per-artifact group would silently drop a queued release, since
+  GitHub keeps one pending run per group.
+
+**Release-asset Maven bundle choice.** Adopted per the split brief; owner may
+revisit. GitHub Packages Maven is repository-scoped and cannot serve private
+cross-repository consumers with a scoped CI credential, so Java libraries
+ship as release-asset Maven bundles consumed through the same App-token
+fetch as Cargo git dependencies. Rejected: a machine-user classic PAT in
+every consumer. The bundle mechanism is specified in the
+[package publication contract](proposed/package-publication-contract.md).
+
+**Must not be reintroduced without owner approval:** publication from a pull
+request, `workflow_run` or free-form dispatch; a publication job that checks
+out and runs repository code with write or OIDC authority; rebuilding an image at the
+tag instead of promoting its main-built digest; overwriting or deleting a
+published asset or moving a published tag.
+

@@ -18,6 +18,7 @@ preserves other repository-owned entries as specified in §3:
 └── workflows/
     ├── binary-release.yml         # consumer-v1 only, Rust binary release enabled
     ├── ci.yml                      # both policies; Velnor policy adds campaign inputs
+    ├── publish.yml                 # consumer-v1 only, at least one `[[publish.bundles]]`
     ├── qualification.yml           # optional schema 2 workflow selected by configuration
     ├── release.yml               # velnor-repository-v1, or consumer-v1 with release enabled
     └── suites.yml                  # optional standalone Nextest suite workflow (or `<slug>.yml`)
@@ -29,6 +30,10 @@ This optional workflow is distinct from Velnor's five-phase hosted cache
 campaign ([contract](hosted-cache-qualification-contract.md)): the campaign's
 dispatch inputs and predecessor resolver are part of generated `ci.yml`
 under `velnor-repository-v1`, not a separate workflow file.
+
+`publish.yml` is the tag-driven publication workflow (see the
+[package publication contract](package-publication-contract.md)); it is absent
+unless `[[publish.bundles]]` declares an artifact.
 
 `release.yml` is emitted for `velnor-repository-v1` (keeping
 its existing Velnor-internal meaning) and for `consumer-v1` when
@@ -238,7 +243,7 @@ explicitly allowlisted in `[workflow] preserve_workflows = [".github/workflows/<
 Each `preserve_workflows` entry MUST be an exact `.github/workflows/<slug>.yml`
 path with a lowercase ASCII slug (`[a-z0-9][a-z0-9_-]*`), no duplicates, and
 MUST NOT name a generator-owned workflow (`ci.yml`, `freshness.yml`,
-`release.yml`, `binary-release.yml`, `tofu-apply.yml`, `qualification.yml`,
+`release.yml`, `publish.yml`, `binary-release.yml`, `tofu-apply.yml`, `qualification.yml`,
 `product-release.yml`, `monitoring.yml`, `suites.yml`, or any custom suite
 `<workflow>.yml` slug). Allowlisted hand-owned workflows are preserved across
 in-place generation and copied into `--output-dir` preview trees so
