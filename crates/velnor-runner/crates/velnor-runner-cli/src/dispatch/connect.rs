@@ -9,6 +9,7 @@ use velnor_runner_host::{
     import_secret,
 };
 
+use super::connect_authority as authority;
 use super::connect_config::sample_config;
 use super::connection_state::{
     admission_lock, config_lock, connect_write_error, connection_binding_snapshot,
@@ -26,6 +27,11 @@ pub(super) struct ConnectRequest<'a> {
     pub(super) connection_id: &'a str,
     pub(super) repo: &'a str,
     pub(super) repository_id: i64,
+    pub(super) job_authority_policy: Option<&'a Path>,
+    pub(super) job_authority_inventory: Option<&'a Path>,
+    pub(super) job_authority_generator_source_sha: Option<&'a str>,
+    pub(super) job_authority_generator_artifact_sha256: Option<&'a str>,
+    pub(super) job_authority_generation: Option<u64>,
     pub(super) scale_set: &'a str,
     pub(super) scale_set_labels: Vec<String>,
     pub(super) source_policy_mode: &'a str,
@@ -244,6 +250,7 @@ fn candidate_config(
     if connect_plan(existing, &candidate) == ConnectPlan::Rejected {
         return Err(ConnectError::Rejected);
     }
+    let candidate = authority::apply(candidate, request, connection)?;
     candidate.to_toml().map_err(|_| ConnectError::Config)
 }
 

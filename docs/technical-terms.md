@@ -56,3 +56,6 @@
 | File system ID | The number that identifies a file system. |
 | Device pair | The Linux major and minor device numbers. |
 | Cleanup proof | A record that shows that the job’s Docker and guest resources are not present after cleanup. |
+| Source context | A GitHub event and source ref, with pull request rules for the job. |
+| Repository binding | A digest of one repository connection and its source policy. |
+| Policy generation | A positive integer that identifies one policy version. |

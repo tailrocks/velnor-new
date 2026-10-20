@@ -35,6 +35,11 @@ fn connect_help_reads_stdin_and_has_no_token_flag() -> Result<(), String> {
     for flag in [
         "--connection-id",
         "--repository-id",
+        "--job-authority-inventory",
+        "--job-authority-generator-source-sha",
+        "--job-authority-generator-artifact-sha256",
+        "--job-authority-generation",
+        "--job-authority-policy",
         "--scale-set-label",
         "--source-policy-mode",
         "--event",
@@ -289,6 +294,11 @@ fn request(state: &Path) -> ConnectRequest<'_> {
         connection_id: "example-repo",
         repo: "example/repo",
         repository_id: 123,
+        job_authority_policy: None,
+        job_authority_inventory: None,
+        job_authority_generator_source_sha: None,
+        job_authority_generator_artifact_sha256: None,
+        job_authority_generation: None,
         scale_set: "ubuntu-26.04-scale-set",
         scale_set_labels: vec!["velnor".to_owned(), "ubuntu-26.04-scale-set".to_owned()],
         source_policy_mode: "branch-restricted",
@@ -342,3 +352,6 @@ mod cli_args_tests;
 mod policy_tests;
 #[path = "connect_tests/reconnect.rs"]
 mod reconnect_tests;
+
+#[path = "connect_tests/authority_inventory.rs"]
+mod authority_inventory_tests;

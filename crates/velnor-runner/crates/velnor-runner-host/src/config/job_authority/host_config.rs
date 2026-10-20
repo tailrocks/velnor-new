@@ -1,14 +1,87 @@
 #[cfg(test)]
 use super::{
-    ApprovedEventContext, ApprovedJobAuthorityPolicy, ApprovedWorkflow, GeneratorIdentity,
-    JobAuthorityRole, POLICY_SCHEMA, PermissionLevel, WorkflowEvent, sha256,
+    ApprovedEventContext, ApprovedWorkflow, GeneratorIdentity, JobAuthorityRole, POLICY_SCHEMA,
+    PermissionLevel, WorkflowEvent, sha256,
 };
-use super::{ApprovedJobAuthorityEntry, ConnectionId, JobAuthorityLookup};
+use super::{
+    ApprovedJobAuthorityEntry, ApprovedJobAuthorityPolicy, ConnectionId, JobAuthorityLookup,
+};
 #[cfg(test)]
 use crate::config::RepositoryConnection;
 use crate::error::HostError;
 
 impl super::super::HostConfig {
+    /// Add one reviewed authority policy from JSON.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Config`] when the JSON does not add one valid policy for the named
+    /// connection or changes any existing configuration.
+    pub fn with_job_authority_policy_json(
+        &self,
+        connection_id: &ConnectionId,
+        policy_json: &str,
+    ) -> Result<Self, HostError> {
+        const MAX_POLICY_BYTES: usize = 256 * 1024;
+        self.validate()?;
+        if policy_json.is_empty()
+            || policy_json.len() > MAX_POLICY_BYTES
+            || !self
+                .connections
+                .iter()
+                .any(|item| &item.connection_id == connection_id)
+            || self
+                .job_authority_policies
+                .iter()
+                .any(|policy| policy.connection_id() == connection_id)
+        {
+            return Err(HostError::Config);
+        }
+
+        let mut policy: ApprovedJobAuthorityPolicy =
+            serde_json::from_str(policy_json).map_err(|_| HostError::Config)?;
+        policy.canonicalize();
+        if policy.connection_id() != connection_id {
+            return Err(HostError::Config);
+        }
+        let mut candidate = self.clone();
+        candidate.job_authority_policies.push(policy);
+        candidate.validate()?;
+        Ok(candidate)
+    }
+
+    /// Add one policy built from a validated generator inventory and reviewed identities.
+    ///
+    /// The generator identity values are operator-reviewed provenance. This method does not
+    /// authenticate the release that produced the inventory.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Config`] when the inventory, identities, connection, or resulting
+    /// policy is invalid.
+    pub fn with_job_authority_inventory(
+        &self,
+        connection_id: &ConnectionId,
+        inventory_json: &str,
+        generator_source_sha: &str,
+        generator_artifact_sha256: &str,
+        generation: u64,
+    ) -> Result<Self, HostError> {
+        let connection = self
+            .connections
+            .iter()
+            .find(|connection| &connection.connection_id == connection_id)
+            .ok_or(HostError::Config)?;
+        let policy_json = super::inventory_bridge::policy_json_from_inventory(
+            connection,
+            inventory_json,
+            generator_source_sha,
+            generator_artifact_sha256,
+            generation,
+        )?;
+        self.with_job_authority_policy_json(connection_id, &policy_json)
+    }
+
     /// Build a parsed test config with one validator-approved policy for a real binding.
     #[cfg(test)]
     pub(crate) fn test_with_job_authority_policy(
@@ -38,7 +111,7 @@ impl super::super::HostConfig {
         Ok(config)
     }
 
-    /// Add one valid test-only authority policy through normal HostConfig validation.
+    /// Add one valid test-only authority policy through normal `HostConfig` validation.
     #[cfg(test)]
     pub(crate) fn add_test_job_authority_policy(
         &mut self,

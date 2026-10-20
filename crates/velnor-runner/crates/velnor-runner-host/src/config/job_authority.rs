@@ -1,6 +1,7 @@
 //! Reviewed workflow and job authority for one repository connection.
 
 mod host_config;
+mod inventory_bridge;
 #[cfg(test)]
 mod tests;
 mod validate;

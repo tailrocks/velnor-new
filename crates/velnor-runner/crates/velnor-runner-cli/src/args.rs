@@ -106,6 +106,21 @@ pub struct ConnectArgs {
     /// Immutable GitHub repository ID.
     #[arg(long)]
     pub repository_id: i64,
+    /// Give the path to the reviewed host-policy JSON object for this connection.
+    #[arg(long, value_name = "FILE")]
+    pub job_authority_policy: Option<PathBuf>,
+    /// Give the path to the generator inventory in JSON format. Also supply `--job-authority-generator-source-sha`, `--job-authority-generator-artifact-sha256`, and `--job-authority-generation`.
+    #[arg(long, value_name = "FILE")]
+    pub job_authority_inventory: Option<PathBuf>,
+    /// Use the reviewed source commit for the inventory generator. Enter 40 lowercase hexadecimal digits.
+    #[arg(long)]
+    pub job_authority_generator_source_sha: Option<String>,
+    /// Use the reviewed SHA-256 digest of the inventory generator executable. Enter 64 lowercase hexadecimal digits.
+    #[arg(long)]
+    pub job_authority_generator_artifact_sha256: Option<String>,
+    /// Set the generation number for this authority policy.
+    #[arg(long)]
+    pub job_authority_generation: Option<u64>,
     /// Scale Set name.
     #[arg(long)]
     pub scale_set: String,

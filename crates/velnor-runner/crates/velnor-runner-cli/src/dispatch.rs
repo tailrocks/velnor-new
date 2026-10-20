@@ -11,6 +11,7 @@ use velnor_runner_host::{READINESS_BUDGET, Readiness, doctor_json, status_json};
 use crate::args::{Cli, Command, CredentialAction, DaemonAction};
 
 mod connect;
+mod connect_authority;
 mod connect_config;
 mod connection_state;
 mod credential;
@@ -56,6 +57,13 @@ fn dispatch(cli: &Cli) -> ExitCode {
             connection_id: &args.connection_id,
             repo: &args.repo,
             repository_id: args.repository_id,
+            job_authority_policy: args.job_authority_policy.as_deref(),
+            job_authority_inventory: args.job_authority_inventory.as_deref(),
+            job_authority_generator_source_sha: args.job_authority_generator_source_sha.as_deref(),
+            job_authority_generator_artifact_sha256: args
+                .job_authority_generator_artifact_sha256
+                .as_deref(),
+            job_authority_generation: args.job_authority_generation,
             scale_set: &args.scale_set,
             scale_set_labels: args.scale_set_labels.clone(),
             source_policy_mode: &args.source_policy_mode,

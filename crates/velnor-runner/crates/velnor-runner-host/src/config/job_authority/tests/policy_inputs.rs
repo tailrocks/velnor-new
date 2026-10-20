@@ -75,3 +75,42 @@ fn connection_identity_bytes_do_not_include_job_authority() -> Result<(), HostEr
     assert!(encoded.contains("[[job_authority_policies]]"));
     Ok(())
 }
+
+#[test]
+fn policy_json_adds_one_bound_policy_without_replacing_existing_policy() -> Result<(), HostError> {
+    let connections = [
+        basic_connection("first", 7, "example/first", "first", "first-set"),
+        basic_connection("second", 8, "example/second", "second", "second-set"),
+        basic_connection("third", 9, "example/third", "third", "third-set"),
+    ];
+    let mut base = crate::HostConfig::parse(&host_config(&connections, 1))?;
+    let first_policy = policy(&base.connections()[0]);
+    base.job_authority_policies.push(first_policy.clone());
+    let target_connection = &base.connections()[1];
+    let target_policy = policy(target_connection);
+    let policy_json = serde_json::to_string(&target_policy).map_err(|_| HostError::Config)?;
+    let added =
+        base.with_job_authority_policy_json(&target_connection.connection_id, &policy_json)?;
+    assert_eq!(added.connections(), base.connections());
+    assert_eq!(added.host, base.host);
+    assert_eq!(added.docker, base.docker);
+    assert!(added.job_authority_policies.contains(&first_policy));
+    assert!(added.job_authority_policies.contains(&target_policy));
+
+    assert!(
+        added
+            .with_job_authority_policy_json(&target_connection.connection_id, &policy_json)
+            .is_err()
+    );
+    let unrelated_policy = policy(&base.connections()[2]);
+    let unrelated_json = serde_json::to_string(&unrelated_policy).map_err(|_| HostError::Config)?;
+    assert!(
+        base.with_job_authority_policy_json(&target_connection.connection_id, &unrelated_json)
+            .is_err()
+    );
+    assert!(
+        base.with_job_authority_policy_json(&target_connection.connection_id, "{}")
+            .is_err()
+    );
+    Ok(())
+}
