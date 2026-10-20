@@ -10,6 +10,8 @@ members = [
     "crates/velnor-actions-cli",
     "crates/velnor-actions-freshness",
     "crates/velnor-actions-tofu",
+    "crates/velnor-actions-bun",
+    "crates/velnor-actions-gradle",
 ]
 exclude = ["crates/velnor-runner"]
 resolver = "3"

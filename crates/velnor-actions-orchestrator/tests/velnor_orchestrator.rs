@@ -38,6 +38,7 @@ mod impl_git_authority_p10;
 mod impl_git_paths_p10;
 mod impl_images;
 mod impl_images_publish;
+mod impl_images_select;
 mod impl_lane_isolation;
 mod impl_local_release_manifest_fs;
 #[path = "impl_local_shared_action.rs"]
@@ -69,6 +70,7 @@ mod impl_orch_features;
 mod impl_orch_gate;
 mod impl_orch_gen;
 mod impl_orch_gen2;
+mod impl_orch_gen_lfs;
 mod impl_orch_install_sets;
 mod impl_orch_intake;
 mod impl_orch_intake_deps;

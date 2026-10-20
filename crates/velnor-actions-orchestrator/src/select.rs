@@ -11,22 +11,24 @@
 //! group, qualification) change everything.
 
 use std::collections::BTreeSet;
-use std::ffi::OsString;
 use std::path::Path;
 
 use velnor_actions_contract::{ProposedTask, WorkflowEvent};
-use velnor_actions_mise::GitRequest;
 use velnor_actions_rust::SelectionBroadening;
 
 use crate::decisions::{broadening_for_path, selection_broadens_for_path};
 use crate::discover::Discovery;
-use crate::git_paths::{NON_UTF8_PATH, split_nul_paths};
+use crate::git_paths::NON_UTF8_PATH;
 use crate::select_affected::{Ownership, affected_packages, has_unowned_file};
 use crate::select_edges::{base_edges, head_edges};
-use crate::validators::{validate_diff_rev, validate_select_diff_args};
 
+#[path = "select_changes.rs"]
+mod changes;
 #[path = "select_checkout.rs"]
 mod checkout;
+#[path = "select_images.rs"]
+pub(crate) mod images;
+pub(crate) use images::ChangeEvidence;
 #[path = "select_mode.rs"]
 mod mode;
 #[path = "select_paths.rs"]
@@ -39,7 +41,8 @@ use mode::{event_token, resolved_edges, resolved_links};
 #[path = "select_tool_sources.rs"]
 mod tool_sources;
 
-use paths::{head_sha, is_advisory_toolfile, tree_diff_names, untracked_files};
+use changes::{change_sets, local_change_set};
+use paths::head_sha;
 
 /// Full obligation universe: every task with applicable targets.
 ///
@@ -77,6 +80,7 @@ pub(crate) fn classify_changed(
     head: &str,
     discovery: &Discovery,
     warnings: &mut Vec<String>,
+    evidence: &mut ChangeEvidence,
 ) -> Option<BTreeSet<String>> {
     if selection_mode(event) == SelectionMode::Full {
         warnings.push(format!("full_run_event:{}:all_changed", event_token(event)));
@@ -89,7 +93,7 @@ pub(crate) fn classify_changed(
         return None;
     }
     if event == WorkflowEvent::Local {
-        return classify_local(root, discovery, warnings);
+        return classify_local(root, discovery, warnings, evidence);
     }
     let Some(base) = base else {
         warnings.push("comparison_unavailable:missing_base:all_changed".to_owned());
@@ -108,7 +112,13 @@ pub(crate) fn classify_changed(
     }
     let (changed, toolfiles) = change_sets(root, base, head, warnings)?;
     Some(affected_from_changed(
-        discovery, &changed, toolfiles, root, base, head, warnings,
+        discovery,
+        &changed,
+        toolfiles,
+        root,
+        (base, head),
+        warnings,
+        evidence,
     ))
 }
 
@@ -117,6 +127,7 @@ fn classify_local(
     root: &Path,
     discovery: &Discovery,
     warnings: &mut Vec<String>,
+    evidence: &mut ChangeEvidence,
 ) -> Option<BTreeSet<String>> {
     let sha = match head_sha(root) {
         Ok(sha) => sha,
@@ -127,7 +138,13 @@ fn classify_local(
     };
     let (changed, toolfiles) = local_change_set(root, &sha, warnings)?;
     Some(affected_from_changed(
-        discovery, &changed, toolfiles, root, &sha, &sha, warnings,
+        discovery,
+        &changed,
+        toolfiles,
+        root,
+        (&sha, &sha),
+        warnings,
+        evidence,
     ))
 }
 
@@ -145,10 +162,16 @@ fn affected_from_changed(
     changed: &BTreeSet<String>,
     toolfiles: bool,
     root: &Path,
-    base: &str,
-    head: &str,
+    (base, head): (&str, &str),
     warnings: &mut Vec<String>,
+    evidence: &mut ChangeEvidence,
 ) -> BTreeSet<String> {
+    if !changed
+        .iter()
+        .any(|path| selection_broadens_for_path(path).is_some())
+    {
+        evidence.paths = Some(changed.clone());
+    }
     let all_packages: BTreeSet<String> = discovery
         .proposals
         .iter()
@@ -263,131 +286,6 @@ pub(crate) fn group_changed(
 ) -> bool {
     changed.contains(&task.identity.unit_id)
         || (task.identity.unit_id.is_empty() && changed_keys.contains(&task.identity.unit_key))
-}
-
-/// Files changed between base and head via the allowlisted `diff` verb.
-///
-/// Validation gates the untrusted range (flag-injection defense); `-z` is
-/// our own trusted constant added after, so output is NUL-delimited with
-/// no C-quoting or trimming. Rename detection stays off: the output is a
-/// set of possibly-affected paths, and a collapsed R100 rename would drop
-/// the old path's owner from selection. Same convention as
-/// `tree_diff_names` and `added_files`.
-fn changed_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>, String> {
-    validate_diff_rev(base, "bad_base")?;
-    validate_diff_rev(head, "bad_head")?;
-    let mut args = vec![
-        OsString::from("--name-only"),
-        OsString::from("--no-renames"),
-        OsString::from(format!("{base}...{head}")),
-        OsString::from("--"),
-    ];
-    validate_select_diff_args(&args).map_err(|err| err.to_string())?;
-    args.insert(0, OsString::from("-z"));
-    let output = GitRequest::diff(args)
-        .run_in(root)
-        .map_err(|err| err.to_string())?;
-    output
-        .require_success("git")
-        .map_err(|err| err.to_string())?;
-    split_nul_paths(&output.stdout)
-}
-
-/// Committed change set minus advisory tool files, or `None` to broaden.
-///
-/// Git failures, non-ignored untracked files, and modified tracked files
-/// broaden with a recorded warning; the flag reports whether tool files were filtered, for the
-/// findings-only warning when nothing else changed.
-fn change_sets(
-    root: &Path,
-    base: &str,
-    head: &str,
-    warnings: &mut Vec<String>,
-) -> Option<(BTreeSet<String>, bool)> {
-    let changed = match changed_files(root, base, head) {
-        Ok(files) => files,
-        Err(problem) => {
-            warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
-            return None;
-        }
-    };
-    let untracked = match untracked_files(root) {
-        Ok(files) => files,
-        Err(problem) => {
-            warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
-            return None;
-        }
-    };
-    let mut dirty = BTreeSet::new();
-    for cached in [true, false] {
-        match tree_diff_names(root, cached) {
-            Ok(files) => dirty.extend(files),
-            Err(problem) => {
-                warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
-                return None;
-            }
-        }
-    }
-    let unchanged =
-        tool_sources::unchanged_declaration_sources(root, base, Some(head), &changed, warnings)?;
-    let toolfiles = !unchanged.is_empty()
-        || changed.iter().any(|path| is_advisory_toolfile(path))
-        || untracked.iter().any(|path| is_advisory_toolfile(path));
-    if untracked
-        .into_iter()
-        .any(|path| !is_advisory_toolfile(&path))
-    {
-        warnings.push("untracked_files:all_changed".to_owned());
-        return None;
-    }
-    // The tree under test must be the committed head: a modified tracked
-    // file is a change the commit diff cannot see.
-    if dirty.iter().any(|path| !is_advisory_toolfile(path)) {
-        warnings.push("dirty_worktree:all_changed".to_owned());
-        return None;
-    }
-    let changed = changed
-        .into_iter()
-        .filter(|path| !is_advisory_toolfile(path) && !unchanged.contains(path))
-        .collect();
-    Some((changed, toolfiles))
-}
-
-/// Working-tree change set minus advisory tool files, or `None` to broaden.
-///
-/// Staged plus unstaged diffs plus untracked files form the local union;
-/// git failures broaden with a recorded warning.
-fn local_change_set(
-    root: &Path,
-    base: &str,
-    warnings: &mut Vec<String>,
-) -> Option<(BTreeSet<String>, bool)> {
-    let mut changed = BTreeSet::new();
-    for cached in [true, false] {
-        match tree_diff_names(root, cached) {
-            Ok(files) => changed.extend(files),
-            Err(problem) => {
-                warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
-                return None;
-            }
-        }
-    }
-    let untracked = match untracked_files(root) {
-        Ok(files) => files,
-        Err(problem) => {
-            warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
-            return None;
-        }
-    };
-    changed.extend(untracked);
-    let unchanged =
-        tool_sources::unchanged_declaration_sources(root, base, None, &changed, warnings)?;
-    let toolfiles = !unchanged.is_empty() || changed.iter().any(|path| is_advisory_toolfile(path));
-    let changed = changed
-        .into_iter()
-        .filter(|path| !is_advisory_toolfile(path) && !unchanged.contains(path))
-        .collect();
-    Some((changed, toolfiles))
 }
 
 #[cfg(test)]

@@ -14,6 +14,8 @@ use super::{Family, ProductRelease, render};
 
 #[path = "schema2_product_release_exec_tests.rs"]
 mod exec_tests;
+#[path = "schema2_product_release_rerun_tests.rs"]
+mod rerun_tests;
 use super::super::product_release_test_pins::test_pins;
 
 fn product(families: &[RoutingWorkflow]) -> Result<ProductRelease, Box<dyn Error>> {
@@ -320,7 +322,7 @@ fn run_prepare_metadata_predicate(
 
 fn assert_prepare_tag_target(function: &str) -> Result<(), Box<dyn Error>> {
     let script = format!(
-        "repository='tailrocks/velnor-new'\nsource_sha='0123456789abcdef0123456789abcdef01234567'\nprepare_tag='v0.1.4'\ngh() {{ test \"$*\" = 'api repos/tailrocks/velnor-new/git/ref/tags/v0.1.4' || return 1; printf '%s\\n' \"$GH_TAG_FIXTURE\"; }}\n{function}\nassert_tag_target\n"
+        "repository='tailrocks/velnor-new'\nrelease_commit='0123456789abcdef0123456789abcdef01234567'\nprepare_tag='v0.1.4'\ngh() {{ test \"$*\" = 'api repos/tailrocks/velnor-new/git/ref/tags/v0.1.4' || return 1; printf '%s\\n' \"$GH_TAG_FIXTURE\"; }}\n{function}\nassert_tag_target\n"
     );
     let output = Command::new("bash")
         .args(["-euo", "pipefail", "-c", &script])

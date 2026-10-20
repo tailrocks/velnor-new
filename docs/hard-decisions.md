@@ -74,7 +74,9 @@ library used by one app runs exactly those two crate jobs; touching one app runs
 only that app's job. `push`, `merge_group`, and `workflow_dispatch` run every
 job. The baseline-coverage skip path (trusted-baseline artifacts and
 `covered_tasks` step gates) is removed completely; it is not a second skip
-mechanism. See [affected selection](implemented/affected-selection.md).
+mechanism. Container image build jobs join the same disposition table, keyed
+on their Dockerfile, context inputs and prebuilt crate (adopted per the split
+brief; owner may revisit). See [affected selection](implemented/affected-selection.md).
 Approved by the human owner on 2026-10-19, together with the decision 1
 amendment ("every crate job the plan schedules").
 The `complete = true` input rule, which lets a package with an unbounded
@@ -264,6 +266,42 @@ project-declared version into any generated file, loading the project's
 Mise config (or trusting it) in a generated step to resolve versions, or
 letting a Velnor pin override a project declaration.
 
+## 6. One job per Bun workspace member with parallel script steps
+
+**Decision.** Each Bun workspace member owns exactly one generated CI job named
+`Bun / <package name>` (job id `bun-<slug>`, for example
+`Bun / @chainargos/ui`). A single-package root (no `workspaces`) is one member.
+The job prepares checkout, pinned tools and the dependency install once; the
+member's `package.json` scripts (`typecheck`, `lint`, `test`, `build` by
+default) then run as parallel steps (`background: true` members joined by one
+`wait-all`). The only accepted JavaScript lockfile is the text `bun.lock`.
+Specification: [Bun contract](proposed/bun-contract.md).
+
+**Status.** Adopted per the split brief; owner may revisit. It extends decision
+1 to a new stack.
+
+**Rationale.** Decision 1's rationale holds for Bun: checkout, tool setup and
+`bun install` are paid once per job and the independent checks overlap. A
+workspace member is the unit whose scripts share one `node_modules` view and
+whose affected selection is exact (its directory plus its `workspace:`
+dependents), so a one-member change does not run the other members. Foreign
+lockfiles (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, binary
+`bun.lockb`) fail generation instead of adding a second package-manager
+adapter.
+
+**Invariants.**
+
+- Repository scripts never see a credential. The registry phase of
+  `bun install --ignore-scripts` is the only step that holds
+  `GITHUB_TOKEN` with `packages: read` (decision 7), and it reads a
+  Velnor-written `bunfig.toml`, never the repository's registry settings.
+- Generation fails on a repository `bunfig.toml` that sets a registry,
+  scope, token or certificate (`bunfig_registry_override`).
+
+**Must not be reintroduced without owner approval:** a second package-manager
+adapter, one shared job for several members, scripts run before the install
+credential is gone, or a repository-controlled registry in the install phase.
+
 ## 7. Private dependency credentials
 
 **Decision.** A GitHub App installation token (`contents: read`, an exact
@@ -382,3 +420,5 @@ associated-PR source selection from irreversible tag mutation. Tag, signer and
 publisher jobs remain source-free; no general privileged checkout or execution
 is authorized. The release is published once with complete signed assets and
 stays immutable. See [manual stable coordination](proposed/binary-release-contract.md).
+
+**Gradle stack decisions (HD-4a adapter version grammars, HD-5 one job per Gradle project) and the release-asset Maven bundle choice** are recorded in [Gradle stack contract](proposed/gradle-contract.md#decisions); adopted per the split brief, owner may revisit.

@@ -988,6 +988,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "velnor-actions-bun"
+version = "0.1.29"
+dependencies = [
+ "serde_json",
+ "thiserror",
+ "toml",
+ "velnor-actions-contract",
+]
+
+[[package]]
 name = "velnor-actions-cli"
 version = "0.1.29"
 dependencies = [
@@ -1023,6 +1033,13 @@ dependencies = [
  "syn",
  "toml",
  "ureq",
+]
+
+[[package]]
+name = "velnor-actions-gradle"
+version = "0.1.29"
+dependencies = [
+ "sha2",
 ]
 
 [[package]]
