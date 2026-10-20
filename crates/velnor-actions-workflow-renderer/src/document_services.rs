@@ -28,3 +28,13 @@ pub(crate) fn services_yaml(services: &[velnor_actions_contract::ServiceContaine
             .collect(),
     )
 }
+
+/// Append the `services:` entry when the job declares any.
+pub(crate) fn push_services(
+    entries: &mut Vec<(String, Yaml)>,
+    services: &[velnor_actions_contract::ServiceContainer],
+) {
+    if !services.is_empty() {
+        entries.push(("services".to_owned(), services_yaml(services)));
+    }
+}

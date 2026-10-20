@@ -137,6 +137,7 @@ pub fn build_bun_member_job(
     let mut all = vec![steps::checkout_step(checkout_uses)?];
     all.extend(policy.steps.iter().cloned());
     Ok(Job {
+        services: Vec::new(),
         display_name: format!("Bun / {}", policy.name),
         runs_on: BUN_RUNNER.to_owned(),
         timeout_minutes: policy.timeout,
