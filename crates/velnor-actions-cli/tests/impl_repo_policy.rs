@@ -52,6 +52,7 @@ pub(crate) const MEMBERS: [(&str, &str); 10] = [
         "velnor-actions-orchestrator",
     ),
     ("crates/velnor-actions-rust", "velnor-actions-rust"),
+    ("crates/velnor-actions-gradle", "velnor-actions-gradle"),
     ("crates/velnor-actions-tofu", "velnor-actions-tofu"),
     (
         "crates/velnor-actions-workflow-renderer",

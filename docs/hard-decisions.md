@@ -396,3 +396,5 @@ request or fork event, a privileged job that checks out or runs repository
 code, a release tag that rebuilds instead of promoting, BuildKit cache
 backends and mounts that hand a credential to the build, or overwriting or
 deleting a published release asset or moving a published tag.
+
+**Gradle stack decisions (HD-4a adapter version grammars, HD-5 one job per Gradle project) and the release-asset Maven bundle choice** are recorded in [Gradle stack contract](proposed/gradle-contract.md#decisions); adopted per the split brief, owner may revisit.
