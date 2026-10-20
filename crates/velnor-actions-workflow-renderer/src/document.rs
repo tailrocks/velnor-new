@@ -318,7 +318,7 @@ fn job_to_yaml(
     append_job_options(&mut entries, job, scale_set, &job_env, policy.workflow_env)?;
     let mut effective_env = policy.workflow_env.clone();
     effective_env.extend(job_env.clone());
-    let rendered_steps = crate::document_lanes::render_job_steps(
+    let mut rendered_steps = crate::document_lanes::render_job_steps(
         id,
         job,
         ctx,
@@ -331,6 +331,7 @@ fn job_to_yaml(
             actions_read: policy.actions_read,
         },
     )?;
+    crate::cache_save_budget::apply(&mut rendered_steps, job.timeout_minutes.minutes())?;
     entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
     Ok(Yaml::Map(entries))
 }
