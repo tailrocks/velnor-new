@@ -985,6 +985,7 @@ name = "velnor-actions-ansible"
 version = "0.1.31"
 dependencies = [
  "thiserror",
+ "toml",
  "velnor-actions-contract",
 ]
 
@@ -1083,6 +1084,7 @@ dependencies = [
  "thiserror",
  "toml",
  "velnor-actions-actionlint",
+ "velnor-actions-ansible",
  "velnor-actions-bun",
  "velnor-actions-contract",
  "velnor-actions-dbt",

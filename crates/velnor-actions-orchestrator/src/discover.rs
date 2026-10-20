@@ -91,6 +91,8 @@ pub struct Discovery {
     pub(crate) bun: crate::workflow_task_jobs::bun_inventory::BunInventory,
     /// dbt projects named by `[stacks.dbt]`, analysed from the same index.
     pub(crate) dbt: crate::workflow_task_jobs::dbt_inventory::DbtInventory,
+    /// Ansible roots named by `[stacks.ansible]`, analysed from the same index.
+    pub(crate) ansible: crate::workflow_task_jobs::ansible_inventory::AnsibleInventory,
 }
 
 /// Run file index, detection, inventory, profiles, and task derivation.
@@ -116,6 +118,12 @@ pub(crate) fn discover_with_phase_timings(
     discover_inner(root, config, catalog, Some(phases))
 }
 
+type TaskInventories = (
+    crate::workflow_task_jobs::bun_inventory::BunInventory,
+    crate::workflow_task_jobs::dbt_inventory::DbtInventory,
+    crate::workflow_task_jobs::ansible_inventory::AnsibleInventory,
+);
+
 /// Bun member inventory for the configured `[stacks.bun]` (empty without it).
 fn bun_inventory(
     root: &Path,
@@ -128,6 +136,22 @@ fn bun_inventory(
         }
         None => Ok(crate::workflow_task_jobs::bun_inventory::BunInventory::default()),
     }
+}
+
+/// The Bun, dbt and Ansible inventories of the configured stacks.
+fn task_inventories(
+    root: &Path,
+    index: &FileIndex,
+    config: &VelnorConfig,
+) -> Result<TaskInventories, OrchestratorError> {
+    use crate::workflow_task_jobs::{
+        ansible_inventory::AnsibleInventory, dbt_inventory::DbtInventory,
+    };
+    Ok((
+        bun_inventory(root, index, config)?,
+        DbtInventory::for_config(root, index, config)?,
+        AnsibleInventory::for_config(root, index, config)?,
+    ))
 }
 
 fn discover_inner(
@@ -193,9 +217,7 @@ fn discover_inner(
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
     let (consumer_manifest_json, consumer_manifest_stand_in) =
         consumer_manifest::for_policy(root, config.workflow.policy)?;
-    let bun = bun_inventory(root, &index, config)?;
-    let dbt =
-        crate::workflow_task_jobs::dbt_inventory::DbtInventory::for_config(root, &index, config)?;
+    let (bun, dbt, ansible) = task_inventories(root, &index, config)?;
     let gradle_roots = gradle_jobs::analyze_roots(root, &index, config)?;
     Ok(Discovery {
         gradle_roots,
@@ -215,6 +237,7 @@ fn discover_inner(
         affected: crate::affected_inputs::AffectedInputs { resolves, rules },
         bun,
         dbt,
+        ansible,
     })
 }
 
