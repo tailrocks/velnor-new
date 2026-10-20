@@ -1,5 +1,8 @@
 //! Fixed shell and jq text for the publication workflow.
 //!
+//! Lives with the renderer because it is generated-workflow content, not
+//! orchestrator behavior: nothing here runs at generation time.
+//!
 //! Every script is a constant template filled only with values the
 //! contract already validated (artifact ids, repo-relative paths, a branch
 //! name, a repository slug), so no config text can introduce shell
@@ -16,12 +19,14 @@ const ID_ERE: &str = "[a-z][a-z0-9]*(-[a-z0-9]+)*";
 /// Define the `gh` shell function through the pinned Mise tool.
 ///
 /// `prefix` is the Mise argv up to and including `gh`.
-pub(crate) fn gh_function(prefix: &[String]) -> String {
+#[must_use]
+pub fn gh_function(prefix: &[String]) -> String {
     format!("gh() {{ {} \"$@\"; }}", prefix.join(" "))
 }
 
 /// Parse the pushed tag, require an exact declared artifact, write outputs.
-pub(crate) fn parse_tag_script(repository: &str, artifacts: &[&str]) -> String {
+#[must_use]
+pub fn parse_tag_script(repository: &str, artifacts: &[&str]) -> String {
     let declared = artifacts.join("|");
     format!(
         "set -eu; [ \"$GITHUB_EVENT_NAME\" = push ]; [ \"$GITHUB_REF_TYPE\" = tag ]; \
@@ -34,7 +39,8 @@ pub(crate) fn parse_tag_script(repository: &str, artifacts: &[&str]) -> String {
 }
 
 /// Require an annotated tag whose object points at the pushed commit.
-pub(crate) fn annotated_tag_script(gh: &str) -> String {
+#[must_use]
+pub fn annotated_tag_script(gh: &str) -> String {
     format!(
         "set -eu; {gh}; \
          gh api \"repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME\" \
@@ -45,7 +51,8 @@ pub(crate) fn annotated_tag_script(gh: &str) -> String {
 }
 
 /// Require the tagged commit to be reachable from the default branch.
-pub(crate) fn ancestry_script(gh: &str, branch: &str) -> String {
+#[must_use]
+pub fn ancestry_script(gh: &str, branch: &str) -> String {
     format!(
         "set -eu; {gh}; \
          gh api \"repos/$GITHUB_REPOSITORY/compare/{branch}...$GITHUB_SHA\" \
@@ -54,7 +61,8 @@ pub(crate) fn ancestry_script(gh: &str, branch: &str) -> String {
 }
 
 /// Require a successful `Required` check run, from GitHub Actions, at the commit.
-pub(crate) fn required_script(gh: &str) -> String {
+#[must_use]
+pub fn required_script(gh: &str) -> String {
     format!(
         "set -eu; {gh}; \
          gh api \"repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?check_name=Required\" \
@@ -63,7 +71,8 @@ pub(crate) fn required_script(gh: &str) -> String {
 }
 
 /// Require the manifest at the tagged commit to carry the tag's version.
-pub(crate) fn manifest_script(gh: &str, source: VersionSource, path: &str) -> String {
+#[must_use]
+pub fn manifest_script(gh: &str, source: VersionSource, path: &str) -> String {
     let program = manifest_program(source);
     format!(
         "set -eu; {gh}; export VELNOR_TAG_VERSION=\"${{GITHUB_REF_NAME##*-v}}\"; \
@@ -72,7 +81,8 @@ pub(crate) fn manifest_script(gh: &str, source: VersionSource, path: &str) -> St
 }
 
 /// Require the tag version to equal an inline config literal.
-pub(crate) fn inline_version_script(version: &str) -> String {
+#[must_use]
+pub fn inline_version_script(version: &str) -> String {
     format!("set -eu; [ \"${{GITHUB_REF_NAME##*-v}}\" = '{version}' ]")
 }
 
@@ -80,7 +90,8 @@ pub(crate) fn inline_version_script(version: &str) -> String {
 ///
 /// Mirrors `VersionSource::read` line for line, then compares the result
 /// with `env.VELNOR_TAG_VERSION`; every miss ends in `error(...)`.
-fn manifest_program(source: VersionSource) -> String {
+#[must_use]
+pub fn manifest_program(source: VersionSource) -> String {
     let compare = r#"if . == env.VELNOR_TAG_VERSION then empty else error("version_mismatch") end"#;
     let found = match source {
         VersionSource::CargoToml => {
@@ -101,7 +112,8 @@ fn manifest_program(source: VersionSource) -> String {
 /// Sorted entries, zero mtime, root ownership, normalized modes, no gzip
 /// name or timestamp: identical inputs give identical bytes. Symlinks and
 /// missing paths fail the build.
-pub(crate) fn pack_script(id: &str, paths: &[String]) -> String {
+#[must_use]
+pub fn pack_script(id: &str, paths: &[String]) -> String {
     let list = paths.join(" ");
     format!(
         "set -eu; ver=${{GITHUB_REF_NAME##*-v}}; out=\"$RUNNER_TEMP/bundle\"; mkdir -p \"$out\"; \
@@ -114,7 +126,8 @@ pub(crate) fn pack_script(id: &str, paths: &[String]) -> String {
 }
 
 /// Re-verify the checksum sidecar against the downloaded tarball.
-pub(crate) fn verify_checksum_script(id: &str) -> String {
+#[must_use]
+pub fn verify_checksum_script(id: &str) -> String {
     format!(
         "set -eu; ver=${{GITHUB_REF_NAME##*-v}}; cd \"$RUNNER_TEMP/bundle\"; \
          ls | wc -l | grep -Eqx ' *2'; sha256sum -c -- \"{id}-$ver.tar.gz.sha256\""
@@ -122,7 +135,8 @@ pub(crate) fn verify_checksum_script(id: &str) -> String {
 }
 
 /// Upload the bundle as immutable assets of the tag's GitHub release.
-pub(crate) fn upload_script(gh: &str, id: &str) -> String {
+#[must_use]
+pub fn upload_script(gh: &str, id: &str) -> String {
     let files = format!(
         "\"$RUNNER_TEMP/bundle/{id}-$ver.tar.gz\" \"$RUNNER_TEMP/bundle/{id}-$ver.tar.gz.sha256\""
     );
@@ -134,7 +148,3 @@ pub(crate) fn upload_script(gh: &str, id: &str) -> String {
          --title \"$GITHUB_REF_NAME\" --notes 'Release asset bundle' {files}; fi"
     )
 }
-
-#[cfg(test)]
-#[path = "publish_scripts_tests.rs"]
-mod tests;
