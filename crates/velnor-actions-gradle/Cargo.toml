@@ -4,9 +4,14 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+autotests = false
 
 [lints]
 workspace = true
 
 [dependencies]
 sha2 = { workspace = true }
+
+[[test]]
+name = "velnor_gradle"
+path = "tests/velnor_gradle.rs"

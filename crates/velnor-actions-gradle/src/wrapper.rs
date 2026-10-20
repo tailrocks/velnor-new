@@ -150,7 +150,3 @@ pub fn verify(properties: Option<&str>, jar: &[u8]) -> Result<VerifiedWrapper, W
         release,
     })
 }
-
-#[cfg(test)]
-#[path = "wrapper_tests.rs"]
-mod tests;

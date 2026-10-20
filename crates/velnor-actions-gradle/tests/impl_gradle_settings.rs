@@ -1,6 +1,6 @@
 //! Static settings model tests, including the real `ChainArgos` settings shape.
 
-use super::*;
+use velnor_actions_gradle::settings::*;
 
 const ETH: &str = r#"
 pluginManagement { repositories { maven { url = uri(file("../build/deps-repo")) } gradlePluginPortal() } }

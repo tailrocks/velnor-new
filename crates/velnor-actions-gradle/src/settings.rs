@@ -244,7 +244,3 @@ fn expand(
         .map(|(path, dir)| Project { path, dir })
         .collect())
 }
-
-#[cfg(test)]
-#[path = "settings_tests.rs"]
-mod tests;

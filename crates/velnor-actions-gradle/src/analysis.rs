@@ -103,7 +103,3 @@ pub fn analyze_root(
     analysis.findings = findings.into_iter().collect();
     analysis
 }
-
-#[cfg(test)]
-#[path = "analysis_tests.rs"]
-mod tests;

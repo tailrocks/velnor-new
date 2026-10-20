@@ -1,6 +1,8 @@
 //! Integrity check tests.
 
-use super::*;
+use std::collections::BTreeSet;
+
+use velnor_actions_gradle::integrity::*;
 
 const HEX: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 

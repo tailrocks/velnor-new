@@ -1,8 +1,10 @@
 //! Whole-root analysis over in-memory fixture trees with the real 9.5.1 wrapper jar.
 
-use super::*;
+use std::collections::{BTreeMap, BTreeSet};
 
-const JAR: &[u8] = include_bytes!("../tests/fixtures/gradle-wrapper-9.5.1.jar");
+use velnor_actions_gradle::analysis::*;
+
+const JAR: &[u8] = include_bytes!("fixtures/gradle-wrapper-9.5.1.jar");
 const SHA: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 fn tree() -> BTreeMap<String, Vec<u8>> {

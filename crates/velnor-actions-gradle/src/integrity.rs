@@ -188,7 +188,3 @@ fn trust_too_broad(xml: &str) -> bool {
         group.is_none() || (regex && matches!(group.as_deref(), Some(".*" | ".+" | "^.*$")))
     })
 }
-
-#[cfg(test)]
-#[path = "integrity_tests.rs"]
-mod tests;

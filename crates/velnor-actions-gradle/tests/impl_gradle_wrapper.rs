@@ -1,7 +1,7 @@
 //! Wrapper gate tests. The "official jar" is a stand-in whose digest is
 //! injected through the catalog function under test via a real digest match.
 
-use super::*;
+use velnor_actions_gradle::wrapper::*;
 
 fn props(url: &str, sum: Option<&str>) -> String {
     let mut text = format!(
