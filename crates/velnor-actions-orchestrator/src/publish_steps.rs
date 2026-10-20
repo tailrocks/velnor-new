@@ -13,7 +13,7 @@ use velnor_actions_actionlint::actions::{
     ATTEST_BUILD_PROVENANCE_USES, DOWNLOAD_ARTIFACT_ACTION_USES, UPLOAD_ARTIFACT_ACTION_USES,
 };
 use velnor_actions_contract::config::{PublishBundle, VersionSource};
-use velnor_actions_contract::{JobTimeout, Step};
+use velnor_actions_contract::{ImageConfig, JobTimeout, Step};
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 use velnor_actions_workflow_renderer::publish_scripts as script;
 use velnor_actions_workflow_renderer::publish_spec::{
@@ -24,9 +24,15 @@ use velnor_actions_workflow_renderer::{
 };
 
 use crate::OrchestratorError;
-use crate::publish_release_steps::{event_kind, release_jobs};
+use crate::publish_release_steps::{
+    BRANCH_AUTHORITY_JOB, branch_authority_job, event_kind, release_jobs,
+};
 use crate::utf8::strings_of;
 use crate::workflow::CHECKOUT_USES;
+use image_steps::{crane_function, publish_job as image_publish_job, publish_job_id};
+
+#[path = "publish_image_steps.rs"]
+pub(crate) mod image_steps;
 
 /// Tag authority job id; every bundle job needs it.
 pub(crate) const AUTHORITY_JOB: &str = "publish-authority";
@@ -69,6 +75,8 @@ pub(crate) struct Inputs<'a> {
     pub(crate) bundles: &'a [BundlePlan<'a>],
     /// Manifest for the `git-tag` release job; `None` without that mode.
     pub(crate) git_tag_manifest: Option<&'a str>,
+    /// Declared container images, sorted by id.
+    pub(crate) images: &'a [ImageConfig],
 }
 
 /// Assemble the authority job and every bundle chain.
@@ -81,7 +89,8 @@ pub(crate) fn assemble_jobs(
 ) -> Result<BTreeMap<String, PublishJobSpec>, OrchestratorError> {
     let gh = gh_function(inputs.catalog)?;
     let mut jobs = BTreeMap::new();
-    let mixed = !inputs.bundles.is_empty() && inputs.git_tag_manifest.is_some();
+    let branch_side = inputs.git_tag_manifest.is_some() || !inputs.images.is_empty();
+    let mixed = !inputs.bundles.is_empty() && branch_side;
     if !inputs.bundles.is_empty() {
         let mut authority = authority_job(inputs, &gh)?;
         if mixed {
@@ -101,8 +110,24 @@ pub(crate) fn assemble_jobs(
             publish_job(inputs, id, &gh)?,
         );
     }
+    if branch_side {
+        let mut authority = branch_authority_job(inputs, &gh)?;
+        if mixed {
+            authority.condition = Some(event_kind("branch"));
+        }
+        jobs.insert(BRANCH_AUTHORITY_JOB.to_owned(), authority);
+    }
     if let Some(manifest) = inputs.git_tag_manifest {
-        jobs.extend(release_jobs(inputs, &gh, manifest, mixed)?);
+        jobs.extend(release_jobs(inputs, manifest)?);
+    }
+    if !inputs.images.is_empty() {
+        let crane = crane_function(inputs.catalog)?;
+        for image in inputs.images {
+            jobs.insert(
+                publish_job_id(image),
+                image_publish_job(inputs, image, &gh, &crane)?,
+            );
+        }
     }
     Ok(jobs)
 }

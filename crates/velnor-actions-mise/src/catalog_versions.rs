@@ -79,6 +79,9 @@ pub(crate) fn tool_source(tool: PinnedTool, version: &str) -> String {
             format!("https://github.com/opentofu/opentofu/releases/tag/v{version}")
         }
         PinnedTool::ReleasePlz => format!("https://crates.io/api/v1/crates/release-plz/{version}"),
+        PinnedTool::Crane => {
+            format!("https://github.com/google/go-containerregistry/releases/tag/v{version}")
+        }
     }
 }
 

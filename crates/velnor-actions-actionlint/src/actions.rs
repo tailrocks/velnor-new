@@ -1,4 +1,4 @@
-//! Pinned action refs against the 12-entry allowlist.
+//! Pinned action refs against the 13-entry allowlist.
 //!
 //! Every ref pins `repo[/path]@sha` plus a `# vX.Y.Z` comment; no
 //! mutable-tag exceptions exist.
@@ -6,7 +6,7 @@
 use crate::ActionlintError;
 
 /// Exhaustive allowlist of `owner/repo[/path]` action keys.
-pub const ALLOWED_ACTIONS: [&str; 12] = [
+pub const ALLOWED_ACTIONS: [&str; 13] = [
     "jdx/mise-action",
     "actions/checkout",
     "actions/download-artifact",
@@ -17,6 +17,7 @@ pub const ALLOWED_ACTIONS: [&str; 12] = [
     "asamarts/alint",
     "aws-actions/configure-aws-credentials",
     "actions/attest-build-provenance",
+    "actions/attest",
     "actions/create-github-app-token",
     "actions/github-script",
 ];
@@ -50,6 +51,15 @@ pub const ATTEST_BUILD_PROVENANCE_ACTION_SHA: &str = "4d101475d8b20a2381f7844782
 /// Complete immutable action ref for workflow rendering.
 pub const ATTEST_BUILD_PROVENANCE_USES: &str =
     "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
+
+/// Action producing custom-predicate attestations (SBOM attestations for images).
+pub const ATTEST_ACTION: &str = "actions/attest";
+/// Reviewed immutable release of the generic attestation action.
+pub const ATTEST_ACTION_VERSION: &str = "v4.2.2";
+/// Full commit SHA for [`ATTEST_ACTION_VERSION`].
+pub const ATTEST_ACTION_SHA: &str = "1e69f48acb82d1966a394da916b4c1698aa569d6";
+/// Complete immutable action ref for workflow rendering.
+pub const ATTEST_USES: &str = "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6";
 
 /// Action key for the repository-policy Alint job's pinned ref.
 pub const ALINT_ACTION: &str = "asamarts/alint";

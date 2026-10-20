@@ -10,111 +10,13 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{JobTimeout, Step, StepKind, is_valid_branch_name, validate_job_id};
 
+pub use crate::publish_roles::{PublishPermissions, PublishRole};
 use crate::{
     RenderError,
     release_permissions::PermissionLevel,
     release_spec::{is_clean_text, validate_environment, validate_repository},
     steps::scan_for_private_subcommands,
 };
-
-/// Publication boundary role carried by one job.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum PublishRole {
-    /// Verifies tag release authority; reads GitHub metadata only, no checkout.
-    Authority,
-    /// Verifies default-branch push authority; waits for `Required`, no checkout.
-    BranchAuthority,
-    /// Creates tags and GitHub releases from the verified default-branch commit.
-    TagRelease,
-    /// Builds an artifact from the checked-out tag commit; read-only.
-    ArtifactBuild,
-    /// Attests the built artifact; holds OIDC and attestation authority, no checkout.
-    ArtifactAttest,
-    /// Uploads the attested artifact as a release asset; no checkout.
-    ArtifactPublish,
-}
-
-impl PublishRole {
-    /// Machine-readable role name for errors.
-    #[must_use]
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Authority => "authority",
-            Self::BranchAuthority => "branch-authority",
-            Self::TagRelease => "tag-release",
-            Self::ArtifactBuild => "artifact-build",
-            Self::ArtifactAttest => "artifact-attest",
-            Self::ArtifactPublish => "artifact-publish",
-        }
-    }
-
-    /// Forward-only pipeline rank (needs must point to lower ranks).
-    fn rank(self) -> u8 {
-        match self {
-            Self::Authority | Self::BranchAuthority => 0,
-            Self::TagRelease | Self::ArtifactBuild => 1,
-            Self::ArtifactAttest => 2,
-            Self::ArtifactPublish => 3,
-        }
-    }
-
-    /// True for roles that execute no repository code and never check it out.
-    ///
-    /// `ArtifactBuild` only reads files; `TagRelease` checks out so the pinned
-    /// release tool can read manifests and history, and runs no repository code.
-    fn forbids_checkout(self) -> bool {
-        !matches!(self, Self::ArtifactBuild | Self::TagRelease)
-    }
-
-    /// True for the roles that gate the rest of the workflow.
-    fn is_authority(self) -> bool {
-        matches!(self, Self::Authority | Self::BranchAuthority)
-    }
-
-    /// The authority role a downstream role must transitively need.
-    fn gate(self) -> Option<Self> {
-        match self {
-            Self::Authority | Self::BranchAuthority => None,
-            Self::TagRelease => Some(Self::BranchAuthority),
-            Self::ArtifactBuild | Self::ArtifactAttest | Self::ArtifactPublish => {
-                Some(Self::Authority)
-            }
-        }
-    }
-}
-
-/// Per-job least-privilege permissions (typed levels only).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PublishPermissions {
-    /// Repository contents access.
-    pub contents: PermissionLevel,
-    /// Check-run read access (the `Required` verdict).
-    pub checks: PermissionLevel,
-    /// OIDC token access (attestation signing).
-    pub id_token: PermissionLevel,
-    /// Artifact attestation access.
-    pub attestations: PermissionLevel,
-}
-
-impl PublishPermissions {
-    /// Exact least-privilege matrix for one role.
-    #[must_use]
-    pub fn expected(role: PublishRole) -> Self {
-        use PermissionLevel::{None, Read, Write};
-        let (contents, checks, id_token, attestations) = match role {
-            PublishRole::Authority | PublishRole::BranchAuthority => (Read, Read, None, None),
-            PublishRole::ArtifactBuild => (Read, None, None, None),
-            PublishRole::ArtifactAttest => (Read, None, Write, Write),
-            PublishRole::TagRelease | PublishRole::ArtifactPublish => (Write, None, None, None),
-        };
-        Self {
-            contents,
-            checks,
-            id_token,
-            attestations,
-        }
-    }
-}
 
 /// One step plus the optional GitHub step id its outputs are read through.
 #[derive(Debug, Clone)]
@@ -140,7 +42,7 @@ pub struct PublishJobSpec {
     pub needs: Vec<String>,
     /// Run condition (`if`), single line without secret handles.
     pub condition: Option<String>,
-    /// Pinned GitHub environment (required for asset upload).
+    /// Pinned GitHub environment (required for asset upload and registry writes).
     pub environment: Option<String>,
     /// Job outputs: name to `${{ steps.<id>.outputs.<name> }}`.
     pub outputs: BTreeMap<String, String>,
@@ -191,7 +93,8 @@ impl PublishJobSpec {
         if self.permissions != PublishPermissions::expected(self.role) {
             return Err(bad("permission_matrix"));
         }
-        let writes = self.permissions.contents == PermissionLevel::Write;
+        let writes = self.permissions.contents == PermissionLevel::Write
+            || self.permissions.packages == PermissionLevel::Write;
         if writes != self.environment.is_some() {
             return Err(bad("environment_binding"));
         }

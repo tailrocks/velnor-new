@@ -13,6 +13,7 @@ mod distribution;
 mod dockerfile;
 mod execution;
 mod host_container;
+mod image_grammar;
 mod image_jobs;
 mod image_task;
 mod images;
@@ -78,11 +79,11 @@ pub use host_container::{
     ContainerPlatform, DaemonIdentityPolicy, HostContainerProfile, HostDockerCli, HostDockerDaemon,
     HostOrbStackSdk,
 };
+pub use image_grammar::{is_valid_image_id, is_valid_image_repository};
 pub use image_task::{NativeImageCachePolicy, NativeImagePlatform, NativeImageTask};
 pub use images::{
     DEFAULT_IMAGE_TIMEOUT_MINUTES, IMAGE_JOB_PREFIX, IMAGE_REGISTRY_HOST, ImageConfig,
-    ImageDockerfile, ImagePlatform, ImagePrebuilt, is_valid_image_id, is_valid_image_repository,
-    validate_images,
+    ImageDockerfile, ImagePlatform, ImagePrebuilt, validate_images,
 };
 pub use mise::{
     CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind,

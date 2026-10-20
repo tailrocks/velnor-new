@@ -321,6 +321,12 @@ in the privileged ones, keeps provenance bound to one source SHA and workflow.
 [image publication contract](proposed/image-publication-contract.md) and
 [package publication contract](proposed/package-publication-contract.md).
 
+**Image jobs placement.** The privileged image jobs live in `publish.yml`, the
+workflow whose IR owns the authority boundary, and consume the artifacts of the
+push's successful `ci.yml` run (same commit, same event) rather than same-run
+artifacts; `ci.yml` keeps its closed permission set and credential-free steps.
+Adopted per the split brief; owner may revisit.
+
 **Tag flow and release-asset bundles.** The same boundary covers release
 assets. The trigger set is closed in the typed IR: tag pushes only for
 `publish.yml`, with no `pull_request`, `pull_request_target`,
