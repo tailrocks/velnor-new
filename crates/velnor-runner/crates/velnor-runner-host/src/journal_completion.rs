@@ -15,9 +15,7 @@ mod inbox;
 #[path = "journal_completion_record.rs"]
 mod record;
 
-pub(crate) use inbox::{
-    CompletionInboxEntry, MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN,
-};
+pub(crate) use inbox::{MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN};
 
 /// One leased completion cleanup attempt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

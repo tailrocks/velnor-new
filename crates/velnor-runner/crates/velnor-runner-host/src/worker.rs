@@ -5,8 +5,6 @@
 use bollard::Docker;
 use bollard::models::ContainerCreateBody;
 use bollard::query_parameters::CreateContainerOptions;
-use bollard::query_parameters::{AttachContainerOptionsBuilder, StartContainerOptions};
-use tokio::io::AsyncWriteExt;
 
 use crate::docker_client::docker_deadline;
 use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_mounts, runner_plan};
@@ -16,11 +14,13 @@ mod names;
 pub(crate) mod resources;
 mod volumes;
 pub(crate) use names::{WorkerContainerRole, WorkerIdentityNames};
-#[cfg(test)]
-pub(crate) use volumes::remove_verified_worker_volume;
 pub(crate) use volumes::{
     VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole, WorkerVolumeVerification,
-    create_named_volumes, remove_worker_volumes, verify_worker_volume,
+    verify_worker_volume,
+};
+#[cfg(test)]
+pub(crate) use volumes::{
+    create_named_volumes, remove_verified_worker_volume, remove_worker_volumes,
 };
 pub(crate) mod execution_authorization;
 pub(crate) mod guest_image;
@@ -311,49 +311,4 @@ pub(crate) async fn worker_id_for_name(
         }) => Ok(None),
         Err(_) => Err(HostError::Docker),
     }
-}
-
-pub(crate) async fn create_only(
-    docker: &Docker,
-    spec: &CreateProjection,
-) -> Result<String, HostError> {
-    let created = bollard_create(spec)?;
-    let response = docker
-        .create_container(Some(created.options), created.config)
-        .await
-        .map_err(|_| HostError::Docker)?;
-    if response.id.is_empty() {
-        Err(HostError::Docker)
-    } else {
-        Ok(response.id)
-    }
-}
-
-pub(crate) async fn start_id(docker: &Docker, id: &str) -> Result<(), HostError> {
-    docker
-        .start_container(id, None::<StartContainerOptions>)
-        .await
-        .map_err(|_| HostError::Docker)
-}
-
-pub(crate) async fn deliver_jit(docker: &Docker, id: &str, jit: &[u8]) -> Result<(), HostError> {
-    let options = AttachContainerOptionsBuilder::new()
-        .stdin(true)
-        .stream(true)
-        .build();
-    let mut attached = docker
-        .attach_container(id, Some(options))
-        .await
-        .map_err(|_| HostError::Docker)?;
-    attached
-        .input
-        .write_all(jit)
-        .await
-        .map_err(|_| HostError::Docker)?;
-    attached
-        .input
-        .shutdown()
-        .await
-        .map_err(|_| HostError::Docker)?;
-    Ok(())
 }

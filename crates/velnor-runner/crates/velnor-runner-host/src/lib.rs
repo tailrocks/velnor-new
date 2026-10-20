@@ -66,7 +66,7 @@ pub use reconcile::{
     IntentRow, LaunchPhase, Reconcile, ReleaseFact, before_advertise, occupies, release_permitted,
 };
 pub use scale_set::{EnsureError, EnsuredSet, product_runner_groups};
-pub use stage::{PairStop, PartialPair, remove_recorded};
+pub use stage::remove_recorded;
 pub use worker::{
     BindMount, BollardCreate, CreateProjection, ResourceBudget, Started, bollard_create,
     dind_create, runner_create,
@@ -106,8 +106,6 @@ mod keychain_tests;
 #[cfg(test)]
 mod launch_harness;
 #[cfg(test)]
-mod launch_test_support;
-#[cfg(test)]
 mod launch_tests;
 #[cfg(test)]
 mod listen_tests;
@@ -119,7 +117,5 @@ mod readiness_tests;
 mod reconcile_tests;
 #[cfg(test)]
 mod runner_image_contract_tests;
-#[cfg(test)]
-mod stage_tests;
 #[cfg(test)]
 mod worker_tests;

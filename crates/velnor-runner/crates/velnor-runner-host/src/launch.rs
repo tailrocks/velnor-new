@@ -38,7 +38,6 @@ pub(crate) use drive::{
     authorize_deferred_offers, authorize_positive_offer, recover_acquired_scoped_offer,
 };
 pub(crate) use engine_context::SelectedEngineContext;
-pub(crate) use inspect::classify_inspect;
 #[cfg(test)]
 pub(crate) use resource_probe::IntakeCompositionProvider;
 pub(crate) use resource_probe::StartObservationWitness;

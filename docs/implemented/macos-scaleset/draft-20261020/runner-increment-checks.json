@@ -931,6 +931,30 @@
       "author": "/root",
       "full_runner_clippy": "FAIL",
       "live_installation": "NOT_RUN"
+    },
+    {
+      "result": "PASS",
+      "base_commit": "1b882c65e6b5b6e6175472d0b0f8ecbdbecb2916",
+      "change": "Remove the unused stage launch path. Keep cleanup for resources that the host owns.",
+      "source_manifest": "stage-retirement-m39-v33-158e8f-20261020.tsv",
+      "source_manifest_sha256": "c671e9181a21f6577b6ac51d2756c203c59431db43818b75bdc9c034c1557b7d",
+      "passed": 22,
+      "nextest_run": "5005a3e4-13b9-4d79-a8fc-eca159e1ac59",
+      "exit_status": 0,
+      "log": "shipping-stage-retirement-focused-20261020.log",
+      "log_sha256": "c14a9673150c5079d7e6ee11a0a93d381499bc35de290149a8817437b95fc21d",
+      "author": "/root/container_metadata_repair",
+      "reviewer": "/root/execution_source_security_review",
+      "limits": "These checks do not prove live cleanup. Eight journal fixture tests still need repair.",
+      "post_hook_check": {
+        "result": "PASS",
+        "passed": 22,
+        "nextest_run": "32a207f0-1f05-4c70-a55c-3b16f3eb1a00",
+        "exit_status": 0,
+        "log": "shipping-stage-retirement-post-hook-fixed-20261020.log",
+        "log_sha256": "d51f8ecdd5e9ee24cd101328a9d2de629a6baf9c73a1d7823db62dd8f78cc9a0"
+      },
+      "hook_repair": "Keep test-only volume exports under cfg(test)."
     }
   ],
   "broader_pair_check": {
