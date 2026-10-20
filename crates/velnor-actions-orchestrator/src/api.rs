@@ -3,6 +3,8 @@
 pub use super::check_runtime::{EXECUTE_CHECK_OP, execute_check};
 pub use super::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 pub use super::config::deps_lock::{lock_private_sources, read_deps_lock, render_lock};
+pub use super::config::private_fetch::{PRIVATE_FETCH_OP, PRIVATE_REVOKE_OP, run_private_fetch};
+pub use super::config::private_revoke::run_private_revoke;
 pub use super::critical_path::{
     CriticalPath, critical_path, critical_path_for_groups, critical_path_line,
     critical_path_structural, render_critical_path,

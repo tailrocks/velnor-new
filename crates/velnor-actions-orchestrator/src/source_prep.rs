@@ -156,9 +156,10 @@ pub(crate) fn lockful_roots(root: &Path, workspaces: &[PlannedWorkspace]) -> Vec
 pub(crate) fn fetch_steps_for_crate(
     catalog: &ToolCatalog,
     roots: &[String],
+    all_features: bool,
 ) -> Result<Vec<Step>, OrchestratorError> {
     let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
-    fetch_steps_with(catalog, roots, &env, false)
+    fetch_steps_with(catalog, roots, &env, false, all_features)
 }
 
 /// Fetch steps for the plan job (trusted writer): same owned homes.
@@ -171,9 +172,10 @@ pub(crate) fn fetch_steps_for_crate(
 pub(crate) fn fetch_steps_for_plan(
     catalog: &ToolCatalog,
     roots: &[String],
+    all_features: bool,
 ) -> Result<Vec<Step>, OrchestratorError> {
     let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
-    fetch_steps_with(catalog, roots, &env, false)
+    fetch_steps_with(catalog, roots, &env, false, all_features)
 }
 
 /// Credential-free native preview preparation under the dispatch's owned homes.
@@ -182,7 +184,7 @@ pub(crate) fn fetch_steps_for_preview(
     roots: &[String],
     env: &BTreeMap<String, String>,
 ) -> Result<Vec<Step>, OrchestratorError> {
-    fetch_steps_with(catalog, roots, env, true)
+    fetch_steps_with(catalog, roots, env, true, false)
 }
 
 /// One probe-and-fetch `sh -c` step per lockful root.
@@ -190,6 +192,8 @@ pub(crate) fn fetch_steps_for_preview(
 /// The script runs `cargo metadata --locked --offline` first: success
 /// skips online fetch (warm path); failure fetches explicitly and echoes
 /// the miss reason. Nested roots name their manifest in argv and step name.
+/// With `all_features` the probe resolves every optional dependency an
+/// `--all-features` task compiles, so a partial source cache misses.
 /// # Errors
 ///
 /// Returns contract errors for unsafe roots or rejected vectors.
@@ -198,11 +202,12 @@ fn fetch_steps_with(
     roots: &[String],
     env: &BTreeMap<String, String>,
     remove_credentials: bool,
+    all_features: bool,
 ) -> Result<Vec<Step>, OrchestratorError> {
     let mut steps = Vec::with_capacity(roots.len());
     for root in roots {
         validate_root(root)?;
-        let mut script = fetch_script(catalog, root);
+        let mut script = fetch_script(catalog, root, all_features);
         if remove_credentials {
             let credentials = velnor_actions_workflow_renderer::toolchain_env::credential_scrub()
                 .into_keys()
@@ -237,11 +242,12 @@ fn fetch_steps_with(
 /// replacement) is never read while ambient auth is in scope. Both
 /// paths print `velnor: sources downloaded=<n>`; the fallback counts
 /// Cargo's per-crate `Downloaded <name> v<version>` stderr lines.
-fn fetch_script(catalog: &ToolCatalog, root: &str) -> String {
+fn fetch_script(catalog: &ToolCatalog, root: &str, all_features: bool) -> String {
     let spec = catalog.tool_spec(PinnedTool::Rust);
     let base = format!("mise --no-config --no-env --no-hooks exec {spec} -- cargo");
     let manifest = format!(" {}", isolated_manifest_flag(root));
-    let probe = format!("{base} metadata --locked --offline{manifest} >/dev/null 2>&1");
+    let features = if all_features { " --all-features" } else { "" };
+    let probe = format!("{base} metadata --locked --offline{features}{manifest} >/dev/null 2>&1");
     let log = "\"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\"";
     let count = "\"$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads\"";
     let fetch = format!("{base} fetch --locked{manifest} 2> {log}");

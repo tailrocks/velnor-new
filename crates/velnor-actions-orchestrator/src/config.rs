@@ -15,6 +15,14 @@ use crate::config_stacks::PartialStacks;
 
 #[path = "deps_lock.rs"]
 pub(crate) mod deps_lock;
+#[path = "private_fetch.rs"]
+pub(crate) mod private_fetch;
+#[path = "private_fetch_session.rs"]
+pub(crate) mod private_fetch_session;
+#[path = "private_revoke.rs"]
+pub(crate) mod private_revoke;
+#[path = "private_sources.rs"]
+pub(crate) mod private_sources;
 
 /// Config path as reported in diagnostics.
 pub(crate) const CONFIG_REL: &str = ".velnor/config.toml";

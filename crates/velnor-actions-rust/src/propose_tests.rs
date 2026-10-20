@@ -5,6 +5,7 @@ use crate::profile::NextestProfile;
 /// Minimal group exercising every converted field.
 fn group() -> TaskGroup {
     TaskGroup {
+        all_features: false,
         task_id: "stack/rust/root/clippy/default".to_owned(),
         package_id: "path+file:///repo#demo@0.1.0".to_owned(),
         package_name: "demo".to_owned(),

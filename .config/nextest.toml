@@ -7,6 +7,21 @@ test-threads = "num-cpus"
 status-level = "all"
 final-status-level = "flaky"
 
+# Start the measured longest CI tests first to reduce the scheduling tail.
+# Main a85 timings were 41.840s, 21.264s, and 14.880s respectively;
+# this ordering does not guarantee the hosted job's total duration.
+[[profile.ci.overrides]]
+filter = 'package(=velnor-actions-orchestrator) and test(=impl_tofu_t24_scale::tofu_generate_scales_with_root_count)'
+priority = 100
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-actions-orchestrator) and test(=impl_perf_p13::generate_scales_to_workflow_file_limit_then_fails_closed)'
+priority = 90
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-actions-orchestrator) and test(=impl_generate_p09_atomic::atomic_commit_never_exposes_missing_tree)'
+priority = 80
+
 [[profile.ci.overrides]]
 filter = 'package(velnor-actions-orchestrator) and test(bench_concurrent_lanes_2_and_4)'
 success-output = "immediate"

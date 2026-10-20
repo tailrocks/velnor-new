@@ -14,8 +14,19 @@ mod preludes;
 
 /// Runnable fixture proposal for one package/kind pair.
 pub(super) fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> ProposedTask {
+    group_with_all_features(package, kind, gated_by, false)
+}
+
+/// Runnable fixture proposal with an explicit Cargo all-features mode.
+pub(super) fn group_with_all_features(
+    package: &str,
+    kind: TaskKind,
+    gated_by: &[&str],
+    all_features: bool,
+) -> ProposedTask {
     let key = if package == "demo" { "root" } else { package };
     let group = TaskGroup {
+        all_features,
         task_id: format!("stack/rust/{key}/{}/default", kind.as_str()),
         package_id: format!("{package} 0.1.0"),
         package_name: package.to_owned(),
@@ -74,6 +85,9 @@ pub(super) fn names(job: &Job) -> Vec<&str> {
 
 #[path = "crate_jobs_parallel_tests.rs"]
 mod parallel_tests;
+
+#[path = "crate_jobs_all_features_tests.rs"]
+mod all_features_tests;
 
 #[test]
 fn skips_testless_and_workspace_groups() {

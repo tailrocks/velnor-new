@@ -13,6 +13,7 @@ use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, Te
 fn group(package: &str) -> ProposedTask {
     let key = if package == "demo" { "root" } else { package };
     let group = TaskGroup {
+        all_features: false,
         task_id: format!("stack/rust/{key}/{}/default", TaskKind::Test.as_str()),
         package_id: format!("{package} 0.1.0"),
         package_name: package.to_owned(),

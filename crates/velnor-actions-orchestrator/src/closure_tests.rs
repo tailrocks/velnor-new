@@ -11,6 +11,7 @@ use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, Te
 /// Minimal proposal with `declared` inputs and `reads` flag.
 fn group(declared: Vec<String>, reads: bool) -> ProposedTask {
     let group = TaskGroup {
+        all_features: false,
         task_id: "stack/rust/root/clippy/default".to_owned(),
         package_id: "demo".to_owned(),
         package_name: "demo".to_owned(),

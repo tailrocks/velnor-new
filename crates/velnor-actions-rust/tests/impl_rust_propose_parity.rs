@@ -16,6 +16,7 @@ use velnor_actions_rust::{
 /// Fully-loaded group exercising every converted field.
 fn group() -> TaskGroup {
     TaskGroup {
+        all_features: false,
         task_id: "stack/rust/crates-a/clippy/default".to_owned(),
         package_id: "path+file:///repo#demo@0.1.0".to_owned(),
         package_name: "demo".to_owned(),
@@ -124,6 +125,62 @@ fn extension_proposal_matches_group() {
     let from_task =
         extension_for_proposal(&task, &inputs(&task, &targets)).expect("proposal extension");
     assert_eq!(json_of(&from_task), json_of(&from_group));
+    assert!(
+        !json_of(&from_group)
+            .expect("group extension JSON")
+            .as_object()
+            .expect("extension object")
+            .contains_key("all_features"),
+        "the default mode omits the optional extension field"
+    );
+}
+
+#[test]
+fn all_features_mode_is_bound_in_neutral_and_typed_identity() {
+    let mut group = group();
+    group.all_features = true;
+    group.features = vec!["a".to_owned(), "b".to_owned()];
+    let targets = vec!["lib:demo".to_owned()];
+    let task = propose_task(&group).expect("all-features group proposes");
+    assert_eq!(task.identity.flags, ["--all-features"]);
+
+    let from_group =
+        group.identity_extension(&group_inputs(&group, "crates/a/Cargo.toml", &targets));
+    let from_proposal =
+        extension_for_proposal(&task, &inputs(&task, &targets)).expect("proposal extension");
+    assert_eq!(json_of(&from_group), json_of(&from_proposal));
+    assert!(from_group.all_features);
+    assert_eq!(from_group.features, ["a", "b"]);
+    assert_eq!(
+        from_group.to_stack_extension().data["all_features"],
+        serde_json::json!(true)
+    );
+
+    let mut changed_features = group.clone();
+    changed_features.features.push("c".to_owned());
+    let changed_task = propose_task(&changed_features).expect("updated feature set proposes");
+    let changed = extension_for_proposal(&changed_task, &inputs(&changed_task, &targets))
+        .expect("updated extension");
+    assert_ne!(json_of(&from_group), json_of(&changed));
+}
+
+#[test]
+fn all_features_sorts_with_multi_target_identity_flags() {
+    let mut group = group();
+    group.kind = TaskKind::Test;
+    group.task_id = "stack/rust/crates-a/test/default".to_owned();
+    group.all_features = true;
+    group.target_flags = vec![
+        "--lib".to_owned(),
+        "--bins".to_owned(),
+        "--tests".to_owned(),
+    ];
+    let task = propose_task(&group).expect("multi-target group proposes");
+    assert_eq!(
+        task.identity.flags,
+        ["--all-features", "--bins", "--lib", "--tests"]
+    );
+    assert!(task.validate().is_ok());
 }
 
 #[test]

@@ -11,6 +11,7 @@ use velnor_actions_rust::{
 /// One derived group for producer-identity checks.
 fn group() -> TaskGroup {
     TaskGroup {
+        all_features: false,
         task_id: "stack/rust/root/test/default".to_owned(),
         package_id: "demo 0.1.0".to_owned(),
         package_name: "demo".to_owned(),
