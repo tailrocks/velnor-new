@@ -13,6 +13,9 @@ use velnor_actions_contract::{
 use crate::OrchestratorError;
 use crate::config_stacks::PartialStacks;
 
+#[path = "deps_lock.rs"]
+pub(crate) mod deps_lock;
+
 /// Config path as reported in diagnostics.
 pub(crate) const CONFIG_REL: &str = ".velnor/config.toml";
 
