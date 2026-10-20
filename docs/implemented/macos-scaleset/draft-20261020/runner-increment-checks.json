@@ -849,5 +849,43 @@
       "cause": "The package requires Rust 1.99.1."
     },
     "installation": "NOT_RUN"
+  },
+  "orbstack_official_runner_execution": {
+    "result": "PASS",
+    "scope": "The official runner binary ran in a local Linux container. This test does not prove a Scale Set installation.",
+    "source_commit": "3cec039aa187fb5bd411dcefc6ac1b2f4d08f664",
+    "current_matching_runner_pin_commit": "f65570f7da7e92912976ceb46295731cfda3abce",
+    "matching_pin_fields": [
+      "runner_version",
+      "runner_source_commit",
+      "runner_sha256",
+      "runner_asset_size_bytes",
+      "runner_platform"
+    ],
+    "runner_version": "2.338.0",
+    "runner_source_commit": "197ca027b90de199464dee3bb9ff198a1db60967",
+    "runner_archive_sha256": "af4b794c1bc41d73d40535e3fe092a39f9679cd8d965954c2aca25a05ca41d32",
+    "listener_sha256": "50a25191bebce204fa3da9d73c780339543e5591882a9028122fc1165472942e",
+    "command": "/opt/runner/bin/Runner.Listener --version",
+    "exit_status": 0,
+    "version_output": "2.338.0",
+    "executable_machine": "ELF64 x86-64",
+    "platform": "linux/amd64",
+    "engine_context": "orbstack",
+    "engine_id": "bc9058a0-c807-412b-a088-6c1d96ddd462",
+    "image_digest": "sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a",
+    "container_id": "3c9a0883f8ecfa83258f7cf89ef9facea2803d2883f0873c51b49dfa6983edae",
+    "mounts": [],
+    "privileged": false,
+    "cpu_limit": 2,
+    "memory_limit_bytes": 4294967296,
+    "cleanup": "PASS",
+    "log": "orbstack-official-runner-2.338.0-amd64-final-20261020.log",
+    "log_sha256": "291cc4149709f49f25281b1a5f155ffe921887b9486f2c3e0e8f7fc284ffca33",
+    "record": "orbstack-official-runner-2.338.0-amd64-record-20261020.json",
+    "record_sha256": "eb576c1c541f42a3c3b5513fdd09230c0468babcb12d88ba66e61587d2e2a6c7",
+    "author": "/root/container_metadata_repair",
+    "reviewer": "/root",
+    "earlier_attempts": "The record keeps the failed extraction attempts and the earlier host mount. The passing test used no host mounts."
   }
 }
