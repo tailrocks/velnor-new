@@ -7,6 +7,7 @@ use std::{
 };
 
 use rustix::fs::{AtFlags, StatxFlags, statx};
+use rustix::process::{getegid, geteuid};
 
 fn context(kind: ExecutionPublicationKind, bytes: &[u8]) -> ExecutionPublicationContext {
     ExecutionPublicationContext {
@@ -97,7 +98,7 @@ impl TestDirectory {
             std::process::id()
         ));
         fs::create_dir(&path).expect("make test directory");
-        fs::set_permissions(&path, fs::Permissions::from_mode(CONTROL_DIRECTORY_MODE))
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o700))
             .expect("set test directory mode");
         Self(path)
     }
@@ -133,13 +134,33 @@ fn mount_fixture(directory: &File) -> (MountEntry, Vec<u8>) {
     )
 }
 
+fn publish_as_current_user(
+    directory: &File,
+    kind: ExecutionPublicationKind,
+    operation_id: &str,
+    bytes: &[u8],
+    mount: &MountEntry,
+    mountinfo: &[u8],
+) -> Result<OpenedControlFile, ProbeError> {
+    publish_or_read_with_owner(
+        directory,
+        kind,
+        operation_id,
+        bytes,
+        mount,
+        mountinfo,
+        geteuid().as_raw(),
+        getegid().as_raw(),
+    )
+}
+
 #[test]
 fn publisher_creates_one_fixed_file_and_accepts_same_bytes_on_replay() {
     let directory = TestDirectory::new();
     let fd = directory.open();
     let (mount, mountinfo) = mount_fixture(&fd);
     let bytes = br#"{"nonce":"a"}"#;
-    let first = publish_or_read(
+    let first = publish_as_current_user(
         &fd,
         ExecutionPublicationKind::Challenge,
         "0123456789abcdef0123456789abcdef",
@@ -150,11 +171,11 @@ fn publisher_creates_one_fixed_file_and_accepts_same_bytes_on_replay() {
     .expect("publish challenge");
     assert_eq!(first.bytes, bytes);
     assert_eq!(first.identity.mode, CONTROL_FILE_MODE);
-    assert_eq!(first.identity.owner_uid, CONTROL_UID);
-    assert_eq!(first.identity.owner_gid, CONTROL_GID);
+    assert_eq!(first.identity.owner_uid, geteuid().as_raw());
+    assert_eq!(first.identity.owner_gid, getegid().as_raw());
     assert_eq!(first.identity.size, bytes.len() as u64);
 
-    let replay = publish_or_read(
+    let replay = publish_as_current_user(
         &fd,
         ExecutionPublicationKind::Challenge,
         "0123456789abcdef0123456789abcdef",
@@ -173,7 +194,7 @@ fn publisher_rejects_conflicting_replay_without_replacing_the_file() {
     let directory = TestDirectory::new();
     let fd = directory.open();
     let (mount, mountinfo) = mount_fixture(&fd);
-    publish_or_read(
+    publish_as_current_user(
         &fd,
         ExecutionPublicationKind::Decision,
         "0123456789abcdef0123456789abcdef",
@@ -184,7 +205,7 @@ fn publisher_rejects_conflicting_replay_without_replacing_the_file() {
     .expect("publish decision");
 
     assert!(matches!(
-        publish_or_read(
+        publish_as_current_user(
             &fd,
             ExecutionPublicationKind::Decision,
             "0123456789abcdef0123456789abcdef",
@@ -201,6 +222,60 @@ fn publisher_rejects_conflicting_replay_without_replacing_the_file() {
 }
 
 #[test]
+fn production_wrapper_keeps_the_root_file_owner_contract() {
+    let directory = TestDirectory::new();
+    let fd = directory.open();
+    let (mount, mountinfo) = mount_fixture(&fd);
+    let result = publish_or_read(
+        &fd,
+        ExecutionPublicationKind::Decision,
+        "0123456789abcdef0123456789abcdef",
+        br#"{"decision":true}"#,
+        &mount,
+        &mountinfo,
+    );
+
+    if geteuid().as_raw() == CONTROL_UID {
+        let published = result.expect("root can publish with the production owner");
+        assert_eq!(published.identity.owner_uid, CONTROL_UID);
+        assert_eq!(published.identity.owner_gid, CONTROL_GID);
+    } else {
+        assert!(matches!(
+            result,
+            Err(ProbeError::Invalid("publication_owner"))
+        ));
+    }
+}
+
+#[test]
+fn file_observation_rejects_an_unexpected_owner() {
+    let directory = TestDirectory::new();
+    let fd = directory.open();
+    let (mount, mountinfo) = mount_fixture(&fd);
+    let path = directory.0.join("owned.json");
+    fs::write(&path, br#"{"nonce":"a"}"#).expect("write owned file");
+    fs::set_permissions(&path, fs::Permissions::from_mode(CONTROL_FILE_MODE))
+        .expect("set published file mode");
+    let file = File::open(&path).expect("open owned file");
+    let metadata = file.metadata().expect("stat owned file");
+    let unexpected_uid = geteuid().as_raw().saturating_add(1);
+
+    assert!(matches!(
+        observation::observe_control_file_identity(
+            &file,
+            &fd,
+            &mount,
+            &mountinfo,
+            &metadata,
+            br#"{"nonce":"a"}"#.len(),
+            unexpected_uid,
+            getegid().as_raw(),
+        ),
+        Err(ProbeError::Invalid("publication_file_statx_fields"))
+    ));
+}
+
+#[test]
 fn publisher_rejects_symlink_destination() {
     let directory = TestDirectory::new();
     let fd = directory.open();
@@ -211,7 +286,7 @@ fn publisher_rejects_symlink_destination() {
         .expect("make the specified symbolic link");
 
     assert!(matches!(
-        publish_or_read(
+        publish_as_current_user(
             &fd,
             ExecutionPublicationKind::Challenge,
             "0123456789abcdef0123456789abcdef",

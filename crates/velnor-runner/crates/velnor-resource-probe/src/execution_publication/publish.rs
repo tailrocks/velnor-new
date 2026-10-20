@@ -1,8 +1,11 @@
+mod files;
 mod observation;
 
+use files::{open_control_file, read_control_file};
+
 use observation::{
-    decode_payload, lower_hex, observe_control_directory, observe_control_file_identity,
-    open_control_directory, read_mountinfo, valid_boot_id, valid_digest, valid_operation_id,
+    decode_payload, lower_hex, observe_control_directory, open_control_directory, read_mountinfo,
+    valid_boot_id, valid_digest, valid_operation_id,
 };
 
 use std::{
@@ -117,12 +120,25 @@ pub(super) fn publish_execution_control(
         &root_mount,
         &mountinfo,
     )?;
-    let file_before = open_control_file(&control, context.kind, &root_mount, &mountinfo)?;
+    let file_before = open_control_file(
+        &control,
+        context.kind,
+        &root_mount,
+        &mountinfo,
+        CONTROL_UID,
+        CONTROL_GID,
+    )?;
     let mountinfo_after = read_mountinfo()?;
     let root_mount_after = attachment_mount(&mountinfo_after, PUBLISHER_ROOT)?;
     let directory_after = observe_control_directory(&control, &root_mount_after, &mountinfo_after)?;
-    let final_opened =
-        open_control_file(&control, context.kind, &root_mount_after, &mountinfo_after)?;
+    let final_opened = open_control_file(
+        &control,
+        context.kind,
+        &root_mount_after,
+        &mountinfo_after,
+        CONTROL_UID,
+        CONTROL_GID,
+    )?;
     let boot_after = crate::execution_channel::identity::read_boot_id()?;
     let namespace_after = crate::execution_channel::identity::mount_namespace_id()?;
     if mountinfo_after != mountinfo
@@ -218,6 +234,28 @@ fn publish_or_read(
     mount: &MountEntry,
     mountinfo: &[u8],
 ) -> Result<OpenedControlFile, ProbeError> {
+    publish_or_read_with_owner(
+        directory,
+        kind,
+        operation_id,
+        bytes,
+        mount,
+        mountinfo,
+        CONTROL_UID,
+        CONTROL_GID,
+    )
+}
+
+fn publish_or_read_with_owner(
+    directory: &File,
+    kind: ExecutionPublicationKind,
+    operation_id: &str,
+    bytes: &[u8],
+    mount: &MountEntry,
+    mountinfo: &[u8],
+    owner_uid: u32,
+    owner_gid: u32,
+) -> Result<OpenedControlFile, ProbeError> {
     match openat(
         directory,
         kind.file_name(),
@@ -225,7 +263,14 @@ fn publish_or_read(
         Mode::empty(),
     ) {
         Ok(fd) => {
-            let opened = read_control_file(&File::from(fd), directory, mount, mountinfo)?;
+            let opened = read_control_file(
+                &File::from(fd),
+                directory,
+                mount,
+                mountinfo,
+                owner_uid,
+                owner_gid,
+            )?;
             if opened.bytes != bytes {
                 return Err(ProbeError::Invalid("publication_replay_conflict"));
             }
@@ -247,8 +292,8 @@ fn publish_or_read(
         .map_err(|_| ProbeError::Invalid("publication_write"))?;
     fchown(
         &file,
-        Some(Uid::from_raw(CONTROL_UID)),
-        Some(Gid::from_raw(CONTROL_GID)),
+        Some(Uid::from_raw(owner_uid)),
+        Some(Gid::from_raw(owner_gid)),
     )
     .map_err(|_| ProbeError::Invalid("publication_owner"))?;
     fchmod(&file, Mode::from_raw_mode(CONTROL_FILE_MODE))
@@ -266,69 +311,7 @@ fn publish_or_read(
     directory
         .sync_all()
         .map_err(|_| ProbeError::Invalid("publication_directory_sync"))?;
-    open_control_file(directory, kind, mount, mountinfo)
-}
-
-fn open_control_file(
-    directory: &File,
-    kind: ExecutionPublicationKind,
-    mount: &MountEntry,
-    mountinfo: &[u8],
-) -> Result<OpenedControlFile, ProbeError> {
-    let fd = openat(
-        directory,
-        kind.file_name(),
-        OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
-        Mode::empty(),
-    )
-    .map_err(|_| ProbeError::Invalid("publication_destination_open"))?;
-    read_control_file(&File::from(fd), directory, mount, mountinfo)
-}
-
-fn read_control_file(
-    file: &File,
-    directory: &File,
-    mount_entry: &MountEntry,
-    mountinfo: &[u8],
-) -> Result<OpenedControlFile, ProbeError> {
-    let metadata = file
-        .metadata()
-        .map_err(|_| ProbeError::Invalid("publication_file_stat"))?;
-    let mode = metadata.mode() & 0o777;
-    if !metadata.is_file()
-        || metadata.uid() != CONTROL_UID
-        || metadata.gid() != CONTROL_GID
-        || mode != CONTROL_FILE_MODE
-        || metadata.len() == 0
-        || metadata.len() > CONTROL_FILE_LIMIT as u64
-    {
-        return Err(ProbeError::Invalid("publication_file_identity"));
-    }
-    let bytes = read_control_bytes(file)?;
-    let identity = observe_control_file_identity(
-        file,
-        directory,
-        mount_entry,
-        mountinfo,
-        &metadata,
-        bytes.len(),
-    )?;
-    serde_json::from_slice::<serde_json::Value>(&bytes)
-        .map_err(|_| ProbeError::Invalid("publication_file_json"))?;
-    Ok(OpenedControlFile { bytes, identity })
-}
-
-fn read_control_bytes(file: &File) -> Result<Vec<u8>, ProbeError> {
-    let mut bytes = Vec::with_capacity(CONTROL_FILE_LIMIT.min(4096));
-    file.try_clone()
-        .map_err(|_| ProbeError::Invalid("publication_file_clone"))?
-        .take((CONTROL_FILE_LIMIT + 1) as u64)
-        .read_to_end(&mut bytes)
-        .map_err(|_| ProbeError::Invalid("publication_file_read"))?;
-    if bytes.len() > CONTROL_FILE_LIMIT {
-        return Err(ProbeError::InputTooLarge("publication_file"));
-    }
-    Ok(bytes)
+    open_control_file(directory, kind, mount, mountinfo, owner_uid, owner_gid)
 }
 
 fn publication_file(

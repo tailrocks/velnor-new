@@ -12,6 +12,8 @@ pub(super) fn observe_control_file_identity(
     mountinfo: &[u8],
     metadata: &std::fs::Metadata,
     size: usize,
+    owner_uid: u32,
+    owner_gid: u32,
 ) -> Result<FileIdentity, ProbeError> {
     let stat = fstat(file).map_err(|_| ProbeError::Invalid("publication_file_fstat"))?;
     let statx_value = statx(
@@ -26,14 +28,14 @@ pub(super) fn observe_control_file_identity(
     if statx_value.stx_mask & required.bits() != required.bits()
         || FileType::from_raw_mode(stat.st_mode) != FileType::RegularFile
         || stat.st_ino != metadata.ino()
-        || stat.st_uid != CONTROL_UID
-        || stat.st_gid != CONTROL_GID
+        || stat.st_uid != owner_uid
+        || stat.st_gid != owner_gid
         || stat.st_mode & 0o777 != CONTROL_FILE_MODE
         || stat.st_size < 0
         || u64::try_from(stat.st_size).ok() != Some(size)
         || statx_value.stx_ino != metadata.ino()
-        || statx_value.stx_uid != CONTROL_UID
-        || statx_value.stx_gid != CONTROL_GID
+        || statx_value.stx_uid != owner_uid
+        || statx_value.stx_gid != owner_gid
         || u32::from(statx_value.stx_mode) & 0o777 != CONTROL_FILE_MODE
         || statx_value.stx_size != size
     {
