@@ -129,6 +129,30 @@ descriptor into `git`; this is the recorded deviation from the design text).
 points elsewhere receives no credential. Later steps run
 `--locked --offline` against `$CARGO_HOME/git/db`.
 
+## Placement in generated jobs
+
+When `[private_sources]` is configured, the block is inserted immediately before
+the `Fetch Cargo sources` step of
+
+- the Plan job (all lockful workspace roots), after moving the helper staging
+  step up to just before the block, and
+- every Rust crate job, scoped to the roots the job fetches.
+
+A job gets the block only when its allowlist is non-empty: Cargo git sources of
+its roots under `owner`, plus the locked repositories of the kinds a Rust job
+retrieves (`cargo` and `release-assets`; `git-trees` and `maven-bundles` belong
+to the jobs that consume them). No table, or a closure with no private source,
+leaves the job byte-identical. Generation fails when declared sources have no
+lock (`deps_lock_missing`), when the lock drifted from the declarations
+(`deps_lock_drift:<id>`), and for the Velnor repository policy, which stages no
+helper (`requires_consumer_policy`). Because the allowlist is a literal, any
+change to a `Cargo.lock` private source or to `deps.lock` changes the generated
+workflow and the freshness gate turns red until it is regenerated.
+
+Not yet wired: the prebuilt-binary image job (`image_prebuilt`), the credential-free
+preview preparation, and jobs of other stacks. They must call
+`PrivateWiring::steps_for_roots` before any step that resolves private sources.
+
 ## Fetch and revoke operations
 
 The fetch step carries, as literal non-secret env, the owner, the sorted

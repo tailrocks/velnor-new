@@ -23,6 +23,8 @@ pub(crate) mod private_fetch_session;
 pub(crate) mod private_revoke;
 #[path = "private_sources.rs"]
 pub(crate) mod private_sources;
+#[path = "private_wiring.rs"]
+pub(crate) mod private_wiring;
 
 /// Config path as reported in diagnostics.
 pub(crate) const CONFIG_REL: &str = ".velnor/config.toml";

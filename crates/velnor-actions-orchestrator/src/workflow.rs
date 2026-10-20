@@ -84,9 +84,13 @@ fn build_plan_job(
     needs: PlanJobToolNeeds,
     fetch_roots: &[String],
     discovery: &Discovery,
+    private: Option<&crate::config::private_wiring::PrivateWiring>,
 ) -> Result<Job, OrchestratorError> {
     let tofu_roots = crate::tofu_cache::tofu_cache_roots(discovery)?;
     let mut plan = plan_job(label, acquire, catalog, needs, fetch_roots, &tofu_roots)?;
+    if let Some(private) = private {
+        private.insert_into_job(&mut plan, fetch_roots)?;
+    }
     insert_format_report_steps(
         &mut plan,
         wire_w1::workspace_format_report_steps(discovery)?,
