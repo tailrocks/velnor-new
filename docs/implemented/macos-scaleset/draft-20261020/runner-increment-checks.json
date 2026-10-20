@@ -715,6 +715,25 @@
       "scope": "The test uses the cleanup observer with Docker test data. It does not prove a live installation.",
       "format_exit_status": 0,
       "commit_hook_exit_status": 0
+    },
+    {
+      "result": "PASS",
+      "source_commit": "73dfa869dff68a45609667c6d9db4e3a1a31b65d",
+      "command": "env -u RUST_MIN_STACK CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 rustup run 1.99.1 mbx nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host -E 'test(parser_)'",
+      "nextest_run": "cd25da1a-12df-43f9-a07a-a41232aca208",
+      "exit_status": 0,
+      "passed": 16,
+      "log": "alint-parser-parent-integrated-20261020.log",
+      "log_sha256": "a4a0dcdefbbdfe7160113f5e8696ec624253d51c64febfb7662cbbca3117e85e",
+      "format_exit_status": 0,
+      "alint_exit_status": 0,
+      "alint_command": "alint check --fail-on-warning",
+      "alint_log": "alint-parent-extraction-verified-20261020.log",
+      "alint_log_sha256": "f4f9c3a03f07697148e00390f1779db8b20b4721d95431bc5002972d44a59226",
+      "commit_hook_exit_status": 0,
+      "author": "/root/container_metadata_repair",
+      "reviewer": "/root/execution_source_security_review",
+      "scope": "Five tests and their helper moved to a child module. Their code did not change."
     }
   ],
   "broader_pair_check": {
