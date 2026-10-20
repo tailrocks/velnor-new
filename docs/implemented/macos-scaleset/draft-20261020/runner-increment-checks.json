@@ -254,6 +254,19 @@
       "log_sha256": "347d1c4eddefb08a8d0f3c2e91d98e3f3fc59ce29f7664f79e8dbc5d5ac94a6f",
       "author": "/root",
       "reviewer": "/root/execution_source_security_review"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "3337a823d3f703d1ae0bc9109780ed9d01e0ed04",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --locked --workspace --all-features",
+      "exit_status": 0,
+      "nextest_run": "eb29cd36-bffc-4464-844a-82e0f38ba18c",
+      "passed": 5027,
+      "skipped": 5,
+      "log": "root-full-3337-20261020.log",
+      "log_sha256": "563e0bb3b9ea9b10c654af268fcd801c60c51cec80d3cb511551965e591b9869",
+      "author": "/root",
+      "reviewer": null
     }
   ],
   "broader_pair_check": {

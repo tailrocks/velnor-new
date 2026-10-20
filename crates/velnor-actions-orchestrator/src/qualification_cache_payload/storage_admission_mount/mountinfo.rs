@@ -27,6 +27,8 @@ pub(super) fn validate_work_mountinfo(
     validate_path_mountinfo(mountinfo, target, mount_id, device_major, device_minor)
 }
 
+type SelectedMount<'a> = (usize, u64, u32, u32, Vec<&'a str>, &'a str);
+
 fn validate_path_mountinfo(
     mountinfo: &str,
     target: &str,
@@ -37,7 +39,7 @@ fn validate_path_mountinfo(
     if !target.starts_with('/') || target.ends_with('/') && target != "/" {
         return Err("cache_storage_mount_path_invalid");
     }
-    let mut selected: Option<(usize, u64, u32, u32, Vec<&str>, &str)> = None;
+    let mut selected: Option<SelectedMount<'_>> = None;
     for line in mountinfo.lines() {
         let mut halves = line.splitn(2, " - ");
         let left = halves.next().ok_or("cache_storage_mountinfo_invalid")?;
