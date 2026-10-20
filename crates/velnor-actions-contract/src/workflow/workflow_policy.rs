@@ -209,6 +209,7 @@ mod tests {
             jobs: BTreeMap::from([(
                 "plan".to_owned(),
                 Job {
+                    services: Vec::new(),
                     display_name: "Plan".to_owned(),
                     runs_on: "ubuntu-26.04".to_owned(),
                     check_runner: None,

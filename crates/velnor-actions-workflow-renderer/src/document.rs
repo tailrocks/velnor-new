@@ -18,6 +18,9 @@ use velnor_actions_contract::{
 };
 
 #[cfg(test)]
+#[path = "document_services_tests.rs"]
+mod document_services_tests;
+#[cfg(test)]
 #[path = "document_runner_shell_tests.rs"]
 mod runner_shell_tests;
 
@@ -332,6 +335,12 @@ fn job_to_yaml(
         },
     )?;
     crate::cache_save_budget::apply(&mut rendered_steps, job.timeout_minutes.minutes())?;
+    if !job.services.is_empty() {
+        entries.push((
+            "services".to_owned(),
+            crate::document_services::services_yaml(&job.services),
+        ));
+    }
     entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
     Ok(Yaml::Map(entries))
 }
