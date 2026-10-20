@@ -4,7 +4,8 @@ use syn::visit::{self, Visit};
 use syn::{Type, UseTree};
 
 #[derive(Default)]
-struct ImportAudit {
+struct ImportAudit<'a> {
+    name: &'a str,
     aliases: HashMap<String, Vec<String>>,
     violations: Vec<String>,
 }
@@ -14,8 +15,11 @@ pub(super) struct CollectedImports {
     pub(super) violations: Vec<String>,
 }
 
-pub(super) fn collect(file: &syn::File) -> CollectedImports {
-    let mut audit = ImportAudit::default();
+pub(super) fn collect(name: &str, file: &syn::File) -> CollectedImports {
+    let mut audit = ImportAudit {
+        name,
+        ..ImportAudit::default()
+    };
     audit.visit_file(file);
     CollectedImports {
         aliases: audit.aliases,
@@ -23,9 +27,15 @@ pub(super) fn collect(file: &syn::File) -> CollectedImports {
     }
 }
 
-impl<'ast> Visit<'ast> for ImportAudit {
+impl<'ast> Visit<'ast> for ImportAudit<'_> {
     fn visit_item_use(&mut self, item: &'ast syn::ItemUse) {
-        collect_use_tree(&item.tree, &[], &mut self.aliases, &mut self.violations);
+        collect_use_tree(
+            self.name,
+            &item.tree,
+            &[],
+            &mut self.aliases,
+            &mut self.violations,
+        );
         visit::visit_item_use(self, item);
     }
 
@@ -70,6 +80,7 @@ impl<'ast> Visit<'ast> for ImportAudit {
 }
 
 fn collect_use_tree(
+    name: &str,
     tree: &UseTree,
     prefix: &[String],
     aliases: &mut HashMap<String, Vec<String>>,
@@ -79,26 +90,32 @@ fn collect_use_tree(
         UseTree::Path(path) => {
             let mut next = prefix.to_vec();
             next.push(path.ident.to_string());
-            collect_use_tree(&path.tree, &next, aliases, violations);
+            collect_use_tree(name, &path.tree, &next, aliases, violations);
         }
-        UseTree::Name(name) => {
+        UseTree::Name(item_name) => {
             let mut imported = prefix.to_vec();
-            let local_name = name.ident.to_string();
+            let local_name = item_name.ident.to_string();
             if local_name != "self" {
                 imported.push(local_name.clone());
             }
-            record_import(imported, local_name, aliases, violations);
+            record_import(name, imported, local_name, aliases, violations);
         }
         UseTree::Rename(rename) => {
             let mut imported = prefix.to_vec();
             if rename.ident != "self" {
                 imported.push(rename.ident.to_string());
             }
-            record_import(imported, rename.rename.to_string(), aliases, violations);
+            record_import(
+                name,
+                imported,
+                rename.rename.to_string(),
+                aliases,
+                violations,
+            );
         }
         UseTree::Group(group) => {
             for item in &group.items {
-                collect_use_tree(item, prefix, aliases, violations);
+                collect_use_tree(name, item, prefix, aliases, violations);
             }
         }
         UseTree::Glob(_) => {
@@ -114,6 +131,7 @@ fn collect_use_tree(
 }
 
 fn record_import(
+    name: &str,
     imported: Vec<String>,
     local_name: String,
     aliases: &mut HashMap<String, Vec<String>>,
@@ -121,14 +139,16 @@ fn record_import(
 ) {
     let canonical = super::resolve_names(imported, aliases);
     if super::is_external_file_api_root(&canonical)
-        && !is_reviewed_read_only_rustix_import(&canonical)
+        && !is_reviewed_read_only_rustix_import(name, &canonical)
     {
         violations.push(format!(
             "external crate import exposes path-opening APIs: `{}`",
             canonical.join("::")
         ));
     }
-    if super::is_dangerous_file_api(&canonical) {
+    if !super::executable::is_test_fixture_mutation(name, &canonical)
+        && super::is_dangerous_file_api(&canonical)
+    {
         violations.push(format!(
             "filesystem mutation import is forbidden: `{}`",
             canonical.join("::")
@@ -162,12 +182,16 @@ fn record_alias(
     }
 }
 
-fn is_reviewed_read_only_rustix_import(path: &[String]) -> bool {
+fn is_reviewed_read_only_rustix_import(name: &str, path: &[String]) -> bool {
     if path.len() != 3 || path[0] != "rustix" {
         return false;
     }
     match path[1].as_str() {
-        "fs" => matches!(path[2].as_str(), "OFlags" | "fcntl_getfl" | "fcntl_setfl"),
+        "fs" => {
+            matches!(path[2].as_str(), "OFlags" | "fcntl_getfl" | "fcntl_setfl")
+                || (name == "requests_executable_lookup.rs"
+                    && matches!(path[2].as_str(), "FileType" | "Mode" | "openat"))
+        }
         "process" => matches!(
             path[2].as_str(),
             "Pid"

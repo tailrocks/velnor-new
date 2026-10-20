@@ -1,5 +1,8 @@
 use super::check_file;
 
+#[path = "impl_mise_forbidden_src_executable_lookup_tests.rs"]
+mod executable_lookup;
+
 #[test]
 fn bounded_file_filter_exceptions_are_exact_and_local() -> Result<(), String> {
     let allowed_write = "fn copy_from_child(output: &mut impl std::io::Write, buffer: &[u8], count: usize) { output\n.write_all(&buffer[..count])\n.map_err(std::io::Error::other)?; }";
@@ -95,7 +98,7 @@ fn bounded_file_filter_exceptions_are_exact_and_local() -> Result<(), String> {
     Ok(())
 }
 
-fn check_source_fixture(
+pub(super) fn check_source_fixture(
     name: &str,
     source: &str,
     violations: &mut Vec<String>,

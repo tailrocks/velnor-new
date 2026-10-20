@@ -86,6 +86,8 @@ const EXPECTED_MODULES: &[&str] = &[
     "release_plz.rs",
     "requests.rs",
     "requests_app_token_tests.rs",
+    "requests_executable_lookup.rs",
+    "requests_executable_lookup_tests.rs",
     "requests_helpers.rs",
     "requests_metadata.rs",
     "requests_presence.rs",
@@ -203,17 +205,8 @@ const ALWAYS_BANNED: &[&str] = &[
     "apply_fix",
 ];
 
-const STREAM_FILE_WRITE: &str = "output.write_all(bytes)";
-
-/// Tool-file names allowed only in `toolfiles.rs` (read-only routing and
-/// inspection): owned Mise files plus foreign Rust files for routing.
-const TOOLFILES_ONLY: &[&str] = &[
-    "mise.toml",
-    "mise.lock",
-    "rust-toolchain.toml",
-    "Cargo.toml",
-    "Cargo.lock",
-];
+#[path = "impl_mise_forbidden_src_site_policy.rs"]
+mod site_policy;
 
 fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
     let name = path
@@ -225,64 +218,8 @@ fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
     Ok(())
 }
 
-fn check_source_sites(name: &str, source: &str, violations: &mut Vec<String>) {
-    let compact = source
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .replace(" .", ".");
-    let is_filter_process = name == "bounded_file_filter_process.rs";
-    let is_filter = name == "bounded_file_filter.rs";
-    let is_command_stream = name == "command_stream.rs";
-    let is_command_progress = name == "command_progress.rs";
-    let write_expression = "output.write_all(&buffer[..count])";
-    let diagnostic_expression = ".write_all(bytes)";
-    let metadata_expression = "std::fs::symlink_metadata(program)";
-    path_policy::check_path_openers(name, source, violations);
-    if is_filter_process && compact.matches(write_expression).count() != 1 {
-        violations.push(format!(
-            "{name}: expected exactly one bounded output write `{write_expression}`"
-        ));
-    }
-    if is_filter && compact.matches(metadata_expression).count() != 1 {
-        violations.push(format!(
-            "{name}: expected exactly one read-only program metadata check `{metadata_expression}`"
-        ));
-    }
-    if is_command_stream && compact.matches(STREAM_FILE_WRITE).count() != 1 {
-        violations.push(format!(
-            "{name}: expected exactly one caller-owned bounded stream write `{STREAM_FILE_WRITE}`"
-        ));
-    }
-    if !is_command_stream && !is_command_progress && compact.contains(STREAM_FILE_WRITE) {
-        violations.push(format!(
-            "{name}: caller-owned stream write is outside its approved module"
-        ));
-    }
-    if is_command_progress && compact.matches(diagnostic_expression).count() != 1 {
-        violations.push(format!(
-            "{name}: expected exactly one borrowed-diagnostic write `{diagnostic_expression}`"
-        ));
-    }
-    if !is_command_progress && !is_command_stream && compact.contains(diagnostic_expression) {
-        violations.push(format!(
-            "{name}: borrowed-diagnostic write is outside its approved module"
-        ));
-    }
-    if !is_filter_process && compact.contains(write_expression) {
-        violations.push(format!(
-            "{name}: bounded output write is outside its approved module"
-        ));
-    }
-    if !is_filter && compact.contains(metadata_expression) {
-        violations.push(format!(
-            "{name}: program metadata check is outside its approved module"
-        ));
-    }
-}
-
 fn check_source(name: &str, source: &str, violations: &mut Vec<String>) {
-    check_source_sites(name, source, violations);
+    site_policy::check_source_sites(name, source, violations);
     let is_filter_process = name == "bounded_file_filter_process.rs";
     let is_filter = name == "bounded_file_filter.rs";
     let is_command_stream = name == "command_stream.rs";
@@ -302,6 +239,9 @@ fn check_source(name: &str, source: &str, violations: &mut Vec<String>) {
         }
         let at = format!("{name}:{line}");
         for token in ALWAYS_BANNED {
+            if rustup_policy::token_allowed_in_scoped_fixture(name, token) {
+                continue;
+            }
             if name == "command_stream.rs" && *token == "write_all" && borrowed_stream_write {
                 borrowed_file_writes += 1;
                 continue;
@@ -321,13 +261,16 @@ fn check_source(name: &str, source: &str, violations: &mut Vec<String>) {
             }
         }
         if name != "toolfiles.rs" {
-            for token in TOOLFILES_ONLY {
+            for token in site_policy::TOOLFILES_ONLY {
                 if code.contains(token) {
                     violations.push(format!("{at}: `{token}` outside toolfiles.rs in `{code}`"));
                 }
             }
         }
-        if code.contains("\"rustup\"") && !code.contains("FORBIDDEN") {
+        if code.contains("\"rustup\"")
+            && !code.contains("FORBIDDEN")
+            && !rustup_policy::rustup_literal_allowed(name)
+        {
             violations.push(format!("{at}: unsanctioned `rustup` in `{code}`"));
         }
         if code.contains(".mise/tasks") && !code.contains("contains") {
@@ -387,3 +330,6 @@ mod filter_tests;
 
 #[path = "impl_mise_forbidden_src_path_policy.rs"]
 mod path_policy;
+
+#[path = "impl_mise_forbidden_src_rustup_policy.rs"]
+mod rustup_policy;

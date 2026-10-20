@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use syn::visit::{self, Visit};
 use syn::{Expr, ExprCall, ExprMethodCall, ExprPath, Path, QSelf};
 
+#[path = "impl_mise_forbidden_src_path_policy_executable.rs"]
+mod executable;
 #[path = "impl_mise_forbidden_src_path_policy_imports.rs"]
 mod imports;
 #[path = "impl_mise_forbidden_src_path_policy_macros.rs"]
@@ -11,6 +13,7 @@ mod macros;
 mod qualified;
 
 const READ_ONLY_CALL: &str = "rustix::fs::open(path,rustix::fs::OFlags::RDONLY|rustix::fs::OFlags::NOFOLLOW|rustix::fs::OFlags::CLOEXEC,rustix::fs::Mode::empty(),)";
+const EXECUTABLE_LOOKUP: &str = "requests_executable_lookup.rs";
 
 pub(super) fn check_path_openers(name: &str, source: &str, violations: &mut Vec<String>) {
     let syntax = match syn::parse_file(source) {
@@ -20,7 +23,7 @@ pub(super) fn check_path_openers(name: &str, source: &str, violations: &mut Vec<
             return;
         }
     };
-    let imports = imports::collect(&syntax);
+    let imports = imports::collect(name, &syntax);
     violations.extend(
         imports
             .violations
@@ -50,6 +53,16 @@ pub(super) fn check_path_openers(name: &str, source: &str, violations: &mut Vec<
                 .push("expected one exact no-follow read-only Rustix file open".to_owned());
         }
     }
+    if name == EXECUTABLE_LOOKUP
+        && (audit.executable_lookup_opens != 1
+            || audit.executable_lookup_directory_openats != 2
+            || audit.executable_lookup_file_openats != 1)
+    {
+        audit.violations.push(
+            "expected one pinned-root open and three exact no-follow executable path opens"
+                .to_owned(),
+        );
+    }
     violations.extend(
         audit
             .violations
@@ -64,12 +77,31 @@ struct PathAudit<'a> {
     aliases: HashMap<String, Vec<String>>,
     violations: Vec<String>,
     read_only_rustix_opens: usize,
+    executable_lookup_opens: usize,
+    executable_lookup_directory_openats: usize,
+    executable_lookup_file_openats: usize,
 }
 
 impl PathAudit<'_> {
     fn inspect_call(&mut self, path: &Path, call: &ExprCall) {
         let canonical = resolve_path(path, &self.aliases);
-        self.inspect_canonical_call(&canonical, exact_read_only_rustix_call(path, call));
+        let checked_call = executable::exact_read_only_rustix_call(self.name, &canonical, call);
+        if self.name == EXECUTABLE_LOOKUP
+            && executable::canonical_is(&canonical, &["rustix", "fs", "openat"])
+        {
+            if executable::exact_openat_with_flags(
+                call,
+                &["RDONLY", "DIRECTORY", "NOFOLLOW", "CLOEXEC"],
+            ) {
+                self.executable_lookup_directory_openats += 1;
+            } else if executable::exact_openat_with_flags(
+                call,
+                &["RDONLY", "NOFOLLOW", "NONBLOCK", "CLOEXEC"],
+            ) {
+                self.executable_lookup_file_openats += 1;
+            }
+        }
+        self.inspect_canonical_call(&canonical, checked_call);
     }
 
     fn inspect_qualified_call(&mut self, qself: &QSelf, path: &Path) {
@@ -85,14 +117,26 @@ impl PathAudit<'_> {
         if is_rustix_open(canonical) {
             if self.name == "check_file_read.rs" && exact_read_only_rustix {
                 self.read_only_rustix_opens += 1;
+            } else if self.name == EXECUTABLE_LOOKUP && exact_read_only_rustix {
+                match canonical[2].as_str() {
+                    "open" => self.executable_lookup_opens += 1,
+                    "openat" => {}
+                    _ => self.violations.push(
+                        "executable lookup uses an unsupported Rustix open operation".to_owned(),
+                    ),
+                }
             } else {
                 self.violations.push(format!(
                     "path-opening API is not the exact checked read-only call: `{}`",
                     canonical.join("::")
                 ));
             }
+        } else if executable::is_test_fixture_mutation(self.name, canonical) {
+            // This exact source file creates disposable test inputs.
         } else if is_path_open_call(canonical) {
-            if !is_standard_read_only_file_open(canonical) || self.name == "check_file_read.rs" {
+            if !is_standard_read_only_file_open(canonical)
+                || matches!(self.name, "check_file_read.rs" | EXECUTABLE_LOOKUP)
+            {
                 self.violations.push(format!(
                     "path-opening call is forbidden: `{}`",
                     canonical.join("::")
@@ -128,6 +172,9 @@ impl PathAudit<'_> {
     }
 
     fn inspect_canonical_reference(&mut self, canonical: &[String]) {
+        if executable::is_test_fixture_mutation(self.name, canonical) {
+            return;
+        }
         if is_rustix_open(canonical)
             || (is_path_open_call(canonical) && !is_standard_read_only_file_open(canonical))
             || is_dangerous_file_api(canonical)
@@ -183,85 +230,6 @@ impl<'ast> Visit<'ast> for PathAudit<'_> {
     }
 }
 
-fn exact_read_only_rustix_call(path: &Path, call: &ExprCall) -> bool {
-    path_is(path, &["rustix", "fs", "open"])
-        && call.args.len() == 3
-        && expr_path_is(&call.args[0], &["path"])
-        && exact_read_only_flags(&call.args[1])
-        && empty_mode_call(&call.args[2])
-}
-
-fn exact_read_only_flags(expression: &Expr) -> bool {
-    let mut flags = Vec::new();
-    collect_flag_paths(expression, &mut flags);
-    flags
-        == vec![
-            vec!["rustix", "fs", "OFlags", "RDONLY"],
-            vec!["rustix", "fs", "OFlags", "NOFOLLOW"],
-            vec!["rustix", "fs", "OFlags", "CLOEXEC"],
-        ]
-}
-
-fn collect_flag_paths(expression: &Expr, flags: &mut Vec<Vec<String>>) {
-    match expression {
-        Expr::Binary(binary) if matches!(binary.op, syn::BinOp::BitOr(_)) => {
-            collect_flag_paths(&binary.left, flags);
-            collect_flag_paths(&binary.right, flags);
-        }
-        Expr::Path(path) if path.qself.is_none() => {
-            if path_is(&path.path, &["rustix", "fs", "OFlags", "RDONLY"]) {
-                flags.push(
-                    vec!["rustix", "fs", "OFlags", "RDONLY"]
-                        .into_iter()
-                        .map(str::to_owned)
-                        .collect(),
-                );
-            } else if path_is(&path.path, &["rustix", "fs", "OFlags", "NOFOLLOW"]) {
-                flags.push(
-                    vec!["rustix", "fs", "OFlags", "NOFOLLOW"]
-                        .into_iter()
-                        .map(str::to_owned)
-                        .collect(),
-                );
-            } else if path_is(&path.path, &["rustix", "fs", "OFlags", "CLOEXEC"]) {
-                flags.push(
-                    vec!["rustix", "fs", "OFlags", "CLOEXEC"]
-                        .into_iter()
-                        .map(str::to_owned)
-                        .collect(),
-                );
-            } else {
-                flags.push(vec!["invalid".to_owned()]);
-            }
-        }
-        _ => flags.push(vec!["invalid".to_owned()]),
-    }
-}
-
-fn empty_mode_call(expression: &Expr) -> bool {
-    let Expr::Call(call) = expression else {
-        return false;
-    };
-    call.args.is_empty()
-        && matches!(&*call.func, Expr::Path(path)
-            if path.qself.is_none()
-                && path_is(&path.path, &["rustix", "fs", "Mode", "empty"]))
-}
-
-fn expr_path_is(expression: &Expr, expected: &[&str]) -> bool {
-    matches!(expression, Expr::Path(path)
-        if path.qself.is_none() && path_is(&path.path, expected))
-}
-
-fn path_is(path: &Path, expected: &[&str]) -> bool {
-    path.segments.len() == expected.len()
-        && path
-            .segments
-            .iter()
-            .zip(expected)
-            .all(|(segment, expected)| segment.ident == *expected)
-}
-
 fn resolve_path(path: &Path, aliases: &HashMap<String, Vec<String>>) -> Vec<String> {
     resolve_names(
         path.segments
@@ -309,6 +277,9 @@ fn is_rustix_open(path: &[String]) -> bool {
 }
 
 fn is_path_open_call(path: &[String]) -> bool {
+    if is_standard_read_only_file_open(path) {
+        return true;
+    }
     if path.len() >= 2 && path[0] == "libc" && matches!(path[1].as_str(), "open" | "openat") {
         return true;
     }
@@ -338,6 +309,12 @@ fn is_standard_read_only_file_open(path: &[String]) -> bool {
 }
 
 fn is_dangerous_file_api(path: &[String]) -> bool {
+    if path
+        .last()
+        .is_some_and(|name| matches!(name.as_str(), "symlink" | "symlinkat"))
+    {
+        return true;
+    }
     if !is_std_fs_path(path) {
         return false;
     }
