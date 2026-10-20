@@ -89,6 +89,7 @@ pub use private_sources::{
     DEPS_LOCK_PATH, PrivateAssetSource, PrivateGitTreeSource, PrivateSourcesConfig,
     is_valid_asset_name, is_valid_extract_to, is_valid_github_owner, is_valid_github_repo_name,
     is_valid_source_id, is_valid_source_tag, split_repository,
+};
 pub use publish::{
     PublishBundle, PublishConfig, RELEASE_TAG_GLOB, ReleaseTag, VersionSource, is_artifact_id,
     is_strict_semver,
