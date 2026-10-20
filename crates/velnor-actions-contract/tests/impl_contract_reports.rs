@@ -176,6 +176,7 @@ fn rejects_task_report_v2(report: &TaskReport) {
 #[test]
 fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
     let job = Job {
+        services: Vec::new(),
         display_name: "Plan".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,

@@ -34,12 +34,17 @@ fn internal_env_pairs(text: &str) -> Vec<(String, String)> {
 
 /// Render the plan job, extract its gate env, run the gate logic, accept.
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "the exhaustive job literal grew by one catalog field"
+)]
 fn render_gate_roundtrip_accepts_plan() -> TestResult {
     let pin = format!("actions/checkout@{:040x}", 0);
     let mut jobs = BTreeMap::new();
     jobs.insert(
         "plan".to_owned(),
         Job {
+            services: Vec::new(),
             check_runner: None,
             display_name: "Plan".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),

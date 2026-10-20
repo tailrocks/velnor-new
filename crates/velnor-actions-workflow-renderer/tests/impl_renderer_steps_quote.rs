@@ -236,6 +236,7 @@ fn rendered_run_steps_quote_runner_temp_paths() -> Result<(), RenderError> {
     jobs.insert(
         "plan".to_owned(),
         Job {
+            services: Vec::new(),
             display_name: "Plan".to_owned(),
             runs_on: EMIT_LABEL.to_owned(),
             check_runner: None,

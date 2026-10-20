@@ -31,6 +31,7 @@ fn action(name: &str, uses: &str, with: &[(&str, &str)], condition: Option<&str>
 
 fn job(steps: Vec<Step>) -> Job {
     Job {
+        services: Vec::new(),
         display_name: "Job".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,
