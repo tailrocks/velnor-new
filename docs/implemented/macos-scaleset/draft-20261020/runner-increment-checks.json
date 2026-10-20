@@ -1551,5 +1551,22 @@
     "reviewer": "runner_context_review",
     "scope": "Two calls use Box::pin before .await. The change keeps the operation order and ownership.",
     "remaining": "The strict runner gate still has other failures."
+  },
+  "native_lifecycle_fixture_caps": {
+    "result": "FAIL",
+    "tests": 12,
+    "passed": 10,
+    "failed": 2,
+    "run_id": "0e153840-632a-4a3b-b84e-455f3500c824",
+    "log_sha256": "c7b7fad16ae8f183272b8f5d1dd30de6d5ad56308bac8a343f0e5e5af49a4c53",
+    "manifest_sha256": "f80b13a0def87c65f6d608991753ff7b4ea625ec92fb80b472361343aa30e5f7",
+    "author": "native_intake_composition",
+    "reviewer": "execution_source_security_review",
+    "scope": "The fixtures keep the cleanup assertions. Private helpers keep the files within their size limits.",
+    "remaining": [
+      "The historical JIT states fixture still fails.",
+      "The unassigned runner replacement test still fails.",
+      "The full runner gate remains incomplete."
+    ]
   }
 }

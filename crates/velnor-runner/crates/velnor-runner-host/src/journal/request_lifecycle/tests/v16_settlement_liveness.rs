@@ -1,8 +1,9 @@
 use std::time::Instant;
 
 use super::helpers::{
-    create_cleaned_settlement_probe, record_owned_network_cleanup, record_owned_storage_cleanup,
-    settlement_sample,
+    create_cleaned_settlement_probe, event_source, record_owned_network_cleanup,
+    record_owned_storage_cleanup, record_runner_absent_for_cleanup,
+    record_runner_completion_for_cleanup, settlement_sample,
 };
 use super::review_counterexamples::ready;
 use crate::error::HostError;
@@ -29,6 +30,9 @@ async fn fresh_settlement_releases_hold_and_survives_restart() -> Result<(), Hos
         binding,
         scope,
         physical,
+        request,
+        intent,
+        runner,
         provisioned,
         ..
     } = ready().await?;
@@ -42,6 +46,16 @@ async fn fresh_settlement_releases_hold_and_survives_restart() -> Result<(), Hos
         .reservation(&physical)
         .await?
         .ok_or(HostError::Journal)?;
+    let cleanup_generation = record_runner_completion_for_cleanup(
+        &scope,
+        &request,
+        intent,
+        Some(701),
+        703,
+        &event_source(101, 1070),
+        &runner,
+    )
+    .await?;
     record_owned_storage_cleanup(&scope, &provisioned).await?;
     scope
         .record_remote_cleanup(reservation.reservation_id)
@@ -50,6 +64,7 @@ async fn fresh_settlement_releases_hold_and_survives_restart() -> Result<(), Hos
         .record_local_cleanup(reservation.reservation_id)
         .await?;
     record_owned_network_cleanup(&scope, reservation.reservation_id).await?;
+    record_runner_absent_for_cleanup(&scope, intent, cleanup_generation).await?;
     reject_stale_or_mismatched_samples(&scope, &provisioned, &physical).await?;
 
     let fresh = create_cleaned_settlement_probe(&scope, &provisioned, '4').await?;

@@ -1,5 +1,6 @@
 use super::helpers::{
     TEST_ENGINE_ID, record_owned_network_cleanup, record_owned_storage_cleanup,
+    record_runner_absent_for_cleanup, record_runner_completion_for_cleanup,
     settle_storage_metadata,
 };
 use super::review_counterexamples::ready;
@@ -76,6 +77,16 @@ async fn assert_profile_hold(
         .reservation(&fixture.physical)
         .await?
         .ok_or(HostError::Journal)?;
+    let cleanup_generation = record_runner_completion_for_cleanup(
+        &fixture.scope,
+        &fixture.request,
+        fixture.intent,
+        Some(701),
+        703,
+        &super::helpers::event_source(101, 1070),
+        &fixture.runner,
+    )
+    .await?;
     record_owned_storage_cleanup(&fixture.scope, &fixture.provisioned).await?;
     record_owned_network_cleanup(&fixture.scope, reservation.reservation_id).await?;
     fixture
@@ -86,6 +97,7 @@ async fn assert_profile_hold(
         .scope
         .record_local_cleanup(reservation.reservation_id)
         .await?;
+    record_runner_absent_for_cleanup(&fixture.scope, fixture.intent, cleanup_generation).await?;
 
     let previous = fixture
         .scope

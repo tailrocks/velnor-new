@@ -43,8 +43,7 @@ async fn record_cleanup_observer_probe(
     scope: &ConnectionJournal,
     provisioned: &ProvisionedRunner,
 ) -> Result<(), HostError> {
-    use crate::journal::{ProbePhase, ProbeSeed, ResourceProbePurpose};
-    use crate::launch::VerifiedProbeCleanup;
+    use crate::journal::{ProbeSeed, ResourceProbePurpose};
     use sha2::{Digest, Sha256};
     use velnor_resource_probe::cleanup_observer_wire::CleanupObserverRequest;
 
@@ -205,6 +204,59 @@ pub(super) async fn settle_storage_metadata(
     scope
         .record_storage_metadata_settlement(&claim, sample)
         .await
+}
+
+pub(super) async fn record_runner_completion_for_cleanup(
+    scope: &ConnectionJournal,
+    request: &crate::journal::AssignmentIdentity,
+    intent_id: i64,
+    started_job_id: Option<i64>,
+    completed_job_id: i64,
+    source: &velnor_runner_github::SourceMetadata,
+    runner: &velnor_runner_github::RunnerReference,
+) -> Result<i64, HostError> {
+    if let Some(job_id) = started_job_id {
+        if scope
+            .record_job_started(request, job_id, source, runner, None)
+            .await?
+            != intent_id
+        {
+            return Err(HostError::Journal);
+        }
+    }
+    if scope
+        .record_job_completed(
+            request,
+            completed_job_id,
+            source,
+            Some("success"),
+            Some(runner),
+            None,
+        )
+        .await?
+        != Some(intent_id)
+    {
+        return Err(HostError::Journal);
+    }
+    let claim = scope
+        .claim_completion_cleanup(intent_id, 180)
+        .await?
+        .ok_or(HostError::Journal)?;
+    Ok(claim.generation)
+}
+
+pub(super) async fn record_runner_absent_for_cleanup(
+    scope: &ConnectionJournal,
+    intent_id: i64,
+    generation: i64,
+) -> Result<(), HostError> {
+    if !scope
+        .record_completion_runner_absent(intent_id, generation)
+        .await?
+    {
+        return Err(HostError::Journal);
+    }
+    Ok(())
 }
 
 pub(super) async fn create_cleaned_settlement_probe(

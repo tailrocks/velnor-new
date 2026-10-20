@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use super::helpers::{
     TEST_ENGINE_ID, event_source, provision_acquired_request_with_initialization,
     record_observed_storage_cleanup, record_owned_network_cleanup, record_owned_storage_cleanup,
-    runner_name, settle_storage_metadata,
+    record_runner_absent_for_cleanup, record_runner_completion_for_cleanup, runner_name,
+    settle_storage_metadata,
 };
 use super::review_counterexamples::ready;
 use crate::error::HostError;
@@ -304,6 +305,16 @@ async fn prepare_completed_legacy_fixture(
             None,
         )
         .await?;
+    let cleanup_generation = record_runner_completion_for_cleanup(
+        &fixture.scope,
+        &fixture.request,
+        fixture.intent,
+        None,
+        703,
+        &event_source(101, 1070),
+        &fixture.runner,
+    )
+    .await?;
     record_owned_storage_cleanup(&fixture.scope, &fixture.provisioned).await?;
     let reservation = fixture
         .scope
@@ -323,6 +334,7 @@ async fn prepare_completed_legacy_fixture(
         .record_local_cleanup(reservation.reservation_id)
         .await?;
     record_owned_network_cleanup(&fixture.scope, reservation.reservation_id).await?;
+    record_runner_absent_for_cleanup(&fixture.scope, fixture.intent, cleanup_generation).await?;
     assert_eq!(
         settle_storage_metadata(&fixture.scope, &fixture.provisioned, '5').await?,
         crate::journal::MetadataSettlementResult::Settled

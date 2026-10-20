@@ -2,8 +2,9 @@ use super::admission::JOB_LIMIT;
 use super::helpers::{
     ProvisionedRunner, Scratch, binding, created_scope, event_source,
     finish_initialized_listener_delivery, provision_acquired_request_with_initialization, receipt,
-    record_acquired, record_observed_storage_cleanup, record_owned_network_cleanup,
-    record_owned_storage_cleanup, runner_name, settle_storage_metadata,
+    record_observed_storage_cleanup, record_owned_network_cleanup, record_owned_storage_cleanup,
+    record_runner_absent_for_cleanup, record_runner_completion_for_cleanup, runner_name,
+    settle_storage_metadata,
 };
 use crate::error::HostError;
 use crate::journal::{AssignmentIdentity, AssignmentKey, ConnectionJournal, Journal};
@@ -238,6 +239,38 @@ async fn independent_recovered_unassigned_runner_allows_replacement_for_same_req
     Ok(())
 }
 
+async fn complete_and_release_runner(f: &Ready) -> Result<(), HostError> {
+    let cleanup_generation = record_runner_completion_for_cleanup(
+        &f.scope,
+        &f.request,
+        f.intent,
+        None,
+        703,
+        &event_source(101, 1070),
+        &f.runner,
+    )
+    .await?;
+    let reservation = f
+        .scope
+        .reservation(&f.physical)
+        .await?
+        .ok_or(HostError::Journal)?;
+    record_owned_storage_cleanup(&f.scope, &f.provisioned).await?;
+    record_owned_network_cleanup(&f.scope, reservation.reservation_id).await?;
+    f.scope
+        .record_remote_cleanup(reservation.reservation_id)
+        .await?;
+    f.scope
+        .record_local_cleanup(reservation.reservation_id)
+        .await?;
+    record_runner_absent_for_cleanup(&f.scope, f.intent, cleanup_generation).await?;
+    assert_eq!(
+        settle_storage_metadata(&f.scope, &f.provisioned, 'd').await?,
+        crate::journal::MetadataSettlementResult::Settled
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn independent_completed_cleanup_allows_new_demand_after_restart() -> Result<(), HostError> {
     let f = ready().await?;
@@ -260,23 +293,7 @@ async fn independent_completed_cleanup_allows_new_demand_after_restart() -> Resu
             .await?,
         Some(f.intent)
     );
-    let reservation = f
-        .scope
-        .reservation(&f.physical)
-        .await?
-        .ok_or(HostError::Journal)?;
-    record_owned_storage_cleanup(&f.scope, &f.provisioned).await?;
-    record_owned_network_cleanup(&f.scope, reservation.reservation_id).await?;
-    f.scope
-        .record_remote_cleanup(reservation.reservation_id)
-        .await?;
-    f.scope
-        .record_local_cleanup(reservation.reservation_id)
-        .await?;
-    assert_eq!(
-        settle_storage_metadata(&f.scope, &f.provisioned, 'd').await?,
-        crate::journal::MetadataSettlementResult::Settled
-    );
+    complete_and_release_runner(&f).await?;
     let path = f.scratch.file();
     let binding = f.binding.clone();
     drop(f.scope);

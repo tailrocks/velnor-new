@@ -199,54 +199,18 @@ async fn install_v27_pair_guards(connection: &turso::Connection) -> Result<(), H
     super::super::install_revision_triggers(connection).await
 }
 
-pub(super) async fn verify_failed_upgrades(
-    connection: &turso::Connection,
-    reservation_id: i64,
-    before: &ProofFacts,
-) -> Result<(), HostError> {
-    for failpoint in [
-        super::super::upgrade_v28::UpgradeFailpoint::AfterDecisionDrop,
-        super::super::upgrade_v28::UpgradeFailpoint::AfterProofCopy,
-    ] {
-        connection
-            .execute("BEGIN IMMEDIATE", ())
-            .await
-            .map_err(|_| HostError::Journal)?;
-        let failed = super::super::upgrade_v28::upgrade_with_test_failure(connection, failpoint)
-            .await
-            .is_err();
-        connection
-            .execute("ROLLBACK", ())
-            .await
-            .map_err(|_| HostError::Journal)?;
-        verify_rollback(connection, reservation_id, before, failed).await?;
-    }
-    Ok(())
-}
-
-async fn verify_rollback(
-    connection: &turso::Connection,
-    reservation_id: i64,
-    before: &ProofFacts,
-    failed: bool,
-) -> Result<(), HostError> {
+pub(super) async fn user_version(connection: &turso::Connection) -> Result<i64, HostError> {
     let mut version = connection
         .query("PRAGMA user_version", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    let version = version
+    version
         .next()
         .await
         .map_err(|_| HostError::Journal)?
         .ok_or(HostError::Journal)?
         .get::<i64>(0)
-        .map_err(|_| HostError::Journal)?;
-    if !failed || version != 32 || &proof_facts(connection, reservation_id).await? != before {
-        return Err(HostError::Journal);
-    }
-    super::super::guards::bootstrap_decision_transition_guards(connection, true).await?;
-    super::super::guards::bootstrap_proof_transition_guards(connection, true).await?;
-    super::super::validate_v27_objects(connection).await
+        .map_err(|_| HostError::Journal)
 }
 
 pub(super) async fn replace_decisions_as_v27(

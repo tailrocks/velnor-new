@@ -1,4 +1,7 @@
-use super::helpers::{TEST_ENGINE_ID, record_owned_network_cleanup, record_owned_storage_cleanup};
+use super::helpers::{
+    TEST_ENGINE_ID, event_source, record_owned_network_cleanup, record_owned_storage_cleanup,
+    record_runner_absent_for_cleanup, record_runner_completion_for_cleanup,
+};
 use super::review_counterexamples::ready;
 use crate::error::HostError;
 use crate::journal::{Journal, ReservationState, StorageRole};
@@ -7,7 +10,6 @@ use crate::worker::{WorkerIdentityNames, WorkerVolumeRole};
 
 mod database;
 mod historical_v18;
-use database::{query_i64, query_optional_text};
 
 #[tokio::test]
 async fn missing_wrong_and_uncertain_metadata_absence_keep_the_hold_after_reopen()
@@ -185,6 +187,16 @@ async fn persisted_four_object_cleanup_cannot_set_v19_cleanup_proven() -> Result
 async fn exact_five_object_cleanup_settles_only_after_all_owned_absence() -> Result<(), HostError> {
     let fixture = ready().await?;
     let reservation_id = fixture.provisioned.reservation_id;
+    let cleanup_generation = record_runner_completion_for_cleanup(
+        &fixture.scope,
+        &fixture.request,
+        fixture.intent,
+        Some(701),
+        703,
+        &event_source(101, 1070),
+        &fixture.runner,
+    )
+    .await?;
     record_owned_storage_cleanup(&fixture.scope, &fixture.provisioned).await?;
     assert_eq!(
         fixture
@@ -198,6 +210,7 @@ async fn exact_five_object_cleanup_settles_only_after_all_owned_absence() -> Res
     fixture.scope.record_remote_cleanup(reservation_id).await?;
     fixture.scope.record_local_cleanup(reservation_id).await?;
     record_owned_network_cleanup(&fixture.scope, reservation_id).await?;
+    record_runner_absent_for_cleanup(&fixture.scope, fixture.intent, cleanup_generation).await?;
     assert_eq!(
         fixture
             .scope
