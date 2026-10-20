@@ -146,16 +146,25 @@ impl ServerState {
         let execs = Arc::clone(&self.execs);
         let source_revision = self.images.source_sha().to_owned();
         let initializer = Arc::clone(&self.initializer()?.1);
+        let tamper_channel_response = Arc::clone(&self.tamper_channel_response);
         self.attach_tasks.push(tokio::spawn(async move {
             let line = exec_fixture::read_line(&mut stream, 8192)
                 .await
                 .map_err(|error| format!("Exec {id} request: {error}"))?;
             let metadata_inodes = initializer.lock().await.metadata_inodes().await?;
+            let is_channel_request = serde_json::from_slice::<Value>(&line)
+                .ok()
+                .is_some_and(|request| request["schema_version"] == 3);
             let (response, operation_id) = exec_fixture::exec_record(
                 &line,
                 &record.container_id,
                 &source_revision,
                 metadata_inodes,
+                if is_channel_request {
+                    tamper_channel_response.swap(0, std::sync::atomic::Ordering::SeqCst)
+                } else {
+                    0
+                },
             )?;
             exec_fixture::write_stdout_frame(&mut stream, &response).await?;
             let ack = exec_fixture::read_line(&mut stream, 128)

@@ -188,7 +188,7 @@ async fn start_attach(
         .ok_or_else(|| "Attach preceded create".to_owned())?;
     let operation = create["Labels"]["velnor.operation"]
         .as_str()
-        .ok_or_else(|| "Container operation label is absent".to_owned())?
+        .ok_or_else(|| "The request has no operation label.".to_owned())?
         .to_owned();
     let capture = Arc::clone(capture);
     attach_tasks.push(tokio::spawn(async move {
@@ -255,7 +255,7 @@ fn volume_response(state: &ApiState, path: &str) -> Result<(u16, String), String
     let worker = name
         .strip_suffix(suffix)
         .ok_or_else(|| "Volume name is invalid".to_owned())?;
-    Ok((200, json!({"Name": name, "Driver": "local", "Mountpoint": format!("/var/lib/docker/volumes/{name}/_data"), "Labels": {"velnor.worker": worker, "velnor.connection": state.volume_identity.connection_id, "velnor.reservation": state.volume_identity.reservation_id.to_string(), "velnor.operation": state.volume_identity.operation_id.to_string(), "velnor.role": role}, "Options": {}, "Scope": "local"}).to_string()))
+    Ok((200, json!({"Name": name, "Driver": "local", "Mountpoint": format!("/var/lib/docker/volumes/{name}/_data"), "Labels": {"velnor.worker": worker, "velnor.connection": state.volume_identity.connection, "velnor.reservation": state.volume_identity.reservation.to_string(), "velnor.operation": state.volume_identity.operation.to_string(), "velnor.role": role}, "Options": {}, "Scope": "local"}).to_string()))
 }
 
 fn create_response(state: &mut ApiState, body: &[u8]) -> Result<(u16, String), String> {
@@ -264,7 +264,7 @@ fn create_response(state: &mut ApiState, body: &[u8]) -> Result<(u16, String), S
         .create_config
         .as_ref()
         .and_then(|config| config["Labels"]["velnor.operation"].as_str())
-        .ok_or_else(|| "Container operation label is absent".to_owned())?;
+        .ok_or_else(|| "The request has no operation label.".to_owned())?;
     state.helper_name = Some(format!("velnor-init-{operation}"));
     Ok((
         state.create_status.unwrap_or(201),

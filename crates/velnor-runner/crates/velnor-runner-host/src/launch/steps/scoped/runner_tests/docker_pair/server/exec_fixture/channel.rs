@@ -5,8 +5,9 @@ use velnor_resource_probe::execution_channel_wire::{
 pub(crate) fn execution_channel_record(
     context: &ExecutionChannelContext,
     metadata_inodes: [u64; 3],
+    tamper_response: u8,
 ) -> Result<Vec<u8>, String> {
-    let observation = ExecutionChannelObservation {
+    let mut observation = ExecutionChannelObservation {
         schema_version: 3,
         operation_id: context.operation_id.clone(),
         guest_boot_id: context.expected_guest_boot_id.clone(),
@@ -51,6 +52,11 @@ pub(crate) fn execution_channel_record(
             true,
         ),
     };
+    match tamper_response {
+        1 => observation.operation_id.push('0'),
+        2 => observation.job_facts.inode += 1,
+        _ => {}
+    }
     let mut bytes = serde_json::to_vec(&observation).map_err(|error| error.to_string())?;
     bytes.push(b'\n');
     Ok(bytes)

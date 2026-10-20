@@ -1,21 +1,12 @@
 //! Measure the proof channel inside the owned Runner container.
 
-use std::{future::Future, pin::Pin, time::Instant};
+use std::time::Instant;
 
-use bollard::{
-    Docker,
-    container::LogOutput,
-    exec::{CreateExecOptions, StartExecOptions, StartExecResults},
-};
-use futures_util::{Stream, StreamExt};
-use serde::{Serialize, de::DeserializeOwned};
-use tokio::{io::AsyncWriteExt, time::Instant as TokioInstant};
-use velnor_resource_probe::{
-    execution_channel_wire::{ExecutionChannelContext, ExecutionChannelObservation},
-    worker_binding::{AcknowledgeRequest, WORKER_RECORD_LIMIT, WORKER_REQUEST_LIMIT},
+use bollard::Docker;
+use velnor_resource_probe::execution_channel_wire::{
+    ExecutionChannelContext, ExecutionChannelObservation,
 };
 use velnor_runner_github::RunnerReference;
-use zeroize::Zeroize;
 
 use crate::{
     error::HostError,
@@ -30,31 +21,48 @@ use crate::{
 };
 
 use super::VerifiedProofChannelBinding;
+mod acknowledgment;
+mod protocol;
+pub(super) use protocol::{decode_line, drain_empty_output, encode_line, read_stdout_line, within};
+mod exchange;
+use exchange::{ChannelExchange, exchange_channel_record};
 
 mod attachments;
-use attachments::{make_mount, validate_storage_attachments};
+use attachments::make_mount;
 
-const HELPER_PATH: &str = "/velnor/resource-probe";
 const CONTROL_PATH: &str = "/opt/velnor/source-proof/control";
 const CONTROL_SOURCE: &str = "source-proof/control";
 const INBOX_PATH: &str = "/opt/velnor/source-proof/inbox";
 const INBOX_SOURCE: &str = "source-proof/inbox";
 const JOB_FACTS_PATH: &str = "/opt/velnor/job-facts";
 const JOB_FACTS_SOURCE: &str = "job-facts";
-const ACK_LIMIT: usize = 128;
+
+pub(crate) struct ProofChannelMeasurement<'a> {
+    pub(crate) engine: &'a SelectedEngineContext,
+    pub(crate) images: &'a VerifiedWorkerImages,
+    pub(crate) acquired: &'a AcquiredProvisioning,
+    pub(crate) started: &'a BootstrapStartReceipt,
+    pub(crate) storage: &'a VerifiedStorageResourceBinding,
+    pub(crate) metadata: &'a VerifiedCreatedStorageObject,
+    pub(crate) runner: &'a RunnerReference,
+    pub(crate) deadline: Instant,
+}
 
 /// Measure the exact Runner channel after the host starts the owned container pair.
 pub(crate) async fn measure_proof_channel(
     docker: &Docker,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
-    acquired: &AcquiredProvisioning,
-    started: &BootstrapStartReceipt,
-    storage: &VerifiedStorageResourceBinding,
-    metadata: &VerifiedCreatedStorageObject,
-    runner: &RunnerReference,
-    deadline: Instant,
+    measurement: ProofChannelMeasurement<'_>,
 ) -> Result<VerifiedProofChannelBinding, HostError> {
+    let ProofChannelMeasurement {
+        engine,
+        images,
+        acquired,
+        started,
+        storage,
+        metadata,
+        runner,
+        deadline,
+    } = measurement;
     validate_inputs(engine, acquired, started, storage, metadata, runner)?;
     within(deadline, images.verify_for_engine(docker, engine)).await??;
     inspect_runner(docker, images, started.runner_container_id(), deadline).await?;
@@ -65,80 +73,17 @@ pub(crate) async fn measure_proof_channel(
         operation_id: operation_id.clone(),
         expected_guest_boot_id: storage.guest_boot_id().to_owned(),
     };
-    let mut request_bytes = encode_line(&request, WORKER_REQUEST_LIMIT)?;
-    let exec = within(
-        deadline,
-        docker.create_exec(
-            started.runner_container_id(),
-            CreateExecOptions::<String> {
-                attach_stdin: Some(true),
-                attach_stdout: Some(true),
-                attach_stderr: Some(true),
-                tty: Some(false),
-                cmd: Some(vec![
-                    HELPER_PATH.to_owned(),
-                    "--mode".to_owned(),
-                    "execution_channel".to_owned(),
-                ]),
-                ..Default::default()
-            },
-        ),
+    let observation = exchange_channel_record(
+        docker,
+        ChannelExchange {
+            container_id: started.runner_container_id(),
+            request: &request,
+            storage,
+            started,
+            deadline,
+        },
     )
-    .await?
-    .map_err(|_| HostError::Docker)?;
-    if exec.id.is_empty() {
-        return Err(HostError::Identity);
-    }
-    let StartExecResults::Attached {
-        mut output,
-        mut input,
-    } = within(
-        deadline,
-        docker.start_exec(
-            &exec.id,
-            Some(StartExecOptions {
-                detach: false,
-                tty: false,
-                output_capacity: Some(WORKER_RECORD_LIMIT + ACK_LIMIT),
-            }),
-        ),
-    )
-    .await?
-    .map_err(|_| HostError::Docker)?
-    else {
-        return Err(HostError::Docker);
-    };
-
-    within(deadline, input.write_all(&request_bytes))
-        .await?
-        .map_err(|_| HostError::Docker)?;
-    request_bytes.zeroize();
-    within(deadline, input.flush())
-        .await?
-        .map_err(|_| HostError::Docker)?;
-    let record_bytes = read_stdout_line(&mut output, deadline).await?;
-    let observation: ExecutionChannelObservation = decode_line(&record_bytes, WORKER_RECORD_LIMIT)?;
-    validate_observation(&observation, &operation_id, storage)?;
-    validate_storage_attachments(&observation, storage, started)?;
-
-    let ack = encode_line(&AcknowledgeRequest { operation_id }, ACK_LIMIT)?;
-    within(deadline, input.write_all(&ack))
-        .await?
-        .map_err(|_| HostError::Docker)?;
-    within(deadline, input.shutdown())
-        .await?
-        .map_err(|_| HostError::Docker)?;
-    drain_empty_output(&mut output, deadline).await?;
-    let exit = within(deadline, docker.inspect_exec(&exec.id))
-        .await?
-        .map_err(|_| HostError::Docker)?;
-    if exit.id.as_deref() != Some(exec.id.as_str())
-        || exit.container_id.as_deref() != Some(started.runner_container_id())
-        || exit.running != Some(false)
-        || exit.exit_code != Some(0)
-    {
-        return Err(HostError::Docker);
-    }
+    .await?;
     inspect_runner(docker, images, started.runner_container_id(), deadline).await?;
     make_binding(acquired, started, storage, metadata, runner, &observation)
 }
@@ -201,11 +146,11 @@ async fn inspect_runner(
 fn validate_observation(
     observation: &ExecutionChannelObservation,
     operation_id: &str,
-    storage: &VerifiedStorageResourceBinding,
+    expected_guest_boot_id: &str,
 ) -> Result<(), HostError> {
     if observation.schema_version != 3
         || observation.operation_id != operation_id
-        || observation.guest_boot_id != storage.guest_boot_id()
+        || observation.guest_boot_id != expected_guest_boot_id
         || observation.mount_namespace_id == 0
     {
         return Err(HostError::Identity);
@@ -277,86 +222,4 @@ fn make_binding(
     } else {
         Err(HostError::Identity)
     }
-}
-
-pub(super) async fn within<T>(
-    deadline: Instant,
-    future: impl Future<Output = T>,
-) -> Result<T, HostError> {
-    tokio::time::timeout_at(TokioInstant::from_std(deadline), future)
-        .await
-        .map_err(|_| HostError::DockerTimeout)
-}
-
-pub(super) async fn read_stdout_line<S>(
-    output: &mut Pin<Box<S>>,
-    deadline: Instant,
-) -> Result<Vec<u8>, HostError>
-where
-    S: Stream<Item = Result<LogOutput, bollard::errors::Error>> + Send + ?Sized,
-{
-    let mut bytes = Vec::with_capacity(4096);
-    while let Some(frame) = within(deadline, output.next()).await? {
-        let frame = frame.map_err(|_| HostError::Docker)?;
-        let chunk = match frame {
-            LogOutput::StdOut { message } => message,
-            LogOutput::StdErr { .. } | LogOutput::Console { .. } | LogOutput::StdIn { .. } => {
-                return Err(HostError::Frame);
-            }
-        };
-        if let Some(newline) = chunk.iter().position(|byte| *byte == b'\n') {
-            if newline + 1 != chunk.len()
-                || bytes.len().saturating_add(chunk.len()) > WORKER_RECORD_LIMIT + 1
-            {
-                return Err(HostError::Frame);
-            }
-            bytes.extend_from_slice(&chunk);
-            return Ok(bytes);
-        }
-        if bytes.len().saturating_add(chunk.len()) > WORKER_RECORD_LIMIT {
-            return Err(HostError::Frame);
-        }
-        bytes.extend_from_slice(&chunk);
-    }
-    Err(HostError::Frame)
-}
-
-pub(super) async fn drain_empty_output<S>(
-    output: &mut Pin<Box<S>>,
-    deadline: Instant,
-) -> Result<(), HostError>
-where
-    S: Stream<Item = Result<LogOutput, bollard::errors::Error>> + Send + ?Sized,
-{
-    while let Some(frame) = within(deadline, output.next()).await? {
-        if !frame.map_err(|_| HostError::Docker)?.as_ref().is_empty() {
-            return Err(HostError::Frame);
-        }
-    }
-    Ok(())
-}
-
-pub(super) fn encode_line<T: Serialize>(value: &T, limit: usize) -> Result<Vec<u8>, HostError> {
-    let mut bytes = serde_json::to_vec(value).map_err(|_| HostError::Frame)?;
-    if bytes.is_empty() || bytes.len() >= limit {
-        bytes.zeroize();
-        return Err(HostError::Frame);
-    }
-    bytes.push(b'\n');
-    Ok(bytes)
-}
-
-pub(super) fn decode_line<T>(bytes: &[u8], limit: usize) -> Result<T, HostError>
-where
-    T: DeserializeOwned + Serialize,
-{
-    if bytes.len() > limit + 1 || bytes.last() != Some(&b'\n') {
-        return Err(HostError::Frame);
-    }
-    let record: T =
-        serde_json::from_slice(&bytes[..bytes.len() - 1]).map_err(|_| HostError::Frame)?;
-    if serde_json::to_vec(&record).map_err(|_| HostError::Frame)? != bytes[..bytes.len() - 1] {
-        return Err(HostError::Frame);
-    }
-    Ok(record)
 }

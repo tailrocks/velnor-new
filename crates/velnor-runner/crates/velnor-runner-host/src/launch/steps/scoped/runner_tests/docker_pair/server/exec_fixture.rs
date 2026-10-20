@@ -23,6 +23,7 @@ pub(super) fn exec_record(
     container_id: &str,
     source_revision: &str,
     metadata_inodes: [u64; 3],
+    tamper_channel_response: u8,
 ) -> Result<(Vec<u8>, String), String> {
     let value: Value = serde_json::from_slice(line).map_err(|error| error.to_string())?;
     if value["schema_version"] == 1 {
@@ -43,7 +44,7 @@ pub(super) fn exec_record(
         return Err("The execution-channel request changed its wire identity.".to_owned());
     }
     Ok((
-        execution_channel_record(&context, metadata_inodes)?,
+        execution_channel_record(&context, metadata_inodes, tamper_channel_response)?,
         context.operation_id,
     ))
 }

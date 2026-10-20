@@ -4,13 +4,6 @@ mod claims;
 mod handoff;
 mod initialize;
 mod recovery;
-pub(super) use claims::same_start_claim;
-use claims::{same_create_claim, verify_claim_image};
-pub(crate) use handoff::finish_after_pair_mounts;
-pub(crate) use initialize::initialize;
-#[cfg(test)]
-pub(crate) use recovery::recover_absent;
-
 use bollard::{
     Docker,
     container::AttachContainerResults,
@@ -18,6 +11,10 @@ use bollard::{
         AttachContainerOptionsBuilder, RemoveContainerOptionsBuilder, StartContainerOptions,
     },
 };
+pub(super) use claims::same_start_claim;
+use claims::{same_create_claim, verify_claim_image};
+pub(crate) use handoff::finish_after_pair_mounts;
+pub(crate) use initialize::initialize;
 use tokio::time::{Instant, timeout_at};
 
 use crate::{

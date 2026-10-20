@@ -63,6 +63,14 @@ async fn delayed_create_cleans_late_owned_helper_before_response() -> Result<(),
     api.release_create_response();
     api.wait_for_create_completion().await?;
 
+    assert_delayed_cleanup(api, &helper_name).await?;
+    Ok(())
+}
+
+async fn assert_delayed_cleanup(
+    api: InitializationDockerApi,
+    helper_name: &str,
+) -> Result<(), HostError> {
     let capture = api.finish().await?;
     assert_eq!(
         capture

@@ -4,6 +4,7 @@ const CHALLENGE_PATH: &str = "/opt/velnor/source-proof/control/challenge.json";
 const DECISION_PATH: &str = "/opt/velnor/source-proof/control/decision.json";
 const CONTROL_FILE_MODE: u32 = 0o444;
 const ROOT_UID: u32 = 0;
+#[cfg(test)]
 const BTRFS_SUPER_MAGIC: u64 = 0x9123_683e;
 const MAX_CONTROL_FILE_BYTES: u64 = 8 * 1024;
 
@@ -23,6 +24,7 @@ struct ControlFileReceipt {
     fs_type_magic: u64,
     filesystem_id: u64,
     filesystem_instance_digest: String,
+    #[cfg(test)]
     mount_source: String,
     read_only: bool,
     no_copy: bool,
@@ -127,10 +129,6 @@ impl ExecutionChallengePublicationReceipt {
 
     pub(crate) const fn control_directory_inode(&self) -> u64 {
         self.file.control_directory_inode
-    }
-
-    pub(crate) fn mount_source(&self) -> &str {
-        &self.file.mount_source
     }
 
     pub(crate) fn challenge_digest(&self) -> &str {
@@ -299,10 +297,6 @@ impl ExecutionDecisionDeliveryReceipt {
 
     pub(crate) const fn control_directory_inode(&self) -> u64 {
         self.file.control_directory_inode
-    }
-
-    pub(crate) fn mount_source(&self) -> &str {
-        &self.file.mount_source
     }
 
     pub(crate) fn path(&self) -> &str {

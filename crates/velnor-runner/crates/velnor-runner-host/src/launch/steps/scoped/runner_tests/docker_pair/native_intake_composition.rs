@@ -24,6 +24,8 @@ use pre_delivery::assert_pre_delivery_snapshot;
 mod ack_recovery;
 #[path = "native_intake_composition/pair_assertions.rs"]
 mod pair_assertions;
+#[path = "native_intake_composition/tampered_channel.rs"]
+mod tampered_channel;
 use pair_assertions::{assert_bound_identity, assert_jit_persistence, verify_native_pair_requests};
 
 #[test]

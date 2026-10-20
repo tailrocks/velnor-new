@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::atomic::AtomicU8};
 
 use serde_json::{Value, json};
 use tokio::{
@@ -12,7 +12,7 @@ use super::*;
 #[path = "daemon/http.rs"]
 mod http;
 
-use self::http::read_request;
+use self::http::{read_request, write_response};
 
 #[path = "daemon/publication.rs"]
 mod publication;
@@ -39,6 +39,7 @@ pub(super) async fn serve(
     runner_create_status: Option<u16>,
     requests: Arc<std::sync::Mutex<Vec<CapturedRequest>>>,
     jit_input: Arc<std::sync::Mutex<Vec<u8>>>,
+    tamper_channel_response: Arc<AtomicU8>,
     mut stop: oneshot::Receiver<bool>,
 ) -> Result<(), String> {
     let mut state = ServerState::new(
@@ -47,6 +48,7 @@ pub(super) async fn serve(
         runner_create_status,
         requests,
         jit_input,
+        tamper_channel_response,
     );
     loop {
         let accepted = tokio::select! {
@@ -73,6 +75,7 @@ struct ServerState {
     initializer_container_id: Option<String>,
     requests: Arc<Mutex<Vec<CapturedRequest>>>,
     jit_input: Arc<Mutex<Vec<u8>>>,
+    tamper_channel_response: Arc<AtomicU8>,
     volumes: HashMap<String, Value>,
     networks: HashMap<String, Value>,
     containers: HashMap<String, Value>,
@@ -98,6 +101,7 @@ impl ServerState {
         runner_create_status: Option<u16>,
         requests: Arc<std::sync::Mutex<Vec<CapturedRequest>>>,
         jit_input: Arc<std::sync::Mutex<Vec<u8>>>,
+        tamper_channel_response: Arc<AtomicU8>,
     ) -> Self {
         Self {
             images,
@@ -106,6 +110,7 @@ impl ServerState {
             initializer_container_id: None,
             requests,
             jit_input,
+            tamper_channel_response,
             volumes: HashMap::new(),
             networks: HashMap::new(),
             containers: HashMap::new(),
@@ -375,26 +380,4 @@ async fn record_jit_input(
         .map_err(|_| "The JIT configuration lock failed.".to_owned())?
         .extend(payload);
     Ok(())
-}
-
-async fn write_response(stream: &mut UnixStream, status: u16, body: &[u8]) -> Result<(), String> {
-    let reason = match status {
-        200 => "OK",
-        201 => "Created",
-        204 => "No Content",
-        404 => "Not Found",
-        _ => "Error",
-    };
-    let header = format!(
-        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        body.len()
-    );
-    stream
-        .write_all(header.as_bytes())
-        .await
-        .map_err(|error| error.to_string())?;
-    stream
-        .write_all(body)
-        .await
-        .map_err(|error| error.to_string())
 }

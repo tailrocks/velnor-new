@@ -1142,5 +1142,30 @@
     "review_sha256": "24841fb6909a6a0d64860ec6f2c85612c2a3e59108d55bb9318e0e3308cac431",
     "language_reviewer": "helper_language_review",
     "scope": "The tests check cache owner identity, receipts, runtime file access, and step validation. Live cache production and installation tests remain NOT_RUN."
+  },
+  "native_channel_adverse_validation": {
+    "result": "PASS",
+    "source_base": "98abe7100f6f48ccfbdc2ac7ba1b8c14c38fdcd2",
+    "compile_source_pin": "98abe7100f6f48ccfbdc2ac7ba1b8c14c38fdcd2",
+    "focused_tests": 33,
+    "registration_and_size_tests": 6,
+    "checks": [
+      {
+        "log": "native-worker-v3-parent-language-final-20261020.log",
+        "sha256": "a6653d64974c52c8617b200d7121b4f61ccbaf093e1fc4f414d3f0cc2c7d1331",
+        "exit_status": 0,
+        "run_id": "6cbeb703-bbd7-49ba-8ec9-db70ab93c96b"
+      },
+      {
+        "log": "native-worker-v3-parent-registration-20261020.log",
+        "sha256": "23f838920c4ea8b0b75f2230b0c3359e72a2eabaa0d5a363d1bb4bfe30a916fd",
+        "exit_status": 0,
+        "run_id": "11c6e369-61d1-4af5-a918-0cf24215594c"
+      }
+    ],
+    "review_sha256": "f2174cc5323db9f27a5e8eb174580d93aa52615918643609c2cb260d3d196f2e",
+    "language_reviewer": "helper_language_review",
+    "integration_note": "The merge keeps the current pair resource assertions. The parent applied Rust formatting and the reviewed diagnostic text.",
+    "scope": "Invalid operation and directory identities stop before ACK. The tests keep the acquired reservation and capacity charge. Full strict Clippy and live tests remain necessary."
   }
 }

@@ -2,9 +2,9 @@ use super::*;
 
 #[derive(Clone)]
 pub(super) struct VolumeIdentity {
-    pub(super) connection_id: String,
-    pub(super) reservation_id: i64,
-    pub(super) operation_id: i64,
+    pub(super) connection: String,
+    pub(super) reservation: i64,
+    pub(super) operation: i64,
 }
 
 pub(super) async fn volume_identity(
@@ -16,9 +16,9 @@ pub(super) async fn volume_identity(
         .await?
         .ok_or(HostError::Journal)?;
     Ok(VolumeIdentity {
-        connection_id: scope.connection_id().as_str().to_owned(),
-        reservation_id,
-        operation_id: plan.operation_id(),
+        connection: scope.connection_id().as_str().to_owned(),
+        reservation: reservation_id,
+        operation: plan.operation_id(),
     })
 }
 
@@ -110,18 +110,22 @@ impl InitializationTestResponder {
         Ok((status, response.into_bytes()))
     }
 
-    pub(crate) async fn prepare_attach(&self) -> Result<InitializationAttachHandle, String> {
-        let operation = self
-            .state
-            .create_config
-            .as_ref()
-            .and_then(|config| config["Labels"]["velnor.operation"].as_str())
-            .ok_or_else(|| "Container operation label is absent".to_owned())?
-            .to_owned();
-        Ok(InitializationAttachHandle {
-            operation,
-            capture: Arc::clone(&self.capture),
-        })
+    pub(crate) fn prepare_attach(
+        &self,
+    ) -> impl std::future::Future<Output = Result<InitializationAttachHandle, String>> {
+        std::future::ready((|| {
+            let operation = self
+                .state
+                .create_config
+                .as_ref()
+                .and_then(|config| config["Labels"]["velnor.operation"].as_str())
+                .ok_or_else(|| "The request has no operation label.".to_owned())?
+                .to_owned();
+            Ok(InitializationAttachHandle {
+                operation,
+                capture: Arc::clone(&self.capture),
+            })
+        })())
     }
 
     pub(crate) async fn metadata_inodes(&self) -> Result<[u64; 3], String> {

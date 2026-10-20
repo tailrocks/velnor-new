@@ -1,5 +1,8 @@
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicU8, Ordering},
+};
 use std::time::Duration;
 
 use bollard::Docker;
@@ -57,6 +60,7 @@ pub(super) struct PairDockerApi {
     path: PathBuf,
     requests: Arc<Mutex<Vec<CapturedRequest>>>,
     jit_input: Arc<Mutex<Vec<u8>>>,
+    tamper_channel_response: Arc<AtomicU8>,
     stop: Option<oneshot::Sender<bool>>,
     task: Option<tokio::task::JoinHandle<Result<(), String>>>,
 }
@@ -125,9 +129,11 @@ impl PairDockerApi {
         let listener = UnixListener::bind(&path).map_err(|error| error.to_string())?;
         let requests = Arc::new(Mutex::new(Vec::new()));
         let jit_input = Arc::new(Mutex::new(Vec::new()));
+        let tamper_channel_response = Arc::new(AtomicU8::new(0));
         let (stop, stopped) = oneshot::channel();
         let server_requests = Arc::clone(&requests);
         let server_jit = Arc::clone(&jit_input);
+        let server_tamper_channel = Arc::clone(&tamper_channel_response);
         let task = tokio::spawn(async move {
             daemon::serve(
                 listener,
@@ -136,6 +142,7 @@ impl PairDockerApi {
                 runner_create_status,
                 server_requests,
                 server_jit,
+                server_tamper_channel,
                 stopped,
             )
             .await
@@ -150,9 +157,18 @@ impl PairDockerApi {
             path,
             requests,
             jit_input,
+            tamper_channel_response,
             stop: Some(stop),
             task: Some(task),
         })
+    }
+
+    pub(super) fn tamper_next_channel_operation_id(&self) {
+        self.tamper_channel_response.store(1, Ordering::SeqCst);
+    }
+
+    pub(super) fn tamper_next_channel_attachment_inode(&self) {
+        self.tamper_channel_response.store(2, Ordering::SeqCst);
     }
 
     pub(super) async fn finish(self) -> Result<CapturedApi, String> {

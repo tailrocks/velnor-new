@@ -8,7 +8,7 @@ use velnor_resource_probe::execution_channel_wire::{
 };
 
 mod measure;
-pub(crate) use measure::measure_proof_channel;
+pub(crate) use measure::{ProofChannelMeasurement, measure_proof_channel};
 mod read_request;
 pub(crate) use read_request::{
     ExecutionRequestRead, VerifiedExecutionRequest, read_execution_request,
@@ -18,7 +18,9 @@ pub(crate) use read_request::{
 mod fixtures;
 #[cfg(test)]
 pub(crate) use fixtures::{
-    test_channel_for_ready_job_facts, test_proof_channel_mount, test_verified_proof_channel_binding,
+    TestProofChannelBindingFields, TestProofChannelIdentity, TestProofChannelMount,
+    test_channel_for_ready_job_facts, test_proof_channel_mount,
+    test_verified_proof_channel_binding,
 };
 
 mod validation;
@@ -229,10 +231,6 @@ impl VerifiedProofChannelBinding {
         &self.control_directory
     }
 
-    pub(crate) fn inbox(&self) -> &ProofChannelMount {
-        &self.inbox
-    }
-
     pub(crate) fn job_facts(&self) -> &ProofChannelMount {
         &self.job_facts
     }
@@ -272,10 +270,6 @@ impl VerifiedProofChannelBinding {
 
     pub(crate) fn channel_digest(&self) -> &str {
         &self.channel_digest
-    }
-
-    pub(crate) const fn dind_attachment_absent(&self) -> bool {
-        self.dind_attachment_absent
     }
 }
 
@@ -323,30 +317,32 @@ struct ChannelContent<'a> {
 }
 
 impl ProofChannelMount {
+    #[cfg(test)]
     pub(crate) fn target(&self) -> &str {
         &self.target
     }
 
-    pub(crate) fn subpath(&self) -> &str {
-        &self.subpath
-    }
-
+    #[cfg(test)]
     pub(crate) const fn mount_id(&self) -> u64 {
         self.mount_id
     }
 
+    #[cfg(test)]
     pub(crate) const fn device(&self) -> (u32, u32) {
         (self.device_major, self.device_minor)
     }
 
+    #[cfg(test)]
     pub(crate) const fn statx_device(&self) -> (u32, u32) {
         (self.statx_device_major, self.statx_device_minor)
     }
 
+    #[cfg(test)]
     pub(crate) const fn fs_type_magic(&self) -> u64 {
         self.fs_type_magic
     }
 
+    #[cfg(test)]
     pub(crate) const fn filesystem_id(&self) -> u64 {
         self.filesystem_id
     }
@@ -355,14 +351,17 @@ impl ProofChannelMount {
         &self.filesystem_instance_digest
     }
 
+    #[cfg(test)]
     pub(crate) const fn directory_inode(&self) -> u64 {
         self.directory_inode
     }
 
+    #[cfg(test)]
     pub(crate) const fn owner(&self) -> (u32, u32) {
         (self.owner_uid, self.owner_gid)
     }
 
+    #[cfg(test)]
     pub(crate) const fn mode(&self) -> u32 {
         self.mode
     }

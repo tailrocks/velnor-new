@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use super::{
-    capabilities_match, engine_identity_matches, image_environment_matches, volume_identity_matches,
-};
+use super::{capabilities_match, engine_identity_matches, image_environment_matches};
 
 #[test]
 fn image_environment_allows_only_the_pinned_base_path() {
