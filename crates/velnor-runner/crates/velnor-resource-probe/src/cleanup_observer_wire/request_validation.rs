@@ -3,6 +3,10 @@ use sha2::{Digest, Sha256};
 use super::{CleanupObserverRequest, validate_binding};
 
 /// Validate the shared request identity and its canonical binding digest.
+///
+/// # Errors
+///
+/// Returns an error if a request field or digest is incorrect.
 pub fn validate_request(request: &CleanupObserverRequest) -> Result<(), &'static str> {
     if request.schema_version != 1
         || !is_lower_hex(&request.operation_id, 32)
@@ -66,7 +70,7 @@ mod tests {
                 mount_root: "/".to_owned(),
                 mount_device: [8, 1],
                 statx_device: [8, 1],
-                filesystem_type_magic: 0x01021994,
+                filesystem_type_magic: 0x0102_1994,
                 filesystem_id: 20,
                 read_only: true,
             },
@@ -83,8 +87,8 @@ mod tests {
                 .map(|(index, role)| CleanupVolume {
                     role: role.to_owned(),
                     mountpoint: format!("/var/lib/docker/volumes/volume-{index}/_data"),
-                    mount_device: [8, index as u32 + 1],
-                    statx_device: [8, index as u32 + 1],
+                    mount_device: [8, u32::try_from(index).expect("four fixture volumes") + 1],
+                    statx_device: [8, u32::try_from(index).expect("four fixture volumes") + 1],
                     inode: index as u64 + 100,
                 })
                 .collect(),

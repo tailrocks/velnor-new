@@ -32,6 +32,10 @@ pub struct CleanupObserverBinding {
 ///
 /// This is also used when the macOS journal reads a persisted binding, so an
 /// old or malformed record cannot become a cleanup authority.
+///
+/// # Errors
+///
+/// Returns an error if a required field is incorrect.
 pub fn validate_binding(binding: &CleanupObserverBinding) -> Result<(), &'static str> {
     validate_boot_id(&binding.expected_guest_boot_id)?;
     validate_process(&binding.daemon)?;
