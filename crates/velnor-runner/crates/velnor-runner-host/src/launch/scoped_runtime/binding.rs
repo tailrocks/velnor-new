@@ -18,14 +18,16 @@ pub(super) async fn cleanup_failed_pair<P: ImageProvider>(
     images: &VerifiedWorkerImages,
     reservation_id: i64,
 ) -> ScopedRuntimeOutcome {
-    let cleaned = super::super::bootstrap::remove_bootstrap_after_terminal_failure(
-        docker,
-        scoped,
-        host,
-        engine,
-        images,
-        reservation_id,
-        provider,
+    let cleaned = Box::pin(
+        super::super::bootstrap::remove_bootstrap_after_terminal_failure(
+            docker,
+            scoped,
+            host,
+            engine,
+            images,
+            reservation_id,
+            provider,
+        ),
     )
     .await
     .unwrap_or(false);

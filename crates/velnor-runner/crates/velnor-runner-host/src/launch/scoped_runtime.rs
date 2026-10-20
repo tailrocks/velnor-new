@@ -179,7 +179,7 @@ fn prepare_and_bind_scoped_with_provider<'a, P: ImageProvider + 'a>(
         let Some(prepared) = prepared else {
             return Ok(ScopedRuntimeOutcome::NoStart);
         };
-        prepare_started_and_bound(
+        Box::pin(prepare_started_and_bound(
             prepared,
             context.docker,
             context.scoped,
@@ -187,7 +187,7 @@ fn prepare_and_bind_scoped_with_provider<'a, P: ImageProvider + 'a>(
             context.provider,
             context.engine,
             context.images,
-        )
+        ))
         .await
     })
 }
@@ -266,20 +266,22 @@ async fn prepare_started_and_bound<P: ImageProvider>(
         mut prepared,
         network,
         started,
-    } = match prepare_network_and_started_pair(
+    } = match Box::pin(prepare_network_and_started_pair(
         prepared, docker, scoped, host, provider, engine, images,
-    )
+    ))
     .await
     {
         Ok(preparation) => preparation,
         Err(pending) => return Ok(pending),
     };
     let reservation_id = prepared.acquired().reservation_id();
-    let initialization = match crate::worker::storage_initialization::finish_after_pair_mounts(
-        docker,
-        scoped,
-        prepared.storage_mut().pending_initialization_mut(),
-        started.mount_handoff(),
+    let initialization = match Box::pin(
+        crate::worker::storage_initialization::finish_after_pair_mounts(
+            docker,
+            scoped,
+            prepared.storage_mut().pending_initialization_mut(),
+            started.mount_handoff(),
+        ),
     )
     .await
     {
@@ -309,7 +311,7 @@ async fn prepare_started_and_bound<P: ImageProvider>(
             ));
         }
     };
-    bind_started(
+    Box::pin(bind_started(
         prepared,
         network,
         started,
@@ -321,7 +323,7 @@ async fn prepare_started_and_bound<P: ImageProvider>(
         provider,
         engine,
         images,
-    )
+    ))
     .await
 }
 
@@ -344,18 +346,18 @@ async fn prepare_network_and_started_pair<P: ImageProvider>(
     let Some(initializer) = prepared.storage().pending_initialization() else {
         return Err(pending(prepared, None, None, None, HostError::Journal));
     };
-    let network = match super::bootstrap::create_owned_network(
+    let network = match Box::pin(super::bootstrap::create_owned_network(
         docker,
         scoped,
         engine,
         reservation_id,
-    )
+    ))
     .await
     {
         Ok(network) => network,
         Err(error) => return Err(pending(prepared, None, None, None, error)),
     };
-    let started = match super::bootstrap::start_bootstrap_pair(
+    let started = match Box::pin(super::bootstrap::start_bootstrap_pair(
         &prepared,
         &network,
         initializer.metadata_handoff(),
@@ -364,7 +366,7 @@ async fn prepare_network_and_started_pair<P: ImageProvider>(
         scoped,
         engine,
         images,
-    )
+    ))
     .await
     {
         Ok(started) => started,

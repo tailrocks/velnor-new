@@ -1517,5 +1517,16 @@
     "scope": "The two fixtures use numeric separators. Their numeric values and JSON text stay the same.",
     "numeric_tokens_checked": 124,
     "remaining": "The strict runner gate still has other failures."
+  },
+  "large_future_calls": {
+    "result": "PASS",
+    "tests": 7,
+    "run_id": "d3296cd0-fdc5-4ed7-b845-e838b58d7ddd",
+    "log_sha256": "28a67b66411d61642ce983e1ed219c1c3d9857e5c4514e25bc1120be8bf3eac9",
+    "manifest_sha256": "5d4750c634d166f032bb4ea8b338d6ff60e614da45d71f04d96bad8de8e73440",
+    "author": "grouped_source_evidence",
+    "reviewer": "runner_context_review",
+    "scope": "Three calls use Box::pin before .await. The change keeps the operation order and ownership.",
+    "remaining": "The full strict runner gate still has other failures."
   }
 }
