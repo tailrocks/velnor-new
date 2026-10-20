@@ -179,6 +179,37 @@ that name `..`. Such a member is always selected until a
 statement that its declared inputs list everything it reads outside its
 directory.
 
+## Playwright browsers (PW, not yet generated)
+
+`[stacks.bun.members."<name>"] browsers = [...]` is accepted and validated, but
+no browser provisioning step is generated yet; a member that needs one fails at
+run time. Design decisions already taken:
+
+- Never `playwright install --with-deps` and never repository-resolved code with
+  `sudo`; system dependencies come from the hosted image.
+- The Playwright version is the one `bun.lock` resolves for `@playwright/test`
+  (`Member.playwright`); its `playwright-core` tarball integrity in the lock is
+  the trust anchor for the browser revision table (`browsers.json`).
+- Archives come from `cdn.playwright.dev` and are verified against SHA-256 values
+  pinned in a reviewable Velnor lock (written by a CLI subcommand, like
+  `deps.lock`); upstream publishes no checksums, so the first computation is
+  trust-on-first-use, and every later run verifies it. The install lands in the
+  `playwright-browsers` cache family (path
+  `$RUNNER_TEMP/velnor/ms-playwright`, trusted writers only).
+
+## Remaining work
+
+- `bun-install` and `playwright-browsers` cache families (design 3.4): the Bun
+  package cache is currently cold in every job.
+- Playwright provisioning as above.
+- A Bun member job that also consumes release assets or Maven bundles through the
+  App-token block (documentation-portal, platform): the Bun job builder rejects
+  App-token steps today.
+- Members of an npm publication that depend on private npm scopes (the
+  unprivileged build holds no registry credential).
+- Live qualification against the private fixture repositories: the lifecycle phase
+  against the real registry, the package-access grant and the `release` environment.
+
 ## Verification
 
 - Contract: strict-table, grammar and bound tests (`config/bun_tests.rs`).
