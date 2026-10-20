@@ -24,7 +24,8 @@ pub use reads::{is_config_file, outside_reads};
 pub use select::{affected_members, forced_members};
 pub use tools::check_package_manager;
 pub use workspace::{
-    Member, Workspace, job_id, job_name, member_scripts, resolve, resolve_member_dir, slug,
+    Member, PlaywrightCore, Workspace, job_id, job_name, member_scripts, resolve,
+    resolve_member_dir, slug,
 };
 
 /// Stable identifier of the Bun stack.

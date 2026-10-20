@@ -29,6 +29,15 @@ pub struct Member {
     pub playwright: Option<String>,
 }
 
+/// The `playwright-core` package `bun.lock` resolves: the trust anchor of the browser lock.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaywrightCore {
+    /// Resolved version.
+    pub version: String,
+    /// Tarball integrity recorded in the lock (`sha512-...`).
+    pub integrity: String,
+}
+
 /// One workspace root with its members, sorted by name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Workspace {
@@ -38,6 +47,8 @@ pub struct Workspace {
     pub package_manager: Option<String>,
     /// Members, sorted by name.
     pub members: Vec<Member>,
+    /// Resolved `playwright-core`, when the lock holds it with an integrity.
+    pub playwright_core: Option<PlaywrightCore>,
 }
 
 /// The member of `workspace` named `name`.
@@ -113,6 +124,14 @@ pub fn resolve(
         root: root.to_owned(),
         package_manager: package.package_manager,
         members: out,
+        playwright_core: playwright_core(&lock),
+    })
+}
+
+fn playwright_core(lock: &BunLock) -> Option<PlaywrightCore> {
+    Some(PlaywrightCore {
+        version: lock.versions.get("playwright-core")?.clone(),
+        integrity: lock.integrity.get("playwright-core")?.clone(),
     })
 }
 
