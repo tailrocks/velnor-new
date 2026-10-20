@@ -498,6 +498,34 @@
       "scope": "The release harness rejected unstaged tracked changes. Eighteen tests received SIGTERM. This was not a clean-source gate.",
       "author": "/root",
       "reviewer": "/root/obsolete_capacity_cleanup"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "f6a642ca868a0053552d1e7c8e47035e0800835e",
+      "command": "VELNOR_EDGE_CAPTURE_PATH=<external-corpus> cargo nextest run --locked --offline -p velnor-actions-workflow-renderer -E 'test(write_edge_corpus_for_external_psych_roundtrip)' --run-ignored only --no-fail-fast",
+      "nextest_run": "67d18950-667d-4d2d-8294-e2897caf7307",
+      "passed": 1,
+      "exit_status": 0,
+      "external_parser": "Psych 3.1.0",
+      "scalars": 12,
+      "corpus_sha256": "97482e5f77e8fcc1bae7060142c0bd29dce42e31516e782fb3f2316c793b3548",
+      "parser_log_sha256": "69e4f8def8c238292481318e331f6e5e22a869e4f1e2e12e449b016e01dd9765",
+      "scope": "The external parser preserved the scalar values. The diagnostic fixture uses marker version 0.1.4.",
+      "author": "/root/execution_channel_helper",
+      "reviewer": "PENDING"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "f6a642ca868a0053552d1e7c8e47035e0800835e",
+      "command": "VELNOR_LIVE_TOFU=1 cargo nextest run --locked --offline -p velnor-actions-mise --test velnor_mise -E 'test(live_tofu_registry_init_downloads_provider)' --run-ignored only --no-fail-fast",
+      "nextest_run": "63974e76-6b21-4dae-8bdf-8cdc6526198e",
+      "passed": 1,
+      "exit_status": 0,
+      "opentofu_version": "1.13.1",
+      "log_sha256": "c21067f3b4483f4a129b5a09deac178ad2ee04c067321bbc2609691bd2f19453",
+      "scope": "The provider download and readonly initialization passed. The lock file did not change.",
+      "author": "/root/execution_channel_helper",
+      "reviewer": "PENDING"
     }
   ],
   "broader_pair_check": {
