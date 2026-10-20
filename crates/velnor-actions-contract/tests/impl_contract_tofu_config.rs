@@ -137,6 +137,7 @@ fn absent_tofu_table_stays_valid_and_schema_stable() {
         rust: None,
         tofu: None,
         bun: None,
+        gradle: None,
         dbt: None,
         ansible: None,
     };
@@ -174,6 +175,7 @@ fn tofu_is_a_registered_ignorable_stack() {
         rust: None,
         tofu: None,
         bun: None,
+        gradle: None,
         dbt: None,
         ansible: None,
     };
@@ -183,6 +185,7 @@ fn tofu_is_a_registered_ignorable_stack() {
         rust: None,
         tofu: None,
         bun: None,
+        gradle: None,
         dbt: None,
         ansible: None,
     };

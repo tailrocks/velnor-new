@@ -20,6 +20,7 @@ use velnor_actions_rust::{
 
 use crate::OrchestratorError;
 use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
+use crate::config::gradle_jobs;
 use crate::discover_index::build_file_index;
 use crate::internal::phase_timing::PlanPhaseTimings;
 use crate::inventory::{qualify_workspaces, run_inventories, run_inventories_with_phase_timings};
@@ -45,6 +46,8 @@ pub struct PlannedWorkspace {
 /// Full detection output feeding planning and rendering.
 #[derive(Debug, Clone, Default)]
 pub struct Discovery {
+    /// Analysed Gradle roots (stack contract: findings fail generation).
+    pub(crate) gradle_roots: Vec<crate::config::gradle_jobs::GradleRoot>,
     /// Explicit repository-owned checks, independent of detected workspaces.
     pub mise_checks: Vec<velnor_actions_mise::DiscoveredCheck>,
     /// Per-project selection states.
@@ -193,7 +196,9 @@ fn discover_inner(
     let bun = bun_inventory(root, &index, config)?;
     let dbt =
         crate::workflow_task_jobs::dbt_inventory::DbtInventory::for_config(root, &index, config)?;
+    let gradle_roots = gradle_jobs::analyze_roots(root, &index, config)?;
     Ok(Discovery {
+        gradle_roots,
         mise_checks,
         statuses,
         workspaces,
