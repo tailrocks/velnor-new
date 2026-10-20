@@ -11,6 +11,8 @@ use super::{assignment, source_blocked};
 
 mod acquire;
 mod runner;
+#[cfg(test)]
+pub(crate) use runner::run_native_quarantine_composition;
 pub(crate) use runner::{AcquiredProvisioning, CheckedAcquiredRecovery};
 
 pub(crate) enum ScopedProvisioningOutcome {

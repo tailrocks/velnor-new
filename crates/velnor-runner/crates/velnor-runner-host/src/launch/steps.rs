@@ -38,6 +38,8 @@ pub(super) use scale::scale_unacked;
 use source_authorization::source_blocked;
 pub(super) use source_authorization::{authorize_poll_rest, authorize_population_message};
 
+#[cfg(test)]
+pub(crate) use scoped::run_native_quarantine_composition;
 pub(crate) use scoped::{
     AcquiredProvisioning, CheckedAcquiredRecovery, KnownNoAcquire, ScopedProvisioningOutcome,
     acquire_authorized_request, acquire_scoped,

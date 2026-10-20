@@ -64,6 +64,12 @@ pub(crate) use session::{
 pub(crate) use slot::HOLDS_ROWS_SQL;
 #[cfg(test)]
 pub(crate) use turn::Acknowledgement;
+#[cfg(test)]
+pub(crate) use turn::classify_owned_terminal_available;
+#[cfg(test)]
+pub(crate) use turn::test_positive_poll_once_with_response;
+#[cfg(test)]
+pub(crate) use turn::test_scoped_intake;
 pub(crate) use turn::{
     CursorDisposition, PositiveAdmission, PositivePollOutcome, admit_when_ready, positive_poll_once,
 };
@@ -143,6 +149,8 @@ pub(crate) use capacity::{
 };
 #[cfg(test)]
 pub(crate) use name_taken::{fail_unstarted, should_ack};
+#[cfg(test)]
+pub(crate) use steps::run_native_quarantine_composition;
 #[cfg(test)]
 pub(crate) use steps::{Idle, idle};
 #[cfg(test)]

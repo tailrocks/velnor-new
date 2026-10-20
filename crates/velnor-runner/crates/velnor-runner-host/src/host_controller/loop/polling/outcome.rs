@@ -52,7 +52,8 @@ impl ControllerPollOutcome {
                 | Some(
                     PositiveAdmission::Deferred(_)
                     | PositiveAdmission::NoAcquire
-                    | PositiveAdmission::KnownNoAcquire(_),
+                    | PositiveAdmission::KnownNoAcquire(_)
+                    | PositiveAdmission::OwnedTerminal(_),
                 ) => None,
             },
             positive_poll_settled,

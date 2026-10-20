@@ -1,4 +1,4 @@
-//! Durable quarantine must precede acknowledgement and leave valid offers progressing.
+//! Save the malformed message before ACK. Keep valid job requests available.
 
 use velnor_runner_github::{
     Exchange, InnerJob, InnerKind, Method, ParsedBatch, Poll, SessionRequest, Transport,
@@ -7,17 +7,14 @@ use velnor_runner_github::{
 
 use super::admission;
 use super::completion_intake::{intake_and_ack_if_only, intake_poll};
-use crate::Journal;
 use crate::launch::capacity::Admit;
-use crate::launch::drive_offer;
 use crate::launch::steps::acknowledge;
 use crate::launch::{Drive, Lane};
 use crate::launch_harness::open;
-use crate::launch_harness::{Mode, Script};
-use crate::launch_test_support::{Engine, valid_worker_volume};
+use crate::launch_test_support::Engine;
 use crate::scale_set::EnsureError;
 
-const EXISTING_BACKLOG_ROWS: i64 = 128;
+const EXISTING_BACKLOG_ROWS: usize = 128;
 
 #[derive(Default)]
 struct AckScript {
@@ -181,154 +178,38 @@ async fn unmatched_completion_does_not_block_an_available_offer() -> Result<(), 
 
 #[tokio::test]
 async fn overflow_body_survives_restart_and_mixed_offer_starts_once() -> Result<(), String> {
-    let (scratch, journal) = open("completion-inbox-full-quarantine").await?;
-    fill_inbox(&journal).await?;
-    let event = unmatched_mixed_event(EXISTING_BACKLOG_ROWS);
-    let context = Drive {
-        set_id: 7,
-        queue_path: "messages".to_owned(),
-        queue_token: "queue-token".to_owned(),
-        admin_token: "admin-token".to_owned(),
-        docker_engine_id: None,
-        owner: String::new(),
-        repo: String::new(),
-        pat: String::new(),
-        connection: None,
-        authority_policy: None,
-        host_journal: None,
-        scoped_journal: None,
-        allocated_header: 0,
-        source_authorized: false,
-        admission_state: None,
-    };
-    let starts = start_overflow_offer(&journal, &event, &context).await?;
-    drop(journal);
-    let path = scratch.file();
-    verify_overflow_replay(&path, &event, &context, starts).await?;
-    Ok(())
-}
-
-async fn start_overflow_offer(
-    journal: &Journal,
-    event: &Poll,
-    context: &Drive,
-) -> Result<usize, String> {
-    let first_intake = intake_poll(journal, 7, event)
-        .await
-        .map_err(|error| error.to_string())?;
-    assert!(!first_intake.completion_only && first_intake.wake_cleanup);
-    let decision = admission(&Engine::new(), journal, 1, 1, 0, event)
-        .await
-        .map_err(|error| error.to_string())?;
-    assert_eq!(decision, Admit::Start { stop: true });
-    assert!(
-        journal
-            .store_completion_inbox(7, EXISTING_BACKLOG_ROWS, "replaced")
-            .await
-            .is_err()
-    );
-    let mut first = Script {
-        calls: Vec::new(),
-        mode: Mode::Ok,
-    };
-    let starts = std::cell::Cell::new(0);
-    let result = drive_offer(&mut first, context, event, journal, |volume, _, _| {
-        starts.set(starts.get() + usize::from(valid_worker_volume(volume)));
-        async {
-            Ok(crate::worker::Started {
-                dind_id: "dind-128".to_owned(),
-                runner_id: "runner-128".to_owned(),
-            })
-        }
-    })
-    .await
-    .map_err(|error| error.to_string())?;
-    assert_eq!(
-        result.map(|started| started.runner_id),
-        Some("runner-128".to_owned())
-    );
-    assert_eq!(starts.get(), 1);
-    assert_eq!(first.calls, ["acquire", "jit", "ack"]);
-    Ok(starts.get())
-}
-
-async fn verify_overflow_replay(
-    path: &std::path::Path,
-    event: &Poll,
-    context: &Drive,
-    starts: usize,
-) -> Result<(), String> {
-    let restarted = Journal::open(path)
-        .await
-        .map_err(|error| error.to_string())?;
-    for message_id in 0..EXISTING_BACKLOG_ROWS {
-        assert!(
-            restarted
-                .store_completion_inbox(7, message_id, "replaced")
-                .await
-                .is_err()
-        );
-    }
-    let Poll::Batch(batch) = event else {
-        return Err("expected mixed batch".to_owned());
-    };
-    assert!(
-        restarted
-            .store_completion_inbox(7, batch.message_id, "replaced")
-            .await
-            .is_err()
-    );
-    restarted
-        .store_completion_inbox(7, batch.message_id, &batch.raw_body)
-        .await
-        .map_err(|error| error.to_string())?;
-    let replay_intake = intake_poll(&restarted, 7, event)
-        .await
-        .map_err(|error| error.to_string())?;
-    assert!(!replay_intake.completion_only);
-    let mut replay = Script {
-        calls: Vec::new(),
-        mode: Mode::Ok,
-    };
-    let start_count = std::cell::Cell::new(starts);
-    let again = drive_offer(&mut replay, context, event, &restarted, |_, _, _| {
-        start_count.set(start_count.get() + 1);
-        async { Err(crate::HostError::Docker) }
-    })
-    .await
-    .map_err(|error| error.to_string())?;
-    assert!(again.is_none());
-    assert_eq!(start_count.get(), 1);
-    assert_eq!(replay.calls, ["ack"]);
-    Ok(())
-}
-
-async fn fill_inbox(journal: &Journal) -> Result<(), String> {
-    for message_id in 0..EXISTING_BACKLOG_ROWS {
-        journal
-            .store_completion_inbox(7, message_id, "[]")
-            .await
-            .map_err(|error| error.to_string())?;
-    }
-    Ok(())
+    let message_id = i64::try_from(EXISTING_BACKLOG_ROWS)
+        .map_err(|_| "The inbox ID is too large.".to_owned())?;
+    let event = native_mixed_event(message_id);
+    crate::launch::run_native_quarantine_composition(event, EXISTING_BACKLOG_ROWS)
 }
 
 fn unmatched_mixed_event(message_id: i64) -> Poll {
+    mixed_event(message_id, 62)
+}
+
+fn native_mixed_event(message_id: i64) -> Poll {
+    mixed_event(message_id, 41)
+}
+
+fn mixed_event(message_id: i64, request_id: i64) -> Poll {
     Poll::Batch(ParsedBatch {
         message_id,
-        raw_body: r#"[{"messageType":"JobAvailable","runnerRequestId":62},{"messageType":"JobCompleted","runnerRequestId":0,"runnerId":902,"runnerName":"v0"}]"#.to_owned(),
+        raw_body: format!(
+            r#"[{{"messageType":"JobAvailable","runnerRequestId":{request_id}}},{{"messageType":"JobCompleted","runnerRequestId":0,"runnerId":902,"runnerName":"v0"}}]"#
+        ),
         statistics: None,
         jobs: vec![
             InnerJob {
                 kind: InnerKind::Available,
-                request_id: Some(62),
+                request_id: Some(request_id),
                 job_id: Some("1001".to_owned()),
                 labels: Vec::new(),
                 runner_id: None,
                 runner_name: None,
                 result: None,
                 fields: Vec::new(),
-                source: Default::default(),
+                source: velnor_runner_github::SourceMetadata::default(),
             },
             InnerJob {
                 kind: InnerKind::Completed,
@@ -339,7 +220,7 @@ fn unmatched_mixed_event(message_id: i64) -> Poll {
                 runner_name: Some("v0".to_owned()),
                 result: Some("Succeeded".to_owned()),
                 fields: Vec::new(),
-                source: Default::default(),
+                source: velnor_runner_github::SourceMetadata::default(),
             },
         ],
     })

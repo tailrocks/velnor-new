@@ -22,6 +22,11 @@
 | Source receipt | A journal value that identifies one source approval. |
 | Lifecycle event | A GitHub message about a job that starts or completes. |
 | ACK | A reply that confirms receipt of a message. |
+| Completion inbox | A journal table that keeps GitHub job messages for later processing. |
+| Poll | A response from a GitHub queue that contains job messages. |
+| Receipt | A record that confirms one decision or event. |
+| Terminal state | A final job state that permits the controller to begin cleanup. |
+| Publication snapshot | A journal record of the runner configuration that the controller published. |
 | Acquired request | A job request that GitHub returned in response to `AcquireJobs`. |
 | Physical reservation | A journal record that holds host capacity for one job request. |
 | Guest resource sample | A measurement of CPU, memory, or storage from the selected guest engine. |

@@ -17,6 +17,8 @@ use crate::worker::{self, test_resource_budget};
 mod bootstrap_start;
 #[path = "docker_pair/native_intake_composition.rs"]
 mod native_intake_composition;
+#[cfg(test)]
+pub(crate) use native_intake_composition::run_native_quarantine_composition;
 #[path = "docker_pair/request_checks.rs"]
 mod request_checks;
 #[path = "docker_pair/server.rs"]

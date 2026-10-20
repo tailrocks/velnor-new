@@ -7,12 +7,14 @@ use crate::journal::{ConnectionJournal, HeaderAllocation};
 use crate::listen::Link;
 use crate::scale_set::EnsureError;
 
+#[cfg(test)]
 use super::super::ack_ready;
 use super::super::completion_intake::IntakeDecision;
 use super::{
     Acknowledgement, CursorDisposition, PositiveAdmission, PositivePollOutcome, Settlement,
 };
 
+#[cfg(test)]
 pub(super) async fn finish_positive_poll(
     link: &mut Link,
     session: &QueueSession,
@@ -137,6 +139,12 @@ async fn acknowledge_admission<F>(
 where
     F: AsyncFnMut(&mut Link, &QueueSession, &str, &str, &Option<String>, &Poll) -> Acknowledgement,
 {
+    if let Some(PositiveAdmission::OwnedTerminal(receipt)) = admission {
+        if !receipt.matches_poll(polled, scoped, set_id, &session.session_id) {
+            return false;
+        }
+        *acknowledgement = acknowledge(link, session, admin_base, path, queue, polled).await;
+    }
     if let Some(PositiveAdmission::KnownNoAcquire(receipt)) = admission {
         if !receipt.matches_poll(polled, scoped, set_id) {
             return false;
@@ -190,6 +198,7 @@ pub(super) fn contains_available(polled: &Poll) -> bool {
     matches!(polled, Poll::Batch(batch) if batch.jobs.iter().any(|job| job.kind == InnerKind::Available))
 }
 
+#[cfg(test)]
 async fn acknowledge_response(
     link: &mut Link,
     session: &QueueSession,

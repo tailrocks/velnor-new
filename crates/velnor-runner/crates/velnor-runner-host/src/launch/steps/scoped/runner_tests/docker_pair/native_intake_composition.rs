@@ -3,10 +3,23 @@ use std::time::{Duration, Instant};
 
 use crate::launch::resource_probe::ReleaseReadSecret;
 use velnor_runner_github::Exchange;
+use velnor_runner_github::Poll;
+
+const ACTUAL_STARTED_REQUEST_ID: i64 = 42;
+
+fn actual_started_request_id() -> i64 {
+    ACTUAL_STARTED_REQUEST_ID
+}
 
 #[path = "native_intake_composition/started_replay.rs"]
 mod started_replay;
 use started_replay::{listener_failure, record_started_and_replay};
+#[path = "native_intake_composition/quarantine_inbox.rs"]
+mod quarantine_inbox;
+use quarantine_inbox::verify_quarantined_inbox;
+#[path = "native_intake_composition/pre_delivery.rs"]
+mod pre_delivery;
+use pre_delivery::assert_pre_delivery_snapshot;
 
 #[test]
 fn acquired_request_reaches_measured_storage_bound() -> Result<(), String> {
@@ -27,7 +40,45 @@ fn acquired_request_reaches_measured_storage_bound() -> Result<(), String> {
 }
 
 async fn acquired_request_reaches_measured_storage_bound_inner() -> Result<(), String> {
-    let mut setup = bootstrap_start::open_composition().await?;
+    let setup = Box::pin(bootstrap_start::open_composition()).await?;
+    Box::pin(continue_native_composition(setup, None)).await
+}
+
+pub(crate) fn run_native_quarantine_composition(
+    polled: Poll,
+    backlog_rows: usize,
+) -> Result<(), String> {
+    const PRODUCTION_CALLER_STACK_BYTES: usize = 8 * 1024 * 1024;
+    std::thread::Builder::new()
+        .name("native-quarantine-production-stack".to_owned())
+        .stack_size(PRODUCTION_CALLER_STACK_BYTES)
+        .spawn(move || {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|error| error.to_string())?;
+            runtime.block_on(async move {
+                let setup = Box::pin(bootstrap_start::open_composition_with_poll(
+                    &polled,
+                    backlog_rows,
+                ))
+                .await?;
+                Box::pin(continue_native_composition(
+                    setup,
+                    Some((&polled, backlog_rows)),
+                ))
+                .await
+            })
+        })
+        .map_err(|error| error.to_string())?
+        .join()
+        .map_err(|_| "The native intake test thread stopped unexpectedly.".to_owned())?
+}
+
+async fn continue_native_composition(
+    mut setup: bootstrap_start::CompositionSetup,
+    quarantined: Option<(&Poll, usize)>,
+) -> Result<(), String> {
     let request_id = setup
         .fixture
         .request
@@ -41,7 +92,61 @@ async fn acquired_request_reaches_measured_storage_bound_inner() -> Result<(), S
         .outcome
         .take()
         .ok_or_else(|| "The Acquire outcome was already consumed.".to_owned())?;
-    let bound = bind_acquired(&setup, &provider, outcome).await?;
+    let bound = Box::pin(bind_acquired(&setup, &provider, outcome)).await?;
+    assert_bound_identity(&setup, &bound, request_id).await?;
+    let ready = Box::pin(jit_and_deliver(&setup, bound, request_id, &provider))
+        .await
+        .map_err(|error| format!("JIT and listener: {error}"))?;
+    assert_eq!(ready.request_id(), Some(request_id));
+    assert_eq!(ready.runner().id, 9001);
+    bootstrap_start::authorize_actual_started_request(&setup.fixture, actual_started_request_id())
+        .await?;
+    assert_jit_persistence(&setup.fixture, ready.intent_id(), &ready.runner().name)
+        .await
+        .map_err(|error| format!("JIT persistence: {error}"))?;
+    let before_started = setup.api.activity_snapshot()?;
+    record_started_and_replay(&setup.fixture, actual_started_request_id(), &ready)
+        .await
+        .map_err(|error| format!("Started/reopen replay: {error}"))?;
+    if let Some((polled, backlog_rows)) = quarantined {
+        verify_quarantined_inbox(&setup.fixture, polled, backlog_rows).await?;
+        if let Some(poll_session) = setup.poll_session.take() {
+            let reopened = setup.fixture.reopen().await?;
+            bootstrap_start::replay_owned_terminal_offer(
+                reopened,
+                poll_session,
+                request_id,
+                actual_started_request_id(),
+            )
+            .await?;
+        } else {
+            return Err("The mixed-poll replay session is absent.".to_owned());
+        }
+    }
+    let after_replay = setup.api.activity_snapshot()?;
+    assert_eq!(before_started, after_replay);
+    assert!(before_started.publisher_containers > 0);
+    assert_eq!(
+        before_started.publisher_containers,
+        before_started.publisher_logs
+    );
+    assert_eq!(before_started.runner_attaches, 1);
+    drop(ready);
+    let evidence = setup.api.finish().await?;
+    assert!(
+        evidence.server_error.is_none(),
+        "{:?}",
+        evidence.server_error
+    );
+    assert_eq!(evidence.jit_input, b"opaque-intake-jit");
+    Ok(())
+}
+
+async fn assert_bound_identity(
+    setup: &bootstrap_start::CompositionSetup,
+    bound: &crate::launch::scoped_runtime::BoundScopedBootstrap,
+    request_id: i64,
+) -> Result<(), String> {
     assert_eq!(
         bound.prepared().acquired().request().request_id(),
         Some(request_id)
@@ -61,36 +166,7 @@ async fn acquired_request_reaches_measured_storage_bound_inner() -> Result<(), S
     assert_eq!(binding.dind_container_id(), DIND_ID);
     assert_bound_persistence(&setup.fixture, acquired.reservation_id(), request_id)
         .await
-        .map_err(|error| format!("bound persistence: {error}"))?;
-    let ready = jit_and_deliver(&setup, bound, request_id, &provider)
-        .await
-        .map_err(|error| format!("JIT and listener: {error}"))?;
-    assert_eq!(ready.request_id(), Some(request_id));
-    assert_eq!(ready.runner().id, 9001);
-    assert_jit_persistence(&setup.fixture, ready.intent_id(), &ready.runner().name)
-        .await
-        .map_err(|error| format!("JIT persistence: {error}"))?;
-    let before_started = setup.api.activity_snapshot()?;
-    record_started_and_replay(&setup.fixture, request_id, &ready)
-        .await
-        .map_err(|error| format!("Started/reopen replay: {error}"))?;
-    let after_replay = setup.api.activity_snapshot()?;
-    assert_eq!(before_started, after_replay);
-    assert!(before_started.publisher_containers > 0);
-    assert_eq!(
-        before_started.publisher_containers,
-        before_started.publisher_logs
-    );
-    assert_eq!(before_started.runner_attaches, 1);
-    drop(ready);
-    let evidence = setup.api.finish().await?;
-    assert!(
-        evidence.server_error.is_none(),
-        "{:?}",
-        evidence.server_error
-    );
-    assert_eq!(evidence.jit_input, b"opaque-intake-jit");
-    Ok(())
+        .map_err(|error| format!("bound persistence: {error}"))
 }
 
 async fn assert_bound_persistence(
@@ -200,45 +276,7 @@ async fn jit_and_deliver<P: crate::launch::resource_probe::ImageProvider>(
     request_id: i64,
     provider: &P,
 ) -> Result<crate::launch::scoped_runtime::RunnerReadyBootstrap, String> {
-    let acquired = bound.prepared().acquired();
-    let response = Exchange {
-        status: 200,
-        body: serde_json::json!({
-            "encodedJITConfig": "opaque-intake-jit",
-            "runner": {
-                "id": 9001,
-                "name": acquired.runner_name(),
-                "runnerScaleSetId": acquired.request().scale_set_id()
-            }
-        })
-        .to_string()
-        .into_bytes(),
-    };
-    let mut lane = FakeLane::new([Ok(response)]);
-    let jit = crate::launch::scoped_runtime::create_and_bind(
-        bound,
-        &mut lane,
-        "test-admin-token",
-        &setup.fixture.scope,
-    )
-    .await
-    .map_err(|pending| format!("Production JIT bind failed: {:?}", pending.failure()))?;
-    assert_eq!(lane.paths.len(), 1);
-    assert!(lane.paths[0].contains("/generatejitconfig"));
-    let channel = jit
-        .measure_channel(
-            &setup.api.docker,
-            &setup.engine,
-            &setup.images,
-            Instant::now() + Duration::from_secs(30),
-        )
-        .await
-        .map_err(|pending| {
-            format!(
-                "Production channel measurement failed: {:?}",
-                pending.failure()
-            )
-        })?;
+    let channel = create_and_measure_channel(setup, bound).await?;
     let setup_ref = setup;
     let bound_intent_id = channel.bound().prepared().acquired().intent_id();
     let binding_digest = channel
@@ -297,35 +335,46 @@ async fn jit_and_deliver<P: crate::launch::resource_probe::ImageProvider>(
     Ok(ready)
 }
 
-async fn assert_pre_delivery_snapshot(
+async fn create_and_measure_channel(
     setup: &bootstrap_start::CompositionSetup,
-    reservation_id: i64,
-    intent_id: i64,
-    binding_digest: &str,
-) -> Result<(), String> {
-    let snapshot = setup
-        .fixture
-        .scope
-        .native_publication_snapshot(reservation_id)
-        .await
-        .map_err(|error| error.to_string())?
-        .ok_or_else(|| "The paired publication state is not durable.".to_owned())?;
-    assert_eq!(snapshot.reservation_id, reservation_id);
-    assert_eq!(snapshot.operation_id, intent_id);
-    assert_eq!(snapshot.engine_id, setup.engine.engine_id());
-    assert_eq!(
-        snapshot.docker_root_digest,
-        setup.engine.docker_root_digest()
-    );
-    assert_eq!(snapshot.instance_binding_digest, binding_digest);
-    assert_eq!(snapshot.runner_container_id, RUNNER_ID);
-    assert_eq!(snapshot.dind_container_id, DIND_ID);
-    assert!(snapshot.resources_bound);
-    assert_eq!(snapshot.jit_state, "bound");
-    assert_eq!(snapshot.publication_state, "published");
-    assert!(snapshot.projection_sha256.is_some());
-    assert_eq!(snapshot.challenge_state.as_deref(), Some("published"));
-    assert!(snapshot.challenge_digest.is_some());
-    assert_eq!(snapshot.delivery_state, "not_requested");
-    Ok(())
+    bound: crate::launch::scoped_runtime::BoundScopedBootstrap,
+) -> Result<crate::launch::scoped_runtime::ChannelReadyBootstrap, String> {
+    let acquired = bound.prepared().acquired();
+    let response = Exchange {
+        status: 200,
+        body: serde_json::json!({
+            "encodedJITConfig": "opaque-intake-jit",
+            "runner": {
+                "id": 9001,
+                "name": acquired.runner_name(),
+                "runnerScaleSetId": acquired.request().scale_set_id()
+            }
+        })
+        .to_string()
+        .into_bytes(),
+    };
+    let mut lane = FakeLane::new([Ok(response)]);
+    let jit = crate::launch::scoped_runtime::create_and_bind(
+        bound,
+        &mut lane,
+        "test-admin-token",
+        &setup.fixture.scope,
+    )
+    .await
+    .map_err(|pending| format!("Production JIT bind failed: {:?}", pending.failure()))?;
+    assert_eq!(lane.paths.len(), 1);
+    assert!(lane.paths[0].contains("/generatejitconfig"));
+    Box::pin(jit.measure_channel(
+        &setup.api.docker,
+        &setup.engine,
+        &setup.images,
+        Instant::now() + Duration::from_secs(30),
+    ))
+    .await
+    .map_err(|pending| {
+        format!(
+            "Production channel measurement failed: {:?}",
+            pending.failure()
+        )
+    })
 }

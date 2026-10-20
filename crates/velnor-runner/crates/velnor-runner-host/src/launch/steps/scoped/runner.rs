@@ -366,3 +366,6 @@ fn fresh_nonce() -> Result<String, EnsureError> {
 #[cfg(test)]
 #[path = "runner_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+pub(crate) use tests::run_native_quarantine_composition;

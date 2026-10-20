@@ -27,6 +27,8 @@ mod adverse_acquire;
 mod atomic_acquire;
 #[path = "runner_tests/docker_pair.rs"]
 mod docker_pair;
+#[cfg(test)]
+pub(crate) use docker_pair::run_native_quarantine_composition;
 #[path = "runner_tests/exact_acquire.rs"]
 mod exact_acquire;
 #[path = "runner_tests/policy_change.rs"]

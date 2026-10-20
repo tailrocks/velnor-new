@@ -15,7 +15,9 @@ mod scope;
 mod session;
 pub(super) mod storage;
 
-pub(crate) use completion::{ConnectionCompletionInboxEntry, NativeCompletionReservation};
+pub(crate) use completion::{
+    ConnectionCompletionInboxEntry, NativeCompletionReservation, TerminalReplayBinding,
+};
 pub(crate) use identity::{AssignmentIdentity, AssignmentKey};
 pub(crate) use reservation::JobFactsPublicationClaim;
 pub(crate) use reservation::ListenerDeliveryClaim;

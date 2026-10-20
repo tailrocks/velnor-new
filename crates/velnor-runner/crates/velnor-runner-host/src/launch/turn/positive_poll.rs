@@ -8,8 +8,10 @@ use crate::journal::{ConnectionJournal, HeaderAllocation};
 use crate::listen::Link;
 use crate::scale_set::EnsureError;
 
+#[cfg(test)]
+use super::completion_intake::IntakeDecision;
+use super::completion_intake::completion_error;
 use super::completion_intake::intake_and_ack_if_only_scoped;
-use super::completion_intake::{IntakeDecision, completion_error};
 use super::steps::{AcquiredProvisioning, KnownNoAcquire};
 use super::{ack_ready, poll_scoped_queue};
 
@@ -23,7 +25,13 @@ pub(crate) enum PositiveAdmission {
     Acquired(AcquiredProvisioning),
     /// The journal recorded a definite no-acquire result and its reservation disposition.
     KnownNoAcquire(KnownNoAcquire),
+    /// The exact Available message belongs to a durable terminal request.
+    OwnedTerminal(OwnedTerminalReplay),
 }
+
+#[path = "positive_poll/owned_terminal.rs"]
+pub(crate) mod owned_terminal;
+pub(crate) use owned_terminal::{OwnedTerminalReplay, classify_owned_terminal_available};
 
 /// Queue and journal outcome for one positive-capacity poll.
 pub(crate) struct PositivePollOutcome<A = PositiveAdmission> {
@@ -72,77 +80,11 @@ pub(crate) enum Settlement {
     Uncertain,
 }
 
-/// Run one positive poll and one admission callback for an available request.
-///
-/// This function records the poll attempt before GET. It sends the exact header
-/// value from that attempt. It records lifecycle events before any ACK.
-///
-/// # Errors
-///
-/// Returns an error if polling, durable intake, admission, or uncertainty
-/// recording does not complete.
-pub(crate) async fn positive_poll_once<F>(
-    link: &mut Link,
-    set_id: i64,
-    session: &mut QueueSession,
-    scoped: &ConnectionJournal,
-    session_intent_id: i64,
-    allocation: &HeaderAllocation,
-    cursor: i64,
-    mut admit: F,
-) -> Result<PositivePollOutcome, EnsureError>
-where
-    F: AsyncFnMut(
-        &mut Link,
-        &Poll,
-        Option<String>,
-        String,
-        String,
-        String,
-    ) -> Result<PositiveAdmission, EnsureError>,
-{
-    let attempt = begin_poll(scoped, session_intent_id, set_id, session, allocation).await?;
-    let admin_base = link.base().to_owned();
-    let (attempt, polled, path, queue, decision) = poll_and_intake(
-        link,
-        session,
-        scoped,
-        session_intent_id,
-        set_id,
-        attempt,
-        cursor,
-    )
-    .await?;
-    let (attempt, admission) = invoke_admission(
-        link,
-        &polled,
-        queue.clone(),
-        path.clone(),
-        session,
-        scoped,
-        session_intent_id,
-        attempt,
-        &mut admit,
-    )
-    .await?;
-    finish_positive_poll(
-        link,
-        session,
-        scoped,
-        session_intent_id,
-        set_id,
-        allocation,
-        cursor,
-        attempt,
-        polled,
-        path,
-        queue,
-        admin_base,
-        decision,
-        admission,
-    )
-    .await
-}
+#[path = "positive_poll/controller.rs"]
+mod controller;
+pub(crate) use controller::positive_poll_once;
+#[cfg(test)]
+pub(crate) use controller::test_positive_poll_once_with_response;
 
 async fn begin_poll(
     scoped: &ConnectionJournal,
@@ -168,61 +110,6 @@ async fn begin_poll(
         return Err(EnsureError::AdmissionClosed);
     }
     Ok(attempt)
-}
-
-async fn poll_and_intake(
-    link: &mut Link,
-    session: &mut QueueSession,
-    scoped: &ConnectionJournal,
-    session_intent_id: i64,
-    set_id: i64,
-    attempt: crate::journal::HeaderPollAttempt,
-    cursor: i64,
-) -> Result<
-    (
-        crate::journal::HeaderPollAttempt,
-        Poll,
-        String,
-        Option<String>,
-        IntakeDecision,
-    ),
-    EnsureError,
-> {
-    let (polled, path, queue) = match poll_scoped_queue(
-        link,
-        session,
-        scoped,
-        session_intent_id,
-        set_id,
-        attempt.header_value(),
-        cursor,
-    )
-    .await
-    {
-        Ok(result) => result,
-        Err(error) => {
-            scoped
-                .mark_session_poll_uncertain(session_intent_id, attempt)
-                .await
-                .map_err(|_| completion_error())?;
-            return Err(error);
-        }
-    };
-    let intake = intake_and_ack_if_only_scoped(scoped, set_id, &polled, || async {
-        ack_ready(link, session, path.clone(), queue.clone(), &polled)
-    })
-    .await;
-    let decision = match intake {
-        Ok(decision) => decision,
-        Err(error) => {
-            scoped
-                .mark_session_poll_uncertain(session_intent_id, attempt)
-                .await
-                .map_err(|_| completion_error())?;
-            return Err(error);
-        }
-    };
-    Ok((attempt, polled, path, queue, decision))
 }
 
 async fn invoke_admission<F>(
@@ -265,6 +152,9 @@ where
 
 mod finish;
 pub(crate) use finish::admit_when_ready;
+use finish::contains_available;
+#[cfg(test)]
+use finish::finish_positive_poll;
 #[cfg(test)]
 pub(crate) use finish::finish_positive_poll_with_ack;
 #[cfg(test)]
@@ -272,7 +162,6 @@ use finish::{
     acknowledgement_after_intake, admit_available, authorized_deferred_matches, cursor_disposition,
     make_outcome, settle_known_response,
 };
-use finish::{contains_available, finish_positive_poll};
 
 #[cfg(test)]
 #[path = "positive_poll_tests.rs"]

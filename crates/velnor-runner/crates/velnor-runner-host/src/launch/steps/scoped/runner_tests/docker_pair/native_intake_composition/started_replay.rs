@@ -1,3 +1,4 @@
+use super::super::bootstrap_start::NATIVE_COMPOSITION_JOB_ID;
 use super::{Fixture, SET_ID};
 use std::cell::Cell;
 
@@ -26,7 +27,7 @@ pub(super) async fn record_started_and_replay(
         },
     )
     .await
-    .map_err(|error| format!("Started intake/ACK failed: {error:?}"))?;
+    .map_err(|error| format!("The Started intake or ACK failed: {error:?}."))?;
     assert_eq!(started, [request_id]);
     assert!(acknowledged_started.get());
     replay_started(fixture, intent_id, request_id, &started_poll).await
@@ -41,7 +42,7 @@ async fn replay_started(
     let journal_file = fixture.journal_file();
     let reopened = crate::Journal::open(&journal_file)
         .await
-        .map_err(|error| format!("Reopening the journal failed: {error:?}"))?;
+        .map_err(|error| format!("The journal could not be reopened: {error:?}."))?;
     let reopened_scope = reopened
         .connection_scope(&fixture.binding)
         .await
@@ -54,12 +55,14 @@ async fn replay_started(
         .into_iter()
         .find(|row| row.intent_id == intent_id)
         .map(|row| row.reservation_id)
-        .ok_or_else(|| "Reopened reservation is absent before replay.".to_owned())?;
+        .ok_or_else(|| "The reservation is missing after the journal reopened.".to_owned())?;
     let before_replay = reopened_scope
         .native_publication_snapshot(reservation_id)
         .await
         .map_err(|error| error.to_string())?
-        .ok_or_else(|| "Reopened publication snapshot is absent.".to_owned())?;
+        .ok_or_else(|| {
+            "The publication snapshot is missing after the journal reopened.".to_owned()
+        })?;
     let replay_acknowledged = Cell::new(false);
     let replayed = crate::launch::turn::test_started_intake_and_ack(
         &reopened_scope,
@@ -76,14 +79,14 @@ async fn replay_started(
         },
     )
     .await
-    .map_err(|error| format!("Replayed Started intake/ACK failed: {error:?}"))?;
+    .map_err(|error| format!("The replayed Started intake or ACK failed: {error:?}."))?;
     assert_eq!(replayed, [request_id]);
     assert!(replay_acknowledged.get());
     let after_replay = reopened_scope
         .native_publication_snapshot(reservation_id)
         .await
         .map_err(|error| error.to_string())?
-        .ok_or_else(|| "Replayed publication snapshot is absent.".to_owned())?;
+        .ok_or_else(|| "The replayed publication snapshot is missing.".to_owned())?;
     assert_eq!(after_replay, before_replay);
     let rows = reopened_scope
         .physical_runner_reservations()
@@ -92,7 +95,9 @@ async fn replay_started(
     let row = rows
         .iter()
         .find(|row| row.intent_id == intent_id)
-        .ok_or_else(|| "Reopened Started reservation is absent.".to_owned())?;
+        .ok_or_else(|| {
+            "The Started reservation is missing after the journal reopened.".to_owned()
+        })?;
     assert_eq!(row.started_request_id, Some(request_id));
     assert_eq!(row.runner_request_id, Some(request_id));
     assert_eq!(
@@ -113,7 +118,7 @@ fn started_body(request_id: i64, runner_id: i64, runner_name: &str) -> Result<St
         "runnerRequestId": request_id,
         "runnerId": runner_id,
         "runnerName": runner_name,
-        "jobId": "native-intake-composition-job",
+        "jobId": NATIVE_COMPOSITION_JOB_ID,
         "ownerName": "owner",
         "repositoryName": "repository",
         "jobWorkflowRef": "owner/repository/.github/workflows/build.yml@refs/heads/main",
@@ -128,7 +133,7 @@ fn started_poll(body: String) -> Result<velnor_runner_github::Poll, String> {
         velnor_runner_github::parse_inner_messages(&body).map_err(|error| error.to_string())?;
     Ok(velnor_runner_github::Poll::Batch(
         velnor_runner_github::ParsedBatch {
-            message_id: 78,
+            message_id: 129,
             raw_body: body,
             statistics: None,
             jobs,
@@ -144,16 +149,16 @@ pub(super) fn listener_failure(
     match pending {
         PendingScopedExecution::Jit(failure) => {
             format!(
-                "Production listener JIT delivery failed: {:?}",
+                "The production listener failed to deliver the JIT configuration: {:?}.",
                 failure.failure()
             )
         }
         PendingScopedExecution::Channel(_, failure)
         | PendingScopedExecution::Runner(_, _, failure) => {
-            format!("Production listener publication failed: {failure}")
+            format!("The production listener failed to publish the request: {failure}.")
         }
         PendingScopedExecution::RequestTimeout(_) => {
-            "Production listener request timed out.".to_owned()
+            "The production listener request timed out.".to_owned()
         }
     }
 }

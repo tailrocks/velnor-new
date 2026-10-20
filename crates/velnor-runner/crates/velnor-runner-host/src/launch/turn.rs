@@ -17,7 +17,11 @@ pub(crate) use completion_intake::IntakeDecision;
 #[cfg(test)]
 pub(crate) use positive_poll::Acknowledgement;
 #[cfg(test)]
+pub(crate) use positive_poll::classify_owned_terminal_available;
+#[cfg(test)]
 pub(crate) use positive_poll::finish_positive_poll_with_ack;
+#[cfg(test)]
+pub(crate) use positive_poll::test_positive_poll_once_with_response;
 pub(crate) use positive_poll::{
     CursorDisposition, PositiveAdmission, PositivePollOutcome, Settlement, admit_when_ready,
     positive_poll_once,
@@ -41,6 +45,16 @@ where
     completion_intake::intake_and_ack_if_only_scoped(journal, set_id, polled, acknowledge)
         .await
         .map(|decision| decision.started_request_ids)
+}
+
+#[cfg(test)]
+pub(crate) async fn test_scoped_intake(
+    journal: &crate::journal::ConnectionJournal,
+    set_id: i64,
+    polled: &velnor_runner_github::Poll,
+) -> Result<IntakeDecision, crate::scale_set::EnsureError> {
+    completion_intake::intake_and_ack_if_only_scoped(journal, set_id, polled, || async { Ok(()) })
+        .await
 }
 
 #[cfg(test)]

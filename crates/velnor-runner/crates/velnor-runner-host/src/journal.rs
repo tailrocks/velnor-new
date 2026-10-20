@@ -51,6 +51,7 @@ pub(crate) use completion::{
 pub(crate) use connection::JobFactsPublicationClaim;
 pub(crate) use connection::ListenerDeliveryClaim;
 pub(crate) use connection::NativeCompletionReservation;
+pub(crate) use connection::TerminalReplayBinding;
 pub(crate) use connection::{
     PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation, ReservationState,
 };

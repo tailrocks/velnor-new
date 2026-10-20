@@ -6,6 +6,11 @@ use super::*;
 #[path = "bootstrap_start/preflight.rs"]
 mod preflight;
 use preflight::assert_verified_preflight_before_mutations;
+#[path = "bootstrap_start/native_intake.rs"]
+mod native_intake;
+pub(super) use native_intake::{
+    NATIVE_COMPOSITION_JOB_ID, open_composition_with_poll, replay_owned_terminal_offer,
+};
 
 const ENGINE_ID: &str = "bc9058a0-c807-412b-a088-6c1d96ddd462";
 const MEMORY_BYTES: u64 = 32 * 1024 * 1024 * 1024;
@@ -146,7 +151,8 @@ impl BootstrapSetup {
         let engine = selected_engine(&images)?;
         let state = BootstrapAdmissionState::new(&fixture.binding)?;
         let drive = bootstrap_drive(&fixture, &state.path);
-        let outcome = acquire_source_authorized(&drive, permit, &engine).await?;
+        let poll = crate::launch_harness::available(&[REQUEST_ID]);
+        let outcome = acquire_source_authorized(&drive, permit, &engine, &poll).await?;
         let (initializer_image, initializer) = initializer_for(&outcome, &fixture, &images).await?;
         let api =
             PairDockerApi::open_with_initializer(images.clone(), initializer_image, initializer)?;
@@ -222,10 +228,10 @@ async fn acquire_source_authorized(
     drive: &crate::launch::Drive,
     permit: StartPermit,
     engine: &crate::launch::SelectedEngineContext,
+    poll: &velnor_runner_github::Poll,
 ) -> Result<crate::launch::steps::ScopedProvisioningOutcome, String> {
-    let poll = crate::launch_harness::available(&[REQUEST_ID]);
     let mut lane = FakeLane::new([Ok(exchange(200, r#"{"count":1,"value":[41]}"#))]);
-    let outcome = crate::launch::steps::acquire_scoped(&mut lane, drive, &poll, permit, engine)
+    let outcome = crate::launch::steps::acquire_scoped(&mut lane, drive, poll, permit, engine)
         .await
         .map_err(|error| format!("Source-authorized Acquire error: {error}"))?;
     assert_eq!(lane.paths.len(), 1);
@@ -307,40 +313,15 @@ pub(super) struct CompositionSetup {
     pub(super) engine: crate::launch::SelectedEngineContext,
     pub(super) images: crate::launch::VerifiedWorkerImages,
     pub(super) guest_image: crate::worker::guest_image::test_support::TestGuestImage,
+    pub(super) poll_session: Option<native_intake::PollSession>,
     _state: BootstrapAdmissionState,
 }
 
+pub(super) use native_intake::authorize_actual_started_request;
+
 pub(super) async fn open_composition() -> Result<CompositionSetup, String> {
-    let fixture = Fixture::open_with_engine("native-intake-composition", ENGINE_ID).await?;
-    configure_capacity(&fixture).await?;
-    let permit = StartPermit::test_fixture_with_engine_and_available_memory(
-        &"a".repeat(32),
-        ENGINE_ID,
-        MEMORY_BYTES,
-    );
-    let images =
-        super::super::support::test_images_for_engine(ENGINE_ID, permit.docker_root_digest());
-    let engine = selected_engine(&images)?;
-    let state = BootstrapAdmissionState::new(&fixture.binding)?;
-    let drive = bootstrap_drive(&fixture, &state.path);
-    let outcome = acquire_source_authorized(&drive, permit, &engine).await?;
-    let guest_image =
-        crate::worker::guest_image::test_support::TestGuestImage::for_connection_and_images(
-            fixture.binding.clone(),
-            images.clone(),
-        )
-        .map_err(|error| error.to_string())?;
-    let (initializer_image, initializer) = initializer_for(&outcome, &fixture, &images).await?;
-    let api = PairDockerApi::open_with_initializer(images.clone(), initializer_image, initializer)?;
-    Ok(CompositionSetup {
-        fixture,
-        api,
-        outcome: Some(outcome),
-        engine,
-        images,
-        guest_image,
-        _state: state,
-    })
+    let poll = crate::launch_harness::available(&[REQUEST_ID]);
+    Box::pin(open_composition_with_poll(&poll, 0)).await
 }
 
 async fn verify_retained_charge(
