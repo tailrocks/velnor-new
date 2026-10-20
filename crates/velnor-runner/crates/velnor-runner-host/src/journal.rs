@@ -282,6 +282,10 @@ impl Journal {
     pub(super) fn path(&self) -> &Path {
         self.file.path()
     }
+
+    pub(crate) fn state_directory(&self) -> Result<&Path, HostError> {
+        self.path().parent().ok_or(HostError::Path)
+    }
 }
 
 async fn commit_live(

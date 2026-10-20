@@ -4,6 +4,8 @@
 pub(super) mod cfg;
 #[path = "impl_repo_test_registration_macros.rs"]
 mod macros;
+#[path = "impl_repo_test_registration_out_dir.rs"]
+mod out_dir;
 
 use std::error::Error;
 use std::fs;
@@ -21,8 +23,17 @@ pub(super) enum Possibility {
 pub(super) use macros::{Call, Definition};
 
 pub(super) struct IncludeSource {
-    pub(super) path: PathBuf,
+    pub(super) path: IncludePath,
     pub(super) condition: Possibility,
+}
+
+/// Where a direct `include!` reads its source.
+#[derive(Debug)]
+pub(super) enum IncludePath {
+    /// A literal path resolved from the including file's directory.
+    Relative(PathBuf),
+    /// A safe relative suffix of the build script's Cargo `OUT_DIR`.
+    CargoOutDir(PathBuf),
 }
 
 #[derive(Default)]
@@ -135,7 +146,7 @@ impl<'ast> Visit<'ast> for SourceVisitor<'_> {
                 Err(error) => self.error = Some(error.to_string()),
             }
         } else if path.is_ident("include") {
-            match macros::include_source(&node.mac.tokens, self.source) {
+            match out_dir::direct_include_path(&node.mac.tokens, self.source) {
                 Ok(path) => self.findings.includes.push(IncludeSource {
                     path,
                     condition: item_condition,

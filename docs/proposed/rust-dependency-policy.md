@@ -37,6 +37,16 @@ predicates as possible. Its registration result means syntactically reachable
 under the evaluated test-profile conditions, not that every target-specific
 branch was compiled on the host running the check.
 
+One non-literal include form is accepted: a direct item-level
+`include!(concat!(env!("OUT_DIR"), "/<path>.rs"))` whose suffix is string
+literals forming one safe relative `.rs` path (no `..`, empty, doubled, or
+absolute components). It names build output the package's build script writes,
+not a repository source, so the edge contributes nothing to the registered
+repository closure and the generated file is not scanned. Cargo sets `OUT_DIR`
+only for a package with a build script, so the form is an error in a package
+whose Cargo metadata reports no `custom-build` target. Every other computed
+include, including this form inside a macro expansion, stays fail-closed.
+
 Tokio requires a demonstrated asynchronous-I/O need. Prefer the standard
 library for one-use facilities. Shared versions belong in
 `[workspace.dependencies]`; members MUST opt in explicitly.
