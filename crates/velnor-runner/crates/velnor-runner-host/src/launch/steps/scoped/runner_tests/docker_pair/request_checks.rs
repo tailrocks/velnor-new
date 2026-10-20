@@ -2,6 +2,25 @@ use serde_json::Value;
 
 use super::server::{CapturedRequest, DIND_ID, RUNNER_ID, route};
 
+pub(super) fn verify_worker_image_ids(
+    requests: &[CapturedRequest],
+    images: &crate::launch::VerifiedWorkerImages,
+) -> Result<(), String> {
+    let creates = requests
+        .iter()
+        .enumerate()
+        .filter(|(_, request)| request.method == "POST" && route(request) == "/containers/create")
+        .collect::<Vec<_>>();
+    let (_, dind, _) = created_role(&creates, "dind")?;
+    let (_, runner, _) = created_role(&creates, "runner")?;
+    if dind["Image"] != images.dind().runtime_id()
+        || runner["Image"] != images.runner().runtime_id()
+    {
+        return Err("The pair create requests do not use the expected image IDs.".to_owned());
+    }
+    Ok(())
+}
+
 pub(super) fn valid_runner_attach(request: &CapturedRequest) -> bool {
     if request.method != "POST" || route(request) != format!("/containers/{RUNNER_ID}/attach") {
         return false;
@@ -48,6 +67,7 @@ pub(super) fn verify_pair_requests(
         format!("container:{DIND_ID}")
     );
     assert!(has_mounts(&dind, &["/var/lib/docker", "/run"]));
+    assert_dind_metadata_mounts(&dind);
     assert!(has_mounts(
         &runner,
         &[
@@ -117,9 +137,6 @@ fn assert_pair_event_order(
         .enumerate()
         .filter(|(_, request)| route(request).ends_with("/attach"))
         .collect::<Vec<_>>();
-    if attaches.len() != 2 {
-        return Err("There must be one Runner attach and one initializer attach.".to_owned());
-    }
     let runner_attaches = attaches
         .iter()
         .filter(|(_, request)| valid_runner_attach(request))
@@ -141,14 +158,54 @@ fn assert_pair_event_order(
         .ok_or_else(|| "The Runner attach event is absent.".to_owned())?;
     let dind_start = event_index(requests, &format!("/containers/{DIND_ID}/start"))?;
     let runner_start = event_index(requests, &format!("/containers/{RUNNER_ID}/start"))?;
-    if !(dind_create < runner_create
+    let initializer_start = event_index(requests, &format!("/containers/{initializer_id}/start"))?;
+    let initializer_wait = event_index(requests, &format!("/containers/{initializer_id}/wait"))?;
+    if !(initializer_start < dind_create
+        && dind_create < runner_create
         && runner_create < runner_attach
         && runner_attach < dind_start
-        && dind_start < runner_start)
+        && dind_start < runner_start
+        && runner_start < initializer_wait)
     {
         return Err("The pair create, attach, and start order is invalid.".to_owned());
     }
     Ok(())
+}
+
+fn assert_dind_metadata_mounts(config: &Value) {
+    let mounts = config["HostConfig"]["Mounts"]
+        .as_array()
+        .expect("The DinD mounts must be present.");
+    let expected = [
+        ("/.velnor-runtime-identity", "runtime-identity"),
+        ("/opt/velnor/job-facts", "job-facts"),
+    ];
+    let mut metadata_volume = None;
+    for (target, subpath) in expected {
+        let matching = mounts
+            .iter()
+            .filter(|mount| mount["Target"].as_str() == Some(target))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            matching.len(),
+            1,
+            "There must be one DinD mount at {target}."
+        );
+        let mount = matching[0];
+        assert_eq!(mount["Type"], "volume");
+        assert_eq!(mount["ReadOnly"], true);
+        let source = mount["Source"]
+            .as_str()
+            .expect("The volume source must be present.");
+        assert!(!source.is_empty());
+        if let Some(expected_source) = metadata_volume {
+            assert_eq!(source, expected_source);
+        } else {
+            metadata_volume = Some(source);
+        }
+        assert_eq!(mount["VolumeOptions"]["NoCopy"], true);
+        assert_eq!(mount["VolumeOptions"]["Subpath"], subpath);
+    }
 }
 
 fn event_index(requests: &[CapturedRequest], path: &str) -> Result<usize, String> {

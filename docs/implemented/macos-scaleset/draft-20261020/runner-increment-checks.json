@@ -1091,5 +1091,29 @@
     "reviewer": "obsolete_capacity_cleanup",
     "language_reviewer": "helper_language_review",
     "scope": "The tests check step IDs, job IDs, file sizes, and test registration. Generated cache steps and live tests remain necessary."
+  },
+  "native_pair_assertion_rehost": {
+    "result": "PASS",
+    "source_base": "32b3b2194fe461952ef3a143006d006dd8e202de",
+    "compile_source_pin": "32b3b2194fe461952ef3a143006d006dd8e202de",
+    "focused_tests": 7,
+    "registration_tests": 5,
+    "checks": [
+      {
+        "log": "native-retirement-parent-language-final-20261020.log",
+        "sha256": "5a48e1960d8cdca9a7694b377835535981f8e416d639f14d5f59eaa24bbbfa40",
+        "exit_status": 0,
+        "run_id": "1ea67ec3-d8af-46a5-9882-a340ef54ef93"
+      },
+      {
+        "log": "native-retirement-parent-registration-20261020.log",
+        "sha256": "732942c400baa28ee38fb94056cd5a7593214e4198bc0a33f53eb3af009b3b29",
+        "exit_status": 0,
+        "run_id": "7252fbe4-361d-4dfa-841d-6fec89e450d2"
+      }
+    ],
+    "review_sha256": "10f60bd9dacb54d70c290db2dd5fcc40d7c8e488825546bf0052be50f91c52bb",
+    "merge_note": "Two candidate files came from 5ef492. The merge keeps the V32 recovery exports and current diagnostic text.",
+    "scope": "The active tests check pair resources, image IDs, JIT privacy, and recovery. Two obsolete direct start tests are removed. Full runner and live gates remain necessary."
   }
 }

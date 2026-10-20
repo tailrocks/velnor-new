@@ -2,23 +2,18 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::config::ConnectionId;
-use crate::journal::{
-    AssignedAcquireResult, CapacityLimits, OperationalCapacityLimits, RequestAcquireState,
-    fixture_provisioning_profile,
-};
+use crate::journal::{AssignedAcquireResult, RequestAcquireState};
 use crate::journal::{AssignmentIdentity, AssignmentKey};
 use crate::launch::inspect_tests::DockerStub;
 use crate::launch::resource_probe::StartPermit;
 use crate::worker::Started;
-use serde_json::json;
 use velnor_runner_github::Method;
 
 use super::super::acquire::{self, AcquireDisposition};
-use super::super::runner::{self, ReservationOutcome};
+use super::super::runner;
 use super::super::validate_scope_binding;
 use support::{
-    FakeLane, Fixture, REQUEST_ID, SET_ID, assert_runner_name, docker_identity_stub, exchange,
-    fixture_storage, selected_engine, test_images, test_images_for_engine,
+    FakeLane, Fixture, REQUEST_ID, SET_ID, exchange, fixture_storage, selected_engine, test_images,
 };
 
 #[path = "runner_tests/adverse_acquire.rs"]
@@ -30,8 +25,6 @@ mod docker_pair;
 pub(crate) use docker_pair::{
     RunnerCreateFailure, run_native_quarantine_composition, runner_create_409,
 };
-#[path = "runner_tests/exact_acquire.rs"]
-mod exact_acquire;
 #[path = "runner_tests/policy_change.rs"]
 mod policy_change;
 #[path = "runner_tests/provisioning.rs"]
