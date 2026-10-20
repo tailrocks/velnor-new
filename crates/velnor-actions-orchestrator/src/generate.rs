@@ -195,6 +195,7 @@ fn render_all(
     let actionlint = render_actionlint_yaml(&actionlint_input)?;
     let actionlint = rehead_actionlint_marker(&actionlint.yaml, version)?;
     let mut extra = crate::release_emit::release_files(prep, &mise)?;
+    extra.extend(crate::publish_emit::publish_files(prep, &mise)?);
     extra.extend(crate::binary_release_emit::files(prep)?);
     extra.extend(crate::binary_preview_emit::files(prep)?);
     extra.extend(crate::freshness_emit::freshness_files(prep)?);

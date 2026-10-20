@@ -279,7 +279,7 @@ pub(super) fn valid_tools_cache_identity(kind: &StepKind) -> bool {
             && with.len() == 1
             && with
                 .get(TOOLS_CACHE_IDENTITY_DIGEST_INPUT)
-                .is_some_and(|digest| crate::config::project_tool_refs::is_tools_cache_identity_input(digest))
+                .is_some_and(|digest| crate::config::project_tool_refs::is_tools_identity_input(digest))
             && env.is_empty())
 }
 
