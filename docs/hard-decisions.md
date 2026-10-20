@@ -266,6 +266,37 @@ project-declared version into any generated file, loading the project's
 Mise config (or trusting it) in a generated step to resolve versions, or
 letting a Velnor pin override a project declaration.
 
+## 4a. Adapter-specific exact version grammars
+
+**Decision.** Decision 4's "exact `X.Y.Z`" is widened per adapter, never
+loosened: `java` accepts `<vendor>-<X.Y.Z>[+<build>[.<n>]*][.LTS]` (vendor one
+of `temurin`, `oracle-graalvm`, `graalvm-community`, `corretto`, `zulu`);
+Gradle accepts `N.N` or `N.N.N` from the wrapper URL. Majors, `lts`, `latest`,
+ranges, templates and leading zeros still fail with
+`project_tool_version_not_exact`; the `$GITHUB_ENV` guard for these keys is
+`[A-Za-z0-9.+-]`, single-line, never echoed raw.
+
+**Status.** Adopted per the split brief; owner may revisit. See the
+[Gradle stack contract](proposed/gradle-contract.md).
+
+**Must not be reintroduced without owner approval:** a vendor-less or
+major-only JDK selector, or a wider character class for any other key.
+
+## 5. One job per Gradle project or declared group
+
+**Decision.** A Gradle project (or declared group) owns one job,
+`Gradle / <project>` (id `gradle-<slug>`); its checks run as one `--continue`
+Gradle invocation, not as parallel steps.
+
+**Status.** Adopted per the split brief; owner may revisit.
+
+**Rationale.** Gradle serializes concurrent builds in one root, so step
+concurrency (decision 1) would only simulate parallelism; `--continue` keeps
+every independent check running and required.
+
+**Must not be reintroduced without owner approval:** per-phase Gradle jobs for
+one project, or concurrent Gradle writers in one root.
+
 ## 7. Private dependency credentials
 
 **Decision.** A GitHub App installation token (`contents: read`, an exact
@@ -281,7 +312,9 @@ credential. Specification:
 [private sources contract](proposed/private-sources-contract.md).
 
 **Status.** Adopted per the split brief; owner may revisit. Recorded
-2026-10-20 together with the release-asset Maven bundle choice. The
+2026-10-20 together with the release-asset Maven bundle choice (Maven
+artifacts of private libraries ship as `<id>-<version>-maven.zip` release
+assets with a `.sha256`, not through GitHub Packages). The
 `velnor-deps` App does not exist yet; creating it is an owner blocker.
 
 **Rationale.** Without it a private sibling dependency forces a long-lived

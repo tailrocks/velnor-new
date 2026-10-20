@@ -950,6 +950,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "velnor-actions-gradle"
+version = "0.1.29"
+dependencies = [
+ "sha2",
+]
+
+[[package]]
 name = "velnor-actions-mise"
 version = "0.1.29"
 dependencies = [
