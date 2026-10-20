@@ -84,11 +84,17 @@ pub fn ensure_product_scale_set(
         return Err(EnsureError::Rejected);
     }
     let (mut transport, admin) = open_admin(pat, owner, repo)?;
+    let create_labels = product_create_labels();
+    let expected_labels = create_labels
+        .iter()
+        .map(|label| label.name.clone())
+        .collect::<Vec<_>>();
     let found = get_runner_scale_set(
         &mut transport,
         &ScaleSetByName {
             runner_group_id: DEFAULT_GROUP,
             name: SET_NAME,
+            expected_labels: &expected_labels,
             admin_token: admin.expose_token(),
         },
     )
@@ -100,7 +106,7 @@ pub fn ensure_product_scale_set(
             &ScaleSetCreate {
                 name: SET_NAME,
                 runner_group_id: DEFAULT_GROUP,
-                labels: &product_create_labels(),
+                labels: &create_labels,
                 admin_token: admin.expose_token(),
             },
         )

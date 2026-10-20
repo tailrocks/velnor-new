@@ -257,6 +257,7 @@ pub(crate) fn started_progress(message_id: i64, assigned: i64) -> Poll {
 
 fn progress_job(kind: InnerKind) -> InnerJob {
     InnerJob {
+        source: velnor_runner_github::SourceMetadata::default(),
         kind,
         request_id: Some(0),
         job_id: None,
@@ -290,6 +291,7 @@ fn kind_wait(message_id: i64, assigned: i64, kind: InnerKind) -> Poll {
             total_idle_runners: 0,
         }),
         jobs: vec![InnerJob {
+            source: velnor_runner_github::SourceMetadata::default(),
             kind,
             request_id: Some(0),
             job_id: None,
@@ -311,6 +313,7 @@ pub(crate) fn available(ids: &[i64]) -> Poll {
             .iter()
             .copied()
             .map(|id| InnerJob {
+                source: velnor_runner_github::SourceMetadata::default(),
                 kind: InnerKind::Available,
                 request_id: Some(id),
                 job_id: None,
