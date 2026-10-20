@@ -168,7 +168,7 @@ fn chainargos_policy_pins_branch_and_pull_request_contexts() -> Result<(), HostE
     let config = parsed(text)?;
     let source = &config.connections()[0].source_policy;
     assert_eq!(source.branches, ["sea/integration"]);
-    assert!(source.tag_prefixes.is_empty());
+    assert_eq!(source.tag_prefixes, Vec::<String>::new());
     assert!(!source.events.contains(&WorkflowEvent::Schedule));
     assert!(!source.events.contains(&WorkflowEvent::Release));
     assert_eq!(source.pull_request_rules.len(), 2);
