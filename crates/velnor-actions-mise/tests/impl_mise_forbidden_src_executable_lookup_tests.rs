@@ -23,7 +23,7 @@ fn executable_lookup_rejects_mutating_descriptor_flags() -> Result<(), String> {
     let original = include_str!("../src/requests_executable_lookup.rs");
     assert!(
         violations("requests_executable_lookup.rs", original)?.is_empty(),
-        "the real descriptor walk must satisfy its baseline contract"
+        "The descriptor walk must meet the baseline contract."
     );
     let flags = "OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC";
     for replacement in [
@@ -33,18 +33,21 @@ fn executable_lookup_rejects_mutating_descriptor_flags() -> Result<(), String> {
         "OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC",
     ] {
         let changed = original.replacen(flags, replacement, 1);
-        assert_ne!(
-            changed, original,
-            "test mutation did not find its source flags"
-        );
+        assert_ne!(changed, original, "The test must change the source flags.");
         let found = violations("requests_executable_lookup.rs", &changed)?;
-        assert!(!found.is_empty(), "mutating flags passed: {replacement}");
+        assert!(
+            !found.is_empty(),
+            "The scanner must reject these flags: {replacement}."
+        );
     }
     let ordinary_open = format!(
         "{original}\nfn lookup(path: &std::path::Path) {{ let _ = std::fs::File::open(path); }}"
     );
     let found = violations("requests_executable_lookup.rs", &ordinary_open)?;
-    assert!(!found.is_empty(), "ordinary path open passed");
+    assert!(
+        !found.is_empty(),
+        "The scanner must reject an ordinary path open."
+    );
     Ok(())
 }
 
@@ -52,7 +55,10 @@ fn executable_lookup_rejects_mutating_descriptor_flags() -> Result<(), String> {
 fn lookup_authority_is_rejected_outside_the_named_module() -> Result<(), String> {
     let source = "use rustix::fs::{Mode, OFlags, openat}; fn lookup(directory: &std::fs::File, name: &std::ffi::OsStr) { let _ = openat(directory, name, OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::CLOEXEC, Mode::empty()); }";
     let found = violations("requests.rs", source)?;
-    assert!(!found.is_empty(), "unreviewed descriptor lookup passed");
+    assert!(
+        !found.is_empty(),
+        "The scanner must reject this descriptor lookup outside the approved module."
+    );
     Ok(())
 }
 
@@ -65,10 +71,16 @@ fn direct_rustup_and_production_symlink_calls_remain_forbidden() -> Result<(), S
     ] {
         let altered = format!("{source}\n{suffix}");
         let found = violations("requests_executable_lookup.rs", &altered)?;
-        assert!(!found.is_empty(), "unsafe addition passed: {suffix}");
+        assert!(
+            !found.is_empty(),
+            "The scanner must reject this unsafe addition: {suffix}."
+        );
     }
     let direct = violations("requests.rs", "fn bypass() { let _ = \"rustup\"; }")?;
-    assert!(!direct.is_empty(), "bare Rustup reference passed");
+    assert!(
+        !direct.is_empty(),
+        "The scanner must reject a bare Rustup reference."
+    );
     Ok(())
 }
 
@@ -84,12 +96,12 @@ fn fixture_mutations_are_limited_to_executable_lookup_tests() -> Result<(), Stri
         let allowed = violations("requests_executable_lookup_tests.rs", &source)?;
         assert!(
             allowed.is_empty(),
-            "approved fixture call was denied: {allowed:?}"
+            "The scanner must allow this fixture call in the test module. Violations: {allowed:?}."
         );
         let denied = violations("requests_tests.rs", &source)?;
         assert!(
             !denied.is_empty(),
-            "fixture call passed in other module: {mutation}"
+            "The scanner must reject this fixture call outside the test module: {mutation}."
         );
     }
     Ok(())

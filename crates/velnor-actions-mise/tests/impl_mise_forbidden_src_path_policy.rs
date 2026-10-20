@@ -59,7 +59,7 @@ pub(super) fn check_path_openers(name: &str, source: &str, violations: &mut Vec<
             || audit.executable_lookup_file_openats != 1)
     {
         audit.violations.push(
-            "expected one pinned-root open and three exact no-follow executable path opens"
+            "The scan must find one open of the pinned root and three exact no-follow opens of the executable path."
                 .to_owned(),
         );
     }
@@ -122,7 +122,7 @@ impl PathAudit<'_> {
                     "open" => self.executable_lookup_opens += 1,
                     "openat" => {}
                     _ => self.violations.push(
-                        "executable lookup uses an unsupported Rustix open operation".to_owned(),
+                        "The scanner does not allow this Rustix open operation for executable lookup.".to_owned(),
                     ),
                 }
             } else {
@@ -132,7 +132,7 @@ impl PathAudit<'_> {
                 ));
             }
         } else if executable::is_test_fixture_mutation(self.name, canonical) {
-            // This exact source file creates disposable test inputs.
+            // This source file creates temporary inputs for the tests.
         } else if is_path_open_call(canonical) {
             if !is_standard_read_only_file_open(canonical)
                 || matches!(self.name, "check_file_read.rs" | EXECUTABLE_LOOKUP)

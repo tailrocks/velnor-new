@@ -28,7 +28,7 @@ pub(super) fn check_source_sites(name: &str, source: &str, violations: &mut Vec<
         && !super::rustup_policy::has_pinned_mise_rustup_payload(source)
     {
         violations.push(format!(
-            "{name}: Rustup lookup must be one fixed payload passed through Mise"
+            "{name}: Rustup lookup must use one fixed payload through Mise."
         ));
     }
     if is_filter_process && compact.matches(write_expression).count() != 1 {
