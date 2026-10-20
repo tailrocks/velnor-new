@@ -49,6 +49,11 @@ the host's `xcode-select` setting.
 
 ## Compatibility Rules and Verification Procedures
 
+### Native release job authority (checked 2026-10-21)
+
+Jackin run `39495895585`, attempt 1, demonstrated executing producer jobs while the aggregate run remained `queued`; requiring only `in_progress` incorrectly rejected them before checkout. Aggregate status alone never establishes caller authority.
+The official [attempt-specific jobs endpoint](https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt) supplies the bounded complete inventory selecting one generated role's positive job ID. The [individual job endpoint](https://docs.github.com/en/rest/actions/workflow-jobs#get-a-job-for-a-workflow-run) refreshes its identity, status and conclusion using existing Actions read permissions. The runner's [GitHubContext export](https://github.com/actions/runner/blob/main/src/Runner.Worker/GitHubContext.cs) exports `GITHUB_JOB`; Velnor maps this machine identifier to the generated display name through a closed mapping checked against actual rendered jobs.
+Native guards authenticate exact source, workflow, run and attempt; aggregate `queued` or `in_progress` requires no conclusion plus the unique expected job executing with no conclusion. Only immutable locators are cached; subsequent guards fetch the individual job again. Historical signed-run evidence remains separate from the current publisher, recovery or tap caller's authority.
 ### Workflow YAML sharing (checked 2026-10-19)
 
 GitHub's official [workflow reuse reference](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#yaml-anchors-and-aliases)

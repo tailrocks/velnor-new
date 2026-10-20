@@ -87,6 +87,16 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
                 OriginalVerification::RetainedRun { .. }
             ),
         )?;
+        if matches!(
+            &self.original_verification,
+            OriginalVerification::RetainedRun { .. }
+        ) {
+            super::recovery::promotion_context::Invocation::from_env()?.authenticate_recovery(
+                self.signed.plan(),
+                &self.api,
+                self.receipt.repository.id,
+            )?;
+        }
         self.verify_remote_repository()?;
         if self.receipt.channel == PackageReleaseChannel::Stable {
             self.api.verify_release_channel_environment(

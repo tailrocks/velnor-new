@@ -1,8 +1,8 @@
 //! Source-free version data admission for a static native release policy.
 
 use super::{
-    github::{GitHubApi, GitRefResponse, WorkflowRunResponse, sha256},
-    run_identity::{RunSource, run_matches},
+    github::{GitHubApi, GitRefResponse, sha256},
+    run_identity::{CurrentRun, RunSource, release_job_name},
 };
 use crate::{OrchestratorError, internal::internal};
 use serde::{Deserialize, Serialize};
@@ -150,25 +150,17 @@ fn authenticate(
         sha: &context.source_sha,
         branch: &plan.default_branch,
     };
-    for run in [
-        api.workflow_run(context.run_id, context.run_attempt)?,
-        api.get_json::<WorkflowRunResponse>(
-            &api.route(&format!("actions/runs/{}", context.run_id)),
-        )?,
-    ] {
-        if !run_matches(
-            &run,
-            &workflow,
-            context.run_id,
-            context.run_attempt,
+    let job = release_job_name(plan, &required("GITHUB_JOB")?)?;
+    api.verify_current_role(
+        &CurrentRun {
+            id: context.run_id,
+            attempt: context.run_attempt,
             source,
-            plan.channel.event().as_str(),
-        ) || run.status.as_deref() != Some("in_progress")
-            || run.conclusion.is_some()
-        {
-            return Err(internal("release_policy_workflow_authority"));
-        }
-    }
+            workflow: &workflow,
+            event: plan.channel.event().as_str(),
+        },
+        &job,
+    )?;
     let head: GitRefResponse = api.get_json(&api.route(&format!(
         "git/ref/heads/{}",
         super::github::encode_segment(&plan.default_branch)

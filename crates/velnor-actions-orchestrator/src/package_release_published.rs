@@ -143,6 +143,17 @@ fn authenticated_api(
         || env::var("GITHUB_RUN_ATTEMPT").ok().as_deref()
             != Some(receipt.workflow.run_attempt.to_string().as_str());
     api.verify_release_run(receipt, retained)?;
+    if retained {
+        let invocation = super::recovery::promotion_context::Invocation::from_env()?;
+        if invocation.continuation(signed.plan()) {
+            invocation.authenticate_continuation(signed.plan(), &api, receipt.repository.id)?;
+        } else {
+            invocation.authenticate_recovery(signed.plan(), &api, receipt.repository.id)?;
+        }
+    } else {
+        api.verify_direct_release_caller(signed.plan(), receipt)?;
+    }
+
     api.verify_ci_identity(
         receipt.source.ci_run_id,
         receipt.source.ci_run_attempt,

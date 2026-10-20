@@ -10,8 +10,14 @@ use velnor_actions_contract::{
     package_release::PackageReleaseReceipt,
 };
 
+#[path = "package_release_active_job.rs"]
+mod active_job;
 #[path = "package_release_run_identity_cache.rs"]
 mod cache;
+pub(super) use active_job::CurrentRun;
+#[path = "package_release_active_role.rs"]
+mod active_role;
+pub(super) use active_role::{continuation_job_name, release_job_name};
 pub(super) use cache::RunIdentityCache;
 
 #[derive(Clone, Copy)]
@@ -75,7 +81,33 @@ impl GitHubApi {
         )?;
         let run: WorkflowRunResponse =
             self.get_json(&self.route(&format!("actions/runs/{}", receipt.workflow.run_id)))?;
-        Self::verify_release_run_response(receipt, retained, &run, &workflow)
+        if retained {
+            return Self::verify_release_run_response(receipt, true, &run, &workflow);
+        }
+        let identity = CurrentRun {
+            id: receipt.workflow.run_id,
+            attempt: receipt.workflow.run_attempt,
+            source: RunSource {
+                repository_id: receipt.repository.id,
+                sha: &receipt.source.commit_sha,
+                branch: &receipt.source.default_branch,
+            },
+            workflow: &workflow,
+            event: receipt.channel.event().as_str(),
+        };
+        if !run_matches(
+            &run,
+            &workflow,
+            identity.id,
+            identity.attempt,
+            identity.source,
+            identity.event,
+        ) || !matches!(run.status.as_deref(), Some("queued" | "in_progress"))
+            || run.conclusion.is_some()
+        {
+            return Err(internal("package_original_run_identity_mismatch"));
+        }
+        self.require_active_job(&identity, "Publish authenticated channel release")
     }
 
     fn verify_release_run_response(
@@ -96,9 +128,12 @@ impl GitHubApi {
             receipt.workflow.run_attempt,
             source,
             receipt.channel.event().as_str(),
-        ) || run.status.as_deref() != Some(if retained { "completed" } else { "in_progress" })
-            || (!retained && run.conclusion.is_some())
-        {
+        ) || if retained {
+            run.status.as_deref() != Some("completed")
+        } else {
+            !matches!(run.status.as_deref(), Some("queued" | "in_progress"))
+                || run.conclusion.is_some()
+        } {
             return Err(internal("package_original_run_identity_mismatch"));
         }
         Ok(())
