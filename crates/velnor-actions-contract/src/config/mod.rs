@@ -6,6 +6,7 @@ mod actions;
 mod agents;
 mod binary_release;
 mod build_task;
+mod bun;
 mod check_receipt_budget;
 mod dco;
 mod discovery;
@@ -54,6 +55,10 @@ pub use binary_release::{
 };
 pub use build_task::{
     BuildTask, BuildTaskRunner, BuildTaskXcodeCapability, is_valid_build_tool_key,
+};
+pub use bun::{
+    BUN_JOB_PREFIX, BunBrowser, BunInputRule, BunMemberConfig, BunStackConfig, DEFAULT_BUN_SCRIPTS,
+    MAX_BUN_TIMEOUT_MINUTES, is_valid_member_name, is_valid_script_name,
 };
 pub use check_receipt_budget::{
     MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES, MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,

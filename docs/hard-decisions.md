@@ -266,6 +266,42 @@ project-declared version into any generated file, loading the project's
 Mise config (or trusting it) in a generated step to resolve versions, or
 letting a Velnor pin override a project declaration.
 
+## 6. One job per Bun workspace member with parallel script steps
+
+**Decision.** Each Bun workspace member owns exactly one generated CI job named
+`Bun / <package name>` (job id `bun-<slug>`, for example
+`Bun / @chainargos/ui`). A single-package root (no `workspaces`) is one member.
+The job prepares checkout, pinned tools and the dependency install once; the
+member's `package.json` scripts (`typecheck`, `lint`, `test`, `build` by
+default) then run as parallel steps (`background: true` members joined by one
+`wait-all`). The only accepted JavaScript lockfile is the text `bun.lock`.
+Specification: [Bun contract](proposed/bun-contract.md).
+
+**Status.** Adopted per the split brief; owner may revisit. It extends decision
+1 to a new stack.
+
+**Rationale.** Decision 1's rationale holds for Bun: checkout, tool setup and
+`bun install` are paid once per job and the independent checks overlap. A
+workspace member is the unit whose scripts share one `node_modules` view and
+whose affected selection is exact (its directory plus its `workspace:`
+dependents), so a one-member change does not run the other members. Foreign
+lockfiles (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, binary
+`bun.lockb`) fail generation instead of adding a second package-manager
+adapter.
+
+**Invariants.**
+
+- Repository scripts never see a credential. The registry phase of
+  `bun install --ignore-scripts` is the only step that holds
+  `GITHUB_TOKEN` with `packages: read` (decision 7), and it reads a
+  Velnor-written `bunfig.toml`, never the repository's registry settings.
+- Generation fails on a repository `bunfig.toml` that sets a registry,
+  scope, token or certificate (`bunfig_registry_override`).
+
+**Must not be reintroduced without owner approval:** a second package-manager
+adapter, one shared job for several members, scripts run before the install
+credential is gone, or a repository-controlled registry in the install phase.
+
 ## 7. Private dependency credentials
 
 **Decision.** A GitHub App installation token (`contents: read`, an exact

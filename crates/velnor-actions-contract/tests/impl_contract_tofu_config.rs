@@ -136,6 +136,7 @@ fn absent_tofu_table_stays_valid_and_schema_stable() {
         ignore: Vec::new(),
         rust: None,
         tofu: None,
+        bun: None,
     };
     assert!(stacks.validate("config.toml").is_ok());
     let rendered = serde_json::to_string(&stacks).expect("serializes");
@@ -170,12 +171,14 @@ fn tofu_is_a_registered_ignorable_stack() {
         ignore: vec!["tofu".to_owned()],
         rust: None,
         tofu: None,
+        bun: None,
     };
     assert!(stacks.validate("config.toml").is_ok());
     let stacks = StacksConfig {
         ignore: vec!["cobol".to_owned()],
         rust: None,
         tofu: None,
+        bun: None,
     };
     let err = stacks.validate("config.toml").expect_err("bogus id fails");
     assert!(err.to_string().contains("unknown_stack_id"), "{err}");

@@ -2,6 +2,7 @@
   "version": 1,
   "groups": {
     "velnor-actions-actionlint": "library",
+    "velnor-actions-bun": "library",
     "velnor-actions-cli": "tool",
     "velnor-actions-contract": "library",
     "velnor-actions-mise": "library",
