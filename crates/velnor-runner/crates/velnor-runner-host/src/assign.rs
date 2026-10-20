@@ -92,6 +92,7 @@ mod tests {
 
     fn job(kind: InnerKind, request_id: Option<i64>, job_id: Option<&str>) -> InnerJob {
         InnerJob {
+            source: velnor_runner_github::SourceMetadata::default(),
             kind,
             request_id,
             job_id: job_id.map(str::to_owned),

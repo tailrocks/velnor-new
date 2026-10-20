@@ -4,9 +4,9 @@
 mod regwire;
 
 use velnor_runner_github::{
-    CAPACITY_HEADER, Method, ScaleSetById, ScaleSetByName, ScaleSetCreate, ScaleSetFound,
-    SessionError, WireError, admin_token_is_fresh, create_runner_scale_set, get_runner_scale_set,
-    get_runner_scale_set_by_id, http_create_body, product_create_labels,
+    CAPACITY_HEADER, CreateLabel, Method, ScaleSetById, ScaleSetByName, ScaleSetCreate,
+    ScaleSetFound, SessionError, WireError, admin_token_is_fresh, create_runner_scale_set,
+    get_runner_scale_set, get_runner_scale_set_by_id, http_create_body, product_create_labels,
 };
 
 use regwire::{Script, header, show};
@@ -17,6 +17,10 @@ const ADMIN: &str = "admin-secret-canary";
 fn labels() -> String {
     r#"[{"name":"velnor","type":"System"},{"name":"ubuntu-26.04-scale-set","type":"System"}]"#
         .to_owned()
+}
+
+fn product_expected_labels() -> [String; 2] {
+    ["velnor".to_owned(), NAME.to_owned()]
 }
 
 fn one_set(id: i64) -> String {
@@ -30,14 +34,27 @@ fn page(count: i64, value: &str) -> String {
     format!(r#"{{"count":{count},"value":{value}}}"#)
 }
 
+fn set_with_labels(id: i64, name: &str, names: &[&str]) -> String {
+    let labels = names
+        .iter()
+        .map(|name| format!(r#"{{"name":"{name}","type":"System"}}"#))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        r#"{{"id":{id},"name":"{name}","labels":[{labels}],"RunnerSetting":{{"disableUpdate":true}}}}"#
+    )
+}
+
 #[test]
 fn get_count_distinguishes_missing_duplicate_and_malformed() -> Result<(), String> {
     let mut missing = Script::once(200, &page(0, "[]"));
+    let expected_labels = product_expected_labels();
     let found = show(get_runner_scale_set(
         &mut missing,
         &ScaleSetByName {
             runner_group_id: 4,
             name: NAME,
+            expected_labels: &expected_labels,
             admin_token: ADMIN,
         },
     ))?;
@@ -56,11 +73,13 @@ fn get_count_distinguishes_missing_duplicate_and_malformed() -> Result<(), Strin
 
     let duplicate = format!("[{},{}]", one_set(1), one_set(2));
     let mut many = Script::once(200, &page(2, &duplicate));
+    let expected_labels = product_expected_labels();
     let err = get_runner_scale_set(
         &mut many,
         &ScaleSetByName {
             runner_group_id: 4,
             name: NAME,
+            expected_labels: &expected_labels,
             admin_token: ADMIN,
         },
     );
@@ -75,6 +94,7 @@ fn get_count_distinguishes_missing_duplicate_and_malformed() -> Result<(), Strin
         &ScaleSetByName {
             runner_group_id: 4,
             name: NAME,
+            expected_labels: &expected_labels,
             admin_token: ADMIN,
         },
     );
@@ -83,13 +103,57 @@ fn get_count_distinguishes_missing_duplicate_and_malformed() -> Result<(), Strin
 }
 
 #[test]
+fn configured_selector_checks_the_live_name_and_exact_labels() -> Result<(), String> {
+    let name = "sea-integration-ubuntu-26.04-scale-set";
+    let expected_labels = ["velnor".to_owned(), name.to_owned()];
+    let response = set_with_labels(12, name, &["velnor", name]);
+    let mut accepted = Script::once(200, &page(1, &format!("[{response}]")));
+    let found = show(get_runner_scale_set(
+        &mut accepted,
+        &ScaleSetByName {
+            runner_group_id: 7,
+            name,
+            expected_labels: &expected_labels,
+            admin_token: ADMIN,
+        },
+    ))?;
+    let ScaleSetFound::Found(view) = found else {
+        return Err("configured set was not found".to_owned());
+    };
+    assert_eq!(view.name, name);
+    assert_eq!(
+        accepted.seen[0].query.as_deref(),
+        Some("api-version=6.0-preview&name=sea-integration-ubuntu-26.04-scale-set&runnerGroupId=7")
+    );
+
+    let wrong_labels = set_with_labels(12, name, &["velnor", "ubuntu-26.04-scale-set"]);
+    let mut rejected = Script::once(200, &page(1, &format!("[{wrong_labels}]")));
+    let result = get_runner_scale_set(
+        &mut rejected,
+        &ScaleSetByName {
+            runner_group_id: 7,
+            name,
+            expected_labels: &expected_labels,
+            admin_token: ADMIN,
+        },
+    );
+    assert_eq!(
+        result,
+        Err(SessionError::Wire(WireError::RegistrationRejected))
+    );
+    Ok(())
+}
+
+#[test]
 fn get_query_percent_encodes_reserved_bytes() -> Result<(), String> {
     let mut script = Script::once(200, &page(0, "[]"));
+    let expected_labels = product_expected_labels();
     let found = show(get_runner_scale_set(
         &mut script,
         &ScaleSetByName {
             runner_group_id: 3,
             name: "a b/c",
+            expected_labels: &expected_labels,
             admin_token: ADMIN,
         },
     ))?;
@@ -141,6 +205,39 @@ fn create_sends_product_labels_and_preview_query() -> Result<(), String> {
 }
 
 #[test]
+fn create_uses_the_configured_selector_labels() -> Result<(), String> {
+    let name = "sea-integration-ubuntu-26.04-scale-set";
+    let expected = set_with_labels(13, name, &["velnor", name]);
+    let mut script = Script::once(200, &expected);
+    let labels = [
+        CreateLabel {
+            name: "velnor".to_owned(),
+            label_type: "System".to_owned(),
+        },
+        CreateLabel {
+            name: name.to_owned(),
+            label_type: "System".to_owned(),
+        },
+    ];
+    let created = show(create_runner_scale_set(
+        &mut script,
+        &ScaleSetCreate {
+            name,
+            runner_group_id: 7,
+            labels: &labels,
+            admin_token: ADMIN,
+        },
+    ))?;
+    assert_eq!(created.name, name);
+    let body = String::from_utf8(script.seen[0].body.clone()).map_err(|_| "body")?;
+    assert_eq!(
+        body,
+        r#"{"name":"sea-integration-ubuntu-26.04-scale-set","runnerGroupId":7,"labels":[{"type":"System","name":"velnor"},{"type":"System","name":"sea-integration-ubuntu-26.04-scale-set"}],"RunnerSetting":{"disableUpdate":true}}"#
+    );
+    Ok(())
+}
+
+#[test]
 fn empty_create_labels_use_the_set_name() -> Result<(), String> {
     let mut script = Script::once(500, "");
     let err = create_runner_scale_set(
@@ -180,11 +277,13 @@ fn empty_create_labels_use_the_set_name() -> Result<(), String> {
 #[test]
 fn get_by_id_decodes_and_accepts() -> Result<(), String> {
     let mut script = Script::once(200, &one_set(9));
+    let expected_labels = product_expected_labels();
     let view = show(get_runner_scale_set_by_id(
         &mut script,
         &ScaleSetById {
             scale_set_id: 9,
             name: NAME,
+            expected_labels: &expected_labels,
             admin_token: ADMIN,
         },
     ))?;

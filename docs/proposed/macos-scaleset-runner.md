@@ -106,7 +106,7 @@ cleanup is proven.
 ## 4. Protocol
 
 Authority: `actions/scaleset` `e6daac702355cdb5b880b4fbdcf6d85dcd9e48e5`
-(`client.go`, `session_client.go`, `listener/listener.go`). Do not vendor the
+(`client.go`, `session_client.go`, `listener/listener.go`, `types.go`). Do not vendor the
 Go module.
 
 - Actions service base from registration. Query `api-version=6.0-preview`.
@@ -121,9 +121,18 @@ Go module.
 - Poll header `X-ScaleSetMaxCapacity` is total capacity, not free slots.
 - HTTP 202 is an empty poll, not an error, and is not acknowledged.
 - Queue envelope `messageType` must be `RunnerScaleSetJobMessages`. `body` is a
-  string containing a JSON array. Inner kinds: `JobAvailable`, `JobAssigned`,
-  `JobStarted`, `JobCompleted`. Unknown inner kinds are visible and not silently
-  acknowledged.
+  string containing a JSON array. A missing or null `body` decodes as the empty
+  string, as Go's `runnerScaleSetMessageResponse.Body string` does, so a
+  statistics-only message is accepted with no jobs. Inner kinds: `JobAvailable`,
+  `JobAssigned`, `JobStarted`, `JobCompleted`. Unknown inner kinds are visible
+  and not silently acknowledged.
+- `JobMessageBase.JobID` is a Go `string`: the native `jobId` is an opaque,
+  bounded (256 bytes, no control characters) identifier, not a numeric
+  workflow-job API id. A JSON number is still accepted when positive.
+- Each job message keeps its source values `ownerName`, `repositoryName`,
+  `jobWorkflowRef`, `workflowRunId` and `eventName` (`SourceMetadata`). A
+  missing value stays absent; `SourceMetadata::complete` returns them only when
+  every value is present, non-blank and the run id is positive.
 - `statistics` on the envelope may be null or omitted. Both mean absent. A
   present object always carries the seven counters. `totalAssignedJobs` is
   population authority. Do not add it to local reservations.
@@ -131,7 +140,12 @@ Go module.
   not greater than 0. Synthetic initial id `-1` is not acknowledged.
 - Create sends `RunnerSetting` (Pascal-case JSON key) with `disableUpdate: true`.
   Re-read after create, adopt, and create races. Refuse the set if the server
-  does not keep updates disabled, or if name, scope, or labels disagree.
+  does not keep updates disabled, or if name, scope, or labels disagree. Get by
+  name or id takes the caller's expected selector labels: the server's label
+  set must equal them exactly (order-free, no duplicates), must include
+  `velnor` and the set name, and must never include the hosted `ubuntu-26.04`
+  label. A created set is checked against the labels it was created with (the
+  set name alone when none were sent).
 - 401 on session calls refreshes once, single-flight. 403 is an authorization
   defect, not an infinite retry.
 - Acknowledge only when the batch is replay-safe. Never acknowledge an

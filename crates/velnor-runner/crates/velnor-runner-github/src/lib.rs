@@ -19,8 +19,9 @@ pub use paths::{
     scale_set_path,
 };
 pub use poll::{
-    InnerJob, InnerKind, MAX_POLL_BODY_BYTES, MAX_POLL_MESSAGES, ParsedBatch, Poll,
-    QuarantinedBatch, Statistics, may_ack, parse_inner_messages, parse_poll,
+    CompleteSourceMetadata, InnerJob, InnerKind, MAX_POLL_BODY_BYTES, MAX_POLL_MESSAGES,
+    ParsedBatch, Poll, QuarantinedBatch, SourceMetadata, Statistics, may_ack, parse_inner_messages,
+    parse_poll,
 };
 pub use refresh::{RefreshGate, StatusClass, classify_status};
 pub use registration::{
