@@ -15,6 +15,7 @@ mod host_container;
 mod image_task;
 mod mise;
 mod preview_policy;
+mod private_sources;
 /// Run-time references to project-declared tool versions (hard decision 5).
 pub mod project_tool_refs;
 /// Generated run-time resolver for project-declared versions (hard decision 5).
@@ -75,6 +76,11 @@ pub use image_task::{NativeImageCachePolicy, NativeImagePlatform, NativeImageTas
 pub use mise::{
     CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind,
     MiseCheck, is_valid_check_system_build, is_valid_check_system_version, is_valid_mise_task_name,
+};
+pub use private_sources::{
+    DEPS_LOCK_PATH, PrivateAssetSource, PrivateGitTreeSource, PrivateSourcesConfig,
+    is_valid_asset_name, is_valid_extract_to, is_valid_github_owner, is_valid_github_repo_name,
+    is_valid_source_id, is_valid_source_tag, split_repository,
 };
 pub use qualified_tools::{
     QualifiedCargoInstallation, QualifiedTool, QualifiedToolArtifact, QualifiedToolArtifactRecipe,
@@ -167,6 +173,9 @@ pub struct VelnorConfig {
     /// Optional downstream package promotion policy.
     #[serde(default, skip_serializing_if = "DistributionConfig::is_empty")]
     pub distribution: DistributionConfig,
+    /// Private cross-repository dependency credentials (`[private_sources]`, HD-7).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub private_sources: Option<PrivateSourcesConfig>,
 }
 
 impl VelnorConfig {
@@ -223,6 +232,9 @@ impl VelnorConfig {
             }
         }
         self.distribution.validate(file)?;
+        if let Some(private_sources) = &self.private_sources {
+            private_sources.validate(file)?;
+        }
         self.check_distribution_source(file)?;
         self.check_preview_tools(file)?;
         self.check_crate_build_jobs(file)?;

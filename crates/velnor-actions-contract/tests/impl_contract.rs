@@ -18,6 +18,7 @@ fn config_validation_reports_key_paths() {
         checks: Vec::new(),
         qualified_tools: Vec::new(),
         distribution: velnor_actions_contract::config::DistributionConfig::default(),
+        private_sources: None,
         schema: 1,
         workflow: WorkflowConfig {
             name: "CI".to_owned(),
@@ -110,6 +111,7 @@ fn runner_label_uses_exact_catalog_match() {
         checks: Vec::new(),
         qualified_tools: Vec::new(),
         distribution: velnor_actions_contract::config::DistributionConfig::default(),
+        private_sources: None,
         schema: 1,
         workflow: velnor_actions_contract::WorkflowConfig {
             name: "CI".to_owned(),

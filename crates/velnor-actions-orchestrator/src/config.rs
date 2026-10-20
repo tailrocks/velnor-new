@@ -129,6 +129,9 @@ struct PartialConfig {
     /// Optional downstream package promotion.
     #[serde(default)]
     distribution: velnor_actions_contract::config::DistributionConfig,
+    /// Private cross-repository dependency credentials (HD-7).
+    #[serde(default)]
+    private_sources: Option<velnor_actions_contract::config::PrivateSourcesConfig>,
     /// Optional exact `X.Y.Z` version overrides for generator-managed tools.
     #[serde(default)]
     tools: velnor_actions_contract::ToolsConfig,
@@ -234,6 +237,7 @@ impl PartialConfig {
             checks: self.checks,
             qualified_tools: self.qualified_tools,
             distribution: self.distribution,
+            private_sources: self.private_sources,
             tools: self.tools,
         })
     }

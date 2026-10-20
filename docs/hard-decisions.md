@@ -249,3 +249,43 @@ pin.
 project-declared version into any generated file, loading the project's
 Mise config (or trusting it) in a generated step to resolve versions, or
 letting a Velnor pin override a project declaration.
+
+## 7. Private dependency credentials
+
+**Decision.** A GitHub App installation token (`contents: read`, an exact
+repository allowlist derived from the Cargo.lock git sources and
+`.velnor/deps.lock`) is minted, used and **revoked** inside Velnor-owned
+fetch steps before any repository-controlled step runs. `GITHUB_TOKEN` with
+`packages: read` is used only in the registry phase of
+`bun install --ignore-scripts`. No credential reaches Gradle, Cargo build
+scripts, Bun lifecycle scripts or Mise tasks. Maven artifacts for private
+consumers ship as release-asset bundles fetched with the App token, because
+GitHub Packages Maven cannot serve other private repositories with a scoped
+credential. Specification:
+[private sources contract](proposed/private-sources-contract.md).
+
+**Status.** Adopted per the split brief; owner may revisit. Recorded
+2026-10-20 together with the release-asset Maven bundle choice. The
+`velnor-deps` App does not exist yet; creating it is an owner blocker.
+
+**Rationale.** Without it a private sibling dependency forces a long-lived
+broad credential (a machine-user classic PAT or per-producer deploy keys)
+into jobs that run repository code. A token that is scoped to the exact lock
+closure and dead before repository code starts leaves a compromised
+dependency or build script nothing to steal.
+
+**Invariants.**
+
+- The token never coexists with repository-controlled code: mint, fetch and
+  revoke form one block ahead of every such step.
+- Only the `PrivateFetch` credential policy keeps
+  `VELNOR_PRIVATE_FETCH_TOKEN` and `VELNOR_NPM_READ_TOKEN`; every other
+  policy strips every `*_TOKEN`.
+- Fork pull requests and `pull_request_target` never receive the token;
+  an unavailable credential fails the job closed.
+
+**Must not be reintroduced without owner approval:** a long-lived or
+repository-wide credential for dependency fetch (classic PAT, deploy keys),
+a credential binding in any step other than the fetch step, a fetch that
+runs build scripts or repository hooks while the token is live, or
+`pull_request_target` to obtain secrets.

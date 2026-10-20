@@ -11,6 +11,7 @@ pub mod candidate_manifest;
 pub mod canonical;
 pub mod closure;
 pub mod config;
+pub mod deps_lock;
 pub mod discover;
 pub mod errors;
 pub mod extension_schemas;
