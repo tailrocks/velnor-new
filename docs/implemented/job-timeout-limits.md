@@ -17,8 +17,10 @@ Crate jobs (the one job per Rust crate and each OpenTofu root job) use
 cold builds can exceed five minutes before every check finishes; raising this
 one value gives every crate job the same larger literal bound without changing
 the one-job-per-crate topology. Parallel check steps are linked to the job's
-cancellation, so the bound covers the whole job. Control jobs (plan, required, validators, candidate, release and
-publish) keep the five-minute default.
+cancellation, so the bound covers the whole job. Control jobs (plan, required,
+validators, candidate, release and publish) keep the five-minute default except
+that `[workflow] plan_timeout_minutes` may set the planning job independently
+(default `5`, bounded `1..=360`). It does not change other control-job budgets.
 
 The three official generator compiler jobs (Linux, macOS ARM64, and macOS Intel)
 and the official `velnor-host` binary compiler job use ten minutes. This bound
@@ -36,6 +38,7 @@ checks, evidence, retries, permissions, or protected approval.
 ```toml
 [workflow]
 crate_timeout_minutes = 20 # every Rust crate job and OpenTofu root job
+plan_timeout_minutes = 15  # planning job only
 ```
 
 The contract owns the range and defaults. Typed workflow factories use that

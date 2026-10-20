@@ -64,6 +64,10 @@ root job). The default is `5`; accepted values are `1..=360`. Zero or more than
 360 is rejected, never clamped. See
 [job timeout limits](implemented/job-timeout-limits.md).
 
+`[workflow] plan_timeout_minutes` independently sets the literal timeout of
+the planning job, with the same default and accepted range. It does not alter
+the required, validator, crate, or other job budgets.
+
 ## 3. Pull requests test only what they affect
 
 **Decision.** On `pull_request` (fork pull requests included), the plan

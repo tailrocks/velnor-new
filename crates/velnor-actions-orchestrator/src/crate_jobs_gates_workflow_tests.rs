@@ -14,7 +14,7 @@ fn complete_workflow_runs_one_crate_job_with_parallel_checks() {
     std::fs::create_dir(root.path().join(".velnor")).expect("config directory");
     std::fs::write(
         root.path().join(".velnor/config.toml"),
-        "schema = 1\n[workflow]\npolicy = 'velnor-repository-v1'\n",
+        "schema = 1\n[workflow]\npolicy = 'velnor-repository-v1'\nplan_timeout_minutes = 15\n",
     )
     .expect("repository config");
     let config = crate::config::load_config(root.path()).expect("default config");
@@ -46,6 +46,7 @@ fn complete_workflow_runs_one_crate_job_with_parallel_checks() {
     .expect("stage exact helper in the crate job");
     let owner = "rust-demo";
     let jobs = &workflow.ir.jobs;
+    assert_plan_timeout_is_independent(jobs);
     assert_eq!(jobs[owner].needs, ["plan"]);
     assert_eq!(jobs[owner].display_name, "Rust / demo");
     for obsolete in ["rust-demo-lint", "rust-demo-tests", "rust-demo-docs"] {
@@ -91,6 +92,15 @@ fn complete_workflow_runs_one_crate_job_with_parallel_checks() {
     assert!(inventory.inventory.iter().any(|job| job == owner));
     assert_unsuccessful_owners_fail(&inventory, [owner]);
     assert_eq!(emitted.values().collect::<BTreeSet<_>>().len(), 1);
+}
+
+fn assert_plan_timeout_is_independent(
+    jobs: &std::collections::BTreeMap<String, velnor_actions_contract::Job>,
+) {
+    assert_eq!(jobs["plan"].timeout_minutes.minutes(), 15);
+    assert_eq!(jobs["actionlint"].timeout_minutes.minutes(), 5);
+    assert_eq!(jobs["required"].timeout_minutes.minutes(), 5);
+    assert_eq!(jobs["rust-demo"].timeout_minutes.minutes(), 5);
 }
 
 fn fixture_generator_lock() -> velnor_actions_contract::GeneratorLock {
