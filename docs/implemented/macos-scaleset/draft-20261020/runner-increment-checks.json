@@ -182,6 +182,18 @@
       "log_sha256": "3823f070bab32e5716744c47ae59266722d74157aacac820a626159bcdb20d59",
       "author": "/root",
       "reviewer": "/root/execution_source_security_review"
+    },
+    {
+      "result": "PASS",
+      "source_commit": "021d7d39db951e40e365f2970b182ca295175cb9",
+      "command": "CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/shipping-hook-target-20261020 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host --lib -E 'test(v29_storage_path_migration) | test(v29_attachment_with_legacy_paths) | test(persisted_witness_rejects) | test(orphan_cleanup_observer_operation) | test(one_source_backed_job_facts_publication) | test(runtime_identity_tests) | test(publication::request::tests) | test(accepts_the_utility_success_record) | test(bootstrap::storage::test_fixtures) | test(cleanup_root_accessor)'",
+      "exit_status": 0,
+      "nextest_run": "27c698c0-47d2-4a61-b025-1fec6c77ba30",
+      "passed": 18,
+      "log": "cleanup-metadata-shipping-post-hook-20261020.log",
+      "log_sha256": "73e317c1d2c19675594352d2c5de67489b3c81c0159d25cf96054aaf7d39877f",
+      "author": "/root",
+      "reviewer": "/root/execution_source_security_review"
     }
   ],
   "broader_pair_check": {
