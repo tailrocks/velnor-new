@@ -58,6 +58,7 @@ pub mod publish_render;
 pub mod publish_roles;
 pub mod publish_scripts;
 pub mod publish_spec;
+mod qualification_cache_composites;
 pub mod release_checkout_gates;
 pub mod release_config;
 pub mod release_gates;

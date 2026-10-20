@@ -1,8 +1,14 @@
+#[path = "cache_doctor_qualification_tests.rs"]
+mod qualification_tests;
+
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::cache_family::{
     CacheFamily, SOURCES_KEY_PLAN_EXPR, SOURCES_KEY_STEP_EXPR, SOURCES_RESTORE_KEYS_PLAN_EXPR,
     SOURCES_RESTORE_KEYS_STEP_EXPR, SOURCES_SAVE_CONDITION,
+};
+use velnor_actions_contract::workflow::{
+    QualificationCacheLayer, QualificationCacheStepId, QualificationCacheStepStage,
 };
 use velnor_actions_contract::{Job, JobTimeout, PullRequestCachePolicy, Step, StepKind};
 

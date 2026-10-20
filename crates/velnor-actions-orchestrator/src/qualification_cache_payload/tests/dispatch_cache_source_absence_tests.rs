@@ -79,7 +79,7 @@ fn root_set_snapshot_rejects_unsafe_missing_root_before_snapshot_completion() {
     fs::set_permissions(&unsafe_parent, fs::Permissions::from_mode(0o777))
         .expect("writable ancestor");
     let roots = CacheRootSet {
-        matrix_key: "source-absence".to_owned(),
+        owner_id: "source-absence".to_owned(),
         layer: velnor_actions_contract::workflow::QualificationCacheLayer::MiseTools,
         roots: vec![
             observe(

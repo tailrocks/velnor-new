@@ -6,9 +6,10 @@ use super::payload::{
     valid_tools_cache_identity,
 };
 use super::{
-    NORMAL_TOOLS_CACHE_EXPORT_OPERATION, NORMAL_TOOLS_CACHE_IMPORT_OPERATION,
-    NORMAL_TOOLS_CACHE_STAGE_OPERATION, PRIVATE_FETCH_OPERATION, PRIVATE_REVOKE_OPERATION,
-    PRIVATE_TOKEN_MINT_ACTION_PREFIX, TOOLS_CACHE_RESTORE_USES,
+    BUN_REGISTRY_INSTALL_OPERATION, NORMAL_TOOLS_CACHE_EXPORT_OPERATION,
+    NORMAL_TOOLS_CACHE_IMPORT_OPERATION, NORMAL_TOOLS_CACHE_STAGE_OPERATION,
+    PRIVATE_FETCH_OPERATION, PRIVATE_REVOKE_OPERATION, PRIVATE_TOKEN_MINT_ACTION_PREFIX,
+    TOOLS_CACHE_RESTORE_USES,
 };
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
@@ -126,26 +127,47 @@ pub enum StepRole {
     PrivateFetch,
     /// Revocation of the private-source token, run `always()` (HD-7).
     PrivateRevoke,
-    /// Step that writes the measured runtime identity file for qualification cache.
+    /// Producer of the measured qualification runtime identity file.
     QualificationRuntimeIdentity,
-    /// Step that binds one job ID and cache layer.
-    QualificationCacheBind,
-    /// Restore action for one job ID and cache layer.
-    QualificationCacheRestore,
-    /// Import step for one plan lane and cache layer.
-    QualificationCacheImport,
-    /// Read-only check of the cache service during a cache operation.
-    QualificationCacheObservation,
-    /// Export step for one job ID and cache layer.
-    QualificationCacheExport,
-    /// Save action for one job ID and cache layer.
-    QualificationCacheSave,
-    /// Writes the qualification cache receipt in the required aggregation job.
-    QualificationCacheReceipt,
-    /// Reads the configured roots for one cache layer.
+    /// Producer of bounded cache-root observations for one owner and layer.
     QualificationCacheRoots,
     /// Bun registry install using the workflow-scoped npm token.
     BunRegistryInstall,
+    /// Binding of one emitted job owner and cache layer.
+    QualificationCacheBind,
+    /// Restore action for one emitted job owner and cache layer.
+    QualificationCacheRestore,
+    /// Import operation for one plan lane and cache layer.
+    QualificationCacheImport,
+    /// Read-only backend observation for one cache operation stage.
+    QualificationCacheObservation,
+    /// Export operation for one emitted job owner and cache layer.
+    QualificationCacheExport,
+    /// Save action for one emitted job owner and cache layer.
+    QualificationCacheSave,
+    /// Save action whose exact key and path are passed to the Finish composite.
+    /// Qualification cache receipt writer in the required aggregation job.
+    QualificationCacheReceipt,
+    /// Upload of the completed qualification cache receipt artifact.
+    QualificationCacheReceiptUpload,
+    /// Runtime identity measurement after cache import.
+    QualificationCacheRuntimeIdentityAfterImport,
+    /// Backend observation for restore or save lifecycle.
+    QualificationCacheCensus,
+    /// Import of one owner-layer cache payload.
+    QualificationCachePayloadImport,
+    /// Export of one owner-layer cache payload.
+    QualificationCachePayloadExport,
+    /// Immutable evidence for one owner-layer lifecycle.
+    QualificationCacheOwnerLayerEvidence,
+    /// Aggregate owner evidence before job artifact upload.
+    QualificationCacheOwnerAggregate,
+    /// Composite containing the cache setup and restore sequence.
+    QualificationCachePrepareComposite,
+    /// Composite immediately before one workflow-scope cache save.
+    QualificationCacheBeforeSaveComposite,
+    /// Composite immediately after one workflow-scope cache save.
+    QualificationCacheAfterSaveComposite,
 }
 
 impl StepRole {
@@ -177,6 +199,7 @@ impl StepRole {
             Self::PublishPlan
             | Self::MatrixReportUpload
             | Self::PublishFinal
+            | Self::QualificationCacheReceiptUpload
             | Self::PreseedUpload => action_has_prefix_for_kind(kind, "actions/upload-artifact@"),
             Self::ToolsCacheSave | Self::CargoSourcesSave => {
                 action_has_prefix_for_kind(kind, "actions/cache/save@")
@@ -196,6 +219,15 @@ impl StepRole {
             Self::TofuProvidersSave => super::super::step_protocol::valid_provider_save(kind),
             Self::PrivateTokenMint => matches!(kind,
                 StepKind::Action { uses, .. } if uses.starts_with(PRIVATE_TOKEN_MINT_ACTION_PREFIX)),
+            Self::QualificationCachePrepareComposite
+            | Self::QualificationCacheBeforeSaveComposite
+            | Self::QualificationCacheAfterSaveComposite => {
+                matches!(
+                    kind,
+                    StepKind::Action { uses, .. }
+                        if uses.starts_with("./.github/actions/qualification-cache-")
+                )
+            }
             Self::MbxCache => valid_mbx_cache(kind),
             Self::MbxVersionCheck | Self::MbxWorkspaceCleanup => {
                 matches!(kind, StepKind::Shell { .. })
@@ -243,6 +275,7 @@ impl StepRole {
             Self::MbxVersionCheck => Some(StepId::MbxReady),
             Self::CacheKeys => Some(StepId::CacheKeys),
             Self::PrivateTokenMint => Some(StepId::DepsToken),
+            Self::QualificationCacheReceipt => Some(StepId::QualificationCacheReceipt),
             _ => None,
         }
     }
@@ -266,6 +299,15 @@ impl StepRole {
             StepId::ToolsRestore => Self::ToolsCacheRestore,
             StepId::DepsToken => Self::PrivateTokenMint,
             StepId::QualificationCache(identity) => match identity.stage() {
+                super::super::step_id::QualificationCacheStepStage::RuntimeIdentity => {
+                    Self::QualificationRuntimeIdentity
+                }
+                super::super::step_id::QualificationCacheStepStage::RuntimeIdentityAfterImport => {
+                    Self::QualificationCacheRuntimeIdentityAfterImport
+                }
+                super::super::step_id::QualificationCacheStepStage::Roots => {
+                    Self::QualificationCacheRoots
+                }
                 super::super::step_id::QualificationCacheStepStage::Bind => {
                     Self::QualificationCacheBind
                 }
@@ -275,14 +317,37 @@ impl StepRole {
                 super::super::step_id::QualificationCacheStepStage::Save => {
                     Self::QualificationCacheSave
                 }
-                super::super::step_id::QualificationCacheStepStage::RuntimeIdentity => {
-                    Self::QualificationRuntimeIdentity
+                super::super::step_id::QualificationCacheStepStage::RestoreCensus
+                | super::super::step_id::QualificationCacheStepStage::SaveBeforeCensus
+                | super::super::step_id::QualificationCacheStepStage::SaveAfterCensus => {
+                    Self::QualificationCacheCensus
                 }
-                super::super::step_id::QualificationCacheStepStage::Roots => {
-                    Self::QualificationCacheRoots
+                super::super::step_id::QualificationCacheStepStage::Import => {
+                    Self::QualificationCachePayloadImport
+                }
+                super::super::step_id::QualificationCacheStepStage::Export => {
+                    Self::QualificationCachePayloadExport
+                }
+                super::super::step_id::QualificationCacheStepStage::OwnerLayerEvidence => {
+                    Self::QualificationCacheOwnerLayerEvidence
+                }
+                super::super::step_id::QualificationCacheStepStage::OwnerAggregate => {
+                    Self::QualificationCacheOwnerAggregate
+                }
+            },
+            StepId::QualificationCacheComposite(identity) => match identity.phase() {
+                super::super::step_id::QualificationCacheCompositePhase::Prepare => {
+                    Self::QualificationCachePrepareComposite
+                }
+                super::super::step_id::QualificationCacheCompositePhase::BeforeSave => {
+                    Self::QualificationCacheBeforeSaveComposite
+                }
+                super::super::step_id::QualificationCacheCompositePhase::AfterSave => {
+                    Self::QualificationCacheAfterSaveComposite
                 }
             },
             StepId::QualificationRuntimeIdentity => Self::QualificationRuntimeIdentity,
+            StepId::QualificationCacheReceipt => Self::QualificationCacheReceipt,
         }
     }
 }
@@ -297,13 +362,28 @@ fn internal_operation_for_role(role: StepRole) -> Option<&'static str> {
         StepRole::NormalToolsCacheExport => Some(NORMAL_TOOLS_CACHE_EXPORT_OPERATION),
         StepRole::PrivateFetch => Some(PRIVATE_FETCH_OPERATION),
         StepRole::PrivateRevoke => Some(PRIVATE_REVOKE_OPERATION),
-        StepRole::BunRegistryInstall => Some(super::BUN_REGISTRY_INSTALL_OPERATION),
-        StepRole::QualificationRuntimeIdentity => Some("observe-qualification-cache-runtime-v1"),
+        StepRole::BunRegistryInstall => Some(BUN_REGISTRY_INSTALL_OPERATION),
+        StepRole::QualificationRuntimeIdentity
+        | StepRole::QualificationCacheRuntimeIdentityAfterImport => {
+            Some("observe-qualification-cache-runtime-v1")
+        }
         StepRole::QualificationCacheRoots => Some("observe-qualification-cache-roots-v1"),
         StepRole::QualificationCacheBind => Some("bind-qualification-cache-v1"),
-        StepRole::QualificationCacheImport => Some("import-qualification-cache-payload-v1"),
-        StepRole::QualificationCacheObservation => Some("observe-qualification-cache-backend-v1"),
-        StepRole::QualificationCacheExport => Some("export-qualification-cache-payload-v1"),
+        StepRole::QualificationCacheImport | StepRole::QualificationCachePayloadImport => {
+            Some("import-qualification-cache-payload-v1")
+        }
+        StepRole::QualificationCacheObservation | StepRole::QualificationCacheCensus => {
+            Some("observe-qualification-cache-backend-v1")
+        }
+        StepRole::QualificationCacheExport | StepRole::QualificationCachePayloadExport => {
+            Some("export-qualification-cache-payload-v1")
+        }
+        StepRole::QualificationCacheOwnerLayerEvidence => {
+            Some("record-qualification-cache-owner-layer-v1")
+        }
+        StepRole::QualificationCacheOwnerAggregate => {
+            Some("aggregate-qualification-cache-owner-v1")
+        }
         StepRole::QualificationCacheReceipt => Some("write-qualification-cache-receipt-v1"),
         _ => None,
     }

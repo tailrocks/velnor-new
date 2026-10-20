@@ -31,6 +31,7 @@ pub use normal_tofu::{
 };
 #[path = "qualification_cache_payload/roots.rs"]
 mod roots;
+pub use roots::collect_owner_roots;
 #[path = "qualification_cache_payload/stage_paths.rs"]
 mod stage_paths;
 pub use stage_paths::{normal_tools_cache_stage_path, qualification_cache_stage_path};
@@ -270,6 +271,35 @@ pub fn import_qualification_cache_payload(
     })
 }
 
+/// Import a payload using the backend observation produced by the preceding
+/// fixed census operation.
+///
+/// # Errors
+///
+/// Gives an error when the action result, backend observation, staged payload,
+/// or root installation does not pass validation.
+pub fn import_qualification_cache_payload_with_backend_observation(
+    context: &QualificationCachePayloadContext<'_, '_>,
+    action: &CacheActionObservation,
+    observed: QualificationCacheBackendObservation,
+) -> Result<QualificationCachePayloadImport, &'static str> {
+    validate_action_observation(action)?;
+    let (binding, roots) = bind_context(context)?;
+    let proof = transfer::engine::import_payload(
+        &binding,
+        &roots,
+        context.binding.runner_temp,
+        action.hit,
+        action.matched_key.as_deref(),
+        &observed,
+    )?;
+    Ok(QualificationCachePayloadImport {
+        binding,
+        backend: observed,
+        proof,
+    })
+}
+
 fn bind_context(
     context: &QualificationCachePayloadContext<'_, '_>,
 ) -> Result<(QualificationCacheBindingOutputs, roots::CacheRootSet), &'static str> {
@@ -293,7 +323,7 @@ fn read_roots(
     root_environment: QualificationCacheRootEnvironment<'_>,
 ) -> Result<roots::CacheRootSet, &'static str> {
     let layer = roots::parse_layer(request.layer).ok_or("qualification_cache_roots_invalid")?;
-    let observed = roots::CacheRootSet::parse(roots_json, request.matrix_key, layer)?;
+    let observed = roots::CacheRootSet::parse(roots_json, request.owner_id, layer)?;
     let expected = roots::expected_paths_for_environment(layer, request.runner_temp, |name| {
         root_environment.value(name)
     })?;

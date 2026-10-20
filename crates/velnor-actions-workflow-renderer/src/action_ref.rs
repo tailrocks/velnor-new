@@ -30,6 +30,7 @@ pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
             | crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
     ) || TOOLS_CACHE_PRELUDE_USES.contains(&uses)
         || is_generated_provider_prelude(uses)
+        || is_qualification_cache_composite(uses)
         || is_crate_obligation_action(uses)
         || is_generated_declared_task(uses)
     {
@@ -57,6 +58,34 @@ pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
 
 /// Prefix for renderer-generated crate obligation composites.
 pub(crate) const CRATE_OBLIGATION_ACTION_PREFIX: &str = "./.github/actions/crate-obligation-";
+
+/// Local composite for one validated qualification-cache owner and phase.
+const QUALIFICATION_CACHE_COMPOSITE_PREFIX: &str = "./.github/actions/qualification-cache-";
+
+pub(crate) fn is_qualification_cache_composite(uses: &str) -> bool {
+    let Some(suffix) = uses.strip_prefix(QUALIFICATION_CACHE_COMPOSITE_PREFIX) else {
+        return false;
+    };
+    if let Some(owner) = suffix.strip_prefix("prepare-") {
+        return velnor_actions_contract::validate_job_id(owner).is_ok();
+    }
+    let Some((phase, rest)) = suffix.split_once('-') else {
+        return false;
+    };
+    if !matches!(phase, "before" | "after") {
+        return false;
+    }
+    let Some(rest) = rest.strip_prefix("save-") else {
+        return false;
+    };
+    let Some((layer, owner)) = rest.split_once('-') else {
+        return false;
+    };
+    matches!(
+        layer,
+        "mbx_objects" | "cargo_sources" | "mise_tools" | "tofu_providers" | "task_result"
+    ) && velnor_actions_contract::validate_job_id(owner).is_ok()
+}
 
 /// Local composite that holds one crate job's obligation steps.
 ///

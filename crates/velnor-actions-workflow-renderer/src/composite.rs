@@ -59,6 +59,16 @@ pub(crate) fn composite_yaml_with_inputs(
     inputs: Vec<(String, Yaml)>,
     steps: Vec<Yaml>,
 ) -> Result<Yaml, RenderError> {
+    composite_yaml_with_inputs_and_outputs(name, inputs, Vec::new(), steps)
+}
+
+/// Composite action document with typed caller inputs and output mappings.
+pub(crate) fn composite_yaml_with_inputs_and_outputs(
+    name: &str,
+    inputs: Vec<(String, Yaml)>,
+    outputs: Vec<(String, Yaml)>,
+    steps: Vec<Yaml>,
+) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(name)?;
     let mut fields = vec![
         ("name".to_owned(), Yaml::str(name.to_owned())),
@@ -69,6 +79,9 @@ pub(crate) fn composite_yaml_with_inputs(
     ];
     if !inputs.is_empty() {
         fields.push(("inputs".to_owned(), Yaml::Map(inputs)));
+    }
+    if !outputs.is_empty() {
+        fields.push(("outputs".to_owned(), Yaml::Map(outputs)));
     }
     fields.push((
         "runs".to_owned(),

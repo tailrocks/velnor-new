@@ -8,9 +8,13 @@ pub const ORCHESTRATOR_VERSION: u32 = 0;
 #[doc(hidden)]
 pub use velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
 #[doc(hidden)]
+pub use velnor_actions_contract::run_key_for_ci;
+#[doc(hidden)]
 pub use velnor_actions_contract::workflow::{
-    BoundQualificationCacheKeys, QualificationCacheBackendObservation,
-    QualificationCacheRestoreExpectation,
+    BoundQualificationCacheKeys, QualificationCacheBackendEntry,
+    QualificationCacheBackendObservation, QualificationCacheLayer, QualificationCacheLayerReceipt,
+    QualificationCacheRestore, QualificationCacheRestoreExpectation,
+    QualificationCacheRestoreResult, QualificationCacheSave, QualificationCacheSaveActionResult,
 };
 
 pub use super::baseline_publish::{PUBLISH_OP, PublishOutputs, baseline_publish};
@@ -75,23 +79,34 @@ pub use super::qualification_cache_payload::{
     NormalTofuProvidersCachePayloadRequest, NormalTofuProvidersCacheRestorePreflight,
     NormalToolsCachePayloadRequest, QualificationCachePayloadContext,
     QualificationCachePayloadExport, QualificationCachePayloadImport,
-    QualificationCacheRootEnvironment, export_normal_tofu_providers_cache_payload,
-    export_normal_tools_cache_payload, export_qualification_cache_payload,
-    import_normal_tools_cache_payload, import_qualification_cache_payload,
-    normal_tools_cache_stage_path, observe_normal_tofu_providers_cache_backend,
-    preflight_normal_tofu_providers_cache_restore, qualification_cache_stage_path,
-    validate_normal_tofu_providers_cache_request, validate_qualification_cache_root_observation,
+    QualificationCacheRootEnvironment, collect_owner_roots,
+    export_normal_tofu_providers_cache_payload, export_normal_tools_cache_payload,
+    export_qualification_cache_payload, import_normal_tools_cache_payload,
+    import_qualification_cache_payload,
+    import_qualification_cache_payload_with_backend_observation, normal_tools_cache_stage_path,
+    observe_normal_tofu_providers_cache_backend, preflight_normal_tofu_providers_cache_restore,
+    qualification_cache_stage_path, validate_normal_tofu_providers_cache_request,
+    validate_qualification_cache_root_observation,
 };
 pub use super::qualification_cache_runtime::{
-    QUALIFICATION_CACHE_BIND_OP, QualificationCacheBindingOutputs,
-    QualificationCacheBindingRequest, bind_qualification_cache_runtime,
+    QUALIFICATION_CACHE_BIND_OP, QUALIFICATION_CACHE_ROOTS_OP, QualificationCacheBindingOutputs,
+    QualificationCacheBindingRequest, QualificationCacheOwnerLayerContext,
+    aggregate_qualification_cache_owner_evidence, bind_qualification_cache_runtime,
+    observe_qualification_cache_runtime, observe_qualification_cache_runtime_after_import,
+    qualification_cache_owner_layer_context, qualification_cache_roots_filename,
+    qualification_cache_runtime_after_import_filename,
+    qualification_cache_runtime_identity_filename, read_qualification_cache_owner_evidence,
+    read_qualification_cache_roots, write_qualification_cache_owner_layer_evidence,
+    write_qualification_cache_roots,
 };
+pub use super::qualification_cache_runtime_phase::QualificationCacheRuntimePhase;
 pub use super::qualification_resolver::{
     QUALIFICATION_ADMISSION_FILENAME, QUALIFICATION_RESOLVER_OP, read_qualification_admission,
     resolve_qualification_admission,
 };
 pub use super::qualification_source_evidence::{
-    SOURCE_EVIDENCE_OP, write_qualification_source_evidence,
+    CACHE_RECEIPT_OP, SOURCE_EVIDENCE_OP, write_qualification_cache_receipt,
+    write_qualification_source_evidence,
 };
 pub use super::qualify::qualify_argv_staged;
 pub use super::retrieve_reports::{FETCH_OP, retrieve_reports};

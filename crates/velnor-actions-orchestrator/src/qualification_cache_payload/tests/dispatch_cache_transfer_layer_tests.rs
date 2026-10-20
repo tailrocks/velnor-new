@@ -95,7 +95,7 @@ fn root_set(
     ids: &[CacheRootId],
 ) -> CacheRootSet {
     CacheRootSet {
-        matrix_key: "lane-1".to_owned(),
+        owner_id: "lane-1".to_owned(),
         layer,
         roots: ids
             .iter()

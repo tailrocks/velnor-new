@@ -32,7 +32,7 @@ pub(super) fn runner_temp(temp: &tempfile::TempDir, name: &str) -> PathBuf {
 pub(super) fn roots(runner_temp: &Path) -> CacheRootSet {
     let cargo = runner_temp.join("velnor/cargo");
     CacheRootSet {
-        matrix_key: "lane-1".to_owned(),
+        owner_id: "lane-1".to_owned(),
         layer: QualificationCacheLayer::MiseTools,
         roots: vec![
             CacheRootObservation {
@@ -115,6 +115,7 @@ pub(super) fn binding_with_keys(
         phase: "cold".to_owned(),
         plan_id: "plan-1".to_owned(),
         run_key: "r10-a1".to_owned(),
+        owner_id: "lane-1".to_owned(),
         matrix_key: "lane-1".to_owned(),
         layer: layer.to_owned(),
         restore_key: Some(cache_key.to_owned()),

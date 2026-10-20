@@ -18,7 +18,7 @@ use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
     ACQUIRE_RELEASE_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP, ADMIT_RELEASE_AGGREGATE_OP,
-    ADMIT_RELEASE_POLICY_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_REGISTRY_INSTALL_OP,
+    ADMIT_RELEASE_POLICY_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_REGISTRY_INSTALL_OP, CACHE_RECEIPT_OP,
     CAPTURE_REVIEW_COMPLETION_OP, EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP,
     EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, PLAN_OP,
     PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP, PRIVATE_REVOKE_OP, PUBLISH_OP,
@@ -47,6 +47,12 @@ pub(crate) use public::run_public;
 mod cache_bind;
 #[path = "dispatch_cache_observe.rs"]
 mod cache_observe;
+#[path = "dispatch_cache_owner_evidence.rs"]
+mod cache_owner_evidence;
+#[path = "dispatch_cache_receipt.rs"]
+mod cache_receipt;
+#[path = "dispatch_cache_runtime.rs"]
+mod cache_runtime;
 #[path = "dispatch_cache_tar.rs"]
 mod cache_tar;
 #[path = "dispatch_cache_tar_launcher.rs"]
@@ -85,16 +91,8 @@ const GITHUB_EVENT_PATH_ENV: &str = "GITHUB_EVENT_PATH";
 
 #[path = "dispatch/operation.rs"]
 mod operation;
-use operation::{InternalOp, from_env as internal_op};
-
-/// Validated private request: operation plus exact request-file path.
-#[derive(Debug)]
-struct InternalRequest {
-    /// Operation to run.
-    op: InternalOp,
-    /// Exact request-file path from the environment.
-    path: PathBuf,
-}
+use operation::from_env as internal_op;
+use operation::{InternalOp, InternalRequest};
 
 /// Run the private file entrypoint when the gate is satisfied.
 ///
@@ -142,6 +140,10 @@ fn gate_request() -> Option<InternalRequest> {
     if matches!(
         op,
         InternalOp::BindQualificationCache
+            | InternalOp::ObserveQualificationCacheRuntime
+            | InternalOp::ObserveQualificationCacheRoots
+            | InternalOp::RecordQualificationCacheOwnerLayer
+            | InternalOp::AggregateQualificationCacheOwner
             | InternalOp::ObserveQualificationCacheBackend
             | InternalOp::ImportQualificationCachePayload
             | InternalOp::ExportQualificationCachePayload
@@ -150,6 +152,7 @@ fn gate_request() -> Option<InternalRequest> {
             | InternalOp::ExportNormalToolsCachePayload
             | InternalOp::InstallCacheTarLaunchers
             | InternalOp::PreflightNormalTofuCacheRestore
+            | InternalOp::WriteQualificationCacheReceipt
     ) {
         return cache_runner_request(op);
     }
@@ -228,27 +231,40 @@ fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
         InternalOp::TapMerge => {
             return tap_merge::gate_request(&path).map(|path| InternalRequest { op, path });
         }
-        InternalOp::Fetch
-        | InternalOp::Report
-        | InternalOp::BunRegistryInstall
-        | InternalOp::PrivateFetch
-        | InternalOp::PrivateRevoke
-        | InternalOp::PreseedManifest
-        | InternalOp::RepoPolicy
-        | InternalOp::ExecuteCheck
-        | InternalOp::BindQualificationCache
-        | InternalOp::ObserveQualificationCacheBackend
-        | InternalOp::ImportQualificationCachePayload
-        | InternalOp::ExportQualificationCachePayload
-        | InternalOp::NormalToolsCacheStagePath
-        | InternalOp::ImportNormalToolsCachePayload
-        | InternalOp::ExportNormalToolsCachePayload
-        | InternalOp::InstallCacheTarLaunchers
-        | InternalOp::PreflightNormalTofuCacheRestore
-        | InternalOp::WriteQualificationSourceEvidence
-        | InternalOp::ResolveTaskExecution => {}
+        op if request_file_only_gate(op) => {}
+        _ => return None,
     }
     Some(InternalRequest { op, path })
+}
+
+fn request_file_only_gate(op: InternalOp) -> bool {
+    matches!(
+        op,
+        InternalOp::Fetch
+            | InternalOp::Report
+            | InternalOp::BunRegistryInstall
+            | InternalOp::PrivateFetch
+            | InternalOp::PrivateRevoke
+            | InternalOp::PreseedManifest
+            | InternalOp::RepoPolicy
+            | InternalOp::ExecuteCheck
+            | InternalOp::BindQualificationCache
+            | InternalOp::ObserveQualificationCacheRuntime
+            | InternalOp::ObserveQualificationCacheRoots
+            | InternalOp::RecordQualificationCacheOwnerLayer
+            | InternalOp::AggregateQualificationCacheOwner
+            | InternalOp::ObserveQualificationCacheBackend
+            | InternalOp::ImportQualificationCachePayload
+            | InternalOp::ExportQualificationCachePayload
+            | InternalOp::NormalToolsCacheStagePath
+            | InternalOp::ImportNormalToolsCachePayload
+            | InternalOp::ExportNormalToolsCachePayload
+            | InternalOp::InstallCacheTarLaunchers
+            | InternalOp::PreflightNormalTofuCacheRestore
+            | InternalOp::WriteQualificationCacheReceipt
+            | InternalOp::WriteQualificationSourceEvidence
+            | InternalOp::ResolveTaskExecution
+    )
 }
 
 /// Require both GitHub run coordinates before entering cache operations.

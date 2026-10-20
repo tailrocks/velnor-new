@@ -17,6 +17,7 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::workflow::QualificationCacheLayer;
 use velnor_actions_contract::workflow::cache_family::{
     CacheFamily, SOURCES_KEY_PLAN_EXPR, SOURCES_KEY_STEP_EXPR, SOURCES_RESTORE_KEYS_PLAN_EXPR,
     SOURCES_RESTORE_KEYS_STEP_EXPR, SOURCES_SAVE_CONDITION, TOFU_PROVIDER_CACHE_BASE_EXPR,
@@ -29,6 +30,9 @@ use velnor_actions_contract::{Job, PullRequestCachePolicy, Step, StepKind};
 
 use crate::RenderError;
 
+#[path = "cache_doctor_qualification.rs"]
+mod qualification;
+
 /// The MBX target-mode action keys on `github.job`, `hashFiles`, and tool
 /// versions and saves on same-repository PRs. It is exempt from the doctor
 /// only until target mode is deleted (the next cache PR removes this).
@@ -39,6 +43,7 @@ pub(crate) const MBX_TARGET_MODE_DOCTOR_EXEMPTION: &str = "jdx/mr-boxington-acti
 enum Family {
     Runtime(CacheFamily),
     Tools,
+    Qualification(QualificationCacheLayer),
 }
 
 /// One cache-bearing step, classified.
@@ -124,6 +129,9 @@ fn family_for_key(key: &str) -> Option<Family> {
     }
     if crate::cache_p08::is_v2_cache_key_expression(key) {
         return Some(Family::Tools);
+    }
+    if let Some(layer) = qualification::layer_for_key(key) {
+        return Some(Family::Qualification(layer));
     }
     CacheFamily::for_key(key).map(Family::Runtime)
 }
@@ -247,7 +255,10 @@ fn check_paths(job: &str, step: &Step, cache: &CacheUse<'_>) -> Result<(), Rende
                     path == CacheFamily::TofuProviders.spec().path_input(Some(slug))
                 })
         }
-        (Family::Runtime(_), None) => false,
+        (Family::Qualification(_), Some(path)) => {
+            qualification::action_paths(job, step, path, cache.save)
+        }
+        (Family::Runtime(_) | Family::Qualification(_), None) => false,
     };
     if ok {
         Ok(())
@@ -295,6 +306,7 @@ fn check_save(job: &str, step: &Step, family: Family) -> Result<(), RenderError>
         ]
         .into_iter()
         .any(|policy| condition == crate::cache_p08::tools_cache_save_condition(policy)),
+        Family::Qualification(_) => qualification::save_gate(job, step, condition),
     };
     if ok {
         Ok(())

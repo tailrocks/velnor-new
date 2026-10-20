@@ -12,11 +12,14 @@ use crate::{
     yaml::Yaml,
 };
 
+#[path = "document_steps_cache_env.rs"]
+mod cache_env;
+
 /// True for the final job's plan download (fetch is gated inline below).
 ///
 /// An absent plan artifact (failed plan) must still reach the merge
 /// verdict instead of failing the job at the download step.
-fn is_verdict_download(step: &Step) -> bool {
+pub(super) fn is_verdict_download(step: &Step) -> bool {
     step.role == Some(velnor_actions_contract::StepRole::DownloadPlan)
         && matches!(
             &step.kind,
@@ -40,9 +43,10 @@ fn internal_env(
     needs_envs: &[(String, String)],
     job_env: &BTreeMap<String, String>,
     step_env: &BTreeMap<String, String>,
+    composite: bool,
 ) -> Result<Yaml, RenderError> {
-    commands::validate_env(step_env)?;
     if op == steps::FETCH_OPERATION {
+        commands::validate_env(step_env)?;
         if !step_env.is_empty() {
             return Err(RenderError::InvalidWorkflow(
                 "fetch_internal_env_not_supported".to_owned(),
@@ -58,6 +62,7 @@ fn internal_env(
         || op == velnor_actions_contract::PRIVATE_REVOKE_OPERATION
         || op == velnor_actions_contract::BUN_REGISTRY_INSTALL_OPERATION
     {
+        commands::validate_env(step_env)?;
         // Private-source operations take no request file: their whole input
         // is the fixed step env (token binding plus the literal allowlist).
         let mut env = vec![(INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned()))];
@@ -69,7 +74,12 @@ fn internal_env(
         return Ok(Yaml::Map(env));
     }
     if steps::is_qualification_cache_operation(op) {
-        crate::steps_internal::validate_qualification_cache_env(op, step_env)?;
+        if composite {
+            commands::validate_composite_qualification_cache_env(step_env)?;
+        } else {
+            commands::validate_qualification_cache_env(step_env)?;
+        }
+        cache_env::validate_qualification_cache_env(op, step_env)?;
         let mut env = vec![(INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned()))];
         env.extend(
             step_env
@@ -78,6 +88,7 @@ fn internal_env(
         );
         return Ok(Yaml::Map(env));
     }
+    commands::validate_env(step_env)?;
     let request = format!("{}/{target}-request.json", ctx.request_dir);
     let mut env = Vec::new();
     if op == steps::RESOLVE_QUALIFICATION_OPERATION {
@@ -108,129 +119,22 @@ fn internal_env(
     Ok(Yaml::Map(env))
 }
 
-/// Render one action step: name, condition, pin, inputs, step env.
-///
-/// Step env (cache modes) renders after `with:`; absent env renders
-/// nothing, so env-less steps keep their exact historical bytes.
-fn action_step_to_yaml(
-    job_id: &str,
-    step: &Step,
-    uses: &str,
-    with: &BTreeMap<String, String>,
-    env: &BTreeMap<String, String>,
-    job_env: &BTreeMap<String, String>,
-    runs_on: Option<&str>,
-) -> Result<Yaml, RenderError> {
-    let runtime_identity = step.role == Some(velnor_actions_contract::StepRole::ToolsCacheIdentity)
-        || ["ubuntu-22.04", "ubuntu-24.04", "ubuntu-26.04"]
-            .iter()
-            .any(|lane| {
-                crate::cache_p08::runtime_identity_action_uses(lane) == Some(uses)
-                    || crate::cache_p08::runtime_prelude_action_uses(lane) == Some(uses)
-            });
-    if runtime_identity {
-        let Some(lane) = runs_on else {
-            return Err(RenderError::InvalidWorkflow(
-                "tools_cache_identity_missing_runner".to_owned(),
-            ));
-        };
-        crate::cache_p08::validate_runtime_identity_action(step, uses, lane, with, env)?;
-    } else if uses == crate::tool_seed::TOOL_SEED_USES {
-        crate::tool_seed::validate_action_call(step, uses, with, env)?;
-    } else if uses == crate::cache_steps::TOOLS_RESTORE_USES {
-        crate::cache_steps::validate_tools_restore_call(step)?;
-    } else {
-        steps::validate_uses(uses)?;
-    }
-    for (key, value) in with {
-        crate::expressions::check_with_key(key)?;
-        crate::expressions::check_with_value(key, value)?;
-        steps::scan_for_private_subcommands(key)?;
-        steps::scan_for_private_subcommands(value)?;
-    }
-    let rendered_env = cache_action_env(step, env)?;
-    commands::validate_env(&rendered_env)?;
-    let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-    crate::step_ids::push_step_id(&mut entries, step);
-    if let Some(condition) = &step.condition {
-        steps::scan_for_private_subcommands(condition)?;
-        entries.push(("if".to_owned(), Yaml::str(condition.clone())));
-    } else if uses == steps::UPLOAD_ARTIFACT_USES {
-        entries.push((
-            "if".to_owned(),
-            Yaml::str(crate::render::UPLOAD_STEP_CONDITION.to_owned()),
-        ));
-    }
-    crate::cache_save_budget::decorate(step, &mut entries, runs_on.is_some())?;
-    if job_id == FINAL_JOB_ID && is_verdict_download(step) {
-        entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
-    }
-    let uses_value = if runtime_identity
-        || uses == crate::tool_seed::TOOL_SEED_USES
-        || uses == crate::cache_steps::TOOLS_RESTORE_USES
-        || uses == steps::CACHE_TAR_LAUNCHER_USES
-        || uses == crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
-        || crate::action_ref::is_generated_provider_prelude(uses)
-        || crate::action_ref::is_crate_obligation_action(uses)
-        || crate::action_ref::is_generated_declared_task(uses)
-    {
-        Yaml::annotated(uses, "zizmor: ignore[self-repository]")
-    } else {
-        Yaml::str(uses.to_owned())
-    };
-    entries.push(("uses".to_owned(), uses_value));
-    if !with.is_empty() {
-        let with_yaml = if crate::action_ref::is_generated_declared_task(uses) {
-            Yaml::FlowMap(
-                with.iter()
-                    .map(|(key, value)| (key.clone(), value.clone()))
-                    .collect(),
-            )
-        } else {
-            string_map_yaml(with)
-        };
-        entries.push(("with".to_owned(), with_yaml));
-    }
-    let filtered_env: BTreeMap<String, String> = rendered_env
-        .iter()
-        .filter(|(key, value)| job_env.get(*key).map(String::as_str) != Some(value.as_str()))
-        .map(|(key, value)| (key.clone(), value.clone()))
-        .collect();
-    if !filtered_env.is_empty() {
-        entries.push(("env".to_owned(), string_map_yaml(&filtered_env)));
-    }
-    Ok(Yaml::Map(entries))
-}
+#[cfg(test)]
+#[path = "document_steps_qualification_cache_tests.rs"]
+mod qualification_cache_tests;
 
-fn cache_action_env(
-    step: &Step,
-    env: &BTreeMap<String, String>,
-) -> Result<BTreeMap<String, String>, RenderError> {
-    let mut rendered = env.clone();
-    if crate::cache_tar_setup::requires_cache_tar_path(step.role) {
-        if rendered
-            .get("PATH")
-            .is_some_and(|value| value != steps::CACHE_TAR_LAUNCHER_PATH_OUTPUT_EXPR)
-        {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "cache_action_path_override:{}",
-                step.name
-            )));
-        }
-        rendered.insert(
-            "PATH".to_owned(),
-            steps::CACHE_TAR_LAUNCHER_PATH_OUTPUT_EXPR.to_owned(),
-        );
-    }
-    Ok(rendered)
-}
+#[path = "document_steps_action.rs"]
+mod action;
+#[cfg(test)]
+use action::cache_action_env;
+use action::{ActionStepContext, action_step_to_yaml};
 
 #[cfg(test)]
 #[path = "document_steps_cache_path_tests.rs"]
 mod cache_path_tests;
 
 /// Sorted string map as YAML (shared by `with:` and `env:` emission).
-pub(crate) fn string_map_yaml(map: &BTreeMap<String, String>) -> Yaml {
+pub(super) fn string_map_yaml(map: &BTreeMap<String, String>) -> Yaml {
     Yaml::Map(
         map.iter()
             .map(|(key, value)| (key.clone(), Yaml::str(value.clone())))
@@ -289,9 +193,18 @@ pub(crate) fn non_internal_step_to_yaml(
     steps::scan_for_private_subcommands(&step.name)?;
     crate::parallel_steps::reject_parallel(step, job_id)?;
     match &step.kind {
-        StepKind::Action { uses, with, env } => {
-            action_step_to_yaml(job_id, step, uses, with, env, job_env, Some(runs_on))
-        }
+        StepKind::Action { uses, with, env } => action_step_to_yaml(
+            step,
+            uses,
+            with,
+            env,
+            ActionStepContext {
+                job_id,
+                job_env,
+                runs_on: Some(runs_on),
+                composite: false,
+            },
+        ),
         StepKind::Shell { run, env } => shell_step_to_yaml(step, run, env, job_env, false),
         StepKind::Internal { .. } | StepKind::TaskExecution { .. } => Err(
             RenderError::InvalidWorkflow("internal_op_rejected".to_owned()),
@@ -311,29 +224,20 @@ pub(crate) fn step_to_yaml(
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&step.name)?;
     if composite {
-        if matches!(
-            step.role,
-            Some(
-                velnor_actions_contract::StepRole::CargoSourcesSave
-                    | velnor_actions_contract::StepRole::ToolsCacheSave
-                    | velnor_actions_contract::StepRole::TofuProvidersSave
-            )
-        ) {
-            return Err(RenderError::InvalidWorkflow(
-                "optional_cache_save_requires_job_scope".to_owned(),
-            ));
-        }
         crate::parallel_steps::reject_parallel(step, job_id)?;
     }
     match &step.kind {
         StepKind::Action { uses, with, env } => action_step_to_yaml(
-            job_id,
             step,
             uses,
             with,
             env,
-            step_context.job_env,
-            step_context.runs_on,
+            ActionStepContext {
+                job_id,
+                job_env: step_context.job_env,
+                runs_on: step_context.runs_on,
+                composite,
+            },
         ),
         StepKind::Shell { run, env } => {
             shell_step_to_yaml(step, run, env, step_context.job_env, composite)
@@ -388,7 +292,15 @@ fn internal_step_to_yaml(
     crate::step_ids::push_step_id(&mut entries, step);
     entries.push((
         "env".to_owned(),
-        internal_env(op, target, ctx, channel, step_context.job_env, step_env)?,
+        internal_env(
+            op,
+            target,
+            ctx,
+            channel,
+            step_context.job_env,
+            step_env,
+            composite,
+        )?,
     ));
     push_composite_shell(&mut entries, composite);
     entries.push((

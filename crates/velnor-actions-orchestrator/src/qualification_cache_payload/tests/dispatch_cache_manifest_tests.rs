@@ -58,7 +58,7 @@ fn manifest_rejects_stale_lane_identity_state_and_unadmitted_objects() {
     let encoded = manifest.canonical_json().expect("canonical manifest");
 
     let mut stale_lane = binding.clone();
-    stale_lane.matrix_key = "other-lane".to_owned();
+    stale_lane.owner_id = "other-lane".to_owned();
     assert_eq!(
         PayloadManifest::parse_for_restore(&encoded, &stale_lane, &roots, CACHE_KEY),
         Err("qualification_cache_manifest_binding_mismatch")
@@ -162,7 +162,7 @@ fn manifest_rejects_unknown_noncanonical_and_malformed_root_metadata() {
 fn roots() -> CacheRootSet {
     let value = json!({
         "schema": "velnor.qualification-cache-roots/v1",
-        "matrix_key": "lane-1",
+        "owner_id": "lane-1",
         "layer": "mbx_objects",
         "roots": [{"id": "mbx_actions", "path": "/tmp/runner/velnor/mbx/actions"}]
     });
@@ -181,6 +181,7 @@ fn binding() -> QualificationCacheBindingOutputs {
         phase: "cold".to_owned(),
         plan_id: "plan-1".to_owned(),
         run_key: "r10-a1".to_owned(),
+        owner_id: "lane-1".to_owned(),
         matrix_key: "lane-1".to_owned(),
         layer: "mbx_objects".to_owned(),
         restore_key: Some(CACHE_KEY.to_owned()),

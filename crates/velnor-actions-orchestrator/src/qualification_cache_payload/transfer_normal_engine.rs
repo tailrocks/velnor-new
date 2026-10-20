@@ -140,7 +140,7 @@ fn validate_normal_binding(
     if !valid_identity(identity)
         || cache_key != format!("mise-tools-v2-payload-v3-{identity}")
         || roots.layer != QualificationCacheLayer::MiseTools
-        || roots.matrix_key != "normal-tools"
+        || roots.owner_id != "normal-tools"
         || roots.roots.iter().map(|root| root.id).collect::<Vec<_>>()
             != [
                 CacheRootId::CargoBin,

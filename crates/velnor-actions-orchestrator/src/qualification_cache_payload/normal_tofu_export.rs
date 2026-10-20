@@ -63,7 +63,7 @@ pub fn export_normal_tofu_providers_cache_payload(
 ) -> Result<NormalTofuProvidersCacheExport, &'static str> {
     let runtime = validate_request(request)?;
     let roots = CacheRootSet {
-        matrix_key: "normal-tofu-providers".to_owned(),
+        owner_id: "normal-tofu-providers".to_owned(),
         layer: QualificationCacheLayer::TofuProviders,
         roots: vec![CacheRootObservation {
             id: CacheRootId::TofuPlugins,

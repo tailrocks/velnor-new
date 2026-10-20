@@ -1,7 +1,9 @@
 //! Closed private operation identities; no public dispatch aliases.
+use std::path::PathBuf;
+
 use super::{
     ACQUIRE_RELEASE_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP, ADMIT_RELEASE_AGGREGATE_OP,
-    ADMIT_RELEASE_POLICY_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_REGISTRY_INSTALL_OP,
+    ADMIT_RELEASE_POLICY_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_REGISTRY_INSTALL_OP, CACHE_RECEIPT_OP,
     CAPTURE_REVIEW_COMPLETION_OP, EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP,
     EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OP_ENV, PLAN_OP,
     PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP, PRIVATE_REVOKE_OP, PUBLISH_OP,
@@ -9,7 +11,7 @@ use super::{
     SELECT_RELEASE_TAP_CONTINUATION_OP, SELECT_STABLE_RELEASE_SOURCE_OP, SIGN_PACKAGE_RELEASE_OP,
     SOURCE_EVIDENCE_OP, TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP,
     WRITE_STABLE_TAG_INTENT_OP, WRITE_STABLE_TAG_ORIGIN_OP, cache_bind, cache_observe,
-    cache_tar_launcher, env, normal_tofu_cache_preflight,
+    cache_owner_evidence, cache_runtime, cache_tar_launcher, env, normal_tofu_cache_preflight,
 };
 
 /// Private operation selected by the gate.
@@ -30,6 +32,10 @@ pub(super) enum InternalOp {
     RepoPolicy,
     ResolveQualification,
     BindQualificationCache,
+    ObserveQualificationCacheRuntime,
+    ObserveQualificationCacheRoots,
+    RecordQualificationCacheOwnerLayer,
+    AggregateQualificationCacheOwner,
     ObserveQualificationCacheBackend,
     ImportQualificationCachePayload,
     ExportQualificationCachePayload,
@@ -39,6 +45,7 @@ pub(super) enum InternalOp {
     InstallCacheTarLaunchers,
     PreflightNormalTofuCacheRestore,
     WriteQualificationSourceEvidence,
+    WriteQualificationCacheReceipt,
     ResolveTaskExecution,
     PackageSigner,
     PackagePublisher,
@@ -57,6 +64,15 @@ pub(super) enum InternalOp {
     StableTagOrigin,
     StableTagAdmission,
     BunRegistryInstall,
+}
+
+/// Validated private request: operation plus exact request-file path.
+#[derive(Debug)]
+pub(super) struct InternalRequest {
+    /// Operation to run.
+    pub(super) op: InternalOp,
+    /// Exact request-file path from the environment.
+    pub(super) path: PathBuf,
 }
 
 pub(super) fn from_env() -> Option<InternalOp> {
@@ -78,6 +94,14 @@ pub(super) fn from_env() -> Option<InternalOp> {
             InternalOp::ResolveQualification
         }
         Ok(tag) if tag == cache_bind::OP => InternalOp::BindQualificationCache,
+        Ok(tag) if tag == cache_runtime::RUNTIME_OP => InternalOp::ObserveQualificationCacheRuntime,
+        Ok(tag) if tag == cache_runtime::ROOTS_OP => InternalOp::ObserveQualificationCacheRoots,
+        Ok(tag) if tag == cache_owner_evidence::LAYER_OP => {
+            InternalOp::RecordQualificationCacheOwnerLayer
+        }
+        Ok(tag) if tag == cache_owner_evidence::OWNER_OP => {
+            InternalOp::AggregateQualificationCacheOwner
+        }
         Ok(tag) if tag == cache_observe::OP => InternalOp::ObserveQualificationCacheBackend,
         Ok(tag) if tag == cache_bind::transfer::IMPORT_OP => {
             InternalOp::ImportQualificationCachePayload
@@ -97,6 +121,7 @@ pub(super) fn from_env() -> Option<InternalOp> {
             InternalOp::PreflightNormalTofuCacheRestore
         }
         Ok(tag) if tag == SOURCE_EVIDENCE_OP => InternalOp::WriteQualificationSourceEvidence,
+        Ok(tag) if tag == CACHE_RECEIPT_OP => InternalOp::WriteQualificationCacheReceipt,
         Ok(tag) if tag == TASK_EXECUTION_RESOLVER_OP => InternalOp::ResolveTaskExecution,
         Ok(tag) if tag == PRIVATE_FETCH_OP => InternalOp::PrivateFetch,
         Ok(tag) if tag == PRIVATE_REVOKE_OP => InternalOp::PrivateRevoke,

@@ -13,7 +13,8 @@ use super::source_delta::validate_source_delta;
 use super::types::{
     AdmissionDocument, AdmissionNode, MAX_QUALIFICATION_RECEIPT_BYTES,
     MAX_QUALIFICATION_RECEIPT_DEPTH, QualificationCacheBackendEntry,
-    QualificationCacheLayerReceipt, QualificationCacheReceipt, QualificationSourceDelta,
+    QualificationCacheLayerReceipt, QualificationCacheReceipt, QualificationCacheReceiptLink,
+    QualificationSourceDelta,
 };
 use super::validation::{
     LaneEvidence, validate_lanes, validate_metadata, validate_node_metadata, validate_receipt_shape,
@@ -78,6 +79,17 @@ impl QualificationCacheAdmission {
     /// # Errors
     pub fn receipt_digest(&self) -> Result<String, ContractError> {
         Ok(digest_b3(&canonical_json_bytes(&self.root.receipt)?))
+    }
+
+    /// Return the validated receipt and artifact identity for this admission.
+    /// # Errors
+    pub fn receipt_link(&self) -> Result<QualificationCacheReceiptLink, ContractError> {
+        Ok(QualificationCacheReceiptLink {
+            run: self.root.receipt.run,
+            receipt_digest: self.receipt_digest()?,
+            artifact_id: self.root.artifact.id,
+            artifact_digest: self.root.artifact.digest.clone(),
+        })
     }
 
     pub(crate) fn receipt(&self) -> &QualificationCacheReceipt {

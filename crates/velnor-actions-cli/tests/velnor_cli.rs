@@ -19,6 +19,8 @@ mod impl_cli_gate_cache_bind;
 mod impl_cli_gate_cache_normal_stage;
 #[path = "impl_cli_gate_cache_observe.rs"]
 mod impl_cli_gate_cache_observe;
+#[path = "impl_cli_gate_cache_receipt.rs"]
+mod impl_cli_gate_cache_receipt;
 #[path = "impl_cli_gate_cache_transfer.rs"]
 mod impl_cli_gate_cache_transfer;
 #[path = "impl_cli_gate_normal_tofu_preflight.rs"]

@@ -24,7 +24,7 @@ pub struct QualificationCacheOwnerMemberRef {
     pub input_digest: String,
 }
 
-/// Plan data used to check the cache owner in directives and receipts.
+/// Plan data for the cache owner check in directives and receipts.
 #[derive(Debug, Clone)]
 pub(crate) struct QualificationCacheOwner {
     pub(crate) owner_id: String,
@@ -49,6 +49,13 @@ struct LayerPreimage<'a> {
     platform_id: &'a str,
     layer: QualificationCacheLayer,
     member_layers: Vec<(&'a str, String)>,
+}
+
+#[derive(Serialize)]
+struct OwnerDriverPreimage<'a> {
+    domain: &'static str,
+    owner_id: &'a str,
+    members: Vec<(String, String)>,
 }
 
 /// Build one cache owner from all plan entries for the specified job.
@@ -140,7 +147,10 @@ pub(crate) fn owner_layer_identity(
     > = None;
     for entry in &owner.entries {
         let requirements = runtime_requirements(plan, entry)?;
-        if runtime.as_ref().is_some_and(|prior| prior != &requirements) {
+        if runtime
+            .as_ref()
+            .is_some_and(|prior| !same_runtime_pins(prior.as_ref(), requirements.as_ref()))
+        {
             return Err(invalid("owner_members_have_incompatible_runtime_pins"));
         }
         if runtime.is_none() {
@@ -169,13 +179,48 @@ pub(crate) fn owner_runtime_requirements(
     let Some(first) = owner.entries.first() else {
         return Err(invalid("owner_has_no_matrix_members"));
     };
-    let requirements = runtime_requirements(plan, first)?;
+    let Some(mut requirements) = runtime_requirements(plan, first)? else {
+        for entry in owner.entries.iter().skip(1) {
+            if runtime_requirements(plan, entry)?.is_some() {
+                return Err(invalid("owner_members_have_incompatible_runtime_pins"));
+            }
+        }
+        return Ok(None);
+    };
+    let mut driver_members = vec![(first.matrix_key.clone(), requirements.driver_id.clone())];
     for entry in owner.entries.iter().skip(1) {
-        if runtime_requirements(plan, entry)? != requirements {
+        let Some(member_requirements) = runtime_requirements(plan, entry)? else {
+            return Err(invalid("owner_members_have_incompatible_runtime_pins"));
+        };
+        if !same_runtime_pins(Some(&requirements), Some(&member_requirements)) {
             return Err(invalid("owner_members_have_incompatible_runtime_pins"));
         }
+        driver_members.push((entry.matrix_key.clone(), member_requirements.driver_id));
     }
-    Ok(requirements)
+    if driver_members.len() > 1 {
+        driver_members.sort_by(|left, right| left.0.cmp(&right.0));
+        requirements.driver_id = digest_b3(&canonical_json_bytes(&OwnerDriverPreimage {
+            domain: "velnor-qualification-cache-owner-driver-v4",
+            owner_id: &owner.owner_id,
+            members: driver_members,
+        })?);
+    }
+    Ok(Some(requirements))
+}
+
+fn same_runtime_pins(
+    left: Option<&super::super::runtime::QualificationRuntimeIdentityRequirements>,
+    right: Option<&super::super::runtime::QualificationRuntimeIdentityRequirements>,
+) -> bool {
+    match (left, right) {
+        (None, None) => true,
+        (Some(left), Some(right)) => {
+            let mut normalized_right = right.clone();
+            normalized_right.driver_id.clone_from(&left.driver_id);
+            left == &normalized_right
+        }
+        _ => false,
+    }
 }
 
 fn invalid(reason: &str) -> ContractError {

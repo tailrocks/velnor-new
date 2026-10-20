@@ -70,7 +70,10 @@ pub const BUN_REGISTRY_INSTALL_OPERATION: &str = "bun-registry-install-v1";
 /// Pinned-action prefix of the private token mint step (HD-7).
 pub const PRIVATE_TOKEN_MINT_ACTION_PREFIX: &str = "actions/create-github-app-token@";
 
-pub use super::step_id::{QualificationCacheStepId, QualificationCacheStepStage, StepId};
+pub use super::step_id::{
+    QualificationCacheCompositeId, QualificationCacheCompositePhase, QualificationCacheStepId,
+    QualificationCacheStepStage, StepId,
+};
 
 mod role;
 pub use role::StepRole;

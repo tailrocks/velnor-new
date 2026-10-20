@@ -13,8 +13,6 @@ use crate::{
     preseed_closure, steps, support, workflow_policy,
 };
 
-type JobMap = BTreeMap<String, Job>;
-
 #[path = "render_emit.rs"]
 mod emit;
 
@@ -237,42 +235,13 @@ pub fn finalize_jobs(
     Ok(jobs)
 }
 
-/// Skip an affected-plan job only when its plan marks that job `not_affected`.
-fn apply_affected_job_gates(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
-    if !jobs.contains_key(PLAN_JOB_ID) {
-        return Ok(());
-    }
-    crate::matrix::crate_job_caps(jobs)?;
-    for (id, job) in jobs {
-        if !velnor_actions_contract::is_crate_job_id(id) {
-            continue;
-        }
-        if !job.needs.iter().any(|need| need == PLAN_JOB_ID) {
-            job.needs.push(PLAN_JOB_ID.to_owned());
-        }
-        let gate = format!(
-            "!contains(needs.{PLAN_JOB_ID}.outputs.{}, ',{id},')",
-            crate::matrix::NOT_AFFECTED_JOBS_OUTPUT
-        );
-        job.condition = Some(match job.condition.take() {
-            Some(condition) => format!("({condition}) && {gate}"),
-            None => gate,
-        });
-    }
-    Ok(())
-}
+#[path = "render_validation.rs"]
+mod validation;
+use validation::{apply_affected_job_gates, validate_final_jobs};
 
 #[cfg(test)]
 #[path = "render_affected_job_gate_tests.rs"]
 mod affected_job_gate_tests;
-
-/// Validate every finalized job after policy merging and internal expansion.
-fn validate_final_jobs(ir: &WorkflowIr, jobs: &mut JobMap) -> Result<(), RenderError> {
-    crate::cache_steps::append_workspace_cleanups(jobs)?;
-    let mut finalized = ir.clone();
-    finalized.jobs.clone_from(jobs);
-    finalized.validate().map_err(RenderError::Contract)
-}
 
 /// Validate context/IR plus policy merge and support invariants.
 fn merged_jobs(
@@ -380,14 +349,27 @@ fn render_merged_with_routing(
         Err(error) if emit::workflow_file_too_large(&error) => {
             let extracted =
                 crate::crate_obligations::extract_obligation_composites(&mut shared, ctx)?;
-            if extracted == 0 {
-                return Err(error);
-            }
             let retry_emit = emit::EmitSettings {
                 allow_step_aliases: true,
                 ..first_emit
             };
-            emit::emit_shared(ir, &shared, &jobs, ctx, &retry_emit, routing)
+            match emit::emit_shared(ir, &shared, &jobs, ctx, &retry_emit, routing) {
+                Ok(workflow) => Ok(workflow),
+                Err(second_error) if emit::workflow_file_too_large(&second_error) => {
+                    let shared_ids = shared.calls.keys().cloned().collect();
+                    let cache_files = crate::qualification_cache_composites::extract(
+                        &mut shared.jobs,
+                        &shared_ids,
+                        ctx,
+                    )?;
+                    if cache_files.is_empty() {
+                        return Err(if extracted == 0 { error } else { second_error });
+                    }
+                    shared.files.extend(cache_files);
+                    emit::emit_shared(ir, &shared, &jobs, ctx, &retry_emit, routing)
+                }
+                Err(second_error) => Err(second_error),
+            }
         }
         Err(error) => Err(error),
     }

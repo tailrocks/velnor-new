@@ -45,7 +45,7 @@ pub(crate) struct PayloadManifest {
 pub(crate) enum PayloadScope {
     Qualification {
         campaign: String,
-        matrix_key: String,
+        owner_id: String,
         layer: String,
     },
     NormalTools,
@@ -74,7 +74,7 @@ impl PayloadManifest {
         validate_payload_roots(roots, &payload_roots)?;
         if !binding.active
             || binding.layer != roots.layer.as_str()
-            || binding.matrix_key != roots.matrix_key
+            || binding.owner_id != roots.owner_id
             || binding.save_key.as_deref() != Some(cache_key)
         {
             return Err("qualification_cache_manifest_binding_mismatch");
@@ -82,7 +82,7 @@ impl PayloadManifest {
         Ok(Self {
             scope: PayloadScope::Qualification {
                 campaign: binding.campaign.clone(),
-                matrix_key: binding.matrix_key.clone(),
+                owner_id: binding.owner_id.clone(),
                 layer: binding.layer.clone(),
             },
             cache_key: cache_key.to_owned(),
@@ -122,13 +122,13 @@ impl PayloadManifest {
         validate_digest(expected_state_digest)?;
         if !binding.active
             || binding.layer != roots.layer.as_str()
-            || binding.matrix_key != roots.matrix_key
+            || binding.owner_id != roots.owner_id
             || binding.expected_cache.is_none()
             || binding.restore_key.as_deref() != Some(cache_key)
             || manifest.scope
                 != (PayloadScope::Qualification {
                     campaign: binding.campaign.clone(),
-                    matrix_key: binding.matrix_key.clone(),
+                    owner_id: binding.owner_id.clone(),
                     layer: binding.layer.clone(),
                 })
             || manifest.cache_key != cache_key
@@ -155,12 +155,12 @@ impl PayloadManifest {
         validate_digest(runtime_identity_digest)?;
         if !binding.active
             || binding.layer != roots.layer.as_str()
-            || binding.matrix_key != roots.matrix_key
+            || binding.owner_id != roots.owner_id
             || binding.save_key.as_deref() != Some(cache_key)
             || manifest.scope
                 != (PayloadScope::Qualification {
                     campaign: binding.campaign.clone(),
-                    matrix_key: binding.matrix_key.clone(),
+                    owner_id: binding.owner_id.clone(),
                     layer: binding.layer.clone(),
                 })
             || manifest.cache_key != cache_key
@@ -249,13 +249,13 @@ impl PayloadManifest {
         let value = match &self.scope {
             PayloadScope::Qualification {
                 campaign,
-                matrix_key,
+                owner_id,
                 layer,
             } => json!({
                 "cache_key": self.cache_key,
                 "campaign": campaign,
                 "layer": layer,
-                "matrix_key": matrix_key,
+                "owner_id": owner_id,
                 "namespace": NAMESPACE,
                 "roots": roots,
                 "runtime_identity_digest": self.runtime_identity_digest,
