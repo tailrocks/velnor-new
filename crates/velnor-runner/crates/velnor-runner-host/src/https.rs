@@ -10,7 +10,16 @@ use velnor_runner_github::{Exchange, Method, SessionRequest, Transport, Transpor
 
 use crate::error::HostError;
 
+#[cfg(test)]
+mod deadline_tests;
 mod process;
+#[cfg(test)]
+mod test_support;
+#[cfg(test)]
+pub(super) use test_support::exchange_fixture_response;
+
+/// Limit each response body to one MiB.
+const MAX_RESPONSE_BODY_BYTES: usize = 1024 * 1024;
 
 /// One Actions or GitHub API origin. The path on each call is relative.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,11 +45,21 @@ impl HttpsTransport {
 
     /// Create a transport that shares one absolute deadline across its requests.
     pub(crate) fn with_deadline(base: &str, deadline: Instant) -> Result<Self, HostError> {
-        Ok(Self {
-            base: checked_base(base)?,
-            max_time_seconds: 60,
-            deadline: Some(deadline),
-        })
+        let transport = Self::new(base)?;
+        Ok(transport.bounded_by_deadline(deadline))
+    }
+
+    /// Return a copy of this transport without increasing its existing time limits.
+    #[must_use]
+    pub(crate) fn bounded_by_deadline(&self, deadline: Instant) -> Self {
+        Self {
+            base: self.base.clone(),
+            max_time_seconds: self.max_time_seconds,
+            deadline: Some(
+                self.deadline
+                    .map_or(deadline, |current| current.min(deadline)),
+            ),
+        }
     }
 
     /// Clone this origin with a short deadline for background cleanup requests.
@@ -83,7 +102,7 @@ impl Transport for HttpsTransport {
         match result {
             Ok(exchange) => Ok(exchange),
             Err(CurlFail::Timeout) => Err(TransportFail::Timeout),
-            Err(CurlFail::Reset) => Err(TransportFail::Reset),
+            Err(CurlFail::Reset | CurlFail::ResponseTooLarge) => Err(TransportFail::Reset),
         }
     }
 }
@@ -91,21 +110,39 @@ impl Transport for HttpsTransport {
 enum CurlFail {
     Timeout,
     Reset,
+    ResponseTooLarge,
 }
 
 fn perform(base: &str, deadline: Instant, request: &SessionRequest) -> Result<Exchange, CurlFail> {
-    let url = join_url(base, &request.path, request.query.as_deref()).ok_or(CurlFail::Reset)?;
+    perform_bounded(base, deadline, request, MAX_RESPONSE_BODY_BYTES)
+}
+
+fn perform_bounded(
+    base: &str,
+    deadline: Instant,
+    request: &SessionRequest,
+    max_response_bytes: usize,
+) -> Result<Exchange, CurlFail> {
     let scratch = Scratch::create()?;
+    perform_with_scratch(base, deadline, request, max_response_bytes, &scratch)
+}
+
+fn perform_with_scratch(
+    base: &str,
+    deadline: Instant,
+    request: &SessionRequest,
+    max_response_bytes: usize,
+    scratch: &Scratch,
+) -> Result<Exchange, CurlFail> {
+    let url = join_url(base, &request.path, request.query.as_deref()).ok_or(CurlFail::Reset)?;
     let body_path = scratch.path("body");
-    let out_path = scratch.path("out");
     write_private(&body_path, &request.body)?;
     let max_time = remaining(deadline).ok_or(CurlFail::Timeout)?;
-    let config = curl_config(&url, request, &body_path, &out_path, max_time)?;
-    let status = process::run_curl(&config, deadline)?;
+    let config = curl_config(&url, request, &body_path, max_time)?;
+    let (status, body) = process::run_curl(&config, deadline, max_response_bytes)?;
     if Instant::now() >= deadline {
         return Err(CurlFail::Timeout);
     }
-    let body = read_output(&out_path)?;
     trace(base, request, status, body.len());
     Ok(Exchange { status, body })
 }
@@ -195,14 +232,13 @@ fn curl_config(
     url: &str,
     request: &SessionRequest,
     body: &Path,
-    output: &Path,
     max_time: Duration,
 ) -> Result<String, CurlFail> {
     let max_time_seconds = max_time.as_secs_f64();
     let mut lines = vec![
         format!("request = \"{}\"", method_name(request.method)),
         quoted("url", url)?,
-        format!("output = \"{}\"", display_path(output)?),
+        "output = \"-\"".to_owned(),
         "write-out = \"%{http_code}\"".to_owned(),
         format!("max-time = {max_time_seconds:.3}"),
     ];
@@ -280,14 +316,6 @@ fn checked_base(base: &str) -> Result<String, HostError> {
     }
 }
 
-fn read_output(path: &Path) -> Result<Vec<u8>, CurlFail> {
-    match fs::read(path) {
-        Ok(bytes) => Ok(bytes),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
-        Err(_) => Err(CurlFail::Reset),
-    }
-}
-
 fn write_private(path: &Path, bytes: &[u8]) -> Result<(), CurlFail> {
     let mut file = OpenOptions::new()
         .create(true)
@@ -325,48 +353,5 @@ impl Scratch {
 impl Drop for Scratch {
     fn drop(&mut self) {
         let _removed = fs::remove_dir_all(&self.dir);
-    }
-}
-
-#[cfg(test)]
-mod deadline_tests {
-    use std::path::Path;
-    use std::time::{Duration, Instant};
-
-    use velnor_runner_github::{Method, SessionRequest};
-
-    use super::{HttpsTransport, curl_config};
-
-    #[test]
-    fn bounded_transport_keeps_the_callers_absolute_cutoff() {
-        let deadline = Instant::now() + Duration::from_secs(30);
-        let transport = HttpsTransport::with_deadline("https://api.github.com", deadline)
-            .expect("valid endpoint");
-
-        assert_eq!(transport.deadline, Some(deadline));
-    }
-
-    #[test]
-    fn curl_config_uses_the_transport_timeout() -> Result<(), &'static str> {
-        let transport =
-            HttpsTransport::new("https://api.github.com").map_err(|_| "invalid HTTPS endpoint")?;
-        let request = SessionRequest {
-            method: Method::Get,
-            path: "/rate_limit".to_owned(),
-            query: None,
-            headers: Vec::new(),
-            body: Vec::new(),
-        };
-        let config = curl_config(
-            "https://api.github.com/rate_limit",
-            &request,
-            Path::new("/tmp/request-body"),
-            Path::new("/tmp/request-output"),
-            Duration::from_secs(transport.max_time_seconds),
-        )
-        .map_err(|_| "invalid curl configuration")?;
-
-        assert!(config.lines().any(|line| line == "max-time = 60.000"));
-        Ok(())
     }
 }

@@ -1,0 +1,17 @@
+{
+  "base_commit": "1ec5c6b3486bc14ce3ab27a6c7026f9d0b93ad7e",
+  "source_manifest_sha256": "7dad3a9913f9acfb689066119c071fec416096a0f978c200614ef8836d6117fc",
+  "independent_review_sha256": "894f0cef55143c63e6b4445490ab33740d049cf621a84d94986ed24c9c44c89b",
+  "language_review": "PASS",
+  "response_limit_bytes": 1048576,
+  "isolated_nextest": {
+    "result": "PASS",
+    "passed": 17,
+    "run_id": "7a37a3b7-f6b7-4a1d-9475-d84aaffb7a96",
+    "log_sha256": "4e7f776b9cd8354c85fac300184d1832d51f5a6bedf00d421fedb8c42dc5bfba"
+  },
+  "format": "PASS",
+  "integrated_nextest": "NOT_RUN",
+  "full_strict_clippy": "FAIL",
+  "live_test": "NOT_RUN"
+}

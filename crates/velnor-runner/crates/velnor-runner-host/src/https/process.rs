@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{self, TryRecvError};
@@ -7,20 +7,31 @@ use std::time::{Duration, Instant};
 
 use super::{CURL_ARGV, CurlFail, classify_exit};
 
-pub(super) fn run_curl(config: &str, deadline: Instant) -> Result<u16, CurlFail> {
-    run_curl_with_home(config, None, deadline)
+pub(super) fn run_curl(
+    config: &str,
+    deadline: Instant,
+    max_response_bytes: usize,
+) -> Result<(u16, Vec<u8>), CurlFail> {
+    run_curl_with_home(config, None, deadline, max_response_bytes)
 }
 
 #[cfg(test)]
 pub(super) fn run_in_home(config: &str, home: &Path) -> Result<u16, CurlFail> {
-    run_curl_with_home(config, Some(home), Instant::now() + Duration::from_secs(60))
+    run_curl_with_home(
+        config,
+        Some(home),
+        Instant::now() + Duration::from_secs(60),
+        super::MAX_RESPONSE_BODY_BYTES,
+    )
+    .map(|(status, _)| status)
 }
 
 fn run_curl_with_home(
     config: &str,
     home: Option<&Path>,
     deadline: Instant,
-) -> Result<u16, CurlFail> {
+    max_response_bytes: usize,
+) -> Result<(u16, Vec<u8>), CurlFail> {
     if Instant::now() >= deadline {
         return Err(CurlFail::Timeout);
     }
@@ -35,9 +46,60 @@ fn run_curl_with_home(
         .stderr(Stdio::null())
         .spawn()
         .map_err(|_| CurlFail::Reset)?;
-    write_config_until(&mut child, config.as_bytes(), deadline)?;
-    let finished = wait_until(child, deadline)?;
-    classify_exit(finished.status.code(), &finished.stdout)
+    let Some(stdout) = child.stdout.take() else {
+        stop_child(&mut child);
+        return Err(CurlFail::Reset);
+    };
+    let Ok(reader) = thread::Builder::new()
+        .name("velnor-https-response".to_owned())
+        .spawn(move || read_bounded_response(stdout, max_response_bytes))
+    else {
+        stop_child(&mut child);
+        return Err(CurlFail::Reset);
+    };
+    if let Err(error) = write_config_until(&mut child, config.as_bytes(), deadline) {
+        stop_child(&mut child);
+        let _reader_result = reader.join();
+        return Err(error);
+    }
+    let finished = wait_until(child, deadline);
+    let response = reader.join().map_err(|_| CurlFail::Reset)??;
+    let finished = finished?;
+    let status = classify_exit(finished.status.code(), &response.status)?;
+    Ok((status, response.body))
+}
+
+struct BoundedResponse {
+    body: Vec<u8>,
+    status: Vec<u8>,
+}
+
+fn read_bounded_response<R: Read>(
+    mut reader: R,
+    max_body_bytes: usize,
+) -> Result<BoundedResponse, CurlFail> {
+    let mut body = Vec::with_capacity(max_body_bytes);
+    let mut trailer = Vec::with_capacity(3);
+    let mut chunk = [0_u8; 8192];
+    loop {
+        let read = reader.read(&mut chunk).map_err(|_| CurlFail::Reset)?;
+        if read == 0 {
+            break;
+        }
+        trailer.extend_from_slice(&chunk[..read]);
+        if trailer.len() > 3 {
+            let body_bytes = trailer.len() - 3;
+            if body.len().saturating_add(body_bytes) > max_body_bytes {
+                return Err(CurlFail::ResponseTooLarge);
+            }
+            body.extend_from_slice(&trailer[..body_bytes]);
+            trailer.drain(..body_bytes);
+        }
+    }
+    Ok(BoundedResponse {
+        body,
+        status: trailer,
+    })
 }
 
 fn write_config_until(child: &mut Child, config: &[u8], deadline: Instant) -> Result<(), CurlFail> {

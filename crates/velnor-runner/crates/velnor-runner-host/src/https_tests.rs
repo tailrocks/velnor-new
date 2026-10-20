@@ -10,7 +10,8 @@ use std::time::{Duration, Instant};
 use velnor_runner_github::{Method, SessionRequest};
 
 use super::https::{
-    CURL_ARGV, HttpsTransport, join_url, request_deadline_at, run_curl_in_home, trace_lines,
+    CURL_ARGV, HttpsTransport, exchange_fixture_response, join_url, request_deadline_at,
+    run_curl_in_home, trace_lines,
 };
 use crate::error::HostError;
 
@@ -64,6 +65,48 @@ fn expired_absolute_deadline_has_no_remaining_request_time() {
 }
 
 #[test]
+fn bounded_response_accepts_the_exact_limit_without_truncation()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = ResponseFixture::start(
+        "HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: close\r\n\r\n",
+        b"four".to_vec(),
+    )?;
+    let exchange = exchange_fixture_response(&fixture.base, 4)?;
+    fixture.finish()?;
+
+    assert_eq!(exchange.status, 200);
+    assert_eq!(exchange.body, b"four");
+    Ok(())
+}
+
+#[test]
+fn bounded_response_rejects_oversized_content_length() -> Result<(), Box<dyn std::error::Error>> {
+    let fixture = ResponseFixture::start(
+        "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\n",
+        b"12345".to_vec(),
+    )?;
+    let result = exchange_fixture_response(&fixture.base, 4);
+    let _server_result = fixture.finish();
+
+    assert!(result.is_err());
+    Ok(())
+}
+
+#[test]
+fn bounded_response_rejects_streamed_body_without_content_length()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = ResponseFixture::start(
+        "HTTP/1.0 200 OK\r\nConnection: close\r\n\r\n",
+        vec![b'x'; 32 * 1024],
+    )?;
+    let result = exchange_fixture_response(&fixture.base, 4);
+    let _server_result = fixture.finish();
+
+    assert!(result.is_err());
+    Ok(())
+}
+
+#[test]
 fn join_keeps_the_encoded_query() {
     let url = join_url(
         "https://api.github.com",
@@ -102,11 +145,9 @@ fn curl_ignores_retrying_curlrc_before_a_post() -> Result<(), Box<dyn std::error
         "retry = 1\nretry-all-errors\nretry-delay = 0\n",
     )?;
     let server = RetryFixture::start()?;
-    let output = home.path.join("response");
     let config = format!(
-        "request = \"POST\"\nurl = \"http://{}/create\"\noutput = \"{}\"\nwrite-out = \"%{{http_code}}\"\nmax-time = 5\n",
-        server.address,
-        output.display()
+        "request = \"POST\"\nurl = \"http://{}/create\"\noutput = \"-\"\nwrite-out = \"%{{http_code}}\"\nmax-time = 5\n",
+        server.address
     );
 
     let result = run_curl_in_home(&config, &home.path);
@@ -255,4 +296,37 @@ fn respond(stream: &mut TcpStream, status: u16) -> std::io::Result<()> {
         stream,
         "HTTP/1.1 {status} {reason}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
     )
+}
+
+struct ResponseFixture {
+    base: String,
+    server: JoinHandle<std::io::Result<()>>,
+}
+
+impl ResponseFixture {
+    fn start(head: &'static str, body: Vec<u8>) -> std::io::Result<Self> {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let address = listener.local_addr()?;
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept()?;
+            read_headers(&mut stream)?;
+            stream.write_all(head.as_bytes())?;
+            for chunk in body.chunks(1024) {
+                if stream.write_all(chunk).is_err() {
+                    break;
+                }
+            }
+            Ok(())
+        });
+        Ok(Self {
+            base: format!("http://{address}"),
+            server,
+        })
+    }
+
+    fn finish(self) -> std::io::Result<()> {
+        self.server
+            .join()
+            .map_err(|_| std::io::Error::other("The response test fixture failed."))?
+    }
 }
