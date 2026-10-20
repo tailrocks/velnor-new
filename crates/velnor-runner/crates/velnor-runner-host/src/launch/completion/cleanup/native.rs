@@ -168,17 +168,13 @@ async fn remove_owned_containers(
         ),
     ];
     for (container_id, name, role) in expected {
-        remove_container(
-            context,
-            launch,
-            claim,
-            budget,
-            container_id,
-            &name,
+        let target = docker::ContainerDeletion {
+            id: container_id,
+            name: &name,
             role,
             identity,
-        )
-        .await?;
+        };
+        remove_container(context, launch, claim, budget, &target).await?;
     }
     Ok(())
 }
