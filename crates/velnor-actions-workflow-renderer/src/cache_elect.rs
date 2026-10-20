@@ -140,13 +140,10 @@ fn tools_save_steps(job: &Job) -> Vec<&Step> {
 }
 
 fn expected_tools_save(key: &str, policy: PullRequestCachePolicy) -> Result<Step, RenderError> {
-    let mut expected = crate::steps::tools_cache_step(
-        false,
+    crate::steps::tools_cache_save_step(
         key,
         Some(crate::cache_p08::tools_cache_save_condition(policy)),
-    )?;
-    expected.role = Some(StepRole::ToolsCacheSave);
-    Ok(expected)
+    )
 }
 
 fn validate_existing_tools_save(
