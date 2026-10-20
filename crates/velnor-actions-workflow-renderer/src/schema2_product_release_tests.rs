@@ -232,52 +232,87 @@ fn only_requested_families_are_composed() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn generator_publisher_stays_inside_the_typed_release_graph() {
-    assert!(family::publish_script(Family::Generator, &test_pins()).is_err());
+
+fn binary_release_binds_the_built_helper_and_publishes_both_files() -> Result<(), Box<dyn Error>> {
+    let product = product(&[RoutingWorkflow::MacosBinaryRelease])?;
+    let body = all_text(&product);
+    let pins = test_pins();
+    let helper_build = pins.attestation_helper_build_argv.join(" ");
+    let host_build = pins.runner_build_argv.join(" ");
+    let helper_position = body
+        .find(&helper_build)
+        .ok_or("The helper build command is missing from the workflow.")?;
+    let digest_position = body
+        .find("helper_sha=")
+        .ok_or("The helper digest is missing from the workflow.")?;
+    let host_position = body
+        .find(&host_build)
+        .ok_or("The host build command is missing from the workflow.")?;
+
+    assert!(helper_position < digest_position && digest_position < host_position);
+    assert!(body.contains("VELNOR_RUNNER_BUILD_SOURCE_SHA"));
+    assert!(body.contains("VELNOR_RUNNER_BUILD_HELPER_SHA256"));
+    assert!(body.contains("$VELNOR_SOURCE_SHA"));
+    assert!(body.contains("$helper_sha"));
+    assert!(!body.contains("export VELNOR_ATTESTATION_HELPER_SHA256="));
+    assert!(body.contains("VELNOR_SOURCE_SHA"));
+    assert!(body.contains("cp "));
+    assert!(body.contains("$helper_path"));
+    assert!(body.contains("velnor-runner-attestation-helper"));
+    assert!(
+        body.contains("shasum -a 256 velnor-host velnor-runner-attestation-helper > SHA256SUMS")
+    );
+    assert_eq!(
+        family::Family::Binary.asset_names(),
+        [
+            "velnor-host",
+            "velnor-runner-attestation-helper",
+            "SHA256SUMS"
+        ]
+        .map(str::to_owned)
+    );
+    Ok(())
 }
 
 #[test]
-fn generator_prepare_uses_the_canonical_inventory_and_manifest_bytes() {
-    let generator =
-        family::prepare_script(Family::Generator, &test_pins()).expect("generator prepare script");
-    let version = env!("CARGO_PKG_VERSION");
-    let linux_checksum =
-        format!("$temp_dir/linux-assets/velnor-actions-{version}-x86_64-unknown-linux-gnu.sha256");
-    let arm_checksum =
-        format!("$temp_dir/macos-assets/velnor-actions-{version}-aarch64-apple-darwin.sha256");
-    let intel_checksum =
-        format!("$temp_dir/macos-intel-assets/velnor-actions-{version}-x86_64-apple-darwin.sha256");
-    let tag = format!("readonly fixed_tag='v{version}'");
-    for required in [
-        "--dir \"$temp_dir/linux-assets\"",
-        "--dir \"$temp_dir/macos-assets\"",
-        "--dir \"$temp_dir/macos-intel-assets\"",
-        &linux_checksum,
-        &arm_checksum,
-        &intel_checksum,
-        "cmp release-manifest.json manifest-assets/release-manifest.json",
-        &tag,
-        ".target_commitish == $sha",
-        "tag does not resolve to the exact source commit",
-    ] {
-        assert!(
-            generator.contains(required),
-            "missing {required}: {generator}"
-        );
-    }
-    assert_eq!(generator.matches("--pattern '").count(), 20);
-    assert!(!generator.contains("velnor-actions-0.1.0"));
+fn binary_host_build_identity_uses_only_the_measured_helper_and_release_source()
+-> Result<(), Box<dyn Error>> {
+    let product = product(&[RoutingWorkflow::MacosBinaryRelease])?;
+    let body = all_text(&product);
+    let digest_position = body.find("helper_sha=").ok_or("helper digest is absent")?;
+    let source_binding_position = body
+        .find("VELNOR_RUNNER_BUILD_SOURCE_SHA")
+        .ok_or("host source identity mapping is absent")?;
+    let helper_binding_position = body
+        .find("VELNOR_RUNNER_BUILD_HELPER_SHA256")
+        .ok_or("host helper identity mapping is absent")?;
+    let host_build = test_pins().runner_build_argv.join(" ");
+    let host_position = body
+        .find(&host_build)
+        .ok_or("host build command is absent")?;
+
+    assert!(
+        digest_position < source_binding_position
+            && source_binding_position < helper_binding_position
+            && helper_binding_position < host_position
+    );
+    assert!(!body.contains("VELNOR_RUNNER_BUILD_SOURCE_SHA:"));
+    assert!(!body.contains("VELNOR_RUNNER_BUILD_HELPER_SHA256:"));
+    assert!(!body.contains("export VELNOR_ATTESTATION_HELPER_SHA256="));
+    Ok(())
 }
 
 #[test]
 fn non_generator_publication_keeps_immutable_tag_and_attestation_checks() {
     let pins = test_pins();
-    let images = family::prepare_script(Family::Images, &pins).expect("image prepare script");
+    let images = family::prepare_script(Family::Images, &pins)
+        .expect("Could not build the image prepare script.");
     assert!(images.contains("--dir \"$temp_dir/assets\""));
     assert!(images.contains("velnor-runner-linux-amd64.tar"));
     assert!(images.contains("velnor-dind-linux-amd64.tar"));
 
-    let publisher = family::publish_script(Family::Binary, &pins).expect("binary publish script");
+    let publisher = family::publish_script(Family::Binary, &pins)
+        .expect("Could not build the binary publish script.");
     assert!(publisher.contains("assets/velnor-host"));
     assert!(publisher.contains("velnor-host binary built from $release_source_sha."));
     assert!(publisher.contains("--source-ref refs/heads/main"));
@@ -285,10 +320,12 @@ fn non_generator_publication_keeps_immutable_tag_and_attestation_checks() {
     assert!(publisher.contains("--latest=false"));
     assert!(publisher.contains("--draft"));
     assert!(publisher.contains("--verify-tag"));
-    let create_ref = publisher.find("git/refs").expect("explicit tag creation");
+    let create_ref = publisher
+        .find("git/refs")
+        .expect("The publisher script must create the tag explicitly.");
     let create_release = publisher
         .find("family_gh release create")
-        .expect("draft release creation");
+        .expect("The publisher script must create the draft release.");
     assert!(create_ref < create_release, "{publisher}");
 }
 

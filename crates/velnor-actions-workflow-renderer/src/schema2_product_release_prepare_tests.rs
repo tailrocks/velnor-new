@@ -1,9 +1,45 @@
-use std::error::Error;
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-use super::test_pins;
-use super::{Family, family};
+use super::*;
+
+#[test]
+fn generator_publisher_stays_inside_the_typed_release_graph() {
+    assert!(family::publish_script(Family::Generator, &test_pins()).is_err());
+}
+
+#[test]
+fn generator_prepare_uses_the_canonical_inventory_and_manifest_bytes() {
+    let generator = family::prepare_script(Family::Generator, &test_pins())
+        .expect("Could not build the generator prepare script.");
+    let version = env!("CARGO_PKG_VERSION");
+    let linux_checksum =
+        format!("$temp_dir/linux-assets/velnor-actions-{version}-x86_64-unknown-linux-gnu.sha256");
+    let arm_checksum =
+        format!("$temp_dir/macos-assets/velnor-actions-{version}-aarch64-apple-darwin.sha256");
+    let intel_checksum =
+        format!("$temp_dir/macos-intel-assets/velnor-actions-{version}-x86_64-apple-darwin.sha256");
+    let tag = format!("readonly fixed_tag='v{version}'");
+    for required in [
+        "--dir \"$temp_dir/linux-assets\"",
+        "--dir \"$temp_dir/macos-assets\"",
+        "--dir \"$temp_dir/macos-intel-assets\"",
+        &linux_checksum,
+        &arm_checksum,
+        &intel_checksum,
+        "cmp release-manifest.json manifest-assets/release-manifest.json",
+        &tag,
+        ".target_commitish == $sha",
+        "tag does not resolve to the exact source commit",
+    ] {
+        assert!(
+            generator.contains(required),
+            "missing {required}: {generator}"
+        );
+    }
+    assert_eq!(generator.matches("--pattern '").count(), 20);
+    assert!(!generator.contains("velnor-actions-0.1.0"));
+}
 
 #[test]
 fn generator_prepare_rerun_requires_source_target_and_exact_source_tag()
@@ -29,35 +65,35 @@ fn generator_prepare_rerun_requires_source_target_and_exact_source_tag()
 fn extract_prepare_expected_assets(script: &str) -> Result<&str, Box<dyn Error>> {
     let start = script
         .find("readonly prepare_expected_assets='")
-        .ok_or("generator prepare asset list is missing")?
+        .ok_or("The generator prepare script has no asset list.")?
         + "readonly prepare_expected_assets='".len();
     let end = script[start..]
         .find('\'')
         .map(|offset| start + offset)
-        .ok_or("generator prepare asset list is unterminated")?;
+        .ok_or("The generator prepare asset list has no closing delimiter.")?;
     Ok(&script[start..end])
 }
 
 fn extract_prepare_metadata_predicate(script: &str) -> Result<&str, Box<dyn Error>> {
     let start = script
         .find("'.[0] as $release")
-        .ok_or("generator prepare metadata predicate is missing")?
+        .ok_or("The generator prepare script has no metadata check.")?
         + 1;
     let end = script[start..]
         .find(")' \\\n  <<<\"$matches\"")
         .map(|offset| start + offset + 1)
-        .ok_or("generator prepare metadata predicate is unterminated")?;
+        .ok_or("The generator prepare metadata check has no closing delimiter.")?;
     Ok(&script[start..end])
 }
 
 fn extract_prepare_tag_function(script: &str) -> Result<&str, Box<dyn Error>> {
     let start = script
         .find("assert_tag_target() {")
-        .ok_or("generator prepare tag check is missing")?;
+        .ok_or("The generator prepare script has no tag check.")?;
     let end = script[start..]
         .find("\n}\n")
         .map(|offset| start + offset + 2)
-        .ok_or("generator prepare tag check is unterminated")?;
+        .ok_or("The generator prepare tag check has no closing delimiter.")?;
     Ok(&script[start..end])
 }
 
@@ -105,7 +141,7 @@ fn run_prepare_metadata_predicate(
     child
         .stdin
         .take()
-        .ok_or("could not write generator release fixture")?
+        .ok_or("Could not write the generator release fixture.")?
         .write_all(release.as_bytes())?;
     Ok(child.wait_with_output()?.status.success())
 }

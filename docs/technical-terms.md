@@ -77,3 +77,9 @@
 | DDL | SQL statements that define or change database objects. |
 
 | Physical attempt | An attempt to start an acquired request with one reservation. |
+
+| Artifact | One or more files that a workflow produces. |
+
+| Artifact attestation | A record that identifies an artifact and the workflow that produced it. |
+
+| Attestation helper | A program that does a check of artifact attestations for the host. |

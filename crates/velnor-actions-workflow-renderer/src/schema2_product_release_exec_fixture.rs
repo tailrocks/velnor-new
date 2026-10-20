@@ -36,7 +36,10 @@ pub(super) struct ResultRecord {
 impl Fixture {
     pub(super) fn new(family: Family, mode: &'static str) -> Result<Self, Box<dyn Error>> {
         if family == Family::Generator {
-            return Err("generator release requires the canonical manifest fixture".into());
+            return Err(
+                "This fixture does not support a generator release without the canonical manifest."
+                    .into(),
+            );
         }
         let id = NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed);
         let root = std::env::temp_dir().join(format!(
@@ -127,8 +130,25 @@ impl Fixture {
                 "RESOURCE_PROBE_MANIFEST.json",
                 "SHA256SUMS",
             ],
-            Family::Binary => &["velnor-host", "SHA256SUMS"],
+            Family::Binary => &[
+                "velnor-host",
+                "velnor-runner-attestation-helper",
+                "SHA256SUMS",
+            ],
             Family::Generator => &[],
+        }
+    }
+
+    fn published_assets(&self) -> Vec<&'static str> {
+        match self.mode {
+            "missing-helper" => vec!["velnor-host", "SHA256SUMS"],
+            "unexpected-asset" => vec![
+                "velnor-host",
+                "velnor-runner-attestation-helper",
+                "unexpected-binary",
+                "SHA256SUMS",
+            ],
+            _ => self.assets().to_vec(),
         }
     }
 
@@ -139,7 +159,9 @@ impl Fixture {
     fn write_api_fixtures(&self) -> Result<(), Box<dyn Error>> {
         let initial = match self.mode {
             "draft" => release_page(self, true, false),
-            "complete" | "wrong-target" => release_page(self, false, true),
+            "complete" | "wrong-target" | "missing-helper" | "unexpected-asset" => {
+                release_page(self, false, true)
+            }
             _ => "[[]]".to_owned(),
         };
         fs::write(self.root.join("releases.json"), initial)?;
@@ -147,7 +169,15 @@ impl Fixture {
             self.root.join("published.json"),
             release_object(self, false, self.mode != "mutable"),
         )?;
-        let ref_page = if matches!(self.mode, "complete" | "draft" | "orphan" | "wrong-target") {
+        let ref_page = if matches!(
+            self.mode,
+            "complete"
+                | "draft"
+                | "orphan"
+                | "wrong-target"
+                | "missing-helper"
+                | "unexpected-asset"
+        ) {
             format!(r#"[[{{"ref":"refs/tags/{}"}}]]"#, self.tag())
         } else {
             "[[]]".to_owned()
@@ -190,7 +220,15 @@ impl Fixture {
             ),
         )?;
         fs::write(self.root.join("tag-created"), "")?;
-        if !matches!(self.mode, "complete" | "draft" | "orphan" | "wrong-target") {
+        if !matches!(
+            self.mode,
+            "complete"
+                | "draft"
+                | "orphan"
+                | "wrong-target"
+                | "missing-helper"
+                | "unexpected-asset"
+        ) {
             fs::remove_file(self.root.join("tag-created"))?;
         }
         Ok(())
@@ -214,7 +252,7 @@ impl Fixture {
                 fs::write(directory.join("SHA256SUMS"), sums)?;
             }
             Family::Generator => {
-                return Err("generator release assets need canonical provenance".into());
+                return Err("The generator release assets need canonical provenance.".into());
             }
         }
         Ok(())
@@ -224,7 +262,7 @@ impl Fixture {
 impl Drop for Fixture {
     fn drop(&mut self) {
         if let Err(error) = fs::remove_dir_all(&self.root) {
-            eprintln!("release test fixture cleanup failed: {error}");
+            eprintln!("The release test fixture cleanup failed: {error}.");
         }
     }
 }
@@ -235,7 +273,7 @@ fn release_page(fixture: &Fixture, draft: bool, immutable: bool) -> String {
 
 fn release_object(fixture: &Fixture, draft: bool, immutable: bool) -> String {
     let assets = fixture
-        .assets()
+        .published_assets()
         .iter()
         .map(|asset| {
             format!(

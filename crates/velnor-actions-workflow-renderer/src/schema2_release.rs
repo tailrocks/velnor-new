@@ -23,18 +23,21 @@ const MACOS_RUNS_ON: &str = "macos-15";
 const ASSET_DIR: &str = "assets";
 pub(super) const CHECKSUMS: &str = "SHA256SUMS";
 const HOST_BIN: &str = "velnor-host";
+const ATTESTATION_HELPER_BIN: &str = "velnor-runner-attestation-helper";
 
 const BINARY_VERIFY: &str = "\
 set -eu
-desc=\"$(file -b velnor-host)\"
-case \"$desc\" in
-  *Mach-O*arm64*) ;;
-  *) echo \"not an arm64 Mach-O: $desc\" >&2; exit 1 ;;
-esac";
+for binary in velnor-host velnor-runner-attestation-helper; do
+  desc=\"$(file -b \"$binary\")\"
+  case \"$desc\" in
+    *Mach-O*arm64*) ;;
+    *) echo \"The binary is not an arm64 Mach-O file: $binary: $desc.\" >&2; exit 1 ;;
+  esac
+done";
 
 const BINARY_SUM: &str = "\
 set -eu
-shasum -a 256 velnor-host > SHA256SUMS";
+shasum -a 256 velnor-host velnor-runner-attestation-helper > SHA256SUMS";
 
 /// Image release: build both linux/amd64 images, attest, then upload assets.
 ///
@@ -57,11 +60,12 @@ pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Y
         .ok_or_else(|| RenderError::InvalidWorkflow("product_release_pins_missing".to_owned()))?;
     let install = join_argv_for_run(&pins.install_build_tools_argv)?;
     let build = format!(
-        "set -eu\n{}\ncp crates/velnor-runner/target/release/velnor-host velnor-host\ntest -s velnor-host",
-        join_argv_for_run(&pins.runner_build_argv)?
+        "set -eu\n: \"${{VELNOR_SOURCE_SHA:?}}\"\n{}\nhelper_path=crates/velnor-runner/target/release/velnor-runner-attestation-helper\ntest -s \"$helper_path\"\nhelper_sha=\"$(shasum -a 256 \"$helper_path\" | awk 'NR == 1 {{ print $1 }}')\"\n[[ \"$helper_sha\" =~ ^[0-9a-f]{{64}}$ ]]\nenv VELNOR_RUNNER_BUILD_SOURCE_SHA=\"$VELNOR_SOURCE_SHA\" VELNOR_RUNNER_BUILD_HELPER_SHA256=\"$helper_sha\" {}\ncp crates/velnor-runner/target/release/velnor-host velnor-host\ncp \"$helper_path\" velnor-runner-attestation-helper\ntest -s velnor-host\ntest -s velnor-runner-attestation-helper\ntest \"$(shasum -a 256 velnor-runner-attestation-helper | awk 'NR == 1 {{ print $1 }}')\" = \"$helper_sha\"",
+        join_argv_for_run(&pins.attestation_helper_build_argv)?,
+        join_argv_for_run(&pins.runner_build_argv)?,
     );
     let macos = runs_on_yaml(MACOS_RUNS_ON)?;
-    let files = [HOST_BIN, CHECKSUMS];
+    let files = [HOST_BIN, ATTESTATION_HELPER_BIN, CHECKSUMS];
     Ok(document(
         "macOS binary release",
         vec![
@@ -73,7 +77,7 @@ pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Y
                 vec![
                     generator_release::mise_setup_step(pins, ReleaseTarget::MacosArm64)?,
                     run_step("Install pinned Rust and MBX", &install),
-                    run_step("Build velnor-host with MBX", &build),
+                    run_step("Build helper and bind digest into velnor-host", &build),
                     run_step("Verify Mach-O architecture", BINARY_VERIFY),
                     run_step("Checksum built bytes", BINARY_SUM),
                 ],
