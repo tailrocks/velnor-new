@@ -1,0 +1,92 @@
+{
+  "change": "Merge main and preserve the runner changes.",
+  "source_head": "46fc93d3f9f2329d9d8707dc590a3536bd7b202b",
+  "main": "9102646d80d0aadd05cac536b94ae830c4855e05",
+  "time_utc": "2026-10-20T22:48:21.832571+00:00",
+  "checks": [
+    {
+      "check": "check-v2",
+      "status": "PASS",
+      "log": "evidence/main-910-check-v2-20261021.log",
+      "sha256": "e8040e6919eac5b5ac81a73a9f876fb44ac793318200f74a3f88305b15dd8c8f",
+      "nextest_run_ids": []
+    },
+    {
+      "check": "fmt",
+      "status": "PASS",
+      "log": "evidence/main-910-fmt-20261021.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "nextest_run_ids": []
+    },
+    {
+      "check": "clippy",
+      "status": "PASS",
+      "log": "evidence/main-910-clippy-20261021.log",
+      "sha256": "fb64533f192528b1201457a76854abb9f7dd04228512ba124c3d1efb3dbc85e6",
+      "nextest_run_ids": []
+    },
+    {
+      "check": "nextest",
+      "status": "PASS",
+      "log": "evidence/main-910-nextest-20261021.log",
+      "sha256": "ea779b3dcfd91a8b989b3c6311bbd82962e2c18edd3a363f410e4ae711518687",
+      "nextest_run_ids": [
+        "93f9f893-b274-4bbd-912f-853d08dffc4b"
+      ]
+    },
+    {
+      "check": "parity-check",
+      "status": "PASS",
+      "log": "evidence/main-910-parity-check-20261021.log",
+      "sha256": "575fff10a7d06ed2d3655ae5cc73eab1232a9e5b2c17aae62413e3557c903fa2",
+      "nextest_run_ids": [
+        "387142f7-88c7-46a5-a1cd-579948d81a5b"
+      ]
+    },
+    {
+      "check": "generated-tree",
+      "status": "PASS",
+      "log": "evidence/main-910-generated-tree-20261021.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "nextest_run_ids": []
+    },
+    {
+      "check": "golden-check",
+      "status": "PASS",
+      "log": "evidence/main-910-golden-check-20261021.log",
+      "sha256": "f9f7d45211fe7c6caa15ae755fa743666289054d857f8937a2c263a8fa537d54",
+      "nextest_run_ids": []
+    },
+    {
+      "check": "alint-config",
+      "status": "PASS",
+      "log": "evidence/main-910-alint-config-20261021.log",
+      "sha256": "0b5eaf285eca0479c08ac7d9cfe273d051bae0f8745289298b4f92f527a198c0",
+      "nextest_run_ids": []
+    },
+    {
+      "check": "alint",
+      "status": "PASS",
+      "log": "evidence/main-910-alint-20261021.log",
+      "sha256": "c5957a5cc162f430bc9bb1b8dad09fe6fda2d5b5cd59e2c62f4b4b64051f1ccb",
+      "nextest_run_ids": []
+    }
+  ],
+  "selected_tests": 291,
+  "parity_check_tests": 1,
+  "generation_count": 2,
+  "generated_entries": 252,
+  "generation_bytes": "IDENTICAL",
+  "golden_update": "The first parity test updated generated files. The next test checked them without update mode.",
+  "alint_info_count": 4,
+  "independent_review": {
+    "author": "/root/runtime_stack_architecture",
+    "scope": "Configuration, dependencies, test registration, and publication permissions.",
+    "status": "PASS",
+    "kind": "Source review."
+  },
+  "full_root_suite": "NOT_RUN",
+  "full_runner_gates": "NOT_RUN",
+  "release": "NOT_RUN",
+  "consumer_installation": "NOT_RUN"
+}

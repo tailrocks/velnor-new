@@ -18,7 +18,7 @@ fn run(ci: bool) -> Value {
 }
 fn consumer_job() -> Value {
     json!({"id":404,"run_id":202,"name":"preview-assemble","head_sha":"a".repeat(40),
-        "status":"in_progress","conclusion":null})
+        "status":"in_progress","conclusion":null,"started_at":"2026-10-20T20:54:22Z"})
 }
 fn responses() -> Vec<(String, Value)> {
     let channel = PackageReleaseChannel::Preview;
@@ -262,16 +262,7 @@ fn assembler_job_inventory_requires_complete_stable_pages_and_unique_ids() {
             .collect::<Vec<_>>()
     };
     let (api, fixture) = GitHubApi::with_fixture("example/app", queued(pages.to_vec()));
-    ReleaseArtifactApi {
-        api,
-        repository: "example/app".into(),
-    }
-    .require_active_consumer(
-        PackageReleaseChannel::Preview,
-        &request().context,
-        ReleaseConsumer::Assembler,
-    )
-    .expect("second-page exact consumer");
+    active_consumer(&api).expect("second-page exact consumer");
     fixture.assert_drained();
     let mut cases = Vec::new();
     let mut truncated = pages.to_vec();
@@ -291,18 +282,7 @@ fn assembler_job_inventory_requires_complete_stable_pages_and_unique_ids() {
     cases.push(exceeded);
     for pages in cases {
         let (api, _) = GitHubApi::with_fixture("example/app", queued(pages));
-        assert!(
-            ReleaseArtifactApi {
-                api,
-                repository: "example/app".into()
-            }
-            .require_active_consumer(
-                PackageReleaseChannel::Preview,
-                &request().context,
-                ReleaseConsumer::Assembler
-            )
-            .is_err()
-        );
+        assert!(active_consumer(&api).is_err());
     }
 }
 
@@ -328,4 +308,28 @@ fn source_free_signer_requires_its_own_active_job_not_the_assembler() {
     .authenticate(&request.plan, &request.context, ReleaseConsumer::Signer)
     .expect("exact native signer");
     fixture.assert_drained();
+}
+
+fn active_consumer(api: &GitHubApi) -> Result<(), OrchestratorError> {
+    let request = request();
+    let workflow = super::super::WorkflowMetadata {
+        id: 8,
+        name: request.plan.channel.workflow_name().to_owned(),
+        path: request.plan.channel.workflow_path().to_owned(),
+        state: "active".to_owned(),
+    };
+    api.require_active_job(
+        &CurrentRun {
+            id: request.context.run_id,
+            attempt: request.context.run_attempt,
+            source: RunSource {
+                repository_id: request.context.repository_id,
+                sha: &request.context.source_sha,
+                branch: &request.plan.default_branch,
+            },
+            workflow: &workflow,
+            event: request.plan.channel.event().as_str(),
+        },
+        request.plan.channel.assemble_job_id(),
+    )
 }

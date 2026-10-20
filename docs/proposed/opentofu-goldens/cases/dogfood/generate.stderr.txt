@@ -16,6 +16,7 @@ Repository: <repo>
 .github/actions/generator-release-qualify-macos-intel/action.yml
 .github/actions/generator-release-qualify-macos/action.yml
 .github/actions/qualification-cache-after-save-cargo_sources-rust-velnor-actions-actionlint/action.yml
+.github/actions/qualification-cache-after-save-cargo_sources-rust-velnor-actions-ansible/action.yml
 .github/actions/qualification-cache-after-save-cargo_sources-rust-velnor-actions-bun/action.yml
 .github/actions/qualification-cache-after-save-cargo_sources-rust-velnor-actions-cli/action.yml
 .github/actions/qualification-cache-after-save-cargo_sources-rust-velnor-actions-contract/action.yml
@@ -35,6 +36,7 @@ Repository: <repo>
 .github/actions/qualification-cache-after-save-cargo_sources-rust-velnor-runner-github/action.yml
 .github/actions/qualification-cache-after-save-cargo_sources-rust-velnor-runner-host/action.yml
 .github/actions/qualification-cache-after-save-mbx_objects-rust-velnor-actions-actionlint/action.yml
+.github/actions/qualification-cache-after-save-mbx_objects-rust-velnor-actions-ansible/action.yml
 .github/actions/qualification-cache-after-save-mbx_objects-rust-velnor-actions-bun/action.yml
 .github/actions/qualification-cache-after-save-mbx_objects-rust-velnor-actions-cli/action.yml
 .github/actions/qualification-cache-after-save-mbx_objects-rust-velnor-actions-contract/action.yml
@@ -54,6 +56,7 @@ Repository: <repo>
 .github/actions/qualification-cache-after-save-mbx_objects-rust-velnor-runner-github/action.yml
 .github/actions/qualification-cache-after-save-mbx_objects-rust-velnor-runner-host/action.yml
 .github/actions/qualification-cache-after-save-mise_tools-rust-velnor-actions-actionlint/action.yml
+.github/actions/qualification-cache-after-save-mise_tools-rust-velnor-actions-ansible/action.yml
 .github/actions/qualification-cache-after-save-mise_tools-rust-velnor-actions-bun/action.yml
 .github/actions/qualification-cache-after-save-mise_tools-rust-velnor-actions-cli/action.yml
 .github/actions/qualification-cache-after-save-mise_tools-rust-velnor-actions-contract/action.yml
@@ -73,6 +76,7 @@ Repository: <repo>
 .github/actions/qualification-cache-after-save-mise_tools-rust-velnor-runner-github/action.yml
 .github/actions/qualification-cache-after-save-mise_tools-rust-velnor-runner-host/action.yml
 .github/actions/qualification-cache-after-save-task_result-rust-velnor-actions-actionlint/action.yml
+.github/actions/qualification-cache-after-save-task_result-rust-velnor-actions-ansible/action.yml
 .github/actions/qualification-cache-after-save-task_result-rust-velnor-actions-bun/action.yml
 .github/actions/qualification-cache-after-save-task_result-rust-velnor-actions-cli/action.yml
 .github/actions/qualification-cache-after-save-task_result-rust-velnor-actions-contract/action.yml
@@ -92,6 +96,7 @@ Repository: <repo>
 .github/actions/qualification-cache-after-save-task_result-rust-velnor-runner-github/action.yml
 .github/actions/qualification-cache-after-save-task_result-rust-velnor-runner-host/action.yml
 .github/actions/qualification-cache-after-save-tofu_providers-rust-velnor-actions-actionlint/action.yml
+.github/actions/qualification-cache-after-save-tofu_providers-rust-velnor-actions-ansible/action.yml
 .github/actions/qualification-cache-after-save-tofu_providers-rust-velnor-actions-bun/action.yml
 .github/actions/qualification-cache-after-save-tofu_providers-rust-velnor-actions-cli/action.yml
 .github/actions/qualification-cache-after-save-tofu_providers-rust-velnor-actions-contract/action.yml
@@ -111,6 +116,7 @@ Repository: <repo>
 .github/actions/qualification-cache-after-save-tofu_providers-rust-velnor-runner-github/action.yml
 .github/actions/qualification-cache-after-save-tofu_providers-rust-velnor-runner-host/action.yml
 .github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-actionlint/action.yml
+.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-ansible/action.yml
 .github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-bun/action.yml
 .github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-cli/action.yml
 .github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-contract/action.yml
@@ -130,6 +136,7 @@ Repository: <repo>
 .github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-runner-github/action.yml
 .github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-runner-host/action.yml
 .github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-actionlint/action.yml
+.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-ansible/action.yml
 .github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-bun/action.yml
 .github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-cli/action.yml
 .github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-contract/action.yml
@@ -149,6 +156,7 @@ Repository: <repo>
 .github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-runner-github/action.yml
 .github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-runner-host/action.yml
 .github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-actionlint/action.yml
+.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-ansible/action.yml
 .github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-bun/action.yml
 .github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-cli/action.yml
 .github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-contract/action.yml
@@ -168,6 +176,7 @@ Repository: <repo>
 .github/actions/qualification-cache-before-save-mise_tools-rust-velnor-runner-github/action.yml
 .github/actions/qualification-cache-before-save-mise_tools-rust-velnor-runner-host/action.yml
 .github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-actionlint/action.yml
+.github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-ansible/action.yml
 .github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-bun/action.yml
 .github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-cli/action.yml
 .github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-contract/action.yml
@@ -187,6 +196,7 @@ Repository: <repo>
 .github/actions/qualification-cache-before-save-task_result-rust-velnor-runner-github/action.yml
 .github/actions/qualification-cache-before-save-task_result-rust-velnor-runner-host/action.yml
 .github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-actionlint/action.yml
+.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-ansible/action.yml
 .github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-bun/action.yml
 .github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-cli/action.yml
 .github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-contract/action.yml
@@ -206,6 +216,7 @@ Repository: <repo>
 .github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-runner-github/action.yml
 .github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-runner-host/action.yml
 .github/actions/qualification-cache-prepare-rust-velnor-actions-actionlint/action.yml
+.github/actions/qualification-cache-prepare-rust-velnor-actions-ansible/action.yml
 .github/actions/qualification-cache-prepare-rust-velnor-actions-bun/action.yml
 .github/actions/qualification-cache-prepare-rust-velnor-actions-cli/action.yml
 .github/actions/qualification-cache-prepare-rust-velnor-actions-contract/action.yml

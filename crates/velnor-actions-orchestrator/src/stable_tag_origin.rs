@@ -11,8 +11,8 @@ use velnor_actions_contract::{
 };
 
 use super::{
-    github::{GitHubApi, GitRefResponse, WorkflowRunResponse, sha256},
-    run_identity::{RunSource, run_matches},
+    github::{GitHubApi, GitRefResponse, sha256},
+    run_identity::{CurrentRun, RunSource, release_job_name, run_matches},
 };
 use crate::{OrchestratorError, internal::internal};
 
@@ -237,16 +237,27 @@ fn authenticate_current(
     context: &ReleaseProductionContext,
     latest_ci: bool,
 ) -> Result<(), OrchestratorError> {
-    authenticate(api, plan, context, latest_ci)?;
-    let current: WorkflowRunResponse =
-        api.get_json(&api.route(&format!("actions/runs/{}", context.run_id)))?;
-    if current.id != Some(context.run_id)
-        || current.run_attempt != Some(context.run_attempt)
-        || current.head_sha.as_deref() != Some(context.source_sha.as_str())
-    {
-        return Err(internal("stable_tag_stale_current_attempt"));
-    }
-    api.verify_stable_tag_environment(&plan.default_branch)
+    api.verify_repository(context.repository_id)?;
+    api.verify_stable_tag_environment(&plan.default_branch)?;
+    let source = RunSource {
+        repository_id: context.repository_id,
+        sha: &context.source_sha,
+        branch: &plan.default_branch,
+    };
+    let workflow =
+        api.admitted_workflow(plan.channel.workflow_path(), plan.channel.workflow_name())?;
+    let job = release_job_name(plan, &required("GITHUB_JOB")?)?;
+    api.verify_current_role(
+        &CurrentRun {
+            id: context.run_id,
+            attempt: context.run_attempt,
+            source,
+            workflow: &workflow,
+            event: "workflow_dispatch",
+        },
+        &job,
+    )?;
+    authenticate_source(api, plan, context, source, latest_ci)
 }
 
 fn authenticate(
@@ -272,10 +283,23 @@ fn authenticate(
         context.run_attempt,
         source,
         "workflow_dispatch",
-    ) || !matches!(run.status.as_deref(), Some("in_progress" | "completed"))
+    ) || !matches!(
+        run.status.as_deref(),
+        Some("queued" | "in_progress" | "completed")
+    ) || (run.status.as_deref() != Some("completed") && run.conclusion.is_some())
     {
         return Err(internal("stable_tag_workflow_identity"));
     }
+    authenticate_source(api, plan, context, source, latest)
+}
+
+fn authenticate_source(
+    api: &GitHubApi,
+    plan: &PackageReleasePlan,
+    context: &ReleaseProductionContext,
+    source: RunSource<'_>,
+    latest: bool,
+) -> Result<(), OrchestratorError> {
     api.verify_ci_identity(context.ci_run_id, context.ci_run_attempt, source, latest)?;
     if latest {
         let current: GitRefResponse = api.get_json(&api.route(&format!(

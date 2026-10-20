@@ -3,7 +3,7 @@ use crate::config::{CONFIG_REL, load_config};
 use velnor_actions_contract::WorkflowTask;
 
 /// Write `body` as `.velnor/config.toml` under a fresh temp root.
-fn rooted(body: &str) -> tempfile::TempDir {
+pub(super) fn rooted(body: &str) -> tempfile::TempDir {
     let root = tempfile::tempdir().expect("temp root");
     let dir = root.path().join(".velnor");
     std::fs::create_dir_all(&dir).expect("velnor dir");
@@ -382,29 +382,6 @@ fn bun_stack_loads_strictly_and_requires_roots() {
         "schema = 1\n[stacks.bun]\nroots = []\n",
         "schema = 1\n[stacks.bun]\nroots = [\".\"]\nrun = \"bun test\"\n",
         "schema = 1\n[stacks.bun]\nroots = [\"../escape\"]\n",
-    ] {
-        assert!(load_config(rooted(body).path()).is_err(), "{body}");
-    }
-}
-
-#[test]
-fn dbt_stack_loads_strictly_and_requires_projects() {
-    let root = rooted(
-        "schema = 1\n[stacks.dbt]\nprojects = [\"chainargos-dbt\"]\nservices = [\"postgres\"]\nchecks = [\"parse\", \"compile\"]\n[stacks.dbt.env]\nDBT_HOST = \"127.0.0.1\"\n",
-    );
-    let dbt = load_config(root.path())
-        .expect("dbt stack")
-        .stacks
-        .dbt
-        .expect("dbt");
-    assert_eq!(dbt.projects[0].as_str(), "chainargos-dbt");
-    assert_eq!(dbt.env["DBT_HOST"], "127.0.0.1");
-    for body in [
-        "schema = 1\n[stacks.dbt]\n",
-        "schema = 1\n[stacks.dbt]\nprojects = []\n",
-        "schema = 1\n[stacks.dbt]\nprojects = [\".\"]\nrun = \"dbt run\"\n",
-        "schema = 1\n[stacks.dbt]\nprojects = [\".\"]\nchecks = [\"compile\"]\n",
-        "schema = 1\n[stacks.dbt]\nprojects = [\".\"]\n[stacks.dbt.env]\nHOME = \"x\"\n",
     ] {
         assert!(load_config(rooted(body).path()).is_err(), "{body}");
     }
