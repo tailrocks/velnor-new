@@ -26,7 +26,7 @@ fn asset(root: &Path) -> (PathBuf, AssetProof) {
 fn admitted_file_rejects_same_bytes_at_replaced_inode() {
     let root = tempfile::tempdir().expect("root");
     let (path, proof) = asset(root.path());
-    let held = PinnedAsset::new(&path, &proof, deadline()).expect("pin");
+    let held = HeldFile::new(&path, &proof.sha256, proof.size, deadline()).expect("pin");
     held.verify(deadline()).expect("unchanged");
     fs::rename(&path, root.path().join("original")).expect("move");
     fs::write(&path, b"abc").expect("same bytes new inode");
@@ -38,7 +38,7 @@ fn admitted_file_rejects_in_place_mutation_and_symbolic_replacement() {
     use std::os::unix::fs::symlink;
     let root = tempfile::tempdir().expect("root");
     let (path, proof) = asset(root.path());
-    let held = PinnedAsset::new(&path, &proof, deadline()).expect("pin");
+    let held = HeldFile::new(&path, &proof.sha256, proof.size, deadline()).expect("pin");
     fs::write(&path, b"abd").expect("mutate");
     assert!(held.verify(deadline()).is_err());
     fs::rename(&path, root.path().join("other")).expect("move");
@@ -106,16 +106,14 @@ fn private_upload_file_becomes_exact_0644_without_changing_bytes() {
 }
 
 #[test]
-fn hardlink_after_pin_cannot_be_admitted_by_a_refreshed_metadata_snapshot() {
+fn hardlink_after_pin_is_rejected_by_verification_and_normalization() {
     use std::os::unix::fs::MetadataExt;
     let root = tempfile::tempdir().expect("root");
     let (path, proof) = asset(root.path());
-    let mut held = PinnedAsset::new(&path, &proof, deadline()).expect("pin");
+    let held = HeldFile::new(&path, &proof.sha256, proof.size, deadline()).expect("pin");
     fs::hard_link(&path, root.path().join("alias")).expect("second link");
-    // Model the post-fchmod snapshot window, so an old ctime alone cannot make
-    // this negative pass: the current snapshot itself must reject two links.
-    held.original = held.file.metadata().expect("refreshed snapshot");
-    assert_eq!(held.original.nlink(), 2);
+    // Normalization may not turn a linked input into a newly admitted asset.
+    assert_eq!(held.file().metadata().expect("linked snapshot").nlink(), 2);
     assert!(held.verify(deadline()).is_err());
     assert!(normalize_upload_file(&path, &proof, deadline()).is_err());
     assert_eq!(fs::read(&path).expect("original remains"), b"abc");

@@ -329,3 +329,57 @@ fn permanent_tag_release_environment_requires_human_review_without_self_approval
         );
     }
 }
+
+#[test]
+fn status_reader_routes_are_closed_to_same_repository_metadata_and_settings() {
+    for suffix in [
+        "",
+        "/branches/main",
+        "/rules/branches/main",
+        "/branches/main/protection",
+        "/environments/release",
+        "/environments/preview-publish",
+        "/environments/tap-update",
+        "/environments/tap-update/deployment-branch-policies?per_page=100&page=1",
+    ] {
+        assert!(
+            super::validate_status_route("example/app", &format!("repos/example/app{suffix}"))
+                .is_ok()
+        );
+    }
+    for route in [
+        "repos/foreign/app",
+        "repos/example/app/contents/Cargo.toml",
+        "repos/example/app/actions/runs/22",
+        "repos/example/app/actions/artifacts/22",
+        "repos/example/app/releases",
+        "repos/example/app/environments/other",
+        "repos/example/app/branches/other",
+        "repos/example/app/environments/release/deployment-branch-policies?per_page=100&page=2",
+        "https://api.github.com/repos/example/app",
+    ] {
+        assert!(
+            super::validate_status_route("example/app", route).is_err(),
+            "{route}"
+        );
+    }
+}
+
+#[test]
+fn current_source_sha_and_protection_come_from_one_branch_snapshot() {
+    let valid = json!({"name":"main","protected":true,"commit":{"sha":"a".repeat(40)}});
+    assert_eq!(
+        super::protected_branch_sha(&valid).expect("protected main"),
+        "a".repeat(40)
+    );
+    for (pointer, replacement) in [
+        ("/name", json!("other")),
+        ("/protected", json!(false)),
+        ("/commit/sha", json!("bad")),
+        ("/commit", serde_json::Value::Null),
+    ] {
+        let mut changed = valid.clone();
+        *changed.pointer_mut(pointer).expect("field") = replacement;
+        assert!(super::protected_branch_sha(&changed).is_err(), "{pointer}");
+    }
+}

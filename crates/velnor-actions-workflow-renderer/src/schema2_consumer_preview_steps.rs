@@ -162,7 +162,9 @@ fn source_operation_script(op: &str, run: String) -> String {
     ) {
         // Source preparation may have written runner environment files. Remove
         // credentials before the native source executor itself is spawned.
-        crate::toolchain_env::with_credential_unset_script(&run)
+        crate::toolchain_env::with_credential_unset_script(&format!(
+            "unset VELNOR_RELEASE_STATUS_TOKEN; {run}"
+        ))
     } else {
         run
     }

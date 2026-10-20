@@ -303,7 +303,7 @@ fn tap_jobs_separate_unprivileged_preparation_and_scoped_app_authority() {
         assert!(privileged.contains("owner: example"));
         assert!(privileged.contains("repositories: homebrew-tap"));
         assert!(privileged.contains("skip-token-revoke: false"));
-        assert!(!privileged.contains("RELEASE_STATUS_READ_TOKEN"));
+        assert!(privileged.contains("${{ secrets.RELEASE_STATUS_READ_TOKEN }}"));
         assert!(privileged.contains("VELNOR_RELEASE_ORIGINAL_RUN_ID:"));
     }
     let writer = job(yaml, "preview-tap-writer", Some("preview-tap-merge"));

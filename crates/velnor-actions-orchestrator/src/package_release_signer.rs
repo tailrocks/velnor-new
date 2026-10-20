@@ -77,9 +77,17 @@ pub(crate) struct VerifiedSignedPackage {
 #[derive(Debug, Clone)]
 pub(crate) struct VerifiedAttestedSignedPackage {
     signed: VerifiedSignedPackage,
+    closure: std::sync::Arc<crate::filesystem_owner::held_directory::HeldDirectory>,
+    identity: PackageReleaseSigningIdentity,
 }
 
 impl VerifiedAttestedSignedPackage {
+    pub(crate) fn closure(
+        &self,
+    ) -> std::sync::Arc<crate::filesystem_owner::held_directory::HeldDirectory> {
+        std::sync::Arc::clone(&self.closure)
+    }
+
     pub(crate) fn plan(&self) -> &PackageReleasePlan {
         self.signed.plan()
     }
@@ -138,7 +146,7 @@ pub(crate) fn verify_attested_signed_package_from_env()
     ) {
         return crate::package_release_publish::verify_original_for_promotion();
     }
-    let (plan, expected, input) = publisher_context_from_env()?;
+    let (plan, expected, input) = publisher_context_from_env(None)?;
     verify_attested_signed_package(&input, &plan, &expected)
 }
 
@@ -157,14 +165,48 @@ pub(crate) fn verify_attested_signed_package(
     plan: &PackageReleasePlan,
     expected: &PackageReleaseSigningIdentity,
 ) -> Result<VerifiedAttestedSignedPackage, OrchestratorError> {
-    let mut signed = verify_signed_package(directory, plan, expected)?;
-    attestation::verify_release_attestation(&signed, expected)?;
-    signed.plan = plan.clone();
-    Ok(VerifiedAttestedSignedPackage { signed })
+    let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(
+        u64::from(velnor_actions_contract::workflow::JobTimeout::DEFAULT_MINUTES) * 60,
+    ))
+    .map_err(|_| internal("package_verification_deadline"))?;
+    let (signed, closure) =
+        crate::filesystem_owner::held_directory::HeldDirectory::admit(directory, deadline, || {
+            let mut signed = verify_signed_package(directory, plan, expected)?;
+            attestation::verify_release_attestation(&signed, expected)?;
+            signed.plan = plan.clone();
+            Ok(signed)
+        })?;
+    Ok(VerifiedAttestedSignedPackage {
+        signed,
+        closure: std::sync::Arc::new(closure),
+        identity: expected.clone(),
+    })
 }
 
-fn publisher_context_from_env()
--> Result<(PackageReleasePlan, PackageReleaseSigningIdentity, PathBuf), OrchestratorError> {
+pub(crate) fn require_retained_identity(
+    signed: &VerifiedAttestedSignedPackage,
+    expected: &PackageReleaseSigningIdentity,
+) -> Result<(), OrchestratorError> {
+    if expected != &signed.identity {
+        return Err(internal("package_publish_original_changed"));
+    }
+    receipt::require_expected_identity(signed.receipt(), signed.plan(), expected)
+}
+
+pub(crate) fn recheck_publisher_context(
+    signed: &VerifiedAttestedSignedPackage,
+) -> Result<(), OrchestratorError> {
+    let (plan, expected, directory) =
+        publisher_context_from_env(Some(signed.identity.repository_id))?;
+    if &plan != signed.plan() || directory != signed.directory() || expected != signed.identity {
+        return Err(internal("package_publish_original_changed"));
+    }
+    receipt::require_expected_identity(signed.receipt(), &plan, &expected)
+}
+
+fn publisher_context_from_env(
+    repository_id: Option<u64>,
+) -> Result<(PackageReleasePlan, PackageReleaseSigningIdentity, PathBuf), OrchestratorError> {
     let runner_temp = absolute_env("RUNNER_TEMP")?;
     let root = runner_temp.join("velnor");
     let request = absolute_env("VELNOR_REQUEST_FILE")?;
@@ -176,7 +218,10 @@ fn publisher_context_from_env()
         parse_package_release_plan(&bytes).map_err(|_| internal("package_signer_plan_invalid"))?;
     let input = root.join(PUBLISH_INPUT_DIR);
     require_private_directory(&input)?;
-    let expected = signing_identity_from_env(&plan)?;
+    let expected = match repository_id {
+        Some(id) => runtime::signing_identity_for_repository(&plan, id, std::time::Instant::now())?,
+        None => signing_identity_from_env(&plan)?,
+    };
     Ok((plan, expected, input))
 }
 

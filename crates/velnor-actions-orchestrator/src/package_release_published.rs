@@ -36,8 +36,8 @@ pub(crate) fn verify_committed_preview_release(
     let api = authenticated_api(signed)?;
     let receipt = signed.receipt();
     let expected = local_identity(signed)?;
-    let mut release = selected_release(&api, "preview")?;
     let release_id = configured_preview_release_id()?;
+    let mut release = super::rolling_backend::fixed_release(&api, release_id)?;
     if release.id != release_id
         || release.draft != Some(false)
         || release.prerelease != Some(true)
@@ -87,7 +87,7 @@ pub(crate) fn verify_committed_preview_release(
     if api.remote_assets(&release)? != expected.assets {
         return Err(internal("rolling_published_asset_bytes"));
     }
-    let final_release = selected_release(&api, "preview")?;
+    let final_release = super::rolling_backend::fixed_release(&api, release_id)?;
     if final_release.id != release_id
         || final_release.body != release.body
         || final_release.draft != Some(false)

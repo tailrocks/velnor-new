@@ -21,7 +21,11 @@ use velnor_actions_contract::publication_retry::{
 const MAX_HISTORY: usize = 8;
 
 #[derive(Default)]
-pub(super) struct EvidenceCache(Vec<Generation>);
+pub(super) struct EvidenceCache {
+    generations: Vec<Generation>,
+    original: Option<RollingOriginal>,
+    ancestry: BTreeMap<(String, String), bool>,
+}
 #[derive(Clone)]
 struct Generation {
     original: RollingOriginal,
@@ -31,18 +35,53 @@ struct Generation {
 }
 
 impl EvidenceCache {
+    pub(super) fn original(
+        &mut self,
+        publisher: &GitHubPackagePublisher,
+    ) -> Result<RollingOriginal, OrchestratorError> {
+        if let Some(original) = &self.original {
+            return Ok(original.clone());
+        }
+        let original =
+            super::super::published::original_pointer(&publisher.api, &publisher.signed)?;
+        self.original = Some(original.clone());
+        Ok(original)
+    }
+
+    pub(super) fn ancestor(
+        &mut self,
+        api: &super::super::github::GitHubApi,
+        before: &str,
+        after: &str,
+    ) -> Result<bool, OrchestratorError> {
+        let key = (before.to_owned(), after.to_owned());
+        if let Some(result) = self.ancestry.get(&key) {
+            return Ok(*result);
+        }
+        if self.ancestry.len() >= 128 {
+            return Err(internal("rolling_ancestry_cache_bound"));
+        }
+        let result = super::observe::ancestor(api, before, after)?;
+        self.ancestry.insert(key, result);
+        Ok(result)
+    }
+
     fn verified(
         &mut self,
         publisher: &GitHubPackagePublisher,
         original: &RollingOriginal,
     ) -> Result<Generation, OrchestratorError> {
-        if let Some(generation) = self.0.iter().find(|item| item.original == *original) {
+        if let Some(generation) = self
+            .generations
+            .iter()
+            .find(|item| item.original == *original)
+        {
             return Ok(generation.clone());
         }
-        if self.0.len() >= MAX_HISTORY {
+        if self.generations.len() >= MAX_HISTORY {
             return Err(internal("rolling_original_cache_bound"));
         }
-        let current = super::super::published::original_pointer(&publisher.api, &publisher.signed)?;
+        let current = self.original(publisher)?;
         let generation = select_original(
             original,
             &current,
@@ -57,7 +96,7 @@ impl EvidenceCache {
                 generation(original, &evidence.signed)
             },
         )?;
-        self.0.push(generation.clone());
+        self.generations.push(generation.clone());
         Ok(generation)
     }
 }
@@ -87,6 +126,7 @@ fn generation(
             read_regular(&signed.directory().join(name))?.len() as u64,
         );
     }
+    signed.closure().verify()?;
     Ok(Generation {
         original: original.clone(),
         identity,
@@ -187,7 +227,7 @@ fn authenticate(
             if !generation.version.supersedes(&old.version) {
                 return Err(internal("rolling_predecessor_version_downgrade"));
             }
-            if !super::observe::ancestor(
+            if !cache.ancestor(
                 &publisher.api,
                 &previous.journal.identity.source_sha,
                 &identity.source_sha,

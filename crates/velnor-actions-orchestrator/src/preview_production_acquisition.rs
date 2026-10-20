@@ -1,10 +1,11 @@
 //! Credentialed acquisition ends before any repository code starts. The runner's
 //! step output, not mutable on-disk metadata, binds the token-free consumer.
+use crate::filesystem_owner::held_file::HeldFile;
 
 use super::{
     aggregate::{self, AdmittedLeaves},
     context,
-    handoff::{self, PinnedAsset, TaskInput},
+    handoff::{self, TaskInput},
     leaf_manifest::{self, PreviewLeafManifest},
 };
 use crate::{
@@ -175,7 +176,12 @@ fn restore(
             .checked_add(proof.size)
             .filter(|size| *size <= crate::package_release_artifacts::MAX_TOTAL_BYTES)
             .ok_or_else(|| internal("preview_leaf_asset_total"))?;
-        pinned.push(PinnedAsset::new(Path::new(&input.path), &proof, deadline)?);
+        pinned.push(HeldFile::new(
+            Path::new(&input.path),
+            &proof.sha256,
+            proof.size,
+            deadline,
+        )?);
     }
     let admitted = AdmittedLeaves {
         manifests: record.leaves,

@@ -24,12 +24,21 @@ pub(super) fn signing_identity_from_env(
 ) -> Result<PackageReleaseSigningIdentity, OrchestratorError> {
     let started = std::time::Instant::now();
     let repository = required_env("GITHUB_REPOSITORY")?;
+    let repository_id = query_repository_id(&repository)?;
+    signing_identity_for_repository(plan, repository_id, started)
+}
+
+pub(super) fn signing_identity_for_repository(
+    plan: &PackageReleasePlan,
+    repository_id: u64,
+    started: std::time::Instant,
+) -> Result<PackageReleaseSigningIdentity, OrchestratorError> {
+    let repository = required_env("GITHUB_REPOSITORY")?;
     let source_sha = required_env("GITHUB_SHA")?;
     let source_ref = required_env("GITHUB_REF")?;
     let workflow_ref = required_env("GITHUB_WORKFLOW_REF")?;
     let workflow_sha = required_env("GITHUB_WORKFLOW_SHA")?;
     let event = signing_event(plan, &required_env("GITHUB_EVENT_NAME")?)?;
-    let repository_id = query_repository_id(&repository)?;
     let run_id = positive_u64("GITHUB_RUN_ID")?;
     let run_attempt = positive_u32("GITHUB_RUN_ATTEMPT")?;
     let ci_run_id = positive_u64("VELNOR_RELEASE_CI_RUN_ID")?;

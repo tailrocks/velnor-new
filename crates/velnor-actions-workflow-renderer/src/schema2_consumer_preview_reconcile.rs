@@ -165,6 +165,10 @@ fn selector_operation(spec: &ConsumerReleaseSpec) -> Result<Yaml, RenderError> {
             "${{ steps.history.outputs.commit_count }}",
         ),
         ("GH_TOKEN", "${{ github.token }}"),
+        (
+            "VELNOR_RELEASE_STATUS_TOKEN",
+            "${{ secrets.RELEASE_STATUS_READ_TOKEN }}",
+        ),
     ];
     if let Some(preview) = &spec.preview {
         env.push((

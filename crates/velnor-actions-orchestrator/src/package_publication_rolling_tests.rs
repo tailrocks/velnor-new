@@ -17,6 +17,36 @@ struct Backend {
 }
 
 impl Backend {
+    fn full_inventory() -> Self {
+        let mut backend = Self::new();
+        backend.identity.assets = (0..29)
+            .map(|index| {
+                let name = match index {
+                    27 => "release.json.bundle".to_owned(),
+                    28 => "release.json".to_owned(),
+                    _ => format!("asset-{index:02}.bin"),
+                };
+                let digest = if index == 28 {
+                    backend.identity.receipt_digest.clone()
+                } else {
+                    format!("{index:064x}")
+                };
+                (name, digest)
+            })
+            .collect();
+        backend.state.assets = (1..=29)
+            .map(|id| RollingAsset {
+                id,
+                name: format!("previous-{id:02}.bin"),
+                state: RollingAssetState::Uploaded,
+                size: 100,
+                sha256: Some("e".repeat(64)),
+            })
+            .collect();
+        backend.state.replaceable = backend.state.assets.clone();
+        backend
+    }
+
     fn new() -> Self {
         let old = RollingAsset {
             id: 1,
@@ -110,6 +140,32 @@ impl Backend {
     }
 }
 
+#[test]
+fn complete_twenty_nine_asset_replacement_has_bounded_recoverable_writes() {
+    let mut complete = Backend::full_inventory();
+    publish_rolling_package_release(&mut complete).expect("complete inventory");
+    assert_eq!(complete.mutations.len(), 91);
+    for interruption in 1..=91 {
+        let mut backend = Backend::full_inventory();
+        backend.lose_response_at = Some(interruption);
+        assert!(publish_rolling_package_release(&mut backend).is_err());
+        assert_eq!(backend.mutations.len(), interruption);
+        publish_rolling_package_release(&mut backend).expect("recover full inventory");
+        assert_eq!(backend.mutations.len(), 91, "accepted write not repeated");
+    }
+}
+
+#[test]
+fn every_full_inventory_write_rechecks_candidate_authority() {
+    for limit in 0..91 {
+        let mut backend = Backend::full_inventory();
+        backend.stale_after = Some(limit);
+        let error = publish_rolling_package_release(&mut backend).expect_err("stale write blocked");
+        assert!(error.to_string().contains("StaleCandidate"));
+        assert_eq!(backend.mutations.len(), limit);
+    }
+}
+
 impl RollingPackagePublicationBackend for Backend {
     fn release_id(&self) -> u64 {
         103
@@ -131,6 +187,9 @@ impl RollingPackagePublicationBackend for Backend {
             .is_none_or(|limit| self.mutations.len() < limit))
     }
     fn mutate(&mut self, action: RollingAction) -> Result<(), OrchestratorError> {
+        if !self.candidate_current()? {
+            return Err(internal("rolling_publication_refused:StaleCandidate"));
+        }
         self.apply(&action);
         self.mutations.push(action);
         if self.lose_response_at == Some(self.mutations.len()) {

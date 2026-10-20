@@ -1,9 +1,6 @@
 //! Fresh fixed-release observations and monotonic tag transport.
 
-use super::super::{
-    github::{GitHubApi, ReleaseResponse, unique_release},
-    published,
-};
+use super::super::github::{GitHubApi, ReleaseResponse};
 use super::{Envelope, GitHubPackagePublisher, authority, internal};
 use crate::OrchestratorError;
 use serde::Deserialize;
@@ -15,37 +12,33 @@ pub(super) fn release(
     publisher: &GitHubPackagePublisher,
     id: u64,
 ) -> Result<ReleaseResponse, OrchestratorError> {
-    let releases = publisher.release_list()?;
-    let release = unique_release(&releases, "preview")?;
-    if release.id != id
+    fixed_release(&publisher.api, id)
+}
+
+pub(crate) fn fixed_release(
+    api: &GitHubApi,
+    id: u64,
+) -> Result<ReleaseResponse, OrchestratorError> {
+    // The configured numeric ID is the authority. Listing historical releases
+    // cannot strengthen that binding and grows with unrelated stable releases.
+    let release: ReleaseResponse = api.get_json(&api.route(&format!("releases/{id}")))?;
+    if id == 0
+        || release.id != id
+        || release.tag_name != "preview"
         || release.draft != Some(false)
         || release.prerelease != Some(true)
         || release.immutable != Some(false)
     {
         return Err(internal("rolling_fixed_release_lifecycle"));
     }
-    publisher
-        .api
-        .get_json(&publisher.api.route(&format!("releases/{id}")))
-        .and_then(|fresh: ReleaseResponse| {
-            if fresh.id != id
-                || fresh.tag_name != "preview"
-                || fresh.body != release.body
-                || fresh.draft != Some(false)
-                || fresh.prerelease != Some(true)
-                || fresh.immutable != Some(false)
-            {
-                return Err(internal("rolling_fixed_release_changed"));
-            }
-            Ok(fresh)
-        })
+    Ok(release)
 }
 
 pub(super) fn state(
     publisher: &GitHubPackagePublisher,
     id: u64,
     cache: &mut authority::EvidenceCache,
-) -> Result<RollingState, OrchestratorError> {
+) -> Result<(RollingState, Option<Envelope>), OrchestratorError> {
     publisher.verify_remote_repository()?;
     let release = release(publisher, id)?;
     let tag = publisher
@@ -68,7 +61,7 @@ pub(super) fn state(
         assets.clone()
     };
     let journal_can_advance = match &envelope {
-        Some(previous) => ancestor(
+        Some(previous) => cache.ancestor(
             &publisher.api,
             &previous.journal.identity.source_sha,
             &publisher.identity.source_sha,
@@ -76,11 +69,11 @@ pub(super) fn state(
         None => false,
     };
     let observed = RollingState {
-        original: published::original_pointer(&publisher.api, &publisher.signed)?,
+        original: cache.original(publisher)?,
         release_id: id,
         tag: "preview".to_owned(),
         status: RollingReleaseStatus::MutablePreview,
-        tag_can_fast_forward: ancestor(
+        tag_can_fast_forward: cache.ancestor(
             &publisher.api,
             &tag.source_sha,
             &publisher.identity.source_sha,
@@ -92,14 +85,14 @@ pub(super) fn state(
             .as_ref()
             .filter(|item| item.journal.phase == RollingPhase::Committed)
             .map(|item| item.journal.identity.clone()),
-        journal: envelope.map(|item| item.journal),
+        journal: envelope.as_ref().map(|item| item.journal.clone()),
         journal_can_advance,
     };
     let final_release = self::release(publisher, id)?;
     if final_release.body != release.body {
         return Err(internal("rolling_observation_body_changed"));
     }
-    Ok(observed)
+    Ok((observed, envelope))
 }
 
 pub(super) fn bootstrap(state: &RollingState) -> RollingBootstrapSnapshot {
@@ -162,3 +155,7 @@ pub(super) fn ancestor(
         && comparison.status == "ahead"
         && comparison.ahead_by > 0)
 }
+
+#[cfg(test)]
+#[path = "package_release_rolling_backend_observe_tests.rs"]
+mod tests;

@@ -1,7 +1,8 @@
 //! Authenticate the full leaf union before unprivileged source assembly.
+use crate::filesystem_owner::held_file::HeldFile;
 
 use super::{
-    handoff::{self, AssetProof, PinnedAsset, TaskInput},
+    handoff::{self, AssetProof, TaskInput},
     leaf_manifest::PreviewLeafManifest,
 };
 use crate::{
@@ -28,7 +29,7 @@ use velnor_actions_mise::CheckDeadline;
 pub(super) struct AdmittedLeaves {
     pub(super) manifests: Vec<PreviewLeafManifest>,
     pub(super) inputs: Vec<TaskInput>,
-    pub(super) pinned: Vec<PinnedAsset>,
+    pub(super) pinned: Vec<HeldFile>,
     pub(super) manifest_bytes: u64,
     pub(super) asset_bytes: u64,
 }
@@ -146,9 +147,12 @@ fn retain_verified(
             sha256: asset.sha256.clone(),
             size: asset.size,
         };
-        admitted
-            .pinned
-            .push(PinnedAsset::new(&asset.path, &proof, deadline)?);
+        admitted.pinned.push(HeldFile::new(
+            &asset.path,
+            &proof.sha256,
+            proof.size,
+            deadline,
+        )?);
         let ReleaseProductionStage::Payload { pair } = &expected.stage else {
             return Err(internal("preview_leaf_stage"));
         };

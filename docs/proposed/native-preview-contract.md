@@ -101,6 +101,23 @@ required job results must be successful before publication. Recheck current
 main and these facts before every mutation and final commit. A newer main makes
 an unfinished older preview ineligible; retained evidence is not new authority.
 
+Workflow identity is admitted active once per SDK invocation, with exact workflow
+ID, canonical path and display name. GitHub documents that
+[disabling a workflow](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/disable-and-enable-workflows)
+prevents new triggers and reruns but does not cancel existing runs. Disabling is
+therefore not a cancellation authority for an already admitted producing run.
+Its current attempt and required running/completed state remain fresh checks.
+Successful completed CI-attempt evidence, including the exact-source `Required`
+job, may be reused within that invocation under its full repository, source,
+branch, workflow, run and attempt identity. Failed or incomplete evidence is
+never cached as success. Every latest-CI admission still reads the latest source
+CI listing and current run attempt, status and conclusion; this cache never
+substitutes historical success for a newer or unsuccessful current attempt.
+Artifact expiry after immutable bytes are admitted cannot change those held
+bytes, but may prevent a future recovery invocation from reacquiring them. The
+terminal publication verifier deliberately refreshes the retained artifact pointer
+rather than treating invocation-local admission as permanent availability.
+
 For numeric base version `P`, complete-history count `N` and source SHA `S`, the
 preview version is `P-preview.N+S[0..7]`. Its only public tag is literal `preview`.
 There are no versioned preview tags or preview releases per commit. Reruns retain
@@ -178,6 +195,13 @@ generation bytes before treating them as committed. Commit the authenticated
 generation receipt/pointer last, with the source tag and complete inventory
 admitted again. Only then may native Homebrew promotion consume the generation.
 
+The executor proposes transitions; it does not grant write authority. The
+backend consumes each private observation once, including on failure, and checks
+mutable candidate authority immediately before every actual write. Terminal
+verification reads all actual asset bytes from the same configured numeric
+release ID rather than enumerating historical releases. One absolute deadline
+covers initial cryptographic admission through terminal byte verification.
+
 After interruption or an ambiguous API response, reobserve asset IDs and
 size/digest/state before acting. Resume only the same authenticated original
 signed candidate. Delete only exact journal-owned obsolete/staging asset IDs
@@ -215,8 +239,21 @@ with a writer token.
 Tap updater runs without write credentials. W is the target-scoped formula PR
 writer; O independently reads protection; C emits exact-head completion; R is
 the genuinely authenticated reviewer. Their numeric identities and permissions
-remain distinct. No writer bypass, admin write, new token scope, copied credential
-or producer-cache authority is introduced by channel support.
+remain distinct. The source-only `RELEASE_STATUS_READ_TOKEN` role explicitly
+requires Administration-read, Actions-read and Metadata-read in the source
+repository, without Contents or write grants. Its native GET allowlist contains
+only that repository's identity, main protection/rules, global immutability and
+the three fixed release/preview-publish/tap-update environment settings and branch
+policies. It never reads artifacts, workflow runs or repository contents and
+never substitutes a writer or Tap identity. This refined read role requires
+external permission qualification; an old Administration-only token is not
+assumed sufficient. GitHub’s [branch endpoint permissions](https://docs.github.com/en/rest/branches/branches?apiVersion=2026-03-10#get-a-branch)
+require Contents-read for private resources, with an explicit public-resource
+exception. The no-Contents reader must therefore qualify its branch reads on
+the actual public source repository; private access is not inferred and does
+not trigger automatic permission expansion or credential fallback. No writer
+bypass, admin write, copied credential or producer-cache authority is introduced
+by channel support.
 
 ## Native Homebrew destinations and continuation
 

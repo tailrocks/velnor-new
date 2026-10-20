@@ -24,6 +24,8 @@ pub(crate) trait RollingPackagePublicationBackend {
     /// Exact latest-main CI, workflow, protected environment and source authority.
     fn candidate_current(&mut self) -> Result<bool, OrchestratorError>;
     /// Execute exactly one mutation, using only fixed routes and captured IDs.
+    /// Consume the last authenticated observation and recheck mutable candidate
+    /// authority immediately before transport. Never reuse a consumed observation.
     /// Reject terminal actions. Never re-draft, re-publish or recreate the release.
     fn mutate(&mut self, action: RollingAction) -> Result<(), OrchestratorError>;
 }
@@ -44,10 +46,14 @@ pub(crate) fn publish_rolling_package_release(
         }
         let observed = backend.observe()?;
         let available = backend.available_original_assets()?;
-        let current = backend.candidate_current()?;
-        let action = rolling_action(&expected, release_id, &observed, current, &available);
+        // This is a proposal, never write authority. The adapter consumes its
+        // observation and checks fresh candidate authority before each write.
+        let action = rolling_action(&expected, release_id, &observed, true, &available);
         match action {
             RollingAction::Reconcile => {
+                if !backend.candidate_current()? {
+                    return Err(internal("rolling_publication_refused:StaleCandidate"));
+                }
                 return Ok(if committed_here {
                     PackagePublicationOutcome::Published
                 } else {
@@ -70,9 +76,6 @@ pub(crate) fn publish_rolling_package_release(
                     return Err(internal("rolling_publication_postcondition_not_reached"));
                 }
                 *budget -= 1;
-                if !backend.candidate_current()? {
-                    return Err(internal("rolling_publication_refused:StaleCandidate"));
-                }
                 let committing = mutation == RollingAction::Commit;
                 backend.mutate(mutation)?;
                 committed_here |= committing;

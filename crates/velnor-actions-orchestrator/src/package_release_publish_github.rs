@@ -49,6 +49,7 @@ const API_TIMEOUT: Duration = Duration::from_secs(90);
 pub(super) struct GitHubApi {
     catalog: ToolCatalog,
     repository: String,
+    pub(super) run_identity_cache: std::cell::RefCell<super::run_identity::RunIdentityCache>,
     #[cfg(test)]
     fixture: Option<std::rc::Rc<fixture::JsonFixture>>,
 }
@@ -58,6 +59,7 @@ impl GitHubApi {
         Self {
             catalog: ToolCatalog::pinned(),
             repository,
+            run_identity_cache: std::cell::RefCell::default(),
             #[cfg(test)]
             fixture: None,
         }
@@ -264,7 +266,7 @@ impl GitHubApi {
     }
 
     pub(super) fn verify_repository(&self, expected_id: u64) -> Result<(), OrchestratorError> {
-        self.verify_repository_identity(expected_id)?;
+        preflight::verify_repository_identity(self, expected_id)?;
         self.verify_immutable_status()
     }
 
@@ -272,7 +274,7 @@ impl GitHubApi {
         &self,
         channel: velnor_actions_contract::package_release::PackageReleaseChannel,
         branch: &str,
-    ) -> Result<(), OrchestratorError> {
+    ) -> Result<Option<String>, OrchestratorError> {
         preflight::verify_release_channel_environment(channel, self, branch)
     }
 

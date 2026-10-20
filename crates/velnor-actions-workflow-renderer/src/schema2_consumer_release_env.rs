@@ -69,6 +69,12 @@ pub(super) fn environment(
             | "recover-package-release-v1"
             | "write-stable-tag-intent-v1"
             | "write-stable-tag-origin-v1"
+            | "select-stable-release-source-v1"
+            | "admit-stable-tag-origin-v1"
+            | "admit-homebrew-tap-v1"
+            | "write-homebrew-tap-pr-v1"
+            | "merge-homebrew-tap-pr-v1"
+            | "select-release-tap-continuation-v1"
     ) {
         push(
             &mut env,

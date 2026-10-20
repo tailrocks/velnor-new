@@ -12,7 +12,7 @@ use crate::{
     package_publication::{PackagePublicationOutcome, publish_package_release},
     package_release_signer::{
         PackageReleaseSigningIdentity, VerifiedAttestedSignedPackage,
-        verify_attested_signed_package, verify_attested_signed_package_from_env,
+        verify_attested_signed_package_from_env,
     },
 };
 
@@ -91,11 +91,16 @@ pub(crate) use recovery::verify_original_for_promotion;
 /// # Errors
 /// Rejects absent credentials, invalid original evidence, stale candidates, and conflicting remote state.
 pub fn publish_package_release_from_env() -> Result<PackagePublicationOutcome, OrchestratorError> {
-    let signed = verify_attested_signed_package_from_env()?;
-    let current_ci = current_ci_from_env()?;
-    let mut backend =
-        GitHubPackagePublisher::new(signed, current_ci, OriginalVerification::RunnerEnvironment)?;
-    publish_backend(&mut backend)
+    artifact_zip::within_operation(|| {
+        let signed = verify_attested_signed_package_from_env()?;
+        let current_ci = current_ci_from_env()?;
+        let mut backend = GitHubPackagePublisher::new(
+            signed,
+            current_ci,
+            OriginalVerification::RunnerEnvironment,
+        )?;
+        publish_backend(&mut backend)
+    })
 }
 
 fn publish_backend(
@@ -141,6 +146,7 @@ struct GitHubPackagePublisher {
     recovery_body: String,
     current_ci: (u64, u32),
     original_verification: OriginalVerification,
+    original_closure: std::sync::Arc<crate::filesystem_owner::held_directory::HeldDirectory>,
 }
 
 impl GitHubPackagePublisher {
@@ -149,9 +155,12 @@ impl GitHubPackagePublisher {
         current_ci: (u64, u32),
         original_verification: OriginalVerification,
     ) -> Result<Self, OrchestratorError> {
+        let original_closure = signed.closure();
+        original_closure.verify()?;
         let receipt = signed.receipt().clone();
         let identity = local_identity(&signed)?;
         let recovery_body = recovery_body(&signed, &identity.receipt_digest)?;
+        original_closure.verify()?;
         let api = GitHubApi::new(receipt.repository.slug.clone());
         Ok(Self {
             signed,
@@ -162,6 +171,7 @@ impl GitHubPackagePublisher {
             receipt,
             current_ci,
             original_verification,
+            original_closure,
         })
     }
 

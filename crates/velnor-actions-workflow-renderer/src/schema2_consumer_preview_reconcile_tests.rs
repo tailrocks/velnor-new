@@ -57,9 +57,13 @@ fn reconcile_selection_and_updater_never_receive_tap_credentials() {
         selection,
         job(text, "preview-tap-prepare", Some("preview-tap-writer")),
     ] {
-        assert!(!part.contains("secrets."));
+        let reader = "${{ secrets.RELEASE_STATUS_READ_TOKEN }}";
+        assert!(part.contains(reader));
+        assert!(part.contains("VELNOR_RELEASE_STATUS_TOKEN:"));
+        assert!(!part.replace(reader, "").contains("secrets."));
         assert!(!part.contains("permission-contents: write"));
         assert!(!part.contains("VELNOR_TAP_TOKEN"));
+        assert!(!part.contains("VELNOR_TAP_MERGE_TOKEN"));
         assert!(!part.contains("VELNOR_TAP_PROTECTION_TOKEN"));
     }
     let prepare = job(text, "preview-tap-prepare", Some("preview-tap-writer"));
