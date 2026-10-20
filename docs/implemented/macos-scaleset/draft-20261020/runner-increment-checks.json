@@ -1722,5 +1722,17 @@
     "format": "PASS",
     "full_runner_gate": "FAIL",
     "scope": "The split preserves polling order and capacity rules. Full release checks remain incomplete."
+  },
+  "storage_budget_accessors_20261021": {
+    "status": "PASS",
+    "source_parent": "c215b8df6d1400a7073dd9f5c872385abc839d2c",
+    "result": "23 storage budget tests passed. Other tests were outside this test filter.",
+    "run_id": "cc93abd0-0d5c-40d9-9d45-f38cebc3ba38",
+    "log_sha256": "4d1bd340a67c448313848ba2d70c578c96f14b0104ce7b806ead052236825be7",
+    "review_sha256": "ddcee3facfdc104160fe7bef3d13373044ef923f81979a093f5205dea4a1acf8",
+    "scope": "Twelve fixed accessors use associated functions. Values and the digest remain unchanged.",
+    "full_runner_gate": "FAIL",
+    "strict_clippy": "FAIL",
+    "strict_clippy_note": "The full host check has other errors. A separate focused check passed for these accessors."
   }
 }

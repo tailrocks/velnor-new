@@ -173,14 +173,14 @@ impl StorageProfile {
         self.validate_alias_contract()?;
         self.validate_tmpfs_role_limits()?;
         let metadata = self.role_limit(StorageRole::EngineMetadata)?;
-        if metadata.max_bytes() < publication.peak_payload_bytes()
-            || metadata.max_inodes() < publication.object_count()
+        if metadata.max_bytes() < ControllerPublicationBound::peak_payload_bytes()
+            || metadata.max_inodes() < ControllerPublicationBound::object_count()
         {
             return Err(HostError::Journal);
         }
         let home = self.role_limit(StorageRole::RunnerHome)?;
-        if home.max_bytes() < publication.home_inbox_peak_payload_bytes()
-            || home.max_inodes() < publication.home_inbox_object_count()
+        if home.max_bytes() < ControllerPublicationBound::home_inbox_peak_payload_bytes()
+            || home.max_inodes() < ControllerPublicationBound::home_inbox_object_count()
         {
             return Err(HostError::Journal);
         }
