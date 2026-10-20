@@ -13,6 +13,7 @@ mod discovery;
 mod distribution;
 mod dockerfile;
 mod execution;
+mod gradle;
 mod host_container;
 mod image_grammar;
 mod image_jobs;
@@ -83,6 +84,10 @@ pub use dockerfile::{DockerfileFacts, DockerfileProblem, analyze_dockerfile, is_
 pub use execution::{
     ExecutionConfig, ExecutionMode, ExecutionOverride, ExecutionParity, ExecutionProfile,
     ExecutionRole, HOSTED_PROFILE_ID, ProfileKind, RoutingWorkflow, SCALE_SET_PROFILE_ID,
+};
+pub use gradle::{
+    GRADLE_JOB_PREFIX, GradleProjectConfig, GradleService, GradleStackConfig,
+    MAX_GRADLE_TIMEOUT_MINUTES, MAX_GRADLE_WORKERS,
 };
 pub use host_container::{
     ContainerPlatform, DaemonIdentityPolicy, HostContainerProfile, HostDockerCli, HostDockerDaemon,
