@@ -1,0 +1,25 @@
+{
+  "change": "Keep owned bootstrap errors below the size limit.",
+  "source_base": "f4eb93a84af1bb32e1a4e6b7cc62abf6ef9b26c1",
+  "pair": {
+    "manifest_sha256": "37d085481ebd164cf944cd29070af806f59279ec5e3f49714390aac8e2d755f5",
+    "nextest_run_id": "d0291a3b-84b4-44cf-8643-e17dda0ee728",
+    "tests_passed": 6,
+    "log_sha256": "854129ed6254bf08bcea2e41c17ab129a14f6a86c88ea022222fd25cfab2f428",
+    "review_sha256": "f8645c636ff9ba3514defcd8d32725874bfdb284cf5f13fa30f1ddca4a341e47"
+  },
+  "jit": {
+    "manifest_sha256": "5e5460ac1ed9bc0cc6780eaf49b0cd614d00baf3a8a3fd46dcaa3de27f1675c3",
+    "nextest_run_id": "7b58129e-22f2-49ff-929a-93f6da5f0950",
+    "tests_passed": 7,
+    "log_sha256": "022e5ede05ecda6a9d2f3247628e44700af2972f4cbdb028ad2596ce576752cd",
+    "receipt_erratum_sha256": "f7d780bea734213429f118ed3568753ba7d8552330c3777a2d3ebca097bef0f1",
+    "review_sha256": "af7c8b09147b3ecaed846d226d9f3c7496e28584463507992756d64fd228a82f"
+  },
+  "evidence_reuse": "The runner source and dependencies did not change during the main merge. The three final file hashes match.",
+  "format": "PASS",
+  "strict_clippy": "FAIL",
+  "strict_detail": "The five selected error-size findings are absent. Other runner lint defects remain.",
+  "full_integrated_gates": "NOT_RUN",
+  "installation": "NOT_RUN"
+}

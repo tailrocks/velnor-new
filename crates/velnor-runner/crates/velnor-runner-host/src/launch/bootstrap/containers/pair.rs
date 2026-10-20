@@ -36,12 +36,12 @@ pub(crate) struct PendingBootstrapPair {
 #[must_use]
 pub(crate) struct PairStartFailure {
     error: HostError,
-    pending: Option<PendingBootstrapPair>,
+    pending: Option<Box<PendingBootstrapPair>>,
 }
 
 impl PairStartFailure {
     pub(crate) fn into_parts(self) -> (HostError, Option<PendingBootstrapPair>) {
-        (self.error, self.pending)
+        (self.error, self.pending.map(|pending| *pending))
     }
 
     pub(super) fn before_attach(error: HostError) -> Self {
@@ -58,10 +58,10 @@ impl PairStartFailure {
     ) -> Self {
         Self {
             error,
-            pending: Some(PendingBootstrapPair {
+            pending: Some(Box::new(PendingBootstrapPair {
                 _claim: claim,
                 _attached: attached,
-            }),
+            })),
         }
     }
 }
@@ -171,3 +171,24 @@ fn valid_jit_payload(bytes: &[u8]) -> bool {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod failure_tests {
+    use super::PairStartFailure;
+    use crate::error::HostError;
+
+    #[test]
+    fn before_attach_failure_returns_error_without_pending_pair() {
+        let failure = PairStartFailure::before_attach(HostError::Identity);
+
+        let (error, pending) = failure.into_parts();
+
+        assert!(matches!(error, HostError::Identity));
+        assert!(pending.is_none());
+    }
+
+    #[test]
+    fn pair_start_failure_has_bounded_inline_size() {
+        assert!(std::mem::size_of::<PairStartFailure>() <= 128);
+    }
+}

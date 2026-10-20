@@ -12,6 +12,16 @@ use crate::{
 };
 use velnor_runner_github::{Exchange, Method, SessionRequest, Transport, TransportFail};
 
+#[test]
+fn pending_jit_bootstrap_error_stays_bounded() {
+    assert!(std::mem::size_of::<super::PendingJitBootstrap>() <= 128);
+}
+
+#[test]
+fn pending_channel_bootstrap_error_stays_bounded() {
+    assert!(std::mem::size_of::<super::PendingChannelBootstrap>() <= 128);
+}
+
 #[derive(Clone)]
 struct ConflictTransport(Arc<AtomicUsize>);
 

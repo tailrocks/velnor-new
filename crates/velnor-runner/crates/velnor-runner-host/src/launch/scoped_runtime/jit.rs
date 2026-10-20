@@ -50,7 +50,7 @@ impl JitReadyBootstrap {
 /// Keep a bound runner when JIT creation or journal binding fails.
 #[must_use]
 pub(crate) struct PendingJitBootstrap {
-    bound: BoundScopedBootstrap,
+    bound: Box<BoundScopedBootstrap>,
     failure: EnsureError,
 }
 
@@ -107,7 +107,7 @@ where
     let acquired = bound.prepared.acquired();
     let Some(request_id) = acquired.request().request_id() else {
         return Err(PendingJitBootstrap {
-            bound,
+            bound: Box::new(bound),
             failure: EnsureError::Uncertain,
         });
     };
@@ -132,7 +132,12 @@ where
     .await
     {
         Ok(result) => result,
-        Err(failure) => return Err(PendingJitBootstrap { bound, failure }),
+        Err(failure) => {
+            return Err(PendingJitBootstrap {
+                bound: Box::new(bound),
+                failure,
+            });
+        }
     };
     Ok(JitReadyBootstrap {
         bound,
@@ -230,7 +235,7 @@ impl JitReadyBootstrap {
                 channel,
             }),
             Err(failure) => Err(PendingChannelBootstrap {
-                bound: self.bound,
+                bound: Box::new(self.bound),
                 runner: self.runner,
                 jit: self.jit,
                 failure,
@@ -242,7 +247,7 @@ impl JitReadyBootstrap {
 /// Keep live runner handles and the JIT value when channel measurement fails.
 #[must_use]
 pub(crate) struct PendingChannelBootstrap {
-    bound: BoundScopedBootstrap,
+    bound: Box<BoundScopedBootstrap>,
     runner: RunnerReference,
     jit: EncodedJit,
     failure: crate::error::HostError,
@@ -285,7 +290,7 @@ impl ChannelReadyBootstrap {
             Ok(Some(claim)) => claim,
             Ok(None) | Err(_) => {
                 return Err(PendingJitBootstrap {
-                    bound: self.bound,
+                    bound: Box::new(self.bound),
                     failure: EnsureError::Uncertain,
                 });
             }
@@ -300,7 +305,7 @@ impl ChannelReadyBootstrap {
         } else {
             let _marked = scoped.mark_listener_delivery_uncertain(&claim).await;
             return Err(PendingJitBootstrap {
-                bound: self.bound,
+                bound: Box::new(self.bound),
                 failure: EnsureError::Uncertain,
             });
         };
@@ -311,7 +316,7 @@ impl ChannelReadyBootstrap {
         {
             let _marked = scoped.mark_listener_delivery_uncertain(&claim).await;
             return Err(PendingJitBootstrap {
-                bound: self.bound,
+                bound: Box::new(self.bound),
                 failure: EnsureError::Uncertain,
             });
         }
