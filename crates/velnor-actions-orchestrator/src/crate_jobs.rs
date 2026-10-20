@@ -26,6 +26,7 @@ use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 use {velnor_actions_mise::PinnedTool, velnor_actions_workflow_renderer::render::PLAN_JOB_ID};
 
 use crate::OrchestratorError;
+use crate::config::private_wiring::PrivateWiring;
 use crate::crate_job_ids::{JobOwners, group_is_tofu, group_runnable};
 use crate::discover::Discovery;
 use crate::internal::internal;
@@ -63,6 +64,10 @@ pub(crate) struct CrateBuild {
 
 /// Build crate jobs with the repository's workflow and Rust-stack config.
 /// # Errors
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one call site; the private-source wiring joins the existing inputs"
+)]
 pub(crate) fn build_for_workflow(
     config: &VelnorConfig,
     label: &str,
@@ -71,6 +76,7 @@ pub(crate) fn build_for_workflow(
     fetch_roots: &[String],
     acquire: Option<&Step>,
     helper_version: &str,
+    private: Option<&PrivateWiring>,
 ) -> Result<CrateBuild, OrchestratorError> {
     let no_crates = BTreeMap::new();
     let crates = config
@@ -79,24 +85,27 @@ pub(crate) fn build_for_workflow(
         .as_ref()
         .map_or(&no_crates, |rust| &rust.crates);
     reject_unknown_crates(crates, discovery)?;
-    build_crate_jobs(CrateJobInputs {
-        label,
-        policy: config.workflow.policy,
-        discovery,
-        catalog,
-        fetch_roots,
-        acquire,
-        max_parallel_jobs: config.workflow.max_parallel_jobs,
-        timeout: JobTimeout::new(config.workflow.crate_timeout_minutes)?,
-        helper_version,
-        cache_policy: config.workflow.pull_request_cache_policy,
-        crates,
-        seed_parallel_targets: config
-            .stacks
-            .rust
-            .as_ref()
-            .is_some_and(|rust| rust.seed_parallel_targets),
-    })
+    build_crate_jobs_with(
+        CrateJobInputs {
+            label,
+            policy: config.workflow.policy,
+            discovery,
+            catalog,
+            fetch_roots,
+            acquire,
+            max_parallel_jobs: config.workflow.max_parallel_jobs,
+            timeout: JobTimeout::new(config.workflow.crate_timeout_minutes)?,
+            helper_version,
+            cache_policy: config.workflow.pull_request_cache_policy,
+            crates,
+            seed_parallel_targets: config
+                .stacks
+                .rust
+                .as_ref()
+                .is_some_and(|rust| rust.seed_parallel_targets),
+        },
+        private,
+    )
 }
 
 /// All authority and rendering inputs for one crate-job build.
@@ -133,7 +142,21 @@ pub(crate) struct CrateJobInputs<'a> {
 /// # Errors
 ///
 /// Returns contract, render-context, or tool-request errors.
+#[cfg(test)]
 pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, OrchestratorError> {
+    build_crate_jobs_with(input, None)
+}
+
+/// [`build_crate_jobs`] plus the private-source block (HD-7) for jobs whose
+/// lock closure is non-empty.
+///
+/// # Errors
+///
+/// Returns contract, render-context, or tool-request errors.
+pub(crate) fn build_crate_jobs_with(
+    input: CrateJobInputs<'_>,
+    private: Option<&PrivateWiring>,
+) -> Result<CrateBuild, OrchestratorError> {
     let CrateJobInputs {
         discovery,
         catalog,
@@ -185,6 +208,7 @@ pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, 
             use_nextest,
             use_opentofu,
             needs,
+            private,
         )?;
         drivers.insert(job_id.clone(), driver);
         if use_opentofu {
@@ -208,6 +232,34 @@ pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
         && Stack::from_id(&task.stack_id) != Some(Stack::Mise)
 }
 
+/// Private-source block (HD-7) plus the Cargo source fetch of one Rust job.
+fn rust_source_steps(
+    input: &CrateJobInputs<'_>,
+    model: &CrateJob,
+    needs_validators: bool,
+    private: Option<&PrivateWiring>,
+) -> Result<Vec<Step>, OrchestratorError> {
+    let scoped_roots = crate::source_prep::crate_fetch_roots(
+        &model.manifest,
+        input.fetch_roots,
+        input.policy == WorkflowPolicy::VelnorRepositoryV1 && needs_validators,
+    );
+    let all_features = model
+        .obligations
+        .iter()
+        .any(|obligation| obligation.run.iter().any(|arg| arg == "--all-features"));
+    let mut steps = match private {
+        Some(private) => private.steps_for_roots(&scoped_roots)?,
+        None => Vec::new(),
+    };
+    steps.extend(crate::source_prep::fetch_steps_for_crate(
+        input.catalog,
+        &scoped_roots,
+        all_features,
+    )?);
+    Ok(steps)
+}
+
 /// Render one validated crate model to its fixed IR job.
 ///
 /// P08 order: helper staging, plan download (report identities bind
@@ -220,6 +272,7 @@ pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
 /// setup, mixed roles the union.
 #[expect(
     clippy::fn_params_excessive_bools,
+    clippy::too_many_arguments,
     reason = "one call site threads job scope plus driver selection"
 )]
 fn render_job(
@@ -230,6 +283,7 @@ fn render_job(
     use_nextest: bool,
     use_opentofu: bool,
     needs: Vec<String>,
+    private: Option<&PrivateWiring>,
 ) -> Result<Job, OrchestratorError> {
     let &CrateJobInputs {
         label,
@@ -275,20 +329,7 @@ fn render_job(
         )?);
     }
     if use_rust {
-        let scoped_roots = crate::source_prep::crate_fetch_roots(
-            &model.manifest,
-            fetch_roots,
-            policy == WorkflowPolicy::VelnorRepositoryV1 && needs_validators,
-        );
-        let all_features = model
-            .obligations
-            .iter()
-            .any(|obligation| obligation.run.iter().any(|arg| arg == "--all-features"));
-        steps.extend(crate::source_prep::fetch_steps_for_crate(
-            catalog,
-            &scoped_roots,
-            all_features,
-        )?);
+        steps.extend(rust_source_steps(input, model, needs_validators, private)?);
     }
     steps.extend(crate::workflow::wire_w1::maybe_task_cache_steps(
         None,
@@ -314,7 +355,7 @@ fn render_job(
 
 #[cfg(test)]
 #[path = "crate_jobs_tests.rs"]
-mod crate_jobs_tests;
+pub(crate) mod crate_jobs_tests;
 
 #[cfg(test)]
 #[path = "crate_jobs_display_tests.rs"]

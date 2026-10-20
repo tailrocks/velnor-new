@@ -85,7 +85,10 @@ impl<'ast> Visit<'ast> for ModuleCollector {
     }
 }
 
-pub(super) fn declared_target_source_closure(root: &Path) -> Outcome<HashSet<PathBuf>> {
+pub(super) fn declared_target_source_closure(
+    root: &Path,
+    has_build_script: bool,
+) -> Outcome<HashSet<PathBuf>> {
     let root = root.canonicalize()?;
     let source_base = root
         .parent()
@@ -129,12 +132,23 @@ pub(super) fn declared_target_source_closure(root: &Path) -> Outcome<HashSet<Pat
             }
             let findings = graph::source_findings_for_syntax(&source, &syntax)?;
             for include in &findings.includes {
-                enqueue_compiled_include(
-                    &include.path,
-                    combine(file.condition, include.condition),
-                    &file,
-                    &mut pending,
-                )?;
+                let condition = combine(file.condition, include.condition);
+                match &include.path {
+                    graph::IncludePath::Relative(path) => {
+                        enqueue_compiled_include(path, condition, &file, &mut pending)?;
+                    }
+                    // Build output, not a repository source: nothing to follow.
+                    graph::IncludePath::CargoOutDir(suffix) => {
+                        if condition != Possibility::Never && !has_build_script {
+                            return Err(format!(
+                                "Cargo OUT_DIR include in a package without a build script: {} ({})",
+                                source.display(),
+                                suffix.display()
+                            )
+                            .into());
+                        }
+                    }
+                }
             }
             records.push(SourceRecord { file, findings });
         }

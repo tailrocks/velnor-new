@@ -13,7 +13,7 @@ use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, Te
 mod preludes;
 
 /// Runnable fixture proposal for one package/kind pair.
-pub(super) fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> ProposedTask {
+pub(crate) fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> ProposedTask {
     group_with_all_features(package, kind, gated_by, false)
 }
 
@@ -56,7 +56,7 @@ pub(super) fn group_with_all_features(
 }
 
 /// Discovery shell carrying only task proposals.
-pub(super) fn discovery(groups: Vec<ProposedTask>) -> Discovery {
+pub(crate) fn discovery(groups: Vec<ProposedTask>) -> Discovery {
     Discovery {
         mise_checks: Vec::new(),
         statuses: Vec::new(),

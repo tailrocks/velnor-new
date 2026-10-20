@@ -80,7 +80,11 @@ pub(super) fn workspace_plan(manifest: &Path) -> Outcome<WorkspacePlan> {
             .ok_or("package manifest has no parent")?
             .canonicalize()?;
         let mut test_targets = Vec::new();
+        let mut has_build_script = false;
         for target in package["targets"].as_array().ok_or("package targets")? {
+            has_build_script |= target["kind"]
+                .as_array()
+                .is_some_and(|kinds| kinds.iter().any(|kind| kind == "custom-build"));
             if target["test"].as_bool() != Some(true) {
                 continue;
             }
@@ -94,6 +98,7 @@ pub(super) fn workspace_plan(manifest: &Path) -> Outcome<WorkspacePlan> {
         }
         plans.push(PackagePlan {
             root: package_root,
+            has_build_script,
             test_targets,
         });
     }

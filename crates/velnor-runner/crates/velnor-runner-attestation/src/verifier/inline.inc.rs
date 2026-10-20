@@ -1,0 +1,188 @@
+async fn qualify_checksum_target_bytes(
+    bundle_bytes: &[u8],
+    checksum_bytes: &[u8],
+    expected: &ExpectedClaims,
+    checksum_subject: &ExpectedSubject,
+    target_subject: &ExpectedSubject,
+    state_directory: &std::path::Path,
+    deadline: Instant,
+) -> Result<(), Box<dyn Error>> {
+    if bundle_bytes.len() > MAX_BUNDLE_BYTES {
+        return Err("verification bundle exceeds bound".into());
+    }
+    if checksum_bytes.len() > MAX_CHECKSUM_BYTES {
+        return Err("checksum asset exceeds bound".into());
+    }
+    let bundle: Bundle = serde_json::from_slice(bundle_bytes)?;
+    let checksum_text = std::str::from_utf8(checksum_bytes)?;
+    let mut target_digests = Vec::new();
+    for line in checksum_text.lines() {
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        if fields.len() != 2 {
+            return Err("checksum list has unsupported row format".into());
+        }
+        if fields[1] == target_subject.name {
+            target_digests.push(fields[0]);
+        }
+    }
+    if target_digests.len() != 1 || target_digests[0] != target_subject.digest {
+        return Err("signed checksum list target digest missing, duplicated, or mismatched".into());
+    }
+    let digest = Sha256Hash::from_hex(target_digests[0])?;
+    let trusted_root = load_public_good_trusted_root(state_directory).await?;
+    let expected = expected.clone();
+    let checksum_subject = checksum_subject.clone();
+    let target_subject = target_subject.clone();
+    let checksum_bytes = checksum_bytes.to_vec();
+    tokio::task::spawn_blocking(move || -> Result<(), std::io::Error> {
+        if Instant::now() >= deadline {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "verification deadline exceeded before signature verification",
+            ));
+        }
+        let verifier = Verifier::new(&trusted_root).map_err(verification_io_error)?;
+        let policy = VerificationPolicy::new(
+            IdentityMatcher::Uri(expected.signer.clone()),
+            GITHUB_ACTIONS_ISSUER,
+        )
+        .skip_sct();
+        verifier
+            .verify(checksum_bytes.as_slice(), &bundle, &policy)
+            .map_err(verification_io_error)?;
+        validate_claims(&bundle, &expected, &checksum_subject).map_err(verification_io_error)?;
+        verifier
+            .verify(digest, &bundle, &policy)
+            .map_err(verification_io_error)?;
+        validate_claims(&bundle, &expected, &target_subject).map_err(verification_io_error)?;
+        if Instant::now() >= deadline {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "verification deadline exceeded during signature verification",
+            ));
+        }
+        Ok(())
+    })
+    .await??;
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct InlineVerifyRequest {
+    schema: u8,
+    state_directory: String,
+    bundle_base64: String,
+    checksum_base64: String,
+    expected: ExpectedClaims,
+    checksum_subject: ExpectedSubject,
+    target_subject: ExpectedSubject,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct InlineVerifyResponse {
+    schema: u8,
+    result: &'static str,
+}
+
+pub(crate) async fn verify_inline_checksum_target(
+    request: InlineVerifyRequest,
+    deadline: Instant,
+) -> Result<InlineVerifyResponse, Box<dyn Error>> {
+    if request.schema != 2 {
+        return Err("unsupported request schema".into());
+    }
+    let state_directory = validate_state_directory(&request.state_directory)?;
+    let bundle_bytes = base64::engine::general_purpose::STANDARD.decode(&request.bundle_base64)?;
+    let checksum_bytes =
+        base64::engine::general_purpose::STANDARD.decode(&request.checksum_base64)?;
+    if bundle_bytes.len() > MAX_BUNDLE_BYTES {
+        return Err("verification bundle exceeds bound".into());
+    }
+    if checksum_bytes.len() > MAX_CHECKSUM_BYTES {
+        return Err("checksum asset exceeds bound".into());
+    }
+    validate_expected_inputs(&request.expected, &request.checksum_subject, &request.target_subject)?;
+    qualify_checksum_target_bytes(
+        &bundle_bytes,
+        &checksum_bytes,
+        &request.expected,
+        &request.checksum_subject,
+        &request.target_subject,
+        &state_directory,
+        deadline,
+    )
+    .await?;
+    Ok(InlineVerifyResponse {
+        schema: 2,
+        result: "verified",
+    })
+}
+
+fn validate_state_directory(value: &str) -> Result<std::path::PathBuf, Box<dyn Error>> {
+    use std::path::Path;
+
+    let components = value.strip_prefix('/');
+    if value.is_empty()
+        || value.len() > 4096
+        || value.chars().any(char::is_control)
+        || !components.is_some_and(|path| {
+            !path.is_empty()
+                && path
+                    .split('/')
+                    .all(|component| !component.is_empty() && component != "." && component != "..")
+        })
+    {
+        return Err("state directory is malformed or exceeds byte limit".into());
+    }
+    crate::tuf_state::validate_private_directory_path(Path::new(value))?;
+    let canonical = std::fs::canonicalize(value)?;
+    if canonical != Path::new(value) {
+        return Err("state directory is not canonical".into());
+    }
+    Ok(canonical)
+}
+
+fn validate_expected_inputs(
+    expected: &ExpectedClaims,
+    checksum: &ExpectedSubject,
+    target: &ExpectedSubject,
+) -> Result<(), Box<dyn Error>> {
+    for value in [
+        &expected.signer,
+        &expected.source,
+        &expected.source_ref,
+        &expected.build_config,
+        &checksum.name,
+        &target.name,
+    ] {
+        if value.is_empty() || value.len() > 4096 {
+            return Err("expected claim value is empty or exceeds byte limit".into());
+        }
+    }
+    // Fulcio .1.10, .1.13, and .1.19 encode immutable Git references, such as
+    // the 40-character commit IDs used by this GitHub source policy. See
+    // https://github.com/sigstore/fulcio/blob/main/docs/oid-info.md.
+    for commit_id in [
+        &expected.signer_digest,
+        &expected.source_digest,
+        &expected.build_config_digest,
+    ] {
+        if !is_lower_hex(commit_id, 40) {
+            return Err("expected Git commit ID is malformed".into());
+        }
+    }
+    for digest in [&checksum.digest, &target.digest] {
+        if !is_lower_hex(digest, 64) {
+            return Err("expected SHA-256 digest is malformed".into());
+        }
+    }
+    Ok(())
+}
+
+fn is_lower_hex(value: &str, length: usize) -> bool {
+    value.len() == length
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
