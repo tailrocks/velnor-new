@@ -132,6 +132,9 @@ struct PartialConfig {
     /// Private cross-repository dependency credentials (HD-7).
     #[serde(default)]
     private_sources: Option<velnor_actions_contract::config::PrivateSourcesConfig>,
+    /// Container images built on every run and published from the default branch.
+    #[serde(default)]
+    images: Vec<velnor_actions_contract::config::ImageConfig>,
     /// Optional exact `X.Y.Z` version overrides for generator-managed tools.
     #[serde(default)]
     tools: velnor_actions_contract::ToolsConfig,
@@ -238,6 +241,7 @@ impl PartialConfig {
             qualified_tools: self.qualified_tools,
             distribution: self.distribution,
             private_sources: self.private_sources,
+            images: self.images,
             tools: self.tools,
         })
     }

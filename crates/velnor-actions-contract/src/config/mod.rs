@@ -10,9 +10,11 @@ mod check_receipt_budget;
 mod dco;
 mod discovery;
 mod distribution;
+mod dockerfile;
 mod execution;
 mod host_container;
 mod image_task;
+mod images;
 mod mise;
 mod preview_policy;
 mod private_sources;
@@ -64,6 +66,7 @@ pub use distribution::{
     DistributionConfig, ExactHeadReviewCheck, HomebrewTapConfig, HomebrewTapProtectionObserver,
     HomebrewTapSource, ReviewAppIdentity, TapMergePolicy, TapUpdateEnvironment, TapUpdaterBinding,
 };
+pub use dockerfile::{DockerfileFacts, DockerfileProblem, analyze_dockerfile, is_digest_pinned};
 pub use execution::{
     ExecutionConfig, ExecutionMode, ExecutionOverride, ExecutionParity, ExecutionProfile,
     ExecutionRole, HOSTED_PROFILE_ID, ProfileKind, RoutingWorkflow, SCALE_SET_PROFILE_ID,
@@ -73,6 +76,10 @@ pub use host_container::{
     HostOrbStackSdk,
 };
 pub use image_task::{NativeImageCachePolicy, NativeImagePlatform, NativeImageTask};
+pub use images::{
+    IMAGE_REGISTRY_HOST, ImageConfig, ImageDockerfile, ImagePlatform, ImagePrebuilt,
+    is_valid_image_id, is_valid_image_repository, validate_images,
+};
 pub use mise::{
     CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind,
     MiseCheck, is_valid_check_system_build, is_valid_check_system_version, is_valid_mise_task_name,
@@ -176,6 +183,9 @@ pub struct VelnorConfig {
     /// Private cross-repository dependency credentials (`[private_sources]`, HD-7).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub private_sources: Option<PrivateSourcesConfig>,
+    /// Container images built on every run and published from the default branch.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub images: Vec<ImageConfig>,
 }
 
 impl VelnorConfig {
@@ -242,6 +252,7 @@ impl VelnorConfig {
         self.actions.validate(file)?;
         validate_qualified_tools(&self.qualified_tools, file)?;
         self.check_checks(file)?;
+        validate_images(&self.images, file)?;
         self.check_shard_budgets(file)?;
         Ok(())
     }
@@ -350,6 +361,12 @@ mod check_tool_reference_tests;
 
 #[cfg(test)]
 mod preview_policy_tests;
+
+#[cfg(test)]
+mod images_tests;
+
+#[cfg(test)]
+mod dockerfile_tests;
 
 mod review_completion;
 pub(crate) use distribution::valid_review_check_name;
