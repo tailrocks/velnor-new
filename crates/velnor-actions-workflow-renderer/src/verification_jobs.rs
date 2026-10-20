@@ -17,6 +17,8 @@ pub(crate) mod build_task_jobs;
 pub(crate) mod build_task_mise;
 #[path = "build_task_mise_tools.rs"]
 pub(crate) mod build_task_mise_tools;
+#[path = "image_build_jobs.rs"]
+pub(crate) mod image_build_jobs;
 #[path = "native_image_jobs.rs"]
 pub(crate) mod native_image_jobs;
 #[path = "task_script.rs"]
@@ -28,6 +30,9 @@ pub(crate) mod workflow_task_jobs;
 
 pub use build_task_jobs::{
     BuildTaskArtifact, BuildTaskPolicy, BuildTaskTool, build_build_task_job,
+};
+pub use image_build_jobs::{
+    BUILDKIT_IMAGE, ImageBuildPolicy, artifact_name, artifact_path, build_image_build_job,
 };
 pub use native_image_jobs::{NativeImageTaskPolicy, build_native_image_job};
 pub use workflow_task_jobs::WorkflowTaskPolicy;

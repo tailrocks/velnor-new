@@ -57,6 +57,7 @@ pub use config::{
     ExecutionConfig, ExecutionMode, ExecutionOverride, ExecutionParity, ExecutionProfile,
     ExecutionRole, GENERATOR_OWNED_WORKFLOW_FILES, GeneratorValidation, GitHubTokenSecret,
     HOSTED_PROFILE_ID, HostContainerProfile, HostDockerCli, HostDockerDaemon, HostOrbStackSdk,
+    ImageConfig, ImageDockerfile, ImagePlatform, ImagePrebuilt,
     MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES, MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,
     MAX_CHECK_CONTAINER_DAEMON_CAPTURE_BYTES, MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES,
     MAX_CHECK_CONTAINER_PATH_BYTES, MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,

@@ -160,10 +160,11 @@ pub(super) fn placement_for(
             .get(job_id)
             .is_some_and(|over| over.profile == execution.scale_set_profile)
         {
-            let hosted_only = config.workflow.tasks.iter().any(|task| {
-                matches!(task, WorkflowTask::Build(_) | WorkflowTask::NativeImage(_))
-                    && format!("{WORKFLOW_TASK_JOB_PREFIX}{}", task.id()) == job_id
-            });
+            let hosted_only = config.image_for_build_job(job_id).is_some()
+                || config.workflow.tasks.iter().any(|task| {
+                    matches!(task, WorkflowTask::Build(_) | WorkflowTask::NativeImage(_))
+                        && format!("{WORKFLOW_TASK_JOB_PREFIX}{}", task.id()) == job_id
+                });
             let issue = if hosted_only {
                 "workflow_task_hosted_only_scale_set_override"
             } else {
@@ -213,6 +214,9 @@ fn workflow_task_supports_scale_set(
         return Ok(
             check.platform == CheckPlatform::LinuxX64 && check.executor == CheckExecutor::Hosted
         );
+    }
+    if let Some(checked) = config.check_image_job_runner(job_id, &job.runs_on) {
+        return checked.map(|()| false);
     }
     let Some(task_id) = job_id.strip_prefix(WORKFLOW_TASK_JOB_PREFIX) else {
         return Ok(true);
