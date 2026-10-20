@@ -43,7 +43,7 @@ pub(crate) fn revoke(backend: &dyn StatusBackend) -> Result<(), OrchestratorErro
 /// Run `private-revoke-v1` from the step environment.
 ///
 /// # Errors
-/// See [`revoke`]; also removes any leftover credential directory.
+/// See `revoke`; also removes any leftover credential directory.
 pub fn run_private_revoke() -> Result<(), OrchestratorError> {
     let token = Token::new(
         &std::env::var(velnor_actions_contract::PRIVATE_FETCH_TOKEN_ENV).unwrap_or_default(),
