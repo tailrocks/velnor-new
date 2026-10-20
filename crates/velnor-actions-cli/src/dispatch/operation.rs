@@ -45,6 +45,10 @@ pub(super) enum InternalOp {
     TapPrepare,
     /// Source-free authentication before credential-free tap preparation.
     TapAdmission,
+    /// Token-bound fetch of private cross-repository sources (HD-7).
+    PrivateFetch,
+    /// Installation-token revocation after the private fetch (HD-7).
+    PrivateRevoke,
     /// Isolated App-authenticated PR writer for a validated tap candidate.
     TapWriter,
     /// Isolated exact-head App-authenticated tap promotion merge.

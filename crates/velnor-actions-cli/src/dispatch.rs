@@ -23,11 +23,12 @@ use velnor_actions_orchestrator::{
     CAPTURE_REVIEW_COMPLETION_OP, DYNAMIC_MATRIX_OUTPUT_MODE, EMIT_REVIEW_COMPLETION_OP,
     EXECUTE_CHECK_OP, EXECUTE_PREVIEW_PRODUCER_OP, FETCH_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP,
     OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PREPARE_HOMEBREW_TAP_OP,
-    PRESEED_MANIFEST_OP, PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP,
-    REPORT_OP, REQUEST_FILE_ENV, SELECT_PREVIEW_TAP_CONTINUATION_OP, SIGN_PACKAGE_RELEASE_OP,
-    TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, execute_check,
-    merge_internal, merge_passed, plan_internal, plan_outputs, publish_final_report,
-    publish_plan_files, resolve_task_execution, response_path_for, retrieve_reports,
+    PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP, PRIVATE_REVOKE_OP, PUBLISH_PACKAGE_RELEASE_OP,
+    PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP, REPORT_OP, REQUEST_FILE_ENV,
+    SELECT_PREVIEW_TAP_CONTINUATION_OP, SIGN_PACKAGE_RELEASE_OP, TASK_EXECUTION_RESOLVER_OP,
+    WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, execute_check, merge_internal, merge_passed,
+    plan_internal, plan_outputs, publish_final_report, publish_plan_files, resolve_task_execution,
+    response_path_for, retrieve_reports, run_private_fetch, run_private_revoke,
     write_preseed_manifest, write_request, write_task_report,
 };
 
@@ -105,6 +106,8 @@ fn internal_op() -> Option<InternalOp> {
             InternalOp::ResolveQualification
         }
         Ok(tag) if tag == TASK_EXECUTION_RESOLVER_OP => InternalOp::ResolveTaskExecution,
+        Ok(tag) if tag == PRIVATE_FETCH_OP => InternalOp::PrivateFetch,
+        Ok(tag) if tag == PRIVATE_REVOKE_OP => InternalOp::PrivateRevoke,
         Ok(tag) if tag == SIGN_PACKAGE_RELEASE_OP => InternalOp::PackageSigner,
         Ok(tag) if tag == PUBLISH_PACKAGE_RELEASE_OP => InternalOp::PackagePublisher,
         Ok(tag) if tag == RECOVER_PACKAGE_RELEASE_OP => InternalOp::PackageRecovery,
@@ -134,6 +137,9 @@ fn gate_request() -> Option<InternalRequest> {
             return runner_velnor_dir().map(|path| InternalRequest { op, path });
         }
         return None;
+    }
+    if op == InternalOp::PrivateFetch || op == InternalOp::PrivateRevoke {
+        return runner_velnor_dir().map(|path| InternalRequest { op, path });
     }
     if op == InternalOp::PreseedManifest {
         return runner_velnor_dir().map(|path| InternalRequest { op, path });
@@ -190,6 +196,8 @@ fn gate_request() -> Option<InternalRequest> {
         }
         InternalOp::Fetch
         | InternalOp::Report
+        | InternalOp::PrivateFetch
+        | InternalOp::PrivateRevoke
         | InternalOp::PreseedManifest
         | InternalOp::RepoPolicy
         | InternalOp::ExecuteCheck
@@ -240,6 +248,14 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         },
         InternalOp::Report => match write_task_report() {
             Ok(_) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
+        InternalOp::PrivateFetch => match run_private_fetch() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
+        InternalOp::PrivateRevoke => match run_private_revoke() {
+            Ok(()) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
         },
         InternalOp::PreseedManifest => match write_preseed_manifest() {
