@@ -183,6 +183,14 @@ fn request_can_be_materialized(path: &Path) -> bool {
 }
 
 /// Run one validated private operation.
+/// Exit code of a unit-returning private operation.
+fn unit_exit(result: Result<(), OrchestratorError>) -> ExitCode {
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => fail_internal(&error.to_string()),
+    }
+}
+
 fn run_internal(request: &InternalRequest) -> ExitCode {
     match request.op {
         InternalOp::ExecuteCheck => match execute_check() {
@@ -224,10 +232,7 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
             Ok(_) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
         },
-        InternalOp::GradleRun => match run_gradle_run() {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
+        InternalOp::GradleRun => unit_exit(run_gradle_run()),
         InternalOp::BunRegistryInstall => match run_bun_registry_install() {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
