@@ -1495,5 +1495,16 @@
     "reviewer": "execution_source_security_review",
     "scope": "The provider trait and opaque candidate type have crate visibility. Their data and verification methods keep their restricted visibility.",
     "remaining": "The strict runner gate and live tests remain necessary."
+  },
+  "image_import_row_validation": {
+    "result": "PASS",
+    "author": "replay_context_refactor",
+    "test_source_base": "5228231b80af387a19550c7da8ed5ab1ccbc0ddf",
+    "tests": 17,
+    "run_id": "b6218524-3244-470f-8c1d-3a013a2e5770",
+    "log_sha256": "1e42ad7a312d854634516b9a39a235173957e171dd2ea3013f86dd3ae8577dfb",
+    "final_sha256": "b0ad4e0e6c580e9d484109fe1e83a23c83f035465aca1679351fd83364a6933c",
+    "scope": "The private row validator has no asynchronous operation. Its body and database operation order stay the same.",
+    "remaining": "The strict runner gate still has other failures."
   }
 }
