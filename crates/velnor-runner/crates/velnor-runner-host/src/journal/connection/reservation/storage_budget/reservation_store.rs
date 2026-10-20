@@ -27,6 +27,6 @@ pub(super) use sample_history::{
     validate_orphan_roles, validate_orphan_samples, validate_sample_history,
 };
 mod validation;
-pub(super) use validation::{load_plan, validate_role_shape, validate_rows};
+pub(super) use validation::{load_plan, validate_rows};
 mod writes;
 pub(super) use writes::{append_sample, insert_reservation, plan_memory};
