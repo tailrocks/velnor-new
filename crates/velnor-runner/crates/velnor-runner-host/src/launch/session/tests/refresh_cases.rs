@@ -229,6 +229,6 @@ async fn rejected_refresh_and_wrong_durable_id_send_no_retryable_request() -> Re
         .await
         .is_err()
     );
-    assert!(wrong_id_transport.requests.is_empty());
+    assert_eq!(wrong_id_transport.requests.as_slice(), &[]);
     Ok(())
 }

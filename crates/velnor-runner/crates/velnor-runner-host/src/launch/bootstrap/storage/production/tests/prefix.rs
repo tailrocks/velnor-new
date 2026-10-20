@@ -4,14 +4,14 @@ use super::*;
 use crate::journal::{
     AssignmentKey, CapacityLimits, EngineContext, Journal, ReservationRequest, ReservationResult,
     StorageAdmissionSample, StorageFilesystemKind, StorageMedium, StoragePoolObservation,
-    StorageProvisioningAdmission, StorageProvisioningMemoryObservation, StorageRole,
-    StorageSampleIdentity, fixture_provisioning_profile,
+    StorageProfile, StorageProvisioningAdmission, StorageProvisioningMemoryObservation,
+    StorageRole, StorageSampleIdentity, fixture_provisioning_profile,
 };
 use crate::launch::{SelectedEngineContext, StartPermit};
 use crate::worker::{WorkerIdentityNames, WorkerVolumeRole};
 
 struct PrefixFixture {
-    _scratch: crate::journal::request_lifecycle::tests::helpers::Scratch,
+    scratch: crate::journal::request_lifecycle::tests::helpers::Scratch,
     scope: crate::journal::ConnectionJournal,
     reservation_id: i64,
     stub: crate::launch::inspect_tests::DockerStub,
@@ -21,7 +21,7 @@ struct PrefixFixture {
 #[tokio::test]
 async fn foreign_second_role_holds_prefix_and_blocks_later_effects() -> Result<(), String> {
     let fixture = prefix_fixture().await?;
-    let (intent_id, _) = reservation_facts(&fixture._scratch.file(), fixture.reservation_id)
+    let (intent_id, _) = reservation_facts(&fixture.scratch.file(), fixture.reservation_id)
         .await
         .map_err(|error| format!("metadata receipt facts: {error}"))?;
     let names =
@@ -146,7 +146,7 @@ async fn prefix_fixture() -> Result<PrefixFixture, String> {
     ))
     .map_err(|error| format!("docker stub: {error}"))?;
     Ok(PrefixFixture {
-        _scratch: scratch,
+        scratch,
         scope,
         reservation_id,
         stub,
@@ -172,24 +172,7 @@ pub(super) async fn prepare_reservation(
     let engine_id = permit.engine_id().to_owned();
     let docker_root_digest = permit.docker_root_digest().to_owned();
     let sample_generation_id = permit.sample_generation_id().to_owned();
-    let pools = profile
-        .pools()
-        .iter()
-        .filter(|pool| pool.medium() == StorageMedium::Disk)
-        .map(|pool| {
-            StoragePoolObservation::new_with_filesystem(
-                pool.pool_id().to_owned(),
-                pool.pool_id().to_owned(),
-                pool.medium(),
-                StorageFilesystemKind::Btrfs,
-                pool.max_bytes(),
-                pool.max_bytes(),
-                pool.max_inodes(),
-                pool.max_inodes(),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| format!("pool sample: {error}"))?;
+    let pools = disk_pool_observations(&profile)?;
     let sample = StorageAdmissionSample::new(
         StorageSampleIdentity::new(
             sample_generation_id.clone(),
@@ -235,6 +218,27 @@ pub(super) async fn prepare_reservation(
         return Err("reservation did not have an acquired launch intent".to_owned());
     }
     Ok(reservation_id)
+}
+
+fn disk_pool_observations(profile: &StorageProfile) -> Result<Vec<StoragePoolObservation>, String> {
+    profile
+        .pools()
+        .iter()
+        .filter(|pool| pool.medium() == StorageMedium::Disk)
+        .map(|pool| {
+            StoragePoolObservation::new_with_filesystem(
+                pool.pool_id().to_owned(),
+                pool.pool_id().to_owned(),
+                pool.medium(),
+                StorageFilesystemKind::Btrfs,
+                pool.max_bytes(),
+                pool.max_bytes(),
+                pool.max_inodes(),
+                pool.max_inodes(),
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("pool sample: {error}"))
 }
 
 fn responses(

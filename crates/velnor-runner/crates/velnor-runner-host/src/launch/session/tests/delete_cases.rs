@@ -208,7 +208,7 @@ async fn delete_is_not_sent_while_durable_session_work_remains() -> Result<(), S
         .await,
         SessionDeleteOutcome::NotReady
     );
-    assert!(transport.calls.is_empty());
+    assert_eq!(transport.calls.as_slice(), &[]);
     assert_eq!(
         journal
             .charged_header_capacity()

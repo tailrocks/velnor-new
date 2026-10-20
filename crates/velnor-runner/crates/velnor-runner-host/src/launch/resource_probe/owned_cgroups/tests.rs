@@ -68,7 +68,7 @@ fn response_value(
             "mount_device_minor": 38,
             "statx_device_major": 0,
             "statx_device_minor": 38,
-            "filesystem_type_magic": 2435016766u64,
+            "filesystem_type_magic": 2_435_016_766_u64,
             "filesystem_type_name": "btrfs",
             "filesystem_id": 17,
             "block_size": 4096,
@@ -85,7 +85,7 @@ fn response_value(
             "device_major": 0,
             "device_minor": 38,
             "inode": 30,
-            "filesystem_type_magic": 2435016766u64,
+            "filesystem_type_magic": 2_435_016_766_u64,
             "filesystem_id": 17
         },
         "daemon": process(50, 500, 500, "/system/docker"),

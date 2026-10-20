@@ -999,6 +999,21 @@
         "Remove temporary diagnostic output."
       ],
       "limits": "The full host suite has a failed event replay test. These checks do not prove a live installation."
+    },
+    {
+      "result": "PASS",
+      "base_commit": "a29b9780d592716bebbe60bd654dc64ea76aa88d",
+      "change": "Keep test values and assertions. Extract the disk pool observations.",
+      "passed": 6,
+      "nextest_run": "cc34a583-3104-42aa-9eb5-3baae8192482",
+      "exit_status": 0,
+      "log": "shipping-lint-caps-focused-20261020.log",
+      "log_sha256": "c31e388b91197497e9f042ebbe989767fb2e61bd0846588b9b7776ca6ab659ef",
+      "source_manifest": "test-lint-caps-901fddb8-manifest-20261020.tsv",
+      "source_manifest_sha256": "69e9c7d26d249debde2851e4dfdaa70677160a102e4eda1fba7a1d365f4d44a9",
+      "author": "/root/container_metadata_repair",
+      "reviewer": "/root/helper_language_review",
+      "limits": "The full runner strict check still has a FAIL result."
     }
   ],
   "broader_pair_check": {
