@@ -19,6 +19,7 @@ with fixtures and qualification tests, not against live private repositories.
 | Step roles, mint shape and credential-binding gates, block constructor | contract `step_identity.rs`, renderer `private_source_steps.rs`, `support_private_tokens.rs` | `tests/impl_renderer_private_sources.rs`, `impl_private_sources_parity.rs` |
 | `private-fetch-v1`, `private-revoke-v1` | orchestrator `private_fetch*.rs`, `private_revoke.rs`, CLI gates | `private_fetch_*tests.rs`, `private_revoke_tests.rs`, `impl_cli_private.rs` |
 | Generated placement in the Plan job and Rust crate jobs | orchestrator `private_wiring.rs` | `private_wiring_tests.rs`, `private_wiring_workflow_tests.rs` |
+| Placement in MBX `Dependency seed` jobs (Velnor helper staged right after checkout, before the mint, fetch and revoke; without it v0.1.37 failed with `internal_without_acquire:dependency-seed`) | orchestrator `dependency_seed.rs` | `impl_private_sources_generate.rs` (`mbx_seed_job_with_private_sources_stages_the_helper_before_the_fetch`, golden step order) |
 | Placement in `cargo_bin` image build jobs (helper staging, mint, fetch, revoke before the Cargo source fetch and the BuildKit build) | orchestrator `image_prebuilt.rs` | `image_prebuilt_tests.rs` |
 
 ## Decisions
