@@ -1,8 +1,56 @@
-use super::{manifest, release_version, test_pins};
+use super::{Failure, expected_asset_args, manifest, release_version, test_pins};
 use std::error::Error;
 use std::fs;
+use std::io::Write;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::process::Command;
+
+pub(super) fn assert_draft_creation(
+    root: &Path,
+    case: Failure,
+    output: &std::process::Output,
+) -> Result<(), Box<dyn Error>> {
+    assert_eq!(
+        read_publish_marker(root, "created-tag", case, output)?,
+        format!("v{}\n", release_version())
+    );
+    assert_eq!(
+        read_publish_marker(root, "asset-args", case, output)?,
+        expected_asset_args()
+    );
+    Ok(())
+}
+
+fn read_publish_marker(
+    root: &Path,
+    name: &str,
+    case: Failure,
+    output: &std::process::Output,
+) -> Result<String, Box<dyn Error>> {
+    fs::read_to_string(root.join(name)).map_err(|error| {
+        let calls = fs::read_to_string(root.join("gh-calls")).unwrap_or_default();
+        let mise = fs::read_to_string(root.join("mise-calls")).unwrap_or_default();
+        let message = format!(
+            "case {case:?}: missing {name}: {error}; child status={}\nstdout:\n{}\nstderr:\n{}\nGitHub calls:\n{calls}\nMise calls:\n{mise}\nfixture={}\n",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+            root.display()
+        );
+        let preserved = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(root.join("publish-failure-diagnostic.txt"))
+            .and_then(|mut file| file.write_all(message.as_bytes()))
+            .is_ok();
+        Box::new(std::io::Error::new(
+            error.kind(),
+            format!("{message}diagnostic preserved={preserved}"),
+        )) as Box<dyn Error>
+    })
+}
 
 #[test]
 fn publisher_observes_one_release_id_before_and_after_publication() {

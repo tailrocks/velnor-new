@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Candidate release manifest verification and qualification parity helpers.
 
+source "$ROOT/scripts/generator-release/fixture-git.sh"
+
 MAX_CANDIDATE_MANIFEST_BYTES=8388608
 
 candidate_tree_oid() {
@@ -319,15 +321,15 @@ capture_release_dogfood() {
     exit 2
   fi
   stage_candidate_manifest "$repo" dogfood
+  local git_log="$out/git-setup.log"
   (
     cd "$repo" \
-      && git -c init.defaultBranch=main init -q \
-      && git remote add origin https://github.com/tailrocks/velnor-new.git \
-      && git add -A \
-      && GIT_AUTHOR_NAME=v GIT_AUTHOR_EMAIL=v@v GIT_COMMITTER_NAME=v GIT_COMMITTER_EMAIL=v@v \
-         GIT_AUTHOR_DATE='2026-01-01T00:00:00Z' GIT_COMMITTER_DATE='2026-01-01T00:00:00Z' \
-         git -c commit.gpgsign=false commit -qm "golden"
-  ) >/dev/null 2>&1 || { echo "FATAL: dogfood git setup failed"; exit 2; }
+      && fixture_git init -q \
+      && fixture_git remote add origin https://github.com/tailrocks/velnor-new.git \
+      && fixture_git add -A \
+      && fixture_git commit -qm "golden"
+  ) >"$git_log" 2>&1 || { cat "$git_log" >&2; echo "FATAL: dogfood git setup failed"; exit 2; }
+  rm -f "$git_log"
   # Warm the cargo cache for both lockful dogfood workspaces ahead of the
   # candidate's locked/offline discovery (Gate 1): the qualify runner
   # starts with a virgin cache, so without this fetch the candidate's

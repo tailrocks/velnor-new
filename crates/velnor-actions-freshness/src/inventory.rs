@@ -30,6 +30,7 @@ pub(crate) const EXPECTED_TOOLS: &[(&str, &str)] = &[
     ("mr-boxington", "MR_BOXINGTON_VERSION"),
     ("gh", "GH_VERSION"),
     ("actionlint", "ACTIONLINT_VERSION"),
+    ("jactionlint", "JACTIONLINT_VERSION"),
     ("shellcheck", "SHELLCHECK_VERSION"),
     ("zizmor", "ZIZMOR_VERSION"),
     ("nextest", "NEXTEST_VERSION"),

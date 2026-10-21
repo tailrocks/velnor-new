@@ -135,6 +135,7 @@ impl TapGitHubApi {
             }
             return Ok(response.body);
         }
+        args = crate::github_authority_read::for_request(args)?;
         let mut gh_args = vec![
             OsString::from("api"),
             OsString::from("-H"),

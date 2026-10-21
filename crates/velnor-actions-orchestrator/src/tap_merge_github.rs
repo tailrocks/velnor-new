@@ -154,20 +154,12 @@ impl TapMergeGitHub {
         serde_json::from_slice(&response.body).map_err(|_| internal("review_completion_check_json"))
     }
 
-    fn request(&self, mut args: Vec<OsString>) -> Result<ApiResponse, OrchestratorError> {
+    fn request(&self, args: Vec<OsString>) -> Result<ApiResponse, OrchestratorError> {
         #[cfg(test)]
         if let Some(transport) = &self.test_transport {
             return (transport.borrow_mut())(&args);
         }
-        let mut gh_args = vec![
-            OsString::from("api"),
-            OsString::from("--include"),
-            OsString::from("-H"),
-            OsString::from("Accept: application/vnd.github+json"),
-            OsString::from("-H"),
-            OsString::from(format!("X-GitHub-Api-Version: {API_VERSION}")),
-        ];
-        gh_args.append(&mut args);
+        let gh_args = request_arguments(args)?;
         let command = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), gh_args)
             .map_err(|_| internal("tap_merge_gh_unavailable"))?
             .command_with_github_token(&self.catalog, &self.token)
@@ -181,6 +173,20 @@ impl TapMergeGitHub {
             .map_err(|_| internal("tap_merge_api_failed"))?;
         parse_included_response(&output.stdout)
     }
+}
+
+fn request_arguments(mut args: Vec<OsString>) -> Result<Vec<OsString>, OrchestratorError> {
+    args = crate::github_authority_read::for_request(args)?;
+    let mut gh_args = vec![
+        OsString::from("api"),
+        OsString::from("--include"),
+        OsString::from("-H"),
+        OsString::from("Accept: application/vnd.github+json"),
+        OsString::from("-H"),
+        OsString::from(format!("X-GitHub-Api-Version: {API_VERSION}")),
+    ];
+    gh_args.append(&mut args);
+    Ok(gh_args)
 }
 
 fn decode_ok<T: DeserializeOwned>(response: &ApiResponse) -> Result<T, OrchestratorError> {
