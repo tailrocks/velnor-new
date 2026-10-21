@@ -317,7 +317,6 @@ Starting a fresh timeout for each phase would permit cumulative overruns.
 Expiration must prevent a success proof or publication handoff; GitHub's outer
 job limit additionally bounds checkout, tool installation, and source fetch.
 
-
 ## Native preview after completed CI (2026-10-18)
 
 The dedicated native preview renderer admits only the canonical CI completion
@@ -341,7 +340,6 @@ foreign, PR, failed, or superseded evidence cannot authorize preview. No CI
 artifact is consumed to select source. Signer and publisher retain isolated
 permissions and independent revalidation. Receipt, certificate and SLSA claims
 bind the true producing `workflow_run`; authenticated source CI remains `push`.
-
 
 The payload shape was checked against original `octokit/webhooks` commit
 `aa80c24a3f55354465b8b1438d33dd5602956d0d`: the
@@ -398,3 +396,5 @@ for the bounded diagnostic output protocol and its runner-source references.
 
 See [native release asset upload](../implemented/native-release-upload.md) for
 the qualified upload-host, authentication and binary-input source contract.
+
+See [optional dependency-seed failure isolation](../implemented/optional-dependency-seed.md).

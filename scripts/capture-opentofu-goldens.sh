@@ -194,14 +194,14 @@ setup_case() {
     echo "FATAL: could not prepare schema-only consumer input for $case"
     exit 2
   fi
+  local git_log="$WORK/$case-git-setup.log"
   (cd "$repo" \
-    && git init -q \
-    && git add -A \
-    && GIT_AUTHOR_NAME=v GIT_AUTHOR_EMAIL=v@v GIT_COMMITTER_NAME=v GIT_COMMITTER_EMAIL=v@v \
-       GIT_AUTHOR_DATE='2026-01-01T00:00:00Z' GIT_COMMITTER_DATE='2026-01-01T00:00:00Z' \
-       git -c commit.gpgsign=false commit -qm "golden" \
-  ) >/dev/null 2>&1 || { echo "FATAL: git setup failed for $case"; exit 2; }
-  head=$(git -C "$repo" rev-parse HEAD)
+    && fixture_git init -q \
+    && fixture_git add -A \
+    && fixture_git commit -qm "golden" \
+  ) >"$git_log" 2>&1 || { cat "$git_log" >&2; echo "FATAL: git setup failed for $case"; exit 2; }
+  rm -f "$git_log"
+  head=$(fixture_git -C "$repo" rev-parse HEAD)
   echo "$head"
 }
 
