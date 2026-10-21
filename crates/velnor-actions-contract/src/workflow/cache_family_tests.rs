@@ -164,9 +164,8 @@ fn reference_family_ceilings_fit_the_budget_rule() {
         | CacheFamily::DbtPackages
         | CacheFamily::PythonVenv
         | CacheFamily::AnsibleCollections => 1,
-        // The dependency seed plus the suite bundle of one workspace.
-        CacheFamily::MbxBundle => 2,
-        CacheFamily::TofuProviders => 2,
+        // Two OpenTofu roots; the dependency seed plus the suite bundle of one workspace.
+        CacheFamily::TofuProviders | CacheFamily::MbxBundle => 2,
         CacheFamily::BunInstall => 4,
     };
     let worst: u64 = CacheFamily::ALL

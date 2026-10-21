@@ -151,8 +151,8 @@ fn lane_steps(
     ]);
     let clippy_lane = lane("velnor-clippy");
     let doc_lane = lane("velnor-doc");
-    let lanes: [(&str, Vec<&str>, Vec<(&str, &str)>); 3] = [
-        ("Compile test executables (seed)", test_build, Vec::new()),
+    let lanes: [(&str, Vec<&str>); 3] = [
+        ("Compile test executables (seed)", test_build),
         (
             "Compile Clippy lane (seed)",
             vec![
@@ -166,7 +166,6 @@ fn lane_steps(
                 "--target-dir",
                 &clippy_lane,
             ],
-            Vec::new(),
         ),
         (
             "Compile documentation lane (seed)",
@@ -181,7 +180,6 @@ fn lane_steps(
                 "--target-dir",
                 &doc_lane,
             ],
-            Vec::new(),
         ),
     ];
     let mut tools = vec![PinnedTool::Rust];
@@ -191,15 +189,9 @@ fn lane_steps(
     let base_env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
     lanes
         .into_iter()
-        .map(|(name, args, extra_env)| {
+        .map(|(name, args)| {
             let argv = crate::vectors::exec_argv(tools.clone(), "mbx", &args, catalog)?;
-            let mut env = base_env.clone();
-            env.extend(
-                extra_env
-                    .into_iter()
-                    .map(|(k, v)| (k.to_owned(), v.to_owned())),
-            );
-            let mut step = shell_step(name, argv, env)?;
+            let mut step = shell_step(name, argv, base_env.clone())?;
             step.role = Some(StepRole::MbxSeedBuild);
             Ok(step)
         })
