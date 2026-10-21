@@ -1,9 +1,13 @@
-#[path = "tests/fixture_stack_cases.rs"]
-mod fixture_stack_cases;
-
 use crate::{error::HostError, journal::MetadataSettlementResult};
 
 use super::finish_after_settlement;
+
+#[path = "tests/support.rs"]
+mod support;
+pub(super) use support::{
+    capacity_retry_fixture, diagnostics_root, run_native_cleanup,
+    run_native_cleanup_with_diagnostics, seed_completion,
+};
 
 #[test]
 fn settled_metadata_finishes_completion() {
@@ -106,12 +110,28 @@ fn native_capacity_retry_does_not_repeat_proven_cleanup_effects() -> Result<(), 
         "native_capacity_retry_does_not_repeat_proven_cleanup_effects",
         || {
             Box::pin(async {
-                fixture_stack_cases::native_capacity_retry_does_not_repeat_proven_cleanup_effects_on_fixture_stack()
-                    .await
-                    .map_err(|error| error.to_string())
+                Box::pin(
+                    native_capacity_retry_does_not_repeat_proven_cleanup_effects_on_fixture_stack(),
+                )
+                .await
+                .map_err(|error| error.to_string())
             })
         },
     )
+}
+
+async fn native_capacity_retry_does_not_repeat_proven_cleanup_effects_on_fixture_stack()
+-> Result<(), HostError> {
+    let fixture = capacity_retry_fixture().await?;
+    let (launch, now) = seed_completion(&fixture).await?;
+    let first_claim = fixture
+        .scope
+        .claim_completion_cleanup_at(launch.intent.id, now, 90)
+        .await?
+        .ok_or(HostError::Journal)?;
+    let first_generation =
+        assert_capacity_hold_keeps_attempt(&fixture, &launch, first_claim, now).await?;
+    assert_retry_settlement_is_idempotent(&fixture, &launch, now, first_generation).await
 }
 
 #[test]
@@ -120,12 +140,62 @@ fn terminal_replay_requires_the_exact_intent_and_normal_outcome() -> Result<(), 
         "terminal_replay_requires_the_exact_intent_and_normal_outcome",
         || {
             Box::pin(async {
-                fixture_stack_cases::terminal_replay_requires_the_exact_intent_and_normal_outcome_on_fixture_stack()
+                terminal_replay_requires_the_exact_intent_and_normal_outcome_on_fixture_stack()
                     .await
                     .map_err(|error| error.to_string())
             })
         },
     )
+}
+
+async fn terminal_replay_requires_the_exact_intent_and_normal_outcome_on_fixture_stack()
+-> Result<(), HostError> {
+    let fixture = capacity_retry_fixture().await?;
+    let (launch, now) = seed_completion(&fixture).await?;
+    let claim = fixture
+        .scope
+        .claim_completion_cleanup_at(launch.intent.id, now, 90)
+        .await?
+        .ok_or(HostError::Journal)?;
+    assert!(
+        fixture
+            .scope
+            .record_completion_runner_absent_at(launch.intent.id, claim.generation, now)
+            .await?
+    );
+    assert!(matches!(
+        run_native_cleanup(&fixture, &launch, claim).await?,
+        Err(super::super::Failure {
+            phase: "metadata capacity hold",
+            ..
+        })
+    ));
+
+    assert!(
+        fixture
+            .scope
+            .record_completion_cleanup_at(launch.intent.id, claim.generation, now)
+            .await?
+    );
+    assert!(
+        !fixture
+            .scope
+            .terminal_settlement_matches_at(launch.intent.id, claim.generation)
+            .await?
+    );
+    assert!(
+        !fixture
+            .scope
+            .terminal_settlement_matches_at(launch.intent.id + 1, claim.generation)
+            .await?
+    );
+    assert!(
+        !fixture
+            .scope
+            .record_completion_cleanup_at(launch.intent.id, claim.generation, now + 1)
+            .await?
+    );
+    Ok(())
 }
 
 async fn assert_capacity_hold_keeps_attempt(
@@ -249,112 +319,4 @@ async fn assert_retry_settlement_is_idempotent(
     );
     assert!(fixture.scope.intent(launch.intent.id).await?.cleanup_proven);
     Ok(())
-}
-
-async fn capacity_retry_fixture()
--> Result<crate::launch::bootstrap::CleanupRuntimeFixture, HostError> {
-    use crate::journal::request_lifecycle::tests::{
-        helpers::TEST_ENGINE_ID, native_started_intake_fixture_with_filesystem_digest,
-    };
-
-    let sample_generation = format!("{:032x}", u32::from(b'a'));
-    let permit =
-        crate::launch::StartPermit::test_fixture_with_engine_id(&sample_generation, TEST_ENGINE_ID);
-    let digest = crate::launch::resource_probe::filesystem_instance_digest(
-        permit.engine_id(),
-        permit.docker_root_digest(),
-        b"12345678-1234-1234-1234-123456789abc",
-        b"/dev/vdb",
-        b"btrfs",
-        0x9123_683e,
-        0,
-        38,
-        0,
-        41,
-        17,
-    );
-    let base = native_started_intake_fixture_with_filesystem_digest(Some(digest)).await?;
-    crate::launch::bootstrap::cleanup_runtime_fixture_for_base(base).await
-}
-
-async fn seed_completion(
-    fixture: &crate::launch::bootstrap::CleanupRuntimeFixture,
-) -> Result<(crate::journal::CompletedLaunch, i64), HostError> {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    let base = &fixture._base;
-    let completed = fixture
-        .scope
-        .record_job_completed(
-            &base.assignment,
-            base.message_id,
-            &base.source,
-            Some("success"),
-            Some(&base.runner),
-            Some("opaque-started-job"),
-        )
-        .await?;
-    assert_eq!(completed, Some(base.intent_id));
-    fixture
-        .scope
-        .record_remote_cleanup(fixture.reservation_id)
-        .await?;
-    let now = i64::try_from(
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| HostError::Journal)?
-            .as_secs(),
-    )
-    .map_err(|_| HostError::Journal)?;
-    let launch = fixture
-        .scope
-        .due_completed_launches(now, 1)
-        .await?
-        .into_iter()
-        .next()
-        .ok_or(HostError::Journal)?;
-    Ok((launch, now))
-}
-
-async fn run_native_cleanup(
-    fixture: &crate::launch::bootstrap::CleanupRuntimeFixture,
-    launch: &crate::journal::CompletedLaunch,
-    claim: crate::journal::CleanupClaim,
-) -> Result<Result<(), super::super::Failure>, HostError> {
-    use std::{os::unix::fs::PermissionsExt, sync::atomic::AtomicBool};
-
-    use crate::{https::HttpsTransport, launch::completion, listen::Secret};
-
-    let scratch = fixture._base._scratch.file();
-    let state = std::fs::canonicalize(scratch.parent().ok_or(HostError::Path)?)
-        .map_err(|_| HostError::Path)?;
-    std::fs::set_permissions(&state, std::fs::Permissions::from_mode(0o700))
-        .map_err(|_| HostError::Path)?;
-    let diagnostics = completion::diagnostics::DiagnosticsRoot::open(
-        &state,
-        fixture.scope.connection_id().as_str(),
-    )?;
-    let mut transport = HttpsTransport::new("https://github.com")?;
-    let admin = Secret::new("native cleanup fixture");
-    let journal = completion::journal_ref::CompletionJournal::scoped(fixture.scope.clone());
-    let docker = fixture.server.docker();
-    let engine = fixture
-        .scope
-        .engine_context()
-        .await?
-        .ok_or(HostError::Ownership)?;
-    let info = docker.info().await.map_err(|_| HostError::Docker)?;
-    let selected = crate::launch::SelectedEngineContext::capture(&engine, &info)?;
-    let stopping = AtomicBool::new(false);
-    let mut context = completion::cleanup::Context {
-        journal: &journal,
-        docker: &docker,
-        transport: &mut transport,
-        admin: &admin,
-        diagnostics: &diagnostics,
-        native_cleanup: Some(&fixture.runtime),
-        selected_engine: Some(&selected),
-    };
-    let mut budget = super::super::EffectBudget::new_native(&stopping);
-    Ok(super::super::reconcile_claimed(&mut context, launch, claim, &mut budget).await)
 }

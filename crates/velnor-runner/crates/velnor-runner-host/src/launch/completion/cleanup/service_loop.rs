@@ -33,8 +33,8 @@ pub(in crate::launch::completion) fn run(
         transport: &mut transport,
         admin: &admin,
         diagnostics: &diagnostics,
-        native_cleanup: native_cleanup.as_ref(),
-        selected_engine: selected_engine.as_ref(),
+        native_cleanup: Some(&native_cleanup),
+        selected_engine: Some(&selected_engine),
     };
     let mut first_failure = None;
     loop {

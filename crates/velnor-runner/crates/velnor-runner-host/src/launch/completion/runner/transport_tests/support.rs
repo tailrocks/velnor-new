@@ -1,7 +1,4 @@
 use std::collections::VecDeque;
-use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use velnor_runner_github::TransportFail;
@@ -9,14 +6,13 @@ use velnor_runner_github::session::{Exchange, Method, SessionRequest, Transport}
 
 use super::super::super::cleanup_retry_delay_seconds;
 use crate::error::HostError;
-use crate::journal::{CleanupClaim, CompletedLaunch, Journal};
+use crate::journal::request_lifecycle::tests::{
+    NativeStartedIntakeFixture, native_started_intake_fixture,
+};
+use crate::journal::{CleanupClaim, CompletedLaunch, ConnectionJournal};
 use crate::launch::completion::journal_ref::CompletionJournal;
 use crate::listen::Secret;
 
-const SCALE_SET_ID: i64 = 77;
-const REQUEST_ID: i64 = 61;
-const RUNNER_ID: i64 = 10_061;
-const RUNNER_NAME: &str = "v61";
 const EFFECT_LEASE_SECONDS: i64 = 90;
 
 pub(super) fn runner_body(id: i64, name: &str, scale_set_id: i64) -> Vec<u8> {
@@ -86,46 +82,53 @@ pub(super) struct CapturedRequest {
 }
 
 pub(super) struct Fixture {
-    pub(super) journal: Journal,
+    pub(super) scope: ConnectionJournal,
     pub(super) completion: CompletionJournal,
+    intake: NativeStartedIntakeFixture,
     pub(super) admin: Secret,
-    _scratch: Scratch,
 }
 
 impl Fixture {
     pub(super) async fn new(label: &str) -> Result<Self, HostError> {
-        let scratch = Scratch::new(label)?;
-        let journal = Journal::open(scratch.file()).await?;
-        let completion = CompletionJournal::root(journal.clone());
+        let _ = label;
+        let intake = native_started_intake_fixture().await?;
+        let scope = intake.scope.clone();
         let admin = Secret::new("test token");
         Ok(Self {
-            journal,
-            completion,
+            scope,
+            completion: CompletionJournal::scoped(intake.scope.clone()),
+            intake,
             admin,
-            _scratch: scratch,
         })
     }
 
     pub(super) async fn claim(&self) -> Result<(CompletedLaunch, CleanupClaim), HostError> {
-        let (id, _) = self
-            .journal
-            .begin_assigned_launch("m61r61", SCALE_SET_ID, REQUEST_ID, RUNNER_NAME)
+        self.intake.record_started().await?;
+        let completed = self
+            .scope
+            .record_job_completed(
+                &self.intake.assignment,
+                self.intake.message_id,
+                &self.intake.source,
+                Some("success"),
+                Some(&self.intake.runner),
+                Some("opaque-started-job"),
+            )
             .await?;
-        self.journal
-            .record_runner_completed(SCALE_SET_ID, REQUEST_ID, RUNNER_ID, RUNNER_NAME)
-            .await?
-            .ok_or(HostError::Journal)?;
-        let launch = self.due(id).await?;
+        if completed != Some(self.intake.intent_id) {
+            return Err(HostError::Journal);
+        }
+        let launch = self.due(self.intake.intent_id).await?;
         let claim = self
-            .journal
-            .claim_completion_cleanup(id, EFFECT_LEASE_SECONDS)
+            .scope
+            .claim_completion_cleanup(launch.intent.id, EFFECT_LEASE_SECONDS)
             .await?
             .ok_or(HostError::Journal)?;
         Ok((launch, claim))
     }
 
     pub(super) async fn due(&self, id: i64) -> Result<CompletedLaunch, HostError> {
-        self.journal
+        self.scope
             .due_completed_launches(
                 unix_seconds()?.checked_add(200).ok_or(HostError::Journal)?,
                 10,
@@ -146,13 +149,13 @@ impl Fixture {
             .checked_add(cleanup_retry_delay_seconds(previous.attempt))
             .ok_or(HostError::Journal)?;
         if !self
-            .journal
+            .scope
             .retry_completion_cleanup_at(id, previous.generation, now, retry_after)
             .await?
         {
             return Err(HostError::Journal);
         }
-        self.journal
+        self.scope
             .claim_completion_cleanup_at(id, retry_after, EFFECT_LEASE_SECONDS)
             .await?
             .ok_or(HostError::Journal)
@@ -170,39 +173,14 @@ pub(super) fn assert_request(
     assert_eq!(request.query.as_deref(), query);
 }
 
-struct Scratch {
-    path: PathBuf,
-    directory: PathBuf,
-}
-
-impl Scratch {
-    fn new(label: &str) -> Result<Self, HostError> {
-        static NEXT: AtomicU64 = AtomicU64::new(0);
-        let id = NEXT.fetch_add(1, Ordering::Relaxed);
-        let directory = std::env::temp_dir().join(format!(
-            "velnor-completion-runner-{label}-{}-{id}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&directory).map_err(|_| HostError::Path)?;
-        std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700))
-            .map_err(|_| HostError::Path)?;
-        Ok(Self {
-            path: directory.join("journal.db"),
-            directory,
-        })
-    }
-
-    fn file(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        if let Err(error) = std::fs::remove_dir_all(&self.directory) {
-            let _kind = error.kind();
-        }
-    }
+pub(super) fn assert_runner_lookup(request: &CapturedRequest, method: Method, name: &str) {
+    let query = format!("agentName={name}&api-version=6.0-preview");
+    assert_request(
+        request,
+        method,
+        "_apis/distributedtask/pools/0/agents",
+        Some(&query),
+    );
 }
 
 fn unix_seconds() -> Result<i64, HostError> {

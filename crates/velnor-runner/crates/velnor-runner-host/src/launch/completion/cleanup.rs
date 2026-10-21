@@ -1,17 +1,13 @@
 //! Claim-fenced cleanup orchestration and one-request effect boundaries.
 
-#[path = "container.rs"]
-mod container;
 mod native;
 #[path = "runner.rs"]
 mod runner;
+#[cfg(test)]
+#[path = "cleanup/scoped_shutdown_tests.rs"]
+mod scoped_shutdown_tests;
 #[path = "cleanup/service_loop.rs"]
 mod service_loop;
-#[cfg(test)]
-#[path = "tests.rs"]
-mod tests;
-#[path = "volume.rs"]
-mod volume;
 
 pub(in crate::launch) use native::remove_owned_resources_for_retirement;
 
@@ -34,24 +30,12 @@ use crate::listen::Secret;
 use super::journal_ref::CompletionJournal;
 
 const CLAIM_LEASE_SECONDS: i64 = 90;
-#[cfg(test)]
-const CURL_REQUEST_TIMEOUT_SECONDS: u64 = 60;
-#[cfg(test)]
-const EFFECT_MARGIN_SECONDS: u64 = 30;
 const EFFECT_WINDOW_SECONDS: i64 = 90;
 const RUNNER_REQUESTS: u64 = 3;
 const CONTAINER_COUNT: u64 = 2;
-const CONTAINER_REQUESTS: u64 = 9;
 const VOLUME_COUNT: u64 = crate::worker::WorkerVolumeRole::ALL.len() as u64;
-const VOLUME_REQUESTS: u64 = 3;
-const MAX_CLEANUP_EFFECTS: u64 =
-    RUNNER_REQUESTS + CONTAINER_COUNT * CONTAINER_REQUESTS + VOLUME_COUNT * VOLUME_REQUESTS;
 const MAX_NATIVE_CLEANUP_EFFECTS: u64 =
     RUNNER_REQUESTS + CONTAINER_COUNT * 4 * 2 + VOLUME_COUNT * 3 * 2 + 7;
-#[cfg(test)]
-const MAX_EXTERNAL_CHAIN_SECONDS: u64 = RUNNER_REQUESTS * CURL_REQUEST_TIMEOUT_SECONDS
-    + (CONTAINER_COUNT * CONTAINER_REQUESTS + VOLUME_COUNT * VOLUME_REQUESTS)
-        * crate::docker_client::DOCKER_OPERATION_TIMEOUT.as_secs();
 const SCAN_LIMIT: u32 = 4;
 const MAX_SCAN_WAVES: usize = 3;
 
@@ -77,16 +61,14 @@ pub(super) struct EffectBudget<'a> {
 impl<'a> EffectBudget<'a> {
     pub(super) fn new(stopping: &'a AtomicBool) -> Self {
         Self {
-            remaining: MAX_CLEANUP_EFFECTS,
+            remaining: MAX_NATIVE_CLEANUP_EFFECTS,
             stopping,
         }
     }
 
+    #[cfg(test)]
     fn new_native(stopping: &'a AtomicBool) -> Self {
-        Self {
-            remaining: MAX_NATIVE_CLEANUP_EFFECTS,
-            stopping,
-        }
+        Self::new(stopping)
     }
 
     fn reserve(&mut self, phase: &'static str) -> Result<(), Failure> {
@@ -228,11 +210,7 @@ async fn reconcile_one(
             return Some(failure);
         }
     };
-    let mut budget = if launch.intent.worker_volume.is_none() {
-        EffectBudget::new_native(stopping)
-    } else {
-        EffectBudget::new(stopping)
-    };
+    let mut budget = EffectBudget::new(stopping);
     let result = reconcile_claimed(context, &launch, claim, &mut budget).await;
     let Err(failure) = result else {
         return None;
@@ -279,18 +257,7 @@ async fn reconcile_claimed(
     {
         return Err(Failure::not_proven("diagnostic write pending"));
     }
-    if launch.intent.worker_volume.is_some() && !valid_completion(launch) {
-        return Err(Failure::not_proven("completion identity"));
-    }
-    if launch.intent.worker_volume.is_some() {
-        runner::reconcile(context, launch, claim, budget).await?;
-        container::cleanup(context, launch, claim, budget).await?;
-        volume::cleanup(context, launch, claim, budget).await?;
-    } else if context.journal.scoped_connection().is_none() {
-        return Err(Failure::not_proven("completion identity"));
-    } else {
-        native::cleanup(context, launch, claim, budget).await?;
-    }
+    native::cleanup(context, launch, claim, budget).await?;
     let recorded = context
         .journal
         .record_completion_cleanup(launch.intent.id, claim.generation)
@@ -347,21 +314,6 @@ where
 enum EffectOutcome<T> {
     Stopped,
     Completed(HostResult<T>),
-}
-
-fn valid_completion(launch: &CompletedLaunch) -> bool {
-    launch.intent.id > 0
-        && launch.intent.kind == "launch"
-        && !launch.intent.cleanup_proven
-        && launch.identity.scale_set_id > 0
-        && launch.identity.runner_request_id > 0
-        && launch.identity.runner_id > 0
-        && !launch.identity.runner_name.is_empty()
-        && launch
-            .intent
-            .worker_volume
-            .as_deref()
-            .is_some_and(|worker| crate::runner_plan(worker).is_ok())
 }
 
 fn retry_delay_seconds(attempt: u32) -> i64 {

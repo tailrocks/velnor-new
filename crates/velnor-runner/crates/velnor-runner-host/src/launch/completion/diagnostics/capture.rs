@@ -7,13 +7,13 @@ use bollard::models::ContainerInspectResponse;
 use super::super::cleanup::{Context, EffectBudget, Failure, run_effect};
 use super::stage::{OperationKey, StageRequest};
 use super::{
-    CAPTURE_DEADLINE, CaptureIdentity, DiagnosticRecord, DiagnosticsRoot, INSPECT_DEADLINE,
-    MAX_RECORD_BYTES, diagnostic_record, worker,
+    CAPTURE_DEADLINE, DiagnosticRecord, DiagnosticsRoot, INSPECT_DEADLINE, MAX_RECORD_BYTES,
+    RecordIdentity, diagnostic_record_fields, worker,
 };
 use crate::error::HostError;
-use crate::journal::{CleanupClaim, CompletedLaunch};
+use crate::journal::{CleanupClaim, CompletedLaunch, StorageCleanupIdentity};
 
-pub(in crate::launch) struct CaptureRequest<'a, 'b> {
+pub(in crate::launch) struct NativeCaptureRequest<'a, 'b> {
     pub(in crate::launch) root: &'a DiagnosticsRoot,
     pub(in crate::launch) launch: &'a CompletedLaunch,
     pub(in crate::launch) claim: CleanupClaim,
@@ -21,14 +21,24 @@ pub(in crate::launch) struct CaptureRequest<'a, 'b> {
     pub(in crate::launch) role: &'static str,
     pub(in crate::launch) expected_name: &'a str,
     pub(in crate::launch) container_id: &'a str,
-    pub(in crate::launch) volume: &'a str,
+    pub(in crate::launch) identity: &'a StorageCleanupIdentity,
 }
 
-pub(in crate::launch) async fn capture(
+type NativeIdentityValidator = fn(
+    &ContainerInspectResponse,
+    &str,
+    &str,
+    &str,
+    &StorageCleanupIdentity,
+    &str,
+) -> Result<(), HostError>;
+
+pub(in crate::launch) async fn capture_native(
     context: &Context<'_>,
-    request: CaptureRequest<'_, '_>,
+    request: NativeCaptureRequest<'_, '_>,
+    validate: NativeIdentityValidator,
 ) -> Result<(), Failure> {
-    let CaptureRequest {
+    let NativeCaptureRequest {
         root,
         launch,
         claim,
@@ -36,24 +46,34 @@ pub(in crate::launch) async fn capture(
         role,
         expected_name,
         container_id,
-        volume,
+        identity,
     } = request;
     let started = Instant::now();
-    let identity = CaptureIdentity {
-        connection_id: root.connection_id.clone(),
-        intent_id: launch.intent.id,
-        generation: claim.generation,
-        role,
-        expected_name,
-        container_id,
-        volume,
-    };
     let response = inspect_container(context, budget, launch, claim, container_id, started).await?;
-    let record = diagnostic_record(response, &identity)
-        .map_err(|error| Failure::request("container diagnostic inspect", error))?;
+    validate(
+        &response,
+        container_id,
+        expected_name,
+        role,
+        identity,
+        &root.connection_id,
+    )
+    .map_err(|error| Failure::request("container diagnostic inspect", error))?;
+    let record = diagnostic_record_fields(
+        response,
+        &RecordIdentity {
+            connection_id: root.connection_id.clone(),
+            intent_id: launch.intent.id,
+            generation: claim.generation,
+            role,
+            expected_name,
+            container_id,
+        },
+    )
+    .map_err(|error| Failure::request("container diagnostic inspect", error))?;
     if !context
         .journal
-        .completion_claim_current(launch.intent.id, claim.generation)
+        .completion_cleanup_claim_current(launch.intent.id, claim.generation)
         .await
         .map_err(|error| Failure::request("diagnostic claim check", error))?
     {
@@ -151,6 +171,8 @@ async fn persist_capture(
             launch,
             claim,
             budget,
+            #[cfg(test)]
+            root,
             stage_request,
             remaining,
             cancelled: Arc::clone(&cancelled),
@@ -163,7 +185,7 @@ async fn persist_capture(
     }
     if !context
         .journal
-        .completion_claim_current(launch.intent.id, claim.generation)
+        .completion_cleanup_claim_current(launch.intent.id, claim.generation)
         .await
         .map_err(|error| Failure::request("diagnostic claim check", error))?
     {
@@ -214,6 +236,8 @@ struct DispatchRequest<'a, 'b> {
     launch: &'a CompletedLaunch,
     claim: CleanupClaim,
     budget: &'a mut EffectBudget<'b>,
+    #[cfg(test)]
+    root: &'a DiagnosticsRoot,
     stage_request: StageRequest,
     remaining: Duration,
     cancelled: Arc<AtomicBool>,
@@ -227,10 +251,16 @@ async fn dispatch_stage(
         launch,
         claim,
         budget,
+        #[cfg(test)]
+        root,
         stage_request,
         remaining,
         cancelled,
     } = request;
+    #[cfg(test)]
+    let next_write_gate = root
+        .take_next_write_gate()
+        .map_err(|error| Failure::request("diagnostic worker gate", error))?;
     let operation_cancelled = Arc::clone(&cancelled);
     run_effect(
         context.journal,
@@ -240,6 +270,13 @@ async fn dispatch_stage(
         "diagnostic write",
         || async move {
             let worker = worker::process_worker()?;
+            #[cfg(test)]
+            let reply = if let Some(gate) = next_write_gate {
+                worker.submit_gated(stage_request, operation_cancelled.clone(), gate)?
+            } else {
+                worker.submit(stage_request, operation_cancelled.clone())?
+            };
+            #[cfg(not(test))]
             let reply = worker.submit(stage_request, operation_cancelled.clone())?;
             match tokio::time::timeout(remaining, reply).await {
                 Ok(Ok(result)) => result,

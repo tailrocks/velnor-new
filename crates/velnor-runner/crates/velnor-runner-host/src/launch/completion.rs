@@ -29,7 +29,7 @@ use zeroize::Zeroize;
 use crate::docker_client::DOCKER_OPERATION_TIMEOUT;
 use crate::error::HostError;
 use crate::https::HttpsTransport;
-use crate::journal::{ConnectionJournal, Journal};
+use crate::journal::ConnectionJournal;
 use crate::launch::SelectedEngineContext;
 use crate::launch::bootstrap::NativeCleanupRuntime;
 use crate::listen::Secret;
@@ -46,8 +46,8 @@ pub(super) struct Resources {
     pub(super) transport: HttpsTransport,
     pub(super) admin: Secret,
     pub(super) diagnostics: diagnostics::DiagnosticsRoot,
-    pub(super) native_cleanup: Option<NativeCleanupRuntime>,
-    pub(super) selected_engine: Option<SelectedEngineContext>,
+    pub(super) native_cleanup: NativeCleanupRuntime,
+    pub(super) selected_engine: SelectedEngineContext,
 }
 
 /// One independently scheduled completion cleanup worker.
@@ -61,26 +61,6 @@ pub(crate) struct CompletionWorker {
 }
 
 impl CompletionWorker {
-    /// Start the bounded completer on its own thread and runtime.
-    pub(crate) fn start(
-        journal: Journal,
-        docker: Docker,
-        admin_base: &str,
-        admin_token: String,
-        state: &Path,
-    ) -> Result<Self, HostError> {
-        Self::start_with_journal(
-            journal_ref::CompletionJournal::root(journal),
-            "root",
-            docker,
-            admin_base,
-            admin_token,
-            state,
-            None,
-            None,
-        )
-    }
-
     /// Start cleanup for one repository connection's completion rows.
     pub(crate) fn start_scoped(
         journal: ConnectionJournal,
@@ -99,8 +79,8 @@ impl CompletionWorker {
             admin_base,
             admin_token,
             state,
-            Some(native_cleanup),
-            Some(selected),
+            native_cleanup,
+            selected,
         )
     }
 
@@ -111,8 +91,8 @@ impl CompletionWorker {
         admin_base: &str,
         admin_token: String,
         state: &Path,
-        native_cleanup: Option<NativeCleanupRuntime>,
-        selected_engine: Option<SelectedEngineContext>,
+        native_cleanup: NativeCleanupRuntime,
+        selected_engine: SelectedEngineContext,
     ) -> Result<Self, HostError> {
         if admin_token.is_empty() {
             return Err(HostError::EmptySecret);
@@ -129,7 +109,7 @@ impl CompletionWorker {
         let thread_stopping = Arc::clone(&stopping);
         let (wake, receiver) = mpsc::sync_channel(1);
         let (finished_tx, finished) = oneshot::channel();
-        let journal_identity = journal.instance_identity();
+        let journal_identity = journal.completion_state_identity();
         let resources = Resources {
             diagnostics: diagnostics::DiagnosticsRoot::open_for_journal(
                 state,

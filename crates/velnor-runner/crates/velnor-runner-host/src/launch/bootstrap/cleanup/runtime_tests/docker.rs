@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     path::PathBuf,
     sync::{
         Arc,
@@ -23,6 +24,7 @@ pub(crate) struct StatefulDocker {
     task: Option<tokio::task::JoinHandle<()>>,
     request_count: Arc<AtomicU64>,
     effects: Arc<EffectCounts>,
+    state: Arc<Mutex<ServerState>>,
 }
 
 impl StatefulDocker {
@@ -68,7 +70,7 @@ impl StatefulDocker {
         let effects = Arc::new(EffectCounts::default());
         let task = tokio::spawn(server::serve(
             listener,
-            state,
+            Arc::clone(&state),
             Arc::clone(&request_count),
             Arc::clone(&effects),
         ));
@@ -81,11 +83,53 @@ impl StatefulDocker {
             task: Some(task),
             request_count,
             effects,
+            state,
         })
     }
 
     pub(crate) fn docker(&self) -> Docker {
         self.docker.clone()
+    }
+
+    pub(crate) async fn expose_owned_containers(
+        &self,
+        connection_id: &str,
+    ) -> Result<(), HostError> {
+        self.expose_owned_containers_with_mismatch(connection_id, OwnedContainerMismatch::None)
+            .await
+    }
+
+    pub(crate) async fn expose_owned_containers_with_mismatch(
+        &self,
+        connection_id: &str,
+        mismatch: OwnedContainerMismatch,
+    ) -> Result<(), HostError> {
+        let mut state = self.state.lock().await;
+        state.owned_connection_id = Some(connection_id.to_owned());
+        state.owned_mismatch = mismatch;
+        state.owned_containers_present = true;
+        Ok(())
+    }
+
+    pub(crate) async fn fail_owned_volume_removal(
+        &self,
+        connection_id: &str,
+    ) -> Result<(), HostError> {
+        let mut state = self.state.lock().await;
+        state.owned_connection_id = Some(connection_id.to_owned());
+        state.owned_volumes = state
+            .identity
+            .volumes()
+            .iter()
+            .map(|(_, name)| name.clone())
+            .collect();
+        state.volume_delete_failure = state
+            .identity
+            .volumes()
+            .iter()
+            .find(|(role, _)| *role == crate::journal::StorageRole::RunnerHome)
+            .map(|(_, name)| name.clone());
+        Ok(())
     }
 
     pub(crate) fn request_count(&self) -> u64 {
@@ -138,6 +182,23 @@ struct ServerState {
     capacity_first: u64,
     capacity_after_first: u64,
     capacity_total: u64,
+    owned_connection_id: Option<String>,
+    owned_mismatch: OwnedContainerMismatch,
+    owned_containers_present: bool,
+    removed_owned_containers: HashSet<String>,
+    owned_volumes: HashSet<String>,
+    volume_delete_failure: Option<String>,
+}
+
+#[derive(Clone, Copy, Default)]
+pub(crate) enum OwnedContainerMismatch {
+    #[default]
+    None,
+    Id,
+    Name,
+    Reservation,
+    Operation,
+    Scope,
 }
 
 impl ServerState {
@@ -164,6 +225,12 @@ impl ServerState {
             capacity_first,
             capacity_after_first,
             capacity_total,
+            owned_connection_id: None,
+            owned_mismatch: OwnedContainerMismatch::None,
+            owned_containers_present: false,
+            removed_owned_containers: HashSet::new(),
+            owned_volumes: HashSet::new(),
+            volume_delete_failure: None,
         }
     }
 }

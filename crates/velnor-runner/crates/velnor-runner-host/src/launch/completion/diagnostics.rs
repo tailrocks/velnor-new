@@ -5,9 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use bollard::models::ContainerInspectResponse;
 use rustix::fs::{Mode, OFlags, open, openat};
-use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 #[path = "diagnostics/stage.rs"]
@@ -35,6 +33,8 @@ pub(in crate::launch) struct DiagnosticsRoot {
     scope: OwnedFd,
     journal_identity: String,
     connection_id: String,
+    #[cfg(test)]
+    next_write_gate: std::sync::Mutex<Option<Arc<std::sync::Barrier>>>,
 }
 
 #[cfg(test)]
@@ -104,12 +104,35 @@ impl DiagnosticsRoot {
             scope,
             journal_identity,
             connection_id: connection_id.to_owned(),
+            #[cfg(test)]
+            next_write_gate: std::sync::Mutex::new(None),
         })
     }
 
     pub(super) fn pending_for(&self, intent_id: i64) -> Result<bool, HostError> {
         let worker = worker::process_worker()?;
         worker.pending_for(&self.journal_identity, &self.connection_id, intent_id)
+    }
+
+    #[cfg(test)]
+    pub(in crate::launch) fn pause_next_write_for_test(
+        &self,
+    ) -> Result<Arc<std::sync::Barrier>, HostError> {
+        let gate = Arc::new(std::sync::Barrier::new(2));
+        let mut next = self.next_write_gate.lock().map_err(|_| HostError::Lock)?;
+        if next.is_some() {
+            return Err(HostError::Journal);
+        }
+        *next = Some(Arc::clone(&gate));
+        Ok(gate)
+    }
+
+    #[cfg(test)]
+    fn take_next_write_gate(&self) -> Result<Option<Arc<std::sync::Barrier>>, HostError> {
+        self.next_write_gate
+            .lock()
+            .map(|mut next| next.take())
+            .map_err(|_| HostError::Lock)
     }
 
     #[cfg(test)]
@@ -255,98 +278,15 @@ impl Drop for PendingWrite {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct DiagnosticRecord {
-    version: u8,
-    connection_id: String,
-    intent_id: i64,
-    claim_generation: i64,
-    role: String,
-    container_id: String,
-    name: String,
-    image: Option<String>,
-    restart_count: Option<i64>,
-    state: Option<DiagnosticState>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct DiagnosticState {
-    status: Option<String>,
-    running: Option<bool>,
-    paused: Option<bool>,
-    restarting: Option<bool>,
-    oom_killed: Option<bool>,
-    dead: Option<bool>,
-    exit_code: Option<i64>,
-    started_at: Option<String>,
-    finished_at: Option<String>,
-}
+#[path = "diagnostics/record.rs"]
+mod record;
+#[cfg(test)]
+pub(crate) use record::{CaptureIdentity, DiagnosticState, diagnostic_record};
+pub(crate) use record::{DiagnosticRecord, RecordIdentity, diagnostic_record_fields};
 
 #[path = "diagnostics/capture.rs"]
 mod capture;
-pub(in crate::launch) use capture::{CaptureRequest, capture, delete_after_capture};
-
-struct CaptureIdentity<'a> {
-    connection_id: String,
-    intent_id: i64,
-    generation: i64,
-    role: &'static str,
-    expected_name: &'a str,
-    container_id: &'a str,
-    volume: &'a str,
-}
-
-fn diagnostic_record(
-    info: ContainerInspectResponse,
-    identity: &CaptureIdentity<'_>,
-) -> Result<DiagnosticRecord, HostError> {
-    let id = info.id.as_deref().ok_or(HostError::Ownership)?;
-    let name = info.name.as_deref().ok_or(HostError::Ownership)?;
-    let labels = info
-        .config
-        .as_ref()
-        .and_then(|config| config.labels.as_ref())
-        .ok_or(HostError::Ownership)?;
-    let actual_name = name.strip_prefix('/').unwrap_or(name);
-    if id != identity.container_id
-        || actual_name != identity.expected_name
-        || labels.get("velnor.volume").map(String::as_str) != Some(identity.volume)
-        || labels.get("velnor.worker").map(String::as_str) != Some(identity.volume)
-        || labels.get("velnor.role").map(String::as_str) != Some(identity.role)
-    {
-        return Err(HostError::Ownership);
-    }
-    let state = info.state.map(|state| DiagnosticState {
-        status: state.status.map(|status| status.to_string()),
-        running: state.running,
-        paused: state.paused,
-        restarting: state.restarting,
-        oom_killed: state.oom_killed,
-        dead: state.dead,
-        exit_code: state.exit_code,
-        started_at: bounded_text(state.started_at, 64),
-        finished_at: bounded_text(state.finished_at, 64),
-    });
-    let record = DiagnosticRecord {
-        version: 1,
-        connection_id: identity.connection_id.clone(),
-        intent_id: identity.intent_id,
-        claim_generation: identity.generation,
-        role: identity.role.to_owned(),
-        container_id: id.to_owned(),
-        name: identity.expected_name.to_owned(),
-        image: bounded_text(info.image, 128),
-        restart_count: info.restart_count,
-        state,
-    };
-    let bytes = serde_json::to_vec(&record).map_err(|_| HostError::Journal)?;
-    if bytes.len() > MAX_RECORD_BYTES {
-        return Err(HostError::Ownership);
-    }
-    Ok(record)
-}
+pub(in crate::launch) use capture::{NativeCaptureRequest, capture_native, delete_after_capture};
 
 fn check_deadline(started: Instant) -> Result<(), HostError> {
     if started.elapsed() >= CAPTURE_DEADLINE {

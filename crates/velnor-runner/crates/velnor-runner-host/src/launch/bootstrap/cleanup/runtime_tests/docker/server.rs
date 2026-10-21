@@ -51,7 +51,11 @@ async fn handle(
         let body = http::read_line(&mut stream).await?;
         let response = observer_output(&body, &state).await?;
         let mut frame = vec![1, 0, 0, 0];
-        frame.extend_from_slice(&(response.len() as u32).to_be_bytes());
+        frame.extend_from_slice(
+            &u32::try_from(response.len())
+                .map_err(|_| HostError::Frame)?
+                .to_be_bytes(),
+        );
         frame.extend_from_slice(&response);
         stream
             .write_all(&frame)
@@ -94,7 +98,11 @@ fn capacity_logs(state: &ServerState) -> Result<(u16, Vec<u8>), HostError> {
     .map_err(|_| HostError::Frame)?;
     output.push(b'\n');
     let mut frame = vec![1, 0, 0, 0];
-    frame.extend_from_slice(&(output.len() as u32).to_be_bytes());
+    frame.extend_from_slice(
+        &u32::try_from(output.len())
+            .map_err(|_| HostError::Frame)?
+            .to_be_bytes(),
+    );
     frame.extend_from_slice(&output);
     Ok((200, frame))
 }
@@ -137,6 +145,16 @@ fn image_response(path: &str, state: &ServerState) -> Result<(u16, Vec<u8>), Hos
 }
 
 fn container_response(path: &str, state: &ServerState) -> Result<(u16, Vec<u8>), HostError> {
+    let reference = path
+        .split("/containers/")
+        .nth(1)
+        .unwrap_or("")
+        .split('/')
+        .next()
+        .unwrap_or("");
+    if let Some(response) = owned_container_response(reference, state)? {
+        return Ok(response);
+    }
     let Some(probe) = state.probe.as_ref() else {
         return Ok((404, message()));
     };
@@ -178,6 +196,112 @@ fn container_response(path: &str, state: &ServerState) -> Result<(u16, Vec<u8>),
         200,
         serde_json::to_vec(&body).map_err(|_| HostError::Frame)?,
     ))
+}
+
+fn owned_container_response(
+    reference: &str,
+    state: &ServerState,
+) -> Result<Option<(u16, Vec<u8>)>, HostError> {
+    if !state.owned_containers_present || state.removed_owned_containers.contains(reference) {
+        return Ok(None);
+    }
+    let (id, role, container_role) = if reference == state.identity.runner_container_id() {
+        (
+            state.identity.runner_container_id(),
+            "runner",
+            crate::worker::WorkerContainerRole::Runner,
+        )
+    } else if reference == state.identity.dind_container_id() {
+        (
+            state.identity.dind_container_id(),
+            "dind",
+            crate::worker::WorkerContainerRole::Dind,
+        )
+    } else {
+        return Ok(None);
+    };
+    let connection_id = state
+        .owned_connection_id
+        .as_deref()
+        .ok_or(HostError::Ownership)?;
+    let names =
+        crate::worker::WorkerIdentityNames::from_private_volume(state.identity.private_volume())?;
+    let name = names.container_name(container_role);
+    let mismatch = state.owned_mismatch;
+    let observed_id = if matches!(mismatch, OwnedContainerMismatch::Id) {
+        "foreign-container-id".to_owned()
+    } else {
+        id.to_owned()
+    };
+    let observed_name = if matches!(mismatch, OwnedContainerMismatch::Name) {
+        format!("/{name}-foreign")
+    } else {
+        format!("/{name}")
+    };
+    let observed_connection = if matches!(mismatch, OwnedContainerMismatch::Scope) {
+        "foreign-scope".to_owned()
+    } else {
+        connection_id.to_owned()
+    };
+    let reservation_id = if matches!(mismatch, OwnedContainerMismatch::Reservation) {
+        "0".to_owned()
+    } else {
+        state.identity.reservation_id().to_string()
+    };
+    let operation_id = if matches!(mismatch, OwnedContainerMismatch::Operation) {
+        "0".to_owned()
+    } else {
+        state.identity.operation_id().to_string()
+    };
+    let body = owned_container_body(
+        role,
+        &observed_id,
+        &observed_name,
+        &reservation_id,
+        &operation_id,
+        &observed_connection,
+    );
+    Ok(Some((
+        200,
+        serde_json::to_vec(&body).map_err(|_| HostError::Frame)?,
+    )))
+}
+
+fn owned_container_body(
+    role: &str,
+    id: &str,
+    name: &str,
+    reservation_id: &str,
+    operation_id: &str,
+    connection_id: &str,
+) -> serde_json::Value {
+    serde_json::json!({
+        "Id": id,
+        "Name": name,
+        "Image": "sha256:0123456789abcdef",
+        "RestartCount": 0,
+        "State": {
+            "Status": "exited",
+            "Running": false,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "ExitCode": 0,
+            "StartedAt": "2026-01-01T00:00:00Z",
+            "FinishedAt": "2026-01-01T00:01:00Z"
+        },
+        "Config": {
+            "Labels": {
+                "io.velnor.managed": "true",
+                "io.velnor.reservation-id": reservation_id,
+                "io.velnor.operation-id": operation_id,
+                "io.velnor.connection-id": connection_id,
+                "io.velnor.role": role
+            },
+            "Env": ["RUNNER_DIAGNOSTIC_CANARY=must-not-be-written"]
+        }
+    })
 }
 
 fn merged_config(image: &serde_json::Value, created: &serde_json::Value) -> serde_json::Value {

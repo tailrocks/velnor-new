@@ -54,6 +54,8 @@ pub(crate) use test_fixtures::{
 pub(crate) use containers::test_bootstrap_mount_handoff;
 
 #[cfg(test)]
+pub(crate) use cleanup::runtime_tests::docker::OwnedContainerMismatch;
+#[cfg(test)]
 pub(crate) use cleanup::runtime_tests::{
     CleanupRuntimeFixture, cleanup_runtime_fixture, cleanup_runtime_fixture_for_base,
     cleanup_runtime_fixture_for_base_with_capacity, verify_storage_cleanup_for_scope,

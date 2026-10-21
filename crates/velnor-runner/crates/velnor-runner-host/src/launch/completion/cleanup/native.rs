@@ -4,6 +4,10 @@
 #[path = "native/tests.rs"]
 mod tests;
 
+#[cfg(test)]
+#[path = "native/diagnostics_tests.rs"]
+mod diagnostics_tests;
+
 use crate::{
     journal::{CleanupClaim, CompletedLaunch, MetadataSettlementResult},
     launch::bootstrap::PendingStorageCleanupWitness,
@@ -18,10 +22,7 @@ pub(super) async fn cleanup(
     claim: CleanupClaim,
     budget: &mut EffectBudget<'_>,
 ) -> Result<(), Failure> {
-    let scope = context
-        .journal
-        .scoped_connection()
-        .ok_or_else(|| Failure::not_proven("scoped completion journal"))?;
+    let scope = context.journal.connection();
     let runtime = context
         .native_cleanup
         .ok_or_else(|| Failure::not_proven("native cleanup capability"))?;
@@ -53,7 +54,10 @@ pub(super) async fn cleanup(
             .await
             .map_err(|error| Failure::request("storage cleanup preflight", error))?;
         validate_pending(&pending, &reservation)?;
-        remove_owned_containers(context, launch, claim, budget, &pending).await?;
+        Box::pin(remove_owned_containers(
+            context, launch, claim, budget, &pending,
+        ))
+        .await?;
         remove_owned_volumes(context, launch, claim, budget, &pending).await?;
 
         let proof = runtime
@@ -174,7 +178,7 @@ async fn remove_owned_containers(
             role,
             identity,
         };
-        remove_container(context, launch, claim, budget, &target).await?;
+        Box::pin(remove_container(context, launch, claim, budget, &target)).await?;
     }
     Ok(())
 }

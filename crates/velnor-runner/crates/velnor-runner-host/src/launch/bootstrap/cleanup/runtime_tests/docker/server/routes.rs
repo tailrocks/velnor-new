@@ -15,6 +15,17 @@ pub(super) async fn route(
         return image_response(path, &state);
     }
     if path.contains("/volumes/") {
+        let name = path.rsplit('/').next().unwrap_or_default();
+        if request.method == "GET" && state.owned_volumes.contains(name) {
+            return volume_response(name, &state);
+        }
+        if request.method == "DELETE" && state.owned_volumes.contains(name) {
+            if state.volume_delete_failure.as_deref() == Some(name) {
+                return Ok((500, message()));
+            }
+            state.owned_volumes.remove(name);
+            return Ok((204, Vec::new()));
+        }
         return Ok((404, message()));
     }
     if path.contains("/networks/") && request.method == "DELETE" {
@@ -46,6 +57,14 @@ pub(super) async fn route(
             || path.contains(state.identity.dind_container_id())
         {
             effects.container_deletes.fetch_add(1, Ordering::Relaxed);
+            if state.owned_containers_present {
+                let id = if path.contains(state.identity.runner_container_id()) {
+                    state.identity.runner_container_id().to_owned()
+                } else {
+                    state.identity.dind_container_id().to_owned()
+                };
+                state.removed_owned_containers.insert(id);
+            }
         }
         if let Some(probe) = state.probe.as_mut() {
             probe.phase = ProbePhase::Removed;
@@ -53,6 +72,36 @@ pub(super) async fn route(
         return Ok((204, Vec::new()));
     }
     Ok((404, message()))
+}
+
+fn volume_response(name: &str, state: &ServerState) -> Result<(u16, Vec<u8>), HostError> {
+    let (role, _) = state
+        .identity
+        .volumes()
+        .iter()
+        .find(|(_, candidate)| candidate == name)
+        .ok_or(HostError::Ownership)?;
+    let connection_id = state
+        .owned_connection_id
+        .as_deref()
+        .ok_or(HostError::Ownership)?;
+    let body = serde_json::json!({
+        "Name": name,
+        "Driver": "local",
+        "Mountpoint": format!("/var/lib/docker/volumes/{name}/_data"),
+        "Options": {},
+        "Scope": "local",
+        "Labels": {
+            "velnor.connection": connection_id,
+            "velnor.reservation": state.identity.reservation_id().to_string(),
+            "velnor.operation": state.identity.operation_id().to_string(),
+            "velnor.role": role.as_str()
+        }
+    });
+    Ok((
+        200,
+        serde_json::to_vec(&body).map_err(|_| HostError::Frame)?,
+    ))
 }
 
 fn create_probe(
@@ -99,9 +148,9 @@ fn create_probe(
         effects.capacity_runs.fetch_add(1, Ordering::Relaxed);
     }
     state.probe = Some(probe);
-    return Ok((
+    Ok((
         201,
         serde_json::to_vec(&serde_json::json!({"Id": PROBE_ID, "Warnings": []}))
             .map_err(|_| HostError::Frame)?,
-    ));
+    ))
 }

@@ -15,7 +15,7 @@ impl ConnectionJournal {
     pub(crate) fn completion_state_identity(&self) -> String {
         format!(
             "{}#{}",
-            self.journal.completion_state_identity(),
+            self.journal.path().to_string_lossy(),
             self.connection_id().as_str()
         )
     }

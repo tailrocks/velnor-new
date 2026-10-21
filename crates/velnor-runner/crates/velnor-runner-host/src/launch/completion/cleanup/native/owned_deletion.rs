@@ -14,6 +14,8 @@ use crate::{
     launch::bootstrap::{NativeCleanupRuntime, PendingStorageCleanupWitness},
 };
 
+use crate::launch::completion::diagnostics;
+
 use super::super::super::{Context, EffectBudget, Failure, run_effect};
 
 #[path = "owned_deletion/identity.rs"]
@@ -59,29 +61,48 @@ pub(in crate::launch::completion::cleanup::native) async fn remove_container(
         return Ok(());
     };
     validate_container(&inspected, id, name, role, identity, context)?;
-    if inspected.state.as_ref().and_then(|state| state.running) == Some(true) {
-        request_effect(
-            context,
+    let running = inspected.state.as_ref().and_then(|state| state.running) == Some(true);
+    let captured = diagnostics::capture_native(
+        context,
+        diagnostics::NativeCaptureRequest {
+            root: context.diagnostics,
             launch,
             claim,
             budget,
-            "container stop",
+            role,
+            expected_name: name,
+            container_id: id,
             identity,
-            || async {
-                within(context.docker.stop_container(
-                    id,
-                    Some(StopContainerOptions {
-                        t: Some(10),
-                        signal: None,
-                    }),
-                ))
-                .await?
-                .map_err(|_| HostError::Docker)
-            },
-        )
-        .await?;
-    }
-    remove_container_and_check(context, launch, claim, budget, id, identity).await
+        },
+        identity::validate_container,
+    )
+    .await;
+    diagnostics::delete_after_capture(captured, async {
+        if running {
+            request_effect(
+                context,
+                launch,
+                claim,
+                budget,
+                "container stop",
+                identity,
+                || async {
+                    within(context.docker.stop_container(
+                        id,
+                        Some(StopContainerOptions {
+                            t: Some(10),
+                            signal: None,
+                        }),
+                    ))
+                    .await?
+                    .map_err(|_| HostError::Docker)
+                },
+            )
+            .await?;
+        }
+        remove_container_and_check(context, launch, claim, budget, id, identity).await
+    })
+    .await
 }
 
 async fn remove_container_and_check(
@@ -137,10 +158,7 @@ fn validate_container(
     identity: &crate::journal::StorageCleanupIdentity,
     context: &Context<'_>,
 ) -> Result<(), Failure> {
-    let connection_id = context
-        .journal
-        .scoped_connection()
-        .map_or("", |scope| scope.connection_id().as_str());
+    let connection_id = context.journal.connection().connection_id().as_str();
     identity::validate_container(container, id, name, role, identity, connection_id)
         .map_err(|_| Failure::not_proven("container ownership"))
 }
@@ -212,10 +230,7 @@ fn validate_volume(
     identity: &crate::journal::StorageCleanupIdentity,
     context: &Context<'_>,
 ) -> Result<(), Failure> {
-    let connection_id = context
-        .journal
-        .scoped_connection()
-        .map_or("", |scope| scope.connection_id().as_str());
+    let connection_id = context.journal.connection().connection_id().as_str();
     identity::validate_volume(volume, name, role, identity, connection_id)
         .map_err(|_| Failure::not_proven("volume ownership"))
 }
