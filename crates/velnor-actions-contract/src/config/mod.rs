@@ -52,6 +52,7 @@ mod verification;
 mod workflow;
 mod workflow_flags;
 mod workflow_task;
+mod workflow_timeouts;
 
 pub(crate) use binary_release::validate_static_release_inventory;
 

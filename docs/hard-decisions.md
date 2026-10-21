@@ -59,14 +59,10 @@ concurrency, or concurrent Cargo writers sharing one target directory.
 ## 2. Configurable crate-job timeout
 
 **Decision.** `[workflow] crate_timeout_minutes` sets the literal
-`timeout-minutes` of every crate job (each Rust crate job and each OpenTofu
-root job). The default is `5`; accepted values are `1..=360`. Zero or more than
-360 is rejected, never clamped. See
+`timeout-minutes` of every crate job; `plan_timeout_minutes` does the same for
+the planning job only. Both default to `5`, accept `1..=360`, and reject
+anything else, never clamping. See
 [job timeout limits](implemented/job-timeout-limits.md).
-
-`[workflow] plan_timeout_minutes` independently sets the literal timeout of
-the planning job, with the same default and accepted range. It does not alter
-the required, validator, crate, or other job budgets.
 
 ## 3. Pull requests test only what they affect
 
