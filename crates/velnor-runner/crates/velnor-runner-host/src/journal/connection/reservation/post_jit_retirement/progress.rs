@@ -183,21 +183,6 @@ pub(super) async fn append_phase(
     Ok(())
 }
 
-pub(super) async fn append_phase_transaction(
-    scope: &ConnectionJournal,
-    claim: &PostJitRetirementClaim,
-    phase_index: i64,
-    phase: &'static str,
-    evidence_sha256: String,
-) -> Result<(), HostError> {
-    in_transaction(scope.journal_ref(), async |connection| {
-        scope.validate_scope(connection).await?;
-        validate_in_transaction(connection, scope, claim).await?;
-        append_phase(connection, claim, phase_index, phase, &evidence_sha256).await
-    })
-    .await
-}
-
 pub(in crate::journal) async fn record_network_phase_in_transaction(
     connection: &turso::Connection,
     scope: &ConnectionJournal,
@@ -302,9 +287,4 @@ async fn validate_cleaned_jit_identity(
         return Err(HostError::Identity);
     }
     Ok(())
-}
-
-pub(super) fn evidence_digest<T: serde::Serialize>(value: &T) -> Result<String, HostError> {
-    let bytes = serde_json::to_vec(value).map_err(|_| HostError::Journal)?;
-    Ok(hex_digest(&bytes))
 }

@@ -44,6 +44,7 @@ impl PostJitRetirementCandidate {
         self.identity.generation
     }
 
+    #[cfg(test)]
     pub(crate) const fn intent_id(&self) -> i64 {
         self.identity.intent_id
     }
@@ -179,6 +180,7 @@ pub(super) async fn claim_candidate(
     .await
 }
 
+#[cfg(test)]
 async fn claim_in_transaction(
     connection: &turso::Connection,
     scope: &ConnectionJournal,

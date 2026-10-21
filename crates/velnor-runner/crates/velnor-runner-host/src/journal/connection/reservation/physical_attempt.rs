@@ -1,4 +1,5 @@
 use crate::error::HostError;
+#[cfg(test)]
 use crate::journal::connection::storage::read_transaction;
 
 use crate::journal::connection::ConnectionJournal;
@@ -19,6 +20,7 @@ pub(crate) struct PhysicalAttemptIdentity {
 }
 
 impl ConnectionJournal {
+    #[cfg(test)]
     pub(crate) async fn current_physical_attempt(
         &self,
         reservation_id: i64,

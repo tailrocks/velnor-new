@@ -16,6 +16,7 @@ pub(crate) struct StoragePoolObservation {
 }
 
 impl StoragePoolObservation {
+    #[cfg(test)]
     pub(crate) fn new(
         pool_id: String,
         filesystem_instance_digest: String,
@@ -118,6 +119,7 @@ pub(crate) struct StorageMemoryObservation {
 }
 
 impl StorageMemoryObservation {
+    #[cfg(test)]
     pub(crate) fn new(
         guest_available_bytes: u64,
         ancestor_memory_max_bytes: u64,
