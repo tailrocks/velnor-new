@@ -14,27 +14,6 @@ use crate::{
 };
 use uuid::Uuid;
 
-/// Publish the claimed challenge in the measured control directory.
-pub(crate) async fn publish_challenge(
-    input: ControlPublicationInput<'_>,
-    claim: &ExecutionChallengePublicationClaim,
-) -> Result<ExecutionChallengePublicationReceipt, HostError> {
-    let provider =
-        crate::launch::resource_probe::release_image_provider(input.release_secret, input.journal)?;
-    publish_challenge_with_provider(input, claim, &provider).await
-}
-
-#[cfg(test)]
-pub(in crate::launch) async fn publish_challenge_with_test_provider<
-    P: crate::launch::resource_probe::ImageProvider,
->(
-    input: ControlPublicationInput<'_>,
-    claim: &ExecutionChallengePublicationClaim,
-    provider: &P,
-) -> Result<ExecutionChallengePublicationReceipt, HostError> {
-    publish_challenge_with_provider(input, claim, provider).await
-}
-
 pub(in crate::launch) async fn publish_challenge_with_provider<
     P: crate::launch::resource_probe::ImageProvider,
 >(

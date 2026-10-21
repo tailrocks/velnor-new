@@ -31,9 +31,3 @@ pub(in crate::journal) async fn ensure_no_active(
         Ok(())
     }
 }
-
-pub(in crate::journal) async fn ensure_no_active_probe(
-    connection: &turso::Connection,
-) -> Result<(), HostError> {
-    ensure_no_active(connection).await
-}
