@@ -4,6 +4,18 @@ set -euo pipefail
 readonly runner_image='velnor-runner:linux-amd64'
 readonly dind_image='velnor-dind:linux-amd64'
 readonly target_dir="${CARGO_TARGET_DIR:-crates/velnor-runner/target}"
+readonly runner_version="$(python3 - .velnor/runner.lock <<'PY'
+import pathlib
+import sys
+import tomllib
+
+lock = tomllib.loads(pathlib.Path(sys.argv[1]).read_text())
+version = lock["runner_version"]
+if not isinstance(version, str) or not version:
+    raise SystemExit("runner version is missing from .velnor/runner.lock")
+print(version)
+PY
+)"
 readonly source_revision="${VELNOR_SOURCE_REVISION:?missing source revision}"
 readonly binary="$target_dir/x86_64-unknown-linux-musl/release/velnor-resource-probe"
 readonly storage_init_binary="$target_dir/x86_64-unknown-linux-musl/release/velnor-storage-init"
@@ -18,6 +30,8 @@ git diff --quiet HEAD -- || { printf 'The source tree differs from its release c
   exit 1
 }
 [[ -f "$binary" && ! -L "$binary" ]]
+
+python3 -B images/resource-probe/test_verify_runner_listener.py
 
 mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo build \
   --locked \
@@ -158,6 +172,11 @@ for image in "$runner_image" "$dind_image"; do
   printf '%s image_id=%s image_arch=%s guest_arch=%s resource_probe_sha256=%s\n' \
     "$image" "$image_id" "$architecture" "$guest_arch" "$actual_sha256"
 done
+
+docker run --interactive "${runtime_args[@]}" \
+  --tmpfs /opt/runner/_diag:rw,nosuid,nodev,noexec,size=16m,uid=65532,gid=65532 \
+  --entrypoint /usr/bin/python3 "$runner_image" - "$runner_version" \
+  < images/resource-probe/verify_runner_listener.py
 
 actual_storage_init_sha256="$(docker run "${runtime_args[@]}" \
   --entrypoint /usr/bin/sha256sum "$runner_image" /velnor/storage-init)"

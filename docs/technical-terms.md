@@ -107,6 +107,11 @@
 | Runner response receipt | A record of one lookup or removal attempt that contains metadata and digests. |
 | Runner absence receipt | A record of an exact lookup that reports no matching runner registration. |
 
+| ELF | A file format for programs, libraries, and compiled software components. |
+| ELF64 | The 64-bit form of the ELF file format. |
+| Little-endian | A byte order that stores the least significant byte first. |
+| x86-64 | A 64-bit processor architecture also called AMD64. |
+
 | Cache census | A record of cache entries returned by an API query for one Git ref. |
 | dbt project | A directory with dbt configuration, models, and related source files. |
 | dbt profile | A dbt configuration that supplies connection settings for a data warehouse. |
