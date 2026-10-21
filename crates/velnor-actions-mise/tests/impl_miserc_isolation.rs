@@ -7,7 +7,11 @@ use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 use velnor_actions_mise::command::IsolatedCommand;
 
-const PINNED_MISE: &str = "2026.10.17";
+use super::impl_miserc_release::{
+    PINNED_MISE, find_on_path, official_release_digest, path_mise_is_pinned,
+    provision_official_release, sha256_file,
+};
+
 const FIX_SOURCE_REV: &str = "dfe74a90b41603625ee6aabecb42f14a1f5eb0f6";
 const FIX_SOURCE_VERSION: &str = "2026.10.1";
 const BINARY_ENV: &str = "VELNOR_MISE_REGRESSION_BINARY";
@@ -118,7 +122,13 @@ impl MiseBinary {
         let explicit_binary = std::env::var_os(BINARY_ENV).is_some();
         let path = match std::env::var_os(BINARY_ENV) {
             Some(path) => PathBuf::from(path),
-            None => find_on_path("mise")?,
+            None => match find_on_path("mise") {
+                Ok(path) if path_mise_is_pinned(&path) => path,
+                // The host's own mise is not the qualified release (or is
+                // absent): fetch the digest-verified official release instead
+                // of failing on whatever the host happens to have installed.
+                _ => provision_official_release()?,
+            },
         };
         let path = path.canonicalize().map_err(|err| err.to_string())?;
         if !path.is_file() {
@@ -175,46 +185,6 @@ impl MiseBinary {
         }
         Ok(Self { path, version })
     }
-}
-
-fn find_on_path(program: &str) -> Result<PathBuf, String> {
-    std::env::split_paths(&std::env::var_os("PATH").ok_or_else(|| "PATH is unset".to_owned())?)
-        .map(|dir| dir.join(program))
-        .find(|candidate| candidate.is_file())
-        .ok_or_else(|| format!("{program} not found on PATH"))
-}
-
-fn official_release_digest(version: &str) -> Result<&'static str, String> {
-    match (version, std::env::consts::OS, std::env::consts::ARCH) {
-        ("2026.10.17", "linux", "x86_64") => {
-            Ok("fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a")
-        }
-        ("2026.10.17", "macos", "aarch64") => {
-            Ok("9e27709db5eb1e900d83149418d3067309f2a5004d4994d94246ab658ba4a3ce")
-        }
-        _ => Err(format!(
-            "unqualified mise release/platform: {version} {}/{}",
-            std::env::consts::OS,
-            std::env::consts::ARCH
-        )),
-    }
-}
-
-fn sha256_file(path: &Path) -> Result<String, String> {
-    for (program, args) in [("shasum", vec!["-a", "256"]), ("sha256sum", vec![])] {
-        let output = match Command::new(program).args(args).arg(path).output() {
-            Ok(output) if output.status.success() => output,
-            _ => continue,
-        };
-        let line = String::from_utf8_lossy(&output.stdout);
-        let digest = line
-            .split_whitespace()
-            .next()
-            .filter(|text| text.len() == 64 && text.chars().all(|ch| ch.is_ascii_hexdigit()))
-            .ok_or_else(|| format!("invalid SHA-256 output from {program}: {line}"))?;
-        return Ok(digest.to_ascii_lowercase());
-    }
-    Err("neither shasum nor sha256sum could hash the mise executable".to_owned())
 }
 
 fn run_raw(
