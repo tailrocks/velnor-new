@@ -8,11 +8,8 @@ use super::support::*;
 use crate::launch::turn::completion_intake::{IntakeDecision, intake_and_ack_if_only_scoped};
 use crate::launch::turn::finish_scoped_poll_response;
 
-#[tokio::test]
-async fn started_only_event_is_stored_before_ack_and_replay_is_idempotent() -> Result<(), String> {
-    let scratch = Scratch::new()?;
-    let (scope, session_intent, allocation) = session_scope(&scratch).await?;
-    let polled = Poll::Batch(ParsedBatch {
+fn started_only_poll() -> Poll {
+    Poll::Batch(ParsedBatch {
         message_id: 73,
         raw_body:
             r#"[{"messageType":"JobStarted","runnerRequestId":0,"runnerId":902,"runnerName":"v0"}]"#
@@ -29,7 +26,14 @@ async fn started_only_event_is_stored_before_ack_and_replay_is_idempotent() -> R
             fields: Vec::new(),
             source: SourceMetadata::default(),
         }],
-    });
+    })
+}
+
+#[tokio::test]
+async fn started_only_event_is_stored_before_ack_and_replay_is_idempotent() -> Result<(), String> {
+    let scratch = Scratch::new()?;
+    let (scope, session_intent, allocation) = session_scope(&scratch).await?;
+    let polled = started_only_poll();
     let acknowledged = Cell::new(false);
     let inbox_stored_before_ack = Cell::new(false);
 
