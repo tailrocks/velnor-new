@@ -18,12 +18,12 @@ Workflow to generate
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
     - actionlint (7 steps)
-    - dependency-seed (22 steps)
-    - plan (15 steps)
+    - dependency-seed (23 steps)
+    - plan (16 steps)
     - required (8 steps)
     - required-gate (1 steps)
-    - rust-parity-app (26 steps)
-    - rust-parity-tool (24 steps)
+    - rust-parity-app (27 steps)
+    - rust-parity-tool (25 steps)
     - 2 Rust crate jobs
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
@@ -71,4 +71,4 @@ Recommendations
   mise.lock not found; Velnor will not create or refresh it
   mise.toml not found; Velnor will use its pinned tools
   rust-toolchain.toml not found; Velnor will not create it
-  tool_install_unverified:6 installs skip verification (no mise.lock): actionlint@1.7.12, gh@2.102.1, nextest@0.9.149, rust@1.99.1, shellcheck@0.11.0, zizmor@1.31.1; install on the CI platform and commit the resulting lock
+  tool_install_unverified:5 installs skip verification (no mise.lock): actionlint@1.7.12, gh@2.102.1, nextest@0.9.149, shellcheck@0.11.0, zizmor@1.31.1; install on the CI platform and commit the resulting lock

@@ -159,6 +159,10 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
             "publish_steps.rs".to_owned(),
             "pins.rs".to_owned(),
             "qualify.rs".to_owned(),
+            // rust_manifest_step.rs: the fixed `Verify Rust channel manifest`
+            // script; its only inputs are catalog digests and the validated
+            // run-time Rust version.
+            "rust_manifest_step.rs".to_owned(),
             "source_prep.rs".to_owned(),
         ]),
         "fixed sh wrappers live in cache_keys/matrix_step_reports/pins/qualify/source_prep only"

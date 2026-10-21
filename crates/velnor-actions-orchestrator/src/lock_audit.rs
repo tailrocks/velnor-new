@@ -31,6 +31,12 @@ use crate::verify::validator_install_pin;
 #[path = "lock_audit_names.rs"]
 mod names;
 use names::subject_names;
+#[path = "lock_audit_rust.rs"]
+mod rust;
+use rust::{is_rust, rust_manifest_coverage};
+#[path = "lock_audit_vectors.rs"]
+mod vectors;
+use vectors::classify_mise_vectors;
 
 /// Audit outcome: one advisory summary plus fail-closed diagnostics.
 pub(crate) struct LockAuditOutcome {
@@ -90,6 +96,10 @@ pub(crate) fn audit_prepare_installs_with_catalog(
     let mut blocking = Vec::new();
     let mut subjects: Vec<InstallSubject> = Vec::new();
     for (id, job) in &ir.jobs {
+        let manifest_verified = job
+            .steps
+            .iter()
+            .any(|step| step.name == crate::workflow::VERIFY_RUST_MANIFEST_STEP);
         for step in &job.steps {
             if step.role != Some(StepRole::PreparePinnedTools) {
                 continue;
@@ -106,6 +116,9 @@ pub(crate) fn audit_prepare_installs_with_catalog(
                 // audit the concrete versions the project declares.
                 let spec = catalog.materialize(&spec);
                 match subject_for_install_spec(&spec, catalog) {
+                    Some(subject) if manifest_verified && is_rust(&subject) => {
+                        rust_manifest_coverage(&subject, &mut blocking);
+                    }
                     Some(subject) => subjects.push(subject),
                     None => blocking.push(format!("unauditable_install_spec:{spec}")),
                 }
@@ -229,51 +242,6 @@ fn validator_argv_specs(argv: &[String]) -> CommandInstalls {
 /// True for argv elements holding a shell script rather than one token.
 fn looks_like_script(arg: &str) -> bool {
     arg.chars().any(char::is_whitespace)
-}
-
-/// Classify the `mise` vectors in one token run, in order.
-///
-/// Each `mise` token classifies through the flags that follow it:
-/// `install` extracts its specs, `exec` skips to the next `mise`
-/// token, and anything else (unknown subcommand, truncated tail)
-/// fails closed — an installer-adjacent vector the audit cannot prove
-/// is an `exec` must block, never pass silently. A bare `install`
-/// without a preceding `mise` (a `cargo install` payload) never
-/// classifies. Specs run until the first shell metacharacter (scripts)
-/// or the end of argv (plain vectors).
-fn classify_mise_vectors(tokens: &[&str]) -> MiseVectors {
-    for (at, token) in tokens.iter().enumerate() {
-        if *token != "mise" {
-            continue;
-        }
-        let mut cursor = at + 1;
-        while cursor < tokens.len() && tokens[cursor].starts_with('-') {
-            cursor += 1;
-        }
-        let Some(subcommand) = tokens.get(cursor) else {
-            return MiseVectors::Unclassifiable("truncated".to_owned());
-        };
-        match *subcommand {
-            "install" => return MiseVectors::Install(specs_until_metachar(&tokens[cursor + 1..])),
-            "exec" => {}
-            other => {
-                return MiseVectors::Unclassifiable(format!("unexpected_subcommand:{other}"));
-            }
-        }
-    }
-    MiseVectors::NotInstall
-}
-
-/// Specs until the first shell metacharacter (scripts) or argv end.
-fn specs_until_metachar(tail: &[&str]) -> Vec<String> {
-    let mut specs = Vec::new();
-    for spec in tail {
-        if matches!(*spec, "&&" | ";" | "||" | "}" | "{" | "(" | ")") {
-            break;
-        }
-        specs.push((*spec).to_owned());
-    }
-    specs
 }
 
 /// Resolve one emitted validator spec through the validator pin.
