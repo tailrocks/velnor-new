@@ -62,6 +62,9 @@ pub(crate) struct PartialRustStack {
     /// Optional exact `X.Y.Z` Rust toolchain channel override.
     #[serde(default)]
     toolchain: Option<String>,
+    /// Opt-in single Rust version source (`"mise"`).
+    #[serde(default)]
+    toolchain_source: Option<velnor_actions_contract::config::RustToolchainSource>,
     /// Per-package options (`[stacks.rust.crates.<package>]`).
     #[serde(default)]
     crates: std::collections::BTreeMap<String, velnor_actions_contract::RustCrateConfig>,
@@ -94,6 +97,7 @@ impl PartialStacks {
                 binary_release: stack.binary_release.unwrap_or_default(),
                 suites: stack.suites,
                 toolchain: stack.toolchain,
+                toolchain_source: stack.toolchain_source,
                 crates: stack.crates,
                 inputs: stack.inputs,
             }

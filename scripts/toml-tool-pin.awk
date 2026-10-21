@@ -23,6 +23,15 @@ in_tools {
   if (name != key) next
   count++
   literal = trim(substr(line, separator + 1))
+  # Inline-table form: `rust = { version = "1.99.1", mr_boxington = true }`.
+  if (substr(literal, 1, 1) == "{") {
+    if (!match(literal, /[{,][[:space:]]*version[[:space:]]*=[[:space:]]*["'][^"']*["']/)) {
+      invalid = 1
+      next
+    }
+    literal = substr(literal, RSTART, RLENGTH)
+    sub(/^[{,][[:space:]]*version[[:space:]]*=[[:space:]]*/, "", literal)
+  }
   quote = substr(literal, 1, 1)
   if ((quote != "\"" && quote != "'") ||
       substr(literal, length(literal), 1) != quote ||

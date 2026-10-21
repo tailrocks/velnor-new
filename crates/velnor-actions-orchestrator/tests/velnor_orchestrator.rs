@@ -11,6 +11,7 @@ mod impl_cache_warm;
 mod impl_common;
 mod impl_config_internal;
 mod impl_consumer_manifest_file;
+mod impl_consumer_mbx_setup;
 mod impl_crate_build_jobs;
 mod impl_crate_graph;
 mod impl_crate_tools_mr_boxington;
