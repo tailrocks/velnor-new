@@ -57,10 +57,6 @@ impl ExecutionChallengePublicationClaim {
         self.witness_request_id
     }
 
-    pub(crate) fn binding_digest(&self) -> &str {
-        &self.binding_digest
-    }
-
     pub(crate) fn engine_id(&self) -> &str {
         &self.engine_id
     }
@@ -237,10 +233,6 @@ pub(super) fn digest(bytes: &[u8]) -> String {
         output.push(char::from(HEX[usize::from(byte & 0x0f)]));
     }
     output
-}
-
-pub(super) fn sql_u64(value: i64) -> Result<u64, HostError> {
-    u64::try_from(value).map_err(|_| HostError::Journal)
 }
 
 pub(super) fn sql_i64(value: u64) -> Result<i64, HostError> {

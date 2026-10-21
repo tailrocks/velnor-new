@@ -191,10 +191,6 @@ impl StartedExecution {
         &self.acquire_state
     }
 
-    pub(in crate::journal::execution_authorization) fn native_job_id(&self) -> Option<&str> {
-        self.native_job_id.as_deref()
-    }
-
     pub(in crate::journal::execution_authorization) const fn runner_terminated(&self) -> bool {
         self.runner_terminated
     }

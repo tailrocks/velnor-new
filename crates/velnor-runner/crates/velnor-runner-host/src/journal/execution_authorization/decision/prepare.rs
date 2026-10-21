@@ -152,8 +152,6 @@ async fn load_ready_state(
     })
 }
 
-const MAX_DECISION_BYTES: usize = 8 * 1024;
-
 struct DecisionReplayKey<'a> {
     operation_id: i64,
     reservation_id: i64,

@@ -67,6 +67,7 @@ impl ProofChannelRecord {
         Ok(value)
     }
 
+    #[cfg(test)]
     pub(crate) fn canonical_json(&self) -> Result<Vec<u8>, HostError> {
         serde_json::to_vec(self).map_err(|_| HostError::Journal)
     }
@@ -151,14 +152,6 @@ impl ProofChannelRecord {
         &self.dind_container_id
     }
 
-    pub(crate) fn job_facts(&self) -> &ProofChannelMountRecord {
-        &self.job_facts
-    }
-
-    pub(crate) fn observation(&self) -> &ExecutionChannelObservation {
-        &self.observation
-    }
-
     pub(crate) fn instance_binding_digest(&self) -> &str {
         &self.instance_binding_digest
     }
@@ -171,14 +164,11 @@ impl ProofChannelRecord {
         &self.metadata_volume_id
     }
 
-    pub(crate) const fn dind_attachment_absent(&self) -> bool {
-        self.dind_attachment_absent
-    }
-
     pub(crate) fn control(&self) -> &ProofChannelMountRecord {
         &self.control
     }
 
+    #[cfg(test)]
     pub(crate) fn inbox(&self) -> &ProofChannelMountRecord {
         &self.inbox
     }
@@ -300,6 +290,7 @@ impl ProofChannelMountRecord {
                 || self.fs_type_magic == BTRFS_SUPER_MAGIC)
     }
 
+    #[cfg(test)]
     pub(crate) const fn mount_id(&self) -> u64 {
         self.mount_id
     }
@@ -312,32 +303,19 @@ impl ProofChannelMountRecord {
         (self.statx_device_major, self.statx_device_minor)
     }
 
+    #[cfg(test)]
     pub(crate) const fn fs_type_magic(&self) -> u64 {
         self.fs_type_magic
     }
 
+    #[cfg(test)]
     pub(crate) const fn filesystem_id(&self) -> u64 {
         self.filesystem_id
     }
 
+    #[cfg(test)]
     pub(crate) fn filesystem_instance_digest(&self) -> &str {
         &self.filesystem_instance_digest
-    }
-
-    pub(crate) fn directory_inode(&self) -> u64 {
-        self.directory_inode
-    }
-
-    pub(crate) fn target(&self) -> &str {
-        &self.target
-    }
-
-    pub(crate) fn subpath(&self) -> &str {
-        &self.subpath
-    }
-
-    pub(crate) const fn read_only(&self) -> bool {
-        self.read_only
     }
 }
 

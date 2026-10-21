@@ -1,8 +1,7 @@
 //! Context digest creation and validation for publication operations.
 
 use super::types::{
-    ContextDigest, ExecutionPublicationContext, ExecutionPublicationParent,
-    ExecutionPublicationSeed, ParentDigest,
+    ContextDigest, ExecutionPublicationContext, ExecutionPublicationSeed, ParentDigest,
 };
 use super::validation::{digest_hex, encode_hex, lower_hex};
 use super::{MAX_PARENT_TEXT, MAX_RECOVERY_PROJECTION_BYTES};
@@ -100,57 +99,5 @@ impl ExecutionPublicationContext {
                 == digest_hex(self.recovery_projection_json.as_bytes())
             && self.operation_name == format!("velnor-execution-publication-{}", self.operation_id)
             && self.context_digest == self.compute_digest().unwrap_or_default()
-    }
-
-    pub(crate) fn operation_id(&self) -> &str {
-        &self.operation_id
-    }
-
-    pub(crate) fn instance_id(&self) -> &str {
-        &self.instance_id
-    }
-
-    pub(crate) fn engine_id(&self) -> &str {
-        &self.engine_id
-    }
-
-    pub(crate) fn docker_root_digest(&self) -> &str {
-        &self.docker_root_digest
-    }
-
-    pub(crate) fn source_revision(&self) -> &str {
-        &self.source_revision
-    }
-
-    pub(crate) fn runtime_image_id(&self) -> &str {
-        &self.runtime_image_id
-    }
-
-    pub(crate) fn image_binding_digest(&self) -> &str {
-        &self.image_binding_digest
-    }
-
-    pub(crate) fn operation_name(&self) -> &str {
-        &self.operation_name
-    }
-
-    pub(crate) fn projection_digest(&self) -> &str {
-        &self.projection_digest
-    }
-
-    pub(crate) fn context_digest(&self) -> &str {
-        &self.context_digest
-    }
-
-    pub(crate) fn parent(&self) -> &ExecutionPublicationParent {
-        &self.parent
-    }
-
-    pub(crate) fn recovery_projection_json(&self) -> &str {
-        &self.recovery_projection_json
-    }
-
-    pub(crate) fn recovery_projection_sha256(&self) -> &str {
-        &self.recovery_projection_sha256
     }
 }
