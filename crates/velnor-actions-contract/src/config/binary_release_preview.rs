@@ -100,7 +100,8 @@ pub struct RustBinaryReleaseProducer {
     /// Fixed supported runner placement.
     #[serde(default = "default_preview_runner")]
     pub runner: VerificationRunner,
-    /// Native preview per-job timeout, one through twenty minutes; default five.
+    /// Native operation budget, one through thirty minutes; default five.
+    /// Producer jobs add a separate fixed lifecycle allowance.
     #[serde(default = "default_preview_timeout")]
     pub timeout_minutes: u16,
     /// Maximum concurrent build processes.
@@ -110,7 +111,10 @@ pub struct RustBinaryReleaseProducer {
 
 impl RustBinaryReleaseProducer {
     /// Independent native producer ceiling; an omitted timeout remains five minutes.
-    pub const MAX_TIMEOUT_MINUTES: u16 = 20;
+    pub const MAX_TIMEOUT_MINUTES: u16 = 30;
+    /// Finite outer-job allowance for setup, evidence retention, and job cleanup.
+    /// This does not widen the native operation deadline or guarantee setup fits.
+    pub const JOB_HEADROOM_MINUTES: u16 = 5;
 }
 
 impl Default for RustBinaryReleaseProducer {

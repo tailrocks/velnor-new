@@ -1,9 +1,12 @@
 use std::{
     error::Error,
     fs,
-    os::unix::fs::{PermissionsExt, symlink},
+    os::unix::{
+        fs::{PermissionsExt, symlink},
+        process::CommandExt,
+    },
     path::Path,
-    process::{Child, ExitStatus},
+    process::{Child, Command, ExitStatus, Stdio},
     thread,
     time::{Duration, Instant},
 };
@@ -37,8 +40,67 @@ fn assert_scratch_removed(fixture: &Fixture) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn wait_for_marker(child: &mut Child, marker: &Path) -> Result<(), Box<dyn Error>> {
-    let deadline = Instant::now() + Duration::from_secs(5);
+// Cancellation probes own their complete process group from spawn until teardown.
+// Startup can include many path checks under a busy full-suite worker pool; its
+// readiness bound is independent of the separately bounded post-TERM wait.
+struct OwnedIdentity {
+    child: Child,
+}
+
+impl OwnedIdentity {
+    fn spawn(command: &mut Command) -> Result<Self, Box<dyn Error>> {
+        command.process_group(0);
+        Ok(Self {
+            child: command.spawn()?,
+        })
+    }
+}
+
+fn signal_group(id: u32, signal: &str) -> std::io::Result<ExitStatus> {
+    Command::new("/bin/kill")
+        .args([signal, "--", &format!("-{id}")])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+}
+
+impl Drop for OwnedIdentity {
+    fn drop(&mut self) {
+        // Never target a name, ambient group, or a group supplied by the fixture.
+        let id = self.child.id();
+        if let Err(error) = signal_group(id, "-TERM") {
+            eprintln!("owned identity group TERM failed: {error}");
+        }
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            if !matches!(self.child.try_wait(), Ok(None)) || Instant::now() >= deadline {
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        // A stopped parent is not proof that its descendants stopped too.
+        if let Err(error) = signal_group(id, "-KILL") {
+            eprintln!("owned identity group KILL failed: {error}");
+        }
+        // Reap never relies on successfully spawning the group signal helper.
+        if let Err(error) = self.child.kill()
+            && error.kind() != std::io::ErrorKind::InvalidInput
+        {
+            eprintln!("owned identity parent kill failed: {error}");
+        }
+        if let Err(error) = self.child.wait() {
+            eprintln!("owned identity parent reap failed: {error}");
+        }
+    }
+}
+
+fn wait_for_marker(
+    child: &mut Child,
+    marker: &Path,
+    budget: Duration,
+) -> Result<(), Box<dyn Error>> {
+    let deadline = Instant::now() + budget;
     loop {
         if marker.exists() {
             return Ok(());
@@ -47,8 +109,6 @@ fn wait_for_marker(child: &mut Child, marker: &Path) -> Result<(), Box<dyn Error
             return Err(format!("hash stub exited before signaling: {status}").into());
         }
         if Instant::now() >= deadline {
-            child.kill()?;
-            let _ = child.wait()?;
             return Err("timed out waiting for hash stub".into());
         }
         thread::sleep(Duration::from_millis(10));
@@ -62,9 +122,7 @@ fn wait_for_child(child: &mut Child) -> Result<ExitStatus, Box<dyn Error>> {
             return Ok(status);
         }
         if Instant::now() >= deadline {
-            child.kill()?;
-            let status = child.wait()?;
-            return Err(format!("identity script did not stop after TERM: {status}").into());
+            return Err("identity script did not stop after TERM".into());
         }
         thread::sleep(Duration::from_millis(10));
     }
@@ -135,9 +193,9 @@ fn cancellation_during_hashing_cleans_private_scratch_without_enabling_cache()
         ],
         &[],
     );
-    let mut child = command.spawn()?;
-    wait_for_marker(&mut child, &marker)?;
-    let status = wait_for_child(&mut child)?;
+    let mut owned = OwnedIdentity::spawn(&mut command)?;
+    wait_for_marker(&mut owned.child, &marker, Duration::from_secs(30))?;
+    let status = wait_for_child(&mut owned.child)?;
     assert_eq!(status.code(), Some(143), "{status}");
     let output = fixture.output()?;
     assert!(
@@ -145,5 +203,39 @@ fn cancellation_during_hashing_cleans_private_scratch_without_enabling_cache()
         "{output}"
     );
     assert_scratch_removed(&fixture)?;
+    Ok(())
+}
+
+#[test]
+fn readiness_failure_reaps_owned_parent_and_descendant() -> Result<(), Box<dyn Error>> {
+    let fixture = Fixture::new()?;
+    let started = fixture.root.join("descendant started");
+    let missing = fixture.root.join("never created");
+    let mut command = Command::new("/bin/sh");
+    command.args(["-c", r#"sleep 20 & worker=$!; trap 'wait "$worker"; exit 143' TERM; printf started > "$1"; wait "$worker""#, "readiness-fixture"])
+        .arg(&started);
+    let mut owned = OwnedIdentity::spawn(&mut command)?;
+    wait_for_marker(&mut owned.child, &started, Duration::from_secs(30))?;
+    let id = owned.child.id();
+    let refusal = wait_for_marker(&mut owned.child, &missing, Duration::ZERO);
+    assert!(refusal.is_err(), "missing readiness marker must fail");
+    drop(owned);
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let gone = loop {
+        if !signal_group(id, "-0")?.success() {
+            break true;
+        }
+        if Instant::now() >= deadline {
+            break false;
+        }
+        thread::sleep(Duration::from_millis(10));
+    };
+    // Independent fixture safety also cleans up if the tested guard regresses.
+    let cleanup = signal_group(id, "-KILL")?;
+    assert!(
+        gone || cleanup.success(),
+        "independent fixture cleanup failed: {cleanup}"
+    );
+    assert!(gone, "readiness failure leaked owned process group {id}");
     Ok(())
 }
