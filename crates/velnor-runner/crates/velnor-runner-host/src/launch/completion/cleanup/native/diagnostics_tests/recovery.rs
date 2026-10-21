@@ -2,6 +2,59 @@ use std::{fs::OpenOptions, io::Write, os::unix::fs::OpenOptionsExt, process::Com
 
 use super::*;
 
+#[path = "recovery/capture_limits.rs"]
+mod capture_limits;
+
+#[test]
+fn missing_runner_trace_is_persisted_as_unavailable_and_blocks_deletion() -> Result<(), String> {
+    run_serialized_diagnostic_test(
+        "missing_runner_trace_is_persisted_as_unavailable_and_blocks_deletion",
+        || {
+            Box::pin(async {
+                Box::pin(missing_runner_trace_blocks_native_deletion_on_fixture_stack())
+                    .await
+                    .map_err(|error| error.to_string())
+            })
+        },
+    )
+}
+
+async fn missing_runner_trace_blocks_native_deletion_on_fixture_stack() -> Result<(), HostError> {
+    let fixture = Box::pin(capacity_retry_fixture()).await?;
+    fixture
+        .server
+        .expose_owned_containers(fixture.scope.connection_id().as_str())
+        .await?;
+    fixture.server.expose_empty_runner_logs().await;
+    let (launch, _) = seed_completion(&fixture).await?;
+    let claim = fixture
+        .scope
+        .claim_completion_cleanup(launch.intent.id, 90)
+        .await?
+        .ok_or(HostError::Journal)?;
+    let root = diagnostics_root(&fixture)?;
+    let result = Box::pin(run_native_cleanup_with_diagnostics(
+        &fixture, &launch, claim, &root,
+    ))
+    .await?;
+    assert_eq!(
+        result,
+        Err(completion::cleanup::Failure::not_proven(
+            "runner logs unavailable"
+        ))
+    );
+    assert_eq!(fixture.server.effects().container_deletes, 0);
+    assert_eq!(fixture.server.effects().volume_deletes, 0);
+    let state_bytes = std::fs::read(runner_log_state_path(&fixture, launch.intent.id)?)
+        .map_err(|_| HostError::Path)?;
+    let state: serde_json::Value =
+        serde_json::from_slice(&state_bytes).map_err(|_| HostError::Frame)?;
+    if state["phase"] != "unavailable" || state["has_trace"] != false {
+        return Err(HostError::Ownership);
+    }
+    Ok(())
+}
+
 #[test]
 fn reopened_partial_native_capture_keeps_containers_and_volumes() -> Result<(), String> {
     run_serialized_diagnostic_test(

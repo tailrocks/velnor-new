@@ -111,6 +111,18 @@ impl StatefulDocker {
         Ok(())
     }
 
+    pub(crate) async fn expose_empty_runner_logs(&self) {
+        self.state.lock().await.empty_runner_logs = true;
+    }
+
+    pub(crate) async fn fail_runner_log_execs(&self, count: u8) {
+        self.state.lock().await.runner_log_exec_failures_remaining = count;
+    }
+
+    pub(crate) async fn runner_log_exec_count(&self) -> u8 {
+        self.state.lock().await.exec_counter
+    }
+
     pub(crate) async fn fail_owned_volume_removal(
         &self,
         connection_id: &str,
@@ -186,8 +198,19 @@ struct ServerState {
     owned_mismatch: OwnedContainerMismatch,
     owned_containers_present: bool,
     removed_owned_containers: HashSet<String>,
+    stopped_owned_containers: HashSet<String>,
     owned_volumes: HashSet<String>,
     volume_delete_failure: Option<String>,
+    exec_counter: u8,
+    exec_state: Option<ExecState>,
+    empty_runner_logs: bool,
+    runner_log_exec_failures_remaining: u8,
+}
+
+struct ExecState {
+    id: String,
+    started: bool,
+    exit_code: Option<i64>,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -229,8 +252,13 @@ impl ServerState {
             owned_mismatch: OwnedContainerMismatch::None,
             owned_containers_present: false,
             removed_owned_containers: HashSet::new(),
+            stopped_owned_containers: HashSet::new(),
             owned_volumes: HashSet::new(),
             volume_delete_failure: None,
+            exec_counter: 0,
+            exec_state: None,
+            empty_runner_logs: false,
+            runner_log_exec_failures_remaining: 0,
         }
     }
 }

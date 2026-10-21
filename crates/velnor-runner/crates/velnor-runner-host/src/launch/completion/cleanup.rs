@@ -32,10 +32,11 @@ use super::journal_ref::CompletionJournal;
 const CLAIM_LEASE_SECONDS: i64 = 90;
 const EFFECT_WINDOW_SECONDS: i64 = 90;
 const RUNNER_REQUESTS: u64 = 3;
+const RUNNER_LOG_EFFECTS: u64 = 80;
 const CONTAINER_COUNT: u64 = 2;
 const VOLUME_COUNT: u64 = crate::worker::WorkerVolumeRole::ALL.len() as u64;
 const MAX_NATIVE_CLEANUP_EFFECTS: u64 =
-    RUNNER_REQUESTS + CONTAINER_COUNT * 4 * 2 + VOLUME_COUNT * 3 * 2 + 7;
+    RUNNER_REQUESTS + CONTAINER_COUNT * 4 * 2 + VOLUME_COUNT * 3 * 2 + 7 + RUNNER_LOG_EFFECTS;
 const SCAN_LIMIT: u32 = 4;
 const MAX_SCAN_WAVES: usize = 3;
 

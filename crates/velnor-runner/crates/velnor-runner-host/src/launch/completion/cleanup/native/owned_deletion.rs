@@ -22,6 +22,8 @@ use super::super::super::{Context, EffectBudget, Failure, run_effect};
 mod identity;
 #[path = "owned_deletion/retirement.rs"]
 mod retirement;
+#[path = "owned_deletion/runner_logs.rs"]
+mod runner_logs;
 pub(in crate::launch) use retirement::remove_owned_resources_for_retirement;
 
 const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
@@ -58,6 +60,9 @@ pub(in crate::launch::completion::cleanup::native) async fn remove_container(
     )
     .await?;
     let Some(inspected) = inspected else {
+        if *role == "runner" {
+            runner_logs::capture_if_needed(context, launch, claim, budget, target).await?;
+        }
         return Ok(());
     };
     validate_container(&inspected, id, name, role, identity, context)?;
@@ -78,7 +83,10 @@ pub(in crate::launch::completion::cleanup::native) async fn remove_container(
     )
     .await;
     diagnostics::delete_after_capture(captured, async {
-        if running {
+        if *role == "runner" {
+            runner_logs::stop_and_confirm(context, launch, claim, budget, target, running).await?;
+            runner_logs::capture_if_needed(context, launch, claim, budget, target).await?;
+        } else if running {
             request_effect(
                 context,
                 launch,
@@ -150,7 +158,7 @@ async fn remove_container_and_check(
     Ok(())
 }
 
-fn validate_container(
+pub(super) fn validate_container(
     container: &ContainerInspectResponse,
     id: &str,
     name: &str,
@@ -282,7 +290,7 @@ async fn verify_runtime(
     }
 }
 
-async fn request_effect<T, F, Fut>(
+pub(super) async fn request_effect<T, F, Fut>(
     context: &Context<'_>,
     launch: &CompletedLaunch,
     claim: CleanupClaim,
@@ -315,7 +323,7 @@ where
     .await
 }
 
-async fn inspect_container(
+pub(super) async fn inspect_container(
     docker: &Docker,
     id: &str,
 ) -> Result<Option<ContainerInspectResponse>, HostError> {
@@ -338,6 +346,6 @@ async fn inspect_volume(docker: &Docker, name: &str) -> Result<Option<Volume>, H
     }
 }
 
-async fn within<F: std::future::Future>(future: F) -> Result<F::Output, HostError> {
+pub(super) async fn within<F: std::future::Future>(future: F) -> Result<F::Output, HostError> {
     docker_deadline_after(future, REQUEST_TIMEOUT).await
 }

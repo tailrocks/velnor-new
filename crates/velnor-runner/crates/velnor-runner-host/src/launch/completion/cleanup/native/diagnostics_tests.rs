@@ -55,6 +55,26 @@ async fn native_cleanup_writes_sanitized_diagnostics_for_exact_owned_containers_
     );
     assert_eq!(fixture.server.effects().container_deletes, 2);
 
+    let state_bytes = std::fs::read(runner_log_state_path(&fixture, launch.intent.id)?)
+        .map_err(|_| HostError::Path)?;
+    let state: serde_json::Value =
+        serde_json::from_slice(&state_bytes).map_err(|_| HostError::Frame)?;
+    if state["phase"] != "complete"
+        || state["binding"]["reservation_id"] != fixture.reservation_id
+        || state["binding"]["intent_id"] != launch.intent.id
+    {
+        return Err(HostError::Ownership);
+    }
+    let projection = std::fs::read(runner_log_projection_path(&fixture, launch.intent.id, 1)?)
+        .map_err(|_| HostError::Path)?;
+    let projection: serde_json::Value =
+        serde_json::from_slice(&projection).map_err(|_| HostError::Frame)?;
+    if projection["runner_log_present"] != true
+        || projection.to_string().contains("RUNNER_DIAGNOSTIC_CANARY")
+    {
+        return Err(HostError::Ownership);
+    }
+
     for (role, id) in [
         ("runner", launch.intent.docker_id.as_deref()),
         ("dind", launch.intent.dind_id.as_deref()),
@@ -286,6 +306,38 @@ fn diagnostic_path(
         .join(completion::diagnostics::SCOPE_DIRECTORY)
         .join(connection)
         .join(filename))
+}
+
+fn runner_log_state_path(
+    fixture: &CleanupRuntimeFixture,
+    intent_id: i64,
+) -> Result<PathBuf, HostError> {
+    let crate::launch::bootstrap::CleanupRuntimeFixture { _base: base, .. } = fixture;
+    let crate::journal::request_lifecycle::tests::NativeStartedIntakeFixture {
+        _scratch: scratch,
+        ..
+    } = base;
+    let state = std::fs::canonicalize(scratch.file().parent().ok_or(HostError::Path)?)
+        .map_err(|_| HostError::Path)?;
+    Ok(state
+        .join(completion::diagnostics::SCOPE_DIRECTORY)
+        .join(completion::diagnostics::scope_component(
+            fixture.scope.connection_id().as_str(),
+        ))
+        .join(format!(
+            "i{intent_id}-r{}-runner-log-state.json",
+            fixture.reservation_id
+        )))
+}
+
+fn runner_log_projection_path(
+    fixture: &CleanupRuntimeFixture,
+    intent_id: i64,
+    attempt: i64,
+) -> Result<PathBuf, HostError> {
+    let state_path = runner_log_state_path(fixture, intent_id)?;
+    let parent = state_path.parent().ok_or(HostError::Path)?;
+    Ok(parent.join(format!("i{intent_id}-g{attempt}-runner-logs.json")))
 }
 
 fn lower_hex(bytes: &[u8]) -> String {

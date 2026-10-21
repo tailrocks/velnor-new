@@ -1,5 +1,7 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::AtomicBool;
+#[cfg(test)]
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, mpsc};
 use std::thread::{self, JoinHandle};
 
@@ -7,9 +9,25 @@ use tokio::sync::oneshot;
 
 use crate::error::HostError;
 
+use super::runner_log_state::CaptureStateRequest;
+use super::runner_logs::RunnerLogStageRequest;
 use super::stage::{OperationKey, StageRequest, write_request};
 
 static WORKER: OnceLock<Result<Worker, HostError>> = OnceLock::new();
+#[cfg(test)]
+static RUNNER_LOG_SUBMISSIONS: AtomicUsize = AtomicUsize::new(0);
+#[cfg(test)]
+static FAIL_RUNNER_LOG_WRITES: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(test)]
+pub(in crate::launch) fn runner_log_submission_count() -> usize {
+    RUNNER_LOG_SUBMISSIONS.load(Ordering::Relaxed)
+}
+
+#[cfg(test)]
+pub(in crate::launch) fn fail_next_runner_log_writes(count: usize) {
+    FAIL_RUNNER_LOG_WRITES.store(count, Ordering::Relaxed);
+}
 
 pub(super) struct Worker {
     sender: mpsc::SyncSender<Job>,
@@ -18,11 +36,35 @@ pub(super) struct Worker {
 }
 
 struct Job {
-    request: StageRequest,
+    request: WriteRequest,
     cancelled: Arc<AtomicBool>,
     reply: oneshot::Sender<Result<(), HostError>>,
     #[cfg(test)]
     gate: Option<Arc<std::sync::Barrier>>,
+}
+
+enum WriteRequest {
+    Record(StageRequest),
+    RunnerLogs(RunnerLogStageRequest),
+    CaptureState(CaptureStateRequest),
+}
+
+impl WriteRequest {
+    fn key(&self) -> &OperationKey {
+        match self {
+            Self::Record(request) => &request.key,
+            Self::RunnerLogs(request) => request.key(),
+            Self::CaptureState(request) => request.key(),
+        }
+    }
+
+    fn write(self, cancelled: &AtomicBool) -> Result<(), HostError> {
+        match self {
+            Self::Record(request) => write_request(request, cancelled),
+            Self::RunnerLogs(request) => request.write_request(cancelled),
+            Self::CaptureState(request) => request.write_request(cancelled),
+        }
+    }
 }
 
 pub(super) fn process_worker() -> Result<&'static Worker, HostError> {
@@ -67,8 +109,32 @@ impl Worker {
         request: StageRequest,
         cancelled: Arc<AtomicBool>,
     ) -> Result<oneshot::Receiver<Result<(), HostError>>, HostError> {
+        self.submit_request(WriteRequest::Record(request), cancelled)
+    }
+
+    pub(super) fn submit_runner_logs(
+        &self,
+        request: RunnerLogStageRequest,
+        cancelled: Arc<AtomicBool>,
+    ) -> Result<oneshot::Receiver<Result<(), HostError>>, HostError> {
+        self.submit_request(WriteRequest::RunnerLogs(request), cancelled)
+    }
+
+    pub(super) fn submit_capture_state(
+        &self,
+        request: CaptureStateRequest,
+        cancelled: Arc<AtomicBool>,
+    ) -> Result<oneshot::Receiver<Result<(), HostError>>, HostError> {
+        self.submit_request(WriteRequest::CaptureState(request), cancelled)
+    }
+
+    fn submit_request(
+        &self,
+        request: WriteRequest,
+        cancelled: Arc<AtomicBool>,
+    ) -> Result<oneshot::Receiver<Result<(), HostError>>, HostError> {
         let (reply, receive) = oneshot::channel();
-        let key = request.key.clone();
+        let key = request.key().clone();
         let mut active = self.active.lock().map_err(|_| HostError::Lock)?;
         if active.is_some() {
             return Err(HostError::Journal);
@@ -109,7 +175,7 @@ impl Worker {
         if self
             .sender
             .try_send(Job {
-                request,
+                request: WriteRequest::Record(request),
                 cancelled,
                 reply,
                 gate: Some(gate),
@@ -126,15 +192,27 @@ impl Worker {
 
 fn worker_loop(receiver: &mpsc::Receiver<Job>, active: &Arc<Mutex<Option<OperationKey>>>) {
     while let Ok(job) = receiver.recv() {
-        let key = job.request.key.clone();
+        let key = job.request.key().clone();
         #[cfg(test)]
         if let Some(gate) = &job.gate {
             gate.wait();
         }
-        let result = catch_unwind(AssertUnwindSafe(|| {
-            write_request(job.request, &job.cancelled)
-        }))
-        .unwrap_or(Err(HostError::Path));
+        #[cfg(test)]
+        let result = if matches!(&job.request, WriteRequest::RunnerLogs(_)) {
+            RUNNER_LOG_SUBMISSIONS.fetch_add(1, Ordering::Relaxed);
+            if take_forced_runner_log_failure() {
+                Err(HostError::Path)
+            } else {
+                catch_unwind(AssertUnwindSafe(|| job.request.write(&job.cancelled)))
+                    .unwrap_or(Err(HostError::Path))
+            }
+        } else {
+            catch_unwind(AssertUnwindSafe(|| job.request.write(&job.cancelled)))
+                .unwrap_or(Err(HostError::Path))
+        };
+        #[cfg(not(test))]
+        let result = catch_unwind(AssertUnwindSafe(|| job.request.write(&job.cancelled)))
+            .unwrap_or(Err(HostError::Path));
         if let Ok(mut current) = active.lock()
             && current.as_ref() == Some(&key)
         {
@@ -142,6 +220,15 @@ fn worker_loop(receiver: &mpsc::Receiver<Job>, active: &Arc<Mutex<Option<Operati
         }
         let _ignored = job.reply.send(result);
     }
+}
+
+#[cfg(test)]
+fn take_forced_runner_log_failure() -> bool {
+    FAIL_RUNNER_LOG_WRITES
+        .try_update(Ordering::Relaxed, Ordering::Relaxed, |count| {
+            count.checked_sub(1)
+        })
+        .is_ok()
 }
 
 #[cfg(test)]

@@ -126,3 +126,5 @@
 | dbt adapter | A dbt component that connects a project to a database. |
 | Event payload | JSON data that describes a GitHub event. |
 | Operational reserve | CPU and memory capacity kept available for operational work. |
+| Capture binding | Identity data that links one runner trace capture to a physical attempt, journal, repository connection, worker pair, and storage. |
+| Runner trace file | A file that records diagnostic events from the GitHub Runner or Worker program. |

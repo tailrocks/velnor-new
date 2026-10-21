@@ -8,6 +8,10 @@ use std::time::{Duration, Instant};
 use rustix::fs::{Mode, OFlags, open, openat};
 use sha2::{Digest, Sha256};
 
+#[path = "diagnostics/runner_log_state.rs"]
+mod runner_log_state;
+#[path = "diagnostics/runner_logs.rs"]
+mod runner_logs;
 #[path = "diagnostics/stage.rs"]
 mod stage;
 #[path = "diagnostics/worker.rs"]
@@ -15,6 +19,8 @@ mod worker;
 use crate::error::HostError;
 #[cfg(test)]
 use stage::{OperationKey, StageRequest};
+#[cfg(test)]
+pub(in crate::launch) use worker::{fail_next_runner_log_writes, runner_log_submission_count};
 
 pub(super) const MAX_RECORD_BYTES: usize = 4_096;
 pub(super) const DIRECTORY_MODE: u16 = 0o700;
@@ -286,7 +292,52 @@ pub(crate) use record::{DiagnosticRecord, RecordIdentity, diagnostic_record_fiel
 
 #[path = "diagnostics/capture.rs"]
 mod capture;
-pub(in crate::launch) use capture::{NativeCaptureRequest, capture_native, delete_after_capture};
+pub(in crate::launch) use capture::{
+    NativeCaptureRequest, capture_native, delete_after_capture, persist_runner_log_projection,
+    persist_runner_log_state,
+};
+pub(in crate::launch) use runner_log_state::{
+    CaptureBinding, CapturePhase, CaptureState, binding as runner_log_binding,
+    read_projection as read_runner_log_projection, read_state as read_runner_log_state,
+    recover_terminal_projection as recover_runner_log_projection,
+};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::launch) enum RunnerLogAvailability {
+    None,
+    RunnerOnly,
+    WorkerOnly,
+    RunnerAndWorker,
+}
+
+pub(in crate::launch) fn runner_log_create_exec_options() -> bollard::exec::CreateExecOptions<String>
+{
+    runner_logs::create_exec_options()
+}
+
+pub(in crate::launch) fn runner_log_start_exec_options() -> bollard::exec::StartExecOptions {
+    runner_logs::start_exec_options()
+}
+
+pub(in crate::launch) fn validate_runner_log_exec_id(exec_id: &str) -> Result<(), HostError> {
+    runner_logs::validate_exec_id(exec_id)
+}
+
+pub(in crate::launch) async fn collect_runner_log_exec_output(
+    results: bollard::exec::StartExecResults,
+    started: Instant,
+    cancelled: &AtomicBool,
+) -> Result<Vec<u8>, HostError> {
+    runner_logs::collect_exec_output(results, started, cancelled).await
+}
+
+pub(in crate::launch) fn validate_runner_log_exec_exit(
+    exec_id: &str,
+    inspect: &bollard::models::ExecInspectResponse,
+    archive: Vec<u8>,
+) -> Result<Vec<u8>, HostError> {
+    runner_logs::validate_exec_exit(exec_id, inspect, archive)
+}
 
 fn check_deadline(started: Instant) -> Result<(), HostError> {
     if started.elapsed() >= CAPTURE_DEADLINE {
