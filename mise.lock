@@ -82,4 +82,5 @@ specifiers = ["1.99.1"]
 
 [tools.rust.options]
 components = "clippy,rustfmt"
+profile = "minimal"
 targets = "aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu"

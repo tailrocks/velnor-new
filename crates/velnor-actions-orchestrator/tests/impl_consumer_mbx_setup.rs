@@ -20,14 +20,14 @@ use crate::impl_common::{TestResult, config_with_branch, make_repo, write_nextes
 /// The owner's standard consumer `mise.toml` (docs/implemented/consumer-rust-setup.md).
 fn consumer_mise_toml() -> String {
     format!(
-        "min_version = \"2026.10.17\"\n\n[tools]\nrust = {{ version = \"{RUST_VERSION}\", components = [\"clippy\", \"rustfmt\"], targets = [\"aarch64-unknown-linux-gnu\", \"x86_64-unknown-linux-gnu\"], mr_boxington = true }}\nmr-boxington = \"{MR_BOXINGTON_VERSION}\"\nhk = \"2.8.0\"\ncargo-binstall = \"1.26.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"{NEXTEST_VERSION}\"\n\n[settings]\ncargo.binstall = true\nidiomatic_version_file_enable_tools = [\"rust\"]\nlockfile = true\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = {{ MBX_CARGO_SHIM_MODE = \"1\" }}\n"
+        "min_version = \"2026.10.17\"\n\n[tools]\nrust = {{ version = \"{RUST_VERSION}\", profile = \"minimal\", components = [\"clippy\", \"rustfmt\"], targets = [\"aarch64-unknown-linux-gnu\", \"x86_64-unknown-linux-gnu\"], mr_boxington = true }}\nmr-boxington = \"{MR_BOXINGTON_VERSION}\"\nhk = \"2.8.0\"\ncargo-binstall = \"1.26.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"{NEXTEST_VERSION}\"\n\n[settings]\ncargo.binstall = true\nidiomatic_version_file_enable_tools = [\"rust\"]\nlockfile = true\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = {{ MBX_CARGO_SHIM_MODE = \"1\" }}\n"
     )
 }
 
 /// The owner's standard `rust-toolchain.toml`, mirroring the Mise version.
 fn consumer_toolchain() -> String {
     format!(
-        "[toolchain]\nchannel = \"{RUST_VERSION}\"\ncomponents = [\"clippy\", \"rustfmt\"]\ntargets = [\"aarch64-unknown-linux-gnu\", \"x86_64-unknown-linux-gnu\"]\n"
+        "[toolchain]\nchannel = \"{RUST_VERSION}\"\nprofile = \"minimal\"\ncomponents = [\"clippy\", \"rustfmt\"]\ntargets = [\"aarch64-unknown-linux-gnu\", \"x86_64-unknown-linux-gnu\"]\n"
     )
 }
 
