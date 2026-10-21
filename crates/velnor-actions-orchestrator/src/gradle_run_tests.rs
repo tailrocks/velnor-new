@@ -7,6 +7,7 @@ use std::fs;
 use velnor_actions_mise::ProcessOutput;
 
 use super::*;
+use crate::deps_layout::maven_bundle_dir;
 
 const JAR: &[u8] =
     include_bytes!("../../velnor-actions-gradle/tests/fixtures/gradle-wrapper-9.5.1.jar");
@@ -108,6 +109,21 @@ fn installs_the_jdk_then_runs_one_continue_invocation_through_isolated_mise() {
         assert!(env.iter().any(|k| k == key), "{key} in {env:?}");
     }
     assert!(!env.iter().any(|k| k.contains("TOKEN")), "{env:?}");
+    // The init script reads bundles from the directory the private fetch
+    // unpacks them into: `<workspace>/.velnor/deps/maven/<id>`.
+    let maven_root = seen[1]
+        .2
+        .iter()
+        .find(|(k, _)| k == "VELNOR_MAVEN_ROOT")
+        .map(|(_, v)| std::path::PathBuf::from(v))
+        .expect("VELNOR_MAVEN_ROOT");
+    let fetched = maven_bundle_dir(&deps_root(&fx.machine.workspace), "libs-catalog");
+    assert_eq!(fetched.parent(), Some(maven_root.as_path()));
+    assert_eq!(
+        maven_root,
+        fx.machine.workspace.join(".velnor/deps/maven"),
+        "not under RUNNER_TEMP"
+    );
     let home = fx.machine.runner_temp.join("velnor/gradle");
     assert!(
         fs::read_to_string(home.join("gradle.properties"))

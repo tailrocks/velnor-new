@@ -26,6 +26,7 @@ use crate::config::load_config;
 use crate::config::private_fetch_root::prepare_deps_root;
 use crate::config::private_fetch_session::{Session, Token, scrub_dir};
 use crate::config::private_sources::{SourceKind, job_allowlist};
+use crate::deps_layout::maven_bundle_dir;
 use crate::discover::workspace_manifest;
 use crate::internal::internal;
 
@@ -209,7 +210,7 @@ fn fetch_all(
         assets.extend(
             lock.maven_bundles
                 .iter()
-                .map(|bundle| (bundle, deps.join("maven").join(&bundle.id))),
+                .map(|bundle| (bundle, maven_bundle_dir(deps, &bundle.id))),
         );
     }
     if request.kinds.contains(&SourceKind::ReleaseAssets) {
