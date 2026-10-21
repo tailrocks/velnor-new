@@ -12,7 +12,7 @@ impl TemporaryDirectory {
     fn new() -> Result<Self, Box<dyn Error>> {
         let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
         let path = std::env::temp_dir().join(format!(
-            "velnor-verify-local-cargo-home-{}-{unique}",
+            "velnor-verify-local-cargo-dispatch-{}-{unique}",
             std::process::id()
         ));
         fs::create_dir(&path)?;
@@ -33,11 +33,8 @@ impl Drop for TemporaryDirectory {
     }
 }
 
-fn write_executable(path: &Path, version: &str) -> Result<(), Box<dyn Error>> {
-    fs::write(
-        path,
-        format!("#!/bin/sh\nprintf '%s\\n' 'cargo-nextest {version} (fixture)'\n"),
-    )?;
+fn write_executable(path: &Path, body: &str) -> Result<(), Box<dyn Error>> {
+    fs::write(path, format!("#!/bin/sh\n{body}\n"))?;
     fs::set_permissions(path, fs::Permissions::from_mode(0o700))?;
     Ok(())
 }
@@ -45,23 +42,33 @@ fn write_executable(path: &Path, version: &str) -> Result<(), Box<dyn Error>> {
 fn script_function<'a>(script: &'a str, name: &str) -> Result<&'a str, Box<dyn Error>> {
     let start = script
         .find(&format!("{name}() {{"))
-        .ok_or("CARGO_HOME helper is missing")?;
+        .ok_or("The Nextest dispatcher helper is missing.")?;
     let body = &script[start..];
     let end = body
         .find("\n}\n")
-        .ok_or("CARGO_HOME helper is incomplete")?
+        .ok_or("The Nextest dispatcher helper is incomplete.")?
         + 2;
     Ok(&body[..end])
 }
 
 fn cargo_path() -> Result<PathBuf, Box<dyn Error>> {
-    let output = Command::new("sh")
-        .args(["-c", "command -v cargo", "verify-local-cargo"])
+    let policy: toml::Value = toml::from_str(&fs::read_to_string(
+        workspace_root().join(".velnor/version-policy.toml"),
+    )?)?;
+    let version = policy["tools"]["rust"]
+        .as_str()
+        .ok_or("The Rust toolchain pin is missing.")?;
+    let output = Command::new("rustup")
+        .args(["which", "--toolchain", version, "cargo"])
         .output()?;
     if !output.status.success() {
-        return Err("Cargo is not on PATH".into());
+        return Err("Cargo is not available from the pinned Rust toolchain.".into());
     }
     Ok(PathBuf::from(String::from_utf8(output.stdout)?.trim()))
+}
+
+fn workspace_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
 fn path_with(prefixes: &[&Path], suffix: &OsStr) -> Result<OsString, Box<dyn Error>> {
@@ -73,157 +80,227 @@ fn path_with(prefixes: &[&Path], suffix: &OsStr) -> Result<OsString, Box<dyn Err
     Ok(std::env::join_paths(paths)?)
 }
 
-fn cargo_nextest_version(
-    cargo: &Path,
-    cwd: &Path,
-    cargo_home: &Path,
-    path: OsString,
-) -> Result<String, Box<dyn Error>> {
-    let output = Command::new(cargo)
-        .args(["nextest", "--version"])
-        .current_dir(cwd)
-        .env("CARGO_HOME", cargo_home)
-        .env("PATH", path)
-        .output()?;
-    if !output.status.success() {
-        return Err(format!(
-            "Cargo Nextest command failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )
-        .into());
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
-}
-
-fn create_fixture(
-    global_home: &Path,
-    pinned_bin: &Path,
-) -> Result<(PathBuf, PathBuf), Box<dyn Error>> {
-    fs::create_dir_all(global_home.join("registry"))?;
-    fs::create_dir_all(global_home.join("git"))?;
-    let shadow_bin = global_home.join("bin");
-    fs::create_dir(&shadow_bin)?;
-    fs::create_dir(pinned_bin)?;
-    fs::write(
-        global_home.join("config.toml"),
-        "# synthetic global config\n",
-    )?;
-    fs::write(
-        global_home.join("credentials.toml"),
-        "# synthetic credential file\n",
-    )?;
-    let shadowed_nextest = shadow_bin.join("cargo-nextest");
-    let pinned_nextest = pinned_bin.join("cargo-nextest");
-    write_executable(&shadowed_nextest, "0.9.143")?;
-    write_executable(&pinned_nextest, "0.9.148")?;
-    Ok((shadow_bin, pinned_nextest))
-}
-
-fn prepare_cargo_home(
-    script: &str,
-    global_home: &Path,
-    isolated_home: &Path,
-    pinned_nextest: &Path,
-    root: &Path,
-) -> Result<(), Box<dyn Error>> {
-    let helper = script_function(script, "prepare_isolated_cargo_home")?;
-    let harness = root.join("prepare-cargo-home.sh");
+fn prepare_dispatcher(script: &str, dispatcher: &Path, root: &Path) -> Result<(), Box<dyn Error>> {
+    let helper = script_function(script, "prepare_nextest_dispatcher")?;
+    let harness = root.join("prepare-nextest-dispatcher.sh");
     fs::write(
         &harness,
-        format!("{helper}\nprepare_isolated_cargo_home \"$1\" \"$2\" \"$3\"\n"),
+        format!("{helper}\nprepare_nextest_dispatcher \"$1\"\n"),
     )?;
     let prepared = Command::new("bash")
         .arg(&harness)
-        .arg(global_home)
-        .arg(isolated_home)
-        .arg(pinned_nextest)
+        .arg(dispatcher)
         .output()?;
     assert!(
         prepared.status.success(),
-        "CARGO_HOME setup failed: {}",
+        "The dispatcher setup failed. Error: {}",
         String::from_utf8_lossy(&prepared.stderr)
     );
-    Ok(())
-}
-
-fn assert_private_cargo_home(
-    global_home: &Path,
-    isolated_home: &Path,
-    pinned_nextest: &Path,
-) -> Result<(), Box<dyn Error>> {
     assert_eq!(
-        fs::canonicalize(isolated_home.join("bin/cargo-nextest"))?,
-        fs::canonicalize(pinned_nextest)?
-    );
-    assert_eq!(
-        fs::canonicalize(isolated_home.join("registry"))?,
-        fs::canonicalize(global_home.join("registry"))?
-    );
-    assert_eq!(
-        fs::canonicalize(isolated_home.join("git"))?,
-        fs::canonicalize(global_home.join("git"))?
-    );
-    assert!(!isolated_home.join("config.toml").exists());
-    assert!(!isolated_home.join("credentials.toml").exists());
-    assert_eq!(
-        fs::metadata(isolated_home)?.permissions().mode() & 0o777,
+        fs::metadata(dispatcher)?.permissions().mode() & 0o777,
         0o700
     );
     Ok(())
 }
 
-fn assert_route_selection(
-    root: &Path,
-    global_home: &Path,
-    isolated_home: &Path,
-    shadow_bin: &Path,
-    pinned_bin: &Path,
-) -> Result<(), Box<dyn Error>> {
-    let cargo = cargo_path()?;
-    let original_path = std::env::var_os("PATH").ok_or("PATH is missing")?;
-    let baseline_path = path_with(&[shadow_bin, pinned_bin], original_path.as_os_str())?;
-    let baseline = cargo_nextest_version(&cargo, root, global_home, baseline_path)?;
-    assert!(
-        baseline.contains("0.9.143"),
-        "older executable not selected: {baseline}"
-    );
+fn run(
+    executable: &Path,
+    args: &[&str],
+    cwd: &Path,
+    cargo_home: &Path,
+    path: OsString,
+    cargo_tool: &Path,
+    nextest: &Path,
+) -> Result<std::process::Output, Box<dyn Error>> {
+    Ok(Command::new(executable)
+        .args(args)
+        .current_dir(cwd)
+        .env("CARGO_HOME", cargo_home)
+        .env("CARGO_TOOL_PATH", cargo_tool)
+        .env("NEXTEST_BIN", nextest)
+        .env("PATH", path)
+        .output()?)
+}
 
-    let isolated_bin = isolated_home.join("bin");
-    let isolated_path = path_with(
-        &[&isolated_bin, pinned_bin, shadow_bin],
-        original_path.as_os_str(),
+fn create_fixture(root: &Path) -> Result<(PathBuf, PathBuf, PathBuf), Box<dyn Error>> {
+    let cargo_home = root.join("cargo-home");
+    let shadow_bin = cargo_home.join("bin");
+    let pinned_bin = root.join("pinned");
+    fs::create_dir_all(cargo_home.join("registry"))?;
+    fs::create_dir_all(cargo_home.join("git"))?;
+    fs::create_dir(&shadow_bin)?;
+    fs::create_dir(&pinned_bin)?;
+    fs::write(cargo_home.join("config.toml"), "# fixture Cargo config\n")?;
+    fs::write(cargo_home.join("credentials.toml"), "fixture credential\n")?;
+    fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"cargo-dispatch-fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
     )?;
-    let isolated = cargo_nextest_version(&cargo, root, isolated_home, isolated_path)?;
+    fs::create_dir(root.join("src"))?;
+    fs::write(root.join("src/main.rs"), "fn main() {}\n")?;
+
+    let shadow = shadow_bin.join("cargo-nextest");
+    let pinned = pinned_bin.join("cargo-nextest");
+    write_executable(&shadow, "printf '%s\\n' 'CARGO_HOME shadow selected'")?;
+    write_executable(
+        &pinned,
+        "printf '%s\\n' 'cargo-nextest 0.9.149 (pinned fixture)'",
+    )?;
+    Ok((cargo_home, shadow, pinned))
+}
+
+fn assert_global_home_precedence(
+    cargo: &Path,
+    root: &Path,
+    cargo_home: &Path,
+    path: OsString,
+    pinned: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let path_description = path.to_string_lossy().into_owned();
+    let shadowed = run(
+        cargo,
+        &["nextest", "--version"],
+        root,
+        cargo_home,
+        path,
+        cargo,
+        pinned,
+    )?;
+    let shadowed_stdout = String::from_utf8(shadowed.stdout)?;
+    assert!(shadowed.status.success());
     assert!(
-        isolated.contains("0.9.148"),
-        "pinned executable not selected: {isolated}"
+        shadowed_stdout.contains("CARGO_HOME shadow selected"),
+        "Cargo must select the test executable in CARGO_HOME/bin. Diagnostics: stdout={shadowed_stdout}; cargo={}; home={}; PATH={path_description}",
+        cargo.display(),
+        cargo_home.display()
+    );
+    Ok(())
+}
+
+fn assert_dispatcher_contract(script: &str) {
+    assert!(
+        script.contains("\"CARGO=$CARGO_DISPATCHER\"")
+            && script.contains("\"NEXTEST_BIN=$NEXTEST_BIN\"")
+            && script.contains("\"CARGO_TOOL_PATH=$CARGO_TOOL_PATH\""),
+        "MBX must receive the Cargo dispatcher and both exact executable paths."
+    );
+    assert!(
+        script.contains("exec mbx nextest \"$@\""),
+        "MBX must run the pinned Nextest executable."
+    );
+}
+
+fn assert_pinned_dispatch(
+    dispatcher: &Path,
+    root: &Path,
+    cargo_home: &Path,
+    path: OsString,
+    cargo: &Path,
+    pinned: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let selected = run(
+        dispatcher,
+        &["nextest", "--version"],
+        root,
+        cargo_home,
+        path,
+        cargo,
+        pinned,
+    )?;
+    let selected_stdout = String::from_utf8(selected.stdout)?;
+    assert!(selected.status.success());
+    assert!(
+        selected_stdout.contains("cargo-nextest 0.9.149"),
+        "The dispatcher did not select the pinned executable. Output: {selected_stdout}"
+    );
+    assert!(
+        !selected_stdout.contains("CARGO_HOME shadow selected"),
+        "The dispatcher ran the test executable in CARGO_HOME/bin."
+    );
+    Ok(())
+}
+
+fn assert_cargo_delegation(
+    dispatcher: &Path,
+    root: &Path,
+    cargo_home: &Path,
+    path: OsString,
+    cargo: &Path,
+    pinned: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let manifest = root
+        .join("Cargo.toml")
+        .to_str()
+        .ok_or("The manifest path is not UTF-8.")?
+        .to_owned();
+    let delegated = run(
+        dispatcher,
+        &[
+            "metadata",
+            "--no-deps",
+            "--format-version",
+            "1",
+            "--manifest-path",
+            &manifest,
+        ],
+        root,
+        cargo_home,
+        path,
+        cargo,
+        pinned,
+    )?;
+    let metadata = String::from_utf8(delegated.stdout)?;
+    assert!(
+        delegated.status.success(),
+        "The dispatcher did not send the metadata command to Cargo. Error: {}",
+        String::from_utf8_lossy(&delegated.stderr)
+    );
+    assert!(metadata.contains("cargo-dispatch-fixture"));
+    assert_eq!(
+        fs::read_to_string(cargo_home.join("config.toml"))?,
+        "# fixture Cargo config\n"
+    );
+    assert_eq!(
+        fs::read_to_string(cargo_home.join("credentials.toml"))?,
+        "fixture credential\n"
     );
     Ok(())
 }
 
 #[test]
-fn verify_local_isolates_the_pinned_nextest_from_the_global_cargo_home()
+fn verify_local_dispatcher_overrides_cargo_home_shadow_and_delegates_cargo()
 -> Result<(), Box<dyn Error>> {
     let temporary = TemporaryDirectory::new()?;
     let root = temporary.path();
-    let global_home = root.join("global-cargo-home");
-    let isolated_home = root.join("isolated-cargo-home");
-    let pinned_bin = root.join("pinned");
-    let (shadow_bin, pinned_nextest) = create_fixture(&global_home, &pinned_bin)?;
-    let script = super::entrypoint_text()?;
-    assert!(
-        script.contains("PATH=\"$CARGO_HOME/bin:$NEXTEST_DIR:$PATH\""),
-        "Nextest command must put the private CARGO_HOME before other command directories"
-    );
-    prepare_cargo_home(&script, &global_home, &isolated_home, &pinned_nextest, root)?;
-    assert_private_cargo_home(&global_home, &isolated_home, &pinned_nextest)?;
-    assert_route_selection(root, &global_home, &isolated_home, &shadow_bin, &pinned_bin)?;
+    let (cargo_home, shadow, pinned) = create_fixture(root)?;
+    assert!(shadow.is_file());
+    let cargo = cargo_path()?;
+    let original_path = std::env::var_os("PATH").ok_or("PATH is missing")?;
+    let prefix = [pinned
+        .parent()
+        .ok_or("The pinned executable path has no parent directory.")?];
+    let candidate_path = path_with(&prefix, original_path.as_os_str())?;
 
-    let root_path = root.to_path_buf();
-    drop(temporary);
-    assert!(
-        !root_path.exists(),
-        "temporary CARGO_HOME directories were not removed"
-    );
+    assert_global_home_precedence(&cargo, root, &cargo_home, candidate_path.clone(), &pinned)?;
+    let script = super::entrypoint_text()?;
+    assert_dispatcher_contract(&script);
+    let dispatcher = root.join("cargo-dispatch");
+    prepare_dispatcher(&script, &dispatcher, root)?;
+    assert_pinned_dispatch(
+        &dispatcher,
+        root,
+        &cargo_home,
+        candidate_path.clone(),
+        &cargo,
+        &pinned,
+    )?;
+    assert_cargo_delegation(
+        &dispatcher,
+        root,
+        &cargo_home,
+        candidate_path,
+        &cargo,
+        &pinned,
+    )?;
     Ok(())
 }

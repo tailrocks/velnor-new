@@ -38,12 +38,14 @@ The script resolves Rust components with the selected `rustup` toolchain.
 It puts that toolchain's `bin` directory first in `PATH`.
 It compares paths and versions for `rustc`, Cargo, Clippy, and rustfmt.
 It resolves Nextest with `mise --no-config which`.
-The script makes a private `CARGO_HOME` for the Nextest command.
-Its `ln -s` entries use the pinned executable and the existing registry and Git caches.
-It does not copy global Cargo configuration or credentials.
-The Nextest command puts this private `bin` directory before the other command directories.
-This order selects the pinned `cargo-nextest` before an older executable.
-MBX runs Nextest through the pinned executable.
+The script resolves the pinned `cargo-nextest` executable with Mise.
+For the Nextest stages, it gives MBX a private Cargo dispatcher through `CARGO`.
+The dispatcher runs the pinned executable for Cargo's `nextest` command.
+It sends all other Cargo commands to the selected Rust toolchain's Cargo executable.
+Cargo can search `CARGO_HOME/bin` before `PATH` for external commands.
+The dispatcher selects the pinned Nextest executable directly.
+The script keeps the caller's normal `CARGO_HOME`, configuration, and credentials.
+MBX and Nextest send metadata and build commands through the dispatcher.
 The local Mise executable's version is reported; a policy mismatch warns and
 continues. The script compares Rust component paths and versions.
 It also compares the MBX version, Cargo and MBX Clippy versions, the Nextest executable path and version, and the cargo-deny version.

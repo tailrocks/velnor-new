@@ -43,7 +43,6 @@ set -uo pipefail
 ROOT=""
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 1
-CARGO_CACHE_HOME="${CARGO_HOME:-${HOME:?}/.cargo}"
 
 create_log_dir() {
   local parent candidate fallback
@@ -112,19 +111,16 @@ stage() {
   fi
 }
 
-prepare_isolated_cargo_home() {
-  local source_home="$1" isolated_home="$2" nextest_binary="$3" cache
-  [ -x "$nextest_binary" ] || return 1
-  (umask 077; mkdir "$isolated_home" && mkdir "$isolated_home/bin") || return 1
-  if [ -d "$source_home" ]; then
-    source_home="$(cd -P "$source_home" 2>/dev/null && pwd -P)" || return 1
-    for cache in registry git; do
-      if [ -d "$source_home/$cache" ]; then
-        ln -s "$source_home/$cache" "$isolated_home/$cache" || return 1
-      fi
-    done
-  fi
-  ln -s "$nextest_binary" "$isolated_home/bin/cargo-nextest"
+prepare_nextest_dispatcher() {
+  local dispatcher="$1"
+  cat >"$dispatcher" <<'DISPATCHER' || return 1
+#!/bin/sh
+case "${1-}" in
+  nextest) exec "$NEXTEST_BIN" "$@" ;;
+  *) exec "$CARGO_TOOL_PATH" "$@" ;;
+esac
+DISPATCHER
+  chmod 700 "$dispatcher"
 }
 
 if ! command -v mise >/dev/null 2>&1; then
@@ -279,8 +275,9 @@ if [ "$RUSTC_VER" != "$RUST_PIN" ] || [ "$CARGO_VER" != "$RUST_PIN" ] ||
   echo "verify-local: FAIL:$FAILURES"
   exit 1
 fi
-# Find the pinned Nextest executable with Mise.
-# Put the private bin first to select the pinned cargo-nextest.
+# Resolve the pinned Nextest executable and give MBX a Cargo dispatcher.
+# Cargo can search CARGO_HOME/bin before PATH for external commands.
+# Changing PATH alone cannot reliably select the pinned executable.
 NEXTEST_RUN=()
 nextest_route_is_pinned() {
   local bin="$1" binary_version="$2" route_version="$3" expected_version="$4"
@@ -295,20 +292,17 @@ if [ -n "$NEXTEST_BIN" ]; then
   NEXTEST_BIN_VER="$("$NEXTEST_BIN" --version 2>/dev/null | awk 'NR==1{print $2}')"
 fi
 if [ -n "$NEXTEST_BIN" ] && [ "$NEXTEST_BIN_VER" = "$NEXTEST_PIN" ]; then
-  NEXTEST_DIR="$(dirname "$NEXTEST_BIN")"
-  ISOLATED_CARGO_HOME="$LOG_DIR/cargo-home"
-  if ! prepare_isolated_cargo_home "$CARGO_CACHE_HOME" "$ISOLATED_CARGO_HOME" "$NEXTEST_BIN"; then
-    fail "toolchain (cannot prepare a private CARGO_HOME; log: $TOOLCHAIN_LOG)"
+  CARGO_DISPATCHER="$LOG_DIR/cargo-dispatch"
+  if ! prepare_nextest_dispatcher "$CARGO_DISPATCHER"; then
+    fail "toolchain (The script cannot prepare the Cargo dispatcher for pinned Nextest. Log: $TOOLCHAIN_LOG)"
     echo "verify-local: FAIL:$FAILURES"
     exit 1
   fi
-  # Set the private CARGO_HOME.
-  # Put its bin directory before the other command directories.
   # shellcheck disable=SC2016
-  NEXTEST_RUN=("${RUST_EXEC[@]}" env "CARGO_HOME=$ISOLATED_CARGO_HOME" "NEXTEST_DIR=$NEXTEST_DIR" sh -c \
-    'PATH="$CARGO_HOME/bin:$NEXTEST_DIR:$PATH" exec mbx nextest "$@"' verify-local-nextest)
+  NEXTEST_RUN=("${RUST_EXEC[@]}" env "CARGO=$CARGO_DISPATCHER" "NEXTEST_BIN=$NEXTEST_BIN" \
+    "CARGO_TOOL_PATH=$CARGO_TOOL_PATH" sh -c 'exec mbx nextest "$@"' verify-local-nextest)
   NEXTEST_RUN_VER="$("${NEXTEST_RUN[@]}" --version 2>/dev/null | awk 'NR==1{print $2}')"
-  echo "effective: nextest $NEXTEST_RUN_VER via pinned mise path and MBX"
+  echo "effective: nextest $NEXTEST_RUN_VER via pinned executable and MBX Cargo dispatcher"
 else
   echo "effective: no pinned Nextest binary at $NEXTEST_BIN (pin $NEXTEST_PIN)"
 fi

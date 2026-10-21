@@ -6,6 +6,7 @@
 | Symbolic link | A file system entry that names another path. |
 | Rust crate | A Rust source unit for one library or program. |
 | Cargo feature | A named option that selects code or dependencies in a Rust package. |
+| Cargo dispatcher | A program that selects the executable for a Cargo command. |
 | Rust package | A Cargo project with one manifest and one or more Rust crates. |
 | Rust adapter | A Velnor component that reads Rust project data. |
 | Task owner | A Cargo metadata value that selects the policy for the task list. |
