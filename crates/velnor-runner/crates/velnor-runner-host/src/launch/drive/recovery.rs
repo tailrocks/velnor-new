@@ -115,59 +115,25 @@ where
 
 #[cfg(test)]
 pub(crate) async fn recover_acquired_scoped_offer_with_test_observation(
-    connection: &RepositoryConnection,
-    authority_policy: &ApprovedJobAuthorityPolicy,
-    admission_state: &std::path::Path,
-    scoped: &ConnectionJournal,
-    request: &AssignmentIdentity,
-    reservation_id: i64,
-    engine: &SelectedEngineContext,
+    context: AcquiredRecoveryContext<'_>,
     observation: Option<crate::launch::RecoveryObservation>,
 ) -> Result<ScopedProvisioningOutcome, EnsureError> {
-    recover_acquired_scoped_offer_with_observation(
-        AcquiredRecoveryContext {
-            connection,
-            authority_policy,
-            admission_state,
-            scoped,
-            request,
-            reservation_id,
-            engine,
-        },
-        |_| async move { observation },
-    )
-    .await
+    recover_acquired_scoped_offer_with_observation(context, |_| async move { observation }).await
 }
 
 #[cfg(test)]
 pub(crate) async fn recover_acquired_scoped_offer_with_test_provider(
-    connection: &RepositoryConnection,
-    authority_policy: &ApprovedJobAuthorityPolicy,
-    admission_state: &std::path::Path,
-    scoped: &ConnectionJournal,
-    request: &AssignmentIdentity,
-    reservation_id: i64,
+    context: AcquiredRecoveryContext<'_>,
     budget: ResourceBudget,
     docker: &Docker,
     host: &Journal,
-    engine: &SelectedEngineContext,
     provider: &crate::launch::IntakeCompositionProvider,
 ) -> Result<ScopedProvisioningOutcome, EnsureError> {
-    recover_acquired_scoped_offer_with_observation(
-        AcquiredRecoveryContext {
-            connection,
-            authority_policy,
-            admission_state,
-            scoped,
-            request,
-            reservation_id,
-            engine,
-        },
-        |charge| {
-            crate::launch::resource_probe::recovery_observation_with_provider(
-                docker, host, budget, charge, engine, provider,
-            )
-        },
-    )
+    let engine = context.engine;
+    recover_acquired_scoped_offer_with_observation(context, |charge| {
+        crate::launch::resource_probe::recovery_observation_with_provider(
+            docker, host, budget, charge, engine, provider,
+        )
+    })
     .await
 }

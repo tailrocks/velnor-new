@@ -293,13 +293,15 @@ async fn recover_after_ack(
     observation: Option<crate::launch::RecoveryObservation>,
 ) -> Result<crate::launch::steps::ScopedProvisioningOutcome, String> {
     crate::launch::recover_acquired_scoped_offer_with_test_observation(
-        &fixture.binding,
-        policy,
-        admission_state,
-        &fixture.scope,
-        request,
-        reservation_id,
-        engine,
+        crate::launch::AcquiredRecoveryContext {
+            connection: &fixture.binding,
+            authority_policy: policy,
+            admission_state,
+            scoped: &fixture.scope,
+            request,
+            reservation_id,
+            engine,
+        },
         observation,
     )
     .await

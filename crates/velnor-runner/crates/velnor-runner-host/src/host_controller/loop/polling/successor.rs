@@ -237,16 +237,18 @@ async fn recover_candidate(
     #[cfg(test)]
     if let Some(provider) = context.start_permit_provider {
         return crate::launch::recover_acquired_scoped_offer_with_test_provider(
-            connection,
-            policy,
-            context.state,
-            &prepared.scope,
-            request,
-            candidate.reservation_id(),
+            crate::launch::AcquiredRecoveryContext {
+                connection,
+                authority_policy: policy,
+                admission_state: context.state,
+                scoped: &prepared.scope,
+                request,
+                reservation_id: candidate.reservation_id(),
+                engine: context.selected_engine,
+            },
             budget,
             context.docker,
             context.journal,
-            context.selected_engine,
             provider,
         )
         .await;
