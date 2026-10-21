@@ -100,6 +100,20 @@ def sha256_entries(value):
 
 
 authority = lock["authority"]
+snapshot = authority["snapshot"]
+snapshot_id = snapshot["id"]
+require(re.fullmatch(r"[0-9]{8}T[0-9]{6}Z", snapshot_id) is not None,
+        "The Ubuntu archive snapshot identifier is invalid.")
+snapshot_base_url = "https://snapshot.ubuntu.com/ubuntu/" + snapshot_id
+require(snapshot["base_url"] == snapshot_base_url,
+        "The Ubuntu archive snapshot base URL is invalid.")
+expected_inrelease_url = snapshot_base_url + "/dists/" + lock["distribution"] + "/InRelease"
+require(authority["inrelease"]["url"] == expected_inrelease_url,
+        "The InRelease URL does not match the expected URL.")
+expected_sources_url = (snapshot_base_url + "/dists/" + lock["distribution"] + "/"
+                       + authority["sources_index"]["path_in_release"])
+require(authority["sources_index"]["url"] == expected_sources_url,
+        "The Sources URL does not match the expected URL.")
 keyring_path = downloads / "ubuntu-archive-keyring.gpg"
 fetch(authority["archive_keyring"]["url"], keyring_path,
       authority["archive_keyring"], "Ubuntu archive keyring")
@@ -153,7 +167,7 @@ for item in lock["source_files"]:
     signed = signed_files.get(item["name"])
     require(signed == {"sha256": item["sha256"], "size": item["size"]},
             "Ubuntu Sources.xz: source file hash mismatch for " + item["name"])
-    url = "https://archive.ubuntu.com/ubuntu/" + lock["directory"] + "/" + item["name"]
+    url = snapshot_base_url + "/" + lock["directory"] + "/" + item["name"]
     fetch(url, downloads / item["name"], item, item["name"])
 
 orig = next(item for item in lock["source_files"] if item["name"].endswith(".orig.tar.xz"))
@@ -298,7 +312,7 @@ printf '%s  %s\n' "$expected_package_sha256" "$package" | sha256sum -c -
 
 install_root="$work_dir/package-payload"
 mkdir -p -- "$install_root"
-dpkg-deb --extract "$package" "$install_root"
+dpkg-deb --fsys-tarfile "$package" | env -u TAR_OPTIONS "$bootstrap_path/tar" -xpf - -C "$install_root"
 tar_binary="$install_root/usr/bin/tar"
 test -x "$tar_binary"
 printf '%s  %s\n' "$expected_tar_sha256" "$tar_binary" | sha256sum -c -

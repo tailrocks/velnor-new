@@ -128,3 +128,4 @@
 | Operational reserve | CPU and memory capacity kept available for operational work. |
 | Capture binding | Identity data that links one runner trace capture to a physical attempt, journal, repository connection, worker pair, and storage. |
 | Runner trace file | A file that records diagnostic events from the GitHub Runner or Worker program. |
+| Ubuntu archive snapshot | A saved state of the Ubuntu package archive at a specified time. |

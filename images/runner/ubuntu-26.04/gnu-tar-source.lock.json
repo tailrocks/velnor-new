@@ -5,6 +5,10 @@
   "distribution": "resolute-security",
   "directory": "pool/main/t/tar",
   "authority": {
+    "snapshot": {
+      "id": "20261018T000000Z",
+      "base_url": "https://snapshot.ubuntu.com/ubuntu/20261018T000000Z"
+    },
     "archive_keyring": {
       "url": "https://archive.ubuntu.com/ubuntu/project/ubuntu-archive-keyring.gpg",
       "sha256": "80a36b0a6de2f69f49d2df75ef473ccde121e9e190b9ea01d20a4f63778d5c31",
@@ -12,12 +16,12 @@
     },
     "signer_fingerprint": "F6ECB3762474EDA9D21B7022871920D1991BC93C",
     "inrelease": {
-      "url": "https://security.ubuntu.com/ubuntu/dists/resolute-security/InRelease",
+      "url": "https://snapshot.ubuntu.com/ubuntu/20261018T000000Z/dists/resolute-security/InRelease",
       "sha256": "3ce187a5bb2a15221be6553f99268bd7494948dacba8835c711f7f1f4e9ce890",
       "size": 137403
     },
     "sources_index": {
-      "url": "https://security.ubuntu.com/ubuntu/dists/resolute-security/main/source/Sources.xz",
+      "url": "https://snapshot.ubuntu.com/ubuntu/20261018T000000Z/dists/resolute-security/main/source/Sources.xz",
       "path_in_release": "main/source/Sources.xz",
       "sha256": "c751ab065d1c3f3f6f60ba0fa55a31c8b0c7b50f53caa76ade54ac60c6ae24b4",
       "size": 192876
