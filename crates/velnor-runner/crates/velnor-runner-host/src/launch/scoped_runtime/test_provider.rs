@@ -2,12 +2,8 @@ use super::*;
 
 pub(crate) async fn prepare_jit_and_measure_scoped_with_provider<T>(
     outcome: ScopedProvisioningOutcome,
-    docker: &Docker,
-    scoped: &ConnectionJournal,
-    host: &Journal,
+    context: &ScopedHostContext<'_>,
     provider: &crate::launch::IntakeCompositionProvider,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
     lane: &mut T,
     admin_token: &str,
     deadline: Instant,
@@ -15,6 +11,14 @@ pub(crate) async fn prepare_jit_and_measure_scoped_with_provider<T>(
 where
     T: Transport + Lane,
 {
+    let ScopedHostContext {
+        docker,
+        host,
+        scoped,
+        engine,
+        images,
+        ..
+    } = *context;
     let bound = match provider_entry::prepare_and_bind_scoped_with_test_provider(
         outcome, docker, scoped, host, provider, engine, images,
     )
