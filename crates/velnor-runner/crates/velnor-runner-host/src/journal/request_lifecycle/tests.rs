@@ -5,12 +5,25 @@ mod acquired_population_read;
 mod acquired_recovery;
 mod admission;
 mod authorized_offers;
+#[path = "tests/helpers/burst.rs"]
+mod burst_fixture;
 mod cleanup_identity;
 mod cleanup_independence;
 mod correlation;
 mod disk_capacity;
 mod event_source;
 pub(crate) mod helpers;
+#[path = "tests/native_started_fixture.rs"]
+mod native_started_fixture;
+pub(crate) use burst_fixture::add_twelve_completed_burst_rows;
+pub(crate) use native_started_fixture::{
+    native_started_intake_fixture, native_started_intake_fixture_with_filesystem_digest,
+};
+
+pub(crate) async fn native_started_intake_burst_fixture()
+-> Result<NativeStartedIntakeFixture, crate::error::HostError> {
+    burst_fixture::native_started_intake_burst_fixture().await
+}
 mod initialization;
 mod legacy_migration;
 mod linked_request_reopen;
@@ -148,121 +161,13 @@ pub(crate) async fn publish_native_fixture_challenge(
     helpers::publish_test_execution_challenge(&fixture.scope, &fixture.channel).await
 }
 
-/// Build the durable state required for a native Started message.
-pub(crate) async fn native_started_intake_fixture()
--> Result<NativeStartedIntakeFixture, crate::error::HostError> {
-    Box::pin(native_started_intake_fixture_with_filesystem_digest(None)).await
-}
-
-pub(crate) async fn native_started_intake_fixture_with_filesystem_digest(
-    filesystem_instance_digest: Option<String>,
-) -> Result<NativeStartedIntakeFixture, crate::error::HostError> {
-    use crate::journal::{CapacityLimits, Journal, OperationalCapacityLimits};
-
-    const REQUEST_ID: i64 = 101;
-    const MESSAGE_ID: i64 = 1_501;
-    const SET_ID: i64 = 501;
-    const REPOSITORY_ID: i64 = 101;
-    const RUN_ID: i64 = REQUEST_ID + 1_000;
-
-    let scratch = helpers::Scratch::new()?;
-    let journal = Journal::open(&scratch.file()).await?;
-    journal
-        .configure_capacity_with_operational_limits(
-            CapacityLimits {
-                jobs: 1,
-                cpu_millicores: 2_000,
-                memory_bytes: 25_769_803_776,
-            },
-            OperationalCapacityLimits {
-                cpu_millicores: 1_000,
-                memory_bytes: 128 * 1024 * 1024,
-            },
-        )
-        .await?;
-    let binding = helpers::binding("native-started-intake", REPOSITORY_ID)?;
-    let scope = helpers::created_scope(&journal, &binding, SET_ID).await?;
-    let initialized = if let Some(digest) = filesystem_instance_digest.as_ref() {
-        helpers::provision_acquired_request_with_initialization_and_filesystem_digest(
-            &scope,
-            REQUEST_ID,
-            'a',
-            'a',
-            digest.clone(),
-        )
-        .await?
-    } else {
-        helpers::provision_acquired_request_with_initialization(&scope, REQUEST_ID, 'a', 'a')
-            .await?
-    };
-    let provisioned = &initialized.provisioned;
-    let retained_provisioned = initialized.provisioned.clone();
-    let runner = velnor_runner_github::RunnerReference {
-        id: 701,
-        name: helpers::runner_name('a'),
-        runner_scale_set_id: SET_ID,
-    };
-    if let Some(digest) = filesystem_instance_digest.as_deref() {
-        helpers::prepare_jit_and_job_facts_with_filesystem_digest(
-            &scope,
-            provisioned,
-            &runner,
-            REQUEST_ID,
-            digest,
-        )
-        .await?;
-    } else {
-        helpers::prepare_jit_and_job_facts(&scope, provisioned, &runner, REQUEST_ID).await?;
-    }
-    let channel = crate::worker::execution_authorization::test_channel_for_ready_job_facts(
-        crate::worker::execution_authorization::TestProofChannelIdentity {
-            reservation_id: initialized.reservation_id,
-            operation_id: initialized.intent_id,
-            connection_id: scope.connection_id().as_str().to_owned(),
-            scale_set_id: SET_ID,
-            witness_request_id: REQUEST_ID,
-            engine_id: helpers::TEST_ENGINE_ID.to_owned(),
-            docker_root_digest: initialized.docker_root_digest.clone(),
-            runner_id: runner.id,
-            runner_name: runner.name.clone(),
-            runner_container_id: initialized.runner_container_id.clone(),
-            dind_container_id: initialized.dind_container_id.clone(),
-            instance_binding_digest: initialized.instance_binding_digest.clone(),
-        },
-        &initialized.ready,
-    )?;
-    let config = crate::config::HostConfig::test_with_job_authority_policy(&binding)?;
-    scope.install_job_authority_policy(&config).await?;
-    helpers::publish_test_execution_challenge(&scope, &channel).await?;
-    helpers::finish_listener_delivery_after_challenge(&scope, provisioned, &runner).await?;
-    let source = helpers::event_source(REPOSITORY_ID, RUN_ID);
-    let database_path = scratch.file();
-
-    Ok(NativeStartedIntakeFixture {
-        _scratch: scratch,
-        journal,
-        database_path,
-        scope,
-        request_id: REQUEST_ID,
-        message_id: MESSAGE_ID,
-        intent_id: initialized.intent_id,
-        reservation_id: initialized.reservation_id,
-        provisioned: retained_provisioned,
-        assignment: initialized.assignment,
-        reservation_assignment: initialized.provisioned.assignment.clone(),
-        runner,
-        source,
-        channel,
-    })
-}
-
 #[tokio::test]
 async fn published_challenge_without_source_survives_journal_reopen()
 -> Result<(), crate::error::HostError> {
     let fixture = native_pre_challenge_fixture().await?;
     helpers::publish_test_execution_challenge(&fixture.scope, &fixture.channel).await?;
     let NativePreChallengeFixture {
-        _scratch,
+        _scratch: scratch_guard,
         journal,
         database_path,
         scope,
@@ -314,5 +219,6 @@ async fn published_challenge_without_source_survives_journal_reopen()
                 .is_none()
         );
     }
+    drop(scratch_guard);
     Ok(())
 }
