@@ -3,6 +3,9 @@ name: Job image candidate
 "on":
   push: {}
   workflow_dispatch: {}
+concurrency:
+  group: velnor-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 permissions:
   contents: read
 jobs:
@@ -13,7 +16,6 @@ jobs:
     permissions:
       contents: read
     outputs:
-      artifact_name: velnor-job-image-candidate-${{ github.run_attempt }}
       artifact_id: ${{ steps.upload.outputs.artifact-id }}
     steps:
       - name: Use the source commit selected by GitHub.

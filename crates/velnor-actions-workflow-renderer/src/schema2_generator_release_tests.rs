@@ -133,7 +133,7 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
     fs::write(scratch.0.join("published-release.json"), published_json)?;
     install_mock_gh(&scratch.0)?;
     let script = scratch.0.join("publish.sh");
-    fs::write(&script, manifest::publish_script(&test_pins())?)?;
+    fs::write(&script, manifest::publish_script(&test_pins()))?;
     let gh_function = super::workflow_steps::gh_function(&test_pins().gh_argv)?;
     let output = run_publish_command(&scratch.0, case, &script, &gh_function)?;
     assert_publish_result(&scratch.0, case, &output)?;

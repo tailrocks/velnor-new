@@ -67,10 +67,9 @@ fn assert_build_artifact_outputs(workflow: &str, build: &str) -> Result<(), Box<
         build_job.contains("outputs:\n      artifact_id:"),
         "{build_job}"
     );
-    assert!(build_job.contains("artifact_digest:"), "{build_job}");
+    assert!(!build_job.contains("artifact_digest:"), "{build_job}");
     assert!(build_job.contains("id: upload\n"), "{build_job}");
     assert!(build_job.contains("artifact-id"), "{build_job}");
-    assert!(build_job.contains("artifact-digest"), "{build_job}");
     Ok(())
 }
 
