@@ -1,0 +1,25 @@
+{
+  "status": "PASS",
+  "scope": "The isolated harness checks passed. The full root suite must run on the integrated source.",
+  "source_base": "84792fdb5f778730e2756cb75b18cecec50d1258",
+  "integrated_base": "4d44b00c26d2788408c173312a31c7ac9139ad4a",
+  "path": "scripts/test-capture-opentofu-goldens-bin.sh",
+  "sha256": "53f4c4ccdc5e5d356eb9a5eb2cee58a650ba321394a78b9363adfe41d3cb4ad0",
+  "cause": "The offline test used an empty private Cargo home. Its registry data was missing.",
+  "change": "The test copies only the registry index and archive cache. It does not copy Cargo configuration or credentials.",
+  "mise": "Mise reads no configuration. The test does not change the host trust database.",
+  "nextest": {
+    "status": "PASS",
+    "passed": 1,
+    "run_id": "0d81a6cd-aebc-4eb7-8a0e-97c13bb0596e",
+    "log_sha256": "8e978ff1f7e1ced63bac4baa8d8ca4f721ac025d2946c7b67ba490aafdae745d"
+  },
+  "syntax": {
+    "command": "bash -n scripts/test-capture-opentofu-goldens-bin.sh",
+    "exit_status": 0
+  },
+  "independent_review": {
+    "status": "PASS",
+    "sha256": "29d3e7f603702de78933b77f2f8e628d3130473a86e385e99b6f25ab06b5c159"
+  }
+}

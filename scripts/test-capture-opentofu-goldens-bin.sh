@@ -39,6 +39,7 @@ trap cleanup_work EXIT
 STUB_BIN="$WORK/stub bin"
 MARKER="$WORK/cargo-invoked"
 MISE_TRACE="$WORK/mise-release-fetches"
+SEED_TRACE="$WORK/cargo-cache-seeds"
 ORIGINAL_PATH="$PATH"
 REAL_MISE_BIN="$(command -v mise)"
 if [[ "$REAL_MISE_BIN" != /* || ! -f "$REAL_MISE_BIN" || ! -x "$REAL_MISE_BIN" ]]; then
@@ -46,6 +47,9 @@ if [[ "$REAL_MISE_BIN" != /* || ! -f "$REAL_MISE_BIN" || ! -x "$REAL_MISE_BIN" ]
   exit 2
 fi
 export VELNOR_TEST_REAL_MISE_BIN="$REAL_MISE_BIN"
+MISE_STATE_DIR="$WORK/mise-state"
+export MISE_STATE_DIR
+mkdir -p "$MISE_STATE_DIR"
 RUST_POLICY="$(awk -v key=rust -f "$ROOT/scripts/toml-tool-pin.awk" \
   "$ROOT/.velnor/version-policy.toml")"
 RUST_INSTALL_PATH="$(MISE_AUTO_INSTALL=false MISE_EXEC_AUTO_INSTALL=false \
@@ -81,6 +85,27 @@ case " $* " in
       "${VELNOR_TEST_PRIVATE_TMPDIR-}"/velnor-goldens-work.*/stage/dogfood/cargo-home) ;;
       *) echo "release cargo fetch did not use its private Cargo cache" >&2; exit 82 ;;
     esac
+    if [ "${CARGO_NET_OFFLINE-}" = true ]; then
+      case "${VELNOR_TEST_CARGO_CACHE_HOME-}" in
+        /*) ;;
+        *) echo "offline release cargo fetch has no absolute registry cache source" >&2; exit 84 ;;
+      esac
+      for part in index cache; do
+        if [ ! -d "$VELNOR_TEST_CARGO_CACHE_HOME/registry/$part" ]; then
+          echo "offline release cargo fetch registry $part source is missing" >&2
+          exit 85
+        fi
+        mkdir -p "$CARGO_HOME/registry"
+        if [ ! -e "$CARGO_HOME/registry/$part" ]; then
+          cp -RL "$VELNOR_TEST_CARGO_CACHE_HOME/registry/$part" "$CARGO_HOME/registry/$part"
+        fi
+      done
+      if [ -e "$CARGO_HOME/config" ] || [ -e "$CARGO_HOME/config.toml" ]; then
+        echo "offline release cargo cache unexpectedly copied Cargo configuration" >&2
+        exit 86
+      fi
+      printf '%s\t%s\n' "$CARGO_HOME" "$VELNOR_TEST_CARGO_CACHE_HOME" >>"$VELNOR_TEST_MISE_SEED_TRACE"
+    fi
     if [ "${RUSTUP_HOME-}" != "${VELNOR_TEST_CANONICAL_RUSTUP_HOME-}" ]; then
       echo "release cargo fetch did not use the canonical Rustup home" >&2
       exit 83
@@ -211,6 +236,8 @@ expect_release_check_match() {
     VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
     VELNOR_TEST_REAL_MISE_BIN="$REAL_MISE_BIN" VELNOR_TEST_MISE_TRACE="$MISE_TRACE" \
     VELNOR_TEST_PRIVATE_TMPDIR="$WORK/tmp workspace" \
+    VELNOR_TEST_CARGO_CACHE_HOME="$(cd "${CARGO_HOME:-$HOME/.cargo}" && pwd -P)" \
+    VELNOR_TEST_MISE_SEED_TRACE="$SEED_TRACE" \
     VELNOR_TEST_CANONICAL_RUSTUP_HOME="$CANONICAL_RUSTUP_HOME" \
     "$SCRIPT" check-release "$CLI_BIN" "$WORK/valid manifest.json" \
       "$(test_file_sha256 "$WORK/valid manifest.json")" >"$log" 2>&1 || status=$?
@@ -223,6 +250,18 @@ expect_release_check_match() {
   if [ "$(wc -l <"$MISE_TRACE" | tr -d ' ')" -ne 2 ]; then
     echo "FAIL: release qualification did not use guarded Mise for both lockfiles" >&2
     exit 1
+  fi
+  if [ "${CARGO_NET_OFFLINE-}" = true ]; then
+    local expected_cache_home
+    expected_cache_home="$(cd "${CARGO_HOME:-$HOME/.cargo}" && pwd -P)"
+    if [ "$(wc -l <"$SEED_TRACE" | tr -d ' ')" -ne 2 ] || \
+      ! awk -F '\t' -v prefix="$WORK/tmp workspace/velnor-goldens-work." \
+        -v source="$expected_cache_home" \
+        '$1 !~ ("^" prefix "[^/]+/stage/dogfood/cargo-home$") || $2 != source { bad=1 } END { exit bad }' \
+        "$SEED_TRACE"; then
+      echo "FAIL: offline release Cargo cache records do not match the two expected fetches." >&2
+      exit 1
+    fi
   fi
   after="$(rust_install_snapshot)" || exit 2
   if [ "$before" != "$after" ]; then
