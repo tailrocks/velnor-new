@@ -21,6 +21,7 @@ use velnor_actions_gradle::version::parse_java;
 use velnor_actions_gradle::wrapper::{self, JAR_PATH, PROPERTIES_PATH};
 
 use crate::OrchestratorError;
+use crate::config::deps_layout::{deps_root, maven_root};
 
 /// Operation tag of the step.
 pub const GRADLE_RUN_OP: &str = velnor_actions_contract::GRADLE_RUN_OPERATION;
@@ -166,7 +167,7 @@ pub(crate) fn run(
         (os("GRADLE_USER_HOME"), os(&gradle_home)),
         (
             os("VELNOR_MAVEN_ROOT"),
-            os(machine.runner_temp.join("velnor/deps/maven")),
+            os(maven_root(&deps_root(&machine.workspace))),
         ),
     ];
     if spec.database {

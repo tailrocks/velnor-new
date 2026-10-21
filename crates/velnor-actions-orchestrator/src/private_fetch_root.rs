@@ -3,11 +3,9 @@
 use std::path::{Path, PathBuf};
 
 use crate::OrchestratorError;
+use crate::config::deps_layout::deps_root;
 use crate::config::private_fetch_session::scrub_dir;
 use crate::internal::internal;
-
-/// Workspace-relative bundle root, identical for local and CI fetches.
-const DEPS_ROOT_RELPATH: &str = ".velnor/deps";
 
 /// Reset `<workspace>/.velnor/deps` to an absent real directory path.
 ///
@@ -28,7 +26,7 @@ pub(crate) fn prepare_deps_root(workspace: &Path) -> Result<PathBuf, Orchestrato
         Ok(_) => return Err(internal("private_deps_root_unsafe")),
         Err(err) => return Err(io(&velnor, err)),
     }
-    let deps = workspace.join(DEPS_ROOT_RELPATH);
+    let deps = deps_root(&workspace);
     match std::fs::symlink_metadata(&deps) {
         Ok(meta) if meta.is_dir() => scrub_dir(&deps)?,
         Ok(_) => std::fs::remove_file(&deps).map_err(|err| io(&deps, err))?,

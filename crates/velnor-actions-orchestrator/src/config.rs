@@ -15,6 +15,8 @@ use crate::config_stacks::PartialStacks;
 
 #[path = "bun_registry_install.rs"]
 pub(crate) mod bun_registry_install;
+#[path = "deps_layout.rs"]
+pub(crate) mod deps_layout;
 #[path = "deps_lock.rs"]
 pub(crate) mod deps_lock;
 #[path = "gradle_jobs.rs"]
