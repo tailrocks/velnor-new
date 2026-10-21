@@ -94,6 +94,8 @@ pub struct PublishPermissions {
     pub packages: PermissionLevel,
     /// Actions access (reading the artifacts of the push's CI run).
     pub actions: PermissionLevel,
+    /// Pull-request read access (`release-plz release` lists a commit's pull requests).
+    pub pull_requests: PermissionLevel,
 }
 
 impl PublishPermissions {
@@ -101,19 +103,19 @@ impl PublishPermissions {
     #[must_use]
     pub fn expected(role: PublishRole) -> Self {
         use PermissionLevel::{None, Read, Write};
-        let (contents, checks, id_token, attestations, packages, actions) = match role {
-            PublishRole::Authority | PublishRole::BranchAuthority => {
-                (Read, Read, None, None, None, None)
-            }
-            PublishRole::ArtifactBuild => (Read, None, None, None, None, None),
-            PublishRole::ArtifactAttest => (Read, None, Write, Write, None, None),
-            PublishRole::TagRelease | PublishRole::ArtifactPublish => {
-                (Write, None, None, None, None, None)
-            }
-            PublishRole::ImagePublish => (Read, None, Write, Write, Write, Read),
-            PublishRole::ImagePromote => (Read, None, None, Read, Write, None),
-            PublishRole::NpmPublish => (Read, None, None, None, Write, None),
-        };
+        let (contents, checks, id_token, attestations, packages, actions, pull_requests) =
+            match role {
+                PublishRole::Authority | PublishRole::BranchAuthority => {
+                    (Read, Read, None, None, None, None, None)
+                }
+                PublishRole::ArtifactBuild => (Read, None, None, None, None, None, None),
+                PublishRole::ArtifactAttest => (Read, None, Write, Write, None, None, None),
+                PublishRole::TagRelease => (Write, None, None, None, None, None, Read),
+                PublishRole::ArtifactPublish => (Write, None, None, None, None, None, None),
+                PublishRole::ImagePublish => (Read, None, Write, Write, Write, Read, None),
+                PublishRole::ImagePromote => (Read, None, None, Read, Write, None, None),
+                PublishRole::NpmPublish => (Read, None, None, None, Write, None, None),
+            };
         Self {
             contents,
             checks,
@@ -121,6 +123,7 @@ impl PublishPermissions {
             attestations,
             packages,
             actions,
+            pull_requests,
         }
     }
 }
