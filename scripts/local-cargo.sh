@@ -51,12 +51,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 
 read_rust_pin() {
-  awk -F '"' '
-    /^\[tools\]$/ { in_tools = 1; next }
-    /^\[/ { in_tools = 0 }
-    in_tools && /^[[:space:]]*rust[[:space:]]*=/ { print $2; found = 1; exit }
-    END { if (!found) exit 1 }
-  ' "$1"
+  awk -v key=rust -f "$SCRIPT_DIR/toml-tool-pin.awk" "$1"
 }
 
 LOCAL_RUST_PIN="$(read_rust_pin "$ROOT/mise.toml")" || LOCAL_RUST_PIN="<missing>"

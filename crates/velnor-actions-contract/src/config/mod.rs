@@ -42,6 +42,7 @@ mod runs_on;
 mod rust_inputs;
 mod rust_suites;
 mod rust_suites_validate;
+mod rust_toolchain_source;
 mod stacks;
 mod task_source;
 mod tofu;
@@ -141,6 +142,7 @@ pub use rust_suites::{
 pub use rust_suites_validate::{
     validate_preserve_workflows, validate_rust_suites, validate_suites_with_dispatch,
 };
+pub use rust_toolchain_source::RustToolchainSource;
 pub use stacks::{
     DeclaredCompileDriver, DeclaredTestRunner, MAX_CRATE_BUILD_JOBS, RustConfiguration,
     RustCrateConfig, RustStackConfig, StacksConfig, is_valid_feature_name, is_valid_rust_target,

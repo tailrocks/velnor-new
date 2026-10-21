@@ -156,7 +156,7 @@ fn catalog_tool(key: &str) -> Option<PinnedTool> {
 }
 
 /// Whether `rel` is a Mise config location (not a toolchain file).
-fn is_mise_config(rel: &str) -> bool {
+pub(crate) fn is_mise_config(rel: &str) -> bool {
     PROJECT_MISE_CONFIG_PATTERNS
         .iter()
         .any(|pattern| matches_source_pattern(pattern, rel))
