@@ -162,6 +162,7 @@ mod impl_tool_snapshot;
 mod impl_tools_identity_inputs;
 mod impl_trust;
 mod impl_trust_identity;
+mod impl_upgrades;
 mod impl_validators;
 mod impl_validators_repo;
 mod impl_validators_repo_b;

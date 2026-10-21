@@ -186,6 +186,7 @@ fn render_all(
     extra.extend(crate::binary_release_emit::files(prep)?);
     extra.extend(crate::binary_preview_emit::files(prep)?);
     extra.extend(crate::freshness_emit::freshness_files(prep)?);
+    extra.extend(crate::freshness_emit::upgrades::upgrades_files(prep)?);
     extra.extend(cache_cleanup_emit::files(prep)?);
     extra.extend(crate::owned_tool_publication::files(prep)?);
     extra.extend(crate::tofu_apply_emit::tofu_apply_files(prep)?);
