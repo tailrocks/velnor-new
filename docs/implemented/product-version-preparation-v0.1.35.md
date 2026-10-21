@@ -1,6 +1,9 @@
 # Product version preparation for v0.1.35
 
 This prepares workspace metadata for the native release policy request correction.
+It also carries the subsequent main-branch DBT Postgres adapter fix: the generator
+sets its experimental-adapter option from the indexed profile, without accepting
+that engine option through the project environment table.
 Jackin preview run 39534567581 built all six payloads and assembled its aggregate
 successfully, then signer job 119015736624 rejected its generated request with
 `package_signer_request_path_mismatch`. No replacement preview was published.
