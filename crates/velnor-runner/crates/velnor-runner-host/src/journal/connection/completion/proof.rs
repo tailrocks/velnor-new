@@ -1,11 +1,9 @@
 //! Completion cleanup proofs fenced to the owning connection and lease.
 
-use crate::error::HostError;
-use crate::journal::sql::token_rejected;
-
 use super::super::ConnectionJournal;
 use super::super::storage::in_transaction;
-use super::claim::{current_claim, unix_seconds};
+use super::claim::unix_seconds;
+use crate::error::HostError;
 
 #[path = "proof/settled.rs"]
 mod settled;
@@ -65,87 +63,6 @@ impl ConnectionJournal {
                 return Err(HostError::Journal);
             }
             Ok(Some(schedule))
-        })
-        .await
-    }
-
-    /// Bind verified local container IDs under a current cleanup lease.
-    pub(crate) async fn bind_completion_containers(
-        &self,
-        id: i64,
-        generation: i64,
-        runner_container_id: Option<&str>,
-        dind_id: Option<&str>,
-    ) -> Result<bool, HostError> {
-        self.bind_completion_containers_with(
-            id,
-            generation,
-            runner_container_id,
-            dind_id,
-            unix_seconds,
-        )
-        .await
-    }
-
-    #[cfg(test)]
-    pub(crate) async fn bind_completion_containers_at(
-        &self,
-        id: i64,
-        generation: i64,
-        runner_container_id: Option<&str>,
-        dind_id: Option<&str>,
-        now: i64,
-    ) -> Result<bool, HostError> {
-        self.bind_completion_containers_with(id, generation, runner_container_id, dind_id, || {
-            Ok(now)
-        })
-        .await
-    }
-
-    async fn bind_completion_containers_with(
-        &self,
-        id: i64,
-        generation: i64,
-        runner_container_id: Option<&str>,
-        dind_id: Option<&str>,
-        clock: impl FnOnce() -> Result<i64, HostError>,
-    ) -> Result<bool, HostError> {
-        if id <= 0
-            || generation <= 0
-            || runner_container_id.is_some_and(token_rejected)
-            || dind_id.is_some_and(token_rejected)
-        {
-            return Err(HostError::Journal);
-        }
-        in_transaction(&self.journal, async |connection| {
-            self.validate_scope(connection).await?;
-            let set_id = self.required_set_id(connection).await?;
-            let now = clock()?;
-            if now < 0
-                || !current_claim(
-                    connection,
-                    self.connection_id().as_str(),
-                    set_id,
-                    id,
-                    generation,
-                    now,
-                )
-                .await?
-            {
-                return Ok(false);
-            }
-            if runner_container_id.is_none() && dind_id.is_none() {
-                return Ok(true);
-            }
-            bind_ids(
-                connection,
-                self.connection_id().as_str(),
-                set_id,
-                id,
-                runner_container_id,
-                dind_id,
-            )
-            .await
         })
         .await
     }
@@ -285,40 +202,4 @@ impl ConnectionJournal {
         })
         .await
     }
-}
-
-async fn bind_ids(
-    connection: &turso::Connection,
-    connection_id: &str,
-    scale_set_id: i64,
-    id: i64,
-    runner_container_id: Option<&str>,
-    dind_id: Option<&str>,
-) -> Result<bool, HostError> {
-    let changed = connection
-        .execute(
-            "UPDATE connection_intents SET docker_id = COALESCE(docker_id, ?1), dind_id = COALESCE(dind_id, ?2) WHERE id = ?3 AND connection_id = ?4 AND scale_set_id = ?5 AND kind = 'launch' AND cleanup_proven = 0 AND (?1 IS NULL OR docker_id IS NULL OR docker_id = ?1) AND (?2 IS NULL OR dind_id IS NULL OR dind_id = ?2)",
-            (runner_container_id, dind_id, id, connection_id, scale_set_id),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    if changed == 1 {
-        return Ok(true);
-    }
-    let mut rows = connection
-        .query(
-            "SELECT docker_id, dind_id FROM connection_intents WHERE id = ?1 AND connection_id = ?2 AND scale_set_id = ?3",
-            (id, connection_id, scale_set_id),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
-        return Ok(false);
-    };
-    let stored_runner: Option<String> = row.get(0).map_err(|_| HostError::Journal)?;
-    let stored_dind: Option<String> = row.get(1).map_err(|_| HostError::Journal)?;
-    Ok(
-        runner_container_id.is_none_or(|value| stored_runner.as_deref() == Some(value))
-            && dind_id.is_none_or(|value| stored_dind.as_deref() == Some(value)),
-    )
 }
