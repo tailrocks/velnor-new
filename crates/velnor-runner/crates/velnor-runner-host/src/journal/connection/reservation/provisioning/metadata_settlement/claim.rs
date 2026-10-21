@@ -21,41 +21,15 @@ pub(super) async fn insert_claim(
         .await
         .map_err(|_| HostError::Journal)?
         .ok_or(HostError::Journal)?;
-    let operation_id = row.get::<i64>(0).map_err(|_| HostError::Journal)?;
-    let scale_set_id = row.get::<i64>(1).map_err(|_| HostError::Journal)?;
-    let held_engine = row.get::<String>(2).map_err(|_| HostError::Journal)?;
-    let held_root = row.get::<String>(3).map_err(|_| HostError::Journal)?;
-    let reservation_state = row.get::<String>(4).map_err(|_| HostError::Journal)?;
-    let remote_cleanup = row.get::<i64>(5).map_err(|_| HostError::Journal)?;
-    let local_cleanup = row.get::<i64>(6).map_err(|_| HostError::Journal)?;
-    let intent_kind = row.get::<String>(7).map_err(|_| HostError::Journal)?;
-    let profile_generation_id = row.get::<String>(8).map_err(|_| HostError::Journal)?;
-    let profile_digest = row.get::<String>(9).map_err(|_| HostError::Journal)?;
-    let profile_engine = row.get::<String>(10).map_err(|_| HostError::Journal)?;
-    let profile_root = row.get::<String>(11).map_err(|_| HostError::Journal)?;
-    let resources_bound = row.get::<i64>(12).map_err(|_| HostError::Journal)?;
-    let storage_cleanup = row.get::<i64>(13).map_err(|_| HostError::Journal)?;
-    let jit_state = row.get::<String>(14).map_err(|_| HostError::Journal)?;
-    let binding_digest = row.get::<String>(15).map_err(|_| HostError::Journal)?;
-    let cleanup_binding_digest = row.get::<String>(16).map_err(|_| HostError::Journal)?;
-    let current_profile_generation = row.get::<String>(17).map_err(|_| HostError::Journal)?;
-    if rows.next().await.map_err(|_| HostError::Journal)?.is_some()
-        || reservation_state == "released"
-        || remote_cleanup != 1
-        || local_cleanup != 1
-        || intent_kind != "launch"
-        || resources_bound != 1
-        || storage_cleanup != 1
-        || !matches!(jit_state.as_str(), "not_requested" | "cleaned")
-        || binding_digest != cleanup_binding_digest
-        || current_profile_generation != profile_generation_id
-        || profile_engine != held_engine
-        || profile_root != held_root
-        || seed.engine_id != held_engine
-        || seed.docker_root_digest != held_root
-    {
-        return Err(HostError::Journal);
-    }
+    let (
+        operation_id,
+        scale_set_id,
+        held_engine,
+        held_root,
+        profile_generation_id,
+        profile_digest,
+        binding_digest,
+    ) = decode_claimable_reservation(&mut rows, &row, seed).await?;
     let profile = super::super::storage_budget::current_profile(connection)
         .await?
         .ok_or(HostError::Journal)?;
@@ -64,6 +38,36 @@ pub(super) async fn insert_claim(
     {
         return Err(HostError::Identity);
     }
+    let generation = next_settlement_generation(connection, reservation_id).await?;
+    let claim = StorageMetadataSettlementClaim {
+        connection_id,
+        reservation_id,
+        generation,
+        operation_id,
+        scale_set_id,
+        instance_id,
+        probe_operation_id: seed.operation_id.clone(),
+        profile_generation_id,
+        profile_digest,
+        engine_id: held_engine,
+        docker_root_digest: held_root,
+        instance_binding_digest: binding_digest,
+        claimed_at: Instant::now(),
+    };
+    connection
+        .execute(
+            "INSERT INTO capacity_reservation_metadata_settlement_claims (reservation_id, generation, operation_id, connection_id, scale_set_id, instance_id, probe_operation_id, profile_generation_id, profile_digest, engine_id, docker_root_digest, instance_binding_digest) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            (claim.reservation_id, claim.generation, claim.operation_id, claim.connection_id.as_str(), claim.scale_set_id, claim.instance_id.as_str(), claim.probe_operation_id.as_str(), claim.profile_generation_id.as_str(), claim.profile_digest.as_str(), claim.engine_id.as_str(), claim.docker_root_digest.as_str(), claim.instance_binding_digest.as_str()),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(claim)
+}
+
+async fn next_settlement_generation(
+    connection: &turso::Connection,
+    reservation_id: i64,
+) -> Result<i64, HostError> {
     let mut prior = connection
         .query(
             "SELECT COUNT(*), COALESCE(MAX(generation), 0) FROM capacity_reservation_metadata_settlement_claims WHERE reservation_id = ?1",
@@ -103,27 +107,58 @@ pub(super) async fn insert_claim(
     {
         return Err(HostError::Journal);
     }
-    let claim = StorageMetadataSettlementClaim {
-        connection_id,
-        reservation_id,
-        generation,
+    Ok(generation)
+}
+
+type ClaimableReservationRow = (i64, i64, String, String, String, String, String);
+
+async fn decode_claimable_reservation(
+    rows: &mut turso::Rows,
+    row: &turso::Row,
+    seed: &ProbeSeed,
+) -> Result<ClaimableReservationRow, HostError> {
+    let operation_id = row.get::<i64>(0).map_err(|_| HostError::Journal)?;
+    let scale_set_id = row.get::<i64>(1).map_err(|_| HostError::Journal)?;
+    let held_engine = row.get::<String>(2).map_err(|_| HostError::Journal)?;
+    let held_root = row.get::<String>(3).map_err(|_| HostError::Journal)?;
+    let reservation_state = row.get::<String>(4).map_err(|_| HostError::Journal)?;
+    let remote_cleanup = row.get::<i64>(5).map_err(|_| HostError::Journal)?;
+    let local_cleanup = row.get::<i64>(6).map_err(|_| HostError::Journal)?;
+    let intent_kind = row.get::<String>(7).map_err(|_| HostError::Journal)?;
+    let profile_generation_id = row.get::<String>(8).map_err(|_| HostError::Journal)?;
+    let profile_digest = row.get::<String>(9).map_err(|_| HostError::Journal)?;
+    let profile_engine = row.get::<String>(10).map_err(|_| HostError::Journal)?;
+    let profile_root = row.get::<String>(11).map_err(|_| HostError::Journal)?;
+    let resources_bound = row.get::<i64>(12).map_err(|_| HostError::Journal)?;
+    let storage_cleanup = row.get::<i64>(13).map_err(|_| HostError::Journal)?;
+    let jit_state = row.get::<String>(14).map_err(|_| HostError::Journal)?;
+    let binding_digest = row.get::<String>(15).map_err(|_| HostError::Journal)?;
+    let cleanup_binding_digest = row.get::<String>(16).map_err(|_| HostError::Journal)?;
+    let current_profile_generation = row.get::<String>(17).map_err(|_| HostError::Journal)?;
+    if rows.next().await.map_err(|_| HostError::Journal)?.is_some()
+        || reservation_state == "released"
+        || remote_cleanup != 1
+        || local_cleanup != 1
+        || intent_kind != "launch"
+        || resources_bound != 1
+        || storage_cleanup != 1
+        || !matches!(jit_state.as_str(), "not_requested" | "cleaned")
+        || binding_digest != cleanup_binding_digest
+        || current_profile_generation != profile_generation_id
+        || profile_engine != held_engine
+        || profile_root != held_root
+        || seed.engine_id != held_engine
+        || seed.docker_root_digest != held_root
+    {
+        return Err(HostError::Journal);
+    }
+    Ok((
         operation_id,
         scale_set_id,
-        instance_id,
-        probe_operation_id: seed.operation_id.clone(),
+        held_engine,
+        held_root,
         profile_generation_id,
         profile_digest,
-        engine_id: held_engine,
-        docker_root_digest: held_root,
-        instance_binding_digest: binding_digest,
-        claimed_at: Instant::now(),
-    };
-    connection
-        .execute(
-            "INSERT INTO capacity_reservation_metadata_settlement_claims (reservation_id, generation, operation_id, connection_id, scale_set_id, instance_id, probe_operation_id, profile_generation_id, profile_digest, engine_id, docker_root_digest, instance_binding_digest) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-            (claim.reservation_id, claim.generation, claim.operation_id, claim.connection_id.as_str(), claim.scale_set_id, claim.instance_id.as_str(), claim.probe_operation_id.as_str(), claim.profile_generation_id.as_str(), claim.profile_digest.as_str(), claim.engine_id.as_str(), claim.docker_root_digest.as_str(), claim.instance_binding_digest.as_str()),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    Ok(claim)
+        binding_digest,
+    ))
 }

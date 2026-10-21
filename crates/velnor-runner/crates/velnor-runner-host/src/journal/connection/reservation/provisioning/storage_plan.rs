@@ -1,5 +1,7 @@
 //! Storage role charges from one journal capacity reservation.
 
+use std::collections::BTreeMap;
+
 use crate::error::HostError;
 
 use super::super::storage_budget::{
@@ -152,35 +154,7 @@ pub(super) async fn load(
         .map_err(|_| HostError::Journal)?;
     let mut roles = Vec::with_capacity(EXPECTED_ROLE_COUNT);
     while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
-        let role = StorageRole::parse(&row.get::<String>(0).map_err(|_| HostError::Journal)?)?;
-        if !StorageRole::PHYSICAL.contains(&role) {
-            return Err(HostError::Journal);
-        }
-        let pool_id: String = row.get(1).map_err(|_| HostError::Journal)?;
-        let medium = StorageMedium::parse(&row.get::<String>(2).map_err(|_| HostError::Journal)?)?;
-        let filesystem_kind =
-            StorageFilesystemKind::parse(&row.get::<String>(3).map_err(|_| HostError::Journal)?)?;
-        let inode_policy =
-            StorageInodePolicy::parse(&row.get::<String>(4).map_err(|_| HostError::Journal)?)?;
-        let planned_filesystem_instance_digest: Option<String> =
-            row.get(5).map_err(|_| HostError::Journal)?;
-        let charge_bytes = positive_u64(row.get(6).map_err(|_| HostError::Journal)?)?;
-        let charge_inodes = positive_u64(row.get(7).map_err(|_| HostError::Journal)?)?;
-        let retained_memory_bytes = nonnegative_u64(row.get(8).map_err(|_| HostError::Journal)?)?;
-        let charge = StorageProvisioningRole {
-            role,
-            pool_id: pool_id.clone(),
-            medium,
-            filesystem_kind,
-            inode_policy,
-            planned_filesystem_instance_digest,
-            charge_bytes,
-            charge_inodes,
-            retained_memory_bytes,
-        };
-        let pool = pools.get(&pool_id).ok_or(HostError::Journal)?;
-        validate_role(&profile, &charge, pool)?;
-        roles.push(charge);
+        roles.push(decode_and_validate_role(&row, &profile, &pools)?);
     }
     roles.sort_unstable_by_key(StorageProvisioningRole::role);
     let mut expected_roles = StorageRole::PHYSICAL;
@@ -204,6 +178,42 @@ pub(super) async fn load(
         sample_generation_id: context.sample_generation_id.clone(),
         roles,
     })
+}
+
+fn decode_and_validate_role(
+    row: &turso::Row,
+    profile: &super::super::storage_budget::StorageProfile,
+    pools: &BTreeMap<String, validation::PoolRow>,
+) -> Result<StorageProvisioningRole, HostError> {
+    let role = StorageRole::parse(&row.get::<String>(0).map_err(|_| HostError::Journal)?)?;
+    if !StorageRole::PHYSICAL.contains(&role) {
+        return Err(HostError::Journal);
+    }
+    let pool_id: String = row.get(1).map_err(|_| HostError::Journal)?;
+    let medium = StorageMedium::parse(&row.get::<String>(2).map_err(|_| HostError::Journal)?)?;
+    let filesystem_kind =
+        StorageFilesystemKind::parse(&row.get::<String>(3).map_err(|_| HostError::Journal)?)?;
+    let inode_policy =
+        StorageInodePolicy::parse(&row.get::<String>(4).map_err(|_| HostError::Journal)?)?;
+    let planned_filesystem_instance_digest: Option<String> =
+        row.get(5).map_err(|_| HostError::Journal)?;
+    let charge_bytes = positive_u64(row.get(6).map_err(|_| HostError::Journal)?)?;
+    let charge_inodes = positive_u64(row.get(7).map_err(|_| HostError::Journal)?)?;
+    let retained_memory_bytes = nonnegative_u64(row.get(8).map_err(|_| HostError::Journal)?)?;
+    let charge = StorageProvisioningRole {
+        role,
+        pool_id: pool_id.clone(),
+        medium,
+        filesystem_kind,
+        inode_policy,
+        planned_filesystem_instance_digest,
+        charge_bytes,
+        charge_inodes,
+        retained_memory_bytes,
+    };
+    let pool = pools.get(&pool_id).ok_or(HostError::Journal)?;
+    validate_role(profile, &charge, pool)?;
+    Ok(charge)
 }
 
 async fn validate_reservation_identity(
