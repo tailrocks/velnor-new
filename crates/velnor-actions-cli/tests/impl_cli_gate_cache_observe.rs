@@ -1,37 +1,32 @@
-//! CLI gate coverage for cache-backend observation.
+//! CLI gate coverage for qualification-cache observations.
 
 use std::error::Error;
 
 use crate::impl_cli_gate::assert_identical;
 use crate::impl_cli_tmp::{cleanup, code, fresh_tempdir, spawn_isolated};
 
+const RUNTIME_OP: &str = "observe-qualification-cache-runtime-v1";
+const RETIRED_BACKEND_OP: &str = "observe-qualification-cache-backend-v1";
+
 #[test]
-fn cache_observation_requires_runner_temp_and_both_run_coordinates() -> Result<(), Box<dyn Error>> {
+fn cache_runtime_observation_requires_runner_temp_and_both_run_coordinates()
+-> Result<(), Box<dyn Error>> {
     let temp = fresh_tempdir("gate-cache-observe")?;
     let bare = spawn_isolated(&[], &[], &temp)?;
 
     for vars in [
         vec![
-            (
-                "VELNOR_INTERNAL_OP",
-                "observe-qualification-cache-backend-v1",
-            ),
+            ("VELNOR_INTERNAL_OP", RUNTIME_OP),
             ("GITHUB_RUN_ID", "700"),
             ("GITHUB_RUN_ATTEMPT", "1"),
         ],
         vec![
-            (
-                "VELNOR_INTERNAL_OP",
-                "observe-qualification-cache-backend-v1",
-            ),
+            ("VELNOR_INTERNAL_OP", RUNTIME_OP),
             ("RUNNER_TEMP", temp.to_str().unwrap_or("/")),
             ("GITHUB_RUN_ATTEMPT", "1"),
         ],
         vec![
-            (
-                "VELNOR_INTERNAL_OP",
-                "observe-qualification-cache-backend-v1",
-            ),
+            ("VELNOR_INTERNAL_OP", RUNTIME_OP),
             ("RUNNER_TEMP", temp.to_str().unwrap_or("/")),
             ("GITHUB_RUN_ID", "700"),
         ],
@@ -43,10 +38,7 @@ fn cache_observation_requires_runner_temp_and_both_run_coordinates() -> Result<(
     let internal = spawn_isolated(
         &[],
         &[
-            (
-                "VELNOR_INTERNAL_OP",
-                "observe-qualification-cache-backend-v1",
-            ),
+            ("VELNOR_INTERNAL_OP", RUNTIME_OP),
             ("RUNNER_TEMP", temp.to_str().unwrap_or("/")),
             ("GITHUB_RUN_ID", "700"),
             ("GITHUB_RUN_ATTEMPT", "1"),
@@ -61,7 +53,19 @@ fn cache_observation_requires_runner_temp_and_both_run_coordinates() -> Result<(
     assert_eq!(internal.stdout, [] as [u8; 0]);
     let stderr = String::from_utf8_lossy(&internal.stderr);
     assert!(stderr.contains("missing_github_event_name"), "{stderr}");
-    assert!(!stderr.contains("observe-qualification-cache-backend-v1"));
+
+    let retired = spawn_isolated(
+        &[],
+        &[
+            ("VELNOR_INTERNAL_OP", RETIRED_BACKEND_OP),
+            ("RUNNER_TEMP", temp.to_str().unwrap_or("/")),
+            ("GITHUB_RUN_ID", "700"),
+            ("GITHUB_RUN_ATTEMPT", "1"),
+        ],
+        &temp,
+    )?;
+    assert_eq!(code(&retired), 2);
+    assert_identical(&bare, &retired);
     cleanup(&temp);
     Ok(())
 }
