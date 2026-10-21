@@ -11,11 +11,20 @@ The formatter uses `--all` for each selected Cargo manifest.
 The formatter includes the packages that the root Cargo manifest lists.
 `crates/velnor-runner` uses its own Cargo manifest.
 The steps exclude test fixtures and generated golden files.
-The commit stops if a tool changes a file.
-The changed content stays outside the Git index.
-Review these changes before you add them to the Git index.
-The hook does not keep a separate copy of unstaged changes.
-Cargo fix commands can change unstaged Rust files in the selected package.
+### Check Git state after hook fixes
+
+The Cargo formatter and Clippy fix commands run through
+`scripts/hk-fix-write-guard.sh`.
+The script runs each command with its selected Cargo manifest and arguments.
+It checks the Git index and file state before and after each command.
+It checks tracked files and untracked files that Git does not ignore.
+If this state changes after a successful command, the script returns a failure.
+This check includes files outside hk's selected input set.
+
+Existing staged, unstaged, and untracked changes can remain if the command does not change their content or index entries.
+The state check does not print file content or a diff.
+It does not add changes to the Git index.
+If a Cargo command fails, the script returns the same exit status.
 Keep the full verification procedure below.
 
 ## Full verification
