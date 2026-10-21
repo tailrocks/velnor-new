@@ -71,29 +71,6 @@ struct PhysicalCoverage {
     has_unattributed_runner: bool,
 }
 
-/// Compare assigned demand with all saved reservations and `AcquireJobs` results.
-///
-/// The caller checks that the session is current. The caller sets the capacity header. The caller uses the resource permit.
-/// This function does not call `AcquireJobs`. It does not create a reservation.
-pub(crate) fn plan_assigned_population(
-    assigned_total: i64,
-    connection_id: &ConnectionId,
-    scale_set_id: i64,
-    reservations: &[PhysicalRunnerReservation],
-    acquired: &[AssignmentIdentity],
-    recovery_candidates: &[AcquiredRecoveryCandidate],
-) -> AssignedPopulationPlan {
-    plan_assigned_population_with_successors(
-        assigned_total,
-        connection_id,
-        scale_set_id,
-        reservations,
-        acquired,
-        recovery_candidates,
-        &[],
-    )
-}
-
 pub(crate) fn plan_assigned_population_with_successors(
     assigned_total: i64,
     connection_id: &ConnectionId,

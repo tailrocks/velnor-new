@@ -1,5 +1,5 @@
 use crate::error::HostError;
-use crate::host_controller::{AssignedPopulationAction, plan_assigned_population};
+use crate::host_controller::{AssignedPopulationAction, plan_assigned_population_with_successors};
 use crate::journal::{
     AssignedAcquireResult, AssignmentKey, CapacityLimits, Journal, SourceAuthorizationResult,
 };
@@ -15,25 +15,27 @@ async fn acquired_population_uses_exact_journal_candidate_and_bounds_start_to_sh
     let acquired = fixture.scope.acquired_authorized_requests(64).await?;
     let candidates = [fixture.candidate];
 
-    let one_job = plan_assigned_population(
+    let one_job = plan_assigned_population_with_successors(
         1,
         fixture.scope.connection_id(),
         fixture.set_id,
         &reservations,
         &acquired,
         &candidates,
+        &[],
     );
     assert_eq!(one_job.uncovered, 0, "{one_job:#?} {reservations:#?}");
     assert_eq!(one_job.actions.len(), 1);
     assert_eq!(one_job.blocked, None);
 
-    let plan = plan_assigned_population(
+    let plan = plan_assigned_population_with_successors(
         10,
         fixture.scope.connection_id(),
         fixture.set_id,
         &reservations,
         &acquired,
         &candidates,
+        &[],
     );
     assert_eq!(plan.owned_coverage, 0);
     assert_eq!(plan.uncovered, 9);
@@ -47,13 +49,14 @@ async fn acquired_population_uses_exact_journal_candidate_and_bounds_start_to_sh
         }]
     );
 
-    let no_demand = plan_assigned_population(
+    let no_demand = plan_assigned_population_with_successors(
         0,
         fixture.scope.connection_id(),
         fixture.set_id,
         &reservations,
         &acquired,
         &candidates,
+        &[],
     );
     assert!(no_demand.actions.is_empty());
     assert_eq!(no_demand.uncovered, 0);
@@ -138,12 +141,13 @@ async fn actual_started_request_can_differ_from_the_acquire_witness() -> Result<
     ));
 
     let acquired = scope.acquired_authorized_requests(64).await?;
-    let plan = plan_assigned_population(
+    let plan = plan_assigned_population_with_successors(
         1,
         scope.connection_id(),
         SET_ID,
         &reservations,
         &acquired,
+        &[],
         &[],
     );
     assert_eq!(plan.owned_coverage, 1);

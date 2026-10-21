@@ -5,8 +5,7 @@ use crate::journal::{
 };
 
 use super::{
-    AssignedPopulationAction, AssignedPopulationBlock, plan_assigned_population,
-    plan_assigned_population_with_successors,
+    AssignedPopulationAction, AssignedPopulationBlock, plan_assigned_population_with_successors,
 };
 
 fn request(request_id: i64) -> AssignmentIdentity {
@@ -95,7 +94,15 @@ fn assigned_total_does_not_create_physical_authority_for_an_unbound_request() {
         PhysicalRunnerJitState::Started,
         Some(runner(201)),
     )];
-    let plan = plan_assigned_population(12, &connection(), 17, &rows, &[request(102)], &[]);
+    let plan = plan_assigned_population_with_successors(
+        12,
+        &connection(),
+        17,
+        &rows,
+        &[request(102)],
+        &[],
+        &[],
+    );
     assert_eq!(plan.assigned_total, 12);
     assert_eq!(plan.owned_coverage, 1);
     assert_eq!(plan.actions, []);
@@ -115,7 +122,15 @@ fn pre_jit_row_without_validated_candidate_does_not_start() {
     row.intent_state = Some(IntentState::Pending);
     row.launch_phase = Some(crate::reconcile::LaunchPhase::ProvisioningHeld);
     row.acquired_request = Some(request(104));
-    let plan = plan_assigned_population(1, &connection(), 17, &[row], &[request(104)], &[]);
+    let plan = plan_assigned_population_with_successors(
+        1,
+        &connection(),
+        17,
+        &[row],
+        &[request(104)],
+        &[],
+        &[],
+    );
     assert_eq!(plan.owned_coverage, 0);
     assert_eq!(plan.actions, []);
     assert_eq!(plan.blocked, None);
@@ -128,7 +143,15 @@ fn truncated_source_population_preserves_uncovered_demand() {
     row.intent_state = Some(IntentState::Pending);
     row.launch_phase = Some(crate::reconcile::LaunchPhase::ProvisioningHeld);
     row.acquired_request = Some(request(114));
-    let plan = plan_assigned_population(10, &connection(), 17, &[row], &[request(114)], &[]);
+    let plan = plan_assigned_population_with_successors(
+        10,
+        &connection(),
+        17,
+        &[row],
+        &[request(114)],
+        &[],
+        &[],
+    );
     assert_eq!(plan.owned_coverage, 0);
     assert_eq!(plan.actions, []);
     assert_eq!(plan.uncovered, 10);
@@ -143,7 +166,8 @@ fn assigned_count_gap_without_exact_ids_keeps_polling_open() {
         PhysicalRunnerJitState::Started,
         Some(runner(215)),
     )];
-    let plan = plan_assigned_population(10, &connection(), 17, &rows, &[], &[]);
+    let plan =
+        plan_assigned_population_with_successors(10, &connection(), 17, &rows, &[], &[], &[]);
     assert_eq!(plan.owned_coverage, 1);
     assert_eq!(plan.actions, []);
     assert_eq!(plan.uncovered, 9);
@@ -160,7 +184,15 @@ fn remote_runner_row_joins_to_its_exact_request_witness_without_starting_another
     );
     row.runner_request_id = Some(108);
     row.started_request_id = Some(108);
-    let plan = plan_assigned_population(2, &connection(), 17, &[row.clone()], &[request(109)], &[]);
+    let plan = plan_assigned_population_with_successors(
+        2,
+        &connection(),
+        17,
+        &[row.clone()],
+        &[request(109)],
+        &[],
+        &[],
+    );
     assert_eq!(plan.owned_coverage, 1);
     assert_eq!(plan.actions, []);
     assert_eq!(plan.uncovered, 1);
@@ -180,7 +212,15 @@ fn actual_started_request_can_differ_from_the_acquire_witness() {
     row.runner_request_id = Some(110);
     row.started_request_id = Some(110);
     row.acquired_request = Some(request(109));
-    let plan = plan_assigned_population(2, &connection(), 17, &[row.clone()], &[request(109)], &[]);
+    let plan = plan_assigned_population_with_successors(
+        2,
+        &connection(),
+        17,
+        &[row.clone()],
+        &[request(109)],
+        &[],
+        &[],
+    );
     assert_eq!(plan.actions, []);
     assert_eq!(plan.owned_coverage, 1);
     assert_eq!(plan.uncovered, 1);
@@ -188,12 +228,13 @@ fn actual_started_request_can_differ_from_the_acquire_witness() {
 
     let mut conflicting_funding_link = row.clone();
     conflicting_funding_link.acquired_request = Some(request(111));
-    let plan = plan_assigned_population(
+    let plan = plan_assigned_population_with_successors(
         2,
         &connection(),
         17,
         &[conflicting_funding_link],
         &[request(109)],
+        &[],
         &[],
     );
     assert_eq!(
@@ -203,12 +244,13 @@ fn actual_started_request_can_differ_from_the_acquire_witness() {
 
     let mut conflicting_actual_events = row.clone();
     conflicting_actual_events.completed_request_id = Some(112);
-    let plan = plan_assigned_population(
+    let plan = plan_assigned_population_with_successors(
         2,
         &connection(),
         17,
         &[conflicting_actual_events],
         &[request(109)],
+        &[],
         &[],
     );
     assert_eq!(
@@ -218,12 +260,13 @@ fn actual_started_request_can_differ_from_the_acquire_witness() {
 
     let mut conflicting_intent_event = row;
     conflicting_intent_event.runner_request_id = Some(113);
-    let plan = plan_assigned_population(
+    let plan = plan_assigned_population_with_successors(
         2,
         &connection(),
         17,
         &[conflicting_intent_event],
         &[request(109)],
+        &[],
         &[],
     );
     assert_eq!(
@@ -287,7 +330,15 @@ fn uncertain_ownership_closes_population_start() {
         PhysicalRunnerJitState::Ready,
         Some(runner(205)),
     );
-    let plan = plan_assigned_population(2, &connection(), 17, &[row], &[request(105)], &[]);
+    let plan = plan_assigned_population_with_successors(
+        2,
+        &connection(),
+        17,
+        &[row],
+        &[request(105)],
+        &[],
+        &[],
+    );
     assert_eq!(plan.actions, []);
     assert_eq!(
         plan.blocked,
@@ -311,7 +362,7 @@ fn duplicate_runner_identity_counts_once_and_lower_total_does_not_release_it() {
             Some(runner(206)),
         ),
     ];
-    let plan = plan_assigned_population(1, &connection(), 17, &rows, &[], &[]);
+    let plan = plan_assigned_population_with_successors(1, &connection(), 17, &rows, &[], &[], &[]);
     assert_eq!(plan.owned_coverage, 1);
     assert_eq!(plan.actions, []);
     assert_eq!(plan.blocked, None);
@@ -319,7 +370,15 @@ fn duplicate_runner_identity_counts_once_and_lower_total_does_not_release_it() {
 
 #[test]
 fn negative_population_never_becomes_an_unsigned_count() {
-    let plan = plan_assigned_population(-1, &connection(), 17, &[], &[request(109)], &[]);
+    let plan = plan_assigned_population_with_successors(
+        -1,
+        &connection(),
+        17,
+        &[],
+        &[request(109)],
+        &[],
+        &[],
+    );
     assert_eq!(plan.assigned_total, 0);
     assert_eq!(plan.uncovered, 0);
     assert_eq!(plan.blocked, Some(AssignedPopulationBlock::InvalidCount));
