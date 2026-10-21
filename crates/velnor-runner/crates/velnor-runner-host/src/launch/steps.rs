@@ -20,7 +20,6 @@ use super::{Drive, Lane};
 pub(super) use offer_authorization::authorize_offer;
 #[cfg(test)]
 pub(super) use offer_authorization::authorize_offer_with_transport;
-pub(super) use source_authorization::authorize_poll_rest;
 use source_authorization::source_blocked;
 
 #[cfg(test)]

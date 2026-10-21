@@ -29,8 +29,6 @@ pub(crate) mod scoped_runtime;
 pub(crate) use admission_gate::lock_connection;
 pub(in crate::launch) use completion::remove_owned_resources_for_retirement;
 #[cfg(test)]
-pub(crate) use drive::acquire_scoped_offer;
-#[cfg(test)]
 pub(crate) use drive::authorize_positive_offer_with;
 #[cfg(test)]
 pub(crate) use drive::recover_acquired_scoped_offer_with_test_observation;

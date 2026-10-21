@@ -117,9 +117,6 @@ impl Rest<'_> {
 pub(crate) enum GuestAdmission {
     /// No supported guest probe is available, so new work stays unacquired.
     Unavailable,
-    /// A current selected-guest sample permits this attempt to proceed.
-    #[cfg(test)]
-    FreshSample,
 }
 
 impl fmt::Debug for Drive {
@@ -199,13 +196,6 @@ pub(crate) struct ScopedAdmissionInput<'a> {
     pub(crate) admission_state: &'a Path,
 }
 
-/// Authorize one available request, obtain a fresh permit, then acquire it.
-pub(crate) async fn acquire_scoped_offer(
-    input: ScopedAdmissionInput<'_>,
-) -> Result<super::steps::ScopedProvisioningOutcome, EnsureError> {
-    acquire_scoped_offer_inner(input, None).await
-}
-
 /// Acquire an offer using its exact journal-backed source authorization.
 pub(crate) async fn acquire_authorized_scoped_offer(
     input: ScopedAdmissionInput<'_>,
@@ -219,12 +209,12 @@ pub(crate) async fn acquire_authorized_scoped_offer(
         return Err(EnsureError::Uncertain);
     }
     let offer = authorized.offer();
-    acquire_scoped_offer_inner(input, Some(offer)).await
+    acquire_scoped_offer_inner(input, offer).await
 }
 
 async fn acquire_scoped_offer_inner(
     mut input: ScopedAdmissionInput<'_>,
-    authorized: Option<&crate::journal::AuthorizedOffer>,
+    authorized: &crate::journal::AuthorizedOffer,
 ) -> Result<super::steps::ScopedProvisioningOutcome, EnsureError> {
     if input.allocated_header == 0 {
         return Err(EnsureError::AdmissionClosed);
@@ -247,30 +237,26 @@ async fn acquire_scoped_offer_inner(
         release_read_secret: Some(input.release_read_secret),
         scoped_journal: Some(input.scoped_journal),
         allocated_header: input.allocated_header,
-        source_authorized: authorized.is_some(),
+        source_authorized: true,
         admission_state: Some(input.admission_state),
         worker_images: Some(input.worker_images),
         selected_engine: Some(input.selected_engine),
         guest_image: Some(input.guest_image),
     };
-    if let Some(offer) = authorized {
-        let (_batch, request_id) =
-            super::steps::assignment(input.polled)?.ok_or(EnsureError::Uncertain)?;
-        let binding = input
-            .scoped_journal
-            .source_authorization_binding()
-            .await
-            .map_err(|_| EnsureError::Uncertain)?;
-        if offer.connection_id() != input.scoped_journal.connection_id()
-            || offer.connection_id() != &input.connection.connection_id
-            || offer.scale_set_id() != input.set_id
-            || offer.request_id() != request_id
-            || offer.binding_digest() != binding.binding_digest()
-        {
-            return Err(EnsureError::Uncertain);
-        }
-    } else {
-        super::steps::authorize_poll_rest(&rest, input.polled).await?;
+    let (_batch, request_id) =
+        super::steps::assignment(input.polled)?.ok_or(EnsureError::Uncertain)?;
+    let binding = input
+        .scoped_journal
+        .source_authorization_binding()
+        .await
+        .map_err(|_| EnsureError::Uncertain)?;
+    if authorized.connection_id() != input.scoped_journal.connection_id()
+        || authorized.connection_id() != &input.connection.connection_id
+        || authorized.scale_set_id() != input.set_id
+        || authorized.request_id() != request_id
+        || authorized.binding_digest() != binding.binding_digest()
+    {
+        return Err(EnsureError::Uncertain);
     }
 
     let Some(permit) = super::resource_probe::start_permit(

@@ -25,6 +25,10 @@ pub(super) struct PositiveOfferInputs<'a, 'context> {
     pub(super) allocated_header: u32,
 }
 
+#[cfg(test)]
+#[path = "positive_offer/tests.rs"]
+mod tests;
+
 pub(super) async fn admit_positive_offer(
     input: &PositiveOfferInputs<'_, '_>,
     link: &mut Link,
