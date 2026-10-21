@@ -35,6 +35,8 @@ pub(crate) mod private_fetch;
 pub(crate) mod private_fetch_root;
 #[path = "private_fetch_session.rs"]
 pub(crate) mod private_fetch_session;
+#[path = "private_fetch_verified.rs"]
+pub(crate) mod private_fetch_verified;
 #[path = "private_revoke.rs"]
 pub(crate) mod private_revoke;
 #[path = "private_sources.rs"]

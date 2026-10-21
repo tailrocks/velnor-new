@@ -26,6 +26,7 @@ use crate::config::deps_lock::{FoundAsset, parse_commit, parse_release_asset, re
 use crate::config::load_config;
 use crate::config::private_fetch_root::prepare_deps_root;
 use crate::config::private_fetch_session::{Session, Token, scrub_dir};
+use crate::config::private_fetch_verified::{Verified, VerifiedSource};
 use crate::config::private_sources::{SourceKind, job_allowlist};
 use crate::discover::workspace_manifest;
 use crate::internal::internal;
@@ -205,13 +206,17 @@ fn fetch_all(
         return Ok(summary);
     };
     let mut budget = ArchiveBudget::new();
-    let mut assets: Vec<(&LockedAsset, PathBuf)> = Vec::new();
+    let mut verified = Vec::new();
+    let mut assets: Vec<(SourceKind, &LockedAsset, PathBuf, String)> = Vec::new();
     if request.kinds.contains(&SourceKind::MavenBundles) {
-        assets.extend(
-            lock.maven_bundles
-                .iter()
-                .map(|bundle| (bundle, maven_bundle_dir(deps, &bundle.id))),
-        );
+        assets.extend(lock.maven_bundles.iter().map(|bundle| {
+            (
+                SourceKind::MavenBundles,
+                bundle,
+                maven_bundle_dir(deps, &bundle.id),
+                format!("maven/{}", bundle.id),
+            )
+        }));
     }
     if request.kinds.contains(&SourceKind::ReleaseAssets) {
         for asset in &lock.release_assets {
@@ -219,11 +224,17 @@ fn fetch_all(
                 .extract_to
                 .as_deref()
                 .ok_or_else(|| internal("private_asset_without_extract_to"))?;
-            assets.push((asset, deps.join(target)));
+            assets.push((
+                SourceKind::ReleaseAssets,
+                asset,
+                deps.join(target),
+                target.to_owned(),
+            ));
         }
     }
-    for (asset, destination) in assets {
+    for (kind, asset, destination, relative) in assets {
         fetch_asset(backend, asset, &destination, downloads, &mut budget)?;
+        verified.push(VerifiedSource::asset(kind, asset, &relative));
         summary.assets += 1;
     }
     if request.kinds.contains(&SourceKind::GitTrees) {
@@ -238,9 +249,11 @@ fn fetch_all(
             )?;
             let destination = deps.join("git").join(&tree.id);
             extract_into(&archive, &destination, &mut budget)?;
+            verified.push(VerifiedSource::tree(tree, &format!("git/{}", tree.id)));
             summary.trees += 1;
         }
     }
+    Verified::new(verified).write(deps)?;
     Ok(summary)
 }
 
@@ -347,6 +360,22 @@ fn extract_into(
     extract_archive(archive, destination, &name, budget, deadline)
 }
 
+/// The checkout's effective catalog (hard decision 5): the Rust the project
+/// declares, the same version the generated resolver exports as
+/// `VELNOR_TOOL_RUST` and every later Cargo step runs.
+///
+/// `cargo fetch` must run under that toolchain: `mise exec` with a version
+/// that is not installed only warns and runs the ambient `cargo` without the
+/// owned `MISE_CARGO_HOME`, so the git database would land in `~/.cargo` and
+/// the later offline steps would miss it.
+///
+/// # Errors
+/// Config or toolchain-file errors, as generation reports them.
+pub(crate) fn fetch_catalog(workspace: &Path) -> Result<ToolCatalog, OrchestratorError> {
+    let config = load_config(workspace)?;
+    crate::tool_catalog_resolve::resolve_tool_catalog(workspace, &config)
+}
+
 /// Run `private-fetch-v1` from the step environment.
 ///
 /// # Errors
@@ -376,7 +405,7 @@ pub fn run_private_fetch() -> Result<(), OrchestratorError> {
         &request.owner,
         &request.repositories,
         owned_env,
-        ToolCatalog::pinned(),
+        fetch_catalog(&request.workspace)?,
     )?;
     let summary = execute(&request, &session)?;
     drop(session);

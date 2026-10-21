@@ -281,8 +281,41 @@ impl Session {
         .map_err(|err| internal(&format!("private_cargo_fetch_command:{err}")))
     }
 
-    /// Run `cargo fetch --locked` for one manifest.
+    /// `mise where <rust>`: fails when the toolchain is not installed.
+    ///
+    /// `mise exec` only warns about a missing version and then runs the
+    /// ambient `cargo` with the ambient `CARGO_HOME`, so without this check a
+    /// fetch "succeeds" into a directory no later step reads.
+    pub(crate) fn rust_toolchain_check_command(
+        &self,
+    ) -> Result<IsolatedCommand, OrchestratorError> {
+        let mut args: Vec<OsString> = MISE_GLOBAL_FLAGS.iter().map(OsString::from).collect();
+        args.push(OsString::from("where"));
+        args.push(OsString::from(self.catalog.tool_spec(PinnedTool::Rust)));
+        IsolatedCommand::private_fetch(
+            "mise",
+            args,
+            self.runner_temp.join("velnor"),
+            &self.git_config_file(),
+            &self.owned_env,
+            None,
+        )
+        .map_err(|err| internal(&format!("private_rust_toolchain_command:{err}")))
+    }
+
+    /// Run `cargo fetch --locked` for one manifest, under the project Rust.
     pub(crate) fn cargo_fetch(&self, manifest: &Path) -> Result<(), OrchestratorError> {
+        let check = self
+            .rust_toolchain_check_command()?
+            .run_bounded(CAPTURE_BYTES, Duration::from_mins(1))
+            .map_err(|err| internal(&format!("private_rust_toolchain_spawn:{err}")))?;
+        if !check.success {
+            eprintln!("{}", String::from_utf8_lossy(&check.stderr));
+            return Err(internal(&format!(
+                "private_rust_toolchain_missing:{}",
+                self.catalog.tool_spec(PinnedTool::Rust)
+            )));
+        }
         let output = self
             .cargo_fetch_command(manifest)?
             .run_bounded(CAPTURE_BYTES * 8, CARGO_TIMEOUT)

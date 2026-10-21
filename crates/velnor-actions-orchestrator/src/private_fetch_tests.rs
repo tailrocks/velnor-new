@@ -360,3 +360,39 @@ fn kinds_not_requested_are_not_fetched() {
 mod attack;
 #[path = "private_fetch_env_tests.rs"]
 mod env_parse;
+#[path = "private_fetch_verified_tests.rs"]
+mod verified;
+
+#[test]
+fn the_fetch_catalog_takes_the_rust_the_project_declares() {
+    use velnor_actions_mise::PinnedTool;
+    let world = world();
+    let root = world.workspace.path();
+    let pinned = ToolCatalog::pinned().tool_spec(PinnedTool::Rust);
+    assert_eq!(
+        fetch_catalog(root)
+            .expect("catalog")
+            .tool_spec(PinnedTool::Rust),
+        pinned,
+        "no project declaration keeps the Velnor pin"
+    );
+    fs::write(root.join("mise.toml"), "[tools]\nrust = \"1.0.1\"\n").expect("mise");
+    assert_eq!(
+        fetch_catalog(root)
+            .expect("catalog")
+            .tool_spec(PinnedTool::Rust),
+        "rust@1.0.1"
+    );
+    fs::remove_file(root.join("mise.toml")).expect("rm");
+    fs::write(
+        root.join("rust-toolchain.toml"),
+        "[toolchain]\nchannel = \"1.0.2\"\n",
+    )
+    .expect("toolchain");
+    assert_eq!(
+        fetch_catalog(root)
+            .expect("catalog")
+            .tool_spec(PinnedTool::Rust),
+        "rust@1.0.2"
+    );
+}

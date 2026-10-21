@@ -181,7 +181,15 @@ is the repository root) and the owned toolchain env. `private-fetch-v1`:
    credentialed call (a pull request that adds a private source to a lock cannot
    widen what the minted token can reach);
 3. runs `cargo fetch --locked` per root from the runner-owned isolation
-   directory (no repository `.cargo/config.toml`), under the private-fetch policy;
+   directory (no repository `.cargo/config.toml`), under the private-fetch policy,
+   with the Rust the project declares (hard decision 4, resolved from the
+   checkout exactly as generation does, so it is the version the generated
+   resolver exports as `VELNOR_TOOL_RUST`), after `mise where` proves that
+   toolchain installed (`private_rust_toolchain_missing:<spec>` otherwise).
+   `mise exec` with a missing version only warns and runs the ambient `cargo`
+   with the ambient `CARGO_HOME`; the git database would then miss the owned
+   `$RUNNER_TEMP/velnor/cargo` that the later offline steps and the Cargo
+   sources cache read;
 4. for each locked asset: checks the tag still resolves to the locked commit
    (`private_tag_moved`), the published digest equals the locked SHA-256, the
    downloaded bytes hash to it (`private_asset_sha256_mismatch`), then extracts
@@ -215,6 +223,52 @@ and removes whatever occupies `.velnor/deps` (planted files, stale content or a
 symlink) without following links. The archive reader then refuses symlinked
 ancestors, so extraction cannot leave the workspace. Downloads, the credential
 directory and the revoke state stay under `$RUNNER_TEMP/velnor/`.
+
+## Verified marker
+
+After every requested bundle and tree is verified and extracted, the fetch
+writes `<workspace>/.velnor/deps/verified.json`. It is a stable contract for
+repository code (a `build.rs`, a test, a local script) that wants to confirm
+the extracted trees match `.velnor/deps.lock` without fetching again:
+
+```json
+{
+  "schema": 1,
+  "sources": [
+    {
+      "kind": "release-assets",
+      "id": "bitcoin-protos",
+      "path": "bitcoin-protos",
+      "repository": "ChainArgos/bitcoin-processor-java",
+      "tag": "bitcoin-protos-v1.0.0",
+      "commit": "<40 lowercase hex>",
+      "asset": "bitcoin-protos-1.0.0.tar.gz",
+      "sha256": "<64 lowercase hex>"
+    }
+  ]
+}
+```
+
+- `schema` is `1`; any incompatible change bumps it. New optional fields may
+  be added within schema 1, so readers ignore unknown fields.
+- `sources` lists exactly what this job verified, sorted by `kind` then `id`.
+  `kind` is `git-trees`, `maven-bundles` or `release-assets`; `path` is the
+  extracted directory relative to `.velnor/deps` (`<extract_to>`,
+  `maven/<id>` or `git/<id>`); `commit` is the commit the tag resolved to,
+  equal to the lock; `asset` and `sha256` (the digest of the downloaded
+  archive bytes, equal to the lock) are absent for git trees, which the commit
+  pins.
+- It is written last and atomically, so its presence means the whole fetch
+  succeeded. A failed fetch leaves none. The bundle root is reset at the start
+  of every fetch, so a marker planted in the checkout never survives.
+- A job whose fetch extracts nothing (Cargo sources only) writes no marker and
+  creates no `.velnor/deps`.
+- A release asset whose `extract_to` is `verified.json` fails the fetch with
+  `private_verified_marker_collision`.
+
+The marker records verification at fetch time. It is not a signature: code
+running later in the same job can edit the tree and the marker alike, so treat
+it as a consistency check against the lock, not a trust anchor.
 
 Every `vars.*` the generator emits for private sources is declared:
 `config-variables` in the generated `actionlint.yaml` lists
