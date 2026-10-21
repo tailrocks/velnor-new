@@ -1,6 +1,6 @@
 # Ansible contract (Ansible stack with uv-locked Python)
 
-Status: partly implemented. Source design: the ChainArgos split stacks design
+Status: implemented except for the items under "Not yet implemented". Source design: the ChainArgos split stacks design
 (section 6.2 and 6.3). Decision: [host deployment (HD-9)](../host-deployment-decision.md),
 adopted per the split brief; owner may revisit. This page states what exists
 today and what each remaining piece must satisfy; it does not claim the stack
@@ -37,8 +37,11 @@ sha256 = "<64 lower-case hex>"
 ```
 
 The table is strict. There is no shell, argv, YAML or `uses:` field, and no
-host, vault or SSH field. Paths are repository-relative file paths over
-`[A-Za-z0-9._-]` segments.
+host, vault or SSH field. `ansible.cfg` path values are literal, nonempty
+root-relative paths using only ASCII letters, digits, `.`, `_`, `-`, and `/`;
+expansion syntax, quotes, backslashes, empty list elements and traversal
+outside the root are rejected. `inventory` uses comma-separated paths and
+`roles_path` uses colon-separated paths; the other separator is invalid.
 
 ## Implemented: `velnor-actions-ansible`
 
@@ -79,22 +82,72 @@ HD-9 (host deployment stays operator-run, outside generated CI/CD) is recorded
 in [host deployment decision](../host-deployment-decision.md); adopted per the
 split brief; owner may revisit.
 
-## Known consumer gaps (reported, not fixed here)
+## Consumer notes
 
-- `ansible-configs/requirements.txt` does not exist: the Python closure of
-  `ansible-core` and `ansible-lint` must be compiled with hashes.
-- `ansible-lint` is not declared anywhere; its version must be pinned in the
-  hashed requirements (no `mise.toml` entry is needed or used for it).
-- The four collections need declared SHA-256 digests in `[[stacks.ansible.collections]]`.
-- The repository mixes Ansible with a Rust workspace (see the ownership note in
-  the delivery report); the Rust crates need their own `[stacks.rust]` roots.
+- The consumer commits `ansible-configs/requirements.txt` (the hash-pinned closure
+  of `ansible-core` and `ansible-lint`, compiled with `uv pip compile
+  --generate-hashes`), declares `ansible-lint` next to `ansible-core` in
+  `mise.toml`, pins every collection of `requirements.yaml` by SHA-256 and
+  commits an inert `ansible.cfg` (below).
+- The repository mixes Ansible with a Rust workspace; the Rust stack detects the
+  root workspace on its own (there is no `roots` key), so the two stacks coexist
+  without extra configuration.
+
+## Implemented: the `Ansible / <root>` job
+
+`WorkflowTaskPolicy::Stack` (renderer `stack_jobs`, shared with dbt) carries one
+job per configured root; the orchestrator resolves it in `ansible_inventory`
+(analysis, fail closed), `ansible_tasks` and `ansible_steps`, and plans it in
+`select_ansible`. The job id is `ansible-<slug>` and the display name
+`Ansible / <root>`. Findings fail generation as `ansible_stack_findings:`.
+
+- **Shape.** Checkout without credentials, `Setup Mise`, `Resolve project tool
+  versions` (defining `VELNOR_TOOL_UV` and `VELNOR_TOOL_PYTHON`, which the job
+  references), `Install uv`, `Install Python`, `Create Python environment`,
+  `Verify ansible.cfg`, `Install Ansible collections` (when any are declared),
+  then `Ansible syntax check` and `Ansible lint` as background steps joined by
+  `wait-all`. The job holds `contents: read` only and refuses any `uses:` step or
+  token role; there is no vault password and no host connection.
+- **uv check and Python.** `uv` and Python install from the `linux-x64` row of
+  `mise.lock` (`[tools.uv]`, `[tools.python]`): generation requires a `sha256:`
+  checksum and a URL under the upstream release path
+  (`ansible_tool_checksum_missing`, `ansible_tool_url_untrusted`,
+  `ansible_tool_lock_missing`), the job rebuilds the exact URL from the
+  project-declared version, and `sha256sum -c` runs before extraction. Both tools
+  must be declared in the Mise config (`uv_not_declared`, `python_not_declared`).
+- **Agreement.** `ansible-core` (and `ansible-lint` when `lint` is a check) must
+  be declared in the Mise config and equal the pinned version in
+  `requirements.txt` (`conflicting_project_tool_versions:<name>`).
+- **Environment.** `uv venv`, then `uv pip install --require-hashes --no-deps
+  --no-build`, with `UV_NO_CONFIG`, `UV_PYTHON_DOWNLOADS=never` and a job-owned
+  `UV_CACHE_DIR`; sdists are never built.
+- **Owned configuration.** `ANSIBLE_HOME`, `ANSIBLE_COLLECTIONS_PATH` and
+  `UV_CACHE_DIR` live under `$RUNNER_TEMP/velnor`. `ANSIBLE_CONFIG` is the root's
+  committed `ansible.cfg`, required and checked in two places: generation admits
+  only the inert keys `defaults.{inventory, roles_path, host_key_checking,
+  retry_files_enabled, interpreter_python, forks, gathering, timeout, nocows,
+  deprecation_warnings, display_skipped_hosts, any_errors_fatal}` and
+  `ssh_connection.{pipelining, retries}` with literal path-list grammar and
+  every path inside the root
+  (`ansible_cfg_missing`, `ansible_cfg_key_forbidden:<section.key>`,
+  `ansible_cfg_path_invalid:<key>`,
+  `ansible_cfg_path_escapes_root:<key>`), and the job re-checks the file's SHA-256
+  against the digest recorded at generation. `ansible-lint` runs from a
+  Velnor-written config (`profile`, `offline: true`), never the repository's
+  `.ansible-lint`.
+- **Checks.** The syntax step runs `ansible-playbook --syntax-check -i <inventory>`
+  over every sorted top-level playbook, continues past failures and prints an
+  `ok`/`FAIL` report per playbook; the lint step lints the same playbooks.
+- **Plan.** A change under a root, to the requirements file or to the inventory
+  selects the job; an unknown change set, a global-config path (including the
+  Mise config and lock) or a full-run event selects every root. The `ansible-`
+  prefix owns no obligations.
+- **Caches.** `python-venv` and `ansible-collections` are specified
+  ([cache families](cache-families.md)); their restore and save steps are not
+  generated yet.
 
 ## Not yet implemented
 
-- `Stack::Ansible` discovery and the `Ansible / <root>` job (venv, collections,
-  parallel syntax and lint steps), plan dispositions and the `python-venv` and
-  `ansible-collections` cache families.
-- The uv catalog entry check and an `ansible-lint` run with an owned
-  `ANSIBLE_CONFIG`/`ANSIBLE_HOME`.
+- The `python-venv` and `ansible-collections` restore and save steps.
 - Named checks reusing the locked-Python path (Selene tests,
   design-system-extraction).

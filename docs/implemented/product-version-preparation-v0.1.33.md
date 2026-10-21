@@ -2,18 +2,18 @@
 
 This prepares workspace metadata and generated outputs for a proposed 0.1.33
 release. It carries the v0.1.32 Gradle and Maven release features forward, integrates
-the subsequent cache-family and dbt changes from main, and includes the native artifact ZIP metadata correction. This document records
+the subsequent cache-family, dbt, and Ansible changes from main, and includes the native artifact ZIP metadata correction. This document records
 preparation only: the complete local and hosted verification, reviewed main
 merge, exact-source release admission, and protected release approval remain
 required. No v0.1.33 release or tag is claimed here.
 
-All 14 workspace packages now use 0.1.33. The 23 exact internal path
+All 14 workspace packages now use 0.1.33. The 24 exact internal path
 requirements and the 14 local package records in the root `Cargo.lock` were
 updated together. The independently versioned runner, nested runner lockfile,
-external dependency versions and edges, historical release manifests,
+external dependency versions, historical release manifests,
 consumer pins, and tool configuration were not changed. Cargo metadata before
-and after the version update reports the same 128 external packages and
-dependency edges (SHA-256 `6331ea8d0af80f9d5d650abd6dfc2af27fe478d70b08c084f4464f0b993e4842`).
+and after the version update reports the same 128 registry packages and
+their dependency edges (SHA-256 `6331ea8d0af80f9d5d650abd6dfc2af27fe478d70b08c084f4464f0b993e4842`).
 
 The freshly built 0.1.33 CLI regenerated the root `.github` tree. Two
 independent `generate --output-dir` runs produced byte-identical trees, each
@@ -30,6 +30,11 @@ The integrated dbt stack accepts only its five documented profile-data environme
 variables. Velnor owns the project and profile directories, keeping runtime
 inputs inside the same project boundary that discovery validates and PR planning
 tracks. Engine-option environment overrides are rejected before generation.
+
+The integrated Ansible config validator admits only literal relative inventory
+and role paths, with each key’s documented list delimiter. Expansion syntax and
+empty elements are rejected before Ansible can resolve paths outside its indexed
+root. The adapter reuses the workspace’s existing TOML dependency.
 
 Release admission requires the complete root workspace and nested runner formatting,
 Clippy, Nextest, config, dependency-policy, and freshness gates, followed by
