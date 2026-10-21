@@ -15,11 +15,10 @@ pub(crate) mod resources;
 mod volumes;
 pub(crate) use names::{WorkerContainerRole, WorkerIdentityNames};
 #[cfg(test)]
-pub(crate) use volumes::remove_verified_worker_volume;
 pub(crate) use volumes::{
-    VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole, WorkerVolumeVerification,
-    verify_worker_volume,
+    VerifiedWorkerVolume, WorkerVolumeRemoval, remove_verified_worker_volume,
 };
+pub(crate) use volumes::{WorkerVolumeRole, WorkerVolumeVerification, verify_worker_volume};
 pub(crate) mod execution_authorization;
 pub(crate) mod guest_image;
 mod mounts;
