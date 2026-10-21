@@ -1,0 +1,133 @@
+{
+  "schema": 1,
+  "checkpoint_id": "source-checkpoint-33eded012-20261021",
+  "created_at_utc": "2026-10-21T13:53:05.708198+00:00",
+  "source_repository": "https://github.com/tailrocks/velnor-new",
+  "branch": "fix/private-scaleset-installation",
+  "committed_head": "33eded012120d214a1c7f2ee2347c8ab4b9f23be",
+  "range_base": "a85f5de31dd861d3b4104910e3629045bab7b4b8",
+  "consumer_order": [
+    "donbeave/essential-mac",
+    "ChainArgos/eth-processor-rust"
+  ],
+  "status": "INCOMPLETE",
+  "gates": {
+    "listed_increment_checks": "PASS",
+    "nested_full_strict": "FAIL",
+    "root_full_nextest_at_committed_head": "NOT_RUN",
+    "nested_full_nextest_at_committed_head": "NOT_RUN",
+    "release_for_committed_head": "NOT_RUN",
+    "essential_mac_installation_and_live_job": "NOT_RUN",
+    "eth_processor_rust_installation_and_live_job": "NOT_RUN"
+  },
+  "commits": [
+    {
+      "sha": "d6ac1999588f345bc85f1dbdacbbebf0cf9ab72c",
+      "url": "https://github.com/tailrocks/velnor-new/commit/d6ac1999588f345bc85f1dbdacbbebf0cf9ab72c",
+      "subject": "Require the selected Docker endpoint",
+      "parent_port": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/evidence/connect-endpoint-parent-port-20261021.json",
+        "sha256": "b4bd2ab1f5d4e1c2e04e4ba10602b49853df62109067cab94e32fcdefe6250b4"
+      },
+      "parent_checks": [
+        {
+          "path": "/Users/donbeave/Downloads/velnor-goal/evidence/connect-endpoint-parent-checks-20261021/fmt.json",
+          "sha256": "a81dda4fc5e8cedc4fbb6edc687a26e406a56205c712cdd92b87b53ea42dc6b4"
+        },
+        {
+          "path": "/Users/donbeave/Downloads/velnor-goal/evidence/connect-endpoint-parent-checks-20261021/nextest.json",
+          "sha256": "c4f9019c1b6151c298b7e3b1f2dd591c74a856061fda190c6b5121b40f3cf3d2"
+        }
+      ],
+      "push_log": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/evidence/connect-endpoint-parent-push-20261021.log",
+        "sha256": "1597febf35975f81ef5ce64afe845d84a00f8c5626228c0803f97cc064da434c"
+      }
+    },
+    {
+      "sha": "2c7388c2217060e42b4ccc11006e6f615569d957",
+      "url": "https://github.com/tailrocks/velnor-new/commit/2c7388c2217060e42b4ccc11006e6f615569d957",
+      "subject": "Require the authorized offer for admission",
+      "parent_port": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/evidence/typed-offer-parent-port-20261021.json",
+        "sha256": "53c6ec858bced64351ddd0e3ab0df3c0d4ee83d8c613bdc4e1c9a200707f48b7"
+      },
+      "parent_checks": [
+        {
+          "path": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/typed-offer-parent-integrated-20261021/check.json",
+          "sha256": "06d67aa8375359cdc54631eae9e172bc3d9b40095a2c89f1fec1fd6c37da74cf"
+        },
+        {
+          "path": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/typed-offer-parent-integrated-20261021/fmt.json",
+          "sha256": "bfe125aee754d1a2d3debdc88e6f037e51f9f67c3f080fd810fc40560f07426b"
+        },
+        {
+          "path": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/typed-offer-parent-integrated-20261021/nextest.json",
+          "sha256": "ff10c554eb6eb5890410761ff1758b77c829d054baf693afcf5668aec4bf9af1"
+        }
+      ],
+      "push_log": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/evidence/typed-offer-parent-push-20261021.log",
+        "sha256": "3695f0fd42cfa644844be75ac451f69190657938a98e18bded54bd9ea2711b56"
+      }
+    },
+    {
+      "sha": "9cd099bfc7542265090cbbb7b52b0bd42987882c",
+      "url": "https://github.com/tailrocks/velnor-new/commit/9cd099bfc7542265090cbbb7b52b0bd42987882c",
+      "subject": "Limit the retirement helper to tests",
+      "parent_port": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/evidence/retirement-helper-parent-port-20261021.json",
+        "sha256": "1b218f9c42629d1d12d968aa5edd1924ff18170b63550944c0494a5fc9227093"
+      },
+      "parent_checks": [
+        {
+          "path": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/retirement-helper-parent-integrated-20261021/check.json",
+          "sha256": "931e74ddcb1dd2a1f492eda7c1bacb7fc0a5bb35361fa03999e966b88b578ba8"
+        },
+        {
+          "path": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/retirement-helper-parent-integrated-20261021/fmt.json",
+          "sha256": "cde3f1e3a0fc96198b04111852033157ff7335c912969c0557de7bc640cd4237"
+        }
+      ],
+      "push_log": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/evidence/retirement-helper-parent-push-20261021.log",
+        "sha256": "c6357ce2054f48a38c92d839e7117d6e779c32ff2654c496193f6b8e9d73967d"
+      }
+    },
+    {
+      "sha": "33eded012120d214a1c7f2ee2347c8ab4b9f23be",
+      "url": "https://github.com/tailrocks/velnor-new/commit/33eded012120d214a1c7f2ee2347c8ab4b9f23be",
+      "subject": "Permit the bound qualification cache on dispatch",
+      "parent_port": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/evidence/cache-dispatch-parent-port-20261021.json",
+        "sha256": "09e91b56e8f026d0b23fea1f4f2aa73e2a3ee8d33df71762a5965b89ea2d4ef0"
+      },
+      "parent_checks": [
+        {
+          "path": "/Users/donbeave/Downloads/velnor-goal/evidence/cache-dispatch-parent-checks-20261021/fmt.json",
+          "sha256": "cd95875f552cb8634150c5fca23855b70a58c5f5fe8fd360b38648b93d6cb38e"
+        },
+        {
+          "path": "/Users/donbeave/Downloads/velnor-goal/evidence/cache-dispatch-parent-checks-20261021/nextest.json",
+          "sha256": "22efff2b2ba6ec90a376fdda70aa609164370846a105d61c79a32d2b2a0ea761"
+        }
+      ],
+      "push_log": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/evidence/cache-dispatch-parent-push-20261021.log",
+        "sha256": "443a5e8e11b7b15a26566e8c8dd906055420587f504d31aab3d51b3dc4db3099"
+      }
+    }
+  ],
+  "limits": [
+    "The listed checks cover only their recorded source and test selection.",
+    "These checks do not prove a live installation.",
+    "Historical evidence remains unchanged."
+  ],
+  "next": [
+    "Complete the main branch merge.",
+    "Complete the source checks.",
+    "Publish the verified release.",
+    "Install essential-mac first.",
+    "Install eth-processor-rust after the essential-mac gate passes."
+  ]
+}
