@@ -143,10 +143,19 @@ fn observe_until_done(
 ) {
     let mut iteration = 0_u64;
     let mut first_error = None;
+    // Fail if the writer makes no progress for 30 seconds.
+    // A time limit for the entire run can fail when the host is busy.
+    let mut last_phase = writer_phase.load(Ordering::Relaxed);
+    let mut last_progress = Instant::now();
     while done.load(Ordering::Relaxed) == 0 {
+        let phase = writer_phase.load(Ordering::Relaxed);
+        if phase != last_phase {
+            last_phase = phase;
+            last_progress = Instant::now();
+        }
         assert!(
-            started.elapsed() <= std::time::Duration::from_secs(30),
-            "observer timed out waiting for writer"
+            last_progress.elapsed() <= std::time::Duration::from_secs(30),
+            "The observer saw no writer progress for 30 seconds."
         );
         iteration += 1;
         if let Err(error) = target.symlink_metadata() {

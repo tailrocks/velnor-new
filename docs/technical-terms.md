@@ -108,6 +108,7 @@
 | Runner registration | A GitHub service record that identifies one runner. |
 | Runner response receipt | A record of one lookup or removal attempt that contains metadata and digests. |
 | Runner absence receipt | A record of an exact lookup that reports no matching runner registration. |
+| Session poll receipt | A record of one successful GitHub queue poll and its configured session identity. |
 
 | ELF | A file format for programs, libraries, and compiled software components. |
 | ELF64 | The 64-bit form of the ELF file format. |
@@ -130,9 +131,12 @@
 | Dependency seed | A job that compiles a workspace and saves an MBX bundle for crate jobs to restore. |
 | Mirror | A server that supplies a copy of the same file. |
 | Cache pruning | Removal of older cache entries under a retention policy. |
+| Cargo home | The directory that Cargo uses for configuration, downloaded dependencies, and installed tools. |
 | dbt adapter | A dbt component that connects a project to a database. |
 | Event payload | JSON data that describes a GitHub event. |
 | Operational reserve | CPU and memory capacity kept available for operational work. |
 | Capture binding | Identity data that links one runner trace capture to a physical attempt, journal, repository connection, worker pair, and storage. |
 | Runner trace file | A file that records diagnostic events from the GitHub Runner or Worker program. |
 | Ubuntu archive snapshot | A saved state of the Ubuntu package archive at a specified time. |
+| Verified marker | A file that records the private sources verified by one completed fetch. It does not authenticate later repository changes. |
+| SIGKILL | A Unix signal that requests immediate process termination and cannot be caught or ignored. |

@@ -35,6 +35,25 @@ with fixtures and qualification tests, not against live private repositories.
   `tests/impl_private_sources_generate.rs` checks generation with the pinned
   actionlint.
 
+- Cargo Git sources use the managed Cargo home. When the project declares
+  Rust, the fetch uses that version. Otherwise, it uses the Velnor pin.
+  The fetch requires that toolchain to be installed before starting Cargo.
+  In bitcoin-processor-rust run 39591265476, the project declared 1.98.1 and
+  the Velnor pin was 1.99.1. Mise warned about the missing pin and ran ambient
+  `cargo`, which fetched into `~/.cargo`. The step logged success.
+  The next `Fetch Cargo sources` step missed the offline cache.
+  It then failed while attempting an unauthenticated clone of the private repository.
+  Tests: `cargo_sources_are_fetched_with_the_rust_the_project_declares`,
+  `cargo_fetch_runs_exactly_the_rust_it_is_given`, and
+  `the_toolchain_check_asks_mise_where_for_the_same_rust_and_carries_no_token`.
+
+- After a successful fetch, `.velnor/deps/verified.json` records each verified
+  bundle's tag, commit, asset, and archive SHA-256. Repository code can compare
+  those values with the lock without another fetch. The owner may revisit this
+  decision, adopted under the split brief. See "Verified marker" in the private
+  sources contract. Tests: `private_fetch_verified_tests.rs` and the asset-tampering
+  test in `private_fetch_attack_tests.rs`.
+
 ## Threat-model checks and where they are tested
 
 - Token unavailable (fork pull request) fails closed: `impl_cli_private.rs`, `Token` tests.

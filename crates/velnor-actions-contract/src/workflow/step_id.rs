@@ -60,6 +60,18 @@ pub enum StepId {
     QualificationRuntimeIdentity,
     /// Qualification receipt file consumed by the Required artifact upload.
     QualificationCacheReceipt,
+    /// Runtime keys for generated stack-family caches.
+    FamilyKeys,
+    /// Size admission for Bun install cache.
+    FamilySizeBunInstall,
+    /// Size admission for Playwright browser cache.
+    FamilySizePlaywrightBrowsers,
+    /// Size admission for dbt package cache.
+    FamilySizeDbtPackages,
+    /// Size admission for Python virtualenv cache.
+    FamilySizePythonVenv,
+    /// Size admission for Ansible collections cache.
+    FamilySizeAnsibleCollections,
 }
 
 impl StepId {
@@ -89,6 +101,12 @@ impl StepId {
             Self::QualificationCacheComposite(_) => "qualification-cache-composite",
             Self::QualificationRuntimeIdentity => "qualification-runtime-identity",
             Self::QualificationCacheReceipt => "qualification-cache-receipt",
+            Self::FamilyKeys => "family-keys",
+            Self::FamilySizeBunInstall => "family-size-bun-install",
+            Self::FamilySizePlaywrightBrowsers => "family-size-playwright-browsers",
+            Self::FamilySizeDbtPackages => "family-size-dbt-packages",
+            Self::FamilySizePythonVenv => "family-size-python-venv",
+            Self::FamilySizeAnsibleCollections => "family-size-ansible-collections",
         }
     }
 

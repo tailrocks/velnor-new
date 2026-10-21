@@ -295,7 +295,7 @@ fn tools_identity_binds_resolved_versions_never_hashed_files() {
 }
 
 #[test]
-fn bun_families_fail_closed_until_a_generator_emits_them() {
+fn stack_families_reject_a_hand_written_literal_key() {
     for (family, path) in [
         ("dbt-packages", "${{ runner.temp }}/velnor/dbt-packages/x"),
         ("python-venv", "${{ runner.temp }}/velnor/uv-cache"),
@@ -320,10 +320,7 @@ fn bun_families_fail_closed_until_a_generator_emits_them() {
             let step = action("Cache", uses, &[("key", &key), ("path", path)], condition);
             let jobs = with_reader(step);
             let text = check(&jobs).expect_err(family).to_string();
-            assert!(
-                text.contains("i2_path_not_from_spec") || text.contains("i7_save_not_trust_gated"),
-                "{family}: {text}"
-            );
+            assert!(text.contains("unknown_family"), "{family}: {text}");
         }
     }
 }

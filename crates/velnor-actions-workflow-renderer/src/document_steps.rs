@@ -226,6 +226,20 @@ pub(crate) fn step_to_yaml(
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&step.name)?;
     if composite {
+        if matches!(
+            step.role,
+            Some(
+                velnor_actions_contract::StepRole::CargoSourcesSave
+                    | velnor_actions_contract::StepRole::ToolsCacheSave
+                    | velnor_actions_contract::StepRole::TofuProvidersSave
+                    | velnor_actions_contract::StepRole::MbxBundleSave
+                    | velnor_actions_contract::StepRole::FamilySave
+            )
+        ) {
+            return Err(RenderError::InvalidWorkflow(
+                "optional_cache_save_requires_job_scope".to_owned(),
+            ));
+        }
         crate::parallel_steps::reject_parallel(step, job_id)?;
     }
     match &step.kind {

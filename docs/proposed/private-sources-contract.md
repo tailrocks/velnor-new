@@ -181,7 +181,13 @@ is the repository root) and the owned toolchain env. `private-fetch-v1`:
    credentialed call (a pull request that adds a private source to a lock cannot
    widen what the minted token can reach);
 3. runs `cargo fetch --locked` per root from the runner-owned isolation
-   directory (no repository `.cargo/config.toml`), under the private-fetch policy;
+   directory (no repository `.cargo/config.toml`), under the private-fetch policy,
+   with the resolved Rust version. The fetch resolves it as generation does,
+   including the Velnor pin when the project declares no version.
+   Before invoking Cargo, the fetch requires `mise where` to find the installed toolchain.
+   A missing toolchain fails with `private_rust_toolchain_missing:<spec>`.
+   The fetch does not substitute ambient Cargo or its home.
+   It shares the managed `$RUNNER_TEMP/velnor/cargo` home with later offline steps and the Cargo sources cache;
 4. for each locked asset: checks the tag still resolves to the locked commit
    (`private_tag_moved`), the published digest equals the locked SHA-256, the
    downloaded bytes hash to it (`private_asset_sha256_mismatch`), then extracts
@@ -217,6 +223,40 @@ directory. Remove existing `.velnor/deps` entries without following symbolic
 links. The archive reader rejects symbolic links in parent directories.
 Downloads, credential files, and revoke state remain under
 `$RUNNER_TEMP/velnor/`.
+
+## Verified marker
+
+After every requested bundle and tree is verified and extracted, the fetch
+writes `<workspace>/.velnor/deps/verified.json`. Repository code can use it to
+check that the extracted trees match `.velnor/deps.lock` without fetching
+again:
+
+```json
+{
+  "schema": 1,
+  "sources": [
+    {
+      "kind": "release-assets",
+      "id": "bitcoin-protos",
+      "path": "bitcoin-protos",
+      "repository": "ChainArgos/bitcoin-processor-java",
+      "tag": "bitcoin-protos-v1.0.0",
+      "commit": "<40 lowercase hex>",
+      "asset": "bitcoin-protos-1.0.0.tar.gz",
+      "sha256": "<64 lowercase hex>"
+    }
+  ]
+}
+```
+
+The marker uses schema 1 and lists exactly the verified sources, sorted by `kind` and `id`.
+The fetch writes a temporary file, then renames it to publish the marker last.
+A failed fetch leaves no marker.
+A fetch with no extracted bundle writes no marker and creates no `.velnor/deps`.
+An asset targeting `verified.json` fails with `private_verified_marker_collision`.
+The marker records verification at fetch time.
+Later repository code can change both the trees and marker.
+Use the marker for consistency checks against the lock. Do not treat it as proof of those later files.
 
 The generated `actionlint.yaml` declares private-source variable names through
 `config-variables`. This list includes `private_sources.app_id_variable`.

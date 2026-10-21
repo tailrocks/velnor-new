@@ -1,7 +1,7 @@
 use super::super::step::StepKind;
 use super::payload::{
     action_has_prefix_for_kind, internal_operation, valid_cache_tar_launcher,
-    valid_checkout_payload, valid_tools_cache_identity,
+    valid_tools_cache_identity,
 };
 use super::{
     BUN_REGISTRY_INSTALL_OPERATION, NORMAL_TOOLS_CACHE_EXPORT_OPERATION,
@@ -184,6 +184,14 @@ pub enum StepRole {
     QualificationCacheBeforeSaveComposite,
     /// Composite immediately after one workflow-scope cache save.
     QualificationCacheAfterSaveComposite,
+    /// Runtime trust and keys of generated stack-family caches.
+    FamilyKeys,
+    /// Read-only restore of one stack-family cache.
+    FamilyRestore,
+    /// On-disk size admission before saving one stack-family cache.
+    FamilySizeCheck,
+    /// Trusted-only save of one stack-family cache.
+    FamilySave,
 }
 
 impl StepRole {
@@ -204,8 +212,11 @@ impl StepRole {
         if let Some(operation) = internal_operation_for_role(self) {
             return internal_operation(kind, operation);
         }
+        if is_shell_role(self) {
+            return matches!(kind, StepKind::Shell { .. });
+        }
         match self {
-            Self::Checkout => valid_checkout_payload(kind),
+            Self::Checkout => super::super::step_payloads::valid_checkout_payload(kind),
             Self::ToolSeed => super::valid_tool_seed_payload(kind),
             Self::MiseSetup => super::valid_mise_setup(kind),
             Self::TofuProviderUse => super::super::step_protocol::valid_provider_use(kind),
@@ -220,11 +231,13 @@ impl StepRole {
             Self::ToolsCacheSave
             | Self::CargoSourcesSave
             | Self::QualificationCacheSave
-            | Self::MbxBundleSave => action_has_prefix_for_kind(kind, "actions/cache/save@"),
+            | Self::MbxBundleSave
+            | Self::FamilySave => action_has_prefix_for_kind(kind, "actions/cache/save@"),
             Self::ToolsCacheIdentity => valid_tools_cache_identity(kind),
             Self::QualificationCacheRestore
             | Self::CargoSourcesRestore
-            | Self::MbxBundleRestore => action_has_prefix_for_kind(kind, "actions/cache/restore@"),
+            | Self::MbxBundleRestore
+            | Self::FamilyRestore => action_has_prefix_for_kind(kind, "actions/cache/restore@"),
             Self::ToolsCacheRestore => matches!(
                 kind,
                 StepKind::Action { uses, .. } if uses == TOOLS_CACHE_RESTORE_USES
@@ -248,37 +261,45 @@ impl StepRole {
             | Self::MbxBundleImport
             | Self::MbxProducerMark
             | Self::MbxSeedBuild
-            | Self::MbxBundleExport => matches!(kind, StepKind::Shell { .. }),
+            | Self::MbxBundleExport
+            | Self::FamilyKeys
+            | Self::FamilySizeCheck => matches!(kind, StepKind::Shell { .. }),
             Self::PlaywrightInstall => super::super::step_protocol::valid_playwright_install(kind),
             Self::MbxVersionCheck | Self::MbxWorkspaceCleanup => {
                 matches!(kind, StepKind::Shell { .. })
             }
-            Self::PreparePinnedTools
-            | Self::PrepareRustComponents
-            | Self::CargoDeny
-            | Self::CargoMachete
-            | Self::Actionlint
-            | Self::Zizmor
-            | Self::Markdownlint
-            | Self::StrictJson
-            | Self::FrontmatterId
-            | Self::LinkCheck
-            | Self::NativeValidators
-            | Self::AcquireVelnor
-            | Self::PreseedStage
-            | Self::CheckGenerated
-            | Self::PlanFormat
-            | Self::MsrvQualification
-            | Self::CargoSourcesFetch
-            | Self::CacheKeys
-            | Self::PreseedBuild
-            | Self::PreseedManifest
-            | Self::PreseedVerifyBuild
-            | Self::PreseedVerifyManifest
-            | Self::MbxPreflight => matches!(kind, StepKind::Shell { .. }),
             _ => false,
         }
     }
+}
+
+fn is_shell_role(role: StepRole) -> bool {
+    matches!(
+        role,
+        StepRole::PreparePinnedTools
+            | StepRole::PrepareRustComponents
+            | StepRole::CargoDeny
+            | StepRole::CargoMachete
+            | StepRole::Actionlint
+            | StepRole::Zizmor
+            | StepRole::Markdownlint
+            | StepRole::StrictJson
+            | StepRole::FrontmatterId
+            | StepRole::LinkCheck
+            | StepRole::NativeValidators
+            | StepRole::AcquireVelnor
+            | StepRole::PreseedStage
+            | StepRole::CheckGenerated
+            | StepRole::PlanFormat
+            | StepRole::MsrvQualification
+            | StepRole::CargoSourcesFetch
+            | StepRole::CacheKeys
+            | StepRole::PreseedBuild
+            | StepRole::PreseedManifest
+            | StepRole::PreseedVerifyBuild
+            | StepRole::PreseedVerifyManifest
+            | StepRole::MbxPreflight
+    )
 }
 
 fn internal_operation_for_role(role: StepRole) -> Option<&'static str> {

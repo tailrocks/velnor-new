@@ -61,6 +61,7 @@ struct Fake {
     routes: RefCell<BTreeMap<String, Vec<u8>>>,
     downloads: RefCell<Vec<String>>,
     cargo: RefCell<Vec<PathBuf>>,
+    rust: RefCell<Vec<String>>,
 }
 
 impl Fake {
@@ -72,8 +73,9 @@ impl Fake {
 }
 
 impl FetchBackend for Fake {
-    fn cargo_fetch(&self, manifest: &Path) -> Result<(), OrchestratorError> {
+    fn cargo_fetch(&self, manifest: &Path, rust: &str) -> Result<(), OrchestratorError> {
         self.cargo.borrow_mut().push(manifest.to_owned());
+        self.rust.borrow_mut().push(rust.to_owned());
         Ok(())
     }
 
@@ -265,6 +267,7 @@ fn request(world: &World, repositories: &[&str], kinds: &[SourceKind]) -> FetchR
         roots: vec![String::new()],
         workspace: world.workspace.path().to_owned(),
         runner_temp: world.temp.path().to_owned(),
+        managed_cargo_home: world.temp.path().join("velnor/cargo"),
     }
 }
 
@@ -360,3 +363,37 @@ fn kinds_not_requested_are_not_fetched() {
 mod attack;
 #[path = "private_fetch_env_tests.rs"]
 mod env_parse;
+#[path = "private_fetch_verified_tests.rs"]
+mod verified;
+
+/// Regression (bitcoin-processor-rust run 39591265476): the fetch ran the
+/// Velnor-pinned Rust although the project declared another one, so the git
+/// database landed outside the owned Cargo home.
+#[test]
+fn cargo_sources_are_fetched_with_the_rust_the_project_declares() {
+    let pinned =
+        velnor_actions_mise::ToolCatalog::pinned().tool_spec(velnor_actions_mise::PinnedTool::Rust);
+    let fetch_with = |files: &[(&str, &str)]| {
+        let world = world();
+        for (name, text) in files {
+            fs::write(world.workspace.path().join(name), text)
+                .expect("The test project file must be written.");
+        }
+        let request = request(&world, &["eth-domain"], &[SourceKind::Cargo]);
+        execute(&request, &world.fake).expect("The private fetch must succeed.");
+        world.fake.rust.borrow().clone()
+    };
+    assert_eq!(
+        fetch_with(&[]),
+        [pinned],
+        "The Velnor pin must apply when no version is declared."
+    );
+    assert_eq!(
+        fetch_with(&[("mise.toml", "[tools]\nrust = \"1.0.1\"\n")]),
+        ["rust@1.0.1"]
+    );
+    assert_eq!(
+        fetch_with(&[("rust-toolchain.toml", "[toolchain]\nchannel = \"1.0.2\"\n")]),
+        ["rust@1.0.2"]
+    );
+}

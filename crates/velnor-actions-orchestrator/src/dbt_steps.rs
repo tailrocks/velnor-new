@@ -17,6 +17,7 @@ use velnor_actions_workflow_renderer::shell_step;
 
 use super::stack_support::{LockedArchive, bash, quote};
 use crate::OrchestratorError;
+use crate::workflow_task_jobs::stack_family_cache;
 
 /// Where the verified binary lives at run time.
 const FUSION_DIR: &str = "$RUNNER_TEMP/velnor/dbt-fusion/bin";
@@ -107,6 +108,50 @@ fn check_command(check: DbtCheck) -> (&'static str, &'static str) {
     }
 }
 
+/// Copy between the project's `dbt_packages` and the family cache directory.
+///
+/// `dbt deps` installs into the project; the family archives a Velnor-owned
+/// directory. `stage` seeds the project from a restored entry (the lock still
+/// decides what `dbt deps` installs), `stash` records the installed result.
+fn packages_copy_step(
+    stage: bool,
+    plan: &velnor_actions_workflow_renderer::steps::FamilyCachePlan,
+    dir: &str,
+    catalog: &ToolCatalog,
+    config: &velnor_actions_contract::config::DbtStackConfig,
+    project: &Project,
+) -> Result<Step, OrchestratorError> {
+    let family = plan
+        .family
+        .spec()
+        .shell_paths(plan.locator.as_deref())
+        .join("");
+    let (name, copy) = if stage {
+        (
+            "Copy restored dbt packages",
+            format!(
+                "if [ -d \"{family}\" ] && [ ! -L \"{family}\" ]; then rm -rf \"$p\"; mkdir -p \"$p\"; cp -a \"{family}/.\" \"$p/\"; fi"
+            ),
+        )
+    } else {
+        (
+            "Copy installed dbt packages",
+            format!(
+                "if [ -d \"$p\" ] && [ ! -L \"$p\" ]; then rm -rf \"{family}\"; mkdir -p \"{family}\"; cp -a \"$p/.\" \"{family}/\"; fi"
+            ),
+        )
+    };
+    let script = format!(
+        "set -euo pipefail; cd -P -- \"$GITHUB_WORKSPACE\"; cd -- {dir}; p=\"$PWD/dbt_packages\"; {copy}",
+        dir = quote(dir),
+    );
+    Ok(shell_step(
+        name,
+        bash(&script),
+        step_env(catalog, config, project)?,
+    )?)
+}
+
 /// Every step after checkout, in execution order.
 pub(crate) fn project_steps(
     config: &VelnorConfig,
@@ -119,10 +164,19 @@ pub(crate) fn project_steps(
         .dbt
         .as_ref()
         .ok_or_else(|| contract("dbt_stack_not_configured"))?;
-    let mut steps = vec![
-        install_step(catalog, dbt, project)?,
-        dbt_step(DEPS_NAME, dir, "deps", catalog, dbt, project)?,
-    ];
+    let packages = stack_family_cache::dbt_packages(dir)?;
+    let mut steps = vec![install_step(catalog, dbt, project)?];
+    steps.extend(stack_family_cache::prelude(std::slice::from_ref(
+        &packages,
+    ))?);
+    steps.push(packages_copy_step(
+        true, &packages, dir, catalog, dbt, project,
+    )?);
+    steps.push(dbt_step(DEPS_NAME, dir, "deps", catalog, dbt, project)?);
+    steps.push(packages_copy_step(
+        false, &packages, dir, catalog, dbt, project,
+    )?);
+    steps.extend(stack_family_cache::after_producer(&packages)?);
     for check in dbt.effective_checks() {
         let (name, args) = check_command(check);
         let mut step = dbt_step(name, dir, args, catalog, dbt, project)?;

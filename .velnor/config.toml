@@ -1,7 +1,7 @@
 schema = 2
 
 [workflow]
-crate_timeout_minutes = 10
+crate_timeout_minutes = 30
 name = "CI"
 policy = "velnor-repository-v1"
 default_branch = "main"

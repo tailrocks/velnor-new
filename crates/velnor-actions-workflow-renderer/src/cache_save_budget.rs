@@ -13,6 +13,7 @@ const SOURCES_ID: &str = "velnor-optional-sources-save";
 const TOOLS_ID: &str = "velnor-optional-tools-save";
 const PROVIDERS_ID: &str = "velnor-optional-providers-save";
 const MBX_BUNDLE_ID: &str = "velnor-optional-mbx-bundle-save";
+const FAMILY_SAVE_ID_PREFIX: &str = "velnor-optional-family-";
 const RESERVE_SECONDS: u32 = 30;
 const WRITE_SECONDS: u32 = 60;
 /// A compiled bundle is larger than the other families; it gets a longer attempt.
@@ -101,10 +102,11 @@ pub(crate) fn decorate(
         return Ok(());
     }
     let id = match step.role {
-        Some(StepRole::CargoSourcesSave) => SOURCES_ID,
-        Some(StepRole::ToolsCacheSave) => TOOLS_ID,
-        Some(StepRole::TofuProvidersSave) => PROVIDERS_ID,
-        Some(StepRole::MbxBundleSave) => MBX_BUNDLE_ID,
+        Some(StepRole::CargoSourcesSave) => SOURCES_ID.to_owned(),
+        Some(StepRole::ToolsCacheSave) => TOOLS_ID.to_owned(),
+        Some(StepRole::TofuProvidersSave) => PROVIDERS_ID.to_owned(),
+        Some(StepRole::MbxBundleSave) => MBX_BUNDLE_ID.to_owned(),
+        Some(StepRole::FamilySave) => family_save_id(step)?,
         _ => return Ok(()),
     };
     if !job_context {
@@ -120,14 +122,28 @@ pub(crate) fn decorate(
         return Err(invalid());
     }
     entries.extend([
-        ("id".to_owned(), Yaml::str(id)),
+        ("id".to_owned(), Yaml::str(id.as_str())),
         (
             "timeout-minutes".to_owned(),
-            Yaml::Int(i64::from(write_seconds(id) / 60)),
+            Yaml::Int(i64::from(write_seconds(&id) / 60)),
         ),
         ("continue-on-error".to_owned(), Yaml::Bool(true)),
     ]);
     Ok(())
+}
+
+fn family_save_id(step: &Step) -> Result<String, RenderError> {
+    use velnor_actions_contract::workflow::cache_family_steps::{FAMILY_KEYS_ID, family_for_stem};
+    let StepKind::Action { with, .. } = &step.kind else {
+        return Err(invalid());
+    };
+    let family_stem = with
+        .get("key")
+        .and_then(|key| key.strip_prefix(&format!("${{{{steps.{FAMILY_KEYS_ID}.outputs.")))
+        .and_then(|rest| rest.strip_suffix("_key}}"))
+        .filter(|candidate| family_for_stem(candidate).is_some())
+        .ok_or_else(invalid)?;
+    Ok(format!("{FAMILY_SAVE_ID_PREFIX}{family_stem}-save"))
 }
 
 /// Add one clock before the original job steps and admission before each save.
@@ -169,6 +185,7 @@ fn validate_ids(steps: &[Yaml]) -> Result<(), RenderError> {
             || id == format!("{TOOLS_ID}-budget")
             || id == format!("{PROVIDERS_ID}-budget")
             || id == format!("{MBX_BUNDLE_ID}-budget")
+            || (id.starts_with(FAMILY_SAVE_ID_PREFIX) && id.ends_with("-save-budget"))
         {
             return Err(invalid());
         }
@@ -209,7 +226,13 @@ fn save_id(step: &Yaml) -> Option<&str> {
     if uses != crate::steps::TOOLS_SAVE_USES {
         return None;
     }
-    if id == SOURCES_ID || id == TOOLS_ID || id == PROVIDERS_ID || is_owner_save_id(id) {
+    if id == SOURCES_ID
+        || id == TOOLS_ID
+        || id == PROVIDERS_ID
+        || id == MBX_BUNDLE_ID
+        || is_owner_save_id(id)
+        || (id.starts_with(FAMILY_SAVE_ID_PREFIX) && id.ends_with("-save"))
+    {
         Some(id)
     } else {
         None

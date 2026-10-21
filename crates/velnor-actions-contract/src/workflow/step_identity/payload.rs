@@ -4,26 +4,6 @@ use super::{
     TOOLS_CACHE_IDENTITY_DIGEST_INPUT, TOOLS_CACHE_PRELUDE_USES,
 };
 
-/// Require the standard credential-free checkout action payload.
-pub(super) fn valid_checkout_payload(kind: &StepKind) -> bool {
-    matches!(kind, StepKind::Action { uses, with, .. }
-        if action_has_prefix(uses, "actions/checkout@")
-            && with.get("persist-credentials").is_some_and(|value| value == "false"))
-}
-
-/// Require the simple generated checkout shape used before host-seed reads.
-pub(super) fn valid_configured_checkout_payload(kind: &StepKind) -> bool {
-    matches!(kind, StepKind::Action { with, env, .. }
-        if valid_checkout_payload(kind)
-            && with.iter().all(|(key, value)| match key.as_str() {
-                "persist-credentials" => value == "false",
-                "fetch-depth" => value == "0",
-                "lfs" => value == "true",
-                _ => false,
-            })
-            && env.is_empty())
-}
-
 /// Require the fixed generated hosted identity-and-seed composite and digest.
 pub(in crate::workflow) fn valid_tools_cache_identity(kind: &StepKind) -> bool {
     matches!(kind, StepKind::Action { uses, with, env }

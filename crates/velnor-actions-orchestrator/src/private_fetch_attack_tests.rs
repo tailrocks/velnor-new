@@ -106,6 +106,14 @@ fn a_tampered_asset_fails_the_sha256_check_and_extracts_nothing() {
             .join(".velnor/deps/explorer-schema")
             .exists()
     );
+    assert!(
+        !world
+            .workspace
+            .path()
+            .join(".velnor/deps/verified.json")
+            .exists(),
+        "A failed fetch must leave no verified marker."
+    );
 }
 
 #[test]

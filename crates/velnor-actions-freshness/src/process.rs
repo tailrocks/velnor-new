@@ -50,6 +50,9 @@ mod unix {
 
     const POLL_INTERVAL: Duration = Duration::from_millis(5);
     const MAX_CLEANUP_RESERVE: Duration = Duration::from_millis(100);
+    /// Additional time after the caller's deadline to collect a child's exit status after SIGKILL.
+    /// This extension gives a busy host more time to complete that cleanup.
+    const KILL_REAP_GRACE: Duration = Duration::from_secs(1);
 
     pub(super) fn run_unix(
         command: &mut Command,
@@ -76,7 +79,6 @@ mod unix {
             return Err(abort_without_captures(
                 &mut child,
                 group,
-                deadline,
                 "process stdout or stderr was unavailable".to_owned(),
             ));
         };
@@ -86,7 +88,6 @@ mod unix {
             return Err(abort_without_captures(
                 &mut child,
                 group,
-                deadline,
                 format!("process pipes could not become nonblocking ({error})"),
             ));
         }
@@ -217,11 +218,11 @@ mod unix {
             pause_until(deadline);
         }
         if !reaped {
-            match child.try_wait() {
-                Ok(Some(_)) => {}
-                Ok(None) => failures.push("child was not reaped before the deadline".to_owned()),
-                Err(error) => failures.push(format!("process reaping failed ({error})")),
-            }
+            reap_killed_child(
+                child,
+                &mut failures,
+                "child was not reaped before the deadline",
+            );
         }
         if !stdout.is_closed() || !stderr.is_closed() {
             failures.push("process output pipes remained open at the deadline".to_owned());
@@ -261,30 +262,38 @@ mod unix {
         }
     }
 
-    fn abort_without_captures(
-        child: &mut Child,
-        group: u32,
-        deadline: Instant,
-        cause: String,
-    ) -> String {
+    fn abort_without_captures(child: &mut Child, group: u32, cause: String) -> String {
         drop(child.stdout.take());
         drop(child.stderr.take());
         let mut failures = Vec::new();
         if let Err(error) = terminate_group(child, group) {
             failures.push(error);
         }
-        while Instant::now() < deadline {
+        reap_killed_child(
+            child,
+            &mut failures,
+            "child was not reaped before the deadline",
+        );
+        combine_failure(cause, &failures)
+    }
+
+    /// Reap a child that has been sent SIGKILL, allowing [`KILL_REAP_GRACE`].
+    fn reap_killed_child(child: &mut Child, failures: &mut Vec<String>, unreaped: &str) {
+        let limit = Instant::now() + KILL_REAP_GRACE;
+        loop {
             match child.try_wait() {
-                Ok(Some(_)) => return combine_failure(cause, &failures),
-                Ok(None) => pause_until(deadline),
+                Ok(Some(_)) => return,
+                Ok(None) if Instant::now() < limit => pause_until(limit),
+                Ok(None) => {
+                    failures.push(unreaped.to_owned());
+                    return;
+                }
                 Err(error) => {
                     failures.push(format!("process reaping failed ({error})"));
-                    break;
+                    return;
                 }
             }
         }
-        failures.push("child was not reaped before the deadline".to_owned());
-        combine_failure(cause, &failures)
     }
 
     fn cleanup_reserve(timeout: Duration) -> Duration {

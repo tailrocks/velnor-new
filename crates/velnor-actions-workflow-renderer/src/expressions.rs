@@ -12,6 +12,17 @@ use crate::RenderError;
 #[path = "expressions_qualification_cache.rs"]
 mod qualification_cache;
 
+fn is_family_key_output(inner: &str) -> bool {
+    use velnor_actions_contract::workflow::cache_family_steps::{FAMILY_KEYS_ID, family_for_stem};
+    inner
+        .strip_prefix(&format!("steps.{FAMILY_KEYS_ID}.outputs."))
+        .and_then(|name| {
+            name.strip_suffix("_restore_keys")
+                .or_else(|| name.strip_suffix("_key"))
+        })
+        .is_some_and(|stem| family_for_stem(stem).is_some())
+}
+
 /// Reject `${{` plus control characters in a step display name.
 ///
 /// Shared by shell, action, and internal constructors: names are fixed
@@ -350,6 +361,7 @@ fn check_with_value_scoped(key: &str, value: &str, composite: bool) -> Result<()
             && !qualification_cache::is_prepare_save_output(key, inner)
             && !qualification_cache::is_clock_output(key, inner)
             && !qualification_cache::is_composite_output_map(key, inner)
+            && !is_family_key_output(inner)
         {
             return Err(RenderError::BadActionRef(format!(
                 "bad_with_expression:{key}"

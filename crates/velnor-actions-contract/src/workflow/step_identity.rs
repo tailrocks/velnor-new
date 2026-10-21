@@ -1,11 +1,12 @@
 //! Typed workflow step identity and semantic role.
 
 use super::step::{Step, StepKind};
-use super::step_payloads::{valid_mise_setup, valid_tool_seed_payload};
+use super::step_payloads::{
+    valid_configured_checkout_payload, valid_mise_setup, valid_tool_seed_payload,
+};
 use crate::errors::ContractError;
 use std::collections::BTreeSet;
 mod payload;
-use payload::valid_configured_checkout_payload;
 pub(super) use payload::{valid_cache_tar_launcher, valid_tools_cache_identity};
 
 /// Fixed local action path used for exact provider-cache admission.

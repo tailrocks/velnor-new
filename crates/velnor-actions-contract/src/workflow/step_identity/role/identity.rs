@@ -23,6 +23,7 @@ impl StepRole {
             Self::CacheKeys => Some(StepId::CacheKeys),
             Self::PrivateTokenMint => Some(StepId::DepsToken),
             Self::QualificationCacheReceipt => Some(StepId::QualificationCacheReceipt),
+            Self::FamilyKeys => Some(StepId::FamilyKeys),
             _ => None,
         }
     }
@@ -82,6 +83,12 @@ impl StepRole {
             },
             StepId::QualificationRuntimeIdentity => Self::QualificationRuntimeIdentity,
             StepId::QualificationCacheReceipt => Self::QualificationCacheReceipt,
+            StepId::FamilyKeys => Self::FamilyKeys,
+            StepId::FamilySizeBunInstall
+            | StepId::FamilySizePlaywrightBrowsers
+            | StepId::FamilySizeDbtPackages
+            | StepId::FamilySizePythonVenv
+            | StepId::FamilySizeAnsibleCollections => Self::FamilySizeCheck,
         }
     }
 }
