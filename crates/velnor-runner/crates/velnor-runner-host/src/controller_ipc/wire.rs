@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::config::{ConnectionId, RepositoryConnection};
+use crate::readiness::Readiness;
 
 pub(super) const MAX_REQUEST_BYTES: usize = 65_536;
 pub(super) const SOCKET_NAME: &str = "controller.sock";
@@ -28,6 +29,11 @@ pub(super) enum Request {
     DoctorProbeStatus {
         nonce: String,
     },
+    ControllerReadiness {
+        config_sha256: String,
+        engine_id: String,
+        docker_root_digest: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,6 +52,8 @@ pub(super) struct Response {
     pub(super) value: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) doctor_probe: Option<DoctorProbeReply>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) readiness: Option<Readiness>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

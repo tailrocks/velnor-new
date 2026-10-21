@@ -8,12 +8,15 @@ use std::path::Path;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use super::server::{read_drain_token, valid_token};
+use super::wire::{DoctorProbeReply, Request, Response, SOCKET_NAME, Target};
 use crate::config::{ConnectionId, HostConfig, RepositoryConnection};
 use crate::error::HostError;
 use crate::ipc::{MAX_FRAME, encode_frame};
 
-use super::server::{read_drain_token, valid_token};
-use super::wire::{DoctorProbeReply, Request, Response, SOCKET_NAME, Target};
+mod readiness;
+
+pub use readiness::controller_readiness_status;
 
 const RETRY: Duration = Duration::from_millis(100);
 const CALL_TIMEOUT: Duration = Duration::from_secs(5);
@@ -220,9 +223,9 @@ fn marker_for(state: &Path, request: &Request) -> std::path::PathBuf {
         Request::Reactivate { binding, .. } | Request::Detached { binding, .. } => state
             .join("connection-drain")
             .join(binding.connection_id.as_str()),
-        Request::DoctorProbeStart { .. } | Request::DoctorProbeStatus { .. } => {
-            state.join(SOCKET_NAME)
-        }
+        Request::DoctorProbeStart { .. }
+        | Request::DoctorProbeStatus { .. }
+        | Request::ControllerReadiness { .. } => state.join(SOCKET_NAME),
     }
 }
 
@@ -232,7 +235,9 @@ fn call(state: &Path, request: &Request) -> Result<bool, HostError> {
     }
     if matches!(
         request,
-        Request::DoctorProbeStart { .. } | Request::DoctorProbeStatus { .. }
+        Request::DoctorProbeStart { .. }
+            | Request::DoctorProbeStatus { .. }
+            | Request::ControllerReadiness { .. }
     ) {
         return Err(HostError::Lock);
     }
@@ -251,19 +256,26 @@ fn call_socket(path: &Path, request: &Request) -> Result<bool, HostError> {
 }
 
 fn call_socket_response(path: &Path, request: &Request) -> Result<Response, HostError> {
+    call_socket_response_with_timeout(path, request, CALL_TIMEOUT)
+}
+
+fn call_socket_response_with_timeout(
+    path: &Path,
+    request: &Request,
+    timeout: Duration,
+) -> Result<Response, HostError> {
+    let deadline = Instant::now()
+        .checked_add(timeout)
+        .ok_or(HostError::Frame)?;
     validate_socket(path)?;
     let mut stream = UnixStream::connect(path).map_err(|_| HostError::Lock)?;
-    stream
-        .set_read_timeout(Some(CALL_TIMEOUT))
-        .map_err(|_| HostError::Lock)?;
-    stream
-        .set_write_timeout(Some(CALL_TIMEOUT))
-        .map_err(|_| HostError::Lock)?;
+    set_socket_deadline(&stream, deadline)?;
     let request = request.encode().map_err(|()| HostError::Frame)?;
     stream
         .write_all(&encode_frame(&request)?)
         .map_err(|_| HostError::Frame)?;
     let mut prefix = [0; 4];
+    set_socket_deadline(&stream, deadline)?;
     stream
         .read_exact(&mut prefix)
         .map_err(|_| HostError::Frame)?;
@@ -272,10 +284,24 @@ fn call_socket_response(path: &Path, request: &Request) -> Result<Response, Host
         return Err(HostError::Frame);
     }
     let mut bytes = vec![0; length];
+    set_socket_deadline(&stream, deadline)?;
     stream
         .read_exact(&mut bytes)
         .map_err(|_| HostError::Frame)?;
     Response::decode(&bytes).map_err(|()| HostError::Frame)
+}
+
+fn set_socket_deadline(stream: &UnixStream, deadline: Instant) -> Result<(), HostError> {
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    if remaining.is_zero() {
+        return Err(HostError::Frame);
+    }
+    stream
+        .set_read_timeout(Some(remaining))
+        .map_err(|_| HostError::Lock)?;
+    stream
+        .set_write_timeout(Some(remaining))
+        .map_err(|_| HostError::Lock)
 }
 
 fn validate_socket(path: &Path) -> Result<(), HostError> {
@@ -350,5 +376,22 @@ fn valid_request(request: &Request) -> bool {
                     .bytes()
                     .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
         }
+        Request::ControllerReadiness {
+            config_sha256,
+            engine_id,
+            docker_root_digest,
+        } => {
+            valid_digest(config_sha256)
+                && !engine_id.is_empty()
+                && engine_id.len() <= 128
+                && valid_digest(docker_root_digest)
+        }
     }
+}
+
+fn valid_digest(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }

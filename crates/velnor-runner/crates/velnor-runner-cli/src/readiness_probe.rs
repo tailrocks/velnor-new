@@ -122,11 +122,11 @@ async fn read_status(child: &mut Child, deadline: Instant) -> Readiness {
     let Ok(text) = std::str::from_utf8(&bytes) else {
         return Readiness::Degraded;
     };
-    // A `ready` token is rejected because this partial observer cannot prove full reconciliation.
     match text.strip_suffix('\n') {
         Some("waiting_for_engine") => Readiness::WaitingForEngine,
         Some("waiting_for_credentials") => Readiness::WaitingForCredentials,
         Some("reconciling") => Readiness::Reconciling,
+        Some("ready") => Readiness::Ready,
         Some("draining") => Readiness::Draining,
         _ => Readiness::Degraded,
     }

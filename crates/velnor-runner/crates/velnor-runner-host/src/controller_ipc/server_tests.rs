@@ -54,6 +54,39 @@ async fn detached_is_provable_while_the_host_is_draining() -> Result<(), String>
 }
 
 #[tokio::test]
+async fn readiness_ipc_stays_reconciling_without_controller_evidence() -> Result<(), String> {
+    let state_path = test_state("readiness-without-controller-evidence");
+    fs::create_dir_all(&state_path).map_err(|error| error.to_string())?;
+    let journal = Journal::open(&state_path.join("launch.db"))
+        .await
+        .map_err(|error| format!("The journal could not open. Error: {error}."))?;
+    let response = handle_request(
+        &journal,
+        &ControlState::empty(),
+        &state_path,
+        Request::ControllerReadiness {
+            config_sha256: "b".repeat(64),
+            engine_id: "engine".to_owned(),
+            docker_root_digest: "a".repeat(64),
+        },
+        "engine",
+        &"a".repeat(64),
+    )
+    .await
+    .map_err(|error| format!("The readiness request failed. Error: {error}."))?;
+    if response.readiness != Some(crate::readiness::Readiness::Reconciling)
+        || response.value.is_some()
+        || response.doctor_probe.is_some()
+    {
+        return Err(
+            "The controller must remain in the reconciling state without readiness evidence."
+                .to_owned(),
+        );
+    }
+    fs::remove_dir_all(state_path).map_err(|error| error.to_string())
+}
+
+#[tokio::test]
 async fn reactivation_retries_after_crash_before_config_persist() -> Result<(), String> {
     let state_path = test_state("reactivation-retry");
     fs::create_dir_all(state_path.join("connection-drain")).map_err(|error| error.to_string())?;

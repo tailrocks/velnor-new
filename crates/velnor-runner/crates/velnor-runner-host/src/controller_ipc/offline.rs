@@ -71,7 +71,9 @@ fn with_journal(state: &Path, request: &Request) -> Result<bool, HostError> {
                 run_detached(&journal, binding)
             }
         }
-        Request::DoctorProbeStart { .. } | Request::DoctorProbeStatus { .. } => {
+        Request::DoctorProbeStart { .. }
+        | Request::DoctorProbeStatus { .. }
+        | Request::ControllerReadiness { .. } => {
             return Err(HostError::Lock);
         }
     }?;
@@ -158,7 +160,9 @@ fn request_token(request: &Request) -> &str {
         Request::DrainStatus { token, .. }
         | Request::Reactivate { token, .. }
         | Request::Detached { token, .. } => token,
-        Request::DoctorProbeStart { .. } | Request::DoctorProbeStatus { .. } => "",
+        Request::DoctorProbeStart { .. }
+        | Request::DoctorProbeStatus { .. }
+        | Request::ControllerReadiness { .. } => "",
     }
 }
 
@@ -175,9 +179,9 @@ fn marker_path(state: &Path, request: &Request) -> std::path::PathBuf {
         Request::Reactivate { binding, .. } | Request::Detached { binding, .. } => state
             .join("connection-drain")
             .join(binding.connection_id.as_str()),
-        Request::DoctorProbeStart { .. } | Request::DoctorProbeStatus { .. } => {
-            state.join(SOCKET_NAME)
-        }
+        Request::DoctorProbeStart { .. }
+        | Request::DoctorProbeStatus { .. }
+        | Request::ControllerReadiness { .. } => state.join(SOCKET_NAME),
     }
 }
 

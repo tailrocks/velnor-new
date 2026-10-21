@@ -202,6 +202,7 @@ fn serve(
                     let response = response.unwrap_or(Response {
                         value: None,
                         doctor_probe: None,
+                        readiness: None,
                     });
                     if let Err(error) = write_response(&mut stream, response) {
                         eprintln!("host control response failed: {error}");

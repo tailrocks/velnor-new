@@ -33,6 +33,7 @@ pub(super) async fn handle(
             doctor_probe_start(journal, &nonce, engine_id, docker_root_digest).await
         }
         Request::DoctorProbeStatus { nonce } => doctor_probe_status(journal, state, &nonce).await,
+        Request::ControllerReadiness { .. } => Ok(readiness_response()),
     }
 }
 
@@ -164,6 +165,7 @@ fn boolean_response(value: bool) -> Response {
     Response {
         value: Some(value),
         doctor_probe: None,
+        readiness: None,
     }
 }
 
@@ -171,5 +173,14 @@ fn probe_response(reply: DoctorProbeReply) -> Response {
     Response {
         value: None,
         doctor_probe: Some(reply),
+        readiness: None,
+    }
+}
+
+fn readiness_response() -> Response {
+    Response {
+        value: None,
+        doctor_probe: None,
+        readiness: Some(crate::readiness::Readiness::Reconciling),
     }
 }
