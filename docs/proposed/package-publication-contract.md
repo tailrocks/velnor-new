@@ -88,7 +88,7 @@ version_file = "backend-rust/blockchain-explorer/Cargo.toml"
 |---|---|---|
 | `bundle-build-<id>` | `contents: read` | `if` the authority's `artifact` output equals the id. The only checkout. Packs `<id>-<version>.tar.gz` plus `.sha256` and uploads them as a run artifact |
 | `bundle-attest-<id>` | `contents: read`, `id-token: write`, `attestations: write` | No checkout. Re-verifies the checksum, then runs `actions/attest-build-provenance` on the tarball |
-| `bundle-publish-<id>` | `contents: write`, environment `release` | No checkout. Re-verifies the checksum, then `gh release create --verify-tag` or `gh release upload` (never `--clobber`), so an existing asset fails the job |
+| `bundle-publish-<id>` | `contents: write`, environment `release` | No checkout. Re-verifies the checksum, then `gh release create --verify-tag` or `gh release upload` (never `--clobber`), so an existing asset is never overwritten: one with the same sha256 is skipped (a release finished by hand, or a re-run), a different one fails the job |
 
 The archive is deterministic: GNU tar with `--sort=name --mtime=@0
 --owner=0 --group=0 --numeric-owner --format=ustar --mode=u=rwX,go=rX`,
@@ -207,7 +207,16 @@ the tarball (*adopted per the split brief; owner may revisit*).
 [[publish.maven]]
 id = "processor-shared-libs"     # tag processor-shared-libs-v2.3.0, zip name stem
 root = "backend"                 # a [stacks.gradle] root
+# attest = false                 # opt out of provenance (default true)
+# attest_reason = "private repository on a plan without artifact attestations"
 ```
+
+`attest = false` exists for repositories whose GitHub plan cannot create
+artifact attestations (private repository without the feature). It requires
+`attest_reason` (clean text, at most 200 characters; rejected with `attest =
+true`), replaces the attestation action with a step that prints the reason as
+a `::warning` annotation, and keeps checksum verification and every other job
+unchanged. Attestation is never skipped silently and stays on by default.
 
 The root's own convention plugin owns the bundle: `./gradlew :mavenBundle`
 stages every published project and writes
@@ -223,9 +232,9 @@ immutability rules as the other kinds (hard decision 8):
 
 | Job | Authority | Rule |
 |---|---|---|
-| `maven-build-<id>` | `contents: read` | `if` the authority's `artifact` output equals the id. The only checkout. Acquires the staged helper, mints, fetches and revokes the private-source token for the lock's Maven bundles (`PrivateWiring::steps_for_gradle`; the token is revoked before any repository build logic runs), sets up Mise, then runs `gradle-run-v1` with task `:mavenBundle` (the Gradle wrapper gates, strict dependency verification and the Velnor-owned Gradle home apply as in CI). A fixed script then re-checks the checksum, requires every zip entry under `repository/` and every POM at the tag's version, and moves exactly the zip and its checksum into `$RUNNER_TEMP/bundle` for upload. Its timeout is the Gradle stack's |
+| `maven-build-<id>` | `contents: read` | `if` the authority's `artifact` output equals the id. The only checkout. Acquires the staged helper, mints, fetches and revokes the private-source token for the lock's Maven bundles (`PrivateWiring::steps_for_gradle`; the token is revoked before any repository build logic runs), sets up Mise, then runs `gradle-run-v1` with task `:mavenBundle` (the Gradle wrapper gates, strict dependency verification and the Velnor-owned Gradle home apply as in CI). A fixed script then re-checks the checksum, requires every zip entry under `repository/` and every POM at the tag's version, and moves exactly the zip and its checksum into `$RUNNER_TEMP/bundle` for upload.  Database: when any project of the entry's root declares `services = ["postgres"]` under `[stacks.gradle.projects]`, this job carries the same hermetic local postgres service container and `VELNOR_GRADLE_DATABASE=1` that the root's CI jobs use (jOOQ codegen through Flyway needs it); roots without a declared database are unchanged. Attest and publish never carry services. Its timeout is the Gradle stack's |
 | `maven-attest-<id>` | `contents: read`, `id-token: write`, `attestations: write` | No checkout. Re-verifies the checksum, then `actions/attest-build-provenance` on the zip |
-| `maven-publish-<id>` | `contents: write`, environment `release` | No checkout. Re-verifies the checksum, then `gh release create --verify-tag` or `gh release upload` (never `--clobber`) of the zip and checksum, so an existing asset fails the job |
+| `maven-publish-<id>` | `contents: write`, environment `release` | No checkout. Re-verifies the checksum, then `gh release create --verify-tag` or `gh release upload` (never `--clobber`) of the zip and checksum, so an existing asset is never overwritten: one with the same sha256 is skipped (a release finished by hand, or a re-run), a different one fails the job |
 
 The build job is the only one that runs a Velnor internal operation. The
 publication renderer allows exactly `gradle-run-v1`, `private-fetch-v1` and
@@ -237,7 +246,7 @@ internal operation. No role or permission is added: Maven reuses
 Consumers lock the zip with its sha256 in `.velnor/deps.lock` (item P) and
 pin each jar a second time in `verification-metadata.xml`.
 
-Tests: `impl_orch_publish_maven.rs` (generated chain, roles, private-source
+Tests: `impl_orch_publish_maven.rs` (generated chain, roles, database service inheritance, private-source
 ordering, determinism, stale declarations), `publish_maven_scripts_tests.rs`
 (the collect, verify and upload scripts run for real against fixture zips),
 `impl_renderer_publish_spec.rs` (internal operations by role, staged helper)
