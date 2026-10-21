@@ -3,8 +3,6 @@ use std::io::Write;
 use std::path::Path;
 use std::process::Stdio;
 
-use velnor_actions_mise::ToolCatalog;
-
 use super::*;
 
 const SECRET: &str = "ghs_SecretToken123";
@@ -198,7 +196,6 @@ fn the_session_directory_is_private_and_vanishes_on_drop() {
         "ChainArgos",
         &["processor-shared".to_owned()],
         Vec::new(),
-        ToolCatalog::pinned(),
     )
     .expect("session");
     let dir = temp.path().join("velnor/private-fetch");
@@ -226,7 +223,6 @@ fn a_stale_directory_is_scrubbed_before_a_new_session_starts() {
         "ChainArgos",
         &["a".to_owned()],
         Vec::new(),
-        ToolCatalog::pinned(),
     )
     .expect("session");
     assert_eq!(
@@ -245,11 +241,10 @@ fn cargo_fetch_is_locked_isolated_and_carries_no_token() {
         "ChainArgos",
         &["processor-shared".to_owned()],
         vec![("MISE_CARGO_HOME".to_owned(), "/runner/cargo".to_owned())],
-        ToolCatalog::pinned(),
     )
     .expect("session");
     let command = session
-        .cargo_fetch_command(Path::new("/work/Cargo.toml"))
+        .cargo_fetch_command(Path::new("/work/Cargo.toml"), "rust@1.98.1")
         .expect("command");
     let argv: Vec<String> = command
         .argv()
@@ -315,17 +310,13 @@ fn cargo_fetch_is_locked_isolated_and_carries_no_token() {
     }
 }
 
-fn project_rust_session(temp: &Path, version: &str) -> Session {
-    let catalog = ToolCatalog::pinned()
-        .with_project_tool(velnor_actions_mise::PinnedTool::Rust, version)
-        .expect("project rust");
+fn rust_session(temp: &Path) -> Session {
     Session::create(
         temp,
         token(),
         "ChainArgos",
         &["processor-shared-rust".to_owned()],
         vec![("MISE_CARGO_HOME".to_owned(), "/runner/cargo".to_owned())],
-        catalog,
     )
     .expect("session")
 }
@@ -338,37 +329,24 @@ fn argv_of(command: &IsolatedCommand) -> Vec<String> {
         .collect()
 }
 
-/// Regression (bitcoin-processor-rust run 39591265476): the fetch ran
-/// `mise exec rust@<Velnor pin>` while the project declared another Rust.
-/// Mise only warned about the missing version and ran the ambient `cargo`
-/// with the ambient `CARGO_HOME`, so the git database never reached the
-/// owned `MISE_CARGO_HOME` and the later offline `Fetch Cargo sources` step
-/// fell back to an unauthenticated clone.
 #[test]
-fn cargo_fetch_runs_the_project_declared_rust_not_the_velnor_pin() {
+fn cargo_fetch_runs_exactly_the_rust_it_is_given() {
     let temp = tempfile::tempdir().expect("temp");
-    let pinned = ToolCatalog::pinned().tool_spec(velnor_actions_mise::PinnedTool::Rust);
-    let project = if pinned == "rust@1.0.1" {
-        "1.0.2"
-    } else {
-        "1.0.1"
-    };
-    let session = project_rust_session(temp.path(), project);
+    let session = rust_session(temp.path());
     let argv = argv_of(
         &session
-            .cargo_fetch_command(Path::new("/work/Cargo.toml"))
+            .cargo_fetch_command(Path::new("/work/Cargo.toml"), "rust@1.98.1")
             .expect("command"),
     );
-    let spec = format!("rust@{project}");
-    assert!(argv.contains(&spec), "{argv:?}");
-    assert!(!argv.contains(&pinned), "{argv:?}");
+    let exec = argv.iter().position(|a| a == "exec").expect("exec");
+    assert_eq!(argv[exec + 1], "rust@1.98.1", "{argv:?}");
 }
 
 #[test]
 fn the_toolchain_check_asks_mise_where_for_the_same_rust_and_carries_no_token() {
     let temp = tempfile::tempdir().expect("temp");
-    let session = project_rust_session(temp.path(), "1.98.1");
-    let command = session.rust_toolchain_check_command().expect("command");
+    let session = rust_session(temp.path());
+    let command = session.rust_check_command("rust@1.98.1").expect("command");
     let argv = argv_of(&command);
     assert_eq!(argv[0], "mise");
     let tail: Vec<&str> = argv[argv.len() - 2..].iter().map(String::as_str).collect();
@@ -390,8 +368,4 @@ fn the_toolchain_check_asks_mise_where_for_the_same_rust_and_carries_no_token() 
             .any(|(k, v)| k == "MISE_CARGO_HOME" && v == "/runner/cargo"),
         "the check sees the same owned Mise env as the fetch"
     );
-    let fetch = session
-        .cargo_fetch_command(Path::new("/work/Cargo.toml"))
-        .expect("fetch");
-    assert!(argv_of(&fetch).contains(&"rust@1.98.1".to_owned()));
 }

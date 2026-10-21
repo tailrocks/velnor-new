@@ -42,9 +42,9 @@ with fixtures and qualification tests, not against live private repositories.
   and ran the ambient `cargo`. The step logged success, the next
   `Fetch Cargo sources` step missed offline and failed an unauthenticated
   clone of the private repository. Tests:
-  `cargo_fetch_runs_the_project_declared_rust_not_the_velnor_pin`,
-  `the_toolchain_check_asks_mise_where_for_the_same_rust_and_carries_no_token`,
-  `the_fetch_catalog_takes_the_rust_the_project_declares`.
+  `cargo_sources_are_fetched_with_the_rust_the_project_declares`,
+  `cargo_fetch_runs_exactly_the_rust_it_is_given`,
+  `the_toolchain_check_asks_mise_where_for_the_same_rust_and_carries_no_token`.
 
 - Verified marker (`private_fetch_verified.rs`, adopted per the split brief;
   owner may revisit): after a successful fetch,
