@@ -1,11 +1,9 @@
 //! Image-import identity and receipt row conversions.
 
-use crate::error::HostError;
-use crate::journal::sql::one_row;
-
 use super::super::{
     ImageImportId, ImageImportObservation, ImageImportRecord, ImageImportRequest, ImageImportState,
 };
+use crate::error::HostError;
 
 type ImageImportIdentityValues<'a> = (
     &'a str,
@@ -224,8 +222,4 @@ fn identity_values_with_attempt(
         request.load_archive_index_digest.as_deref(),
         request.image_reference.as_str(),
     ))
-}
-
-pub(super) fn affected_one(result: u64) -> Result<(), HostError> {
-    one_row(result)
 }

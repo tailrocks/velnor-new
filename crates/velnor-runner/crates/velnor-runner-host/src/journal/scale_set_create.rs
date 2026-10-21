@@ -169,12 +169,6 @@ pub(crate) struct ScaleSetCreateRecord {
 }
 
 impl ScaleSetCreateRecord {
-    /// Give the durable row ID.
-    #[must_use]
-    pub(crate) const fn id(&self) -> ScaleSetCreateId {
-        self.id
-    }
-
     /// Give the durable lifecycle state.
     #[must_use]
     pub(crate) const fn state(&self) -> ScaleSetCreateState {
@@ -189,6 +183,7 @@ impl ScaleSetCreateRecord {
 
     /// Give a recorded known no-effect status, if any.
     #[must_use]
+    #[cfg(test)]
     pub(crate) const fn no_effect_status(&self) -> Option<u16> {
         self.no_effect_status
     }

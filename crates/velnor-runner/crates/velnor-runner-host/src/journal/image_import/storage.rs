@@ -163,6 +163,7 @@ pub(super) async fn complete_preloaded(
     .await
 }
 
+#[cfg(test)]
 pub(super) async fn abort_before_effect(
     journal: &crate::journal::Journal,
     id: ImageImportId,

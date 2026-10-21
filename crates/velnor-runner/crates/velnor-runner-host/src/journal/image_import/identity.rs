@@ -70,10 +70,12 @@ impl ImageImportRequest {
         &self.engine_id
     }
 
+    #[cfg(test)]
     pub(crate) fn docker_root_digest(&self) -> &str {
         &self.docker_root_digest
     }
 
+    #[cfg(test)]
     pub(crate) fn daemon_architecture(&self) -> &str {
         &self.daemon_architecture
     }

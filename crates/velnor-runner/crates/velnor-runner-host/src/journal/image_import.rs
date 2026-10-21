@@ -69,16 +69,6 @@ pub(crate) enum ImageImportState {
 }
 
 impl ImageImportState {
-    pub(super) fn as_str(self) -> &'static str {
-        match self {
-            Self::Prepared => "prepared",
-            Self::Requested => "requested",
-            Self::Uncertain => "uncertain",
-            Self::Completed => "completed",
-            Self::Aborted => "aborted",
-        }
-    }
-
     pub(super) fn parse(value: &str) -> Result<Self, HostError> {
         match value {
             "prepared" => Ok(Self::Prepared),
@@ -170,6 +160,7 @@ impl Journal {
     }
 
     /// Abandon only an intent whose one-shot effect was never claimed.
+    #[cfg(test)]
     pub(crate) async fn abort_image_import_before_effect(
         &self,
         id: ImageImportId,
