@@ -22,6 +22,7 @@ pub use super::extension_schemas::{
     task_stack_segment,
 };
 pub use super::finalized::finalized_jobs;
+pub use super::generate::unmanaged::{UnmanagedReport, unmanaged_report};
 pub use super::generate::{
     GenerateOptions, GenerateReport, ToolSnapshot, generate, generate_dispatched,
     render_staged_tree, render_staged_tree_with,
