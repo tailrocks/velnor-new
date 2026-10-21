@@ -94,11 +94,15 @@ pub(in crate::journal) async fn record_metadata_probe_cleanup(
 
 use crate::error::HostError;
 use crate::journal::connection::storage::read_transaction;
+#[cfg(test)]
 use crate::launch::StartPermit;
 
 use super::super::ConnectionJournal;
+#[cfg(test)]
 use super::admission::{ReservationRequest, ReservationResult};
-use super::storage_budget::{StorageProfile, StorageProvisioningAdmission};
+use super::storage_budget::StorageProfile;
+#[cfg(test)]
+use super::storage_budget::StorageProvisioningAdmission;
 
 impl ConnectionJournal {
     /// Read the immutable current policy for trusted sample construction.
@@ -161,6 +165,7 @@ impl ConnectionJournal {
     }
 
     /// Record one host capacity reservation and the full storage role charges before Docker changes.
+    #[cfg(test)]
     pub(crate) async fn try_reserve_with_provisioning(
         &self,
         request: ReservationRequest<'_>,
@@ -230,14 +235,6 @@ pub(in crate::journal) async fn resources_bound(
     intent_id: i64,
 ) -> Result<bool, HostError> {
     binding::resources_bound(connection, connection_id, intent_id).await
-}
-
-pub(in crate::journal) async fn is_v16_reservation(
-    connection: &turso::Connection,
-    connection_id: &str,
-    intent_id: i64,
-) -> Result<bool, HostError> {
-    admission::is_v16_reservation(connection, connection_id, intent_id).await
 }
 
 pub(in crate::journal) async fn release_ready(

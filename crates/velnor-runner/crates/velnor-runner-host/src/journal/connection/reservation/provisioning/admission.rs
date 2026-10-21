@@ -2,7 +2,9 @@ use std::time::Instant;
 
 use crate::error::HostError;
 use crate::journal::connection::AssignmentKey;
-use crate::journal::connection::storage::{has_ambiguous_legacy_work, in_transaction};
+use crate::journal::connection::storage::has_ambiguous_legacy_work;
+#[cfg(test)]
+use crate::journal::connection::storage::in_transaction;
 use crate::worker::{WorkerContainerRole, WorkerIdentityNames, WorkerVolumeRole};
 
 use super::super::admission::{
@@ -27,6 +29,7 @@ pub(super) use capacity::{metadata_capacity_fits, sql_i64};
 pub(super) use record::container_role;
 use record::{insert_capacity_reservation, insert_launch_intent, insert_provisioning_rows};
 
+#[cfg(test)]
 pub(super) async fn reserve(
     journal: &ConnectionJournal,
     request: ReservationRequest<'_>,
@@ -141,21 +144,6 @@ async fn validated_profile_for_admission(
         return Ok(None);
     }
     Ok(Some(profile))
-}
-
-pub(super) async fn is_v16_reservation(
-    connection: &turso::Connection,
-    connection_id: &str,
-    intent_id: i64,
-) -> Result<bool, HostError> {
-    let mut rows = connection
-        .query(
-            "SELECT 1 FROM capacity_reservation_provisioning AS p JOIN capacity_reservations AS r ON r.id = p.reservation_id WHERE p.operation_id = ?1 AND r.connection_id = ?2",
-            (intent_id, connection_id),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    Ok(rows.next().await.map_err(|_| HostError::Journal)?.is_some())
 }
 
 fn reservation_nonce(key: &AssignmentKey) -> Result<&str, HostError> {
