@@ -72,8 +72,8 @@ fn test_channel_binding()
             },
             metadata_volume_name: "metadata".to_owned(),
             metadata_volume_id: repeat("c", 12),
-            control: control,
-            inbox: inbox,
+            control,
+            inbox,
             dind_attachment_absent: true,
         },
     )?)

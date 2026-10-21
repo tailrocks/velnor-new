@@ -209,8 +209,8 @@ fn test_channel() -> Result<VerifiedProofChannelBinding, HostError> {
             },
             metadata_volume_name: "metadata".to_owned(),
             metadata_volume_id: "c".repeat(12),
-            control: control,
-            inbox: inbox,
+            control,
+            inbox,
             dind_attachment_absent: true,
         },
     )
