@@ -3,10 +3,19 @@ use bollard::Docker;
 use crate::error::HostError;
 use crate::journal::ConnectionJournal;
 use crate::launch::steps::{AcquiredProvisioning, ScopedProvisioningOutcome};
-use crate::launch::{SelectedEngineContext, VerifiedWorkerImages};
+use crate::launch::{SelectedEngineContext, StartObservationWitness, VerifiedWorkerImages};
 
 use super::containers::VerifiedCreatedStorageObject;
 use super::storage::{self, PreparedTmpfsStorage};
+
+pub(in crate::launch::bootstrap) struct StorageCreationContext<'a> {
+    pub(in crate::launch::bootstrap) docker: &'a Docker,
+    pub(in crate::launch::bootstrap) journal: &'a ConnectionJournal,
+    pub(in crate::launch::bootstrap) engine: &'a SelectedEngineContext,
+    pub(in crate::launch::bootstrap) images: &'a VerifiedWorkerImages,
+    pub(in crate::launch::bootstrap) observation: &'a StartObservationWitness,
+    pub(in crate::launch::bootstrap) metadata: &'a VerifiedCreatedStorageObject,
+}
 
 /// One acquired request with its initialized storage objects.
 #[must_use]
@@ -75,16 +84,19 @@ pub(crate) async fn prepare_acquired(
     {
         return Err(HostError::Identity);
     }
-    let storage = storage::create_and_initialize(
+    let storage_context = StorageCreationContext {
         docker,
         journal,
-        acquired.reservation_id(),
-        acquired.intent_id(),
         engine,
         images,
-        acquired.observation(),
+        observation: acquired.observation(),
+        metadata: &metadata,
+    };
+    let storage = storage::create_and_initialize(
+        &storage_context,
+        acquired.reservation_id(),
+        acquired.intent_id(),
         acquired.resource_budget(),
-        &metadata,
     )
     .await?;
     Ok(Some(PreparedAcquiredBootstrap {

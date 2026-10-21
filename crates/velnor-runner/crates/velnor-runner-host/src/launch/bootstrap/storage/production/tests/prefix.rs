@@ -37,17 +37,23 @@ async fn foreign_second_role_holds_prefix_and_blocks_later_effects() -> Result<(
         names.volume_name(WorkerVolumeRole::RunnerMetadata),
     )
     .map_err(|error| format!("metadata object fixture: {error}"))?;
+    let engine = selected_engine()?;
+    let images = images();
+    let observation = observation();
+    let context = crate::launch::bootstrap::adapter::StorageCreationContext {
+        docker: &fixture.stub.docker,
+        journal: &fixture.scope,
+        engine: &engine,
+        images: &images,
+        observation: &observation,
+        metadata: &metadata,
+    };
     assert!(
         super::super::create_and_initialize(
-            &fixture.stub.docker,
-            &fixture.scope,
+            &context,
             fixture.reservation_id,
             intent_id,
-            &selected_engine()?,
-            &images(),
-            &observation(),
             test_resource_budget().map_err(|error| error.to_string())?,
-            &metadata,
         )
         .await
         .is_err()

@@ -1,16 +1,14 @@
 use std::time::Duration;
 
-use bollard::Docker;
-
 use crate::error::HostError;
-use crate::journal::{ConnectionJournal, StorageRole};
-use crate::launch::{SelectedEngineContext, StartObservationWitness, VerifiedWorkerImages};
+use crate::journal::StorageRole;
 use crate::worker::ResourceBudget;
 use crate::worker::storage_initialization::{
     ObservedStorageInitialization, PendingStorageInitialization, StorageInitializationImage,
     StorageInitializationLimits,
 };
 
+use super::super::adapter::StorageCreationContext;
 use super::super::containers::{VerifiedCreatedStorageObject, create_storage_object};
 
 const INITIALIZER_PIDS: u64 = 16;
@@ -55,16 +53,19 @@ impl PreparedTmpfsStorage {
 
 /// Create each claimed tmpfs object and initialize Home and Work.
 pub(crate) async fn create_and_initialize(
-    docker: &Docker,
-    journal: &ConnectionJournal,
+    context: &StorageCreationContext<'_>,
     reservation_id: i64,
     operation_id: i64,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
-    observation: &StartObservationWitness,
     budget: ResourceBudget,
-    metadata: &VerifiedCreatedStorageObject,
 ) -> Result<PreparedTmpfsStorage, HostError> {
+    let StorageCreationContext {
+        docker,
+        journal,
+        engine,
+        images,
+        observation,
+        metadata,
+    } = context;
     validate_metadata_identity(
         metadata,
         reservation_id,
