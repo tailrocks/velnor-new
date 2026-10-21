@@ -24,9 +24,10 @@ pub(crate) use profile::StorageRoleLimit;
 pub(crate) use role::{
     StorageFilesystemKind, StorageInodePolicy, StorageMedium, StorageObserver, StorageRole,
 };
+#[cfg(test)]
+pub(crate) use sample::StorageAdmission;
 pub(crate) use sample::{
-    StorageAdmission, StorageAdmissionSample, StorageProvisioningAdmission,
-    StorageProvisioningMemoryObservation,
+    StorageAdmissionSample, StorageProvisioningAdmission, StorageProvisioningMemoryObservation,
 };
 
 pub(super) async fn validate_schema(
@@ -49,6 +50,7 @@ pub(super) async fn profile_generation(
     profile_store::load(conn, generation_id).await
 }
 
+#[cfg(test)]
 pub(super) async fn admission_fits(
     conn: &turso::Connection,
     admission: &StorageAdmission,
@@ -70,6 +72,7 @@ pub(super) async fn admission_fits(
     .await
 }
 
+#[cfg(test)]
 pub(super) async fn admission_matches_existing(
     conn: &turso::Connection,
     reservation_id: i64,
@@ -78,6 +81,7 @@ pub(super) async fn admission_matches_existing(
     reservation_store::matches_existing(conn, reservation_id, admission).await
 }
 
+#[cfg(test)]
 pub(super) async fn insert_reservation_storage(
     conn: &turso::Connection,
     reservation_id: i64,
@@ -87,6 +91,7 @@ pub(super) async fn insert_reservation_storage(
     reservation_store::insert_reservation(conn, reservation_id, profile, admission).await
 }
 
+#[cfg(test)]
 pub(super) async fn append_storage_sample(
     conn: &turso::Connection,
     reservation_id: i64,

@@ -49,6 +49,7 @@ impl StorageRoleCharge {
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn role(&self) -> StorageRole {
         self.role
     }
@@ -61,14 +62,17 @@ impl StorageRoleCharge {
         &self.filesystem_instance_digest
     }
 
+    #[cfg(test)]
     pub(crate) fn medium(&self) -> StorageMedium {
         self.medium
     }
 
+    #[cfg(test)]
     pub(crate) fn charge_bytes(&self) -> u64 {
         self.charge_bytes
     }
 
+    #[cfg(test)]
     pub(crate) fn charge_inodes(&self) -> u64 {
         self.charge_inodes
     }
@@ -127,10 +131,12 @@ impl StorageReservationPlan {
         &self.profile_digest
     }
 
+    #[cfg(test)]
     pub(crate) fn instance_binding_digest(&self) -> &str {
         &self.instance_binding_digest
     }
 
+    #[cfg(test)]
     pub(crate) fn retained_memory_bytes(&self) -> Result<u64, HostError> {
         self.roles.iter().try_fold(0_u64, |sum, role| {
             sum.checked_add(role.retained_memory_bytes)

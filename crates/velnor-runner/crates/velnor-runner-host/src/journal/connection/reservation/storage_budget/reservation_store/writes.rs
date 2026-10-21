@@ -2,12 +2,18 @@
 
 use crate::error::HostError;
 
+#[cfg(test)]
 use super::super::observations::StoragePoolObservation;
 use super::super::plan::StorageReservationPlan;
+#[cfg(test)]
 use super::super::profile::StorageProfile;
+#[cfg(test)]
 use super::super::profile_store::to_sql;
+#[cfg(test)]
 use super::super::sample::{StorageAdmission, StorageAdmissionSample};
+
 /// Persist the immutable role charge and first successful admission sample.
+#[cfg(test)]
 pub(in crate::journal::connection::reservation::storage_budget) async fn insert_reservation(
     connection: &turso::Connection,
     reservation_id: i64,
@@ -46,6 +52,7 @@ pub(in crate::journal::connection::reservation::storage_budget) async fn insert_
 }
 
 /// Append a new exact sample while retaining the original reservation plan.
+#[cfg(test)]
 pub(in crate::journal::connection::reservation::storage_budget) async fn append_sample(
     connection: &turso::Connection,
     reservation_id: i64,
@@ -55,6 +62,7 @@ pub(in crate::journal::connection::reservation::storage_budget) async fn append_
     insert_sample(connection, reservation_id, profile, sample).await
 }
 
+#[cfg(test)]
 async fn insert_sample(
     connection: &turso::Connection,
     reservation_id: i64,

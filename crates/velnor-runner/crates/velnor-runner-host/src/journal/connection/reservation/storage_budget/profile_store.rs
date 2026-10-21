@@ -2,7 +2,9 @@
 
 use crate::error::HostError;
 use crate::journal::Journal;
-use crate::journal::connection::storage::{in_transaction, read_transaction};
+use crate::journal::connection::storage::in_transaction;
+#[cfg(test)]
+use crate::journal::connection::storage::read_transaction;
 
 use super::profile::{StoragePoolLimit, StorageProfile, StorageRoleLimit};
 use super::publication::ControllerPublicationBound;
@@ -21,6 +23,7 @@ impl Journal {
     }
 
     /// Read the selected storage profile after its format and policy checks.
+    #[cfg(test)]
     pub(crate) async fn current_storage_profile(
         &self,
     ) -> Result<Option<StorageProfile>, HostError> {

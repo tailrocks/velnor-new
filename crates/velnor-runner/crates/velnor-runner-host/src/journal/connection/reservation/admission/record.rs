@@ -1,9 +1,8 @@
 //! Reservation persistence helpers.
 
-use super::{
-    AssignmentIdentity, AssignmentKey, ConnectionJournal, HostError, ReservationAttempt,
-    ReservationRequest,
-};
+use super::super::super::{AssignmentIdentity, AssignmentKey, ConnectionJournal};
+use super::generic::ReservationAttempt;
+use super::{HostError, ReservationRequest};
 
 pub(super) fn runner_assignment_fields(key: &AssignmentKey) -> (Option<i64>, Option<String>) {
     match key {

@@ -1,15 +1,19 @@
 //! Durable storage plans and their fresh admission observations.
 
+#[cfg(test)]
 use std::collections::BTreeMap;
 
+#[cfg(test)]
 use super::role::{StorageFilesystemKind, StorageInodePolicy, StorageMedium};
 
+#[cfg(test)]
 #[derive(Default)]
 struct HeldCharges {
     by_pool: BTreeMap<String, HeldPool>,
     memory_bytes: u64,
 }
 
+#[cfg(test)]
 #[derive(Clone)]
 struct HeldPool {
     filesystem_instance_digest: String,
@@ -20,13 +24,19 @@ struct HeldPool {
     inodes: u64,
 }
 
+#[cfg(test)]
 mod admission;
+#[cfg(test)]
 pub(super) use admission::{admission_fits, matches_existing};
 mod sample_history;
 pub(super) use sample_history::{
     validate_orphan_roles, validate_orphan_samples, validate_sample_history,
 };
 mod validation;
-pub(super) use validation::{load_plan, validate_rows};
+#[cfg(test)]
+pub(super) use validation::load_plan;
+pub(super) use validation::validate_rows;
 mod writes;
-pub(super) use writes::{append_sample, insert_reservation, plan_memory};
+pub(super) use writes::plan_memory;
+#[cfg(test)]
+pub(super) use writes::{append_sample, insert_reservation};

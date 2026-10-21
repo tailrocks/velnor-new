@@ -6,6 +6,7 @@ use crate::error::HostError;
 use super::observations::{
     StorageMemoryObservation, StoragePoolObservation, StorageSampleIdentity,
 };
+#[cfg(test)]
 use super::plan::StorageReservationPlan;
 use super::profile::StorageProfile;
 use super::role::StorageMedium;
@@ -15,9 +16,11 @@ const MAX_SAMPLE_AGE: Duration = Duration::from_secs(30);
 
 mod validation;
 use validation::{
-    validate_metadata_pool_identity, validate_pool_observations, validate_provisioning_memory,
-    validate_provisioning_pool_identity, validate_retained_memory, validate_sample_identity,
+    validate_metadata_pool_identity, validate_provisioning_memory,
+    validate_provisioning_pool_identity, validate_sample_identity,
 };
+#[cfg(test)]
+use validation::{validate_pool_observations, validate_retained_memory};
 
 #[derive(Debug, Clone)]
 pub(crate) struct StorageAdmissionSample {
@@ -79,6 +82,7 @@ impl StorageAdmissionSample {
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn validate_for(
         &self,
         profile: &StorageProfile,
@@ -286,12 +290,14 @@ impl StorageProvisioningMemoryObservation {
     }
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone)]
 pub(crate) struct StorageAdmission {
     pub(super) plan: StorageReservationPlan,
     pub(super) sample: StorageAdmissionSample,
 }
 
+#[cfg(test)]
 impl StorageAdmission {
     pub(crate) fn new(
         plan: StorageReservationPlan,

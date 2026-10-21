@@ -3,6 +3,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use crate::error::HostError;
 
 use super::super::observations::StoragePoolObservation;
+#[cfg(test)]
 use super::super::plan::{StorageReservationPlan, StorageRoleCharge};
 use super::super::profile::{StoragePoolLimit, StorageProfile};
 use super::super::role::{StorageFilesystemKind, StorageInodePolicy, StorageMedium};
@@ -110,6 +111,7 @@ pub(super) fn validate_sample_identity(
     }
 }
 
+#[cfg(test)]
 pub(super) fn validate_pool_observations(
     sample: &StorageAdmissionSample,
     profile: &StorageProfile,
@@ -129,6 +131,7 @@ pub(super) fn validate_pool_observations(
     Ok(())
 }
 
+#[cfg(test)]
 fn validate_pool_observation(
     limit: &StoragePoolLimit,
     observation: &StoragePoolObservation,
@@ -149,6 +152,7 @@ fn validate_pool_observation(
     validate_pool_capacity(limit, observation, &matching_roles)
 }
 
+#[cfg(test)]
 fn validate_pool_identity(
     limit: &StoragePoolLimit,
     observation: &StoragePoolObservation,
@@ -178,6 +182,7 @@ fn validate_pool_identity(
     }
 }
 
+#[cfg(test)]
 fn validate_pool_capacity(
     limit: &StoragePoolLimit,
     observation: &StoragePoolObservation,
@@ -208,6 +213,7 @@ fn validate_pool_capacity(
     }
 }
 
+#[cfg(test)]
 pub(super) fn validate_retained_memory(
     sample: &StorageAdmissionSample,
     profile: &StorageProfile,

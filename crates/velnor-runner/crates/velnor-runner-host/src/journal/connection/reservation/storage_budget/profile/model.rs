@@ -16,6 +16,7 @@ pub(crate) struct StoragePoolLimit {
 }
 
 impl StoragePoolLimit {
+    #[cfg(test)]
     pub(crate) fn new(
         pool_id: String,
         medium: StorageMedium,

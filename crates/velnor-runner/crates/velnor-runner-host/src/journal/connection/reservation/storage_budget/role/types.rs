@@ -56,14 +56,6 @@ impl StorageFilesystemKind {
         }
     }
 
-    pub(in crate::journal::connection::reservation::storage_budget) const fn as_byte(self) -> u8 {
-        match self {
-            Self::Btrfs => 1,
-            Self::Tmpfs => 2,
-            Self::Other => 3,
-        }
-    }
-
     pub(crate) fn parse(value: &str) -> Result<Self, HostError> {
         match value {
             "btrfs" => Ok(Self::Btrfs),
