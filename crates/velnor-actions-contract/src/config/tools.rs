@@ -8,6 +8,7 @@ pub const OVERRIDABLE_TOOLS: &[&str] = &[
     "actionlint",
     "cargo-nextest",
     "gh",
+    "jactionlint",
     "mr-boxington",
     "nextest",
     "opentofu",
