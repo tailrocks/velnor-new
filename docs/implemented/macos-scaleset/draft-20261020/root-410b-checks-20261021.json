@@ -64,5 +64,14 @@
     "reviewer": "grouped_source_evidence",
     "status": "PASS",
     "scope": "The reviewer checked the run ID, summaries, raw hashes, exclusions, and source state."
+  },
+  "repository_freshness": {
+    "status": "PASS",
+    "source": "4317c092e544954a112adf313cc8b28268a48e38",
+    "exit_status": 0,
+    "log": "evidence/root-410b-repo-policy-freshness.log",
+    "sha256": "f8aeb51661e4aea7ca732dd087a2416a0d8561630f05e098f3c11fad0d7d6b1c",
+    "upstream_probe": false,
+    "live_advisories": false
   }
 }
