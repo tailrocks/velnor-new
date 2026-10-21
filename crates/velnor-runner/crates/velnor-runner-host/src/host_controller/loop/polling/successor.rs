@@ -110,8 +110,7 @@ async fn reserve_physical_successor(
             permit,
             admission,
             request,
-            policy.generation(),
-            policy.policy_sha256(),
+            policy,
             assigned_limit,
         )
         .await?;

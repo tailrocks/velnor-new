@@ -1,8 +1,10 @@
 //! Database records for one capacity reservation and its `AcquireJobs` permission.
 
+use crate::config::ApprovedJobAuthorityPolicy;
 use crate::error::HostError;
 use crate::journal::connection::AssignmentIdentity;
 use crate::journal::connection::storage::in_transaction;
+#[cfg(test)]
 use crate::journal::request_lifecycle::RequestAcquireState;
 use crate::launch::StartPermit;
 
@@ -20,24 +22,32 @@ pub(crate) enum RequestPhysicalReservationResult {
     AcquireClaimed { reservation_id: i64, intent_id: i64 },
     /// Return the recorded connection without use of another permit or sample.
     Existing {
+        #[cfg(test)]
         reservation_id: i64,
+        #[cfg(test)]
         intent_id: i64,
+        #[cfg(test)]
         acquire_state: RequestAcquireState,
     },
     /// Current host policy permits no additional capacity reservation of this size.
     AtCapacity,
     /// If the earlier capacity reservation has no request connection, reconcile it before acquisition.
-    ReconcileRequired { reservation_id: i64, intent_id: i64 },
+    ReconcileRequired {
+        #[cfg(test)]
+        reservation_id: i64,
+        #[cfg(test)]
+        intent_id: i64,
+    },
 }
 
 /// This result describes a new physical reservation for a request that was acquired earlier.
 pub(crate) enum PhysicalSuccessorReservationResult {
     /// The transaction committed the new reservation and physical attempt. It did not send an `AcquireJobs` request.
-    Reserved { reservation_id: i64, intent_id: i64 },
+    Reserved { reservation_id: i64 },
     /// The current shared resource policy rejected the new physical attempt.
     AtCapacity,
     /// Existing physical effects for this assignment need reconciliation.
-    ReconcileRequired { reservation_id: i64, intent_id: i64 },
+    ReconcileRequired,
 }
 
 impl ConnectionJournal {
@@ -74,12 +84,13 @@ impl ConnectionJournal {
         permit: StartPermit,
         admission: StorageProvisioningAdmission,
         request: &AssignmentIdentity,
-        policy_generation: u64,
-        policy_digest: &str,
+        policy: &ApprovedJobAuthorityPolicy,
         assigned_total: u32,
     ) -> Result<PhysicalSuccessorReservationResult, HostError> {
         let nonce = physical_nonce(physical.assignment.key())?.to_owned();
         let request_id = request.request_id().ok_or(HostError::Identity)?;
+        let policy_generation = policy.generation();
+        let policy_digest = policy.policy_sha256();
         if request.connection_id() != self.connection_id()
             || physical.assignment.connection_id() != self.connection_id()
             || request.scale_set_id() != physical.assignment.scale_set_id()
@@ -118,19 +129,13 @@ impl ConnectionJournal {
                 }
                 #[cfg(test)]
                 ReservationResult::Resumed { reservation_id } => {
-                    let intent_id = reservation_intent_id(connection, reservation_id).await?;
-                    return Ok(PhysicalSuccessorReservationResult::ReconcileRequired {
-                        reservation_id,
-                        intent_id,
-                    });
+                    reservation_intent_id(connection, reservation_id).await?;
+                    return Ok(PhysicalSuccessorReservationResult::ReconcileRequired);
                 }
                 ReservationResult::ReconcileRequired { reservation_id }
                 | ReservationResult::Released { reservation_id } => {
-                    let intent_id = reservation_intent_id(connection, reservation_id).await?;
-                    return Ok(PhysicalSuccessorReservationResult::ReconcileRequired {
-                        reservation_id,
-                        intent_id,
-                    });
+                    reservation_intent_id(connection, reservation_id).await?;
+                    return Ok(PhysicalSuccessorReservationResult::ReconcileRequired);
                 }
             };
             let intent_id = reservation_intent_id(connection, reservation_id).await?;
@@ -143,10 +148,7 @@ impl ConnectionJournal {
                 &nonce,
             )
             .await?;
-            Ok(PhysicalSuccessorReservationResult::Reserved {
-                reservation_id,
-                intent_id,
-            })
+            Ok(PhysicalSuccessorReservationResult::Reserved { reservation_id })
         })
         .await
     }
@@ -194,11 +196,7 @@ impl ConnectionJournal {
                 }
                 ReservationResult::ReconcileRequired { reservation_id }
                 | ReservationResult::Released { reservation_id } => {
-                    let intent_id = reservation_intent_id(connection, reservation_id).await?;
-                    return Ok(RequestPhysicalReservationResult::ReconcileRequired {
-                        reservation_id,
-                        intent_id,
-                    });
+                    return request_reconcile_required(connection, reservation_id).await;
                 }
             };
             let intent_id = reservation_intent_id(connection, reservation_id).await?;
@@ -239,6 +237,22 @@ impl ConnectionJournal {
         })
         .await
     }
+}
+
+async fn request_reconcile_required(
+    connection: &turso::Connection,
+    reservation_id: i64,
+) -> Result<RequestPhysicalReservationResult, HostError> {
+    #[cfg(test)]
+    let intent_id = reservation_intent_id(connection, reservation_id).await?;
+    #[cfg(not(test))]
+    reservation_intent_id(connection, reservation_id).await?;
+    Ok(RequestPhysicalReservationResult::ReconcileRequired {
+        #[cfg(test)]
+        reservation_id,
+        #[cfg(test)]
+        intent_id,
+    })
 }
 
 async fn successor_population_shortfall(
@@ -368,10 +382,16 @@ async fn existing_request_link(
     {
         return Err(HostError::Journal);
     }
+    #[cfg(test)]
     let acquire_state = crate::journal::request_lifecycle::acquire::parse_state(&acquire_state)?;
+    #[cfg(not(test))]
+    crate::journal::request_lifecycle::acquire::parse_state(&acquire_state)?;
     Ok(Some(RequestPhysicalReservationResult::Existing {
+        #[cfg(test)]
         reservation_id,
+        #[cfg(test)]
         intent_id,
+        #[cfg(test)]
         acquire_state,
     }))
 }
