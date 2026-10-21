@@ -8,8 +8,8 @@ pub use crate::catalog::{COSIGN_LINUX_AMD64_SHA256, COSIGN_VERSION};
 use crate::{IsolatedCommand, MiseError, command::EnvPolicy};
 use velnor_actions_contract::vcs::is_safe_github_repository;
 
-/// Maximum bytes accepted from the pinned Cosign download transport.
-pub const COSIGN_MAX_BYTES: usize = 128 * 1024 * 1024;
+/// Exact pinned executable length bounds the Cosign download and staged reads.
+pub const COSIGN_MAX_BYTES: usize = crate::catalog::COSIGN_LINUX_AMD64_BYTES;
 /// Per-command captured output limit for fixed Cosign invocations.
 pub const COSIGN_COMMAND_OUTPUT_LIMIT: usize = 64 * 1024;
 /// Deadline for fixed Cosign invocations and binary download.

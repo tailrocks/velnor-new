@@ -39,7 +39,7 @@ fn fixture(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {
     }, vec!["sh".into(), "-c".into(), r#"curl -fsSL "$VELNOR_ASSET_URL" -o "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.33" && printf '%s  %s\n' "$VELNOR_ASSET_SHA256" "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.33" | sha256sum -c -"#.into()]).expect("typed acquisition");
     let setup = MiseSetup {
         uses: "jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde".into(),
-        version: "2026.10.15".into(),
+        version: "2026.10.17".into(),
         sha256: "a".repeat(64),
     };
     ConsumerReleaseSpec {
@@ -52,7 +52,7 @@ fn fixture(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {
         producer_acquire: acquire,
         producer_setup: setup.clone(),
         linux_setup: setup,
-        install_gh_argv: vec!["mise".into(), "install".into(), "gh@2.102.0".into()],
+        install_gh_argv: vec!["mise".into(), "install".into(), "gh@2.102.1".into()],
         install_rust_argv: vec!["mise".into(), "install".into(), "rust@1.99.1".into()],
         producer_source_prep: vec![],
         producer_cargo_env: [

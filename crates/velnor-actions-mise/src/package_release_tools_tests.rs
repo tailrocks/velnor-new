@@ -95,3 +95,30 @@ fn cosign_handle_rejects_unpinned_executable_bytes() {
     let mut bytes = Cursor::new(b"untrusted executable bytes");
     assert!(verify_cosign_reader(&mut bytes).is_err());
 }
+
+#[test]
+fn cosign_measured_asset_length_reaches_digest_verification() {
+    // Official v3.1.4 Linux amd64 asset is 145,688,404 bytes, exceeding the
+    // former unrelated 128 MiB ceiling. Stream without allocating the asset.
+    let mut input = std::io::repeat(0).take(145_688_404);
+    let error =
+        verify_cosign_reader(&mut input).expect_err("synthetic bytes are not signed tool bytes");
+    assert!(format!("{error:?}").contains("cosign_sha256_mismatch"));
+    assert_eq!(
+        input.limit(),
+        0,
+        "full measured asset can reach its digest guard"
+    );
+}
+
+#[test]
+fn cosign_measured_asset_ceiling_refuses_an_oversized_stream() {
+    let mut input = std::io::repeat(0).take(145_688_405);
+    let error = verify_cosign_reader(&mut input).expect_err("oversized by one byte");
+    assert!(format!("{error:?}").contains("cosign_file_too_large"));
+    assert_eq!(
+        input.limit(),
+        0,
+        "one excess byte proves the size violation"
+    );
+}

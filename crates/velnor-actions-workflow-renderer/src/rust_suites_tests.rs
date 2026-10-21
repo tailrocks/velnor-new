@@ -22,7 +22,7 @@ type TestResult = Result<(), Box<dyn Error>>;
 fn sample_mise() -> MiseSetup {
     MiseSetup {
         uses: format!("jdx/mise-action@{}", "b".repeat(40)),
-        version: "2026.10.15".to_owned(),
+        version: "2026.10.17".to_owned(),
         sha256: MISE_BINARY_SHA256_LINUX_X64.to_owned(),
     }
 }

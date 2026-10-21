@@ -28,7 +28,7 @@ fn policy(steps: Vec<Step>) -> StackJobPolicy {
         services: Vec::new(),
         setup: MiseSetup {
             uses: "jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde".to_owned(),
-            version: "2026.10.15".to_owned(),
+            version: "2026.10.17".to_owned(),
             sha256: "0".repeat(64),
         },
         steps,
