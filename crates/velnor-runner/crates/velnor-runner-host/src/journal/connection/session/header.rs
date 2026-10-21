@@ -52,32 +52,6 @@ impl ConnectionJournal {
         .await
     }
 
-    /// Record a capacity reservation for this session's header within the host budget.
-    pub(crate) async fn reserve_session_header(
-        &self,
-        session_intent_id: i64,
-        target: u32,
-    ) -> Result<HeaderAllocation, HostError> {
-        in_transaction(self.journal_ref(), async |connection| {
-            self.validate_scope(connection).await?;
-            let scale_set_id = self.required_set_id(connection).await?;
-            let session_id =
-                active_session_id(connection, self, scale_set_id, session_intent_id).await?;
-            let mut ledger = load(connection).await?;
-            let allocation = ledger
-                .reserve(
-                    self.connection_id().clone(),
-                    scale_set_id,
-                    &session_id,
-                    target,
-                )
-                .map_err(|_| HostError::Journal)?;
-            save(connection, &ledger).await?;
-            Ok(allocation)
-        })
-        .await
-    }
-
     /// Before you send a session poll, record its session ID and request with a database commit.
     pub(crate) async fn begin_session_poll(
         &self,

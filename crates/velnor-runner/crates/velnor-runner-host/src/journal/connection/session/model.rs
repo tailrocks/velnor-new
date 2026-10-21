@@ -21,16 +21,6 @@ pub(crate) enum SessionCreateState {
 }
 
 impl SessionCreateState {
-    pub(super) const fn as_str(self) -> &'static str {
-        match self {
-            Self::Prepared => "prepared",
-            Self::Requested => "requested",
-            Self::Uncertain => "uncertain",
-            Self::Bound => "bound",
-            Self::Retired => "retired",
-        }
-    }
-
     pub(super) fn parse(value: &str) -> Result<Self, crate::error::HostError> {
         match value {
             "prepared" => Ok(Self::Prepared),
@@ -78,6 +68,7 @@ impl BoundConnectionSession {
 impl SessionCreateRecord {
     /// Give the repository connection that owns this attempt.
     #[must_use]
+    #[cfg(test)]
     pub(crate) fn connection_id(&self) -> &ConnectionId {
         &self.connection_id
     }

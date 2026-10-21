@@ -7,9 +7,9 @@ pub(crate) use model::{SessionRefreshClaim, SessionRefreshRecord, SessionRefresh
 use crate::config::ConnectionId;
 use crate::error::HostError;
 use crate::journal::ConnectionJournal;
-use crate::journal::connection::storage::{
-    has_ambiguous_legacy_work, in_transaction, read_transaction,
-};
+#[cfg(test)]
+use crate::journal::connection::storage::read_transaction;
+use crate::journal::connection::storage::{has_ambiguous_legacy_work, in_transaction};
 use crate::launch::{ReturnedSessionRefreshTransportError, VerifiedSessionRefresh};
 
 use super::header::active_session_id;
@@ -114,6 +114,7 @@ impl ConnectionJournal {
     }
 
     /// Read the complete bounded refresh history for one exact session intent.
+    #[cfg(test)]
     pub(crate) async fn session_refreshes(
         &self,
         session_intent_id: i64,

@@ -2,8 +2,10 @@
 
 use crate::config::{ConnectionId, SourcePolicyMode};
 use crate::error::HostError;
+use crate::journal::connection::ConnectionJournal;
 use crate::journal::connection::storage::read_transaction;
-use crate::journal::connection::{AssignmentIdentity, AssignmentKey, ConnectionJournal};
+#[cfg(test)]
+use crate::journal::connection::{AssignmentIdentity, AssignmentKey};
 use crate::journal::source_authorization::{
     created_set_matches, encode_source_receipt, validate_stored_source,
 };
@@ -52,6 +54,7 @@ impl AuthorizedOffer {
 
     /// Queue message ID retained for source authorization and audit correlation.
     #[must_use]
+    #[cfg(test)]
     pub(crate) const fn message_id(&self) -> i64 {
         self.message_id
     }
@@ -70,6 +73,7 @@ impl AuthorizedOffer {
 
     /// Digest of the canonical authenticated source JSON.
     #[must_use]
+    #[cfg(test)]
     pub(crate) fn source_digest(&self) -> &str {
         &self.source_digest
     }
@@ -81,6 +85,7 @@ impl AuthorizedOffer {
     }
 
     /// Recreate the exact assigned-request identity held in this receipt.
+    #[cfg(test)]
     pub(crate) fn assignment_identity(&self) -> Result<AssignmentIdentity, HostError> {
         AssignmentIdentity::new(
             &self.connection_id,
@@ -149,6 +154,7 @@ impl ConnectionJournal {
     }
 
     /// Read one exact still-authorized offer after its source receipt has been persisted.
+    #[cfg(test)]
     pub(crate) async fn authorized_offer(
         &self,
         request_id: i64,

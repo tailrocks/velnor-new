@@ -77,6 +77,7 @@ impl RecordedEventDisposition {
 
 impl ConnectionJournal {
     /// Correlate an actual `JobStarted` request with its exact JIT-created runner.
+    #[cfg(test)]
     pub(crate) async fn record_job_started(
         &self,
         identity: &AssignmentIdentity,
@@ -135,6 +136,7 @@ impl ConnectionJournal {
     }
 
     /// Persist a request completion; only an exact runner reference links a pair.
+    #[cfg(test)]
     pub(crate) async fn record_job_completed(
         &self,
         identity: &AssignmentIdentity,

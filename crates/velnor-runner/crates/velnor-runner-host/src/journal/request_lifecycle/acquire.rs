@@ -32,6 +32,7 @@ enum AcquireResponse<'a> {
 
 impl ConnectionJournal {
     /// Record the one-shot `AcquireJobs` intent before the HTTP request.
+    #[cfg(test)]
     pub(crate) async fn claim_request_acquire(
         &self,
         identity: &AssignmentIdentity,

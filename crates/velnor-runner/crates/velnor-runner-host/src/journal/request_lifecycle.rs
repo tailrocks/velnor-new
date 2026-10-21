@@ -11,7 +11,9 @@ pub(in crate::journal) mod source;
 pub(crate) mod tests;
 
 use crate::config::ConnectionId;
+#[cfg(test)]
 use crate::error::HostError;
+#[cfg(test)]
 use crate::journal::connection::AssignmentIdentity;
 
 pub(crate) use acquire::AcquiredRecoveryCandidate;
@@ -47,6 +49,7 @@ pub(crate) struct RunnerJitClaim {
     requested_name: String,
 }
 
+#[cfg(test)]
 impl RunnerJitClaim {
     /// Give the physical capacity intent ID.
     #[must_use]

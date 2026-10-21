@@ -58,6 +58,7 @@ pub(crate) struct SessionRefreshRecord {
     pub(super) state: SessionRefreshState,
 }
 
+#[cfg(test)]
 impl SessionRefreshRecord {
     /// Give the repository connection that owns this attempt.
     #[must_use]
