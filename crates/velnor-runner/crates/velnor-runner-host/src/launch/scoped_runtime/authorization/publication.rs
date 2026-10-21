@@ -83,14 +83,14 @@ where
     )
     .await
     {
-        return Err(PendingScopedExecution::Channel(ready, error));
+        return Err(PendingScopedExecution::Channel(Box::new(ready), error));
     }
     if let Err(error) = publish_challenge_with_provider(&ready, context, provider, deadline).await {
-        return Err(PendingScopedExecution::Channel(ready, error));
+        return Err(PendingScopedExecution::Channel(Box::new(ready), error));
     }
     let reservation_id = ready.bound().prepared().acquired().reservation_id();
     if let Err(error) = before_delivery(reservation_id).await {
-        return Err(PendingScopedExecution::Channel(ready, error));
+        return Err(PendingScopedExecution::Channel(Box::new(ready), error));
     }
     ready
         .deliver(context.scoped, deadline)

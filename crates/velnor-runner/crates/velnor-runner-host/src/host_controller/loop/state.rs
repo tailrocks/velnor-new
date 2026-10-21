@@ -167,7 +167,7 @@ impl PreparedConnection {
                 .build()
             else {
                 return Err(Box::new(PendingScopedExecution::Runner(
-                    runner,
+                    Box::new(runner),
                     None,
                     HostError::Journal,
                 )));
@@ -176,7 +176,9 @@ impl PreparedConnection {
                 Ok(secret) => secret,
                 Err(error) => {
                     return Err(Box::new(PendingScopedExecution::Runner(
-                        runner, None, error,
+                        Box::new(runner),
+                        None,
+                        error,
                     )));
                 }
             };
@@ -211,7 +213,7 @@ impl PreparedConnection {
     ) {
         self.retain_pending(
             request_id,
-            PendingScopedExecution::Runner(runner, None, error),
+            PendingScopedExecution::Runner(Box::new(runner), None, error),
         );
     }
 

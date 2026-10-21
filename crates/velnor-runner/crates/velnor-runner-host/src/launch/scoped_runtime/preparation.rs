@@ -34,7 +34,7 @@ pub(super) async fn prepare_started_and_bound<P: ImageProvider>(
     .await
     {
         Ok(preparation) => preparation,
-        Err(pending) => return Ok(pending),
+        Err(pending) => return Ok(*pending),
     };
     let reservation_id = prepared.acquired().reservation_id();
     let initialization = match Box::pin(
@@ -103,10 +103,16 @@ async fn prepare_network_and_started_pair<P: ImageProvider>(
     provider: &P,
     engine: &SelectedEngineContext,
     images: &VerifiedWorkerImages,
-) -> Result<StartedPairPreparation, ScopedRuntimeOutcome> {
+) -> Result<StartedPairPreparation, Box<ScopedRuntimeOutcome>> {
     let reservation_id = prepared.acquired().reservation_id();
     let Some(initializer) = prepared.storage().pending_initialization() else {
-        return Err(pending(prepared, None, None, None, HostError::Journal));
+        return Err(Box::new(pending(
+            prepared,
+            None,
+            None,
+            None,
+            HostError::Journal,
+        )));
     };
     let network = match Box::pin(bootstrap::create_owned_network(
         docker,
@@ -117,7 +123,7 @@ async fn prepare_network_and_started_pair<P: ImageProvider>(
     .await
     {
         Ok(network) => network,
-        Err(error) => return Err(pending(prepared, None, None, None, error)),
+        Err(error) => return Err(Box::new(pending(prepared, None, None, None, error))),
     };
     let started = match Box::pin(bootstrap::start_bootstrap_pair(
         &prepared,
@@ -134,20 +140,22 @@ async fn prepare_network_and_started_pair<P: ImageProvider>(
         Ok(started) => started,
         Err(failure) => {
             let (error, pending_pair) = failure.into_parts();
-            return Err(cleanup_failed_pair(
-                prepared,
-                network,
-                error,
-                pending_pair,
-                docker,
-                scoped,
-                host,
-                provider,
-                engine,
-                images,
-                reservation_id,
-            )
-            .await);
+            return Err(Box::new(
+                cleanup_failed_pair(
+                    prepared,
+                    network,
+                    error,
+                    pending_pair,
+                    docker,
+                    scoped,
+                    host,
+                    provider,
+                    engine,
+                    images,
+                    reservation_id,
+                )
+                .await,
+            ));
         }
     };
     Ok(StartedPairPreparation {

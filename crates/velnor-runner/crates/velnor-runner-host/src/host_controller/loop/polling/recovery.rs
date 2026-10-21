@@ -15,7 +15,7 @@ pub(super) fn retain_ready_or_pending(
         Err(runner) => retain_authorization_pending(
             prepared,
             request_id,
-            PendingScopedExecution::Runner(*runner, None, HostError::Ownership),
+            PendingScopedExecution::Runner(runner, None, HostError::Ownership),
         ),
     }
 }

@@ -1,0 +1,74 @@
+{
+  "result": "PASS",
+  "scope": "These checks cover five files. The full runner checks still fail.",
+  "source_base": "64da3af23adec52c6b2a5dbd358ff0f830a273a1",
+  "manifest_sha256": "65acf61f07a99f989968255b4a5eb1f3079b4f3502eb14e7e250f249af5869e9",
+  "change": "Store the owned error values and the private request helper future in Box values. Keep the public APIs and cleanup order.",
+  "checks": {
+    "nextest_uuid": "b1aaeae3-7c34-47bc-a502-c3bda2c587c8",
+    "nextest_summary": "9 passed, 1163 skipped",
+    "nextest_log": "evidence/pending-scoped-preparation-error-box-46fc93d3-20261021/nextest.log",
+    "nextest_log_sha256": "0052290a79d45d99b11dd194a9fddc10c13e386647b90ce990c88d269cb56192",
+    "rustfmt_exit": 0,
+    "rustfmt_log": "evidence/pending-scoped-preparation-error-box-46fc93d3-20261021/fmt.log",
+    "rustfmt_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "strict_clippy_exit": 101,
+    "strict_clippy_log": "evidence/pending-scoped-preparation-error-box-46fc93d3-20261021/strict-clippy.log",
+    "strict_clippy_log_sha256": "f7d5ca53b132582b980b3f8faa44be11107fa8c1d4559b2e3aab10d355997a73",
+    "strict_clippy_note": "The full host check still fails with 525 test-library errors. It reports no result_large_err diagnostics. It reports no new large_futures or function-length diagnostics in the five reviewed files."
+  },
+  "review": {
+    "reviewer": "/root/execution_source_security_review",
+    "result": "PASS",
+    "original_sha256": "eb3694bed8c814fef80e9b257532e2d8cd2d9a0a1410f92fc7ec1651324e55ee",
+    "record_sha256": "6f1a48c4451a11ed2df0696b158990fff6802767af4a744c6fd5b7bbb0e1bb05"
+  },
+  "consumer_activation": "NOT_RUN",
+  "command_receipt": {
+    "sha256": "84d0e93c08ac97676c5492ea3be59d269b4b2ec7c07883f627a0238103a56923",
+    "data": {
+      "source": "/Users/donbeave/Downloads/velnor-goal/build/pending-scoped-preparation-error-box-46fc93d3-20261021/source",
+      "manifest": "evidence/pending-scoped-preparation-error-box-46fc93d3-20261021/final-manifest.json",
+      "manifest_sha256": "65acf61f07a99f989968255b4a5eb1f3079b4f3502eb14e7e250f249af5869e9",
+      "environment": {
+        "rust": "1.99.1",
+        "mbx": "mr-boxington 1.25.0",
+        "cargo_nextest": "0.9.148",
+        "cargo_target_dir": "/Users/donbeave/Downloads/velnor-goal/build/jit-pending-box-46fc93d3-20261021/target",
+        "cargo_build_jobs": 4,
+        "rust_min_stack": "unset"
+      },
+      "checks": [
+        {
+          "name": "focused-nextest",
+          "working_directory": "/Users/donbeave/Downloads/velnor-goal/build/pending-scoped-preparation-error-box-46fc93d3-20261021/source",
+          "argv_shell": "set -o pipefail; CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/jit-pending-box-46fc93d3-20261021/target CARGO_BUILD_JOBS=4 env -u RUST_MIN_STACK mise --no-config exec rust@1.99.1 mr-boxington@1.25.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.148 -- mbx nextest run --manifest-path crates/velnor-runner/Cargo.toml -p velnor-runner-host --lib --locked --offline --build-jobs 4 --filter-expr 'test(native_intake_composition) | test(request_wait) | test(successor_recovery) | test(pending_scoped_execution_error_stays_bounded)' 2>&1 | tee /Users/donbeave/Downloads/velnor-goal/evidence/pending-scoped-preparation-error-box-46fc93d3-20261021/nextest.log",
+          "exit": 0,
+          "run_id": "b1aaeae3-7c34-47bc-a502-c3bda2c587c8",
+          "result": "9 passed, 1163 skipped",
+          "log": "evidence/pending-scoped-preparation-error-box-46fc93d3-20261021/nextest.log",
+          "log_sha256": "0052290a79d45d99b11dd194a9fddc10c13e386647b90ce990c88d269cb56192"
+        },
+        {
+          "name": "rustfmt-check",
+          "working_directory": "/Users/donbeave/Downloads/velnor-goal/build/pending-scoped-preparation-error-box-46fc93d3-20261021/source",
+          "argv_shell": "set -o pipefail; mise --no-config exec rust@1.99.1 -- rustfmt --edition 2024 --check crates/velnor-runner/crates/velnor-runner-host/src/launch/scoped_runtime/authorization.rs crates/velnor-runner/crates/velnor-runner-host/src/launch/scoped_runtime/authorization/publication.rs crates/velnor-runner/crates/velnor-runner-host/src/host_controller/loop/state.rs crates/velnor-runner/crates/velnor-runner-host/src/host_controller/loop/polling/recovery.rs crates/velnor-runner/crates/velnor-runner-host/src/launch/scoped_runtime/preparation.rs 2>&1 | tee /Users/donbeave/Downloads/velnor-goal/evidence/pending-scoped-preparation-error-box-46fc93d3-20261021/fmt.log",
+          "exit": 0,
+          "log": "evidence/pending-scoped-preparation-error-box-46fc93d3-20261021/fmt.log",
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "strict-clippy",
+          "working_directory": "/Users/donbeave/Downloads/velnor-goal/build/pending-scoped-preparation-error-box-46fc93d3-20261021/source",
+          "argv_shell": "set -o pipefail; CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/jit-pending-box-46fc93d3-20261021/target CARGO_BUILD_JOBS=4 env -u RUST_MIN_STACK mise --no-config exec rust@1.99.1 mr-boxington@1.25.0 -- mbx clippy --manifest-path crates/velnor-runner/Cargo.toml --locked --offline -p velnor-runner-host --all-targets -- -D warnings 2>&1 | tee /Users/donbeave/Downloads/velnor-goal/evidence/pending-scoped-preparation-error-box-46fc93d3-20261021/strict-clippy.log",
+          "exit": 101,
+          "result": "strict host-package Clippy failed on the broader baseline; 408 lib errors and 525 lib-test errors, no result_large_err diagnostics",
+          "log": "evidence/pending-scoped-preparation-error-box-46fc93d3-20261021/strict-clippy.log",
+          "log_sha256": "f7d5ca53b132582b980b3f8faa44be11107fa8c1d4559b2e3aab10d355997a73"
+        }
+      ]
+    },
+    "kind": "external_evidence"
+  },
+  "test_evidence_reuse": "The nested source differs from the tested base only through these five files and the earlier Pair and JIT files."
+}
