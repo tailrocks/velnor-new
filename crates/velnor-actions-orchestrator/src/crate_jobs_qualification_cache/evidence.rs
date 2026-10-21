@@ -1,6 +1,6 @@
 use super::{
-    CENSUS_PHASE_ENV, LAYERS, ROOTS_FILE_ENV, RUNTIME_FILE_ENV, cache_action_step, dynamic_id,
-    internal_dynamic_step, owner_layer_env, step_output,
+    LAYERS, ROOTS_FILE_ENV, RUNTIME_FILE_ENV, cache_action_step, dynamic_id, internal_dynamic_step,
+    owner_layer_env, step_output,
 };
 use crate::{OrchestratorError, QualificationCacheRuntimePhase};
 use velnor_actions_contract::workflow::{
@@ -13,9 +13,7 @@ const AFTER_RUNTIME_FILE_ENV: &str = "VELNOR_QUALIFICATION_CACHE_RUNTIME_AFTER_F
 struct LayerIds {
     bind: QualificationCacheStepId,
     export: QualificationCacheStepId,
-    before: QualificationCacheStepId,
     save: QualificationCacheStepId,
-    after: QualificationCacheStepId,
     record: QualificationCacheStepId,
 }
 
@@ -23,7 +21,7 @@ struct LayerIds {
 pub(in crate::crate_jobs) fn owner_evidence_steps(
     owner_id: &str,
 ) -> Result<Vec<Step>, OrchestratorError> {
-    let mut steps = Vec::with_capacity(LAYERS.len() * 5 + 1);
+    let mut steps = Vec::with_capacity(LAYERS.len() * 3 + 1);
     let mut evidence = Vec::with_capacity(LAYERS.len());
     for layer in LAYERS {
         append_layer_evidence(owner_id, layer, &mut steps, &mut evidence)?;
@@ -40,23 +38,7 @@ fn append_layer_evidence(
 ) -> Result<(), OrchestratorError> {
     let ids = layer_ids(owner_id, layer)?;
     steps.push(export_step(owner_id, layer, &ids)?);
-    steps.push(save_census_step(
-        owner_id,
-        layer,
-        ids.bind,
-        ids.export,
-        ids.before,
-        "save_before",
-    )?);
     steps.push(save_action(layer, &ids)?);
-    steps.push(save_census_step(
-        owner_id,
-        layer,
-        ids.bind,
-        ids.export,
-        ids.after,
-        "save_after",
-    )?);
     steps.push(layer_record(owner_id, layer, &ids)?);
     evidence.push((layer, ids.record));
     Ok(())
@@ -69,17 +51,7 @@ fn layer_ids(
     Ok(LayerIds {
         bind: dynamic_id(QualificationCacheStepStage::Bind, layer, owner_id)?,
         export: dynamic_id(QualificationCacheStepStage::Export, layer, owner_id)?,
-        before: dynamic_id(
-            QualificationCacheStepStage::SaveBeforeCensus,
-            layer,
-            owner_id,
-        )?,
         save: dynamic_id(QualificationCacheStepStage::Save, layer, owner_id)?,
-        after: dynamic_id(
-            QualificationCacheStepStage::SaveAfterCensus,
-            layer,
-            owner_id,
-        )?,
         record: dynamic_id(
             QualificationCacheStepStage::OwnerLayerEvidence,
             layer,
@@ -134,43 +106,6 @@ fn export_step(
         ids.bind.as_string()
     ));
     Ok(step)
-}
-
-fn save_census_step(
-    owner_id: &str,
-    layer: QualificationCacheLayer,
-    bind: QualificationCacheStepId,
-    export: QualificationCacheStepId,
-    id: QualificationCacheStepId,
-    phase: &str,
-) -> Result<Step, OrchestratorError> {
-    let mut env = owner_layer_env(owner_id, layer);
-    env.insert(CENSUS_PHASE_ENV.to_owned(), phase.to_owned());
-    env.insert("GH_TOKEN".to_owned(), "${{ github.token }}".to_owned());
-    env.insert(
-        "VELNOR_QUALIFICATION_CACHE_KEY".to_owned(),
-        step_output(bind, "save_key"),
-    );
-    let mut step = internal_dynamic_step(
-        "Observe qualification cache save state",
-        "observe-qualification-cache-backend-v1",
-        StepRole::QualificationCacheCensus,
-        id,
-        env,
-    )?;
-    step.condition = Some(save_requested_condition(bind, export));
-    Ok(step)
-}
-
-fn save_requested_condition(
-    bind: QualificationCacheStepId,
-    export: QualificationCacheStepId,
-) -> String {
-    format!(
-        "needs.plan.outputs.qualification_campaign != '' && steps.{}.outputs.active == 'true' && steps.{}.outputs.save_requested == 'true'",
-        bind.as_string(),
-        export.as_string()
-    )
 }
 
 fn save_action(layer: QualificationCacheLayer, ids: &LayerIds) -> Result<Step, OrchestratorError> {
@@ -248,9 +183,6 @@ fn layer_record_env(
         ),
     );
     insert_layer_action_outputs(&mut env, ids, owner_id, layer)?;
-    insert_save_census_outputs(&mut env, "SAVE_BEFORE_CENSUS", ids.before);
-    insert_save_census_outputs(&mut env, "SAVE_AFTER_CENSUS", ids.after);
-    insert_restore_census_outputs(&mut env, owner_id, layer)?;
     Ok(env)
 }
 
@@ -293,59 +225,16 @@ fn insert_layer_action_outputs(
             "restore_result",
         ),
     );
+    let import = dynamic_id(QualificationCacheStepStage::Import, layer, owner_id)?;
+    env.insert(
+        "VELNOR_QUALIFICATION_CACHE_HIT".to_owned(),
+        step_output(import, "restore_action_hit"),
+    );
+    env.insert(
+        "VELNOR_QUALIFICATION_CACHE_MATCHED_KEY".to_owned(),
+        step_output(import, "restore_action_matched_key"),
+    );
     Ok(())
-}
-
-fn insert_save_census_outputs(
-    env: &mut std::collections::BTreeMap<String, String>,
-    group: &str,
-    id: QualificationCacheStepId,
-) {
-    for (field, output) in census_output_fields() {
-        env.insert(
-            format!("VELNOR_QUALIFICATION_CACHE_{group}_{field}"),
-            step_output(id, output),
-        );
-    }
-}
-
-fn insert_restore_census_outputs(
-    env: &mut std::collections::BTreeMap<String, String>,
-    owner_id: &str,
-    layer: QualificationCacheLayer,
-) -> Result<(), OrchestratorError> {
-    let id = dynamic_id(QualificationCacheStepStage::RestoreCensus, layer, owner_id)?;
-    for (field, output) in census_output_fields() {
-        env.insert(
-            format!("VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_{field}"),
-            step_output(id, output),
-        );
-    }
-    for (field, output) in [
-        ("RESTORE_KEY", "restore_key"),
-        ("ACTION_HIT", "restore_action_hit"),
-        ("ACTION_MATCHED_KEY", "restore_action_matched_key"),
-    ] {
-        env.insert(
-            format!("VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_{field}"),
-            step_output(id, output),
-        );
-    }
-    Ok(())
-}
-
-fn census_output_fields() -> [(&'static str, &'static str); 9] {
-    [
-        ("PHASE", "census_phase"),
-        ("KEY", "census_key"),
-        ("STATUS", "backend_status"),
-        ("ADMITTED", "backend_admitted"),
-        ("CACHE_ID", "backend_cache_id"),
-        ("CACHE_KEY", "backend_cache_key"),
-        ("CACHE_REF", "backend_cache_ref"),
-        ("CACHE_VERSION", "backend_cache_version"),
-        ("CACHE_SIZE", "backend_cache_size"),
-    ]
 }
 
 fn owner_aggregate(

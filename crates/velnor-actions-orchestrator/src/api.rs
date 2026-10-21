@@ -95,15 +95,20 @@ pub use super::qualification_cache_payload::{
 pub use super::qualification_cache_runtime::{
     QUALIFICATION_CACHE_BIND_OP, QUALIFICATION_CACHE_ROOTS_OP, QualificationCacheBindingOutputs,
     QualificationCacheBindingRequest, QualificationCacheOwnerLayerContext,
-    aggregate_qualification_cache_owner_evidence, bind_qualification_cache_runtime,
-    observe_qualification_cache_runtime, observe_qualification_cache_runtime_after_import,
+    aggregate_qualification_cache_owner_evidence, aggregate_qualification_cache_worker_owner_facts,
+    bind_qualification_cache_runtime, observe_qualification_cache_runtime,
+    observe_qualification_cache_runtime_after_import, qualification_cache_before_observation,
     qualification_cache_owner_layer_context, qualification_cache_roots_filename,
     qualification_cache_runtime_after_import_filename,
     qualification_cache_runtime_identity_filename, read_qualification_cache_owner_evidence,
     read_qualification_cache_roots, write_qualification_cache_owner_layer_evidence,
-    write_qualification_cache_roots,
+    write_qualification_cache_roots, write_qualification_cache_worker_layer_facts,
 };
 pub use super::qualification_cache_runtime_phase::QualificationCacheRuntimePhase;
+pub use super::qualification_cache_worker_facts::{
+    QualificationCacheWorkerLayerFacts, QualificationCacheWorkerOwnerFacts,
+    QualificationCacheWorkerRestoreFacts, QualificationCacheWorkerSaveFacts,
+};
 pub use super::qualification_resolver::{
     QUALIFICATION_ADMISSION_FILENAME, QUALIFICATION_RESOLVER_OP, read_qualification_admission,
     resolve_qualification_admission,

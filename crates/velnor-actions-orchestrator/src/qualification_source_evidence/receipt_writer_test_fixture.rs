@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) struct PreparedArtifacts {
-    pub(super) _temp: tempfile::TempDir,
+    pub(super) temp: tempfile::TempDir,
     pub(super) plan: Plan,
     pub(super) entry: velnor_actions_contract::MatrixEntry,
     pub(super) directive: QualificationCacheDirective,
@@ -30,7 +30,7 @@ pub(super) fn prepared_artifacts() -> PreparedArtifacts {
     let owner = fixture_owner_receipt(&plan, &directive, owner_directive);
     write_owner_at(&artifact, &owner);
     PreparedArtifacts {
-        _temp: temp,
+        temp,
         plan,
         entry,
         directive,
@@ -191,14 +191,57 @@ pub(super) fn source_path(prepared: &PreparedArtifacts) -> PathBuf {
 }
 
 pub(super) fn write_owner(prepared: &PreparedArtifacts, owner: &QualificationCacheOwnerReceipt) {
-    write_canonical(&owner_path(prepared), owner);
+    write_canonical(&owner_path(prepared), &worker_owner_facts(owner));
 }
 
 fn write_owner_at(artifact: &Path, owner: &QualificationCacheOwnerReceipt) {
     let path = artifact
         .join(OWNER_EVIDENCE_DIRECTORY)
         .join(format!("{}.json", owner.owner_id));
-    write_canonical(&path, owner);
+    let worker = worker_owner_facts(owner);
+    assert_eq!(worker.schema, 1);
+    assert_eq!(worker.kind, "qualification_cache_worker_owner_facts");
+    assert_ne!(worker.platform_id, "");
+    assert!(velnor_actions_contract::Digest::parse(&worker.member_digest).is_ok());
+    assert_ne!(worker.members.as_slice(), &[]);
+    assert_eq!(worker.layers.len(), 5);
+    write_canonical(&path, &worker);
+}
+
+fn worker_owner_facts(
+    owner: &QualificationCacheOwnerReceipt,
+) -> crate::QualificationCacheWorkerOwnerFacts {
+    crate::QualificationCacheWorkerOwnerFacts {
+        schema: crate::QualificationCacheWorkerOwnerFacts::SCHEMA,
+        kind: crate::QualificationCacheWorkerOwnerFacts::KIND.to_owned(),
+        owner_id: owner.owner_id.clone(),
+        platform_id: owner.platform_id.clone(),
+        member_digest: owner.member_digest.clone(),
+        members: owner.members.clone(),
+        layers: owner
+            .layers
+            .iter()
+            .map(|layer| crate::QualificationCacheWorkerLayerFacts {
+                owner_id: layer.owner_id.clone(),
+                platform_id: layer.platform_id.clone(),
+                member_digest: layer.member_digest.clone(),
+                layer: layer.layer,
+                active: layer.active,
+                identity_digest: layer.identity_digest.clone(),
+                runtime_identity: layer.runtime_identity.clone(),
+                state_digest: layer.state_digest.clone(),
+                restore: crate::QualificationCacheWorkerRestoreFacts {
+                    requested_key: layer.restore.requested_key.clone(),
+                    matched_key: layer.restore.matched_key.clone(),
+                    result: layer.restore.result,
+                },
+                save: crate::QualificationCacheWorkerSaveFacts {
+                    requested_key: layer.save.requested_key.clone(),
+                    action: layer.save.action,
+                },
+            })
+            .collect(),
+    }
 }
 
 pub(super) fn write_canonical<T: serde::Serialize>(path: &Path, value: &T) {

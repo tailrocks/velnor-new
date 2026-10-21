@@ -20,7 +20,7 @@ Workflow to generate
     - actionlint (9 steps)
     - plan (12 steps)
     - publish-baseline (6 steps)
-    - required (8 steps)
+    - required (10 steps)
     - required-gate (1 steps)
     - rust-app (21 steps)
     - 1 Rust package job

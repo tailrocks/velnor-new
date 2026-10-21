@@ -1,6 +1,5 @@
 //! Checked cache payload operations for generated consumer jobs.
 
-use std::env;
 use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::workflow::QualificationCacheBackendObservation;
@@ -245,14 +244,11 @@ pub fn import_qualification_cache_payload(
     validate_action_observation(action)?;
     let (binding, roots) = bind_context(context)?;
     let observed = if let Some(key) = binding.restore_key.as_deref() {
-        let workspace = workspace_path()?;
-        crate::qualification_cache_backend::observe_qualification_cache_backend(
-            &workspace,
-            context.binding.repository,
+        crate::qualification_cache_runtime::qualification_cache_before_observation(
+            context.binding,
             key,
-            context.binding.git_ref,
         )
-        .map_err(|_| "qualification_cache_backend_unavailable")?
+        .map_err(|_| "qualification_cache_before_snapshot_unavailable")?
     } else {
         QualificationCacheBackendObservation::NotQueried
     };
@@ -341,29 +337,6 @@ fn validate_action_observation(action: &CacheActionObservation) -> Result<(), &'
         return Err("qualification_cache_action_observation_invalid");
     }
     Ok(())
-}
-
-fn workspace_path() -> Result<PathBuf, &'static str> {
-    let path = env::var("GITHUB_WORKSPACE").map_err(|_| "missing_github_workspace")?;
-    let workspace = PathBuf::from(path);
-    clean_path_text(&workspace, "github_workspace_path_invalid")?;
-    Ok(workspace)
-}
-
-fn clean_path_text<'a>(path: &'a Path, error: &'static str) -> Result<&'a str, &'static str> {
-    let text = path.to_str().ok_or(error)?;
-    if text.len() > 4_096
-        || !text.starts_with('/')
-        || text == "/"
-        || text.bytes().any(|byte| byte.is_ascii_control())
-        || text
-            .split('/')
-            .skip(1)
-            .any(|part| part.is_empty() || matches!(part, "." | ".."))
-    {
-        return Err(error);
-    }
-    Ok(text)
 }
 
 #[cfg(test)]

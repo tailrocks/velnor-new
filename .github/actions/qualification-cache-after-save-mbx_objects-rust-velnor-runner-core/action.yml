@@ -21,19 +21,6 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Observe qualification cache save state
-      if: inputs.qualification_campaign != '' && fromJSON(inputs.prepare_outputs).cache_mbx_objects_active == 'true' && fromJSON(inputs.before_outputs).cache_mbx_objects_save_requested == 'true'
-      id: qualification-cache-save-after-census-mbx_objects-9cd91a53edce0a4b
-      env:
-        VELNOR_INTERNAL_OP: observe-qualification-cache-backend-v1
-        GH_TOKEN: ${{ github.token }}
-        VELNOR_QUALIFICATION_CACHE_CENSUS_PHASE: save_after
-        VELNOR_QUALIFICATION_CACHE_KEY: ${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_save_key }}
-        VELNOR_QUALIFICATION_CACHE_LAYER: mbx_objects
-        VELNOR_QUALIFICATION_CACHE_OWNER_ID: rust-velnor-runner-core
-        VELNOR_QUALIFICATION_CACHE_RUNTIME_PHASE: before_import
-      shell: bash
-      run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.31'"
     - name: Record qualification cache layer evidence
       if: inputs.qualification_campaign != ''
       id: qualification-cache-owner-layer-evidence-mbx_objects-9cd91a53edce0a4b
@@ -43,43 +30,15 @@ runs:
         VELNOR_QUALIFICATION_CACHE_EXPORT_EXPORT_RESULT: ${{ fromJSON(inputs.before_outputs).cache_mbx_objects_export_result }}
         VELNOR_QUALIFICATION_CACHE_EXPORT_SAVE_REQUESTED: ${{ fromJSON(inputs.before_outputs).cache_mbx_objects_save_requested }}
         VELNOR_QUALIFICATION_CACHE_EXPORT_STATE_DIGEST: ${{ fromJSON(inputs.before_outputs).cache_mbx_objects_state_digest }}
+        VELNOR_QUALIFICATION_CACHE_HIT: ${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_restore_census_action_hit }}
         VELNOR_QUALIFICATION_CACHE_LAYER: mbx_objects
+        VELNOR_QUALIFICATION_CACHE_MATCHED_KEY: ${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_restore_census_action_matched_key }}
         VELNOR_QUALIFICATION_CACHE_OWNER_ID: rust-velnor-runner-core
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_ACTION_HIT: ${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_restore_census_action_hit }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_ACTION_MATCHED_KEY: ${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_restore_census_action_matched_key }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_ADMITTED: ${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_restore_census_admitted }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_ID: ${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_restore_census_cache_id }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_KEY: ${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_restore_census_cache_key }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_REF: ${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_restore_census_cache_ref }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_SIZE: ${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_restore_census_cache_size }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_VERSION: ${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_restore_census_cache_version }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_KEY: ${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_restore_census_key }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_PHASE: ${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_restore_census_phase }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_RESTORE_KEY: ${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_restore_census_restore_key }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_STATUS: ${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_restore_census_status }}
         VELNOR_QUALIFICATION_CACHE_RESTORE_RESULT: ${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_restore_result }}
         VELNOR_QUALIFICATION_CACHE_ROOTS_FILE: ${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_roots }}
         VELNOR_QUALIFICATION_CACHE_RUNTIME_AFTER_FILE: ${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_runtime_after }}
         VELNOR_QUALIFICATION_CACHE_RUNTIME_PHASE: before_import
         VELNOR_QUALIFICATION_CACHE_SAVE_ACTION: ${{ fromJSON(inputs.before_outputs).cache_mbx_objects_save_requested == 'true' && inputs.cache_mbx_objects_save_action_outcome || '' }}
-        VELNOR_QUALIFICATION_CACHE_SAVE_AFTER_CENSUS_ADMITTED: ${{ steps.qualification-cache-save-after-census-mbx_objects-9cd91a53edce0a4b.outputs.backend_admitted }}
-        VELNOR_QUALIFICATION_CACHE_SAVE_AFTER_CENSUS_CACHE_ID: ${{ steps.qualification-cache-save-after-census-mbx_objects-9cd91a53edce0a4b.outputs.backend_cache_id }}
-        VELNOR_QUALIFICATION_CACHE_SAVE_AFTER_CENSUS_CACHE_KEY: ${{ steps.qualification-cache-save-after-census-mbx_objects-9cd91a53edce0a4b.outputs.backend_cache_key }}
-        VELNOR_QUALIFICATION_CACHE_SAVE_AFTER_CENSUS_CACHE_REF: ${{ steps.qualification-cache-save-after-census-mbx_objects-9cd91a53edce0a4b.outputs.backend_cache_ref }}
-        VELNOR_QUALIFICATION_CACHE_SAVE_AFTER_CENSUS_CACHE_SIZE: ${{ steps.qualification-cache-save-after-census-mbx_objects-9cd91a53edce0a4b.outputs.backend_cache_size }}
-        VELNOR_QUALIFICATION_CACHE_SAVE_AFTER_CENSUS_CACHE_VERSION: ${{ steps.qualification-cache-save-after-census-mbx_objects-9cd91a53edce0a4b.outputs.backend_cache_version }}
-        VELNOR_QUALIFICATION_CACHE_SAVE_AFTER_CENSUS_KEY: ${{ steps.qualification-cache-save-after-census-mbx_objects-9cd91a53edce0a4b.outputs.census_key }}
-        VELNOR_QUALIFICATION_CACHE_SAVE_AFTER_CENSUS_PHASE: ${{ steps.qualification-cache-save-after-census-mbx_objects-9cd91a53edce0a4b.outputs.census_phase }}
-        VELNOR_QUALIFICATION_CACHE_SAVE_AFTER_CENSUS_STATUS: ${{ steps.qualification-cache-save-after-census-mbx_objects-9cd91a53edce0a4b.outputs.backend_status }}
-        VELNOR_QUALIFICATION_CACHE_SAVE_BEFORE_CENSUS_ADMITTED: ${{ fromJSON(inputs.before_outputs).cache_mbx_objects_save_before_census_admitted }}
-        VELNOR_QUALIFICATION_CACHE_SAVE_BEFORE_CENSUS_CACHE_ID: ${{ fromJSON(inputs.before_outputs).cache_mbx_objects_save_before_census_cache_id }}
-        VELNOR_QUALIFICATION_CACHE_SAVE_BEFORE_CENSUS_CACHE_KEY: ${{ fromJSON(inputs.before_outputs).cache_mbx_objects_save_before_census_cache_key }}
-        VELNOR_QUALIFICATION_CACHE_SAVE_BEFORE_CENSUS_CACHE_REF: ${{ fromJSON(inputs.before_outputs).cache_mbx_objects_save_before_census_cache_ref }}
-        VELNOR_QUALIFICATION_CACHE_SAVE_BEFORE_CENSUS_CACHE_SIZE: ${{ fromJSON(inputs.before_outputs).cache_mbx_objects_save_before_census_cache_size }}
-        VELNOR_QUALIFICATION_CACHE_SAVE_BEFORE_CENSUS_CACHE_VERSION: ${{ fromJSON(inputs.before_outputs).cache_mbx_objects_save_before_census_cache_version }}
-        VELNOR_QUALIFICATION_CACHE_SAVE_BEFORE_CENSUS_KEY: ${{ fromJSON(inputs.before_outputs).cache_mbx_objects_save_before_census_key }}
-        VELNOR_QUALIFICATION_CACHE_SAVE_BEFORE_CENSUS_PHASE: ${{ fromJSON(inputs.before_outputs).cache_mbx_objects_save_before_census_phase }}
-        VELNOR_QUALIFICATION_CACHE_SAVE_BEFORE_CENSUS_STATUS: ${{ fromJSON(inputs.before_outputs).cache_mbx_objects_save_before_census_status }}
         VELNOR_QUALIFICATION_CACHE_SAVE_KEY: ${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_save_key }}
         VELNOR_QUALIFICATION_RUNTIME_IDENTITY_FILE: ${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_runtime_before }}
       shell: bash

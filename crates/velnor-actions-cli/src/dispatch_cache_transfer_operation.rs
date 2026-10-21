@@ -3,12 +3,11 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
-    CacheActionObservation, CacheRestoreStatus, QualificationCacheBackendObservation,
-    QualificationCacheBindingRequest, QualificationCachePayloadContext,
-    QualificationCachePayloadExport, QualificationCachePayloadImport,
-    QualificationCacheRootEnvironment, bind_qualification_cache_runtime,
-    export_qualification_cache_payload, import_qualification_cache_payload,
-    validate_qualification_cache_root_observation,
+    CacheActionObservation, CacheRestoreStatus, QualificationCacheBindingRequest,
+    QualificationCachePayloadContext, QualificationCachePayloadExport,
+    QualificationCachePayloadImport, QualificationCacheRootEnvironment,
+    bind_qualification_cache_runtime, export_qualification_cache_payload,
+    import_qualification_cache_payload, validate_qualification_cache_root_observation,
 };
 
 const ROOTS_ENV: &str = "VELNOR_QUALIFICATION_CACHE_ROOTS";
@@ -143,14 +142,6 @@ fn import_output_body(
     result: &QualificationCachePayloadImport,
     action: &CacheActionObservation,
 ) -> Result<String, &'static str> {
-    let (status, cache) = match &result.backend {
-        QualificationCacheBackendObservation::Absent => ("absent", None),
-        QualificationCacheBackendObservation::Found(entry) => ("found", Some(entry)),
-        QualificationCacheBackendObservation::NotQueried => ("not_queried", None),
-        QualificationCacheBackendObservation::Unavailable => {
-            return Err("qualification_cache_backend_unavailable");
-        }
-    };
     let proof = &result.proof;
     let restore_result = match proof.status() {
         CacheRestoreStatus::Disabled => "disabled",
@@ -171,27 +162,6 @@ fn import_output_body(
             "restore_action_matched_key",
             action.matched_key.clone().unwrap_or_default(),
         ),
-        ("backend_status", status.to_owned()),
-        (
-            "backend_cache_id",
-            cache.map_or_else(String::new, |entry| entry.id.to_string()),
-        ),
-        (
-            "backend_cache_key",
-            cache.map_or_else(String::new, |entry| entry.key.clone()),
-        ),
-        (
-            "backend_cache_ref",
-            cache.map_or_else(String::new, |entry| entry.git_ref.clone()),
-        ),
-        (
-            "backend_cache_version",
-            cache.map_or_else(String::new, |entry| entry.version.clone()),
-        ),
-        (
-            "backend_cache_size",
-            cache.map_or_else(String::new, |entry| entry.size_bytes.to_string()),
-        ),
         (
             "state_digest",
             proof.state_digest().unwrap_or_default().to_owned(),
@@ -204,9 +174,6 @@ fn import_output_body(
         ),
     ];
     let mut fields = fields;
-    if proof.status() != CacheRestoreStatus::Disabled {
-        fields.push(("backend_admitted", "true".to_owned()));
-    }
     if proof.status() == CacheRestoreStatus::Hit {
         fields.push(("payload_admitted", "true".to_owned()));
         fields.push(("restore_admitted", "true".to_owned()));

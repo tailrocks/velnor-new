@@ -1,7 +1,7 @@
 use super::{
-    CENSUS_PHASE_ENV, LAYERS, RESTORE_HIT_ENV, RESTORE_MATCHED_KEY_ENV, ROOTS_FILE_ENV,
-    RUNTIME_FILE_ENV, RUNTIME_IDENTITY_OPERATION, cache_action_step, dynamic_id,
-    internal_dynamic_step, owner_layer_env, step_output,
+    LAYERS, RESTORE_HIT_ENV, RESTORE_MATCHED_KEY_ENV, ROOTS_FILE_ENV, RUNTIME_FILE_ENV,
+    RUNTIME_IDENTITY_OPERATION, cache_action_step, dynamic_id, internal_dynamic_step,
+    owner_layer_env, step_output,
 };
 use crate::OrchestratorError;
 use velnor_actions_contract::workflow::{QualificationCacheLayer, QualificationCacheStepStage};
@@ -9,7 +9,7 @@ use velnor_actions_contract::{Step, StepRole};
 
 /// Restore each owner layer and install its payload before task execution.
 pub(super) fn owner_restore_steps(owner_id: &str) -> Result<Vec<Step>, OrchestratorError> {
-    let mut steps = Vec::with_capacity(LAYERS.len() * 3 + 4);
+    let mut steps = Vec::with_capacity(LAYERS.len() * 2 + 4);
     for layer in LAYERS {
         append_restore_layer_steps(owner_id, layer, &mut steps)?;
     }
@@ -30,11 +30,9 @@ fn append_restore_layer_steps(
 ) -> Result<(), OrchestratorError> {
     let bind = dynamic_id(QualificationCacheStepStage::Bind, layer, owner_id)?;
     let restore = dynamic_id(QualificationCacheStepStage::Restore, layer, owner_id)?;
-    let census = dynamic_id(QualificationCacheStepStage::RestoreCensus, layer, owner_id)?;
     let import = dynamic_id(QualificationCacheStepStage::Import, layer, owner_id)?;
     steps.push(restore_action(layer, bind, restore)?);
-    steps.push(restore_census(owner_id, layer, bind, restore, census)?);
-    steps.push(restore_import(owner_id, layer, restore, census, import)?);
+    steps.push(restore_import(owner_id, layer, restore, import)?);
     Ok(())
 }
 
@@ -58,42 +56,10 @@ fn restore_action(
     Ok(action)
 }
 
-fn restore_census(
-    owner_id: &str,
-    layer: QualificationCacheLayer,
-    bind: velnor_actions_contract::workflow::QualificationCacheStepId,
-    restore: velnor_actions_contract::workflow::QualificationCacheStepId,
-    census: velnor_actions_contract::workflow::QualificationCacheStepId,
-) -> Result<Step, OrchestratorError> {
-    let mut env = owner_layer_env(owner_id, layer);
-    env.insert(CENSUS_PHASE_ENV.to_owned(), "restore".to_owned());
-    env.insert("GH_TOKEN".to_owned(), "${{ github.token }}".to_owned());
-    env.insert(
-        RESTORE_HIT_ENV.to_owned(),
-        step_output(restore, "cache-hit"),
-    );
-    env.insert(
-        RESTORE_MATCHED_KEY_ENV.to_owned(),
-        step_output(restore, "cache-matched-key"),
-    );
-    env.insert(
-        "VELNOR_QUALIFICATION_CACHE_KEY".to_owned(),
-        step_output(bind, "restore_key"),
-    );
-    internal_dynamic_step(
-        "Observe qualification cache restore",
-        "observe-qualification-cache-backend-v1",
-        StepRole::QualificationCacheCensus,
-        census,
-        env,
-    )
-}
-
 fn restore_import(
     owner_id: &str,
     layer: QualificationCacheLayer,
     restore: velnor_actions_contract::workflow::QualificationCacheStepId,
-    census: velnor_actions_contract::workflow::QualificationCacheStepId,
     import: velnor_actions_contract::workflow::QualificationCacheStepId,
 ) -> Result<Step, OrchestratorError> {
     let mut env = owner_layer_env(owner_id, layer);
@@ -123,7 +89,6 @@ fn restore_import(
         RESTORE_MATCHED_KEY_ENV.to_owned(),
         step_output(restore, "cache-matched-key"),
     );
-    insert_restore_census_outputs(&mut env, census);
     internal_dynamic_step(
         "Import qualification cache payload",
         "import-qualification-cache-payload-v1",
@@ -131,30 +96,6 @@ fn restore_import(
         import,
         env,
     )
-}
-
-fn insert_restore_census_outputs(
-    env: &mut std::collections::BTreeMap<String, String>,
-    census: velnor_actions_contract::workflow::QualificationCacheStepId,
-) {
-    for (field, output) in [
-        ("PHASE", "census_phase"),
-        ("KEY", "census_key"),
-        ("STATUS", "backend_status"),
-        ("ADMITTED", "backend_admitted"),
-        ("CACHE_ID", "backend_cache_id"),
-        ("CACHE_KEY", "backend_cache_key"),
-        ("CACHE_REF", "backend_cache_ref"),
-        ("CACHE_VERSION", "backend_cache_version"),
-        ("CACHE_SIZE", "backend_cache_size"),
-        ("ACTION_HIT", "restore_action_hit"),
-        ("ACTION_MATCHED_KEY", "restore_action_matched_key"),
-    ] {
-        env.insert(
-            format!("VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_{field}"),
-            step_output(census, output),
-        );
-    }
 }
 
 fn runtime_check_step(

@@ -302,6 +302,12 @@ fn read_optional_runtime(
 mod validation;
 use validation::validate_layer_receipt;
 
+#[path = "qualification_cache_runtime_owner_evidence/worker_facts.rs"]
+mod worker_facts;
+pub use worker_facts::{
+    aggregate_qualification_cache_worker_owner_facts, write_qualification_cache_worker_layer_facts,
+};
+
 fn owner_directive<'a>(
     directive: &'a QualificationCacheDirective,
     owner_id: &str,

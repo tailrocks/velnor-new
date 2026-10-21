@@ -18,7 +18,7 @@ use velnor_actions_orchestrator::{
 };
 
 use super::{
-    GITHUB_OUTPUT_ENV, InternalOp, InternalRequest, RUNNER_TEMP_ENV, cache_bind, cache_observe,
+    GITHUB_OUTPUT_ENV, InternalOp, InternalRequest, RUNNER_TEMP_ENV, cache_bind,
     cache_owner_evidence, cache_receipt, cache_runtime, cache_tar_launcher, fail_internal,
     package_release, package_release_publish, package_release_recovery, preview_production,
     review_completion, run_publish_internal, tap_continuation, tap_merge, tap_prepare,
@@ -71,7 +71,6 @@ pub(super) fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::RecordQualificationCacheOwnerLayer => cache_owner_evidence::record_layer(),
         InternalOp::AggregateQualificationCacheOwner => cache_owner_evidence::aggregate_owner(),
         InternalOp::WriteQualificationCacheReceipt => cache_receipt::run(),
-        InternalOp::ObserveQualificationCacheBackend => cache_observe::run(),
         InternalOp::ImportQualificationCachePayload => cache_bind::transfer::run_import(),
         InternalOp::ExportQualificationCachePayload => cache_bind::transfer::run_export(),
         InternalOp::NormalToolsCacheStagePath => cache_bind::normal_stage::run(),

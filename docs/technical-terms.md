@@ -45,6 +45,7 @@
 | Digest | A value made from data that can show whether data changed. |
 | Probe lease | A journal record that tracks an active resource-probe operation. |
 | Cache key | A value that selects one cache entry. |
+| Cache directive | Plan data that specifies the cache layers and identities permitted for a cache owner. |
 | Cache family | A cache type with one key layer, schema, and path list. |
 | Cache snapshot | The files saved in one cache entry. |
 | Cache trust | An access rule that says which workflow runs can write to a cache. |

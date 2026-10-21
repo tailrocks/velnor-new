@@ -12,33 +12,6 @@ outputs:
   cache_cargo_sources_export_result:
     description: Cache output from this composite action
     value: ${{ steps.qualification-cache-export-cargo_sources-ee21ace0475c499e.outputs.export_result }}
-  cache_cargo_sources_save_before_census_admitted:
-    description: Cache output from this composite action
-    value: ${{ steps.qualification-cache-save-before-census-cargo_sources-ee21ace0475c499e.outputs.backend_admitted }}
-  cache_cargo_sources_save_before_census_cache_id:
-    description: Cache output from this composite action
-    value: ${{ steps.qualification-cache-save-before-census-cargo_sources-ee21ace0475c499e.outputs.backend_cache_id }}
-  cache_cargo_sources_save_before_census_cache_key:
-    description: Cache output from this composite action
-    value: ${{ steps.qualification-cache-save-before-census-cargo_sources-ee21ace0475c499e.outputs.backend_cache_key }}
-  cache_cargo_sources_save_before_census_cache_ref:
-    description: Cache output from this composite action
-    value: ${{ steps.qualification-cache-save-before-census-cargo_sources-ee21ace0475c499e.outputs.backend_cache_ref }}
-  cache_cargo_sources_save_before_census_cache_size:
-    description: Cache output from this composite action
-    value: ${{ steps.qualification-cache-save-before-census-cargo_sources-ee21ace0475c499e.outputs.backend_cache_size }}
-  cache_cargo_sources_save_before_census_cache_version:
-    description: Cache output from this composite action
-    value: ${{ steps.qualification-cache-save-before-census-cargo_sources-ee21ace0475c499e.outputs.backend_cache_version }}
-  cache_cargo_sources_save_before_census_key:
-    description: Cache output from this composite action
-    value: ${{ steps.qualification-cache-save-before-census-cargo_sources-ee21ace0475c499e.outputs.census_key }}
-  cache_cargo_sources_save_before_census_phase:
-    description: Cache output from this composite action
-    value: ${{ steps.qualification-cache-save-before-census-cargo_sources-ee21ace0475c499e.outputs.census_phase }}
-  cache_cargo_sources_save_before_census_status:
-    description: Cache output from this composite action
-    value: ${{ steps.qualification-cache-save-before-census-cargo_sources-ee21ace0475c499e.outputs.backend_status }}
   cache_cargo_sources_save_requested:
     description: Cache output from this composite action
     value: ${{ steps.qualification-cache-export-cargo_sources-ee21ace0475c499e.outputs.save_requested }}
@@ -58,18 +31,5 @@ runs:
         VELNOR_QUALIFICATION_CACHE_ROOTS_FILE: ${{ fromJSON(inputs.prepare_outputs).cache_cargo_sources_roots }}
         VELNOR_QUALIFICATION_CACHE_RUNTIME_PHASE: after_import
         VELNOR_QUALIFICATION_RUNTIME_IDENTITY_FILE: ${{ fromJSON(inputs.prepare_outputs).cache_cargo_sources_runtime_after }}
-      shell: bash
-      run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.31'"
-    - name: Observe qualification cache save state
-      if: inputs.qualification_campaign != '' && fromJSON(inputs.prepare_outputs).cache_cargo_sources_active == 'true' && steps.qualification-cache-export-cargo_sources-ee21ace0475c499e.outputs.save_requested == 'true'
-      id: qualification-cache-save-before-census-cargo_sources-ee21ace0475c499e
-      env:
-        VELNOR_INTERNAL_OP: observe-qualification-cache-backend-v1
-        GH_TOKEN: ${{ github.token }}
-        VELNOR_QUALIFICATION_CACHE_CENSUS_PHASE: save_before
-        VELNOR_QUALIFICATION_CACHE_KEY: ${{ fromJSON(inputs.prepare_outputs).cache_cargo_sources_save_key }}
-        VELNOR_QUALIFICATION_CACHE_LAYER: cargo_sources
-        VELNOR_QUALIFICATION_CACHE_OWNER_ID: rust-velnor-resource-probe
-        VELNOR_QUALIFICATION_CACHE_RUNTIME_PHASE: before_import
       shell: bash
       run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.31'"

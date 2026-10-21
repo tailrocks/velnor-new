@@ -1,19 +1,24 @@
-//! Canonical pre-plan cache census artifact.
+//! Record cache entries before planning.
 
 use std::collections::BTreeSet;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::strict_json::parse_strict_json_bytes;
-#[cfg(test)]
 use velnor_actions_contract::workflow::QualificationCacheBackendObservation;
 use velnor_actions_contract::workflow::{
     QualificationCacheBackendEntry, QualificationDispatch, QualificationPhase,
 };
 use velnor_actions_contract::{canonical_json_bytes, digest_b3, run_key_for_ci};
 
+#[path = "snapshot/after.rs"]
+mod after;
 #[path = "snapshot/census.rs"]
 mod census;
+pub(crate) use after::{
+    QUALIFICATION_CACHE_BACKEND_AFTER_FILENAME, capture_qualification_cache_after,
+    parse_qualification_cache_after, stage_qualification_cache_after,
+};
 #[cfg(test)]
 #[path = "snapshot/tests.rs"]
 mod tests;
@@ -42,7 +47,7 @@ pub(crate) struct QualificationCacheBackendSnapshot {
 #[derive(Serialize)]
 struct SnapshotPayload<'a> {
     schema: u32,
-    stage: &'static str,
+    stage: &'a str,
     context: &'a QualificationDispatch,
     run_key: &'a str,
     status: &'a str,
@@ -55,7 +60,7 @@ impl QualificationCacheBackendSnapshot {
     fn payload(&self) -> SnapshotPayload<'_> {
         SnapshotPayload {
             schema: self.schema,
-            stage: "before",
+            stage: &self.stage,
             context: &self.context,
             run_key: &self.run_key,
             status: &self.status,
@@ -73,9 +78,29 @@ impl QualificationCacheBackendSnapshot {
         finished_unix_ms: Option<u64>,
         entries: Vec<QualificationCacheBackendEntry>,
     ) -> Result<Self, crate::OrchestratorError> {
+        Self::new_for_stage(
+            context,
+            run_key,
+            status,
+            started_unix_ms,
+            finished_unix_ms,
+            entries,
+            "before",
+        )
+    }
+
+    fn new_for_stage(
+        context: &QualificationDispatch,
+        run_key: String,
+        status: &str,
+        started_unix_ms: Option<u64>,
+        finished_unix_ms: Option<u64>,
+        entries: Vec<QualificationCacheBackendEntry>,
+        stage: &'static str,
+    ) -> Result<Self, crate::OrchestratorError> {
         let mut snapshot = Self {
             schema: SNAPSHOT_SCHEMA,
-            stage: "before".to_owned(),
+            stage: stage.to_owned(),
             context: context.clone(),
             run_key,
             status: status.to_owned(),
@@ -88,17 +113,16 @@ impl QualificationCacheBackendSnapshot {
             &canonical_json_bytes(&snapshot.payload())
                 .map_err(crate::internal::internal_contract)?,
         );
-        validate(&snapshot, context)?;
+        validate(&snapshot, context, stage)?;
         Ok(snapshot)
     }
 
-    #[cfg(test)]
     pub(crate) fn observation_for(
         &self,
         key: &str,
         git_ref: &str,
     ) -> Result<QualificationCacheBackendObservation, crate::OrchestratorError> {
-        validate(self, &self.context)?;
+        validate(self, &self.context, &self.stage)?;
         if git_ref != self.context.git_ref {
             return Err(crate::internal::internal(
                 "qualification_cache_snapshot_ref_mismatch",
@@ -127,7 +151,7 @@ impl QualificationCacheBackendSnapshot {
         context: &QualificationDispatch,
         run_key: &str,
     ) -> Result<(), crate::OrchestratorError> {
-        validate(self, context)?;
+        validate(self, context, "before")?;
         if self.run_key != run_key {
             return Err(crate::internal::internal(
                 "qualification_cache_snapshot_run_mismatch",
@@ -174,6 +198,23 @@ pub(crate) fn complete_snapshot_for_test(
     )
 }
 
+#[cfg(test)]
+pub(crate) fn snapshot_for_test(
+    context: &QualificationDispatch,
+    stage: &'static str,
+    entries: Vec<QualificationCacheBackendEntry>,
+) -> Result<QualificationCacheBackendSnapshot, crate::OrchestratorError> {
+    QualificationCacheBackendSnapshot::new_for_stage(
+        context,
+        run_key_for_ci(context.run_id, u64::from(context.run_attempt)),
+        "complete",
+        Some(1),
+        Some(2),
+        entries,
+        stage,
+    )
+}
+
 pub(crate) fn parse_qualification_cache_before(
     bytes: &[u8],
     expected: &QualificationDispatch,
@@ -185,6 +226,25 @@ pub(crate) fn parse_qualification_cache_before(
     }
     let value = parse_strict_json_bytes(bytes, MAX_SNAPSHOT_BYTES)
         .map_err(|_| crate::internal::internal("qualification_cache_snapshot_invalid"))?;
+    parse_snapshot(value, bytes, expected, "before")
+}
+
+fn parse_snapshot_value(bytes: &[u8]) -> Result<serde_json::Value, crate::OrchestratorError> {
+    if bytes.len() > MAX_SNAPSHOT_BYTES {
+        return Err(crate::internal::internal(
+            "qualification_cache_snapshot_bounds",
+        ));
+    }
+    parse_strict_json_bytes(bytes, MAX_SNAPSHOT_BYTES)
+        .map_err(|_| crate::internal::internal("qualification_cache_snapshot_invalid"))
+}
+
+fn parse_snapshot(
+    value: serde_json::Value,
+    bytes: &[u8],
+    expected: &QualificationDispatch,
+    stage: &'static str,
+) -> Result<QualificationCacheBackendSnapshot, crate::OrchestratorError> {
     let snapshot: QualificationCacheBackendSnapshot = serde_json::from_value(value)
         .map_err(|_| crate::internal::internal("qualification_cache_snapshot_invalid"))?;
     let canonical = canonical_json_bytes(&snapshot).map_err(crate::internal::internal_contract)?;
@@ -193,7 +253,7 @@ pub(crate) fn parse_qualification_cache_before(
             "qualification_cache_snapshot_noncanonical",
         ));
     }
-    validate(&snapshot, expected)?;
+    validate(&snapshot, expected, stage)?;
     Ok(snapshot)
 }
 
@@ -236,12 +296,13 @@ pub(crate) fn snapshot_path(runner_temp: &Path, run_key: &str) -> std::path::Pat
 fn validate(
     snapshot: &QualificationCacheBackendSnapshot,
     expected: &QualificationDispatch,
+    expected_stage: &str,
 ) -> Result<(), crate::OrchestratorError> {
     expected
         .validate_shape()
         .map_err(crate::internal::internal_contract)?;
     if snapshot.schema != SNAPSHOT_SCHEMA
-        || snapshot.stage != "before"
+        || snapshot.stage != expected_stage
         || &snapshot.context != expected
         || snapshot.run_key != run_key_for_ci(expected.run_id, u64::from(expected.run_attempt))
     {

@@ -46,8 +46,6 @@ mod public;
 pub(crate) use public::run_public;
 #[path = "dispatch_cache_bind.rs"]
 mod cache_bind;
-#[path = "dispatch_cache_observe.rs"]
-mod cache_observe;
 #[path = "dispatch_cache_owner_evidence.rs"]
 mod cache_owner_evidence;
 #[path = "dispatch_cache_receipt.rs"]
@@ -145,7 +143,6 @@ fn gate_request() -> Option<InternalRequest> {
             | InternalOp::ObserveQualificationCacheRoots
             | InternalOp::RecordQualificationCacheOwnerLayer
             | InternalOp::AggregateQualificationCacheOwner
-            | InternalOp::ObserveQualificationCacheBackend
             | InternalOp::ImportQualificationCachePayload
             | InternalOp::ExportQualificationCachePayload
             | InternalOp::NormalToolsCacheStagePath
@@ -254,7 +251,6 @@ fn request_file_only_gate(op: InternalOp) -> bool {
             | InternalOp::ObserveQualificationCacheRoots
             | InternalOp::RecordQualificationCacheOwnerLayer
             | InternalOp::AggregateQualificationCacheOwner
-            | InternalOp::ObserveQualificationCacheBackend
             | InternalOp::ImportQualificationCachePayload
             | InternalOp::ExportQualificationCachePayload
             | InternalOp::NormalToolsCacheStagePath

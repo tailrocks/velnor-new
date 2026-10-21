@@ -63,8 +63,14 @@ pub(crate) fn is_operation_output(key: &str, inner: &str) -> bool {
         "VELNOR_QUALIFICATION_CACHE_RUNTIME_BEFORE_FILE" => {
             ("runtime-identity", &["runtime_identity_path"])
         }
-        "VELNOR_QUALIFICATION_CACHE_HIT" => ("restore", &["cache-hit"]),
-        "VELNOR_QUALIFICATION_CACHE_MATCHED_KEY" => ("restore", &["cache-matched-key"]),
+        "VELNOR_QUALIFICATION_CACHE_HIT" => {
+            return step_output_for_stage(inner, "import", "restore_action_hit")
+                || step_output_for_stage(inner, "restore", "cache-hit");
+        }
+        "VELNOR_QUALIFICATION_CACHE_MATCHED_KEY" => {
+            return step_output_for_stage(inner, "import", "restore_action_matched_key")
+                || step_output_for_stage(inner, "restore", "cache-matched-key");
+        }
         "VELNOR_QUALIFICATION_CACHE_KEY" => ("bind", &["restore_key", "save_key"]),
         "VELNOR_QUALIFICATION_CACHE_RESTORE_RESULT" => ("import", &["restore_result"]),
         "VELNOR_QUALIFICATION_CACHE_EXPORT_EXPORT_RESULT" => ("export", &["export_result"]),
@@ -92,6 +98,16 @@ pub(crate) fn is_operation_output(key: &str, inner: &str) -> bool {
     outputs
         .iter()
         .any(|output| step_output_for_stage(inner, stage, output))
+}
+
+pub(crate) fn is_restore_action_input(key: &str, inner: &str) -> bool {
+    match key {
+        "VELNOR_QUALIFICATION_CACHE_HIT" => step_output_for_stage(inner, "restore", "cache-hit"),
+        "VELNOR_QUALIFICATION_CACHE_MATCHED_KEY" => {
+            step_output_for_stage(inner, "restore", "cache-matched-key")
+        }
+        _ => false,
+    }
 }
 
 fn cache_census_output(key: &str, prefix: &str) -> Option<&'static str> {

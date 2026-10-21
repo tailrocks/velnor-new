@@ -325,6 +325,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VELNOR_INTERNAL_OP: fetch-reports-v1
         run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.31'"
+      - name: Write qualification cache receipt
+        id: qualification-cache-receipt
+        env:
+          VELNOR_INTERNAL_OP: write-qualification-cache-receipt-v1
+        run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.31'"
+      - name: Publish qualification cache receipt
+        if: steps.qualification-cache-receipt.outputs.receipt_path != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          if-no-files-found: error
+          name: velnor-qualification-cache-receipt-v4-a${{ github.run_attempt }}
+          path: ${{ steps.qualification-cache-receipt.outputs.receipt_path }}
+          retention-days: "30"
       - name: Write request
         env:
           VELNOR_INTERNAL_OP: write-request-v1

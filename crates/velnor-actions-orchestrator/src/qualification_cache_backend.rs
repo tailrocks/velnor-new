@@ -4,8 +4,13 @@
 mod snapshot;
 #[cfg(test)]
 pub(crate) use snapshot::complete_snapshot_for_test;
+#[cfg(test)]
+pub(crate) use snapshot::snapshot_for_test;
 pub(crate) use snapshot::{
-    capture_qualification_cache_before, stage_qualification_cache_before,
+    QUALIFICATION_CACHE_BACKEND_AFTER_FILENAME, QUALIFICATION_CACHE_BACKEND_BEFORE_FILENAME,
+    capture_qualification_cache_after, capture_qualification_cache_before,
+    parse_qualification_cache_after, parse_qualification_cache_before,
+    stage_qualification_cache_after, stage_qualification_cache_before,
     verify_staged_qualification_cache_before,
 };
 

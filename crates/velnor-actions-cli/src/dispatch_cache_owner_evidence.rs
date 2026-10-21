@@ -5,14 +5,14 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
-    QualificationCacheBackendEntry, QualificationCacheBackendObservation, QualificationCacheLayer,
-    QualificationCacheLayerReceipt, QualificationCacheRestore, QualificationCacheRestoreResult,
-    QualificationCacheSave, QualificationCacheSaveActionResult,
+    QualificationCacheBindingRequest, aggregate_qualification_cache_worker_owner_facts,
+    bind_qualification_cache_runtime, qualification_cache_runtime_after_import_filename,
+    run_key_for_ci, write_qualification_cache_worker_layer_facts,
 };
 use velnor_actions_orchestrator::{
-    QualificationCacheBindingRequest, aggregate_qualification_cache_owner_evidence,
-    bind_qualification_cache_runtime, qualification_cache_runtime_after_import_filename,
-    run_key_for_ci, write_qualification_cache_owner_layer_evidence,
+    QualificationCacheLayer, QualificationCacheRestoreResult, QualificationCacheSaveActionResult,
+    QualificationCacheWorkerLayerFacts, QualificationCacheWorkerRestoreFacts,
+    QualificationCacheWorkerSaveFacts,
 };
 
 use super::{cache_bind, fail_internal};
@@ -23,9 +23,11 @@ const OWNER_ID: &str = "VELNOR_QUALIFICATION_CACHE_OWNER_ID";
 const LAYER: &str = "VELNOR_QUALIFICATION_CACHE_LAYER";
 const RUNTIME_PHASE: &str = "VELNOR_QUALIFICATION_CACHE_RUNTIME_PHASE";
 const AFTER_RUNTIME_FILE: &str = "VELNOR_QUALIFICATION_CACHE_RUNTIME_AFTER_FILE";
-const CENSUS_PREFIX: &str = "VELNOR_QUALIFICATION_CACHE_";
 const EXPORT_PREFIX: &str = "VELNOR_QUALIFICATION_CACHE_EXPORT_";
 const SAVE_ACTION: &str = "VELNOR_QUALIFICATION_CACHE_SAVE_ACTION";
+const RESTORE_RESULT: &str = "VELNOR_QUALIFICATION_CACHE_RESTORE_RESULT";
+const RESTORE_ACTION_HIT: &str = "VELNOR_QUALIFICATION_CACHE_HIT";
+const RESTORE_ACTION_MATCHED_KEY: &str = "VELNOR_QUALIFICATION_CACHE_MATCHED_KEY";
 
 pub(crate) fn record_layer() -> ExitCode {
     match record_layer_inner() {
@@ -53,10 +55,10 @@ fn record_layer_inner() -> Result<String, &'static str> {
         return Err("qualification_cache_owner_layer_mismatch");
     }
 
-    let receipt = if context.runtime_identity.is_some() {
-        active_layer_receipt(&request, &context, &owner_id, &layer_text)?
+    let facts = if context.runtime_identity.is_some() {
+        active_layer_facts(&request, &context, &owner_id, &layer_text)?
     } else {
-        QualificationCacheLayerReceipt {
+        QualificationCacheWorkerLayerFacts {
             owner_id,
             platform_id: context.owner.platform_id,
             member_digest: context.owner.member_digest,
@@ -65,30 +67,27 @@ fn record_layer_inner() -> Result<String, &'static str> {
             identity_digest: context.layer.identity_digest,
             runtime_identity: None,
             state_digest: None,
-            restore: QualificationCacheRestore {
+            restore: QualificationCacheWorkerRestoreFacts {
                 requested_key: None,
                 matched_key: None,
-                matched_cache: QualificationCacheBackendObservation::NotQueried,
                 result: QualificationCacheRestoreResult::Disabled,
             },
-            save: QualificationCacheSave {
+            save: QualificationCacheWorkerSaveFacts {
                 requested_key: None,
                 action: QualificationCacheSaveActionResult::Disabled,
-                before: QualificationCacheBackendObservation::NotQueried,
-                after: QualificationCacheBackendObservation::NotQueried,
             },
         }
     };
-    write_qualification_cache_owner_layer_evidence(&request, &receipt)
+    write_qualification_cache_worker_layer_facts(&request, &facts)
         .map_err(|_| "qualification_cache_owner_layer_write_failed")
 }
 
-fn active_layer_receipt(
+fn active_layer_facts(
     request: &QualificationCacheBindingRequest<'_>,
     context: &velnor_actions_orchestrator::QualificationCacheOwnerLayerContext,
     owner_id: &str,
     layer_text: &str,
-) -> Result<QualificationCacheLayerReceipt, &'static str> {
+) -> Result<QualificationCacheWorkerLayerFacts, &'static str> {
     let after_name = qualification_cache_runtime_after_import_filename(owner_id, layer_text)
         .map_err(|_| "qualification_cache_runtime_after_import_invalid")?;
     let run_key = run_key_for_ci(request.run_id, u64::from(request.run_attempt));
@@ -103,38 +102,18 @@ fn active_layer_receipt(
     }
     let binding = bind_qualification_cache_runtime(request)
         .map_err(|_| "qualification_cache_binding_invalid")?;
-    let restore = restore_observation(binding.restore_key.as_ref())?;
+    let restore = restore_facts(binding.restore_key.as_deref())?;
     let export_result = required(&format!("{EXPORT_PREFIX}EXPORT_RESULT"))?;
     let save_requested = bool_value(&format!("{EXPORT_PREFIX}SAVE_REQUESTED"))?;
     let state_digest = required(&format!("{EXPORT_PREFIX}STATE_DIGEST"))?;
-    let (save_before, save_after, save_action) = if save_requested {
-        (
-            Some(census_observation(
-                "SAVE_BEFORE",
-                binding.save_key.as_deref(),
-            )?),
-            Some(census_observation(
-                "SAVE_AFTER",
-                binding.save_key.as_deref(),
-            )?),
-            env::var(SAVE_ACTION).ok().filter(|value| !value.is_empty()),
-        )
-    } else {
-        (
-            None,
-            None,
-            env::var(SAVE_ACTION).ok().filter(|value| !value.is_empty()),
-        )
-    };
-    let save = save_evidence(
-        binding.save_key,
+    let save_action = env::var(SAVE_ACTION).ok().filter(|value| !value.is_empty());
+    let save = save_facts(
+        binding.save_key.as_deref(),
         &export_result,
         save_requested,
-        save_before,
-        save_after,
         save_action.as_deref(),
     )?;
-    Ok(QualificationCacheLayerReceipt {
+    Ok(QualificationCacheWorkerLayerFacts {
         owner_id: owner_id.to_owned(),
         platform_id: context.owner.platform_id.clone(),
         member_digest: context.owner.member_digest.clone(),
@@ -145,6 +124,74 @@ fn active_layer_receipt(
         state_digest: Some(state_digest),
         restore,
         save,
+    })
+}
+
+fn restore_facts(
+    expected_key: Option<&str>,
+) -> Result<QualificationCacheWorkerRestoreFacts, &'static str> {
+    let result = required(RESTORE_RESULT)?;
+    let hit = bool_value(RESTORE_ACTION_HIT)?;
+    let matched_key = optional(RESTORE_ACTION_MATCHED_KEY);
+    restore_facts_from_outputs(expected_key, &result, hit, matched_key)
+}
+
+fn restore_facts_from_outputs(
+    expected_key: Option<&str>,
+    result_text: &str,
+    hit: bool,
+    matched_key: Option<String>,
+) -> Result<QualificationCacheWorkerRestoreFacts, &'static str> {
+    let result = match result_text {
+        "disabled" => QualificationCacheRestoreResult::Disabled,
+        "miss" => QualificationCacheRestoreResult::Miss,
+        "hit" => QualificationCacheRestoreResult::Hit,
+        _ => return Err("qualification_cache_restore_result_invalid"),
+    };
+    if hit != matched_key.is_some() || (result == QualificationCacheRestoreResult::Hit) != hit {
+        return Err("qualification_cache_restore_action_mismatch");
+    }
+    if expected_key.is_none() && (hit || result != QualificationCacheRestoreResult::Disabled) {
+        return Err("qualification_cache_disabled_restore_observed");
+    }
+    if hit && matched_key.as_deref() != expected_key {
+        return Err("qualification_cache_restore_key_mismatch");
+    }
+    Ok(QualificationCacheWorkerRestoreFacts {
+        requested_key: expected_key.map(str::to_owned),
+        matched_key,
+        result,
+    })
+}
+
+fn save_facts(
+    expected_key: Option<&str>,
+    export_result: &str,
+    save_requested: bool,
+    action: Option<&str>,
+) -> Result<QualificationCacheWorkerSaveFacts, &'static str> {
+    let (requested_key, action) = match (expected_key, export_result, save_requested, action) {
+        (None, "not_required", false, None) => (None, QualificationCacheSaveActionResult::Disabled),
+        (Some(_), "not_required", false, None) => {
+            (None, QualificationCacheSaveActionResult::NotRequired)
+        }
+        (Some(key), "staged", true, Some("success")) => (
+            Some(key.to_owned()),
+            QualificationCacheSaveActionResult::Succeeded,
+        ),
+        (Some(key), "staged", true, Some("skipped")) => (
+            Some(key.to_owned()),
+            QualificationCacheSaveActionResult::Skipped,
+        ),
+        (Some(key), "staged", true, Some("failure" | "cancelled" | "timed_out")) => (
+            Some(key.to_owned()),
+            QualificationCacheSaveActionResult::Failed,
+        ),
+        _ => return Err("qualification_cache_save_action_invalid"),
+    };
+    Ok(QualificationCacheWorkerSaveFacts {
+        requested_key,
+        action,
     })
 }
 
@@ -167,7 +214,7 @@ fn aggregate_owner_inner() -> Result<String, &'static str> {
     .into_iter()
     .map(PathBuf::from)
     .collect::<Vec<_>>();
-    aggregate_qualification_cache_owner_evidence(&inputs.request(), &paths)
+    aggregate_qualification_cache_worker_owner_facts(&inputs.request(), &paths)
         .map_err(|_| "qualification_cache_owner_aggregate_failed")
 }
 
@@ -184,140 +231,6 @@ fn read_inputs_before_import() -> Result<super::cache_bind::BindInputs, &'static
 fn read_inputs_after_import() -> Result<super::cache_bind::BindInputs, &'static str> {
     cache_bind::read_inputs(|name| env::var(name))
         .map_err(|_| "qualification_cache_binding_inputs_invalid")
-}
-
-fn restore_observation(
-    expected_key: Option<&String>,
-) -> Result<QualificationCacheRestore, &'static str> {
-    let observed = census_observation("RESTORE", expected_key.map(String::as_str))?;
-    let prefix = format!("{CENSUS_PREFIX}RESTORE_CENSUS_");
-    let hit = bool_value(&format!("{prefix}ACTION_HIT"))?;
-    let matched_key = optional(&format!("{prefix}ACTION_MATCHED_KEY"));
-    if hit != matched_key.is_some()
-        || hit != matches!(observed, QualificationCacheBackendObservation::Found(_))
-    {
-        return Err("qualification_cache_restore_observation_mismatch");
-    }
-    Ok(QualificationCacheRestore {
-        requested_key: expected_key.cloned(),
-        matched_key,
-        matched_cache: observed,
-        result: if hit {
-            QualificationCacheRestoreResult::Hit
-        } else {
-            QualificationCacheRestoreResult::Miss
-        },
-    })
-}
-
-fn census_observation(
-    phase: &str,
-    expected_key: Option<&str>,
-) -> Result<QualificationCacheBackendObservation, &'static str> {
-    let prefix = format!("{CENSUS_PREFIX}{phase}_CENSUS_");
-    if required(&format!("{prefix}PHASE"))? != phase.to_ascii_lowercase()
-        || optional(&format!("{prefix}KEY")).as_deref() != expected_key
-        || required(&format!("{prefix}ADMITTED"))? != "true"
-    {
-        return Err("qualification_cache_census_mismatch");
-    }
-    match required(&format!("{prefix}STATUS"))?.as_str() {
-        "absent" if expected_key.is_some() => {
-            ensure_empty_cache(&prefix)?;
-            Ok(QualificationCacheBackendObservation::Absent)
-        }
-        "not_queried" if expected_key.is_none() => {
-            ensure_empty_cache(&prefix)?;
-            Ok(QualificationCacheBackendObservation::NotQueried)
-        }
-        "found" if expected_key.is_some() => {
-            let entry = QualificationCacheBackendEntry {
-                id: positive_decimal(&format!("{prefix}CACHE_ID"))?,
-                key: required(&format!("{prefix}CACHE_KEY"))?,
-                git_ref: required(&format!("{prefix}CACHE_REF"))?,
-                version: required(&format!("{prefix}CACHE_VERSION"))?,
-                size_bytes: positive_decimal(&format!("{prefix}CACHE_SIZE"))?,
-            };
-            if Some(entry.key.as_str()) != expected_key {
-                return Err("qualification_cache_census_key_mismatch");
-            }
-            Ok(QualificationCacheBackendObservation::Found(entry))
-        }
-        _ => Err("qualification_cache_census_status_invalid"),
-    }
-}
-
-fn save_observation(
-    requested_key: Option<String>,
-    export_result: &str,
-    save_requested: bool,
-    before: QualificationCacheBackendObservation,
-    after: QualificationCacheBackendObservation,
-    action: Option<&str>,
-) -> Result<QualificationCacheSave, &'static str> {
-    let action = match (
-        requested_key.is_some(),
-        export_result,
-        save_requested,
-        action,
-    ) {
-        (false, "not_required", false, _) => QualificationCacheSaveActionResult::Disabled,
-        (true, "not_required", false, _) => QualificationCacheSaveActionResult::NotRequired,
-        (true, "staged", true, Some("success")) => QualificationCacheSaveActionResult::Succeeded,
-        (true, "staged", true, Some("skipped")) => QualificationCacheSaveActionResult::Skipped,
-        (true, "staged", true, Some("failure" | "cancelled" | "timed_out")) => {
-            QualificationCacheSaveActionResult::Failed
-        }
-        _ => return Err("qualification_cache_save_action_invalid"),
-    };
-    Ok(QualificationCacheSave {
-        requested_key: if action == QualificationCacheSaveActionResult::NotRequired {
-            None
-        } else {
-            requested_key
-        },
-        action,
-        before,
-        after,
-    })
-}
-
-fn save_evidence(
-    requested_key: Option<String>,
-    export_result: &str,
-    save_requested: bool,
-    before: Option<QualificationCacheBackendObservation>,
-    after: Option<QualificationCacheBackendObservation>,
-    action: Option<&str>,
-) -> Result<QualificationCacheSave, &'static str> {
-    if !save_requested {
-        if export_result != "not_required"
-            || action.is_some()
-            || before.is_some()
-            || after.is_some()
-        {
-            return Err("qualification_cache_unscheduled_save_has_observations");
-        }
-        return save_observation(
-            requested_key,
-            export_result,
-            false,
-            QualificationCacheBackendObservation::NotQueried,
-            QualificationCacheBackendObservation::NotQueried,
-            None,
-        );
-    }
-    if export_result != "staged" {
-        return Err("qualification_cache_save_stage_missing");
-    }
-    save_observation(
-        requested_key,
-        export_result,
-        true,
-        before.ok_or("qualification_cache_save_before_census_missing")?,
-        after.ok_or("qualification_cache_save_after_census_missing")?,
-        action,
-    )
 }
 
 fn parse_layer(value: &str) -> Result<QualificationCacheLayer, &'static str> {
@@ -348,32 +261,6 @@ fn bool_value(name: &str) -> Result<bool, &'static str> {
         "false" => Ok(false),
         _ => Err("qualification_cache_boolean_invalid"),
     }
-}
-
-fn positive_decimal(name: &str) -> Result<u64, &'static str> {
-    let text = required(name)?;
-    let value = text
-        .parse::<u64>()
-        .map_err(|_| "qualification_cache_decimal_invalid")?;
-    if value == 0 || value.to_string() != text {
-        return Err("qualification_cache_decimal_invalid");
-    }
-    Ok(value)
-}
-
-fn ensure_empty_cache(prefix: &str) -> Result<(), &'static str> {
-    for suffix in [
-        "CACHE_ID",
-        "CACHE_KEY",
-        "CACHE_REF",
-        "CACHE_VERSION",
-        "CACHE_SIZE",
-    ] {
-        if optional(&format!("{prefix}{suffix}")).is_some() {
-            return Err("qualification_cache_census_unexpected_entry");
-        }
-    }
-    Ok(())
 }
 
 fn write_output(name: &str, value: &str) -> ExitCode {

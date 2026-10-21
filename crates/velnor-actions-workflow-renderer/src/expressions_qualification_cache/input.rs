@@ -48,6 +48,14 @@ fn is_layer_composite_input(
     before_field: Option<&str>,
 ) -> bool {
     let prefix = format!("cache_{}", layer.as_str());
+    if let Some(action_field) = restore_action_input_field(key) {
+        if super::runtime_env::is_restore_action_input(key, inner) {
+            return true;
+        }
+        let expected = format!("{prefix}_restore_census_{action_field}");
+        return prepare_field.is_some_and(|mapped| mapped == expected)
+            && is_declared_prepare_field(&expected);
+    }
     let evidence_key = format!(
         "VELNOR_QUALIFICATION_CACHE_LAYER_{}_EVIDENCE",
         layer.as_str().to_ascii_uppercase()
@@ -87,6 +95,14 @@ fn is_layer_composite_input(
         .or(direct_input)
         .unwrap_or_default();
     !observed.ends_with("_runtime_after") || layer != QualificationCacheLayer::TaskResult
+}
+
+fn restore_action_input_field(key: &str) -> Option<&'static str> {
+    match key {
+        "VELNOR_QUALIFICATION_CACHE_HIT" => Some("action_hit"),
+        "VELNOR_QUALIFICATION_CACHE_MATCHED_KEY" => Some("action_matched_key"),
+        _ => None,
+    }
 }
 
 fn composite_env_field(key: &str) -> Option<String> {

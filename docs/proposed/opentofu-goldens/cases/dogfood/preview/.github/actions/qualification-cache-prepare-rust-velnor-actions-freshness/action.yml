@@ -11,10 +11,10 @@ outputs:
     value: ${{ steps.qualification-cache-bind-cargo_sources-619fe82dfa03f1e2.outputs.active }}
   cache_cargo_sources_restore_census_action_hit:
     description: Cache output from this composite action
-    value: ${{ steps.qualification-cache-restore-census-cargo_sources-619fe82dfa03f1e2.outputs.restore_action_hit }}
+    value: ${{ steps.qualification-cache-import-cargo_sources-619fe82dfa03f1e2.outputs.restore_action_hit }}
   cache_cargo_sources_restore_census_action_matched_key:
     description: Cache output from this composite action
-    value: ${{ steps.qualification-cache-restore-census-cargo_sources-619fe82dfa03f1e2.outputs.restore_action_matched_key }}
+    value: ${{ steps.qualification-cache-import-cargo_sources-619fe82dfa03f1e2.outputs.restore_action_matched_key }}
   cache_cargo_sources_restore_census_admitted:
     description: Cache output from this composite action
     value: ${{ steps.qualification-cache-restore-census-cargo_sources-619fe82dfa03f1e2.outputs.backend_admitted }}
@@ -68,10 +68,10 @@ outputs:
     value: ${{ steps.qualification-cache-bind-mbx_objects-619fe82dfa03f1e2.outputs.active }}
   cache_mbx_objects_restore_census_action_hit:
     description: Cache output from this composite action
-    value: ${{ steps.qualification-cache-restore-census-mbx_objects-619fe82dfa03f1e2.outputs.restore_action_hit }}
+    value: ${{ steps.qualification-cache-import-mbx_objects-619fe82dfa03f1e2.outputs.restore_action_hit }}
   cache_mbx_objects_restore_census_action_matched_key:
     description: Cache output from this composite action
-    value: ${{ steps.qualification-cache-restore-census-mbx_objects-619fe82dfa03f1e2.outputs.restore_action_matched_key }}
+    value: ${{ steps.qualification-cache-import-mbx_objects-619fe82dfa03f1e2.outputs.restore_action_matched_key }}
   cache_mbx_objects_restore_census_admitted:
     description: Cache output from this composite action
     value: ${{ steps.qualification-cache-restore-census-mbx_objects-619fe82dfa03f1e2.outputs.backend_admitted }}
@@ -125,10 +125,10 @@ outputs:
     value: ${{ steps.qualification-cache-bind-mise_tools-619fe82dfa03f1e2.outputs.active }}
   cache_mise_tools_restore_census_action_hit:
     description: Cache output from this composite action
-    value: ${{ steps.qualification-cache-restore-census-mise_tools-619fe82dfa03f1e2.outputs.restore_action_hit }}
+    value: ${{ steps.qualification-cache-import-mise_tools-619fe82dfa03f1e2.outputs.restore_action_hit }}
   cache_mise_tools_restore_census_action_matched_key:
     description: Cache output from this composite action
-    value: ${{ steps.qualification-cache-restore-census-mise_tools-619fe82dfa03f1e2.outputs.restore_action_matched_key }}
+    value: ${{ steps.qualification-cache-import-mise_tools-619fe82dfa03f1e2.outputs.restore_action_matched_key }}
   cache_mise_tools_restore_census_admitted:
     description: Cache output from this composite action
     value: ${{ steps.qualification-cache-restore-census-mise_tools-619fe82dfa03f1e2.outputs.backend_admitted }}
@@ -182,10 +182,10 @@ outputs:
     value: ${{ steps.qualification-cache-bind-task_result-619fe82dfa03f1e2.outputs.active }}
   cache_task_result_restore_census_action_hit:
     description: Cache output from this composite action
-    value: ${{ steps.qualification-cache-restore-census-task_result-619fe82dfa03f1e2.outputs.restore_action_hit }}
+    value: ${{ steps.qualification-cache-import-task_result-619fe82dfa03f1e2.outputs.restore_action_hit }}
   cache_task_result_restore_census_action_matched_key:
     description: Cache output from this composite action
-    value: ${{ steps.qualification-cache-restore-census-task_result-619fe82dfa03f1e2.outputs.restore_action_matched_key }}
+    value: ${{ steps.qualification-cache-import-task_result-619fe82dfa03f1e2.outputs.restore_action_matched_key }}
   cache_task_result_restore_census_admitted:
     description: Cache output from this composite action
     value: ${{ steps.qualification-cache-restore-census-task_result-619fe82dfa03f1e2.outputs.backend_admitted }}
@@ -236,10 +236,10 @@ outputs:
     value: ${{ steps.qualification-cache-bind-tofu_providers-619fe82dfa03f1e2.outputs.active }}
   cache_tofu_providers_restore_census_action_hit:
     description: Cache output from this composite action
-    value: ${{ steps.qualification-cache-restore-census-tofu_providers-619fe82dfa03f1e2.outputs.restore_action_hit }}
+    value: ${{ steps.qualification-cache-import-tofu_providers-619fe82dfa03f1e2.outputs.restore_action_hit }}
   cache_tofu_providers_restore_census_action_matched_key:
     description: Cache output from this composite action
-    value: ${{ steps.qualification-cache-restore-census-tofu_providers-619fe82dfa03f1e2.outputs.restore_action_matched_key }}
+    value: ${{ steps.qualification-cache-import-tofu_providers-619fe82dfa03f1e2.outputs.restore_action_matched_key }}
   cache_tofu_providers_restore_census_admitted:
     description: Cache output from this composite action
     value: ${{ steps.qualification-cache-restore-census-tofu_providers-619fe82dfa03f1e2.outputs.backend_admitted }}
@@ -459,21 +459,6 @@ runs:
         key: ${{ steps.qualification-cache-bind-mbx_objects-619fe82dfa03f1e2.outputs.restore_key }}
         path: ${{ steps.qualification-cache-bind-mbx_objects-619fe82dfa03f1e2.outputs.restore_stage_path }}
         restore-keys: ""
-    - name: Observe qualification cache restore
-      if: inputs.qualification_campaign != ''
-      id: qualification-cache-restore-census-mbx_objects-619fe82dfa03f1e2
-      env:
-        VELNOR_INTERNAL_OP: observe-qualification-cache-backend-v1
-        GH_TOKEN: ${{ github.token }}
-        VELNOR_QUALIFICATION_CACHE_CENSUS_PHASE: restore
-        VELNOR_QUALIFICATION_CACHE_HIT: ${{ steps.qualification-cache-restore-mbx_objects-619fe82dfa03f1e2.outputs.cache-hit }}
-        VELNOR_QUALIFICATION_CACHE_KEY: ${{ steps.qualification-cache-bind-mbx_objects-619fe82dfa03f1e2.outputs.restore_key }}
-        VELNOR_QUALIFICATION_CACHE_LAYER: mbx_objects
-        VELNOR_QUALIFICATION_CACHE_MATCHED_KEY: ${{ steps.qualification-cache-restore-mbx_objects-619fe82dfa03f1e2.outputs.cache-matched-key }}
-        VELNOR_QUALIFICATION_CACHE_OWNER_ID: rust-velnor-actions-freshness
-        VELNOR_QUALIFICATION_CACHE_RUNTIME_PHASE: before_import
-      shell: bash
-      run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.31'"
     - name: Import qualification cache payload
       if: inputs.qualification_campaign != ''
       id: qualification-cache-import-mbx_objects-619fe82dfa03f1e2
@@ -483,17 +468,6 @@ runs:
         VELNOR_QUALIFICATION_CACHE_LAYER: mbx_objects
         VELNOR_QUALIFICATION_CACHE_MATCHED_KEY: ${{ steps.qualification-cache-restore-mbx_objects-619fe82dfa03f1e2.outputs.cache-matched-key }}
         VELNOR_QUALIFICATION_CACHE_OWNER_ID: rust-velnor-actions-freshness
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_ACTION_HIT: ${{ steps.qualification-cache-restore-census-mbx_objects-619fe82dfa03f1e2.outputs.restore_action_hit }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_ACTION_MATCHED_KEY: ${{ steps.qualification-cache-restore-census-mbx_objects-619fe82dfa03f1e2.outputs.restore_action_matched_key }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_ADMITTED: ${{ steps.qualification-cache-restore-census-mbx_objects-619fe82dfa03f1e2.outputs.backend_admitted }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_ID: ${{ steps.qualification-cache-restore-census-mbx_objects-619fe82dfa03f1e2.outputs.backend_cache_id }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_KEY: ${{ steps.qualification-cache-restore-census-mbx_objects-619fe82dfa03f1e2.outputs.backend_cache_key }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_REF: ${{ steps.qualification-cache-restore-census-mbx_objects-619fe82dfa03f1e2.outputs.backend_cache_ref }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_SIZE: ${{ steps.qualification-cache-restore-census-mbx_objects-619fe82dfa03f1e2.outputs.backend_cache_size }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_VERSION: ${{ steps.qualification-cache-restore-census-mbx_objects-619fe82dfa03f1e2.outputs.backend_cache_version }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_KEY: ${{ steps.qualification-cache-restore-census-mbx_objects-619fe82dfa03f1e2.outputs.census_key }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_PHASE: ${{ steps.qualification-cache-restore-census-mbx_objects-619fe82dfa03f1e2.outputs.census_phase }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_STATUS: ${{ steps.qualification-cache-restore-census-mbx_objects-619fe82dfa03f1e2.outputs.backend_status }}
         VELNOR_QUALIFICATION_CACHE_ROOTS_FILE: ${{ steps.qualification-cache-roots-mbx_objects-619fe82dfa03f1e2.outputs.root_observation_path }}
         VELNOR_QUALIFICATION_CACHE_RUNTIME_PHASE: before_import
         VELNOR_QUALIFICATION_RUNTIME_IDENTITY_FILE: ${{ steps.qualification-cache-runtime-identity-mbx_objects-619fe82dfa03f1e2.outputs.runtime_identity_path }}
@@ -507,21 +481,6 @@ runs:
         key: ${{ steps.qualification-cache-bind-cargo_sources-619fe82dfa03f1e2.outputs.restore_key }}
         path: ${{ steps.qualification-cache-bind-cargo_sources-619fe82dfa03f1e2.outputs.restore_stage_path }}
         restore-keys: ""
-    - name: Observe qualification cache restore
-      if: inputs.qualification_campaign != ''
-      id: qualification-cache-restore-census-cargo_sources-619fe82dfa03f1e2
-      env:
-        VELNOR_INTERNAL_OP: observe-qualification-cache-backend-v1
-        GH_TOKEN: ${{ github.token }}
-        VELNOR_QUALIFICATION_CACHE_CENSUS_PHASE: restore
-        VELNOR_QUALIFICATION_CACHE_HIT: ${{ steps.qualification-cache-restore-cargo_sources-619fe82dfa03f1e2.outputs.cache-hit }}
-        VELNOR_QUALIFICATION_CACHE_KEY: ${{ steps.qualification-cache-bind-cargo_sources-619fe82dfa03f1e2.outputs.restore_key }}
-        VELNOR_QUALIFICATION_CACHE_LAYER: cargo_sources
-        VELNOR_QUALIFICATION_CACHE_MATCHED_KEY: ${{ steps.qualification-cache-restore-cargo_sources-619fe82dfa03f1e2.outputs.cache-matched-key }}
-        VELNOR_QUALIFICATION_CACHE_OWNER_ID: rust-velnor-actions-freshness
-        VELNOR_QUALIFICATION_CACHE_RUNTIME_PHASE: before_import
-      shell: bash
-      run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.31'"
     - name: Import qualification cache payload
       if: inputs.qualification_campaign != ''
       id: qualification-cache-import-cargo_sources-619fe82dfa03f1e2
@@ -531,17 +490,6 @@ runs:
         VELNOR_QUALIFICATION_CACHE_LAYER: cargo_sources
         VELNOR_QUALIFICATION_CACHE_MATCHED_KEY: ${{ steps.qualification-cache-restore-cargo_sources-619fe82dfa03f1e2.outputs.cache-matched-key }}
         VELNOR_QUALIFICATION_CACHE_OWNER_ID: rust-velnor-actions-freshness
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_ACTION_HIT: ${{ steps.qualification-cache-restore-census-cargo_sources-619fe82dfa03f1e2.outputs.restore_action_hit }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_ACTION_MATCHED_KEY: ${{ steps.qualification-cache-restore-census-cargo_sources-619fe82dfa03f1e2.outputs.restore_action_matched_key }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_ADMITTED: ${{ steps.qualification-cache-restore-census-cargo_sources-619fe82dfa03f1e2.outputs.backend_admitted }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_ID: ${{ steps.qualification-cache-restore-census-cargo_sources-619fe82dfa03f1e2.outputs.backend_cache_id }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_KEY: ${{ steps.qualification-cache-restore-census-cargo_sources-619fe82dfa03f1e2.outputs.backend_cache_key }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_REF: ${{ steps.qualification-cache-restore-census-cargo_sources-619fe82dfa03f1e2.outputs.backend_cache_ref }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_SIZE: ${{ steps.qualification-cache-restore-census-cargo_sources-619fe82dfa03f1e2.outputs.backend_cache_size }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_VERSION: ${{ steps.qualification-cache-restore-census-cargo_sources-619fe82dfa03f1e2.outputs.backend_cache_version }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_KEY: ${{ steps.qualification-cache-restore-census-cargo_sources-619fe82dfa03f1e2.outputs.census_key }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_PHASE: ${{ steps.qualification-cache-restore-census-cargo_sources-619fe82dfa03f1e2.outputs.census_phase }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_STATUS: ${{ steps.qualification-cache-restore-census-cargo_sources-619fe82dfa03f1e2.outputs.backend_status }}
         VELNOR_QUALIFICATION_CACHE_ROOTS_FILE: ${{ steps.qualification-cache-roots-cargo_sources-619fe82dfa03f1e2.outputs.root_observation_path }}
         VELNOR_QUALIFICATION_CACHE_RUNTIME_PHASE: before_import
         VELNOR_QUALIFICATION_RUNTIME_IDENTITY_FILE: ${{ steps.qualification-cache-runtime-identity-cargo_sources-619fe82dfa03f1e2.outputs.runtime_identity_path }}
@@ -555,21 +503,6 @@ runs:
         key: ${{ steps.qualification-cache-bind-mise_tools-619fe82dfa03f1e2.outputs.restore_key }}
         path: ${{ steps.qualification-cache-bind-mise_tools-619fe82dfa03f1e2.outputs.restore_stage_path }}
         restore-keys: ""
-    - name: Observe qualification cache restore
-      if: inputs.qualification_campaign != ''
-      id: qualification-cache-restore-census-mise_tools-619fe82dfa03f1e2
-      env:
-        VELNOR_INTERNAL_OP: observe-qualification-cache-backend-v1
-        GH_TOKEN: ${{ github.token }}
-        VELNOR_QUALIFICATION_CACHE_CENSUS_PHASE: restore
-        VELNOR_QUALIFICATION_CACHE_HIT: ${{ steps.qualification-cache-restore-mise_tools-619fe82dfa03f1e2.outputs.cache-hit }}
-        VELNOR_QUALIFICATION_CACHE_KEY: ${{ steps.qualification-cache-bind-mise_tools-619fe82dfa03f1e2.outputs.restore_key }}
-        VELNOR_QUALIFICATION_CACHE_LAYER: mise_tools
-        VELNOR_QUALIFICATION_CACHE_MATCHED_KEY: ${{ steps.qualification-cache-restore-mise_tools-619fe82dfa03f1e2.outputs.cache-matched-key }}
-        VELNOR_QUALIFICATION_CACHE_OWNER_ID: rust-velnor-actions-freshness
-        VELNOR_QUALIFICATION_CACHE_RUNTIME_PHASE: before_import
-      shell: bash
-      run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.31'"
     - name: Import qualification cache payload
       if: inputs.qualification_campaign != ''
       id: qualification-cache-import-mise_tools-619fe82dfa03f1e2
@@ -579,17 +512,6 @@ runs:
         VELNOR_QUALIFICATION_CACHE_LAYER: mise_tools
         VELNOR_QUALIFICATION_CACHE_MATCHED_KEY: ${{ steps.qualification-cache-restore-mise_tools-619fe82dfa03f1e2.outputs.cache-matched-key }}
         VELNOR_QUALIFICATION_CACHE_OWNER_ID: rust-velnor-actions-freshness
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_ACTION_HIT: ${{ steps.qualification-cache-restore-census-mise_tools-619fe82dfa03f1e2.outputs.restore_action_hit }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_ACTION_MATCHED_KEY: ${{ steps.qualification-cache-restore-census-mise_tools-619fe82dfa03f1e2.outputs.restore_action_matched_key }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_ADMITTED: ${{ steps.qualification-cache-restore-census-mise_tools-619fe82dfa03f1e2.outputs.backend_admitted }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_ID: ${{ steps.qualification-cache-restore-census-mise_tools-619fe82dfa03f1e2.outputs.backend_cache_id }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_KEY: ${{ steps.qualification-cache-restore-census-mise_tools-619fe82dfa03f1e2.outputs.backend_cache_key }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_REF: ${{ steps.qualification-cache-restore-census-mise_tools-619fe82dfa03f1e2.outputs.backend_cache_ref }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_SIZE: ${{ steps.qualification-cache-restore-census-mise_tools-619fe82dfa03f1e2.outputs.backend_cache_size }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_VERSION: ${{ steps.qualification-cache-restore-census-mise_tools-619fe82dfa03f1e2.outputs.backend_cache_version }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_KEY: ${{ steps.qualification-cache-restore-census-mise_tools-619fe82dfa03f1e2.outputs.census_key }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_PHASE: ${{ steps.qualification-cache-restore-census-mise_tools-619fe82dfa03f1e2.outputs.census_phase }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_STATUS: ${{ steps.qualification-cache-restore-census-mise_tools-619fe82dfa03f1e2.outputs.backend_status }}
         VELNOR_QUALIFICATION_CACHE_ROOTS_FILE: ${{ steps.qualification-cache-roots-mise_tools-619fe82dfa03f1e2.outputs.root_observation_path }}
         VELNOR_QUALIFICATION_CACHE_RUNTIME_PHASE: before_import
         VELNOR_QUALIFICATION_RUNTIME_IDENTITY_FILE: ${{ steps.qualification-cache-runtime-identity-mise_tools-619fe82dfa03f1e2.outputs.runtime_identity_path }}
@@ -603,21 +525,6 @@ runs:
         key: ${{ steps.qualification-cache-bind-tofu_providers-619fe82dfa03f1e2.outputs.restore_key }}
         path: ${{ steps.qualification-cache-bind-tofu_providers-619fe82dfa03f1e2.outputs.restore_stage_path }}
         restore-keys: ""
-    - name: Observe qualification cache restore
-      if: inputs.qualification_campaign != ''
-      id: qualification-cache-restore-census-tofu_providers-619fe82dfa03f1e2
-      env:
-        VELNOR_INTERNAL_OP: observe-qualification-cache-backend-v1
-        GH_TOKEN: ${{ github.token }}
-        VELNOR_QUALIFICATION_CACHE_CENSUS_PHASE: restore
-        VELNOR_QUALIFICATION_CACHE_HIT: ${{ steps.qualification-cache-restore-tofu_providers-619fe82dfa03f1e2.outputs.cache-hit }}
-        VELNOR_QUALIFICATION_CACHE_KEY: ${{ steps.qualification-cache-bind-tofu_providers-619fe82dfa03f1e2.outputs.restore_key }}
-        VELNOR_QUALIFICATION_CACHE_LAYER: tofu_providers
-        VELNOR_QUALIFICATION_CACHE_MATCHED_KEY: ${{ steps.qualification-cache-restore-tofu_providers-619fe82dfa03f1e2.outputs.cache-matched-key }}
-        VELNOR_QUALIFICATION_CACHE_OWNER_ID: rust-velnor-actions-freshness
-        VELNOR_QUALIFICATION_CACHE_RUNTIME_PHASE: before_import
-      shell: bash
-      run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.31'"
     - name: Import qualification cache payload
       if: inputs.qualification_campaign != ''
       id: qualification-cache-import-tofu_providers-619fe82dfa03f1e2
@@ -627,17 +534,6 @@ runs:
         VELNOR_QUALIFICATION_CACHE_LAYER: tofu_providers
         VELNOR_QUALIFICATION_CACHE_MATCHED_KEY: ${{ steps.qualification-cache-restore-tofu_providers-619fe82dfa03f1e2.outputs.cache-matched-key }}
         VELNOR_QUALIFICATION_CACHE_OWNER_ID: rust-velnor-actions-freshness
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_ACTION_HIT: ${{ steps.qualification-cache-restore-census-tofu_providers-619fe82dfa03f1e2.outputs.restore_action_hit }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_ACTION_MATCHED_KEY: ${{ steps.qualification-cache-restore-census-tofu_providers-619fe82dfa03f1e2.outputs.restore_action_matched_key }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_ADMITTED: ${{ steps.qualification-cache-restore-census-tofu_providers-619fe82dfa03f1e2.outputs.backend_admitted }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_ID: ${{ steps.qualification-cache-restore-census-tofu_providers-619fe82dfa03f1e2.outputs.backend_cache_id }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_KEY: ${{ steps.qualification-cache-restore-census-tofu_providers-619fe82dfa03f1e2.outputs.backend_cache_key }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_REF: ${{ steps.qualification-cache-restore-census-tofu_providers-619fe82dfa03f1e2.outputs.backend_cache_ref }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_SIZE: ${{ steps.qualification-cache-restore-census-tofu_providers-619fe82dfa03f1e2.outputs.backend_cache_size }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_VERSION: ${{ steps.qualification-cache-restore-census-tofu_providers-619fe82dfa03f1e2.outputs.backend_cache_version }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_KEY: ${{ steps.qualification-cache-restore-census-tofu_providers-619fe82dfa03f1e2.outputs.census_key }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_PHASE: ${{ steps.qualification-cache-restore-census-tofu_providers-619fe82dfa03f1e2.outputs.census_phase }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_STATUS: ${{ steps.qualification-cache-restore-census-tofu_providers-619fe82dfa03f1e2.outputs.backend_status }}
         VELNOR_QUALIFICATION_CACHE_ROOTS_FILE: ${{ steps.qualification-cache-roots-tofu_providers-619fe82dfa03f1e2.outputs.root_observation_path }}
         VELNOR_QUALIFICATION_CACHE_RUNTIME_PHASE: before_import
         VELNOR_QUALIFICATION_RUNTIME_IDENTITY_FILE: ${{ steps.qualification-cache-runtime-identity-tofu_providers-619fe82dfa03f1e2.outputs.runtime_identity_path }}
@@ -651,21 +547,6 @@ runs:
         key: ${{ steps.qualification-cache-bind-task_result-619fe82dfa03f1e2.outputs.restore_key }}
         path: ${{ steps.qualification-cache-bind-task_result-619fe82dfa03f1e2.outputs.restore_stage_path }}
         restore-keys: ""
-    - name: Observe qualification cache restore
-      if: inputs.qualification_campaign != ''
-      id: qualification-cache-restore-census-task_result-619fe82dfa03f1e2
-      env:
-        VELNOR_INTERNAL_OP: observe-qualification-cache-backend-v1
-        GH_TOKEN: ${{ github.token }}
-        VELNOR_QUALIFICATION_CACHE_CENSUS_PHASE: restore
-        VELNOR_QUALIFICATION_CACHE_HIT: ${{ steps.qualification-cache-restore-task_result-619fe82dfa03f1e2.outputs.cache-hit }}
-        VELNOR_QUALIFICATION_CACHE_KEY: ${{ steps.qualification-cache-bind-task_result-619fe82dfa03f1e2.outputs.restore_key }}
-        VELNOR_QUALIFICATION_CACHE_LAYER: task_result
-        VELNOR_QUALIFICATION_CACHE_MATCHED_KEY: ${{ steps.qualification-cache-restore-task_result-619fe82dfa03f1e2.outputs.cache-matched-key }}
-        VELNOR_QUALIFICATION_CACHE_OWNER_ID: rust-velnor-actions-freshness
-        VELNOR_QUALIFICATION_CACHE_RUNTIME_PHASE: before_import
-      shell: bash
-      run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.31'"
     - name: Import qualification cache payload
       if: inputs.qualification_campaign != ''
       id: qualification-cache-import-task_result-619fe82dfa03f1e2
@@ -675,17 +556,6 @@ runs:
         VELNOR_QUALIFICATION_CACHE_LAYER: task_result
         VELNOR_QUALIFICATION_CACHE_MATCHED_KEY: ${{ steps.qualification-cache-restore-task_result-619fe82dfa03f1e2.outputs.cache-matched-key }}
         VELNOR_QUALIFICATION_CACHE_OWNER_ID: rust-velnor-actions-freshness
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_ACTION_HIT: ${{ steps.qualification-cache-restore-census-task_result-619fe82dfa03f1e2.outputs.restore_action_hit }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_ACTION_MATCHED_KEY: ${{ steps.qualification-cache-restore-census-task_result-619fe82dfa03f1e2.outputs.restore_action_matched_key }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_ADMITTED: ${{ steps.qualification-cache-restore-census-task_result-619fe82dfa03f1e2.outputs.backend_admitted }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_ID: ${{ steps.qualification-cache-restore-census-task_result-619fe82dfa03f1e2.outputs.backend_cache_id }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_KEY: ${{ steps.qualification-cache-restore-census-task_result-619fe82dfa03f1e2.outputs.backend_cache_key }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_REF: ${{ steps.qualification-cache-restore-census-task_result-619fe82dfa03f1e2.outputs.backend_cache_ref }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_SIZE: ${{ steps.qualification-cache-restore-census-task_result-619fe82dfa03f1e2.outputs.backend_cache_size }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_VERSION: ${{ steps.qualification-cache-restore-census-task_result-619fe82dfa03f1e2.outputs.backend_cache_version }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_KEY: ${{ steps.qualification-cache-restore-census-task_result-619fe82dfa03f1e2.outputs.census_key }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_PHASE: ${{ steps.qualification-cache-restore-census-task_result-619fe82dfa03f1e2.outputs.census_phase }}
-        VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_STATUS: ${{ steps.qualification-cache-restore-census-task_result-619fe82dfa03f1e2.outputs.backend_status }}
         VELNOR_QUALIFICATION_CACHE_ROOTS_FILE: ${{ steps.qualification-cache-roots-task_result-619fe82dfa03f1e2.outputs.root_observation_path }}
         VELNOR_QUALIFICATION_CACHE_RUNTIME_PHASE: before_import
         VELNOR_QUALIFICATION_RUNTIME_IDENTITY_FILE: ${{ steps.qualification-cache-runtime-identity-task_result-619fe82dfa03f1e2.outputs.runtime_identity_path }}

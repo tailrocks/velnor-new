@@ -14,6 +14,8 @@ use crate::internal::internal;
 #[path = "qualification_cache_runtime_closure.rs"]
 pub(crate) mod closure;
 
+#[path = "qualification_cache_runtime_before.rs"]
+mod before;
 #[path = "qualification_cache_runtime_files.rs"]
 mod files;
 #[path = "qualification_cache_runtime_names.rs"]
@@ -29,6 +31,9 @@ use self::files::read_owned_runner_file;
 use self::files::{
     RunDirectory, parse_layer, read_guest_image_projection, validate_runner_temp,
     validate_runtime_environment, verified_scale_set_image_identity,
+};
+pub use self::owner_evidence::{
+    aggregate_qualification_cache_worker_owner_facts, write_qualification_cache_worker_layer_facts,
 };
 
 /// Private operation tag for binding one validated cache layer.
@@ -160,6 +165,8 @@ pub fn bind_qualification_cache_runtime(
         .ok_or_else(|| internal("qualification_cache_runtime_identity_missing"))?;
     bind_active_runtime(request, &documents, entry, layer, evidence)
 }
+
+pub use before::qualification_cache_before_observation;
 
 fn disabled_binding(
     request: &QualificationCacheBindingRequest<'_>,

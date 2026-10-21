@@ -95,6 +95,33 @@ pub(super) fn read_binding_documents(
     })
 }
 
+pub(super) fn observe_before_snapshot(
+    request: &QualificationCacheBindingRequest<'_>,
+    key: &str,
+) -> Result<
+    velnor_actions_contract::workflow::QualificationCacheBackendObservation,
+    OrchestratorError,
+> {
+    let run_key = run_key_for_ci(request.run_id, u64::from(request.run_attempt));
+    let run_dir = RunDirectory::open(request.runner_temp, &run_key)?;
+    let plan = read_plan(&run_dir, &run_key)?;
+    validate_dispatch_context(&plan, request)?;
+    let context = plan
+        .qualification
+        .as_ref()
+        .ok_or_else(|| internal("qualification_cache_dispatch_missing"))?;
+    let bytes = run_dir.read_owned_file(
+        crate::qualification_cache_backend::QUALIFICATION_CACHE_BACKEND_BEFORE_FILENAME,
+        16 * 1024 * 1024,
+        None,
+        "qualification_cache_snapshot",
+    )?;
+    let snapshot =
+        crate::qualification_cache_backend::parse_qualification_cache_before(&bytes, context)?;
+    snapshot.validate_for(context, &run_key)?;
+    snapshot.observation_for(key, request.git_ref)
+}
+
 fn read_identity(
     run_dir: &RunDirectory,
     filename: &str,

@@ -141,10 +141,34 @@ fn qualification_cache_operation_expressions_are_typed_and_closed() {
         "${{ steps.qualification-cache-export-mbx_objects-0123456789abcdef.outputs.save_requested == 'true' && steps.qualification-cache-save-mbx_objects-0123456789abcdef.outcome || '' }}"
     )
     .is_ok());
+    assert!(check(
+        "VELNOR_QUALIFICATION_CACHE_HIT",
+        "${{ steps.qualification-cache-import-mbx_objects-0123456789abcdef.outputs.restore_action_hit }}"
+    )
+    .is_ok());
+    assert!(check(
+        "VELNOR_QUALIFICATION_CACHE_MATCHED_KEY",
+        "${{ steps.qualification-cache-import-mbx_objects-0123456789abcdef.outputs.restore_action_matched_key }}"
+    )
+    .is_ok());
+    assert!(check(
+        "VELNOR_QUALIFICATION_CACHE_HIT",
+        "${{ steps.qualification-cache-restore-mbx_objects-0123456789abcdef.outputs.cache-hit }}"
+    )
+    .is_ok());
+    assert!(check(
+        "VELNOR_QUALIFICATION_CACHE_MATCHED_KEY",
+        "${{ steps.qualification-cache-restore-mbx_objects-0123456789abcdef.outputs.cache-matched-key }}"
+    )
+    .is_ok());
     for (key, expression) in [
         (
             "VELNOR_QUALIFICATION_CACHE_EXPORT_STATE_DIGEST",
             "${{ steps.qualification-cache-export-mbx_objects-0123456789abcdef.outputs.save_requested }}",
+        ),
+        (
+            "VELNOR_QUALIFICATION_CACHE_MATCHED_KEY",
+            "${{ steps.qualification-cache-restore-mbx_objects-0123456789abcdef.outputs.cache-hit }}",
         ),
         (
             "VELNOR_QUALIFICATION_CACHE_EXPORT_STATE_DIGEST",
@@ -161,6 +185,60 @@ fn qualification_cache_operation_expressions_are_typed_and_closed() {
         ("VELNOR_QUALIFICATION_CACHE_KEY", "${{ github.sha }}"),
     ] {
         assert!(check(key, expression).is_err(), "{key}: {expression}");
+    }
+}
+
+#[test]
+fn restore_action_facts_use_the_exact_layered_prepare_boundary() {
+    assert!(check_composite_qualification_cache_env_value(
+        "VELNOR_QUALIFICATION_CACHE_HIT",
+        "${{ steps.qualification-cache-restore-mbx_objects-0123456789abcdef.outputs.cache-hit }}"
+    )
+    .is_ok());
+    assert!(check_composite_qualification_cache_env_value(
+        "VELNOR_QUALIFICATION_CACHE_MATCHED_KEY",
+        "${{ steps.qualification-cache-restore-mbx_objects-0123456789abcdef.outputs.cache-matched-key }}"
+    )
+    .is_ok());
+    for (key, suffix) in [
+        ("VELNOR_QUALIFICATION_CACHE_HIT", "action_hit"),
+        (
+            "VELNOR_QUALIFICATION_CACHE_MATCHED_KEY",
+            "action_matched_key",
+        ),
+    ] {
+        let input = format!(
+            "${{{{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_restore_census_{suffix} }}}}"
+        );
+        assert!(check_composite_qualification_cache_env_value(key, &input).is_ok());
+        let boundary = format!(
+            "${{{{ steps.qualification-cache-prepare-0123456789abcdef.outputs.cache_mbx_objects_restore_census_{suffix} }}}}"
+        );
+        assert!(check_composite_qualification_cache_env_value(key, &boundary).is_ok());
+    }
+
+    for (key, expression) in [
+        (
+            "VELNOR_QUALIFICATION_CACHE_HIT",
+            "${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_restore_census_backend_status }}",
+        ),
+        (
+            "VELNOR_QUALIFICATION_CACHE_HIT",
+            "${{ steps.qualification-cache-import-mbx_objects-0123456789abcdef.outputs.cache-hit }}",
+        ),
+        (
+            "VELNOR_QUALIFICATION_CACHE_MATCHED_KEY",
+            "${{ fromJSON(inputs.before_outputs).cache_mbx_objects_restore_census_action_matched_key }}",
+        ),
+        (
+            "VELNOR_QUALIFICATION_CACHE_HIT",
+            "${{ steps.qualification-cache-prepare-0123456789abcdef.outputs.cache_mbx_objects_restore_census_backend_status }}",
+        ),
+    ] {
+        assert!(
+            check_composite_qualification_cache_env_value(key, expression).is_err(),
+            "{key}: {expression}"
+        );
     }
 }
 

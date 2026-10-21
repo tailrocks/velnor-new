@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::{
-    QualificationCacheCompositeId, QualificationCacheLayer, QualificationCacheStepId,
-    QualificationCacheStepStage, StepId,
+    QualificationCacheCompositeId, QualificationCacheCompositePhase, QualificationCacheLayer,
+    QualificationCacheStepId, QualificationCacheStepStage, StepId, StepRole,
 };
 use velnor_actions_contract::{Step, StepKind};
 
@@ -16,6 +16,7 @@ pub(super) fn rewrite_cross_phase_outputs(
 ) -> Result<Vec<Step>, RenderError> {
     let by_expression = outputs.clone();
     for step in &mut steps {
+        validate_restore_action_inputs(step, &by_expression)?;
         if let Some(condition) = &mut step.condition {
             *condition = condition.replace(
                 "needs.plan.outputs.qualification_campaign",
@@ -42,6 +43,66 @@ pub(super) fn rewrite_cross_phase_outputs(
         }
     }
     Ok(steps)
+}
+
+fn validate_restore_action_inputs(
+    step: &Step,
+    outputs: &BTreeMap<String, String>,
+) -> Result<(), RenderError> {
+    if step.role != Some(StepRole::QualificationCacheOwnerLayerEvidence) {
+        return Ok(());
+    }
+    let StepKind::Internal { env, .. } = &step.kind else {
+        return Ok(());
+    };
+    for (key, field, action_output) in [
+        (
+            "VELNOR_QUALIFICATION_CACHE_HIT",
+            "action_hit",
+            "restore_action_hit",
+        ),
+        (
+            "VELNOR_QUALIFICATION_CACHE_MATCHED_KEY",
+            "action_matched_key",
+            "restore_action_matched_key",
+        ),
+    ] {
+        let Some(value) = env.get(key) else {
+            continue;
+        };
+        let Some(StepId::QualificationCache(id)) = step.id else {
+            return Err(RenderError::InvalidWorkflow(
+                "qualification_cache_restore_fact_owner_missing".to_owned(),
+            ));
+        };
+        if id.stage() != QualificationCacheStepStage::OwnerLayerEvidence {
+            return Err(RenderError::InvalidWorkflow(
+                "qualification_cache_restore_fact_stage_invalid".to_owned(),
+            ));
+        }
+        let suffix = id
+            .as_string()
+            .strip_prefix("qualification-cache-owner-layer-evidence-")
+            .map(str::to_owned)
+            .ok_or_else(|| {
+                RenderError::InvalidWorkflow(
+                    "qualification_cache_restore_fact_owner_invalid".to_owned(),
+                )
+            })?;
+        let expected_step = format!("qualification-cache-import-{suffix}");
+        let expected_reference = format!("steps.{expected_step}.outputs.{action_output}");
+        let expected_value = format!("${{{{ {expected_reference} }}}}");
+        let input = format!(
+            "fromJSON(inputs.prepare_outputs).cache_{}_restore_census_{field}",
+            id.layer().as_str()
+        );
+        if value != &expected_value || outputs.get(&expected_reference) != Some(&input) {
+            return Err(RenderError::InvalidWorkflow(
+                "qualification_cache_restore_fact_binding_invalid".to_owned(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn rewrite_value(
@@ -89,6 +150,20 @@ pub(super) fn inputs_for_after(
     job_id: &str,
     save_outcome: &str,
 ) -> Result<BTreeMap<String, String>, RenderError> {
+    let expected_prepare =
+        QualificationCacheCompositeId::new(QualificationCacheCompositePhase::Prepare, job_id)
+            .map_err(RenderError::Contract)?;
+    let expected_before = QualificationCacheCompositeId::for_layer(
+        QualificationCacheCompositePhase::BeforeSave,
+        layer,
+        job_id,
+    )
+    .map_err(RenderError::Contract)?;
+    if prepare_id != expected_prepare || before_id != expected_before {
+        return Err(RenderError::InvalidWorkflow(
+            "qualification_cache_after_save_composite_identity_invalid".to_owned(),
+        ));
+    }
     let mut inputs = BTreeMap::from([
         (
             CAMPAIGN_INPUT.to_owned(),
@@ -118,6 +193,10 @@ pub(super) fn inputs_for_after(
     }
     Ok(inputs)
 }
+
+#[cfg(test)]
+#[path = "rewrite_tests.rs"]
+mod tests;
 
 pub(super) fn rewrite_outer_save(
     step: &mut Step,

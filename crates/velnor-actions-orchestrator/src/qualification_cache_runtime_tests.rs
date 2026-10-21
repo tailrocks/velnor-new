@@ -84,3 +84,6 @@ fn bind_result(
 
 #[path = "qualification_cache_runtime_cases_tests.rs"]
 mod cases;
+
+#[path = "qualification_cache_runtime_before_tests.rs"]
+mod before_snapshot_tests;

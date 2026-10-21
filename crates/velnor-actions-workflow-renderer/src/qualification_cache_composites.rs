@@ -74,7 +74,7 @@ pub(crate) fn extract(
                 "${{ needs.plan.outputs.qualification_campaign }}".to_owned(),
             )]),
         )?;
-        let (layers, aggregate) = split_tail(tail_steps)?;
+        let (layers, aggregate) = split_tail(tail_steps, job_id)?;
         let mut tail_calls = Vec::with_capacity(layers.len() * 3 + 1);
         let mut layer_files = Vec::with_capacity(layers.len() * 2);
         let mut aggregate = aggregate;
@@ -120,7 +120,7 @@ fn build_layer_composites(
     let layer = chunk.layer;
     let before_id =
         layer_composite_id(QualificationCacheCompositePhase::BeforeSave, layer, job_id)?;
-    let before_outputs = before_outputs(layer, &chunk.before)?;
+    let before_outputs = before_outputs(layer, job_id, &chunk.before)?;
     let mut before_input_names =
         velnor_actions_contract::workflow::qualification_cache_layer_prepare_input_names(layer);
     before_input_names.push(CAMPAIGN_INPUT.to_owned());
@@ -148,7 +148,7 @@ fn build_layer_composites(
     rewrite_outer_save(&mut save, layer, job_id, prepare_id, before_id)?;
     let save_outcome = format!("${{{{ steps.{}.outcome }}}}", save_id.as_string());
     let after_id = layer_composite_id(QualificationCacheCompositePhase::AfterSave, layer, job_id)?;
-    let after_outputs = after_outputs(layer, &chunk.after)?;
+    let after_outputs = after_outputs(layer, job_id, &chunk.after)?;
     let mut after_input_names =
         velnor_actions_contract::workflow::qualification_cache_after_save_input_names(layer);
     after_input_names.push(CAMPAIGN_INPUT.to_owned());
@@ -217,18 +217,15 @@ fn is_prepare_step(step: &Step) -> bool {
 }
 
 fn is_finish_step(step: &Step) -> bool {
-    match step.role {
-        Some(StepRole::QualificationCacheCensus) => {
-            matches!(census_phase(step), Some("save_before" | "save_after"))
-        }
+    matches!(
+        step.role,
         Some(
             StepRole::QualificationCachePayloadExport
-            | StepRole::QualificationCacheSave
-            | StepRole::QualificationCacheOwnerLayerEvidence
-            | StepRole::QualificationCacheOwnerAggregate,
-        ) => true,
-        _ => false,
-    }
+                | StepRole::QualificationCacheSave
+                | StepRole::QualificationCacheOwnerLayerEvidence
+                | StepRole::QualificationCacheOwnerAggregate,
+        )
+    )
 }
 
 fn census_phase(step: &Step) -> Option<&str> {

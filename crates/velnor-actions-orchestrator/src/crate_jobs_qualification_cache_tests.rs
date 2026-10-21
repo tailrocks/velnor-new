@@ -10,8 +10,9 @@ use super::owner_binding_steps;
 fn owner_binding_prelude_has_unique_typed_ids_and_bound_file_paths() {
     let owner = "rust-example";
     let steps = owner_binding_steps(owner).expect("owner steps");
-    assert_eq!(steps.len(), 34);
+    assert_eq!(steps.len(), 29);
     assert_all_internal_steps_have_runtime_phase(&steps);
+    assert_worker_steps_stay_local_and_token_free(&steps);
     validate_step_sequence(&steps, owner).expect("valid steps");
     let post_import = steps
         .iter()
@@ -130,9 +131,10 @@ fn assert_runtime_phase(
 fn owner_evidence_runs_after_parallel_tasks_and_has_one_aggregate() {
     let owner = "rust-example";
     let steps = super::owner_evidence_steps(owner).expect("owner evidence steps");
-    assert_eq!(steps.len(), 26);
+    assert_eq!(steps.len(), 16);
     validate_step_sequence(&steps, owner).expect("valid evidence sequence");
     assert_all_internal_steps_have_runtime_phase(&steps);
+    assert_worker_steps_stay_local_and_token_free(&steps);
     assert_eq!(
         steps.last().expect("aggregate").role,
         Some(StepRole::QualificationCacheOwnerAggregate)
@@ -142,7 +144,7 @@ fn owner_evidence_runs_after_parallel_tasks_and_has_one_aggregate() {
         .filter(|step| step.role == Some(StepRole::QualificationCacheOwnerLayerEvidence))
         .count();
     assert_eq!(recorders, 5);
-    assert_layer_recorder_phase(&steps);
+    assert_owner_evidence_layers(&steps, owner);
     assert!(
         steps
             .iter()
@@ -154,24 +156,6 @@ fn owner_evidence_runs_after_parallel_tasks_and_has_one_aggregate() {
                 })
             })
     );
-    for stage in [
-        QualificationCacheStepStage::SaveBeforeCensus,
-        QualificationCacheStepStage::SaveAfterCensus,
-    ] {
-        assert!(
-            steps
-                .iter()
-                .filter(|step| {
-                    step.id.is_some_and(|id| match id {
-                        StepId::QualificationCache(id) => id.stage() == stage,
-                        _ => false,
-                    })
-                })
-                .all(|step| step.condition.as_deref().is_some_and(|condition| {
-                    condition.contains("outputs.save_requested == 'true'")
-                }))
-        );
-    }
     let exports = steps
         .iter()
         .filter(|step| step.role == Some(StepRole::QualificationCachePayloadExport));
@@ -198,12 +182,39 @@ fn assert_all_internal_steps_have_runtime_phase(steps: &[velnor_actions_contract
     }
 }
 
-fn assert_layer_recorder_phase(steps: &[velnor_actions_contract::Step]) {
-    for step in steps
-        .iter()
-        .filter(|step| step.role == Some(StepRole::QualificationCacheOwnerLayerEvidence))
-    {
-        let StepKind::Internal { env, .. } = &step.kind else {
+fn assert_owner_evidence_layers(steps: &[velnor_actions_contract::Step], owner: &str) {
+    let tail = &steps[..15];
+    let (groups, remainder) = tail.as_chunks::<3>();
+    assert_eq!(remainder, []);
+    for (group, layer) in groups.iter().zip(cache_layers()) {
+        for (index, (stage, role)) in [
+            (
+                QualificationCacheStepStage::Export,
+                StepRole::QualificationCachePayloadExport,
+            ),
+            (
+                QualificationCacheStepStage::Save,
+                StepRole::QualificationCacheSave,
+            ),
+            (
+                QualificationCacheStepStage::OwnerLayerEvidence,
+                StepRole::QualificationCacheOwnerLayerEvidence,
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let id = QualificationCacheStepId::new(stage, layer, owner)
+                .expect("typed owner layer identity");
+            assert_eq!(group[index].id, Some(StepId::QualificationCache(id)));
+            assert_eq!(group[index].role, Some(role));
+        }
+        assert_eq!(
+            group[2].condition.as_deref(),
+            Some("needs.plan.outputs.qualification_campaign != ''"),
+            "the evidence record runs when the campaign is active, even when the save is skipped"
+        );
+        let StepKind::Internal { env, .. } = &group[2].kind else {
             panic!("owner layer evidence is internal");
         };
         assert_eq!(
@@ -216,6 +227,66 @@ fn assert_layer_recorder_phase(steps: &[velnor_actions_contract::Step]) {
             .expect("save action output");
         assert!(save_action.contains("outputs.save_requested == 'true'"));
         assert!(save_action.contains("|| ''"));
+    }
+    assert!(steps.iter().all(|step| {
+        step.role != Some(StepRole::QualificationCacheCensus)
+            && !step.id.is_some_and(|id| match id {
+                StepId::QualificationCache(id) => matches!(
+                    id.stage(),
+                    QualificationCacheStepStage::SaveBeforeCensus
+                        | QualificationCacheStepStage::SaveAfterCensus
+                ),
+                _ => false,
+            })
+    }));
+    let aggregate = steps.last().expect("aggregate");
+    let aggregate_id = QualificationCacheStepId::new(
+        QualificationCacheStepStage::OwnerAggregate,
+        QualificationCacheLayer::TaskResult,
+        owner,
+    )
+    .expect("aggregate identity");
+    assert_eq!(aggregate.id, Some(StepId::QualificationCache(aggregate_id)));
+}
+
+fn cache_layers() -> [QualificationCacheLayer; 5] {
+    [
+        QualificationCacheLayer::MbxObjects,
+        QualificationCacheLayer::CargoSources,
+        QualificationCacheLayer::MiseTools,
+        QualificationCacheLayer::TofuProviders,
+        QualificationCacheLayer::TaskResult,
+    ]
+}
+
+fn assert_worker_steps_stay_local_and_token_free(steps: &[velnor_actions_contract::Step]) {
+    for step in steps {
+        let env = match &step.kind {
+            StepKind::Action { uses, env, with } => {
+                assert!(uses.starts_with("actions/cache/"));
+                assert!(!with.contains_key("GH_TOKEN"));
+                assert!(!with.contains_key("GITHUB_TOKEN"));
+                env
+            }
+            StepKind::Internal { operation, env } => {
+                assert!(matches!(
+                    operation.as_str(),
+                    "observe-qualification-cache-runtime-v1"
+                        | "observe-qualification-cache-roots-v1"
+                        | "bind-qualification-cache-v1"
+                        | "import-qualification-cache-payload-v1"
+                        | "export-qualification-cache-payload-v1"
+                        | "record-qualification-cache-owner-layer-v1"
+                        | "aggregate-qualification-cache-owner-v1"
+                ));
+                env
+            }
+            StepKind::Shell { .. } | StepKind::TaskExecution { .. } => {
+                panic!("cache ownership operations must not launch worker REST commands");
+            }
+        };
+        assert!(!env.contains_key("GH_TOKEN"));
+        assert!(!env.contains_key("GITHUB_TOKEN"));
     }
 }
 

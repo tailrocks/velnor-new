@@ -1,6 +1,23 @@
 use velnor_actions_contract::workflow::QualificationCacheLayer;
 
 pub(crate) fn is_composite_boundary_output(key: &str, inner: &str) -> bool {
+    if let Some(action_field) = restore_action_boundary_field(key) {
+        let matches_declared_output = cache_layers().into_iter().any(|layer| {
+            let expected = format!("cache_{}_restore_census_{action_field}", layer.as_str());
+            let Some(value) = inner.strip_prefix("steps.qualification-cache-prepare-") else {
+                return false;
+            };
+            let Some((tag, output)) = value.split_once(".outputs.") else {
+                return false;
+            };
+            output == expected
+                && tag.len() == 16
+                && tag
+                    .bytes()
+                    .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        });
+        return matches_declared_output && is_prepare_composite_output(inner);
+    }
     for layer in [
         QualificationCacheLayer::MbxObjects,
         QualificationCacheLayer::CargoSources,
@@ -41,6 +58,24 @@ pub(crate) fn is_composite_boundary_output(key: &str, inner: &str) -> bool {
                 key == output && is_typed_composite_output(inner, "before-save", layer, output)
             })
     })
+}
+
+fn restore_action_boundary_field(key: &str) -> Option<&'static str> {
+    match key {
+        "VELNOR_QUALIFICATION_CACHE_HIT" => Some("action_hit"),
+        "VELNOR_QUALIFICATION_CACHE_MATCHED_KEY" => Some("action_matched_key"),
+        _ => None,
+    }
+}
+
+fn cache_layers() -> [QualificationCacheLayer; 5] {
+    [
+        QualificationCacheLayer::MbxObjects,
+        QualificationCacheLayer::CargoSources,
+        QualificationCacheLayer::MiseTools,
+        QualificationCacheLayer::TofuProviders,
+        QualificationCacheLayer::TaskResult,
+    ]
 }
 
 pub(crate) fn is_typed_save_outcome_input(key: &str, inner: &str) -> bool {

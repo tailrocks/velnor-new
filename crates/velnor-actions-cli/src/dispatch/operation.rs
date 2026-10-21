@@ -11,8 +11,8 @@ use super::{
     RECOVER_PACKAGE_RELEASE_OP, REPORT_OP, SELECT_RELEASE_TAP_CONTINUATION_OP,
     SELECT_STABLE_RELEASE_SOURCE_OP, SIGN_PACKAGE_RELEASE_OP, SOURCE_EVIDENCE_OP,
     TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP,
-    WRITE_STABLE_TAG_INTENT_OP, WRITE_STABLE_TAG_ORIGIN_OP, cache_bind, cache_observe,
-    cache_owner_evidence, cache_runtime, cache_tar_launcher, env, normal_tofu_cache_preflight,
+    WRITE_STABLE_TAG_INTENT_OP, WRITE_STABLE_TAG_ORIGIN_OP, cache_bind, cache_owner_evidence,
+    cache_runtime, cache_tar_launcher, env, normal_tofu_cache_preflight,
 };
 
 /// Private operation selected by the gate.
@@ -39,7 +39,6 @@ pub(super) enum InternalOp {
     ObserveQualificationCacheRoots,
     RecordQualificationCacheOwnerLayer,
     AggregateQualificationCacheOwner,
-    ObserveQualificationCacheBackend,
     ImportQualificationCachePayload,
     ExportQualificationCachePayload,
     NormalToolsCacheStagePath,
@@ -106,7 +105,6 @@ pub(super) fn from_env() -> Option<InternalOp> {
         Ok(tag) if tag == cache_owner_evidence::OWNER_OP => {
             InternalOp::AggregateQualificationCacheOwner
         }
-        Ok(tag) if tag == cache_observe::OP => InternalOp::ObserveQualificationCacheBackend,
         Ok(tag) if tag == cache_bind::transfer::IMPORT_OP => {
             InternalOp::ImportQualificationCachePayload
         }

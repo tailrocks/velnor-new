@@ -1,4 +1,4 @@
-//! Bounded ref-wide pages from the Actions cache API.
+//! Read bounded API pages for cache entries on one Git ref.
 
 use std::collections::BTreeSet;
 use std::ffi::{OsStr, OsString};

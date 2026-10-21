@@ -200,6 +200,28 @@ fn snapshot_digest_and_canonical_encoding_are_required() {
 }
 
 #[test]
+fn before_and_after_snapshots_are_stage_bound() {
+    let dispatch = context(QualificationPhase::Cold);
+    let before = snapshot_for_test(&dispatch, "before", vec![entry(1, "cache-key")])
+        .expect("before snapshot");
+    let after =
+        snapshot_for_test(&dispatch, "after", vec![entry(2, "cache-key")]).expect("after snapshot");
+    let before_bytes = canonical_json_bytes(&before).expect("before bytes");
+    let after_bytes = canonical_json_bytes(&after).expect("after bytes");
+
+    assert_eq!(
+        parse_qualification_cache_before(&before_bytes, &dispatch).expect("parse before"),
+        before
+    );
+    assert_eq!(
+        parse_qualification_cache_after(&after_bytes, &dispatch).expect("parse after"),
+        after
+    );
+    assert!(parse_qualification_cache_before(&after_bytes, &dispatch).is_err());
+    assert!(parse_qualification_cache_after(&before_bytes, &dispatch).is_err());
+}
+
+#[test]
 fn not_queried_is_for_control_only() {
     let cold = context(QualificationPhase::Cold);
     assert!(

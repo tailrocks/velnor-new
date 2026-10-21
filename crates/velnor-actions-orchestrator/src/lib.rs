@@ -87,6 +87,7 @@ mod qualification_cache_backend;
 mod qualification_cache_payload;
 mod qualification_cache_runtime;
 mod qualification_cache_runtime_phase;
+mod qualification_cache_worker_facts;
 mod qualification_candidate;
 mod qualification_resolver;
 mod qualification_source_evidence;
