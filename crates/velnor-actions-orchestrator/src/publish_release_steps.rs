@@ -76,6 +76,7 @@ pub(crate) fn branch_authority_job(
         outputs: BTreeMap::new(),
         permissions: PublishPermissions::expected(PublishRole::BranchAuthority),
         steps,
+        services: Vec::new(),
     })
 }
 

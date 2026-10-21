@@ -48,3 +48,14 @@ pub fn verify_script(id: &str) -> String {
 pub fn upload_script(gh: &str, id: &str) -> String {
     upload_assets_script(gh, &zip_name(id))
 }
+
+/// Visible stand-in for the attestation step when `attest = false`: a workflow
+/// warning carrying the configured reason, never a silent skip. `reason` is
+/// validated clean text (no quotes, `$` or backticks).
+#[must_use]
+pub fn attest_disabled_script(reason: &str) -> String {
+    format!(
+        "set -eu; printf '::warning title=Provenance attestation disabled::%s\\n' \
+         'publish.maven attest=false: {reason}'"
+    )
+}

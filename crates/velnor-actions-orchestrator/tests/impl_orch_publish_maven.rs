@@ -237,3 +237,70 @@ fn private_maven_bundles_are_minted_fetched_and_revoked_around_the_build_only() 
     }
     Ok(())
 }
+
+const DB_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n\
+[stacks.gradle]\nroots = [\"backend\"]\ntimeout_minutes = 45\n\
+[stacks.gradle.projects.\":core\"]\nservices = [\"postgres\"]\n\
+[[publish.maven]]\nid = \"processor-shared-libs\"\nroot = \"backend\"\n";
+
+#[test]
+fn a_root_whose_ci_declares_postgres_gets_the_same_service_in_the_bundle_build() -> TestResult {
+    let repo = repo(DB_CONFIG, PROPERTIES)?;
+    let yaml = preview(repo.path())?;
+    let build = section(&yaml, "maven-build-processor-shared-libs")?;
+    assert!(build.contains("VELNOR_GRADLE_DATABASE: \"1\""), "{build}");
+    assert!(
+        build.contains("services:") && build.contains("postgres@sha256:"),
+        "{build}"
+    );
+    assert!(build.contains("- 40000:5432"), "{build}");
+    assert!(
+        build.contains("permissions:\n      contents: read\n") && !build.contains("environment:"),
+        "{build}"
+    );
+    let attest = section(&yaml, "maven-attest-processor-shared-libs")?;
+    let publish = section(&yaml, "maven-publish-processor-shared-libs")?;
+    assert!(
+        !attest.contains("services:") && !publish.contains("services:"),
+        "only the unprivileged build job carries the database"
+    );
+    assert!(attest.contains("attest"), "{attest}");
+    Ok(())
+}
+
+#[test]
+fn a_root_without_a_database_keeps_a_service_free_bundle_build() -> TestResult {
+    let repo = repo(CONFIG, PROPERTIES)?;
+    let yaml = preview(repo.path())?;
+    let build = section(&yaml, "maven-build-processor-shared-libs")?;
+    assert!(!build.contains("services:"), "{build}");
+    assert!(build.contains("VELNOR_GRADLE_DATABASE: \"0\""), "{build}");
+    Ok(())
+}
+
+#[test]
+fn attestation_is_default_on_and_an_opt_out_is_a_visible_warning_with_its_reason() -> TestResult {
+    let on = preview(repo(CONFIG, PROPERTIES)?.path())?;
+    let attest = section(&on, "maven-attest-processor-shared-libs")?;
+    assert!(attest.contains("attest-build-provenance"), "{attest}");
+    assert!(!attest.contains("attestation disabled"), "{attest}");
+
+    let off_config = format!(
+        "{CONFIG}attest = false\nattest_reason = \"private repository on a plan without artifact attestations\"\n"
+    );
+    let off = preview(repo(&off_config, PROPERTIES)?.path())?;
+    let attest = section(&off, "maven-attest-processor-shared-libs")?;
+    assert!(!attest.contains("attest-build-provenance"), "{attest}");
+    assert!(
+        attest.contains("::warning title=Provenance attestation disabled::")
+            && attest.contains("without artifact attestations"),
+        "{attest}"
+    );
+    assert!(attest.contains("Verify checksum"), "{attest}");
+
+    let no_reason = format!("{CONFIG}attest = false\n");
+    let bad = repo(&no_reason, PROPERTIES)?;
+    let err = err_of(prepare(bad.path()), "attest = false without a reason")?.to_string();
+    assert!(err.contains("attest_reason"), "{err}");
+    Ok(())
+}
