@@ -66,7 +66,7 @@ enum PrepareState {
     Progress(ExecutionProofProgress),
     Ready {
         proof: Box<ProofRow>,
-        started: StartedExecution,
+        started: Box<StartedExecution>,
     },
 }
 
@@ -78,8 +78,8 @@ async fn prepare_in_transaction(
         PrepareState::Progress(progress) => return Ok(progress),
         PrepareState::Ready { proof, started } => (proof, started),
     };
-    let prepared = decision::build_decision(connection, context, &proof, &started).await?;
-    decision::store_decision(connection, context, &proof, &started, &prepared).await?;
+    let prepared = decision::build_decision(connection, context, &proof, started.as_ref()).await?;
+    decision::store_decision(connection, context, &proof, started.as_ref(), &prepared).await?;
     Ok(ExecutionProofProgress::DecisionPrepared)
 }
 
@@ -148,7 +148,7 @@ async fn load_ready_state(
     }
     Ok(PrepareState::Ready {
         proof: Box::new(proof),
-        started,
+        started: Box::new(started),
     })
 }
 
