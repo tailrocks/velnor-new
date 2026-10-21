@@ -203,6 +203,11 @@ fn render_all(
         )?);
     }
     extra.extend(rendered.shared);
+    crate::rust_install_audit::audit(&extra)?;
+    crate::rust_install_audit::audit(&[velnor_actions_workflow_renderer::render::RenderedFile {
+        path: velnor_actions_workflow_renderer::render::WORKFLOW_PATH.to_owned(),
+        bytes: workflow.clone(),
+    }])?;
     let tree = render_tree_with_claude_mode(
         &workflow,
         &actionlint,

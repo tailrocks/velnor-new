@@ -57,7 +57,45 @@ pub(super) fn producer_mark_steps(spec: &RustSuitesRenderSpec) -> Result<Vec<Ste
     }
 }
 
-pub(super) fn install_suite_tools_step(spec: &RustSuitesRenderSpec) -> Result<Step, RenderError> {
+/// Owned rustup and Cargo homes the toolchain checks read.
+fn verify_env() -> BTreeMap<String, String> {
+    BTreeMap::from([
+        (
+            "RUSTUP_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/rustup".to_owned(),
+        ),
+        (
+            "CARGO_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/cargo".to_owned(),
+        ),
+    ])
+}
+
+/// Right after the tools cache restore: no restored Rust byte runs unchecked.
+pub(super) fn restored_rust_step(spec: &RustSuitesRenderSpec) -> Result<Step, RenderError> {
+    let mut step = steps::shell_step(
+        "Verify restored Rust toolchain",
+        spec.verify_restored_rust_argv.clone(),
+        verify_env(),
+    )?;
+    step.role = Some(velnor_actions_contract::StepRole::VerifyRustManifest);
+    Ok(step)
+}
+
+/// The suite install and, directly after it, the toolchain verification.
+pub(super) fn install_suite_tools_steps(
+    spec: &RustSuitesRenderSpec,
+) -> Result<Vec<Step>, RenderError> {
+    let mut verify = steps::shell_step(
+        crate::VERIFY_RUST_TOOLCHAIN_STEP,
+        spec.verify_rust_argv.clone(),
+        verify_env(),
+    )?;
+    verify.role = Some(velnor_actions_contract::StepRole::VerifyRustManifest);
+    Ok(vec![install_suite_tools_step(spec)?, verify])
+}
+
+fn install_suite_tools_step(spec: &RustSuitesRenderSpec) -> Result<Step, RenderError> {
     steps::shell_step(
         "Install suite tools",
         vec![

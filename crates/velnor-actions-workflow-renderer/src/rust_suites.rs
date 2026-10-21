@@ -21,7 +21,8 @@ mod suite_steps;
 #[path = "rust_suites_tests.rs"]
 mod tests;
 use suite_steps::{
-    compile_driver_steps, install_suite_tools_step, nextest_archive_step, nextest_run_step,
+    compile_driver_steps, install_suite_tools_steps, nextest_archive_step, nextest_run_step,
+    restored_rust_step,
 };
 
 /// Specification for rendering declared Rust test suite jobs and workflows.
@@ -49,6 +50,12 @@ pub struct RustSuitesRenderSpec {
     pub mbx_action: Option<(String, String)>,
     /// Pull-request cache save policy.
     pub pull_request_cache_policy: PullRequestCachePolicy,
+    /// `sh -c` argv run right after the tools cache restore: discards the
+    /// cached rustup and verifies a restored toolchain file by file.
+    pub verify_restored_rust_argv: Vec<String>,
+    /// `sh -c` argv run right after the suite install: verifies the
+    /// installed toolchain file by file.
+    pub verify_rust_argv: Vec<String>,
     /// Whether step environments export `RUSTUP_TOOLCHAIN`.
     pub export_rustup_toolchain: bool,
 }
@@ -229,9 +236,12 @@ fn build_single_suite_job(
     standalone_workflow: bool,
 ) -> Result<Job, RenderError> {
     let name = &suite.id;
-    let mut job_steps = vec![steps::checkout_step(&spec.checkout_uses)?];
+    let mut job_steps = vec![
+        steps::checkout_step(&spec.checkout_uses)?,
+        restored_rust_step(spec)?,
+    ];
     job_steps.extend(compile_driver_steps(spec)?);
-    job_steps.push(install_suite_tools_step(spec)?);
+    job_steps.extend(install_suite_tools_steps(spec)?);
     job_steps.push(nextest_run_step(
         suite,
         spec,
@@ -264,9 +274,12 @@ fn build_sharded_archive_jobs(
     let archive_dir_expr = format!("${{{{ runner.temp }}}}/velnor/suite-archive-{name}");
     let archive_file_expr = format!("{archive_dir_expr}/archive.tar.zst");
 
-    let mut build_steps = vec![steps::checkout_step(&spec.checkout_uses)?];
+    let mut build_steps = vec![
+        steps::checkout_step(&spec.checkout_uses)?,
+        restored_rust_step(spec)?,
+    ];
     build_steps.extend(compile_driver_steps(spec)?);
-    build_steps.push(install_suite_tools_step(spec)?);
+    build_steps.extend(install_suite_tools_steps(spec)?);
     build_steps.push(nextest_archive_step(suite, spec)?);
     build_steps.extend(suite_steps::producer_mark_steps(spec)?);
     build_steps.push(steps::upload_suite_archive_step(
@@ -283,10 +296,17 @@ fn build_sharded_archive_jobs(
 
     let mut run_steps = vec![
         steps::checkout_step(&spec.checkout_uses)?,
+        restored_rust_step(spec)?,
         steps::download_suite_archive_step(&archive_artifact, &archive_dir_expr)?,
-        install_suite_tools_step(spec)?,
-        nextest_run_step(suite, spec, true, true, standalone_workflow)?,
     ];
+    run_steps.extend(install_suite_tools_steps(spec)?);
+    run_steps.push(nextest_run_step(
+        suite,
+        spec,
+        true,
+        true,
+        standalone_workflow,
+    )?);
     append_suite_artifact_uploads(&mut run_steps, suite, true)?;
     let run_job = suite_job_record(
         format!("Suite ({name})"),
@@ -306,9 +326,12 @@ fn build_sharded_inline_job(
     standalone_workflow: bool,
 ) -> Result<Job, RenderError> {
     let name = &suite.id;
-    let mut job_steps = vec![steps::checkout_step(&spec.checkout_uses)?];
+    let mut job_steps = vec![
+        steps::checkout_step(&spec.checkout_uses)?,
+        restored_rust_step(spec)?,
+    ];
     job_steps.extend(compile_driver_steps(spec)?);
-    job_steps.push(install_suite_tools_step(spec)?);
+    job_steps.extend(install_suite_tools_steps(spec)?);
     job_steps.push(nextest_run_step(
         suite,
         spec,

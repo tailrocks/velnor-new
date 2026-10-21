@@ -156,6 +156,10 @@ pub(super) fn build_steps(
             &pins.install_intel_target_argv,
         )?);
     }
+    steps.push(workflow_steps::command_step(
+        crate::VERIFY_RUST_TOOLCHAIN_STEP,
+        &pins.verify_rust_argv,
+    )?);
     steps.extend([
         workflow_steps::bash_step("Build velnor-actions with MBX", &build),
         workflow_steps::bash_step(verify_name, verify),

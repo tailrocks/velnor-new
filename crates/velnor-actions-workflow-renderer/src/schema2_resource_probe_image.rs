@@ -18,6 +18,7 @@ pub(super) fn build_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, Render
             "Install pinned Linux musl target",
             &pins.install_resource_probe_target_argv,
         )?,
+        generator_release::command_step(crate::VERIFY_RUST_TOOLCHAIN_STEP, &pins.verify_rust_argv)?,
         generator_release::command_step(
             "Build locked resource probe",
             &pins.resource_probe_build_argv,

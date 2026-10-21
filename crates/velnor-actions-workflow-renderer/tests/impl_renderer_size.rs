@@ -115,6 +115,11 @@ fn direct_freshness_renderer_rejects_an_oversized_workflow() {
             sha256: "a".repeat(64),
         },
         rust_version: "1.98.1".to_owned(),
+        verify_rust_argv: vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            "echo verify-rust".to_owned(),
+        ],
         generator_version: VERSION.to_owned(),
     };
     let error =
@@ -144,6 +149,11 @@ fn direct_schema2_renderer_rejects_an_oversized_workflow() -> Result<(), RenderE
                 "jdx/mr-boxington-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
             mbx_version: large_mbx_version,
             rust_version: "1.98.0".to_owned(),
+            verify_rust_argv: vec![
+                "sh".to_owned(),
+                "-c".to_owned(),
+                "echo verify-rust".to_owned(),
+            ],
         }),
         mise_pin_qualification: Some(MisePinQualificationPins {
             linux_x86_64_setup: MiseSetup {
