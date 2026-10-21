@@ -1,6 +1,10 @@
 //! Integration test entry point; cases live in the sibling files.
 #[path = "impl_ansible_collections.rs"]
 mod impl_ansible_collections;
+#[path = "impl_ansible_config_file.rs"]
+mod impl_ansible_config_file;
+#[path = "impl_ansible_locked.rs"]
+mod impl_ansible_locked;
 #[path = "impl_ansible_playbooks.rs"]
 mod impl_ansible_playbooks;
 #[path = "impl_ansible_requirements.rs"]

@@ -22,6 +22,8 @@ use crate::git_paths::NON_UTF8_PATH;
 use crate::select_affected::{Ownership, affected_packages, has_unowned_file};
 use crate::select_edges::{base_edges, head_edges};
 
+#[path = "select_ansible.rs"]
+pub(crate) mod ansible;
 #[path = "select_bun.rs"]
 pub(crate) mod bun;
 #[path = "select_changes.rs"]

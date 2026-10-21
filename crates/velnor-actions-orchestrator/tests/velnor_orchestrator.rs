@@ -1,5 +1,6 @@
 //! Integration test entry point; cases live in the sibling files.
 mod impl_actionlint_bridge;
+mod impl_ansible;
 mod impl_bench_p13;
 mod impl_bun;
 mod impl_bun_playwright;

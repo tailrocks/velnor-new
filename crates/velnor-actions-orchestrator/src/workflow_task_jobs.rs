@@ -17,6 +17,12 @@ use crate::config::private_wiring::PrivateWiring;
 use crate::discover::Discovery;
 use crate::workflow::CHECKOUT_USES;
 
+#[path = "ansible_inventory.rs"]
+pub(crate) mod ansible_inventory;
+#[path = "ansible_steps.rs"]
+mod ansible_steps;
+#[path = "ansible_tasks.rs"]
+mod ansible_tasks;
 #[path = "bun_inventory.rs"]
 pub(crate) mod bun_inventory;
 #[path = "bun_steps.rs"]
@@ -29,6 +35,8 @@ pub(crate) mod dbt_inventory;
 mod dbt_steps;
 #[path = "dbt_tasks.rs"]
 mod dbt_tasks;
+#[path = "stack_support.rs"]
+pub(crate) mod stack_support;
 
 /// Resolve every declared task variant into one sorted policy inventory.
 pub(crate) fn policies(
@@ -56,6 +64,7 @@ pub(crate) fn policies(
     )?;
     let bun_policies = bun_tasks::policies(root, config, discovery, catalog, acquire, private)?;
     let dbt_policies = dbt_tasks::policies(config, discovery, catalog)?;
+    let ansible_policies = ansible_tasks::policies(config, discovery, catalog)?;
     let mut workflow_tasks = verification_policies
         .iter()
         .cloned()
@@ -75,6 +84,7 @@ pub(crate) fn policies(
         .chain(image_policies.into_iter().map(WorkflowTaskPolicy::Image))
         .chain(bun_policies.into_iter().map(WorkflowTaskPolicy::Bun))
         .chain(dbt_policies.into_iter().map(WorkflowTaskPolicy::Stack))
+        .chain(ansible_policies.into_iter().map(WorkflowTaskPolicy::Stack))
         .collect::<Vec<_>>();
     workflow_tasks.sort_by(|left, right| left.id().cmp(right.id()));
     Ok(workflow_tasks)

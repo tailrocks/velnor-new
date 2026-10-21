@@ -140,6 +140,7 @@ fn plan_internal_inner(
         &evidence,
     ));
     for dispositions in [
+        crate::select::ansible::dispositions,
         crate::select::bun::dispositions,
         crate::select::dbt::dispositions,
     ] {
