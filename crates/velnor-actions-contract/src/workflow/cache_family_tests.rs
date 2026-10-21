@@ -163,8 +163,9 @@ fn reference_family_ceilings_fit_the_budget_rule() {
         | CacheFamily::PlaywrightBrowsers
         | CacheFamily::DbtPackages
         | CacheFamily::PythonVenv
-        | CacheFamily::AnsibleCollections
-        | CacheFamily::MbxBundle => 1,
+        | CacheFamily::AnsibleCollections => 1,
+        // The dependency seed plus the suite bundle of one workspace.
+        CacheFamily::MbxBundle => 2,
         CacheFamily::TofuProviders => 2,
         CacheFamily::BunInstall => 4,
     };

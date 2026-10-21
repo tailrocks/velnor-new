@@ -204,6 +204,10 @@ fn build_workflow_jobs(
     for (id, job) in built.jobs {
         jobs.insert(id, job);
     }
+    // Seeds run no checks and are never required (cache decision 2).
+    for (id, job) in built.seeds {
+        jobs.insert(id, job);
+    }
     for (id, job) in
         check_jobs::build_check_jobs(prepared.policy, input.discovery, &prepared.catalog)?
     {

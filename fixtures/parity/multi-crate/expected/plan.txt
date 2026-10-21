@@ -18,11 +18,12 @@ Workflow to generate
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
     - actionlint (7 steps)
+    - dependency-seed (22 steps)
     - plan (15 steps)
     - required (8 steps)
     - required-gate (1 steps)
-    - rust-parity-app (29 steps)
-    - rust-parity-tool (27 steps)
+    - rust-parity-app (26 steps)
+    - rust-parity-tool (24 steps)
     - 2 Rust crate jobs
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check

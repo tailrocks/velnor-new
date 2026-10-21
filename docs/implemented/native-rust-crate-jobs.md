@@ -52,14 +52,16 @@ so each compiles in its own lane through `CARGO_TARGET_DIR`:
 | Format | none (no compilation) |
 
 The lanes live inside the workspace `target/`. Compiled state reaches the next
-run as the opaque `mbx cache export` bundle of the job's builds (every lane
-builds with the job's `MBX_CACHE_EXPORT_GROUP`), not as a `target/` payload.
-MBX shares one compiler CPU/memory budget and deduplicates identical in-flight
+run as the opaque `mbx cache export` bundle, not as a `target/` payload. A crate
+job restores the dependency-seed bundle read-only and imports it; it never
+exports or saves. The non-crate `Dependency seed` job (one per MBX Cargo
+workspace; protected default-branch pushes only; not part of `Required`)
+compiles the three lanes for `--workspace` under the job's
+`MBX_CACHE_EXPORT_GROUP`, records the producer marker, and exports and saves the
+bundle ([cache decisions](../proposed/cache-decisions.md) 1 to 3). MBX shares
+one compiler CPU/memory budget and deduplicates identical in-flight
 compilations across target directories (upstream "Parallel Cargo steps"
-guidance). The `Record MBX producer success` marker follows the test build, so
-the bundle is exported and saved after the final parallel join on a trusted
-push even when a later check failed
-([cache decisions](../proposed/cache-decisions.md) 1 and 3).
+guidance).
 The contract admits `CARGO_TARGET_DIR` only as a workspace-relative
 `target/velnor-<lane>` path.
 

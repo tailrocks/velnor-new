@@ -31,6 +31,9 @@ use crate::crate_job_ids::{JobOwners, group_is_tofu, group_runnable};
 use crate::discover::Discovery;
 use crate::internal::internal;
 
+#[path = "dependency_seed.rs"]
+pub(crate) mod dependency_seed;
+
 #[path = "crate_jobs_stage.rs"]
 mod stage;
 
@@ -56,6 +59,8 @@ pub(crate) use stage::{is_mbx, is_nextest, is_opentofu, is_rust};
 
 /// Built crate jobs plus their driver selections for MBX gating.
 pub(crate) struct CrateBuild {
+    /// Dependency-seed jobs (cache decision 2): never part of `Required`.
+    pub(crate) seeds: Vec<(String, Job)>,
     /// `(job_id, job)` pairs in deterministic job-ID order.
     pub(crate) jobs: Vec<(String, Job)>,
     /// Render-driver selection per crate job ID.
@@ -166,6 +171,7 @@ pub(crate) fn build_crate_jobs_with(
     let mut jobs = Vec::with_capacity(grouped.len());
     let mut drivers = BTreeMap::new();
     let mut tofu_ids = Vec::new();
+    let mut seed_workspaces: BTreeMap<String, bool> = BTreeMap::new();
     for (key, tasks) in &grouped {
         let first = tasks.first().ok_or_else(|| internal("crate_empty"))?;
         let job_id = owners
@@ -208,6 +214,11 @@ pub(crate) fn build_crate_jobs_with(
             needs,
             private,
         )?;
+        if use_mbx {
+            let root =
+                crate::source_prep::workspace_root_for_manifest(&model.manifest, input.fetch_roots);
+            *seed_workspaces.entry(root.to_owned()).or_default() |= use_nextest;
+        }
         drivers.insert(job_id.clone(), driver);
         if use_opentofu {
             tofu_ids.push(job_id.clone());
@@ -216,7 +227,19 @@ pub(crate) fn build_crate_jobs_with(
     }
     stage::stage_tofu_root_jobs(&mut jobs, &tofu_ids, max_parallel_jobs);
     jobs.sort_by(|left, right| left.0.cmp(&right.0));
-    Ok(CrateBuild { jobs, drivers })
+    let workspaces: Vec<_> = seed_workspaces
+        .into_iter()
+        .map(|(root, nextest)| dependency_seed::SeedWorkspace { root, nextest })
+        .collect();
+    let seeds = dependency_seed::seed_jobs(&input, &workspaces, private)?;
+    for (id, _) in &seeds {
+        drivers.insert(id.clone(), RenderDriver::Mbx);
+    }
+    Ok(CrateBuild {
+        seeds,
+        jobs,
+        drivers,
+    })
 }
 
 /// True when the task becomes a crate-job obligation.
@@ -322,7 +345,7 @@ fn render_job(
         let working_dir = (!root.is_empty()).then_some(root);
         steps.extend(crate::mbx_preflight::steps_for_catalog(
             catalog,
-            velnor_actions_workflow_renderer::steps::MbxTransport::CrateBundle,
+            velnor_actions_workflow_renderer::steps::MbxTransport::SeedRead,
             working_dir,
         )?);
     }
@@ -334,7 +357,7 @@ fn render_job(
         TaskCacheMode::Off,
         "",
     )?);
-    steps.extend(obligation_steps(input, model, use_opentofu, use_mbx)?);
+    steps.extend(obligation_steps(input, model, use_opentofu)?);
     steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);
     Ok(Job {
         services: Vec::new(),
