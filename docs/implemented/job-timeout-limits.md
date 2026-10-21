@@ -7,7 +7,7 @@ GitHub's per-job execution limit on hosted runners
 ([Actions limits](https://docs.github.com/en/actions/reference/limits)).
 Configuration that requests zero or more than 360 is rejected for general crate
 jobs, custom checks, native builds, verification, and suites. Native preview
-production accepts one through twenty minutes and tap-updater configuration accepts
+native-operation production accepts one through thirty minutes and tap-updater configuration accepts
 one through five, both defaulting to five independently of the general workflow range. No job family may omit the
 field, substitute GitHub's implicit default, or silently clamp a request.
 
@@ -43,7 +43,7 @@ limits. Reusable workflow callers cannot declare a job timeout; their exact
 canonical local callee inventory is admitted together, and each executable
 callee job has its own bounded timeout. External or missing callees are rejected.
 
-Native preview production starts one monotonic twenty-minute maximum deadline
+Native preview and stable production start one monotonic thirty-minute maximum deadline
 before reading its context, configuration, plan, or preparation. A shorter
 configured native budget uses
 the same original start. A synchronous scoped ceiling bounds transitive
@@ -72,7 +72,7 @@ identify the internal stage. A prior partially cached six-payload diagnostic
 took 37 minutes 37 seconds, with each CLI target already exceeding five minutes.
 The policy does not claim those native builds fit. The later explicit Jackin
 CI/CD timeout authorization permits a larger producer budget. The native
-producer ceiling is twenty minutes, retaining five as the default and the tap
+producer native-operation ceiling is thirty minutes, retaining five as the default and the tap
 updater ceiling. Actual builds must still finish
 inside their configured producer budget; a larger setting is not capacity proof.
 The general workflow limit cannot widen this independent native ceiling.
@@ -100,3 +100,18 @@ Configuration rejects custom names at the shared release-authority boundary,
 before writing workflows. Generic workflows without native publication retain
 custom names. This prevents a validated configuration from generating a preview
 that can never receive its completion trigger.
+
+SDK37 separates the native operation budget from the producer job envelope. Each
+payload and assembly job has five additional minutes for setup, artifact retention
+and job cleanup (maximum thirty-five minutes); the default native operation remains
+five minutes and its job is ten. The lifecycle allowance does not reset or extend the configured native deadline. The
+existing process-group cleanup grace remains inside the native budget.
+
+Jackin run 39583938014 completed five payloads, but its Linux ARM job was canceled
+by the outer twenty-minute limit while compilation and linking remained active.
+Setup consumed eighty-eight seconds before native execution began, so the outer
+limit preempted the native deadline. The preceding same-target success took
+eighteen minutes thirty seconds; macOS ARM in the failed run succeeded in
+seventeen minutes forty-nine seconds. These measurements justify bounded cold-build
+headroom, not a claim of an MBX regression or a guarantee of completion. Signer,
+publisher, control and Tap limits remain unchanged; crate jobs are independent.

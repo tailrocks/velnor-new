@@ -34,7 +34,7 @@ fn every_literal_pair_has_exact_owner_and_complete_assembly_dependencies() {
             field(job, "name"),
             &Yaml::str(format!("Build {} / {}", pair.product_id, pair.target))
         );
-        assert_eq!(field(job, "timeout-minutes"), &Yaml::Int(5));
+        assert_eq!(field(job, "timeout-minutes"), &Yaml::Int(10));
         assert_eq!(field(job, "needs"), &needs(&["preview-eligibility"]));
         assert_eq!(
             field(job, "permissions"),

@@ -46,54 +46,42 @@ fn assert_configuration_admission_boundaries(config_calls: &[String]) {
     // the owned-tool preview reloads at its CLI-gated boundary, qualification
     // admission reloads for the repo-resolved catalog, and tap preparation
     // reloads the captured tap's own config before using its updater task;
-    // preview admission passes its one loaded config to shared preparation;
-    // Private-source, image-preview, cache-backend, and Playwright boundaries reload their inputs.
-    assert_eq!(config_calls.len(), 13, "{config_calls:?}");
-    assert!(
-        config_calls
-            .iter()
-            .any(|call| call.starts_with("prepare.rs")),
-        "{config_calls:?}"
-    );
-    assert!(
-        config_calls
-            .iter()
-            .any(|call| call.starts_with("check_runtime.rs")),
-        "{config_calls:?}"
-    );
-    assert!(
-        config_calls
-            .iter()
-            .any(|call| call.starts_with("routing.rs")),
-        "{config_calls:?}"
-    );
-    assert!(
-        config_calls
-            .iter()
-            .any(|call| call.starts_with("owned_tool_preview.rs")),
-        "{config_calls:?}"
-    );
-    assert!(
-        config_calls
-            .iter()
-            .any(|call| call.starts_with("qualification_resolver.rs")),
-        "{config_calls:?}"
-    );
+    // preview admission passes its one loaded config to shared preparation.
+    // The private source, image preview, cache backend, Playwright, and unmanaged
+    // checks reload only the configuration that they need.
+    assert_eq!(config_calls.len(), 14, "{config_calls:?}");
+    for expected in [
+        "prepare.rs",
+        "check_runtime.rs",
+        "routing.rs",
+        "owned_tool_preview.rs",
+        "qualification_resolver.rs",
+    ] {
+        assert!(
+            config_calls.iter().any(|call| call.starts_with(expected)),
+            "{config_calls:?}"
+        );
+    }
     assert!(
         config_calls.iter().all(|call| {
-            call.starts_with("prepare.rs")
-                || call.starts_with("preview_producer_entry.rs")
-                || call.starts_with("check_runtime.rs")
-                || call.starts_with("routing.rs")
-                || call.starts_with("deps_lock.rs")
-                || call.starts_with("job_image_preview.rs")
-                || call.starts_with("private_fetch.rs")
-                || call.starts_with("owned_tool_preview.rs")
-                || call.starts_with("qualification_cache_backend.rs")
-                || call.starts_with("playwright_resolve.rs")
-                || call.starts_with("qualification_resolver.rs")
-                || call.starts_with("tap_prepare.rs")
-                || call.starts_with("tap_prepare_execute.rs")
+            [
+                "prepare.rs",
+                "preview_producer_entry.rs",
+                "check_runtime.rs",
+                "routing.rs",
+                "deps_lock.rs",
+                "job_image_preview.rs",
+                "generate_unmanaged.rs",
+                "private_fetch.rs",
+                "owned_tool_preview.rs",
+                "qualification_cache_backend.rs",
+                "playwright_resolve.rs",
+                "qualification_resolver.rs",
+                "tap_prepare.rs",
+                "tap_prepare_execute.rs",
+            ]
+            .iter()
+            .any(|prefix| call.starts_with(prefix))
         }),
         "{config_calls:?}"
     );

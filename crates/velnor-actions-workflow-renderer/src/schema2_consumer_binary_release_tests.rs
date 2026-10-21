@@ -161,7 +161,7 @@ fn stable_shares_bounded_production_and_channel_specific_tap_destinations() {
     let yaml = render_consumer_binary_release(&spec, &hosted_policy())
         .expect("stable tap")
         .bytes;
-    assert_eq!(yaml.matches("timeout-minutes: 20").count(), 7);
+    assert_eq!(yaml.matches("timeout-minutes: 25").count(), 7);
     let prepare = job(&yaml, "stable-tap-prepare", Some("stable-tap-writer"));
     assert!(!prepare.contains("create-github-app-token"));
     assert!(prepare.contains("admit-homebrew-tap-v1"));
@@ -171,7 +171,8 @@ fn stable_shares_bounded_production_and_channel_specific_tap_destinations() {
     assert!(merge.contains("merge-homebrew-tap-pr-v1"));
     assert!(!merge.contains("actions/checkout"));
     assert!(!merge.contains("timeout-minutes: 20"));
-    spec.producer_timeout_minutes = 21;
+    assert!(!merge.contains("timeout-minutes: 25"));
+    spec.producer_timeout_minutes = 31;
     assert!(render_consumer_binary_release(&spec, &hosted_policy()).is_err());
     let mut spec = stable();
     spec.stable.as_mut().expect("stable").release_plz_argv[0] = "bash".to_owned();

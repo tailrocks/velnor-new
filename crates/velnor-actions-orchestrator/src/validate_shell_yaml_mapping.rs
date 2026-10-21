@@ -19,6 +19,12 @@ const MAX_BYTES: usize = 16 * 1024 * 1024;
 struct Line {
     indent: usize,
     content: String,
+    raw_content: String,
+}
+
+enum BlockLine {
+    Content(String),
+    WhitespaceOnly { indentation: usize },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -47,9 +53,11 @@ pub(super) fn normalize(text: &str) -> Result<String, OrchestratorError> {
             if indent > MAX_DEPTH * 2 {
                 return Err(fail("depth_limit"));
             }
+            let raw_content = raw[indent..].to_owned();
             Ok(Line {
                 indent,
                 content: content.to_owned(),
+                raw_content,
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -94,10 +102,21 @@ impl Normalizer {
                 continue;
             }
             let mut line = line.clone();
+            let mut next_index = index + 1;
             if shape::is_run(&line, &path)
                 && let Some((_, value)) = mapping_entry(&line.content)
             {
-                let value = value.to_owned();
+                let mut value = value.to_owned();
+                if value == "|" {
+                    let (body, end) = literal_run_block(lines, index);
+                    if body.is_empty() {
+                        return Err(super::super::shellcheck_fail("run_block_scalar_unlintable"));
+                    }
+                    value = quote_run_body(&body)?;
+                    line.content = format!("run: {value}");
+                    line.raw_content.clone_from(&line.content);
+                    next_index = end;
+                }
                 if let Some(definition) = value.strip_prefix('&')
                     && let Some((name, _)) = definition.split_once(' ')
                     && !self.names.insert(name.to_owned())
@@ -115,7 +134,7 @@ impl Normalizer {
             }
             shape::update_path(&line, &mut path);
             self.push(&mut output, line)?;
-            index += 1;
+            index = next_index;
         }
         Ok(output)
     }
@@ -158,6 +177,7 @@ impl Normalizer {
                 .map(|line| Line {
                     indent: line.indent.saturating_sub(header.indent + 2),
                     content: line.content.clone(),
+                    raw_content: line.raw_content.clone(),
                 })
                 .collect::<Vec<_>>();
             self.mappings
@@ -207,6 +227,85 @@ fn block_end(lines: &[Line], index: usize) -> usize {
         end += 1;
     }
     end
+}
+
+/// Read a step's `run: |` text and apply the YAML rule for final line breaks.
+fn literal_run_block(lines: &[Line], index: usize) -> (String, usize) {
+    let header_indent = lines[index].indent;
+    let mut content_indent = None;
+    let mut body_lines = Vec::new();
+    let mut end = index + 1;
+
+    while let Some(line) = lines.get(end) {
+        if line.raw_content.is_empty() {
+            body_lines.push(BlockLine::WhitespaceOnly {
+                indentation: line.indent,
+            });
+            end += 1;
+            continue;
+        }
+        let Some(indent) = content_indent else {
+            if line.indent <= header_indent {
+                break;
+            }
+            content_indent = Some(line.indent);
+            body_lines.push(BlockLine::Content(line.raw_content.clone()));
+            end += 1;
+            continue;
+        };
+        if line.indent < indent {
+            break;
+        }
+        let extra_indent = line.indent - indent;
+        body_lines.push(BlockLine::Content(format!(
+            "{}{}",
+            " ".repeat(extra_indent),
+            line.raw_content
+        )));
+        end += 1;
+    }
+
+    let Some(content_indent) = content_indent else {
+        return (String::new(), end);
+    };
+    let mut body_lines = body_lines
+        .into_iter()
+        .map(|line| match line {
+            BlockLine::Content(line) => line,
+            BlockLine::WhitespaceOnly { indentation } => {
+                " ".repeat(indentation.saturating_sub(content_indent))
+            }
+        })
+        .collect::<Vec<_>>();
+    while body_lines.last().is_some_and(String::is_empty) {
+        body_lines.pop();
+    }
+    if body_lines.is_empty() {
+        return (String::new(), end);
+    }
+    let mut body = body_lines.join("\n");
+    body.push('\n');
+    (body, end)
+}
+
+fn quote_run_body(body: &str) -> Result<String, OrchestratorError> {
+    let mut quoted = String::with_capacity(body.len() + 2);
+    quoted.push('"');
+    for character in body.chars() {
+        match character {
+            '\\' => quoted.push_str("\\\\"),
+            '"' => quoted.push_str("\\\""),
+            '\n' => quoted.push_str("\\n"),
+            '\r' => quoted.push_str("\\r"),
+            '\t' => quoted.push_str("\\t"),
+            value if value.is_control() => {
+                return Err(fail("block_scalar_character_unsupported"));
+            }
+            value => quoted.push(value),
+        }
+    }
+    quoted.push('"');
+    Ok(quoted)
 }
 
 fn fail(problem: &str) -> OrchestratorError {

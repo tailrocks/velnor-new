@@ -27,6 +27,14 @@ mod render;
 #[path = "generate_runner_labels.rs"]
 mod runner_labels;
 
+/// Gates that run before any write: profile evidence and unmanaged content.
+#[path = "generate_preflight.rs"]
+mod preflight;
+
+/// List `.github` entries generation neither emits nor retires.
+#[path = "generate_unmanaged.rs"]
+pub(crate) mod unmanaged;
+
 /// Stage and publish fresh preview output transactionally.
 #[path = "generate_preview.rs"]
 mod preview;
@@ -89,7 +97,8 @@ pub fn generate_dispatched(
     opts: &GenerateOptions,
     dispatch: Option<ExecutionMode>,
 ) -> Result<GenerateReport, OrchestratorError> {
-    fail_on_blocking_findings(prep)?;
+    preflight::fail_on_blocking_findings(prep)?;
+    let notices = preflight::unmanaged_notices(prep)?;
     let tools = ToolSnapshot::capture(&prep.root);
     let tofu_roots = crate::select_tofu::tofu_selected_roots(&prep.discovery.statuses);
     let tofu_locks = velnor_actions_tofu::TofuLockSnapshot::capture(&prep.root, &tofu_roots);
@@ -99,10 +108,11 @@ pub fn generate_dispatched(
     tofu_locks
         .verify(&prep.root)
         .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let warnings = match &opts.output_dir {
+    let mut warnings = match &opts.output_dir {
         None => replace_in_place(prep, &tree)?,
         Some(dir) => preview::write_preview(prep, dir, &tree)?,
     };
+    warnings.extend(notices);
     Ok(GenerateReport {
         files_written: tree.paths(),
         recommendations: prep.discovery.recommendations.clone(),
@@ -110,29 +120,6 @@ pub fn generate_dispatched(
         profiles: profile_provenance(prep),
         warnings,
     })
-}
-
-/// Fail closed on transient-only profile evidence before touching `.github`.
-fn fail_on_blocking_findings(prep: &GenerationPreparation) -> Result<(), OrchestratorError> {
-    let blockers = crate::evidence::blocking_findings(&prep.discovery.workspaces);
-    if !blockers.is_empty() {
-        return Err(OrchestratorError::Profile {
-            problem: format!(
-                "{}: {}",
-                velnor_actions_rust::TRANSIENT_EVIDENCE_CODE,
-                blockers.join("; ")
-            ),
-        });
-    }
-    if !prep.lock_audit_blocking.is_empty() {
-        return Err(OrchestratorError::Profile {
-            problem: format!(
-                "lock_audit_blocked: {}",
-                prep.lock_audit_blocking.join("; ")
-            ),
-        });
-    }
-    Ok(())
 }
 
 /// Render the validated tree (base files plus release extras) in memory.
@@ -156,11 +143,14 @@ pub fn render_staged_tree_with(
     dispatch: Option<ExecutionMode>,
 ) -> Result<RenderedTree, OrchestratorError> {
     let owned = owned_preparation(prep)?;
-    let tree = render::render_all(&owned, dispatch)?;
+    let mut tree = render::render_all(&owned, dispatch)?;
+    let routing = crate::routing::workflow_routing_policy(&owned.config, dispatch)?;
+    tree.files
+        .extend(cache_cleanup_emit::files(&owned, &routing)?);
+    tree.files.sort_by(|left, right| left.path.cmp(&right.path));
     check_tree_paths(&tree)?;
     Ok(tree)
 }
-
 /// Validate every rendered path lexically plus symlink-prefix probing.
 fn check_tree_paths(tree: &RenderedTree) -> Result<Vec<SafeTreePath>, OrchestratorError> {
     let mut safe = Vec::with_capacity(tree.files.len() + tree.symlinks.len());
@@ -185,6 +175,9 @@ fn reject_symlink(path: &Path) -> Result<(), OrchestratorError> {
     }
     Ok(())
 }
+
+#[path = "cache_cleanup_emit.rs"]
+mod cache_cleanup_emit;
 
 /// Symlink-prefix guard with emitted-leaf replacement.
 #[path = "generate_leaf_links.rs"]

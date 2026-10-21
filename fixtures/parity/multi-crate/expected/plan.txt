@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.36
+Velnor Actions plan 0.1.37
 Repository: <repo>
 
 Detected stacks
@@ -18,12 +18,13 @@ Workflow to generate
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
     - actionlint (9 steps)
+    - dependency-seed (23 steps)
     - plan (16 steps)
     - publish-baseline (6 steps)
     - required (10 steps)
     - required-gate (1 steps)
-    - rust-parity-app (30 steps)
-    - rust-parity-tool (28 steps)
+    - rust-parity-app (27 steps)
+    - rust-parity-tool (25 steps)
     - 2 Rust package jobs
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check

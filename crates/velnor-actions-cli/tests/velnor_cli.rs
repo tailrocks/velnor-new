@@ -66,6 +66,8 @@ mod impl_cli_tmp;
 mod impl_cli_tofu_capacity;
 #[path = "impl_cli_toolchain_and_tools.rs"]
 mod impl_cli_toolchain_and_tools;
+#[path = "impl_cli_unmanaged.rs"]
+mod impl_cli_unmanaged;
 #[path = "impl_cli_verify_local.rs"]
 mod impl_cli_verify_local;
 #[path = "impl_cli_warning.rs"]

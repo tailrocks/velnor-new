@@ -15,6 +15,7 @@ mod discovery;
 mod distribution;
 mod dockerfile;
 mod execution;
+mod github;
 pub mod gradle;
 mod host_container;
 mod image_grammar;
@@ -88,6 +89,7 @@ pub use execution::{
     ExecutionRole, HOSTED_PROFILE_ID, ProfileKind, RoutingWorkflow, SCALE_SET_PROFILE_ID,
     ValidatedImageReference,
 };
+pub use github::{GithubConfig, UnmanagedPolicy};
 pub use host_container::{
     ContainerPlatform, DaemonIdentityPolicy, HostContainerProfile, HostDockerCli, HostDockerDaemon,
     HostOrbStackSdk,
@@ -195,6 +197,9 @@ pub struct VelnorConfig {
     /// Generated dco2 configuration (`[dco]`); absent emits no `.github/dco.yml`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dco: Option<DcoConfig>,
+    /// Policy for `.github` entries the generator does not emit (`[github]`).
+    #[serde(default, skip_serializing_if = "GithubConfig::is_default")]
+    pub github: GithubConfig,
     /// Schema 2 routing. Absent on schema 1.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution: Option<ExecutionConfig>,
@@ -236,6 +241,7 @@ impl VelnorConfig {
         self.resources.validate(file)?;
         self.test_sharding.validate(file)?;
         self.stacks.validate(file)?;
+        self.github.validate(file)?;
         self.tools.validate(file)?;
         if let Some(dco) = &self.dco {
             dco.validate(file)?;
@@ -333,29 +339,6 @@ impl VelnorConfig {
             )?;
             if !check_ids.insert(check.id.as_str()) {
                 return Err(ContractError::config(file, "checks", "duplicate_check_id"));
-            }
-        }
-        Ok(())
-    }
-
-    /// Reject shard counts beyond the test-process budget (par §8).
-    /// # Errors
-    pub fn check_shard_budgets(&self, file: &str) -> Result<(), ContractError> {
-        let budget = self.resources.test_process_budget;
-        if self.test_sharding.default_shards > budget {
-            return Err(ContractError::config(
-                file,
-                "test_sharding.default_shards",
-                "exceeds_test_process_budget",
-            ));
-        }
-        for (manifest, shards) in &self.test_sharding.by_manifest {
-            if *shards > budget {
-                return Err(ContractError::config(
-                    file,
-                    format!("test_sharding.by_manifest.{manifest}"),
-                    "exceeds_test_process_budget",
-                ));
             }
         }
         Ok(())

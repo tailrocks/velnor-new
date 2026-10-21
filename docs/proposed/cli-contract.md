@@ -20,6 +20,7 @@ options are the only global options. The exact user-facing command tree is:
 velnor-actions init
 velnor-actions plan
 velnor-actions generate [--output-dir PATH]
+velnor-actions unmanaged
 ```
 
 `velnor-actions deps lock` pins private sources; see the [private sources contract](private-sources-contract.md). `velnor-actions playwright lock` pins the Playwright browser archives of Bun members; see the [Bun contract](bun-contract.md).

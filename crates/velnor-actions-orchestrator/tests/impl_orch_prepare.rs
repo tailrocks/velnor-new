@@ -51,6 +51,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         [
             "check_runtime.rs",
             "deps_lock.rs",
+            "generate_unmanaged.rs",
             "job_image_preview.rs",
             "owned_tool_preview.rs",
             "playwright_resolve.rs",

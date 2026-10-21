@@ -6,6 +6,7 @@ mod action_mbx_shell;
 mod action_ref;
 pub mod agents_md;
 mod artifact_paths;
+pub mod cache_cleanup;
 mod cache_doctor;
 pub mod cache_elect;
 pub mod cache_p08;

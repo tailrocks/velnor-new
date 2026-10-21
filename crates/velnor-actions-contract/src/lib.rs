@@ -36,6 +36,7 @@ pub mod preview_identity;
 pub mod preview_production;
 pub mod propose;
 pub mod publication_retry;
+mod release_reexports;
 pub mod review_completion;
 pub mod secrets;
 pub mod strict_json;
@@ -45,8 +46,9 @@ pub mod vcs;
 pub mod workflow;
 mod workflow_reexports;
 pub use config::{
-    DEFAULT_IMAGE_TIMEOUT_MINUTES, IMAGE_JOB_PREFIX, IMAGE_REGISTRY_HOST, ImageConfig,
-    ImageDockerfile, ImagePlatform, ImagePrebuilt, PrivateAssetSource, PrivateGitTreeSource,
-    PrivateSourcesConfig, ReleaseRegistry,
+    DEFAULT_IMAGE_TIMEOUT_MINUTES, GithubConfig, IMAGE_JOB_PREFIX, IMAGE_REGISTRY_HOST,
+    ImageConfig, ImageDockerfile, ImagePlatform, ImagePrebuilt, PrivateAssetSource,
+    PrivateGitTreeSource, PrivateSourcesConfig, ReleaseRegistry, UnmanagedPolicy,
 };
 pub use exports::*;
+pub use release_reexports::*;

@@ -143,6 +143,9 @@ struct PartialConfig {
     /// Agent instruction file policy.
     #[serde(default)]
     agents: velnor_actions_contract::AgentsConfig,
+    /// Policy for unmanaged `.github` entries.
+    #[serde(default)]
+    github: velnor_actions_contract::GithubConfig,
     /// Generated dco2 configuration.
     #[serde(default)]
     dco: Option<velnor_actions_contract::DcoConfig>,
@@ -274,6 +277,7 @@ impl PartialConfig {
             discovery: self.discovery.materialize(),
             actions: self.actions.materialize(),
             agents: self.agents,
+            github: self.github,
             dco: self.dco,
             execution: self.execution,
             checks: self.checks,
