@@ -37,6 +37,7 @@ mod generate;
 mod generator;
 mod gh_download;
 mod git_paths;
+mod github_authority_read;
 mod image_build_tasks;
 mod image_prebuilt;
 mod init;
@@ -144,7 +145,6 @@ pub(crate) mod tap_test_support;
 #[cfg(test)]
 #[path = "../../test_support/git_fixture.rs"]
 pub(crate) mod git_fixture;
-
 pub use api::*;
 
 mod review_completion_workflow_emit;
