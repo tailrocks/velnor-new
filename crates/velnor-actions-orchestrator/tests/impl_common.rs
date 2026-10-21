@@ -73,6 +73,43 @@ pub(crate) fn without_ambient_identity(
     inner()
 }
 
+/// Marker proving the current process already runs with the child event env.
+const EVENT_ENV_MARKER: &str = "VELNOR_TEST_EVENT_ENV";
+
+/// Run `inner` with `GITHUB_EVENT_PATH` set to a file holding `payload`, or
+/// removed when `payload` is `None`, regardless of the ambient CI event.
+///
+/// Re-executes the calling test in a child with the environment adjusted
+/// (child env needs no `unsafe`) and requires exactly one passing child run.
+pub(crate) fn with_event_payload(
+    test: &str,
+    payload: Option<&str>,
+    inner: impl FnOnce() -> TestResult,
+) -> TestResult {
+    if std::env::var(EVENT_ENV_MARKER).is_ok() {
+        return inner();
+    }
+    let dir = TempDir::new()?;
+    let mut child = StdCommand::new(std::env::current_exe()?);
+    child.arg(test).env(EVENT_ENV_MARKER, "1");
+    match payload {
+        Some(payload) => {
+            let path = dir.path().join("event.json");
+            fs::write(&path, payload)?;
+            child.env("GITHUB_EVENT_PATH", path);
+        }
+        None => {
+            child.env_remove("GITHUB_EVENT_PATH");
+        }
+    }
+    let output = child.output()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{test}: {stdout}{stderr}");
+    assert!(stdout.contains("1 passed"), "{test}: {stdout}");
+    Ok(())
+}
+
 /// Snapshot map shortcut.
 pub(crate) type Snapshot = BTreeMap<String, (Vec<u8>, SystemTime)>;
 

@@ -171,7 +171,7 @@ schema = 1
 [workflow]
 name = "CI"
 policy = "consumer-v1"
-# default_branch = "main" # Required only when origin/HEAD cannot be resolved.
+# default_branch = "main" # Optional: origin/HEAD, then the CI event payload, are used when omitted.
 generator_validation = "bootstrap"
 max_parallel_jobs = 2
 # runner_label = "ubuntu-24.04" # optional older pinned override; omit for latest
