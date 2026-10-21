@@ -193,7 +193,13 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
         | StepId::CacheKeys
         | StepId::SourcesFetch
         | StepId::MbxBundleKey
-        | StepId::MbxBundleExport => {
+        | StepId::MbxBundleExport
+        | StepId::FamilyKeys
+        | StepId::FamilySizeBunInstall
+        | StepId::FamilySizePlaywrightBrowsers
+        | StepId::FamilySizeDbtPackages
+        | StepId::FamilySizePythonVenv
+        | StepId::FamilySizeAnsibleCollections => {
             matches!(kind, StepKind::Shell { .. })
         }
         StepId::SourcesRestore | StepId::MbxBundleRestore => {

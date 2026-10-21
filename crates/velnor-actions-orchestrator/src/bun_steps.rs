@@ -20,6 +20,7 @@ use velnor_actions_workflow_renderer::{ambient_shell_step, shell_step};
 use crate::OrchestratorError;
 use crate::config::playwright_install::BROWSERS_SUBDIR;
 use crate::utf8::{strings_of, strings_of_env};
+use crate::workflow_task_jobs::stack_family_cache;
 
 /// Cache directory of Bun's package cache (`BUN_INSTALL_CACHE_DIR`).
 const CACHE_DIR: &str = "${{ runner.temp }}/velnor/bun-cache";
@@ -63,6 +64,13 @@ pub(crate) fn member_steps(input: &MemberInputs<'_>) -> Result<Vec<Step>, Orches
     steps.extend(input.private.iter().cloned());
     steps.push(prepare_step(input.catalog)?);
     steps.push(verify_step(input)?);
+    let bun = stack_family_cache::bun_install(input.root)?;
+    let mut plans = vec![bun.clone()];
+    let browsers = input
+        .playwright
+        .map(|_| stack_family_cache::playwright_browsers());
+    plans.extend(browsers.clone());
+    steps.extend(stack_family_cache::prelude(&plans)?);
     if input.scopes.is_empty() {
         steps.push(install_step(input)?);
     } else {
@@ -73,7 +81,11 @@ pub(crate) fn member_steps(input: &MemberInputs<'_>) -> Result<Vec<Step>, Orches
         )?);
         steps.push(lifecycle_step(input)?);
     }
+    steps.extend(stack_family_cache::after_producer(&bun)?);
     steps.extend(input.playwright.cloned());
+    if let Some(browsers) = &browsers {
+        steps.extend(stack_family_cache::after_producer(browsers)?);
+    }
     for script in input.scripts {
         let mut step = script_step(input, script)?;
         step.parallel = true;

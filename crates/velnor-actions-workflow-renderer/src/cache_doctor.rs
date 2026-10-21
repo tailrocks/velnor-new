@@ -26,12 +26,18 @@ use velnor_actions_contract::workflow::cache_family_mbx::{
     MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_PATH_EXPR, MBX_BUNDLE_RESTORE_KEYS_EXPR,
     MBX_BUNDLE_SAVE_CONDITION,
 };
+use velnor_actions_contract::workflow::cache_family_steps::{
+    STACK_FAMILIES, family_key_expr, family_save_condition,
+};
 use velnor_actions_contract::workflow::step_identity::{
     TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDERS_KEY_OUTPUT_EXPR, TOFU_PROVIDERS_PATH_OUTPUT_EXPR,
 };
 use velnor_actions_contract::{Job, PullRequestCachePolicy, Step, StepKind};
 
 use crate::RenderError;
+
+#[path = "cache_doctor_stack.rs"]
+mod stack;
 
 /// The install-only MBX action carries no cache input, so the doctor sees
 /// only the objects-mode action (qualification), whose run-bound generation
@@ -126,13 +132,23 @@ fn family_for_key(key: &str) -> Option<Family> {
     if key == MBX_BUNDLE_KEY_EXPR {
         return Some(Family::Runtime(CacheFamily::MbxBundle));
     }
+    if let Some(family) = STACK_FAMILIES
+        .into_iter()
+        .find(|family| key == family_key_expr(*family))
+    {
+        return Some(Family::Runtime(family));
+    }
     if key == TOFU_PROVIDERS_KEY_OUTPUT_EXPR || is_tofu_plan_key(key) {
         return Some(Family::Runtime(CacheFamily::TofuProviders));
     }
     if crate::cache_p08::is_v2_cache_key_expression(key) {
         return Some(Family::Tools);
     }
-    CacheFamily::for_key(key).map(Family::Runtime)
+    // A stack family key is only the generated expression; a literal key that
+    // merely shares its prefix would bypass the per-job key step.
+    CacheFamily::for_key(key)
+        .filter(|family| !STACK_FAMILIES.contains(family))
+        .map(Family::Runtime)
 }
 
 fn is_tofu_plan_key(key: &str) -> bool {
@@ -257,19 +273,17 @@ fn check_paths(job: &str, step: &Step, cache: &CacheUse<'_>) -> Result<(), Rende
         (Family::Runtime(CacheFamily::MbxBundle), Some(path)) => {
             path == MBX_BUNDLE_PATH_EXPR && mbx_bundle_restore_keys_ok(step, cache.save)
         }
-        // No generated step uses the Bun families yet (the contract and specs
-        // exist first); a hand-written step on one fails closed.
-        (Family::Runtime(_), None)
-        | (
+        (
             Family::Runtime(
-                CacheFamily::BunInstall
+                family @ (CacheFamily::BunInstall
                 | CacheFamily::PlaywrightBrowsers
                 | CacheFamily::DbtPackages
                 | CacheFamily::PythonVenv
-                | CacheFamily::AnsibleCollections,
+                | CacheFamily::AnsibleCollections),
             ),
-            Some(_),
-        ) => false,
+            Some(path),
+        ) => stack::path_ok(family, path) && stack::restore_keys_ok(step, family, cache.save),
+        (Family::Runtime(_), None) => false,
     };
     if ok {
         Ok(())
@@ -325,12 +339,12 @@ fn check_save(job: &str, step: &Step, family: Family) -> Result<(), RenderError>
         Family::Runtime(CacheFamily::TofuProviders) => condition == TOFU_PROVIDERS_SAVE_CONDITION,
         Family::Runtime(CacheFamily::MbxBundle) => condition == MBX_BUNDLE_SAVE_CONDITION,
         Family::Runtime(
-            CacheFamily::BunInstall
+            family @ (CacheFamily::BunInstall
             | CacheFamily::PlaywrightBrowsers
             | CacheFamily::DbtPackages
             | CacheFamily::PythonVenv
-            | CacheFamily::AnsibleCollections,
-        ) => false,
+            | CacheFamily::AnsibleCollections),
+        ) => condition == family_save_condition(family),
         Family::Tools => [
             PullRequestCachePolicy::ReadOnly,
             PullRequestCachePolicy::SameRepositoryScoped,

@@ -107,6 +107,18 @@ fn is_image_publish_output(inner: &str) -> bool {
         .is_some_and(|name| matches!(name, "digest" | "digest_amd64" | "digest_arm64"))
 }
 
+/// True for a stack family key or restore-keys output of the job's own key step.
+fn is_family_key_output(inner: &str) -> bool {
+    use velnor_actions_contract::workflow::cache_family_steps::{FAMILY_KEYS_ID, family_for_stem};
+    inner
+        .strip_prefix(&format!("steps.{FAMILY_KEYS_ID}.outputs."))
+        .and_then(|name| {
+            name.strip_suffix("_restore_keys")
+                .or_else(|| name.strip_suffix("_key"))
+        })
+        .is_some_and(|stem| family_for_stem(stem).is_some())
+}
+
 /// True for a Plan-published per-root provider key (`tofu_providers_key_<n>`).
 fn is_tofu_providers_plan_key(inner: &str) -> bool {
     inner
@@ -279,6 +291,7 @@ pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError
             && !is_tofu_providers_plan_key(inner)
             && !is_private_mint_input(key, inner)
             && !is_image_publish_output(inner)
+            && !is_family_key_output(inner)
         {
             return Err(RenderError::BadActionRef(format!(
                 "bad_with_expression:{key}"
