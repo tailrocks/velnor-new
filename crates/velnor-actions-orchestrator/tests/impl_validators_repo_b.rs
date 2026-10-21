@@ -103,10 +103,11 @@ fn mbx_transport_stays_with_mr_boxington_action() {
         pin,
         &rust,
         env.clone(),
-        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        velnor_actions_workflow_renderer::steps::MbxTransport::InstallOnly,
         None,
     )
     .expect("objects steps")
+    .and_then(|steps| <[velnor_actions_contract::Step; 3]>::try_from(steps).ok())
     .expect("MBX profile");
     assert_eq!(preflight.name, "Verify Rust before MBX action");
     assert_eq!(version_check.name, "Verify native MBX version");
@@ -125,7 +126,7 @@ fn mbx_transport_stays_with_mr_boxington_action() {
             pin,
             &rust,
             env.clone(),
-            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            velnor_actions_workflow_renderer::steps::MbxTransport::InstallOnly,
             None,
         )
         .expect("Cargo profile")
@@ -139,7 +140,7 @@ fn mbx_transport_stays_with_mr_boxington_action() {
             pin,
             &rust,
             env,
-            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            velnor_actions_workflow_renderer::steps::MbxTransport::InstallOnly,
             None,
         )
         .is_err()

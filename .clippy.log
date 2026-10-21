@@ -1,0 +1,14 @@
+   Compiling velnor-archive-guard v0.1.36 (/private/tmp/claude-501/velnor-cache2/crates/velnor-archive-guard)
+    Checking velnor-actions-workflow-renderer v0.1.36 (/private/tmp/claude-501/velnor-cache2/crates/velnor-actions-workflow-renderer)
+    Checking velnor-actions-tofu v0.1.36 (/private/tmp/claude-501/velnor-cache2/crates/velnor-actions-tofu)
+    Checking velnor-actions-rust v0.1.36 (/private/tmp/claude-501/velnor-cache2/crates/velnor-actions-rust)
+    Checking velnor-actions-bun v0.1.36 (/private/tmp/claude-501/velnor-cache2/crates/velnor-actions-bun)
+    Checking velnor-actions-dbt v0.1.36 (/private/tmp/claude-501/velnor-cache2/crates/velnor-actions-dbt)
+    Checking velnor-actions-ansible v0.1.36 (/private/tmp/claude-501/velnor-cache2/crates/velnor-actions-ansible)
+    Checking velnor-actions-contract v0.1.36 (/private/tmp/claude-501/velnor-cache2/crates/velnor-actions-contract)
+    Checking velnor-actions-actionlint v0.1.36 (/private/tmp/claude-501/velnor-cache2/crates/velnor-actions-actionlint)
+    Checking velnor-actions-gradle v0.1.36 (/private/tmp/claude-501/velnor-cache2/crates/velnor-actions-gradle)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.75s
+mbx[cache]: 6 hits, 1 misses, 8 not looked up; 0 B downloaded, 0 B uploaded, 222.4 KiB stored locally
+mbx[savings]: 256.4 GiB on loan to every checkout simultaneously. the paperwork is an inode.
+done

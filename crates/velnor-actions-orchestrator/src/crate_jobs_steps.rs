@@ -15,6 +15,7 @@ pub(super) fn obligation_steps(
     input: &CrateJobInputs<'_>,
     model: &CrateJob,
     use_opentofu: bool,
+    use_mbx: bool,
 ) -> Result<Vec<Step>, OrchestratorError> {
     let sequential = |obligation: &CrateObligation| {
         velnor_actions_rust::runs_before_parallel_checks(&obligation.kind)
@@ -32,6 +33,11 @@ pub(super) fn obligation_steps(
         .filter(|obligation| concurrent && !sequential(obligation))
         .map(|obligation| obligation.task_id.as_str())
         .collect();
+    // The MBX bundle producer is the last sequential compile (the test build):
+    // the marker after it lets the export run even when a later check fails.
+    let bundle_producer = use_mbx
+        .then(|| model.obligations.iter().rposition(sequential))
+        .flatten();
     let target_root =
         crate::source_prep::workspace_root_for_manifest(&model.manifest, input.fetch_roots);
     let seed = seed_step(input, model, concurrent, target_root)?;
@@ -77,6 +83,9 @@ pub(super) fn obligation_steps(
             cap_cargo_jobs(&mut step, options.build_jobs);
         }
         steps.push(step);
+        if bundle_producer == Some(index) {
+            steps.push(velnor_actions_workflow_renderer::steps::mbx_producer_mark_step()?);
+        }
     }
     Ok(steps)
 }

@@ -66,7 +66,7 @@ fn release_qualification_uses_catalog_action_and_exact_version_probe() {
     let catalog = ToolCatalog::pinned();
     let steps = steps_for_catalog(
         &catalog,
-        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        velnor_actions_workflow_renderer::steps::MbxTransport::InstallOnly,
         None,
     )
     .expect("catalog qualification MBX steps");

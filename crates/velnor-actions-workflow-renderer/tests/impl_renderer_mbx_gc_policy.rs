@@ -3,7 +3,7 @@
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
-use velnor_actions_workflow_renderer::steps::{MBX_CACHE_MODE_ENV, checkout_step};
+use velnor_actions_workflow_renderer::steps::checkout_step;
 use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 
 use super::impl_renderer_fixtures::*;
@@ -26,17 +26,17 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
         &fixture_ctx(),
     )?;
     assert!(
-        text.contains("github.ref_protected == true && 'write' || 'read'"),
-        "only protected default-branch pushes write:\n{text}"
-    );
-    assert!(
         text.contains("MBX_GC_AUTO: \"0\""),
         "MBX jobs defer GC while action results may be in flight:\n{text}"
     );
     assert!(text.contains("MBX_SHARE_OUT_DIR: \"0\""), "{text}");
     assert!(text.contains("MBX_CC: \"0\""), "{text}");
     assert!(text.contains("MBX_BUILD_SCRIPT_EXECUTION: \"0\""), "{text}");
-    assert!(text.contains(&format!("{MBX_CACHE_MODE_ENV}:")), "{text}");
+    assert!(
+        text.contains("MBX_CACHE_EXPORT_GROUP: velnor"),
+        "MBX jobs tag their builds with the bundle export group:\n{text}"
+    );
+    assert!(!text.contains("ACTIONS_CACHE_MODE"), "{text}");
 
     let plain = checkout_step(&checkout_pin())?;
     let cargo_text = render_workflow_ir(
@@ -103,7 +103,7 @@ fn mbx_job_policy_applies_to_hosted_and_scale_set_lanes() -> Result<(), RenderEr
     );
     assert_eq!(
         text.matches(
-            "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \\\"$mbx_bin\\\" cache dir >/dev/null 2>&1"
+            "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \\\"$mbx_bin\\\" clean"
         )
         .count(),
         2,
@@ -142,7 +142,7 @@ fn native_mbx_disk_samples_cover_the_active_lifecycle_boundaries() -> Result<(),
     let post_restore = positions(&text, "mbx_disk_sample after-cache-restore");
     let consumers = positions(&text, "uses: ./.github/actions/rust-demo");
     let before_clean = positions(&text, "mbx_disk_sample before-final-clean");
-    let clean_calls = positions(&text, "\\\"$mbx_bin\\\" cache dir >/dev/null 2>&1");
+    let clean_calls = positions(&text, "\\\"$mbx_bin\\\" clean");
     let after_clean = positions(&text, "mbx_disk_sample after-final-clean");
     for positions in [
         &pre_restore,

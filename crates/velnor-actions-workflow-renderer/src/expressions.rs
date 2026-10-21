@@ -76,7 +76,7 @@ const ENV_EXPRESSIONS: [&str; 14] = [
 /// Run-scoped names, runner paths, matrix coordinates, the
 /// push-gated cache-save flag, and runtime cache identities. Notably absent: every `secrets.*` handle (rejected
 /// separately as `secret_in_action_input`).
-const WITH_EXPRESSIONS: [&str; 16] = [
+const WITH_EXPRESSIONS: [&str; 18] = [
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
@@ -93,6 +93,8 @@ const WITH_EXPRESSIONS: [&str; 16] = [
     "steps.cache-keys.outputs.sources_restore_keys",
     "needs.plan.outputs.sources_key",
     "needs.plan.outputs.sources_restore_keys",
+    "steps.mbx-bundle-key.outputs.key",
+    "steps.mbx-bundle-key.outputs.restore_keys",
 ];
 
 /// True for an output of the image publication assemble step.

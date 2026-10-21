@@ -19,7 +19,6 @@ fn configured_timeout_reaches_every_crate_job() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::new(30).expect("valid timeout"),
         helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -58,7 +57,6 @@ fn configured_timeout_reaches_every_tofu_root_job() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::new(120).expect("valid timeout"),
         helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })

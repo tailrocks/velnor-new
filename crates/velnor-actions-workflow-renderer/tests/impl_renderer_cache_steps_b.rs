@@ -2,7 +2,7 @@
 
 use velnor_actions_contract::StepKind;
 use velnor_actions_workflow_renderer::steps::{
-    CompileDriver, MBX_CACHE_MODE_ENV, mbx_steps_for_driver, target_dir_for_lane,
+    CompileDriver, mbx_steps_for_driver, target_dir_for_lane,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -21,31 +21,30 @@ fn lane_target_dirs_stay_isolated() {
 }
 
 #[test]
-fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
+fn native_action_carries_no_cache_write_gate() {
     let uses = format!("jdx/mr-boxington-action@{}", sha());
     let [_, direct, _] = mbx_tool_steps(&uses, "1.19.0", "1.98.1").expect("direct MBX steps");
-    let [_, driven, _] = mbx_steps_for_driver(
+    let driven = mbx_steps_for_driver(
         &uses,
         CompileDriver::Mbx,
         "1.19.0",
         "1.98.1",
         mbx_tool_env("1.98.1"),
-        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        velnor_actions_workflow_renderer::steps::MbxTransport::InstallOnly,
         None,
     )
     .expect("driver MBX")
-    .expect("MBX driver emits");
+    .expect("MBX driver emits")
+    .remove(1);
     for step in [&direct, &driven] {
-        let StepKind::Action { env, .. } = &step.kind else {
+        let StepKind::Action { env, with, .. } = &step.kind else {
             panic!("mbx must be an action step");
         };
-        assert_eq!(
-            env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
-            Some(
-                "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}"
-            ),
-            "native object saves are limited to protected default-branch pushes"
+        assert!(
+            !env.contains_key("ACTIONS_CACHE_MODE"),
+            "the install-only action never writes a cache"
         );
+        assert_eq!(with.get("backend").map(String::as_str), Some("local"));
     }
     assert!(
         mbx_steps_for_driver(
@@ -54,7 +53,7 @@ fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
             "1.19.0",
             "1.98.1",
             mbx_tool_env("1.98.1"),
-            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            velnor_actions_workflow_renderer::steps::MbxTransport::InstallOnly,
             None,
         )
         .expect("cargo driver")
