@@ -152,6 +152,8 @@ pub enum StepRole {
     MbxBundleImport,
     /// Marker written once the family's producer (the compile) succeeded.
     MbxProducerMark,
+    /// One dependency-seed lane compile through `mbx`; the seed job's producer.
+    MbxSeedBuild,
     /// `mbx cache export --format directory` gated on the producer marker.
     MbxBundleExport,
     /// Trusted-only `actions/cache/save` of the exported bundle directory.
@@ -223,6 +225,7 @@ impl StepRole {
             | Self::MbxBundleKey
             | Self::MbxBundleImport
             | Self::MbxProducerMark
+            | Self::MbxSeedBuild
             | Self::MbxBundleExport
             | Self::PrepareRustComponents
             | Self::CargoDeny
