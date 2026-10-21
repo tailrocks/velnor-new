@@ -110,10 +110,12 @@ impl ListenerDeliveryClaim {
         &self.docker_root_digest
     }
 
+    #[cfg(test)]
     pub(crate) fn dind_container_id(&self) -> &str {
         &self.dind_container_id
     }
 
+    #[cfg(test)]
     pub(crate) fn instance_binding_digest(&self) -> &str {
         &self.instance_binding_digest
     }

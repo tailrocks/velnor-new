@@ -44,6 +44,7 @@ impl ConnectionJournal {
     }
 
     /// Record `uncertain` for helper creation when the Docker result is not known.
+    #[cfg(test)]
     pub(crate) async fn mark_storage_initializer_create_uncertain(
         &self,
         claim: &StorageInitializationClaim,
@@ -98,42 +99,6 @@ impl ConnectionJournal {
         claim: &StorageInitializationClaim,
     ) -> Result<(), HostError> {
         mark_uncertain(self, claim, "UPDATE capacity_reservation_storage_initialization SET start_state = CASE WHEN start_state = 'requested' THEN 'uncertain' ELSE start_state END WHERE reservation_id = ?1 AND start_state IN ('requested', 'started')").await
-    }
-
-    /// Record the result from the storage initializer.
-    pub(crate) async fn record_storage_initialized(
-        &self,
-        claim: &StorageInitializationClaim,
-        result: &ObservedStorageInitialization,
-    ) -> Result<(), HostError> {
-        if claim.layout_version != 1 || result.operation_id() != claim.operation_key {
-            return Err(HostError::Identity);
-        }
-        let home_device = result.home().device();
-        let work_device = result.work().device();
-        let values = (
-            i64::from(home_device.0),
-            i64::from(home_device.1),
-            i64::try_from(result.home().inode()).map_err(|_| HostError::Identity)?,
-            i64::try_from(result.home().mount_id()).map_err(|_| HostError::Identity)?,
-            i64::from(work_device.0),
-            i64::from(work_device.1),
-            i64::try_from(result.work().inode()).map_err(|_| HostError::Identity)?,
-            i64::try_from(result.work().mount_id()).map_err(|_| HostError::Identity)?,
-        );
-        let connection_id = self.connection_id().as_str().to_owned();
-        in_transaction(self.journal_ref(), async |connection| {
-            self.validate_scope(connection).await?;
-            let changed = connection.execute(
-                "UPDATE capacity_reservation_storage_initialization SET result_state = 'confirmed', home_device_major = ?2, home_device_minor = ?3, home_inode = ?4, home_mount_id = ?5, work_device_major = ?6, work_device_minor = ?7, work_inode = ?8, work_mount_id = ?9 WHERE reservation_id = ?1 AND connection_id = ?10 AND operation_id = ?11 AND operation_key = ?12 AND engine_id = ?13 AND docker_root_digest = ?14 AND start_state = 'started' AND result_state = 'not_requested'",
-                (claim.reservation_id, values.0, values.1, values.2, values.3, values.4, values.5, values.6, values.7, connection_id.as_str(), claim.operation_id, claim.operation_key.as_str(), claim.engine_id.as_str(), claim.docker_root_digest.as_str()),
-            ).await.map_err(|_| HostError::Journal)?;
-            if changed != 1 { return Err(HostError::Journal); }
-            Ok(())
-        }).await?;
-        #[cfg(test)]
-        commit_gate::pause_after_commit(claim.reservation_id, "result").await;
-        Ok(())
     }
 
     /// Record an exact layout-v2 result with its metadata volume identity.

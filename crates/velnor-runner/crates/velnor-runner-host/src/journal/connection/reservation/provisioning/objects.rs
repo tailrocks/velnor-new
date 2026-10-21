@@ -57,10 +57,12 @@ impl StorageObjectCreateClaim {
         &self.docker_root_digest
     }
 
+    #[cfg(test)]
     pub(crate) fn profile_generation_id(&self) -> &str {
         &self.profile_generation_id
     }
 
+    #[cfg(test)]
     pub(crate) fn profile_digest(&self) -> &str {
         &self.profile_digest
     }
@@ -69,6 +71,7 @@ impl StorageObjectCreateClaim {
         &self.sample_generation_id
     }
 
+    #[cfg(test)]
     pub(crate) fn pool_id(&self) -> &str {
         &self.pool_id
     }
@@ -97,6 +100,7 @@ impl StorageObjectCreateClaim {
         self.retained_memory_bytes
     }
 
+    #[cfg(test)]
     pub(crate) fn publication_policy_digest(&self) -> Option<&str> {
         self.publication_policy_digest.as_deref()
     }

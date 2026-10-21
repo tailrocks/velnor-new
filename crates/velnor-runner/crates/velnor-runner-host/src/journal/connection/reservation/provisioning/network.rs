@@ -65,11 +65,9 @@ impl RecordedStorageNetwork {
     pub(crate) fn network_name(&self) -> &str {
         &self.network_name
     }
+    #[cfg(test)]
     pub(crate) fn network_id(&self) -> &str {
         &self.network_id
-    }
-    pub(crate) fn labels(&self) -> &BTreeMap<String, String> {
-        &self.labels
     }
 }
 
@@ -87,27 +85,23 @@ pub(crate) struct StorageNetworkRecoveryIdentity {
 }
 
 impl StorageNetworkRecoveryIdentity {
-    pub(crate) const fn reservation_id(&self) -> i64 {
-        self.reservation_id
-    }
-    pub(crate) const fn operation_id(&self) -> i64 {
-        self.operation_id
-    }
+    #[cfg(test)]
     pub(crate) fn engine_id(&self) -> &str {
         &self.engine_id
     }
-    pub(crate) fn docker_root_digest(&self) -> &str {
-        &self.docker_root_digest
-    }
+    #[cfg(test)]
     pub(crate) fn network_name(&self) -> &str {
         &self.network_name
     }
+    #[cfg(test)]
     pub(crate) fn network_id(&self) -> Option<&str> {
         self.network_id.as_deref()
     }
+    #[cfg(test)]
     pub(crate) fn labels(&self) -> &BTreeMap<String, String> {
         &self.labels
     }
+    #[cfg(test)]
     pub(crate) fn create_state(&self) -> &str {
         &self.create_state
     }

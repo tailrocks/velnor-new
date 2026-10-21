@@ -30,22 +30,6 @@ pub(crate) struct StorageMetadataSettlementClaim {
 }
 
 impl StorageMetadataSettlementClaim {
-    pub(crate) const fn reservation_id(&self) -> i64 {
-        self.reservation_id
-    }
-
-    pub(crate) const fn generation(&self) -> i64 {
-        self.generation
-    }
-
-    pub(crate) const fn operation_id(&self) -> i64 {
-        self.operation_id
-    }
-
-    pub(crate) const fn scale_set_id(&self) -> i64 {
-        self.scale_set_id
-    }
-
     pub(crate) fn probe_operation_id(&self) -> &str {
         &self.probe_operation_id
     }
@@ -64,10 +48,6 @@ impl StorageMetadataSettlementClaim {
 
     pub(crate) fn docker_root_digest(&self) -> &str {
         &self.docker_root_digest
-    }
-
-    pub(crate) fn instance_binding_digest(&self) -> &str {
-        &self.instance_binding_digest
     }
 }
 

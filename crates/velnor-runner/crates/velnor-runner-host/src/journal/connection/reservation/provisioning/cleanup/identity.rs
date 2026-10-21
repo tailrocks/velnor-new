@@ -125,9 +125,6 @@ impl StorageCleanupMount {
     pub(crate) fn filesystem_id(&self) -> Option<&str> {
         self.filesystem_id.as_deref()
     }
-    pub(crate) fn filesystem_instance_digest(&self) -> &str {
-        &self.filesystem_instance_digest
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -151,17 +148,9 @@ impl StorageCleanupCgroup {
     pub(crate) fn path(&self) -> &str {
         &self.path
     }
+    #[cfg(test)]
     pub(crate) const fn memory_max_bytes(&self) -> u64 {
         self.memory_max_bytes
-    }
-    pub(crate) const fn cpu_quota_micros(&self) -> u64 {
-        self.cpu_quota_micros
-    }
-    pub(crate) const fn cpu_period_micros(&self) -> u64 {
-        self.cpu_period_micros
-    }
-    pub(crate) const fn pids_max(&self) -> u64 {
-        self.pids_max
     }
 }
 

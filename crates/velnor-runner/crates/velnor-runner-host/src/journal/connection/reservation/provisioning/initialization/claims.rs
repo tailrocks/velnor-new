@@ -1,5 +1,6 @@
 impl ConnectionJournal {
     /// Record initializer identity before Docker creates the helper.
+    #[cfg(test)]
     pub(crate) async fn claim_storage_initialization(
         &self,
         reservation_id: i64,
@@ -220,6 +221,7 @@ impl ConnectionJournal {
     }
 
     /// Keep capacity reserved when the Docker create result is unknown.
+    #[cfg(test)]
     pub(crate) async fn mark_storage_initializer_create_outcome_unknown(
         &self,
         claim: &StorageInitializationClaim,

@@ -108,15 +108,6 @@ impl StorageInitializationClaim {
     pub(crate) fn helper_id(&self) -> Option<&str> {
         self.helper_id.as_deref()
     }
-    pub(crate) fn start_state(&self) -> &str {
-        &self.start_state
-    }
-    pub(crate) fn result_state(&self) -> &str {
-        &self.result_state
-    }
-    pub(crate) fn remove_state(&self) -> &str {
-        &self.remove_state
-    }
     pub(crate) fn abort_helper_id(&self) -> Option<&str> {
         self.abort_helper_id.as_deref()
     }

@@ -77,34 +77,6 @@ impl PreJitCapacityProbeClaim {
         &self.seed
     }
 
-    pub(crate) fn connection_id(&self) -> &str {
-        self.cleanup.connection_id()
-    }
-
-    pub(crate) const fn reservation_id(&self) -> i64 {
-        self.cleanup.reservation_id()
-    }
-
-    pub(crate) const fn operation_id(&self) -> i64 {
-        self.cleanup.operation_id()
-    }
-
-    pub(crate) fn engine_id(&self) -> &str {
-        self.cleanup.engine_id()
-    }
-
-    pub(crate) fn docker_root_digest(&self) -> &str {
-        self.cleanup.docker_root_digest()
-    }
-
-    pub(crate) fn snapshot_sha256(&self) -> &str {
-        self.cleanup.snapshot_sha256()
-    }
-
-    pub(crate) const fn generation(&self) -> i64 {
-        self.cleanup.generation()
-    }
-
     pub(crate) fn probe_operation_id(&self) -> &str {
         &self.seed.operation_id
     }

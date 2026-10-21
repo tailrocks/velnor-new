@@ -93,9 +93,6 @@ impl PreJitBootstrapContainer {
     pub(crate) fn create_state(&self) -> &str {
         &self.create_state
     }
-    pub(crate) fn start_state(&self) -> &str {
-        &self.start_state
-    }
 }
 
 pub(crate) struct PreJitStorageObject {
@@ -211,24 +208,6 @@ impl PreJitInitializerIdentity {
     }
     pub(crate) fn metadata_volume_id(&self) -> Option<&str> {
         self.metadata_volume_id.as_deref()
-    }
-    pub(crate) fn create_dispatch_state(&self) -> &str {
-        &self.create_dispatch_state
-    }
-    pub(crate) fn create_state(&self) -> &str {
-        &self.create_state
-    }
-    pub(crate) fn start_state(&self) -> &str {
-        &self.start_state
-    }
-    pub(crate) fn result_state(&self) -> &str {
-        &self.result_state
-    }
-    pub(crate) fn remove_state(&self) -> &str {
-        &self.remove_state
-    }
-    pub(crate) fn abort_state(&self) -> &str {
-        &self.abort_state
     }
     pub(crate) const fn cpu_nano(&self) -> i64 {
         self.cpu_nano

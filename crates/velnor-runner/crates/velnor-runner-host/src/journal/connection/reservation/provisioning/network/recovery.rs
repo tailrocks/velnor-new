@@ -52,6 +52,7 @@ impl ConnectionJournal {
     }
 
     /// Restore the exact pending create identity after a journal reopen.
+    #[cfg(test)]
     pub(crate) async fn recover_storage_network_create(
         &self,
         reservation_id: i64,
