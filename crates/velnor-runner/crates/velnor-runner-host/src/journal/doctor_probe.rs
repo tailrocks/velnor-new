@@ -92,8 +92,6 @@ pub(crate) enum DoctorProbeOutcome {
 pub(crate) struct DoctorProbeRequestRecord {
     request_id: i64,
     nonce: String,
-    engine_id: String,
-    docker_root_digest: String,
     state: DoctorProbeState,
     child: Option<crate::journal::ProbeRow>,
 }
@@ -101,18 +99,6 @@ pub(crate) struct DoctorProbeRequestRecord {
 impl DoctorProbeRequestRecord {
     pub(crate) const fn request_id(&self) -> i64 {
         self.request_id
-    }
-
-    pub(crate) fn nonce(&self) -> &str {
-        &self.nonce
-    }
-
-    pub(crate) fn engine_id(&self) -> &str {
-        &self.engine_id
-    }
-
-    pub(crate) fn docker_root_digest(&self) -> &str {
-        &self.docker_root_digest
     }
 
     pub(crate) const fn state(&self) -> DoctorProbeState {

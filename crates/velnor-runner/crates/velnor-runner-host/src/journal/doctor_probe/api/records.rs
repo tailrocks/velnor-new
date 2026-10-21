@@ -100,8 +100,6 @@ pub(in crate::journal::doctor_probe) async fn record(
     Ok(DoctorProbeRequestRecord {
         request_id: ticket.request_id,
         nonce: ticket.nonce,
-        engine_id: ticket.engine_id,
-        docker_root_digest: ticket.docker_root_digest,
         state: ticket.state,
         child,
     })
