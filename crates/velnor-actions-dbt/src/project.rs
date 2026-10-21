@@ -3,7 +3,7 @@
 use crate::packages::{parse_packages, verify_lock};
 use crate::paths::stays_inside;
 use crate::yaml::{top_list, top_scalars};
-use crate::{DbtError, check_profiles};
+use crate::{DbtError, check_profiles, uses_postgres_adapter};
 use velnor_actions_contract::config::DBT_JOB_PREFIX;
 
 /// `dbt_project.yml` keys whose value is a list of project-relative directories.
@@ -43,6 +43,8 @@ pub struct Project {
     pub name: String,
     /// `profile` from `dbt_project.yml`.
     pub profile: String,
+    /// True when `profiles.yml` declares a `type: postgres` output.
+    pub postgres_adapter: bool,
 }
 
 /// True for a dbt identifier: letters, digits and `_`, not starting with a digit.
@@ -137,6 +139,7 @@ pub fn analyze_project(dir: &str, files: &ProjectFiles<'_>) -> (Option<Project>,
             dir: dir.to_owned(),
             name,
             profile,
+            postgres_adapter: files.profiles.is_some_and(uses_postgres_adapter),
         });
     (project, findings)
 }
