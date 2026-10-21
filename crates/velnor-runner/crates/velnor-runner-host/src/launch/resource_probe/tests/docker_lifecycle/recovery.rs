@@ -179,8 +179,7 @@ async fn recovery_claim_timeout_sends_no_docker_request() -> Result<(), String> 
         http(200, &malformed),
     ])?;
     let held = journal.write_guard().await;
-    // Allow real socket I/O to finish before the held journal write expires.
-    // An earlier HTTP timeout would not exercise quarantine commit propagation.
+    // Keep the journal write locked until the recovery deadline expires.
     let result = Box::pin(crate::launch::resource_probe::recover::active(
         &docker.docker,
         &journal,
