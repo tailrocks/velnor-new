@@ -45,7 +45,7 @@ use crate::{
     launch::{
         Lane, SelectedEngineContext, VerifiedWorkerImages,
         bootstrap::{PendingBootstrapPair, PreparedAcquiredBootstrap, StartedBootstrapPair},
-        resource_probe::{ImageProvider, ReleaseReadSecret},
+        resource_probe::ImageProvider,
         steps::ScopedProvisioningOutcome,
     },
     worker::storage_initialization::VerifiedStorageInitializationReady,
@@ -208,12 +208,7 @@ fn scoped_prepare_context<'a, P: ImageProvider + 'a>(
 /// Prepare one job, bind its exact Runner, and measure its proof channel.
 pub(crate) async fn prepare_jit_and_measure_scoped<T>(
     outcome: ScopedProvisioningOutcome,
-    docker: &Docker,
-    scoped: &ConnectionJournal,
-    host: &Journal,
-    release_secret: &ReleaseReadSecret,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
+    context: &ScopedHostContext<'_>,
     lane: &mut T,
     admin_token: &str,
     deadline: Instant,
@@ -221,6 +216,14 @@ pub(crate) async fn prepare_jit_and_measure_scoped<T>(
 where
     T: Transport + Lane,
 {
+    let ScopedHostContext {
+        docker,
+        host,
+        scoped,
+        secret: release_secret,
+        engine,
+        images,
+    } = *context;
     let bound = match prepare_and_bind_scoped(
         outcome,
         docker,

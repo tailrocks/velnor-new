@@ -56,15 +56,18 @@ async fn measure_acquired(
         )
         .await;
     }
+    let scoped_context = crate::launch::scoped_runtime::ScopedHostContext {
+        docker: context.docker,
+        host: context.journal,
+        scoped: &prepared.scope,
+        secret: context.release_read_secret,
+        engine: context.selected_engine,
+        images: context.worker_images,
+    };
     Box::pin(
         crate::launch::scoped_runtime::prepare_jit_and_measure_scoped(
             crate::launch::steps::ScopedProvisioningOutcome::Acquired(acquired),
-            context.docker,
-            &prepared.scope,
-            context.journal,
-            context.release_read_secret,
-            context.selected_engine,
-            context.worker_images,
+            &scoped_context,
             &mut lane,
             &admin_token,
             deadline,
