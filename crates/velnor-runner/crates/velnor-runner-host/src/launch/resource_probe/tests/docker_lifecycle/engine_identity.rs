@@ -162,14 +162,14 @@ async fn engine_change_after_create_blocks_start_then_cleans_on_bound_engine() -
         http(200, info_b),
         http(200, info_b),
     ])?;
-    let result = execute::run(
+    let result = Box::pin(execute::run(
         &changed.docker,
         &journal,
         &projection,
         image_evidence(&projection),
         16 * 1024 * 1024 * 1024,
         &Deadline::new(),
-    )
+    ))
     .await;
     let changed_requests = changed.finish_observed().await?;
     assert!(matches!(result, Err(HostError::Identity)));
@@ -241,14 +241,14 @@ async fn root_change_after_create_blocks_start_then_cleans_on_original_root() ->
         http(200, replacement),
         http(200, replacement),
     ])?;
-    let result = execute::run(
+    let result = Box::pin(execute::run(
         &changed.docker,
         &journal,
         &projection,
         image_evidence(&projection),
         16 * 1024 * 1024 * 1024,
         &Deadline::new(),
-    )
+    ))
     .await;
     let changed_requests = changed.finish_observed().await?;
     assert!(matches!(result, Err(HostError::Identity)));

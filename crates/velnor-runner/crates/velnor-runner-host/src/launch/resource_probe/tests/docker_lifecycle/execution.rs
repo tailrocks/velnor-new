@@ -26,14 +26,14 @@ async fn completed_probe_cleans_the_exact_container_before_returning_metrics() -
     append_cleanup(&mut responses, &projection, "exited", 0, cleanup_delay)?;
     let docker = DockerStub::open(responses)?;
 
-    let output = execute::run(
+    let output = Box::pin(execute::run(
         &docker.docker,
         &journal,
         &projection,
         image_evidence(&projection),
         16 * 1024 * 1024 * 1024,
         &Deadline::new(),
-    )
+    ))
     .await;
     let requests = docker.finish_observed().await?;
     let mut expected = start_request_order();
@@ -108,14 +108,14 @@ async fn parsed_record_with_wrong_running_pid_is_cleaned_without_observation() -
     append_cleanup(&mut responses, &projection, "exited", 0, Duration::ZERO)?;
     let docker = DockerStub::open(responses)?;
 
-    let result = execute::run(
+    let result = Box::pin(execute::run(
         &docker.docker,
         &journal,
         &projection,
         image_evidence(&projection),
         memory_total,
         &Deadline::new(),
-    )
+    ))
     .await;
     let requests = docker.finish_observed().await?;
     let mut expected = start_request_order();
@@ -166,14 +166,14 @@ async fn lost_or_invalid_execution_results_cleanup_without_a_permit() -> Result<
         let docker = DockerStub::open(responses)?;
 
         assert!(
-            execute::run(
+            Box::pin(execute::run(
                 &docker.docker,
                 &journal,
                 &projection,
                 image_evidence(&projection),
                 16 * 1024 * 1024 * 1024,
                 &Deadline::new(),
-            )
+            ))
             .await
             .is_err(),
             "failure case {failure:?} unexpectedly yielded metrics"

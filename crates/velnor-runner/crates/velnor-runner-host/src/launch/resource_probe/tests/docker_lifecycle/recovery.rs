@@ -19,14 +19,14 @@ async fn cleanup_timeout_keeps_owned_container_retryable_after_reopen() -> Resul
         delayed_http(200, info, delay),
     ]);
     let docker = DockerStub::open(responses)?;
-    let result = execute::run(
+    let result = Box::pin(execute::run(
         &docker.docker,
         &journal,
         &projection,
         image_evidence(&projection),
         16 * 1024 * 1024 * 1024,
         &Deadline::test_with_timeouts(Duration::from_secs(10), Duration::from_millis(500)),
-    )
+    ))
     .await;
     assert!(matches!(result, Err(HostError::DockerTimeout)));
     let requests = docker.finish_observed().await?;
@@ -42,10 +42,18 @@ async fn cleanup_timeout_keeps_owned_container_retryable_after_reopen() -> Resul
     assert_persisted_projection_rebuilds(&retained)?;
 
     drop(journal);
+    Box::pin(assert_cleanup_after_restart(&scratch, &projection, info)).await
+}
+
+async fn assert_cleanup_after_restart(
+    scratch: &Scratch,
+    projection: &ProbeProjection,
+    info: &str,
+) -> Result<(), String> {
     let journal = Journal::open(&scratch.file())
         .await
         .map_err(|error| error.to_string())?;
-    let exited = inspect(&projection, "exited", 0)?;
+    let exited = inspect(projection, "exited", 0)?;
     let retry = vec![
         http(200, info),
         http(200, info),
@@ -115,14 +123,14 @@ async fn held_journal_transition_timeout_sends_no_docker_request() -> Result<(),
     let (_scratch, journal, projection) = prepared().await?;
     let held = journal.write_guard().await;
     let docker = DockerStub::open(Vec::new())?;
-    let result = execute::run(
+    let result = Box::pin(execute::run(
         &docker.docker,
         &journal,
         &projection,
         image_evidence(&projection),
         16 * 1024 * 1024 * 1024,
         &Deadline::test_with_timeouts(Duration::from_millis(40), Duration::from_millis(20)),
-    )
+    ))
     .await;
     let requests = docker.finish_observed().await?;
     assert!(matches!(result, Err(HostError::DockerTimeout)));
