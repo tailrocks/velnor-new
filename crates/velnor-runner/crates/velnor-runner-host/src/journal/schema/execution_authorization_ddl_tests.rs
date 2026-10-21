@@ -1,3 +1,5 @@
+#[path = "execution_authorization_ddl_tests/binding_reopen.rs"]
+mod binding_reopen;
 #[path = "execution_authorization_ddl_tests/migration.rs"]
 mod migration;
 #[path = "execution_authorization_ddl_tests/rollback.rs"]

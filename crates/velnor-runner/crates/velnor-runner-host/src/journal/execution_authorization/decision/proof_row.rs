@@ -20,8 +20,6 @@ pub(super) struct ProofRow {
     pub(super) policy_digest: String,
     pub(super) runner_id: i64,
     pub(super) runner_name: String,
-    pub(super) runner_container_id: String,
-    pub(super) dind_container_id: String,
     pub(super) instance_binding_digest: String,
     pub(super) challenge: String,
     pub(super) challenge_state: String,
@@ -103,8 +101,6 @@ impl LoadedProofRow {
             policy_digest: self.policy_digest,
             runner_id: self.runner_id,
             runner_name: self.runner_name,
-            runner_container_id: self.runner_container_id,
-            dind_container_id: self.dind_container_id,
             instance_binding_digest: self.instance_binding_digest,
             challenge: self.challenge,
             challenge_state: self.challenge_state,
@@ -177,4 +173,108 @@ pub(super) async fn load_proof(
         return Err(HostError::Journal);
     }
     proof.validate(operation_id, connection_id).map(Some)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::load_proof;
+    use crate::error::HostError;
+    use crate::journal::request_lifecycle::tests::{
+        NativePreChallengeFixture, native_pre_challenge_fixture, publish_native_fixture_challenge,
+    };
+
+    #[tokio::test]
+    async fn proof_loader_rejects_container_identity_mismatches() -> Result<(), HostError> {
+        for field in ["runner_container_id", "dind_container_id"] {
+            let fixture = native_pre_challenge_fixture().await?;
+            publish_native_fixture_challenge(&fixture).await?;
+            let reservation_id = fixture.initialized.reservation_id;
+            let operation_id = fixture.initialized.intent_id;
+            let connection_id = fixture.scope.connection_id().as_str().to_owned();
+            let connection = fixture.journal.connection().await?;
+            let original = container_id(&connection, field, reservation_id).await?;
+            let replacement = different_container_id(&original)?;
+            let guard = runtime_guard(&connection).await?;
+            connection
+                .execute(
+                    "DROP TRIGGER execution_proof_identity_runtime_transition_guard",
+                    (),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            connection
+                .execute(
+                    &format!("UPDATE connection_execution_proofs SET {field} = ?1 WHERE reservation_id = ?2"),
+                    (replacement.as_str(), reservation_id),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            if load_proof(&connection, operation_id, &connection_id)
+                .await
+                .is_ok()
+            {
+                return Err(HostError::Journal);
+            }
+            connection
+                .execute(
+                    &format!("UPDATE connection_execution_proofs SET {field} = ?1 WHERE reservation_id = ?2"),
+                    (original.as_str(), reservation_id),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            connection
+                .execute(&guard, ())
+                .await
+                .map_err(|_| HostError::Journal)?;
+            drop(connection);
+            let NativePreChallengeFixture { journal, .. } = fixture;
+            drop(journal);
+        }
+        Ok(())
+    }
+
+    async fn container_id(
+        connection: &turso::Connection,
+        field: &str,
+        reservation_id: i64,
+    ) -> Result<String, HostError> {
+        let mut rows = connection
+            .query(
+                &format!(
+                    "SELECT {field} FROM connection_execution_proofs WHERE reservation_id = ?1"
+                ),
+                [reservation_id],
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        rows.next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .ok_or(HostError::Journal)?
+            .get(0)
+            .map_err(|_| HostError::Journal)
+    }
+
+    async fn runtime_guard(connection: &turso::Connection) -> Result<String, HostError> {
+        let mut rows = connection
+            .query(
+                "SELECT sql FROM sqlite_schema WHERE type = 'trigger' AND name = 'execution_proof_identity_runtime_transition_guard'",
+                (),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        rows.next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .ok_or(HostError::Journal)?
+            .get(0)
+            .map_err(|_| HostError::Journal)
+    }
+
+    fn different_container_id(value: &str) -> Result<String, HostError> {
+        let mut bytes = value.as_bytes().to_vec();
+        let first = bytes.first_mut().ok_or(HostError::Journal)?;
+        *first = if *first == b'0' { b'1' } else { b'0' };
+        String::from_utf8(bytes).map_err(|_| HostError::Journal)
+    }
 }

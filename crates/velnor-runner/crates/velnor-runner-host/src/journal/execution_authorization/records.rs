@@ -19,7 +19,6 @@ pub(crate) struct ExecutionChallengePublicationClaim {
     pub(super) operation_id: i64,
     pub(super) scale_set_id: i64,
     pub(super) witness_request_id: i64,
-    pub(super) binding_digest: String,
     pub(super) engine_id: String,
     pub(super) docker_root_digest: String,
     pub(super) runner_id: i64,

@@ -134,7 +134,6 @@ async fn claim_in_transaction(
         operation_id: context.intent_id,
         scale_set_id: context.scale_set_id,
         witness_request_id: context.witness_request_id,
-        binding_digest: context.binding_digest,
         engine_id: context.engine_id,
         docker_root_digest: context.docker_root_digest,
         runner_id: context.runner_id,

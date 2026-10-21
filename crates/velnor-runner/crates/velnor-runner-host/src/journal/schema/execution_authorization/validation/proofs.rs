@@ -16,8 +16,22 @@ pub(super) async fn validate(connection: &turso::Connection) -> Result<(), HostE
     if invalid != 0 {
         return Err(HostError::Journal);
     }
+    validate_persisted_bindings(connection).await?;
     rows::validate_proof_rows(connection).await?;
     validate_actual_requests(connection).await
+}
+
+async fn validate_persisted_bindings(connection: &turso::Connection) -> Result<(), HostError> {
+    let invalid = count(
+        connection,
+        "SELECT COUNT(*) FROM connection_execution_proofs AS proof WHERE NOT EXISTS (SELECT 1 FROM capacity_reservations AS reservation WHERE reservation.id = proof.reservation_id AND reservation.intent_id = proof.intent_id AND reservation.connection_id = proof.connection_id AND reservation.binding_digest = proof.binding_digest) OR NOT EXISTS (SELECT 1 FROM connection_job_authority_policies AS policy WHERE policy.connection_id = proof.connection_id AND policy.generation = proof.generation AND policy.policy_digest = proof.policy_digest AND policy.binding_digest = proof.binding_digest)",
+    )
+    .await?;
+    if invalid == 0 {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
+    }
 }
 
 async fn policy_snapshot(
