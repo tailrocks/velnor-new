@@ -2,8 +2,9 @@
 //!
 //! A default-branch authority job waits for the `Required` verdict, then the
 //! release job runs the pinned release-plz to create tags and GitHub
-//! releases. It holds `contents: write` only: no registry token, no
-//! `id-token`, no pull-request authority.
+//! releases. It holds `contents: write` and `pull-requests: read` (release-plz
+//! lists the pull requests of the released commit): no registry token, no
+//! `id-token`, no pull-request write authority.
 
 use std::collections::BTreeMap;
 
