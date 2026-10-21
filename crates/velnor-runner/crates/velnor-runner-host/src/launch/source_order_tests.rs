@@ -97,7 +97,7 @@ async fn scoped_admission_rejects_missing_source_before_probe_or_acquire() -> Re
     let socket = socket_path
         .to_str()
         .ok_or_else(|| "Docker socket path is not UTF-8".to_owned())?;
-    let docker = Docker::connect_with_socket(socket, 1, &bollard::API_DEFAULT_VERSION)
+    let docker = Docker::connect_with_socket(socket, 1, bollard::API_DEFAULT_VERSION)
         .map_err(|error| error.to_string())?;
     let budget = test_resource_budget().map_err(|error| error.to_string())?;
     let secret = crate::launch::resource_probe::ReleaseReadSecret::test_inert();

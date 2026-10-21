@@ -211,7 +211,7 @@ async fn downgrade_retirement_guard_to_v36(
         .execute("PRAGMA user_version=36", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    super::validate(&connection).await
+    super::validate(connection).await
 }
 
 async fn acquired_response_digest(

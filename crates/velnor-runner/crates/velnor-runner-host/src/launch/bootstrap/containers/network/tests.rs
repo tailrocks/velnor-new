@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
-use bollard::models::NetworkInspect;
+use bollard::models::{EndpointResource, NetworkInspect};
 
 use super::{valid_network_id, valid_network_name, validate_network};
 
@@ -67,7 +67,10 @@ fn inspect_accepts_only_the_exact_empty_egress_network() {
     );
 
     let mut occupied = network();
-    occupied.containers = Some(HashMap::from([("foreign".to_owned(), Default::default())]));
+    occupied.containers = Some(HashMap::from([(
+        "foreign".to_owned(),
+        EndpointResource::default(),
+    )]));
     assert!(
         validate_network(
             &occupied,

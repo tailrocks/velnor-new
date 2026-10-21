@@ -76,7 +76,7 @@ async fn deferred_mode_persists_lifecycle_and_source_before_ack_without_acquire(
     let ack_saw_durable_offer = Cell::new(false);
 
     let (decision, acknowledged) = process_deferred_scoped_response(
-        &scope,
+        scope,
         set_id,
         &polled,
         async |_| {
