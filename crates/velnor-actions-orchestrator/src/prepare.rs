@@ -173,11 +173,29 @@ pub(crate) fn runner_label_for(config: &VelnorConfig) -> (String, RunnerSelectio
     }
 }
 
-/// Default branch from the config override or local `origin/HEAD`.
+/// Default branch from the config override, local `origin/HEAD`, or the
+/// GitHub event payload (`repository.default_branch`).
+///
+/// A CI checkout can lack `origin/HEAD`.
+/// Use `repository.default_branch` from the event payload when no configured or local default branch is available.
+/// Return an error if none of these sources supplies a valid branch.
 fn resolve_default_branch(root: &Path, config: &VelnorConfig) -> Result<String, OrchestratorError> {
     if let Some(branch) = &config.workflow.default_branch {
         return Ok(branch.clone());
     }
+    if let Some(branch) = origin_head_branch(root)? {
+        return Ok(branch);
+    }
+    if let Some(branch) = event_default_branch()? {
+        return Ok(branch);
+    }
+    Err(OrchestratorError::DefaultBranch {
+        problem: "origin_head_unresolvable:set workflow.default_branch".to_owned(),
+    })
+}
+
+/// Branch named by the local `origin/HEAD`, or `None` when it does not resolve.
+fn origin_head_branch(root: &Path) -> Result<Option<String>, OrchestratorError> {
     let output = GitRequest::rev_parse(vec![
         OsString::from("--abbrev-ref"),
         OsString::from("origin/HEAD"),
@@ -187,18 +205,31 @@ fn resolve_default_branch(root: &Path, config: &VelnorConfig) -> Result<String, 
         problem: err.to_string(),
     })?;
     if !output.success {
-        return Err(OrchestratorError::DefaultBranch {
-            problem: "origin_head_unresolvable:set workflow.default_branch".to_owned(),
-        });
+        return Ok(None);
     }
     let text = output
         .stdout_text("git")
         .map_err(|err| OrchestratorError::DefaultBranch {
             problem: err.to_string(),
         })?;
-    branch_from_origin_head(text.trim()).ok_or_else(|| OrchestratorError::DefaultBranch {
-        problem: "origin_head_unresolvable:set workflow.default_branch".to_owned(),
-    })
+    Ok(branch_from_origin_head(text.trim()))
+}
+
+/// Default branch from the event payload at `GITHUB_EVENT_PATH`, when present.
+fn event_default_branch() -> Result<Option<String>, OrchestratorError> {
+    let Some(path) = std::env::var_os("GITHUB_EVENT_PATH").filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    let payload =
+        crate::safe_read::read_event_file(Path::new(&path), crate::safe_read::MAX_REPO_FILE_BYTES)?;
+    Ok(branch_from_event_payload(&payload))
+}
+
+/// `repository.default_branch` of an event payload, when it is a valid branch name.
+fn branch_from_event_payload(payload: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(payload).ok()?;
+    let branch = value.get("repository")?.get("default_branch")?.as_str()?;
+    velnor_actions_contract::is_valid_branch_name(branch).then(|| branch.to_owned())
 }
 
 /// Strip the `origin/` prefix, rejecting empty or malformed branches.

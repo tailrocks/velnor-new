@@ -16,7 +16,7 @@ pub mod yaml;
 
 pub use error::DbtError;
 pub use packages::{Package, PackageSource, parse_packages, verify_lock};
-pub use profiles::check_profiles;
+pub use profiles::{check_profiles, uses_postgres_adapter};
 pub use project::{Project, ProjectFiles, analyze_project, job_id, job_name, slug};
 pub use select::affected_projects;
 pub use tools::{FUSION_HOST, FusionPlatform, check_mise_lock, fusion_url};

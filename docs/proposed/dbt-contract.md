@@ -35,7 +35,9 @@ The table is strict. There is no shell, argv, YAML or `uses:` field. `dbt deps`
 always runs first and is not configurable. `env` accepts only the profile-data
 keys `DBT_HOST`, `DBT_PORT`, `DBT_USER`, `DBT_PASSWORD`, and `DBT_DBNAME`;
 project, profile, package, target, state, metadata, index, and log path
-overrides are rejected. Values are inert literals over `[A-Za-z0-9._:/-]` (at
+overrides are rejected. The `env` table also rejects `DBT_ALLOW_EXPERIMENTAL_ADAPTERS`.
+The generator sets `DBT_ALLOW_EXPERIMENTAL_ADAPTERS=true` on every dbt step when `profiles.yml` declares `type: postgres`.
+dbt Fusion preview requires this setting for the Postgres adapter (`dbt1005`). Values are inert literals over `[A-Za-z0-9._:/-]` (at
 most 128 bytes, 32 entries): no expression, quote, `$` or whitespace, so a
 value can never carry syntax. The generator sets `DBT_PROJECT_DIR` and
 `DBT_PROFILES_DIR` to `.` on every dbt step, keeping Fusion's profile and

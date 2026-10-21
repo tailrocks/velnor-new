@@ -123,3 +123,5 @@
 | Keychain | The macOS service that stores credentials and controls access to them. |
 | Unix epoch | The time reference at 00:00:00 UTC on 1 January 1970. |
 | Maven bundle | An archive of Maven repository files that a private fetch extracts for a build. |
+| dbt adapter | A dbt component that connects a project to a database. |
+| Event payload | JSON data that describes a GitHub event. |

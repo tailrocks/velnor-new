@@ -35,3 +35,22 @@ pub fn check_profiles(text: &str) -> Vec<DbtError> {
     findings.dedup();
     findings
 }
+
+/// Return true when a line in `profiles.yml` declares `type: postgres`.
+///
+/// dbt Fusion requires `DBT_ALLOW_EXPERIMENTAL_ADAPTERS` for this adapter.
+/// The generator sets the variable for these projects.
+/// The user `env` table does not permit this variable.
+#[must_use]
+pub fn uses_postgres_adapter(text: &str) -> bool {
+    text.lines().any(|line| {
+        let line = line.split(" #").next().unwrap_or("").trim();
+        line.split_once(':').is_some_and(|(key, value)| {
+            key.trim()
+                .trim_start_matches("- ")
+                .trim_matches(['"', '\''])
+                == "type"
+                && value.trim().trim_matches(['"', '\'']) == "postgres"
+        })
+    })
+}

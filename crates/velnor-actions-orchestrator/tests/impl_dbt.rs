@@ -123,6 +123,67 @@ fn each_project_gets_one_job_with_a_service_and_parallel_checks() -> TestResult 
     Ok(())
 }
 
+const EXPERIMENTAL: &str = "DBT_ALLOW_EXPERIMENTAL_ADAPTERS";
+
+/// The step body after `- name: <step>`, up to the next step.
+fn step_body<'a>(job: &'a str, step: &str) -> Result<&'a str, Box<dyn std::error::Error>> {
+    job.split(&format!("- name: {step}\n"))
+        .nth(1)
+        .and_then(|rest| rest.split("\n      - name:").next())
+        .ok_or_else(|| step.to_owned().into())
+}
+
+#[test]
+fn a_postgres_profile_enables_the_experimental_adapter_gate_on_every_step() -> TestResult {
+    let repo = make_repo(&config(DBT))?;
+    write_project(repo.path(), true)?;
+    let ci = ci_yaml(repo.path())?;
+    let job = job_body(&ci, "dbt-warehouse")?;
+    for step in ["Install dbt-fusion", "dbt deps", "dbt parse", "dbt compile"] {
+        let body = step_body(job, step)?;
+        assert!(
+            body.contains(&format!("{EXPERIMENTAL}: \"true\""))
+                || body.contains(&format!("{EXPERIMENTAL}: true")),
+            "{step}: {body}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn another_adapter_does_not_get_the_experimental_gate() -> TestResult {
+    let repo = make_repo(&config(
+        "[stacks.dbt]\nprojects = [\"warehouse\"]\nchecks = [\"parse\"]\n",
+    ))?;
+    write_project(repo.path(), true)?;
+    fs::write(
+        repo.path().join("warehouse/profiles.yml"),
+        "warehouse:\n  target: ci\n  outputs:\n    ci:\n      type: snowflake\n      account: \"{{ env_var('DBT_HOST') }}\"\n",
+    )?;
+    git(&["add", "."], repo.path())?;
+    let ci = ci_yaml(repo.path())?;
+    assert!(!job_body(&ci, "dbt-warehouse")?.contains(EXPERIMENTAL));
+    Ok(())
+}
+
+#[test]
+fn the_gate_stays_generator_owned_and_cannot_be_set_through_env() -> TestResult {
+    let repo = make_repo(&config(
+        "[stacks.dbt]\nprojects = [\"warehouse\"]\nenv = { DBT_ALLOW_EXPERIMENTAL_ADAPTERS = \"true\" }\n",
+    ))?;
+    write_project(repo.path(), true)?;
+    let error = prepare(repo.path())
+        .err()
+        .ok_or("The env table must reject the experimental adapter variable.")?;
+    assert!(
+        error
+            .to_string()
+            .contains("bad_env_name:DBT_ALLOW_EXPERIMENTAL_ADAPTERS"),
+        "{error}"
+    );
+    Ok(())
+}
+
 #[test]
 fn generation_is_deterministic() -> TestResult {
     let render = || -> Result<String, Box<dyn std::error::Error>> {

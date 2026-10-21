@@ -1,4 +1,6 @@
-use velnor_actions_dbt::{ProjectFiles, analyze_project, check_profiles, job_id, job_name, slug};
+use velnor_actions_dbt::{
+    ProjectFiles, analyze_project, check_profiles, job_id, job_name, slug, uses_postgres_adapter,
+};
 
 const PROJECT: &str = "name: 'chainargos_dbt'\nversion: '1.0.0'\nprofile: 'chainargos'\nmodel-paths: [\"models\"]\nmacro-paths: [\"macros\"]\ntarget-path: \"target\"\nclean-targets:\n  - \"target\"\n";
 
@@ -78,4 +80,20 @@ fn literal_credentials_in_profiles_are_findings() {
 fn slug_folds_directories() {
     assert_eq!(slug("."), "root");
     assert_eq!(slug("Analytics/Core_1"), "analytics-core-1");
+}
+
+#[test]
+fn only_a_postgres_type_output_counts_as_the_postgres_adapter() {
+    let pg = "w:\n  outputs:\n    ci:\n      type: postgres\n      host: \"{{ env_var('DBT_HOST') }}\"\n";
+    assert!(uses_postgres_adapter(pg));
+    assert!(uses_postgres_adapter(
+        "w:\n  outputs:\n    ci:\n      type: \"postgres\" # x\n"
+    ));
+    assert!(!uses_postgres_adapter(
+        "w:\n  outputs:\n    ci:\n      type: snowflake\n"
+    ));
+    assert!(!uses_postgres_adapter(
+        "w:\n  outputs:\n    ci:\n      host: postgres\n"
+    ));
+    assert!(!uses_postgres_adapter("# type: postgres\n"));
 }

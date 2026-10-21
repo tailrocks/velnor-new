@@ -54,17 +54,53 @@ fn uppercase_rust_name_rejected_with_key_path() -> TestResult {
 
 #[test]
 fn branch_failure_hints_default_branch_setting() -> TestResult {
-    let repo = make_repo("schema = 1\n")?;
-    let err = err_of(prepare(repo.path()), "branch unresolvable")?;
-    assert!(
-        matches!(err, OrchestratorError::DefaultBranch { .. }),
-        "got {err}"
-    );
-    assert!(
-        err.to_string().contains("set workflow.default_branch"),
-        "got {err}"
-    );
-    Ok(())
+    with_event_payload("branch_failure_hints_default_branch_setting", None, || {
+        let repo = make_repo("schema = 1\n")?;
+        let err = err_of(prepare(repo.path()), "branch unresolvable")?;
+        assert!(
+            matches!(err, OrchestratorError::DefaultBranch { .. }),
+            "got {err}"
+        );
+        assert!(
+            err.to_string().contains("set workflow.default_branch"),
+            "got {err}"
+        );
+        Ok(())
+    })
+}
+
+#[test]
+fn default_branch_comes_from_the_event_when_origin_head_is_absent() -> TestResult {
+    let payload = "{\"repository\":{\"default_branch\":\"trunk\"}}";
+    with_event_payload(
+        "default_branch_comes_from_the_event_when_origin_head_is_absent",
+        Some(payload),
+        || {
+            let repo = make_repo("schema = 1\n")?;
+            assert_eq!(prepare(repo.path())?.default_branch, "trunk");
+            // The configuration value takes priority over the event value.
+            let pinned = make_repo("schema = 1\n[workflow]\ndefault_branch = \"pinned\"\n")?;
+            assert_eq!(prepare(pinned.path())?.default_branch, "pinned");
+            Ok(())
+        },
+    )
+}
+
+#[test]
+fn an_event_without_a_valid_default_branch_stays_fail_closed() -> TestResult {
+    with_event_payload(
+        "an_event_without_a_valid_default_branch_stays_fail_closed",
+        Some("{\"repository\":{}}"),
+        || {
+            let repo = make_repo("schema = 1\n")?;
+            let err = err_of(prepare(repo.path()), "branch unresolvable")?;
+            assert!(
+                err.to_string().contains("origin_head_unresolvable"),
+                "got {err}"
+            );
+            Ok(())
+        },
+    )
 }
 
 #[test]

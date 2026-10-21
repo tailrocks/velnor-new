@@ -1,7 +1,7 @@
 # Product version preparation for v0.1.34
 
 This prepares the workspace and generated release graph for 0.1.34, which
-carries three fixes found while generating CI for the ChainArgos repositories
+carries five fixes found while generating CI for the ChainArgos repositories
 on top of 0.1.33:
 
 - D2 (#268): the git-tag `rust-tag-release` publication job holds
@@ -13,6 +13,10 @@ on top of 0.1.33:
 - V2 (#270): `private-revoke-v1` retries its post-revoke probe with a bounded
   backoff (29.5 s) and still fails closed when the token authenticates at the
   end.
+- V3 (#272): The generator sets `DBT_ALLOW_EXPERIMENTAL_ADAPTERS=true` on every dbt step when `profiles.yml` uses the Postgres adapter.
+  The `[stacks.dbt].env` allowlist remains closed.
+- V4 (#273): The generator checks the config key, `origin/HEAD`, then the CI event payload for the default branch.
+  `[workflow] default_branch` remains optional in CI. V3 and V4 do not change generated output.
 
 It does not change the release protocol or weaken source, attempt, role,
 signature or protected-environment admission.
