@@ -93,6 +93,7 @@ fn permissions_to_yaml(job: &PublishJobSpec) -> Yaml {
         ("contents", perms.contents),
         ("actions", perms.actions),
         ("checks", perms.checks),
+        ("pull-requests", perms.pull_requests),
         ("attestations", perms.attestations),
         ("id-token", perms.id_token),
         ("packages", perms.packages),

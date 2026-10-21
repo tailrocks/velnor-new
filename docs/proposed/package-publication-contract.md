@@ -136,8 +136,10 @@ Rust crates consumed as `git` dependencies release by tag. The same
   SHA every 30 seconds for up to 30 minutes (job timeout 35). A settled
   non-success fails at once; running, absent or an exhausted budget fails
   closed. A re-run that succeeds supersedes an earlier failure.
-- `rust-tag-release` (`contents: write`, environment `release`, no
-  `id-token`, no registry token): checks out the commit, then runs the pinned
+- `rust-tag-release` (`contents: write`, `pull-requests: read`, environment
+  `release`, no `id-token`, no registry token; `release-plz release` lists the
+  pull requests of the released commit through `commits/<sha>/pulls`, which
+  answers 403 without the read scope): checks out the commit, then runs the pinned
   `release-plz release` with `GIT_TOKEN`. It runs no repository code;
   release-plz reads manifests and history.
 - Tags that release-plz creates with `GITHUB_TOKEN` do not trigger other
