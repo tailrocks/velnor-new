@@ -166,7 +166,7 @@ fn verify_local_bootstrap_reads_quoted_mise_tool_key() -> Result<(), Box<dyn Err
         "quoted Aqua key rejected: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(String::from_utf8(output.stdout)?.trim(), "0.9.148");
+    assert_eq!(String::from_utf8(output.stdout)?.trim(), "0.9.149");
     Ok(())
 }
 

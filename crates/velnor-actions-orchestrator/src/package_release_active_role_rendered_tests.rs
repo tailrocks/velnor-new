@@ -20,7 +20,7 @@ fn fixture(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {
     },vec!["sh".to_owned(),"-c".to_owned(),r#"curl -fsSL "$VELNOR_ASSET_URL" -o "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.30" && printf '%s  %s\n' "$VELNOR_ASSET_SHA256" "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.30" | sha256sum -c -"#.to_owned()]).expect("typed acquisition");
     let setup = MiseSetup {
         uses: "jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde".to_owned(),
-        version: "2026.10.15".to_owned(),
+        version: "2026.10.17".to_owned(),
         sha256: "a".repeat(64),
     };
     ConsumerReleaseSpec {
@@ -36,7 +36,7 @@ fn fixture(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {
         install_gh_argv: vec![
             "mise".to_owned(),
             "install".to_owned(),
-            "gh@2.102.0".to_owned(),
+            "gh@2.102.1".to_owned(),
         ],
         install_rust_argv: vec![
             "mise".to_owned(),

@@ -9,7 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const REPOSITORY: &str = "tailrocks/velnor-new";
 const SOURCE_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
-const PINNED_MISE_ARGUMENTS: &str = "--no-config --no-env --no-hooks exec gh@2.102.0 --";
+const PINNED_MISE_ARGUMENTS: &str = "--no-config --no-env --no-hooks exec gh@2.102.1 --";
 
 #[test]
 fn release_assets_are_bound_to_the_compiled_package_version() {
@@ -178,7 +178,7 @@ fn create_candidate_manifest(root: &Path, case: Failure) -> Result<(), Box<dyn E
             release_version(),
             REPOSITORY,
             "1.99.1",
-            "1.25.0",
+            "1.26.0",
         ])
         .current_dir(root)
         .env("PATH", with_required_tool_path(&[])?)

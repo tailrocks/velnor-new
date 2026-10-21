@@ -14,9 +14,9 @@ fn verify_local_toolchain_specs_come_from_policy_when_local_mise_pins_differ() {
     let specs = specs.unwrap_or_default();
     assert_eq!(specs.len(), 3);
     assert!(specs.contains(&"rust@1.99.1".to_owned()));
-    assert!(specs.contains(&"mr-boxington@1.25.0".to_owned()));
-    assert!(specs.contains(&"aqua:nextest-rs/nextest/cargo-nextest@0.9.148".to_owned()));
-    assert_eq!(policy_mise_version(&root), Ok("2026.10.15".to_owned()));
+    assert!(specs.contains(&"mr-boxington@1.26.0".to_owned()));
+    assert!(specs.contains(&"aqua:nextest-rs/nextest/cargo-nextest@0.9.149".to_owned()));
+    assert_eq!(policy_mise_version(&root), Ok("2026.10.17".to_owned()));
     let check_freshness = fs::read_to_string(root.join("scripts/check-freshness.sh"));
     assert!(
         check_freshness.is_ok(),
@@ -43,7 +43,7 @@ fn verify_local_toolchain_specs_come_from_policy_when_local_mise_pins_differ() {
     assert!(local_mise.is_ok(), "fixture mise.toml: {local_mise:?}");
     let policy = fs::write(
         fixture_policy,
-        "[tools]\nrust = \"1.99.0\"\nmr-boxington = \"1.22.0\"\nnextest = \"0.9.148\"\n",
+        "[tools]\nrust = \"1.99.0\"\nmr-boxington = \"1.22.0\"\nnextest = \"0.9.149\"\n",
     );
     assert!(policy.is_ok(), "fixture policy: {policy:?}");
     assert_eq!(
@@ -51,7 +51,7 @@ fn verify_local_toolchain_specs_come_from_policy_when_local_mise_pins_differ() {
         Ok(vec![
             "rust@1.99.0".to_owned(),
             "mr-boxington@1.22.0".to_owned(),
-            "aqua:nextest-rs/nextest/cargo-nextest@0.9.148".to_owned(),
+            "aqua:nextest-rs/nextest/cargo-nextest@0.9.149".to_owned(),
         ])
     );
     let cleanup = fs::remove_dir_all(fixture_root);
