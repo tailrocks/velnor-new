@@ -7,6 +7,8 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Step, StepKind};
 
+#[path = "cache_steps_family.rs"]
+mod family;
 #[path = "cache_steps_mbx_bundle.rs"]
 mod mbx_bundle;
 #[path = "cache_steps_mbx_command.rs"]
@@ -15,6 +17,10 @@ mod mbx_command;
 mod mbx_gate;
 #[path = "cache_steps_mbx_preflight.rs"]
 mod mbx_preflight;
+pub use family::{
+    FAMILY_KEYS_NAME, FamilyCachePlan, FamilySnapshot, family_keys_step, family_restore_step,
+    family_save_step, family_size_step,
+};
 pub use mbx_bundle::{
     MBX_BUNDLE_EXPORT_NAME, MBX_BUNDLE_IMPORT_NAME, MBX_BUNDLE_KEY_NAME, MBX_BUNDLE_RESTORE_NAME,
     MBX_BUNDLE_SAVE_NAME, MBX_EXPORT_GROUP_ENV, MBX_EXPORT_GROUP_VALUE, MBX_PRODUCER_MARK_NAME,
