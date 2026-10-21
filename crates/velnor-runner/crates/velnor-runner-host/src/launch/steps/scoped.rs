@@ -160,7 +160,7 @@ where
         return Ok(ScopedProvisioningOutcome::NoStart);
     };
     let disposition = acquire::run_claimed(lane, &ctx.queue_token, scoped, claim).await?;
-    map_acquire_disposition(disposition, physical, request)
+    map_acquire_disposition(disposition, *physical, request)
 }
 
 fn map_acquire_disposition(

@@ -18,23 +18,16 @@ use super::acquire;
 pub(super) struct PhysicalIntent {
     pub(super) reservation_id: i64,
     intent_id: i64,
-    request_id: Option<i64>,
+    #[cfg(test)]
     assignment: crate::journal::AssignmentIdentity,
     runner_name: String,
     sample_generation_id: String,
-    observation_sample_generation_id: String,
     observation: StartObservationWitness,
     resource_budget: crate::worker::ResourceBudget,
+    #[cfg(test)]
     charge: (u64, u64),
     pub(super) authority_generation: u64,
     pub(super) authority_digest: String,
-    origin: PhysicalIntentOrigin,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum PhysicalIntentOrigin {
-    NewAcquire,
-    RecoveredAcquire,
 }
 
 pub(crate) struct AcquiredProvisioning {
@@ -62,6 +55,7 @@ impl AcquiredProvisioning {
         &self.request
     }
 
+    #[cfg(test)]
     pub(crate) fn physical_assignment(&self) -> &crate::journal::AssignmentIdentity {
         &self.physical.assignment
     }
@@ -82,6 +76,7 @@ impl AcquiredProvisioning {
         self.physical.resource_budget
     }
 
+    #[cfg(test)]
     pub(crate) const fn charge(&self) -> (u64, u64) {
         self.physical.charge
     }
@@ -117,7 +112,6 @@ impl CheckedAcquiredRecovery {
             return Err(HostError::Identity);
         }
         let sample_generation_id = candidate.sample_generation_id().to_owned();
-        let observation_sample_generation_id = observation.sample_generation_id().to_owned();
         let (observation, resource_budget) = observation.consume_for_recovery(
             engine.engine_id(),
             engine.docker_root_digest(),
@@ -127,21 +121,20 @@ impl CheckedAcquiredRecovery {
         let physical = PhysicalIntent {
             reservation_id: candidate.reservation_id(),
             intent_id: candidate.intent_id(),
-            request_id: candidate.request().request_id(),
+            #[cfg(test)]
             assignment: candidate.physical_assignment().clone(),
             runner_name: candidate.runner_name().to_owned(),
             sample_generation_id,
-            observation_sample_generation_id,
             observation,
             resource_budget,
+            #[cfg(test)]
             charge: candidate.charge(),
             authority_generation: candidate.policy_generation(),
             authority_digest: candidate.policy_digest().to_owned(),
-            origin: PhysicalIntentOrigin::RecoveredAcquire,
         };
         Ok(Self(AcquiredProvisioning {
             physical,
-            request: candidate.request().clone(),
+            request: candidate.into_request(),
         }))
     }
 
@@ -151,7 +144,7 @@ impl CheckedAcquiredRecovery {
 }
 
 pub(super) enum ReservationOutcome {
-    AcquireClaimed(PhysicalIntent, acquire::ClaimedAcquire),
+    AcquireClaimed(Box<PhysicalIntent>, acquire::ClaimedAcquire),
     Existing,
     AtCapacity,
     ReconcileRequired,
@@ -205,21 +198,20 @@ pub(super) async fn reserve_and_claim(
         } => {
             let claim = acquire::ClaimedAcquire::new(request.clone());
             Ok(ReservationOutcome::AcquireClaimed(
-                PhysicalIntent {
+                Box::new(PhysicalIntent {
                     reservation_id,
                     intent_id,
-                    request_id: request.request_id(),
+                    #[cfg(test)]
                     assignment: identity,
                     runner_name,
-                    observation_sample_generation_id: sample_generation_id.clone(),
                     sample_generation_id,
                     observation,
                     resource_budget,
+                    #[cfg(test)]
                     charge: (cpu_millicores, memory_bytes),
                     authority_generation: authority_policy.generation(),
                     authority_digest: authority_policy.policy_sha256().to_owned(),
-                    origin: PhysicalIntentOrigin::NewAcquire,
-                },
+                }),
                 claim,
             ))
         }
@@ -293,17 +285,16 @@ pub(super) async fn reserve(
     Ok(PhysicalIntent {
         reservation_id,
         intent_id,
-        request_id: None,
+        #[cfg(test)]
         assignment: identity,
         runner_name,
-        observation_sample_generation_id: sample_generation_id.clone(),
         sample_generation_id,
         observation,
         resource_budget,
+        #[cfg(test)]
         charge: (cpu_millicores, memory_bytes),
         authority_generation,
         authority_digest,
-        origin: PhysicalIntentOrigin::NewAcquire,
     })
 }
 
@@ -348,6 +339,7 @@ async fn stable_nonce(
     Ok(nonce)
 }
 
+#[cfg(test)]
 fn fresh_nonce() -> Result<String, EnsureError> {
     let mut bytes = [0_u8; 16];
     getrandom::fill(&mut bytes).map_err(|_| EnsureError::Uncertain)?;

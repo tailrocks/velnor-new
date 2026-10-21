@@ -7,6 +7,7 @@ use crate::journal::connection::{AssignmentIdentity, AssignmentKey, ConnectionJo
 /// Journal record that links an acquired request to its reservation.
 pub(crate) struct AcquiredRecoveryCandidate {
     request: AssignmentIdentity,
+    #[cfg(test)]
     physical_assignment: AssignmentIdentity,
     reservation_id: i64,
     intent_id: i64,
@@ -22,9 +23,14 @@ pub(crate) struct AcquiredRecoveryCandidate {
 }
 
 impl AcquiredRecoveryCandidate {
+    pub(crate) fn into_request(self) -> AssignmentIdentity {
+        self.request
+    }
+
     pub(crate) fn request(&self) -> &AssignmentIdentity {
         &self.request
     }
+    #[cfg(test)]
     pub(crate) fn physical_assignment(&self) -> &AssignmentIdentity {
         &self.physical_assignment
     }
@@ -169,7 +175,10 @@ impl ConnectionJournal {
                 return Ok(None);
             }
             Ok(Some(AcquiredRecoveryCandidate {
-                request: request.clone(), physical_assignment, reservation_id, intent_id,
+                request: request.clone(),
+                #[cfg(test)]
+                physical_assignment,
+                reservation_id, intent_id,
                 runner_name, engine_id, docker_root_digest, sample_generation_id,
                 storage_profile_generation_id, storage_profile_digest,
                 policy_generation, policy_digest,
