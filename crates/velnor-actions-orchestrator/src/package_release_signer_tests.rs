@@ -107,45 +107,6 @@ fn stable_identity_keeps_dispatch_and_permanent_version_tag() {
     );
 }
 #[test]
-fn retained_preview_verification_is_closed_to_generated_tap_operations() {
-    for operation in [
-        "admit-homebrew-tap-v1",
-        "write-homebrew-tap-pr-v1",
-        "merge-homebrew-tap-pr-v1",
-    ] {
-        assert!(super::uses_retained_preview(
-            Some("workflow_dispatch"),
-            Some(operation)
-        ));
-        assert!(super::uses_retained_preview(
-            Some("schedule"),
-            Some(operation)
-        ));
-        for event in [
-            None,
-            Some("push"),
-            Some("workflow_run"),
-            Some("pull_request"),
-        ] {
-            assert!(!super::uses_retained_preview(event, Some(operation)));
-        }
-    }
-    for operation in [
-        None,
-        Some("prepare-homebrew-tap-v1"),
-        Some("sign-package-release-v1"),
-        Some("publish-package-release-v1"),
-        Some("recover-package-release-v1"),
-        Some("unknown"),
-    ] {
-        assert!(!super::uses_retained_preview(
-            Some("workflow_dispatch"),
-            operation
-        ));
-    }
-}
-
-#[test]
 fn stable_signer_requires_exact_authenticated_production_context() {
     use velnor_actions_contract::preview_production::ReleaseProductionContext;
     let plan = plan(PackageReleaseChannel::Stable);

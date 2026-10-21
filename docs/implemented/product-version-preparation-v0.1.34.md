@@ -16,7 +16,7 @@ on top of 0.1.33:
 - V3 (#272): The generator sets `DBT_ALLOW_EXPERIMENTAL_ADAPTERS=true` on every dbt step when `profiles.yml` uses the Postgres adapter.
   The `[stacks.dbt].env` allowlist remains closed.
 - V4 (#273): The generator checks the config key, `origin/HEAD`, then the CI event payload for the default branch.
-  `[workflow] default_branch` remains optional in CI. V3 and V4 do not change generated output.
+  `[workflow] default_branch` remains optional in CI. V3 and V4 do not change Velnor’s generated workflows.
 
 It does not change the release protocol or weaken source, attempt, role,
 signature or protected-environment admission.
