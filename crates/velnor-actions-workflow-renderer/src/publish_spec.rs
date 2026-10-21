@@ -50,6 +50,8 @@ pub struct PublishJobSpec {
     pub permissions: PublishPermissions,
     /// Ordered steps.
     pub steps: Vec<PublishStep>,
+    /// Local service containers (only the unprivileged build role may carry them).
+    pub services: Vec<velnor_actions_contract::ServiceContainer>,
 }
 
 /// Trusted publication triggers.
@@ -100,6 +102,9 @@ impl PublishJobSpec {
         crate::guard::validate_runs_on(&self.runs_on)?;
         if self.steps.is_empty() {
             return Err(bad("empty_steps"));
+        }
+        if !self.services.is_empty() && self.role != PublishRole::ArtifactBuild {
+            return Err(bad("services_in_privileged_role"));
         }
         if self.permissions != PublishPermissions::expected(self.role) {
             return Err(bad("permission_matrix"));

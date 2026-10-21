@@ -223,7 +223,7 @@ immutability rules as the other kinds (hard decision 8):
 
 | Job | Authority | Rule |
 |---|---|---|
-| `maven-build-<id>` | `contents: read` | `if` the authority's `artifact` output equals the id. The only checkout. Acquires the staged helper, mints, fetches and revokes the private-source token for the lock's Maven bundles (`PrivateWiring::steps_for_gradle`; the token is revoked before any repository build logic runs), sets up Mise, then runs `gradle-run-v1` with task `:mavenBundle` (the Gradle wrapper gates, strict dependency verification and the Velnor-owned Gradle home apply as in CI). A fixed script then re-checks the checksum, requires every zip entry under `repository/` and every POM at the tag's version, and moves exactly the zip and its checksum into `$RUNNER_TEMP/bundle` for upload. Its timeout is the Gradle stack's |
+| `maven-build-<id>` | `contents: read` | `if` the authority's `artifact` output equals the id. The only checkout. Acquires the staged helper, mints, fetches and revokes the private-source token for the lock's Maven bundles (`PrivateWiring::steps_for_gradle`; the token is revoked before any repository build logic runs), sets up Mise, then runs `gradle-run-v1` with task `:mavenBundle` (the Gradle wrapper gates, strict dependency verification and the Velnor-owned Gradle home apply as in CI). A fixed script then re-checks the checksum, requires every zip entry under `repository/` and every POM at the tag's version, and moves exactly the zip and its checksum into `$RUNNER_TEMP/bundle` for upload.  Database: when any project of the entry's root declares `services = ["postgres"]` under `[stacks.gradle.projects]`, this job carries the same hermetic local postgres service container and `VELNOR_GRADLE_DATABASE=1` that the root's CI jobs use (jOOQ codegen through Flyway needs it); roots without a declared database are unchanged. Attest and publish never carry services. Its timeout is the Gradle stack's |
 | `maven-attest-<id>` | `contents: read`, `id-token: write`, `attestations: write` | No checkout. Re-verifies the checksum, then `actions/attest-build-provenance` on the zip |
 | `maven-publish-<id>` | `contents: write`, environment `release` | No checkout. Re-verifies the checksum, then `gh release create --verify-tag` or `gh release upload` (never `--clobber`) of the zip and checksum, so an existing asset fails the job |
 
@@ -237,7 +237,7 @@ internal operation. No role or permission is added: Maven reuses
 Consumers lock the zip with its sha256 in `.velnor/deps.lock` (item P) and
 pin each jar a second time in `verification-metadata.xml`.
 
-Tests: `impl_orch_publish_maven.rs` (generated chain, roles, private-source
+Tests: `impl_orch_publish_maven.rs` (generated chain, roles, database service inheritance, private-source
 ordering, determinism, stale declarations), `publish_maven_scripts_tests.rs`
 (the collect, verify and upload scripts run for real against fixture zips),
 `impl_renderer_publish_spec.rs` (internal operations by role, staged helper)

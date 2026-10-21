@@ -31,6 +31,7 @@ fn job(role: PublishRole, needs: &[&str]) -> Result<PublishJobSpec, RenderError>
             id: None,
             step: ambient_shell_step("Work", argv, BTreeMap::new())?,
         }],
+        services: Vec::new(),
     })
 }
 

@@ -329,6 +329,7 @@ fn authority_job(inputs: &Inputs<'_>, gh: &str) -> Result<PublishJobSpec, Orches
         outputs,
         permissions: PublishPermissions::expected(PublishRole::Authority),
         steps,
+        services: Vec::new(),
     })
 }
 
@@ -355,5 +356,6 @@ pub(crate) fn bundle_job(
         outputs: BTreeMap::new(),
         permissions: PublishPermissions::expected(role),
         steps,
+        services: Vec::new(),
     }
 }

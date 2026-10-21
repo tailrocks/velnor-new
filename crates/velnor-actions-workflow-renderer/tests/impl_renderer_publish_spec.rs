@@ -35,6 +35,7 @@ fn job(role: PublishRole, needs: &[&str]) -> Result<PublishJobSpec, RenderError>
         outputs: BTreeMap::new(),
         permissions: PublishPermissions::expected(role),
         steps: vec![shell("Work")?],
+        services: Vec::new(),
     })
 }
 
@@ -383,5 +384,27 @@ fn the_staged_helper_exists_exactly_when_an_internal_step_does() -> Result<(), R
     let mut unused = spec()?;
     unused.staged_binary = Some(STAGED.to_owned());
     assert_eq!(rejection(&unused), "publish_staged_binary");
+    Ok(())
+}
+
+#[test]
+fn only_the_unprivileged_build_role_may_carry_service_containers()
+-> Result<(), Box<dyn std::error::Error>> {
+    let service = velnor_actions_contract::ServiceContainer::postgres(18)?;
+    let mut build = spec()?;
+    if let Some(job) = build.jobs.get_mut("bundle-build-a") {
+        job.services.push(service.clone());
+    }
+    build.validate()?;
+    for id in ["publish-authority", "bundle-attest-a", "bundle-publish-a"] {
+        let mut leaked = spec()?;
+        if let Some(job) = leaked.jobs.get_mut(id) {
+            job.services.push(service.clone());
+        }
+        assert!(
+            rejection(&leaked).starts_with("services_in_privileged_role:"),
+            "{id}"
+        );
+    }
     Ok(())
 }

@@ -33,6 +33,8 @@ pub(crate) struct MavenPlan<'a> {
     pub(crate) gradle: velnor_actions_contract::Step,
     /// Build bound: the Gradle stack's own timeout, never the five-minute release default.
     pub(crate) timeout: JobTimeout,
+    /// Local service containers of the project(s) the bundle builds (the CI database).
+    pub(crate) services: Vec<velnor_actions_contract::ServiceContainer>,
 }
 
 /// Artifact name shared by upload and download.
@@ -87,6 +89,7 @@ pub(super) fn build_job(
     );
     job.condition = Some(format!("needs.{AUTHORITY_JOB}.outputs.artifact == '{id}'"));
     job.timeout_minutes = plan.timeout;
+    job.services.clone_from(&plan.services);
     Ok(job)
 }
 
