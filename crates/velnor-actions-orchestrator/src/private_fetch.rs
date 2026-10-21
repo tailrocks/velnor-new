@@ -21,12 +21,12 @@ use velnor_actions_workflow_renderer::private_source_steps::{
 
 use crate::OrchestratorError;
 use crate::check_runtime::preparation::acquisition::archive::{ArchiveBudget, extract_archive};
+use crate::config::deps_layout::maven_bundle_dir;
 use crate::config::deps_lock::{FoundAsset, parse_commit, parse_release_asset, read_deps_lock};
 use crate::config::load_config;
 use crate::config::private_fetch_root::prepare_deps_root;
 use crate::config::private_fetch_session::{Session, Token, scrub_dir};
 use crate::config::private_sources::{SourceKind, job_allowlist};
-use crate::deps_layout::maven_bundle_dir;
 use crate::discover::workspace_manifest;
 use crate::internal::internal;
 

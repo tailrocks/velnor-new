@@ -21,7 +21,7 @@ use velnor_actions_gradle::version::parse_java;
 use velnor_actions_gradle::wrapper::{self, JAR_PATH, PROPERTIES_PATH};
 
 use crate::OrchestratorError;
-use crate::deps_layout::{deps_root, maven_root};
+use crate::config::deps_layout::{deps_root, maven_root};
 
 /// Operation tag of the step.
 pub const GRADLE_RUN_OP: &str = velnor_actions_contract::GRADLE_RUN_OPERATION;

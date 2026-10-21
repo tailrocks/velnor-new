@@ -3,8 +3,8 @@
 use std::path::{Path, PathBuf};
 
 use crate::OrchestratorError;
+use crate::config::deps_layout::deps_root;
 use crate::config::private_fetch_session::scrub_dir;
-use crate::deps_layout::deps_root;
 use crate::internal::internal;
 
 /// Reset `<workspace>/.velnor/deps` to an absent real directory path.

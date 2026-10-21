@@ -7,7 +7,7 @@ use std::fs;
 use velnor_actions_mise::ProcessOutput;
 
 use super::*;
-use crate::deps_layout::maven_bundle_dir;
+use crate::config::deps_layout::maven_bundle_dir;
 
 const JAR: &[u8] =
     include_bytes!("../../velnor-actions-gradle/tests/fixtures/gradle-wrapper-9.5.1.jar");
