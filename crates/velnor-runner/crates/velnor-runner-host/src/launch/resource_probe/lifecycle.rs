@@ -20,7 +20,7 @@ const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 #[path = "lifecycle/publication_image.rs"]
 mod publication_image;
-pub(super) use publication_image::{verify_publication_image, verify_publication_image_until};
+pub(super) use publication_image::verify_publication_image_until;
 
 pub(super) async fn collect<P: ImageProvider>(
     docker: &Docker,

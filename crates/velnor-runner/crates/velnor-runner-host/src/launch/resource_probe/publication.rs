@@ -42,8 +42,6 @@ pub(crate) struct ControlPublicationInput<'a> {
 
 mod control;
 pub(in crate::launch) use control::publish_challenge_with_provider;
-#[cfg(test)]
-pub(in crate::launch) use control::publish_challenge_with_test_provider;
 pub(crate) use control::publish_decision;
 
 fn validate_job_facts_binding(
@@ -73,40 +71,10 @@ pub(crate) struct JobFactsPublicationInput<'a> {
     pub(crate) images: &'a VerifiedWorkerImages,
     pub(crate) connection: &'a crate::config::RepositoryConnection,
     pub(crate) guest_image: &'a crate::worker::guest_image::GuestImageFile,
-    pub(crate) release_secret: &'a super::ReleaseReadSecret,
     pub(crate) ready: &'a crate::worker::storage_initialization::VerifiedStorageInitializationReady,
     pub(crate) claim: &'a crate::journal::JobFactsPublicationClaim,
     pub(crate) channel: &'a VerifiedProofChannelBinding,
     pub(crate) deadline: Instant,
-}
-
-pub(crate) async fn publish_job_facts(
-    input: JobFactsPublicationInput<'_>,
-) -> Result<crate::launch::bootstrap::JobFactsPublication, HostError> {
-    let provider = match crate::launch::resource_probe::release_image_provider(
-        input.release_secret,
-        input.journal,
-    ) {
-        Ok(provider) => provider,
-        Err(error) => {
-            input
-                .connection_journal
-                .mark_job_facts_publication_uncertain(input.claim)
-                .await?;
-            return Err(error);
-        }
-    };
-    publish_job_facts_with_provider(input, &provider).await
-}
-
-#[cfg(test)]
-pub(in crate::launch) async fn publish_job_facts_with_test_provider<
-    P: crate::launch::resource_probe::ImageProvider,
->(
-    input: JobFactsPublicationInput<'_>,
-    provider: &P,
-) -> Result<crate::launch::bootstrap::JobFactsPublication, HostError> {
-    publish_job_facts_with_provider(input, provider).await
 }
 
 pub(in crate::launch) async fn publish_job_facts_with_provider<
@@ -252,6 +220,8 @@ fn job_facts_publication_binding(
     connection: &crate::config::RepositoryConnection,
     guest_image: &[u8],
 ) -> Result<String, HostError> {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+
     use sha2::{Digest as _, Sha256};
     let connection_bytes = connection.canonical_identity_bytes()?;
     let mut hasher = Sha256::new();
@@ -270,7 +240,6 @@ fn job_facts_publication_binding(
         hasher.update(length.to_be_bytes());
         hasher.update(value);
     }
-    const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut output = String::with_capacity(64);
     for byte in hasher.finalize() {
         output.push(char::from(HEX[usize::from(byte >> 4)]));

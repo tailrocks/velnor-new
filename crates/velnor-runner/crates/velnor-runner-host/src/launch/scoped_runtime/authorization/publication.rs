@@ -133,7 +133,6 @@ where
         images: context.images,
         connection,
         guest_image,
-        release_secret: context.secret,
         ready: ready.bound().initialization(),
         claim: &claim,
         channel: ready.channel(),

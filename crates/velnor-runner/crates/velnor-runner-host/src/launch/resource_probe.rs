@@ -4,7 +4,6 @@ use bollard::{Docker, models::SystemInfo};
 
 use crate::journal::{Journal, ProbePhase, ProbeRow};
 use crate::launch::{SelectedEngineContext, VerifiedWorkerImages};
-use crate::scale_set::EnsureError;
 use crate::worker::ResourceBudget;
 
 pub(crate) use self::provider::ImageProvider;
@@ -85,17 +84,6 @@ impl VerifiedPublicationProbeImage {
     }
 }
 
-/// Verify the release image and bind it to fresh selected-engine information.
-pub(in crate::launch::resource_probe) async fn verify_publication_probe_image(
-    docker: &Docker,
-    journal: &Journal,
-    selected: &SelectedEngineContext,
-    release_read_secret: &ReleaseReadSecret,
-) -> Result<VerifiedPublicationProbeImage, crate::error::HostError> {
-    let provider = release_image_provider(release_read_secret, journal)?;
-    verify_publication_probe_image_with_provider(docker, journal, selected, &provider).await
-}
-
 /// Verify the release image before the caller's absolute deadline.
 pub(in crate::launch::resource_probe) async fn verify_publication_probe_image_until(
     docker: &Docker,
@@ -109,17 +97,6 @@ pub(in crate::launch::resource_probe) async fn verify_publication_probe_image_un
         docker, journal, selected, &provider, deadline,
     )
     .await
-}
-
-async fn verify_publication_probe_image_with_provider<P: ImageProvider>(
-    docker: &Docker,
-    journal: &Journal,
-    selected: &SelectedEngineContext,
-    provider: &P,
-) -> Result<VerifiedPublicationProbeImage, crate::error::HostError> {
-    let (image, evidence) =
-        lifecycle::verify_publication_image(docker, journal, provider, selected).await?;
-    Ok(VerifiedPublicationProbeImage { image, evidence })
 }
 
 pub(in crate::launch::resource_probe) async fn verify_publication_probe_image_until_with_provider<
@@ -145,7 +122,6 @@ pub(crate) struct VerifiedProbeCleanup {
     operation_id: String,
     engine_id: String,
     docker_root_digest: String,
-    purpose: crate::journal::ResourceProbePurpose,
     phase: ProbePhase,
     operation_name: String,
     container_id: Option<String>,
@@ -179,7 +155,6 @@ impl VerifiedProbeCleanup {
             operation_id: row.operation_id.clone(),
             engine_id: row.engine_id.clone(),
             docker_root_digest: row.docker_root_digest.clone(),
-            purpose,
             phase: row.phase,
             operation_name: row.operation_name.clone(),
             container_id: row.container_id.clone(),
@@ -196,10 +171,6 @@ impl VerifiedProbeCleanup {
 
     pub(crate) fn docker_root_digest(&self) -> &str {
         &self.docker_root_digest
-    }
-
-    pub(crate) const fn purpose(&self) -> crate::journal::ResourceProbePurpose {
-        self.purpose
     }
 
     pub(crate) const fn phase(&self) -> ProbePhase {
@@ -227,7 +198,6 @@ impl VerifiedProbeCleanup {
             operation_id,
             engine_id,
             docker_root_digest,
-            purpose: crate::journal::ResourceProbePurpose::Capacity,
             phase,
             operation_name,
             container_id,
@@ -268,21 +238,6 @@ pub(crate) async fn run_doctor_probe(
     ticket: &crate::journal::DoctorProbeTicket,
 ) -> Result<Option<serde_json::Value>, crate::error::HostError> {
     Box::pin(doctor::run(docker, journal, release_read_secret, ticket)).await
-}
-
-pub(crate) async fn observe_owned_cgroups(
-    docker: &Docker,
-    journal: &Journal,
-    release_read_secret: &ReleaseReadSecret,
-    subjects: &OwnedCgroupSubjects,
-) -> Result<VerifiedOwnedCgroups, crate::error::HostError> {
-    let token = release_read_secret.as_provider_token()?;
-    let provider = ReleaseImageProvider::from_compiled_source(token, journal)
-        .map_err(|_| crate::error::HostError::Docker)?;
-    Box::pin(observe_owned_cgroups_with_provider(
-        docker, journal, &provider, subjects,
-    ))
-    .await
 }
 
 pub(in crate::launch) fn release_image_provider<'a>(
@@ -351,6 +306,7 @@ pub(crate) async fn recovery_observation(
     )
 }
 
+#[cfg(test)]
 pub(super) fn consume_permit(permit: StartPermit, engine_id: &str, root_digest: &str) -> bool {
     permit.consume(engine_id, root_digest)
 }
@@ -365,28 +321,4 @@ pub(super) fn daemon_architecture(info: &SystemInfo) -> Option<&'static str> {
 
 pub(super) fn daemon_platform_matches(info: &SystemInfo) -> bool {
     provider::daemon_platform_matches(info)
-}
-
-pub(super) async fn engine_binding(docker: &Docker) -> Result<(String, String), EnsureError> {
-    let info = crate::docker_client::docker_deadline(docker.info())
-        .await
-        .map_err(|_| docker_identity_error())?
-        .map_err(|_| docker_identity_error())?;
-    let engine_id = info
-        .id
-        .filter(|id| !id.trim().is_empty())
-        .ok_or_else(docker_identity_error)?;
-    let docker_root = info
-        .docker_root_dir
-        .as_deref()
-        .ok_or_else(docker_identity_error)?;
-    let root_digest = docker_root_digest(docker_root).map_err(|_| docker_identity_error())?;
-    Ok((engine_id, root_digest))
-}
-
-fn docker_identity_error() -> EnsureError {
-    EnsureError::Unexpected {
-        status: 0,
-        step: "docker identity",
-    }
 }
