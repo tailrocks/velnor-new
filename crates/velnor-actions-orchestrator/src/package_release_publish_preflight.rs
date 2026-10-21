@@ -211,14 +211,14 @@ fn api_json(
     route: &str,
 ) -> Result<Value, OrchestratorError> {
     validate_status_route(repository, route)?;
-    let args = vec![
+    let mut args = vec![
         OsString::from("api"),
         OsString::from("-H"),
         OsString::from("Accept: application/vnd.github+json"),
         OsString::from("-H"),
         OsString::from(format!("X-GitHub-Api-Version: {API_VERSION}")),
-        OsString::from(route),
     ];
+    args.extend(crate::github_authority_read::arguments(route)?);
     let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args)
         .map_err(|_| internal("package_publish_gh_unavailable"))?;
     let output = exec
@@ -239,14 +239,14 @@ fn api_json_or_not_found(
     route: &str,
 ) -> Result<Option<Value>, OrchestratorError> {
     validate_status_route(repository, route)?;
-    let args = vec![
+    let mut args = vec![
         OsString::from("api"),
         OsString::from("-H"),
         OsString::from("Accept: application/vnd.github+json"),
         OsString::from("-H"),
         OsString::from(format!("X-GitHub-Api-Version: {API_VERSION}")),
-        OsString::from(route),
     ];
+    args.extend(crate::github_authority_read::arguments(route)?);
     let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args)
         .map_err(|_| internal("package_publish_gh_unavailable"))?;
     let output = exec

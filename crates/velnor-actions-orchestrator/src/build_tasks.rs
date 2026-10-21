@@ -81,8 +81,14 @@ fn validate_config_shape(
         .tools
         .get("rust")
         .ok_or_else(|| failure("build_task_rust_selector"))?;
+    // `components`, `targets` and `profile` may repeat the toolchain file's
+    // values: generation already requires the two to be identical
+    // (`rust_toolchain_mirror_mismatch`), so the file stays the build source.
     if !rust.valid_shape
-        || !rust.unsupported_options.is_empty()
+        || rust
+            .unsupported_options
+            .iter()
+            .any(|option| !matches!(option.as_str(), "components" | "targets" | "profile"))
         || rust.version.as_deref() != Some(rust_toolchain_version)
         || rust.os.is_some()
         || !rust.config_options.is_empty()

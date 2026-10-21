@@ -15,7 +15,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::Step;
+use velnor_actions_contract::{Step, StepRole};
 use velnor_actions_mise::catalog::RUST_CHANNEL_MANIFESTS;
 use velnor_actions_mise::{PinnedTool, ToolCatalog, ToolHomes};
 
@@ -84,11 +84,13 @@ fn script(catalog: &ToolCatalog) -> String {
 pub(crate) fn verify_rust_manifest_step(catalog: &ToolCatalog) -> Result<Step, OrchestratorError> {
     let homes = ToolHomes::runner_temp();
     let env = BTreeMap::from([("RUSTUP_HOME".to_owned(), homes.rustup_home().to_owned())]);
-    Ok(velnor_actions_workflow_renderer::steps::shell_step(
+    let mut step = velnor_actions_workflow_renderer::steps::shell_step(
         VERIFY_RUST_MANIFEST_STEP,
         vec!["sh".to_owned(), "-c".to_owned(), script(catalog)],
         env,
-    )?)
+    )?;
+    step.role = Some(StepRole::VerifyRustManifest);
+    Ok(step)
 }
 
 #[cfg(test)]

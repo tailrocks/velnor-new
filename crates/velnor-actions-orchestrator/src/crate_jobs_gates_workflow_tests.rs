@@ -364,3 +364,6 @@ fn assert_seed_job_dispositions(jobs: &BTreeMap<String, velnor_actions_contract:
         assert_eq!(reasons, expected.into_iter().map(str::to_owned).collect());
     }
 }
+
+#[path = "crate_jobs_optional_seed_tests.rs"]
+mod optional_seed_tests;

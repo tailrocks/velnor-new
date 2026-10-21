@@ -175,7 +175,7 @@ declaration, because Mise (idiomatic version files) and rustup both read it.
   declared version that is not an exact `X.Y.Z` (loose, `latest`, a range, a
   template, an array, a target-triple channel, a leading zero:
   `project_tool_version_not_exact`), two sources that disagree
-  (`conflicting_project_tool_versions`), a source that does not parse
+  (`conflicting_project_tool_versions`; a `rust-toolchain.toml` must also mirror the `mise.toml` rust entry's `components`, `targets` and `profile`, `rust_toolchain_mirror_mismatch`, adopted with the owner's standard layout 2026-10-22, owner may revisit), a source that does not parse
   (`malformed_project_tool_source`, including a malformed `mise.toml` next to
   a valid `rust-toolchain.toml`), a symlinked source, and a Rust toolchain
   file below the root that declares anything but the root version

@@ -286,7 +286,7 @@ min_version = "2026.10.7"
 "aqua:nextest-rs/nextest/cargo-nextest" = "0.9.140"
 "github:boltffi/boltffi" = { version = "0.30.1", matching_regex = '^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|linux-x86_64(-musl)?|windows-arm64|windows-x86_64)\.(tar\.gz|zip)$' }
 "mr-boxington" = "1.26.0"
-rust = { version = "1.99.1", mr_boxington = true }
+rust = { version = "1.99.1", components = ["clippy", "rustfmt"], targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"], mr_boxington = true }
 swiftlint = { version = "0.65.1", os = ["macos"] }
 xcodegen = "2.46.0"
 
