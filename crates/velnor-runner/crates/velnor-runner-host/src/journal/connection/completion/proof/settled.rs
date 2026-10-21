@@ -111,8 +111,5 @@ fn completion_settlement_digest(identity: CompletionSettlementDigest<'_>) -> Str
         identity.runner_name,
         identity.event_digest,
     );
-    Sha256::digest(canonical.as_bytes())
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    crate::digest_hex::lowercase_hex(&Sha256::digest(canonical.as_bytes()))
 }

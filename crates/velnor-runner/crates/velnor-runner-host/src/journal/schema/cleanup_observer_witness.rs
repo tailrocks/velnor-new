@@ -241,10 +241,5 @@ async fn validate_probe_rows(connection: &Connection) -> Result<(), HostError> {
 }
 
 fn binding_digest(json: &[u8]) -> String {
-    let mut result = String::with_capacity(64);
-    for byte in Sha256::digest(json) {
-        use std::fmt::Write as _;
-        let _ = write!(result, "{byte:02x}");
-    }
-    result
+    crate::digest_hex::lowercase_hex(&Sha256::digest(json))
 }

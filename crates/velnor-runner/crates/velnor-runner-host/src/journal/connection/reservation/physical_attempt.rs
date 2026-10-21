@@ -144,11 +144,7 @@ pub(super) async fn record_terminal_cleanup_outcome(
     let canonical = format!(
         "{connection_id}:{reservation_id}:{intent_id}:{lineage_id}:{generation}:{binding}:{state_binding}:{request_id}:{runner_id}:{runner_name}:{event_digest}"
     );
-    let digest = Sha256::digest(canonical.as_bytes());
-    let digest = digest
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
+    let digest = crate::digest_hex::lowercase_hex(&Sha256::digest(canonical.as_bytes()));
     let changed = connection
         .execute(
             "INSERT INTO physical_attempt_outcomes (lineage_id, generation, reservation_id, outcome, proof_digest, settlement_digest, created_at) VALUES (?1, ?2, ?3, 'normal_completion', ?4, ?4, unixepoch())",

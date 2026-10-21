@@ -44,6 +44,7 @@
 | Execution proof | A journal record used to check a job request and its worker pair. |
 | Proof guard | A database trigger that stops a change to an execution proof when the data is not correct. |
 | Digest | A value made from data that can show whether data changed. |
+| Hexadecimal | A number system that uses 16 digits: 0 to 9 and a to f. |
 | Probe lease | A journal record that tracks an active resource-probe operation. |
 | Cache key | A value that selects one cache entry. |
 | Cache directive | Plan data that specifies the cache layers and identities permitted for a cache owner. |

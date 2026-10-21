@@ -10,6 +10,7 @@ mod config;
 mod connect;
 mod controller_ipc;
 mod daemon_lock;
+mod digest_hex;
 mod docker_client;
 mod docker_spec;
 mod error;

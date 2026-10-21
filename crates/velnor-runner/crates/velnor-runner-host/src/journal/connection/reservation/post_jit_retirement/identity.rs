@@ -45,10 +45,5 @@ impl ClaimIdentity {
 }
 
 pub(super) fn hex_digest(bytes: &[u8]) -> String {
-    let mut output = String::with_capacity(64);
-    for byte in Sha256::digest(bytes) {
-        use std::fmt::Write as _;
-        let _ = write!(output, "{byte:02x}");
-    }
-    output
+    crate::digest_hex::lowercase_hex(&Sha256::digest(bytes))
 }

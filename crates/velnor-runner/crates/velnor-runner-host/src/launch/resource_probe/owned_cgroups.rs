@@ -147,11 +147,7 @@ impl OwnedCgroupSubjects {
         let mut digest = Sha256::new();
         digest.update(b"velnor-owned-cgroups-request-v1\0");
         digest.update(bytes);
-        Ok(digest
-            .finalize()
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect())
+        Ok(crate::digest_hex::lowercase_hex(&digest.finalize()))
     }
 }
 

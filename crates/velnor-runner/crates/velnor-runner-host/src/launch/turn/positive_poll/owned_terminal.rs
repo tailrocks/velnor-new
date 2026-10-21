@@ -126,11 +126,5 @@ impl OwnedTerminalReplay {
 }
 
 fn digest(bytes: &[u8]) -> String {
-    let hash = Sha256::digest(bytes);
-    let mut value = String::with_capacity(64);
-    for byte in hash {
-        use std::fmt::Write as _;
-        let _ = write!(value, "{byte:02x}");
-    }
-    value
+    crate::digest_hex::lowercase_hex(&Sha256::digest(bytes))
 }

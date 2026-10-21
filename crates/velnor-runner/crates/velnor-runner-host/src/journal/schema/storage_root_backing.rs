@@ -237,9 +237,5 @@ fn digest_bytes(bytes: &[u8]) -> String {
     let mut digest = Sha256::new();
     digest.update(b"velnor-root-backing-map-v1\0");
     digest.update(bytes);
-    digest
-        .finalize()
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    crate::digest_hex::lowercase_hex(&digest.finalize())
 }
