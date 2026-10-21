@@ -14,7 +14,7 @@ pub const DBT_FUSION_TOOL_VARIABLE: &str = "VELNOR_TOOL_DBT_FUSION";
 ///
 /// `velnor_exact_java` accepts exactly
 /// `<vendor>-<X.Y.Z[.N]*>[+<build>[.<n>]*][.LTS]` (three or more numeric parts,
-/// as Oracle GraalVM `25.0.4.1.1`) over `[A-Za-z0-9.+-]`, so the
+/// as Oracle `GraalVM` `25.0.4.1.1`) over `[A-Za-z0-9.+-]`, so the
 /// single-line `$GITHUB_ENV` write cannot be injected.
 const JAVA_FUNCTIONS: &str = r#"velnor_exact_java() {
   v=$2

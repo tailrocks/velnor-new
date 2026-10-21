@@ -2,7 +2,7 @@
 //!
 //! `java` accepts `<vendor>-<X.Y.Z[.N]*>[+<build>[.<n>]*][.LTS]` where the vendor
 //! is one of [`JAVA_VENDORS`] and the core has three or more numeric parts
-//! (Oracle GraalVM ships `25.0.4.1.1`; the first part is the Java feature
+//! (Oracle `GraalVM` ships `25.0.4.1.1`; the first part is the Java feature
 //! version); Gradle accepts `N.N` or `N.N.N`. Bare majors,
 //! `lts`, `latest`, ranges and templates are rejected. Accepted strings are
 //! lower-case ASCII over `[a-z0-9.+-]` only, so they can be written to the
