@@ -66,6 +66,9 @@ pub(crate) fn tool_source(tool: PinnedTool, version: &str) -> String {
         PinnedTool::Actionlint => {
             format!("https://github.com/rhysd/actionlint/releases/tag/v{version}")
         }
+        PinnedTool::Jactionlint => {
+            format!("https://github.com/jdx/jactionlint/releases/tag/v{version}")
+        }
         PinnedTool::Shellcheck => {
             format!("https://github.com/koalaman/shellcheck/releases/tag/v{version}")
         }
