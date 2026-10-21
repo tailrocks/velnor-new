@@ -71,7 +71,6 @@ pub(super) struct RootBackingContext<'a> {
 struct ValidatedBacking<'a> {
     logical: &'a MeasuredAttachment,
     expected_image: &'a crate::launch::VerifiedImageIdentity,
-    upper: &'a velnor_resource_probe::worker_binding::RootBackingDirectoryObservation,
     backing_digest: String,
 }
 
@@ -143,7 +142,6 @@ fn validate_root_backing<'a>(
     Ok(ValidatedBacking {
         logical,
         expected_image,
-        upper,
         backing_digest,
     })
 }
@@ -265,23 +263,11 @@ fn build_root_backing_mapping(
         image_runtime_id: validated.expected_image.runtime_id().to_owned(),
         image_source_sha: context.images.source_sha().to_owned(),
         logical_mount_id: logical_binding.mount_id(),
-        logical_mount_source: row.mount_source.clone(),
         logical_device: logical_binding.device(),
         logical_statx_device: logical_binding.statx_device(),
         logical_fs_type_magic: logical_binding.fs_type_magic(),
         logical_filesystem_id: logical_binding.filesystem_id(),
         logical_filesystem_instance_digest: logical_binding.filesystem_instance_digest().to_owned(),
-        backing_mount_source: validated.upper.mount_source.clone(),
-        backing_device: (
-            validated.upper.mount_device_major,
-            validated.upper.mount_device_minor,
-        ),
-        backing_statx_device: (
-            validated.upper.statx_device_major,
-            validated.upper.statx_device_minor,
-        ),
-        backing_fs_type_magic: validated.upper.filesystem_type_magic,
-        backing_filesystem_id: validated.upper.filesystem_id,
         backing_filesystem_instance_digest: validated.backing_digest,
         canonical_record,
         mapping_digest,

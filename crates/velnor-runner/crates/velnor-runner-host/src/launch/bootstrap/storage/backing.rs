@@ -15,17 +15,11 @@ pub(crate) struct VerifiedRootBackingMapping {
     pub(super) image_runtime_id: String,
     pub(super) image_source_sha: String,
     pub(super) logical_mount_id: u64,
-    pub(super) logical_mount_source: String,
     pub(super) logical_device: (u32, u32),
     pub(super) logical_statx_device: (u32, u32),
     pub(super) logical_fs_type_magic: u64,
     pub(super) logical_filesystem_id: u64,
     pub(super) logical_filesystem_instance_digest: String,
-    pub(super) backing_mount_source: String,
-    pub(super) backing_device: (u32, u32),
-    pub(super) backing_statx_device: (u32, u32),
-    pub(super) backing_fs_type_magic: u64,
-    pub(super) backing_filesystem_id: u64,
     pub(super) backing_filesystem_instance_digest: String,
     pub(super) canonical_record: String,
     pub(super) mapping_digest: String,
@@ -95,17 +89,11 @@ impl VerifiedRootBackingMapping {
             image_runtime_id: image_runtime_id.to_owned(),
             image_source_sha: image_source_sha.to_owned(),
             logical_mount_id: attachment.mount_id(),
-            logical_mount_source: "overlay".to_owned(),
             logical_device: attachment.device(),
             logical_statx_device: attachment.statx_device(),
             logical_fs_type_magic: attachment.fs_type_magic(),
             logical_filesystem_id: attachment.filesystem_id(),
             logical_filesystem_instance_digest: attachment.filesystem_instance_digest().to_owned(),
-            backing_mount_source: "/dev/vdb".to_owned(),
-            backing_device: (0, 38),
-            backing_statx_device: (0, 38),
-            backing_fs_type_magic: 0x9123_683e,
-            backing_filesystem_id: 11,
             backing_filesystem_instance_digest: backing_filesystem_instance_digest.to_owned(),
             canonical_record,
             mapping_digest,
@@ -145,9 +133,6 @@ impl VerifiedRootBackingMapping {
     pub(crate) const fn logical_mount_id(&self) -> u64 {
         self.logical_mount_id
     }
-    pub(crate) fn logical_mount_source(&self) -> &str {
-        &self.logical_mount_source
-    }
     pub(crate) const fn logical_device(&self) -> (u32, u32) {
         self.logical_device
     }
@@ -160,29 +145,8 @@ impl VerifiedRootBackingMapping {
     pub(crate) const fn logical_filesystem_id(&self) -> u64 {
         self.logical_filesystem_id
     }
-    pub(crate) fn logical_filesystem_instance_digest(&self) -> &str {
-        &self.logical_filesystem_instance_digest
-    }
     pub(crate) fn logical_filesystem_digest(&self) -> &str {
         &self.logical_filesystem_instance_digest
-    }
-    pub(crate) fn backing_mount_source(&self) -> &str {
-        &self.backing_mount_source
-    }
-    pub(crate) const fn backing_device(&self) -> (u32, u32) {
-        self.backing_device
-    }
-    pub(crate) const fn backing_statx_device(&self) -> (u32, u32) {
-        self.backing_statx_device
-    }
-    pub(crate) const fn backing_fs_type_magic(&self) -> u64 {
-        self.backing_fs_type_magic
-    }
-    pub(crate) const fn backing_filesystem_id(&self) -> u64 {
-        self.backing_filesystem_id
-    }
-    pub(crate) fn backing_filesystem_instance_digest(&self) -> &str {
-        &self.backing_filesystem_instance_digest
     }
     pub(crate) fn backing_filesystem_digest(&self) -> &str {
         &self.backing_filesystem_instance_digest
