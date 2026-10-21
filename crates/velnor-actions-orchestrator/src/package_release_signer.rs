@@ -39,7 +39,8 @@ mod tests;
 
 /// Private CLI operation for signing a statically planned package release.
 pub const SIGN_PACKAGE_RELEASE_OP: &str = "sign-package-release-v1";
-const INPUT_DIR: &str = "release-output";
+/// Fixed verified aggregate input shared by admission and signing.
+pub(crate) const SIGNER_INPUT_DIR: &str = "release-output";
 const OUTPUT_DIR: &str = "release-signed";
 const PUBLISH_INPUT_DIR: &str = "release-publish-input";
 const HANDOFF_FILE: &str = "package-output.json";
@@ -123,11 +124,10 @@ pub fn sign_package_release_from_env() -> Result<(), OrchestratorError> {
     let root = runner_temp.join("velnor");
     require_private_directory(&root)?;
     let plan = request::admitted_plan(&root)?;
-    let input = root.join(INPUT_DIR);
-    let output = root.join(OUTPUT_DIR);
+    let input = root.join(SIGNER_INPUT_DIR);
     require_private_directory(&input)?;
     let identity = signing_identity_from_env(&plan)?;
-    sign_package_release(&plan, &identity, &input, &output)?;
+    sign_package_release(&plan, &identity, &root)?;
     Ok(())
 }
 
@@ -214,31 +214,42 @@ fn publisher_context_from_env(
     Ok((plan, expected, input))
 }
 
-/// Independently re-admit producer bytes, create sidecars, sign payloads and
-/// companions, then sign the canonical receipt last and verify it immediately.
-pub(crate) fn sign_package_release(
+/// Re-admit the exact aggregate layout before acquiring a signing tool.
+pub(crate) fn verify_signer_input(
     plan: &PackageReleasePlan,
     identity: &PackageReleaseSigningIdentity,
-    input_dir: &Path,
-    output_dir: &Path,
-) -> Result<VerifiedSignedPackage, OrchestratorError> {
-    plan.validate()
-        .map_err(|_| internal("package_signer_plan_invalid"))?;
-    validate_identity(plan, identity)?;
-    let (version, tag, commit_count, source_sha7) = release_version(plan, identity)?;
-    let companions = release_companions(plan);
-    let verified = verify_package_output(
-        input_dir,
+    root: &Path,
+) -> Result<crate::package_release_artifacts::VerifiedPackageOutput, OrchestratorError> {
+    let input_dir = root.join(SIGNER_INPUT_DIR);
+    require_private_directory(&input_dir)?;
+    let (version, _, _, _) = release_version(plan, identity)?;
+    verify_package_output(
+        &input_dir,
         HANDOFF_FILE,
-        output_dir,
+        &root.join(OUTPUT_DIR),
         &plan.products,
-        &companions,
+        &release_companions(plan),
         PackageOutputIdentity {
             source_commit: &identity.source_sha,
             source_ref: &identity.source_ref,
             version: &version,
         },
-    )?;
+    )
+}
+
+/// Independently re-admit producer bytes, create sidecars, sign payloads and
+/// companions, then sign the canonical receipt last and verify it immediately.
+pub(crate) fn sign_package_release(
+    plan: &PackageReleasePlan,
+    identity: &PackageReleaseSigningIdentity,
+    root: &Path,
+) -> Result<VerifiedSignedPackage, OrchestratorError> {
+    let output_dir = root.join(OUTPUT_DIR);
+    plan.validate()
+        .map_err(|_| internal("package_signer_plan_invalid"))?;
+    validate_identity(plan, identity)?;
+    let (version, tag, commit_count, source_sha7) = release_version(plan, identity)?;
+    let verified = verify_signer_input(plan, identity, root)?;
     let mut artifacts = verified.artifacts.clone();
     artifacts.extend(verified.write_checksum_assets()?);
 
@@ -283,11 +294,11 @@ pub(crate) fn sign_package_release(
     if bundle.name != "release.json.bundle" {
         return Err(internal("package_signer_receipt_bundle_name"));
     }
-    verify_signed_package(output_dir, plan, identity)?;
+    verify_signed_package(&output_dir, plan, identity)?;
     Ok(VerifiedSignedPackage {
         plan: plan.clone(),
         receipt,
-        directory: output_dir.to_path_buf(),
+        directory: output_dir,
     })
 }
 
