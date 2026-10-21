@@ -1,0 +1,259 @@
+{
+  "schema": 1,
+  "checkpoint_id": "source-checkpoint-6b26a1ef-20261021",
+  "created_at_utc": "2026-10-21T09:24:18Z",
+  "source_repository": "https://github.com/tailrocks/velnor-new",
+  "branch": "fix/private-scaleset-installation",
+  "committed_head": "6b26a1efb13b4e1be75d8bb71bb8c7e351f803d9",
+  "scope": {
+    "consumer_order": [
+      "donbeave/essential-mac",
+      "ChainArgos/eth-processor-rust"
+    ],
+    "prior_checkpoint": {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/source-checkpoint-612c61aa3.json",
+      "sha256": "946b93fd06165776a41c6c0261decbfbdea922871ff21f20bb7b285abc76f768",
+      "note": "This record preserves the earlier checkpoint unchanged and describes the later commits."
+    }
+  },
+  "status": "INCOMPLETE",
+  "gates": {
+    "bounded_host_checks": "PASS_FOR_LISTED_SCOPES_ONLY",
+    "nested_full_strict": "FAIL",
+    "nested_full_nextest_at_committed_head": "NOT_RUN",
+    "release": "NOT_RUN",
+    "essential_mac_installation_and_live_job": "NOT_RUN",
+    "eth_processor_rust_installation_and_live_job": "NOT_RUN",
+    "consumer_push_or_pr": "NOT_RUN"
+  },
+  "commits": [
+    {
+      "sha": "0ea9c3112b6ebd15531646dd86cf9ef68bb2cf17",
+      "subject": "Name the storage transition inputs",
+      "changed_paths": [
+        "crates/velnor-runner/crates/velnor-runner-host/src/journal/connection/reservation/provisioning/initialization/lifecycle.rs"
+      ],
+      "scope_note": "Only two parameter names and their two references changed (4 insertions, 4 deletions). This record includes no test receipt for this commit."
+    },
+    {
+      "sha": "959bc2a13b04242a20e648950fe3f5a64927e7f2",
+      "subject": "Use one context for scoped preparation",
+      "changed_paths": [
+        "crates/velnor-runner/crates/velnor-runner-host/src/launch/scoped_runtime.rs",
+        "crates/velnor-runner/crates/velnor-runner-host/src/host_controller/loop/polling/acquired.rs"
+      ],
+      "review": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/evidence/scoped-runtime-context-independent-review-20261021.md",
+        "sha256": "276d906c54be1742896f2a3d6dcb483062255ecbb41bc51c5622bbc6235f5cf3"
+      },
+      "source_manifest": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/build/scoped-runtime-context-51717b4f-20261021/evidence/final-manifest.tsv",
+        "sha256": "41a4a5d81d95351fe4dcda9e258dc98bb2780acb2c2ea39b94f163b17095a771"
+      },
+      "bounded_check": {
+        "result": "PASS",
+        "passed": 3,
+        "skipped": 1201,
+        "run_id": "13256f19-6f87-41de-9511-d5127f4a40df",
+        "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/scoped-runtime-context-51717b4f-20261021/evidence/focused-nextest.log",
+        "raw_log_sha256": "eee72dedfed5ab9b87fcfdf2817fd4c78ba6afb05722a6524e88de5a9e640ef0",
+        "command_receipt": "/Users/donbeave/Downloads/velnor-goal/build/scoped-runtime-context-51717b4f-20261021/evidence/run-receipt.json",
+        "command_receipt_sha256": "d281e5c7991292c359b8c3eae0d8454f4b3599c391493c531a15481cae219133"
+      }
+    },
+    {
+      "sha": "f88db2e0030f4360bae229eb3c8bf408f0cafc2c",
+      "subject": "Box the scoped preparation results",
+      "changed_paths_count": 6,
+      "review": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/evidence/scoped-runtime-enum-independent-review-20261021.md",
+        "sha256": "3c23cf62bf3750f0fadbd6f3146e21f744ac2a76e6d389633399cae74511b153"
+      },
+      "source_manifest": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/build/scoped-runtime-enum-boxing-context2-20261021/evidence/final-manifest.tsv",
+        "sha256": "09b10e9c6754c4df0a660e577c149867b80206d5bbb1600da5b19fe9da0cdaea"
+      },
+      "bounded_check": {
+        "result": "PASS",
+        "passed": 6,
+        "skipped": 1199,
+        "run_id": "5aa71bed-7028-4254-a297-ae6736327677",
+        "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/scoped-runtime-enum-boxing-context2-20261021/evidence/focused-nextest.log",
+        "raw_log_sha256": "9ad953f4ec0bc621d78e3a3fad1e1623c47446219217e32e51abd7111ecc1f7d",
+        "production_check_log_sha256": "9385b4238e60fd1d39054e380e593635fd24d8e25cf358d2175d925d91bd4d77",
+        "format_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command_receipt": "This record has no separate argv receipt. It does not infer a command."
+      }
+    },
+    {
+      "sha": "2ac47486a0fffcad1fbb6a235a9fc9db2d748792",
+      "subject": "Remove unused storage state copies",
+      "changed_paths_count": 10,
+      "scope_note": "The commit removes unused copies from Rust values used during initialization and network cleanup. This record does not assign later test results to this commit alone."
+    },
+    {
+      "sha": "fdba8360947c2e06dce581f29b2db71ba51c7e5b",
+      "subject": "Merge main and keep the current tool pins",
+      "changed_paths_count": 150,
+      "scope_note": "The merge keeps the runner changes and includes main's generator and tool changes. This record does not report a pass for the full nested checks."
+    },
+    {
+      "sha": "ca6da06f30b38719ff41dcfc68112b308403ecc7",
+      "subject": "Use one context for test preparation",
+      "changed_paths": [
+        "crates/velnor-runner/crates/velnor-runner-host/src/launch/scoped_runtime/test_provider.rs",
+        "crates/velnor-runner/crates/velnor-runner-host/src/host_controller/loop/polling/acquired.rs"
+      ],
+      "review": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/evidence/scoped-test-provider-context-independent-review-20261021.md",
+        "sha256": "cfcfe9abd8dba63bcf24c7d67f35aa798fce9f40621e627b378a48cc415996ce"
+      },
+      "port_manifest": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/evidence/test-provider-context-parent-port-20261021.json",
+        "sha256": "ef5fd233ee1b54e17b0628e82cf1d8bb003030a60b482f3562bdecf513d5b8a1"
+      },
+      "integrated_checks": {
+        "receipt_directory": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/test-provider-context-parent-integrated-20261021",
+        "tested_tree_head": "fdba8360947c2e06dce581f29b2db71ba51c7e5b",
+        "nextest": {
+          "result": "PASS",
+          "passed": 6,
+          "skipped": 1199,
+          "run_id": "00432ef8-b288-46b6-ad4a-e8c0a9a7791b",
+          "argv_receipt": "nextest.json",
+          "argv_receipt_sha256": "2399c234621d5ded091577b6912c25450fed43faab4cd68fa57684ffa3269385",
+          "log": "nextest.log",
+          "log_sha256": "505a3bdeb31f5dc33acda5de5bc05f7fc988845a068fd996e81a2921804260c1"
+        },
+        "production_check": {
+          "exit_status": 0,
+          "argv_receipt": "check.json",
+          "log_sha256": "280e074691578ba3137637140685440254932e99492aa7205c1a63a169028c06"
+        },
+        "format": {
+          "exit_status": 0,
+          "argv_receipt": "fmt.json",
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "limitation": "The reviewed tests and production check do not directly execute the changed controller's test-provider branch."
+    },
+    {
+      "sha": "a3b9019eddbac63e92d5e27be6619c49f3f1b991",
+      "subject": "Worker production cleanup increment",
+      "port_manifest": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/evidence/worker-production-parent-port-20261021.json",
+        "sha256": "414a94cd84f78a09f139ac21a049625ea8de58c521fad317a0537ab7ab69fbc6"
+      },
+      "integrated_checks": {
+        "receipt_directory": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/worker-production-parent-integrated-20261021",
+        "tested_tree_head": "ca6da06f30b38719ff41dcfc68112b308403ecc7",
+        "nextest": {
+          "result": "PASS",
+          "passed": 123,
+          "skipped": 1082,
+          "run_id": "ea038181-5221-4337-ae44-9c89f84bd370",
+          "log": "nextest.log",
+          "log_sha256": "d4ba89a652d3c96f4f1716fed54a888bf7712877c471b6f2af0d506b474c7a4f",
+          "selector": "test(worker::) | test(stage::)"
+        },
+        "production_check_log_sha256": "93f9fc379f3550101186cb0cd9b852194631e449fb6e769c39fe70b4ff643ad5",
+        "format_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "sha": "6b26a1efb13b4e1be75d8bb71bb8c7e351f803d9",
+      "subject": "Shorthand initializer fixes",
+      "scope_note": "The commit removes four repeated field names. The source comparison shows no change to fixture values or assertions.",
+      "author_candidate": {
+        "base": "2ac47486a0fffcad1fbb6a235a9fc9db2d748792",
+        "manifest": {
+          "path": "/Users/donbeave/Downloads/velnor-goal/evidence/strict-test-shorthand-2ac47486-manifest.tsv",
+          "sha256": "da8ca110c02fcb51a548f604c2027a4b3eb3b84181fcfdf9f891be47e26b04c0"
+        },
+        "new_tool_run": {
+          "result": "PASS",
+          "passed": 12,
+          "skipped": 1193,
+          "uuid": null,
+          "uuid_note": "The raw log contains no Nextest run UUID.",
+          "nextest": "0.9.149",
+          "nextest_commit": "3fe4ef31972f24e0c94cfe291718eab0fe678260",
+          "rust": "1.99.1",
+          "mbx": "1.26.0",
+          "log": "/Users/donbeave/Downloads/velnor-goal/build/strict-test-shorthand-2ac47486-20261021/nextest-qualified-0.9.149.log",
+          "log_sha256": "1633bc8cf0481c3e4c6e8eb06dcc48ef0a9cd2c036e125280ebf49d0c7295b4b",
+          "version_log": "/Users/donbeave/Downloads/velnor-goal/build/strict-test-shorthand-2ac47486-20261021/nextest-qualified-version.log",
+          "version_log_sha256": "b572923cad246048015ddcf9754f0f910d0f479a0967ff3b4de4c1c223cd8323",
+          "binary_sha256": "db85ec6208e74eddb330bf900eb2b7c17b5f1a278a126f2a85feae0c170d43fa",
+          "command": "mise --no-config --no-env --no-hooks exec rust@1.99.1 mr-boxington@1.26.0 -- sh -c 'export CARGO_HOME=/Users/donbeave/Downloads/velnor-goal/build/strict-test-shorthand-2ac47486-20261021/private-cargo-home-0.9.149; export CARGO_TARGET_DIR=/Users/donbeave/Downloads/velnor-goal/build/strict-test-shorthand-2ac47486-20261021/target; export CARGO_BUILD_JOBS=4; export PATH=\"$CARGO_HOME/bin:/Users/donbeave/.cache/velnor/sdk36-tool-qualification/install/nextest/macos-universal:$PATH\"; mbx nextest run --manifest-path /Users/donbeave/Downloads/velnor-goal/build/strict-test-shorthand-2ac47486-20261021/source/crates/velnor-runner/Cargo.toml -p velnor-runner-host --lib --locked --offline --profile ci --no-tests fail -E \"test(journal::execution_authorization::decision::started::tests::cases) | test(journal::execution_authorization::timeout::tests)\" --no-fail-fast'"
+        },
+        "parent_checks": {
+          "head_at_run": "a3b9019eddbac63e92d5e27be6619c49f3f1b991",
+          "check_exit": 0,
+          "check_log_sha256": "d3f12aaa4e9568f4d9a4ae2fedbd2e36c099b04b606a006953e1ebefdcc85157",
+          "fmt_exit": 0,
+          "fmt_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "receipt_directory": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/authorization-shorthand-parent-integrated-20261021"
+        }
+      }
+    }
+  ],
+  "runner_log_bridge_working_tree_candidate": {
+    "committed_head_before_overlay": "6b26a1efb13b4e1be75d8bb71bb8c7e351f803d9",
+    "committed": false,
+    "manifest": {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/runner-log-bridge-parent-port-20261021.json",
+      "sha256": "1695bb235316efa8b4aaab16ff501d3283eaafd3513c1fbe1f98e6bfc90d22df"
+    },
+    "checks": {
+      "production_check": {
+        "exit_status": 0,
+        "log_sha256": "156582289f42c5c7153bc408bdcf72344caba6f482a07f23622dcda072956463"
+      },
+      "format": {
+        "exit_status": 0,
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "nextest": {
+        "result": "PASS",
+        "passed": 58,
+        "skipped": 1184,
+        "run_id": "026d8724-391d-4ab4-8c42-ec7d6d21f46f",
+        "selector": "test(completion::diagnostics) | test(native::diagnostics_tests)",
+        "receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/runner-log-bridge-parent-integrated-20261021/nextest.json",
+        "receipt_sha256": "912db5fa5feab8de42755fae478c26a1ae1d4da0eeeca52189636c1e32ed0509",
+        "log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/runner-log-bridge-parent-integrated-20261021/nextest.log",
+        "log_sha256": "98a9aab37ce11665b451eec5ba0200ccc1b8523e5ab4c16f9261207a3ac323bf"
+      }
+    },
+    "limits": [
+      "This record does not report a pass for the full strict checks.",
+      "This record does not report a Linux live runner check, a consumer check, or a release check."
+    ]
+  },
+  "strict_gate": {
+    "status": "FAIL",
+    "scope_note": "This record has no strict Clippy receipt for all targets and features at committed head 6b26a1ef. Keep the failure status. Do not assign earlier source counts to this head.",
+    "last_all_target_failure": {
+      "source": "2a6413ef36e44499bbd4e671bc6c890d9cb617f3",
+      "diagnostics_count": 615,
+      "source_locations": 613,
+      "log_record": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/runner-strict-2a6413ef-20261021/diagnostics.json",
+      "sha256": "cf103dd8976be92e2ccafca93dba35032305570fb0dd9b450632605057b8cd33"
+    },
+    "later_library_failure": {
+      "source": "e5b85e1125c51ae2c74fb29fb433f1186f3e49f5",
+      "diagnostics_count": 314,
+      "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/runner-recovery-quality-e5b85-20261021/evidence/strict-clippy-lib.log",
+      "sha256": "952c68c575c6dc60e320f5bfdde24b9eedc0d718440b3597cef37502163df4ad"
+    }
+  },
+  "not_run": [
+    "final full nested Nextest on committed head 6b26a1ef",
+    "release",
+    "donbeave/essential-mac activation or live job",
+    "ChainArgos/eth-processor-rust activation or live job"
+  ],
+  "workspace_note": "At checkpoint preparation, the primary checkout contained an uncommitted runner log bridge change. The committed head was 6b26a1ef. The separate bridge candidate above was not committed at that time."
+}
