@@ -7,7 +7,10 @@ use super::super::observations::StoragePoolObservation;
 use super::super::plan::{StorageReservationPlan, StorageRoleCharge};
 use super::super::profile::{StoragePoolLimit, StorageProfile};
 use super::super::role::{StorageFilesystemKind, StorageInodePolicy, StorageMedium};
-use super::{MAX_SAMPLE_AGE, StorageAdmissionSample, StorageProvisioningMemoryObservation};
+use super::{
+    MAX_SAMPLE_AGE, StorageAdmissionSample, StorageProvisioningMemoryObservation,
+    StorageSampleValidationIdentity,
+};
 
 pub(super) fn validate_provisioning_pool_identity(
     limit: &StoragePoolLimit,
@@ -90,16 +93,15 @@ pub(super) fn validate_provisioning_memory(
 pub(super) fn validate_sample_identity(
     sample: &StorageAdmissionSample,
     profile: &StorageProfile,
-    sample_generation_id: &str,
-    engine_id: &str,
-    docker_root_digest: &str,
+    expected_identity: &StorageSampleValidationIdentity<'_>,
     now: Instant,
 ) -> Result<(), HostError> {
-    let identity_matches = sample.identity.sample_generation_id == sample_generation_id
+    let identity_matches = sample.identity.sample_generation_id
+        == expected_identity.sample_generation_id()
         && sample.identity.profile_generation_id == profile.generation_id()
         && sample.identity.profile_digest == profile.profile_digest()
-        && sample.identity.engine_id == engine_id
-        && sample.identity.docker_root_digest == docker_root_digest;
+        && sample.identity.engine_id == expected_identity.engine_id()
+        && sample.identity.docker_root_digest == expected_identity.docker_root_digest();
     let sample_is_fresh = now
         .checked_duration_since(sample.observed_at)
         .is_some_and(|age| age <= MAX_SAMPLE_AGE)

@@ -151,9 +151,11 @@ fn dynamic_btrfs_inode_policy_requires_btrfs_and_keeps_byte_budget() {
             .validate_for(
                 &profile,
                 &plan,
-                &"e".repeat(32),
-                "test-engine",
-                &"f".repeat(64),
+                &StorageAdmissionSample::validation_identity(
+                    &"e".repeat(32),
+                    "test-engine",
+                    &"f".repeat(64),
+                ),
                 2048,
                 Instant::now(),
             )
@@ -188,9 +190,11 @@ fn sample_for_a_different_filesystem_instance_is_rejected() {
             .validate_for(
                 &profile,
                 &plan,
-                &"e".repeat(32),
-                "test-engine",
-                &"f".repeat(64),
+                &StorageAdmissionSample::validation_identity(
+                    &"e".repeat(32),
+                    "test-engine",
+                    &"f".repeat(64),
+                ),
                 2048,
                 Instant::now(),
             )

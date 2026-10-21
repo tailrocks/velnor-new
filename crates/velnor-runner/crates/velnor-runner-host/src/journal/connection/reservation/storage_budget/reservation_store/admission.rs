@@ -7,7 +7,7 @@ use crate::error::HostError;
 use super::super::profile::StorageProfile;
 use super::super::profile_store::{self, from_sql};
 use super::super::role::{StorageFilesystemKind, StorageInodePolicy, StorageMedium};
-use super::super::sample::StorageAdmission;
+use super::super::sample::{StorageAdmission, StorageAdmissionSample};
 use super::{HeldCharges, HeldPool, load_plan, plan_memory};
 
 /// Check a new sample against all outstanding reservations across connections.
@@ -34,12 +34,15 @@ pub(in crate::journal::connection::reservation::storage_budget) async fn admissi
     let extra_memory = base_memory_charge
         .checked_add(held.memory_bytes)
         .ok_or(HostError::Journal)?;
-    admission.sample.validate_for(
-        &profile,
-        &admission.plan,
+    let expected_identity = StorageAdmissionSample::validation_identity(
         sample_generation_id,
         engine_id,
         docker_root_digest,
+    );
+    admission.sample.validate_for(
+        &profile,
+        &admission.plan,
+        &expected_identity,
         extra_memory,
         Instant::now(),
     )?;

@@ -112,75 +112,64 @@ fn fresh_sample_must_match_engine_profile_pool_and_instance() {
     let plan = plan(&profile, StorageMedium::Disk);
     let admission = StorageAdmission::new(plan.clone(), sample(&profile, false, Instant::now()))
         .expect("admission");
-    assert!(
-        admission
-            .sample()
-            .validate_for(
+    let validates =
+        |sample_generation_id: &str, engine_id: &str, docker_root_digest: &str, now: Instant| {
+            admission.sample().validate_for(
                 &profile,
                 &plan,
-                &"e".repeat(32),
-                "test-engine",
-                &"f".repeat(64),
+                &StorageAdmissionSample::validation_identity(
+                    sample_generation_id,
+                    engine_id,
+                    docker_root_digest,
+                ),
                 2048,
-                Instant::now(),
+                now,
             )
-            .is_ok()
+        };
+    assert!(
+        validates(
+            &"e".repeat(32),
+            "test-engine",
+            &"f".repeat(64),
+            Instant::now()
+        )
+        .is_ok()
     );
     assert!(
-        admission
-            .sample()
-            .validate_for(
-                &profile,
-                &plan,
-                &"0".repeat(32),
-                "test-engine",
-                &"f".repeat(64),
-                2048,
-                Instant::now(),
-            )
-            .is_err()
+        validates(
+            &"0".repeat(32),
+            "test-engine",
+            &"f".repeat(64),
+            Instant::now()
+        )
+        .is_err()
     );
     assert!(
-        admission
-            .sample()
-            .validate_for(
-                &profile,
-                &plan,
-                &"e".repeat(32),
-                "other-engine",
-                &"f".repeat(64),
-                2048,
-                Instant::now(),
-            )
-            .is_err()
+        validates(
+            &"e".repeat(32),
+            "other-engine",
+            &"f".repeat(64),
+            Instant::now()
+        )
+        .is_err()
     );
     assert!(
-        admission
-            .sample()
-            .validate_for(
-                &profile,
-                &plan,
-                &"e".repeat(32),
-                "test-engine",
-                &"0".repeat(64),
-                2048,
-                Instant::now(),
-            )
-            .is_err()
+        validates(
+            &"e".repeat(32),
+            "test-engine",
+            &"0".repeat(64),
+            Instant::now()
+        )
+        .is_err()
     );
     assert!(
-        admission
-            .sample()
-            .validate_for(
-                &profile,
-                &plan,
-                &"e".repeat(32),
-                "test-engine",
-                &"f".repeat(64),
-                2048,
-                Instant::now() + Duration::from_secs(31),
-            )
-            .is_err()
+        validates(
+            &"e".repeat(32),
+            "test-engine",
+            &"f".repeat(64),
+            Instant::now() + Duration::from_secs(31),
+        )
+        .is_err()
     );
 }
 
@@ -228,9 +217,11 @@ fn persisted_sample_wall_time_must_be_recent_and_not_future() {
                 .validate_for(
                     &profile,
                     &plan,
-                    &"e".repeat(32),
-                    "test-engine",
-                    &"f".repeat(64),
+                    &StorageAdmissionSample::validation_identity(
+                        &"e".repeat(32),
+                        "test-engine",
+                        &"f".repeat(64),
+                    ),
                     2048,
                     Instant::now(),
                 )
@@ -275,9 +266,11 @@ fn tmpfs_charge_requires_memory_headroom_observation() {
             .validate_for(
                 &profile,
                 &plan,
-                &"e".repeat(32),
-                "test-engine",
-                &"f".repeat(64),
+                &StorageAdmissionSample::validation_identity(
+                    &"e".repeat(32),
+                    "test-engine",
+                    &"f".repeat(64),
+                ),
                 2048,
                 Instant::now(),
             )
@@ -289,9 +282,11 @@ fn tmpfs_charge_requires_memory_headroom_observation() {
             .validate_for(
                 &profile,
                 &plan,
-                &"e".repeat(32),
-                "test-engine",
-                &"f".repeat(64),
+                &StorageAdmissionSample::validation_identity(
+                    &"e".repeat(32),
+                    "test-engine",
+                    &"f".repeat(64),
+                ),
                 2048,
                 Instant::now(),
             )

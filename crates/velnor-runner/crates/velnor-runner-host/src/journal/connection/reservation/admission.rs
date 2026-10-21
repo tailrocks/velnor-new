@@ -34,6 +34,7 @@ pub(crate) enum ReservationResult {
         reservation_id: i64,
     },
     /// Existing capacity was revalidated with a fresh, single-use sample.
+    #[cfg(test)]
     Resumed {
         /// Durable reservation identity.
         reservation_id: i64,

@@ -32,6 +32,18 @@ pub(crate) struct StorageAdmissionSample {
 }
 
 impl StorageAdmissionSample {
+    pub(crate) const fn validation_identity<'a>(
+        sample_generation_id: &'a str,
+        engine_id: &'a str,
+        docker_root_digest: &'a str,
+    ) -> StorageSampleValidationIdentity<'a> {
+        StorageSampleValidationIdentity {
+            sample_generation_id,
+            engine_id,
+            docker_root_digest,
+        }
+    }
+
     pub(crate) fn new(
         identity: StorageSampleIdentity,
         observed_at: Instant,
@@ -87,20 +99,11 @@ impl StorageAdmissionSample {
         &self,
         profile: &StorageProfile,
         plan: &StorageReservationPlan,
-        sample_generation_id: &str,
-        engine_id: &str,
-        docker_root_digest: &str,
+        expected_identity: &StorageSampleValidationIdentity<'_>,
         base_memory_charge: u64,
         now: Instant,
     ) -> Result<(), HostError> {
-        validate_sample_identity(
-            self,
-            profile,
-            sample_generation_id,
-            engine_id,
-            docker_root_digest,
-            now,
-        )?;
+        validate_sample_identity(self, profile, expected_identity, now)?;
         profile.validate_plan(plan)?;
         validate_pool_observations(self, profile, plan)?;
         validate_retained_memory(self, profile, plan, base_memory_charge)
@@ -129,21 +132,12 @@ impl StorageAdmissionSample {
     pub(super) fn validate_provisioning_for(
         &self,
         profile: &StorageProfile,
-        sample_generation_id: &str,
-        engine_id: &str,
-        docker_root_digest: &str,
+        expected_identity: &StorageSampleValidationIdentity<'_>,
         base_memory_charge: u64,
         memory: &StorageProvisioningMemoryObservation,
         now: Instant,
     ) -> Result<(), HostError> {
-        validate_sample_identity(
-            self,
-            profile,
-            sample_generation_id,
-            engine_id,
-            docker_root_digest,
-            now,
-        )?;
+        validate_sample_identity(self, profile, expected_identity, now)?;
         let disk_pools = profile
             .pools()
             .iter()
@@ -182,14 +176,9 @@ impl StorageAdmissionSample {
         docker_root_digest: &str,
         now: Instant,
     ) -> Result<(), HostError> {
-        validate_sample_identity(
-            self,
-            profile,
-            sample_generation_id,
-            engine_id,
-            docker_root_digest,
-            now,
-        )?;
+        let expected_identity =
+            Self::validation_identity(sample_generation_id, engine_id, docker_root_digest);
+        validate_sample_identity(self, profile, &expected_identity, now)?;
         let disk_pools = profile
             .pools()
             .iter()
@@ -207,6 +196,27 @@ impl StorageAdmissionSample {
             validate_metadata_pool_identity(limit, observation)?;
         }
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct StorageSampleValidationIdentity<'a> {
+    sample_generation_id: &'a str,
+    engine_id: &'a str,
+    docker_root_digest: &'a str,
+}
+
+impl StorageSampleValidationIdentity<'_> {
+    pub(super) const fn sample_generation_id(&self) -> &str {
+        self.sample_generation_id
+    }
+
+    pub(super) const fn engine_id(&self) -> &str {
+        self.engine_id
+    }
+
+    pub(super) const fn docker_root_digest(&self) -> &str {
+        self.docker_root_digest
     }
 }
 
@@ -242,11 +252,14 @@ impl StorageProvisioningAdmission {
         base_memory_charge: u64,
         now: Instant,
     ) -> Result<(), HostError> {
-        self.sample.validate_provisioning_for(
-            profile,
+        let expected_identity = StorageAdmissionSample::validation_identity(
             sample_generation_id,
             engine_id,
             docker_root_digest,
+        );
+        self.sample.validate_provisioning_for(
+            profile,
+            &expected_identity,
             base_memory_charge,
             &self.memory,
             now,

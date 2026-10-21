@@ -116,8 +116,15 @@ impl ConnectionJournal {
                 ReservationResult::AtCapacity => {
                     return Ok(PhysicalSuccessorReservationResult::AtCapacity);
                 }
-                ReservationResult::Resumed { reservation_id }
-                | ReservationResult::ReconcileRequired { reservation_id }
+                #[cfg(test)]
+                ReservationResult::Resumed { reservation_id } => {
+                    let intent_id = reservation_intent_id(connection, reservation_id).await?;
+                    return Ok(PhysicalSuccessorReservationResult::ReconcileRequired {
+                        reservation_id,
+                        intent_id,
+                    });
+                }
+                ReservationResult::ReconcileRequired { reservation_id }
                 | ReservationResult::Released { reservation_id } => {
                     let intent_id = reservation_intent_id(connection, reservation_id).await?;
                     return Ok(PhysicalSuccessorReservationResult::ReconcileRequired {
@@ -179,8 +186,9 @@ impl ConnectionJournal {
             )
             .await?;
             let reservation_id = match reservation {
-                ReservationResult::Reserved { reservation_id }
-                | ReservationResult::Resumed { reservation_id } => reservation_id,
+                ReservationResult::Reserved { reservation_id } => reservation_id,
+                #[cfg(test)]
+                ReservationResult::Resumed { reservation_id } => reservation_id,
                 ReservationResult::AtCapacity => {
                     return Ok(RequestPhysicalReservationResult::AtCapacity);
                 }
