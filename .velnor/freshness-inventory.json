@@ -210,6 +210,15 @@
       "status": "current"
     },
     {
+      "checked_at": "2026-10-21T20:52:00+00:00",
+      "latest": "v2.3.0",
+      "name": "jactionlint",
+      "pinned": "2.3.0",
+      "qualified": "2.3.0",
+      "source": "https://api.github.com/repos/jdx/jactionlint/releases/latest",
+      "status": "current"
+    },
+    {
       "checked_at": "2026-10-21T07:08:59.174784+00:00",
       "latest": "v0.11.0",
       "name": "shellcheck",

@@ -13,6 +13,8 @@ pub enum PinnedTool {
     Gh,
     /// Workflow linter (`actionlint`).
     Actionlint,
+    /// Workflow, composite action and Dependabot linter (`jactionlint`).
+    Jactionlint,
     /// Shell linter (`shellcheck`).
     Shellcheck,
     /// Workflow security linter (`zizmor`).
@@ -31,11 +33,12 @@ pub enum PinnedTool {
 
 impl PinnedTool {
     /// Every catalog tool in stable order.
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Rust,
         Self::MrBoxington,
         Self::Gh,
         Self::Actionlint,
+        Self::Jactionlint,
         Self::Shellcheck,
         Self::Zizmor,
         Self::Nextest,
@@ -53,6 +56,7 @@ impl PinnedTool {
             Self::MrBoxington => "mr-boxington",
             Self::Gh => "gh",
             Self::Actionlint => "actionlint",
+            Self::Jactionlint => "jactionlint",
             Self::Shellcheck => "shellcheck",
             Self::Zizmor => "zizmor",
             Self::Nextest => "nextest",

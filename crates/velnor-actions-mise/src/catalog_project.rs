@@ -32,6 +32,7 @@ impl PinnedTool {
             Self::MrBoxington => "VELNOR_TOOL_MR_BOXINGTON",
             Self::Gh => "VELNOR_TOOL_GH",
             Self::Actionlint => "VELNOR_TOOL_ACTIONLINT",
+            Self::Jactionlint => "VELNOR_TOOL_JACTIONLINT",
             Self::Shellcheck => "VELNOR_TOOL_SHELLCHECK",
             Self::Zizmor => "VELNOR_TOOL_ZIZMOR",
             Self::Nextest => "VELNOR_TOOL_NEXTEST",
@@ -72,6 +73,18 @@ impl ToolCatalog {
         super::validate_concrete_exact_version(tool.tool_name(), version)?;
         version.clone_into(self.version_slot(tool));
         self.project.insert(tool);
+        Ok(self)
+    }
+
+    /// Replace one Velnor pin (a `.velnor/config.toml` `[tools]` override)
+    /// without marking the tool project-declared.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MiseError::InvalidToolVersion`] for a non-exact version.
+    pub fn with_version(mut self, tool: PinnedTool, version: &str) -> Result<Self, MiseError> {
+        super::validate_concrete_exact_version(tool.tool_name(), version)?;
+        version.clone_into(self.version_slot(tool));
         Ok(self)
     }
 
@@ -127,6 +140,7 @@ impl ToolCatalog {
             PinnedTool::MrBoxington => &mut self.mr_boxington,
             PinnedTool::Gh => &mut self.gh,
             PinnedTool::Actionlint => &mut self.actionlint,
+            PinnedTool::Jactionlint => &mut self.jactionlint,
             PinnedTool::Shellcheck => &mut self.shellcheck,
             PinnedTool::Zizmor => &mut self.zizmor,
             PinnedTool::Nextest => &mut self.nextest,

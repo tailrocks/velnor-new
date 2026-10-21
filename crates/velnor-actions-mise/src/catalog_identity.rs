@@ -7,7 +7,7 @@ use velnor_actions_contract::ToolIdentity;
 
 use super::{
     OPENTOFU_SHA256_LINUX_AMD64, OPENTOFU_VERSION, PLACEHOLDER_DIGEST, PinnedTool, TOOL_PLATFORMS,
-    ToolCatalog, tool_source,
+    ToolCatalog, jactionlint_archive_sha256, tool_source,
 };
 use crate::error::MiseError;
 
@@ -28,6 +28,9 @@ impl ToolCatalog {
     fn tool_digest(&self, tool: PinnedTool) -> &str {
         if tool == PinnedTool::Opentofu && self.version(tool) == OPENTOFU_VERSION {
             OPENTOFU_SHA256_LINUX_AMD64
+        } else if tool == PinnedTool::Jactionlint {
+            jactionlint_archive_sha256(self.version(tool), "linux-x64")
+                .unwrap_or(PLACEHOLDER_DIGEST)
         } else {
             PLACEHOLDER_DIGEST
         }
