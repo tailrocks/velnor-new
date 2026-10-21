@@ -18,8 +18,10 @@ tar = { version = "=0.4.46", default-features = false }
 zip = { version = "=9.0.5", default-features = false, features = ["deflate-flate2"] }
 velnor-archive-guard = { version = "=0.1.32", path = "../velnor-archive-guard" }
 velnor-actions-actionlint = { version = "=0.1.32", path = "../velnor-actions-actionlint" }
+velnor-actions-ansible = { version = "=0.1.32", path = "../velnor-actions-ansible" }
 velnor-actions-bun = { version = "=0.1.32", path = "../velnor-actions-bun" }
 velnor-actions-contract = { version = "=0.1.32", path = "../velnor-actions-contract" }
+velnor-actions-dbt = { version = "=0.1.32", path = "../velnor-actions-dbt" }
 velnor-actions-mise = { version = "=0.1.32", path = "../velnor-actions-mise" }
 velnor-actions-rust = { version = "=0.1.32", path = "../velnor-actions-rust" }
 velnor-actions-tofu = { version = "=0.1.32", path = "../velnor-actions-tofu" }

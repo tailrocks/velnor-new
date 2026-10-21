@@ -158,18 +158,32 @@ pub fn check_core_agreement(
     requirements: &[Requirement],
     mise_ansible_core: &str,
 ) -> Result<(), AnsibleError> {
-    let Some(core) = requirements.iter().find(|r| r.name == CORE_DISTRIBUTION) else {
+    check_agreement(requirements, CORE_DISTRIBUTION, mise_ansible_core)
+}
+
+/// The locked `distribution` must be the version Mise declares (decision 4).
+///
+/// # Errors
+///
+/// `python_requirement_missing:<distribution>` when absent and
+/// `conflicting_project_tool_versions:<distribution>` on disagreement.
+pub fn check_agreement(
+    requirements: &[Requirement],
+    distribution: &str,
+    mise_version: &str,
+) -> Result<(), AnsibleError> {
+    let Some(found) = requirements.iter().find(|r| r.name == distribution) else {
         return Err(AnsibleError::new(
             "python_requirement_missing",
-            CORE_DISTRIBUTION,
+            distribution,
         ));
     };
-    if core.version == mise_ansible_core {
+    if found.version == mise_version {
         Ok(())
     } else {
         Err(AnsibleError::new(
             "conflicting_project_tool_versions",
-            CORE_DISTRIBUTION,
+            distribution,
         ))
     }
 }

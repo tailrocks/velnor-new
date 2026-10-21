@@ -296,6 +296,12 @@ fn tools_identity_binds_resolved_versions_never_hashed_files() {
 #[test]
 fn bun_families_fail_closed_until_a_generator_emits_them() {
     for (family, path) in [
+        ("dbt-packages", "${{ runner.temp }}/velnor/dbt-packages/x"),
+        ("python-venv", "${{ runner.temp }}/velnor/uv-cache"),
+        (
+            "ansible-collections",
+            "${{ runner.temp }}/velnor/ansible-collections",
+        ),
         ("bun-install", "${{ runner.temp }}/velnor/bun-cache"),
         (
             "playwright-browsers",

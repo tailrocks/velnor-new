@@ -1,0 +1,81 @@
+{
+  "status": "PASS",
+  "source_head": "bfc2dba6e3dc504813a883e667b70f59ab8a9370",
+  "merge_head": "db986f9c993c8b9c9df5bd470e0a46f47bb6b8c4",
+  "purpose": "Keep the dbt and Ansible changes from main. Keep the Scale Set routing and cache checks.",
+  "checks": {
+    "root_library_strict_clippy": {
+      "status": "PASS",
+      "exit_status": 0,
+      "log": "evidence/main-db986-integration/clippy-lib.log",
+      "sha256": "e498eecd5348808a86a0c0c8350b47c586776c7bae071306b562eded2cbe0ce9"
+    },
+    "root_all_targets_strict_clippy": {
+      "status": "PASS",
+      "exit_status": 0,
+      "log": "evidence/main-db986-integration/clippy-all.log",
+      "sha256": "326c0ede6d60e722a5356cff0979255ad5866aef7b26002e32b7ac1af215da0c"
+    },
+    "root_format": {
+      "status": "PASS",
+      "exit_status": 0,
+      "log": "evidence/main-db986-integration/fmt.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "generator_build": {
+      "status": "PASS",
+      "exit_status": 0,
+      "log": "evidence/main-db986-integration/build.log",
+      "sha256": "dac3ab70a6d1d437847a13f4f8b8fc130c2b06a9f02472d0c3d21b37f36fe092"
+    },
+    "focused_nextest": {
+      "status": "PASS",
+      "exit_status": 0,
+      "passed": 85,
+      "skipped_by_selection": 2334,
+      "log": "evidence/main-db986-integration/focused-nextest.log",
+      "sha256": "dc12ec9decad3075a75b926e2e5da22448e61c68b5ab525716ec82dbdb1b65af",
+      "run_id": "76c0ecc3-3fe9-4388-bd6a-4b967ad53c24"
+    },
+    "repository_structure": {
+      "status": "PASS",
+      "exit_status": 0,
+      "log": "evidence/main-db986-integration/alint.log",
+      "sha256": "c5957a5cc162f430bc9bb1b8dad09fe6fda2d5b5cd59e2c62f4b4b64051f1ccb"
+    },
+    "repository_structure_config": {
+      "status": "PASS",
+      "exit_status": 0,
+      "log": "evidence/main-db986-integration/alint-config.log",
+      "sha256": "0b5eaf285eca0479c08ac7d9cfe273d051bae0f8745289298b4f92f527a198c0"
+    },
+    "generation": {
+      "status": "PASS",
+      "binary_sha256": "39bb3ebbe5854bb3927750702a9f530e1dca81ae57dd981a26720fb3dd1f4f4a",
+      "managed_files": 252,
+      "previews": 2,
+      "symlink_targets": "Equal",
+      "checkout_comparison": "Equal"
+    },
+    "supplemental_goldens": {
+      "status": "PASS",
+      "cases": 5,
+      "log_sha256": "f9f7d45211fe7c6caa15ae755fa743666289054d857f8937a2c263a8fa537d54"
+    },
+    "parity": {
+      "status": "PASS",
+      "passed": 1,
+      "run_id": "1d9e4ef3-544e-42a4-b4d3-30b3b44c8bb2",
+      "log_sha256": "2c041697e8029c2a8d56218852537c67c7f37c7699bceb89e79aae924b46fadf"
+    }
+  },
+  "remaining": [
+    "Run the full gates before release or activation."
+  ],
+  "discovery_review": {
+    "status": "PASS",
+    "receipt_sha256": "4d498d1e5de0bd578c6d828ac76dc2ef7b1c9901e196cc68a63e4532af855024",
+    "manifest_sha256": "7092d9e0b6be98d45c355850e826ab05055030f092a8da21c68c4c53d0019518"
+  },
+  "scope": "The checks apply to this pending merge. They do not prove the full goal."
+}

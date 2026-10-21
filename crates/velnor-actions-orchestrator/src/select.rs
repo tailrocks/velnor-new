@@ -20,12 +20,17 @@ use crate::discover::Discovery;
 use crate::git_paths::NON_UTF8_PATH;
 use crate::select_affected::{Ownership, affected_packages, has_unowned_file};
 use crate::select_edges::{base_edges, head_edges};
+
+#[path = "select_ansible.rs"]
+pub(crate) mod ansible;
 #[path = "select_bun.rs"]
 pub(crate) mod bun;
 #[path = "select_changes.rs"]
 mod changes;
 #[path = "select_checkout.rs"]
 mod checkout;
+#[path = "select_dbt.rs"]
+pub(crate) mod dbt;
 #[path = "select_images.rs"]
 pub(crate) mod images;
 pub(crate) use images::ChangeEvidence;

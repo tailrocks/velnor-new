@@ -35,6 +35,8 @@ use crate::{discover_tofu::qualify_tofu_step, evidence::profile_for_workspace};
 
 #[path = "discover_manifest_paths.rs"]
 mod manifest_paths;
+#[path = "discover_task_inventories.rs"]
+mod task_inventories;
 pub(crate) use manifest_paths::{workspace_lock, workspace_manifest};
 
 /// One workspace with its inventory, profile, and recommendations.
@@ -96,6 +98,10 @@ pub struct Discovery {
     pub affected: crate::affected_inputs::AffectedInputs,
     /// Bun workspaces named by `[stacks.bun]`, read from the same index.
     pub(crate) bun: crate::workflow_task_jobs::bun_inventory::BunInventory,
+    /// Discovery reads dbt projects from `[stacks.dbt]` through the shared file index.
+    pub(crate) dbt: crate::workflow_task_jobs::dbt_inventory::DbtInventory,
+    /// Discovery reads Ansible roots from `[stacks.ansible]` through the shared file index.
+    pub(crate) ansible: crate::workflow_task_jobs::ansible_inventory::AnsibleInventory,
 }
 
 /// Run file index, detection, inventory, profiles, and task derivation.
@@ -119,20 +125,6 @@ pub(crate) fn discover_with_phase_timings(
     phases: &mut PlanPhaseTimings,
 ) -> Result<Discovery, OrchestratorError> {
     discover_inner(root, config, catalog, Some(phases))
-}
-
-/// Bun member inventory for the configured `[stacks.bun]` (empty without it).
-fn bun_inventory(
-    root: &Path,
-    index: &FileIndex,
-    config: &VelnorConfig,
-) -> Result<crate::workflow_task_jobs::bun_inventory::BunInventory, OrchestratorError> {
-    match &config.stacks.bun {
-        Some(stack) => {
-            crate::workflow_task_jobs::bun_inventory::BunInventory::load(root, index, stack)
-        }
-        None => Ok(crate::workflow_task_jobs::bun_inventory::BunInventory::default()),
-    }
 }
 
 fn discover_inner(
@@ -191,7 +183,7 @@ fn discover_inner(
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
     let (consumer_manifest_json, consumer_manifest_stand_in) =
         consumer_manifest::for_policy(root, config.workflow.policy)?;
-    let bun = bun_inventory(root, &index, config)?;
+    let (bun, dbt, ansible) = task_inventories::load(root, &index, config)?;
     let gradle_roots = gradle_jobs::analyze_roots(root, &index, config)?;
     Ok(Discovery {
         gradle_roots,
@@ -210,6 +202,8 @@ fn discover_inner(
         tofu_units,
         affected: crate::affected_inputs::AffectedInputs { resolves, rules },
         bun,
+        dbt,
+        ansible,
     })
 }
 

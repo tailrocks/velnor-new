@@ -1,6 +1,6 @@
 # dbt contract (dbt-fusion stack)
 
-Status: partly implemented. Source design: the ChainArgos split stacks design
+Status: implemented except for the items under "Not yet implemented". Source design: the ChainArgos split stacks design
 (section 6.1). Decision: the `dbt-fusion` version grammar of HD-4a, adopted per
 the split brief; owner may revisit. This page states what exists today and
 what each remaining piece must satisfy; it does not claim the stack is
@@ -26,7 +26,7 @@ complete.
 [stacks.dbt]
 projects = ["chainargos-dbt"]        # required, sorted, unique; "." is the repository root
 services = ["postgres"]              # closed catalog; needed by compile
-env = { DBT_HOST = "127.0.0.1", DBT_PORT = "5432", DBT_USER = "velnor", DBT_PASSWORD = "velnor", DBT_DBNAME = "redshift", DBT_PROFILES_DIR = "." }
+env = { DBT_HOST = "127.0.0.1", DBT_PORT = "40000", DBT_USER = "chainargos", DBT_PASSWORD = "chainargos", DBT_DBNAME = "chainargos", DBT_PROFILES_DIR = "." }
 checks = ["parse", "compile"]        # closed; default ["parse"]; "compile" requires a service
 timeout_minutes = 10                 # 1..=360; default workflow.crate_timeout_minutes
 ```
@@ -36,7 +36,11 @@ always runs first and is not configurable. `env` keys are `DBT_[A-Z0-9_]+` and
 values are inert literals over `[A-Za-z0-9._:/-]` (at most 128 bytes, 32
 entries): no expression, quote, `$` or whitespace, so a value can never carry
 syntax. `DBT_PASSWORD` is a fixed non-secret placeholder for a service container
-and is never a credential.
+and is never a credential. With `services = ["postgres"]`, `DBT_PORT`,
+`DBT_USER`, `DBT_PASSWORD` and `DBT_DBNAME`, when present, must equal what the
+catalog service publishes (host port `40000`, user, password and database
+`chainargos`); a different value fails generation with
+`dbt_env_service_mismatch:<key>`.
 
 ## Implemented: `velnor-actions-dbt`
 
@@ -84,22 +88,50 @@ The adapter-specific grammar `X.Y.Z-preview.N` widens hard decision 4's exact
 `[A-Za-z0-9.-]`, single-line, never echoed raw. Not to be reintroduced without
 owner approval: a prerelease range, `latest` or a bare `X.Y.Z` for `dbt-fusion`.
 
-## Known consumer gaps (reported, not fixed here)
+## Consumer notes
 
-- `chainargos-dbt/mise.lock` records URLs but no `checksum` for `dbt-fusion`
-  (`dbt_fusion_checksum_missing` for all three platforms). The Dockerfiles carry
-  their own `DBT_FUSION_SHA256`. The consumer must either lock checksums or the
-  generated job must verify against a Velnor-held digest; the former keeps the
-  decision 4 single source of truth.
+- `mise lock` records the `dbt-fusion` URLs but no SHA-256: the aqua entry has no
+  checksum source, and an install on one platform adds only a BLAKE3 for that
+  platform. The consumer therefore commits `sha256:` rows for all three
+  platforms, copied from the `.sha256` files `public.cdn.getdbt.com` publishes
+  next to each archive (`mise install` honours and verifies them).
 - The root `mise.toml` is not inside the dbt project directory, so a tool-pin
   change is handled by the declared-version comparison of decision 3, not by the
   project-directory claim.
 
+## Implemented: the `dbt / <project>` job
+
+`WorkflowTaskPolicy::Stack` (renderer `stack_jobs`, shared with Ansible) carries
+one job per configured project; the orchestrator resolves it in `dbt_inventory`
+(analysis, fail closed), `dbt_tasks` and `dbt_steps`, and plans it in
+`select_dbt`. The job id is `dbt-<slug>` and the display name `dbt / <dir>`.
+
+- **Shape.** Checkout without credentials, `Setup Mise`, `Resolve project tool
+  versions` (which defines `VELNOR_TOOL_DBT_FUSION` only because the job
+  references it), `Install dbt-fusion`, `dbt deps`, then one background step per
+  check joined by `wait-all`. The job holds `contents: read` only and refuses any
+  `uses:` step or token role. It runs on the hosted `ubuntu-26.04` runner.
+  No tool is installed through Mise, so the tools-cache v2 steps are not
+  emitted.
+- **Tool provisioning.** `Install dbt-fusion` rebuilds the admitted
+  `public.cdn.getdbt.com` URL from the project-declared version and requires it
+  to equal the `linux-x64` row of the repository `mise.lock`; the row's SHA-256 is
+  the only trust anchor, checked with `sha256sum -c` before extraction.
+  Generation also fails closed (`dbt_fusion_checksum_missing:<platform>` and the
+  other lock findings) when any of the three platform rows lacks a checksum.
+- **Service.** `services = ["postgres"]` adds the digest-pinned catalog Postgres
+  service ([service catalog](workflow-contract.md)) to the job; `compile` runs
+  `dbt compile --static-analysis off` against it.
+- **Plan.** Every project has a `run` or `not_affected` disposition. A change
+  under the project directory selects it; an unknown change set, a global-config
+  path (including the Mise config and lock) or a full-run event selects every
+  project. The `dbt-` prefix owns no obligations.
+- **Caches.** The `dbt-packages` family is specified
+  ([cache families](cache-families.md)); its restore and save steps are not
+  generated yet, so `dbt deps` runs against the network on every run.
+
 ## Not yet implemented
 
-- `Stack::Dbt` discovery, the `dbt / <project>` job (deps, then parallel parse
-  and compile), plan dispositions and the `dbt-packages` cache family.
-- The `dbt-fusion` catalog entry.
-- Postgres service emission for `compile`.
+- The `dbt-packages` restore and save steps.
 - `dbt build --empty` (phase 2, needs the seeded warehouse schema bundle).
 - The `docker-dbt-fusion` image under `[[images]]` and the Lightdash Bun member.

@@ -3,7 +3,7 @@ use super::*;
 /// Pinned `(schema, paths)` digests. Editing a family's paths without a
 /// schema bump changes the digest and fails here; bump the schema, then
 /// update the pin.
-const PINS: [(CacheFamily, &str); 4] = [
+const PINS: [(CacheFamily, &str); 7] = [
     (
         CacheFamily::Sources,
         "fc961241ea3626cce35dbd7f53c4634c97edca039bf4b911bdbe1ce545db5ce9",
@@ -19,6 +19,18 @@ const PINS: [(CacheFamily, &str); 4] = [
     (
         CacheFamily::PlaywrightBrowsers,
         "bc3b248d99fb5a69cf51d264ae132f4876a70489ee8c41548ecbb8b9ff926a0d",
+    ),
+    (
+        CacheFamily::DbtPackages,
+        "33b21c5a1d181bd3095ce75f09c8c06143f48572b3ad9340be10aaabb5134b19",
+    ),
+    (
+        CacheFamily::PythonVenv,
+        "120cff9d5484f14f9db5ef7b101c6f4de3f5d9f05d73212777fe3d62341a07bc",
+    ),
+    (
+        CacheFamily::AnsibleCollections,
+        "4d8b94903556b521c8d6a6e090db995ede77a588fdb2c9cff3c8345437cc384d",
     ),
 ];
 
@@ -142,11 +154,16 @@ fn bun_families_cache_the_velnor_owned_directories() {
 fn reference_family_ceilings_fit_the_budget_rule() {
     const MIB: u64 = 1024 * 1024;
     // ChainArgos reference: four Bun roots, two `OpenTofu` roots, one Playwright
-    // version in use. The legacy tools layer measured 1,307,773,873 B and gets
+    // version in use, one dbt project, one Python requirements file and one
+    // Ansible collection set. The legacy tools layer measured 1,307,773,873 B and gets
     // 1.5 GiB (cache-measurements.md).
     let tools_allowance = 1536 * MIB;
     let units = |family: CacheFamily| match family {
-        CacheFamily::Sources | CacheFamily::PlaywrightBrowsers => 1,
+        CacheFamily::Sources
+        | CacheFamily::PlaywrightBrowsers
+        | CacheFamily::DbtPackages
+        | CacheFamily::PythonVenv
+        | CacheFamily::AnsibleCollections => 1,
         CacheFamily::TofuProviders => 2,
         CacheFamily::BunInstall => 4,
     };
@@ -172,4 +189,37 @@ fn reference_family_ceilings_fit_the_budget_rule() {
     // 328,445,484 B of downloaded Playwright archives for Chromium.
     assert!(CacheFamily::BunInstall.spec().ceiling_bytes > 30_342_453 * 8);
     assert!(CacheFamily::PlaywrightBrowsers.spec().ceiling_bytes > 328_445_484);
+}
+
+#[test]
+fn dbt_and_ansible_families_cache_the_velnor_owned_directories() {
+    let dbt = CacheFamily::DbtPackages.spec();
+    assert!(dbt.is_per_root());
+    assert_eq!(
+        dbt.path_input(Some("chainargos-dbt")),
+        "${{ runner.temp }}/velnor/dbt-packages/chainargos-dbt"
+    );
+    let venv = CacheFamily::PythonVenv.spec();
+    assert_eq!(venv.shell_paths(None), ["$RUNNER_TEMP/velnor/uv-cache"]);
+    let collections = CacheFamily::AnsibleCollections.spec();
+    assert_eq!(
+        collections.path_input(None),
+        "${{ runner.temp }}/velnor/ansible-collections"
+    );
+    assert!(!venv.is_per_root() && !collections.is_per_root());
+    for (family, prefix) in [
+        (CacheFamily::DbtPackages, "velnor-v1-dbt-packages-"),
+        (CacheFamily::PythonVenv, "velnor-v1-python-venv-"),
+        (
+            CacheFamily::AnsibleCollections,
+            "velnor-v1-ansible-collections-",
+        ),
+    ] {
+        assert_eq!(family.key_prefix(), prefix);
+        assert_eq!(
+            CacheFamily::for_key(&format!("{prefix}trusted-x")),
+            Some(family)
+        );
+        assert!(family.validate_key_bound().is_ok(), "{family:?}");
+    }
 }

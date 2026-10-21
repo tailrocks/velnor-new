@@ -49,6 +49,8 @@ fn discovery_with_proposals(proposals: Vec<ProposedTask>) -> Discovery {
         tofu_note: None,
         tofu_units: Vec::new(),
         bun: crate::workflow_task_jobs::bun_inventory::BunInventory::default(),
+        dbt: crate::workflow_task_jobs::dbt_inventory::DbtInventory::default(),
+        ansible: crate::workflow_task_jobs::ansible_inventory::AnsibleInventory::default(),
     }
 }
 
