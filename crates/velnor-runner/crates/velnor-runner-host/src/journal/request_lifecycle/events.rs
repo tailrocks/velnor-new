@@ -63,7 +63,7 @@ pub(crate) enum RecordedEventDisposition {
     Historical { intent_id: i64 },
 }
 
-fn historical_intent_id(disposition: EventRetirementDisposition) -> i64 {
+fn historical_intent_id(disposition: &EventRetirementDisposition) -> i64 {
     match disposition.status {
         EventRetirementStatus::Claimed | EventRetirementStatus::Retired => disposition.intent_id,
     }

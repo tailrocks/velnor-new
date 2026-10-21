@@ -143,10 +143,11 @@ impl ConnectionJournal {
                 offers.push(parse_offer(
                     self.connection_id(),
                     scale_set_id,
-                    row,
+                    &row,
                     &binding_digest,
                     repository_id,
                 )?);
+                drop(row);
             }
             Ok(offers)
         })
@@ -199,10 +200,11 @@ impl ConnectionJournal {
             let offer = parse_offer(
                 self.connection_id(),
                 scale_set_id,
-                row,
+                &row,
                 &binding_digest,
                 repository_id,
             )?;
+            drop(row);
             if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
                 return Err(HostError::Journal);
             }
@@ -263,10 +265,11 @@ impl ConnectionJournal {
             let offer = parse_offer(
                 self.connection_id(),
                 scale_set_id,
-                row,
+                &row,
                 &binding_digest,
                 repository_id,
             )?;
+            drop(row);
             if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
                 return Err(HostError::Journal);
             }
@@ -285,7 +288,7 @@ impl ConnectionJournal {
 fn parse_offer(
     connection_id: &ConnectionId,
     scale_set_id: i64,
-    row: turso::Row,
+    row: &turso::Row,
     expected_binding_digest: &str,
     repository_id: i64,
 ) -> Result<AuthorizedOffer, HostError> {

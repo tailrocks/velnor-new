@@ -85,7 +85,7 @@ async fn replay_started(
     }
     if let Some(retirement) = context.retirement {
         return Ok(RecordedEventDisposition::Historical {
-            intent_id: super::historical_intent_id(retirement),
+            intent_id: super::historical_intent_id(&retirement),
         });
     }
     exact_started_intent(
@@ -115,7 +115,7 @@ async fn record_historical_started(
         return Err(HostError::Journal);
     };
     validate_started_state(connection, record, &state, set_id).await?;
-    let intent_id = super::historical_intent_id(retirement);
+    let intent_id = super::historical_intent_id(&retirement);
     record_started_authorization(connection, record, set_id, intent_id).await?;
     Ok(RecordedEventDisposition::Historical { intent_id })
 }

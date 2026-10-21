@@ -90,7 +90,7 @@ fn replay_completed(
     }
     if let Some(retirement) = context.retirement {
         return Ok(RecordedEventDisposition::Historical {
-            intent_id: super::historical_intent_id(retirement),
+            intent_id: super::historical_intent_id(&retirement),
         });
     }
     Ok(RecordedEventDisposition::Active {
@@ -107,7 +107,7 @@ async fn record_historical_completed(
     let Some(runner) = record.runner else {
         return Err(HostError::Journal);
     };
-    let intent_id = super::historical_intent_id(retirement);
+    let intent_id = super::historical_intent_id(&retirement);
     record_completed_authorization(
         connection,
         record,
