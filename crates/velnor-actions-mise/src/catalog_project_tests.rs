@@ -93,3 +93,24 @@ fn every_tool_has_a_distinct_project_env_and_keys() {
         "aqua:nextest-rs/nextest/cargo-nextest"
     );
 }
+
+#[test]
+fn a_config_pin_replaces_the_velnor_pin_without_declaring_the_tool() {
+    let catalog = ToolCatalog::pinned()
+        .with_version(PinnedTool::Jactionlint, "2.4.0")
+        .expect("exact pin");
+    assert_eq!(catalog.version(PinnedTool::Jactionlint), "2.4.0");
+    assert!(!catalog.is_project_declared(PinnedTool::Jactionlint));
+    assert_eq!(
+        catalog.for_emission().tool_spec(PinnedTool::Jactionlint),
+        "jactionlint@2.4.0"
+    );
+    for loose in ["2.4", "v2.4.0", "latest", "${VELNOR_TOOL_JACTIONLINT}"] {
+        assert!(
+            ToolCatalog::pinned()
+                .with_version(PinnedTool::Jactionlint, loose)
+                .is_err(),
+            "{loose}"
+        );
+    }
+}

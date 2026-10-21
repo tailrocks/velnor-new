@@ -100,10 +100,10 @@ fn catalog_identities_validate() {
     assert!(err.to_string().contains("placeholder_digest"), "{err}");
     for tool in PinnedTool::ALL {
         let identity = catalog.tool_identity(tool);
-        if tool == PinnedTool::Opentofu {
+        if matches!(tool, PinnedTool::Opentofu | PinnedTool::Jactionlint) {
             assert!(
                 identity.validate("catalog").is_ok(),
-                "opentofu digest is bound (T15)"
+                "{tool:?} digest is bound to its measured linux-x64 archive"
             );
         } else {
             let err = identity
