@@ -48,6 +48,7 @@ mod task_source;
 mod tofu;
 mod tofu_apply;
 mod tools;
+mod upgrades;
 mod verification;
 mod workflow;
 mod workflow_flags;
@@ -151,6 +152,10 @@ pub use task_source::MiseTaskSource;
 pub use tofu::{RootProblem, TofuStackConfig, Utf8RepoRelDir};
 pub use tofu_apply::{GitHubTokenSecret, S3BackendConfig, TofuApplyConfig};
 pub use tools::{OVERRIDABLE_TOOLS, ToolsConfig, is_exact_semver};
+pub use upgrades::{
+    DEFAULT_UPGRADES_APP_ID_VARIABLE, DEFAULT_UPGRADES_APP_KEY_SECRET, DEFAULT_UPGRADES_CRON,
+    DEFAULT_UPGRADES_STUCK_DAYS, MAX_UPGRADES_STUCK_DAYS, UPGRADES_WORKFLOW_PATH, UpgradesConfig,
+};
 pub use verification::{VerificationRunner, VerificationTask};
 pub use workflow::{
     GeneratorValidation, LATEST_RUNNER_LABEL, PullRequestCachePolicy, RUNNER_LABEL_CATALOG,
@@ -213,6 +218,9 @@ pub struct VelnorConfig {
     /// Private cross-repository dependency credentials (`[private_sources]`, HD-7).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub private_sources: Option<PrivateSourcesConfig>,
+    /// Daily upgrade pull request and freshness gate (`[upgrades]`); off by default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upgrades: Option<UpgradesConfig>,
     /// Container images built on every run and published from the default branch.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub images: Vec<ImageConfig>,
@@ -278,6 +286,9 @@ impl VelnorConfig {
         self.distribution.validate(file)?;
         if let Some(private_sources) = &self.private_sources {
             private_sources.validate(file)?;
+        }
+        if let Some(upgrades) = &self.upgrades {
+            upgrades.validate(file)?;
         }
         self.publish.validate(file)?;
         self.check_distribution_source(file)?;
