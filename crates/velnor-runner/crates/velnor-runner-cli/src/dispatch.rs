@@ -74,7 +74,7 @@ fn dispatch(cli: &Cli) -> ExitCode {
             platform: &args.platform,
             max_jobs: args.max_jobs,
             docker_context: args.docker_context.as_deref(),
-            endpoint: args.endpoint.as_deref(),
+            endpoint: &args.endpoint,
             runner_cpu_millicores: args.runner_cpu_millicores,
             runner_memory_bytes: args.runner_memory_bytes,
             dind_cpu_millicores: args.dind_cpu_millicores,

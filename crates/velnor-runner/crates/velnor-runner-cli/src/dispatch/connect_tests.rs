@@ -34,6 +34,7 @@ fn connect_help_reads_stdin_and_has_no_token_flag() -> Result<(), String> {
     }
     for flag in [
         "--connection-id",
+        "--endpoint",
         "--repository-id",
         "--job-authority-inventory",
         "--job-authority-generator-source-sha",
@@ -120,6 +121,14 @@ fn connect_stores_and_writes_the_same_configured_reference() -> Result<(), Strin
             return Err(format!("missing {field}"));
         }
     }
+    let config = velnor_runner_host::HostConfig::parse(&text).map_err(|err| err.to_string())?;
+    if config.docker.context != "orbstack"
+        || config.docker.endpoint != "unix:///Users/example/.orbstack/run/docker.sock"
+    {
+        return Err(
+            "The connect command changed the explicit Docker context or endpoint.".to_owned(),
+        );
+    }
     let stored = stored.into_inner().ok_or("store callback was not called")?;
     if stored.0 != TEST_SERVICE || stored.1 != "example-repo" || stored.2.as_slice() != canary {
         return Err("stored credential differs from the TOML reference".to_owned());
@@ -204,6 +213,29 @@ fn connect_does_not_replace_an_invalid_existing_config() -> Result<(), String> {
     let text = std::fs::read_to_string(&path).map_err(|error| error.to_string())?;
     if result.is_ok() || *stored.borrow() || text != "invalid = [\n" {
         return Err("connect replaced an invalid config".to_owned());
+    }
+    Ok(())
+}
+
+#[test]
+fn connect_rejects_an_invalid_endpoint_before_storing_or_writing() -> Result<(), String> {
+    let dir = TempDir::new("invalid-endpoint")?;
+    let mut request = request(dir.path());
+    request.endpoint = "tcp://127.0.0.1:2375";
+    let mut input = Cursor::new(b"token\n");
+    let stored = RefCell::new(false);
+    let result = connect_with_store(&mut input, TEST_SERVICE, &request, |_, _, _| {
+        *stored.borrow_mut() = true;
+        Ok(())
+    });
+    if !matches!(result, Err(ConnectError::Config)) || *stored.borrow() {
+        return Err(
+            "The connect command did not reject the invalid endpoint before secret storage."
+                .to_owned(),
+        );
+    }
+    if dir.path().join("host.toml").exists() {
+        return Err("The connect command wrote host.toml for an invalid endpoint.".to_owned());
     }
     Ok(())
 }
@@ -309,7 +341,7 @@ fn request(state: &Path) -> ConnectRequest<'_> {
         platform: "linux/amd64",
         max_jobs: Some(1),
         docker_context: Some("orbstack"),
-        endpoint: Some("unix:///var/run/docker.sock"),
+        endpoint: "unix:///Users/example/.orbstack/run/docker.sock",
         runner_cpu_millicores: 1_000,
         runner_memory_bytes: 2_147_483_648,
         dind_cpu_millicores: 3_000,

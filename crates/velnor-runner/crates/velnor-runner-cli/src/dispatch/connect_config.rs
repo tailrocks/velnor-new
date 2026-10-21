@@ -33,7 +33,7 @@ pub(super) fn sample_config(
     let source_policy_mode = toml_basic_string(source_policy_mode);
     let pull_request_rules = toml_pull_request_rules(&connection.source_policy.pull_request_rules);
     let docker_context = toml_basic_string(request.docker_context.unwrap_or("orbstack"));
-    let endpoint = toml_basic_string(request.endpoint.unwrap_or("unix:///var/run/docker.sock"));
+    let endpoint = toml_basic_string(request.endpoint);
     let platform = toml_basic_string(request.platform);
     format!(
         "schema = 2\n[[connections]]\nconnection_id = {connection_id}\nrepository_id = {}\nrepository = {repository}\ncredential_ref = {credential_ref}\n[connections.scale_set]\nname = {scale_set_name}\nlabels = {labels}\n[connections.source_policy]\nmode = {source_policy_mode}\nbranches = {branches}\ntag_prefixes = {tag_prefixes}\nevents = {events}\npull_request_rules = {pull_request_rules}\n[host]\nmax_jobs = {}\n[host.resources]\nrunner_cpu_millicores = {}\nrunner_memory_bytes = {}\ndind_cpu_millicores = {}\ndind_memory_bytes = {}\noperational_memory_reserve_bytes = {}\n[docker]\ncontext = {docker_context}\nplatform = {platform}\nendpoint = {endpoint}\n",

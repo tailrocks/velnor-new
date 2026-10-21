@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{Parser, error::ErrorKind};
 
 #[test]
 fn connect_requires_all_host_resource_limits() {
@@ -43,6 +43,8 @@ fn connect_requires_all_host_resource_limits() {
         "6442450944",
         "--operational-memory-reserve-bytes",
         "1073741824",
+        "--endpoint",
+        "unix:///Users/example/.orbstack/run/docker.sock",
     ];
     assert!(crate::Cli::try_parse_from(complete).is_ok());
     let missing_memory = [
@@ -76,6 +78,11 @@ fn connect_requires_all_host_resource_limits() {
         "3000",
         "--operational-memory-reserve-bytes",
         "1073741824",
+        "--endpoint",
+        "unix:///Users/example/.orbstack/run/docker.sock",
     ];
-    assert!(crate::Cli::try_parse_from(missing_memory).is_err());
+    let error = crate::Cli::try_parse_from(missing_memory)
+        .expect_err("The parser accepted arguments without the required memory limit.");
+    assert_eq!(error.kind(), ErrorKind::MissingRequiredArgument);
+    assert!(error.to_string().contains("--runner-memory-bytes"));
 }

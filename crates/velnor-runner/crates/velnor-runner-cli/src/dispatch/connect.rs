@@ -42,7 +42,7 @@ pub(super) struct ConnectRequest<'a> {
     pub(super) platform: &'a str,
     pub(super) max_jobs: Option<u32>,
     pub(super) docker_context: Option<&'a str>,
-    pub(super) endpoint: Option<&'a str>,
+    pub(super) endpoint: &'a str,
     pub(super) runner_cpu_millicores: u64,
     pub(super) runner_memory_bytes: u64,
     pub(super) dind_cpu_millicores: u64,

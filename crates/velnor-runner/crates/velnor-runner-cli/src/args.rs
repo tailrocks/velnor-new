@@ -174,9 +174,9 @@ pub struct ConnectArgs {
     /// Docker context name.
     #[arg(long)]
     pub docker_context: Option<String>,
-    /// Unix socket endpoint.
-    #[arg(long)]
-    pub endpoint: Option<String>,
+    /// Specify the exact Unix socket endpoint for the selected Docker engine.
+    #[arg(long, required = true)]
+    pub endpoint: String,
 }
 
 /// Host credential actions.
@@ -210,13 +210,62 @@ pub enum DaemonAction {
 mod tests {
     use std::path::Path;
 
-    use clap::Parser;
+    use clap::{Parser, error::ErrorKind};
 
     use super::{Cli, Command, ServiceAction};
 
     #[test]
     fn connect_keeps_the_flat_option_interface() -> Result<(), String> {
-        let cli = Cli::try_parse_from([
+        let cli = Cli::try_parse_from(connect_arguments()).map_err(|error| error.to_string())?;
+        let Command::Connect { args } = cli.command else {
+            return Err("connect command did not parse".to_owned());
+        };
+        if args.connection_id != "example"
+            || args.repo != "owner/repo"
+            || args.repository_id != 123
+            || args.scale_set != "example-set"
+            || args.scale_set_labels != ["velnor", "example-set"]
+            || args.source_policy_mode != "repository"
+            || args.events != ["push"]
+            || args.platform != "linux/amd64"
+            || args.endpoint != "unix:///Users/example/.orbstack/run/docker.sock"
+            || args.runner_cpu_millicores != 1000
+            || args.runner_memory_bytes != 2048
+            || args.dind_cpu_millicores != 2000
+            || args.dind_memory_bytes != 4096
+            || args.operational_memory_reserve_bytes != 1024
+        {
+            return Err("connect options changed during parsing".to_owned());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn connect_rejects_an_omitted_endpoint() -> Result<(), String> {
+        let mut arguments = connect_arguments();
+        let endpoint_index = arguments
+            .iter()
+            .position(|argument| *argument == "--endpoint")
+            .ok_or("The test fixture has no --endpoint argument.")?;
+        arguments.drain(endpoint_index..=endpoint_index + 1);
+        let error = match Cli::try_parse_from(arguments) {
+            Ok(_) => {
+                return Err(
+                    "The connect command accepted arguments without an endpoint.".to_owned(),
+                );
+            }
+            Err(error) => error,
+        };
+        if error.kind() != ErrorKind::MissingRequiredArgument
+            || !error.to_string().contains("--endpoint")
+        {
+            return Err("The connect command did not report the missing endpoint.".to_owned());
+        }
+        Ok(())
+    }
+
+    fn connect_arguments() -> Vec<&'static str> {
+        vec![
             "velnor-host",
             "connect",
             "--connection-id",
@@ -247,28 +296,9 @@ mod tests {
             "4096",
             "--operational-memory-reserve-bytes",
             "1024",
-        ])
-        .map_err(|error| error.to_string())?;
-        let Command::Connect { args } = cli.command else {
-            return Err("connect command did not parse".to_owned());
-        };
-        if args.connection_id != "example"
-            || args.repo != "owner/repo"
-            || args.repository_id != 123
-            || args.scale_set != "example-set"
-            || args.scale_set_labels != ["velnor", "example-set"]
-            || args.source_policy_mode != "repository"
-            || args.events != ["push"]
-            || args.platform != "linux/amd64"
-            || args.runner_cpu_millicores != 1000
-            || args.runner_memory_bytes != 2048
-            || args.dind_cpu_millicores != 2000
-            || args.dind_memory_bytes != 4096
-            || args.operational_memory_reserve_bytes != 1024
-        {
-            return Err("connect options changed during parsing".to_owned());
-        }
-        Ok(())
+            "--endpoint",
+            "unix:///Users/example/.orbstack/run/docker.sock",
+        ]
     }
 
     #[test]
