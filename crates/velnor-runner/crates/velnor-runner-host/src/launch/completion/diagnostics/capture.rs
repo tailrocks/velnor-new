@@ -16,32 +16,36 @@ mod native;
 
 pub(in crate::launch) use native::{NativeCaptureRequest, capture_native, delete_after_capture};
 
+pub(in crate::launch) struct RunnerLogWriteContext<'scope, 'host> {
+    pub(in crate::launch) context: &'scope Context<'host>,
+    pub(in crate::launch) root: &'scope DiagnosticsRoot,
+    pub(in crate::launch) launch: &'scope CompletedLaunch,
+    pub(in crate::launch) claim: CleanupClaim,
+    pub(in crate::launch) binding: &'scope CaptureBinding,
+    pub(in crate::launch) started: Instant,
+}
+
 pub(in crate::launch) async fn persist_runner_log_projection(
-    context: &Context<'_>,
-    root: &DiagnosticsRoot,
-    launch: &CompletedLaunch,
-    claim: CleanupClaim,
+    write: &RunnerLogWriteContext<'_, '_>,
     budget: &mut EffectBudget<'_>,
-    binding: &CaptureBinding,
     terminal: &CaptureState,
     attempt: i64,
     archive: &[u8],
-    started: Instant,
 ) -> Result<CaptureState, Failure> {
-    let write = RunnerLogStageRequest::new(
-        root,
+    let projection = RunnerLogStageRequest::new(
+        write.root,
         OperationKey {
-            journal_identity: binding.journal_identity.clone(),
-            connection_id: binding.connection_id.clone(),
-            intent_id: binding.intent_id,
+            journal_identity: write.binding.journal_identity.clone(),
+            connection_id: write.binding.connection_id.clone(),
+            intent_id: write.binding.intent_id,
         },
         attempt,
-        &binding.runner_container_id,
+        &write.binding.runner_container_id,
         archive,
-        started,
+        write.started,
     )
     .map_err(|error| Failure::request("runner log projection", error))?;
-    let availability = match write.availability() {
+    let availability = match projection.availability() {
         super::runner_logs::RunnerLogAvailability::None => RunnerLogAvailability::None,
         super::runner_logs::RunnerLogAvailability::RunnerOnly => RunnerLogAvailability::RunnerOnly,
         super::runner_logs::RunnerLogAvailability::WorkerOnly => RunnerLogAvailability::WorkerOnly,
@@ -49,21 +53,30 @@ pub(in crate::launch) async fn persist_runner_log_projection(
             RunnerLogAvailability::RunnerAndWorker
         }
     };
-    let (digest, size) = write.projection_identity();
+    let (digest, size) = projection.projection_identity();
     let pending = terminal
         .projection_pending(digest, size, availability != RunnerLogAvailability::None)
         .map_err(|error| Failure::request("runner log pending state", error))?;
     persist_runner_log_state(
-        context, root, launch, claim, budget, binding, &pending, started,
+        &RunnerLogWriteContext {
+            context: write.context,
+            root: write.root,
+            launch: write.launch,
+            claim: write.claim,
+            binding: write.binding,
+            started: write.started,
+        },
+        budget,
+        &pending,
     )
     .await?;
     persist_durable_write(
-        context,
-        launch,
-        claim,
+        write.context,
+        write.launch,
+        write.claim,
         budget,
-        DurableWrite::Projection(write),
-        started,
+        DurableWrite::Projection(projection),
+        write.started,
     )
     .await?;
     pending
@@ -72,24 +85,19 @@ pub(in crate::launch) async fn persist_runner_log_projection(
 }
 
 pub(in crate::launch) async fn persist_runner_log_state(
-    context: &Context<'_>,
-    root: &DiagnosticsRoot,
-    launch: &CompletedLaunch,
-    claim: CleanupClaim,
+    write: &RunnerLogWriteContext<'_, '_>,
     budget: &mut EffectBudget<'_>,
-    binding: &CaptureBinding,
     state: &CaptureState,
-    started: Instant,
 ) -> Result<(), Failure> {
-    let request = CaptureStateRequest::new(root, binding, state, started)
+    let request = CaptureStateRequest::new(write.root, write.binding, state, write.started)
         .map_err(|error| Failure::request("runner log state", error))?;
     persist_durable_write(
-        context,
-        launch,
-        claim,
+        write.context,
+        write.launch,
+        write.claim,
         budget,
         DurableWrite::State(request),
-        started,
+        write.started,
     )
     .await
 }

@@ -176,16 +176,18 @@ async fn capture_attempts(
         let (terminal, archive) = capture_attempt(input, budget, state).await?;
         if let Some(archive) = archive {
             state = diagnostics::persist_runner_log_projection(
-                input.context,
-                input.context.diagnostics,
-                input.launch,
-                input.claim,
+                &diagnostics::RunnerLogWriteContext {
+                    context: input.context,
+                    root: input.context.diagnostics,
+                    launch: input.launch,
+                    claim: input.claim,
+                    binding: input.binding,
+                    started: Instant::now(),
+                },
                 budget,
-                input.binding,
                 &terminal,
                 terminal.attempt,
                 &archive,
-                Instant::now(),
             )
             .await?;
             persist_state(
@@ -235,15 +237,17 @@ fn capture_binding(
         .ok_or_else(|| Failure::not_proven("runner home identity"))?;
     diagnostics::runner_log_binding(
         root,
-        launch.intent.id,
-        identity.reservation_id(),
-        identity.operation_id(),
-        identity.topology_version(),
-        identity.engine_id(),
-        identity.docker_root_digest(),
-        identity.runner_container_id(),
-        identity.dind_container_id(),
-        home,
+        &diagnostics::CaptureBindingInput {
+            intent_id: launch.intent.id,
+            reservation_id: identity.reservation_id(),
+            operation_id: identity.operation_id(),
+            topology_version: identity.topology_version(),
+            engine_id: identity.engine_id(),
+            docker_root_digest: identity.docker_root_digest(),
+            runner_container_id: identity.runner_container_id(),
+            dind_container_id: identity.dind_container_id(),
+            runner_home_volume: home,
+        },
     )
     .map_err(|error| Failure::request("runner log identity", error))
 }

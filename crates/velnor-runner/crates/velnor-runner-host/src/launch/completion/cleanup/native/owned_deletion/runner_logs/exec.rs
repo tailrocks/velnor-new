@@ -285,14 +285,16 @@ pub(super) async fn persist_state(
     state: &diagnostics::CaptureState,
 ) -> Result<(), Failure> {
     diagnostics::persist_runner_log_state(
-        context,
-        context.diagnostics,
-        launch,
-        claim,
+        &diagnostics::RunnerLogWriteContext {
+            context,
+            root: context.diagnostics,
+            launch,
+            claim,
+            binding,
+            started: Instant::now(),
+        },
         budget,
-        binding,
         state,
-        Instant::now(),
     )
     .await
 }

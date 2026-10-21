@@ -4,8 +4,8 @@ use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
 use super::{
-    CaptureBinding, CapturePhase, CaptureState, CaptureStateRequest, binding as make_binding,
-    read_projection, read_state, recover_terminal_projection,
+    CaptureBinding, CaptureBindingInput, CapturePhase, CaptureState, CaptureStateRequest,
+    binding as make_binding, read_projection, read_state, recover_terminal_projection,
 };
 use crate::launch::completion::diagnostics::DiagnosticsRoot;
 
@@ -153,15 +153,17 @@ fn attempt_fixture(
         .map_err(|error| format!("{error:?}"))?;
     let binding = make_binding(
         &root,
-        12,
-        23,
-        34,
-        1,
-        "engine-1",
-        &"a".repeat(64),
-        &"b".repeat(64),
-        &"c".repeat(64),
-        "runner-home-23",
+        &CaptureBindingInput {
+            intent_id: 12,
+            reservation_id: 23,
+            operation_id: 34,
+            topology_version: 1,
+            engine_id: "engine-1",
+            docker_root_digest: &"a".repeat(64),
+            runner_container_id: &"b".repeat(64),
+            dind_container_id: &"c".repeat(64),
+            runner_home_volume: "runner-home-23",
+        },
     )
     .map_err(|error| format!("{error:?}"))?;
     Ok((path, binding))
@@ -261,15 +263,17 @@ fn recovery_fixture() -> Result<
         .map_err(|error| format!("{error:?}"))?;
     let binding = make_binding(
         &root,
-        11,
-        22,
-        33,
-        1,
-        "engine-1",
-        &"a".repeat(64),
-        &"b".repeat(64),
-        &"c".repeat(64),
-        "runner-home-22",
+        &CaptureBindingInput {
+            intent_id: 11,
+            reservation_id: 22,
+            operation_id: 33,
+            topology_version: 1,
+            engine_id: "engine-1",
+            docker_root_digest: &"a".repeat(64),
+            runner_container_id: &"b".repeat(64),
+            dind_container_id: &"c".repeat(64),
+            runner_home_volume: "runner-home-22",
+        },
     )
     .map_err(|error| format!("{error:?}"))?;
     let terminal = terminal_state(&root, &binding)?;

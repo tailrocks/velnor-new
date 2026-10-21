@@ -2,7 +2,8 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 
 use super::{
-    CaptureState, diagnostics_scope, make_binding, persist_state, read_state, test_root_path,
+    CaptureBindingInput, CaptureState, diagnostics_scope, make_binding, persist_state, read_state,
+    test_root_path,
 };
 use crate::launch::completion::diagnostics::DiagnosticsRoot;
 
@@ -13,15 +14,17 @@ fn exact_state_temp_is_recovered_without_unlinking_unknown_files() -> Result<(),
         .map_err(|error| format!("{error:?}"))?;
     let binding = make_binding(
         &root,
-        13,
-        24,
-        35,
-        1,
-        "engine-1",
-        &"a".repeat(64),
-        &"b".repeat(64),
-        &"c".repeat(64),
-        "runner-home-24",
+        &CaptureBindingInput {
+            intent_id: 13,
+            reservation_id: 24,
+            operation_id: 35,
+            topology_version: 1,
+            engine_id: "engine-1",
+            docker_root_digest: &"a".repeat(64),
+            runner_container_id: &"b".repeat(64),
+            dind_container_id: &"c".repeat(64),
+            runner_home_volume: "runner-home-24",
+        },
     )
     .map_err(|error| format!("{error:?}"))?;
     let state = CaptureState::prepared(binding.clone(), 1);
@@ -52,15 +55,17 @@ fn mismatched_state_temp_is_preserved_and_blocks_state_write() -> Result<(), Str
         .map_err(|error| format!("{error:?}"))?;
     let binding = make_binding(
         &root,
-        14,
-        25,
-        36,
-        1,
-        "engine-1",
-        &"a".repeat(64),
-        &"b".repeat(64),
-        &"c".repeat(64),
-        "runner-home-25",
+        &CaptureBindingInput {
+            intent_id: 14,
+            reservation_id: 25,
+            operation_id: 36,
+            topology_version: 1,
+            engine_id: "engine-1",
+            docker_root_digest: &"a".repeat(64),
+            runner_container_id: &"b".repeat(64),
+            dind_container_id: &"c".repeat(64),
+            runner_home_volume: "runner-home-25",
+        },
     )
     .map_err(|error| format!("{error:?}"))?;
     let state = CaptureState::prepared(binding.clone(), 1);

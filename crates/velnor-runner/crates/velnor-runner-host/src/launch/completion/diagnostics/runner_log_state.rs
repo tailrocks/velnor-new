@@ -16,7 +16,8 @@ mod storage;
 mod tests;
 
 pub(in crate::launch) use persistence::{
-    CaptureStateRequest, binding, read_projection, read_state, recover_terminal_projection,
+    CaptureBindingInput, CaptureStateRequest, binding, read_projection, read_state,
+    recover_terminal_projection,
 };
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -85,10 +86,8 @@ impl CaptureState {
         let phase_attempts_valid = match self.phase {
             CapturePhase::Prepared => self.create_requests <= 3 && self.start_requests == 0,
             CapturePhase::Created => self.create_requests > 0 && self.start_requests == 0,
-            CapturePhase::StartRequested => {
-                self.create_requests > 0 && (1..=3).contains(&self.start_requests)
-            }
-            CapturePhase::Terminal
+            CapturePhase::StartRequested
+            | CapturePhase::Terminal
             | CapturePhase::ProjectionPending
             | CapturePhase::Complete
             | CapturePhase::Unavailable => {

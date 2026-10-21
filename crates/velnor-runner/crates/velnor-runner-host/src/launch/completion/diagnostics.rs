@@ -293,11 +293,11 @@ pub(crate) use record::{DiagnosticRecord, RecordIdentity, diagnostic_record_fiel
 #[path = "diagnostics/capture.rs"]
 mod capture;
 pub(in crate::launch) use capture::{
-    NativeCaptureRequest, capture_native, delete_after_capture, persist_runner_log_projection,
-    persist_runner_log_state,
+    NativeCaptureRequest, RunnerLogWriteContext, capture_native, delete_after_capture,
+    persist_runner_log_projection, persist_runner_log_state,
 };
 pub(in crate::launch) use runner_log_state::{
-    CaptureBinding, CapturePhase, CaptureState, binding as runner_log_binding,
+    CaptureBinding, CaptureBindingInput, CapturePhase, CaptureState, binding as runner_log_binding,
     read_projection as read_runner_log_projection, read_state as read_runner_log_state,
     recover_terminal_projection as recover_runner_log_projection,
 };

@@ -13,6 +13,18 @@ use super::{
     valid_digest, valid_id,
 };
 
+pub(in crate::launch) struct CaptureBindingInput<'a> {
+    pub(in crate::launch) intent_id: i64,
+    pub(in crate::launch) reservation_id: i64,
+    pub(in crate::launch) operation_id: i64,
+    pub(in crate::launch) topology_version: i64,
+    pub(in crate::launch) engine_id: &'a str,
+    pub(in crate::launch) docker_root_digest: &'a str,
+    pub(in crate::launch) runner_container_id: &'a str,
+    pub(in crate::launch) dind_container_id: &'a str,
+    pub(in crate::launch) runner_home_volume: &'a str,
+}
+
 pub(in crate::launch) struct CaptureStateRequest {
     scope: OwnedFd,
     key: OperationKey,
@@ -74,41 +86,33 @@ impl CaptureStateRequest {
 
 pub(in crate::launch) fn binding(
     root: &DiagnosticsRoot,
-    intent_id: i64,
-    reservation_id: i64,
-    operation_id: i64,
-    topology_version: i64,
-    engine_id: &str,
-    docker_root_digest: &str,
-    runner_container_id: &str,
-    dind_container_id: &str,
-    runner_home_volume: &str,
+    input: &CaptureBindingInput<'_>,
 ) -> Result<CaptureBinding, HostError> {
-    if intent_id <= 0
-        || reservation_id <= 0
-        || operation_id <= 0
-        || topology_version <= 0
-        || engine_id.is_empty()
-        || !valid_digest(docker_root_digest)
-        || !valid_id(runner_container_id)
-        || !valid_id(dind_container_id)
-        || runner_container_id == dind_container_id
-        || !safe_component(runner_home_volume)
+    if input.intent_id <= 0
+        || input.reservation_id <= 0
+        || input.operation_id <= 0
+        || input.topology_version <= 0
+        || input.engine_id.is_empty()
+        || !valid_digest(input.docker_root_digest)
+        || !valid_id(input.runner_container_id)
+        || !valid_id(input.dind_container_id)
+        || input.runner_container_id == input.dind_container_id
+        || !safe_component(input.runner_home_volume)
     {
         return Err(HostError::Ownership);
     }
     Ok(CaptureBinding {
         journal_identity: root.journal_identity.clone(),
         connection_id: root.connection_id.clone(),
-        intent_id,
-        reservation_id,
-        operation_id,
-        topology_version,
-        engine_id: engine_id.to_owned(),
-        docker_root_digest: docker_root_digest.to_owned(),
-        runner_container_id: runner_container_id.to_owned(),
-        dind_container_id: dind_container_id.to_owned(),
-        runner_home_volume: runner_home_volume.to_owned(),
+        intent_id: input.intent_id,
+        reservation_id: input.reservation_id,
+        operation_id: input.operation_id,
+        topology_version: input.topology_version,
+        engine_id: input.engine_id.to_owned(),
+        docker_root_digest: input.docker_root_digest.to_owned(),
+        runner_container_id: input.runner_container_id.to_owned(),
+        dind_container_id: input.dind_container_id.to_owned(),
+        runner_home_volume: input.runner_home_volume.to_owned(),
     })
 }
 
