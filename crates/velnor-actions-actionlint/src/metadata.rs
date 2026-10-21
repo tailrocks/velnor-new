@@ -1,14 +1,14 @@
-//! Actionlint-owned metadata routing (quality §1).
+//! Workflow-lint adapter metadata routing (quality §1).
 //!
-//! The actionlint adapter owns its config file plus lint-tool metadata;
-//! sibling tool files route to their stacks and every other symbol
-//! routes nowhere. Pure data: never spawns processes or reads files.
+//! The adapter owns the generated jactionlint config file plus lint-tool
+//! metadata; sibling tool files route to their stacks and every other
+//! symbol routes nowhere. Pure data: never spawns processes or reads files.
 
-/// Actionlint config file name owned by this adapter.
-pub const ACTIONLINT_CONFIG_FILE: &str = "actionlint.yaml";
+/// jactionlint config file name owned by this adapter.
+pub const JACTIONLINT_CONFIG_FILE: &str = "jactionlint.yaml";
 
-/// File symbols routed to the actionlint stack.
-pub const OWNED_SYMBOLS: &[&str] = &["actionlint.yaml", ".actionlint.yaml"];
+/// File symbols routed to the workflow-lint stack.
+pub const OWNED_SYMBOLS: &[&str] = &["jactionlint.yaml"];
 
 /// Tool files owned by sibling adapters; recognized but never read here.
 pub const FOREIGN_TOOL_FILES: &[&str] = &[
@@ -32,9 +32,9 @@ pub fn stack_for_symbol(path: &str) -> Option<&'static str> {
     }
 }
 
-/// Whether `path` names the owned actionlint config file.
+/// Whether `path` names the owned jactionlint config file.
 #[must_use]
-pub fn is_owned_actionlint_file(path: &str) -> bool {
+pub fn is_owned_jactionlint_file(path: &str) -> bool {
     OWNED_SYMBOLS.contains(&file_name(path))
 }
 

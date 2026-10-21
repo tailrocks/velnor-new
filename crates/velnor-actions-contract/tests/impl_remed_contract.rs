@@ -36,6 +36,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
             tofu_apply: None,
             review_completion: None,
             verify: velnor_actions_contract::VerifyConfig::default(),
+            lint: velnor_actions_contract::WorkflowLintConfig::default(),
             dispatch: velnor_actions_contract::WorkflowDispatchConfig::default(),
             preserve_workflows: Vec::new(),
         },

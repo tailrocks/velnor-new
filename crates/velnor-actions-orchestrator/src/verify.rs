@@ -181,7 +181,7 @@ pub(crate) fn verify_command(
             argv: crate::source_prep::native_validators_argv(),
             prepare_argv: Vec::new(),
         })),
-        ValidatorKind::CargoDeny | ValidatorKind::CargoMachete | ValidatorKind::Actionlint => {
+        ValidatorKind::CargoDeny | ValidatorKind::CargoMachete | ValidatorKind::Jactionlint => {
             Err(OrchestratorError::Contract {
                 problem: format!("verify_kind_rejected:{}", kind.job_id()),
             })

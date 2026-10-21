@@ -52,6 +52,7 @@ mod upgrades;
 mod verification;
 mod workflow;
 mod workflow_flags;
+mod workflow_lint;
 mod workflow_task;
 
 pub(crate) use binary_release::validate_static_release_inventory;
@@ -162,6 +163,7 @@ pub use workflow::{
     RunnerSelection, VelnorSupportWorkflow, VerifyConfig, WorkflowConfig, WorkflowPolicy,
     default_crate_timeout_minutes,
 };
+pub use workflow_lint::{WorkflowLintConfig, WorkflowLintProfile};
 pub use workflow_task::{WORKFLOW_TASK_JOB_PREFIX, WorkflowTask, is_valid_workflow_task_id};
 
 use crate::errors::ContractError;

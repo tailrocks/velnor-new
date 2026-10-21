@@ -326,6 +326,9 @@ fn render_job(
         crate::matrix_step::prepare_install_opentofu(policy, suite, use_opentofu),
         needs_validators,
     )?);
+    if needs_validators {
+        steps.push(crate::workflow::verify_jactionlint_step(catalog)?);
+    }
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
         steps.push(crate::workflow::verify_rust_manifest_step(catalog)?);

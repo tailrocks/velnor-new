@@ -193,7 +193,7 @@ impl ExecutionConfig {
 
     /// Scale-set labels when this config will emit that selector.
     #[must_use]
-    pub fn actionlint_labels(&self) -> Vec<String> {
+    pub fn lint_runner_labels(&self) -> Vec<String> {
         if !self.emits_scale_set_selector() {
             return Vec::new();
         }

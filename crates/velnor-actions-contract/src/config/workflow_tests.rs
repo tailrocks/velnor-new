@@ -23,6 +23,7 @@ fn named(name: &str) -> WorkflowConfig {
         tofu_apply: None,
         review_completion: None,
         verify: VerifyConfig::default(),
+        lint: crate::config::WorkflowLintConfig::default(),
         dispatch: crate::config::WorkflowDispatchConfig::default(),
         preserve_workflows: Vec::new(),
     }

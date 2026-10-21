@@ -41,7 +41,7 @@ pub(crate) fn resolve(
         install_gate_tools_argv: install_argv(
             &[
                 PinnedTool::Gh,
-                PinnedTool::Actionlint,
+                PinnedTool::Jactionlint,
                 PinnedTool::Shellcheck,
                 PinnedTool::Zizmor,
             ],
@@ -86,17 +86,15 @@ pub(crate) fn resolve(
             &catalog,
         )?,
         resource_probe_build_argv: resource_probe_build_argv(&catalog)?,
-        // The release gates lint with the same token scrub as the CI lint
-        // job and the zizmor gate: the linter needs no credential.
-        actionlint_argv: with_env_unset_argv(&exec_argv(
-            &[PinnedTool::Actionlint, PinnedTool::Shellcheck],
-            "actionlint",
-            &velnor_actions_actionlint::workflow_lint_args()
-                .iter()
-                .map(String::as_str)
-                .collect::<Vec<_>>(),
+        // The release gates lint the committed tree exactly as the CI lint
+        // job does, with the same token scrub: the linter needs no credential.
+        lint_argv: with_env_unset_argv(&exec_argv(
+            &[PinnedTool::Jactionlint, PinnedTool::Shellcheck],
+            "bash",
+            &["-c", &velnor_actions_actionlint::workflow_lint_script()],
             &catalog,
         )?),
+        verify_lint_argv: crate::workflow::jactionlint_verify_argv(&catalog),
         // Scrubbed like the validator vector: an empty-string GH_TOKEN
         // makes zizmor abort, while an absent one is clean offline.
         zizmor_argv: with_env_unset_argv(&exec_argv(
@@ -158,7 +156,7 @@ fn qualify_install_argv(catalog: &ToolCatalog) -> Result<Vec<String>, Orchestrat
     install_argv(
         &[
             PinnedTool::Rust,
-            PinnedTool::Actionlint,
+            PinnedTool::Jactionlint,
             PinnedTool::Shellcheck,
             PinnedTool::Zizmor,
         ],

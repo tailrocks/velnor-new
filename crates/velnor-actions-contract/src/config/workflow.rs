@@ -2,7 +2,7 @@
 use super::rust_suites::WorkflowDispatchConfig;
 use super::rust_suites_validate::validate_preserve_workflows;
 use super::workflow_flags::{default_true, is_false, is_true};
-use crate::config::{TofuApplyConfig, WorkflowTask};
+use crate::config::{TofuApplyConfig, WorkflowLintConfig, WorkflowTask};
 use crate::errors::ContractError;
 use crate::workflow::ValidatorKind;
 use serde::{Deserialize, Serialize};
@@ -77,6 +77,9 @@ pub struct WorkflowConfig {
     /// Consumer-selected verification jobs; empty disables them all.
     #[serde(default, skip_serializing_if = "VerifyConfig::is_empty")]
     pub verify: VerifyConfig,
+    /// `[workflow.lint]`: jactionlint profile (default `correctness`).
+    #[serde(default, skip_serializing_if = "WorkflowLintConfig::is_default")]
+    pub lint: WorkflowLintConfig,
     /// Optional `workflow_dispatch` inputs for suite workflows.
     #[serde(default, skip_serializing_if = "WorkflowDispatchConfig::is_empty")]
     pub dispatch: WorkflowDispatchConfig,

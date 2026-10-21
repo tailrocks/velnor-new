@@ -60,7 +60,7 @@ pub(crate) fn tofu_provider_cache_path(root: &str) -> Result<String, Orchestrato
 /// Per-root provider restore/admission composite (L2 exact-key).
 /// # Errors
 ///
-/// Returns contract, actionlint, or render errors for rejected pins,
+/// Returns contract, workflow-lint, or render errors for rejected pins,
 /// keys, or step shapes.
 pub(crate) fn tofu_providers_restore_step(
     key: &str,
@@ -188,7 +188,7 @@ fn validate_tofu_obligation_gate(
 /// `root` in `tofu_roots`); the path is the family spec's per-root path.
 /// # Errors
 ///
-/// Returns contract, actionlint, or render errors for an unknown root or
+/// Returns contract, workflow-lint, or render errors for an unknown root or
 /// invalid cache identity.
 pub(crate) fn provider_cache_step_for_tofu_root(
     root: &str,

@@ -217,6 +217,9 @@ struct PartialWorkflow {
     /// Consumer-selected verification jobs.
     #[serde(default)]
     verify: VerifyConfig,
+    /// `[workflow.lint]`: jactionlint profile.
+    #[serde(default)]
+    lint: velnor_actions_contract::WorkflowLintConfig,
     /// Optional `workflow_dispatch` inputs for suite workflows.
     #[serde(default)]
     dispatch: velnor_actions_contract::WorkflowDispatchConfig,
@@ -316,6 +319,7 @@ impl PartialWorkflow {
             tofu_apply: self.tofu_apply,
             review_completion: self.review_completion,
             verify: self.verify,
+            lint: self.lint,
             dispatch: self.dispatch,
             preserve_workflows: self.preserve_workflows,
         }

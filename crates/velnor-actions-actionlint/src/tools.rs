@@ -1,29 +1,58 @@
-//! Pinned lint-tool versions and minimal typed tool configs.
+//! Pinned lint-tool versions and the jactionlint argument vectors.
 //!
-//! Actionlint and `ShellCheck` versions are pinned constants (verified
-//! 2026-09-28 per version policy). Zizmor has no spec-pinned version,
-//! so its pin is explicit caller input validated for exactness. Types
-//! only: Mise executes tools; this crate never spawns processes.
+//! jactionlint and `ShellCheck` versions are pinned constants; Zizmor's pin
+//! is explicit caller input validated for exactness. Types only: Mise
+//! executes tools; this crate never spawns processes.
 
-use crate::{ACTIONLINT_VERSION, ActionlintError};
+use crate::{ActionlintError, JACTIONLINT_VERSION};
 
 /// Pinned `ShellCheck` release (tag `v0.11.0`; mirrors the mise catalog pin).
 /// Source: `https://api.github.com/repos/koalaman/shellcheck/releases/latest`; checked 2026-09-28.
 pub const SHELLCHECK_VERSION: &str = "0.11.0";
 
-/// Pinned actionlint toolchain identity.
+/// Generated jactionlint config, read through `--config-file` everywhere.
+pub const JACTIONLINT_CONFIG_PATH: &str = ".github/jactionlint.yaml";
+
+/// The file set every jactionlint run checks, as `hk`'s `Builtins.jactionlint`
+/// globs it: workflows, composite actions and Dependabot. Nothing outside
+/// these globs (for example golden trees under `docs/`) is ever linted.
+pub const LINT_FILE_GLOBS: [&str; 3] = [
+    ".github/workflows/*.y*ml",
+    ".github/actions/**/action.y*ml",
+    ".github/dependabot.y*ml",
+];
+
+/// Flags every Velnor jactionlint run passes, in CI, release gates, staged
+/// validation and the documented `hk` step.
+///
+/// - `--strict-exit`: any finding fails, whatever its level.
+/// - `--no-online`: no network check, even if a pull request sets
+///   `online: true` in the config (the flag wins over the file).
+/// - `--shellcheck=shellcheck`: the pinned `ShellCheck` on `PATH`; a missing
+///   binary is exit 3, never a silent pass.
+/// - `--pyflakes=`: no other `PATH` binary runs.
+/// - `--no-color`: logs and annotations stay plain.
+pub const LINT_FLAGS: [&str; 5] = [
+    "--strict-exit",
+    "--no-online",
+    "--shellcheck=shellcheck",
+    "--pyflakes=",
+    "--no-color",
+];
+
+/// Pinned jactionlint toolchain identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ActionlintToolchain {
-    /// Exact pinned version (always [`ACTIONLINT_VERSION`]).
+pub struct JactionlintToolchain {
+    /// Exact pinned version (always [`JACTIONLINT_VERSION`]).
     version: String,
 }
 
-impl ActionlintToolchain {
-    /// Toolchain at the pinned actionlint release.
+impl JactionlintToolchain {
+    /// Toolchain at the pinned jactionlint release.
     #[must_use]
     pub fn pinned() -> Self {
         Self {
-            version: ACTIONLINT_VERSION.to_owned(),
+            version: JACTIONLINT_VERSION.to_owned(),
         }
     }
 
@@ -33,60 +62,52 @@ impl ActionlintToolchain {
         &self.version
     }
 
-    /// Mise tool spec (`actionlint@<exact>`).
+    /// Mise tool spec (`jactionlint@<exact>`).
     #[must_use]
     pub fn mise_tool_spec(&self) -> String {
-        format!("actionlint@{}", self.version)
+        format!("jactionlint@{}", self.version)
     }
 
     /// Staged lint arguments for one pinned-binary invocation.
     ///
-    /// Returns `["-no-color", "-oneline", "-config-file", config,
-    /// ...step_parallelism_ignore_args(), ...workflows]`
-    /// so the staged config and every staged workflow share a single
-    /// invocation of the pinned binary. Pure data: the caller spawns via Mise.
+    /// Returns `[--config-file, config, --format, oneline, ...LINT_FLAGS,
+    /// ...files]`: the staged config plus every staged workflow and composite
+    /// action in one invocation. Pure data: the caller spawns via Mise.
     #[must_use]
-    pub fn staged_lint_argv(config_path: &str, workflows: &[String]) -> Vec<String> {
+    pub fn staged_lint_argv(config_path: &str, files: &[String]) -> Vec<String> {
         let mut argv = vec![
-            "-no-color".to_owned(),
-            "-oneline".to_owned(),
-            "-config-file".to_owned(),
+            "--config-file".to_owned(),
             config_path.to_owned(),
+            "--format".to_owned(),
+            "oneline".to_owned(),
         ];
-        argv.extend(step_parallelism_ignore_args());
-        argv.extend(workflows.iter().cloned());
+        argv.extend(LINT_FLAGS.iter().map(|flag| (*flag).to_owned()));
+        argv.extend(files.iter().cloned());
         argv
     }
 }
 
-/// Arguments for every generated repository-wide actionlint step.
-///
-/// The CI `actionlint` job and the release eligibility gates all lint the
-/// committed workflows, so they share this one vector: colored output plus
-/// [`step_parallelism_ignore_args`].
-#[must_use]
-pub fn workflow_lint_args() -> Vec<String> {
-    let mut args = vec!["-color".to_owned()];
-    args.extend(step_parallelism_ignore_args());
-    args
-}
-
-/// `-ignore` argument pairs required by the pinned release's capabilities.
-#[must_use]
-pub fn step_parallelism_ignore_args() -> Vec<String> {
-    if !crate::ActionlintCapabilities::for_pinned().requires_step_parallelism_bridge() {
-        return Vec::new();
-    }
-    crate::STEP_PARALLELISM_IGNORES
-        .iter()
-        .flat_map(|pattern| ["-ignore".to_owned(), (*pattern).to_owned()])
-        .collect()
-}
-
-impl Default for ActionlintToolchain {
+impl Default for JactionlintToolchain {
     fn default() -> Self {
         Self::pinned()
     }
+}
+
+/// Inline script for every generated repository-wide jactionlint step.
+///
+/// The CI `jactionlint` job and the release eligibility gates lint the
+/// committed tree, so they share this one script: it expands
+/// [`LINT_FILE_GLOBS`] (`nullglob`, `globstar`), fails closed when nothing
+/// matched (a bare run would scan the whole repository), and runs
+/// `jactionlint` with GitHub annotations plus [`LINT_FLAGS`]. Run it as
+/// `bash -c <script>` inside `mise exec`.
+#[must_use]
+pub fn workflow_lint_script() -> String {
+    format!(
+        "shopt -s nullglob globstar; set -- {globs}; if [ \"$#\" -eq 0 ]; then echo \"jactionlint: no workflow files matched\" >&2; exit 3; fi; exec jactionlint --config-file {JACTIONLINT_CONFIG_PATH} --format github {flags} \"$@\"",
+        globs = LINT_FILE_GLOBS.join(" "),
+        flags = LINT_FLAGS.join(" "),
+    )
 }
 
 /// Pinned `ShellCheck` toolchain identity.
@@ -168,8 +189,8 @@ impl ZizmorToolchain {
 /// Minimal typed config for the workflow-lint tool set.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowLintTools {
-    /// Pinned actionlint toolchain.
-    pub actionlint: ActionlintToolchain,
+    /// Pinned jactionlint toolchain.
+    pub jactionlint: JactionlintToolchain,
     /// Pinned `ShellCheck` toolchain.
     pub shellcheck: ShellcheckToolchain,
     /// Explicitly pinned Zizmor toolchain.
@@ -185,17 +206,17 @@ impl WorkflowLintTools {
     /// Zizmor version.
     pub fn new(zizmor_version: impl Into<String>) -> Result<Self, ActionlintError> {
         Ok(Self {
-            actionlint: ActionlintToolchain::pinned(),
+            jactionlint: JactionlintToolchain::pinned(),
             shellcheck: ShellcheckToolchain::pinned(),
             zizmor: ZizmorToolchain::new(zizmor_version)?,
         })
     }
 
-    /// Mise tool specs in fixed order: actionlint, shellcheck, zizmor.
+    /// Mise tool specs in fixed order: jactionlint, shellcheck, zizmor.
     #[must_use]
     pub fn mise_tool_specs(&self) -> Vec<String> {
         vec![
-            self.actionlint.mise_tool_spec(),
+            self.jactionlint.mise_tool_spec(),
             self.shellcheck.mise_tool_spec(),
             self.zizmor.mise_tool_spec(),
         ]

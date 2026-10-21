@@ -58,10 +58,10 @@ pub(crate) struct PlanJobToolNeeds {
 }
 
 /// Always-on workflow-lint job ID, emitted for both policies.
-pub(crate) const LINT_JOB_ID: &str = "actionlint";
+pub(crate) const LINT_JOB_ID: &str = "jactionlint";
 
 /// Display name of the always-on workflow-lint job.
-pub(crate) const LINT_DISPLAY_NAME: &str = "Actionlint";
+pub(crate) const LINT_DISPLAY_NAME: &str = "Jactionlint";
 
 /// Planner job: checkout, pinned-tool install, optional Acquire, request, plan.
 ///
@@ -96,6 +96,8 @@ pub(crate) fn plan_job(
     let mut steps = vec![checkout_history_action()?];
     let prepare = prepare_pinned_tools_step(catalog, plan_tools(needs), needs.rust.has_compiler())?;
     steps.push(prepare);
+    // `Check generated files` runs the staged jactionlint validation.
+    steps.push(crate::workflow::verify_jactionlint_step(catalog)?);
     if needs.rust.has_components() {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     }
@@ -139,34 +141,36 @@ pub(crate) fn plan_job(
     })
 }
 
-/// Always-on lint job: checkout, pinned installation, then actionlint.
+/// Always-on lint job: checkout, pinned installation, executable
+/// verification, then jactionlint over the hk file set.
+///
+/// The lint step is `bash -c` [`velnor_actions_actionlint::workflow_lint_script`]
+/// inside `mise exec`, so CI expands exactly the globs `hk`'s
+/// `Builtins.jactionlint` checks locally (workflows, composite actions and
+/// Dependabot; never golden trees elsewhere in the repository).
 pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, OrchestratorError> {
-    let program = OsString::from("actionlint");
-    let lint_args = velnor_actions_actionlint::workflow_lint_args()
-        .into_iter()
-        .map(OsString::from)
-        .collect();
+    let tools = vec![PinnedTool::Jactionlint, PinnedTool::Shellcheck];
     let exec = PinnedToolExec::new(
-        vec![PinnedTool::Actionlint, PinnedTool::Shellcheck],
-        &program,
-        lint_args,
+        tools.clone(),
+        &OsString::from("bash"),
+        vec![
+            OsString::from("-c"),
+            OsString::from(velnor_actions_actionlint::workflow_lint_script()),
+        ],
     )
     .map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),
     })?;
     let argv = strings_of(exec.argv(catalog))
         .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let prepare = prepare_pinned_tools_step(
-        catalog,
-        vec![PinnedTool::Actionlint, PinnedTool::Shellcheck],
-        false,
-    )?;
+    let prepare = prepare_pinned_tools_step(catalog, tools, false)?;
+    let verify = crate::workflow::verify_jactionlint_step(catalog)?;
     let mut lint =
-        velnor_actions_workflow_renderer::shell_step("Run actionlint", argv, BTreeMap::new())
+        velnor_actions_workflow_renderer::shell_step("Run jactionlint", argv, BTreeMap::new())
             .map_err(|err| OrchestratorError::Contract {
                 problem: err.to_string(),
             })?;
-    lint.role = Some(StepRole::Actionlint);
+    lint.role = Some(StepRole::Jactionlint);
     Ok(Job {
         services: Vec::new(),
         display_name: LINT_DISPLAY_NAME.to_owned(),
@@ -177,7 +181,7 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
         condition: None,
         permissions: None,
         environment: None,
-        steps: vec![checkout_action()?, prepare, lint],
+        steps: vec![checkout_action()?, prepare, verify, lint],
         cache_mode: None,
     })
 }
@@ -245,7 +249,7 @@ pub(crate) fn read_actions_permissions() -> Permissions {
 /// Plan-job install set per role: Rust, validators, Nextest, and `OpenTofu`.
 ///
 /// Validators join the driver set because `Check generated files` runs the public
-/// `generate`, whose staged validation fail-closed-execs pinned actionlint, shellcheck,
+/// `generate`, whose staged validation fail-closed-execs pinned jactionlint, shellcheck,
 /// and zizmor; installing only the driver toolchain leaves that step red. Order
 /// follows `PinnedTool::ALL`. Pure-tofu plans carry opentofu plus the validators
 /// with no Rust; mixed plans carry the union. The native MBX action owns MBX
@@ -255,7 +259,7 @@ fn plan_tools(needs: PlanJobToolNeeds) -> Vec<PinnedTool> {
     let mut tools = Vec::new();
     tools.extend(needs.rust.has_compiler().then_some(PinnedTool::Rust));
     tools.extend([
-        PinnedTool::Actionlint,
+        PinnedTool::Jactionlint,
         PinnedTool::Shellcheck,
         PinnedTool::Zizmor,
     ]);

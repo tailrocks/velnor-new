@@ -4,12 +4,12 @@
 //! integrator only registers the companion test file. Every helper here
 //! answers one anchored EMIT entry: checkout provenance, step-syntax
 //! vetting, the plan-job workspace Format step, MBX gating, the Gate-6
-//! task-cache gate, and the V1 actionlint variable set.
+//! task-cache gate, and the V1 jactionlint variable set.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_actionlint::{
-    ActionlintCapabilities, PinnedActionRef, StepSyntax,
+    JactionlintCapabilities, PinnedActionRef, StepSyntax,
     actions::{CACHE_ACTION_SHA, CACHE_ACTION_VERSION},
     checkout_inputs_schema, validate_action_inputs,
 };
@@ -65,7 +65,7 @@ pub(crate) fn declared_config_variables(config: &VelnorConfig) -> Vec<String> {
 
 /// Pinned checkout action without persisted credentials (WF-3.50).
 ///
-/// The `uses:` value comes from the canonical actionlint ref and the
+/// The `uses:` value comes from the canonical pinned action ref and the
 /// inputs validate against the checkout schema before construction, so
 /// generation aborts pre-write on unknown/missing/empty inputs.
 ///
@@ -144,16 +144,13 @@ pub(crate) fn checkout_step_full() -> Result<Step, OrchestratorError> {
     })
 }
 
-/// Reject workflow syntax the pinned actionlint cannot validate (PAR-6.1).
-///
-/// Native step parallelism is qualified through the actionlint ignore
-/// bridge; any other unqualified syntax fails here.
+/// Reject workflow syntax the pinned jactionlint cannot validate (PAR-6.1).
 ///
 /// # Errors
 ///
-/// Returns an actionlint error for unqualified syntax.
+/// Returns a workflow-lint error for unqualified syntax.
 pub(crate) fn vet_step_syntax(syntax: StepSyntax) -> Result<(), OrchestratorError> {
-    ActionlintCapabilities::for_pinned()
+    JactionlintCapabilities::for_pinned()
         .check_step_syntax(syntax)
         .map_err(OrchestratorError::from)
 }
@@ -167,7 +164,7 @@ pub(crate) fn vet_step_syntax(syntax: StepSyntax) -> Result<(), OrchestratorErro
 ///
 /// # Errors
 ///
-/// Returns actionlint/render errors for rejected pins or step shapes.
+/// Returns workflow-lint/render errors for rejected pins or step shapes.
 pub(crate) fn maybe_task_cache_steps(
     fixture: Option<&Gate6Fixture>,
     mode: TaskCacheMode,
