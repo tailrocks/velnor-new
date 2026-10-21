@@ -27,6 +27,7 @@ impl Journal {
     }
 
     /// Read only active worker rows, refusing a prefix larger than the current ceiling.
+    #[cfg(test)]
     pub(crate) async fn capacity_rows(&self, ceiling: u32) -> Result<Vec<IntentRow>, HostError> {
         let limit = u64::from(ceiling)
             .checked_add(1)
@@ -45,6 +46,7 @@ impl Journal {
     }
 }
 
+#[cfg(test)]
 async fn capacity_rows_in_snapshot(
     conn: &turso::Connection,
     ceiling: u32,

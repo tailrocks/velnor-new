@@ -122,6 +122,7 @@ pub(super) async fn connection_record(
     )))
 }
 
+#[cfg(test)]
 pub(super) async fn scoped_live_id(
     connection: &turso::Connection,
     connection_id: &str,

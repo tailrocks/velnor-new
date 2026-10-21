@@ -59,6 +59,7 @@ pub(crate) use session::{
     SessionDeleteOutcome, SessionRefreshStartupAuthority, VerifiedSessionRefresh,
     delete_removed_connection_session, open_connection_session,
 };
+#[cfg(test)]
 pub(crate) use slot::HOLDS_ROWS_SQL;
 #[cfg(test)]
 pub(crate) use turn::FinishContext;
@@ -83,6 +84,7 @@ pub(crate) use turn::{
 #[cfg(test)]
 mod pressure;
 mod session;
+#[cfg(test)]
 mod slot;
 #[cfg(all(test, unix))]
 #[path = "launch/source_order_tests.rs"]

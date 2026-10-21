@@ -237,24 +237,6 @@ pub(super) async fn guest_capacity_fits(
     Ok(permit.has_guest_capacity(required_cpu, required_memory, available_memory))
 }
 
-pub(super) async fn reservation_state(
-    connection: &turso::Connection,
-    reservation_id: i64,
-    connection_id: &str,
-) -> Result<Option<String>, HostError> {
-    let mut rows = connection
-        .query(
-            "SELECT state FROM capacity_reservations WHERE id = ?1 AND connection_id = ?2",
-            (reservation_id, connection_id),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
-        return Ok(None);
-    };
-    Ok(Some(row.get(0).map_err(|_| HostError::Journal)?))
-}
-
 pub(super) async fn has_unreserved_scoped_launch(
     connection: &turso::Connection,
 ) -> Result<bool, HostError> {
