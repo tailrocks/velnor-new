@@ -147,6 +147,7 @@ inputs = [
   "scripts/check-owned-archive-guard-sources.sh",
   "scripts/owned_archive_preflight.py",
   "mise.toml",
+  "rust-toolchain.toml",
 ]
 tools = ["cargo-nextest", "rust"]
 timeout_minutes = 5
