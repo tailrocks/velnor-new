@@ -75,7 +75,8 @@ pub(crate) use turn::{
 #[cfg(test)]
 pub(crate) use turn::{IntakeDecision, finish_positive_poll_with_ack};
 pub(crate) use turn::{
-    ScopedPollOutcome, Settlement, ZeroHeaderMode, poll_scoped_connection_once_with_mode,
+    ScopedPollContext, ScopedPollOutcome, Settlement, ZeroHeaderMode,
+    poll_scoped_connection_once_with_mode,
 };
 #[cfg(test)]
 mod pressure;

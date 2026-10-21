@@ -104,15 +104,15 @@ async fn handled_zero_header_response_settles_exact_poll_attempt() -> Result<(),
         .map_err(|error| error.to_string())?;
     assert_eq!(attempt.header_value(), 0);
 
-    let wake = finish_scoped_poll_response(
-        &scope,
-        intent_id,
-        10_101,
-        "session-scoped-poll",
-        &allocation,
-        &Poll::Empty,
-        attempt,
-        async {
+    let wake = finish_scoped_poll_response(crate::launch::turn::scoped::ScopedPollFinishContext {
+        scoped: &scope,
+        session_intent_id: intent_id,
+        set_id: 10_101,
+        session_id: "session-scoped-poll",
+        allocation: &allocation,
+        polled: &Poll::Empty,
+        attempt: attempt,
+        handled: async {
             Ok((
                 IntakeDecision {
                     completion_only: true,
@@ -123,8 +123,8 @@ async fn handled_zero_header_response_settles_exact_poll_attempt() -> Result<(),
                 true,
             ))
         },
-        0,
-    )
+        cursor: 0,
+    })
     .await
     .map_err(|error| error.to_string())?;
     assert!(wake.wake_cleanup);
@@ -148,29 +148,30 @@ async fn filtered_empty_keeps_deferred_cursor_and_blocks_session_delete() -> Res
         .begin_zero_header_poll(intent_id, &allocation)
         .await
         .map_err(|error| error.to_string())?;
-    let outcome = finish_scoped_poll_response(
-        &scope,
-        intent_id,
-        10_101,
-        "session-scoped-poll",
-        &allocation,
-        &Poll::Empty,
-        attempt,
-        async {
-            Ok((
-                IntakeDecision {
-                    completion_only: false,
-                    wake_cleanup: false,
-                    session_delete_candidate: true,
-                    started_request_ids: Vec::new(),
-                },
-                false,
-            ))
-        },
-        72,
-    )
-    .await
-    .map_err(|error| error.to_string())?;
+    let outcome =
+        finish_scoped_poll_response(crate::launch::turn::scoped::ScopedPollFinishContext {
+            scoped: &scope,
+            session_intent_id: intent_id,
+            set_id: 10_101,
+            session_id: "session-scoped-poll",
+            allocation: &allocation,
+            polled: &Poll::Empty,
+            attempt: attempt,
+            handled: async {
+                Ok((
+                    IntakeDecision {
+                        completion_only: false,
+                        wake_cleanup: false,
+                        session_delete_candidate: true,
+                        started_request_ids: Vec::new(),
+                    },
+                    false,
+                ))
+            },
+            cursor: 72,
+        })
+        .await
+        .map_err(|error| error.to_string())?;
 
     assert_eq!(outcome.message_id, None);
     assert_eq!(outcome.cursor_disposition, CursorDisposition::Unchanged);
@@ -187,18 +188,19 @@ async fn failed_response_handling_holds_the_header_poll() -> Result<(), String> 
         .await
         .map_err(|error| error.to_string())?;
 
-    let result = finish_scoped_poll_response(
-        &scope,
-        intent_id,
-        10_101,
-        "session-scoped-poll",
-        &allocation,
-        &Poll::Empty,
-        attempt,
-        async { Err(EnsureError::AdmissionClosed) },
-        0,
-    )
-    .await;
+    let result =
+        finish_scoped_poll_response(crate::launch::turn::scoped::ScopedPollFinishContext {
+            scoped: &scope,
+            session_intent_id: intent_id,
+            set_id: 10_101,
+            session_id: "session-scoped-poll",
+            allocation: &allocation,
+            polled: &Poll::Empty,
+            attempt: attempt,
+            handled: async { Err(EnsureError::AdmissionClosed) },
+            cursor: 0,
+        })
+        .await;
     assert!(matches!(result, Err(EnsureError::AdmissionClosed)));
     assert!(matches!(
         scope.begin_session_poll(intent_id, &allocation).await,
@@ -248,17 +250,17 @@ async fn failed_queue_ack_after_inbox_write_holds_the_header_attempt() -> Result
     };
 
     assert!(matches!(
-        finish_scoped_poll_response(
-            &scope,
-            intent_id,
-            10_101,
-            "session-scoped-poll",
-            &allocation,
-            &polled,
-            attempt,
-            handling,
-            0,
-        )
+        finish_scoped_poll_response(crate::launch::turn::scoped::ScopedPollFinishContext {
+            scoped: &scope,
+            session_intent_id: intent_id,
+            set_id: 10_101,
+            session_id: "session-scoped-poll",
+            allocation: &allocation,
+            polled: &polled,
+            attempt: attempt,
+            handled: handling,
+            cursor: 0,
+        })
         .await,
         Err(EnsureError::AdmissionClosed)
     ));

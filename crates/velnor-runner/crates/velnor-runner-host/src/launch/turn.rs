@@ -24,7 +24,7 @@ pub(crate) use positive_poll::{
     positive_poll_once,
 };
 pub(crate) use scoped::{
-    ScopedPollOutcome, ZeroHeaderMode, poll_scoped_connection_once,
+    ScopedPollContext, ScopedPollOutcome, ZeroHeaderMode, poll_scoped_connection_once,
     poll_scoped_connection_once_with_mode,
 };
 

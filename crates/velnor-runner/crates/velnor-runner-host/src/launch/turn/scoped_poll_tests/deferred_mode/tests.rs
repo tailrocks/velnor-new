@@ -49,19 +49,20 @@ async fn assigned_only_response_is_observed_and_acked_without_acquisition() -> R
     assert_eq!(ack_count.get(), 1);
     assert_eq!(authorize_count.get(), 0);
 
-    let outcome = finish_scoped_poll_response(
-        &scope,
-        intent_id,
-        10_101,
-        "session-scoped-poll",
-        &allocation,
-        &polled,
-        attempt,
-        async { Ok((decision, acknowledged)) },
-        0,
-    )
-    .await
-    .map_err(|error| error.to_string())?;
+    let outcome =
+        finish_scoped_poll_response(crate::launch::turn::scoped::ScopedPollFinishContext {
+            scoped: &scope,
+            session_intent_id: intent_id,
+            set_id: 10_101,
+            session_id: "session-scoped-poll",
+            allocation: &allocation,
+            polled: &polled,
+            attempt: attempt,
+            handled: async { Ok((decision, acknowledged)) },
+            cursor: 0,
+        })
+        .await
+        .map_err(|error| error.to_string())?;
     assert_eq!(outcome.assigned_total, Some(3));
     assert_eq!(outcome.cursor_disposition, CursorDisposition::ResetToHead);
     assert!(!outcome.session_delete_candidate);
@@ -90,19 +91,20 @@ async fn assigned_lifecycle_ack_failure_settles_without_delete_candidate() -> Re
     .map_err(|error| format!("Could not process the Assigned response: {error:?}"))?;
     assert!(!acknowledged);
 
-    let outcome = finish_scoped_poll_response(
-        &scope,
-        intent_id,
-        10_101,
-        "session-scoped-poll",
-        &allocation,
-        &polled,
-        attempt,
-        async { Ok((decision, acknowledged)) },
-        0,
-    )
-    .await
-    .map_err(|error| error.to_string())?;
+    let outcome =
+        finish_scoped_poll_response(crate::launch::turn::scoped::ScopedPollFinishContext {
+            scoped: &scope,
+            session_intent_id: intent_id,
+            set_id: 10_101,
+            session_id: "session-scoped-poll",
+            allocation: &allocation,
+            polled: &polled,
+            attempt: attempt,
+            handled: async { Ok((decision, acknowledged)) },
+            cursor: 0,
+        })
+        .await
+        .map_err(|error| error.to_string())?;
     assert_eq!(
         outcome.cursor_disposition,
         CursorDisposition::Deferred { message_id: 75 }
@@ -150,19 +152,20 @@ async fn deferred_mode_rejects_partial_receipts_and_settles_known_get() -> Resul
     assert!(!decision.completion_only);
     assert_eq!(ack_count.get(), 0);
 
-    let outcome = finish_scoped_poll_response(
-        &scope,
-        intent_id,
-        10_101,
-        "session-scoped-poll",
-        &allocation,
-        &polled,
-        attempt,
-        async { Ok((decision, acknowledged)) },
-        0,
-    )
-    .await
-    .map_err(|error| format!("Could not complete the GET operation: {error:?}"))?;
+    let outcome =
+        finish_scoped_poll_response(crate::launch::turn::scoped::ScopedPollFinishContext {
+            scoped: &scope,
+            session_intent_id: intent_id,
+            set_id: 10_101,
+            session_id: "session-scoped-poll",
+            allocation: &allocation,
+            polled: &polled,
+            attempt: attempt,
+            handled: async { Ok((decision, acknowledged)) },
+            cursor: 0,
+        })
+        .await
+        .map_err(|error| format!("Could not complete the GET operation: {error:?}"))?;
     assert_eq!(
         outcome.cursor_disposition,
         CursorDisposition::Deferred { message_id: 72 }
@@ -243,19 +246,20 @@ async fn deferred_mode_authorization_error_settles_get_for_same_session_retry() 
     .map_err(|error| format!("The GET result was uncertain: {error:?}"))?;
     assert!(!acknowledged);
     assert_eq!(ack_count.get(), 0);
-    let _outcome = finish_scoped_poll_response(
-        &scope,
-        intent_id,
-        10_101,
-        "session-scoped-poll",
-        &allocation,
-        &polled,
-        attempt,
-        async { Ok((decision, acknowledged)) },
-        0,
-    )
-    .await
-    .map_err(|error| format!("Could not complete the GET operation: {error:?}"))?;
+    let _outcome =
+        finish_scoped_poll_response(crate::launch::turn::scoped::ScopedPollFinishContext {
+            scoped: &scope,
+            session_intent_id: intent_id,
+            set_id: 10_101,
+            session_id: "session-scoped-poll",
+            allocation: &allocation,
+            polled: &polled,
+            attempt: attempt,
+            handled: async { Ok((decision, acknowledged)) },
+            cursor: 0,
+        })
+        .await
+        .map_err(|error| format!("Could not complete the GET operation: {error:?}"))?;
     assert!(
         scope
             .begin_zero_header_poll(intent_id, &allocation)
@@ -290,19 +294,20 @@ async fn deferred_mode_ack_failure_settles_get_and_keeps_authorized_offer() -> R
     .await
     .map_err(|error| format!("The GET result was uncertain: {error:?}"))?;
     assert!(!acknowledged);
-    let _outcome = finish_scoped_poll_response(
-        &scope,
-        intent_id,
-        10_101,
-        "session-scoped-poll",
-        &allocation,
-        &polled,
-        attempt,
-        async { Ok((decision, acknowledged)) },
-        0,
-    )
-    .await
-    .map_err(|error| format!("Could not complete the GET operation: {error:?}"))?;
+    let _outcome =
+        finish_scoped_poll_response(crate::launch::turn::scoped::ScopedPollFinishContext {
+            scoped: &scope,
+            session_intent_id: intent_id,
+            set_id: 10_101,
+            session_id: "session-scoped-poll",
+            allocation: &allocation,
+            polled: &polled,
+            attempt: attempt,
+            handled: async { Ok((decision, acknowledged)) },
+            cursor: 0,
+        })
+        .await
+        .map_err(|error| format!("Could not complete the GET operation: {error:?}"))?;
     assert!(
         scope
             .authorized_offer(93, 75)

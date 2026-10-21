@@ -81,13 +81,15 @@ pub(super) async fn poll_zero_header_connection(
         ZeroHeaderMode::LifecycleOnly
     };
     crate::launch::poll_scoped_connection_once_with_mode(
-        &mut credentials.link,
-        set_id,
-        &mut credentials.session,
-        scoped,
-        prepared.session_intent,
-        allocation,
-        cursor,
+        crate::launch::ScopedPollContext {
+            link: &mut credentials.link,
+            set_id,
+            session: &mut credentials.session,
+            scoped,
+            session_intent_id: prepared.session_intent,
+            allocation,
+            cursor,
+        },
         mode,
         async |poll| {
             let Some((connection, pat)) = authorization else {

@@ -75,19 +75,20 @@ async fn started_only_event_is_stored_before_ack_and_replay_is_idempotent() -> R
         .begin_zero_header_poll(session_intent, &allocation)
         .await
         .map_err(|error| error.to_string())?;
-    let outcome = finish_scoped_poll_response(
-        &scope,
-        session_intent,
-        10_101,
-        "session-scoped-poll",
-        &allocation,
-        &polled,
-        attempt,
-        async { Ok((decision, true)) },
-        0,
-    )
-    .await
-    .map_err(|error| error.to_string())?;
+    let outcome =
+        finish_scoped_poll_response(crate::launch::turn::scoped::ScopedPollFinishContext {
+            scoped: &scope,
+            session_intent_id: session_intent,
+            set_id: 10_101,
+            session_id: "session-scoped-poll",
+            allocation: &allocation,
+            polled: &polled,
+            attempt: attempt,
+            handled: async { Ok((decision, true)) },
+            cursor: 0,
+        })
+        .await
+        .map_err(|error| error.to_string())?;
     assert_eq!(
         outcome.cursor_disposition,
         crate::launch::CursorDisposition::ResetToHead
@@ -194,29 +195,30 @@ async fn empty_poll_is_delete_candidate_but_has_no_event_ack() -> Result<(), Str
         .begin_zero_header_poll(intent_id, &allocation)
         .await
         .map_err(|error| error.to_string())?;
-    let outcome = finish_scoped_poll_response(
-        &scope,
-        intent_id,
-        10_101,
-        "session-scoped-poll",
-        &allocation,
-        &Poll::Empty,
-        attempt,
-        async {
-            Ok((
-                IntakeDecision {
-                    completion_only: false,
-                    wake_cleanup: false,
-                    session_delete_candidate: true,
-                    started_request_ids: Vec::new(),
-                },
-                false,
-            ))
-        },
-        0,
-    )
-    .await
-    .map_err(|error| error.to_string())?;
+    let outcome =
+        finish_scoped_poll_response(crate::launch::turn::scoped::ScopedPollFinishContext {
+            scoped: &scope,
+            session_intent_id: intent_id,
+            set_id: 10_101,
+            session_id: "session-scoped-poll",
+            allocation: &allocation,
+            polled: &Poll::Empty,
+            attempt: attempt,
+            handled: async {
+                Ok((
+                    IntakeDecision {
+                        completion_only: false,
+                        wake_cleanup: false,
+                        session_delete_candidate: true,
+                        started_request_ids: Vec::new(),
+                    },
+                    false,
+                ))
+            },
+            cursor: 0,
+        })
+        .await
+        .map_err(|error| error.to_string())?;
     assert!(!outcome.wake_cleanup);
     assert!(outcome.session_delete_candidate);
     assert!(

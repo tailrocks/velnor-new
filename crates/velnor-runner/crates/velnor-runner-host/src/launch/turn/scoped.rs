@@ -39,6 +39,30 @@ pub(crate) struct ScopedPollOutcome {
     pub(crate) started_request_ids: Vec<i64>,
 }
 
+/// Borrowed inputs for one exact scoped queue poll.
+pub(crate) struct ScopedPollContext<'a> {
+    pub(crate) link: &'a mut Link,
+    pub(crate) set_id: i64,
+    pub(crate) session: &'a mut QueueSession,
+    pub(crate) scoped: &'a ConnectionJournal,
+    pub(crate) session_intent_id: i64,
+    pub(crate) allocation: &'a HeaderAllocation,
+    pub(crate) cursor: i64,
+}
+
+/// Exact identity and response inputs for one completed scoped poll.
+pub(super) struct ScopedPollFinishContext<'a, F> {
+    pub(super) scoped: &'a ConnectionJournal,
+    pub(super) session_intent_id: i64,
+    pub(super) set_id: i64,
+    pub(super) session_id: &'a str,
+    pub(super) allocation: &'a HeaderAllocation,
+    pub(super) polled: &'a Poll,
+    pub(super) attempt: HeaderPollAttempt,
+    pub(super) handled: F,
+    pub(super) cursor: i64,
+}
+
 pub(crate) async fn poll_scoped_connection_once(
     link: &mut Link,
     set_id: i64,
@@ -49,13 +73,15 @@ pub(crate) async fn poll_scoped_connection_once(
     cursor: i64,
 ) -> Result<ScopedPollOutcome, EnsureError> {
     poll_scoped_connection_once_with_mode(
-        link,
-        set_id,
-        session,
-        scoped,
-        session_intent_id,
-        allocation,
-        cursor,
+        ScopedPollContext {
+            link,
+            set_id,
+            session,
+            scoped,
+            session_intent_id,
+            allocation,
+            cursor,
+        },
         ZeroHeaderMode::LifecycleOnly,
         async |_| Ok(DeferredAuthorizedOffers::empty()),
     )
@@ -63,19 +89,22 @@ pub(crate) async fn poll_scoped_connection_once(
 }
 
 pub(crate) async fn poll_scoped_connection_once_with_mode<F>(
-    link: &mut Link,
-    set_id: i64,
-    session: &mut QueueSession,
-    scoped: &ConnectionJournal,
-    session_intent_id: i64,
-    allocation: &HeaderAllocation,
-    cursor: i64,
+    context: ScopedPollContext<'_>,
     mode: ZeroHeaderMode,
     mut authorize: F,
 ) -> Result<ScopedPollOutcome, EnsureError>
 where
     F: AsyncFnMut(&Poll) -> Result<DeferredAuthorizedOffers, EnsureError>,
 {
+    let ScopedPollContext {
+        link,
+        set_id,
+        session,
+        scoped,
+        session_intent_id,
+        allocation,
+        cursor,
+    } = context;
     if !allocation.matches_session(scoped.connection_id(), set_id, &session.session_id) {
         return Err(EnsureError::AdmissionClosed);
     }
@@ -129,17 +158,17 @@ where
             Ok((decision, acknowledged))
         }
     };
-    finish_scoped_poll_response(
+    finish_scoped_poll_response(ScopedPollFinishContext {
         scoped,
         session_intent_id,
         set_id,
-        &session.session_id,
+        session_id: &session.session_id,
         allocation,
-        &polled,
+        polled: &polled,
         attempt,
         handled,
         cursor,
-    )
+    })
     .await
 }
 
@@ -242,19 +271,22 @@ pub(super) async fn poll_scoped_queue(
 }
 
 pub(super) async fn finish_scoped_poll_response<F>(
-    scoped: &ConnectionJournal,
-    session_intent_id: i64,
-    set_id: i64,
-    session_id: &str,
-    allocation: &HeaderAllocation,
-    polled: &Poll,
-    attempt: HeaderPollAttempt,
-    handled: F,
-    cursor: i64,
+    context: ScopedPollFinishContext<'_, F>,
 ) -> Result<ScopedPollOutcome, EnsureError>
 where
     F: Future<Output = Result<(IntakeDecision, bool), EnsureError>>,
 {
+    let ScopedPollFinishContext {
+        scoped,
+        session_intent_id,
+        set_id,
+        session_id,
+        allocation,
+        polled,
+        attempt,
+        handled,
+        cursor,
+    } = context;
     let (mut decision, response_acknowledged) = match handled.await {
         Ok(decision) => decision,
         Err(error) => {
