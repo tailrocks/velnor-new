@@ -16,16 +16,16 @@ mod binding;
 
 const BOOT_ID: &str = "11111111-2222-4333-8444-555555555555";
 
-struct ProvisioningFixture<'a> {
-    scope: &'a ConnectionJournal,
-    engine_id: String,
-    assignment: AssignmentIdentity,
-    nonce: String,
-    reservation_id: i64,
-    intent_id: i64,
-    docker_root_digest: String,
-    sample_generation_id: String,
-    filesystem_instance_digest: String,
+pub(crate) struct ProvisioningFixture<'a> {
+    pub(crate) scope: &'a ConnectionJournal,
+    pub(crate) engine_id: String,
+    pub(crate) assignment: AssignmentIdentity,
+    pub(crate) nonce: String,
+    pub(crate) reservation_id: i64,
+    pub(crate) intent_id: i64,
+    pub(crate) docker_root_digest: String,
+    pub(crate) sample_generation_id: String,
+    pub(crate) filesystem_instance_digest: String,
 }
 
 pub(crate) struct ProvisionedStorageInitialization {
@@ -82,138 +82,25 @@ pub(super) async fn provision(
 }
 
 pub(crate) async fn provision_with_initialization(
-    scope: &ConnectionJournal,
-    assignment: AssignmentIdentity,
-    nonce: char,
-    reservation_id: i64,
-    intent_id: i64,
-    docker_root_digest: String,
-    sample_generation_id: String,
+    fixture: ProvisioningFixture<'_>,
 ) -> Result<ProvisionedStorageInitialization, HostError> {
-    ProvisioningFixture {
-        scope,
-        engine_id: super::TEST_ENGINE_ID.to_owned(),
-        assignment,
-        nonce: nonce.to_string().repeat(32),
-        reservation_id,
-        intent_id,
-        docker_root_digest,
-        sample_generation_id,
-        filesystem_instance_digest: "a".repeat(64),
-    }
-    .provision_with_initialization()
-    .await
-}
-
-pub(crate) async fn provision_with_initialization_and_filesystem_digest(
-    scope: &ConnectionJournal,
-    assignment: AssignmentIdentity,
-    nonce: char,
-    reservation_id: i64,
-    intent_id: i64,
-    docker_root_digest: String,
-    sample_generation_id: String,
-    filesystem_instance_digest: String,
-) -> Result<ProvisionedStorageInitialization, HostError> {
-    provision_with_engine_and_filesystem_digest(
-        scope,
-        super::TEST_ENGINE_ID,
-        assignment,
-        nonce,
-        reservation_id,
-        intent_id,
-        docker_root_digest,
-        sample_generation_id,
-        filesystem_instance_digest,
-    )
-    .await
+    fixture.provision_with_initialization().await
 }
 
 pub(crate) async fn provision_with_engine_and_filesystem_digest(
-    scope: &ConnectionJournal,
-    engine_id: &str,
-    assignment: AssignmentIdentity,
-    nonce: char,
-    reservation_id: i64,
-    intent_id: i64,
-    docker_root_digest: String,
-    sample_generation_id: String,
-    filesystem_instance_digest: String,
+    fixture: ProvisioningFixture<'_>,
 ) -> Result<ProvisionedStorageInitialization, HostError> {
-    ProvisioningFixture {
-        scope,
-        engine_id: engine_id.to_owned(),
-        assignment,
-        nonce: nonce.to_string().repeat(32),
-        reservation_id,
-        intent_id,
-        docker_root_digest,
-        sample_generation_id,
-        filesystem_instance_digest,
-    }
-    .provision_with_initialization()
-    .await
+    fixture.provision_with_initialization().await
 }
 
 pub(super) async fn provision_with_nonce(
-    scope: &ConnectionJournal,
-    engine_id: &str,
-    assignment: crate::journal::AssignmentIdentity,
-    nonce: &str,
-    reservation_id: i64,
-    intent_id: i64,
-    docker_root_digest: String,
-    sample_generation_id: String,
+    fixture: ProvisioningFixture<'_>,
 ) -> Result<ProvisionedRunner, HostError> {
-    ProvisioningFixture {
-        scope,
-        engine_id: engine_id.to_owned(),
-        assignment,
-        nonce: nonce.to_owned(),
-        reservation_id,
-        intent_id,
-        docker_root_digest,
-        sample_generation_id,
-        filesystem_instance_digest: "a".repeat(64),
-    }
-    .provision()
-    .await
-}
-
-pub(crate) async fn provision_with_nonce_and_initialization(
-    scope: &ConnectionJournal,
-    engine_id: &str,
-    assignment: AssignmentIdentity,
-    nonce: &str,
-    reservation_id: i64,
-    intent_id: i64,
-    docker_root_digest: String,
-    sample_generation_id: String,
-) -> Result<ProvisionedStorageInitialization, HostError> {
-    ProvisioningFixture {
-        scope,
-        engine_id: engine_id.to_owned(),
-        assignment,
-        nonce: nonce.to_owned(),
-        reservation_id,
-        intent_id,
-        docker_root_digest,
-        sample_generation_id,
-        filesystem_instance_digest: "a".repeat(64),
-    }
-    .provision_with_initialization()
-    .await
+    fixture.provision().await
 }
 
 pub(crate) async fn prepare_bootstrap_start_claim(
-    scope: &ConnectionJournal,
-    engine_id: &str,
-    assignment: AssignmentIdentity,
-    nonce: &str,
-    reservation_id: i64,
-    intent_id: i64,
-    docker_root_digest: String,
-    sample_generation_id: String,
+    fixture: ProvisioningFixture<'_>,
 ) -> Result<
     (
         crate::journal::BootstrapStartClaim,
@@ -221,60 +108,17 @@ pub(crate) async fn prepare_bootstrap_start_claim(
     ),
     HostError,
 > {
-    let fixture = ProvisioningFixture {
-        scope,
-        engine_id: engine_id.to_owned(),
-        assignment,
-        nonce: nonce.to_owned(),
-        reservation_id,
-        intent_id,
-        docker_root_digest,
-        sample_generation_id,
-        filesystem_instance_digest: "a".repeat(64),
-    };
-    let names = WorkerIdentityNames::from_nonce(nonce)?;
+    let names = WorkerIdentityNames::from_nonce(&fixture.nonce)?;
     let profile = fixture.profile().await?;
     fixture.record_storage_objects(&profile, &names).await?;
     let initialization = fixture.record_storage_initialization().await?;
     fixture.record_bootstrap_containers(&names).await?;
-    let claim = scope
-        .claim_bootstrap_start(reservation_id)
+    let claim = fixture
+        .scope
+        .claim_bootstrap_start(fixture.reservation_id)
         .await?
         .ok_or(HostError::Journal)?;
     Ok((claim, initialization.handoff))
-}
-
-pub(crate) async fn prepare_initializer(
-    scope: &ConnectionJournal,
-    assignment: AssignmentIdentity,
-    nonce: char,
-    reservation_id: i64,
-    intent_id: i64,
-    docker_root_digest: String,
-    sample_generation_id: String,
-) -> Result<crate::journal::StorageInitializationClaim, HostError> {
-    use crate::worker::storage_initialization::StorageInitializationImage;
-
-    prepare_initializer_state(
-        scope,
-        assignment,
-        nonce,
-        reservation_id,
-        intent_id,
-        docker_root_digest,
-        sample_generation_id,
-    )
-    .await?;
-    let images = crate::launch::verified_images::test_worker_images();
-    let image = StorageInitializationImage::from_verified_release(&images)?;
-    scope
-        .claim_storage_initialization(
-            reservation_id,
-            &image,
-            crate::journal::request_lifecycle::tests::helpers::test_initializer_limits()?,
-        )
-        .await?
-        .ok_or(HostError::Journal)
 }
 
 pub(crate) async fn prepare_initializer_state(

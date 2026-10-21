@@ -199,14 +199,18 @@ async fn provision_burst_request(
         .record_request_acquire(&request, AssignedAcquireResult::Returned(vec![request_id]))
         .await?;
     helpers::initialize_reserved_request(
-        scope,
         request,
-        physical,
-        nonce,
-        reservation_id,
-        intent_id,
-        docker_root_digest,
-        sample_generation_id,
+        helpers::provisioning::ProvisioningFixture {
+            scope,
+            engine_id: helpers::TEST_ENGINE_ID.to_owned(),
+            assignment: physical,
+            nonce: nonce.to_string().repeat(32),
+            reservation_id,
+            intent_id,
+            docker_root_digest,
+            sample_generation_id,
+            filesystem_instance_digest: "a".repeat(64),
+        },
     )
     .await
 }

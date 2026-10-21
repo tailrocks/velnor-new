@@ -25,14 +25,18 @@ async fn committed_pair_handoff_and_initializer_removal_survive_restart() -> Res
         crate::journal::CreateCommitStage::Removed,
     )?;
     let mut provisioning = Box::pin(helpers::initialize_reserved_request(
-        &scope,
         assignment.clone(),
-        assignment,
-        '8',
-        reservation_id,
-        intent_id,
-        docker_root_digest,
-        sample_generation_id,
+        helpers::provisioning::ProvisioningFixture {
+            scope: &scope,
+            engine_id: helpers::TEST_ENGINE_ID.to_owned(),
+            assignment,
+            nonce: '8'.to_string().repeat(32),
+            reservation_id,
+            intent_id,
+            docker_root_digest,
+            sample_generation_id,
+            filesystem_instance_digest: "a".repeat(64),
+        },
     ));
     tokio::select! {
         result = &mut provisioning => {

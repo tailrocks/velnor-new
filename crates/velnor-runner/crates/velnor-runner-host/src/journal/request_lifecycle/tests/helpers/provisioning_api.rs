@@ -1,22 +1,3 @@
-pub(crate) async fn provision_physical_intent_with_initialization(
-    scope: &ConnectionJournal,
-    nonce: char,
-    sample_nonce: char,
-) -> Result<JobFactsReaderFixture, HostError> {
-    use crate::journal::AssignmentKey;
-    let nonce_text = nonce.to_string().repeat(32);
-    let assignment = scope
-        .assignment_identity(AssignmentKey::Remote {
-            kind: "runner".to_owned(),
-            subject: nonce_text.clone(),
-        })
-        .await?;
-    provision_assignment_with_initialization(
-        scope, assignment, None, nonce, sample_nonce, None, TEST_ENGINE_ID,
-    )
-    .await
-}
-
 pub(crate) async fn provision_acquired_request_with_initialization(
     scope: &ConnectionJournal,
     request_id: i64,
@@ -154,8 +135,7 @@ async fn provision_assignment_with_initialization(
     engine_id: &str,
 ) -> Result<JobFactsReaderFixture, HostError> {
     use crate::journal::{
-        ReservationRequest, ReservationResult,
-        fixture_storage_provisioning_admission_for_profile,
+        ReservationRequest, ReservationResult, fixture_storage_provisioning_admission_for_profile,
     };
     use crate::launch::StartPermit;
 
@@ -168,8 +148,7 @@ async fn provision_assignment_with_initialization(
         .current_storage_profile()
         .await?
         .ok_or(HostError::Journal)?;
-    let filesystem_instance_digest =
-        filesystem_instance_digest.unwrap_or_else(|| "a".repeat(64));
+    let filesystem_instance_digest = filesystem_instance_digest.unwrap_or_else(|| "a".repeat(64));
     let admission = fixture_storage_provisioning_admission_for_profile(
         &permit,
         filesystem_instance_digest.clone(),
@@ -189,7 +168,8 @@ async fn provision_assignment_with_initialization(
             .await?;
         let reservation_id = match result {
             crate::journal::RequestPhysicalReservationResult::AcquireClaimed {
-                reservation_id, ..
+                reservation_id,
+                ..
             } => reservation_id,
             crate::journal::RequestPhysicalReservationResult::AtCapacity => {
                 return Err(HostError::Identity);
@@ -219,21 +199,30 @@ async fn provision_assignment_with_initialization(
         return Err(HostError::Journal);
     }
     let artifacts = provisioning::provision_with_engine_and_filesystem_digest(
+        provisioning::ProvisioningFixture {
             scope,
-            engine_id,
+            engine_id: engine_id.to_owned(),
             assignment,
-            nonce,
+            nonce: nonce.to_string().repeat(32),
             reservation_id,
             intent_id,
             docker_root_digest,
             sample_generation_id,
             filesystem_instance_digest,
-        )
-        .await?;
+        },
+    )
+    .await?;
+    Ok(job_facts_reader_fixture(request, artifacts))
+}
+
+fn job_facts_reader_fixture(
+    request: Option<crate::journal::AssignmentIdentity>,
+    artifacts: provisioning::ProvisionedStorageInitialization,
+) -> JobFactsReaderFixture {
     let provisioned = artifacts.provisioned;
-    Ok(JobFactsReaderFixture {
-        // Physical reservation stays bound to the Remote assignment, while
-        // acquired request events use the exact AssignedRequest identity.
+    // Physical reservation stays bound to the Remote assignment, while
+    // acquired request events use the exact AssignedRequest identity.
+    JobFactsReaderFixture {
         assignment: request.unwrap_or_else(|| provisioned.assignment.clone()),
         reservation_assignment: provisioned.assignment.clone(),
         provisioned: provisioned.clone(),
@@ -248,7 +237,7 @@ async fn provision_assignment_with_initialization(
         handoff: artifacts.handoff,
         observed: artifacts.observed,
         ready: artifacts.ready,
-    })
+    }
 }
 
 pub(crate) struct JobFactsReaderFixture {
@@ -269,29 +258,15 @@ pub(crate) struct JobFactsReaderFixture {
 }
 
 pub(crate) async fn initialize_reserved_request(
-    scope: &ConnectionJournal,
     request: crate::journal::AssignmentIdentity,
-    physical: crate::journal::AssignmentIdentity,
-    nonce: char,
-    reservation_id: i64,
-    intent_id: i64,
-    docker_root_digest: String,
-    sample_generation_id: String,
+    physical: provisioning::ProvisioningFixture<'_>,
 ) -> Result<JobFactsReaderFixture, HostError> {
-    let artifacts = Box::pin(provisioning::provision_with_initialization(
-        scope,
-        physical.clone(),
-        nonce,
-        reservation_id,
-        intent_id,
-        docker_root_digest,
-        sample_generation_id,
-    ))
-    .await?;
+    let reservation_assignment = physical.assignment.clone();
+    let artifacts = Box::pin(provisioning::provision_with_initialization(physical)).await?;
     let provisioned = artifacts.provisioned;
     Ok(JobFactsReaderFixture {
         assignment: request,
-        reservation_assignment: physical,
+        reservation_assignment,
         reservation_id: provisioned.reservation_id,
         intent_id: provisioned.intent_id,
         runner_container_id: provisioned.runner_container_id.clone(),
@@ -308,54 +283,9 @@ pub(crate) async fn initialize_reserved_request(
 }
 
 pub(crate) async fn provision_acquired_physical_intent(
-    scope: &ConnectionJournal,
-    engine_id: &str,
-    assignment: crate::journal::AssignmentIdentity,
-    nonce: &str,
-    reservation_id: i64,
-    intent_id: i64,
-    docker_root_digest: String,
-    sample_generation_id: String,
+    fixture: provisioning::ProvisioningFixture<'_>,
 ) -> Result<(), HostError> {
-    provisioning::provision_with_nonce(
-        scope,
-        engine_id,
-        assignment,
-        nonce,
-        reservation_id,
-        intent_id,
-        docker_root_digest,
-        sample_generation_id,
-    )
-    .await
-    .map(|_| ())
-}
-
-pub(crate) async fn prepare_bootstrap_start_claim(
-    scope: &ConnectionJournal,
-    engine_id: &str,
-    assignment: crate::journal::AssignmentIdentity,
-    nonce: &str,
-    reservation_id: i64,
-    intent_id: i64,
-    docker_root_digest: String,
-    sample_generation_id: String,
-) -> Result<
-    (
-        crate::journal::BootstrapStartClaim,
-        crate::journal::VerifiedMetadataInitializationHandoff,
-    ),
-    HostError,
-> {
-    provisioning::prepare_bootstrap_start_claim(
-        scope,
-        engine_id,
-        assignment,
-        nonce,
-        reservation_id,
-        intent_id,
-        docker_root_digest,
-        sample_generation_id,
-    )
-    .await
+    provisioning::provision_with_nonce(fixture)
+        .await
+        .map(|_| ())
 }

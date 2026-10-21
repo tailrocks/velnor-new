@@ -80,14 +80,18 @@ pub(super) async fn prepare_linked_lifecycle(
     assert_eq!(recorded_intent_id, intent_id);
     assert!(!fresh);
     let initialized = initialize_reserved_request(
-        &scope,
         witness.clone(),
-        physical.clone(),
-        nonce,
-        reservation_id,
-        intent_id,
-        root_digest,
-        sample_generation_id,
+        super::super::helpers::provisioning::ProvisioningFixture {
+            scope: &scope,
+            engine_id: super::super::helpers::TEST_ENGINE_ID.to_owned(),
+            assignment: physical.clone(),
+            nonce: nonce.to_string().repeat(32),
+            reservation_id,
+            intent_id,
+            docker_root_digest: root_digest,
+            sample_generation_id,
+            filesystem_instance_digest: "a".repeat(64),
+        },
     )
     .await?;
     let provisioned = initialized.provisioned.clone();

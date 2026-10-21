@@ -131,14 +131,17 @@ async fn recovery_jit_claim_rejects_a_policy_changed_after_acquire() -> Result<(
         .ok_or(HostError::Identity)?
         .to_owned();
     super::helpers::provision_acquired_physical_intent(
-        &fixture.scope,
-        candidate.engine_id(),
-        candidate.physical_assignment().clone(),
-        &nonce,
-        candidate.reservation_id(),
-        candidate.intent_id(),
-        candidate.docker_root_digest().to_owned(),
-        candidate.sample_generation_id().to_owned(),
+        super::helpers::provisioning::ProvisioningFixture {
+            scope: &fixture.scope,
+            engine_id: candidate.engine_id().to_owned(),
+            assignment: candidate.physical_assignment().clone(),
+            nonce,
+            reservation_id: candidate.reservation_id(),
+            intent_id: candidate.intent_id(),
+            docker_root_digest: candidate.docker_root_digest().to_owned(),
+            sample_generation_id: candidate.sample_generation_id().to_owned(),
+            filesystem_instance_digest: "a".repeat(64),
+        },
     )
     .await?;
     let changed = crate::config::HostConfig::test_with_job_authority_policy_generation(

@@ -77,17 +77,19 @@ pub(crate) async fn prepare_bootstrap_start_claim_for_nonce(
     if fresh || intent_id != acquired_intent_id {
         return Err(HostError::Journal);
     }
-    let (claim, metadata_handoff) = provisioning::prepare_bootstrap_start_claim(
-        scope,
-        TEST_ENGINE_ID,
-        assignment,
-        &nonce_text,
-        reservation_id,
-        intent_id,
-        docker_root_digest.clone(),
-        sample_generation_id,
-    )
-    .await?;
+    let (claim, metadata_handoff) =
+        provisioning::prepare_bootstrap_start_claim(provisioning::ProvisioningFixture {
+            scope,
+            engine_id: TEST_ENGINE_ID.to_owned(),
+            assignment,
+            nonce: nonce_text,
+            reservation_id,
+            intent_id,
+            docker_root_digest: docker_root_digest.clone(),
+            sample_generation_id,
+            filesystem_instance_digest: "a".repeat(64),
+        })
+        .await?;
     Ok(BootstrapStartClaimFixture {
         claim,
         metadata_handoff,
@@ -363,7 +365,7 @@ pub(super) async fn provision_reserved_physical_intent(
 }
 
 #[path = "physical/provisioning.rs"]
-mod provisioning;
+pub(crate) mod provisioning;
 
 fn role_filesystem_digest(role: crate::journal::StorageRole) -> String {
     use crate::journal::StorageRole;
