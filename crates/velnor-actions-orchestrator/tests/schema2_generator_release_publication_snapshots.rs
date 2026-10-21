@@ -3,7 +3,7 @@ use super::cross_snapshots;
 use super::qualification_snapshots;
 
 pub(super) fn assert_pinned_gh_policy(actions: &Actions) {
-    let pinned_wrapper = r#"gh() {\n  (\n    mise --no-config --no-env --no-hooks exec gh@2.102.0 -- gh \"$@\" & _velnor_gh_pid=$!\n    ( sleep 60; kill -TERM \"$_velnor_gh_pid\" 2>/dev/null; sleep 5; kill -KILL \"$_velnor_gh_pid\" 2>/dev/null ) </dev/null >/dev/null 2>&1 & _velnor_gh_watch=$!\n    _velnor_gh_status=0\n    wait \"$_velnor_gh_pid\" || _velnor_gh_status=$?\n    kill -KILL \"$_velnor_gh_watch\" 2>/dev/null || true\n    wait \"$_velnor_gh_watch\" 2>/dev/null || true\n    exit \"$_velnor_gh_status\"\n  ) </dev/null\n}\nexport -f gh"#;
+    let pinned_wrapper = r#"gh() {\n  (\n    mise --no-config --no-env --no-hooks exec gh@2.102.1 -- gh \"$@\" & _velnor_gh_pid=$!\n    ( sleep 60; kill -TERM \"$_velnor_gh_pid\" 2>/dev/null; sleep 5; kill -KILL \"$_velnor_gh_pid\" 2>/dev/null ) </dev/null >/dev/null 2>&1 & _velnor_gh_watch=$!\n    _velnor_gh_status=0\n    wait \"$_velnor_gh_pid\" || _velnor_gh_status=$?\n    kill -KILL \"$_velnor_gh_watch\" 2>/dev/null || true\n    wait \"$_velnor_gh_watch\" 2>/dev/null || true\n    exit \"$_velnor_gh_status\"\n  ) </dev/null\n}\nexport -f gh"#;
     for (name, body) in actions {
         if ["gh api ", "gh release ", "gh attestation "]
             .iter()
@@ -161,7 +161,7 @@ fn assert_build_actions(body: &str, actions: &Actions) -> Result<(), Box<dyn std
         "{linux_action}"
     );
     assert!(
-        linux_action.contains("rust@1.99.1 mr-boxington@1.25.0")
+        linux_action.contains("rust@1.99.1 mr-boxington@1.26.0")
             || linux_action.contains(
                 r#"'rust@'\"${VELNOR_TOOL_RUST}\" 'mr-boxington@'\"${VELNOR_TOOL_MR_BOXINGTON}\""#
             ),
@@ -285,7 +285,7 @@ fn assert_manifest_builder_contract(manifest: &str) {
     let version = env!("CARGO_PKG_VERSION");
     assert!(
         manifest.contains(&format!(
-            "create-release-manifest.sh '{version}' 'tailrocks/velnor-new' '1.99.1' '1.25.0'"
+            "create-release-manifest.sh '{version}' 'tailrocks/velnor-new' '1.99.1' '1.26.0'"
         )) || manifest.contains(&format!(
             r#"create-release-manifest.sh '{version}' 'tailrocks/velnor-new' ''\"${{VELNOR_TOOL_RUST}}\"'' ''\"${{VELNOR_TOOL_MR_BOXINGTON}}\"''"#
         )),

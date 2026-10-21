@@ -83,13 +83,13 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
-          version: 2026.10.15
+          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          version: 2026.10.17
       - name: V2 identity
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: cef4e76e1375e17c4d78faf327aafdee37b5b786202f8de780cd2039f1efe143
+          d: 7bfdcef3e7974b7f1e5323b191b163c4e6d43c29fd0eeb8ce7eb86858490aff7
       - &s4
         name: Restore Mise tools
         id: tools-restore
@@ -97,7 +97,7 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
-          mise-sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
+          mise-sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Prepare pinned tools
         run: mise --no-config --no-env --no-hooks install actionlint@1.7.12 shellcheck@0.11.0
@@ -155,7 +155,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 864c6e2918c5f1eb33940466421849b47ba015835146ef4a690f850b1906ad88
+          d: 00bdb985db575daf0919bcbe831f1629db05e06320c080ccf415c19d484a0606
       - *s4
       - name: Run cargo-deny
         run: "sh -c '{ mise --no-config --no-env --no-hooks install cargo-deny@0.20.2 && unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; } && mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" --config \"$GITHUB_WORKSPACE/deny.toml\" check && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" --config \"$GITHUB_WORKSPACE/crates/velnor-runner/deny.toml\" check'"
@@ -175,7 +175,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: c8ab6c0d6870c8a889ec89a4f5b58289d51cfd10628e7f5332827683bea2432d
+          d: 1f7b04fc9f061a3c7d623692623bf6230147de964d81811fb543218614460d57
       - *s4
       - name: Prepare pinned tools
         run: mise --no-config --no-env --no-hooks install 'http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2'
@@ -273,13 +273,13 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 431a91c8d7b93429842c8a4e9f2b33932f342926f82e72369d21fd03364a4ce5-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: 817af7e3c04180cb3d394d3c4b1dbf915c9405d2e6ec7b616ef80bd5271fe4aa-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - *s4
       - name: Prepare pinned tools
         env: &m11
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: "mise --no-config --no-env --no-hooks install 'rust@'\"${VELNOR_TOOL_RUST}\" actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.31.1 'aqua:nextest-rs/nextest/cargo-nextest@'\"${VELNOR_TOOL_NEXTEST}\" gh@2.102.0"
+        run: "mise --no-config --no-env --no-hooks install 'rust@'\"${VELNOR_TOOL_RUST}\" actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.31.1 'aqua:nextest-rs/nextest/cargo-nextest@'\"${VELNOR_TOOL_NEXTEST}\" gh@2.102.1"
       - name: Compute cache keys
         id: cache-keys
         env:
@@ -462,7 +462,7 @@ jobs:
       - *s11
       - name: Prepare pinned tools
         env: *m11
-        run: mise --no-config --no-env --no-hooks install gh@2.102.0
+        run: mise --no-config --no-env --no-hooks install gh@2.102.1
       - name: Download plan
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
@@ -536,7 +536,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: fa66dd23b81580da254a33b46d1be4705b2934b21289a6caada5a1f18f2156dc-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: 13b982d522f0c1adde8b33589cd7927faba2fa3cb98630fb073fbff8d7f94c73-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - *s4
       - *s9
       - *s10
@@ -751,7 +751,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 430034e67e34495db2cf3823fb02e500ab54dbaa427978a7d87b2ce0f9a19541-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: a4e1c862082c15893b1accf3b4fd3ab9d353115ce59cba697b92ec35d8d1557d-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - *s4
       - *s9
       - *s10
@@ -1002,7 +1002,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: b8fd27af348af152dc18240f4566fc63f8240adde8a4d62354d5cc08a6ed0d82-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: 7f70f948b804383637286dbd6b48a924af713d85cdee67a7988a7ff75857e374-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - *s4
       - *s9
       - *s10
@@ -1684,7 +1684,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: acf594e0df38c4b7064f583c37db60da1bbe70dae674ebccbb81d0da3cffb6e1
+          d: bd0ad66d91cd9853fca35d99811fb46189c8846ac9046b2c486cabc6cc9f00eb
       - *s4
       - name: Prepare pinned tools
         run: mise --no-config --no-env --no-hooks install zizmor@1.31.1

@@ -200,7 +200,7 @@ fn binary_release_uses_native_github_cli_pin_despite_source_mise_override() -> T
         .split("  stable-publisher:")
         .nth(1)
         .ok_or("stable publisher job missing")?;
-    assert!(publisher.contains("gh@2.102.0"));
+    assert!(publisher.contains("gh@2.102.1"));
     assert!(!publisher.contains("gh@2.0.0"));
     assert!(!publisher.contains("cargo metadata"));
     assert!(!publisher.contains("Check out exact source"));
