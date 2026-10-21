@@ -188,6 +188,8 @@ Velnor MUST NOT save unchanged data, use an unbounded stable key, globally prune
 superseded exact keys is not global pruning; decision 4), or restore one cache layer through two mechanisms. MBX objects, Cargo sources, and Mise task artifacts MUST remain independently
 restorable. The default branch MUST produce warm snapshots through ordinary CI; no unconditional warm-up
 workflow is allowed.
+Family pruning runs only in the push-only `Cache prune` job, which alone holds `actions: write` (never the Plan
+job or a pull request), and keeps the newest `retained_entries` per unit of a family's `trusted` entries.
 
 ## 3. Miss reasons, artifacts, and report schema
 

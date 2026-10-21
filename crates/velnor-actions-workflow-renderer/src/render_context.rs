@@ -48,6 +48,8 @@ pub const FINAL_CONDITION: &str = CONTRACT_REQUIRED_CONDITION;
 pub const UPLOAD_STEP_CONDITION: &str = "always()";
 /// Planner job ID: the sole matrix producer (contract alias).
 pub const PLAN_JOB_ID: &str = CONTRACT_PLAN_JOB_ID;
+/// Cache-prune job ID: the one job holding `actions: write` (cache decision 4).
+pub const CACHE_PRUNE_JOB_ID: &str = "cache-prune";
 /// Matrix consumer job ID.
 pub const TASK_JOB_ID: &str = "velnor-task";
 /// Candidate validation job ID (Velnor policy only).

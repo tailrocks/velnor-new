@@ -90,8 +90,8 @@ output across trust scopes.
 
 Each spec carries `ceiling_bytes` (largest stored entry; a save that would
 exceed it is refused and reported as `over_ceiling`) and `retained_entries`
-(newest entries kept per unit; older exact keys are pruned per family,
-[decision 4](cache-decisions.md)). `worst_case_bytes(units)` multiplies them.
+(newest entries kept per unit; older exact keys are pruned per family by the
+`Cache prune` job, [decision 4](cache-decisions.md)). `worst_case_bytes(units)` multiplies them.
 A test sums the reference repository (ChainArgos: four Bun roots, two OpenTofu
 roots, one Playwright version, one dbt project, one requirements file, one collection set, one Cargo workspace bundle, plus a 1.5 GiB allowance for the tools layer)
 and fails when it exceeds 85 % of the 10 GiB quota.

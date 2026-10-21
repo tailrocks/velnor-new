@@ -205,6 +205,7 @@ fn build_workflow_jobs(
         jobs.insert(id, job);
     }
     // Seeds run no checks and are never required (cache decision 2).
+    let seed_ids: Vec<String> = built.seeds.iter().map(|(id, _)| id.clone()).collect();
     for (id, job) in built.seeds {
         jobs.insert(id, job);
     }
@@ -242,6 +243,14 @@ fn build_workflow_jobs(
         prepared.acquire.take(),
         &prepared.catalog,
     )?;
+    if !required_ids.is_empty() {
+        let (id, job) = crate::workflow_jobs::cache_prune::prune_job(
+            input.label,
+            &prepared.catalog,
+            &seed_ids,
+        )?;
+        jobs.insert(id, job);
+    }
     wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
     Ok(jobs)
 }
