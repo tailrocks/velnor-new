@@ -21,7 +21,7 @@ const DBT: &str = "
 projects = [\"warehouse\"]
 services = [\"postgres\"]
 checks = [\"parse\", \"compile\"]
-env = { DBT_HOST = \"127.0.0.1\", DBT_PORT = \"40000\", DBT_USER = \"chainargos\", DBT_PASSWORD = \"chainargos\", DBT_DBNAME = \"chainargos\", DBT_PROFILES_DIR = \".\" }
+env = { DBT_HOST = \"127.0.0.1\", DBT_PORT = \"40000\", DBT_USER = \"chainargos\", DBT_PASSWORD = \"chainargos\", DBT_DBNAME = \"chainargos\" }
 ";
 
 fn config(extra: &str) -> String {
@@ -108,6 +108,15 @@ fn each_project_gets_one_job_with_a_service_and_parallel_checks() -> TestResult 
     assert!(job.contains("Resolve project tool versions"), "{job}");
     assert!(job.contains("wait-all"), "{job}");
     assert!(job.contains("DBT_PASSWORD: chainargos"), "{job}");
+    for step in ["Install dbt-fusion", "dbt deps", "dbt parse", "dbt compile"] {
+        let body = job
+            .split(&format!("- name: {step}\n"))
+            .nth(1)
+            .and_then(|rest| rest.split("\n      - name:").next())
+            .ok_or(step)?;
+        assert!(body.contains("DBT_PROJECT_DIR: ."), "{step}: {body}");
+        assert!(body.contains("DBT_PROFILES_DIR: ."), "{step}: {body}");
+    }
     assert!(!job.contains("secrets."), "{job}");
     let required = job_body(&ci, "required")?;
     assert!(required.contains("- dbt-warehouse"), "{required}");
@@ -122,6 +131,22 @@ fn generation_is_deterministic() -> TestResult {
         ci_yaml(repo.path())
     };
     assert_eq!(render()?, render()?);
+    Ok(())
+}
+
+#[test]
+fn configuration_cannot_redirect_profiles_outside_the_project() -> TestResult {
+    let redirected = DBT.replace(
+        "DBT_HOST",
+        r#"DBT_PROFILES_DIR = "../shared-profiles", DBT_HOST"#,
+    );
+    let repo = make_repo(&config(&redirected))?;
+    write_project(repo.path(), true)?;
+    let error = prepare(repo.path()).expect_err("redirected profile path must be rejected");
+    assert!(
+        error.to_string().contains("bad_env_name:DBT_PROFILES_DIR"),
+        "{error}"
+    );
     Ok(())
 }
 
