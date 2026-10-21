@@ -5,6 +5,9 @@ use crate::journal::connection::storage::read_transaction;
 use super::admission::JOB_LIMIT;
 use super::helpers::{Scratch, binding, created_scope};
 
+#[path = "initialization/metadata_claim.rs"]
+mod metadata_claim;
+
 mod cleanup_guard;
 mod late_initializer;
 mod v21_migration;

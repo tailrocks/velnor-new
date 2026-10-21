@@ -1,6 +1,7 @@
 use crate::error::HostError;
 use crate::journal::connection::{
-    StorageFilesystemKind, StorageInodePolicy, StorageMedium, StorageRole,
+    StorageFilesystemKind, StorageInodePolicy, StorageMedium, StoragePoolLimit, StorageProfile,
+    StorageRole, StorageRoleLimit,
 };
 
 use super::super::HoldContext;
@@ -39,12 +40,40 @@ pub(super) async fn load_object_role_plan(
     {
         return Err(HostError::Journal);
     }
-
     let role_limit = profile.role_limit(role)?;
     if role_limit.alias_of().is_some() {
         return Err(HostError::Journal);
     }
     let pool = profile.pool_limit(role_limit.pool_id())?;
+    let persisted = read_persisted_role_plan(connection, reservation_id, role).await?;
+    validate_persisted_role_plan(
+        connection,
+        reservation_id,
+        role,
+        &profile,
+        role_limit,
+        pool,
+        persisted,
+    )
+    .await
+}
+
+struct PersistedObjectRolePlan {
+    pool_id: String,
+    medium: StorageMedium,
+    filesystem_kind: StorageFilesystemKind,
+    inode_policy: StorageInodePolicy,
+    planned_filesystem_instance_digest: Option<String>,
+    charge_bytes: u64,
+    charge_inodes: u64,
+    retained_memory_bytes: u64,
+}
+
+async fn read_persisted_role_plan(
+    connection: &turso::Connection,
+    reservation_id: i64,
+    role: StorageRole,
+) -> Result<PersistedObjectRolePlan, HostError> {
     let mut rows = connection
         .query(
             "SELECT pool_id, medium, filesystem_kind, inode_policy, planned_filesystem_instance_digest, charge_bytes, charge_inodes, retained_memory_bytes FROM capacity_reservation_provisioning_roles WHERE reservation_id = ?1 AND role = ?2",
@@ -60,20 +89,32 @@ pub(super) async fn load_object_role_plan(
     if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
         return Err(HostError::Journal);
     }
+    Ok(PersistedObjectRolePlan {
+        pool_id: row.get(0).map_err(|_| HostError::Journal)?,
+        medium: StorageMedium::parse(&row.get::<String>(1).map_err(|_| HostError::Journal)?)?,
+        filesystem_kind: StorageFilesystemKind::parse(
+            &row.get::<String>(2).map_err(|_| HostError::Journal)?,
+        )?,
+        inode_policy: StorageInodePolicy::parse(
+            &row.get::<String>(3).map_err(|_| HostError::Journal)?,
+        )?,
+        planned_filesystem_instance_digest: row.get(4).map_err(|_| HostError::Journal)?,
+        charge_bytes: positive_sql_u64(row.get(5).map_err(|_| HostError::Journal)?)?,
+        charge_inodes: positive_sql_u64(row.get(6).map_err(|_| HostError::Journal)?)?,
+        retained_memory_bytes: nonnegative_sql_u64(row.get(7).map_err(|_| HostError::Journal)?)?,
+    })
+}
 
-    let pool_id: String = row.get(0).map_err(|_| HostError::Journal)?;
-    let medium = StorageMedium::parse(&row.get::<String>(1).map_err(|_| HostError::Journal)?)?;
-    let filesystem_kind =
-        StorageFilesystemKind::parse(&row.get::<String>(2).map_err(|_| HostError::Journal)?)?;
-    let inode_policy =
-        StorageInodePolicy::parse(&row.get::<String>(3).map_err(|_| HostError::Journal)?)?;
-    let planned_filesystem_instance_digest: Option<String> =
-        row.get(4).map_err(|_| HostError::Journal)?;
-    let charge_bytes = positive_sql_u64(row.get(5).map_err(|_| HostError::Journal)?)?;
-    let charge_inodes = positive_sql_u64(row.get(6).map_err(|_| HostError::Journal)?)?;
-    let retained_memory_bytes = nonnegative_sql_u64(row.get(7).map_err(|_| HostError::Journal)?)?;
+async fn validate_persisted_role_plan(
+    connection: &turso::Connection,
+    reservation_id: i64,
+    role: StorageRole,
+    profile: &StorageProfile,
+    role_limit: &StorageRoleLimit,
+    pool: &StoragePoolLimit,
+    persisted: PersistedObjectRolePlan,
+) -> Result<ObjectRolePlan, HostError> {
     let contract = role.contract().ok_or(HostError::Journal)?;
-
     let publication_policy_digest = if role == StorageRole::EngineMetadata {
         Some(
             profile
@@ -84,19 +125,19 @@ pub(super) async fn load_object_role_plan(
     } else {
         None
     };
-    let medium_matches_contract = medium == contract.medium
+    let medium_matches_contract = persisted.medium == contract.medium
         && match role {
-            StorageRole::EngineMetadata => medium == StorageMedium::Disk,
+            StorageRole::EngineMetadata => persisted.medium == StorageMedium::Disk,
             StorageRole::SharedRun
             | StorageRole::RunnerHome
             | StorageRole::RunnerWork
-            | StorageRole::DindData => medium == StorageMedium::Tmpfs,
+            | StorageRole::DindData => persisted.medium == StorageMedium::Tmpfs,
             _ => false,
         };
-    let instance_matches = match medium {
-        StorageMedium::Tmpfs => planned_filesystem_instance_digest.is_none(),
+    let instance_matches = match persisted.medium {
+        StorageMedium::Tmpfs => persisted.planned_filesystem_instance_digest.is_none(),
         StorageMedium::Disk => {
-            planned_filesystem_instance_digest.as_deref()
+            persisted.planned_filesystem_instance_digest.as_deref()
                 == Some(
                     pool_instance_digest(connection, reservation_id, role)
                         .await?
@@ -107,34 +148,35 @@ pub(super) async fn load_object_role_plan(
     let object_policy_matches =
         object_policy_digest(connection, reservation_id, role).await? == publication_policy_digest;
     if !medium_matches_contract
-        || pool_id != role_limit.pool_id()
-        || pool.medium() != medium
+        || persisted.pool_id != role_limit.pool_id()
+        || pool.medium() != persisted.medium
         || !instance_matches
-        || (medium == StorageMedium::Tmpfs && filesystem_kind != StorageFilesystemKind::Tmpfs)
-        || (medium == StorageMedium::Disk
+        || (persisted.medium == StorageMedium::Tmpfs
+            && persisted.filesystem_kind != StorageFilesystemKind::Tmpfs)
+        || (persisted.medium == StorageMedium::Disk
             && !matches!(
-                filesystem_kind,
+                persisted.filesystem_kind,
                 StorageFilesystemKind::Btrfs | StorageFilesystemKind::Other
             ))
-        || (medium == StorageMedium::Tmpfs && pool.inode_policy() != StorageInodePolicy::Finite)
-        || inode_policy != pool.inode_policy()
+        || (persisted.medium == StorageMedium::Tmpfs
+            && pool.inode_policy() != StorageInodePolicy::Finite)
+        || persisted.inode_policy != pool.inode_policy()
         || !object_policy_matches
-        || charge_bytes != role_limit.max_bytes()
-        || charge_inodes != role_limit.max_inodes()
-        || retained_memory_bytes != role_limit.retained_memory_bytes()
+        || persisted.charge_bytes != role_limit.max_bytes()
+        || persisted.charge_inodes != role_limit.max_inodes()
+        || persisted.retained_memory_bytes != role_limit.retained_memory_bytes()
     {
         return Err(HostError::Journal);
     }
-
     Ok(ObjectRolePlan {
         #[cfg(test)]
-        pool_id,
-        medium,
-        filesystem_kind,
-        inode_policy,
-        charge_bytes,
-        charge_inodes,
-        retained_memory_bytes,
+        pool_id: persisted.pool_id,
+        medium: persisted.medium,
+        filesystem_kind: persisted.filesystem_kind,
+        inode_policy: persisted.inode_policy,
+        charge_bytes: persisted.charge_bytes,
+        charge_inodes: persisted.charge_inodes,
+        retained_memory_bytes: persisted.retained_memory_bytes,
         #[cfg(test)]
         publication_policy_digest,
     })

@@ -36,88 +36,50 @@ impl ConnectionJournal {
         let connection_id = self.connection_id().as_str().to_owned();
         let claim = Box::pin(in_transaction(self.journal_ref(), async |connection| {
             self.validate_scope(connection).await?;
-            let Some(context) = hold_context(connection, &connection_id, reservation_id).await? else { return Ok(None); };
+            let Some(context) = hold_context(connection, &connection_id, reservation_id).await? else {
+                return Ok(None);
+            };
             if !hold_is_claimable(&context)
                 || !objects_are_ready(connection, reservation_id).await?
                 || !prebind_effects_absent(connection, reservation_id).await?
+                || !Self::initialization_claim_available(connection, &connection_id, reservation_id).await?
             {
                 return Ok(None);
             }
-            let mut rows = connection
-                .query(
-                    "SELECT COUNT(*) FROM capacity_reservation_storage_initialization WHERE reservation_id = ?1 AND connection_id = ?2",
-                    (reservation_id, connection_id.as_str()),
-                )
-                .await
-                .map_err(|_| HostError::Journal)?;
-            let existing = rows
-                .next()
-                .await
-                .map_err(|_| HostError::Journal)?
-                .ok_or(HostError::Journal)?
-                .get::<i64>(0)
-                .map_err(|_| HostError::Journal)?;
-            if existing != 0 {
-                return Ok(None);
-            }
             let operation_key = format!("{}-1", context.operation_id);
-            if operation_key.len() > 64 || !valid_digest(image.runtime_id(), "sha256:", 64)
-                || !valid_hex(image.source_sha(), 40) || limits.cpu_nano() <= 0
-                || limits.memory_bytes() <= 0 || !(1..=16).contains(&limits.pids())
-            { return Err(HostError::Identity); }
-            let mut reservation_rows = connection.query(
-                "SELECT cpu_millicores, memory_bytes FROM capacity_reservations WHERE id = ?1 AND connection_id = ?2",
-                (reservation_id, connection_id.as_str()),
-            ).await.map_err(|_| HostError::Journal)?;
-            let reservation = reservation_rows.next().await.map_err(|_| HostError::Journal)?.ok_or(HostError::Journal)?;
-            let cpu_millicores = reservation.get::<i64>(0).map_err(|_| HostError::Journal)?;
-            let reserved_memory = reservation.get::<i64>(1).map_err(|_| HostError::Journal)?;
-            if reservation_rows.next().await.map_err(|_| HostError::Journal)?.is_some()
-                || limits.cpu_nano() > cpu_millicores.checked_mul(1_000_000).ok_or(HostError::Journal)?
-                || limits.memory_bytes() > reserved_memory
-            { return Err(HostError::Config); }
-            let mut rows = connection.query(
-                "SELECT role, docker_name FROM capacity_reservation_provisioning_objects WHERE reservation_id = ?1 AND create_state = 'created' AND docker_id = docker_name AND role IN ('runner-home', 'runner-work') ORDER BY role",
-                [reservation_id],
-            ).await.map_err(|_| HostError::Journal)?;
-            let mut home_volume = None;
-            let mut work_volume = None;
-            while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
-                let role = row.get::<String>(0).map_err(|_| HostError::Journal)?;
-                let name = row.get::<String>(1).map_err(|_| HostError::Journal)?;
-                match role.as_str() {
-                    "runner-home" => {
-                        if home_volume.replace(name).is_some() {
-                            return Err(HostError::Journal);
-                        }
-                    }
-                    "runner-work" => {
-                        if work_volume.replace(name).is_some() {
-                            return Err(HostError::Journal);
-                        }
-                    }
-                    _ => return Err(HostError::Journal),
-                }
+            Self::validate_initializer_limits(
+                connection,
+                reservation_id,
+                &connection_id,
+                &operation_key,
+                image,
+                limits,
+            ).await?;
+            let Some((home_volume, work_volume)) =
+                Self::created_worker_volumes(connection, reservation_id).await?
+            else {
+                return Ok(None);
+            };
+            if home_volume == work_volume {
+                return Err(HostError::Journal);
             }
-            let (Some(home_volume), Some(work_volume)) = (home_volume, work_volume) else { return Ok(None); };
-            if home_volume == work_volume { return Err(HostError::Journal); }
             let metadata_identity = if let Some(metadata) = metadata {
-                if metadata.role() != crate::journal::StorageRole::EngineMetadata
-                    || metadata.reservation_id() != reservation_id
-                    || metadata.operation_id() != context.operation_id
-                    || metadata.engine_id() != context.engine_id
-                    || metadata.docker_root_digest() != context.docker_root_digest
-                    || metadata.docker_name() != metadata.docker_id()
-                    || metadata.docker_name() == home_volume || metadata.docker_name() == work_volume
-                { return Err(HostError::Identity); }
-                let mut rows = connection.query(
-                    "SELECT COUNT(*) FROM capacity_reservation_provisioning_objects WHERE reservation_id = ?1 AND role = 'engine-metadata' AND create_state = 'created' AND docker_name = ?2 AND docker_id = ?3",
-                    (reservation_id, metadata.docker_name(), metadata.docker_id()),
-                ).await.map_err(|_| HostError::Journal)?;
-                let count = rows.next().await.map_err(|_| HostError::Journal)?.ok_or(HostError::Journal)?.get::<i64>(0).map_err(|_| HostError::Journal)?;
-                if count != 1 { return Ok(None); }
-                Some((metadata.docker_name().to_owned(), metadata.docker_id().to_owned()))
-            } else { None };
+                let Some(identity) = Self::metadata_identity(
+                    connection,
+                    reservation_id,
+                    &context,
+                    metadata,
+                    &home_volume,
+                    &work_volume,
+                )
+                .await?
+                else {
+                    return Ok(None);
+                };
+                Some(identity)
+            } else {
+                None
+            };
             let helper_name = format!("velnor-init-{operation_key}");
             connection.execute(
                 "INSERT INTO capacity_reservation_storage_initialization (reservation_id, connection_id, operation_id, generation, engine_id, docker_root_digest, image_runtime_id, image_source_sha, nano_cpus, memory_bytes, pids_limit, home_volume, work_volume, layout_version, metadata_volume, metadata_volume_id, helper_name, create_state, start_state, result_state, remove_state, operation_key) VALUES (?1, ?2, ?3, 1, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, 'requested', 'not_requested', 'not_requested', 'not_requested', ?17)",
@@ -141,6 +103,121 @@ impl ConnectionJournal {
             commit_gate::pause_after_commit(reservation_id, "claim").await;
         }
         Ok(claim)
+    }
+
+    async fn initialization_claim_available(
+        connection: &turso::Connection,
+        connection_id: &str,
+        reservation_id: i64,
+    ) -> Result<bool, HostError> {
+        let mut rows = connection
+            .query(
+                "SELECT COUNT(*) FROM capacity_reservation_storage_initialization WHERE reservation_id = ?1 AND connection_id = ?2",
+                (reservation_id, connection_id),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        let existing = rows
+            .next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .ok_or(HostError::Journal)?
+            .get::<i64>(0)
+            .map_err(|_| HostError::Journal)?;
+        Ok(existing == 0)
+    }
+
+    async fn validate_initializer_limits(
+        connection: &turso::Connection,
+        reservation_id: i64,
+        connection_id: &str,
+        operation_key: &str,
+        image: &StorageInitializationImage,
+        limits: crate::worker::storage_initialization::StorageInitializationLimits,
+    ) -> Result<(), HostError> {
+        if operation_key.len() > 64
+            || !valid_digest(image.runtime_id(), "sha256:", 64)
+            || !valid_hex(image.source_sha(), 40)
+            || limits.cpu_nano() <= 0
+            || limits.memory_bytes() <= 0
+            || !(1..=16).contains(&limits.pids())
+        {
+            return Err(HostError::Identity);
+        }
+        let mut reservation_rows = connection.query(
+            "SELECT cpu_millicores, memory_bytes FROM capacity_reservations WHERE id = ?1 AND connection_id = ?2",
+            (reservation_id, connection_id),
+        ).await.map_err(|_| HostError::Journal)?;
+        let reservation = reservation_rows.next().await.map_err(|_| HostError::Journal)?.ok_or(HostError::Journal)?;
+        let cpu_millicores = reservation.get::<i64>(0).map_err(|_| HostError::Journal)?;
+        let reserved_memory = reservation.get::<i64>(1).map_err(|_| HostError::Journal)?;
+        if reservation_rows.next().await.map_err(|_| HostError::Journal)?.is_some()
+            || limits.cpu_nano() > cpu_millicores.checked_mul(1_000_000).ok_or(HostError::Journal)?
+            || limits.memory_bytes() > reserved_memory
+        {
+            return Err(HostError::Config);
+        }
+        Ok(())
+    }
+
+    async fn created_worker_volumes(
+        connection: &turso::Connection,
+        reservation_id: i64,
+    ) -> Result<Option<(String, String)>, HostError> {
+        let mut rows = connection.query(
+            "SELECT role, docker_name FROM capacity_reservation_provisioning_objects WHERE reservation_id = ?1 AND create_state = 'created' AND docker_id = docker_name AND role IN ('runner-home', 'runner-work') ORDER BY role",
+            [reservation_id],
+        ).await.map_err(|_| HostError::Journal)?;
+        let mut home_volume = None;
+        let mut work_volume = None;
+        while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
+            let role = row.get::<String>(0).map_err(|_| HostError::Journal)?;
+            let name = row.get::<String>(1).map_err(|_| HostError::Journal)?;
+            match role.as_str() {
+                "runner-home" => {
+                    if home_volume.replace(name).is_some() {
+                        return Err(HostError::Journal);
+                    }
+                }
+                "runner-work" => {
+                    if work_volume.replace(name).is_some() {
+                        return Err(HostError::Journal);
+                    }
+                }
+                _ => return Err(HostError::Journal),
+            }
+        }
+        Ok(home_volume.zip(work_volume))
+    }
+
+    async fn metadata_identity(
+        connection: &turso::Connection,
+        reservation_id: i64,
+        context: &super::HoldContext,
+        metadata: &crate::launch::bootstrap::VerifiedCreatedStorageObject,
+        home_volume: &str,
+        work_volume: &str,
+    ) -> Result<Option<(String, String)>, HostError> {
+        if metadata.role() != crate::journal::StorageRole::EngineMetadata
+            || metadata.reservation_id() != reservation_id
+            || metadata.operation_id() != context.operation_id
+            || metadata.engine_id() != context.engine_id
+            || metadata.docker_root_digest() != context.docker_root_digest
+            || metadata.docker_name() != metadata.docker_id()
+            || metadata.docker_name() == home_volume
+            || metadata.docker_name() == work_volume
+        {
+            return Err(HostError::Identity);
+        }
+        let mut rows = connection.query(
+            "SELECT COUNT(*) FROM capacity_reservation_provisioning_objects WHERE reservation_id = ?1 AND role = 'engine-metadata' AND create_state = 'created' AND docker_name = ?2 AND docker_id = ?3",
+            (reservation_id, metadata.docker_name(), metadata.docker_id()),
+        ).await.map_err(|_| HostError::Journal)?;
+        let count = rows.next().await.map_err(|_| HostError::Journal)?.ok_or(HostError::Journal)?.get::<i64>(0).map_err(|_| HostError::Journal)?;
+        if count != 1 {
+            return Ok(None);
+        }
+        Ok(Some((metadata.docker_name().to_owned(), metadata.docker_id().to_owned())))
     }
 
     /// Record the Docker create request in the journal before Docker receives it.

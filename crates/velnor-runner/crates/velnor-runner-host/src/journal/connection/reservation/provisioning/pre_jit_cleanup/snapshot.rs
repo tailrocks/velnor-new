@@ -11,18 +11,7 @@ pub(super) async fn snapshot_digest(
 ) -> Result<String, HostError> {
     let mut digest = Sha256::new();
     digest.update(b"velnor-pre-jit-cleanup-snapshot-v1\0");
-    for value in [
-        context.operation_id.to_string(),
-        context.scale_set_id.to_string(),
-        context.engine_id.clone(),
-        context.docker_root_digest.clone(),
-        context.profile_generation_id.clone(),
-        context.profile_digest.clone(),
-        context.sample_generation_id.clone(),
-        context.topology_version.to_string(),
-    ] {
-        append_value(&mut digest, &value)?;
-    }
+    append_context_values(&mut digest, context)?;
     append_rows(
         connection,
         reservation_id,
@@ -88,6 +77,22 @@ pub(super) async fn snapshot_digest(
     )
     .await?;
     Ok(hex(&digest.finalize()))
+}
+
+fn append_context_values(digest: &mut Sha256, context: &HoldContext) -> Result<(), HostError> {
+    for value in [
+        context.operation_id.to_string(),
+        context.scale_set_id.to_string(),
+        context.engine_id.clone(),
+        context.docker_root_digest.clone(),
+        context.profile_generation_id.clone(),
+        context.profile_digest.clone(),
+        context.sample_generation_id.clone(),
+        context.topology_version.to_string(),
+    ] {
+        append_value(digest, &value)?;
+    }
+    Ok(())
 }
 
 async fn append_rows(
