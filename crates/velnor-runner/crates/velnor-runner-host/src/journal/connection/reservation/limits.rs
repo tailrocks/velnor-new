@@ -34,6 +34,7 @@ impl Journal {
     /// # Errors
     ///
     /// Returns [`HostError::Journal`] for invalid limits or a database error.
+    #[cfg(test)]
     pub(crate) async fn configure_capacity(&self, limits: CapacityLimits) -> Result<(), HostError> {
         in_transaction(self, async |connection| {
             let operational = read_operational_limits(connection).await?;
@@ -63,6 +64,7 @@ impl Journal {
     /// # Errors
     ///
     /// Returns [`HostError::Journal`] when the journal cannot be read.
+    #[cfg(test)]
     pub(crate) async fn occupied_reservation_count(&self) -> Result<u64, HostError> {
         read_transaction(self, async |connection| {
             Self::occupied_count(connection).await
@@ -153,6 +155,7 @@ async fn capacity_policy_exists(connection: &turso::Connection) -> Result<bool, 
     Ok(rows.next().await.map_err(|_| HostError::Journal)?.is_some())
 }
 
+#[cfg(test)]
 async fn read_operational_limits(
     connection: &turso::Connection,
 ) -> Result<OperationalCapacityLimits, HostError> {

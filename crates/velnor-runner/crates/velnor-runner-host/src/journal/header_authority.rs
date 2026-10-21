@@ -4,10 +4,14 @@ use crate::config::ConnectionId;
 use crate::error::HostError;
 use crate::journal::Journal;
 use crate::journal::capacity_header::{
-    HeaderAllocation, HeaderDeleteAttempt, HeaderPollAttempt, PollOutcome, bootstrap, load,
-    transition, validate, validate_capacity_policy_connection,
+    HeaderAllocation, bootstrap, load, validate, validate_capacity_policy_connection,
+};
+#[cfg(test)]
+use crate::journal::capacity_header::{
+    HeaderDeleteAttempt, HeaderPollAttempt, PollOutcome, transition,
 };
 use crate::journal::connection::storage::read_transaction;
+#[cfg(test)]
 use crate::launch::{CompletedHeaderPoll, DeletedSession204};
 
 impl Journal {
@@ -22,6 +26,7 @@ impl Journal {
     }
 
     /// Reserve one exact session's header against the host-wide limit.
+    #[cfg(test)]
     pub(crate) async fn reserve_header_allocation(
         &self,
         connection_id: ConnectionId,
@@ -36,6 +41,7 @@ impl Journal {
     }
 
     /// Commit a poll intent before its caller sends the HTTP request.
+    #[cfg(test)]
     pub(crate) async fn begin_header_poll(
         &self,
         allocation: &HeaderAllocation,
@@ -44,6 +50,7 @@ impl Journal {
     }
 
     /// Commit a same-session zero-header intent before its caller sends it.
+    #[cfg(test)]
     pub(crate) async fn begin_zero_header_poll(
         &self,
         allocation: &HeaderAllocation,
@@ -52,6 +59,7 @@ impl Journal {
     }
 
     /// Settle only the poll attempt carried by the source adapter's proof.
+    #[cfg(test)]
     pub(crate) async fn settle_header_poll(
         &self,
         completed: CompletedHeaderPoll,
@@ -63,18 +71,8 @@ impl Journal {
         .await
     }
 
-    /// Keep a poll charged when its remote outcome is unknown.
-    pub(crate) async fn mark_header_poll_uncertain(
-        &self,
-        attempt: HeaderPollAttempt,
-    ) -> Result<(), HostError> {
-        transition(self, |ledger| {
-            ledger.finish_poll(&attempt, PollOutcome::Unknown)
-        })
-        .await
-    }
-
     /// Commit an exact session-delete intent before its caller sends DELETE.
+    #[cfg(test)]
     pub(crate) async fn begin_header_session_delete(
         &self,
         allocation: &HeaderAllocation,
@@ -83,6 +81,7 @@ impl Journal {
     }
 
     /// Retire an allocation only after its source adapter proves exact DELETE 204.
+    #[cfg(test)]
     pub(crate) async fn retire_header_allocation(
         &self,
         deleted: DeletedSession204,
@@ -92,6 +91,7 @@ impl Journal {
     }
 
     /// Keep an allocation charged when DELETE has an unknown remote outcome.
+    #[cfg(test)]
     pub(crate) async fn mark_header_delete_uncertain(
         &self,
         attempt: HeaderDeleteAttempt,
@@ -109,6 +109,7 @@ impl Journal {
     }
 
     /// Give the total capacity still charged to remote sessions.
+    #[cfg(test)]
     pub(crate) async fn charged_header_capacity(&self) -> Result<u32, HostError> {
         read_transaction(self, async |connection| {
             let ledger = load(connection).await?;

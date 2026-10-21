@@ -4,7 +4,9 @@ use crate::error::HostError;
 use crate::journal::Journal;
 use crate::journal::connection::storage::{in_transaction, read_transaction};
 
-use super::{HeaderLedger, HeaderLedgerError, HeaderLedgerSnapshot};
+#[cfg(test)]
+use super::HeaderLedgerError;
+use super::{HeaderLedger, HeaderLedgerSnapshot};
 
 const SCHEMA_VERSION: i64 = 2;
 const PREVIOUS_SCHEMA_VERSION: i64 = 1;
@@ -46,6 +48,7 @@ pub(in crate::journal) async fn validate_capacity_policy_connection(
 ///
 /// Poll-intent callers must wait for this function to commit before sending
 /// the corresponding HTTP request.
+#[cfg(test)]
 pub(in crate::journal) async fn transition<T>(
     journal: &Journal,
     operation: impl FnOnce(&mut HeaderLedger) -> Result<T, HeaderLedgerError>,
