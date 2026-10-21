@@ -57,17 +57,14 @@ impl Observation {
 }
 
 impl RecoveryObservation {
-    /// Return the sample ID.
-    pub(crate) fn sample_generation_id(&self) -> &str {
-        self.observation.sample_generation_id()
-    }
-
     /// Return the sample used for recovery.
+    #[cfg(test)]
     pub(crate) fn witness(&self) -> &StartObservationWitness {
         &self.witness
     }
 
     /// Return the checked CPU and memory limits for both containers.
+    #[cfg(test)]
     pub(crate) const fn resource_budget(&self) -> ResourceBudget {
         self.budget
     }
