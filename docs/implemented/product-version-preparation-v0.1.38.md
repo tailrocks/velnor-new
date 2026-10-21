@@ -15,9 +15,12 @@ success and cancellation still control cache writes. See
 [optional seed isolation](optional-dependency-seed.md) for the implementation,
 original GitHub sources and qualification limits.
 
-The normal branch starts at upstream main
-`46e354a40e4f3d8f4c7c24a0b410206c7ee236c1`, preserving its cache-pruning and
-Playwright mirror changes. Fourteen workspace package versions and twenty-four
+The branch integrates upstream main through
+`fb2a2eb5e9a050dbac92f8b1e3cfdc10cce98b55` (#285 to #301), preserving every
+change merged since v0.1.37, including cache pruning, Playwright mirrors, dbt,
+private Cargo git sources, the Maven bundle database service, consumer Rust
+setup, channel-manifest verification, opt-in upgrades, the MBX dependency-seed
+helper fix, the owner Rust layout and the jactionlint catalog pin. Fourteen workspace package versions and twenty-four
 exact internal path requirements advance to 0.1.38. Cargo controls the lock
 update; all 128 external package records retain their versions, checksums and
 resolved dependency graphs. The independently versioned runner, tool pins,
