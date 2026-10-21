@@ -55,16 +55,16 @@ use crate::{
 #[must_use]
 pub(crate) enum ScopedRuntimeOutcome {
     NoStart,
-    Bound(BoundScopedBootstrap),
-    Pending(PendingScopedBootstrap),
+    Bound(Box<BoundScopedBootstrap>),
+    Pending(Box<PendingScopedBootstrap>),
 }
 
 /// Keep each exact outcome from preparation through channel measurement.
 #[must_use]
 pub(crate) enum ScopedChannelOutcome {
     NoStart,
-    Ready(ChannelReadyBootstrap),
-    PendingPreparation(PendingScopedBootstrap),
+    Ready(Box<ChannelReadyBootstrap>),
+    PendingPreparation(Box<PendingScopedBootstrap>),
     PendingJit(PendingJitBootstrap),
     PendingChannel(PendingChannelBootstrap),
 }
@@ -239,14 +239,14 @@ where
         ScopedRuntimeOutcome::Pending(pending) => {
             return Ok(ScopedChannelOutcome::PendingPreparation(pending));
         }
-        ScopedRuntimeOutcome::Bound(bound) => bound,
+        ScopedRuntimeOutcome::Bound(bound) => *bound,
     };
     let jit = match create_and_bind(bound, lane, admin_token, scoped).await {
         Ok(jit) => jit,
         Err(pending) => return Ok(ScopedChannelOutcome::PendingJit(pending)),
     };
     match jit.measure_channel(docker, engine, images, deadline).await {
-        Ok(ready) => Ok(ScopedChannelOutcome::Ready(ready)),
+        Ok(ready) => Ok(ScopedChannelOutcome::Ready(Box::new(ready))),
         Err(pending) => Ok(ScopedChannelOutcome::PendingChannel(pending)),
     }
 }
@@ -271,7 +271,7 @@ fn pending_with_initialization(
 ) -> ScopedRuntimeOutcome {
     #[cfg(not(test))]
     let _ = &failure;
-    ScopedRuntimeOutcome::Pending(PendingScopedBootstrap {
+    ScopedRuntimeOutcome::Pending(Box::new(PendingScopedBootstrap {
         prepared,
         _network: network,
         _started: started,
@@ -279,5 +279,5 @@ fn pending_with_initialization(
         _initialization: initialization,
         #[cfg(test)]
         failure,
-    })
+    }))
 }

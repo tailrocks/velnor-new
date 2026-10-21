@@ -95,7 +95,7 @@ async fn retain_scoped_channel(
                 images: context.worker_images,
             };
             let runner = Box::pin(crate::launch::scoped_runtime::prepare_listener(
-                ready,
+                *ready,
                 &host_context,
                 &prepared.binding,
                 &prepared.guest_image,

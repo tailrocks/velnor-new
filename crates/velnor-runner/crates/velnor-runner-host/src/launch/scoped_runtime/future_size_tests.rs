@@ -1,4 +1,7 @@
-use std::{mem::size_of_val, path::PathBuf};
+use std::{
+    mem::{size_of, size_of_val},
+    path::PathBuf,
+};
 
 use bollard::Docker;
 
@@ -13,6 +16,12 @@ use crate::{
         steps::ScopedProvisioningOutcome,
     },
 };
+
+#[test]
+fn scoped_outcome_enums_keep_large_payloads_indirect() {
+    assert!(size_of::<super::ScopedRuntimeOutcome>() <= 2 * size_of::<usize>());
+    assert!(size_of::<super::ScopedChannelOutcome>() <= 256);
+}
 
 #[tokio::test]
 async fn shared_scoped_prepare_future_stays_small_and_preserves_no_start() {

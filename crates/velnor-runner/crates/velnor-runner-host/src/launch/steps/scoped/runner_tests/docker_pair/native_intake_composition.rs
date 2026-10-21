@@ -190,9 +190,9 @@ async fn bind_acquired<P: crate::launch::resource_probe::ImageProvider>(
     .await
     .map_err(|error| format!("The production bind step failed: {error}."))?;
     match result {
-        crate::launch::scoped_runtime::ScopedRuntimeOutcome::Bound(bound) => Ok(bound),
+        crate::launch::scoped_runtime::ScopedRuntimeOutcome::Bound(bound) => Ok(*bound),
         crate::launch::scoped_runtime::ScopedRuntimeOutcome::Pending(pending) => {
-            pending_bind_error(pending)
+            pending_bind_error(*pending)
         }
         crate::launch::scoped_runtime::ScopedRuntimeOutcome::NoStart => {
             Err("The production bind step returned NoStart.".to_owned())

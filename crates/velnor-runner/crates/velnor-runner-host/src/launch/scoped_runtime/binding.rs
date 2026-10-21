@@ -83,13 +83,15 @@ pub(super) async fn bind_started<P: ImageProvider>(
             error,
         ));
     }
-    Ok(ScopedRuntimeOutcome::Bound(BoundScopedBootstrap {
-        prepared,
-        _network: network,
-        started,
-        metadata,
-        initialization,
-        binding,
-        guest_boot_id,
-    }))
+    Ok(ScopedRuntimeOutcome::Bound(Box::new(
+        BoundScopedBootstrap {
+            prepared,
+            _network: network,
+            started,
+            metadata,
+            initialization,
+            binding,
+            guest_boot_id,
+        },
+    )))
 }
