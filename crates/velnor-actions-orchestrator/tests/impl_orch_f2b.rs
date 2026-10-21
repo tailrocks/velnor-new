@@ -132,6 +132,7 @@ fn broaden_paths_classify_global_and_outside() {
     for path in [
         ".velnor/config.toml",
         ".velnor/",
+        ".github/workflows/cache-prune.yml",
         ".github/workflows/ci.yml",
     ] {
         assert_eq!(
