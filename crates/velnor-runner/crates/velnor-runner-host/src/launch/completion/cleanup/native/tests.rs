@@ -123,6 +123,10 @@ fn native_capacity_retry_does_not_repeat_proven_cleanup_effects() -> Result<(), 
 async fn native_capacity_retry_does_not_repeat_proven_cleanup_effects_on_fixture_stack()
 -> Result<(), HostError> {
     let fixture = capacity_retry_fixture().await?;
+    fixture
+        .server
+        .expose_owned_containers(fixture.scope.connection_id().as_str())
+        .await?;
     let (launch, now) = seed_completion(&fixture).await?;
     let first_claim = fixture
         .scope
@@ -151,6 +155,10 @@ fn terminal_replay_requires_the_exact_intent_and_normal_outcome() -> Result<(), 
 async fn terminal_replay_requires_the_exact_intent_and_normal_outcome_on_fixture_stack()
 -> Result<(), HostError> {
     let fixture = capacity_retry_fixture().await?;
+    fixture
+        .server
+        .expose_owned_containers(fixture.scope.connection_id().as_str())
+        .await?;
     let (launch, now) = seed_completion(&fixture).await?;
     let claim = fixture
         .scope
@@ -211,13 +219,16 @@ async fn assert_capacity_hold_keeps_attempt(
             .await?
     );
     let first = run_native_cleanup(fixture, launch, claim).await?;
-    assert!(matches!(
-        first,
-        Err(super::super::Failure {
-            phase: "metadata capacity hold",
-            ..
-        })
-    ));
+    assert!(
+        matches!(
+            first,
+            Err(super::super::Failure {
+                phase: "metadata capacity hold",
+                ..
+            })
+        ),
+        "Native cleanup returned {first:?}."
+    );
     let after_first = fixture.server.effects();
     assert_eq!(after_first.observer_runs, 1);
     assert_eq!(after_first.capacity_runs, 1);
