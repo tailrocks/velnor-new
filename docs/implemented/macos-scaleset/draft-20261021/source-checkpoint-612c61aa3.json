@@ -1,0 +1,182 @@
+{
+  "source_repository": "https://github.com/tailrocks/velnor-new",
+  "head": "612c61aa33ddbe604617e034e4d79b9198c6ac6b",
+  "branch": "fix/private-scaleset-installation",
+  "consumers": [
+    "donbeave/essential-mac",
+    "ChainArgos/eth-processor-rust"
+  ],
+  "status": "INCOMPLETE",
+  "gates": {
+    "bounded_checks": "PASS",
+    "full_strict_checks": "FAIL",
+    "release": "NOT_RUN",
+    "essential_mac_installation": "NOT_RUN",
+    "eth_processor_rust_installation": "NOT_RUN"
+  },
+  "records": [
+    {
+      "commit": "51717b4f077277cafbf8332d84f008c078d7f109",
+      "checks": [
+        {
+          "name": "check",
+          "command": "mise --no-config --no-env --no-hooks exec rust@1.99.1 mr-boxington@1.25.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.148 -- mbx check --manifest-path crates/velnor-runner/Cargo.toml --target-dir /Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02 --locked --offline -p velnor-runner-host --lib",
+          "exit_status": 0,
+          "start": "2026-10-21T07:50:36.651236+00:00",
+          "end": "2026-10-21T07:51:05.632159+00:00",
+          "log_sha256": "377471e2980c8fa776098d95e3711f15ed3edab56958c032fe5fcc3e406b06c7"
+        },
+        {
+          "name": "fmt",
+          "command": "mise --no-config --no-env --no-hooks exec rust@1.99.1 mr-boxington@1.25.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.148 -- mbx fmt --manifest-path crates/velnor-runner/Cargo.toml --all -- --check",
+          "exit_status": 0,
+          "start": "2026-10-21T07:50:32.182038+00:00",
+          "end": "2026-10-21T07:50:36.452006+00:00",
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "nextest",
+          "command": "mise --no-config --no-env --no-hooks exec rust@1.99.1 mr-boxington@1.25.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.148 -- mbx nextest run --manifest-path crates/velnor-runner/Cargo.toml --target-dir /Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02 --locked --offline -p velnor-runner-host --lib -E 'test(journal::connection_tests::reservation_tests::) | test(completion_and_inbox_keys_are_scoped_and_survive_restart)' --no-tests fail --build-jobs 4 --test-threads 4",
+          "exit_status": 0,
+          "start": "2026-10-21T07:51:05.747434+00:00",
+          "end": "2026-10-21T07:52:23.794745+00:00",
+          "log_sha256": "9c5d721ca1f374e16658ef5a68fb49530d40ceea342e9fde6730f84813f94a0a",
+          "run_id": "0a87ee12-59ea-4e39-b34f-dd2baf071eca",
+          "result": "6 tests run: 6 passed, 1198 skipped"
+        }
+      ]
+    },
+    {
+      "commit": "077ec23189fe135dfa642bd6aae6b4099d1d1cad",
+      "checks": [
+        {
+          "name": "check",
+          "command": "mise --no-config --no-env --no-hooks exec rust@1.99.1 mr-boxington@1.25.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.148 -- mbx check --manifest-path crates/velnor-runner/Cargo.toml --target-dir /Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02 --locked --offline -p velnor-runner-host",
+          "exit_status": 0,
+          "start": "2026-10-21T07:58:12.553434+00:00",
+          "end": "2026-10-21T07:58:28.497904+00:00",
+          "log_sha256": "cc5856b1c27b5efae1ad835d67e00df590f5b26d60487f961ac5c52df4454886"
+        },
+        {
+          "name": "fmt",
+          "command": "mise --no-config --no-env --no-hooks exec rust@1.99.1 mr-boxington@1.25.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.148 -- mbx fmt --manifest-path crates/velnor-runner/Cargo.toml --all -- --check",
+          "exit_status": 0,
+          "start": "2026-10-21T07:58:11.444484+00:00",
+          "end": "2026-10-21T07:58:12.546011+00:00",
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "nextest",
+          "command": "mise --no-config --no-env --no-hooks exec rust@1.99.1 mr-boxington@1.25.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.148 -- mbx nextest run --manifest-path crates/velnor-runner/Cargo.toml --target-dir /Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02 --locked --offline -p velnor-runner-host --lib -E 'test(launch::bootstrap::storage::observation::) | test(launch::resource_probe::cleanup_observer::record::tests::) | test(acknowledged_acquire_reopens_and_rechecks_before_jit) | test(acquired_request_reaches_measured_storage_bound) | test(invalid_channel_record_sends_no_ack_and_keeps_acquired_charge)' --no-tests fail --build-jobs 4 --test-threads 4",
+          "exit_status": 0,
+          "start": "2026-10-21T07:58:28.505361+00:00",
+          "end": "2026-10-21T08:00:22.130854+00:00",
+          "log_sha256": "38827fb306a04c99b3b84cbe96c6437ccef643922f0f05c1a9a5f1ce76fe6022",
+          "run_id": "1e5d0e32-f930-4fec-8d42-bdc0c143090c",
+          "result": "16 tests run: 16 passed, 1188 skipped"
+        }
+      ]
+    },
+    {
+      "commit": "2bf0b0339466d19ac549b17ba70b53c3354da70a",
+      "checks": [
+        {
+          "name": "check",
+          "command": "mise --no-config --no-env --no-hooks exec rust@1.99.1 mr-boxington@1.25.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.148 -- mbx check --manifest-path crates/velnor-runner/Cargo.toml --target-dir /Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02 --locked --offline -p velnor-runner-host",
+          "exit_status": 0,
+          "start": "2026-10-21T08:01:50.258370+00:00",
+          "end": "2026-10-21T08:02:01.837361+00:00",
+          "log_sha256": "6c7dc1b22e8a72a25a1f080ec71554c75b7e73b380b8b5b2da34bdfc70905a27"
+        },
+        {
+          "name": "fmt",
+          "command": "mise --no-config --no-env --no-hooks exec rust@1.99.1 mr-boxington@1.25.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.148 -- mbx fmt --manifest-path crates/velnor-runner/Cargo.toml --all -- --check",
+          "exit_status": 0,
+          "start": "2026-10-21T08:01:49.255955+00:00",
+          "end": "2026-10-21T08:01:50.251530+00:00",
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "nextest",
+          "command": "mise --no-config --no-env --no-hooks exec rust@1.99.1 mr-boxington@1.25.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.148 -- mbx nextest run --manifest-path crates/velnor-runner/Cargo.toml --target-dir /Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02 --locked --offline -p velnor-runner-host --lib -E 'test(foreign_second_role_holds_prefix_and_blocks_later_effects) | test(initializer_uses_the_admission_reserve_and_fixed_role_order) | test(metadata_volume_uses_the_disk_role_and_records_exact_identity)' --no-tests fail --build-jobs 4 --test-threads 4",
+          "exit_status": 0,
+          "start": "2026-10-21T08:02:01.845508+00:00",
+          "end": "2026-10-21T08:03:01.563225+00:00",
+          "log_sha256": "98c34c3ae63eedebbe724244306e6b33604d9a8d0d8bd3467f0177bc74511f46",
+          "run_id": "c1d81057-9e5f-4187-b5b9-b4c93fd6be6d",
+          "result": "3 tests run: 3 passed, 1201 skipped"
+        }
+      ]
+    },
+    {
+      "commit": "3d35ce332dcc1cf6ac7b87d7af199961b20aeabb",
+      "checks": [
+        {
+          "name": "all-target-check",
+          "command": "mise --no-config --no-env --no-hooks exec rust@1.99.1 mr-boxington@1.25.0 -- mbx check --manifest-path crates/velnor-runner/Cargo.toml --target-dir /Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02 --locked --offline -p velnor-runner-host --all-targets",
+          "exit_status": 0,
+          "start": "2026-10-21T08:06:28.238267+00:00",
+          "end": "2026-10-21T08:07:00.189758+00:00",
+          "log_sha256": "0c449e821ba26c8953fb6800f515b9d516341859f9334c6831ee670b35a1e242"
+        },
+        {
+          "name": "check",
+          "command": "mise --no-config --no-env --no-hooks exec rust@1.99.1 mr-boxington@1.25.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.148 -- mbx check --manifest-path crates/velnor-runner/Cargo.toml --target-dir /Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02 --locked --offline -p velnor-runner-host",
+          "exit_status": 0,
+          "start": "2026-10-21T08:03:50.143964+00:00",
+          "end": "2026-10-21T08:04:00.152494+00:00",
+          "log_sha256": "ff9db668c6bf0173a87c6272bb3ec94f3a7f5c729b9f878b803e6fb2b793e85b"
+        },
+        {
+          "name": "fmt",
+          "command": "mise --no-config --no-env --no-hooks exec rust@1.99.1 mr-boxington@1.25.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.148 -- mbx fmt --manifest-path crates/velnor-runner/Cargo.toml --all -- --check",
+          "exit_status": 0,
+          "start": "2026-10-21T08:03:48.776980+00:00",
+          "end": "2026-10-21T08:03:50.137275+00:00",
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "nextest",
+          "command": "mise --no-config --no-env --no-hooks exec rust@1.99.1 mr-boxington@1.25.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.148 -- mbx nextest run --manifest-path crates/velnor-runner/Cargo.toml --target-dir /Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02 --locked --offline -p velnor-runner-host --lib -E 'test(/storage_budget_tests|storage_budget_samples_tests|provisioning::admission/)' --no-tests fail --build-jobs 4 --test-threads 4",
+          "exit_status": 0,
+          "start": "2026-10-21T08:04:00.159612+00:00",
+          "end": "2026-10-21T08:04:47.767852+00:00",
+          "log_sha256": "3b6d96cfa082483685aafd85d5c2d38545847e1999de0180a25f7cdb4fa9be80",
+          "run_id": "a4559e5c-f533-4195-ac09-68675a120231",
+          "result": "19 tests run: 19 passed, 1185 skipped"
+        }
+      ]
+    },
+    {
+      "commit": "612c61aa33ddbe604617e034e4d79b9198c6ac6b",
+      "checks": [
+        {
+          "name": "check",
+          "command": "mise --no-config --no-env --no-hooks exec rust@1.99.1 mr-boxington@1.25.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.148 -- mbx check --manifest-path crates/velnor-runner/Cargo.toml --target-dir /Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02 --locked --offline -p velnor-runner-host",
+          "exit_status": 0,
+          "start": "2026-10-21T08:07:46.573591+00:00",
+          "end": "2026-10-21T08:07:49.701276+00:00",
+          "log_sha256": "dd1b48932b79563222de17665e8ba2021554c6f3afa04b4e688cda70f38e9462"
+        },
+        {
+          "name": "fmt",
+          "command": "mise --no-config --no-env --no-hooks exec rust@1.99.1 mr-boxington@1.25.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.148 -- mbx fmt --manifest-path crates/velnor-runner/Cargo.toml --all -- --check",
+          "exit_status": 0,
+          "start": "2026-10-21T08:07:45.579620+00:00",
+          "end": "2026-10-21T08:07:46.566894+00:00",
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "nextest",
+          "command": "mise --no-config --no-env --no-hooks exec rust@1.99.1 mr-boxington@1.25.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.148 -- mbx nextest run --manifest-path crates/velnor-runner/Cargo.toml --target-dir /Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02 --locked --offline -p velnor-runner-host --lib -E 'test(initialization) | test(network) | test(pre_jit_cleanup) | test(metadata_settlement) | test(cleanup_identity)' --no-tests fail --build-jobs 4 --test-threads 4",
+          "exit_status": 0,
+          "start": "2026-10-21T08:07:49.708089+00:00",
+          "end": "2026-10-21T08:10:04.648722+00:00",
+          "log_sha256": "5f2e792023c75f100e094fef2ecff946cce372bb0253fe09e3ef19d32a4c9a99",
+          "run_id": "9cc60adb-29a6-4c9f-90c6-b5e931909346",
+          "result": "85 tests run: 85 passed, 1119 skipped"
+        }
+      ]
+    }
+  ]
+}
