@@ -125,6 +125,8 @@
 | Unix epoch | The time reference at 00:00:00 UTC on 1 January 1970. |
 | Maven bundle | An archive of Maven repository files that a private fetch extracts for a build. |
 | MBX bundle | A set of cache files that MBX exports or imports as one unit. |
+| PAX metadata | Additional file information stored in a tar archive. |
+| Dependency seed | A job that compiles a workspace and saves an MBX bundle for crate jobs to restore. |
 | dbt adapter | A dbt component that connects a project to a database. |
 | Event payload | JSON data that describes a GitHub event. |
 | Operational reserve | CPU and memory capacity kept available for operational work. |

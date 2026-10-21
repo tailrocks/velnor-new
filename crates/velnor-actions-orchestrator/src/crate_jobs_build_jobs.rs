@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{RustCrateConfig, Step, StepKind};
+use velnor_actions_contract::{Job, RustCrateConfig, Step, StepKind};
 
 use super::is_rust;
 use crate::OrchestratorError;
@@ -43,4 +43,30 @@ pub(super) fn cap_cargo_jobs(step: &mut Step, build_jobs: u32) {
     if let StepKind::TaskExecution { env, .. } = &mut step.kind {
         env.insert(CARGO_BUILD_JOBS_ENV.to_owned(), build_jobs.to_string());
     }
+}
+
+/// Add manifest context only when two Rust packages share one display name.
+pub(super) fn disambiguate_rust_job_names(
+    jobs: &mut [(String, Job)],
+    manifests: &BTreeMap<String, String>,
+) -> Result<(), OrchestratorError> {
+    let mut counts = BTreeMap::<String, usize>::new();
+    for (job_id, job) in jobs.iter() {
+        if job_id.starts_with("rust-") {
+            *counts.entry(job.display_name.clone()).or_default() += 1;
+        }
+    }
+    for (job_id, job) in jobs.iter_mut() {
+        if job_id.starts_with("rust-")
+            && counts
+                .get(&job.display_name)
+                .is_some_and(|count| *count > 1)
+        {
+            let manifest = manifests
+                .get(job_id)
+                .ok_or_else(|| crate::internal::internal("rust_job_manifest_missing"))?;
+            job.display_name = format!("{} ({manifest})", job.display_name);
+        }
+    }
+    Ok(())
 }

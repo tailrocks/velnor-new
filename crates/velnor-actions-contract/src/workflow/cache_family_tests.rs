@@ -163,9 +163,9 @@ fn reference_family_ceilings_fit_the_budget_rule() {
         | CacheFamily::PlaywrightBrowsers
         | CacheFamily::DbtPackages
         | CacheFamily::PythonVenv
-        | CacheFamily::AnsibleCollections
-        | CacheFamily::MbxBundle => 1,
-        CacheFamily::TofuProviders => 2,
+        | CacheFamily::AnsibleCollections => 1,
+        // Count two OpenTofu roots and the seed and suite bundles of one workspace.
+        CacheFamily::TofuProviders | CacheFamily::MbxBundle => 2,
         CacheFamily::BunInstall => 4,
     };
     let worst: u64 = CacheFamily::ALL

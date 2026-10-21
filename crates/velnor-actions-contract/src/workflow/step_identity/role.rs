@@ -122,6 +122,8 @@ pub enum StepRole {
     MbxBundleImport,
     /// Record producer success before exporting an MBX bundle.
     MbxProducerMark,
+    /// Compile one dependency seed lane through `mbx` for the seed job's producer.
+    MbxSeedBuild,
     /// Export the MBX bundle.
     MbxBundleExport,
     /// Save the MBX bundle to the trusted cache.
@@ -245,6 +247,7 @@ impl StepRole {
             Self::MbxBundleKey
             | Self::MbxBundleImport
             | Self::MbxProducerMark
+            | Self::MbxSeedBuild
             | Self::MbxBundleExport => matches!(kind, StepKind::Shell { .. }),
             Self::PlaywrightInstall => super::super::step_protocol::valid_playwright_install(kind),
             Self::MbxVersionCheck | Self::MbxWorkspaceCleanup => {

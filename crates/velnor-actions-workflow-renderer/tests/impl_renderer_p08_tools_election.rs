@@ -45,6 +45,22 @@ fn keyed_job() -> Result<Job, RenderError> {
     })
 }
 
+fn keyed_seed_job() -> Result<Job, RenderError> {
+    let mut job = keyed_job()?;
+    job.steps.push(Step {
+        name: "Compile dependency seed".to_owned(),
+        id: None,
+        role: Some(StepRole::MbxSeedBuild),
+        condition: None,
+        parallel: false,
+        kind: StepKind::Shell {
+            run: vec!["true".to_owned()],
+            env: BTreeMap::new(),
+        },
+    });
+    Ok(job)
+}
+
 fn paired_jobs() -> Result<BTreeMap<String, Job>, RenderError> {
     Ok(BTreeMap::from([
         ("plan".to_owned(), keyed_job()?),
@@ -198,5 +214,38 @@ fn tools_cache_election_rejects_orphan_and_duplicate_winner_saves() -> Result<()
         .ok_or_else(|| RenderError::InvalidWorkflow("test_save_missing".to_owned()))?;
     winner.steps.push(winner.steps[index].clone());
     assert!(elect_cache_writers(&mut jobs).is_err());
+    Ok(())
+}
+
+#[test]
+fn dependency_seed_is_never_a_tools_cache_writer() -> Result<(), RenderError> {
+    let mut seed_only =
+        BTreeMap::from([("dependency-seed-crates-demo".to_owned(), keyed_seed_job()?)]);
+    elect_cache_writers(&mut seed_only)?;
+    assert!(
+        save_index(
+            seed_only
+                .get("dependency-seed-crates-demo")
+                .expect("The seed job must exist.")
+        )
+        .is_none()
+    );
+
+    let mut jobs = BTreeMap::from([
+        ("dependency-seed-crates-demo".to_owned(), keyed_seed_job()?),
+        ("rust-demo".to_owned(), keyed_job()?),
+    ]);
+    elect_cache_writers(&mut jobs)?;
+    assert_eq!(
+        save_index(jobs.get("rust-demo").expect("The crate job must exist.")),
+        Some(2)
+    );
+    assert!(
+        save_index(
+            jobs.get("dependency-seed-crates-demo")
+                .expect("The seed job must exist.")
+        )
+        .is_none()
+    );
     Ok(())
 }

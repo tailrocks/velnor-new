@@ -22,9 +22,12 @@ use crate::crate_job_ids::{
 use crate::discover::Discovery;
 use crate::internal::internal;
 
+#[path = "dependency_seed.rs"]
+pub(crate) mod dependency_seed;
+
 #[path = "crate_jobs_build_jobs.rs"]
 mod build_jobs;
-use build_jobs::{cap_cargo_jobs, reject_unknown_crates};
+use build_jobs::{cap_cargo_jobs, disambiguate_rust_job_names, reject_unknown_crates};
 
 #[path = "crate_jobs_steps.rs"]
 mod job_steps;
@@ -57,6 +60,8 @@ pub(crate) use stage::{is_mbx, is_nextest, is_opentofu, is_rust};
 /// Built crate jobs plus their driver selections for MBX gating.
 #[derive(Default)]
 pub(crate) struct CrateBuild {
+    /// These dependency seed jobs implement cache decision 2 and are not part of `Required`.
+    pub(crate) seeds: Vec<(String, Job)>,
     /// `(job_id, job)` pairs in deterministic job-ID order.
     pub(crate) jobs: Vec<(String, Job)>,
     /// Render-driver selection per crate job ID.
@@ -214,33 +219,11 @@ pub(crate) fn build_qualification_crate_jobs(
     if jobs.windows(2).any(|pair| pair[0].0 == pair[1].0) {
         return Err(internal("qualification_crate_job_id_collision"));
     }
-    Ok(CrateBuild { jobs, drivers })
-}
-
-/// Add manifest context only when two Rust packages share one display name.
-fn disambiguate_rust_job_names(
-    jobs: &mut [(String, Job)],
-    manifests: &BTreeMap<String, String>,
-) -> Result<(), OrchestratorError> {
-    let mut counts = BTreeMap::<String, usize>::new();
-    for (job_id, job) in jobs.iter() {
-        if job_id.starts_with("rust-") {
-            *counts.entry(job.display_name.clone()).or_default() += 1;
-        }
-    }
-    for (job_id, job) in jobs.iter_mut() {
-        if job_id.starts_with("rust-")
-            && counts
-                .get(&job.display_name)
-                .is_some_and(|count| *count > 1)
-        {
-            let manifest = manifests
-                .get(job_id)
-                .ok_or_else(|| internal("rust_job_manifest_missing"))?;
-            job.display_name = format!("{} ({manifest})", job.display_name);
-        }
-    }
-    Ok(())
+    Ok(CrateBuild {
+        seeds: Vec::new(),
+        jobs,
+        drivers,
+    })
 }
 
 fn build_crate_jobs_inner(
@@ -254,6 +237,7 @@ fn build_crate_jobs_inner(
     let mut drivers = BTreeMap::new();
     let mut tofu_ids = Vec::new();
     let mut manifests = BTreeMap::new();
+    let workspaces = dependency_seed::workspaces_for_discovery(input.discovery, input.fetch_roots);
     for (key, tasks) in &grouped {
         let job_id = owners
             .group_id(key)
@@ -286,7 +270,15 @@ fn build_crate_jobs_inner(
     stage::stage_tofu_root_jobs(&mut jobs, &tofu_ids, input.max_parallel_jobs);
     disambiguate_rust_job_names(&mut jobs, &manifests)?;
     jobs.sort_by(|left, right| left.0.cmp(&right.0));
-    Ok(CrateBuild { jobs, drivers })
+    let seeds = dependency_seed::seed_jobs(&input, &workspaces, private)?;
+    for (id, _) in &seeds {
+        drivers.insert(id.clone(), RenderDriver::Mbx);
+    }
+    Ok(CrateBuild {
+        seeds,
+        jobs,
+        drivers,
+    })
 }
 
 /// Build and validate one crate job from its exact obligation slice.

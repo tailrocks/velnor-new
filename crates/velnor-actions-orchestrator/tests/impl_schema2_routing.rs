@@ -1,5 +1,7 @@
 //! Schema 2 generation on temp fixtures. Do not generate into the repository tree.
 
+use std::fs;
+
 use velnor_actions_orchestrator::{
     ExecutionMode, migrate_config, prepare, render_staged_tree, render_staged_tree_with,
 };
@@ -40,6 +42,44 @@ fn schema1_omits_scale_set_selector() -> TestResult {
     assert!(
         !joined.contains("runs-on: [velnor"),
         "schema 1 emitted a scale-set selector"
+    );
+    Ok(())
+}
+
+#[test]
+fn dependency_seed_uses_scale_set_without_hosted_cache_job() -> TestResult {
+    let config = format!("{}\nmode = \"scale-set\"\n{}", execution_head(), profiles());
+    let repo = make_repo(&config)?;
+    fs::write(
+        repo.path().join("mise.toml"),
+        "wrappers = { cargo = { command = \"mbx\", env = { MBX_CARGO_SHIM_MODE = \"1\" } } }\n",
+    )?;
+
+    let tree = render_staged_tree(&prepare(repo.path())?)?;
+    let ci = required_file(&tree, ".github/workflows/ci.yml")?;
+    let seed = job_body(ci, "dependency-seed")?;
+
+    assert!(seed.contains(SCALE_RUNS), "{seed}");
+    assert!(
+        seed.contains("name: Compile test executables (seed)"),
+        "{seed}"
+    );
+    assert!(seed.contains("name: Compile Clippy lane (seed)"), "{seed}");
+    assert!(
+        seed.contains("name: Compile documentation lane (seed)"),
+        "{seed}"
+    );
+    assert!(
+        !ci.contains("mbx-cache-write-hosted")
+            && !ci.contains("mbx-cache-read-hosted")
+            && !ci.contains("dependency-seed-hosted"),
+        "MBX generation must not add a hosted cache job when the mode is scale-set. Output: {ci}"
+    );
+    assert!(
+        job_ids(ci).iter().all(|id| {
+            !id.starts_with("rust-") || job_body(ci, id).is_ok_and(|body| body.contains(SCALE_RUNS))
+        }),
+        "All Rust jobs must use the configured runner when the mode is scale-set. Output: {ci}"
     );
     Ok(())
 }

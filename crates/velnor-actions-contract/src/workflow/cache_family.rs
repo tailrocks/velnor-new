@@ -111,7 +111,7 @@ const PLAYWRIGHT_BROWSERS: FamilySpec = FamilySpec {
     layer: "playwright-browsers",
     schema: 1,
     paths: &PLAYWRIGHT_BROWSERS_PATHS,
-    ceiling_bytes: 512 * MIB,
+    ceiling_bytes: 384 * MIB,
     retained_entries: 2,
 };
 

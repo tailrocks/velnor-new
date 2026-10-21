@@ -240,6 +240,10 @@ fn build_workflow_jobs(
         }
         insert_job(&mut jobs, id, job)?;
     }
+    // Cache decision 2 excludes seed jobs from `Required`.
+    for (id, job) in built.seeds {
+        insert_job(&mut jobs, id, job)?;
+    }
     for (id, mut job) in qualification.jobs {
         set_crate_job_condition(&mut job, true);
         insert_job(&mut jobs, id, job)?;

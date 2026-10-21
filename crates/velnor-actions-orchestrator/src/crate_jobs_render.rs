@@ -62,7 +62,7 @@ pub(super) fn render_job(
         let working_dir = (!root.is_empty()).then_some(root);
         steps.extend(crate::mbx_preflight::steps_for_catalog(
             catalog,
-            MbxTransport::CrateBundle,
+            MbxTransport::SeedRead,
             working_dir,
         )?);
     }
@@ -86,7 +86,6 @@ pub(super) fn render_job(
         max_parallel_jobs,
         helper_version,
         qualification,
-        use_mbx,
     )?);
     steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);
     Ok(Job {
@@ -111,7 +110,6 @@ fn render_terminal_steps(
     max_parallel_jobs: u32,
     helper_version: &str,
     qualification: bool,
-    use_mbx: bool,
 ) -> Result<Vec<Step>, OrchestratorError> {
     let mut steps = crate::workflow::wire_w1::maybe_task_cache_steps(None, TaskCacheMode::Off, "")?;
     let obligation_steps = render_obligation_steps(
@@ -120,7 +118,6 @@ fn render_terminal_steps(
         use_opentofu,
         max_parallel_jobs,
         helper_version,
-        use_mbx,
     )?;
     // Keep task-execution steps unconditional. Ordered post-import identity
     // checks fail the job when runtime facts change, so GitHub skips later
@@ -151,9 +148,8 @@ fn render_obligation_steps(
     use_opentofu: bool,
     max_parallel_jobs: u32,
     helper_version: &str,
-    use_mbx: bool,
 ) -> Result<Vec<Step>, OrchestratorError> {
-    let mut steps = Vec::with_capacity(model.obligations.len() + usize::from(use_mbx));
+    let mut steps = Vec::with_capacity(model.obligations.len());
     for (index, obligation) in model.obligations.iter().enumerate() {
         // The first obligation declares the root job's concurrency cap;
         // the renderer turns the marker into `strategy.max-parallel`.
@@ -172,13 +168,6 @@ fn render_obligation_steps(
         )?;
         step.parallel = parallel;
         steps.push(step);
-        let last_producer = model
-            .obligations
-            .iter()
-            .rposition(|item| velnor_actions_rust::runs_before_parallel_checks(&item.kind));
-        if use_mbx && last_producer == Some(index) {
-            steps.push(velnor_actions_workflow_renderer::steps::mbx_producer_mark_step()?);
-        }
     }
     Ok(steps)
 }

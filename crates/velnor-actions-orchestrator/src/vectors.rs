@@ -139,7 +139,7 @@ fn tofu_task_argv(
 }
 
 /// Fixed vector: pinned tools plus a literal payload through Mise.
-fn exec_argv(
+pub(crate) fn exec_argv(
     tools: Vec<PinnedTool>,
     program: &str,
     args: &[&str],

@@ -315,11 +315,11 @@ fn save_step() -> Result<Step, RenderError> {
     Ok(step)
 }
 
-/// Append the export and save to every job that restores a bundle.
+/// Append the export and save to every job that records a producer mark.
 ///
 /// Runs right before the workspace cleanup is appended, so the cleanup stays
-/// the final step. A job with a bundle restore but no producer mark exports
-/// nothing at runtime (the export script finds no marker).
+/// the final step. A job that restores a bundle but records no producer mark
+/// has no export or save step. Crate jobs restore the dependency seed bundle.
 ///
 /// # Errors
 ///
@@ -330,8 +330,18 @@ pub(crate) fn append_bundle_postludes(
     for (id, job) in jobs {
         let restores = count(&job.steps, StepRole::MbxBundleRestore);
         let exports = count(&job.steps, StepRole::MbxBundleExport);
-        if restores == 0 && exports == 0 {
+        let marks = count(&job.steps, StepRole::MbxProducerMark);
+        if restores == 0 && exports == 0 && marks == 0 {
             continue;
+        }
+        if marks == 0 && exports == 0 {
+            // This job restores the bundle and never writes one.
+            continue;
+        }
+        if marks != 1 {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "mbx_producer_mark_count:{id}"
+            )));
         }
         if restores != 1 || exports != 0 {
             return Err(RenderError::InvalidWorkflow(format!(

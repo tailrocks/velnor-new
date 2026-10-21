@@ -8,6 +8,7 @@ use velnor_actions_contract::workflow::cache_family::CacheFamily;
 
 use super::super::append_bundle_postludes;
 use super::super::bundle_helper_script;
+use super::super::mbx_producer_mark_step;
 use super::{MBX, RUST, job, run_of, steps};
 use crate::cache_steps::MbxTransport;
 
@@ -68,7 +69,7 @@ impl Sandbox {
             .env("STUB_MARK", self.root.join("imported"))
             .env("VELNOR_MBX_BUNDLE_ROOT", ".")
             .env("VELNOR_MBX_BUNDLE_RUST_TOOLCHAIN", RUST)
-            .env("VELNOR_MBX_BUNDLE_UNIT", "crate")
+            .env("VELNOR_MBX_BUNDLE_UNIT", "seed")
             .env("VELNOR_MBX_BUNDLE_VERSION", MBX)
             .env("VELNOR_MBX_BUNDLE_TOOLCHAIN", RUST);
         for (key, value) in extra {
@@ -100,7 +101,10 @@ fn write_exec(path: &Path, body: &str) {
 }
 
 fn export_script() -> String {
-    let steps = steps(MbxTransport::CrateBundle, None);
+    let mut steps = steps(MbxTransport::SeedWrite, None);
+    steps.push(
+        mbx_producer_mark_step().expect("The test could not create the producer success marker."),
+    );
     let mut jobs = BTreeMap::from([("rust-demo".to_owned(), job(steps))]);
     append_bundle_postludes(&mut jobs).expect("postlude");
     let steps = &jobs["rust-demo"].steps;
@@ -146,7 +150,7 @@ fn export_script_reports_a_failed_export_without_failing_the_job() {
 }
 
 fn import_script() -> String {
-    run_of(&steps(MbxTransport::CrateBundle, None)[5]).to_owned()
+    run_of(&steps(MbxTransport::SeedRead, None)[5]).to_owned()
 }
 
 #[test]
@@ -170,7 +174,7 @@ fn import_script_consumes_the_restored_bundle_and_discards_a_corrupt_one() {
 
 #[test]
 fn key_script_grants_a_save_only_to_a_trusted_push() {
-    let key_script = run_of(&steps(MbxTransport::CrateBundle, None)[3]).to_owned();
+    let key_script = run_of(&steps(MbxTransport::SeedRead, None)[3]).to_owned();
     let cases = [
         (
             [

@@ -325,11 +325,16 @@ fn lockfile_delta_changes_cache_identity() -> TestResult {
     let cargo_keys = cache_keys(&yaml_for(&lock, false)?);
     // The sources key is computed at runtime by the Plan key step over the
     // lockfile digests, so both driver modes share one key expression.
+    // The MBX workflow adds one more reader, the dependency-seed job.
     let sources = |keys: &[String]| {
-        keys.iter()
+        let mut found = keys
+            .iter()
             .filter(|key| key.contains("sources_key"))
             .cloned()
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>();
+        found.sort();
+        found.dedup();
+        found
     };
     assert!(!sources(&mbx_keys).is_empty(), "mbx snapshot: {mbx_keys:?}");
     assert_eq!(

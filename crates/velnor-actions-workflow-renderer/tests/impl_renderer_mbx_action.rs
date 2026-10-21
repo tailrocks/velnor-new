@@ -240,7 +240,7 @@ fn install_step_sets_working_directory_for_nested_workspaces() {
         TEST_MBX_VERSION,
         TEST_RUST_TOOLCHAIN,
         mbx_tool_env(TEST_RUST_TOOLCHAIN),
-        velnor_actions_workflow_renderer::steps::MbxTransport::CrateBundle,
+        velnor_actions_workflow_renderer::steps::MbxTransport::SeedRead,
         Some("crates/velnor-runner"),
     )
     .expect("driver steps")
