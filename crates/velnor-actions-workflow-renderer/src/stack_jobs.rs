@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::config::{ANSIBLE_JOB_PREFIX, DBT_JOB_PREFIX};
 use velnor_actions_contract::{
-    Job, JobTimeout, PermissionLevel, Permissions, ServiceContainer, Step, StepKind,
+    Job, JobTimeout, PermissionLevel, Permissions, ServiceContainer, Step, StepKind, StepRole,
 };
 
 use crate::{MiseSetup, RenderError, mise_setup_step, steps};
@@ -77,7 +77,9 @@ impl StackJobPolicy {
             } else if seen_parallel {
                 closed = true;
             }
-            if matches!(step.kind, StepKind::Action { .. }) || step.role.is_some() {
+            if (matches!(step.kind, StepKind::Action { .. }) || step.role.is_some())
+                && !is_family_cache_role(step.role)
+            {
                 return Err(invalid("stack_job_privileged_step"));
             }
         }
@@ -121,6 +123,20 @@ pub fn build_stack_job(policy: &StackJobPolicy, checkout_uses: &str) -> Result<J
         steps: all,
         check_runner: None,
     })
+}
+
+/// True for the generated family cache steps (key, restore, size, save); the
+/// cache doctor validates their exact shapes.
+pub(crate) fn is_family_cache_role(role: Option<StepRole>) -> bool {
+    matches!(
+        role,
+        Some(
+            StepRole::FamilyKeys
+                | StepRole::FamilyRestore
+                | StepRole::FamilySizeCheck
+                | StepRole::FamilySave
+        )
+    )
 }
 
 /// Reconstruct the job and reject an altered, missing or split one.
