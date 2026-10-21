@@ -20,9 +20,6 @@ use crate::config::private_wiring::PrivateWiring;
 
 /// Job id of the seed for the repository-root workspace.
 pub(crate) const SEED_JOB_ID: &str = "dependency-seed";
-/// Job-level condition: only a protected push to the default branch seeds.
-pub(crate) const SEED_JOB_CONDITION: &str = "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true";
-
 /// One MBX Cargo workspace that needs a seed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SeedWorkspace {
@@ -104,7 +101,9 @@ fn seed_job(
         check_runner: None,
         timeout_minutes: input.timeout,
         needs: vec![velnor_actions_workflow_renderer::render::PLAN_JOB_ID.to_owned()],
-        condition: Some(SEED_JOB_CONDITION.to_owned()),
+        condition: Some(
+            velnor_actions_contract::workflow::DEPENDENCY_SEED_JOB_CONDITION.to_owned(),
+        ),
         permissions: None,
         environment: None,
         steps,
