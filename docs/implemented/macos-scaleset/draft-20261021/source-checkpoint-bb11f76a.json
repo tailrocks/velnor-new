@@ -1,0 +1,1001 @@
+{
+  "schema": 1,
+  "checkpoint_id": "source-checkpoint-a7f04c83d-evidence-v3-20261021",
+  "created_at_utc": "2026-10-21T10:10:05Z",
+  "candidate_only": true,
+  "source_repository": "https://github.com/tailrocks/velnor-new",
+  "branch": "fix/private-scaleset-installation",
+  "committed_head": "bb11f76a7cac4f1aff0204b65379924c3656477e",
+  "status": "INCOMPLETE",
+  "scope": {
+    "consumer_order": [
+      "donbeave/essential-mac",
+      "ChainArgos/eth-processor-rust"
+    ],
+    "no_consumer_activation_or_push": true,
+    "previous_checkpoint": {
+      "path": "/Users/donbeave/Downloads/velnor-goal/build/source-checkpoint-a7f04c83d-evidence-v2-20261021/source-checkpoint.json",
+      "sha256": "06845750cad860f16d2a8f9a020de9a2eae693141d9857e9865af247626c88b2",
+      "earlier_checkpoint": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/build/source-checkpoint-a7f04c83d-20261021/source-checkpoint.json",
+        "sha256": "edcce975acb8dd678fed4ec75fd01f94990181b9fd38de10f958c41a24b737c9",
+        "earlier_checkpoint": {
+          "path": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/docs/implemented/macos-scaleset/draft-20261021/source-checkpoint-6b26a1ef.json",
+          "sha256": "905350e2b6ad28e4a0d7310d3b3caec1269943d43449f1d67749f9c8fa1d651b",
+          "earlier_checkpoint": {
+            "path": "/Users/donbeave/Downloads/velnor-goal/evidence/source-checkpoint-612c61aa3.json",
+            "sha256": "946b93fd06165776a41c6c0261decbfbdea922871ff21f20bb7b285abc76f768"
+          }
+        }
+      }
+    }
+  },
+  "toolchain": {
+    "rust": "1.99.1",
+    "mbx": "1.26.0",
+    "nextest": "0.9.149",
+    "nextest_commit": "3fe4ef31972f24e0c94cfe291718eab0fe678260",
+    "older_1_25_0_and_nextest_0_9_148_records": "historical_only",
+    "verified_nextest_installation": {
+      "receipt": "/Users/donbeave/Downloads/velnor-goal/evidence/host-nextest-149-manual-install-20261021.json",
+      "receipt_sha256": "b28a88ce393c7dcdaca32ce6d04f71c34ccbd5d3b637a4e69290ab072ffa8b4c",
+      "api_release_metadata": "/Users/donbeave/.cache/velnor/sdk36-tool-qualification/metadata/nextest-release.json",
+      "api_release_metadata_sha256": "ed98e1c1351cc911c4a60222dcb8e231fad9b96d611033711379f4d049915c30",
+      "release_archive_sha256": "47b9941765a9ff94e304a3fe5444ac1c7593da655525b8b69f8f2b31a9217507",
+      "installed_binary_sha256": "db85ec6208e74eddb330bf900eb2b7c17b5f1a278a126f2a85feae0c170d43fa",
+      "installed_version": "cargo-nextest 0.9.149; commit 3fe4ef31972f24e0c94cfe291718eab0fe678260; aarch64-apple-darwin",
+      "self_update_result": "The supported self-update attempt timed out; the manually installed verified official release binary is the source of the current 0.9.149 tool.",
+      "self_update_log_sha256": "841dca98f5e0fc5e2fbd58ff48dffb68086e1edf72ed8006287e81e64314333d",
+      "self_update_log_path": "not recorded in the retained installation JSON; no path is asserted here."
+    }
+  },
+  "commits": [
+    {
+      "sha": "2ec691b9396a3fb7bb7d693a112fa691bc906c9e",
+      "subject": "Keep runner records before job cleanup",
+      "changed_paths_count": 38
+    },
+    {
+      "sha": "8caf0c6c099461816133701f290e2bf0807316ff",
+      "subject": "Reduce publication record size",
+      "changed_paths_count": 3
+    },
+    {
+      "sha": "8b521ac856b76ccac251e69f50a92f809a7fe6e9",
+      "subject": "Record the runner check results",
+      "changed_paths_count": 1
+    },
+    {
+      "sha": "1c79dd80360b14f7bf4122bf6ce3d944cd180686",
+      "subject": "Limit journal test helpers to tests",
+      "changed_paths_count": 8
+    },
+    {
+      "sha": "d81cabdebb90bde32df2d8142136eb9449ebab0d",
+      "subject": "Provide owned workers for cleanup tests",
+      "changed_paths_count": 1
+    },
+    {
+      "sha": "3c11c0f58ef18a7444d3d6c89a9fb699a6d5aafb",
+      "subject": "Remove unused completion binding methods",
+      "changed_paths_count": 1
+    },
+    {
+      "sha": "79ea87f29070af7f0ff0d2b48dc6a449faba7e15",
+      "subject": "Limit reservation test helpers to tests",
+      "changed_paths_count": 1
+    },
+    {
+      "sha": "a7f04c83dc52fd6cff99df0459affc4f4b83f84b",
+      "subject": "Limit bootstrap test helpers to tests",
+      "changed_paths_count": 5
+    }
+  ],
+  "parent_port_manifests": [
+    {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/runner-log-bridge-parent-port-20261021.json",
+      "sha256": "1695bb235316efa8b4aaab16ff501d3283eaafd3513c1fbe1f98e6bfc90d22df",
+      "expected_sha256": "1695bb235316efa8b4aaab16ff501d3283eaafd3513c1fbe1f98e6bfc90d22df",
+      "matches": true
+    },
+    {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/journal-test-helpers-parent-port-20261021.json",
+      "sha256": "29d416b132dbb554b5ab3aea40401efd08b808dbe6d935829fb9ca59a9181b62",
+      "expected_sha256": "29d416b132dbb554b5ab3aea40401efd08b808dbe6d935829fb9ca59a9181b62",
+      "matches": true
+    },
+    {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/completion-fixture-repair-parent-port-20261021.json",
+      "sha256": "19c8aa6759743f8474adc42b32d3f7df743d58c960bbf6c4a4c63b03c8ace421",
+      "expected_sha256": "19c8aa6759743f8474adc42b32d3f7df743d58c960bbf6c4a4c63b03c8ace421",
+      "matches": true
+    },
+    {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/reservation-test-helpers-parent-port-20261021.json",
+      "sha256": "efeb957b3f5ad12fb057b8b662eb1ab5bc00b64c9d3f5d402d8879c8c6b47321",
+      "expected_sha256": "efeb957b3f5ad12fb057b8b662eb1ab5bc00b64c9d3f5d402d8879c8c6b47321",
+      "matches": true
+    },
+    {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/bootstrap-test-helpers-parent-port-20261021.json",
+      "sha256": "c1e395c8dd6a5f5ba6d32bcd0a7a8e7049197154b2f59b496324b7f82b062d7a",
+      "expected_sha256": "c1e395c8dd6a5f5ba6d32bcd0a7a8e7049197154b2f59b496324b7f82b062d7a",
+      "matches": true
+    },
+    {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/publication-record-layout-parent-port-20261021.json",
+      "sha256": "d9cdaf9260d7643fadddbcbea1040a64e3b26d6dafb9c9196693db41ad05ffd6",
+      "expected_sha256": "d9cdaf9260d7643fadddbcbea1040a64e3b26d6dafb9c9196693db41ad05ffd6",
+      "matches": true
+    },
+    {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/worker-production-parent-port-20261021.json",
+      "sha256": "414a94cd84f78a09f139ac21a049625ea8de58c521fad317a0537ab7ab69fbc6",
+      "expected_sha256": "414a94cd84f78a09f139ac21a049625ea8de58c521fad317a0537ab7ab69fbc6",
+      "matches": true
+    },
+    {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/runner-log-bridge-parent-port-20261021.json",
+      "sha256": "1695bb235316efa8b4aaab16ff501d3283eaafd3513c1fbe1f98e6bfc90d22df",
+      "expected_sha256": "1695bb235316efa8b4aaab16ff501d3283eaafd3513c1fbe1f98e6bfc90d22df",
+      "matches": true
+    },
+    {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/authorization-shorthand-parent-port-20261021.json",
+      "sha256": "6f7b8276040a0f4120f8663b8068872a940d87613e88858b03ead83518d0dedd",
+      "expected_sha256": "6f7b8276040a0f4120f8663b8068872a940d87613e88858b03ead83518d0dedd",
+      "matches": true
+    },
+    {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/test-provider-context-parent-port-20261021.json",
+      "sha256": "ef5fd233ee1b54e17b0628e82cf1d8bb003030a60b482f3562bdecf513d5b8a1",
+      "expected_sha256": "ef5fd233ee1b54e17b0628e82cf1d8bb003030a60b482f3562bdecf513d5b8a1",
+      "matches": true
+    },
+    {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/provisioning-helper-parent-port-20261021.json",
+      "sha256": "f4e62428195ad473de99f2ec9345d30f1745ebe6830160087e1833e65e022274",
+      "expected_sha256": "f4e62428195ad473de99f2ec9345d30f1745ebe6830160087e1833e65e022274",
+      "matches": true
+    },
+    {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/resource-probe-test-stack-parent-port-20261021.json",
+      "sha256": "a93d733eacbc1b5912bc0fc513e25dae815c582d79903933c2e8807b7bec5a9d",
+      "matches_expected": true
+    },
+    {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/execution-audit-parent-port-20261021.json",
+      "sha256": "8cbd92da7fec5b508f62e6f4586e19206bcdeeebf8f91dd04409856b1ba4574f",
+      "matches_expected": true
+    }
+  ],
+  "integrated_checks": {
+    "2ec691b9396a3fb7bb7d693a112fa691bc906c9e": {
+      "receipt_directory": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/publication-record-layout-parent-integrated-20261021",
+      "tested_head": "2ec691b9396a3fb7bb7d693a112fa691bc906c9e",
+      "nextest": {
+        "exit_status": 0,
+        "run_id": "e88cc24d-7afb-43eb-b2f1-05716c2aa627",
+        "summary": "18 tests run: 18 passed, 1225 skipped",
+        "selector": "test(resource_probe::publication)",
+        "argv_receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/publication-record-layout-parent-integrated-20261021/nextest.json",
+        "argv_receipt_sha256": "7d3f036e4db65339f7b85e50ab1977fd6c6b2045f0d9e31e4b22bbcea96fd1d7",
+        "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/publication-record-layout-parent-integrated-20261021/nextest.log",
+        "raw_log_sha256": "3c34964beb16efa3c7857ebd85c4d8eec55cdb8b4db4a7396f611d879ccac2c1"
+      },
+      "check": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/publication-record-layout-parent-integrated-20261021/check.log",
+        "sha256": "b7e6870322da9f9c51d469a189f40a97a71861adb1c77aff706e151fc042672e",
+        "exit_status": 0
+      },
+      "format": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/publication-record-layout-parent-integrated-20261021/fmt.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "exit_status": 0
+      }
+    },
+    "2ec691b9396a3fb7bb7d693a112fa691bc906c9e_runner_bridge_candidate": {
+      "receipt_directory": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/runner-log-bridge-parent-post-hook-20261021",
+      "tested_head": "6b26a1efb13b4e1be75d8bb71bb8c7e351f803d9",
+      "nextest": {
+        "exit_status": 0,
+        "run_id": "9adb0381-04ea-4229-9bf1-f3f79708ec56",
+        "summary": "58 tests run: 58 passed, 1184 skipped",
+        "selector": "test(completion::diagnostics) | test(native::diagnostics_tests)",
+        "argv_receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/runner-log-bridge-parent-post-hook-20261021/nextest.json",
+        "argv_receipt_sha256": "99bb7eac4f8092baebec16df979828eb26933534229fcdd4f0b35a26236ba103",
+        "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/runner-log-bridge-parent-post-hook-20261021/nextest.log",
+        "raw_log_sha256": "b8f145f7da71919572ad9083c8a2a6f1b5a57c5d051714032d5cae12d01d558c"
+      },
+      "check": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/runner-log-bridge-parent-post-hook-20261021/check.log",
+        "sha256": "13a4e31437bd7bf0bad8b566dcf444083bbf5841fc2aa8fd879318907ea33ff2",
+        "exit_status": 0
+      },
+      "format": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/runner-log-bridge-parent-post-hook-20261021/fmt.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "exit_status": 0
+      }
+    },
+    "8b521ac856b76ccac251e69f50a92f809a7fe6e9": {
+      "receipt_directory": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/journal-test-helpers-parent-integrated-20261021",
+      "tested_head": "8b521ac856b76ccac251e69f50a92f809a7fe6e9",
+      "nextest": {
+        "exit_status": 0,
+        "run_id": "85613eb2-eee6-43ef-8c6d-0f79e6850bfd",
+        "summary": "172 tests run: 172 passed, 1071 skipped",
+        "selector": "test(request_lifecycle) | test(deferred_offer) | test(scoped_poll_tests) | test(connection::session) | test(launch::session)",
+        "argv_receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/journal-test-helpers-parent-integrated-20261021/nextest.json",
+        "argv_receipt_sha256": "c738ff4f0156927cc01271c476986227e36d4555611bcc569570f3bf5a0ef0eb",
+        "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/journal-test-helpers-parent-integrated-20261021/nextest.log",
+        "raw_log_sha256": "54bd09073d8db5f168b88cde0dcb9ea534203f4a9878c5361d4d3d957f5f067e"
+      },
+      "check": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/journal-test-helpers-parent-integrated-20261021/check.log",
+        "sha256": "1ad5427f831215833beea803461c6334fcfd07b8dd7ab8e7c5981f649ec5da71",
+        "exit_status": 0
+      },
+      "format": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/journal-test-helpers-parent-integrated-20261021/fmt.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "exit_status": 0
+      }
+    },
+    "1c79dd80360b14f7bf4122bf6ce3d944cd180686": {
+      "receipt_directory": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/completion-fixture-repair-parent-integrated-20261021",
+      "tested_head": "1c79dd80360b14f7bf4122bf6ce3d944cd180686",
+      "nextest": {
+        "exit_status": 0,
+        "run_id": "d8ac45f0-bc78-4419-830d-a299d6b35787",
+        "summary": "26 tests run: 26 passed, 1217 skipped",
+        "selector": "test(connection::completion) | test(completion::cleanup::native)",
+        "argv_receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/completion-fixture-repair-parent-integrated-20261021/nextest.json",
+        "argv_receipt_sha256": "3bdc8b03cbaec3d9dab7b00e6a13f1f9d3fb47b93eed76a748c5ed0faad4fc22",
+        "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/completion-fixture-repair-parent-integrated-20261021/nextest.log",
+        "raw_log_sha256": "674166ca06237cf8d2b25159cdf14df827d0ef96da01fb92da3f4f9045eb6882"
+      },
+      "check": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/completion-fixture-repair-parent-integrated-20261021/check.log",
+        "sha256": "fca783174eb6dfc648e0bf092f23311e8f00ab27119d74bc6d4137d9b4955e34",
+        "exit_status": 0
+      },
+      "format": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/completion-fixture-repair-parent-integrated-20261021/fmt.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "exit_status": 0
+      }
+    },
+    "3c11c0f58ef18a7444d3d6c89a9fb699a6d5aafb": {
+      "receipt_directory": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/reservation-test-helpers-parent-integrated-20261021",
+      "tested_head": "3c11c0f58ef18a7444d3d6c89a9fb699a6d5aafb",
+      "nextest": {
+        "exit_status": 0,
+        "run_id": "3516a655-69d3-4093-a5a2-89915afe5b56",
+        "summary": "25 tests run: 25 passed, 1218 skipped",
+        "selector": "test(connection_tests::reservation) | test(connection::completion::native_reservation) | test(request_lifecycle::tests::disk_capacity) | test(request_lifecycle::tests::profile_lifecycle) | test(request_lifecycle::tests::review_counterexamples::cleanup_recovery) | test(request_lifecycle::tests::review_migration)",
+        "argv_receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/reservation-test-helpers-parent-integrated-20261021/nextest.json",
+        "argv_receipt_sha256": "5b9b2a50f0dbef9c12dbfc916175355bc7cdd83441273471e99d2fd61955723c",
+        "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/reservation-test-helpers-parent-integrated-20261021/nextest.log",
+        "raw_log_sha256": "bcc928613e3336eee7ce6e0de406ae560c1b750bc44406313eced5dba01a9af9"
+      },
+      "check": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/reservation-test-helpers-parent-integrated-20261021/check.log",
+        "sha256": "50cb5d6963d8bbdf2454815c1de23e7793f4d753b7762cb82318b156dc9e78ba",
+        "exit_status": 0
+      },
+      "format": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/reservation-test-helpers-parent-integrated-20261021/fmt.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "exit_status": 0
+      }
+    },
+    "79ea87f29070af7f0ff0d2b48dc6a449faba7e15": {
+      "receipt_directory": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/bootstrap-test-helpers-parent-integrated-20261021",
+      "tested_head": "79ea87f29070af7f0ff0d2b48dc6a449faba7e15",
+      "nextest": {
+        "exit_status": 0,
+        "run_id": "5bce2c4c-78e5-407c-82c4-c8c26aadeb10",
+        "summary": "92 tests run: 92 passed, 1151 skipped",
+        "selector": "test(journal::image_import) | test(resource_probe::provider) | test(journal::scale_set_create) | test(scale_set)",
+        "argv_receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/bootstrap-test-helpers-parent-integrated-20261021/nextest.json",
+        "argv_receipt_sha256": "ae79d04e01904b5e6341ce2f47b437228d2d3c4407858e70ef9aee49ccb6f557",
+        "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/bootstrap-test-helpers-parent-integrated-20261021/nextest.log",
+        "raw_log_sha256": "8eb1a6bb684bf4e53e1a16cc767c989a6ef07a4a14a1c848fee0439093f4110c"
+      },
+      "check": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/bootstrap-test-helpers-parent-integrated-20261021/check.log",
+        "sha256": "aa7aba9476edd97dab600391f7fdbf2203200cd6ca02bd6fb307bc27902485a8",
+        "exit_status": 0
+      },
+      "format": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/bootstrap-test-helpers-parent-integrated-20261021/fmt.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "exit_status": 0
+      }
+    },
+    "worker_production_parent_port": {
+      "receipt_directory": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/worker-production-parent-integrated-20261021",
+      "tested_head": "ca6da06f30b38719ff41dcfc68112b308403ecc7",
+      "manifest": "/Users/donbeave/Downloads/velnor-goal/evidence/worker-production-parent-port-20261021.json",
+      "nextest": {
+        "argv": [
+          "mise",
+          "--no-config",
+          "--no-env",
+          "--no-hooks",
+          "exec",
+          "rust@1.99.1",
+          "mr-boxington@1.26.0",
+          "--",
+          "env",
+          "CARGO_HOME=/Users/donbeave/Downloads/velnor-goal/build/parent-cargo-home-149-20261021",
+          "PATH=/Users/donbeave/Downloads/velnor-goal/build/parent-cargo-home-149-20261021/bin:/Users/donbeave/.nanocodex/bin:/Users/donbeave/Library/Application Support/mbx/bin:/opt/homebrew/Caskroom/codex/0.163.0/codex-path:/Users/donbeave/.minimax-code/bin:/Users/donbeave/.minimax/bin:/Users/donbeave/.local/bin:/Users/donbeave/.mimocode/bin:/Users/donbeave/.cargo/bin:/Users/donbeave/.local/share/mise/installs/mr-boxington/1.26.0/.mise-bins:/Users/donbeave/.local/share/mise/shims:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Applications/Little Snitch.app/Contents/Components:/Applications/Ghostty.app/Contents/MacOS:/Users/donbeave/Library/Application Support/JetBrains/Toolbox/scripts:/Users/donbeave/.orbstack/bin:/Users/donbeave/.codex-chainargos2/tmp/arg0-macos/codex-arg0ypgijz",
+          "mbx",
+          "nextest",
+          "run",
+          "--manifest-path",
+          "crates/velnor-runner/Cargo.toml",
+          "--target-dir",
+          "/Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02",
+          "--locked",
+          "--offline",
+          "-p",
+          "velnor-runner-host",
+          "--lib",
+          "-E",
+          "test(worker::) | test(stage::)",
+          "--no-tests",
+          "fail",
+          "--build-jobs",
+          "4",
+          "--test-threads",
+          "4"
+        ],
+        "cwd": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020",
+        "start": "2026-10-21T09:20:10.021482+00:00",
+        "end": "2026-10-21T09:20:24.132931+00:00",
+        "exit_status": 0,
+        "run_id": "ea038181-5221-4337-ae44-9c89f84bd370",
+        "summary": "Summary [  13.415s] 123 tests run: 123 passed, 1082 skipped",
+        "argv_receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/worker-production-parent-integrated-20261021/nextest.json",
+        "argv_receipt_sha256": "5c2d757eafd9486f7d4c7028a3952e6c6fafa3e0e603cb25018f85e1f522e0cc",
+        "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/worker-production-parent-integrated-20261021/nextest.log",
+        "raw_log_sha256": "d4ba89a652d3c96f4f1716fed54a888bf7712877c471b6f2af0d506b474c7a4f"
+      }
+    },
+    "runner_log_bridge_parent_port": {
+      "receipt_directory": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/runner-log-bridge-parent-integrated-20261021",
+      "tested_head": "6b26a1efb13b4e1be75d8bb71bb8c7e351f803d9",
+      "manifest": "/Users/donbeave/Downloads/velnor-goal/evidence/runner-log-bridge-parent-port-20261021.json",
+      "nextest": {
+        "argv": [
+          "mise",
+          "--no-config",
+          "--no-env",
+          "--no-hooks",
+          "exec",
+          "rust@1.99.1",
+          "mr-boxington@1.26.0",
+          "--",
+          "env",
+          "CARGO_HOME=/Users/donbeave/Downloads/velnor-goal/build/parent-cargo-home-149-20261021",
+          "PATH=/Users/donbeave/Downloads/velnor-goal/build/parent-cargo-home-149-20261021/bin:/Users/donbeave/.nanocodex/bin:/Users/donbeave/Library/Application Support/mbx/bin:/opt/homebrew/Caskroom/codex/0.163.0/codex-path:/Users/donbeave/.minimax-code/bin:/Users/donbeave/.minimax/bin:/Users/donbeave/.local/bin:/Users/donbeave/.mimocode/bin:/Users/donbeave/.cargo/bin:/Users/donbeave/.local/share/mise/installs/mr-boxington/1.26.0/.mise-bins:/Users/donbeave/.local/share/mise/shims:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Applications/Little Snitch.app/Contents/Components:/Applications/Ghostty.app/Contents/MacOS:/Users/donbeave/Library/Application Support/JetBrains/Toolbox/scripts:/Users/donbeave/.orbstack/bin:/Users/donbeave/.codex-chainargos2/tmp/arg0-macos/codex-arg0ypgijz",
+          "mbx",
+          "nextest",
+          "run",
+          "--manifest-path",
+          "crates/velnor-runner/Cargo.toml",
+          "--target-dir",
+          "/Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02",
+          "--locked",
+          "--offline",
+          "-p",
+          "velnor-runner-host",
+          "--lib",
+          "-E",
+          "test(completion::diagnostics) | test(native::diagnostics_tests)",
+          "--no-tests",
+          "fail",
+          "--build-jobs",
+          "4",
+          "--test-threads",
+          "4"
+        ],
+        "cwd": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020",
+        "start": "2026-10-21T09:23:25.792934+00:00",
+        "end": "2026-10-21T09:24:20.536151+00:00",
+        "exit_status": 0,
+        "run_id": "026d8724-391d-4ab4-8c42-ec7d6d21f46f",
+        "summary": "Summary [  10.560s] 58 tests run: 58 passed, 1184 skipped",
+        "argv_receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/runner-log-bridge-parent-integrated-20261021/nextest.json",
+        "argv_receipt_sha256": "912db5fa5feab8de42755fae478c26a1ae1d4da0eeeca52189636c1e32ed0509",
+        "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/runner-log-bridge-parent-integrated-20261021/nextest.log",
+        "raw_log_sha256": "98a9aab37ce11665b451eec5ba0200ccc1b8523e5ab4c16f9261207a3ac323bf"
+      }
+    },
+    "adverse_acquire_parent_port": {
+      "receipt_directory": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/adverse-acquire-parent-integrated-20261021",
+      "tested_head": "26687ad8fc2b7dda91e9671c70dc425170ac66d4",
+      "manifest": "/Users/donbeave/Downloads/velnor-goal/evidence/adverse-acquire-parent-port-20261021.json",
+      "nextest": {
+        "argv": [
+          "mise",
+          "--no-config",
+          "--no-env",
+          "--no-hooks",
+          "exec",
+          "rust@1.99.1",
+          "mr-boxington@1.26.0",
+          "--",
+          "env",
+          "CARGO_HOME=/Users/donbeave/Downloads/velnor-goal/build/parent-cargo-home-149-20261021",
+          "PATH=/Users/donbeave/Downloads/velnor-goal/build/parent-cargo-home-149-20261021/bin:/Users/donbeave/.nanocodex/bin:/Users/donbeave/Library/Application Support/mbx/bin:/opt/homebrew/Caskroom/codex/0.163.0/codex-path:/Users/donbeave/.minimax-code/bin:/Users/donbeave/.minimax/bin:/Users/donbeave/.local/bin:/Users/donbeave/.mimocode/bin:/Users/donbeave/.local/share/mise/installs/mr-boxington/1.26.0/.mise-bins:/Users/donbeave/.cargo/bin:/Users/donbeave/.local/share/mise/shims:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Applications/Little Snitch.app/Contents/Components:/Applications/Ghostty.app/Contents/MacOS:/Users/donbeave/Library/Application Support/JetBrains/Toolbox/scripts:/Users/donbeave/.orbstack/bin:/Users/donbeave/.codex-chainargos2/tmp/arg0-macos/codex-arg0ypgijz",
+          "mbx",
+          "nextest",
+          "run",
+          "--manifest-path",
+          "crates/velnor-runner/Cargo.toml",
+          "--target-dir",
+          "/Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02",
+          "--locked",
+          "--offline",
+          "-p",
+          "velnor-runner-host",
+          "--lib",
+          "-E",
+          "test(empty_acquire_releases_charge_and_rejects_replay) | test(forbidden_acquire_releases_charge_and_rejects_replay) | test(unusable_acquire_successes_hold_charge_and_block_replay)",
+          "--no-tests",
+          "fail",
+          "--build-jobs",
+          "4",
+          "--test-threads",
+          "4"
+        ],
+        "cwd": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020",
+        "start": "2026-10-21T09:57:14.513207+00:00",
+        "end": "2026-10-21T09:57:55.081808+00:00",
+        "exit_status": 0,
+        "run_id": "1f58d309-9123-4a95-a8f5-aea14c366de7",
+        "summary": "Summary [  11.114s] 3 tests run: 3 passed, 1241 skipped",
+        "argv_receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/adverse-acquire-parent-integrated-20261021/nextest.json",
+        "argv_receipt_sha256": "ea68fb80552a2b39bfc31bd5a42f5c6b5673b1668111947ebf0dbff7e8705373",
+        "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/adverse-acquire-parent-integrated-20261021/nextest.log",
+        "raw_log_sha256": "44083162141c2e92f3fd0877eee79c674d64e3781f4a724a2351194c7a8dd878"
+      },
+      "format": {
+        "receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/adverse-acquire-parent-integrated-20261021/fmt.json",
+        "sha256": "bc638420cda810242d21605d1f5744b73e54eb8d6f1503a7a68911b0f7f2a56a",
+        "exit_status": 0
+      },
+      "check": {
+        "receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/adverse-acquire-parent-integrated-20261021/check.json",
+        "sha256": "5e9219c2fc444ff37d8b75ca6fac016cf5d13cefd18cceb80ce6a7a55f5999aa",
+        "exit_status": 0
+      },
+      "source_manifest": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/evidence/adverse-acquire-parent-port-20261021.json",
+        "sha256": "1e792ca60b84d6cdd058be07a0f50e2199533c4d252c82bb36c6cfb6e7cc1768",
+        "source_review": "/Users/donbeave/Downloads/velnor-goal/evidence/adverse-acquire-independent-review-20261021.md",
+        "source_review_sha256": "4a29c4956449d3ce412e51a87b639282c32c5a19fbff81dca05b45d374e0940a",
+        "file_final_sha256": "1e4e63539b072edc4404dea1938f888d750fab624fdea89684c99b0d1fae9540"
+      }
+    },
+    "test_provider_context_parent_port": {
+      "receipt_directory": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/test-provider-context-parent-integrated-20261021",
+      "tested_head": "fdba8360947c2e06dce581f29b2db71ba51c7e5b",
+      "manifest": "/Users/donbeave/Downloads/velnor-goal/evidence/test-provider-context-parent-port-20261021.json",
+      "nextest": {
+        "argv": [
+          "mise",
+          "--no-config",
+          "--no-env",
+          "--no-hooks",
+          "exec",
+          "rust@1.99.1",
+          "mr-boxington@1.26.0",
+          "--",
+          "env",
+          "CARGO_HOME=/Users/donbeave/Downloads/velnor-goal/build/parent-cargo-home-149-20261021",
+          "PATH=/Users/donbeave/Downloads/velnor-goal/build/parent-cargo-home-149-20261021/bin:/Users/donbeave/.nanocodex/bin:/Users/donbeave/Library/Application Support/mbx/bin:/opt/homebrew/Caskroom/codex/0.163.0/codex-path:/Users/donbeave/.minimax-code/bin:/Users/donbeave/.minimax/bin:/Users/donbeave/.local/bin:/Users/donbeave/.mimocode/bin:/Users/donbeave/.cargo/bin:/Users/donbeave/.local/share/mise/installs/mr-boxington/1.26.0/.mise-bins:/Users/donbeave/.local/share/mise/shims:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Applications/Little Snitch.app/Contents/Components:/Applications/Ghostty.app/Contents/MacOS:/Users/donbeave/Library/Application Support/JetBrains/Toolbox/scripts:/Users/donbeave/.orbstack/bin:/Users/donbeave/.codex-chainargos2/tmp/arg0-macos/codex-arg0ypgijz",
+          "mbx",
+          "nextest",
+          "run",
+          "--manifest-path",
+          "crates/velnor-runner/Cargo.toml",
+          "--target-dir",
+          "/Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02",
+          "--locked",
+          "--offline",
+          "-p",
+          "velnor-runner-host",
+          "--lib",
+          "-E",
+          "test(future_size_tests) | test(stale_acquired_tests) | test(native_intake_composition)",
+          "--no-tests",
+          "fail",
+          "--build-jobs",
+          "4",
+          "--test-threads",
+          "4"
+        ],
+        "cwd": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020",
+        "start": "2026-10-21T09:18:02.878833+00:00",
+        "end": "2026-10-21T09:18:46.267557+00:00",
+        "exit_status": 0,
+        "run_id": "00432ef8-b288-46b6-ad4a-e8c0a9a7791b",
+        "summary": "Summary [   7.720s] 6 tests run: 6 passed, 1199 skipped",
+        "argv_receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/test-provider-context-parent-integrated-20261021/nextest.json",
+        "argv_receipt_sha256": "2399c234621d5ded091577b6912c25450fed43faab4cd68fa57684ffa3269385",
+        "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/test-provider-context-parent-integrated-20261021/nextest.log",
+        "raw_log_sha256": "505a3bdeb31f5dc33acda5de5bc05f7fc988845a068fd996e81a2921804260c1"
+      },
+      "format": {
+        "receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/test-provider-context-parent-integrated-20261021/fmt.json",
+        "receipt_sha256": "3c0a0a93af540a79c0c75fd24f98f9a9fef57f7704e0b2e88e8afa883abbeb3d",
+        "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/test-provider-context-parent-integrated-20261021/fmt.log",
+        "raw_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "exit_status": 0
+      },
+      "check": {
+        "receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/test-provider-context-parent-integrated-20261021/check.json",
+        "receipt_sha256": "fac1bc56e1a3bc4f600a0a3bd2a83296ebf1cc1818858a1f27c19a42d2031156",
+        "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/test-provider-context-parent-integrated-20261021/check.log",
+        "raw_log_sha256": "280e074691578ba3137637140685440254932e99492aa7205c1a63a169028c06",
+        "exit_status": 0
+      },
+      "source_manifest": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/evidence/test-provider-context-parent-port-20261021.json",
+        "sha256": "ef5fd233ee1b54e17b0628e82cf1d8bb003030a60b482f3562bdecf513d5b8a1"
+      }
+    },
+    "resource_probe_test_stack_parent_port": {
+      "receipt_directory": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/resource-probe-test-stack-parent-integrated-20261021",
+      "tested_head": "842424293ebc67a9a98d66bf16e5850f030d7c7f",
+      "manifest": "/Users/donbeave/Downloads/velnor-goal/evidence/resource-probe-test-stack-parent-port-20261021.json",
+      "nextest": {
+        "argv": [
+          "mise",
+          "--no-config",
+          "--no-env",
+          "--no-hooks",
+          "exec",
+          "rust@1.99.1",
+          "mr-boxington@1.26.0",
+          "--",
+          "env",
+          "CARGO_HOME=/Users/donbeave/.cargo",
+          "PATH=/Users/donbeave/.nanocodex/bin:/Users/donbeave/Library/Application Support/mbx/bin:/opt/homebrew/Caskroom/codex/0.163.0/codex-path:/Users/donbeave/.minimax-code/bin:/Users/donbeave/.minimax/bin:/Users/donbeave/.local/bin:/Users/donbeave/.mimocode/bin:/Users/donbeave/.local/share/mise/installs/mr-boxington/1.26.0/.mise-bins:/Users/donbeave/.cargo/bin:/Users/donbeave/.local/share/mise/shims:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Applications/Little Snitch.app/Contents/Components:/Applications/Ghostty.app/Contents/MacOS:/Users/donbeave/Library/Application Support/JetBrains/Toolbox/scripts:/Users/donbeave/.orbstack/bin:/Users/donbeave/.codex-chainargos2/tmp/arg0-macos/codex-arg0ypgijz",
+          "mbx",
+          "nextest",
+          "run",
+          "--manifest-path",
+          "crates/velnor-runner/Cargo.toml",
+          "--target-dir",
+          "/Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02",
+          "--locked",
+          "--offline",
+          "-p",
+          "velnor-runner-host",
+          "--lib",
+          "-E",
+          "test(resource_probe::tests::docker_lifecycle)",
+          "--no-tests",
+          "fail",
+          "--build-jobs",
+          "4",
+          "--test-threads",
+          "4"
+        ],
+        "cwd": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020",
+        "start": "2026-10-21T10:01:53.139935+00:00",
+        "end": "2026-10-21T10:03:01.439308+00:00",
+        "exit_status": 0,
+        "run_id": "5342a98c-a161-4aa4-a3eb-ff4e6b387cc2",
+        "summary": "Summary [  16.078s] 13 tests run: 13 passed, 1231 skipped",
+        "argv_receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/resource-probe-test-stack-parent-integrated-20261021/nextest.json",
+        "argv_receipt_sha256": "393ebf23d067fb1c0d49a5191620db31a0d1d598691e0c95b5c474f72c8756f4",
+        "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/resource-probe-test-stack-parent-integrated-20261021/nextest.log",
+        "raw_log_sha256": "352b2ba13552f543825c16fa1bf60a50dffab9753df32225db2df83413fc2cb6"
+      },
+      "fmt": {
+        "receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/resource-probe-test-stack-parent-integrated-20261021/fmt.json",
+        "receipt_sha256": "02b9f70a0cb78da2357b332b527b0c3736f0d7d11efa9ae394fb21987319b7b2",
+        "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/resource-probe-test-stack-parent-integrated-20261021/fmt.log",
+        "raw_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "exit_status": 0
+      },
+      "check": {
+        "receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/resource-probe-test-stack-parent-integrated-20261021/check.json",
+        "receipt_sha256": "d5058fb8702575700c75a19a8ace23017d3b83beb17a2a39e3e57111b66ffd2b",
+        "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/resource-probe-test-stack-parent-integrated-20261021/check.log",
+        "raw_log_sha256": "640d6d7336fe858df2230e7e72933653a54d77433837084b8307d98bb1267b4e",
+        "exit_status": 0
+      }
+    },
+    "execution_audit_parent_port": {
+      "receipt_directory": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/execution-audit-parent-integrated-20261021",
+      "tested_head": "bb11f76a7cac4f1aff0204b65379924c3656477e",
+      "manifest": "/Users/donbeave/Downloads/velnor-goal/evidence/execution-audit-parent-port-20261021.json",
+      "nextest": {
+        "argv": [
+          "mise",
+          "--no-config",
+          "--no-env",
+          "--no-hooks",
+          "exec",
+          "rust@1.99.1",
+          "mr-boxington@1.26.0",
+          "--",
+          "env",
+          "CARGO_HOME=/Users/donbeave/.cargo",
+          "PATH=/Users/donbeave/.nanocodex/bin:/Users/donbeave/Library/Application Support/mbx/bin:/opt/homebrew/Caskroom/codex/0.163.0/codex-path:/Users/donbeave/.minimax-code/bin:/Users/donbeave/.minimax/bin:/Users/donbeave/.local/bin:/Users/donbeave/.mimocode/bin:/Users/donbeave/.local/share/mise/installs/mr-boxington/1.26.0/.mise-bins:/Users/donbeave/.cargo/bin:/Users/donbeave/.local/share/mise/shims:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Applications/Little Snitch.app/Contents/Components:/Applications/Ghostty.app/Contents/MacOS:/Users/donbeave/Library/Application Support/JetBrains/Toolbox/scripts:/Users/donbeave/.orbstack/bin:/Users/donbeave/.codex-chainargos2/tmp/arg0-macos/codex-arg0ypgijz",
+          "mbx",
+          "nextest",
+          "run",
+          "--manifest-path",
+          "crates/velnor-runner/Cargo.toml",
+          "--target-dir",
+          "/Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02",
+          "--locked",
+          "--offline",
+          "-p",
+          "velnor-runner-host",
+          "--lib",
+          "-E",
+          "test(journal::execution_authorization) | test(resource_probe::publication)",
+          "--no-tests",
+          "fail",
+          "--build-jobs",
+          "4",
+          "--test-threads",
+          "4"
+        ],
+        "cwd": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020",
+        "start": "2026-10-21T10:06:58.981930+00:00",
+        "end": "2026-10-21T10:07:55.069044+00:00",
+        "exit_status": 0,
+        "run_id": "d0c05bc3-bb27-4545-8630-e1f3c0036c68",
+        "summary": "Summary [   8.343s] 42 tests run: 42 passed, 1202 skipped",
+        "argv_receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/execution-audit-parent-integrated-20261021/nextest.json",
+        "argv_receipt_sha256": "cea77ddb33406e1d5117050106942f8fd7cad2b30b54a4076bb48a4d6406622e",
+        "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/execution-audit-parent-integrated-20261021/nextest.log",
+        "raw_log_sha256": "3a8fd25846d75fee2904aab0d291c043292a259f36675c8e0158c94681a41b6d"
+      },
+      "fmt": {
+        "receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/execution-audit-parent-integrated-20261021/fmt.json",
+        "receipt_sha256": "d4005697b8258455ae1e53d080f33a10d9f68dc2b53c52e03b149b8ad8d3f6de",
+        "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/execution-audit-parent-integrated-20261021/fmt.log",
+        "raw_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "exit_status": 0
+      },
+      "check": {
+        "receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/execution-audit-parent-integrated-20261021/check.json",
+        "receipt_sha256": "1a1faabb61b2c96417070c7854c1d50d3c21fdedf4bf15d53115bdec01a7de2f",
+        "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/execution-audit-parent-integrated-20261021/check.log",
+        "raw_log_sha256": "533fa1bf8e6f68c305ba06f4ab9aa06b8ff6de7d447a424aa3f3bafb0460f7d8",
+        "exit_status": 0
+      }
+    },
+    "current_head_receipts": {
+      "resource_probe_test_stack": {
+        "summary": "13 tests passed, 1231 skipped",
+        "run_id": "5342a98c-a161-4aa4-a3eb-ff4e6b387cc2",
+        "tested_head": "842424293ebc67a9a98d66bf16e5850f030d7c7f",
+        "port_manifest": "/Users/donbeave/Downloads/velnor-goal/evidence/resource-probe-test-stack-parent-port-20261021.json",
+        "port_manifest_sha256": "a93d733eacbc1b5912bc0fc513e25dae815c582d79903933c2e8807b7bec5a9d",
+        "qualification": "These focused checks cover stack use in Docker lifecycle tests. They do not prove that the full suite passes."
+      },
+      "execution_audit": {
+        "summary": "42 tests passed, 1202 skipped",
+        "run_id": "d0c05bc3-bb27-4545-8630-e1f3c0036c68",
+        "tested_head": "bb11f76a7cac4f1aff0204b65379924c3656477e",
+        "port_manifest": "/Users/donbeave/Downloads/velnor-goal/evidence/execution-audit-parent-port-20261021.json",
+        "port_manifest_sha256": "8cbd92da7fec5b508f62e6f4586e19206bcdeeebf8f91dd04409856b1ba4574f",
+        "qualification": "The command selected journal::execution_authorization and resource_probe::publication. The full nested suite and strict requalification remain NOT_RUN."
+      }
+    }
+  },
+  "uncommitted_overlay": {
+    "status": "Commit 26687ad8 contains the former provisioning changes. The primary checkout has separate uncommitted source files, evidence files, and logs. This checkpoint does not verify those changes."
+  },
+  "historical_diagnostics": {
+    "initial_26_test_run": {
+      "machine_status": "FAIL",
+      "reported_result": "23 passed, 1 failed, 2 not run",
+      "evidence": {
+        "receipt_directory": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/completion-binding-retirement-parent-integrated-20261021",
+        "tested_head": "1c79dd80360b14f7bf4122bf6ce3d944cd180686",
+        "manifest": "/Users/donbeave/Downloads/velnor-goal/evidence/completion-binding-retirement-parent-port-20261021.json",
+        "nextest": {
+          "argv": [
+            "mise",
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "exec",
+            "rust@1.99.1",
+            "mr-boxington@1.26.0",
+            "--",
+            "env",
+            "CARGO_HOME=/Users/donbeave/Downloads/velnor-goal/build/parent-cargo-home-149-20261021",
+            "PATH=/Users/donbeave/Downloads/velnor-goal/build/parent-cargo-home-149-20261021/bin:/Users/donbeave/.nanocodex/bin:/Users/donbeave/Library/Application Support/mbx/bin:/opt/homebrew/Caskroom/codex/0.163.0/codex-path:/Users/donbeave/.minimax-code/bin:/Users/donbeave/.minimax/bin:/Users/donbeave/.local/bin:/Users/donbeave/.mimocode/bin:/Users/donbeave/.cargo/bin:/Users/donbeave/.local/share/mise/installs/mr-boxington/1.26.0/.mise-bins:/Users/donbeave/.local/share/mise/shims:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Applications/Little Snitch.app/Contents/Components:/Applications/Ghostty.app/Contents/MacOS:/Users/donbeave/Library/Application Support/JetBrains/Toolbox/scripts:/Users/donbeave/.orbstack/bin:/Users/donbeave/.codex-chainargos2/tmp/arg0-macos/codex-arg0ypgijz",
+            "mbx",
+            "nextest",
+            "run",
+            "--manifest-path",
+            "crates/velnor-runner/Cargo.toml",
+            "--target-dir",
+            "/Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02",
+            "--locked",
+            "--offline",
+            "-p",
+            "velnor-runner-host",
+            "--lib",
+            "-E",
+            "test(connection::completion) | test(completion::cleanup::native)",
+            "--no-tests",
+            "fail",
+            "--build-jobs",
+            "4",
+            "--test-threads",
+            "4"
+          ],
+          "cwd": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020",
+          "start": "2026-10-21T09:38:19.034990+00:00",
+          "end": "2026-10-21T09:38:51.946674+00:00",
+          "exit_status": 100,
+          "run_id": "a539d417-b2fd-42bd-b87a-431a8d585b07",
+          "summary": "Summary [  18.032s] 24/26 tests run: 23 passed, 1 failed, 1217 skipped",
+          "argv_receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/completion-binding-retirement-parent-integrated-20261021/nextest.json",
+          "argv_receipt_sha256": "d904ee8d2421be974650f9e0462d132ab495b26af485637e21f2cf5235349a13",
+          "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/completion-binding-retirement-parent-integrated-20261021/nextest.log",
+          "raw_log_sha256": "1a8c7e609108e26dfb7b06125c74b945c039240bb2b8e9d7e5d151882ed3bcce"
+        },
+        "failure": {
+          "test": "launch::completion::cleanup::native::tests::native_capacity_retry_does_not_repeat_proven_cleanup_effects",
+          "assertion": "The test expected phase \"metadata capacity hold\"; the assertion failed.",
+          "run_result": "23 passed, 1 failed, 2 not run (24/26 executed)."
+        },
+        "format": {
+          "receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/completion-binding-retirement-parent-integrated-20261021/fmt.json",
+          "sha256": "a23830df1c06bf64479e013f17c04d250e85570a05dfc29c4989085e445e5b48",
+          "exit_status": 0
+        },
+        "check": {
+          "receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/completion-binding-retirement-parent-integrated-20261021/check.json",
+          "sha256": "8cc01d4f181a5a12fa32230e3717c9e27c75074a19807281c50effa9cb36948b",
+          "exit_status": 0
+        }
+      },
+      "qualification": "Authenticated raw parent-integrated test receipt at source head 1c79dd80360b14f7bf4122bf6ce3d944cd180686. A later 26-pass completion-fixture receipt is separately retained and does not erase this failure."
+    },
+    "runner_image_failure": {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/runner-logs-named-volume-v3-official-actual-test.log",
+      "sha256": "19bca6b8c8372d6a86ed765d4c40bef2e2f60fed402a3359970163d1ae882727",
+      "nextest_run_id": "93d44e98-7e7e-4aea-ba2a-1af038ff7d91",
+      "result": "0 passed, 1 failed, 1192 skipped",
+      "scope": "One actual-test case against the Runner image; do not infer DinD behavior."
+    },
+    "earlier_named_volume_failure": {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/runner-logs-named-volume-v3-actual-test.log",
+      "sha256": "402755b92c4550d9c966f1feaa1fbd3cbbd44557770616751020f956a2efd2e4",
+      "nextest_run_id": "f1e665a4-1093-4b0f-97d4-9454e739c042",
+      "result": "0 passed, 1 failed, 1192 skipped"
+    },
+    "diagnostic_dind_absence": {
+      "machine_status": "FAIL",
+      "earlier_diagnostic_record": {
+        "path": "/Users/donbeave/Downloads/velnor-goal/evidence/runner-logs-exec-collector-v3-dind-path-checks.json",
+        "sha256": "b760d355da8bad54e8b77f8888d3082ea5c6dc905abf49cd607f038e6cd73f55",
+        "result": "The diagnostic JSON explicitly says actual DinD test not yet run. Keep that limitation; it is not replaced by the Runner-image failure or parser fixture."
+      },
+      "focused_parent_run": {
+        "receipt_directory": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/native-capacity-retry-diagnostic-20261021",
+        "tested_head": "1c79dd80360b14f7bf4122bf6ce3d944cd180686",
+        "manifest": "/Users/donbeave/Downloads/velnor-goal/evidence/completion-binding-retirement-parent-port-20261021.json",
+        "nextest": {
+          "argv": [
+            "mise",
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "exec",
+            "rust@1.99.1",
+            "mr-boxington@1.26.0",
+            "--",
+            "env",
+            "CARGO_HOME=/Users/donbeave/Downloads/velnor-goal/build/parent-cargo-home-149-20261021",
+            "PATH=/Users/donbeave/Downloads/velnor-goal/build/parent-cargo-home-149-20261021/bin:/Users/donbeave/.nanocodex/bin:/Users/donbeave/Library/Application Support/mbx/bin:/opt/homebrew/Caskroom/codex/0.163.0/codex-path:/Users/donbeave/.minimax-code/bin:/Users/donbeave/.minimax/bin:/Users/donbeave/.local/bin:/Users/donbeave/.mimocode/bin:/Users/donbeave/.local/share/mise/installs/mr-boxington/1.26.0/.mise-bins:/Users/donbeave/.cargo/bin:/Users/donbeave/.local/share/mise/shims:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Applications/Little Snitch.app/Contents/Components:/Applications/Ghostty.app/Contents/MacOS:/Users/donbeave/Library/Application Support/JetBrains/Toolbox/scripts:/Users/donbeave/.orbstack/bin:/Users/donbeave/.codex-chainargos2/tmp/arg0-macos/codex-arg0ypgijz",
+            "mbx",
+            "nextest",
+            "run",
+            "--manifest-path",
+            "crates/velnor-runner/Cargo.toml",
+            "--target-dir",
+            "/Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02",
+            "--locked",
+            "--offline",
+            "-p",
+            "velnor-runner-host",
+            "--lib",
+            "-E",
+            "test(native_capacity_retry_does_not_repeat_proven_cleanup_effects)",
+            "--no-tests",
+            "fail",
+            "--build-jobs",
+            "4",
+            "--test-threads",
+            "4"
+          ],
+          "cwd": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020",
+          "start": "2026-10-21T09:39:33.716893+00:00",
+          "end": "2026-10-21T09:39:54.525813+00:00",
+          "exit_status": 100,
+          "run_id": "bafe0e04-0992-4831-b4e1-7d492b535cf7",
+          "summary": "Summary [   2.474s] 1 test run: 0 passed, 1 failed, 1242 skipped",
+          "argv_receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/native-capacity-retry-diagnostic-20261021/nextest.json",
+          "argv_receipt_sha256": "588a5e8a8c01f8cd66e631106cf8cf88f99eb980bbcf3f8276668bf500473d15",
+          "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/native-capacity-retry-diagnostic-20261021/nextest.log",
+          "raw_log_sha256": "b12d7758f0c70c546f1b1637e03ea07ec2cd66b77388cd2ff5b1606017054db4"
+        }
+      },
+      "observed_failure": {
+        "test": "launch::completion::cleanup::native::tests::native_capacity_retry_does_not_repeat_proven_cleanup_effects",
+        "error": "Native cleanup returned Err(Failure { phase: \"runner log DinD absent\", reason: \"not_proven\", error: Journal, stop_requested: false }).",
+        "qualification": "This is the exact focused unit-test failure. It is not a live DinD job result, and the previous Runner-image archive attempt remains a separate historical failure."
+      }
+    },
+    "successful_completion_fixture": {
+      "receipt": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/completion-fixture-repair-parent-integrated-20261021/nextest.json",
+      "receipt_sha256": "3bdc8b03cbaec3d9dab7b00e6a13f1f9d3fb47b93eed76a748c5ed0faad4fc22",
+      "run_id": "d8ac45f0-bc78-4419-830d-a299d6b35787",
+      "result": "26 passed, 1217 skipped",
+      "scope": "Parent-integrated completion fixture tests only; does not clear the separate recorded failures or qualify DinD/live execution."
+    }
+  },
+  "reviews_and_manifests": [
+    {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/runner-logs-exec-collector-v3-dind-path-checks.json",
+      "sha256": "b760d355da8bad54e8b77f8888d3082ea5c6dc905abf49cd607f038e6cd73f55"
+    },
+    {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/runner-logs-named-volume-v3-manifest.tsv",
+      "sha256": "a5b886f57b3ea548027b3ececd69c78443a3a95f360812d8ba7322bae3fa23e5"
+    },
+    {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/runner-logs-v3-independent-review-holds-20261021.json",
+      "sha256": "c49265b8298c96e971a0f69009a6d94475d2f1adca85b26935129472c4d26c48"
+    },
+    {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/runner-logs-v4-independent-component-review-20261021.json",
+      "sha256": "a0fd472fd8d9e77601e52ebf84be501848ce39f59cf9a0574ae7427e3ede5cd4"
+    },
+    {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/runner-logs-projection-v10-independent-review-20261021.json",
+      "sha256": "fcb8a2693801418443af06ea612af8a812ce7c790f2a14521b284ea18d4d89ac"
+    },
+    {
+      "path": "/Users/donbeave/Downloads/velnor-goal/evidence/runner-logs-bridge-v4-security-closure-20261021.json",
+      "sha256": "2b7dcb0f87cddc7931e25fb64755cadccb7866aee4848aa793ac5a0d2fcdd21a"
+    }
+  ],
+  "gates": {
+    "bounded_checks": "PASS",
+    "nested_strict": "FAIL",
+    "final_full_nested_nextest_at_committed_head": "NOT_RUN",
+    "release": "NOT_RUN",
+    "essential_mac_installation_or_live_job": "NOT_RUN",
+    "eth_processor_rust_installation_or_live_job": "NOT_RUN",
+    "consumer_push_or_pr": "NOT_RUN",
+    "live_runner_or_DinD_job": "NOT_RUN",
+    "nested_strict_at_committed_head": "NOT_RUN"
+  },
+  "latest_strict_failure": {
+    "source_commit": "e5b85e1125c51ae2c74fb29fb433f1186f3e49f5",
+    "diagnostics_count": 314,
+    "log": "/Users/donbeave/Downloads/velnor-goal/build/runner-recovery-quality-e5b85-20261021/evidence/strict-clippy-lib.log",
+    "sha256": "952c68c575c6dc60e320f5bfdde24b9eedc0d718440b3597cef37502163df4ad",
+    "qualification": "The recorded strict run failed on its stated source commit; current-head strict Clippy has not been run.",
+    "machine_status": "FAIL",
+    "current_head_requalification": "NOT_RUN"
+  },
+  "mise_note": {
+    "state": "Parent reports host Mise self-update was already current at 17; a temporary private-home tool attempt was recovered. No upgrade is claimed."
+  },
+  "workspace_snapshot": {
+    "head": "bb11f76a7cac4f1aff0204b65379924c3656477e",
+    "status_short": [
+      " M crates/velnor-runner/crates/velnor-runner-host/src/journal/execution_authorization/channel_record.rs",
+      " M crates/velnor-runner/crates/velnor-runner-host/src/journal/execution_authorization/decision/prepare.rs",
+      " M crates/velnor-runner/crates/velnor-runner-host/src/journal/execution_authorization/decision/started.rs",
+      " M crates/velnor-runner/crates/velnor-runner-host/src/journal/execution_authorization/records.rs",
+      " M crates/velnor-runner/crates/velnor-runner-host/src/journal/resource_probe/execution_publication/context.rs",
+      "?? clippy-host-strict-current.log",
+      "?? clippy-host-strict-final-v2.log",
+      "?? clippy-host-strict-final.log",
+      "?? clippy-host-strict.log",
+      "?? evidence/",
+      "?? host-provider-merge-manifest-final.tsv",
+      "?? host-provider-merge-manifest.tsv",
+      "?? provider-native-check-final.log",
+      "?? provider-native-focused-final-v2.log",
+      "?? provider-native-focused-final-v3.log",
+      "?? provider-native-focused-final-v4.log",
+      "?? provider-native-focused-final-v5.log",
+      "?? provider-native-focused-final-v6.log",
+      "?? provider-native-focused-final-v7.log",
+      "?? provider-native-focused-final.log"
+    ],
+    "note": "Primary tree is not clean. The listed checkpoint receipts remain source-bound to their recorded heads/overlays; this record does not claim verification of uncommitted resource_probe files or of the full suite at current HEAD."
+  },
+  "limitations": [
+    "Focused test receipts do not constitute the final nested suite.",
+    "Full strict Clippy has not passed at the current committed head.",
+    "No release, consumer installation, registration, activation, or live job is evidenced.",
+    "The branch advanced to 842424293 while this checkpoint was prepared; no final full nested suite or strict gate is attached to that later head.",
+    "The recorded native capacity-retry test failed with the typed phase \"runner log DinD absent\" in a focused unit-test run; no live Runner/DinD job was run.",
+    "The full nested Nextest suite and full strict Clippy gate remain NOT_RUN at current head bb11f76a7cac4f1aff0204b65379924c3656477e.",
+    "This checkpoint excludes the uncommitted source files listed in workspace_snapshot. It does not verify those files.",
+    "The resource-probe and execution-audit results cover only the selected tests. They do not prove that the full nested suite passes at the current HEAD."
+  ],
+  "subsequent_commits_after_requested_list": [
+    {
+      "sha": "26687ad8fc2b7dda91e9671c70dc425170ac66d4",
+      "subject": "Keep metadata checks before initialization",
+      "changed_paths_count": 5,
+      "status": "committed",
+      "bounded_check": "provisioning-helper-parent-integrated-20261021 run on a7 HEAD plus five-file working-tree overlay; all five manifest finals were hash-verified identical to this commit.",
+      "nextest_run_id": "bed6feb5-3478-411c-988b-f72014f744ee",
+      "nextest_summary": "106 tests run: 106 passed, 1138 skipped",
+      "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/provisioning-helper-parent-integrated-20261021/nextest.log",
+      "raw_log_sha256": "26aba987ceff495c840bf0db40073a8ed7f9aed7fe8b51127486383ac85c9693"
+    },
+    {
+      "sha": "842424293ebc67a9a98d66bf16e5850f030d7c7f",
+      "subject": "Reduce stack use in acquire tests",
+      "changed_paths_count": 1,
+      "status": "committed after the requested commit list while this checkpoint was being prepared",
+      "bounded_check": "PASS for the three adverse-acquire tests, format check, and package check.",
+      "nextest_run_id": "1f58d309-9123-4a95-a8f5-aea14c366de7",
+      "nextest_summary": "3 tests run: 3 passed, 1241 skipped",
+      "raw_log": "/Users/donbeave/Downloads/velnor-goal/build/main-cdd6a486-integration-20261020/evidence/adverse-acquire-parent-integrated-20261021/nextest.log",
+      "raw_log_sha256": "44083162141c2e92f3fd0877eee79c674d64e3781f4a724a2351194c7a8dd878",
+      "tested_parent_head": "26687ad8fc2b7dda91e9671c70dc425170ac66d4",
+      "source_byte_identity": "The parent port file final hash matches the committed 842424 file."
+    }
+  ],
+  "additional_ancestry_commits": [
+    {
+      "sha": "6b26a1efb13b4e1be75d8bb71bb8c7e351f803d9",
+      "subject": "Remove repeated field names from authorization tests",
+      "port_manifest": "/Users/donbeave/Downloads/velnor-goal/evidence/authorization-shorthand-parent-port-20261021.json",
+      "port_manifest_sha256": "6f7b8276040a0f4120f8663b8068872a940d87613e88858b03ead83518d0dedd",
+      "bounded_result": "Parent reports format/package checks and a four-field shorthand equivalence check passed; a prior author test receipt was reused. No new run UUID is asserted."
+    },
+    {
+      "sha": "a3b9019eddbac63e92d5e27be6619c49f3f1b991",
+      "subject": "Limit worker test helpers to tests",
+      "bounded_result": "Covered by the worker-production integration receipt at ca6da06; see its exact source manifest and 123-test result."
+    },
+    {
+      "sha": "ca6da06f30b38719ff41dcfc68112b308403ecc7",
+      "subject": "Use one context for test preparation",
+      "bounded_check": "PASS for worker-production selector; 123 passed, 1082 skipped; fmt and package check passed.",
+      "nextest_run_id": "ea038181-5221-4337-ae44-9c89f84bd370",
+      "parent_port_manifest": "/Users/donbeave/Downloads/velnor-goal/evidence/worker-production-parent-port-20261021.json",
+      "parent_port_manifest_sha256": "414a94cd84f78a09f139ac21a049625ea8de58c521fad317a0537ab7ab69fbc6"
+    },
+    {
+      "sha": "bb11f76a7cac4f1aff0204b65379924c3656477e",
+      "subject": "Reduce stack use in Docker tests",
+      "bounded_check": "The selected execution-audit tests passed at the current HEAD. The full nested suite remains NOT_RUN.",
+      "nextest_run_id": "d0c05bc3-bb27-4545-8630-e1f3c0036c68",
+      "nextest_summary": "42 tests run: 42 passed, 1202 skipped",
+      "port_manifest": "/Users/donbeave/Downloads/velnor-goal/evidence/execution-audit-parent-port-20261021.json",
+      "port_manifest_sha256": "8cbd92da7fec5b508f62e6f4586e19206bcdeeebf8f91dd04409856b1ba4574f"
+    }
+  ],
+  "gate_scope_note": "PASS applies only to the listed focused scopes. The latest retained strict run failed at e5b85; no strict requalification was run at bb11f76. The full nested suite at bb11f76 is NOT_RUN.",
+  "historical_record_note": "This evidence-authenticated revision supersedes the prior candidate JSON only; the previous candidate bytes remain unchanged. It does not claim a release, live job, or full nested pass."
+}
