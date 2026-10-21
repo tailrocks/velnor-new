@@ -1,0 +1,79 @@
+{
+  "record_schema": 1,
+  "scope": "Version merge checks",
+  "status": "PASS",
+  "head": "c70484f85958b3f67ee242bff29c3b31e45bf469",
+  "merge_head": "f4db80ddd75173269a7b9e4bab47c1121ec682b7",
+  "merge_base": "e5a3812841a2c788255eaf2bb6b6c052c88cfe3b",
+  "version": "0.1.32",
+  "rust_source_changes": 0,
+  "external_lock_identity_changes": 0,
+  "local_dependency_pins_checked": 23,
+  "resolution": "The merge keeps the branch dependencies. All local crates use version 0.1.32. The generator produces the managed files.",
+  "generator_record": {
+    "path": "evidence/main-f4db-generator-verification-20261021.json",
+    "sha256": "f99737bc3e83a2964a89f4def058144c50c62b93e910b9c6e5544491d0271bbc"
+  },
+  "binary_identities": {
+    "generation": "39dfc909ec9d6923ad7b43cd9de650498429dd4ed7c5c7f786b5ad2e41ff7c2b",
+    "golden_check": "29ad992d73ca73cfa53f3d92ed1795e4581d9486c7e12d1957e2eb8ac5ac868c"
+  },
+  "checks": {
+    "build": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "/Users/donbeave/Downloads/velnor-goal/evidence/main-f4db-build-20261021.log",
+      "sha256": "b9c0c3161a68a7766e093a724a8bbee86d3cb9a4426083cd3d72477b280fc10b"
+    },
+    "clippy": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "/Users/donbeave/Downloads/velnor-goal/evidence/main-f4db-clippy-20261021.log",
+      "sha256": "0eaf8a03c5a8f30f3ac12989bffe44bd9835f030ade2e10c605985600de7641d"
+    },
+    "generate": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "/Users/donbeave/Downloads/velnor-goal/evidence/main-f4db-generate-20261021.log",
+      "sha256": "847bec6254ea05950490a45b9597be85ad780af68820bf62366a80cbfb749655"
+    },
+    "nextest": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "/Users/donbeave/Downloads/velnor-goal/evidence/main-f4db-final-nextest-20261021.log",
+      "sha256": "52ae27714f80ec2d8148e0446d53e965149dbc71fdd92d18b459ee479b3ee6a9",
+      "run_id": "0f47588b-bffb-4d6f-b1c8-b6713d17ec2e",
+      "passed_tests": 291
+    },
+    "golden_check": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "/Users/donbeave/Downloads/velnor-goal/evidence/main-f4db-goldens-check-20261021.log",
+      "sha256": "f9f7d45211fe7c6caa15ae755fa743666289054d857f8937a2c263a8fa537d54"
+    },
+    "format": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "/Users/donbeave/Downloads/velnor-goal/evidence/main-f4db-fmt-final-20261021.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "alint": {
+      "status": "PASS",
+      "exit_code": 0,
+      "log": "/Users/donbeave/Downloads/velnor-goal/evidence/main-f4db-alint-final-20261021.log",
+      "sha256": "c5957a5cc162f430bc9bb1b8dad09fe6fda2d5b5cd59e2c62f4b4b64051f1ccb"
+    }
+  },
+  "reviewer": "/root/native_intake_composition",
+  "limits": [
+    "These checks do not prove a release or a consumer installation.",
+    "The full nested runner strict check still fails."
+  ],
+  "reviewed_hashes": {
+    "crates/velnor-actions-mise/Cargo.toml": "dd20b57963025bea141518aa6b1a8876bdef094fca86e8a46dfc5c38803faa0f",
+    "crates/velnor-actions-orchestrator/Cargo.toml": "e1d853a0b85c646af7143ff9b6188b495b0b2f13e9a0e7090772bf10debbffb1",
+    "crates/velnor-actions-workflow-renderer/Cargo.toml": "2148e5927cd66eda994198115490086929d5d30e4611d58ab7dffdfcafcca674",
+    "Cargo.lock": "fc9eb02cee6e674cbc7122d4609c23d3ecbba7ba588c2a5f6d8ab19378c32391"
+  },
+  "language_reviewer": "/root/runner_context_review"
+}
