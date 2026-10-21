@@ -71,7 +71,9 @@ fn read_authority_input(path: &Path) -> Result<String, ConnectError> {
         .take((MAX_AUTHORITY_INPUT_BYTES + 1) as u64)
         .read_to_end(&mut bytes)
         .map_err(|_| ConnectError::Config)?;
-    if bytes.len() != metadata.len() as usize || bytes.len() > MAX_AUTHORITY_INPUT_BYTES {
+    if bytes.len() > MAX_AUTHORITY_INPUT_BYTES
+        || u64::try_from(bytes.len()).ok() != Some(metadata.len())
+    {
         return Err(ConnectError::Config);
     }
     String::from_utf8(bytes).map_err(|_| ConnectError::Config)
