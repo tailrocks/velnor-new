@@ -315,6 +315,9 @@ fn checkout_history_action() -> Result<Step, OrchestratorError> {
     crate::workflow::wire_w1::checkout_step_full()
 }
 
+#[path = "cache_prune.rs"]
+pub(crate) mod cache_prune;
+
 #[cfg(test)]
 #[path = "workflow_jobs_tests.rs"]
 mod workflow_jobs_tests;

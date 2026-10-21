@@ -100,6 +100,40 @@ jobs:
       - name: Report optional cache save failure
         if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
         run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
+  cache-prune:
+    name: Cache prune
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    env:
+      CARGO_CACHE_AUTO_CLEAN_FREQUENCY: never
+      VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
+    permissions:
+      contents: none
+      actions: write
+    needs:
+      - required
+      - dependency-seed
+    if: always() && !cancelled() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true
+    steps:
+      - name: Setup Mise
+        uses: jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde
+        with:
+          cache: "false"
+          cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          version: 2026.10.17
+      - name: Prepare pinned tools
+        env:
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+        run: mise --no-config --no-env --no-hooks install gh@2.102.1
+      - name: Prune superseded cache entries
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VELNOR_DEFAULT_REF: ${{ format('refs/heads/{0}', github.event.repository.default_branch) }}
+        run: "sh -c 'set -eu; gh() { mise --no-config --no-env --no-hooks exec gh@2.102.1 -- gh \"$@\"; }; ref=\"${VELNOR_DEFAULT_REF:?missing default ref}\"; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/cache-prune\"; rm -rf \"$d\"; mkdir -p \"$d\"; warn() { printf '\\''%s\\n'\\'' \"::warning::cache_unavailable: $1\"; }; prune() { if gh cache list --key \"$1\" --ref \"$ref\" --limit 1000 --sort created_at --order desc --json id,key --jq '\\''.[] | [.id, .key] | @tsv'\\'' > \"$d/list\"; then :; else warn \"could not list $1\"; return 0; fi; awk -v keep=\"$2\" '\\''{ g = $2; sub(/-s256-[0-9a-f]+$/, \"\", g); n[g]++; if (n[g] > keep) print $1 }'\\'' \"$d/list\" > \"$d/doomed\"; while read -r id; do if gh cache delete \"$id\"; then printf '\\''velnor: pruned superseded entry %s of %s\\n'\\'' \"$id\" \"$1\"; else warn \"could not delete $id\"; fi; done < \"$d/doomed\"; }; prune '\\''velnor-v2-sources-trusted-'\\'' 3; prune '\\''velnor-v2-tofu-providers-trusted-'\\'' 3; prune '\\''velnor-v1-bun-install-trusted-'\\'' 2; prune '\\''velnor-v1-playwright-browsers-trusted-'\\'' 2; prune '\\''velnor-v1-dbt-packages-trusted-'\\'' 2; prune '\\''velnor-v1-python-venv-trusted-'\\'' 2; prune '\\''velnor-v1-ansible-collections-trusted-'\\'' 2; prune '\\''velnor-v1-mbx-bundle-trusted-'\\'' 1'"
   dependency-seed:
     name: Dependency seed
     runs-on: ubuntu-26.04

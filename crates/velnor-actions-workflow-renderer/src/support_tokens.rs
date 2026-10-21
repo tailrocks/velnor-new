@@ -150,7 +150,7 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
 /// True for the one scoped token binding: `GH_TOKEN` carrying exactly
 /// `${{ github.token }}` in the plan or final job.
 fn is_scoped_gh_token(id: &str, env: &BTreeMap<String, String>) -> bool {
-    (id == PLAN_JOB_ID || id == FINAL_JOB_ID)
+    (id == PLAN_JOB_ID || id == FINAL_JOB_ID || id == crate::render::CACHE_PRUNE_JOB_ID)
         && env
             .get("GH_TOKEN")
             .is_some_and(|value| value == "${{ github.token }}")

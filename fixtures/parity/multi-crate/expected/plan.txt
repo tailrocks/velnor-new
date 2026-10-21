@@ -18,6 +18,7 @@ Workflow to generate
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
     - actionlint (7 steps)
+    - cache-prune (3 steps)
     - dependency-seed (22 steps)
     - plan (15 steps)
     - required (8 steps)

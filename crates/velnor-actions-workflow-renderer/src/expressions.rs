@@ -182,6 +182,7 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
             && !workflow_input
             && !is_github_token_secret(inner)
             && !is_private_env_binding(key, inner)
+            && !is_job_token_binding(key, inner)
         {
             return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
         }
@@ -194,6 +195,13 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
 /// The step placement is enforced separately by the token-hygiene gate
 /// (`credential_binding_outside_private_fetch`); this only keeps the exact
 /// expression from being legal under any other key.
+/// `GH_TOKEN: ${{ github.token }}` only; the token-hygiene gate scopes it to
+/// the plan, final and cache-prune jobs (the prune job lists and deletes
+/// cache entries with `actions: write`).
+fn is_job_token_binding(key: &str, inner: &str) -> bool {
+    key == "GH_TOKEN" && inner == "github.token"
+}
+
 fn is_private_env_binding(key: &str, inner: &str) -> bool {
     (key == velnor_actions_contract::PRIVATE_FETCH_TOKEN_ENV
         && inner == "steps.deps-token.outputs.token")

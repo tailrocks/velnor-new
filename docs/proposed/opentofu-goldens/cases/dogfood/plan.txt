@@ -48,6 +48,7 @@ Workflow to generate
   Jobs:
     - actionlint (7 steps)
     - alint (2 steps)
+    - cache-prune (3 steps)
     - cargo-deny (6 steps)
     - cargo-machete (7 steps)
     - check-maintenance-helpers (8 steps)
