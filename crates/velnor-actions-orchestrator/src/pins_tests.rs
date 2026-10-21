@@ -14,6 +14,7 @@ pub(crate) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> Vel
         distribution: velnor_actions_contract::config::DistributionConfig::default(),
         job_authority: Vec::new(),
         private_sources: None,
+        upgrades: None,
         images: Vec::new(),
         publish: velnor_actions_contract::config::PublishConfig::default(),
         schema: 1,

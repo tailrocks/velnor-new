@@ -56,6 +56,7 @@ fn lock_acquire_inserts_digest_verified_stage() {
             "Prepare pinned tools",
             "Acquire Velnor",
             "Prepare Rust components",
+            "Verify Rust channel manifest",
             "Write request",
             "Plan"
         ]

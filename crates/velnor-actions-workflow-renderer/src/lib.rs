@@ -97,6 +97,7 @@ mod tool_seed_admission;
 mod tool_seed_test_support;
 pub mod toolchain_env;
 pub mod tree;
+pub mod upgrades;
 pub mod verification_jobs;
 mod workflow_policy;
 pub mod workflow_routing;

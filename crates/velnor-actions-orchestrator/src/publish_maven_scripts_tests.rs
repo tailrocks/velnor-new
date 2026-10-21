@@ -180,3 +180,65 @@ fn the_upload_never_overwrites_an_existing_asset() {
     assert!(script.contains("--verify-tag"));
     assert!(!script.contains("--clobber"));
 }
+
+/// A fake `gh` over a directory standing in for the release's assets.
+const FAKE_GH: &str = r#"gh() { case "$1 $2" in
+  "release view") case "$*" in *--json*) ls "$FAKE_RELEASE" ;; *) test -d "$FAKE_RELEASE" ;; esac ;;
+  "release download") shift 2; pat=; dir=; while [ $# -gt 0 ]; do case "$1" in --pattern) pat=$2; shift ;; --dir) dir=$2; shift ;; esac; shift; done; cp "$FAKE_RELEASE/$pat" "$dir/$pat" ;;
+  "release upload") shift 3; shift 2; for f in "$@"; do cp "$f" "$FAKE_RELEASE/"; done ;;
+  "release create") echo created >&2; exit 9 ;;
+esac; }"#;
+
+fn run_upload(release: &Path, temp: &Path) -> std::io::Result<Output> {
+    Command::new("sh")
+        .args(["-c", &upload_script(FAKE_GH, "libs")])
+        .env_clear()
+        .env("PATH", std::env::var("PATH").unwrap_or_default())
+        .env("RUNNER_TEMP", temp)
+        .env("GITHUB_REF_NAME", "libs-v1.0.0")
+        .env("GITHUB_REPOSITORY", "acme/widgets")
+        .env("FAKE_RELEASE", release)
+        .output()
+}
+
+#[test]
+fn any_existing_asset_fails_without_replacement_or_partial_upload() -> TestResult {
+    if !tools_present() {
+        return Ok(());
+    }
+    let temp = TempDir::new()?;
+    let release = TempDir::new()?;
+    let bundle = temp.path().join("bundle");
+    fs::create_dir_all(&bundle)?;
+    let zip = "libs-1.0.0-maven.zip";
+    let checksum = "libs-1.0.0-maven.zip.sha256";
+    for name in [zip, checksum] {
+        fs::write(bundle.join(name), name)?;
+        fs::write(release.path().join(name), name)?;
+    }
+    let identical = run_upload(release.path(), temp.path())?;
+    assert!(!identical.status.success(), "{identical:?}");
+    assert!(
+        String::from_utf8_lossy(&identical.stderr)
+            .contains("already published, refusing to replace")
+    );
+    assert_eq!(fs::read_to_string(release.path().join(zip))?, zip);
+    assert_eq!(fs::read_to_string(release.path().join(checksum))?, checksum);
+
+    fs::write(release.path().join(zip), "manual upload")?;
+    let different = run_upload(release.path(), temp.path())?;
+    assert!(!different.status.success(), "{different:?}");
+    assert_eq!(
+        fs::read_to_string(release.path().join(zip))?,
+        "manual upload"
+    );
+    assert_eq!(fs::read_to_string(release.path().join(checksum))?, checksum);
+
+    fs::remove_file(release.path().join(checksum))?;
+    fs::write(release.path().join(zip), zip)?;
+    let partial = run_upload(release.path(), temp.path())?;
+    assert!(!partial.status.success(), "{partial:?}");
+    assert_eq!(fs::read_to_string(release.path().join(zip))?, zip);
+    assert!(!release.path().join(checksum).exists());
+    Ok(())
+}

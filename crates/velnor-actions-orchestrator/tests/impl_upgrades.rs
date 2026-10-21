@@ -1,0 +1,92 @@
+//! `[upgrades]` emission: opt-in, generator-owned, never a pull-request check.
+
+use velnor_actions_orchestrator::{prepare, render_staged_tree};
+
+use crate::impl_common::{TestResult, make_repo, plan_for};
+
+const UPGRADES: &str = ".github/workflows/upgrades.yml";
+
+fn config(upgrades: &str) -> String {
+    format!("schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n{upgrades}")
+}
+
+#[test]
+fn enabled_upgrades_emit_the_workflow_and_list_it_in_the_plan() -> TestResult {
+    let repo = make_repo(&config("[upgrades]\nenabled = true\nstuck_days = 5\n"))?;
+    let prep = prepare(repo.path())?;
+    let tree = render_staged_tree(&prep)?;
+    let yaml = tree
+        .get(UPGRADES)
+        .ok_or("The upgrade workflow must exist.")?;
+    assert!(yaml.contains("cron: 17 5 * * *"), "{yaml}");
+    assert!(yaml.contains("VELNOR_STUCK_DAYS: \"5\""), "{yaml}");
+    assert!(
+        yaml.contains("client-id: ${{ vars.VELNOR_DEPS_APP_ID }}"),
+        "{yaml}"
+    );
+    let actionlint = tree
+        .get(".github/actionlint.yaml")
+        .ok_or("The actionlint configuration must exist.")?;
+    assert!(actionlint.contains("VELNOR_DEPS_APP_ID"), "{actionlint}");
+    let ci = tree
+        .get(".github/workflows/ci.yml")
+        .ok_or("The CI workflow must exist.")?;
+    assert!(
+        !ci.contains("Freshness gate") && !ci.contains("velnor/upgrades"),
+        "The upgrade gate must not be part of CI or Required."
+    );
+    assert!(plan_for(&prep)?.contains(UPGRADES));
+    Ok(())
+}
+
+#[test]
+fn absent_or_disabled_upgrades_emit_nothing() -> TestResult {
+    for table in ["", "[upgrades]\nenabled = false\n"] {
+        let repo = make_repo(&config(table))?;
+        let prep = prepare(repo.path())?;
+        assert!(
+            render_staged_tree(&prep)?.get(UPGRADES).is_none(),
+            "{table:?}"
+        );
+        assert!(!plan_for(&prep)?.contains(UPGRADES), "{table:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn invalid_upgrades_tables_fail_config_loading() {
+    for table in [
+        "[upgrades]\nenabled = true\ncooldown = \"1d\"\n",
+        "[upgrades]\nenabled = true\nschedule = \"daily\"\n",
+        "[upgrades]\nenabled = true\nstuck_days = 0\n",
+    ] {
+        let repo = make_repo(&config(table)).expect("The test repository must be created.");
+        assert!(prepare(repo.path()).is_err(), "{table:?}");
+    }
+}
+
+#[test]
+fn scale_set_mode_routes_every_upgrades_job_without_hosted_fallback() -> TestResult {
+    let config = "schema = 2\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\nmode = \"scale-set\"\n\
+[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n\
+[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\"]\nplatform = \"linux/amd64\"\n\
+job_container_image = \"ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n\
+[upgrades]\nenabled = true\nstuck_days = 5\n";
+    let repo = make_repo(config)?;
+    let prep = prepare(repo.path())?;
+    let tree = render_staged_tree(&prep)?;
+    let yaml = tree
+        .get(UPGRADES)
+        .ok_or("The upgrades workflow must be emitted.")?;
+    assert_eq!(
+        yaml.matches("runs-on: [velnor, ubuntu-26.04-scale-set]")
+            .count(),
+        3,
+        "Every upgrade job must use the configured Scale Set."
+    );
+    assert!(
+        !yaml.contains("runs-on: ubuntu-26.04"),
+        "Scale Set mode must not use a hosted runner."
+    );
+    Ok(())
+}

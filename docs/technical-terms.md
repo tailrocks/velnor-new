@@ -132,6 +132,19 @@
 | Mirror | A server that supplies a copy of the same file. |
 | Cache pruning | Removal of older cache entries under a retention policy. |
 | Cargo home | The directory that Cargo uses for configuration, downloaded dependencies, and installed tools. |
+| Thread | An execution sequence that can run separately within a process. |
+| Tokio runtime | A Tokio component that runs asynchronous Rust tasks and provides timers and network operations. |
+| Rust channel manifest | A Rust release document that lists toolchain components and their download digests. |
+| Toolchain mirror | A Rust toolchain declaration that repeats the version, profile, component set, and target set from the Mise Rust declaration. |
+| Cargo profile | A Cargo configuration group that sets compiler options for a type of build. |
+| Garbage collection | Removal of stored software data that is no longer needed under specified retention rules. |
+| GC | Garbage collection. |
+| Cooldown | A waiting period before software can select a newly released version. |
+| Cron expression | A set of time fields that specifies when a scheduled operation runs. |
+| Flyway | A tool that applies versioned database migrations. |
+| jOOQ | A Java library and tool that generates code for database access. |
+| Backtrace | A list of function calls that led to a program event. |
+| Shell metacharacter | A character that the shell uses to control command parsing or execution. |
 | dbt adapter | A dbt component that connects a project to a database. |
 | Event payload | JSON data that describes a GitHub event. |
 | Operational reserve | CPU and memory capacity kept available for operational work. |

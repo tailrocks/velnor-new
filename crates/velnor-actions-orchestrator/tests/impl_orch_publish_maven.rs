@@ -238,72 +238,69 @@ fn private_maven_bundles_are_minted_fetched_and_revoked_around_the_build_only() 
     Ok(())
 }
 
+const DB_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n\
+[stacks.gradle]\nroots = [\"backend\"]\ntimeout_minutes = 45\n\
+[stacks.gradle.projects.\":core\"]\nservices = [\"postgres\"]\n\
+[[publish.maven]]\nid = \"processor-shared-libs\"\nroot = \"backend\"\n";
+
 #[test]
-fn scale_set_mode_keeps_maven_publication_authority() -> TestResult {
-    let config = crate::impl_orch_gradle::scale_set_config(CONFIG);
-    let repo = repo(&config, PROPERTIES)?;
+fn a_root_whose_ci_declares_postgres_gets_the_same_service_in_the_bundle_build() -> TestResult {
+    let repo = repo(DB_CONFIG, PROPERTIES)?;
     let yaml = preview(repo.path())?;
-    assert_eq!(yaml, preview(repo.path())?);
-    crate::impl_orch_gradle::audit_scale_set_jobs(PUBLISH_PATH, &yaml)?;
-    let hosted_repo = self::repo(CONFIG, PROPERTIES)?;
-    let hosted_yaml = preview(hosted_repo.path())?;
-    let hosted_header = hosted_yaml
-        .split_once("jobs:\n")
-        .ok_or("Hosted jobs are absent.")?
-        .0;
-    let scale_set_header = yaml
-        .split_once("jobs:\n")
-        .ok_or("Scale Set jobs are absent.")?
-        .0;
-    assert_eq!(hosted_header, scale_set_header);
-    let tag_glob = velnor_actions_contract::config::RELEASE_TAG_GLOB;
-    assert_eq!(scale_set_header.matches(tag_glob).count(), 1);
-    assert_eq!(hosted_header.matches(tag_glob).count(), 1);
-    let facts = |bytes: String| {
-        velnor_actions_workflow_renderer::extract_workflow_authority(&[
-            velnor_actions_workflow_renderer::RenderedFile {
-                path: PUBLISH_PATH.to_owned(),
-                bytes: bytes.replacen(tag_glob, "processor-shared-libs-v2.3.0", 1),
-            },
-        ])
-    };
-    assert_eq!(facts(hosted_yaml)?, facts(yaml.clone())?);
-    let authority_facts = facts(yaml.clone())?;
-    assert_eq!(authority_facts[0].jobs.len(), 4);
-    let authority = section(&yaml, "publish-authority")?;
-    assert!(!authority.contains("checkout"), "{authority}");
     let build = section(&yaml, "maven-build-processor-shared-libs")?;
+    assert!(build.contains("VELNOR_GRADLE_DATABASE: \"1\""), "{build}");
     assert!(
-        build.contains("- publish-authority")
-            && build
-                .contains("needs.publish-authority.outputs.artifact == 'processor-shared-libs'"),
+        build.contains("services:") && build.contains("postgres@sha256:"),
         "{build}"
     );
+    assert!(build.contains("- 40000:5432"), "{build}");
     assert!(
-        build.contains("contents: read") && !build.contains("environment:"),
+        build.contains("permissions:\n      contents: read\n") && !build.contains("environment:"),
         "{build}"
     );
     let attest = section(&yaml, "maven-attest-processor-shared-libs")?;
-    assert!(
-        attest.contains("- maven-build-processor-shared-libs")
-            && attest.contains("id-token: write")
-            && attest.contains("attestations: write"),
-        "{attest}"
-    );
     let publish = section(&yaml, "maven-publish-processor-shared-libs")?;
     assert!(
-        publish.contains("- maven-attest-processor-shared-libs")
-            && publish.contains("environment: release")
-            && publish.contains("contents: write"),
-        "{publish}"
+        !attest.contains("services:") && !publish.contains("services:"),
+        "Only the build job without publication authority may have the database service."
     );
-    for job in [&attest, &publish] {
-        assert!(
-            !job.contains("checkout") && !job.contains("VELNOR_INTERNAL_OP"),
-            "{job}"
-        );
-    }
-    assert!(!publish.contains("--clobber"), "{publish}");
-    assert!(yaml.contains("cancel-in-progress: false"), "{yaml}");
+    assert!(attest.contains("attest"), "{attest}");
+    Ok(())
+}
+
+#[test]
+fn a_root_without_a_database_keeps_a_service_free_bundle_build() -> TestResult {
+    let repo = repo(CONFIG, PROPERTIES)?;
+    let yaml = preview(repo.path())?;
+    let build = section(&yaml, "maven-build-processor-shared-libs")?;
+    assert!(!build.contains("services:"), "{build}");
+    assert!(build.contains("VELNOR_GRADLE_DATABASE: \"0\""), "{build}");
+    Ok(())
+}
+
+#[test]
+fn attestation_is_default_on_and_an_opt_out_is_a_visible_warning_with_its_reason() -> TestResult {
+    let on = preview(repo(CONFIG, PROPERTIES)?.path())?;
+    let attest = section(&on, "maven-attest-processor-shared-libs")?;
+    assert!(attest.contains("attest-build-provenance"), "{attest}");
+    assert!(!attest.contains("attestation disabled"), "{attest}");
+
+    let off_config = format!(
+        "{CONFIG}attest = false\nattest_reason = \"private repository on a plan without artifact attestations\"\n"
+    );
+    let off = preview(repo(&off_config, PROPERTIES)?.path())?;
+    let attest = section(&off, "maven-attest-processor-shared-libs")?;
+    assert!(!attest.contains("attest-build-provenance"), "{attest}");
+    assert!(
+        attest.contains("::warning title=Provenance attestation disabled::")
+            && attest.contains("without artifact attestations"),
+        "{attest}"
+    );
+    assert!(attest.contains("Verify checksum"), "{attest}");
+
+    let no_reason = format!("{CONFIG}attest = false\n");
+    let bad = repo(&no_reason, PROPERTIES)?;
+    let err = err_of(prepare(bad.path()), "attest = false without a reason")?.to_string();
+    assert!(err.contains("attest_reason"), "{err}");
     Ok(())
 }

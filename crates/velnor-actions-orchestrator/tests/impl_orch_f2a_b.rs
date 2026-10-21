@@ -165,6 +165,7 @@ fn offline_deps_fail_closed_without_fetch() -> TestResult {
             name.as_str(),
             "private_fetch.rs"
                 | "private_fetch_session.rs"
+                | "private_fetch_owned_env.rs"
                 | "private_revoke.rs"
                 | "bun_registry_install.rs"
                 | "playwright_install.rs"

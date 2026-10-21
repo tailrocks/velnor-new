@@ -43,12 +43,14 @@ mod runs_on;
 mod rust_inputs;
 mod rust_suites;
 mod rust_suites_validate;
+mod rust_toolchain_source;
 mod schema;
 mod stacks;
 mod task_source;
 mod tofu;
 mod tofu_apply;
 mod tools;
+mod upgrades;
 mod verification;
 mod workflow;
 mod workflow_flags;
@@ -145,6 +147,7 @@ pub use rust_suites::{
 pub use rust_suites_validate::{
     validate_preserve_workflows, validate_rust_suites, validate_suites_with_dispatch,
 };
+pub use rust_toolchain_source::RustToolchainSource;
 pub use stacks::{
     DeclaredCompileDriver, DeclaredTestRunner, MAX_CRATE_BUILD_JOBS, RustConfiguration,
     RustCrateConfig, RustStackConfig, StacksConfig, is_valid_feature_name, is_valid_rust_target,
@@ -153,6 +156,10 @@ pub use task_source::MiseTaskSource;
 pub use tofu::{RootProblem, TofuStackConfig, Utf8RepoRelDir};
 pub use tofu_apply::{GitHubTokenSecret, S3BackendConfig, TofuApplyConfig};
 pub use tools::{OVERRIDABLE_TOOLS, ToolsConfig, is_exact_semver};
+pub use upgrades::{
+    DEFAULT_UPGRADES_APP_ID_VARIABLE, DEFAULT_UPGRADES_APP_KEY_SECRET, DEFAULT_UPGRADES_CRON,
+    DEFAULT_UPGRADES_STUCK_DAYS, MAX_UPGRADES_STUCK_DAYS, UPGRADES_WORKFLOW_PATH, UpgradesConfig,
+};
 pub use verification::{VerificationRunner, VerificationTask};
 pub use workflow::{
     GeneratorValidation, LATEST_RUNNER_LABEL, PullRequestCachePolicy, RUNNER_LABEL_CATALOG,
@@ -218,6 +225,9 @@ pub struct VelnorConfig {
     /// Private cross-repository dependency credentials (`[private_sources]`, HD-7).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub private_sources: Option<PrivateSourcesConfig>,
+    /// Daily upgrade pull request and freshness gate (`[upgrades]`); off by default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upgrades: Option<UpgradesConfig>,
     /// Container images built on every run and published from the default branch.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub images: Vec<ImageConfig>,
@@ -284,6 +294,9 @@ impl VelnorConfig {
         job_authority::validate_job_authority_bindings(&self.job_authority, file)?;
         if let Some(private_sources) = &self.private_sources {
             private_sources.validate(file)?;
+        }
+        if let Some(upgrades) = &self.upgrades {
+            upgrades.validate(file)?;
         }
         self.publish.validate(file)?;
         self.check_distribution_source(file)?;

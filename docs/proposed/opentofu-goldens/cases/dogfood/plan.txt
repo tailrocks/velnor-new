@@ -3,6 +3,7 @@ Repository: <repo>
 
 Detected stacks
   Rust: selected
+  Mise check maintenance-helpers: test-maintenance-helpers (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Workspace crates: 20
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-ansible (crates/velnor-actions-ansible/Cargo.toml) [lib, test; depends on velnor-actions-contract]
@@ -28,13 +29,15 @@ Detected stacks
   Nextest profile .: ci (.config/nextest.toml)
     evidence .config/nextest.toml:4 [profile.ci] [durable]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
-    evidence mise.toml:1 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:10 rust = { version = "1.99.1", profile = "minimal", components = ["clippy", "rustfmt"], targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"], mr_bo [durable]
+    evidence mise.toml:22 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
   Profile crates/velnor-runner: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile crates/velnor-runner: ci (crates/velnor-runner/.config/nextest.toml)
     evidence .config/nextest.toml:4 [profile.ci] [durable]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
     evidence crates/velnor-runner/.config/nextest.toml:3 [profile.ci] [durable]
-    evidence mise.toml:1 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:10 rust = { version = "1.99.1", profile = "minimal", components = ["clippy", "rustfmt"], targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"], mr_bo [durable]
+    evidence mise.toml:22 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
 
 Workflow to generate
   .github/actionlint.yaml
@@ -49,35 +52,36 @@ Workflow to generate
     - alint (5 steps)
     - cargo-deny (10 steps)
     - cargo-machete (11 steps)
-    - dependency-seed (25 steps)
-    - dependency-seed-6372617465732f76656c6e6f722d72756e6e6572 (25 steps)
-    - plan (20 steps)
+    - check-maintenance-helpers (10 steps)
+    - dependency-seed (26 steps)
+    - dependency-seed-6372617465732f76656c6e6f722d72756e6e6572 (26 steps)
+    - plan (21 steps)
     - publish-baseline (8 steps)
     - required (12 steps)
     - required-gate (1 steps)
-    - rust-velnor-actions-actionlint (74 steps)
-    - rust-velnor-actions-ansible (73 steps)
-    - rust-velnor-actions-bun (73 steps)
-    - rust-velnor-actions-cli (74 steps)
-    - rust-velnor-actions-contract (73 steps)
-    - rust-velnor-actions-dbt (73 steps)
-    - rust-velnor-actions-freshness (73 steps)
-    - rust-velnor-actions-gradle (73 steps)
-    - rust-velnor-actions-mise (74 steps)
-    - rust-velnor-actions-orchestrator (74 steps)
-    - rust-velnor-actions-rust (73 steps)
-    - rust-velnor-actions-tofu (73 steps)
-    - rust-velnor-actions-workflow-renderer (73 steps)
-    - rust-velnor-archive-guard (73 steps)
-    - rust-velnor-resource-probe (73 steps)
-    - rust-velnor-runner-attestation (72 steps)
-    - rust-velnor-runner-cli (73 steps)
-    - rust-velnor-runner-core (73 steps)
-    - rust-velnor-runner-github (73 steps)
-    - rust-velnor-runner-host (73 steps)
+    - rust-velnor-actions-actionlint (75 steps)
+    - rust-velnor-actions-ansible (74 steps)
+    - rust-velnor-actions-bun (74 steps)
+    - rust-velnor-actions-cli (75 steps)
+    - rust-velnor-actions-contract (74 steps)
+    - rust-velnor-actions-dbt (74 steps)
+    - rust-velnor-actions-freshness (74 steps)
+    - rust-velnor-actions-gradle (74 steps)
+    - rust-velnor-actions-mise (75 steps)
+    - rust-velnor-actions-orchestrator (75 steps)
+    - rust-velnor-actions-rust (74 steps)
+    - rust-velnor-actions-tofu (74 steps)
+    - rust-velnor-actions-workflow-renderer (74 steps)
+    - rust-velnor-archive-guard (74 steps)
+    - rust-velnor-resource-probe (74 steps)
+    - rust-velnor-runner-attestation (73 steps)
+    - rust-velnor-runner-cli (74 steps)
+    - rust-velnor-runner-core (74 steps)
+    - rust-velnor-runner-github (74 steps)
+    - rust-velnor-runner-host (74 steps)
     - zizmor (11 steps)
     - 20 Rust package jobs
-      Timeout: 10 minutes per crate job
+      Timeout: 8 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
       Entries:
         - rust-velnor-actions-actionlint
@@ -247,6 +251,6 @@ Required-check migration
 Recommendations
   mise.lock is read-only input; Velnor never modifies it
   mise.toml is read-only input; Velnor never modifies it
-  rust-toolchain.toml not found; Velnor will not create it
+  rust-toolchain.toml is read-only input; Velnor never modifies it
   shadowed_nextest_config: .config/nextest.toml shadowed by crates/velnor-runner/.config/nextest.toml; profile selected from crates/velnor-runner/.config/nextest.toml
-  tool_install_unverified:8 installs skip verification: actionlint@1.7.12(no_entry), cargo-deny@0.20.2(no_entry), cargo-machete@0.9.2(no_entry), gh@2.102.1(no_entry), opentofu@1.13.1(no_entry), rust@1.99.1(no_checksums), shellcheck@0.11.0(no_entry), zizmor@1.31.1(no_entry); install on the CI platform and commit the lock to verify them
+  tool_install_unverified:7 installs skip verification: actionlint@1.7.12(no_entry), cargo-deny@0.20.2(no_entry), cargo-machete@0.9.2(no_entry), gh@2.102.1(no_entry), opentofu@1.13.1(no_entry), shellcheck@0.11.0(no_entry), zizmor@1.31.1(no_entry); install on the CI platform and commit the lock to verify them

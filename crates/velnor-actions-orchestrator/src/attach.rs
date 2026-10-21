@@ -263,11 +263,17 @@ fn insert_plan_mbx_restore(
     Ok(())
 }
 
-/// Insert after the pinned Rust setup and any separate component selection.
+/// Insert after Rust setup, separate component selection, and channel manifest verification.
+/// Thus, compilation starts only after the manifest check passes.
 fn after_rust_setup(steps: &[Step]) -> usize {
     steps
         .iter()
-        .position(|step| step.role == Some(StepRole::PrepareRustComponents))
+        .position(|step| step.name == crate::workflow::VERIFY_RUST_MANIFEST_STEP)
+        .or_else(|| {
+            steps
+                .iter()
+                .position(|step| step.role == Some(StepRole::PrepareRustComponents))
+        })
         .or_else(|| {
             steps
                 .iter()

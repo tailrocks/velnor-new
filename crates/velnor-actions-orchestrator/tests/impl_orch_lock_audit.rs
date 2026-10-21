@@ -10,7 +10,7 @@ use crate::impl_common::{TestResult, config_with_branch, make_repo, plan_for};
 
 /// Consumer fixture install set: plan + crate + required Prepare tools.
 const PINS: [(&str, &str); 5] = [
-    ("rust", velnor_actions_mise::RUST_VERSION),
+    ("rust", "1.99.1"),
     ("actionlint", "1.7.12"),
     ("shellcheck", "0.11.0"),
     ("zizmor", "1.31.1"),
@@ -71,7 +71,7 @@ fn preview_generate(repo: &TempDir) -> Result<String, Box<dyn std::error::Error>
 fn missing_lock_advises_and_generates() -> TestResult {
     let repo = repo_with_lock(None)?;
     let prep = prepare(repo.path())?;
-    assert_eq!(prep.lock_audit_blocking, [] as [String; 0]);
+    assert_eq!(prep.lock_audit_blocking, [] as [std::string::String; 0]);
     let summary = prep
         .discovery
         .recommendations
@@ -79,8 +79,11 @@ fn missing_lock_advises_and_generates() -> TestResult {
         .find(|line| line.contains("tool_install_unverified"))
         .ok_or("missing-lock summary")?;
     assert!(summary.contains("no mise.lock"), "{summary}");
+    assert!(
+        !summary.contains("rust@"),
+        "Rust is verified by its channel-manifest digest, not mise.lock: {summary}"
+    );
     for tool in [
-        &format!("rust@{}", velnor_actions_mise::RUST_VERSION),
         "actionlint@1.7.12",
         "shellcheck@0.11.0",
         "zizmor@1.31.1",
@@ -94,27 +97,24 @@ fn missing_lock_advises_and_generates() -> TestResult {
 }
 
 #[test]
-fn full_lock_leaves_only_rust_unverifiable() -> TestResult {
+fn full_lock_leaves_nothing_unverifiable() -> TestResult {
     let repo = repo_with_lock(Some(&full_lock()))?;
     let prep = prepare(repo.path())?;
-    assert_eq!(prep.lock_audit_blocking, [] as [String; 0]);
-    let summary = prep
-        .discovery
-        .recommendations
-        .iter()
-        .find(|line| line.contains("tool_install_unverified"))
-        .ok_or("rust-only summary")?;
+    assert_eq!(prep.lock_audit_blocking, [] as [std::string::String; 0]);
+    // `core:rust` records no lock checksum. The generated manifest check
+    // compares recorded installed-manifest hashes with the pinned channel manifest.
+    // This provides the audit coverage for the `no_checksums` finding.
     assert!(
-        summary.contains(&format!(
-            "rust@{}(no_checksums)",
-            velnor_actions_mise::RUST_VERSION
-        )),
-        "{summary}"
+        !prep
+            .discovery
+            .recommendations
+            .iter()
+            .any(|line| line.contains("tool_install_unverified")),
+        "{:?}",
+        prep.discovery.recommendations
     );
-    for covered in ["actionlint", "shellcheck", "zizmor", "gh@"] {
-        assert!(!summary.contains(covered), "{summary}");
-    }
-    preview_generate(&repo)?;
+    let plan = preview_generate(&repo)?;
+    assert!(!plan.contains("no_checksums"), "{plan}");
     Ok(())
 }
 
@@ -253,10 +253,10 @@ fn hostile_config_ignored_by_isolated_installs() -> TestResult {
 
 #[test]
 fn drifted_lock_advises_without_blocking() -> TestResult {
-    let drifted = full_lock().replace("version = \"1.99.1\"", "version = \"1.97.0\"");
+    let drifted = full_lock().replace("version = \"1.7.12\"", "version = \"1.7.11\"");
     let repo = repo_with_lock(Some(&drifted))?;
     let prep = prepare(repo.path())?;
-    assert_eq!(prep.lock_audit_blocking, [] as [String; 0]);
+    assert_eq!(prep.lock_audit_blocking, [] as [std::string::String; 0]);
     let summary = prep
         .discovery
         .recommendations

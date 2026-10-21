@@ -16,11 +16,11 @@ Workflow to generate
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
     - actionlint (9 steps)
-    - plan (12 steps)
+    - plan (13 steps)
     - publish-baseline (6 steps)
     - required (10 steps)
     - required-gate (1 steps)
-    - rust-empty-suite (15 steps)
+    - rust-empty-suite (16 steps)
     - 1 Rust package job
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> doc build -> format check
@@ -58,4 +58,4 @@ Recommendations
   mise.toml not found; Velnor will use its pinned tools
   persist_evidence: no MBX or Nextest usage detected; to adopt either, add a durable signal
   rust-toolchain.toml not found; Velnor will not create it
-  tool_install_unverified:6 installs skip verification (no mise.lock): actionlint@1.7.12, gh@2.102.1, nextest@0.9.149, rust@1.99.1, shellcheck@0.11.0, zizmor@1.31.1; install on the CI platform and commit the resulting lock
+  tool_install_unverified:5 installs skip verification (no mise.lock): actionlint@1.7.12, gh@2.102.1, nextest@0.9.149, shellcheck@0.11.0, zizmor@1.31.1; install on the CI platform and commit the resulting lock

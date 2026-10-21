@@ -10,6 +10,10 @@ use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::utf8::{strings_of, strings_of_env};
 
+/// `Verify Rust channel manifest` (pinned `core:rust` integrity).
+#[path = "rust_manifest_step.rs"]
+pub(crate) mod rust_manifest_step;
+
 /// True when any selected workspace runs tests through Nextest; only those
 /// legs resolve the pinned runner.
 pub(super) fn plan_uses_nextest(discovery: &Discovery) -> bool {

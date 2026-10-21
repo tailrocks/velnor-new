@@ -97,6 +97,9 @@ pub(crate) fn plan_job(
     if needs.rust.has_components() {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     }
+    if needs.rust.has_compiler() {
+        steps.push(crate::workflow::verify_rust_manifest_step(catalog)?);
+    }
     let cached =
         crate::workflow_jobs_cache::cache_steps_for_plan(catalog, fetch_roots, tofu_roots)?;
     steps.extend(cached.restore);

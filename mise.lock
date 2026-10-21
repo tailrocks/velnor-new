@@ -7,35 +7,10 @@ version = "0.9.149"
 backend = "aqua:nextest-rs/nextest/cargo-nextest"
 specifiers = ["0.9.149"]
 
-[tools."aqua:nextest-rs/nextest/cargo-nextest"."platforms.linux-arm64"]
-checksum = "sha256:6f82e375187cf3a1f3e336879a51940c315a5d0ce7253f7e517ad28295b74189"
-url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.149/cargo-nextest-0.9.149-aarch64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/nextest-rs/nextest/releases/assets/660818146"
-
-[tools."aqua:nextest-rs/nextest/cargo-nextest"."platforms.linux-arm64-musl"]
-checksum = "sha256:6f82e375187cf3a1f3e336879a51940c315a5d0ce7253f7e517ad28295b74189"
-url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.149/cargo-nextest-0.9.149-aarch64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/nextest-rs/nextest/releases/assets/660818146"
-
 [tools."aqua:nextest-rs/nextest/cargo-nextest"."platforms.linux-x64"]
 checksum = "sha256:32d1d8c0567b7a80bee2bad8bb09125c846da96bc009b2de11ec08557290c770"
 url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.149/cargo-nextest-0.9.149-x86_64-unknown-linux-gnu.tar.gz"
 url_api = "https://api.github.com/repos/nextest-rs/nextest/releases/assets/660814555"
-
-[tools."aqua:nextest-rs/nextest/cargo-nextest"."platforms.linux-x64-baseline"]
-checksum = "sha256:32d1d8c0567b7a80bee2bad8bb09125c846da96bc009b2de11ec08557290c770"
-url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.149/cargo-nextest-0.9.149-x86_64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/nextest-rs/nextest/releases/assets/660814555"
-
-[tools."aqua:nextest-rs/nextest/cargo-nextest"."platforms.linux-x64-musl"]
-checksum = "sha256:d65c7f14bcb5c1566d1ecd534c5da8dedb81ba58586e478b0ab81c877d2bd8ad"
-url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.149/cargo-nextest-0.9.149-x86_64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/nextest-rs/nextest/releases/assets/660821053"
-
-[tools."aqua:nextest-rs/nextest/cargo-nextest"."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:d65c7f14bcb5c1566d1ecd534c5da8dedb81ba58586e478b0ab81c877d2bd8ad"
-url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.149/cargo-nextest-0.9.149-x86_64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/nextest-rs/nextest/releases/assets/660821053"
 
 [tools."aqua:nextest-rs/nextest/cargo-nextest"."platforms.macos-arm64"]
 checksum = "sha256:47b9941765a9ff94e304a3fe5444ac1c7593da655525b8b69f8f2b31a9217507"
@@ -47,64 +22,42 @@ checksum = "sha256:47b9941765a9ff94e304a3fe5444ac1c7593da655525b8b69f8f2b31a9217
 url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.149/cargo-nextest-0.9.149-universal-apple-darwin.tar.gz"
 url_api = "https://api.github.com/repos/nextest-rs/nextest/releases/assets/660825754"
 
-[tools."aqua:nextest-rs/nextest/cargo-nextest"."platforms.windows-x64"]
-checksum = "sha256:8e7609fffb5a938c9b48d8788a89699fc83c39d07a9d9dbc61554f661b51d9d8"
-url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.149/cargo-nextest-0.9.149-x86_64-pc-windows-msvc.tar.gz"
-url_api = "https://api.github.com/repos/nextest-rs/nextest/releases/assets/660828891"
+[[tools.cargo-binstall]]
+version = "1.26.0"
+backend = "aqua:cargo-bins/cargo-binstall"
+specifiers = ["1.26.0"]
 
-[tools."aqua:nextest-rs/nextest/cargo-nextest"."platforms.windows-x64-baseline"]
-checksum = "sha256:8e7609fffb5a938c9b48d8788a89699fc83c39d07a9d9dbc61554f661b51d9d8"
-url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.149/cargo-nextest-0.9.149-x86_64-pc-windows-msvc.tar.gz"
-url_api = "https://api.github.com/repos/nextest-rs/nextest/releases/assets/660828891"
+[tools.cargo-binstall."platforms.linux-x64"]
+checksum = "sha256:e59aec44d811ab53b1bb4c5e0b57e433b017999c37e24ca577a3afbefd49dabd"
+url = "https://github.com/cargo-bins/cargo-binstall/releases/download/v1.26.0/cargo-binstall-x86_64-unknown-linux-gnu.tgz"
+url_api = "https://api.github.com/repos/cargo-bins/cargo-binstall/releases/assets/650343654"
+provenance = "github-attestations"
+
+[tools.cargo-binstall."platforms.macos-arm64"]
+checksum = "sha256:8cb681294876c8fdc1750bf79cd24aa0fa810cb91ecbd869d9e540a00dd08624"
+url = "https://github.com/cargo-bins/cargo-binstall/releases/download/v1.26.0/cargo-binstall-aarch64-apple-darwin.zip"
+url_api = "https://api.github.com/repos/cargo-bins/cargo-binstall/releases/assets/650345034"
+provenance = "github-attestations"
+
+[tools.cargo-binstall."platforms.macos-x64"]
+checksum = "sha256:5af8aa7b908318eb26794f35a0a7baf46132cf9c2d20b0a9f5aea4effed96b22"
+url = "https://github.com/cargo-bins/cargo-binstall/releases/download/v1.26.0/cargo-binstall-x86_64-apple-darwin.zip"
+url_api = "https://api.github.com/repos/cargo-bins/cargo-binstall/releases/assets/650343951"
+provenance = "github-attestations"
 
 [[tools.hk]]
-version = "2.7.0"
+version = "2.8.0"
 backend = "packslip:github.com/jdx/hk"
-specifiers = ["2.7.0"]
-
-[tools.hk."platforms.linux-arm64"]
-checksum = "sha256:a64c8cead6f9a47e6bf4d639122ca3eeba60480763076330ba230a8cb7821520"
-url = "https://github.com/jdx/hk/releases/download/v2.7.0/hk-aarch64-unknown-linux-gnu.tar.gz"
-signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
-
-[tools.hk."platforms.linux-arm64-musl"]
-checksum = "sha256:c8fc86be772051e8d80635ef2f755312f3194e2b6758c5b56346ac30cf525f70"
-url = "https://github.com/jdx/hk/releases/download/v2.7.0/hk-aarch64-unknown-linux-musl.tar.gz"
-signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
+specifiers = ["2.8.0"]
 
 [tools.hk."platforms.linux-x64"]
-checksum = "sha256:2d5819ee2bc3e5b424d90fb05928c05297bfa4d36490628b075b8f8afe14b7b1"
-url = "https://github.com/jdx/hk/releases/download/v2.7.0/hk-x86_64-unknown-linux-gnu.tar.gz"
-signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
-
-[tools.hk."platforms.linux-x64-baseline"]
-checksum = "sha256:2d5819ee2bc3e5b424d90fb05928c05297bfa4d36490628b075b8f8afe14b7b1"
-url = "https://github.com/jdx/hk/releases/download/v2.7.0/hk-x86_64-unknown-linux-gnu.tar.gz"
-signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
-
-[tools.hk."platforms.linux-x64-musl"]
-checksum = "sha256:84e3b841f03fb82e6d3c59447bf91044d3352928b69125a5de8ba49febc2f5f1"
-url = "https://github.com/jdx/hk/releases/download/v2.7.0/hk-x86_64-unknown-linux-musl.tar.gz"
-signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
-
-[tools.hk."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:84e3b841f03fb82e6d3c59447bf91044d3352928b69125a5de8ba49febc2f5f1"
-url = "https://github.com/jdx/hk/releases/download/v2.7.0/hk-x86_64-unknown-linux-musl.tar.gz"
+checksum = "sha256:5b5d7021625d12825b3d44496b466ad65697e02651c8b9fe00117f5c25c73d0a"
+url = "https://github.com/jdx/hk/releases/download/v2.8.0/hk-x86_64-unknown-linux-gnu.tar.gz"
 signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
 
 [tools.hk."platforms.macos-arm64"]
-checksum = "sha256:3b98dd45e493a421de5b327c87b3e0fdfac39383e11b6a2b48b43bbc5a9ce0d6"
-url = "https://github.com/jdx/hk/releases/download/v2.7.0/hk-aarch64-apple-darwin.tar.gz"
-signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
-
-[tools.hk."platforms.windows-x64"]
-checksum = "sha256:69fa61c4ef0ea7d25ccb2804b52c31e91be8f7c9cc1176aabe8ea780f3c5b0bb"
-url = "https://github.com/jdx/hk/releases/download/v2.7.0/hk-x86_64-pc-windows-msvc.zip"
-signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
-
-[tools.hk."platforms.windows-x64-baseline"]
-checksum = "sha256:69fa61c4ef0ea7d25ccb2804b52c31e91be8f7c9cc1176aabe8ea780f3c5b0bb"
-url = "https://github.com/jdx/hk/releases/download/v2.7.0/hk-x86_64-pc-windows-msvc.zip"
+checksum = "sha256:9f0290ff3cbfa9f6baff640c846bf07f78dd29e2023b0c230d3d5226c23385ca"
+url = "https://github.com/jdx/hk/releases/download/v2.8.0/hk-aarch64-apple-darwin.tar.gz"
 signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
 
 [[tools.mr-boxington]]
@@ -112,34 +65,9 @@ version = "1.26.0"
 backend = "packslip:github.com/jdx/mr-boxington"
 specifiers = ["1.26.0"]
 
-[tools.mr-boxington."platforms.linux-arm64"]
-checksum = "sha256:30dad5b98974a37447249572c2d4f1dc065b3b774fa74f20f8a37bb73fb26767"
-url = "https://github.com/jdx/mr-boxington/releases/download/v1.26.0/mbx-aarch64-unknown-linux-gnu.tar.gz"
-signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
-
-[tools.mr-boxington."platforms.linux-arm64-musl"]
-checksum = "sha256:a80cb900de756d083bf70e24fbe1e5933560fd806c3778118b9da22a61ebd287"
-url = "https://github.com/jdx/mr-boxington/releases/download/v1.26.0/mbx-aarch64-unknown-linux-musl.tar.gz"
-signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
-
 [tools.mr-boxington."platforms.linux-x64"]
 checksum = "sha256:decb2c1233d194d9d8f98fa926d86a5f726e9091e92fcff75f44a53ed9cab2b9"
 url = "https://github.com/jdx/mr-boxington/releases/download/v1.26.0/mbx-x86_64-unknown-linux-gnu.tar.gz"
-signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
-
-[tools.mr-boxington."platforms.linux-x64-baseline"]
-checksum = "sha256:decb2c1233d194d9d8f98fa926d86a5f726e9091e92fcff75f44a53ed9cab2b9"
-url = "https://github.com/jdx/mr-boxington/releases/download/v1.26.0/mbx-x86_64-unknown-linux-gnu.tar.gz"
-signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
-
-[tools.mr-boxington."platforms.linux-x64-musl"]
-checksum = "sha256:3f7cddaae61d74f263b458feecd7819b14df6b44491629d14f0bacbdad0f2d8b"
-url = "https://github.com/jdx/mr-boxington/releases/download/v1.26.0/mbx-x86_64-unknown-linux-musl.tar.gz"
-signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
-
-[tools.mr-boxington."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:3f7cddaae61d74f263b458feecd7819b14df6b44491629d14f0bacbdad0f2d8b"
-url = "https://github.com/jdx/mr-boxington/releases/download/v1.26.0/mbx-x86_64-unknown-linux-musl.tar.gz"
 signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
 
 [tools.mr-boxington."platforms.macos-arm64"]
@@ -147,17 +75,12 @@ checksum = "sha256:5927803d54f313600f7c6792369867eb26f9dfaa909b04fb5727efcf0d17b
 url = "https://github.com/jdx/mr-boxington/releases/download/v1.26.0/mbx-aarch64-apple-darwin.tar.gz"
 signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
 
-[tools.mr-boxington."platforms.windows-x64"]
-checksum = "sha256:4a61b7c07323f3cd223761e548c32797cd2feef28f62d91ff2c9ac66eb7e3870"
-url = "https://github.com/jdx/mr-boxington/releases/download/v1.26.0/mbx-x86_64-pc-windows-msvc.zip"
-signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
-
-[tools.mr-boxington."platforms.windows-x64-baseline"]
-checksum = "sha256:4a61b7c07323f3cd223761e548c32797cd2feef28f62d91ff2c9ac66eb7e3870"
-url = "https://github.com/jdx/mr-boxington/releases/download/v1.26.0/mbx-x86_64-pc-windows-msvc.zip"
-signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
-
 [[tools.rust]]
 version = "1.99.1"
 backend = "core:rust"
 specifiers = ["1.99.1"]
+
+[tools.rust.options]
+components = "clippy,rustfmt"
+profile = "minimal"
+targets = "aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu"

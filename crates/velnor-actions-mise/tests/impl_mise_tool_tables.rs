@@ -108,3 +108,29 @@ fn mbx_wrapper_rejects_tool_array_tables() {
         );
     }
 }
+
+#[test]
+fn native_mr_boxington_option_reconciles_like_the_wrapper() {
+    for (content, want) in [
+        (
+            "[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"1.26.0\"\n",
+            MbxWrapperStatus::Pinned {
+                version: "1.26.0".to_owned(),
+            },
+        ),
+        (
+            "[tools.rust]\nversion = \"1.99.1\"\nmr_boxington = true\n",
+            MbxWrapperStatus::MissingPin,
+        ),
+        (
+            "[tools]\nrust = { version = \"1.99.1\", mr_boxington = false }\n",
+            MbxWrapperStatus::NoMbxWrapper,
+        ),
+        (
+            "[tools]\n# rust = { version = \"1.99.1\", mr_boxington = true }\n",
+            MbxWrapperStatus::NoMbxWrapper,
+        ),
+    ] {
+        assert_eq!(mbx_wrapper_pin_status(content), want, "{content:?}");
+    }
+}
