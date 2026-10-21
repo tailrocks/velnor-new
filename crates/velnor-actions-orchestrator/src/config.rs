@@ -168,6 +168,9 @@ struct PartialConfig {
     /// Private cross-repository dependency credentials (HD-7).
     #[serde(default)]
     private_sources: Option<velnor_actions_contract::config::PrivateSourcesConfig>,
+    /// Daily upgrade pull request and freshness gate; off by default.
+    #[serde(default)]
+    upgrades: Option<velnor_actions_contract::config::UpgradesConfig>,
     /// Container images built on every run and published from the default branch.
     #[serde(default)]
     images: Vec<velnor_actions_contract::config::ImageConfig>,
@@ -283,6 +286,7 @@ impl PartialConfig {
             qualified_tools: self.qualified_tools,
             distribution: self.distribution,
             private_sources: self.private_sources,
+            upgrades: self.upgrades,
             images: self.images,
             publish: self.publish,
             tools: self.tools,

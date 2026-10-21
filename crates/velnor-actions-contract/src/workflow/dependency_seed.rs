@@ -73,6 +73,8 @@ fn cache_role(role: StepRole) -> bool {
             | StepRole::MiseSetup
             | StepRole::PreparePinnedTools
             | StepRole::PrepareRustComponents
+            | StepRole::VerifyRustManifest
+            | StepRole::AcquireVelnor
             | StepRole::CargoSourcesRestore
             | StepRole::CargoSourcesFetch
             | StepRole::MbxPreflight

@@ -206,7 +206,8 @@ pub fn inspect_mise_file(
 
 /// Reconciliation of the Cargo wrapper against the local tool pin.
 ///
-/// A `wrappers.cargo.command = "mbx"` wrapper requires the `mbx` binary;
+/// Mise's native `rust = { ..., mr_boxington = true }` option or a
+/// `wrappers.cargo.command = "mbx"` wrapper requires the `mbx` binary;
 /// clean checkouts resolve it from the `[tools]` exact pin in this same
 /// file, never from a global install (P07-9).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -229,9 +230,10 @@ pub enum MbxWrapperStatus {
 
 /// Reconcile one `mise.toml` text: wrapper-required MBX versus local pin.
 ///
-/// Returns [`MbxWrapperStatus::NoMbxWrapper`] when no structural MBX
-/// wrapper exists. A wrapper selecting MBX needs an exact
-/// `mr-boxington` pin in `[tools]`; anything else fails closed.
+/// Returns [`MbxWrapperStatus::NoMbxWrapper`] when neither the native
+/// `[tools] rust` `mr_boxington = true` option nor a structural MBX
+/// wrapper exists. Either needs an exact `mr-boxington` pin in `[tools]`;
+/// anything else fails closed.
 #[must_use]
 pub fn mbx_wrapper_pin_status(content: &str) -> MbxWrapperStatus {
     let wrapper = match parse_cargo_wrapper(content) {
@@ -242,7 +244,7 @@ pub fn mbx_wrapper_pin_status(content: &str) -> MbxWrapperStatus {
             };
         }
     };
-    if !wrapper.is_some_and(|found| found.is_mbx()) {
+    if !wrapper.is_some_and(|found| found.is_mbx()) && !rust_option_selects_mbx(content) {
         return MbxWrapperStatus::NoMbxWrapper;
     }
     let inspection = match inspect_mise_file(MISE_TOML_FILE, Some(content)) {
@@ -274,6 +276,16 @@ pub fn mbx_wrapper_pin_status(content: &str) -> MbxWrapperStatus {
             problem: format!("inexact_pin:{tool}:{selector}"),
         }
     }
+}
+
+/// Whether `[tools] rust` structurally sets `mr_boxington = true` (Mise's
+/// native cargo-through-MBX option; inline-table or section spelling).
+fn rust_option_selects_mbx(content: &str) -> bool {
+    crate::toml_scan::parse_toml(content).is_ok_and(|doc| {
+        doc.find(&["tools", "rust", "mr_boxington"])
+            .iter()
+            .any(|found| found.value == crate::toml_scan::TomlValue::Bool(true))
+    })
 }
 
 /// Tool versions recorded in `mise.lock` bytes (TOOL-2.7).

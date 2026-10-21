@@ -16,11 +16,11 @@ Workflow to generate
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
     - actionlint (7 steps)
-    - plan (15 steps)
+    - plan (16 steps)
     - required (8 steps)
     - required-gate (1 steps)
-    - rust-a (17 steps)
-    - rust-lib (16 steps)
+    - rust-a (18 steps)
+    - rust-lib (17 steps)
     - 2 Rust crate jobs
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> run tests -> doctests -> doc build -> format check
@@ -65,4 +65,4 @@ Recommendations
   nextest_recommendation: no explicit test-runner usage; defaulting to `cargo test`
   persist_evidence: no MBX or Nextest usage detected; to adopt either, add a durable signal
   rust-toolchain.toml not found; Velnor will not create it
-  tool_install_unverified:5 installs skip verification (no mise.lock): actionlint@1.7.12, gh@2.102.1, rust@1.99.1, shellcheck@0.11.0, zizmor@1.31.1; install on the CI platform and commit the resulting lock
+  tool_install_unverified:4 installs skip verification (no mise.lock): actionlint@1.7.12, gh@2.102.1, shellcheck@0.11.0, zizmor@1.31.1; install on the CI platform and commit the resulting lock

@@ -1,6 +1,8 @@
 //! Resolve `[[publish.maven]]` entries against the Gradle stack and the work tree.
 
 use velnor_actions_contract::JobTimeout;
+use velnor_actions_contract::ServiceContainer;
+use velnor_actions_contract::config::gradle::GradleService;
 use velnor_actions_contract::config::{PublishMaven, VersionSource};
 use velnor_actions_workflow_renderer::publish_spec::PublishStep;
 
@@ -97,6 +99,8 @@ pub(crate) fn resolve<'a>(
             u16::try_from,
         )
         .map_err(|_| failure(index, "root", "gradle_timeout_range"))?;
+    let services = root_services(prep, gradle, root)?;
+    let database = !services.is_empty();
     Ok(MavenPlan {
         entry,
         check: VersionCheck::Manifest(VersionSource::GradleProperties, version_file),
@@ -106,8 +110,34 @@ pub(crate) fn resolve<'a>(
             root,
             velnor_actions_contract::config::MAVEN_BUNDLE_TASK,
             gradle.max_workers.unwrap_or(4),
-            false,
+            database,
         ),
         timeout: JobTimeout::new(minutes)?,
+        services,
     })
+}
+
+/// Same provisioning the root's CI jobs use: a postgres service when any
+/// project of this root declares it under `[stacks.gradle.projects]`.
+fn root_services(
+    prep: &GenerationPreparation,
+    gradle: &velnor_actions_contract::config::gradle::GradleStackConfig,
+    root: &str,
+) -> Result<Vec<ServiceContainer>, OrchestratorError> {
+    let database = prep.discovery.gradle_roots.iter().any(|analysed| {
+        analysed.root == root
+            && analysed.projects.iter().any(|project| {
+                gradle
+                    .projects
+                    .get(project)
+                    .is_some_and(|p| p.services.contains(&GradleService::Postgres))
+            })
+    });
+    if !database {
+        return Ok(Vec::new());
+    }
+    let postgres = ServiceContainer::postgres(18).map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
+    })?;
+    Ok(vec![postgres])
 }

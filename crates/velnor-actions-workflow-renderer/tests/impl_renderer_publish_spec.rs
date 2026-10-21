@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::JobTimeout;
+use velnor_actions_contract::{JobTimeout, ServiceContainer};
 use velnor_actions_workflow_renderer::publish_render::render_publish_workflow;
 use velnor_actions_workflow_renderer::publish_spec::{
     PublishJobSpec, PublishPermissions, PublishRole, PublishStep, PublishTriggers,
@@ -35,6 +35,7 @@ fn job(role: PublishRole, needs: &[&str]) -> Result<PublishJobSpec, RenderError>
         outputs: BTreeMap::new(),
         permissions: PublishPermissions::expected(role),
         steps: vec![shell("Work")?],
+        services: Vec::new(),
     })
 }
 
@@ -383,5 +384,17 @@ fn the_staged_helper_exists_exactly_when_an_internal_step_does() -> Result<(), R
     let mut unused = spec()?;
     unused.staged_binary = Some(STAGED.to_owned());
     assert_eq!(rejection(&unused), "publish_staged_binary");
+    Ok(())
+}
+
+#[test]
+fn only_the_build_role_may_carry_service_containers() -> Result<(), Box<dyn std::error::Error>> {
+    for (id, ok) in [("bundle-build-a", true), ("bundle-attest-a", false)] {
+        let mut spec = spec()?;
+        if let Some(job) = spec.jobs.get_mut(id) {
+            job.services.push(ServiceContainer::postgres(18)?);
+        }
+        assert_eq!(spec.validate().is_ok(), ok, "{id}");
+    }
     Ok(())
 }

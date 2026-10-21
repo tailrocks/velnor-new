@@ -28,6 +28,30 @@ pub struct PublishMaven {
     pub id: String,
     /// `[stacks.gradle]` root whose `:mavenBundle` task builds the bundle (`.` is the repository root).
     pub root: String,
+    /// Provenance attestation (default on). `false` is an explicit opt-out for
+    /// repositories whose GitHub plan cannot attest (private repository on a plan
+    /// without artifact attestations); it requires `attest_reason`, and the
+    /// generated job prints that reason as a workflow warning instead of attesting.
+    #[serde(default = "default_attest")]
+    pub attest: bool,
+    /// Why attestation is off; required when `attest = false`, forbidden otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attest_reason: Option<String>,
+}
+
+const fn default_attest() -> bool {
+    true
+}
+
+/// Longest accepted `attest_reason`.
+const MAX_ATTEST_REASON: usize = 200;
+
+fn is_clean_reason(reason: &str) -> bool {
+    !reason.trim().is_empty()
+        && reason.len() <= MAX_ATTEST_REASON
+        && reason
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b" .,;:()/_-".contains(&b))
 }
 
 impl PublishMaven {
@@ -55,6 +79,24 @@ impl PublishMaven {
                 format!("{key}.id"),
                 format!("bad_artifact_id:{}", self.id),
             ));
+        }
+        match (self.attest, self.attest_reason.as_deref()) {
+            (true, None) => {}
+            (true, Some(_)) => {
+                return Err(ContractError::config(
+                    file,
+                    format!("{key}.attest_reason"),
+                    "only_with_attest_false",
+                ));
+            }
+            (false, Some(reason)) if is_clean_reason(reason) => {}
+            (false, _) => {
+                return Err(ContractError::config(
+                    file,
+                    format!("{key}.attest_reason"),
+                    "required_clean_text_with_attest_false",
+                ));
+            }
         }
         if self.root != "." {
             validate_repo_path(file, &format!("{key}.root"), &self.root)?;

@@ -195,11 +195,18 @@ fn insert_plan_mbx_restore(
     Ok(())
 }
 
-/// Insert after the pinned Rust setup and any separate component selection.
+/// Insert after the pinned Rust setup, any separate component selection, and
+/// the channel-manifest verification, so nothing compiles with an unverified
+/// toolchain.
 fn after_rust_setup(steps: &[Step]) -> usize {
     steps
         .iter()
-        .position(|step| step.role == Some(StepRole::PrepareRustComponents))
+        .position(|step| step.name == crate::workflow::VERIFY_RUST_MANIFEST_STEP)
+        .or_else(|| {
+            steps
+                .iter()
+                .position(|step| step.role == Some(StepRole::PrepareRustComponents))
+        })
         .or_else(|| {
             steps
                 .iter()

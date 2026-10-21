@@ -87,6 +87,11 @@ fn optional_seed_failure_isolated_for_root_and_nested_workspaces_only() {
     for id in &seeds {
         let seed = &workflow.ir.jobs[id];
         assert_eq!(seed.needs, ["plan"]);
+        assert!(
+            seed.steps
+                .iter()
+                .any(|step| step.role == Some(StepRole::VerifyRustManifest))
+        );
         assert!(!workflow.ir.jobs["required"].needs.contains(id));
         assert!(
             !seed
@@ -233,4 +238,27 @@ fn optional_seed_role_never_follows_job_names_or_mixed_markers() {
         error.to_string().contains("mixed_or_invalid_seed"),
         "{error}"
     );
+}
+
+#[test]
+fn rust_manifest_setup_role_rejects_non_shell_payload() {
+    let mut workflow = workflow();
+    let non_shell = workflow.ir.jobs["rust-demo"]
+        .steps
+        .iter()
+        .find(|step| matches!(step.kind, StepKind::TaskExecution { .. }))
+        .expect("real execution")
+        .kind
+        .clone();
+    let verifier = workflow
+        .ir
+        .jobs
+        .get_mut("dependency-seed")
+        .expect("seed")
+        .steps
+        .iter_mut()
+        .find(|step| step.role == Some(StepRole::VerifyRustManifest))
+        .expect("typed Rust integrity setup");
+    verifier.kind = non_shell;
+    assert!(render(&workflow).is_err());
 }
