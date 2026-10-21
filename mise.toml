@@ -1,11 +1,26 @@
+min_version = "2026.10.17"
+
 [tools]
-# `mr_boxington = true` makes Mise run every `cargo` through MBX (Mise >=
-# 2026.9.2; no `[wrappers.cargo]`, no `mbx setup`). Generated CI reads every
-# version in this table at run time (hard decision 5); clean checkouts
-# resolve MBX from this file via `mise install`, never globally.
-rust = { version = "1.99.1", mr_boxington = true }
+# Owner standard layout: `mr_boxington = true` plus `[wrappers.cargo]` run
+# every `cargo` through MBX. rust-toolchain.toml mirrors this rust entry
+# exactly (channel, components, targets): Mise ignores the file's options,
+# rustup-only tools read only the file, and generation fails on drift. Generated CI reads every version in this table
+# at run time (hard decision 4); clean checkouts resolve MBX from this file
+# via `mise install`, never globally.
+rust = { version = "1.99.1", profile = "minimal", components = ["clippy", "rustfmt"], targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"], mr_boxington = true }
 mr-boxington = "1.26.0"
+hk = "2.8.0"
+cargo-binstall = "1.26.0"
 "aqua:nextest-rs/nextest/cargo-nextest" = "0.9.149"
+
+[settings]
+cargo.binstall = true
+idiomatic_version_file_enable_tools = ["rust"]
+lockfile = true
+
+[wrappers.cargo]
+command = "mbx"
+env = { MBX_CARGO_SHIM_MODE = "1" }
 
 [tasks.test-maintenance-helpers]
 description = "Run repository-only maintenance helper test suites"

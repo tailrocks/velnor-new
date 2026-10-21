@@ -108,6 +108,7 @@ pub(crate) fn resolve_tool_catalog(
         resolve_wrapped_mr_boxington_pin(repo_mise.as_ref(), config.tools.get("mr-boxington"))?;
     }
     let declared = project_declarations(&sources)?;
+    rust_mirror::check_toolchain_mirror(root)?;
     reject_divergent_nested_toolchains(root, declared.get(&PinnedTool::Rust))?;
     let pins = PinInputs {
         declared: &declared,
@@ -300,6 +301,10 @@ fn read_toolchain_file(
         .unwrap_or_else(|| version.clone());
     Ok(Some((rel, raw_channel, version)))
 }
+
+/// `rust-toolchain.toml` mirrors the `mise.toml` rust entry (owner layout).
+#[path = "tool_catalog_rust_mirror.rs"]
+pub(crate) mod rust_mirror;
 
 /// Opt-in `[stacks.rust] toolchain_source = "mise"` enforcement.
 #[path = "tool_catalog_rust_source.rs"]

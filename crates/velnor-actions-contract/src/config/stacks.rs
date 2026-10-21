@@ -72,8 +72,8 @@ pub struct RustStackConfig {
     /// Optional exact `major.minor.patch` Rust toolchain override (`[stacks.rust] toolchain`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub toolchain: Option<String>,
-    /// Opt-in single source for the Rust version (`[stacks.rust] toolchain_source`);
-    /// absent keeps every source hard decision 4 accepts.
+    /// Opt-in Mise-authoritative Rust version (`[stacks.rust] toolchain_source`);
+    /// absent keeps hard decision 4's agreement rule only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub toolchain_source: Option<super::RustToolchainSource>,
     /// Sticky declared compile driver; conflicts with durable evidence fail closed.
