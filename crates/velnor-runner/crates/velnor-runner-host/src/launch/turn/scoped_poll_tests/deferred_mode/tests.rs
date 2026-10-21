@@ -57,7 +57,7 @@ async fn assigned_only_response_is_observed_and_acked_without_acquisition() -> R
             session_id: "session-scoped-poll",
             allocation: &allocation,
             polled: &polled,
-            attempt: attempt,
+            attempt,
             handled: async { Ok((decision, acknowledged)) },
             cursor: 0,
         })
@@ -99,7 +99,7 @@ async fn assigned_lifecycle_ack_failure_settles_without_delete_candidate() -> Re
             session_id: "session-scoped-poll",
             allocation: &allocation,
             polled: &polled,
-            attempt: attempt,
+            attempt,
             handled: async { Ok((decision, acknowledged)) },
             cursor: 0,
         })
@@ -160,7 +160,7 @@ async fn deferred_mode_rejects_partial_receipts_and_settles_known_get() -> Resul
             session_id: "session-scoped-poll",
             allocation: &allocation,
             polled: &polled,
-            attempt: attempt,
+            attempt,
             handled: async { Ok((decision, acknowledged)) },
             cursor: 0,
         })
@@ -254,7 +254,7 @@ async fn deferred_mode_authorization_error_settles_get_for_same_session_retry() 
             session_id: "session-scoped-poll",
             allocation: &allocation,
             polled: &polled,
-            attempt: attempt,
+            attempt,
             handled: async { Ok((decision, acknowledged)) },
             cursor: 0,
         })
@@ -302,7 +302,7 @@ async fn deferred_mode_ack_failure_settles_get_and_keeps_authorized_offer() -> R
             session_id: "session-scoped-poll",
             allocation: &allocation,
             polled: &polled,
-            attempt: attempt,
+            attempt,
             handled: async { Ok((decision, acknowledged)) },
             cursor: 0,
         })

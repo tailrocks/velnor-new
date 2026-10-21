@@ -111,7 +111,7 @@ async fn handled_zero_header_response_settles_exact_poll_attempt() -> Result<(),
         session_id: "session-scoped-poll",
         allocation: &allocation,
         polled: &Poll::Empty,
-        attempt: attempt,
+        attempt,
         handled: async {
             Ok((
                 IntakeDecision {
@@ -156,7 +156,7 @@ async fn filtered_empty_keeps_deferred_cursor_and_blocks_session_delete() -> Res
             session_id: "session-scoped-poll",
             allocation: &allocation,
             polled: &Poll::Empty,
-            attempt: attempt,
+            attempt,
             handled: async {
                 Ok((
                     IntakeDecision {
@@ -196,16 +196,18 @@ async fn failed_response_handling_holds_the_header_poll() -> Result<(), String> 
             session_id: "session-scoped-poll",
             allocation: &allocation,
             polled: &Poll::Empty,
-            attempt: attempt,
+            attempt,
             handled: async { Err(EnsureError::AdmissionClosed) },
             cursor: 0,
         })
         .await;
     assert!(matches!(result, Err(EnsureError::AdmissionClosed)));
-    assert!(matches!(
-        scope.begin_session_poll(intent_id, &allocation).await,
-        Err(_)
-    ));
+    assert!(
+        scope
+            .begin_session_poll(intent_id, &allocation)
+            .await
+            .is_err()
+    );
     Ok(())
 }
 
@@ -257,7 +259,7 @@ async fn failed_queue_ack_after_inbox_write_holds_the_header_attempt() -> Result
             session_id: "session-scoped-poll",
             allocation: &allocation,
             polled: &polled,
-            attempt: attempt,
+            attempt,
             handled: handling,
             cursor: 0,
         })
