@@ -10,6 +10,7 @@ git apply --numstat "$patch" | cut -f3 > "$dir/paths"
 while IFS= read -r path; do
   case "$path" in
     mise.toml|.mise.toml|mise.lock|.mise.lock|.velnor/release-manifest.json|.github/*) ;;
+    rust-toolchain.toml|*/rust-toolchain.toml|rust-toolchain|*/rust-toolchain) ;;
     Cargo.toml|Cargo.lock|*/Cargo.toml|*/Cargo.lock) ;;
     package.json|bun.lock|*/package.json|*/bun.lock) ;;
     gradle/libs.versions.toml|*/gradle/libs.versions.toml|gradle.lockfile|*/gradle.lockfile|gradle/verification-metadata.xml|*/gradle/verification-metadata.xml) ;;

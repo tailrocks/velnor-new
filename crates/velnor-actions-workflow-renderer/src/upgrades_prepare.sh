@@ -43,6 +43,26 @@ chmod 755 "$dir/bin/velnor-actions"
 # 2. Mise tools other than Rust, then Rust (kept separate so a Rust release
 # the new Velnor catalog does not know yet can be rolled back alone).
 mise_files=$(git ls-files -- mise.toml .mise.toml mise.lock .mise.lock)
+# rust-toolchain files mirror the Mise Rust version (owner layout); they move
+# with it and roll back with it.
+toolchain_files=$(git ls-files -- rust-toolchain.toml '*/rust-toolchain.toml' rust-toolchain '*/rust-toolchain')
+rust_files="$mise_files $toolchain_files"
+mirror_rust() {
+  new_rust=$(mise ls --local --json | jq -r '(.rust // .["core:rust"] // [])[0].requested_version // empty')
+  [ -n "$new_rust" ] || return 0
+  for file in $toolchain_files; do
+    case "$file" in
+      *.toml) sed -i -E "s/^([[:space:]]*channel[[:space:]]*=[[:space:]]*\")[0-9]+[.][0-9]+[.][0-9]+(\")/\1$new_rust\2/" "$file" ;;
+      *)
+        if grep -q '^[[:space:]]*\[' "$file"; then
+          sed -i -E "s/^([[:space:]]*channel[[:space:]]*=[[:space:]]*\")[0-9]+[.][0-9]+[.][0-9]+(\")/\1$new_rust\2/" "$file"
+        else
+          printf '%s\n' "$new_rust" > "$file"
+        fi
+        ;;
+    esac
+  done
+}
 lock_mise() {
   if git ls-files --error-unmatch mise.lock >/dev/null 2>&1; then
     mise lock --platform linux-x64,linux-arm64,macos-arm64
@@ -57,9 +77,9 @@ if [ -n "$mise_files" ]; then
     if mise upgrade --bump $tools && lock_mise; then :; else failed "mise upgrade --bump failed for: $(printf '%s' "$tools" | tr '\n' ' ')"; git checkout -- $mise_files; fi
   fi
   mkdir -p "$dir/pre-rust"
-  for file in $mise_files; do cp "$file" "$dir/pre-rust/$file"; done
+  for file in $rust_files; do mkdir -p "$dir/pre-rust/$(dirname "$file")"; cp "$file" "$dir/pre-rust/$file"; done
   if printf '%s' "$before" | jq -e 'has("rust") or has("core:rust")' >/dev/null; then
-    if mise upgrade --bump rust && lock_mise; then :; else failed "mise upgrade --bump rust failed"; for file in $mise_files; do cp "$dir/pre-rust/$file" "$file"; done; fi
+    if mise upgrade --bump rust && lock_mise && mirror_rust; then :; else failed "mise upgrade --bump rust failed"; for file in $rust_files; do cp "$dir/pre-rust/$file" "$file"; done; fi
   fi
   after=$(mise ls --local --json)
   printf '%s\n%s\n' "$before" "$after" | jq -rs '
@@ -116,7 +136,7 @@ done
 generate() { "$dir/bin/velnor-actions" generate > "$dir/generate.log" 2>&1; }
 if ! generate; then
   if grep -q 'rust_channel_manifest_not_catalogued' "$dir/generate.log" && [ -d "$dir/pre-rust" ]; then
-    for file in $mise_files; do cp "$dir/pre-rust/$file" "$file"; done
+    for file in $rust_files; do cp "$dir/pre-rust/$file" "$file"; done
     failed "the newest Rust is not in velnor-actions $version's channel-manifest catalog yet; Rust stays pinned until a Velnor release adds it"
     generate || { cat "$dir/generate.log"; failed "velnor-actions generate failed; .github/ is not regenerated"; }
   else
@@ -132,6 +152,7 @@ git diff --cached --name-only > "$dir/paths"
 while IFS= read -r path; do
   case "$path" in
     mise.toml|.mise.toml|mise.lock|.mise.lock|.velnor/release-manifest.json|.github/*) ;;
+    rust-toolchain.toml|*/rust-toolchain.toml|rust-toolchain|*/rust-toolchain) ;;
     Cargo.toml|Cargo.lock|*/Cargo.toml|*/Cargo.lock) ;;
     package.json|bun.lock|*/package.json|*/bun.lock) ;;
     gradle/libs.versions.toml|*/gradle/libs.versions.toml|gradle.lockfile|*/gradle.lockfile|gradle/verification-metadata.xml|*/gradle/verification-metadata.xml) ;;

@@ -50,7 +50,10 @@ default branch. One concurrency group, never cancelled.
      its SHA-256 before running it.
    - **Mise tools**: `mise upgrade --bump` for every `[tools]` entry except
      Rust, then Rust on its own, then `mise lock --platform
-     linux-x64,linux-arm64,macos-arm64` when `mise.lock` is tracked.
+     linux-x64,linux-arm64,macos-arm64` when `mise.lock` is tracked. The
+     `channel` of every tracked `rust-toolchain.toml` (and plain
+     `rust-toolchain`) follows the new Rust version, because the standard
+     layout keeps that file and it must agree with `mise.toml`.
    - **Cargo**: in every directory with a tracked `Cargo.lock`,
      `cargo upgrade --incompatible --pinned` (cargo-edit, pinned
      `CARGO_EDIT_VERSION`), `cargo update`, then `cargo metadata --locked`.
@@ -67,6 +70,7 @@ default branch. One concurrency group, never cancelled.
      Rust bump alone is rolled back and recorded, so the pull request stays
      green and the gate stays red until a Velnor release adds the digest.
    - Only upgrade-owned paths are kept (`mise.toml`, `mise.lock`,
+     `rust-toolchain.toml`/`rust-toolchain`,
      `.velnor/release-manifest.json`, `.github/**`, `Cargo.toml`/`Cargo.lock`,
      `package.json`/`bun.lock`, Gradle catalog, lock and verification files).
      Anything else is left out and reported. The result is uploaded as a

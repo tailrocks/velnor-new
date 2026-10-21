@@ -22,6 +22,44 @@ checksum = "sha256:47b9941765a9ff94e304a3fe5444ac1c7593da655525b8b69f8f2b31a9217
 url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.149/cargo-nextest-0.9.149-universal-apple-darwin.tar.gz"
 url_api = "https://api.github.com/repos/nextest-rs/nextest/releases/assets/660825754"
 
+[[tools.cargo-binstall]]
+version = "1.26.0"
+backend = "aqua:cargo-bins/cargo-binstall"
+specifiers = ["1.26.0"]
+
+[tools.cargo-binstall."platforms.linux-x64"]
+checksum = "sha256:e59aec44d811ab53b1bb4c5e0b57e433b017999c37e24ca577a3afbefd49dabd"
+url = "https://github.com/cargo-bins/cargo-binstall/releases/download/v1.26.0/cargo-binstall-x86_64-unknown-linux-gnu.tgz"
+url_api = "https://api.github.com/repos/cargo-bins/cargo-binstall/releases/assets/650343654"
+provenance = "github-attestations"
+
+[tools.cargo-binstall."platforms.macos-arm64"]
+checksum = "sha256:8cb681294876c8fdc1750bf79cd24aa0fa810cb91ecbd869d9e540a00dd08624"
+url = "https://github.com/cargo-bins/cargo-binstall/releases/download/v1.26.0/cargo-binstall-aarch64-apple-darwin.zip"
+url_api = "https://api.github.com/repos/cargo-bins/cargo-binstall/releases/assets/650345034"
+provenance = "github-attestations"
+
+[tools.cargo-binstall."platforms.macos-x64"]
+checksum = "sha256:5af8aa7b908318eb26794f35a0a7baf46132cf9c2d20b0a9f5aea4effed96b22"
+url = "https://github.com/cargo-bins/cargo-binstall/releases/download/v1.26.0/cargo-binstall-x86_64-apple-darwin.zip"
+url_api = "https://api.github.com/repos/cargo-bins/cargo-binstall/releases/assets/650343951"
+provenance = "github-attestations"
+
+[[tools.hk]]
+version = "2.8.0"
+backend = "packslip:github.com/jdx/hk"
+specifiers = ["2.8.0"]
+
+[tools.hk."platforms.linux-x64"]
+checksum = "sha256:5b5d7021625d12825b3d44496b466ad65697e02651c8b9fe00117f5c25c73d0a"
+url = "https://github.com/jdx/hk/releases/download/v2.8.0/hk-x86_64-unknown-linux-gnu.tar.gz"
+signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
+
+[tools.hk."platforms.macos-arm64"]
+checksum = "sha256:9f0290ff3cbfa9f6baff640c846bf07f78dd29e2023b0c230d3d5226c23385ca"
+url = "https://github.com/jdx/hk/releases/download/v2.8.0/hk-aarch64-apple-darwin.tar.gz"
+signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
+
 [[tools.mr-boxington]]
 version = "1.26.0"
 backend = "packslip:github.com/jdx/mr-boxington"
