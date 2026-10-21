@@ -42,14 +42,15 @@ fn valid_digest(value: &str) -> bool {
 
 pub(super) struct ExistingReservation {
     pub(super) id: i64,
+    #[cfg(test)]
     pub(super) intent_id: i64,
     pub(super) engine_id: String,
     pub(super) docker_root_digest: String,
-    pub(super) sample_generation_id: Option<String>,
     pub(super) binding_digest: String,
     pub(super) cpu_millicores: i64,
     pub(super) memory_bytes: i64,
     pub(super) released: bool,
+    #[cfg(test)]
     pub(super) state: String,
 }
 
@@ -69,17 +70,25 @@ pub(super) async fn reservation_for_assignment(
     let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
         return Ok(None);
     };
+    #[cfg(test)]
+    let intent_id: i64 = row.get(1).map_err(|_| HostError::Journal)?;
+    #[cfg(not(test))]
+    let _: i64 = row.get(1).map_err(|_| HostError::Journal)?;
+    // Validate the type of the stored sample ID.
+    // Production uses the ledger that records sample use.
+    let _: Option<String> = row.get(5).map_err(|_| HostError::Journal)?;
     let state: String = row.get(8).map_err(|_| HostError::Journal)?;
     Ok(Some(ExistingReservation {
         id: row.get(0).map_err(|_| HostError::Journal)?,
-        intent_id: row.get(1).map_err(|_| HostError::Journal)?,
+        #[cfg(test)]
+        intent_id,
         engine_id: row.get(2).map_err(|_| HostError::Journal)?,
         docker_root_digest: row.get(3).map_err(|_| HostError::Journal)?,
         binding_digest: row.get(4).map_err(|_| HostError::Journal)?,
-        sample_generation_id: row.get(5).map_err(|_| HostError::Journal)?,
         cpu_millicores: row.get(6).map_err(|_| HostError::Journal)?,
         memory_bytes: row.get(7).map_err(|_| HostError::Journal)?,
         released: state == "released",
+        #[cfg(test)]
         state,
     }))
 }
