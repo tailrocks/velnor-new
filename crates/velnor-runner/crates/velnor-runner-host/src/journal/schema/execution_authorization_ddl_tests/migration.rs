@@ -6,7 +6,7 @@ async fn synthetic_v27_pair_rebuild_preserves_published_proof() -> Result<(), Ho
     crate::journal::request_lifecycle::tests::publish_native_fixture_challenge(&fixture).await?;
     let reservation_id = fixture.initialized.reservation_id;
     let database_path = fixture.database_path.clone();
-    let connection = fixture._journal.connection().await?;
+    let connection = fixture.journal.connection().await?;
     let before = proof_facts(&connection, reservation_id).await?;
     recreate_pair_as_v27(&connection).await?;
     crate::journal::schema::execution_authorization::upgrade_v28(&connection).await?;
@@ -16,11 +16,11 @@ async fn synthetic_v27_pair_rebuild_preserves_published_proof() -> Result<(), Ho
     }
     drop(connection);
     let crate::journal::request_lifecycle::tests::NativePreChallengeFixture {
-        _scratch,
-        _journal,
+        _scratch: scratch,
+        journal,
         ..
     } = fixture;
-    drop(_journal);
+    drop(journal);
 
     let path_text = database_path.to_str().ok_or(HostError::Path)?;
     let reopened = turso::Builder::new_local(path_text)
@@ -32,7 +32,7 @@ async fn synthetic_v27_pair_rebuild_preserves_published_proof() -> Result<(), Ho
         return Err(HostError::Journal);
     }
     super::super::validate_objects(&connection).await?;
-    drop(_scratch);
+    drop(scratch);
     Ok(())
 }
 

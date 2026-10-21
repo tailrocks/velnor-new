@@ -108,7 +108,7 @@ async fn v28_rebuild_preserves_published_proof_and_reopens() -> Result<(), HostE
     let reservation_id = fixture.initialized.reservation_id;
     let connection_id = fixture.scope.connection_id().as_str().to_owned();
     let database_path = fixture.database_path.clone();
-    let connection = fixture._journal.connection().await?;
+    let connection = fixture.journal.connection().await?;
 
     let before = migration::proof_facts(&connection, reservation_id).await?;
     migration::recreate_pair_as_v27(&connection).await?;
@@ -120,7 +120,7 @@ async fn v28_rebuild_preserves_published_proof_and_reopens() -> Result<(), HostE
     drop(connection);
     let crate::journal::request_lifecycle::tests::NativePreChallengeFixture {
         _scratch,
-        _journal,
+        journal,
         scope,
         initialized,
         runner,
@@ -129,7 +129,7 @@ async fn v28_rebuild_preserves_published_proof_and_reopens() -> Result<(), HostE
         ..
     } = fixture;
     drop(scope);
-    drop(_journal);
+    drop(journal);
     drop(initialized);
     drop(runner);
     drop(source);

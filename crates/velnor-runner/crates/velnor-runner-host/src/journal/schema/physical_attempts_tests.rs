@@ -6,7 +6,7 @@ use crate::journal::request_lifecycle::tests::native_pre_challenge_fixture;
 #[tokio::test]
 async fn physical_attempt_schema_rejects_missing_guard() -> Result<(), HostError> {
     let fixture = native_pre_challenge_fixture().await?;
-    let connection = fixture._journal.connection().await?;
+    let connection = fixture.journal.connection().await?;
 
     super::physical_attempts::bootstrap(&connection)
         .await
@@ -30,7 +30,7 @@ async fn physical_attempt_schema_rejects_missing_guard() -> Result<(), HostError
 #[tokio::test]
 async fn current_schema_rejects_missing_pre_jit_network_release_guard() -> Result<(), HostError> {
     let fixture = native_pre_challenge_fixture().await?;
-    let connection = fixture._journal.connection().await?;
+    let connection = fixture.journal.connection().await?;
 
     super::storage_network::validate_v33(&connection)
         .await

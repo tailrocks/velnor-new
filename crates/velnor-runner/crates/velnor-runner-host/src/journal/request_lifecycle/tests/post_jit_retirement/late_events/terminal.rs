@@ -125,7 +125,7 @@ async fn replay_retired_events_after_reopen(
     let runner = fixture.runner.clone();
     let source = fixture.source.clone();
     let NativeStartedIntakeFixture {
-        _scratch,
+        _scratch: scratch,
         journal,
         scope,
         ..
@@ -167,7 +167,7 @@ async fn replay_retired_events_after_reopen(
         return Err(HostError::Journal);
     }
     super::assert_historical_scope_state(&scope, set_id, request_id, intent_id).await?;
-    let _keep_scratch_until_reopen_checks_finish = _scratch;
+    let _keep_scratch_until_reopen_checks_finish = scratch;
     Ok(())
 }
 

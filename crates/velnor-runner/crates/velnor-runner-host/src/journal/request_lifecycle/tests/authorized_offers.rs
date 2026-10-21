@@ -192,7 +192,10 @@ async fn requested_uncertain_and_acquired_rows_are_not_offers() -> Result<(), Ho
             .is_none()
     );
 
-    assert!(scope.authorized_offers(8).await?.is_empty());
+    assert_eq!(
+        scope.authorized_offers(8).await?,
+        [] as [crate::journal::request_lifecycle::authorized_offers::AuthorizedOffer; 0]
+    );
     for (request_id, message_id) in [(901, 1_001), (902, 1_002), (903, 1_003)] {
         assert!(
             scope
@@ -261,7 +264,7 @@ fn assert_offer(
     );
     assert_eq!(offer.binding_digest(), scope.binding_digest());
     assert_eq!(offer.source_digest().len(), 64);
-    assert!(!offer.source_json().is_empty());
+    assert_ne!(offer.source_json(), "");
     assert_eq!(
         offer
             .assignment_identity()

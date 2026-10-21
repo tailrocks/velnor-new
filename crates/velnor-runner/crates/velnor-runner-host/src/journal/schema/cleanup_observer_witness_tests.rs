@@ -6,9 +6,7 @@ use crate::journal::request_lifecycle::tests::NativePreChallengeFixture;
 #[tokio::test]
 async fn persisted_witness_rejects_digest_and_context_tampering() -> Result<(), HostError> {
     let fixture = crate::journal::request_lifecycle::tests::native_pre_challenge_fixture().await?;
-    let NativePreChallengeFixture {
-        _journal: journal, ..
-    } = &fixture;
+    let NativePreChallengeFixture { journal, .. } = &fixture;
     let reservation_id = fixture.initialized.reservation_id;
     let before = fixture
         .scope

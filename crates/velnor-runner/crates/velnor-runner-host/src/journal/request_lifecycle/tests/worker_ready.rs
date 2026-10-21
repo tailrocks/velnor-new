@@ -81,13 +81,13 @@ async fn listener_delivery_finalizes_exact_prebound_container_ids() -> Result<()
 async fn one_source_backed_job_facts_publication_survives_reopen() -> Result<(), HostError> {
     let start = starting_runner('b').await?;
     let StartingRunner {
-        _scratch,
+        _scratch: scratch,
         scope,
         provisioned,
         runner: _,
         delivery: _,
     } = start;
-    let path = _scratch.file();
+    let path = scratch.file();
     let reservation_id = provisioned.reservation_id;
     drop(scope);
     drop(provisioned);

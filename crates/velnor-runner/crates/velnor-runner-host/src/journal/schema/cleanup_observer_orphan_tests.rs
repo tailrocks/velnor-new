@@ -8,7 +8,7 @@ async fn orphan_cleanup_observer_operation_blocks_journal_reopen() -> Result<(),
     let fixture = crate::journal::request_lifecycle::tests::native_pre_challenge_fixture().await?;
     let NativePreChallengeFixture {
         _scratch: scratch,
-        _journal: journal,
+        journal,
         database_path,
         scope,
         ..

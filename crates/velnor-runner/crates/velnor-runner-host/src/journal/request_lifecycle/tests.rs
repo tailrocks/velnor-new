@@ -67,7 +67,7 @@ impl NativeStartedIntakeFixture {
 /// Test fixture for source checks.
 pub(crate) struct NativePreChallengeFixture {
     pub(crate) _scratch: helpers::Scratch,
-    pub(crate) _journal: crate::journal::Journal,
+    pub(crate) journal: crate::journal::Journal,
     pub(crate) database_path: std::path::PathBuf,
     pub(crate) scope: crate::journal::ConnectionJournal,
     pub(crate) initialized: helpers::JobFactsReaderFixture,
@@ -131,7 +131,7 @@ pub(crate) async fn native_pre_challenge_fixture()
 
     Ok(NativePreChallengeFixture {
         _scratch: scratch,
-        _journal: journal,
+        journal,
         database_path,
         scope,
         initialized,
@@ -263,7 +263,7 @@ async fn published_challenge_without_source_survives_journal_reopen()
     helpers::publish_test_execution_challenge(&fixture.scope, &fixture.channel).await?;
     let NativePreChallengeFixture {
         _scratch,
-        _journal,
+        journal,
         database_path,
         scope,
         initialized,
@@ -272,7 +272,7 @@ async fn published_challenge_without_source_survives_journal_reopen()
         channel,
     } = fixture;
     drop(scope);
-    drop(_journal);
+    drop(journal);
     drop(initialized);
     drop(channel);
     drop(runner);

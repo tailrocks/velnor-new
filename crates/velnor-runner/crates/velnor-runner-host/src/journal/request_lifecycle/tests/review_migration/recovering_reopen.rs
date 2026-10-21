@@ -117,7 +117,10 @@ async fn completed_recovering_launch(
     let runner = fixture.channel.runner_container_id().to_owned();
     let dind = fixture.channel.dind_container_id().to_owned();
     let assignment = fixture.reservation_assignment.clone();
-    let scratch = fixture._scratch;
+    let crate::journal::request_lifecycle::tests::NativeStartedIntakeFixture {
+        _scratch: scratch,
+        ..
+    } = fixture;
     drop(fixture.scope);
     drop(fixture.journal);
 

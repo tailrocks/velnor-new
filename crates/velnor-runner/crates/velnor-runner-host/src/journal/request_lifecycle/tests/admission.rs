@@ -121,7 +121,10 @@ async fn acquire_replay_requires_exact_single_id_and_uncertainty_holds_jit() -> 
         Some(RequestAcquireState::Uncertain)
     );
     assert!(!scope.claim_request_acquire(&identity).await?);
-    assert!(scope.acquired_authorized_requests(10).await?.is_empty());
+    assert_eq!(
+        scope.acquired_authorized_requests(10).await?,
+        [] as [crate::journal::AssignmentIdentity; 0]
+    );
     let (physical, intent_id) = physical_intent(&scope, 'f').await?;
     let reservation_id = scope
         .reservation(&physical)

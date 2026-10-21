@@ -126,7 +126,7 @@ async fn reopen_rejects(
 ) -> Result<(), HostError> {
     let path = fixture.database_path.clone();
     let super::super::super::NativeStartedIntakeFixture {
-        _scratch,
+        _scratch: scratch,
         journal,
         scope,
         ..
@@ -134,7 +134,7 @@ async fn reopen_rejects(
     drop(scope);
     drop(journal);
     if crate::journal::Journal::open(&path).await.is_err() {
-        let _keep_scratch_until_reopen_finishes = _scratch;
+        let _keep_scratch_until_reopen_finishes = scratch;
         Ok(())
     } else {
         Err(HostError::Journal)

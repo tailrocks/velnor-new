@@ -58,7 +58,7 @@ async fn acquired_population_uses_exact_journal_candidate_and_bounds_start_to_sh
         &candidates,
         &[],
     );
-    assert!(no_demand.actions.is_empty());
+    assert_eq!(no_demand.actions, [] as [AssignedPopulationAction; 0]);
     assert_eq!(no_demand.uncovered, 0);
     assert_eq!(no_demand.blocked, None);
     assert_eq!(
@@ -151,7 +151,7 @@ async fn actual_started_request_can_differ_from_the_acquire_witness() -> Result<
         &[],
     );
     assert_eq!(plan.owned_coverage, 1);
-    assert!(plan.actions.is_empty());
+    assert_eq!(plan.actions, [] as [AssignedPopulationAction; 0]);
     assert_eq!(plan.uncovered, 0);
     assert_eq!(plan.blocked, None);
     Ok(())

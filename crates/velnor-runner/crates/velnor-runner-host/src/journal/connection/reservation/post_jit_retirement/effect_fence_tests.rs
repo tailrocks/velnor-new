@@ -144,7 +144,7 @@ async fn listener_delivery_claim_prevents_retirement_claim() -> Result<(), HostE
         .ok_or(HostError::Journal)?;
     assert_eq!(delivery.reservation_id(), reservation_id);
 
-    super::candidate_tests::recover_interrupted_fixture(&fixture._journal, &fixture.database_path)
+    super::candidate_tests::recover_interrupted_fixture(&fixture.journal, &fixture.database_path)
         .await?;
 
     assert!(
@@ -163,7 +163,7 @@ async fn listener_delivery_claim_prevents_retirement_claim() -> Result<(), HostE
     );
 
     let mut rows = fixture
-        ._journal
+        .journal
         .connection()
         .await?
         .query(

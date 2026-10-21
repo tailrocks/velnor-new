@@ -129,10 +129,8 @@ async fn published_interrupted_runner_is_marked_atomically_and_survives_reopen()
 async fn uncertain_attempt_is_not_marked_for_orphan_recovery() -> Result<(), HostError> {
     let uncertain =
         crate::journal::request_lifecycle::tests::native_pre_challenge_fixture().await?;
-    let crate::journal::request_lifecycle::tests::NativePreChallengeFixture {
-        _journal: journal,
-        ..
-    } = &uncertain;
+    let crate::journal::request_lifecycle::tests::NativePreChallengeFixture { journal, .. } =
+        &uncertain;
     let claim = uncertain
         .scope
         .claim_execution_challenge(uncertain.initialized.reservation_id, &uncertain.channel)
