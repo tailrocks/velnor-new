@@ -66,8 +66,11 @@ findings, each with a stable code.
 
 Rules:
 
-1. **Version.** `X.Y.Z-preview.N` with canonical decimal components. A bare
-   `X.Y.Z`, `latest`, a range, a template, a leading zero or any character
+1. **Version.** `X.Y.Z-preview.N` or the stable `X.Y.Z` (Fusion 2.0.9 and
+   later) with canonical decimal components. Both forms use the same archive
+   `https://public.cdn.getdbt.com/fs/cli/fs-v<version>-<triple>.tar.gz` and a
+   sibling `.sha256` file (verified live 2026-10-21 for 2.0.9 and
+   2.0.0-preview.221). `latest`, a range, a pre-release other than `preview.N`, a template, a leading zero or any character
    outside `[A-Za-z0-9.-]` fails with `project_tool_version_not_exact`.
 2. **Packages.** `dbt deps` is the only network step. Every hub or Git package
    in `packages.yml` needs an entry in `package-lock.yml` pinned by an exact hub
@@ -91,10 +94,10 @@ Rules:
 ## Decisions
 
 **HD-4a, `dbt-fusion` grammar.** Adopted per the split brief; owner may revisit.
-The adapter-specific grammar `X.Y.Z-preview.N` widens hard decision 4's exact
+The adapter-specific grammar `X.Y.Z-preview.N` or `X.Y.Z` widens hard decision 4's exact
 `X.Y.Z` for the `dbt-fusion` key only; the `$GITHUB_ENV` guard for that key is
 `[A-Za-z0-9.-]`, single-line, never echoed raw. Not to be reintroduced without
-owner approval: a prerelease range, `latest` or a bare `X.Y.Z` for `dbt-fusion`.
+owner approval: a range or `latest` for `dbt-fusion`.
 
 ## Consumer notes
 

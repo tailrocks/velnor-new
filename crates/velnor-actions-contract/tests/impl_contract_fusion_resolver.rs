@@ -1,4 +1,4 @@
-//! HD-4a: the dbt-fusion resolver function accepts exactly `X.Y.Z-preview.N`.
+//! HD-4a: the dbt-fusion resolver function accepts exactly `X.Y.Z-preview.N` or stable `X.Y.Z`.
 //!
 //! The generated resolver defines `velnor_exact_fusion`; this test extracts it
 //! (with the helpers it uses) from the generated script and runs it with `sh`
@@ -51,6 +51,8 @@ fn accepts_the_documented_forms() {
         "2.10.3-preview.0",
         "0.1.0-preview.7",
         "10.20.30-preview.1000",
+        "2.0.9",
+        "10.20.30",
     ] {
         assert!(accepts(&harness, ok).expect("sh"), "{ok}");
     }
@@ -60,8 +62,17 @@ fn accepts_the_documented_forms() {
 fn rejects_loose_unknown_and_hostile_declarations() {
     let harness = harness().expect("harness");
     for bad in [
-        "2.0.0",
         "latest",
+        "2.0.9-",
+        "2.0.9-rc.1",
+        "2.0.09",
+        "2.0.9.1",
+        "2.0.*",
+        "2.0.9;",
+        "2.0.9$(id)",
+        "2.0.9\nFOO=1",
+        "~2.0.9",
+        "2",
         "2.0",
         "2.0.0-preview",
         "2.0.0-preview.",

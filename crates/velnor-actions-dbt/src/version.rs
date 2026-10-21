@@ -1,8 +1,9 @@
-//! The dbt-fusion exact version grammar (HD-4a): `X.Y.Z-preview.N`.
+//! The dbt-fusion exact version grammar (HD-4a): `X.Y.Z-preview.N` or the
+//! stable `X.Y.Z`.
 //!
-//! Only prerelease-exact versions are accepted: Fusion ships as
-//! `<major>.<minor>.<patch>-preview.<n>` and a bare `X.Y.Z`, `latest`, a range
-//! or a template is not an exact pin. Accepted strings are lower-case ASCII
+//! Fusion ships as `<major>.<minor>.<patch>-preview.<n>` and, since 2.0.9, as
+//! plain `<major>.<minor>.<patch>`; `latest`, a range or a template is not an
+//! exact pin. Both forms use the same CDN archive name. Accepted strings are lower-case ASCII
 //! over `[a-z0-9.-]`, so they can be written to the single-line `$GITHUB_ENV`
 //! resolver output without escaping.
 
@@ -39,7 +40,7 @@ impl fmt::Display for VersionError {
 }
 
 /// A validated exact dbt-fusion declaration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FusionVersion {
     /// Major component.
     pub major: u32,
@@ -47,17 +48,31 @@ pub struct FusionVersion {
     pub minor: u32,
     /// Patch component.
     pub patch: u32,
-    /// Preview number after `-preview.`.
-    pub preview: u32,
+    /// Preview number after `-preview.`; `None` for a stable release.
+    pub preview: Option<u32>,
+}
+
+impl Ord for FusionVersion {
+    /// A stable release orders after every preview of the same `X.Y.Z`.
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let key = |v: &Self| (v.major, v.minor, v.patch, v.preview.is_none(), v.preview);
+        key(self).cmp(&key(other))
+    }
+}
+
+impl PartialOrd for FusionVersion {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl fmt::Display for FusionVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}.{}.{}-preview.{}",
-            self.major, self.minor, self.patch, self.preview
-        )
+        write!(f, "{}.{}.{}", self.major, self.minor, self.patch)?;
+        if let Some(preview) = self.preview {
+            write!(f, "-preview.{preview}")?;
+        }
+        Ok(())
     }
 }
 
@@ -69,7 +84,7 @@ fn component(text: &str) -> Option<u32> {
     if canonical { text.parse().ok() } else { None }
 }
 
-/// Parse `X.Y.Z-preview.N`.
+/// Parse `X.Y.Z-preview.N` or the stable `X.Y.Z`.
 ///
 /// # Errors
 ///
@@ -81,7 +96,10 @@ pub fn parse_fusion_version(text: &str) -> Result<FusionVersion, VersionError> {
     {
         return Err(VersionError::Charset);
     }
-    let (core, suffix) = text.split_once('-').ok_or(VersionError::Preview)?;
+    let (core, suffix) = match text.split_once('-') {
+        Some((core, suffix)) => (core, Some(suffix)),
+        None => (text, None),
+    };
     let mut parts = core.split('.');
     let (Some(major), Some(minor), Some(patch), None) = (
         parts.next().and_then(component),
@@ -91,10 +109,15 @@ pub fn parse_fusion_version(text: &str) -> Result<FusionVersion, VersionError> {
     ) else {
         return Err(VersionError::Core);
     };
-    let preview = suffix
-        .strip_prefix("preview.")
-        .and_then(component)
-        .ok_or(VersionError::Preview)?;
+    let preview = match suffix {
+        None => None,
+        Some(suffix) => Some(
+            suffix
+                .strip_prefix("preview.")
+                .and_then(component)
+                .ok_or(VersionError::Preview)?,
+        ),
+    };
     Ok(FusionVersion {
         major,
         minor,
