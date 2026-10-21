@@ -1,13 +1,9 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-
 use crate::config::ConnectionId;
 use crate::journal::{AssignedAcquireResult, RequestAcquireState, fixture_provisioning_profile};
 use crate::journal::{AssignmentIdentity, AssignmentKey};
 use crate::launch::inspect_tests::DockerStub;
 use crate::launch::resource_probe::StartPermit;
 use crate::launch::steps::ScopedProvisioningOutcome;
-use crate::worker::Started;
 use velnor_runner_github::Method;
 
 use super::super::acquire::{self, AcquireDisposition};

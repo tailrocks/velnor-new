@@ -5,7 +5,7 @@ use tokio::{
     net::UnixStream,
 };
 
-use super::super::{TIMEOUT, publication_fixture, route};
+use super::super::{TIMEOUT, route};
 use super::{CapturedRequest, ServerState, exec_fixture};
 
 impl ServerState {
