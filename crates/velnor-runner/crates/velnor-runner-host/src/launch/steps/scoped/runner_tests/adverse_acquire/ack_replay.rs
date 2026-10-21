@@ -4,7 +4,8 @@ use crate::journal::RequestAcquireState;
 use crate::launch::resource_probe::StartPermit;
 use crate::launch::steps::KnownNoAcquire;
 use crate::launch::{
-    Acknowledgement, IntakeDecision, PositiveAdmission, Settlement, finish_positive_poll_with_ack,
+    Acknowledgement, FinishContext, IntakeDecision, PositiveAdmission, Settlement,
+    finish_positive_poll_with_ack,
 };
 use crate::scale_set::EnsureError;
 use velnor_runner_github::Poll;
@@ -232,18 +233,20 @@ async fn finish_ack(
     let admin_base = link.base().to_owned();
     let calls = Cell::new(0);
     let outcome = finish_positive_poll_with_ack(
-        &mut link,
-        session,
-        &fixture.scope,
-        session_intent,
-        SET_ID,
-        allocation,
-        0,
-        attempt,
-        poll.clone(),
-        "messages".to_owned(),
-        None,
-        admin_base,
+        FinishContext {
+            link: &mut link,
+            session,
+            scoped: &fixture.scope,
+            session_intent_id: session_intent,
+            set_id: SET_ID,
+            allocation,
+            cursor: 0,
+            attempt,
+            polled: poll.clone(),
+            path: "messages".to_owned(),
+            queue: None,
+            admin_base,
+        },
         intake_decision(),
         Some(PositiveAdmission::KnownNoAcquire(receipt)),
         async |_, _, _, _, _, _| {

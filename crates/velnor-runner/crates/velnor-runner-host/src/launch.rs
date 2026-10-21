@@ -64,13 +64,16 @@ pub(crate) use slot::HOLDS_ROWS_SQL;
 #[cfg(test)]
 pub(crate) use turn::Acknowledgement;
 #[cfg(test)]
+pub(crate) use turn::FinishContext;
+#[cfg(test)]
 pub(crate) use turn::classify_owned_terminal_available;
 #[cfg(test)]
 pub(crate) use turn::test_positive_poll_once_with_response;
 #[cfg(test)]
 pub(crate) use turn::test_scoped_intake;
 pub(crate) use turn::{
-    CursorDisposition, PositiveAdmission, PositivePollOutcome, admit_when_ready, positive_poll_once,
+    CursorDisposition, PositiveAdmission, PositivePollContext, PositivePollOutcome,
+    admit_when_ready, positive_poll_once,
 };
 #[cfg(test)]
 pub(crate) use turn::{IntakeDecision, finish_positive_poll_with_ack};

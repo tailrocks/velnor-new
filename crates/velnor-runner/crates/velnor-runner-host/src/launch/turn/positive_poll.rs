@@ -8,6 +8,16 @@ use crate::journal::{ConnectionJournal, HeaderAllocation};
 use crate::listen::Link;
 use crate::scale_set::EnsureError;
 
+pub(crate) struct PositivePollContext<'a> {
+    pub(crate) link: &'a mut Link,
+    pub(crate) set_id: i64,
+    pub(crate) session: &'a mut QueueSession,
+    pub(crate) scoped: &'a ConnectionJournal,
+    pub(crate) session_intent_id: i64,
+    pub(crate) allocation: &'a HeaderAllocation,
+    pub(crate) cursor: i64,
+}
+
 #[cfg(test)]
 use super::completion_intake::IntakeDecision;
 use super::completion_intake::completion_error;
@@ -112,15 +122,19 @@ async fn begin_poll(
     Ok(attempt)
 }
 
+struct AdmissionContext<'a> {
+    link: &'a mut Link,
+    session: &'a QueueSession,
+    scoped: &'a ConnectionJournal,
+    session_intent_id: i64,
+    attempt: crate::journal::HeaderPollAttempt,
+}
+
 async fn invoke_admission<F>(
-    link: &mut Link,
+    context: AdmissionContext<'_>,
     polled: &Poll,
     queue: Option<String>,
     path: String,
-    session: &QueueSession,
-    scoped: &ConnectionJournal,
-    session_intent_id: i64,
-    attempt: crate::journal::HeaderPollAttempt,
     admit: &mut F,
 ) -> Result<(crate::journal::HeaderPollAttempt, Option<PositiveAdmission>), EnsureError>
 where
@@ -133,6 +147,13 @@ where
         String,
     ) -> Result<PositiveAdmission, EnsureError>,
 {
+    let AdmissionContext {
+        link,
+        session,
+        scoped,
+        session_intent_id,
+        attempt,
+    } = context;
     if !contains_available(polled) {
         return Ok((attempt, None));
     }
@@ -151,6 +172,8 @@ where
 }
 
 mod finish;
+#[cfg(test)]
+pub(crate) use finish::FinishContext;
 pub(crate) use finish::admit_when_ready;
 use finish::contains_available;
 #[cfg(test)]

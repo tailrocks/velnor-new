@@ -33,7 +33,7 @@ fn acquired_ownership_survives_acknowledgement_and_settlement_uncertainty() {
 
     let retained = outcome.admission.expect("acquired token is retained");
     assert_eq!(retained.request_id, 91);
-    assert!(std::ptr::eq(token_address, &*retained));
+    assert!(std::ptr::eq(token_address, std::ptr::addr_of!(*retained)));
     assert_eq!(outcome.acknowledgement, Acknowledgement::Uncertain);
     assert_eq!(outcome.settlement, Settlement::Uncertain);
     assert_eq!(outcome.message_id, Some(17));
@@ -57,7 +57,7 @@ fn settlement_uncertainty_keeps_an_acknowledged_acquired_token() {
 
     let retained = outcome.admission.expect("acquired token is retained");
     assert_eq!(retained.request_id, 92);
-    assert!(std::ptr::eq(token_address, &*retained));
+    assert!(std::ptr::eq(token_address, std::ptr::addr_of!(*retained)));
     assert_eq!(outcome.acknowledgement, Acknowledgement::Acknowledged);
     assert_eq!(outcome.settlement, Settlement::Uncertain);
     assert_eq!(outcome.cursor_disposition, CursorDisposition::ResetToHead);

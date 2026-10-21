@@ -9,8 +9,8 @@ use crate::{
     error::HostError,
     journal::Journal,
     launch::{
-        ReleaseReadSecret, SelectedEngineContext, VerifiedWorkerImages, ZeroHeaderMode,
-        positive_poll_once,
+        PositivePollContext as PositiveTurnContext, ReleaseReadSecret, SelectedEngineContext,
+        VerifiedWorkerImages, ZeroHeaderMode, positive_poll_once,
     },
 };
 
@@ -165,13 +165,15 @@ async fn positive_poll_message(
     };
     let session_intent = prepared.session_intent;
     Box::pin(positive_poll_once(
-        &mut credentials.link,
-        set_id,
-        &mut credentials.session,
-        scoped,
-        session_intent,
-        allocation,
-        cursor,
+        PositiveTurnContext {
+            link: &mut credentials.link,
+            set_id,
+            session: &mut credentials.session,
+            scoped,
+            session_intent_id: session_intent,
+            allocation,
+            cursor,
+        },
         async |link, polled, queue_origin, queue_path, queue_token, admin_token| {
             admit_positive_offer(
                 &inputs,

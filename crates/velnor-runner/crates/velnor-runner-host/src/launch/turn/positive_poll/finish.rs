@@ -14,104 +14,80 @@ use super::{
     Acknowledgement, CursorDisposition, PositiveAdmission, PositivePollOutcome, Settlement,
 };
 
+pub(crate) struct FinishContext<'a> {
+    pub(crate) link: &'a mut Link,
+    pub(crate) session: &'a QueueSession,
+    pub(crate) scoped: &'a ConnectionJournal,
+    pub(crate) session_intent_id: i64,
+    pub(crate) set_id: i64,
+    pub(crate) allocation: &'a HeaderAllocation,
+    pub(crate) cursor: i64,
+    pub(crate) attempt: crate::journal::HeaderPollAttempt,
+    pub(crate) polled: Poll,
+    pub(crate) path: String,
+    pub(crate) queue: Option<String>,
+    pub(crate) admin_base: String,
+}
+
 #[cfg(test)]
 pub(super) async fn finish_positive_poll(
-    link: &mut Link,
-    session: &QueueSession,
-    scoped: &ConnectionJournal,
-    session_intent_id: i64,
-    set_id: i64,
-    allocation: &HeaderAllocation,
-    cursor: i64,
-    attempt: crate::journal::HeaderPollAttempt,
-    polled: Poll,
-    path: String,
-    queue: Option<String>,
-    admin_base: String,
+    context: FinishContext<'_>,
     decision: IntakeDecision,
     admission: Option<PositiveAdmission>,
 ) -> Result<PositivePollOutcome, EnsureError> {
     finish_positive_poll_with_ack(
-        link,
-        session,
-        scoped,
-        session_intent_id,
-        set_id,
-        allocation,
-        cursor,
-        attempt,
-        polled,
-        path,
-        queue,
-        admin_base,
+        context,
         decision,
         admission,
         async |link, session, admin_base, path, queue, polled| {
-            acknowledge_response(link, session, admin_base, path, queue, polled).await
+            acknowledge_response(link, session, admin_base, path, queue, polled)
         },
     )
     .await
 }
 
 pub(crate) async fn finish_positive_poll_with_ack<F>(
-    link: &mut Link,
-    session: &QueueSession,
-    scoped: &ConnectionJournal,
-    session_intent_id: i64,
-    set_id: i64,
-    allocation: &HeaderAllocation,
-    cursor: i64,
-    attempt: crate::journal::HeaderPollAttempt,
-    polled: Poll,
-    path: String,
-    queue: Option<String>,
-    admin_base: String,
+    mut context: FinishContext<'_>,
     decision: IntakeDecision,
     admission: Option<PositiveAdmission>,
     mut acknowledge: F,
 ) -> Result<PositivePollOutcome, EnsureError>
 where
-    F: AsyncFnMut(&mut Link, &QueueSession, &str, &str, &Option<String>, &Poll) -> Acknowledgement,
+    F: AsyncFnMut(&mut Link, &QueueSession, &str, &str, Option<&str>, &Poll) -> Acknowledgement,
 {
     let mut decision = decision;
-    if cursor > 0 && matches!(polled, Poll::Empty) {
+    if context.cursor > 0 && matches!(context.polled, Poll::Empty) {
         decision.session_delete_candidate = false;
     }
-    let mut acknowledgement = acknowledgement_after_intake(&decision, &polled);
+    let mut acknowledgement = acknowledgement_after_intake(&decision, &context.polled);
     if !acknowledge_admission(
-        link,
-        session,
-        scoped,
-        set_id,
-        &polled,
-        &path,
-        &queue,
-        &admin_base,
-        &admission,
+        &mut context,
+        admission.as_ref(),
         &mut acknowledge,
         &mut acknowledgement,
     )
     .await
     {
-        let _uncertainty_recorded = scoped
-            .mark_session_poll_uncertain(session_intent_id, attempt)
+        let _uncertainty_recorded = context
+            .scoped
+            .mark_session_poll_uncertain(context.session_intent_id, context.attempt)
             .await;
         return Ok(make_outcome(
             decision,
             admission,
             Acknowledgement::Deferred,
             Settlement::Uncertain,
-            &polled,
+            &context.polled,
         ));
     }
 
     let settlement = settle_known_response(
-        attempt,
-        allocation,
-        scoped,
-        set_id,
-        &session.session_id,
-        session_intent_id,
+        context.attempt,
+        context.allocation,
+        context.scoped,
+        context.set_id,
+        &context.session.session_id,
+        context.session_intent_id,
     )
     .await;
     Ok(make_outcome(
@@ -119,34 +95,39 @@ where
         admission,
         acknowledgement,
         settlement,
-        &polled,
+        &context.polled,
     ))
 }
 
 async fn acknowledge_admission<F>(
-    link: &mut Link,
-    session: &QueueSession,
-    scoped: &ConnectionJournal,
-    set_id: i64,
-    polled: &Poll,
-    path: &str,
-    queue: &Option<String>,
-    admin_base: &str,
-    admission: &Option<PositiveAdmission>,
+    context: &mut FinishContext<'_>,
+    admission: Option<&PositiveAdmission>,
     acknowledge: &mut F,
     acknowledgement: &mut Acknowledgement,
 ) -> bool
 where
-    F: AsyncFnMut(&mut Link, &QueueSession, &str, &str, &Option<String>, &Poll) -> Acknowledgement,
+    F: AsyncFnMut(&mut Link, &QueueSession, &str, &str, Option<&str>, &Poll) -> Acknowledgement,
 {
+    let FinishContext {
+        link,
+        session,
+        scoped,
+        set_id,
+        polled,
+        path,
+        admin_base,
+        queue,
+        ..
+    } = context;
+    let queue = queue.as_deref();
     if let Some(PositiveAdmission::OwnedTerminal(receipt)) = admission {
-        if !receipt.matches_poll(polled, scoped, set_id, &session.session_id) {
+        if !receipt.matches_poll(polled, scoped, *set_id, &session.session_id) {
             return false;
         }
         *acknowledgement = acknowledge(link, session, admin_base, path, queue, polled).await;
     }
     if let Some(PositiveAdmission::KnownNoAcquire(receipt)) = admission {
-        if !receipt.matches_poll(polled, scoped, set_id) {
+        if !receipt.matches_poll(polled, scoped, *set_id) {
             return false;
         }
         if receipt.state() == crate::journal::RequestAcquireState::NoEffect
@@ -156,13 +137,13 @@ where
         }
     }
     if let Some(PositiveAdmission::Deferred(receipt)) = admission {
-        if !authorized_deferred_matches(receipt, polled, scoped, set_id).await {
+        if !authorized_deferred_matches(receipt, polled, scoped, *set_id).await {
             return false;
         }
         *acknowledgement = acknowledge(link, session, admin_base, path, queue, polled).await;
     }
     if acquired(admission) {
-        if !acquired_matches(admission, polled, scoped, set_id) {
+        if !acquired_matches(admission, polled, scoped, *set_id) {
             return false;
         }
         *acknowledgement = acknowledge(link, session, admin_base, path, queue, polled).await;
@@ -199,24 +180,33 @@ pub(super) fn contains_available(polled: &Poll) -> bool {
 }
 
 #[cfg(test)]
-async fn acknowledge_response(
+fn acknowledge_response(
     link: &mut Link,
     session: &QueueSession,
     admin_base: &str,
     path: &str,
-    queue: &Option<String>,
+    queue: Option<&str>,
     polled: &Poll,
 ) -> Acknowledgement {
     if link.set_base(admin_base).is_err() {
         return Acknowledgement::Deferred;
     }
-    if ack_ready(link, session, path.to_owned(), queue.clone(), polled).is_err() {
+    if ack_ready(
+        link,
+        session,
+        path.to_owned(),
+        queue.map(str::to_owned),
+        polled,
+    )
+    .is_err()
+    {
         Acknowledgement::Uncertain
     } else {
         Acknowledgement::Acknowledged
     }
 }
 
+#[cfg(test)]
 pub(super) async fn admit_available<F, Fut>(
     polled: &Poll,
     admit: F,
@@ -248,7 +238,7 @@ where
     }
 }
 
-fn acquired(admission: &Option<PositiveAdmission>) -> bool {
+fn acquired(admission: Option<&PositiveAdmission>) -> bool {
     matches!(admission, Some(PositiveAdmission::Acquired(_)))
 }
 
@@ -264,7 +254,7 @@ pub(super) async fn authorized_deferred_matches(
 }
 
 fn acquired_matches(
-    admission: &Option<PositiveAdmission>,
+    admission: Option<&PositiveAdmission>,
     polled: &Poll,
     scoped: &ConnectionJournal,
     set_id: i64,

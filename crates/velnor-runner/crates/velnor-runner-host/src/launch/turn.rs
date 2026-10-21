@@ -14,14 +14,16 @@ pub(crate) use completion_intake::IntakeDecision;
 #[cfg(test)]
 pub(crate) use positive_poll::Acknowledgement;
 #[cfg(test)]
+pub(crate) use positive_poll::FinishContext;
+#[cfg(test)]
 pub(crate) use positive_poll::classify_owned_terminal_available;
 #[cfg(test)]
 pub(crate) use positive_poll::finish_positive_poll_with_ack;
 #[cfg(test)]
 pub(crate) use positive_poll::test_positive_poll_once_with_response;
 pub(crate) use positive_poll::{
-    CursorDisposition, PositiveAdmission, PositivePollOutcome, Settlement, admit_when_ready,
-    positive_poll_once,
+    CursorDisposition, PositiveAdmission, PositivePollContext, PositivePollOutcome, Settlement,
+    admit_when_ready, positive_poll_once,
 };
 pub(crate) use scoped::{
     ScopedPollContext, ScopedPollOutcome, ZeroHeaderMode, poll_scoped_connection_once,

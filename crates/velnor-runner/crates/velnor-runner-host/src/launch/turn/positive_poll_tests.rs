@@ -3,9 +3,10 @@ use std::cell::Cell;
 use velnor_runner_github::{InnerJob, InnerKind, ParsedBatch, Poll};
 
 use super::{
-    Acknowledgement, CursorDisposition, IntakeDecision, PositiveAdmission, Settlement,
-    acknowledgement_after_intake, admit_available, admit_when_ready, authorized_deferred_matches,
-    contains_available, cursor_disposition, make_outcome, settle_known_response,
+    Acknowledgement, CursorDisposition, FinishContext, IntakeDecision, PositiveAdmission,
+    Settlement, acknowledgement_after_intake, admit_available, admit_when_ready,
+    authorized_deferred_matches, contains_available, cursor_disposition, make_outcome,
+    settle_known_response,
 };
 
 fn available_poll() -> Poll {
@@ -25,6 +26,75 @@ fn available_poll() -> Poll {
             source: velnor_runner_github::SourceMetadata::default(),
         }],
     })
+}
+
+fn mixed_started_response(
+    fixture: &crate::journal::request_lifecycle::tests::NativeStartedIntakeFixture,
+) -> Poll {
+    Poll::Batch(ParsedBatch {
+        message_id: 1_502,
+        raw_body: r#"[{"messageType":"JobAvailable","runnerRequestId":202},{"messageType":"JobCompleted","runnerRequestId":101,"result":"Succeeded"}]"#.to_owned(),
+        statistics: None,
+        jobs: vec![
+            InnerJob {
+                kind: InnerKind::Available,
+                request_id: Some(202),
+                runner_id: None,
+                runner_name: None,
+                result: None,
+                job_id: Some("job-202".to_owned()),
+                labels: Vec::new(),
+                fields: Vec::new(),
+                source: velnor_runner_github::SourceMetadata::default(),
+            },
+            InnerJob {
+                kind: InnerKind::Completed,
+                request_id: Some(fixture.request_id),
+                runner_id: Some(fixture.runner.id),
+                runner_name: Some(fixture.runner.name.clone()),
+                result: Some("Succeeded".to_owned()),
+                job_id: Some("opaque-started-job".to_owned()),
+                labels: Vec::new(),
+                fields: Vec::new(),
+                source: fixture.source.clone(),
+            },
+        ],
+    })
+}
+
+async fn assert_reservation_and_inbox_retained(
+    fixture: &crate::journal::request_lifecycle::tests::NativeStartedIntakeFixture,
+) -> Result<(), String> {
+    let reservation = fixture
+        .scope
+        .reservation(&fixture.reservation_assignment)
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "physical reservation was not retained".to_owned())?;
+    assert_eq!(
+        reservation.state,
+        crate::journal::ReservationState::Reserved
+    );
+    assert_eq!(
+        fixture
+            .journal
+            .occupied_reservation_count()
+            .await
+            .map_err(|error| error.to_string())?,
+        1
+    );
+    assert_eq!(
+        fixture
+            .scope
+            .pending_completion_inbox(4_102_444_800, 10)
+            .await
+            .map_err(|error| error.to_string())?
+            .iter()
+            .map(|entry| entry.message_id)
+            .collect::<Vec<_>>(),
+        [1_502]
+    );
+    Ok(())
 }
 
 #[tokio::test]
@@ -98,18 +168,20 @@ async fn terminal_acquire_results_keep_ack_and_cursor_rules() -> Result<(), Stri
         link.set_base(&admin_base)
             .map_err(|error| error.to_string())?;
         let outcome = super::finish_positive_poll(
-            &mut link,
-            &session,
-            &scope,
-            intent_id,
-            10_101,
-            &allocation,
-            0,
-            attempt,
-            available_poll(),
-            admin_base,
-            None,
-            "https://127.0.0.1:1/".to_owned(),
+            FinishContext {
+                link: &mut link,
+                session: &session,
+                scoped: &scope,
+                session_intent_id: intent_id,
+                set_id: 10_101,
+                allocation: &allocation,
+                cursor: 0,
+                attempt,
+                polled: available_poll(),
+                path: admin_base.clone(),
+                queue: None,
+                admin_base,
+            },
             IntakeDecision {
                 completion_only: false,
                 wake_cleanup: false,
@@ -142,35 +214,7 @@ async fn closed_admission_keeps_available_unacked_and_records_lifecycle() -> Res
         .record_started()
         .await
         .map_err(|error| error.to_string())?;
-    let polled = Poll::Batch(ParsedBatch {
-        message_id: 1_502,
-        raw_body: r#"[{"messageType":"JobAvailable","runnerRequestId":202},{"messageType":"JobCompleted","runnerRequestId":101,"result":"Succeeded"}]"#.to_owned(),
-        statistics: None,
-        jobs: vec![
-            InnerJob {
-                kind: InnerKind::Available,
-                request_id: Some(202),
-                runner_id: None,
-                runner_name: None,
-                result: None,
-                job_id: Some("job-202".to_owned()),
-                labels: Vec::new(),
-                fields: Vec::new(),
-                source: velnor_runner_github::SourceMetadata::default(),
-            },
-            InnerJob {
-                kind: InnerKind::Completed,
-                request_id: Some(fixture.request_id),
-                runner_id: Some(fixture.runner.id),
-                runner_name: Some(fixture.runner.name.clone()),
-                result: Some("Succeeded".to_owned()),
-                job_id: Some("opaque-started-job".to_owned()),
-                labels: Vec::new(),
-                fields: Vec::new(),
-                source: fixture.source.clone(),
-            },
-        ],
-    });
+    let polled = mixed_started_response(&fixture);
     let acknowledge_called = Cell::new(false);
     let decision = intake_and_ack_if_only_scoped(
         &fixture.scope,
@@ -215,35 +259,7 @@ async fn closed_admission_keeps_available_unacked_and_records_lifecycle() -> Res
         outcome.cursor_disposition,
         CursorDisposition::Deferred { message_id: 1_502 }
     );
-    let reservation = fixture
-        .scope
-        .reservation(&fixture.reservation_assignment)
-        .await
-        .map_err(|error| error.to_string())?
-        .ok_or_else(|| "physical reservation was not retained".to_owned())?;
-    assert_eq!(
-        reservation.state,
-        crate::journal::ReservationState::Reserved
-    );
-    assert_eq!(
-        fixture
-            .journal
-            .occupied_reservation_count()
-            .await
-            .map_err(|error| error.to_string())?,
-        1
-    );
-    assert_eq!(
-        fixture
-            .scope
-            .pending_completion_inbox(4_102_444_800, 10)
-            .await
-            .map_err(|error| error.to_string())?
-            .iter()
-            .map(|entry| entry.message_id)
-            .collect::<Vec<_>>(),
-        [1_502]
-    );
+    assert_reservation_and_inbox_retained(&fixture).await?;
     Ok(())
 }
 
