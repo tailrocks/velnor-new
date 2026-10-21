@@ -4,7 +4,7 @@ use crate::{
     config::{ApprovedJobAuthorityPolicy, RepositoryConnection},
     error::HostError,
     journal::HeaderAllocation,
-    launch::{Drive, GuestAdmission, Rest},
+    launch::{Drive, Rest},
 };
 
 use super::{PositivePollContext, acquired::start_acquired};
@@ -85,6 +85,7 @@ async fn resume_offer(
         .repository
         .split_once('/')
         .ok_or(HostError::Config)?;
+    context.config.resource_budget()?;
     let mut drive = Drive::from_rest(
         prepared.set_id,
         credentials.session.message_queue_url.clone(),
@@ -94,20 +95,13 @@ async fn resume_offer(
             owner,
             repo,
             pat: credentials.github_pat.expose(),
-            resource_budget: Some(context.config.resource_budget()?),
-            static_capacity: true,
-            guest_admission: GuestAdmission::Unavailable,
             connection: Some(connection),
             authority_policy: Some(policy),
             host_journal: Some(context.journal),
-            release_read_secret: Some(context.release_read_secret),
             scoped_journal: Some(&prepared.scope),
             allocated_header: allocation.target(),
             source_authorized: true,
             admission_state: Some(context.state),
-            worker_images: Some(context.worker_images),
-            selected_engine: Some(context.selected_engine),
-            guest_image: Some(&prepared.guest_image),
         },
     );
     drive.docker_engine_id = Some(context.selected_engine.engine_id().to_owned());

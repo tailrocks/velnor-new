@@ -33,10 +33,9 @@ pub(crate) use drive::recover_acquired_scoped_offer_with_test_observation;
 #[cfg(test)]
 pub(crate) use drive::recover_acquired_scoped_offer_with_test_provider;
 pub(crate) use drive::{
-    AcquiredRecoveryContext, DeferredAuthorizedOffer, DeferredAuthorizedOffers, Drive,
-    GuestAdmission, Lane, PositiveOfferAuthorization, Rest, ScopedAdmissionInput,
-    acquire_authorized_scoped_offer, authorize_deferred_offers, authorize_positive_offer,
-    recover_acquired_scoped_offer,
+    AcquiredRecoveryContext, DeferredAuthorizedOffer, DeferredAuthorizedOffers, Drive, Lane,
+    PositiveOfferAuthorization, Rest, ScopedAdmissionInput, acquire_authorized_scoped_offer,
+    authorize_deferred_offers, authorize_positive_offer, recover_acquired_scoped_offer,
 };
 pub(crate) use engine_context::SelectedEngineContext;
 #[cfg(test)]
@@ -171,20 +170,13 @@ fn ack_ready(
             owner: "",
             repo: "",
             pat: "",
-            resource_budget: None,
-            static_capacity: false,
-            guest_admission: drive::GuestAdmission::Unavailable,
             connection: None,
             authority_policy: None,
             host_journal: None,
-            release_read_secret: None,
             scoped_journal: None,
             allocated_header: 0,
             source_authorized: false,
             admission_state: None,
-            worker_images: None,
-            selected_engine: None,
-            guest_image: None,
         },
     );
     let admin = link.base().to_owned();

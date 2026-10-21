@@ -75,20 +75,12 @@ pub(crate) struct Rest<'a> {
     pub(crate) repo: &'a str,
     /// PAT. Not logged.
     pub(crate) pat: &'a str,
-    /// Validated runner and `DinD` limits for new worker pairs.
-    pub(crate) resource_budget: Option<ResourceBudget>,
-    /// Static Docker CPU and memory totals can fit a configured worker pair.
-    pub(crate) static_capacity: bool,
-    /// Fresh guest metrics required before any acquire, JIT, or worker start.
-    pub(crate) guest_admission: GuestAdmission,
     /// Repository connection that authorizes job source metadata.
     pub(crate) connection: Option<&'a RepositoryConnection>,
     /// Validated source policy for this connection.
     pub(crate) authority_policy: Option<&'a ApprovedJobAuthorityPolicy>,
     /// Shared host journal for capacity and selected-engine probes.
     pub(crate) host_journal: Option<&'a Journal>,
-    /// Dedicated host credential for verified release and probe access.
-    pub(crate) release_read_secret: Option<&'a ReleaseReadSecret>,
     /// Scoped journal for connection-owned records.
     pub(crate) scoped_journal: Option<&'a ConnectionJournal>,
     /// Header capacity allocated by the shared host controller.
@@ -97,26 +89,6 @@ pub(crate) struct Rest<'a> {
     pub(crate) source_authorized: bool,
     /// Host state path for the scoped admission fence.
     pub(crate) admission_state: Option<&'a Path>,
-    /// Verified worker images bound to the selected Docker daemon.
-    pub(crate) worker_images: Option<&'a VerifiedWorkerImages>,
-    /// Selected engine context paired with the verified image bundle.
-    pub(crate) selected_engine: Option<&'a SelectedEngineContext>,
-    /// Immutable per-connection guest image metadata artifact.
-    pub(crate) guest_image: Option<&'a GuestImageFile>,
-}
-
-impl Rest<'_> {
-    #[must_use]
-    pub(crate) const fn permits_start(self) -> bool {
-        self.static_capacity && (self.scoped_journal.is_none() || self.allocated_header > 0)
-    }
-}
-
-/// Whether this job-start attempt has a fresh selected-guest sample.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum GuestAdmission {
-    /// No supported guest probe is available, so new work stays unacquired.
-    Unavailable,
 }
 
 impl fmt::Debug for Drive {
@@ -228,20 +200,13 @@ async fn acquire_scoped_offer_inner(
         owner,
         repo,
         pat: input.pat,
-        resource_budget: Some(input.resource_budget),
-        static_capacity: true,
-        guest_admission: GuestAdmission::Unavailable,
         connection: Some(input.connection),
         authority_policy: Some(input.authority_policy),
         host_journal: Some(input.host_journal),
-        release_read_secret: Some(input.release_read_secret),
         scoped_journal: Some(input.scoped_journal),
         allocated_header: input.allocated_header,
         source_authorized: true,
         admission_state: Some(input.admission_state),
-        worker_images: Some(input.worker_images),
-        selected_engine: Some(input.selected_engine),
-        guest_image: Some(input.guest_image),
     };
     let (_batch, request_id) =
         super::steps::assignment(input.polled)?.ok_or(EnsureError::Uncertain)?;
