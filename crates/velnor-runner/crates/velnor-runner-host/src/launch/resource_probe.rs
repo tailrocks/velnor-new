@@ -11,6 +11,7 @@ use self::provider::ReleaseImageProvider;
 
 pub(crate) use self::sample::RecoveryObservation;
 pub(crate) use self::sample::{StartObservationWitness, StartPermit};
+pub(crate) use readiness::ReadinessSample;
 pub(in crate::launch) use sample::filesystem_instance_digest;
 
 mod cleanup_observer;
@@ -27,7 +28,11 @@ mod owned_cgroups;
 mod projection;
 mod provider;
 pub(crate) mod publication;
+mod readiness;
 pub(in crate::launch) use provider::VerifiedWorkspaceCleanup;
+pub(crate) use readiness::collect as collect_readiness_sample;
+#[cfg(test)]
+pub(crate) use tests::docker_lifecycle::readiness_poll::collect_sample_for_engine;
 mod release_secret;
 
 pub(in crate::launch) use provider::VerifiedWorkerImageIdentityProof;

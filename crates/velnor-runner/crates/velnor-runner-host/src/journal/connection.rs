@@ -3,7 +3,8 @@
 #[cfg(test)]
 pub(crate) use reservation::ReservationSnapshot;
 pub(crate) use reservation::{
-    PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation, ReservationState,
+    PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation,
+    ReadinessCapacityUsage, ReservationState,
 };
 pub(crate) use reservation::{
     PostJitRetirementCandidate, PostJitRetirementClaim, PreparedRetirementRemoteAbsence,

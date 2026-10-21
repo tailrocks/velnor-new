@@ -9,7 +9,7 @@ use bollard::models::HostConfigCgroupnsModeEnum;
 use record_fixture::{GIB, MEMORY_TOTAL, record, record_values};
 
 mod cleanup_proof;
-mod docker_lifecycle;
+pub(crate) mod docker_lifecycle;
 mod probe_cpu_pid_binding;
 mod projection_digest;
 mod record_fixture;

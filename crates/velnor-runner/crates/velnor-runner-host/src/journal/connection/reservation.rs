@@ -47,6 +47,102 @@ mod read;
 mod storage;
 mod storage_budget;
 
+/// These host capacity totals use the shared journal validation path.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ReadinessCapacityUsage {
+    pub(crate) jobs: u32,
+    pub(crate) cpu_millicores: u64,
+    pub(crate) memory_bytes: u64,
+    pub(crate) max_jobs: u32,
+    pub(crate) max_cpu_millicores: u64,
+    pub(crate) max_memory_bytes: u64,
+    pub(crate) operational_cpu_millicores: u64,
+    pub(crate) operational_memory_bytes: u64,
+    pub(crate) operational_lease_quiescent: bool,
+}
+
+impl ReadinessCapacityUsage {
+    /// Check charged work against worker limits.
+    /// Check that one measured guest capacity sample covers those limits plus the operational reserve.
+    pub(crate) fn valid_for_guest(
+        &self,
+        effective_cpu_millicores: u64,
+        memory_total_bytes: u64,
+        memory_available_bytes: u64,
+    ) -> bool {
+        self.max_jobs > 0
+            && self.max_cpu_millicores > 0
+            && self.max_memory_bytes > 0
+            && self.operational_cpu_millicores > 0
+            && self.operational_memory_bytes > 0
+            && self.operational_lease_quiescent
+            && self.jobs <= self.max_jobs
+            && self.cpu_millicores <= self.max_cpu_millicores
+            && self.memory_bytes <= self.max_memory_bytes
+            && self
+                .max_cpu_millicores
+                .checked_add(self.operational_cpu_millicores)
+                .is_some_and(|required| required <= effective_cpu_millicores)
+            && self
+                .max_memory_bytes
+                .checked_add(self.operational_memory_bytes)
+                .is_some_and(|required| required <= memory_total_bytes)
+            && memory_available_bytes >= self.operational_memory_bytes
+    }
+}
+
+impl crate::journal::Journal {
+    pub(crate) async fn readiness_capacity_usage(
+        &self,
+    ) -> Result<ReadinessCapacityUsage, crate::error::HostError> {
+        super::storage::read_transaction(self, async |connection| {
+            let usage = storage::capacity_usage(connection).await?;
+            let limits = storage::capacity_limits(connection).await?;
+            let operational_lease_quiescent = operational_lease_quiescent(connection).await?;
+            Ok(ReadinessCapacityUsage {
+                jobs: usage.jobs,
+                cpu_millicores: usage.cpu_millicores,
+                memory_bytes: usage.memory_bytes,
+                max_jobs: limits.jobs,
+                max_cpu_millicores: limits.cpu_millicores,
+                max_memory_bytes: limits.memory_bytes,
+                operational_cpu_millicores: limits.operational_cpu_millicores,
+                operational_memory_bytes: limits.operational_memory_bytes,
+                operational_lease_quiescent,
+            })
+        })
+        .await
+    }
+}
+
+async fn operational_lease_quiescent(
+    connection: &turso::Connection,
+) -> Result<bool, crate::error::HostError> {
+    let mut rows = connection
+        .query(
+            "SELECT state FROM host_operation_leases WHERE singleton = 1",
+            (),
+        )
+        .await
+        .map_err(|_| crate::error::HostError::Journal)?;
+    let Some(row) = rows
+        .next()
+        .await
+        .map_err(|_| crate::error::HostError::Journal)?
+    else {
+        return Ok(true);
+    };
+    match row
+        .get::<String>(0)
+        .map_err(|_| crate::error::HostError::Journal)?
+        .as_str()
+    {
+        "released" => Ok(true),
+        "reserved" | "active" | "uncertain" | "recovering" => Ok(false),
+        _ => Err(crate::error::HostError::Journal),
+    }
+}
+
 pub(crate) use enumerate::{
     PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation,
 };

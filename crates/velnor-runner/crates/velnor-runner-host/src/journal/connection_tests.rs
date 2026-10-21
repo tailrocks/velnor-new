@@ -334,3 +334,26 @@ mod reservation_tests;
 
 #[path = "connection_tests/completion.rs"]
 mod completion_tests;
+
+#[tokio::test]
+async fn existing_connection_scope_is_read_only_and_exact() -> Result<(), HostError> {
+    let scratch = Scratch::new("existing-scope-read")?;
+    let journal = Journal::open(&scratch.file()).await?;
+    let binding = connection("essential", 101, "donbeave/essential-mac");
+    let initial_revision = journal.revision().await?;
+    assert!(journal.existing_connection_scope(&binding).await.is_err());
+    assert_eq!(journal.revision().await?, initial_revision);
+    assert!(journal.connection_scope(&binding).await.is_ok());
+    let created_revision = journal.revision().await?;
+    assert!(journal.existing_connection_scope(&binding).await.is_ok());
+    assert_eq!(journal.revision().await?, created_revision);
+    let changed = connection("essential", 101, "donbeave/other-repo");
+    assert!(journal.existing_connection_scope(&changed).await.is_err());
+    assert_eq!(journal.revision().await?, created_revision);
+    let scope = journal.existing_connection_scope(&binding).await?;
+    assert!(scope.retire_if_drained().await?);
+    let retired_revision = journal.revision().await?;
+    assert!(journal.existing_connection_scope(&binding).await.is_err());
+    assert_eq!(journal.revision().await?, retired_revision);
+    Ok(())
+}

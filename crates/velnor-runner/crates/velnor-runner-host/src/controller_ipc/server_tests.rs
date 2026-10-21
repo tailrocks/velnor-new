@@ -8,6 +8,9 @@ use std::path::PathBuf;
 
 const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 
+#[path = "server/readiness_tests.rs"]
+mod readiness_tests;
+
 #[tokio::test]
 async fn detached_is_provable_while_the_host_is_draining() -> Result<(), String> {
     let state_path = test_state("global-drain-detached");
@@ -53,37 +56,114 @@ async fn detached_is_provable_while_the_host_is_draining() -> Result<(), String>
     Ok(())
 }
 
-#[tokio::test]
-async fn readiness_ipc_stays_reconciling_without_controller_evidence() -> Result<(), String> {
-    let state_path = test_state("readiness-without-controller-evidence");
-    fs::create_dir_all(&state_path).map_err(|error| error.to_string())?;
-    let journal = Journal::open(&state_path.join("launch.db"))
-        .await
-        .map_err(|error| format!("The journal could not open. Error: {error}."))?;
-    let response = handle_request(
-        &journal,
-        &ControlState::empty(),
-        &state_path,
-        Request::ControllerReadiness {
-            config_sha256: "b".repeat(64),
-            engine_id: "engine".to_owned(),
-            docker_root_digest: "a".repeat(64),
-        },
-        "engine",
-        &"a".repeat(64),
-    )
-    .await
-    .map_err(|error| format!("The readiness request failed. Error: {error}."))?;
-    if response.readiness != Some(crate::readiness::Readiness::Reconciling)
-        || response.value.is_some()
-        || response.doctor_probe.is_some()
+#[test]
+fn poll_receipts_require_every_exact_binding_and_config_replacement_clears_them()
+-> Result<(), String> {
+    let binding = test_binding()?;
+    let connection = basic_connection(
+        "essential",
+        101,
+        "donbeave/essential-mac",
+        "essential",
+        "essential-scale-set",
+    );
+    let text = host_config(&[connection], 1);
+    let config = HostConfig::parse(&text).map_err(|error| error.to_string())?;
+    let state = ControlState::new(&config);
+    if state
+        .complete_session_poll_receipts()
+        .map_err(|error| error.to_string())?
+        .is_some()
     {
-        return Err(
-            "The controller must remain in the reconciling state without readiness evidence."
-                .to_owned(),
-        );
+        return Err("The controller reported sessions before a successful poll.".to_owned());
     }
-    fs::remove_dir_all(state_path).map_err(|error| error.to_string())
+    state
+        .record_session_poll(&binding, 17, 23, "session-1")
+        .map_err(|error| error.to_string())?;
+    let receipts = state
+        .complete_session_poll_receipts()
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "The controller omitted a successful session poll.".to_owned())?;
+    if receipts.len() != 1
+        || receipts[0].connection_id != binding.connection_id.as_str()
+        || receipts[0].scale_set_id != 17
+        || receipts[0].session_intent_id != 23
+        || receipts[0].session_id != "session-1"
+        || receipts[0].generation != 1
+    {
+        return Err("The poll receipt did not retain the exact session identity.".to_owned());
+    }
+    let first_observed_at = receipts[0].observed_at;
+    state
+        .record_session_poll(&binding, 17, 23, "session-1")
+        .map_err(|error| error.to_string())?;
+    let receipts = state
+        .complete_session_poll_receipts()
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "The controller omitted its next successful poll.".to_owned())?;
+    if receipts[0].generation != 2 || receipts[0].observed_at < first_observed_at {
+        return Err("Successful polls did not advance the recorded generation.".to_owned());
+    }
+    let successful_observation = receipts[0].observed_at;
+    assert_pending_poll_expiry_and_replacement(&state, &binding, &config, successful_observation)
+}
+
+fn assert_pending_poll_expiry_and_replacement(
+    state: &ControlState,
+    binding: &RepositoryConnection,
+    config: &HostConfig,
+    successful_observation: std::time::Instant,
+) -> Result<(), String> {
+    state
+        .begin_session_poll(
+            binding,
+            17,
+            23,
+            "session-1",
+            std::time::Instant::now() + std::time::Duration::from_millis(20),
+        )
+        .map_err(|error| error.to_string())?;
+    let pending = state
+        .complete_session_poll_receipts()
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| {
+            "A bounded same-session poll dropped its last successful receipt.".to_owned()
+        })?;
+    if pending[0].generation != 2 || pending[0].observed_at != successful_observation {
+        return Err("Starting a poll refreshed the previous receipt timestamp.".to_owned());
+    }
+    std::thread::sleep(std::time::Duration::from_millis(25));
+    if state
+        .complete_session_poll_receipts()
+        .map_err(|error| error.to_string())?
+        .is_some()
+    {
+        return Err("An expired poll attempt kept its prior receipt valid.".to_owned());
+    }
+    state
+        .invalidate_if_session_changed(binding, 17, 23, "replacement-session")
+        .map_err(|error| error.to_string())?;
+    if state
+        .complete_session_poll_receipts()
+        .map_err(|error| error.to_string())?
+        .is_some()
+    {
+        return Err("The controller retained a replaced session receipt.".to_owned());
+    }
+    state
+        .record_session_poll(binding, 17, 23, "replacement-session")
+        .map_err(|error| error.to_string())?;
+    state
+        .replace_config(config)
+        .map_err(|error| error.to_string())?;
+    if state
+        .complete_session_poll_receipts()
+        .map_err(|error| error.to_string())?
+        .is_some()
+    {
+        return Err("The controller retained receipts after configuration replacement.".to_owned());
+    }
+    Ok(())
 }
 
 #[tokio::test]

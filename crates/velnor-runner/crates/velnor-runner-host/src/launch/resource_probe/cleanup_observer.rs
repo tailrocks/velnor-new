@@ -102,6 +102,7 @@ async fn observe_cleanup_binding_using<P: super::provider::ImageProvider>(
     deadline: Instant,
     provider: &P,
 ) -> Result<VerifiedCleanupObserverRecord, HostError> {
+    let _operation = super::readiness::lock_operation(context.journal).await?;
     let prepared = Box::pin(prepare(
         context,
         reservation_id,

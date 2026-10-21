@@ -59,6 +59,7 @@ pub(in crate::launch) async fn measure_pre_jit_capacity<P: ImageProvider>(
     selected: &SelectedEngineContext,
     provider: &P,
 ) -> Result<PreJitCapacityObservation, HostError> {
+    let _operation = super::super::readiness::lock_operation(journal).await?;
     if !scope.validate_pre_jit_cleanup_claim(claim).await? {
         return Err(HostError::Ownership);
     }

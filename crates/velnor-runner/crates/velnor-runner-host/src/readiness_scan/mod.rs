@@ -184,6 +184,16 @@ fn read_config(state: &Path) -> ConfigFact {
     }
 }
 
+pub(crate) fn controller_config(state: &Path) -> Option<(HostConfig, String)> {
+    match read_config(state) {
+        ConfigFact::Valid {
+            config,
+            config_sha256,
+        } => Some((*config, config_sha256)),
+        ConfigFact::Missing | ConfigFact::Invalid => None,
+    }
+}
+
 fn credential_present(reference: &KeychainReference) -> bool {
     let Ok(secret) = load_secret(reference.service(), reference.account()) else {
         return false;

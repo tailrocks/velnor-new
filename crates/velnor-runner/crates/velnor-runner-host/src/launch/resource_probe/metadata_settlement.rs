@@ -73,6 +73,7 @@ async fn settle_storage_metadata_after_cleanup_using<P: ImageProvider>(
     selected: &SelectedEngineContext,
     provider: &P,
 ) -> Result<MetadataSettlementResult, HostError> {
+    let _operation = super::readiness::lock_operation(journal).await?;
     if reservation_id <= 0 {
         return Err(HostError::Identity);
     }

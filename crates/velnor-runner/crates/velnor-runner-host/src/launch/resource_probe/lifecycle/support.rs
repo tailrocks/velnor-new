@@ -101,8 +101,10 @@ pub(super) async fn projection(
     image: VerifiedProbeImage,
     deadline: &Deadline,
     doctor_ticket: Option<&DoctorProbeTicket>,
+    operation_id: Option<&str>,
 ) -> Result<ProbeProjection, HostError> {
-    let operation_id = Uuid::new_v4().simple().to_string();
+    let operation_id =
+        operation_id.map_or_else(|| Uuid::new_v4().simple().to_string(), str::to_owned);
     let instance_id = deadline.within(journal.instance_id()).await??;
     let root_path = root.path();
     let projection = ProbeProjection::build(

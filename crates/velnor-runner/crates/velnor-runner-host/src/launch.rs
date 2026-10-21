@@ -18,7 +18,7 @@ pub(crate) mod execution_authorization;
 mod gate;
 mod inspect;
 #[cfg(all(test, unix))]
-mod inspect_tests;
+pub(crate) mod inspect_tests;
 mod name_taken;
 mod resource_probe;
 pub(crate) mod retirement;
@@ -40,10 +40,14 @@ pub(crate) use drive::{
 pub(crate) use engine_context::SelectedEngineContext;
 #[cfg(test)]
 pub(crate) use resource_probe::IntakeCompositionProvider;
+pub(crate) use resource_probe::ReadinessSample;
 pub(crate) use resource_probe::StartObservationWitness;
 pub(crate) use resource_probe::StartPermit;
 pub(crate) use resource_probe::VerifiedProbeCleanup;
 pub(crate) use resource_probe::build_pin_status;
+pub(crate) use resource_probe::collect_readiness_sample;
+#[cfg(test)]
+pub(crate) use resource_probe::collect_sample_for_engine;
 pub(crate) use resource_probe::publication::VerifiedExecutionPublicationCleanup;
 pub(crate) use resource_probe::run_doctor_probe;
 pub(crate) use resource_probe::start_permit;

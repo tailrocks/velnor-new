@@ -27,6 +27,7 @@ pub(super) async fn collect<P: ImageProvider>(
     journal: &Journal,
     provider: &P,
 ) -> Result<Option<Observation>, HostError> {
+    let _operation = super::readiness::lock_operation(journal).await?;
     collect_for_request(docker, journal, provider, None).await
 }
 
@@ -36,6 +37,7 @@ pub(super) async fn collect_for_doctor<P: ImageProvider>(
     provider: &P,
     ticket: &DoctorProbeTicket,
 ) -> Result<Option<Observation>, HostError> {
+    let _operation = super::readiness::lock_operation(journal).await?;
     collect_for_request(docker, journal, provider, Some(ticket)).await
 }
 
@@ -45,6 +47,7 @@ pub(super) async fn collect_owned_cgroups<P: ImageProvider>(
     provider: &P,
     subjects: &super::owned_cgroups::OwnedCgroupSubjects,
 ) -> Result<Option<super::owned_cgroups::VerifiedOwnedCgroups>, HostError> {
+    let _operation = super::readiness::lock_operation(journal).await?;
     let initial = Deadline::new();
     let active = initial.within(journal.active_probe()).await??;
     let before = info(docker, &initial).await?;
@@ -116,6 +119,7 @@ pub(super) async fn recover_doctor_request(
     journal: &Journal,
     ticket: &DoctorProbeTicket,
 ) -> Result<(), HostError> {
+    let _operation = super::readiness::lock_operation(journal).await?;
     let row = journal.begin_doctor_probe_recovery(ticket).await?;
     let deadline = Deadline::new();
     let current = info(docker, &deadline).await?;
@@ -147,10 +151,43 @@ async fn collect_for_request<P: ImageProvider>(
     provider: &P,
     doctor_ticket: Option<&DoctorProbeTicket>,
 ) -> Result<Option<Observation>, HostError> {
+    collect_for_request_with_recovery(docker, journal, provider, doctor_ticket, true, None).await
+}
+
+pub(super) async fn collect_for_readiness<P: ImageProvider>(
+    docker: &Docker,
+    journal: &Journal,
+    provider: &P,
+) -> Result<Option<Observation>, HostError> {
+    collect_for_request_with_recovery(docker, journal, provider, None, false, None).await
+}
+
+#[cfg(test)]
+pub(super) async fn collect_for_readiness_with_operation_id<P: ImageProvider>(
+    docker: &Docker,
+    journal: &Journal,
+    provider: &P,
+    operation_id: &str,
+) -> Result<Option<Observation>, HostError> {
+    collect_for_request_with_recovery(docker, journal, provider, None, false, Some(operation_id))
+        .await
+}
+
+async fn collect_for_request_with_recovery<P: ImageProvider>(
+    docker: &Docker,
+    journal: &Journal,
+    provider: &P,
+    doctor_ticket: Option<&DoctorProbeTicket>,
+    recover_existing: bool,
+    operation_id: Option<&str>,
+) -> Result<Option<Observation>, HostError> {
     let preparation_deadline = Deadline::new();
     let mut active = preparation_deadline
         .within(journal.active_probe())
         .await??;
+    if active.is_some() && !recover_existing {
+        return Ok(None);
+    }
     if let Some(row) = active.as_ref()
         && row.phase == ProbePhase::Prepared
     {
@@ -196,8 +233,16 @@ async fn collect_for_request<P: ImageProvider>(
     let (cpu_count, memory_total) = guest_capacity(&selected)?;
     let image_evidence = candidate.startup_evidence().ok_or(HostError::Identity)?;
     let image = verified_image(candidate)?;
-    let projection =
-        projection(journal, &root, &engine_id, image, &deadline, doctor_ticket).await?;
+    let projection = projection(
+        journal,
+        &root,
+        &engine_id,
+        image,
+        &deadline,
+        doctor_ticket,
+        operation_id,
+    )
+    .await?;
     let output = Box::pin(execute::run(
         docker,
         journal,

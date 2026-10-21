@@ -15,6 +15,7 @@ use crate::launch_identity::LaunchIdentity;
 pub(crate) struct JournalProcessState {
     lineage_guard: Mutex<Option<EngineLineageGuard>>,
     write_lock: Arc<tokio::sync::Mutex<()>>,
+    probe_execution_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 static STATES: OnceLock<Mutex<HashMap<PathBuf, Arc<JournalProcessState>>>> = OnceLock::new();
@@ -28,6 +29,7 @@ pub(crate) fn process_state(path: &Path) -> Result<Arc<JournalProcessState>, Hos
     let state = Arc::new(JournalProcessState {
         lineage_guard: Mutex::new(None),
         write_lock: Arc::new(tokio::sync::Mutex::new(())),
+        probe_execution_lock: Arc::new(tokio::sync::Mutex::new(())),
     });
     states.insert(path.to_path_buf(), Arc::clone(&state));
     Ok(state)
@@ -45,6 +47,22 @@ pub(crate) fn release_process_state(path: &Path, handle: &Arc<JournalProcessStat
 }
 
 impl Journal {
+    pub(crate) async fn probe_execution_lock(
+        &self,
+    ) -> Result<tokio::sync::OwnedMutexGuard<()>, HostError> {
+        let lock =
+            process_state(self.path()).map(|state| Arc::clone(&state.probe_execution_lock))?;
+        Ok(lock.lock_owned().await)
+    }
+
+    pub(crate) fn try_probe_execution_lock(
+        &self,
+    ) -> Result<Option<tokio::sync::OwnedMutexGuard<()>>, HostError> {
+        let lock =
+            process_state(self.path()).map(|state| Arc::clone(&state.probe_execution_lock))?;
+        Ok(lock.try_lock_owned().ok())
+    }
+
     /// Attach the process-held engine lineage guard after startup validation.
     ///
     /// # Errors

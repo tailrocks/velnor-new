@@ -35,6 +35,17 @@ impl CompletedHeaderPoll {
     }
 
     #[cfg(test)]
+    pub(crate) fn after_test_response(
+        attempt: HeaderPollAttempt,
+        allocation: &HeaderAllocation,
+        journal: &ConnectionJournal,
+        scale_set_id: i64,
+        session_id: &str,
+    ) -> Result<Self, EnsureError> {
+        Self::after_response(attempt, allocation, journal, scale_set_id, session_id)
+    }
+
+    #[cfg(test)]
     pub(crate) fn test_only(attempt: HeaderPollAttempt) -> Self {
         Self { attempt }
     }

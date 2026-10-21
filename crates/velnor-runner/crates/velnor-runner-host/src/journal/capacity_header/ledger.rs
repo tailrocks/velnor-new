@@ -2,6 +2,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "ledger/readiness.rs"]
+mod readiness;
 #[path = "ledger/snapshot.rs"]
 mod snapshot;
 #[path = "ledger/validation.rs"]

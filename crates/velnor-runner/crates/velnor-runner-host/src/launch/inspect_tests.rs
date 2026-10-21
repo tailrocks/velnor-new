@@ -8,9 +8,11 @@ use crate::launch_harness::Scratch;
 use crate::{EnsureError, IntentState, Journal, Outcome};
 
 mod docker_stub;
-pub(super) use self::docker_stub::DockerStub;
-pub(in crate::launch) use self::docker_stub::http;
-pub(in crate::launch) use self::docker_stub::{DockerResponse, closed, delayed_http, raw_http};
+pub(crate) use self::docker_stub::DockerStub;
+pub(crate) use self::docker_stub::http;
+pub(crate) use self::docker_stub::raw_http;
+pub(crate) use self::docker_stub::threaded::BackgroundDockerStub;
+pub(in crate::launch) use self::docker_stub::{DockerResponse, closed, delayed_http};
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 

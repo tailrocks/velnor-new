@@ -8,6 +8,10 @@ use crate::{
     launch::{SessionDeleteOutcome, delete_removed_connection_session},
 };
 
+#[path = "turn/poll_attempt.rs"]
+mod poll_attempt;
+use poll_attempt::PollAttemptGuard;
+
 use super::super::{
     polling::{
         ControllerPollOutcome, PositivePollContext, poll_positive_connection,
@@ -25,6 +29,7 @@ use super::{
 pub(super) struct PollTurnResult {
     pub(super) remove_connection: bool,
     pub(super) positive_poll_settled: bool,
+    pub(super) receipt_recorded: bool,
 }
 
 struct PreparedPoll {
@@ -39,28 +44,91 @@ pub(super) async fn poll_connection(
     pending_retirements: &[RepositoryConnection],
     turn: &mut FairnessTurn,
 ) -> Result<Option<PollTurnResult>, HostError> {
+    let connection_id = prepared.binding.connection_id.as_str().to_owned();
+    let result = poll_connection_inner(prepared, context, pending_retirements, turn).await;
+    if !result
+        .as_ref()
+        .is_ok_and(|result| result.as_ref().is_some_and(|turn| turn.receipt_recorded))
+    {
+        context
+            .control_state
+            .invalidate_session_poll(&connection_id)?;
+    }
+    result
+}
+
+async fn poll_connection_inner(
+    prepared: &mut PreparedConnection,
+    context: &ConnectionPollContext<'_>,
+    pending_retirements: &[RepositoryConnection],
+    turn: &mut FairnessTurn,
+) -> Result<Option<PollTurnResult>, HostError> {
     prepared.collect_authorization().await?;
+    if let Some(credentials) = prepared.credentials.as_ref() {
+        context.control_state.invalidate_if_session_changed(
+            &prepared.binding,
+            prepared.set_id,
+            prepared.session_intent,
+            &credentials.session.session_id,
+        )?;
+    } else {
+        context
+            .control_state
+            .invalidate_session_poll(prepared.binding.connection_id.as_str())?;
+    }
     let Some(poll) = prepare_poll(prepared, context, pending_retirements, turn).await? else {
         return Ok(None);
+    };
+    let poll_guard = match prepared.credentials.as_ref() {
+        Some(credentials) => Some(PollAttemptGuard::begin(
+            context.control_state,
+            &prepared.binding,
+            prepared.set_id,
+            prepared.session_intent,
+            &credentials.session.session_id,
+        )?),
+        None => None,
     };
     let Some(outcome) = execute_poll(prepared, context, pending_retirements, turn, &poll).await?
     else {
         return Ok(Some(PollTurnResult {
             remove_connection: false,
             positive_poll_settled: false,
+            receipt_recorded: false,
         }));
     };
     if outcome.positive_poll_settled {
         turn.observe_positive_poll(true);
     }
-    reconcile_poll(prepared, context, poll.is_removed, &outcome).await?;
+    let is_removed = poll.is_removed;
+    reconcile_poll(prepared, context, is_removed, &outcome).await?;
     let remove_connection = delete_session_if_ready(prepared, turn, poll, &outcome).await?;
     if !remove_connection {
         start_ready_authorizations(prepared, context, outcome.started_request_ids)?;
     }
+    let receipt_recorded = if !remove_connection && !is_removed {
+        let session_id = prepared
+            .credentials
+            .as_ref()
+            .map(|credentials| credentials.session.session_id.as_str())
+            .ok_or(HostError::Keychain)?;
+        context.control_state.record_session_poll(
+            &prepared.binding,
+            prepared.set_id,
+            prepared.session_intent,
+            session_id,
+        )?;
+        true
+    } else {
+        false
+    };
+    if receipt_recorded && let Some(guard) = poll_guard {
+        guard.complete();
+    }
     Ok(Some(PollTurnResult {
         remove_connection,
         positive_poll_settled: outcome.positive_poll_settled,
+        receipt_recorded,
     }))
 }
 

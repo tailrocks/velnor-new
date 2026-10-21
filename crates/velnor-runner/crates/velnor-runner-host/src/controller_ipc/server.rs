@@ -4,10 +4,10 @@ use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::config::{HostConfig, RepositoryConnection};
 use crate::daemon_lock::DaemonLock;
@@ -21,74 +21,14 @@ use transport::{
 };
 #[path = "server/requests.rs"]
 mod requests;
+mod state;
+pub(crate) use state::{ControlState, SessionPollReceipt};
 #[path = "server/transport.rs"]
 mod transport;
 pub(super) use transport::{read_drain_token, valid_token};
 
 const ACCEPT_PAUSE: Duration = Duration::from_millis(25);
 const IO_TIMEOUT: Duration = Duration::from_secs(5);
-const DOCTOR_REPORT_MAX_AGE: Duration = Duration::from_secs(30);
-
-/// Live config bindings read by the private request listener.
-#[derive(Debug, Clone)]
-pub(crate) struct ControlState {
-    bindings: Arc<RwLock<Vec<RepositoryConnection>>>,
-    doctor_report: Arc<RwLock<Option<(String, serde_json::Value, Instant)>>>,
-}
-
-impl ControlState {
-    #[cfg(test)]
-    pub(super) fn empty() -> Self {
-        Self {
-            bindings: Arc::new(RwLock::new(Vec::new())),
-            doctor_report: Arc::new(RwLock::new(None)),
-        }
-    }
-
-    pub(crate) fn new(config: &HostConfig) -> Self {
-        Self {
-            bindings: Arc::new(RwLock::new(config.connections().to_vec())),
-            doctor_report: Arc::new(RwLock::new(None)),
-        }
-    }
-
-    pub(crate) fn replace_config(&self, config: &HostConfig) -> Result<(), HostError> {
-        let mut bindings = self.bindings.write().map_err(|_| HostError::Journal)?;
-        *bindings = config.connections().to_vec();
-        Ok(())
-    }
-
-    pub(crate) fn contains_connection(
-        &self,
-        binding: &RepositoryConnection,
-    ) -> Result<bool, HostError> {
-        let bindings = self.bindings.read().map_err(|_| HostError::Journal)?;
-        Ok(bindings
-            .iter()
-            .any(|candidate| candidate.connection_id == binding.connection_id))
-    }
-
-    pub(crate) fn save_doctor_report(
-        &self,
-        nonce: &str,
-        report: serde_json::Value,
-    ) -> Result<(), HostError> {
-        *self.doctor_report.write().map_err(|_| HostError::Journal)? =
-            Some((nonce.to_owned(), report, Instant::now()));
-        Ok(())
-    }
-
-    fn doctor_report(&self, nonce: &str) -> Result<Option<serde_json::Value>, HostError> {
-        let report = self.doctor_report.read().map_err(|_| HostError::Journal)?;
-        Ok(report.as_ref().and_then(|(key, value, measured_at)| {
-            (key == nonce
-                && Instant::now()
-                    .checked_duration_since(*measured_at)
-                    .is_some_and(|age| age <= DOCTOR_REPORT_MAX_AGE))
-            .then(|| value.clone())
-        }))
-    }
-}
 
 /// Local request listener whose requests run against the daemon-owned Journal.
 pub(crate) struct ControlServer {

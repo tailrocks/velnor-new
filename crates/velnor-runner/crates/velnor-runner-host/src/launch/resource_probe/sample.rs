@@ -135,6 +135,14 @@ impl Observation {
         &self.sample_generation_id
     }
 
+    pub(super) fn effective_cpu_millicores(&self) -> u64 {
+        self.effective_cpu_millicores
+    }
+
+    pub(super) fn memory_available_bytes(&self) -> u64 {
+        self.record.memory_available_bytes
+    }
+
     pub(super) fn has_guest_capacity(&self, cpu_millicores: u64, memory_bytes: u64) -> bool {
         guest_capacity::guest_capacity_fits(
             self.effective_cpu_millicores,
@@ -153,7 +161,6 @@ impl Observation {
             .is_some_and(|age| age <= MAX_OBSERVATION_AGE)
     }
 
-    #[cfg(test)]
     pub(super) fn observed_at(&self) -> Instant {
         self.observed_at
     }

@@ -19,10 +19,15 @@ mod effective_config;
 mod engine_identity;
 #[path = "docker_lifecycle/execution.rs"]
 mod execution;
+#[path = "docker_lifecycle/readiness_guard.rs"]
+mod readiness_guard;
+#[path = "docker_lifecycle/readiness_poll.rs"]
+pub(crate) mod readiness_poll;
 #[path = "docker_lifecycle/recovery.rs"]
 mod recovery;
 
 const CONTAINER_ID: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+const OPERATION_ID: &str = "dddddddddddddddddddddddddddddddd";
 const ENGINE_ID: &str = "probe-engine";
 const ROOT: &str = "/var/lib/docker";
 const REVISION: &str = "b7c3309d33451f8e256a7e255239e9dc9285f042";
@@ -101,16 +106,20 @@ fn image_evidence(projection: &ProbeProjection) -> ProbeImagePreparationEvidence
 }
 
 fn start_responses(projection: &ProbeProjection) -> Result<Vec<DockerResponse>, String> {
+    start_responses_for_info(projection, SELECTED_INFO)
+}
+
+fn start_responses_for_info(
+    projection: &ProbeProjection,
+    info: &str,
+) -> Result<Vec<DockerResponse>, String> {
     Ok(vec![
-        http(
-            200,
-            r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#,
-        ),
+        http(200, info),
         http(200, &format!(r#"{{"Id":"{CONTAINER_ID}","Warnings":[]}}"#)),
-        http(200, SELECTED_INFO),
+        http(200, info),
         http(200, &inspect(projection, "created", 0)?),
         http(200, &inspect(projection, "created", 0)?),
-        http(200, SELECTED_INFO),
+        http(200, info),
     ])
 }
 
@@ -247,7 +256,24 @@ fn append_cleanup(
     exit_code: i64,
     first_info_delay: Duration,
 ) -> Result<(), String> {
-    let info = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64"}"#;
+    append_cleanup_for_info(
+        responses,
+        projection,
+        state,
+        exit_code,
+        first_info_delay,
+        SELECTED_INFO,
+    )
+}
+
+fn append_cleanup_for_info(
+    responses: &mut Vec<DockerResponse>,
+    projection: &ProbeProjection,
+    state: &str,
+    exit_code: i64,
+    first_info_delay: Duration,
+    info: &str,
+) -> Result<(), String> {
     let absent = "{}";
     responses.push(delayed_http(200, info, first_info_delay));
     responses.extend([

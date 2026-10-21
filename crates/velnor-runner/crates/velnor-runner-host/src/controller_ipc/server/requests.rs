@@ -33,7 +33,23 @@ pub(super) async fn handle(
             doctor_probe_start(journal, &nonce, engine_id, docker_root_digest).await
         }
         Request::DoctorProbeStatus { nonce } => doctor_probe_status(journal, state, &nonce).await,
-        Request::ControllerReadiness { .. } => Ok(readiness_response()),
+        Request::ControllerReadiness {
+            config_sha256,
+            engine_id: requested_engine,
+            docker_root_digest: requested_root,
+        } => {
+            controller_readiness(
+                journal,
+                state,
+                state_path,
+                &config_sha256,
+                &requested_engine,
+                &requested_root,
+                engine_id,
+                docker_root_digest,
+            )
+            .await
+        }
     }
 }
 
@@ -177,10 +193,54 @@ fn probe_response(reply: DoctorProbeReply) -> Response {
     }
 }
 
-fn readiness_response() -> Response {
+async fn controller_readiness(
+    journal: &Journal,
+    state: &ControlState,
+    state_path: &Path,
+    config_sha256: &str,
+    requested_engine: &str,
+    requested_root: &str,
+    engine_id: &str,
+    docker_root_digest: &str,
+) -> Result<Response, HostError> {
+    let readiness = if requested_engine != engine_id || requested_root != docker_root_digest {
+        crate::readiness::Readiness::Reconciling
+    } else if let Some((config, current_hash)) =
+        crate::readiness_scan::controller_config(state_path)
+    {
+        if current_hash != config_sha256 || !state.matches_config(&config)? {
+            crate::readiness::Readiness::Reconciling
+        } else {
+            let instance_id = journal.instance_id().await?;
+            let revision = journal.revision().await?;
+            let current_engine = journal.engine_id().await?;
+            let ready = current_engine == engine_id
+                && state.readiness_matches(
+                    config_sha256,
+                    engine_id,
+                    docker_root_digest,
+                    &instance_id,
+                    revision,
+                    std::time::Instant::now(),
+                )?
+                && journal.instance_id().await? == instance_id
+                && journal.revision().await? == revision;
+            if ready {
+                crate::readiness::Readiness::Ready
+            } else {
+                crate::readiness::Readiness::Reconciling
+            }
+        }
+    } else {
+        crate::readiness::Readiness::Reconciling
+    };
+    Ok(readiness_response(readiness))
+}
+
+fn readiness_response(readiness: crate::readiness::Readiness) -> Response {
     Response {
         value: None,
         doctor_probe: None,
-        readiness: Some(crate::readiness::Readiness::Reconciling),
+        readiness: Some(readiness),
     }
 }

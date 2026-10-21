@@ -24,6 +24,8 @@ use super::{
 };
 #[path = "controller/doctor.rs"]
 mod doctor;
+#[path = "controller/readiness.rs"]
+mod readiness;
 #[path = "controller/startup.rs"]
 mod startup;
 
@@ -105,6 +107,7 @@ struct ControllerLoop<'a> {
     connection_sessions: Vec<super::state::PreparedConnection>,
     pending_retirements: Vec<crate::config::RepositoryConnection>,
     doctor_worker: Option<DoctorProbeWorker>,
+    _readiness_worker: readiness::ReadinessWorker,
     doctor_attempted_request_id: Option<i64>,
     release_read_secret: Arc<ReleaseReadSecret>,
     admission_ready: bool,
@@ -166,6 +169,15 @@ impl<'a> ControllerLoop<'a> {
             selected_engine.engine_id().to_owned(),
             selected_engine.docker_root_digest().to_owned(),
         )?;
+        control_state.set_admission_ready(startup.admission_ready);
+        let readiness_worker = readiness::ReadinessWorker::start(
+            state.clone(),
+            docker.clone(),
+            journal.clone(),
+            selected_engine.clone(),
+            control_state.clone(),
+            Arc::clone(&release_read_secret),
+        )?;
         let mut pending_retirements = Vec::new();
         setup::discover_retirements(&state, &current, &mut pending_retirements);
         Ok(Self {
@@ -181,6 +193,7 @@ impl<'a> ControllerLoop<'a> {
             connection_sessions,
             pending_retirements,
             doctor_worker: None,
+            _readiness_worker: readiness_worker,
             doctor_attempted_request_id: None,
             release_read_secret,
             admission_ready: startup.admission_ready,
@@ -238,6 +251,7 @@ impl<'a> ControllerLoop<'a> {
             .await;
             if changed {
                 self.admission_ready = false;
+                self.control_state.set_admission_ready(false);
                 self.next_profile_attempt = tokio::time::Instant::now();
             }
         }
@@ -261,6 +275,7 @@ impl<'a> ControllerLoop<'a> {
                 state: &self.state,
                 release_read_secret: &self.release_read_secret,
                 admission_ready: self.admission_ready,
+                control_state: &self.control_state,
             },
             &self.pending_retirements,
             &mut self.connection_sessions,
@@ -293,6 +308,12 @@ impl<'a> ControllerLoop<'a> {
             .await
             {
                 Ok(prepared) => {
+                    if let Err(error) = self.control_state.invalidate_session_polls() {
+                        eprintln!(
+                            "The controller could not invalidate session poll receipts. Error: {error}."
+                        );
+                        return;
+                    }
                     self.connection_sessions = prepared;
                     self.rotation_due = false;
                 }
@@ -330,8 +351,14 @@ impl<'a> ControllerLoop<'a> {
             return;
         };
         match self.journal.configure_storage_profile(profile).await {
-            Ok(()) => self.admission_ready = true,
-            Err(error) => eprintln!("host controller storage profile persistence held: {error}"),
+            Ok(()) => {
+                self.admission_ready = true;
+                self.control_state.set_admission_ready(true);
+            }
+            Err(error) => {
+                self.control_state.set_admission_ready(false);
+                eprintln!("The controller could not store the storage profile. Error: {error}.");
+            }
         }
     }
 }

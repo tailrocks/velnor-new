@@ -6,6 +6,7 @@ use bollard::Docker;
 
 use crate::{
     config::{HostConfig, RepositoryConnection},
+    controller_ipc::ControlState,
     error::HostError,
     journal::Journal,
     launch::{ReleaseReadSecret, SelectedEngineContext, VerifiedWorkerImages},
@@ -29,6 +30,7 @@ pub(super) struct ConnectionPollContext<'a> {
     pub(super) state: &'a Path,
     pub(super) release_read_secret: &'a Arc<ReleaseReadSecret>,
     pub(super) admission_ready: bool,
+    pub(super) control_state: &'a ControlState,
 }
 
 pub(super) async fn poll_active_connections(

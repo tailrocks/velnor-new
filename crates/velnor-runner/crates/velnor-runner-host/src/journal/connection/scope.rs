@@ -62,6 +62,42 @@ impl Journal {
         })
     }
 
+    /// Open a view only when its exact connection binding already exists.
+    ///
+    /// This check does not create or reactivate a connection scope.
+    pub(crate) async fn existing_connection_scope(
+        &self,
+        binding: &RepositoryConnection,
+    ) -> Result<ConnectionJournal, HostError> {
+        let identity_bytes = binding
+            .canonical_identity_bytes()
+            .map_err(|_| HostError::Journal)?;
+        if identity_bytes.is_empty() || identity_bytes.len() > 1_048_576 {
+            return Err(HostError::Journal);
+        }
+        let identity = String::from_utf8(identity_bytes).map_err(|_| HostError::Journal)?;
+        let connection_id = binding.connection_id.clone();
+        let binding_digest = digest(identity.as_bytes());
+        let id_text = connection_id.as_str().to_owned();
+        let identity_text = identity.clone();
+        read_transaction(self, async |connection| {
+            if has_ambiguous_legacy_work(connection).await? {
+                return Err(HostError::Journal);
+            }
+            match connection_record(connection, &id_text).await? {
+                Some((existing, false)) if existing == identity_text => Ok(()),
+                _ => Err(HostError::Journal),
+            }
+        })
+        .await?;
+        Ok(ConnectionJournal {
+            journal: self.clone(),
+            connection_id,
+            identity,
+            binding_digest,
+        })
+    }
+
     /// Reactivate a retired connection with its exact identity after it drains.
     ///
     /// This method does not create a missing connection record.

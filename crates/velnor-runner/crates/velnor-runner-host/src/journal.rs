@@ -54,7 +54,8 @@ pub(crate) use connection::NativeCompletionReservation;
 pub(crate) use connection::PreJitCleanupSettlementResult;
 pub(crate) use connection::TerminalReplayBinding;
 pub(crate) use connection::{
-    PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation, ReservationState,
+    PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation,
+    ReadinessCapacityUsage, ReservationState,
 };
 pub(crate) use connection::{
     PostJitRetirementCandidate, PostJitRetirementClaim, PreparedRetirementRemoteAbsence,
