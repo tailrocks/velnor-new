@@ -3,6 +3,7 @@
 use super::super::ConnectionJournal;
 use super::super::storage::in_transaction;
 use crate::error::HostError;
+#[cfg(test)]
 use crate::journal::sql::one_row;
 
 impl ConnectionJournal {
@@ -11,6 +12,7 @@ impl ConnectionJournal {
     /// # Errors
     ///
     /// Returns [`HostError::Journal`] when the reservation is missing or released.
+    #[cfg(test)]
     pub(crate) async fn mark_uncertain(&self, reservation_id: i64) -> Result<(), HostError> {
         self.update_reservation_state(reservation_id, "uncertain")
             .await
@@ -21,6 +23,7 @@ impl ConnectionJournal {
     /// # Errors
     ///
     /// Returns [`HostError::Journal`] when the reservation is missing or released.
+    #[cfg(test)]
     pub(crate) async fn mark_recovering(&self, reservation_id: i64) -> Result<(), HostError> {
         self.update_reservation_state(reservation_id, "recovering")
             .await
@@ -47,6 +50,7 @@ impl ConnectionJournal {
     pub(crate) async fn record_local_cleanup(&self, reservation_id: i64) -> Result<(), HostError> {
         self.record_cleanup_proof(reservation_id, false).await
     }
+    #[cfg(test)]
     async fn update_reservation_state(
         &self,
         reservation_id: i64,
