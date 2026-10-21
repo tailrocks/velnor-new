@@ -11,8 +11,6 @@ use crate::worker::ResourceBudget;
 
 mod admission_gate;
 pub(crate) mod bootstrap;
-#[cfg(all(test, unix))]
-mod busy_slot_tests;
 mod completion;
 mod drive;
 mod engine_context;
@@ -147,11 +145,6 @@ pub(crate) async fn poll_scoped_connection_once(
 
 #[cfg(test)]
 pub(crate) use name_taken::fail_unstarted;
-#[cfg(test)]
-pub(crate) use steps::run_native_quarantine_composition;
-#[cfg(test)]
-pub(crate) use steps::{Idle, idle};
-
 fn ack_ready(
     link: &mut Link,
     session: &QueueSession,

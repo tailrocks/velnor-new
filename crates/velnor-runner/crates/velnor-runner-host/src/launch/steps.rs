@@ -1,6 +1,6 @@
 //! Shared poll classification, source authorization, and ACK helpers.
 
-use velnor_runner_github::{Ack, AckScope, Poll, RefreshGate, WireError, ack, may_ack};
+use velnor_runner_github::{Ack, AckScope, Poll, RefreshGate, WireError, ack};
 
 use crate::Offer;
 use crate::error::HostError;
@@ -28,77 +28,6 @@ pub(crate) use scoped::{
     AcquiredProvisioning, CheckedAcquiredRecovery, KnownNoAcquire, ScopedProvisioningOutcome,
     acquire_authorized_request, acquire_scoped,
 };
-
-/// What one poll allows before acquire.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Idle {
-    /// HTTP 202. The queue has nothing else.
-    Empty,
-    /// One `JobAvailable` id. Do not acknowledge yet.
-    Launch,
-    /// Assigned population is positive. Apply current admission rules.
-    Scale,
-    /// The batch is safe to acknowledge, even when assigned population is unknown.
-    /// Deleting it does not free a running slot.
-    Ack,
-    /// A message that must stay on the queue.
-    Blocked,
-}
-
-/// Classify one poll. One available id is acquired. A positive current assigned
-/// population starts one runner before ack. Missing census allows only empty or
-/// start/completion-only batches to be acknowledged; it never implies zero jobs.
-/// A batch whose every assigned job already started is acknowledged.
-#[must_use]
-pub(crate) fn idle(polled: &Poll) -> Idle {
-    match polled {
-        Poll::Empty => Idle::Empty,
-        Poll::Quarantined(_) => Idle::Blocked,
-        Poll::Batch(batch) => match offer(polled) {
-            Offer::Acquire { ids, .. } if ids.len() == 1 => Idle::Launch,
-            Offer::Wait if may_ack(batch, true) => {
-                if absent_census_progress(batch)
-                    || batch.statistics.is_some() && crate::assign::started_replay(batch)
-                {
-                    Idle::Ack
-                } else {
-                    match assigned_population(batch) {
-                        Some(population) if population > 0 => Idle::Scale,
-                        Some(0) => Idle::Ack,
-                        Some(_) | None => Idle::Blocked,
-                    }
-                }
-            }
-            Offer::Acquire { .. } | Offer::Wait => Idle::Blocked,
-        },
-    }
-}
-
-/// Subject of a redelivered assigned poll. Other polls have no exception.
-#[cfg(test)]
-#[must_use]
-pub(super) fn mint_subject(polled: &Poll) -> Option<String> {
-    let Poll::Batch(batch) = polled else {
-        return None;
-    };
-    if idle(polled) != Idle::Launch {
-        return None;
-    }
-    let (_, request_id) = assignment(polled).ok().flatten()?;
-    Some(format!("m{}r{request_id}", batch.message_id))
-}
-
-fn absent_census_progress(batch: &velnor_runner_github::ParsedBatch) -> bool {
-    batch.statistics.is_none() && (batch.jobs.is_empty() || crate::assign::progress_only(batch))
-}
-
-fn assigned_population(batch: &velnor_runner_github::ParsedBatch) -> Option<i64> {
-    batch
-        .statistics
-        .as_ref()
-        .map(velnor_runner_github::Statistics::assigned_population)
-        .filter(|population| *population >= 0)
-}
 
 pub(super) fn assignment(
     polled: &Poll,
