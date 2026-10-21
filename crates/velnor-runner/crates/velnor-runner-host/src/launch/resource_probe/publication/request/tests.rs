@@ -149,3 +149,8 @@ fn paired_request_rejects_changes_to_either_document_or_runtime_identity() {
     value.expected_runner_runtime_identity.inode += 1;
     assert!(PublicationRequest::JobFacts(value).validate().is_err());
 }
+
+#[test]
+fn publication_record_keeps_payloads_indirect() {
+    assert!(std::mem::size_of::<PublicationRecord>() <= 2 * std::mem::size_of::<usize>());
+}

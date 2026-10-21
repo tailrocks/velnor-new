@@ -53,7 +53,7 @@ pub(super) async fn publish(
     ))
     .await?
     {
-        PublicationRecord::Control(value) => Ok(value),
+        PublicationRecord::Control(value) => Ok(*value),
         PublicationRecord::JobFacts(_) => Err(HostError::Identity),
     }
 }
@@ -70,7 +70,7 @@ pub(super) async fn publish_job_facts(
     ))
     .await?
     {
-        PublicationRecord::JobFacts(value) => Ok(value),
+        PublicationRecord::JobFacts(value) => Ok(*value),
         PublicationRecord::Control(_) => Err(HostError::Identity),
     }
 }

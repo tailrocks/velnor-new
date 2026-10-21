@@ -13,8 +13,8 @@ pub(super) enum PublicationRequest {
 }
 
 pub(super) enum PublicationRecord {
-    Control(ExecutionPublicationRecord),
-    JobFacts(JobFactsPublicationRecord),
+    Control(Box<ExecutionPublicationRecord>),
+    JobFacts(Box<JobFactsPublicationRecord>),
 }
 
 impl From<ExecutionPublicationContext> for PublicationRequest {
@@ -122,7 +122,7 @@ impl PublicationRequest {
                     return Err(crate::error::HostError::Identity);
                 }
             }
-            _ => {}
+            Self::Control(_) => {}
         }
         Ok(())
     }
@@ -140,9 +140,11 @@ impl PublicationRequest {
     ) -> Result<PublicationRecord, crate::error::HostError> {
         let record = match self {
             Self::Control(_) => serde_json::from_slice(bytes)
+                .map(Box::new)
                 .map(PublicationRecord::Control)
                 .map_err(|_| crate::error::HostError::Frame),
             Self::JobFacts(_) => serde_json::from_slice(bytes)
+                .map(Box::new)
                 .map(PublicationRecord::JobFacts)
                 .map_err(|_| crate::error::HostError::Frame),
         }?;
