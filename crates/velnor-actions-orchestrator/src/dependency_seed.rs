@@ -91,7 +91,16 @@ fn seed_job(
     )?);
     let roots = vec![workspace.root.clone()];
     if let Some(private) = private {
-        steps.extend(private.steps_for_roots(&roots)?);
+        let private_steps = private.steps_for_roots(&roots)?;
+        if !private_steps.is_empty() {
+            // The private fetch and revoke are Velnor helper operations: stage
+            // the digest-verified helper right after checkout, as crate jobs do.
+            let acquire = input.acquire.ok_or_else(|| OrchestratorError::Contract {
+                problem: "private_sources_seed_without_acquire".to_owned(),
+            })?;
+            steps.insert(1, acquire.clone());
+        }
+        steps.extend(private_steps);
     }
     steps.extend(crate::source_prep::fetch_steps_for_crate(
         catalog, &roots, false,
