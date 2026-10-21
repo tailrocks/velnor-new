@@ -8,7 +8,7 @@ use velnor_actions_workflow_renderer::setup::{
     MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
 };
 
-/// Raw executable byte counts measured for checksum-qualified Mise 2026.10.15.
+/// Raw executable byte counts measured for checksum-qualified Mise 2026.10.17.
 /// Each bound travels with the SHA selected for that same native platform.
 struct MiseBinaryPin {
     sha256: &'static str,
@@ -17,9 +17,9 @@ struct MiseBinaryPin {
 
 fn mise_binary_pin(platform: CheckPlatform) -> MiseBinaryPin {
     let (sha256, max_bytes) = match platform {
-        CheckPlatform::LinuxX64 => (MISE_BINARY_SHA256_LINUX_X64, 168_019_312),
-        CheckPlatform::MacosArm64 => (MISE_BINARY_SHA256_MACOS_ARM64, 135_143_184),
-        CheckPlatform::MacosX64 => (MISE_BINARY_SHA256_MACOS_X64, 164_421_392),
+        CheckPlatform::LinuxX64 => (MISE_BINARY_SHA256_LINUX_X64, 170_281_952),
+        CheckPlatform::MacosArm64 => (MISE_BINARY_SHA256_MACOS_ARM64, 135_544_080),
+        CheckPlatform::MacosX64 => (MISE_BINARY_SHA256_MACOS_X64, 164_502_288),
     };
     MiseBinaryPin { sha256, max_bytes }
 }
@@ -126,7 +126,7 @@ mod tests {
         let marker = temp.path().join("wrapper-ran");
         let source = temp.path().join("mise");
         let script = format!(
-            "#!/bin/sh\nprintf invoked > '{}'\nprintf '2026.10.15\\n'\n",
+            "#!/bin/sh\nprintf invoked > '{}'\nprintf '2026.10.17\\n'\n",
             marker.display()
         );
         std::fs::write(&source, script).expect("wrapper");

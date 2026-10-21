@@ -14,7 +14,7 @@ const PINS: [(&str, &str); 5] = [
     ("actionlint", "1.7.12"),
     ("shellcheck", "0.11.0"),
     ("zizmor", "1.31.1"),
-    ("gh", "2.102.0"),
+    ("gh", "2.102.1"),
 ];
 
 /// v3 lock entry; `platforms` selects checksummed platforms (`rust` takes none).
@@ -84,7 +84,7 @@ fn missing_lock_advises_and_generates() -> TestResult {
         "actionlint@1.7.12",
         "shellcheck@0.11.0",
         "zizmor@1.31.1",
-        "gh@2.102.0",
+        "gh@2.102.1",
     ] {
         assert!(summary.contains(tool), "{summary}");
     }

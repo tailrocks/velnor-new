@@ -3,19 +3,19 @@ use crate::setup::MiseSetup;
 use crate::yaml::render_yaml;
 use std::process::{Command, Output};
 
-const LINUX_OUTPUT: &str = "2026.10.15 linux-x64 (2026-10-09)";
-const MACOS_OUTPUT: &str = "2026.10.15 macos-x64 (2026-10-09)";
+const LINUX_OUTPUT: &str = "2026.10.17 linux-x64 (2026-10-09)";
+const MACOS_OUTPUT: &str = "2026.10.17 macos-x64 (2026-10-09)";
 
 fn pins() -> MisePinQualificationPins {
     MisePinQualificationPins {
         linux_x86_64_setup: MiseSetup {
             uses: format!("jdx/mise-action@{}", "a".repeat(40)),
-            version: "2026.10.15".to_owned(),
+            version: "2026.10.17".to_owned(),
             sha256: "b".repeat(64),
         },
         macos_x86_64_setup: MiseSetup {
             uses: format!("jdx/mise-action@{}", "a".repeat(40)),
-            version: "2026.10.15".to_owned(),
+            version: "2026.10.17".to_owned(),
             sha256: "c".repeat(64),
         },
     }
@@ -35,7 +35,7 @@ fn jobs_are_opt_in_exact_ref_read_only_and_no_publication() {
         assert!(rendered.contains("permissions:\n  contents: read"), "{id}");
         assert!(rendered.contains("ref: ${{ github.sha }}"), "{id}");
         assert!(rendered.contains("persist-credentials: \"false\""), "{id}");
-        assert!(rendered.contains("version: 2026.10.15"), "{id}");
+        assert!(rendered.contains("version: 2026.10.17"), "{id}");
         assert!(rendered.contains("install: \"false\""), "{id}");
         assert!(rendered.contains("env: \"false\""), "{id}");
         assert!(rendered.contains("cache: \"false\""), "{id}");
@@ -101,15 +101,15 @@ fn verification_rejects_invalid_version_platform_and_legacy_output_before_digest
         ),
         (
             ReleaseTarget::LinuxX86_64,
-            "2026.10.15 macos-x64 (2026-10-09)",
+            "2026.10.17 macos-x64 (2026-10-09)",
         ),
         (
             ReleaseTarget::LinuxX86_64,
-            "mise 2026.10.15 linux-x64 (2026-10-09)",
+            "mise 2026.10.17 linux-x64 (2026-10-09)",
         ),
         (
             ReleaseTarget::MacosX86_64,
-            "2026.10.15 macos-x64 (2026-1-9)",
+            "2026.10.17 macos-x64 (2026-1-9)",
         ),
     ];
 
@@ -152,7 +152,7 @@ shasum() {{ test "$1" = "-a"; test "$2" = "256"; printf 'DIGEST_CHECK_REACHED\n'
         .arg("-c")
         .arg(script)
         .env("GITHUB_SHA", "selected-ref")
-        .env("MISE_VERSION", "2026.10.15")
+        .env("MISE_VERSION", "2026.10.17")
         .env("MISE_SHA256", expected_digest)
         .env("MISE_OUTPUT", version_output)
         .env("ACTUAL_DIGEST", actual_digest)

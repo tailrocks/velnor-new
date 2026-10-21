@@ -223,7 +223,7 @@ fn actual_nextest_producer_selector_passes_task_execution_contract() {
     let nextest_spec = catalog.tool_spec(PinnedTool::Nextest);
     assert_eq!(
         nextest_spec,
-        "aqua:nextest-rs/nextest/cargo-nextest@0.9.148"
+        "aqua:nextest-rs/nextest/cargo-nextest@0.9.149"
     );
     assert!(run.contains(&nextest_spec), "producer argv: {run:?}");
 

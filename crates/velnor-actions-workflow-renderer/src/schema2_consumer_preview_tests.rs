@@ -50,7 +50,7 @@ pub(super) fn fixture() -> ConsumerReleaseSpec {
             "mise".to_owned(),
             "--no-config".to_owned(),
             "install".to_owned(),
-            "gh@2.102.0".to_owned(),
+            "gh@2.102.1".to_owned(),
         ],
         install_rust_argv: vec![
             "mise".to_owned(),
@@ -128,7 +128,7 @@ fn policy_fixture() -> PackageReleasePolicy {
 fn setup_fixture() -> MiseSetup {
     MiseSetup {
         uses: "jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde".to_owned(),
-        version: "2026.10.15".to_owned(),
+        version: "2026.10.17".to_owned(),
         sha256: "a".repeat(64),
     }
 }

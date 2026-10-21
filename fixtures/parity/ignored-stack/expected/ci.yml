@@ -71,21 +71,21 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
-          version: 2026.10.15
+          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          version: 2026.10.17
       - name: V2 identity
         id: v2
         if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 4bbc210f5c9874ba0237d2cd76fc58fbbf4ed689ee63e93ffd39f6df75332e16
+          d: 5cdfcf840796e5b79a1dddaf551f9b5f09ccd93b95a318f7cdf15917f5b5d6ed
       - name: Restore Mise tools
         id: tools-restore
         if: github.event_name != 'workflow_dispatch' && steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
-          mise-sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
+          mise-sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
         env:
           PATH: ${{ steps.cache-tar-launchers.outputs.path }}
@@ -161,21 +161,21 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
-          version: 2026.10.15
+          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          version: 2026.10.17
       - name: V2 identity
         id: v2
         if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 34922110fcff4c30afa8bcb0ca6cb2ade338a72459ee282a518d1026815ecb54
+          d: f698869b0fe915c99dd2d703913d35baacedbdb11bf827c94f238dafa671bd48
       - name: Restore Mise tools
         id: tools-restore
         if: github.event_name != 'workflow_dispatch' && steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
-          mise-sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
+          mise-sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
         env:
           PATH: ${{ steps.cache-tar-launchers.outputs.path }}
@@ -303,8 +303,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
-          version: 2026.10.15
+          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          version: 2026.10.17
       - name: Acquire Velnor
         timeout-minutes: 6
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.36\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --connect-timeout 15 --max-time 120 --retry 5 --retry-all-errors --retry-max-time 180 --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
@@ -312,7 +312,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install gh@2.102.0
+        run: mise --no-config --no-env --no-hooks install gh@2.102.1
       - name: Download plan
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333

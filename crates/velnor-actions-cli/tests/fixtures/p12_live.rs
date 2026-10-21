@@ -120,6 +120,11 @@ fn missing_deny_fails() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn every_fail_row_is_nonzero() -> Result<(), Box<dyn Error>> {
+    // Mutate the synthetic catalog's own pin, never the live release catalog.
+    let gh_anchor = harness::FIXTURE_CATALOG
+        .lines()
+        .find(|line| line.starts_with("pub const GH_VERSION:"))
+        .expect("synthetic fixture GH catalog row");
     let old = harness::days_iso(-30)?;
     let granted = harness::days_iso(-10)?;
     let expired = harness::days_iso(-1)?;
@@ -143,10 +148,7 @@ fn every_fail_row_is_nonzero() -> Result<(), Box<dyn Error>> {
         (
             "t-pin",
             CATALOG,
-            Some((
-                "GH_VERSION: &str = \"2.102.0\"",
-                "GH_VERSION: &str = \"9.9.9\"",
-            )),
+            Some((gh_anchor, "pub const GH_VERSION: &str = \"9.9.9\";")),
             "local-pin",
         ),
         ("t-evidence", INVENTORY, None, "upstream-freshness"),
@@ -225,17 +227,17 @@ fn policy_file_is_complete() -> Result<(), Box<dyn Error>> {
         "supported = [\"ubuntu-26.04\", \"ubuntu-24.04\", \"ubuntu-22.04\"]",
         "[validation-tools]",
         "cargo-mutants = \"27.1.0\"",
-        "mise = \"2026.10.15\"",
+        "mise = \"2026.10.17\"",
         "rust = \"1.99.1\"",
-        "mr-boxington = \"1.25.0\"",
-        "gh = \"2.102.0\"",
+        "mr-boxington = \"1.26.0\"",
+        "gh = \"2.102.1\"",
         "actionlint = \"1.7.12\"",
         "shellcheck = \"0.11.0\"",
         "zizmor = \"1.31.1\"",
-        "nextest = \"0.9.148\"",
+        "nextest = \"0.9.149\"",
         "crane = \"0.22.1\"",
         "bun = \"1.4.3\"",
-        "cosign = \"3.1.3\"",
+        "cosign = \"3.1.4\"",
     ] {
         assert!(policy.contains(marker), "policy misses {marker}");
     }

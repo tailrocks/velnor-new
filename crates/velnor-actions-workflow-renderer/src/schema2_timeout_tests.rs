@@ -30,7 +30,7 @@ fn every_schema2_family_renders_only_bounded_executable_jobs() {
         mbx_qualification: Some(MbxQualificationPins {
             mise_setup: pins.linux_x86_64_setup.clone(),
             candidate_action_uses: format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
-            mbx_version: "1.25.0".to_owned(),
+            mbx_version: "1.26.0".to_owned(),
             rust_version: "1.99.1".to_owned(),
         }),
         mise_pin_qualification: Some(MisePinQualificationPins {

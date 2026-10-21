@@ -71,21 +71,21 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
-          version: 2026.10.15
+          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          version: 2026.10.17
       - name: V2 identity
         id: v2
         if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 4bbc210f5c9874ba0237d2cd76fc58fbbf4ed689ee63e93ffd39f6df75332e16
+          d: 5cdfcf840796e5b79a1dddaf551f9b5f09ccd93b95a318f7cdf15917f5b5d6ed
       - name: Restore Mise tools
         id: tools-restore
         if: github.event_name != 'workflow_dispatch' && steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
-          mise-sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
+          mise-sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
         env:
           PATH: ${{ steps.cache-tar-launchers.outputs.path }}
@@ -161,21 +161,21 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
-          version: 2026.10.15
+          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          version: 2026.10.17
       - name: V2 identity
         id: v2
         if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 98c2812df3c8074759d572b636bd4aff99218c0eaa73cccfa889050c889e6a75
+          d: 21037f03d9392bcaace49beafb58fdb8cfeaae6fa55deedda96c8d2147ce4772
       - name: Restore Mise tools
         id: tools-restore
         if: github.event_name != 'workflow_dispatch' && steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
-          mise-sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
+          mise-sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
         env:
           PATH: ${{ steps.cache-tar-launchers.outputs.path }}
@@ -183,7 +183,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install rust@1.99.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.31.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.148
+        run: mise --no-config --no-env --no-hooks install rust@1.99.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.31.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.149
       - name: Write request
         env:
           VELNOR_INTERNAL_OP: write-request-v1
@@ -304,8 +304,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
-          version: 2026.10.15
+          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          version: 2026.10.17
       - name: Acquire Velnor
         timeout-minutes: 6
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.36\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --connect-timeout 15 --max-time 120 --retry 5 --retry-all-errors --retry-max-time 180 --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
@@ -313,7 +313,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install gh@2.102.0
+        run: mise --no-config --no-env --no-hooks install gh@2.102.1
       - name: Download plan
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
@@ -413,21 +413,21 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
-          version: 2026.10.15
+          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          version: 2026.10.17
       - name: V2 identity
         id: v2
         if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 2af237ccb6e3d495bebf556d8a0736ca58fc6a3299c265efaf803631ee0a1ce5
+          d: 53a0f3aeb1fc4b3a95ed9fee4fb24476db517674e7072b3c8a49d654cff61c37
       - name: Restore Mise tools
         id: tools-restore
         if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == '' && steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
-          mise-sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
+          mise-sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
         env:
           PATH: ${{ steps.cache-tar-launchers.outputs.path }}
@@ -440,7 +440,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install rust@1.99.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.31.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.148
+        run: mise --no-config --no-env --no-hooks install rust@1.99.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.31.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.149
       - name: Prepare Rust components
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -450,19 +450,19 @@ jobs:
         run: mise --no-config --no-env --no-hooks exec rust@1.99.1 -- rustup component add --toolchain 1.99.1-x86_64-unknown-linux-gnu clippy rustfmt
       - name: Build test executables
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-1c04bd956b6930304449d5b5bbbb403b3c16aec52e7d31f0fa5ca7628746cd28"}
+        with: {"digest": "b3-839994ddc8dcc89dbde7418b9fdbc8741a321e341dd562f72fc126535f4357b6"}
       - name: Format
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-f346f3f039c13817fbfe64ae9ba8eb792d16b3f8e3bef6fd7ba85d4dfb6b0df2"}
+        with: {"digest": "b3-61531465c8ca0022f6f11c5abad530eb3ce295f528704fb90cf54bb5a231b507"}
       - name: Clippy
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-9dbc3762809ccfd1baf84b60a871aec969c740959b31d572d833d035d1b5345e"}
+        with: {"digest": "b3-b473e250a9beac316fca5ddccca52181360b92d32ff4aed93108e5ed975d416e"}
       - name: Documentation
         background: true
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-f87bbfd01dd8efe4b8eafeec35ad53600dbe722a315870fe8b3f41e47ed4109a"}
+        with: {"digest": "b3-761c6560d92225ea3149fc5531c8a1fba5aa80a6a8fec842213f89c09952e784"}
       - name: Wait for parallel checks
         wait-all:
       - name: Upload crate reports

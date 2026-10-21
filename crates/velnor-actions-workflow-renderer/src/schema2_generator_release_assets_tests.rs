@@ -18,7 +18,7 @@ const INSTALL_ARGS: &[&str] = &[
     "--no-hooks",
     "install",
     "rust@1.99.1",
-    "mr-boxington@1.25.0",
+    "mr-boxington@1.26.0",
 ];
 
 #[test]
@@ -82,7 +82,7 @@ fn release_test_pins() -> crate::schema2::ProductReleasePins {
         "--no-hooks",
         "install",
         "rust@1.99.1",
-        "mr-boxington@1.25.0",
+        "mr-boxington@1.26.0",
     ]
     .into_iter()
     .map(str::to_owned)

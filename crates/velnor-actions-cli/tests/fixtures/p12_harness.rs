@@ -2,7 +2,7 @@
 //!
 //! Each builder returns a self-contained tree under a fresh tempdir that
 //! `scripts/check-freshness.sh --root` validates. The passing root uses
-//! the real reviewed pin values as fixture data; failing roots mutate one
+//! an intentional historical pin baseline as fixture data; failing roots mutate one
 //! aspect each. Date helpers derive "today" from the system clock so
 //! evidence windows stay deterministic without external crates.
 
@@ -10,6 +10,9 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Self-contained fixture catalog; independent of current live tool pins.
+pub(crate) const FIXTURE_CATALOG: &str = include_str!("p12_catalog.txt");
 
 /// One script run: exit code plus captured streams.
 pub(crate) struct Run {
@@ -252,10 +255,7 @@ pub(crate) fn assert_fail(run: &Run, needle: &str) {
 pub(crate) fn passing(prefix: &str) -> Result<Fixture, Box<dyn Error>> {
     let dir = crate::impl_cli_tmp::fresh_tempdir(prefix)?;
     for (rel, body) in [
-        (
-            "crates/velnor-actions-mise/src/catalog.rs",
-            include_str!("p12_catalog.txt"),
-        ),
+        ("crates/velnor-actions-mise/src/catalog.rs", FIXTURE_CATALOG),
         (
             "crates/velnor-actions-actionlint/src/actions.rs",
             include_str!("p12_actions.txt"),
