@@ -25,7 +25,7 @@ pub(crate) use offer_authorization::{
 mod deferred_offer;
 pub(crate) use deferred_offer::{DeferredAuthorizedOffer, DeferredAuthorizedOffers};
 mod recovery;
-pub(crate) use recovery::recover_acquired_scoped_offer;
+pub(crate) use recovery::{AcquiredRecoveryContext, recover_acquired_scoped_offer};
 #[cfg(test)]
 pub(crate) use recovery::{
     recover_acquired_scoped_offer_with_test_observation,

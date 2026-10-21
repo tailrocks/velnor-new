@@ -252,17 +252,19 @@ async fn recover_candidate(
         .await;
     }
     crate::launch::recover_acquired_scoped_offer(
-        connection,
-        policy,
-        context.state,
-        &prepared.scope,
+        crate::launch::AcquiredRecoveryContext {
+            connection,
+            authority_policy: policy,
+            admission_state: context.state,
+            scoped: &prepared.scope,
+            request,
+            reservation_id: candidate.reservation_id(),
+            engine: context.selected_engine,
+        },
         context.journal,
-        request,
-        candidate.reservation_id(),
         budget,
         context.docker,
         context.release_read_secret,
-        context.selected_engine,
     )
     .await
 }

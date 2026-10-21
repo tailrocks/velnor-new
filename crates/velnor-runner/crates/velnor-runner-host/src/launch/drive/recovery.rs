@@ -16,21 +16,41 @@ use crate::{
     worker::ResourceBudget,
 };
 
+/// This context borrows identities and policy to recover one acquired reservation.
+pub(crate) struct AcquiredRecoveryContext<'a> {
+    pub(crate) connection: &'a RepositoryConnection,
+    pub(crate) authority_policy: &'a ApprovedJobAuthorityPolicy,
+    pub(crate) admission_state: &'a std::path::Path,
+    pub(crate) scoped: &'a ConnectionJournal,
+    pub(crate) request: &'a AssignmentIdentity,
+    pub(crate) reservation_id: i64,
+    pub(crate) engine: &'a SelectedEngineContext,
+}
+
 /// Continue an acquired request. Do not reserve it again or call `AcquireJobs` again.
 pub(crate) async fn recover_acquired_scoped_offer(
-    connection: &RepositoryConnection,
-    authority_policy: &ApprovedJobAuthorityPolicy,
-    admission_state: &std::path::Path,
-    scoped: &ConnectionJournal,
+    context: AcquiredRecoveryContext<'_>,
     host: &Journal,
-    request: &AssignmentIdentity,
-    reservation_id: i64,
     budget: ResourceBudget,
     docker: &Docker,
     release_secret: &ReleaseReadSecret,
-    engine: &SelectedEngineContext,
 ) -> Result<ScopedProvisioningOutcome, EnsureError> {
-    recover_acquired_scoped_offer_with_observation(
+    let engine = context.engine;
+    recover_acquired_scoped_offer_with_observation(context, |charge| {
+        recovery_observation(docker, host, budget, charge, engine, release_secret)
+    })
+    .await
+}
+
+async fn recover_acquired_scoped_offer_with_observation<F, Fut>(
+    context: AcquiredRecoveryContext<'_>,
+    observe: F,
+) -> Result<ScopedProvisioningOutcome, EnsureError>
+where
+    F: FnOnce((u64, u64)) -> Fut,
+    Fut: Future<Output = Option<crate::launch::RecoveryObservation>>,
+{
+    let AcquiredRecoveryContext {
         connection,
         authority_policy,
         admission_state,
@@ -38,25 +58,7 @@ pub(crate) async fn recover_acquired_scoped_offer(
         request,
         reservation_id,
         engine,
-        |charge| recovery_observation(docker, host, budget, charge, engine, release_secret),
-    )
-    .await
-}
-
-async fn recover_acquired_scoped_offer_with_observation<F, Fut>(
-    connection: &RepositoryConnection,
-    authority_policy: &ApprovedJobAuthorityPolicy,
-    admission_state: &std::path::Path,
-    scoped: &ConnectionJournal,
-    request: &AssignmentIdentity,
-    reservation_id: i64,
-    engine: &SelectedEngineContext,
-    observe: F,
-) -> Result<ScopedProvisioningOutcome, EnsureError>
-where
-    F: FnOnce((u64, u64)) -> Fut,
-    Fut: Future<Output = Option<crate::launch::RecoveryObservation>>,
-{
+    } = context;
     authority_policy
         .validate_for(connection)
         .map_err(|_| EnsureError::Uncertain)?;
@@ -123,13 +125,15 @@ pub(crate) async fn recover_acquired_scoped_offer_with_test_observation(
     observation: Option<crate::launch::RecoveryObservation>,
 ) -> Result<ScopedProvisioningOutcome, EnsureError> {
     recover_acquired_scoped_offer_with_observation(
-        connection,
-        authority_policy,
-        admission_state,
-        scoped,
-        request,
-        reservation_id,
-        engine,
+        AcquiredRecoveryContext {
+            connection,
+            authority_policy,
+            admission_state,
+            scoped,
+            request,
+            reservation_id,
+            engine,
+        },
         |_| async move { observation },
     )
     .await
@@ -150,13 +154,15 @@ pub(crate) async fn recover_acquired_scoped_offer_with_test_provider(
     provider: &crate::launch::IntakeCompositionProvider,
 ) -> Result<ScopedProvisioningOutcome, EnsureError> {
     recover_acquired_scoped_offer_with_observation(
-        connection,
-        authority_policy,
-        admission_state,
-        scoped,
-        request,
-        reservation_id,
-        engine,
+        AcquiredRecoveryContext {
+            connection,
+            authority_policy,
+            admission_state,
+            scoped,
+            request,
+            reservation_id,
+            engine,
+        },
         |charge| {
             crate::launch::resource_probe::recovery_observation_with_provider(
                 docker, host, budget, charge, engine, provider,

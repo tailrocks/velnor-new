@@ -37,9 +37,10 @@ pub(crate) use drive::recover_acquired_scoped_offer_with_test_observation;
 #[cfg(test)]
 pub(crate) use drive::recover_acquired_scoped_offer_with_test_provider;
 pub(crate) use drive::{
-    DeferredAuthorizedOffer, DeferredAuthorizedOffers, Drive, GuestAdmission, Lane,
-    PositiveOfferAuthorization, Rest, ScopedAdmissionInput, acquire_authorized_scoped_offer,
-    authorize_deferred_offers, authorize_positive_offer, recover_acquired_scoped_offer,
+    AcquiredRecoveryContext, DeferredAuthorizedOffer, DeferredAuthorizedOffers, Drive,
+    GuestAdmission, Lane, PositiveOfferAuthorization, Rest, ScopedAdmissionInput,
+    acquire_authorized_scoped_offer, authorize_deferred_offers, authorize_positive_offer,
+    recover_acquired_scoped_offer,
 };
 pub(crate) use engine_context::SelectedEngineContext;
 #[cfg(test)]

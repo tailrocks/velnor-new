@@ -211,17 +211,19 @@ async fn recover_candidate(
         return Ok(());
     }
     let outcome = crate::launch::recover_acquired_scoped_offer(
-        recovery.connection,
-        recovery.policy,
-        context.state,
-        &prepared.scope,
+        crate::launch::AcquiredRecoveryContext {
+            connection: recovery.connection,
+            authority_policy: recovery.policy,
+            admission_state: context.state,
+            scoped: &prepared.scope,
+            request: &request,
+            reservation_id,
+            engine: context.selected_engine,
+        },
         context.journal,
-        &request,
-        reservation_id,
         context.config.resource_budget()?,
         context.docker,
         context.release_read_secret,
-        context.selected_engine,
     )
     .await;
     match outcome {
