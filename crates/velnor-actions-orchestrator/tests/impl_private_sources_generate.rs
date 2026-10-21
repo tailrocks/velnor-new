@@ -44,3 +44,117 @@ extract_to = \"eth-sql\"\n"
     assert!(actionlint.contains("VELNOR_DEPS_APP_ID"), "{actionlint}");
     Ok(())
 }
+
+fn private_repo() -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
+    let config = format!(
+        "{}[private_sources]\nowner = \"acme\"\napp_id_variable = \"VELNOR_DEPS_APP_ID\"\n\
+app_private_key_secret = \"VELNOR_DEPS_APP_PRIVATE_KEY\"\n\
+[[private_sources.release_assets]]\nid = \"eth-sql\"\nrepository = \"acme/eth-sql\"\n\
+tag = \"v1.0.0\"\nasset = \"eth-sql.tar.gz\"\nextract_to = \"eth-sql\"\n",
+        config_with_branch()
+    );
+    let repo = make_repo(&config)?;
+    fs::write(
+        repo.path().join(".velnor/deps.lock"),
+        format!(
+            "schema = 1\n[[release_assets]]\nid = \"eth-sql\"\nrepository = \"acme/eth-sql\"\n\
+tag = \"v1.0.0\"\ncommit = \"{COMMIT}\"\nasset = \"eth-sql.tar.gz\"\nsha256 = \"{SHA}\"\n\
+extract_to = \"eth-sql\"\n"
+        ),
+    )?;
+    Ok(repo)
+}
+
+/// Golden step order of the mbx + private-sources seed job.
+const SEED_STEPS: &[&str] = &[
+    "Record optional cache budget",
+    "Checkout",
+    "Setup Mise",
+    "Resolve project tool versions",
+    "V2 identity",
+    "Restore Mise tools",
+    "Acquire Velnor",
+    "Prepare pinned tools",
+    "Prepare Rust components",
+    "Verify Rust channel manifest",
+    "Verify Rust before MBX action",
+    "Set up MBX",
+    "Verify native MBX version",
+    "Compute MBX bundle key",
+    "Restore MBX bundle",
+    "Import MBX bundle",
+    "Mint read-only token for private sources",
+    "Fetch private sources",
+    "Revoke private-source token",
+    "Fetch Cargo sources",
+    "Compile test executables (seed)",
+    "Compile Clippy lane (seed)",
+    "Compile documentation lane (seed)",
+    "Record MBX producer success",
+    "Admit optional cache save",
+    "Save Mise tools",
+    "Report optional cache save failure",
+    "Export MBX bundle",
+    "Admit optional cache save",
+    "Save MBX bundle",
+    "Report optional cache save failure",
+    "Clean MBX workspace outputs",
+];
+
+/// Regression (v0.1.37): `mr_boxington = true` plus a private release asset
+/// failed with `internal_without_acquire:dependency-seed`, because the seed
+/// job ran the private fetch helper without staging it first.
+#[test]
+fn mbx_seed_job_with_private_sources_stages_the_helper_before_the_fetch() -> TestResult {
+    let repo = private_repo()?;
+    fs::write(
+        repo.path().join("mise.toml"),
+        format!(
+            "[tools]\nrust = {{ version = \"{}\", mr_boxington = true }}\nmr-boxington = \"{}\"\n",
+            velnor_actions_mise::catalog::RUST_VERSION,
+            velnor_actions_mise::catalog::MR_BOXINGTON_VERSION
+        ),
+    )?;
+    git(&["add", "."], repo.path())?;
+    let prep = prepare(repo.path())?;
+    assert_eq!(
+        prep.discovery.workspaces[0].profile.compile_driver.as_str(),
+        "mbx"
+    );
+    let out = tempfile::TempDir::new()?;
+    let preview = out.path().join("preview");
+    generate(
+        &prep,
+        &GenerateOptions {
+            output_dir: Some(preview.clone()),
+        },
+    )?;
+    let workflow = fs::read_to_string(preview.join(".github/workflows/ci.yml"))?;
+    let seed = workflow
+        .split("\n  dependency-seed:\n")
+        .nth(1)
+        .ok_or("dependency-seed job")?;
+    let seed = seed.split("\n  rust-").next().unwrap_or(seed);
+    let acquire = seed
+        .find("Acquire Velnor")
+        .ok_or("seed stages the helper")?;
+    let fetch = seed
+        .find("vars.VELNOR_DEPS_APP_ID")
+        .ok_or("seed mints the token")?;
+    assert!(
+        acquire < fetch,
+        "Acquire precedes the private fetch:\n{seed}"
+    );
+    let names: Vec<&str> = seed
+        .lines()
+        .filter_map(|line| {
+            line.trim_start()
+                .trim_start_matches("- ")
+                .strip_prefix("name: ")
+        })
+        .skip(1)
+        .take_while(|name| *name != "Plan")
+        .collect();
+    assert_eq!(names, SEED_STEPS);
+    Ok(())
+}
