@@ -271,6 +271,36 @@ to participate in workflow generation must be represented through supported
 Velnor configuration or another generated input, because their contents are
 not merged into generated files.
 
+Because the preview tree contains the preserved entries, the `Check generated
+files` drift step passes silently on unmanaged content. A repository can opt
+into reporting it with `[github]` (default `unmanaged = "allow"`, which keeps
+that behavior):
+
+```toml
+[github]
+unmanaged = "deny"                 # "allow" (default) | "warn" | "deny"
+allow = [".github/CODEOWNERS", ".github/ISSUE_TEMPLATE"]
+```
+
+- An unmanaged entry is any file, symbolic link or empty directory under
+  `.github` that generation preserves: not a declared format, not a
+  generated-workflow-namespace path, not a marked shared action, marked helper
+  script or marked `dco.yml`. Entries named in `[workflow] preserve_workflows`
+  are explicitly allowlisted and never reported.
+- With `warn`, every `generate` (in place or `--output-dir`, so also the drift
+  step) prints `velnor-actions: WARNING: unmanaged_github_entry:<path>` per entry
+  on stderr and succeeds. With `deny`, `generate` fails before writing anything
+  with `contract: unmanaged_github_entries:<path>,...`, so the drift step fails.
+- Each `allow` entry MUST be a normalized path starting with `.github/`, without
+  empty, `.` or `..` segments or backslashes, without duplicates, and not under
+  `.github/workflows/` (use `preserve_workflows`). It exempts that exact path and
+  everything below it when it names a directory.
+- `velnor-actions unmanaged` prints the same list, one path per line on stdout,
+  after applying both allowlists. It never writes, lists regardless of the
+  configured policy, and exits 1 only under `deny` with at least one entry.
+- A velnor release that predates `[github]` rejects the table as an unknown
+  field, so repositories must pin a velnor release that supports it.
+
 For in-place generation, an existing `.github` root and every real directory
 below it MUST be owned by the effective user running Velnor. The orchestrator
 checks directory ownership without following symbolic links before staging and

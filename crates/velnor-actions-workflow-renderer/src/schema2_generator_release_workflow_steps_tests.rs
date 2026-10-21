@@ -136,7 +136,7 @@ fn confirmation_deadline_is_inherited_and_clamps_inflight_cleanup() -> Result<()
     )?;
     let function = gh_confirmation_function(&pinned_gh_argv())?;
     let script = format!(
-        "{function}\ndeadline=$((SECONDS + 7)); sleep 1\nparent_seconds=$SECONDS\n(( parent_seconds >= 1 )) || exit 99\n( test \"$SECONDS\" -ge \"$parent_seconds\" ) || exit 99\ngh_until \"$deadline\" release verify fixture"
+        "{function}\ndeadline=$((SECONDS + 7)); sleep 1\nparent_seconds=$SECONDS\n(( parent_seconds >= 1 )) || exit 99\n( test \"$SECONDS\" -ge \"$parent_seconds\" ) || exit 99\ntrap '' TERM\ngh_until \"$deadline\" release verify fixture"
     );
     let started = std::time::Instant::now();
     let output = Command::new("bash")

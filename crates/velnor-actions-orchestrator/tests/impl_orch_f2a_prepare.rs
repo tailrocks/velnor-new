@@ -48,8 +48,9 @@ fn assert_configuration_admission_boundaries(config_calls: &[String]) {
     // reloads the captured tap's own config before using its updater task;
     // preview admission passes its one loaded config to shared preparation;
     // `deps lock` and the private fetch reload it to resolve and verify the declared private sources;
-    // `playwright lock` reloads it to resolve the declared browser archives.
-    assert_eq!(config_calls.len(), 11, "{config_calls:?}");
+    // `playwright lock` reloads it to resolve the declared browser archives;
+    // `unmanaged` reads only the `[github]` and preserve policy, with no discovery.
+    assert_eq!(config_calls.len(), 12, "{config_calls:?}");
     assert!(
         config_calls
             .iter()
@@ -87,6 +88,7 @@ fn assert_configuration_admission_boundaries(config_calls: &[String]) {
                 || call.starts_with("check_runtime.rs")
                 || call.starts_with("routing.rs")
                 || call.starts_with("deps_lock.rs")
+                || call.starts_with("generate_unmanaged.rs")
                 || call.starts_with("private_fetch.rs")
                 || call.starts_with("owned_tool_preview.rs")
                 || call.starts_with("playwright_resolve.rs")

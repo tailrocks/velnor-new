@@ -37,6 +37,12 @@ pub(crate) enum Command {
         #[arg(long, requires = "owned_tool_candidates_only")]
         owned_tool_candidates_push: bool,
     },
+    /// List `.github` entries that generation would not emit or retire.
+    ///
+    /// Prints one repository-relative path per line to stdout, honoring
+    /// `[github] allow` and `[workflow] preserve_workflows`. Exits 1 when
+    /// `[github] unmanaged = "deny"` and any entry is listed.
+    Unmanaged,
     /// Read or rewrite `.velnor/config.toml`.
     Config {
         /// Config subcommand.
