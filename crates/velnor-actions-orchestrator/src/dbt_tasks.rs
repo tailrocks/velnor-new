@@ -55,7 +55,7 @@ pub(crate) fn policies(
             timeout,
             services: services.clone(),
             setup: setup.clone(),
-            steps: project_steps(config, &project.dir, catalog)?,
+            steps: project_steps(config, project, catalog)?,
         });
     }
     out.sort_by(|left, right| left.id.cmp(&right.id));
