@@ -53,7 +53,11 @@ fn producer(
     let mut fields = base(
         &name,
         Yaml::str(spec.producer_runner.runs_on()),
-        JobTimeout::new(spec.producer_timeout_minutes).map_err(RenderError::Contract)?,
+        JobTimeout::new(
+            spec.producer_timeout_minutes
+                + velnor_actions_contract::config::RustBinaryReleaseProducer::JOB_HEADROOM_MINUTES,
+        )
+        .map_err(RenderError::Contract)?,
     );
     fields.push((
         "if".to_owned(),

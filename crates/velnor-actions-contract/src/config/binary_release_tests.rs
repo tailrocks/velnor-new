@@ -298,14 +298,14 @@ fn rejects_inventory_larger_than_canonical_receipt_limits() {
 }
 
 #[test]
-fn native_producer_timeout_has_independent_twenty_minute_ceiling() {
+fn native_producer_timeout_has_independent_thirty_minute_ceiling() {
     assert!(crate::workflow::timeout::JobTimeout::new(360).is_ok());
-    for minutes in [1, 5, 6, 10, 15, 20] {
+    for minutes in [1, 5, 6, 10, 15, 20, 30] {
         let mut value = enabled_preview();
         value.producer.timeout_minutes = minutes;
         assert!(value.validate("config.toml").is_ok(), "{minutes}");
     }
-    for minutes in [0, 21, 30, 360, 361, u16::MAX] {
+    for minutes in [0, 31, 360, 361, u16::MAX] {
         let mut value = enabled_preview();
         value.producer.timeout_minutes = minutes;
         assert!(value.validate("config.toml").is_err(), "{minutes}");
