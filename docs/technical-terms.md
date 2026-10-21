@@ -118,3 +118,4 @@
 | Data warehouse | A database that stores data for analysis. |
 | Flow list | A YAML list written between square brackets. |
 | Block list | A YAML list with one item on each line after a hyphen. |
+| OCI image index | A document that lists image manifests for one or more platforms. |
