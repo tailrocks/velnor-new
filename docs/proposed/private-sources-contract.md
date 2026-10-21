@@ -193,7 +193,12 @@ is the repository root) and the owned toolchain env. `private-fetch-v1`:
 `private-revoke-v1` runs `always()` after a successful mint: it removes any
 leftover credential directory, sends `DELETE /installation/token` (204, or 401
 for an already dead token), then calls the API with the same token and requires
-401 (`private_token_still_valid` otherwise). Requests use `curl` under the
+401. GitHub can take time to invalidate a deleted token. The step retries
+other response statuses after waits of 0.5, 1, 2, 4, 8, 8, and 6 seconds.
+These waits total 29.5 seconds and exclude HTTP request time.
+If the final status is not 401, the step fails with
+`private_token_still_valid:<status>`. Transport errors stop the step.
+Requests use `curl` under the
 private-fetch policy with an `https`-only, API-origin-only configuration file;
 curl drops the `Authorization` header when a redirect leaves the API host.
 

@@ -122,3 +122,4 @@
 | Orphaned physical attempt | A physical attempt that the journal identifies for recovery after an interruption. |
 | Keychain | The macOS service that stores credentials and controls access to them. |
 | Unix epoch | The time reference at 00:00:00 UTC on 1 January 1970. |
+| Maven bundle | An archive of Maven repository files that a private fetch extracts for a build. |

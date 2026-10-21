@@ -21,6 +21,7 @@ use velnor_actions_workflow_renderer::private_source_steps::{
 
 use crate::OrchestratorError;
 use crate::check_runtime::preparation::acquisition::archive::{ArchiveBudget, extract_archive};
+use crate::config::deps_layout::maven_bundle_dir;
 use crate::config::deps_lock::{FoundAsset, parse_commit, parse_release_asset, read_deps_lock};
 use crate::config::load_config;
 use crate::config::private_fetch_root::prepare_deps_root;
@@ -209,7 +210,7 @@ fn fetch_all(
         assets.extend(
             lock.maven_bundles
                 .iter()
-                .map(|bundle| (bundle, deps.join("maven").join(&bundle.id))),
+                .map(|bundle| (bundle, maven_bundle_dir(deps, &bundle.id))),
         );
     }
     if request.kinds.contains(&SourceKind::ReleaseAssets) {
