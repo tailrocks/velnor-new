@@ -285,3 +285,7 @@ mod tests;
 #[cfg(test)]
 #[path = "artifact_zip_stream_tests.rs"]
 mod stream_tests;
+
+#[cfg(test)]
+#[path = "artifact_zip_metadata_tests.rs"]
+mod metadata_tests;

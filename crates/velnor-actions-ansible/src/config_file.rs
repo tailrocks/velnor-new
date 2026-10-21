@@ -1,10 +1,10 @@
 //! `ansible.cfg` policy: a closed key allowlist.
 //!
 //! The committed file is the only configuration the Ansible job runs under
-//! (`ANSIBLE_CONFIG` points at a byte-identical owned copy). Plugin, callback,
-//! library, vault and connection-plugin keys would let the repository name
-//! code or secrets for the job to load, so only inert settings are admitted and
-//! every path stays inside the root.
+//! (`ANSIBLE_CONFIG` points at the verified in-place root file). Plugin,
+//! callback, library, vault and connection-plugin keys would let the repository
+//! name code or secrets for the job to load, so only inert settings are admitted,
+//! and every path is a literal root-relative name that stays inside the root.
 
 use crate::AnsibleError;
 use crate::paths::stays_inside;
@@ -29,6 +29,30 @@ const ALLOWED: [(&str, &str); 14] = [
 
 /// Keys whose value is one or more root-relative paths.
 const PATH_KEYS: [&str; 2] = ["inventory", "roles_path"];
+
+fn path_problem(key: &str, value: &str) -> Option<&'static str> {
+    let (delimiter, unsupported) = match key {
+        "inventory" => (',', ':'),
+        "roles_path" => (':', ','),
+        _ => return None,
+    };
+    if value.contains(unsupported) {
+        return Some("ansible_cfg_path_invalid");
+    }
+    let paths: Vec<&str> = value.split(delimiter).map(str::trim).collect();
+    if paths.iter().any(|path| {
+        path.is_empty()
+            || !path.bytes().all(|byte| {
+                byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b'/')
+            })
+    }) {
+        return Some("ansible_cfg_path_invalid");
+    }
+    paths
+        .iter()
+        .any(|path| !stays_inside(path))
+        .then_some("ansible_cfg_path_escapes_root")
+}
 
 fn strip_comment(line: &str) -> &str {
     let trimmed = line.trim();
@@ -73,12 +97,9 @@ pub fn check_ansible_cfg(text: &str) -> Vec<AnsibleError> {
             continue;
         }
         if PATH_KEYS.contains(&key)
-            && value
-                .split([':', ','])
-                .map(str::trim)
-                .any(|path| !path.is_empty() && !stays_inside(path))
+            && let Some(code) = path_problem(key, value)
         {
-            findings.push(AnsibleError::new("ansible_cfg_path_escapes_root", key));
+            findings.push(AnsibleError::new(code, key));
         }
     }
     findings.sort();

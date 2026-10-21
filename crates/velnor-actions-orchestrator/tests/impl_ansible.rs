@@ -242,6 +242,49 @@ fn contract_violations_stop_generation() -> TestResult {
     )
 }
 
+#[test]
+fn configuration_path_expansions_and_lists_stop_generation() -> TestResult {
+    for (key, value, code) in [
+        (
+            "inventory",
+            "$HOME/hosts.ini",
+            "ansible_cfg_path_invalid:inventory",
+        ),
+        (
+            "inventory",
+            "{{CWD}}/hosts.ini",
+            "ansible_cfg_path_invalid:inventory",
+        ),
+        (
+            "roles_path",
+            "~/roles",
+            "ansible_cfg_path_invalid:roles_path",
+        ),
+        (
+            "roles_path",
+            "roles,,vendor",
+            "ansible_cfg_path_invalid:roles_path",
+        ),
+        (
+            "inventory",
+            "hosts.ini:other.ini",
+            "ansible_cfg_path_invalid:inventory",
+        ),
+    ] {
+        rejected(
+            |root| {
+                fs::write(
+                    root.join("ansible-configs/ansible.cfg"),
+                    format!("[defaults]\n{key} = {value}\n"),
+                )
+                .map_err(Into::into)
+            },
+            code,
+        )?;
+    }
+    Ok(())
+}
+
 fn ansible_fixture() -> Result<(tempfile::TempDir, String), Box<dyn std::error::Error>> {
     let (dir, _) = fixture(ANSIBLE, false)?;
     let root = dir.path();

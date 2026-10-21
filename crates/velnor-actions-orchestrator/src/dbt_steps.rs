@@ -36,6 +36,8 @@ fn step_env(
     config: &velnor_actions_contract::config::DbtStackConfig,
 ) -> Result<BTreeMap<String, String>, OrchestratorError> {
     let mut extra: BTreeMap<String, String> = config.env.clone();
+    extra.insert("DBT_PROJECT_DIR".to_owned(), ".".to_owned());
+    extra.insert("DBT_PROFILES_DIR".to_owned(), ".".to_owned());
     extra.insert("DO_NOT_TRACK".to_owned(), "1".to_owned());
     extra.insert(
         "DBT_SEND_ANONYMOUS_USAGE_STATS".to_owned(),

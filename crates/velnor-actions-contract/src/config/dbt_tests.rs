@@ -26,7 +26,7 @@ fn full_table_validates() {
     parse(json!({
         "projects": [".", "other"],
         "services": ["postgres"],
-        "env": { "DBT_HOST": "127.0.0.1", "DBT_PASSWORD": "velnor", "DBT_PROFILES_DIR": "." },
+        "env": { "DBT_HOST": "127.0.0.1", "DBT_PASSWORD": "velnor" },
         "checks": ["parse", "compile"],
         "timeout_minutes": 20
     }))
@@ -72,7 +72,43 @@ fn compile_needs_a_service_and_lists_are_sorted() {
 
 #[test]
 fn env_names_and_values_are_inert() {
-    assert!(is_valid_env_name("DBT_HOST") && !is_valid_env_name("HOME"));
+    for name in [
+        "DBT_HOST",
+        "DBT_PORT",
+        "DBT_USER",
+        "DBT_PASSWORD",
+        "DBT_DBNAME",
+    ] {
+        assert!(is_valid_env_name(name), "{name}");
+    }
+    for name in [
+        "DBT_PROJECT_DIR",
+        "DBT_PROFILES_DIR",
+        "DBT_PACKAGES_INSTALL_PATH",
+        "DBT_TARGET_PATH",
+        "DBT_STATE",
+        "DBT_DEFER_STATE",
+        "DBT_METADATA_DIR",
+        "DBT_INDEX_DIR",
+        "DBT_LOG_PATH",
+        "DBT_FUTURE_OPTION",
+        "PROJECT_DIR",
+        "PACKAGES_INSTALL_PATH",
+        "TARGET_PATH",
+        "STATE",
+        "DEFER_STATE",
+        "METADATA_DIR",
+        "INDEX_DIR",
+        "LOG_PATH",
+        "HOME",
+    ] {
+        assert!(!is_valid_env_name(name), "{name}");
+        assert!(
+            problem(json!({ "projects": ["."], "env": { name: "innocent" } }))
+                .contains("bad_env_name"),
+            "{name}"
+        );
+    }
     assert!(!is_valid_env_name("DBT_") && !is_valid_env_name("DBT_host"));
     assert!(is_inert_env_value("127.0.0.1") && !is_inert_env_value("${{ secrets.X }}"));
     assert!(!is_inert_env_value("a b") && !is_inert_env_value("$(id)"));
