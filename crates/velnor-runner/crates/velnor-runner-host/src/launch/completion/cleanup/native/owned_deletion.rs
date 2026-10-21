@@ -82,7 +82,7 @@ pub(in crate::launch::completion::cleanup::native) async fn remove_container(
         identity::validate_container,
     )
     .await;
-    diagnostics::delete_after_capture(captured, async {
+    Box::pin(diagnostics::delete_after_capture(captured, async {
         if *role == "runner" {
             runner_logs::stop_and_confirm(context, launch, claim, budget, target, running).await?;
             runner_logs::capture_if_needed(context, launch, claim, budget, target).await?;
@@ -109,7 +109,7 @@ pub(in crate::launch::completion::cleanup::native) async fn remove_container(
             .await?;
         }
         remove_container_and_check(context, launch, claim, budget, id, identity).await
-    })
+    }))
     .await
 }
 

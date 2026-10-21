@@ -22,6 +22,16 @@ const MAX_CAPTURE_ATTEMPTS: i64 = 3;
 mod exec;
 use exec::{capture_attempt, persist_state};
 
+struct CaptureAttemptInput<'scope, 'host> {
+    context: &'scope Context<'host>,
+    launch: &'scope CompletedLaunch,
+    claim: CleanupClaim,
+    identity: &'scope StorageCleanupIdentity,
+    binding: &'scope diagnostics::CaptureBinding,
+    started: Instant,
+    deadline: Instant,
+}
+
 pub(super) async fn capture_if_needed(
     context: &Context<'_>,
     launch: &CompletedLaunch,
@@ -33,7 +43,7 @@ pub(super) async fn capture_if_needed(
     let binding = capture_binding(context.diagnostics, launch, identity)?;
     let state = match resume_capture(context, launch, claim, budget, &binding).await? {
         CaptureResume::Done => return Ok(()),
-        CaptureResume::Capture(state) => state,
+        CaptureResume::Capture(state) => *state,
     };
     let started = Instant::now();
     let deadline = started
@@ -41,15 +51,21 @@ pub(super) async fn capture_if_needed(
         .ok_or_else(|| Failure::request("runner log deadline", HostError::DockerTimeout))?;
     let dind = inspected_dind(context, launch, claim, budget, identity).await?;
     validate_runner_home(&dind, identity)?;
-    capture_attempts(
-        context, launch, claim, budget, identity, &binding, state, started, deadline,
-    )
-    .await
+    let input = CaptureAttemptInput {
+        context,
+        launch,
+        claim,
+        identity,
+        binding: &binding,
+        started,
+        deadline,
+    };
+    capture_attempts(&input, budget, state).await
 }
 
 enum CaptureResume {
     Done,
-    Capture(diagnostics::CaptureState),
+    Capture(Box<diagnostics::CaptureState>),
 }
 
 async fn resume_capture(
@@ -86,7 +102,7 @@ async fn resume_capture(
     if is_new || state.phase == diagnostics::CapturePhase::Prepared {
         persist_state(context, launch, claim, budget, binding, &state).await?;
     }
-    Ok(CaptureResume::Capture(state))
+    Ok(CaptureResume::Capture(Box::new(state)))
 }
 
 fn verify_saved_projection(
@@ -136,7 +152,7 @@ async fn resume_pending_projection(
     }
     let state = retry_capture(&state)?;
     persist_state(context, launch, claim, budget, binding, &state).await?;
-    Ok(CaptureResume::Capture(state))
+    Ok(CaptureResume::Capture(Box::new(state)))
 }
 
 fn retry_capture(state: &diagnostics::CaptureState) -> Result<diagnostics::CaptureState, Failure> {
@@ -146,42 +162,41 @@ fn retry_capture(state: &diagnostics::CaptureState) -> Result<diagnostics::Captu
 }
 
 async fn capture_attempts(
-    context: &Context<'_>,
-    launch: &CompletedLaunch,
-    claim: CleanupClaim,
+    input: &CaptureAttemptInput<'_, '_>,
     budget: &mut EffectBudget<'_>,
-    identity: &StorageCleanupIdentity,
-    binding: &diagnostics::CaptureBinding,
     mut state: diagnostics::CaptureState,
-    started: Instant,
-    deadline: Instant,
 ) -> Result<(), Failure> {
     for _ in 0..MAX_CAPTURE_ATTEMPTS {
-        if Instant::now() >= deadline {
+        if Instant::now() >= input.deadline {
             return Err(Failure::request(
                 "runner log deadline",
                 HostError::DockerTimeout,
             ));
         }
-        let (terminal, archive) = capture_attempt(
-            context, launch, claim, budget, identity, binding, state, started, deadline,
-        )
-        .await?;
+        let (terminal, archive) = capture_attempt(input, budget, state).await?;
         if let Some(archive) = archive {
             state = diagnostics::persist_runner_log_projection(
-                context,
-                context.diagnostics,
-                launch,
-                claim,
+                input.context,
+                input.context.diagnostics,
+                input.launch,
+                input.claim,
                 budget,
-                binding,
+                input.binding,
                 &terminal,
                 terminal.attempt,
                 &archive,
                 Instant::now(),
             )
             .await?;
-            persist_state(context, launch, claim, budget, binding, &state).await?;
+            persist_state(
+                input.context,
+                input.launch,
+                input.claim,
+                budget,
+                input.binding,
+                &state,
+            )
+            .await?;
             return if state.phase == diagnostics::CapturePhase::Complete {
                 Ok(())
             } else {
@@ -194,7 +209,15 @@ async fn capture_attempts(
         state = terminal
             .retry_after_terminal()
             .map_err(|error| Failure::request("runner log retry", error))?;
-        persist_state(context, launch, claim, budget, binding, &state).await?;
+        persist_state(
+            input.context,
+            input.launch,
+            input.claim,
+            budget,
+            input.binding,
+            &state,
+        )
+        .await?;
     }
     Err(Failure::not_proven("runner log capture attempts"))
 }
