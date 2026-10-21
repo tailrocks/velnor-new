@@ -205,15 +205,18 @@ fn expected_bootstrap_spec(
         BootstrapRole::Dind => inventory.network().name().to_owned(),
         BootstrapRole::Runner => format!("container:{}", dind_id.ok_or(HostError::Ownership)?),
     };
+    let spec_context = containers::PairSpecContext {
+        plan: inventory.storage_plan(),
+        names,
+        connection_id: claim.connection_id(),
+        budget,
+    };
     let spec = containers::create_spec(
         role.container_role(),
-        expected_name.to_owned(),
+        expected_name,
         network_mode,
-        names,
-        claim.connection_id(),
-        inventory.storage_plan(),
         images,
-        budget,
+        &spec_context,
     )?;
     if containers::create_spec_sha256(&spec)? != receipt.spec_sha256() {
         return Err(HostError::Ownership);

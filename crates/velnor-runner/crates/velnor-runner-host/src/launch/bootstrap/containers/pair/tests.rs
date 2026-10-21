@@ -343,17 +343,23 @@ async fn failed_start_keeps_claim_and_runner_attach_until_recovery() -> Result<(
     let names = WorkerIdentityNames::from_nonce(&"f".repeat(32))?;
     let runner_mounts = fixed_mounts(&names, BootstrapContainerRole::Runner)?;
     let dind_mounts = fixed_mounts(&names, BootstrapContainerRole::Dind)?;
-    let result = super::production::start_attached_pair(
+    let deadline = Instant::now()
+        .checked_sub(Duration::from_millis(1))
+        .ok_or(HostError::Docker)?;
+    let context = super::PairStartContext::new(
         &docker,
         &scope,
         &selected,
         &images,
+        &metadata_handoff,
+        deadline,
+    );
+    let result = super::production::start_attached_pair(
+        &context,
         claim,
         attached,
-        &metadata_handoff,
         &runner_mounts,
         &dind_mounts,
-        Instant::now() - Duration::from_millis(1),
     )
     .await;
     assert!(result.is_err(), "expired start deadline must fail closed");

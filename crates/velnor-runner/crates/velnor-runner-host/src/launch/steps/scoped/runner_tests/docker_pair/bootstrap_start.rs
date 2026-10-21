@@ -162,14 +162,16 @@ impl BootstrapSetup {
                 "The storage initializer is not ready for the mount handoff.".to_owned()
             })?;
         crate::launch::bootstrap::start_bootstrap_pair(
-            &self.prepared,
-            &self.network,
-            pending.metadata_handoff(),
-            pending,
-            &self.api.docker,
-            &self.fixture.scope,
-            &self.engine,
-            &self.images,
+            crate::launch::bootstrap::BootstrapPairInput {
+                prepared: &self.prepared,
+                network: &self.network,
+                metadata: pending.metadata_handoff(),
+                pending_initialization: pending,
+                docker: &self.api.docker,
+                journal: &self.fixture.scope,
+                engine: &self.engine,
+                images: &self.images,
+            },
         )
         .await
         .map_err(|failure| {

@@ -95,12 +95,7 @@ async fn fixture(label: &str) -> Result<Fixture, HostError> {
         .await?
         .ok_or(HostError::Journal)?;
     let images = crate::launch::verified_images::test_worker_images_for_root("/var/lib/docker");
-    let engine_context = EngineContext {
-        engine_id: ENGINE_ID.to_owned(),
-        endpoint: "unix:///var/run/docker.sock".to_owned(),
-        platform: "linux/amd64".to_owned(),
-    };
-    let _selected = crate::launch::SelectedEngineContext::bind(&engine_context, &images)?;
+    validate_engine_context(&images)?;
     Ok(Fixture {
         _scratch: scratch,
         scope,
@@ -108,6 +103,16 @@ async fn fixture(label: &str) -> Result<Fixture, HostError> {
         plan,
         images,
     })
+}
+
+fn validate_engine_context(images: &VerifiedWorkerImages) -> Result<(), HostError> {
+    let engine_context = EngineContext {
+        engine_id: ENGINE_ID.to_owned(),
+        endpoint: "unix:///var/run/docker.sock".to_owned(),
+        platform: "linux/amd64".to_owned(),
+    };
+    let _selected = crate::launch::SelectedEngineContext::bind(&engine_context, images)?;
+    Ok(())
 }
 
 async fn connection_scope(journal: &Journal) -> Result<ConnectionJournal, HostError> {
@@ -161,16 +166,26 @@ fn create(
     network: &str,
 ) -> Result<PairCreate, HostError> {
     let names = WorkerIdentityNames::from_nonce(NONCE)?;
+    let context = spec_context(fixture, &names)?;
     create_spec(
         role,
-        format!("velnor-test-{role:?}").to_ascii_lowercase(),
+        &format!("velnor-test-{role:?}").to_ascii_lowercase(),
         network.to_owned(),
-        &names,
-        fixture.scope.connection_id().as_str(),
-        &fixture.plan,
         &fixture.images,
-        crate::worker::test_resource_budget()?,
+        &context,
     )
+}
+
+fn spec_context<'a>(
+    fixture: &'a Fixture,
+    names: &'a WorkerIdentityNames,
+) -> Result<super::PairSpecContext<'a>, HostError> {
+    Ok(super::PairSpecContext {
+        plan: &fixture.plan,
+        names,
+        connection_id: fixture.scope.connection_id().as_str(),
+        budget: crate::worker::test_resource_budget()?,
+    })
 }
 
 #[tokio::test]

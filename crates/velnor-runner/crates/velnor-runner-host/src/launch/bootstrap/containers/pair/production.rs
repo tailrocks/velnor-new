@@ -1,22 +1,15 @@
 use std::time::{Duration, Instant};
 
-use bollard::Docker;
 use bollard::container::AttachContainerResults;
 use bollard::query_parameters::StartContainerOptions;
 
-use crate::error::HostError;
-use crate::journal::{
-    ConnectionJournal, RecordedStorageNetwork, VerifiedMetadataInitializationHandoff,
-};
-use crate::launch::{SelectedEngineContext, VerifiedWorkerImages};
-use crate::worker::storage_initialization::PendingStorageInitialization;
-
-use super::super::super::adapter::PreparedAcquiredBootstrap;
 use super::super::{
     BootstrapContainerRole, BootstrapStartReceipt, VerifiedBootstrapContainerCreated,
     VerifiedBootstrapMountHandoff,
 };
 use super::spec::create_spec;
+use crate::error::HostError;
+use crate::journal::ConnectionJournal;
 mod attach;
 use attach::attach_runner;
 mod helpers;
@@ -27,6 +20,10 @@ use helpers::require_worker_runtime_id;
 use helpers::worker_image;
 mod inputs;
 use inputs::validate_pair_inputs;
+mod context;
+pub(crate) use context::BootstrapPairInput;
+use context::PairCreateContext;
+pub(crate) use context::PairStartContext;
 mod mounts;
 use mounts::{create_handoff, inspect_volume_mounts};
 mod terminal_response;
@@ -36,15 +33,18 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Create and start one journal-owned `DinD` and Runner pair.
 pub(crate) async fn start_bootstrap_pair(
-    prepared: &PreparedAcquiredBootstrap,
-    network: &RecordedStorageNetwork,
-    metadata: &VerifiedMetadataInitializationHandoff,
-    pending_initialization: &PendingStorageInitialization,
-    docker: &Docker,
-    journal: &ConnectionJournal,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
+    input: BootstrapPairInput<'_>,
 ) -> Result<StartedBootstrapPair, PairStartFailure> {
+    let BootstrapPairInput {
+        prepared,
+        network,
+        metadata,
+        pending_initialization,
+        docker,
+        journal,
+        engine,
+        images,
+    } = input;
     let (reservation_id, names) = validate_pair_inputs(
         prepared,
         network,
@@ -60,11 +60,18 @@ pub(crate) async fn start_bootstrap_pair(
     let dind_mounts = fixed_mounts(&names, BootstrapContainerRole::Dind)
         .map_err(PairStartFailure::before_attach)?;
     let deadline = Instant::now() + PAIR_TIMEOUT;
-    let (dind_id, runner_id) = create_pair_containers(
-        prepared, network, docker, journal, engine, images, &names, deadline,
-    )
-    .await
-    .map_err(PairStartFailure::before_attach)?;
+    let create_context = PairCreateContext {
+        prepared,
+        docker,
+        journal,
+        engine,
+        images,
+        names: &names,
+        deadline,
+    };
+    let (dind_id, runner_id) = create_pair_containers(&create_context, network)
+        .await
+        .map_err(PairStartFailure::before_attach)?;
     let start_claim = request(deadline, journal.claim_bootstrap_start(reservation_id))
         .await
         .map_err(PairStartFailure::before_attach)?
@@ -86,16 +93,11 @@ pub(crate) async fn start_bootstrap_pair(
         }
     };
     start_attached_pair(
-        docker,
-        journal,
-        engine,
-        images,
+        &PairStartContext::new(docker, journal, engine, images, metadata, deadline),
         start_claim,
         attached,
-        metadata,
         &runner_mounts,
         &dind_mounts,
-        deadline,
     )
     .await
 }
@@ -111,69 +113,28 @@ pub(in crate::launch::bootstrap) fn verify_pre_jit_created(
 }
 
 async fn create_pair_containers(
-    prepared: &PreparedAcquiredBootstrap,
-    network: &RecordedStorageNetwork,
-    docker: &Docker,
-    journal: &ConnectionJournal,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
-    names: &crate::worker::WorkerIdentityNames,
-    deadline: Instant,
+    context: &PairCreateContext<'_>,
+    network: &crate::journal::RecordedStorageNetwork,
 ) -> Result<(String, String), HostError> {
     let dind_id = create_one(
         BootstrapContainerRole::Dind,
         network.network_name(),
-        prepared,
-        docker,
-        journal,
-        engine,
-        images,
-        names,
-        deadline,
+        context,
     )
     .await?;
     let runner_network = format!("container:{dind_id}");
-    let runner_id = create_one(
-        BootstrapContainerRole::Runner,
-        &runner_network,
-        prepared,
-        docker,
-        journal,
-        engine,
-        images,
-        names,
-        deadline,
-    )
-    .await?;
+    let runner_id = create_one(BootstrapContainerRole::Runner, &runner_network, context).await?;
     Ok((dind_id, runner_id))
 }
 
 pub(super) async fn start_attached_pair(
-    docker: &Docker,
-    journal: &ConnectionJournal,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
+    context: &PairStartContext<'_>,
     claim: crate::journal::BootstrapStartClaim,
-    mut attached: AttachContainerResults,
-    metadata: &VerifiedMetadataInitializationHandoff,
+    attached: AttachContainerResults,
     runner_mounts: &[bollard::models::Mount],
     dind_mounts: &[bollard::models::Mount],
-    deadline: Instant,
 ) -> Result<StartedBootstrapPair, PairStartFailure> {
-    match start_pair(
-        docker,
-        journal,
-        engine,
-        images,
-        &claim,
-        deadline,
-        &mut attached,
-        metadata,
-        runner_mounts,
-        dind_mounts,
-    )
-    .await
-    {
+    match start_pair(context, &claim, runner_mounts, dind_mounts).await {
         Ok((receipt, mount_handoff)) => Ok(StartedBootstrapPair {
             receipt,
             mount_handoff,
@@ -185,7 +146,7 @@ pub(super) async fn start_attached_pair(
             delivery_succeeded: false,
         }),
         Err(error) => {
-            mark_start_uncertain(journal, &claim).await;
+            mark_start_uncertain(context.journal, &claim).await;
             Err(PairStartFailure::after_attach(error, claim, attached))
         }
     }
@@ -205,59 +166,60 @@ async fn mark_start_uncertain(
 async fn create_one(
     role: BootstrapContainerRole,
     network_mode: &str,
-    prepared: &PreparedAcquiredBootstrap,
-    docker: &Docker,
-    journal: &ConnectionJournal,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
-    names: &crate::worker::WorkerIdentityNames,
-    deadline: Instant,
+    context: &PairCreateContext<'_>,
 ) -> Result<String, HostError> {
     let Some(claim) = request(
-        deadline,
-        journal.claim_bootstrap_container_create(prepared.acquired().reservation_id(), role),
+        context.deadline,
+        context
+            .journal
+            .claim_bootstrap_container_create(context.prepared.acquired().reservation_id(), role),
     )
     .await??
     else {
         return Err(HostError::Journal);
     };
     let result = async {
-        if claim.operation_id() != prepared.acquired().intent_id()
-            || claim.engine_id() != engine.engine_id()
-            || claim.docker_root_digest() != engine.docker_root_digest()
+        if claim.operation_id() != context.prepared.acquired().intent_id()
+            || claim.engine_id() != context.engine.engine_id()
+            || claim.docker_root_digest() != context.engine.docker_root_digest()
         {
             return Err(HostError::Identity);
         }
+        let spec_context = super::spec::PairSpecContext {
+            plan: claim.storage_plan(),
+            names: context.names,
+            connection_id: context.journal.connection_id().as_str(),
+            budget: context.prepared.acquired().resource_budget(),
+        };
         let spec = create_spec(
             role,
-            claim.container_name().to_owned(),
+            claim.container_name(),
             network_mode.to_owned(),
-            names,
-            journal.connection_id().as_str(),
-            claim.storage_plan(),
-            images,
-            prepared.acquired().resource_budget(),
+            context.images,
+            &spec_context,
         )?;
         let image_runtime_id = spec.config.image.as_deref().ok_or(HostError::Identity)?;
         let spec_sha256 = create_spec_sha256(&spec)?;
         request(
-            deadline,
-            journal.record_pre_jit_create_spec(
+            context.deadline,
+            context.journal.record_pre_jit_create_spec(
                 &claim,
-                prepared.acquired().resource_budget(),
+                context.prepared.acquired().resource_budget(),
                 image_runtime_id,
-                images.source_sha(),
+                context.images.source_sha(),
                 &spec_sha256,
             ),
         )
         .await??;
-        create_claimed(docker, journal, engine, images, &claim, &spec, deadline).await
+        create_claimed(context, &claim, &spec).await
     }
     .await;
     if result.is_err() {
         let _marked = tokio::time::timeout(
             REQUEST_TIMEOUT,
-            journal.mark_bootstrap_container_create_uncertain(&claim),
+            context
+                .journal
+                .mark_bootstrap_container_create_uncertain(&claim),
         )
         .await;
     }
@@ -265,45 +227,64 @@ async fn create_one(
 }
 
 async fn create_claimed(
-    docker: &Docker,
-    journal: &ConnectionJournal,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
+    context: &PairCreateContext<'_>,
     claim: &crate::journal::BootstrapContainerCreateClaim,
     spec: &PairCreate,
-    deadline: Instant,
 ) -> Result<String, HostError> {
-    request(deadline, images.verify_for_engine(docker, engine)).await??;
-    if inspect(docker, claim.container_name(), deadline)
+    request(
+        context.deadline,
+        context
+            .images
+            .verify_for_engine(context.docker, context.engine),
+    )
+    .await??;
+    if inspect(context.docker, claim.container_name(), context.deadline)
         .await?
         .is_some()
     {
         return Err(HostError::Ownership);
     }
-    request(deadline, images.verify_for_engine(docker, engine)).await??;
+    request(
+        context.deadline,
+        context
+            .images
+            .verify_for_engine(context.docker, context.engine),
+    )
+    .await??;
     let image_reference = spec.config.image.as_deref().ok_or(HostError::Identity)?;
-    let image = request(deadline, docker.inspect_image(image_reference))
-        .await?
-        .map_err(|_| HostError::Docker)?;
-    require_worker_runtime_id(image.id.as_deref(), claim.role(), images)?;
+    let image = request(
+        context.deadline,
+        context.docker.inspect_image(image_reference),
+    )
+    .await?
+    .map_err(|_| HostError::Docker)?;
+    require_worker_runtime_id(image.id.as_deref(), claim.role(), context.images)?;
     let image_config = image.config.ok_or(HostError::Identity)?;
     let create_result = request(
-        deadline,
-        docker.create_container(Some(spec.options.clone()), spec.config.clone()),
+        context.deadline,
+        context
+            .docker
+            .create_container(Some(spec.options.clone()), spec.config.clone()),
     )
     .await?;
     let created = match create_result {
         Ok(created) => created,
         Err(error) => {
-            terminal_response::record_terminal_create_response(journal, claim, error).await;
+            terminal_response::record_terminal_create_response(context.journal, claim, error).await;
             return Err(HostError::Docker);
         }
     };
     if !valid_resource_id(&created.id) {
         return Err(HostError::Docker);
     }
-    request(deadline, images.verify_for_engine(docker, engine)).await??;
-    let inspected = inspect(docker, &created.id, deadline)
+    request(
+        context.deadline,
+        context
+            .images
+            .verify_for_engine(context.docker, context.engine),
+    )
+    .await??;
+    let inspected = inspect(context.docker, &created.id, context.deadline)
         .await?
         .ok_or(HostError::Docker)?;
     verify_created(&inspected, &created.id, claim, spec, &image_config)?;
@@ -317,22 +298,18 @@ async fn create_claimed(
         container_id: created.id.clone(),
     };
     request(
-        deadline,
-        journal.record_bootstrap_container_created(claim, &proof),
+        context.deadline,
+        context
+            .journal
+            .record_bootstrap_container_created(claim, &proof),
     )
     .await??;
     Ok(created.id)
 }
 
 async fn start_pair(
-    docker: &Docker,
-    journal: &ConnectionJournal,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
+    context: &PairStartContext<'_>,
     claim: &crate::journal::BootstrapStartClaim,
-    deadline: Instant,
-    _stdin: &mut AttachContainerResults,
-    metadata: &VerifiedMetadataInitializationHandoff,
     runner_mounts: &[bollard::models::Mount],
     dind_mounts: &[bollard::models::Mount],
 ) -> Result<(BootstrapStartReceipt, VerifiedBootstrapMountHandoff), HostError> {
@@ -341,14 +318,22 @@ async fn start_pair(
         ("dind", claim.dind_container_id(), dind_mounts),
         ("runner", claim.runner_container_id(), runner_mounts),
     ] {
-        request(deadline, images.verify_for_engine(docker, engine)).await??;
         request(
-            deadline,
-            docker.start_container(container_id, None::<StartContainerOptions>),
+            context.deadline,
+            context
+                .images
+                .verify_for_engine(context.docker, context.engine),
+        )
+        .await??;
+        request(
+            context.deadline,
+            context
+                .docker
+                .start_container(container_id, None::<StartContainerOptions>),
         )
         .await?
         .map_err(|_| HostError::Docker)?;
-        let inspected = inspect(docker, container_id, deadline)
+        let inspected = inspect(context.docker, container_id, context.deadline)
             .await?
             .ok_or(HostError::Docker)?;
         if inspected.id.as_deref() != Some(container_id)
@@ -368,10 +353,14 @@ async fn start_pair(
         runner_stdin_open: true,
         jit_withheld: true,
     };
-    request(deadline, journal.record_bootstrap_started(claim, &proof)).await??;
+    request(
+        context.deadline,
+        context.journal.record_bootstrap_started(claim, &proof),
+    )
+    .await??;
     let runner_digest = digests.get(1).ok_or(HostError::Identity)?;
     let dind_digest = digests.first().ok_or(HostError::Identity)?;
-    let handoff = create_handoff(metadata, claim, runner_digest, dind_digest)?;
+    let handoff = create_handoff(context.metadata, claim, runner_digest, dind_digest)?;
     Ok((proof, handoff))
 }
 

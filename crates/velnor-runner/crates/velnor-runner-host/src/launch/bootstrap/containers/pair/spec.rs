@@ -17,31 +17,32 @@ pub(crate) struct PairCreate {
     pub(crate) config: ContainerCreateBody,
 }
 
+pub(crate) struct PairSpecContext<'a> {
+    pub(crate) plan: &'a StorageProvisioningPlan,
+    pub(crate) names: &'a WorkerIdentityNames,
+    pub(crate) connection_id: &'a str,
+    pub(crate) budget: ResourceBudget,
+}
+
 pub(crate) fn create_spec(
     role: BootstrapContainerRole,
-    container_name: String,
+    container_name: &str,
     network_mode: String,
-    names: &WorkerIdentityNames,
-    connection_id: &str,
-    plan: &StorageProvisioningPlan,
     images: &VerifiedWorkerImages,
-    budget: ResourceBudget,
+    context: &PairSpecContext<'_>,
 ) -> Result<PairCreate, HostError> {
     let image = match role {
         BootstrapContainerRole::Runner => images.runner().runtime_id(),
         BootstrapContainerRole::Dind => images.dind().runtime_id(),
     };
     let body = create_body(
-        container_name.clone(),
+        container_name.to_owned(),
         image.to_owned(),
-        plan,
-        names,
-        connection_id,
         role,
         network_mode,
-        budget,
+        context,
     )?;
-    if body.options.name.as_deref() != Some(container_name.as_str())
+    if body.options.name.as_deref() != Some(container_name)
         || body.options.platform != "linux/amd64"
     {
         return Err(HostError::Identity);

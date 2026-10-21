@@ -35,14 +35,16 @@ async fn foreign_image_bundles_fail_before_worker_docker_effects_on_fixture_stac
 
     for foreign in foreign_bundles {
         let result = crate::launch::bootstrap::start_bootstrap_pair(
-            &setup.prepared,
-            &setup.network,
-            pending.metadata_handoff(),
-            pending,
-            &setup.api.docker,
-            &setup.fixture.scope,
-            &setup.engine,
-            &foreign,
+            crate::launch::bootstrap::BootstrapPairInput {
+                prepared: &setup.prepared,
+                network: &setup.network,
+                metadata: pending.metadata_handoff(),
+                pending_initialization: pending,
+                docker: &setup.api.docker,
+                journal: &setup.fixture.scope,
+                engine: &setup.engine,
+                images: &foreign,
+            },
         )
         .await;
         if result.is_ok() {

@@ -122,14 +122,16 @@ async fn prepare_network_and_started_pair<P: ImageProvider>(
         Err(error) => return Err(Box::new(pending(prepared, None, None, None, error))),
     };
     let started = match Box::pin(bootstrap::start_bootstrap_pair(
-        &prepared,
-        &network,
-        initializer.metadata_handoff(),
-        initializer,
-        docker,
-        scoped,
-        engine,
-        images,
+        bootstrap::BootstrapPairInput {
+            prepared: &prepared,
+            network: &network,
+            metadata: initializer.metadata_handoff(),
+            pending_initialization: initializer,
+            docker,
+            journal: scoped,
+            engine,
+            images,
+        },
     ))
     .await
     {

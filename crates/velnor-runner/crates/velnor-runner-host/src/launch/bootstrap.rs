@@ -16,10 +16,11 @@ pub(crate) use cleanup::{
     NativeCleanupRuntime, PendingStorageCleanupWitness, VerifiedStorageCleanup,
 };
 pub(crate) use containers::{
-    BootstrapContainerRole, BootstrapStartReceipt, PendingBootstrapPair, StartedBootstrapPair,
-    VerifiedBootstrapContainerCreated, VerifiedBootstrapMountHandoff, VerifiedCreatedStorageObject,
-    VerifiedStorageNetworkCreated, VerifiedStorageNetworkRemoved, create_owned_network,
-    remove_owned_network, remove_owned_network_for_retirement, start_bootstrap_pair,
+    BootstrapContainerRole, BootstrapPairInput, BootstrapStartReceipt, PendingBootstrapPair,
+    StartedBootstrapPair, VerifiedBootstrapContainerCreated, VerifiedBootstrapMountHandoff,
+    VerifiedCreatedStorageObject, VerifiedStorageNetworkCreated, VerifiedStorageNetworkRemoved,
+    create_owned_network, remove_owned_network, remove_owned_network_for_retirement,
+    start_bootstrap_pair,
 };
 #[cfg(test)]
 use containers::{create_spec, verify_pre_jit_created};

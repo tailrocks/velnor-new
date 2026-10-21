@@ -1,5 +1,6 @@
 use super::super::BootstrapContainerRole;
 use super::PairCreate;
+use super::spec::PairSpecContext;
 use crate::error::HostError;
 use crate::journal::{StorageProvisioningPlan, StorageRole};
 use crate::worker::{WorkerIdentityNames, WorkerVolumeRole};
@@ -175,24 +176,22 @@ pub(in crate::launch::bootstrap::containers) fn fixed_mounts(
 pub(in crate::launch::bootstrap::containers) fn create_body(
     name: String,
     image: String,
-    plan: &StorageProvisioningPlan,
-    names: &WorkerIdentityNames,
-    connection_id: &str,
     role: BootstrapContainerRole,
     network_mode: String,
-    budget: crate::worker::ResourceBudget,
+    context: &PairSpecContext<'_>,
 ) -> Result<PairCreate, HostError> {
+    let plan = context.plan;
     if plan.roles().len() != StorageRole::PHYSICAL.len()
         || plan.reservation_id() <= 0
         || plan.operation_id() <= 0
         || plan.engine_id().is_empty()
         || plan.docker_root_digest().len() != 64
-        || connection_id.is_empty()
+        || context.connection_id.is_empty()
     {
         return Err(HostError::Identity);
     }
-    let labels = container_labels(plan, connection_id, role);
-    let host = host_config(plan, names, role, network_mode, budget)?;
+    let labels = container_labels(plan, context.connection_id, role);
+    let host = host_config(plan, context.names, role, network_mode, context.budget)?;
     let open_stdin = role == BootstrapContainerRole::Runner;
     let config = ContainerCreateBody {
         image: Some(image),
