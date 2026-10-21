@@ -21,6 +21,13 @@ ${{ runner.temp }}/velnor/cargo/bin
 sources, credentials, Cargo targets, MBX objects, or task artifacts. The source layer owns only Cargo's
 `registry/index`, `registry/cache`, and `git/db` paths.
 
+Restored Rust is never trusted as restored. In every job that installs Rust, `Verify restored Rust
+toolchain` runs right after the restore (before `Prepare pinned tools`, which already runs `rustup` and
+`rustc` on a hit): it deletes the restored `cargo/bin` (rustup and its proxies; Mise reinstalls a fresh
+rustup) and verifies the restored toolchain file by file against the component tarballs of its pinned
+channel manifest, failing the job on any difference. See
+[verified Rust installs](../implemented/rust-channel-manifest.md).
+
 The generator derives the static digest from exact Mise action and binary pins, selected tool versions, Rust
 toolchain and components, target, runner lane, and the owned paths. A tool the project's Mise config declares
 ([hard decision 5](../hard-decisions.md)) enters the static digest only as its `${VELNOR_TOOL_<NAME>}`

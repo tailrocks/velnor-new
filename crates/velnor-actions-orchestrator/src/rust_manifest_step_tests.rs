@@ -24,22 +24,51 @@ fn the_step_carries_every_catalogued_digest_and_fails_closed_otherwise() {
             "{version}"
         );
     }
-    assert!(run.contains(&format!(
-        "*) printf \"%s\\n\" \"::error::{NOT_CATALOGUED_CODE}"
-    )));
+    assert!(run.contains(&format!("*) fail \"{NOT_CATALOGUED_CODE}: ")));
     assert!(run.contains("https://static.rust-lang.org/dist/channel-rust-$v.toml"));
     assert!(run.contains("--proto \"=https\""), "{run}");
-    assert!(run.contains("sha256sum -c"), "{run}");
-    assert!(run.contains("shasum -a 256 -c"), "macOS fallback: {run}");
+    assert!(run.contains("sha256sum"), "{run}");
+    assert!(run.contains("shasum -a 256"), "macOS fallback: {run}");
+    // File by file against the pinned component tarballs, not rustup's
+    // own metadata.
+    for needle in [
+        "lib/rustlib/components",
+        "https://static.rust-lang.org/dist/*.tar.xz",
+        "rust_component_tarball_digest_mismatch",
+        "tar -xJf",
+        "rust_toolchain_bytes_mismatch",
+        "rust_toolchain_file_unexpected",
+    ] {
+        assert!(run.contains(needle), "{needle}: {run}");
+    }
     assert!(
-        run.contains(&format!(
-            "$RUSTUP_HOME/toolchains/{RUST_VERSION}-x86_64-unknown-linux-gnu/lib/rustlib/multirust-channel-manifest.toml"
-        )),
-        "{run}"
+        !run.contains("comm -23"),
+        "metadata subset checks prove nothing about the bytes: {run}"
     );
     assert!(
-        run.contains("comm -23"),
-        "installed hashes must be a subset: {run}"
+        !run.contains("rm -rf \"${CARGO_HOME:?}/bin\""),
+        "only the restored phase discards rustup"
+    );
+}
+
+#[test]
+fn the_restored_step_discards_the_cached_rustup_and_tolerates_an_empty_cache() {
+    let step = super::verify_restored_rust_step(&ToolCatalog::pinned()).expect("step");
+    assert_eq!(step.name, super::VERIFY_RESTORED_RUST_STEP);
+    let StepKind::Shell { run, env } = step.kind else {
+        panic!("shell step");
+    };
+    let run = run.join(" ");
+    assert!(run.contains("rm -rf \"${CARGO_HOME:?}/bin\""), "{run}");
+    assert!(run.contains("no restored Rust"), "{run}");
+    assert!(run.contains("rust_toolchain_bytes_mismatch"), "{run}");
+    assert_eq!(
+        env.get("CARGO_HOME").map(String::as_str),
+        Some("${{ runner.temp }}/velnor/cargo")
+    );
+    assert_eq!(
+        env.get("RUSTUP_HOME").map(String::as_str),
+        Some("${{ runner.temp }}/velnor/rustup")
     );
 }
 

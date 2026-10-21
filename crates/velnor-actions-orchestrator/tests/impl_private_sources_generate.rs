@@ -74,6 +74,7 @@ const SEED_STEPS: &[&str] = &[
     "V2 identity",
     "Restore Mise tools",
     "Acquire Velnor",
+    "Verify restored Rust toolchain",
     "Prepare pinned tools",
     "Prepare Rust components",
     "Verify Rust channel manifest",

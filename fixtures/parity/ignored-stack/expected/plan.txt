@@ -14,7 +14,7 @@ Workflow to generate
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
     - actionlint (7 steps)
-    - plan (12 steps)
+    - plan (13 steps)
     - required (8 steps)
     - required-gate (1 steps)
     - no matrix entries (no-work workflow)

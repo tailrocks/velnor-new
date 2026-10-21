@@ -16,10 +16,10 @@ Workflow to generate
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
     - actionlint (7 steps)
-    - plan (12 steps)
+    - plan (13 steps)
     - required (8 steps)
     - required-gate (1 steps)
-    - rust-empty-suite (15 steps)
+    - rust-empty-suite (16 steps)
     - 1 Rust crate job
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> doc build -> format check
