@@ -125,3 +125,4 @@
 | Maven bundle | An archive of Maven repository files that a private fetch extracts for a build. |
 | dbt adapter | A dbt component that connects a project to a database. |
 | Event payload | JSON data that describes a GitHub event. |
+| Operational reserve | CPU and memory capacity kept available for operational work. |

@@ -12,7 +12,7 @@ use crate::launch::VerifiedWorkerImages;
 use crate::worker::ResourceBudget;
 
 use super::super::provider::ProbeImagePreparationEvidence;
-use super::{Observation, ProbeStartupEvidence};
+use super::{Observation, ProbeStartupEvidence, checked_guest_capacity};
 
 const POLICY_DOMAIN: &[u8] = b"velnor-storage-policy-one-job-v1\0";
 const PROFILE_DOMAIN: &[u8] = b"velnor-storage-startup-profile-v1\0";
@@ -103,11 +103,9 @@ pub(in crate::launch::resource_probe) fn build(
     )?;
     let pair_memory = budget.pair().memory_bytes;
     let retained_memory = retained_tmpfs_bytes()?;
-    let all_jobs_memory = pair_memory
-        .checked_add(retained_memory)?
-        .checked_mul(u64::from(max_jobs))?
-        .checked_add(budget.admission_reserve().memory_bytes)?;
-    if all_jobs_memory > observation.memory_total_bytes {
+    let (all_jobs_cpu, all_jobs_memory) =
+        aggregate_guest_capacity(budget, retained_memory, max_jobs)?;
+    if !observation.has_guest_capacity(all_jobs_cpu, all_jobs_memory) {
         return None;
     }
     admission
@@ -121,6 +119,29 @@ pub(in crate::launch::resource_probe) fn build(
         )
         .ok()?;
     Some(StartupStorageProfile { profile })
+}
+
+pub(super) fn aggregate_guest_capacity(
+    budget: ResourceBudget,
+    retained_memory: u64,
+    max_jobs: u32,
+) -> Option<(u64, u64)> {
+    if max_jobs == 0 {
+        return None;
+    }
+    let jobs = u64::from(max_jobs);
+    let worker_cpu = budget.pair().cpu_millicores.checked_mul(jobs)?;
+    let worker_memory = budget
+        .pair()
+        .memory_bytes
+        .checked_add(retained_memory)?
+        .checked_mul(jobs)?;
+    checked_guest_capacity(
+        worker_cpu,
+        worker_memory,
+        budget.admission_reserve().cpu_millicores,
+        budget.admission_reserve().memory_bytes,
+    )
 }
 
 pub(in crate::launch) fn retained_tmpfs_bytes() -> Option<u64> {

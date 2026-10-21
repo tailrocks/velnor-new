@@ -1,6 +1,9 @@
 use super::{charge_fits_pool, checked_required_charge};
 use crate::error::HostError;
 
+#[path = "admission_tests/aggregate_guest_capacity.rs"]
+mod aggregate_guest_capacity;
+
 #[test]
 fn aggregate_charge_must_fit_profile_and_observed_capacity() {
     let second_reservation = checked_required_charge(4, 4, 2).expect("checked aggregate");

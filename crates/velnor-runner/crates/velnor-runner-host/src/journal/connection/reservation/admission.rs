@@ -183,6 +183,18 @@ async fn resume_reservation(
             reservation_id: existing.id,
         });
     }
+    let retained_memory = storage.plan().retained_memory_bytes()?;
+    if !super::storage::guest_capacity_fits(
+        connection,
+        attempt.permit.as_ref().ok_or(HostError::Journal)?,
+        request.memory_bytes,
+        retained_memory,
+        Some(existing.id),
+    )
+    .await?
+    {
+        return Ok(ReservationResult::AtCapacity);
+    }
     if !admission_fits(connection, storage, request, Some(existing.id)).await? {
         return Ok(ReservationResult::AtCapacity);
     }
@@ -222,11 +234,15 @@ async fn create_reservation(
     let Some(profile) = super::storage_budget::current_profile(connection).await? else {
         return Ok(ReservationResult::AtCapacity);
     };
+    let retained_memory = storage.plan().retained_memory_bytes()?;
     if !admission_fits(connection, storage, attempt.request, None).await?
-        || !capacity_available(
+        || !capacity_available(connection, attempt.request, retained_memory).await?
+        || !super::storage::guest_capacity_fits(
             connection,
-            attempt.request,
-            storage.plan().retained_memory_bytes()?,
+            attempt.permit.as_ref().ok_or(HostError::Journal)?,
+            attempt.request.memory_bytes,
+            retained_memory,
+            None,
         )
         .await?
     {

@@ -73,23 +73,11 @@ pub(super) async fn reserve_in_transaction(
         return Ok(ReservationResult::AtCapacity);
     }
 
-    let profile = super::super::storage_budget::current_profile(connection)
-        .await?
-        .ok_or(HostError::Journal)?;
-    profile.validate_provisioning_contract()?;
-    admission.validate_for(
-        &profile,
-        request.sample_generation_id,
-        request.engine_id,
-        request.docker_root_digest,
-        request.memory_bytes,
-        Instant::now(),
-    )?;
-    if !disk_pool_fits(connection, &profile, admission.sample()).await?
-        || !capacity_fits(connection, request, profile_retained_memory(&profile)?).await?
-    {
+    let Some(profile) =
+        validated_profile_for_admission(connection, request, permit, admission).await?
+    else {
         return Ok(ReservationResult::AtCapacity);
-    }
+    };
     ensure_sample_is_new(connection, request.sample_generation_id).await?;
     let permit_value = permit.take().ok_or(HostError::Journal)?;
     if !permit_value.consume_for_admission(request.engine_id, request.docker_root_digest) {
@@ -118,6 +106,41 @@ pub(super) async fn reserve_in_transaction(
     )
     .await?;
     Ok(ReservationResult::Reserved { reservation_id })
+}
+
+async fn validated_profile_for_admission(
+    connection: &turso::Connection,
+    request: ReservationRequest<'_>,
+    permit: &Option<StartPermit>,
+    admission: &StorageProvisioningAdmission,
+) -> Result<Option<super::super::storage_budget::StorageProfile>, HostError> {
+    let Some(profile) = super::super::storage_budget::current_profile(connection).await? else {
+        return Err(HostError::Journal);
+    };
+    profile.validate_provisioning_contract()?;
+    let retained_memory = profile_retained_memory(&profile)?;
+    admission.validate_for(
+        &profile,
+        request.sample_generation_id,
+        request.engine_id,
+        request.docker_root_digest,
+        request.memory_bytes,
+        Instant::now(),
+    )?;
+    if !disk_pool_fits(connection, &profile, admission.sample()).await?
+        || !capacity_fits(connection, request, retained_memory).await?
+        || !super::super::storage::guest_capacity_fits(
+            connection,
+            permit.as_ref().ok_or(HostError::Journal)?,
+            request.memory_bytes,
+            retained_memory,
+            None,
+        )
+        .await?
+    {
+        return Ok(None);
+    }
+    Ok(Some(profile))
 }
 
 pub(super) async fn is_v16_reservation(

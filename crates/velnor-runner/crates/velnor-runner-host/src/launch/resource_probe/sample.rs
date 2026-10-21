@@ -1,9 +1,13 @@
 //! Non-serializable results scoped to one completed probe transaction.
 
+mod guest_capacity;
 mod production_profile;
 mod recovery;
 mod storage_admission;
+#[cfg(test)]
+mod test_fixtures;
 mod witness;
+pub(crate) use guest_capacity::checked_guest_capacity;
 pub(in crate::launch) use production_profile::retained_tmpfs_bytes;
 pub(crate) use recovery::RecoveryObservation;
 pub(in crate::launch) use storage_admission::filesystem_instance_digest;
@@ -11,8 +15,6 @@ pub(crate) use witness::StartObservationWitness;
 #[cfg(test)]
 mod storage_admission_tests;
 
-#[cfg(test)]
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::worker::ResourceBudget;
@@ -120,6 +122,15 @@ impl Observation {
         &self.sample_generation_id
     }
 
+    pub(super) fn has_guest_capacity(&self, cpu_millicores: u64, memory_bytes: u64) -> bool {
+        guest_capacity::guest_capacity_fits(
+            self.effective_cpu_millicores,
+            self.memory_total_bytes,
+            cpu_millicores,
+            memory_bytes,
+        )
+    }
+
     pub(super) const fn memory_total_bytes(&self) -> u64 {
         self.memory_total_bytes
     }
@@ -178,6 +189,20 @@ pub(crate) struct StartPermit {
 }
 
 impl StartPermit {
+    pub(crate) fn checked_guest_capacity(
+        worker_cpu_millicores: u64,
+        worker_memory_bytes: u64,
+        operational_cpu_millicores: u64,
+        operational_memory_bytes: u64,
+    ) -> Option<(u64, u64)> {
+        guest_capacity::checked_guest_capacity(
+            worker_cpu_millicores,
+            worker_memory_bytes,
+            operational_cpu_millicores,
+            operational_memory_bytes,
+        )
+    }
+
     #[cfg(test)]
     pub(crate) fn into_test_recovery_observation(mut self) -> Option<RecoveryObservation> {
         self.observation.effective_cpu_millicores = 4_000;
@@ -190,6 +215,31 @@ impl StartPermit {
 
     pub(crate) const fn resource_budget(&self) -> ResourceBudget {
         self.budget
+    }
+
+    pub(crate) fn has_guest_capacity(
+        &self,
+        cpu_millicores: u64,
+        memory_bytes: u64,
+        additional_available_memory_bytes: u64,
+    ) -> bool {
+        self.observation
+            .has_guest_capacity(cpu_millicores, memory_bytes)
+            && self.observation.record.memory_available_bytes >= additional_available_memory_bytes
+    }
+
+    pub(crate) fn required_available_memory(
+        held_memory_bytes: u64,
+        request_memory_bytes: u64,
+        retained_memory_bytes: u64,
+        operational_reserve_bytes: u64,
+    ) -> Option<u64> {
+        guest_capacity::required_available_memory(
+            held_memory_bytes,
+            request_memory_bytes,
+            retained_memory_bytes,
+            operational_reserve_bytes,
+        )
     }
 
     pub(crate) fn storage_profile(
@@ -267,110 +317,6 @@ impl StartPermit {
         self.observation.engine_id == engine_id
             && self.observation.docker_root_digest == root_digest
             && self.observation.is_recent_at(now)
-    }
-
-    #[cfg(test)]
-    pub(super) fn test_is_valid_at(&self, now: Instant) -> bool {
-        self.is_valid_at("test-engine", &self.observation.docker_root_digest, now)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_fixture() -> Self {
-        static NEXT_GENERATION: AtomicU64 = AtomicU64::new(0);
-        let generation = NEXT_GENERATION.fetch_add(1, Ordering::Relaxed);
-        Self::test_fixture_with_generation(&format!("{generation:032x}"))
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_fixture_with_generation(generation: &str) -> Self {
-        assert!(valid_generation_id(generation));
-        let docker_root_digest = super::projection::DockerRoot::parse("/var/lib/docker")
-            .map(|root| root.digest().to_owned())
-            .unwrap_or_default();
-        let startup_evidence =
-            ProbeStartupEvidence::test_fixture(generation, "test-engine", &docker_root_digest);
-        StartPermit {
-            observation: Observation {
-                record: super::record::fixture_record(),
-                cpus: 1,
-                effective_cpu_millicores: 1_000,
-                memory_total_bytes: 64 * 1024 * 1024 * 1024,
-                engine_id: "test-engine".to_owned(),
-                docker_root_digest,
-                sample_generation_id: generation.to_owned(),
-                observed_at: Instant::now(),
-                startup_evidence,
-            },
-            cpu_millicores: 2_000,
-            memory_bytes: 8 * 1024 * 1024 * 1024,
-            budget: crate::worker::ResourceBudgetConfig {
-                runner_cpu_millicores: 1_000,
-                runner_memory_bytes: 4 * 1024 * 1024 * 1024,
-                dind_cpu_millicores: 1_000,
-                dind_memory_bytes: 4 * 1024 * 1024 * 1024,
-                operational_memory_reserve_bytes: 1,
-            }
-            .validate()
-            .expect("valid fixture budget"),
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_fixture_with_available_memory(
-        generation: &str,
-        available_memory_bytes: u64,
-    ) -> Self {
-        let mut permit = Self::test_fixture_with_generation(generation);
-        assert!(available_memory_bytes <= permit.observation.memory_total_bytes);
-        permit.observation.record.memory_available_bytes = available_memory_bytes;
-        permit
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_fixture_with_engine_and_available_memory(
-        generation: &str,
-        engine_id: &str,
-        available_memory_bytes: u64,
-    ) -> Self {
-        let mut permit = Self::test_fixture_with_engine_id(generation, engine_id);
-        assert!(available_memory_bytes <= permit.observation.memory_total_bytes);
-        permit.observation.record.memory_available_bytes = available_memory_bytes;
-        permit
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_fixture_with_engine_id(generation: &str, engine_id: &str) -> Self {
-        assert!(valid_generation_id(generation));
-        assert!(!engine_id.is_empty() && engine_id.len() <= 128);
-        let docker_root_digest = super::projection::DockerRoot::parse("/var/lib/docker")
-            .map(|root| root.digest().to_owned())
-            .unwrap_or_default();
-        let startup_evidence =
-            ProbeStartupEvidence::test_fixture(generation, engine_id, &docker_root_digest);
-        StartPermit {
-            observation: Observation {
-                record: super::record::fixture_record(),
-                cpus: 1,
-                effective_cpu_millicores: 1_000,
-                memory_total_bytes: 64 * 1024 * 1024 * 1024,
-                engine_id: engine_id.to_owned(),
-                docker_root_digest,
-                sample_generation_id: generation.to_owned(),
-                observed_at: Instant::now(),
-                startup_evidence,
-            },
-            cpu_millicores: 2_000,
-            memory_bytes: 8 * 1024 * 1024 * 1024,
-            budget: crate::worker::ResourceBudgetConfig {
-                runner_cpu_millicores: 1_000,
-                runner_memory_bytes: 4 * 1024 * 1024 * 1024,
-                dind_cpu_millicores: 1_000,
-                dind_memory_bytes: 4 * 1024 * 1024 * 1024,
-                operational_memory_reserve_bytes: 1,
-            }
-            .validate()
-            .expect("valid fixture budget"),
-        }
     }
 }
 

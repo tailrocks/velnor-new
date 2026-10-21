@@ -2,6 +2,7 @@
 
 use crate::error::HostError;
 use crate::journal::sql::token_rejected;
+use crate::launch::StartPermit;
 
 use super::super::identity::AssignmentIdentity;
 use super::super::storage::scalar_count;
@@ -93,15 +94,24 @@ pub(super) struct StoredCapacityLimits {
     pub(super) jobs: u32,
     pub(super) cpu_millicores: u64,
     pub(super) memory_bytes: u64,
+    pub(super) operational_cpu_millicores: u64,
+    pub(super) operational_memory_bytes: u64,
 }
 
 pub(super) async fn capacity_usage(
     connection: &turso::Connection,
 ) -> Result<CapacityUsage, HostError> {
+    capacity_usage_excluding(connection, None).await
+}
+
+pub(super) async fn capacity_usage_excluding(
+    connection: &turso::Connection,
+    excluded_reservation_id: Option<i64>,
+) -> Result<CapacityUsage, HostError> {
     let mut rows = connection
         .query(
-            "SELECT cpu_millicores, memory_bytes FROM capacity_reservations WHERE state != 'released'",
-            (),
+            "SELECT cpu_millicores, memory_bytes FROM capacity_reservations WHERE state != 'released' AND (?1 IS NULL OR id != ?1)",
+            [excluded_reservation_id],
         )
         .await
         .map_err(|_| HostError::Journal)?;
@@ -127,8 +137,8 @@ pub(super) async fn capacity_usage(
     }
     let mut rows = connection
         .query(
-            "SELECT COALESCE(SUM(s.retained_memory_bytes), 0) FROM capacity_reservation_storage AS s JOIN capacity_reservations AS r ON r.id = s.reservation_id WHERE r.state != 'released'",
-            (),
+            "SELECT COALESCE(SUM(s.retained_memory_bytes), 0) FROM capacity_reservation_storage AS s JOIN capacity_reservations AS r ON r.id = s.reservation_id WHERE r.state != 'released' AND (?1 IS NULL OR r.id != ?1)",
+            [excluded_reservation_id],
         )
         .await
         .map_err(|_| HostError::Journal)?;
@@ -147,8 +157,8 @@ pub(super) async fn capacity_usage(
         .ok_or(HostError::Journal)?;
     let mut rows = connection
         .query(
-            "SELECT COALESCE(SUM(p.retained_memory_bytes), 0) FROM capacity_reservation_provisioning AS p JOIN capacity_reservations AS r ON r.id = p.reservation_id WHERE r.state != 'released'",
-            (),
+            "SELECT COALESCE(SUM(p.retained_memory_bytes), 0) FROM capacity_reservation_provisioning AS p JOIN capacity_reservations AS r ON r.id = p.reservation_id WHERE r.state != 'released' AND (?1 IS NULL OR r.id != ?1)",
+            [excluded_reservation_id],
         )
         .await
         .map_err(|_| HostError::Journal)?;
@@ -173,7 +183,7 @@ pub(super) async fn capacity_limits(
 ) -> Result<StoredCapacityLimits, HostError> {
     let mut rows = connection
         .query(
-            "SELECT max_jobs, max_cpu_millicores, max_memory_bytes FROM host_capacity_policy WHERE singleton = 1",
+            "SELECT max_jobs, max_cpu_millicores, max_memory_bytes, operational_cpu_millicores, operational_memory_bytes FROM host_capacity_policy WHERE singleton = 1",
             (),
         )
         .await
@@ -190,7 +200,41 @@ pub(super) async fn capacity_limits(
             .map_err(|_| HostError::Journal)?,
         memory_bytes: u64::try_from(row.get::<i64>(2).map_err(|_| HostError::Journal)?)
             .map_err(|_| HostError::Journal)?,
+        operational_cpu_millicores: u64::try_from(
+            row.get::<i64>(3).map_err(|_| HostError::Journal)?,
+        )
+        .map_err(|_| HostError::Journal)?,
+        operational_memory_bytes: u64::try_from(row.get::<i64>(4).map_err(|_| HostError::Journal)?)
+            .map_err(|_| HostError::Journal)?,
     })
+}
+
+pub(super) async fn guest_capacity_fits(
+    connection: &turso::Connection,
+    permit: &StartPermit,
+    request_memory_bytes: u64,
+    retained_memory_bytes: u64,
+    excluded_reservation_id: Option<i64>,
+) -> Result<bool, HostError> {
+    let limits = capacity_limits(connection).await?;
+    let Some((required_cpu, required_memory)) = StartPermit::checked_guest_capacity(
+        limits.cpu_millicores,
+        limits.memory_bytes,
+        limits.operational_cpu_millicores,
+        limits.operational_memory_bytes,
+    ) else {
+        return Ok(false);
+    };
+    let usage = capacity_usage_excluding(connection, excluded_reservation_id).await?;
+    let Some(available_memory) = crate::launch::StartPermit::required_available_memory(
+        usage.memory_bytes,
+        request_memory_bytes,
+        retained_memory_bytes,
+        limits.operational_memory_bytes,
+    ) else {
+        return Ok(false);
+    };
+    Ok(permit.has_guest_capacity(required_cpu, required_memory, available_memory))
 }
 
 pub(super) async fn reservation_state(

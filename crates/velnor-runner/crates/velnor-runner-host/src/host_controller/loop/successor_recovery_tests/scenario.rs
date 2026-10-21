@@ -26,7 +26,7 @@ pub(super) async fn max_jobs_one_successor() -> Result<(), String> {
 impl FailedAttempt {
     async fn start() -> Result<Self, String> {
         let failure = Box::pin(crate::launch::runner_create_409_with_jobs(1)).await?;
-        failure.set_probe_available_bytes(128 * 1024 * 1024 * 1024);
+        failure.set_probe_available_bytes(32 * 1024 * 1024 * 1024);
         let binding = failure.binding().clone();
         let scope = failure.scope().clone();
         let journal = failure.host_journal().clone();
@@ -80,6 +80,22 @@ impl FailedAttempt {
             1,
             "The acquired logical demand must remain charged until a successor exists."
         );
+        self.journal
+            .configure_capacity_with_operational_limits(
+                crate::journal::CapacityLimits {
+                    jobs: 1,
+                    cpu_millicores: 4_000,
+                    memory_bytes: 32 * 1024 * 1024 * 1024,
+                },
+                crate::journal::OperationalCapacityLimits {
+                    cpu_millicores: 1_000,
+                    memory_bytes: 256 * 1024 * 1024,
+                },
+            )
+            .await
+            .map_err(|error| {
+                format!("The test cannot configure recovery capacity for one job. Error: {error}.")
+            })?;
         Ok(())
     }
 
