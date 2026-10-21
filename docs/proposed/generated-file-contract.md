@@ -20,6 +20,7 @@ preserves other repository-owned entries as specified in §3:
     ├── binary-preview.yml         # consumer-v1 only, rolling preview channel enabled
     ├── preview-tap-reconcile.yml  # preview Homebrew destination configured
     ├── stable-tap-reconcile.yml   # stable Homebrew destination configured
+    ├── cache-cleanup.yml           # `pull_request_cache_policy = "same-repository-scoped"`: deletes a closed PR's cache entries
     ├── ci.yml                      # both policies; Velnor policy adds campaign inputs
     ├── publish.yml                 # consumer-v1 only, `[[publish.bundles]]` or `registry = "git-tag"`
     ├── qualification.yml           # optional schema 2 workflow selected by configuration

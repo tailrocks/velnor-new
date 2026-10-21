@@ -199,6 +199,7 @@ fn render_all(
     extra.extend(crate::binary_release_emit::files(prep)?);
     extra.extend(crate::binary_preview_emit::files(prep)?);
     extra.extend(crate::freshness_emit::freshness_files(prep)?);
+    extra.extend(cache_cleanup_emit::files(prep)?);
     extra.extend(crate::owned_tool_publication::files(prep)?);
     extra.extend(crate::tofu_apply_emit::tofu_apply_files(prep)?);
     extra.extend(crate::review_completion_workflow_emit::files(prep)?);
@@ -248,6 +249,9 @@ fn reject_symlink(path: &Path) -> Result<(), OrchestratorError> {
     }
     Ok(())
 }
+
+#[path = "cache_cleanup_emit.rs"]
+mod cache_cleanup_emit;
 
 /// Symlink-prefix guard with emitted-leaf replacement.
 #[path = "generate_leaf_links.rs"]
