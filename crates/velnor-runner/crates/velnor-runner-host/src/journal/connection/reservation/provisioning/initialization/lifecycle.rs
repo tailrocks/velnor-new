@@ -207,8 +207,8 @@ impl ConnectionJournal {
     async fn claim_transition(
         &self,
         reservation_id: i64,
-        _column: &str,
-        _state: &str,
+        column: &str,
+        state: &str,
         predicate: &str,
     ) -> Result<Option<StorageInitializationClaim>, HostError> {
         if reservation_id <= 0 {
@@ -243,8 +243,8 @@ impl ConnectionJournal {
                 return Err(HostError::Journal);
             }
             if rows.next().await.map_err(|_| HostError::Journal)?.is_some() { return Err(HostError::Journal); }
-            let update = match _column { "start_state" => "UPDATE capacity_reservation_storage_initialization SET start_state = ?2 WHERE reservation_id = ?1", "remove_state" => "UPDATE capacity_reservation_storage_initialization SET remove_state = ?2 WHERE reservation_id = ?1", _ => return Err(HostError::Journal) };
-            let changed = connection.execute(update, (reservation_id, _state)).await.map_err(|_| HostError::Journal)?;
+            let update = match column { "start_state" => "UPDATE capacity_reservation_storage_initialization SET start_state = ?2 WHERE reservation_id = ?1", "remove_state" => "UPDATE capacity_reservation_storage_initialization SET remove_state = ?2 WHERE reservation_id = ?1", _ => return Err(HostError::Journal) };
+            let changed = connection.execute(update, (reservation_id, state)).await.map_err(|_| HostError::Journal)?;
             if changed != 1 { return Ok(None); }
             Ok(Some(claim))
         }).await
