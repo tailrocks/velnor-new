@@ -73,110 +73,117 @@ pub(super) fn worker_attachments(
         .attachments
         .iter()
         .map(|attachment| {
-            let role = storage_role(attachment.role)?;
-            let contract = role
-                .attachments()
-                .iter()
-                .find(|contract| {
-                    contract.observer == observer && contract.target == attachment.target
-                })
-                .ok_or(HostError::Ownership)?;
-            if attachment.read_only != contract.read_only
-                || attachment.mount_id == 0
-                || attachment.statx_inode == 0
-                || attachment.filesystem_id == 0
-                || attachment.total_bytes == 0
-                || attachment.free_bytes > attachment.total_bytes
-                || attachment.available_bytes > attachment.free_bytes
-                || attachment.mount_source.is_empty()
-                || attachment.mount_source.len() > 1024
-                || attachment
-                    .mount_source
-                    .bytes()
-                    .any(|byte| byte.is_ascii_control())
-                || attachment.mount_root.is_empty()
-                || !attachment.mount_root.starts_with('/')
-                || attachment.mount_root.len() > 1024
-                || attachment
-                    .mount_root
-                    .bytes()
-                    .any(|byte| byte.is_ascii_control())
-                || !valid_mount_root(&attachment.mount_root, contract.volume_subpath)
-                || (attachment.filesystem_type_magic != BTRFS_MAGIC
-                    && (attachment.mount_device_major, attachment.mount_device_minor)
-                        != (attachment.statx_device_major, attachment.statx_device_minor))
-            {
-                return Err(HostError::Identity);
-            }
-            let filesystem_instance_digest =
-                crate::launch::resource_probe::filesystem_instance_digest(
-                    engine.engine_id(),
-                    engine.docker_root_digest(),
-                    observation.guest_boot_id.as_bytes(),
-                    attachment.mount_source.as_bytes(),
-                    attachment.filesystem_type_name.as_bytes(),
-                    attachment.filesystem_type_magic,
-                    attachment.mount_device_major,
-                    attachment.mount_device_minor,
-                    attachment.statx_device_major,
-                    attachment.statx_device_minor,
-                    attachment.filesystem_id,
-                );
-            let capacity_digest = filesystem_instance_digest.clone();
-            let binding = ObservedStorageAttachment {
-                role,
-                observer,
-                container_id: Some(container_id.to_owned()),
-                target: attachment.target.clone(),
-                source_target: contract.source_target.map(str::to_owned),
-                volume_subpath: contract.volume_subpath.map(str::to_owned),
-                mount_root: attachment.mount_root.clone(),
-                read_only: attachment.read_only,
-                mount_id: attachment.mount_id,
-                statx_inode: attachment.statx_inode,
-                device_major: attachment.mount_device_major,
-                device_minor: attachment.mount_device_minor,
-                statx_device_major: attachment.statx_device_major,
-                statx_device_minor: attachment.statx_device_minor,
-                fs_type_magic: attachment.filesystem_type_magic,
-                filesystem_id: attachment.filesystem_id,
-                filesystem_instance_digest,
-            };
-            Ok(MeasuredAttachment {
-                role,
-                capacity_digest,
-                capacity_fs_type_magic: attachment.filesystem_type_magic,
-                binding,
-                total_bytes: attachment.total_bytes,
-                free_bytes: attachment.free_bytes,
-                available_bytes: attachment.available_bytes,
-                inode_total: attachment.inode_total,
-                inode_free: attachment.inode_free,
-                inode_available: attachment.inode_available,
-                inode_policy: attachment.inode_policy,
-                filesystem_type_name: attachment.filesystem_type_name.clone(),
-            })
+            measure_attachment(observation, attachment, container_id, observer, engine)
         })
         .collect()
 }
 
-fn storage_role(role: AttachmentRole) -> Result<StorageRole, HostError> {
+fn measure_attachment(
+    observation: &SelfStorageObservation,
+    attachment: &velnor_resource_probe::worker_binding::StorageAttachmentObservation,
+    container_id: &str,
+    observer: StorageObserver,
+    engine: &SelectedEngineContext,
+) -> Result<MeasuredAttachment, HostError> {
+    let role = storage_role(attachment.role);
+    let contract = role
+        .attachments()
+        .iter()
+        .find(|contract| contract.observer == observer && contract.target == attachment.target)
+        .ok_or(HostError::Ownership)?;
+    validate_attachment(attachment, contract.read_only, contract.volume_subpath)?;
+    let filesystem_instance_digest = crate::launch::resource_probe::filesystem_instance_digest(
+        engine.engine_id(),
+        engine.docker_root_digest(),
+        observation.guest_boot_id.as_bytes(),
+        attachment.mount_source.as_bytes(),
+        attachment.filesystem_type_name.as_bytes(),
+        attachment.filesystem_type_magic,
+        attachment.mount_device_major,
+        attachment.mount_device_minor,
+        attachment.statx_device_major,
+        attachment.statx_device_minor,
+        attachment.filesystem_id,
+    );
+    let binding = ObservedStorageAttachment {
+        role,
+        observer,
+        container_id: Some(container_id.to_owned()),
+        target: attachment.target.clone(),
+        source_target: contract.source_target.map(str::to_owned),
+        volume_subpath: contract.volume_subpath.map(str::to_owned),
+        mount_root: attachment.mount_root.clone(),
+        read_only: attachment.read_only,
+        mount_id: attachment.mount_id,
+        statx_inode: attachment.statx_inode,
+        device_major: attachment.mount_device_major,
+        device_minor: attachment.mount_device_minor,
+        statx_device_major: attachment.statx_device_major,
+        statx_device_minor: attachment.statx_device_minor,
+        fs_type_magic: attachment.filesystem_type_magic,
+        filesystem_id: attachment.filesystem_id,
+        filesystem_instance_digest: filesystem_instance_digest.clone(),
+    };
+    Ok(MeasuredAttachment {
+        role,
+        capacity_digest: filesystem_instance_digest,
+        capacity_fs_type_magic: attachment.filesystem_type_magic,
+        binding,
+        total_bytes: attachment.total_bytes,
+        free_bytes: attachment.free_bytes,
+        available_bytes: attachment.available_bytes,
+        inode_total: attachment.inode_total,
+        inode_free: attachment.inode_free,
+        inode_available: attachment.inode_available,
+        inode_policy: attachment.inode_policy,
+        filesystem_type_name: attachment.filesystem_type_name.clone(),
+    })
+}
+
+fn validate_attachment(
+    attachment: &velnor_resource_probe::worker_binding::StorageAttachmentObservation,
+    required_read_only: bool,
+    volume_subpath: Option<&str>,
+) -> Result<(), HostError> {
+    if attachment.read_only != required_read_only
+        || attachment.mount_id == 0
+        || attachment.statx_inode == 0
+        || attachment.filesystem_id == 0
+        || attachment.total_bytes == 0
+        || attachment.free_bytes > attachment.total_bytes
+        || attachment.available_bytes > attachment.free_bytes
+        || !valid_mount_identity(&attachment.mount_source)
+        || !valid_mount_identity(&attachment.mount_root)
+        || !valid_mount_root(&attachment.mount_root, volume_subpath)
+        || (attachment.filesystem_type_magic != BTRFS_MAGIC
+            && (attachment.mount_device_major, attachment.mount_device_minor)
+                != (attachment.statx_device_major, attachment.statx_device_minor))
+    {
+        return Err(HostError::Identity);
+    }
+    Ok(())
+}
+
+fn valid_mount_identity(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 1024 && !value.bytes().any(|byte| byte.is_ascii_control())
+}
+
+fn storage_role(role: AttachmentRole) -> StorageRole {
     match role {
-        AttachmentRole::RunnerRoot => Ok(StorageRole::RunnerRoot),
-        AttachmentRole::RunnerHome => Ok(StorageRole::RunnerHome),
-        AttachmentRole::RunnerWork => Ok(StorageRole::RunnerWork),
-        AttachmentRole::RunnerTmp => Ok(StorageRole::RunnerTmp),
-        AttachmentRole::RunnerShm => Ok(StorageRole::RunnerShm),
-        AttachmentRole::SharedRun => Ok(StorageRole::SharedRun),
-        AttachmentRole::DindRoot => Ok(StorageRole::DindRoot),
-        AttachmentRole::DindData => Ok(StorageRole::DindData),
-        AttachmentRole::DindTmp => Ok(StorageRole::DindTmp),
-        AttachmentRole::DindShm => Ok(StorageRole::DindShm),
-        AttachmentRole::SourceProofInbox => Ok(StorageRole::RunnerHome),
+        AttachmentRole::RunnerRoot => StorageRole::RunnerRoot,
+        AttachmentRole::RunnerHome | AttachmentRole::SourceProofInbox => StorageRole::RunnerHome,
+        AttachmentRole::RunnerWork => StorageRole::RunnerWork,
+        AttachmentRole::RunnerTmp => StorageRole::RunnerTmp,
+        AttachmentRole::RunnerShm => StorageRole::RunnerShm,
+        AttachmentRole::SharedRun => StorageRole::SharedRun,
+        AttachmentRole::DindRoot => StorageRole::DindRoot,
+        AttachmentRole::DindData => StorageRole::DindData,
+        AttachmentRole::DindTmp => StorageRole::DindTmp,
+        AttachmentRole::DindShm => StorageRole::DindShm,
         AttachmentRole::JobFacts
         | AttachmentRole::RuntimeIdentity
         | AttachmentRole::SourceProofControl
-        | AttachmentRole::EngineMetadata => Ok(StorageRole::EngineMetadata),
+        | AttachmentRole::EngineMetadata => StorageRole::EngineMetadata,
     }
 }
 

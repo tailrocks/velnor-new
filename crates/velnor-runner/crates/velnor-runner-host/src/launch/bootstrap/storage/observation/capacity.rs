@@ -2,6 +2,7 @@ use super::{super::VerifiedWorkerStorageObservation, worker::MeasuredAttachment}
 
 pub(super) const BTRFS_MAGIC: u64 = 0x9123_683e;
 const TMPFS_MAGIC: u64 = 0x0102_1994;
+const HEX: &[u8; 16] = b"0123456789abcdef";
 use crate::{
     error::HostError,
     journal::{
@@ -112,9 +113,9 @@ fn filesystem_kind(magic: u64, name: &str) -> Result<StorageFilesystemKind, Host
     match (magic, name) {
         (BTRFS_MAGIC, "btrfs") => Ok(StorageFilesystemKind::Btrfs),
         (TMPFS_MAGIC, "tmpfs") => Ok(StorageFilesystemKind::Tmpfs),
-        (BTRFS_MAGIC | TMPFS_MAGIC, _) => Err(HostError::Identity),
-        (_, "btrfs" | "tmpfs") => Err(HostError::Identity),
-        (0, _) | (_, "") => Err(HostError::Identity),
+        (BTRFS_MAGIC | TMPFS_MAGIC | 0, _) | (_, "btrfs" | "tmpfs" | "") => {
+            Err(HostError::Identity)
+        }
         _ => Ok(StorageFilesystemKind::Other),
     }
 }
@@ -213,7 +214,6 @@ pub(super) fn instance_binding_digest(
         hasher.update(field);
     }
     let mut digest = String::with_capacity(64);
-    const HEX: &[u8; 16] = b"0123456789abcdef";
     for byte in hasher.finalize() {
         digest.push(char::from(HEX[usize::from(byte >> 4)]));
         digest.push(char::from(HEX[usize::from(byte & 0x0f)]));

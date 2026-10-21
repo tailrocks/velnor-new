@@ -23,41 +23,36 @@ pub(in crate::launch) use provider_entry::observe_storage_resources_with_provide
 use crate::{
     error::HostError,
     journal::{ConnectionJournal, Journal},
-    launch::{
-        SelectedEngineContext, VerifiedWorkerImages,
-        bootstrap::{
-            PreparedAcquiredBootstrap, StartedBootstrapPair, VerifiedStorageResourceBinding,
-        },
-        resource_probe::ReleaseReadSecret,
-    },
-    worker::storage_initialization::VerifiedStorageInitializationReady,
+    launch::{SelectedEngineContext, VerifiedWorkerImages, resource_probe::ImageProvider},
 };
 
-pub(crate) async fn observe_storage_resources(
-    docker: &Docker,
-    journal: &ConnectionJournal,
-    host_journal: &Journal,
-    release_read_secret: &ReleaseReadSecret,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
-    prepared: &PreparedAcquiredBootstrap,
-    started: &StartedBootstrapPair,
-    initialization: &VerifiedStorageInitializationReady,
-) -> Result<VerifiedStorageResourceBinding, HostError> {
-    let provider =
-        crate::launch::resource_probe::release_image_provider(release_read_secret, host_journal)?;
-    observe_storage_resources_with_provider(
-        docker,
-        journal,
-        host_journal,
-        &provider,
-        engine,
-        images,
-        prepared,
-        started,
-        initialization,
-    )
-    .await
+pub(in crate::launch) struct StorageObservationContext<'a, P: ImageProvider> {
+    pub(super) docker: &'a Docker,
+    pub(super) journal: &'a ConnectionJournal,
+    pub(super) host_journal: &'a Journal,
+    pub(super) provider: &'a P,
+    pub(super) engine: &'a SelectedEngineContext,
+    pub(super) images: &'a VerifiedWorkerImages,
+}
+
+impl<'a, P: ImageProvider> StorageObservationContext<'a, P> {
+    pub(in crate::launch) const fn new(
+        docker: &'a Docker,
+        journal: &'a ConnectionJournal,
+        host_journal: &'a Journal,
+        provider: &'a P,
+        engine: &'a SelectedEngineContext,
+        images: &'a VerifiedWorkerImages,
+    ) -> Self {
+        Self {
+            docker,
+            journal,
+            host_journal,
+            provider,
+            engine,
+            images,
+        }
+    }
 }
 
 const HELPER_PATH: &str = "/velnor/resource-probe";
@@ -77,10 +72,6 @@ impl VerifiedWorkerStorageObservation {
         &self.observation
     }
 
-    pub(crate) fn exec_id(&self) -> &str {
-        &self.exec_id
-    }
-
     pub(crate) const fn init_host_pid(&self) -> u32 {
         self.init_host_pid
     }
@@ -92,15 +83,20 @@ impl VerifiedWorkerStorageObservation {
 
 /// Measure the fixed storage paths inside one started worker container.
 pub(crate) async fn observe_worker_storage(
-    docker: &Docker,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
+    context: &StorageObservationContext<'_, impl ImageProvider>,
     container_id: &str,
     role: WorkerRole,
     deadline: Instant,
 ) -> Result<VerifiedWorkerStorageObservation, HostError> {
-    within(deadline, images.verify_for_engine(docker, engine)).await??;
-    let init_host_pid = verify_container(docker, container_id, role, images, deadline).await?;
+    within(
+        deadline,
+        context
+            .images
+            .verify_for_engine(context.docker, context.engine),
+    )
+    .await??;
+    let init_host_pid =
+        verify_container(context.docker, container_id, role, context.images, deadline).await?;
 
     let operation_id = uuid::Uuid::new_v4().simple().to_string();
     let request = SelfStorageRequest {
@@ -111,9 +107,54 @@ pub(crate) async fn observe_worker_storage(
     };
     request.validate().map_err(|_| HostError::Identity)?;
     let mut request_bytes = encode_line(&request, WORKER_REQUEST_LIMIT)?;
+    let (exec_id, mut attached) = start_worker_helper(context, container_id, deadline).await?;
+
+    within(deadline, attached.input.write_all(&request_bytes))
+        .await?
+        .map_err(|_| HostError::Docker)?;
+    request_bytes.zeroize();
+    within(deadline, attached.input.flush())
+        .await?
+        .map_err(|_| HostError::Docker)?;
+
+    let record_line = read_stdout_line(&mut attached.output, deadline).await?;
+    let observation: SelfStorageObservation = decode_line(&record_line, WORKER_RECORD_LIMIT)?;
+    validate_observation(
+        &observation,
+        &operation_id,
+        container_id,
+        role,
+        context.images,
+    )?;
+    let running = within(deadline, context.docker.inspect_exec(&exec_id))
+        .await?
+        .map_err(|_| HostError::Docker)?;
+    let helper_host_pid = running.pid.and_then(|pid| u32::try_from(pid).ok());
+    if running.id.as_deref() != Some(exec_id.as_str())
+        || running.container_id.as_deref() != Some(container_id)
+        || running.running != Some(true)
+        || helper_host_pid.is_none_or(|pid| pid == 0)
+    {
+        return Err(HostError::Ownership);
+    }
+
+    Ok(VerifiedWorkerStorageObservation {
+        observation,
+        exec_id,
+        init_host_pid,
+        helper_host_pid: helper_host_pid.ok_or(HostError::Identity)?,
+        attached,
+    })
+}
+
+async fn start_worker_helper(
+    context: &StorageObservationContext<'_, impl ImageProvider>,
+    container_id: &str,
+    deadline: Instant,
+) -> Result<(String, AttachContainerResults), HostError> {
     let exec = within(
         deadline,
-        docker.create_exec(
+        context.docker.create_exec(
             container_id,
             CreateExecOptions::<String> {
                 attach_stdin: Some(true),
@@ -136,7 +177,7 @@ pub(crate) async fn observe_worker_storage(
     }
     let StartExecResults::Attached { output, input } = within(
         deadline,
-        docker.start_exec(
+        context.docker.start_exec(
             &exec.id,
             Some(StartExecOptions {
                 detach: false,
@@ -150,43 +191,12 @@ pub(crate) async fn observe_worker_storage(
     else {
         return Err(HostError::Docker);
     };
-    let mut attached = AttachContainerResults { output, input };
-
-    within(deadline, attached.input.write_all(&request_bytes))
-        .await?
-        .map_err(|_| HostError::Docker)?;
-    request_bytes.zeroize();
-    within(deadline, attached.input.flush())
-        .await?
-        .map_err(|_| HostError::Docker)?;
-
-    let record_line = read_stdout_line(&mut attached.output, deadline).await?;
-    let observation: SelfStorageObservation = decode_line(&record_line, WORKER_RECORD_LIMIT)?;
-    validate_observation(&observation, &operation_id, container_id, role, images)?;
-    let running = within(deadline, docker.inspect_exec(&exec.id))
-        .await?
-        .map_err(|_| HostError::Docker)?;
-    let helper_host_pid = running.pid.and_then(|pid| u32::try_from(pid).ok());
-    if running.id.as_deref() != Some(exec.id.as_str())
-        || running.container_id.as_deref() != Some(container_id)
-        || running.running != Some(true)
-        || helper_host_pid.is_none_or(|pid| pid == 0)
-    {
-        return Err(HostError::Ownership);
-    }
-
-    Ok(VerifiedWorkerStorageObservation {
-        observation,
-        exec_id: exec.id,
-        init_host_pid,
-        helper_host_pid: helper_host_pid.ok_or(HostError::Identity)?,
-        attached,
-    })
+    Ok((exec.id, AttachContainerResults { output, input }))
 }
 
 /// Acknowledge the observation and require the helper to exit successfully.
 pub(crate) async fn finish_worker_storage_observation(
-    docker: &Docker,
+    context: &StorageObservationContext<'_, impl ImageProvider>,
     mut verified: VerifiedWorkerStorageObservation,
     deadline: Instant,
 ) -> Result<(), HostError> {
@@ -206,7 +216,7 @@ pub(crate) async fn finish_worker_storage_observation(
         .await?
         .map_err(|_| HostError::Docker)?;
     drain_empty_output(&mut verified.attached.output, deadline).await?;
-    let exit = within(deadline, docker.inspect_exec(&verified.exec_id))
+    let exit = within(deadline, context.docker.inspect_exec(&verified.exec_id))
         .await?
         .map_err(|_| HostError::Docker)?;
     if exit.id.as_deref() != Some(verified.exec_id.as_str())

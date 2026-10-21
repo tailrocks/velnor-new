@@ -35,6 +35,7 @@ pub(crate) use pre_jit_recovery::{
 };
 pub(crate) use publication::JobFactsPublication;
 pub(crate) use publication::job_facts_publication;
+pub(in crate::launch) use storage::StorageObservationContext;
 pub(crate) use storage::VerifiedStorageResourceBinding;
 pub(in crate::launch) use storage::observe_storage_resources_with_provider;
 pub(crate) use storage::{ObservedContainerCgroup, ObservedStorageAttachment, ObservedStorageRole};

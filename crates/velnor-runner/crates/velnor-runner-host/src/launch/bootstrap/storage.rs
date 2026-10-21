@@ -168,7 +168,9 @@ pub(crate) use production::{PreparedTmpfsStorage, create_and_initialize};
 #[cfg(test)]
 #[path = "test_fixtures/storage.rs"]
 mod test_fixtures;
-pub(in crate::launch) use observation::observe_storage_resources_with_provider;
+pub(in crate::launch) use observation::{
+    StorageObservationContext, observe_storage_resources_with_provider,
+};
 
 #[cfg(test)]
 pub(crate) use test_fixtures::{

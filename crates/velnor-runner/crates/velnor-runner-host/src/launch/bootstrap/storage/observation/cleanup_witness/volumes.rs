@@ -28,21 +28,32 @@ pub(super) const VOLUME_ROLES: [StorageRole; 5] = [
     StorageRole::EngineMetadata,
 ];
 
-/// This function reads all worker and volume identity data while both workers are running.
+pub(in crate::launch::bootstrap::storage::observation) struct CleanupObservationContext<'a> {
+    pub(in crate::launch::bootstrap::storage::observation) docker: &'a Docker,
+    pub(in crate::launch::bootstrap::storage::observation) journal: &'a ConnectionJournal,
+    pub(in crate::launch::bootstrap::storage::observation) engine: &'a SelectedEngineContext,
+    pub(in crate::launch::bootstrap::storage::observation) images: &'a VerifiedWorkerImages,
+    pub(in crate::launch::bootstrap::storage::observation) prepared: &'a PreparedAcquiredBootstrap,
+    pub(in crate::launch::bootstrap::storage::observation) initialization:
+        &'a VerifiedStorageInitializationReady,
+}
+
+/// Read worker and volume identities while both workers run.
 pub(in crate::launch::bootstrap::storage::observation) async fn capture_cleanup_binding(
-    docker: &Docker,
-    journal: &ConnectionJournal,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
-    prepared: &PreparedAcquiredBootstrap,
+    context: &CleanupObservationContext<'_>,
     runner_id: &str,
     dind_id: &str,
     plan: &StorageProvisioningPlan,
     owned: &OwnedCgroupObservation,
     attachments: &[super::super::worker::MeasuredAttachment],
-    initialization: &VerifiedStorageInitializationReady,
     deadline: Instant,
 ) -> Result<CleanupObserverBinding, HostError> {
+    let docker = context.docker;
+    let journal = context.journal;
+    let engine = context.engine;
+    let images = context.images;
+    let prepared = context.prepared;
+    let initialization = context.initialization;
     if owned.guest_boot_id.is_empty()
         || owned.daemon.host_pid == 0
         || owned.containers.len() != 2

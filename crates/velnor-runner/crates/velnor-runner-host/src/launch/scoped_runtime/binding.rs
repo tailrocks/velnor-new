@@ -42,13 +42,16 @@ pub(super) async fn bind_started<P: ImageProvider>(
     initialization: VerifiedStorageInitializationReady,
     context: ScopedPrepareContext<'_, P>,
 ) -> Result<ScopedRuntimeOutcome, HostError> {
-    let binding = match super::super::bootstrap::observe_storage_resources_with_provider(
+    let observation_context = super::super::bootstrap::StorageObservationContext::new(
         context.docker,
         context.scoped,
         context.host,
         context.provider,
         context.engine,
         context.images,
+    );
+    let binding = match super::super::bootstrap::observe_storage_resources_with_provider(
+        &observation_context,
         &prepared,
         &started,
         &initialization,

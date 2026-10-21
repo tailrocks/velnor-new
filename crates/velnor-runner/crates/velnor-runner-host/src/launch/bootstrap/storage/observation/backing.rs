@@ -43,103 +43,131 @@ pub(super) fn validate_owned_sample(
 }
 
 pub(super) fn root_backing_mappings(
-    plan: &StorageProvisioningPlan,
-    journal: &ConnectionJournal,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
+    context: &RootBackingContext<'_>,
     attachments: &[MeasuredAttachment],
     observation: &OwnedCgroupObservation,
-    witness: &StartObservationWitness,
 ) -> Result<Vec<super::super::super::VerifiedRootBackingMapping>, HostError> {
     let rows = observation.root_backings.as_slice();
     let [runner, dind] = rows else {
         return Err(HostError::Identity);
     };
-    let runner_mapping = root_backing_mapping(
-        plan,
-        journal,
-        engine,
-        images,
-        attachments,
-        runner,
-        WorkerRole::Runner,
-        StorageRole::RunnerRoot,
-        &observation.guest_boot_id,
-        witness,
-    )?;
-    let dind_mapping = root_backing_mapping(
-        plan,
-        journal,
-        engine,
-        images,
-        attachments,
-        dind,
-        WorkerRole::Dind,
-        StorageRole::DindRoot,
-        &observation.guest_boot_id,
-        witness,
-    )?;
+    let runner_mapping =
+        root_backing_mapping(context, attachments, runner, StorageRole::RunnerRoot)?;
+    let dind_mapping = root_backing_mapping(context, attachments, dind, StorageRole::DindRoot)?;
     if runner_mapping.backing_filesystem_digest() != dind_mapping.backing_filesystem_digest() {
         return Err(HostError::Identity);
     }
     Ok(vec![runner_mapping, dind_mapping])
 }
 
+pub(super) struct RootBackingContext<'a> {
+    pub(super) plan: &'a StorageProvisioningPlan,
+    pub(super) journal: &'a ConnectionJournal,
+    pub(super) engine: &'a SelectedEngineContext,
+    pub(super) images: &'a VerifiedWorkerImages,
+    pub(super) witness: &'a StartObservationWitness,
+}
+
+struct ValidatedBacking<'a> {
+    logical: &'a MeasuredAttachment,
+    expected_image: &'a crate::launch::VerifiedImageIdentity,
+    upper: &'a velnor_resource_probe::worker_binding::RootBackingDirectoryObservation,
+    backing_digest: String,
+}
+
 fn root_backing_mapping(
-    plan: &StorageProvisioningPlan,
-    journal: &ConnectionJournal,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
+    context: &RootBackingContext<'_>,
     attachments: &[MeasuredAttachment],
     row: &RootBackingObservation,
-    worker_role: WorkerRole,
     role: StorageRole,
-    boot_id: &str,
-    witness: &StartObservationWitness,
 ) -> Result<super::super::super::VerifiedRootBackingMapping, HostError> {
-    let expected_container = match worker_role {
-        WorkerRole::Runner => row.container_id.as_str(),
-        WorkerRole::Dind => row.container_id.as_str(),
+    let validated = validate_root_backing(context, attachments, row, role)?;
+    build_root_backing_mapping(context, row, role, validated)
+}
+
+fn validate_root_backing<'a>(
+    context: &'a RootBackingContext<'a>,
+    attachments: &'a [MeasuredAttachment],
+    row: &'a RootBackingObservation,
+    role: StorageRole,
+) -> Result<ValidatedBacking<'a>, HostError> {
+    let worker_role = match role {
+        StorageRole::RunnerRoot => WorkerRole::Runner,
+        StorageRole::DindRoot => WorkerRole::Dind,
+        _ => return Err(HostError::Identity),
     };
     let logical = attachments
         .iter()
-        .find(|item| item.role == role && item.binding.container_id() == Some(expected_container))
+        .find(|item| {
+            item.role == role && item.binding.container_id() == Some(row.container_id.as_str())
+        })
         .ok_or(HostError::Identity)?;
     let expected_image = match worker_role {
-        WorkerRole::Runner => images.runner(),
-        WorkerRole::Dind => images.dind(),
+        WorkerRole::Runner => context.images.runner(),
+        WorkerRole::Dind => context.images.dind(),
     };
     let directories = row.directories.as_slice();
     let upper = directories
         .iter()
-        .find(|directory| directory.kind == RootBackingKind::Upper)
+        .find(|item| item.kind == RootBackingKind::Upper)
         .ok_or(HostError::Identity)?;
     let work = directories
         .iter()
-        .find(|directory| directory.kind == RootBackingKind::Work)
+        .find(|item| item.kind == RootBackingKind::Work)
         .ok_or(HostError::Identity)?;
-    let lower_count = directories
-        .iter()
-        .filter(|directory| directory.kind == RootBackingKind::Lower)
-        .count();
-    let sampled = witness.storage_mount();
-    if row.container_id != expected_container
-        || row.role != worker_role
-        || row.guest_boot_id != boot_id
+    validate_backing_directories(row, upper, work, context.witness)?;
+    if row.role != worker_role
+        || row.guest_boot_id != context.witness.storage_mount().guest_boot_id()
         || row.mount_id != logical.binding.mount_id()
         || row.mount_source.is_empty()
         || row.filesystem_type != "overlay"
         || row.read_only
         || row.upperdir.is_empty()
         || row.workdir.is_empty()
-        || lower_count != row.lowerdirs.len()
-        || row.directories.len() != lower_count + 2
+    {
+        return Err(HostError::Identity);
+    }
+    let backing_digest = crate::launch::resource_probe::filesystem_instance_digest(
+        context.engine.engine_id(),
+        context.engine.docker_root_digest(),
+        context.witness.storage_mount().guest_boot_id().as_bytes(),
+        upper.mount_source.as_bytes(),
+        upper.mount_filesystem_type.as_bytes(),
+        upper.filesystem_type_magic,
+        upper.mount_device_major,
+        upper.mount_device_minor,
+        upper.statx_device_major,
+        upper.statx_device_minor,
+        upper.filesystem_id,
+    );
+    Ok(ValidatedBacking {
+        logical,
+        expected_image,
+        upper,
+        backing_digest,
+    })
+}
+
+fn validate_backing_directories(
+    row: &RootBackingObservation,
+    upper: &velnor_resource_probe::worker_binding::RootBackingDirectoryObservation,
+    work: &velnor_resource_probe::worker_binding::RootBackingDirectoryObservation,
+    witness: &StartObservationWitness,
+) -> Result<(), HostError> {
+    let directories = row.directories.as_slice();
+    let lower_count = directories
+        .iter()
+        .filter(|item| item.kind == RootBackingKind::Lower)
+        .count();
+    let sampled = witness.storage_mount();
+    if lower_count != row.lowerdirs.len()
+        || directories.len() != lower_count + 2
         || upper.path != row.upperdir
         || work.path != row.workdir
         || row.lowerdirs.iter().any(|path| {
-            !directories.iter().any(|directory| {
-                directory.kind == RootBackingKind::Lower && &directory.path == path
-            })
+            !directories
+                .iter()
+                .any(|item| item.kind == RootBackingKind::Lower && &item.path == path)
         })
         || !same_backing_directory(upper, work)
         || upper.mount_source != sampled.mount_source()
@@ -151,43 +179,49 @@ fn root_backing_mapping(
         || upper.filesystem_type_magic != sampled.filesystem_type_magic()
         || upper.filesystem_id != sampled.filesystem_id()
         || upper.mount_filesystem_type != sampled.filesystem_type_name()
-        || directories.iter().any(|directory| {
-            directory.mount_source.is_empty()
-                || directory.mount_source != upper.mount_source
-                || directory.mount_root != upper.mount_root
-                || directory.mount_filesystem_type != upper.mount_filesystem_type
-                || directory.mount_read_only
-                || directory.mount_device_major != upper.mount_device_major
-                || directory.mount_device_minor != upper.mount_device_minor
-                || directory.statx_mount_id != upper.statx_mount_id
-                || directory.statx_device_major != upper.statx_device_major
-                || directory.statx_device_minor != upper.statx_device_minor
-                || directory.filesystem_type_magic != upper.filesystem_type_magic
-                || directory.filesystem_id != upper.filesystem_id
-                || directory.statx_mount_id == 0
-                || directory.filesystem_id == 0
-                || directory.total_bytes == 0
-                || directory.free_bytes > directory.total_bytes
-                || directory.available_bytes > directory.free_bytes
-                || directory.inode_free > directory.inode_total
-        })
+        || directories
+            .iter()
+            .any(|item| !directory_matches_upper(item, upper))
     {
         return Err(HostError::Identity);
     }
-    let backing_digest = crate::launch::resource_probe::filesystem_instance_digest(
-        engine.engine_id(),
-        engine.docker_root_digest(),
-        boot_id.as_bytes(),
-        upper.mount_source.as_bytes(),
-        upper.mount_filesystem_type.as_bytes(),
-        upper.filesystem_type_magic,
-        upper.mount_device_major,
-        upper.mount_device_minor,
-        upper.statx_device_major,
-        upper.statx_device_minor,
-        upper.filesystem_id,
-    );
-    let logical_binding = &logical.binding;
+    Ok(())
+}
+
+fn directory_matches_upper(
+    item: &velnor_resource_probe::worker_binding::RootBackingDirectoryObservation,
+    upper: &velnor_resource_probe::worker_binding::RootBackingDirectoryObservation,
+) -> bool {
+    !item.mount_source.is_empty()
+        && item.mount_source == upper.mount_source
+        && item.mount_root == upper.mount_root
+        && item.mount_filesystem_type == upper.mount_filesystem_type
+        && !item.mount_read_only
+        && item.mount_device_major == upper.mount_device_major
+        && item.mount_device_minor == upper.mount_device_minor
+        && item.statx_mount_id == upper.statx_mount_id
+        && item.statx_device_major == upper.statx_device_major
+        && item.statx_device_minor == upper.statx_device_minor
+        && item.filesystem_type_magic == upper.filesystem_type_magic
+        && item.filesystem_id == upper.filesystem_id
+        && item.statx_mount_id != 0
+        && item.filesystem_id != 0
+        && item.total_bytes > 0
+        && item.free_bytes <= item.total_bytes
+        && item.available_bytes <= item.free_bytes
+        && item.inode_free <= item.inode_total
+}
+
+fn build_root_backing_mapping(
+    context: &RootBackingContext<'_>,
+    row: &RootBackingObservation,
+    role: StorageRole,
+    validated: ValidatedBacking<'_>,
+) -> Result<super::super::super::VerifiedRootBackingMapping, HostError> {
+    let plan = context.plan;
+    let journal = context.journal;
+    let engine = context.engine;
+    let logical_binding = &validated.logical.binding;
     let canonical_record = serde_json::to_string(&serde_json::json!({
         "schema_version": 1,
         "reservation_id": plan.reservation_id(),
@@ -198,8 +232,8 @@ fn root_backing_mapping(
         "sample_generation_id": plan.sample_generation_id(),
         "role": role.as_str(),
         "container_id": row.container_id,
-        "image_runtime_id": expected_image.runtime_id(),
-        "image_source_sha": images.source_sha(),
+        "image_runtime_id": validated.expected_image.runtime_id(),
+        "image_source_sha": context.images.source_sha(),
         "logical": {
             "mount_id": logical_binding.mount_id(),
             "mount_source": row.mount_source,
@@ -228,8 +262,8 @@ fn root_backing_mapping(
         sample_generation_id: plan.sample_generation_id().to_owned(),
         role,
         container_id: row.container_id.clone(),
-        image_runtime_id: expected_image.runtime_id().to_owned(),
-        image_source_sha: images.source_sha().to_owned(),
+        image_runtime_id: validated.expected_image.runtime_id().to_owned(),
+        image_source_sha: context.images.source_sha().to_owned(),
         logical_mount_id: logical_binding.mount_id(),
         logical_mount_source: row.mount_source.clone(),
         logical_device: logical_binding.device(),
@@ -237,12 +271,18 @@ fn root_backing_mapping(
         logical_fs_type_magic: logical_binding.fs_type_magic(),
         logical_filesystem_id: logical_binding.filesystem_id(),
         logical_filesystem_instance_digest: logical_binding.filesystem_instance_digest().to_owned(),
-        backing_mount_source: upper.mount_source.clone(),
-        backing_device: (upper.mount_device_major, upper.mount_device_minor),
-        backing_statx_device: (upper.statx_device_major, upper.statx_device_minor),
-        backing_fs_type_magic: upper.filesystem_type_magic,
-        backing_filesystem_id: upper.filesystem_id,
-        backing_filesystem_instance_digest: backing_digest,
+        backing_mount_source: validated.upper.mount_source.clone(),
+        backing_device: (
+            validated.upper.mount_device_major,
+            validated.upper.mount_device_minor,
+        ),
+        backing_statx_device: (
+            validated.upper.statx_device_major,
+            validated.upper.statx_device_minor,
+        ),
+        backing_fs_type_magic: validated.upper.filesystem_type_magic,
+        backing_filesystem_id: validated.upper.filesystem_id,
+        backing_filesystem_instance_digest: validated.backing_digest,
         canonical_record,
         mapping_digest,
     })
@@ -287,7 +327,9 @@ pub(super) fn apply_backing_capacity(
             .iter_mut()
             .find(|attachment| attachment.role == role)
             .ok_or(HostError::Identity)?;
-        measured.capacity_digest = mapping.backing_filesystem_digest().to_owned();
+        mapping
+            .backing_filesystem_digest()
+            .clone_into(&mut measured.capacity_digest);
         measured.capacity_fs_type_magic = upper.filesystem_type_magic;
         measured.total_bytes = upper.total_bytes;
         measured.free_bytes = upper.free_bytes;
@@ -300,7 +342,9 @@ pub(super) fn apply_backing_capacity(
         } else {
             InodePolicy::Finite
         };
-        measured.filesystem_type_name = upper.mount_filesystem_type.clone();
+        measured
+            .filesystem_type_name
+            .clone_from(&upper.mount_filesystem_type);
     }
     Ok(())
 }

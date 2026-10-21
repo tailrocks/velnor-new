@@ -1,39 +1,19 @@
-use bollard::Docker;
-
 use crate::{
     error::HostError,
-    journal::{ConnectionJournal, Journal},
-    launch::{
-        SelectedEngineContext, VerifiedWorkerImages,
-        bootstrap::{
-            PreparedAcquiredBootstrap, StartedBootstrapPair, VerifiedStorageResourceBinding,
-        },
-        resource_probe::ImageProvider,
+    launch::bootstrap::{
+        PreparedAcquiredBootstrap, StartedBootstrapPair, VerifiedStorageResourceBinding,
     },
+    launch::resource_probe::ImageProvider,
     worker::storage_initialization::VerifiedStorageInitializationReady,
 };
 
+use super::StorageObservationContext;
+
 pub(in crate::launch) async fn observe_storage_resources_with_provider<P: ImageProvider>(
-    docker: &Docker,
-    journal: &ConnectionJournal,
-    host_journal: &Journal,
-    provider: &P,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
+    context: &StorageObservationContext<'_, P>,
     prepared: &PreparedAcquiredBootstrap,
     started: &StartedBootstrapPair,
     initialization: &VerifiedStorageInitializationReady,
 ) -> Result<VerifiedStorageResourceBinding, HostError> {
-    super::observe_storage_resources_core(
-        docker,
-        journal,
-        host_journal,
-        provider,
-        engine,
-        images,
-        prepared,
-        started,
-        initialization,
-    )
-    .await
+    super::observe_storage_resources_core(context, prepared, started, initialization).await
 }

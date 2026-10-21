@@ -9,7 +9,7 @@ use velnor_resource_probe::{
 #[path = "cleanup_witness/volumes.rs"]
 mod volumes;
 
-pub(super) use volumes::capture_cleanup_binding;
+pub(super) use volumes::{CleanupObservationContext, capture_cleanup_binding};
 
 use crate::{error::HostError, journal::EngineContext, launch::SelectedEngineContext};
 
