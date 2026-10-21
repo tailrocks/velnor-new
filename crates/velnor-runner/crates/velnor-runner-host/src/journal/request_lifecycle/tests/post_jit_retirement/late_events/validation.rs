@@ -1,5 +1,6 @@
 use crate::error::HostError;
 use crate::journal::connection::storage::in_transaction;
+use std::{future::Future, pin::Pin};
 
 use super::{on_large_test_stack, retired_native_fixture};
 
@@ -94,31 +95,38 @@ async fn reopen_rejects_wrong_binding() -> Result<(), HostError> {
     reopen_rejects(fixture).await
 }
 
-async fn completed_retired_fixture()
--> Result<super::super::super::NativeStartedIntakeFixture, HostError> {
-    let fixture = retired_native_fixture().await?;
-    fixture
-        .scope
-        .record_scoped_job_started(
-            &fixture.assignment,
-            9_360,
-            &fixture.source,
-            &fixture.runner,
-            Some("retired-validation-job"),
-        )
-        .await?;
-    fixture
-        .scope
-        .record_scoped_job_completed(
-            &fixture.assignment,
-            9_361,
-            &fixture.source,
-            Some("Succeeded"),
-            Some(&fixture.runner),
-            Some("retired-validation-job"),
-        )
-        .await?;
-    Ok(fixture)
+fn completed_retired_fixture() -> Pin<
+    Box<
+        dyn Future<Output = Result<super::super::super::NativeStartedIntakeFixture, HostError>>
+            + Send
+            + 'static,
+    >,
+> {
+    Box::pin(async {
+        let fixture = retired_native_fixture().await?;
+        fixture
+            .scope
+            .record_scoped_job_started(
+                &fixture.assignment,
+                9_360,
+                &fixture.source,
+                &fixture.runner,
+                Some("retired-validation-job"),
+            )
+            .await?;
+        fixture
+            .scope
+            .record_scoped_job_completed(
+                &fixture.assignment,
+                9_361,
+                &fixture.source,
+                Some("Succeeded"),
+                Some(&fixture.runner),
+                Some("retired-validation-job"),
+            )
+            .await?;
+        Ok(fixture)
+    })
 }
 
 async fn reopen_rejects(
