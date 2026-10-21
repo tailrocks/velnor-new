@@ -27,6 +27,16 @@ pub(super) async fn post_jit_retirement_claim_exists(
     cleanup::post_jit_retirement_claim_exists(connection, reservation_id).await
 }
 
+pub(super) async fn record_retirement_cleanup_evidence(
+    connection: &turso::Connection,
+    journal: &ConnectionJournal,
+    proof: &crate::launch::bootstrap::VerifiedStorageCleanup,
+) -> Result<(), HostError> {
+    cleanup::record_evidence_in_transaction(connection, journal, proof)
+        .await
+        .map(|_| ())
+}
+
 #[cfg(test)]
 pub(crate) use initialization::{CreateCommitStage, arm_create_commit_gate};
 pub(crate) use initialization::{CreateInterruptionOutcome, StorageInitializationClaim};

@@ -4,6 +4,7 @@ use crate::journal::request_lifecycle::tests::native_started_intake_fixture;
 #[tokio::test]
 async fn typed_claim_persists_exact_attempt_and_initial_progress() -> Result<(), HostError> {
     let fixture = native_started_intake_fixture().await?;
+    super::test_support::recover_fixture(&fixture).await?;
     let attempt = fixture
         .scope
         .current_physical_attempt(fixture.reservation_id)
@@ -58,6 +59,7 @@ async fn typed_claim_rejects_invalid_lease_and_foreign_scope() -> Result<(), Hos
             .await
             .is_err()
     );
+    super::test_support::recover_fixture(&fixture).await?;
 
     let other_binding =
         crate::journal::request_lifecycle::tests::helpers::binding("post-jit-foreign-scope", 202)
@@ -73,6 +75,13 @@ async fn typed_claim_rejects_invalid_lease_and_foreign_scope() -> Result<(), Hos
             .claim_post_jit_retirement(fixture.reservation_id, 60)
             .await?
             .is_none()
+    );
+    assert!(
+        fixture
+            .scope
+            .claim_post_jit_retirement(fixture.reservation_id, 60)
+            .await?
+            .is_some()
     );
 
     let connection = fixture.journal.connection().await?;
@@ -90,13 +99,14 @@ async fn typed_claim_rejects_invalid_lease_and_foreign_scope() -> Result<(), Hos
         .ok_or(HostError::Journal)?
         .get::<i64>(0)
         .map_err(|_| HostError::Journal)?;
-    assert_eq!(count, 0);
+    assert_eq!(count, 1);
     Ok(())
 }
 
 #[tokio::test]
 async fn live_claim_replays_and_expired_lease_uses_next_generation() -> Result<(), HostError> {
     let fixture = native_started_intake_fixture().await?;
+    super::test_support::recover_fixture(&fixture).await?;
     let first = fixture
         .scope
         .claim_post_jit_retirement(fixture.reservation_id, 10)
@@ -160,6 +170,7 @@ async fn event_disposition_binds_actual_request_to_claimed_runner() -> Result<()
         ACTUAL_REQUEST,
     )
     .await?;
+    super::test_support::recover_fixture(&fixture).await?;
     let before_claim = crate::journal::connection::storage::read_transaction(
         fixture.scope.journal_ref(),
         async |connection| {

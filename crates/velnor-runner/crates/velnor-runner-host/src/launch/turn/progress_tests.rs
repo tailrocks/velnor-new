@@ -99,8 +99,16 @@ async fn started_fixture() -> Result<NativeStartedIntakeFixture, String> {
     Ok(fixture)
 }
 
-#[tokio::test]
-async fn missing_stats_completion_ack_allows_the_next_poll() -> Result<(), String> {
+#[test]
+fn missing_stats_completion_ack_allows_the_next_poll() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "missing_stats_completion_ack_allows_the_next_poll",
+        || Box::pin(missing_stats_completion_ack_allows_the_next_poll_on_fixture_stack()),
+    )
+}
+
+async fn missing_stats_completion_ack_allows_the_next_poll_on_fixture_stack() -> Result<(), String>
+{
     let fixture = started_fixture().await?;
     let (intent_id, allocation) = bind_session(&fixture).await?;
     let mut session = session()?;
@@ -159,8 +167,16 @@ async fn missing_stats_completion_ack_allows_the_next_poll() -> Result<(), Strin
     Ok(())
 }
 
-#[tokio::test]
-async fn acknowledgement_error_propagates_before_admission() -> Result<(), String> {
+#[test]
+fn acknowledgement_error_propagates_before_admission() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "acknowledgement_error_propagates_before_admission",
+        || Box::pin(acknowledgement_error_propagates_before_admission_on_fixture_stack()),
+    )
+}
+
+async fn acknowledgement_error_propagates_before_admission_on_fixture_stack() -> Result<(), String>
+{
     let fixture = started_fixture().await?;
     let (intent_id, allocation) = bind_session(&fixture).await?;
     let mut session = session()?;

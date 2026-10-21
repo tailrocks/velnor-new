@@ -1,6 +1,6 @@
 //! Positive polling and acquired-work retention for one connection.
 
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use bollard::Docker;
 
@@ -44,7 +44,7 @@ pub(super) struct PositivePollContext<'a> {
     pub(super) selected_engine: &'a SelectedEngineContext,
     pub(super) worker_images: &'a VerifiedWorkerImages,
     pub(super) state: &'a Path,
-    pub(super) release_read_secret: &'a ReleaseReadSecret,
+    pub(super) release_read_secret: &'a Arc<ReleaseReadSecret>,
     pub(super) admission_ready: bool,
     #[cfg(test)]
     pub(super) start_permit_provider: Option<&'a crate::launch::IntakeCompositionProvider>,

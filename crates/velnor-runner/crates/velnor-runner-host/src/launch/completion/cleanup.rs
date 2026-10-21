@@ -13,6 +13,8 @@ mod tests;
 #[path = "volume.rs"]
 mod volume;
 
+pub(in crate::launch) use native::remove_owned_resources_for_retirement;
+
 #[cfg(test)]
 pub(crate) use runner::reconcile_for_test;
 pub(super) use service_loop::run;

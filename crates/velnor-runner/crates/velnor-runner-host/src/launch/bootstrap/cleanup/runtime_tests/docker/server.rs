@@ -87,8 +87,11 @@ fn is_observer(config: &serde_json::Value) -> bool {
 
 fn capacity_logs(state: &ServerState) -> Result<(u16, Vec<u8>), HostError> {
     let probe = state.probe.as_ref().ok_or(HostError::Ownership)?;
-    let mut output = serde_json::to_vec(&capacity::CapacityRecord::new(probe.capacity_available))
-        .map_err(|_| HostError::Frame)?;
+    let mut output = serde_json::to_vec(&capacity::CapacityRecord::new(
+        probe.capacity_available,
+        state.capacity_total,
+    ))
+    .map_err(|_| HostError::Frame)?;
     output.push(b'\n');
     let mut frame = vec![1, 0, 0, 0];
     frame.extend_from_slice(&(output.len() as u32).to_be_bytes());

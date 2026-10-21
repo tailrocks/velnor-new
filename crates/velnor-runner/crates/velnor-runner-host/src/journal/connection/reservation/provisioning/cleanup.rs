@@ -40,78 +40,90 @@ pub(super) async fn record(
     journal: &ConnectionJournal,
     proof: VerifiedStorageCleanup,
 ) -> Result<(), HostError> {
+    let connection_id = journal.connection_id().as_str().to_owned();
+    let reservation_id = proof.reservation_id();
+    in_transaction(journal.journal_ref(), async |connection| {
+        journal.validate_scope(connection).await?;
+        let context = record_evidence_in_transaction(connection, journal, &proof).await?;
+        settle_if_fully_cleaned(connection, &connection_id, reservation_id, &context).await
+    })
+    .await
+}
+
+pub(super) async fn record_evidence_in_transaction(
+    connection: &turso::Connection,
+    journal: &ConnectionJournal,
+    proof: &VerifiedStorageCleanup,
+) -> Result<super::HoldContext, HostError> {
     if !proof.all_owned_refs_absent() || !valid_roles(proof.role_inventory()) {
         return Err(HostError::Identity);
     }
-    let connection_id = journal.connection_id().as_str().to_owned();
     let reservation_id = proof.reservation_id();
     if reservation_id <= 0 {
         return Err(HostError::Identity);
     }
-    in_transaction(journal.journal_ref(), async |connection| {
-        journal.validate_scope(connection).await?;
-        let Some(context) = hold_context(connection, &connection_id, reservation_id).await? else {
-            return Err(HostError::Journal);
-        };
-        if context.operation_id != proof.operation_id()
-            || context.engine_id != proof.engine_id()
-            || context.docker_root_digest != proof.docker_root_digest()
-        {
-            return Err(HostError::Identity);
-        }
-        let binding = bound_identity(connection, reservation_id).await?;
-        let inventory = cleanup_inventory(connection, reservation_id).await?;
-        if binding.runner_id != proof.runner_container_id()
-            || binding.dind_id != proof.dind_container_id()
-            || binding.instance_binding_digest != proof.instance_binding_digest()
-            || proof.volume_names() != inventory.volume_names
-        {
-            return Err(HostError::Identity);
-        }
-        let metadata_volume = inventory.volume_names.get(4).map(String::as_str);
-        let changed = connection
-            .execute(
-                "INSERT INTO capacity_reservation_provisioning_cleanups (reservation_id, runner_container_id, dind_container_id, shared_run_volume, runner_home_volume, runner_work_volume, dind_data_volume, metadata_volume, instance_binding_digest, role_mask, containers_absent, volumes_absent, mounts_detached, cgroups_absent) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 2047, 1, 1, 1, 1 WHERE NOT EXISTS (SELECT 1 FROM capacity_reservation_provisioning_cleanups WHERE reservation_id = ?1)",
-                (
-                    reservation_id,
-                    proof.runner_container_id(),
-                    proof.dind_container_id(),
-                    inventory.volume_names[0].as_str(),
-                    inventory.volume_names[1].as_str(),
-                    inventory.volume_names[2].as_str(),
-                    inventory.volume_names[3].as_str(),
-                    metadata_volume,
-                    proof.instance_binding_digest(),
-                ),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-        if changed == 0 {
-            validate_existing_cleanup(
-                connection,
+    let Some(context) =
+        hold_context(connection, journal.connection_id().as_str(), reservation_id).await?
+    else {
+        return Err(HostError::Journal);
+    };
+    if context.operation_id != proof.operation_id()
+        || context.engine_id != proof.engine_id()
+        || context.docker_root_digest != proof.docker_root_digest()
+    {
+        return Err(HostError::Identity);
+    }
+    let binding = bound_identity(connection, reservation_id).await?;
+    let inventory = cleanup_inventory(connection, reservation_id).await?;
+    if binding.runner_id != proof.runner_container_id()
+        || binding.dind_id != proof.dind_container_id()
+        || binding.instance_binding_digest != proof.instance_binding_digest()
+        || proof.volume_names() != inventory.volume_names
+    {
+        return Err(HostError::Identity);
+    }
+    let metadata_volume = inventory.volume_names.get(4).map(String::as_str);
+    let changed = connection
+        .execute(
+            "INSERT INTO capacity_reservation_provisioning_cleanups (reservation_id, runner_container_id, dind_container_id, shared_run_volume, runner_home_volume, runner_work_volume, dind_data_volume, metadata_volume, instance_binding_digest, role_mask, containers_absent, volumes_absent, mounts_detached, cgroups_absent) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 2047, 1, 1, 1, 1 WHERE NOT EXISTS (SELECT 1 FROM capacity_reservation_provisioning_cleanups WHERE reservation_id = ?1)",
+            (
                 reservation_id,
                 proof.runner_container_id(),
                 proof.dind_container_id(),
-                &inventory.volume_names,
+                inventory.volume_names[0].as_str(),
+                inventory.volume_names[1].as_str(),
+                inventory.volume_names[2].as_str(),
+                inventory.volume_names[3].as_str(),
+                metadata_volume,
                 proof.instance_binding_digest(),
-            )
-            .await?;
-        } else if changed != 1 {
-            return Err(HostError::Journal);
-        }
-        let changed = connection
-            .execute(
-                "UPDATE capacity_reservation_provisioning_state SET storage_cleanup_proven = 1 WHERE reservation_id = ?1 AND resources_bound = 1 AND instance_binding_digest = ?2 AND storage_cleanup_proven = 0",
-                (reservation_id, proof.instance_binding_digest()),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-        if changed == 0 && !storage_cleanup_already_proven(connection, reservation_id).await? {
-            return Err(HostError::Journal);
-        }
-        settle_if_fully_cleaned(connection, &connection_id, reservation_id, &context).await
-    })
-    .await
+            ),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    if changed == 0 {
+        validate_existing_cleanup(
+            connection,
+            reservation_id,
+            proof.runner_container_id(),
+            proof.dind_container_id(),
+            &inventory.volume_names,
+            proof.instance_binding_digest(),
+        )
+        .await?;
+    } else if changed != 1 {
+        return Err(HostError::Journal);
+    }
+    let changed = connection
+        .execute(
+            "UPDATE capacity_reservation_provisioning_state SET storage_cleanup_proven = 1 WHERE reservation_id = ?1 AND resources_bound = 1 AND instance_binding_digest = ?2 AND storage_cleanup_proven = 0",
+            (reservation_id, proof.instance_binding_digest()),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    if changed == 0 && !storage_cleanup_already_proven(connection, reservation_id).await? {
+        return Err(HostError::Journal);
+    }
+    Ok(context)
 }
 
 pub(super) async fn insert_observer_witness(

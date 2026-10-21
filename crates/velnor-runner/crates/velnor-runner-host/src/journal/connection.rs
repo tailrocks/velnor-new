@@ -5,6 +5,9 @@ pub(crate) use reservation::ReservationSnapshot;
 pub(crate) use reservation::{
     PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation, ReservationState,
 };
+pub(crate) use reservation::{
+    PostJitRetirementCandidate, PostJitRetirementClaim, PreparedRetirementRemoteAbsence,
+};
 mod completion;
 mod identity;
 mod intents;

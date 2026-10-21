@@ -18,6 +18,7 @@ async fn v35_migration_installs_fences_atomically_and_reopens() -> Result<(), Ho
     let path = fixture.database_path.clone();
     let connection = fixture.journal.connection().await?;
     drop_fences(&connection).await?;
+    install_v36_retirement_guard(&connection).await?;
     connection
         .execute("PRAGMA user_version=35", ())
         .await
@@ -44,15 +45,17 @@ async fn v35_migration_installs_fences_atomically_and_reopens() -> Result<(), Ho
 
     let migrated = Journal::open(&path).await?;
     let connection = migrated.connection().await?;
-    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 36);
+    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 37);
     super::post_jit_effect_fences::validate(&connection).await?;
+    super::post_jit_retirement::validate_v37(&connection).await?;
     drop(connection);
     drop(migrated);
 
     let reopened = Journal::open(&path).await?;
     let connection = reopened.connection().await?;
-    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 36);
-    super::post_jit_effect_fences::validate(&connection).await
+    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 37);
+    super::post_jit_effect_fences::validate(&connection).await?;
+    super::post_jit_retirement::validate_v37(&connection).await
 }
 
 #[tokio::test]
@@ -84,6 +87,21 @@ async fn drop_fences(connection: &turso::Connection) -> Result<(), HostError> {
             .map_err(|_| HostError::Journal)?;
     }
     Ok(())
+}
+
+async fn install_v36_retirement_guard(connection: &turso::Connection) -> Result<(), HostError> {
+    connection
+        .execute(
+            "DROP TRIGGER physical_attempt_post_jit_retirement_claim_insert_guard",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(super::post_jit_retirement::CLAIM_INSERT_GUARD_V36, ())
+        .await
+        .map(|_| ())
+        .map_err(|_| HostError::Journal)
 }
 
 async fn assert_fences_absent(connection: &turso::Connection) -> Result<(), HostError> {

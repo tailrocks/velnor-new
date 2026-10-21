@@ -1,7 +1,5 @@
 //! The durable worker identity controls Docker cleanup requests.
 
-use std::collections::HashMap;
-
 use bollard::{
     Docker,
     errors::Error as DockerError,
@@ -17,6 +15,12 @@ use crate::{
 };
 
 use super::super::super::{Context, EffectBudget, Failure, run_effect};
+
+#[path = "owned_deletion/identity.rs"]
+mod identity;
+#[path = "owned_deletion/retirement.rs"]
+mod retirement;
+pub(in crate::launch) use retirement::remove_owned_resources_for_retirement;
 
 const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
@@ -133,42 +137,12 @@ fn validate_container(
     identity: &crate::journal::StorageCleanupIdentity,
     context: &Context<'_>,
 ) -> Result<(), Failure> {
-    let labels = container
-        .config
-        .as_ref()
-        .and_then(|config| config.labels.as_ref())
-        .ok_or_else(|| Failure::not_proven("container labels"))?;
-    let expected = HashMap::from([
-        ("io.velnor.managed", "true".to_owned()),
-        (
-            "io.velnor.reservation-id",
-            identity.reservation_id().to_string(),
-        ),
-        (
-            "io.velnor.operation-id",
-            identity.operation_id().to_string(),
-        ),
-        (
-            "io.velnor.connection-id",
-            context
-                .journal
-                .scoped_connection()
-                .map_or("", |scope| scope.connection_id().as_str())
-                .to_owned(),
-        ),
-        ("io.velnor.role", role.to_owned()),
-    ]);
-    let labels_match = expected
-        .iter()
-        .all(|(key, value)| labels.get(*key) == Some(value));
-    let expected_name = format!("/{name}");
-    if container.id.as_deref() != Some(id)
-        || container.name.as_deref() != Some(expected_name.as_str())
-        || !labels_match
-    {
-        return Err(Failure::not_proven("container ownership"));
-    }
-    Ok(())
+    let connection_id = context
+        .journal
+        .scoped_connection()
+        .map_or("", |scope| scope.connection_id().as_str());
+    identity::validate_container(container, id, name, role, identity, connection_id)
+        .map_err(|_| Failure::not_proven("container ownership"))
 }
 
 pub(in crate::launch::completion::cleanup::native) async fn remove_owned_volumes(
@@ -238,30 +212,12 @@ fn validate_volume(
     identity: &crate::journal::StorageCleanupIdentity,
     context: &Context<'_>,
 ) -> Result<(), Failure> {
-    let labels = &volume.labels;
-    let expected = HashMap::from([
-        (
-            "velnor.connection",
-            context
-                .journal
-                .scoped_connection()
-                .map_or("", |scope| scope.connection_id().as_str())
-                .to_owned(),
-        ),
-        ("velnor.reservation", identity.reservation_id().to_string()),
-        ("velnor.operation", identity.operation_id().to_string()),
-        ("velnor.role", role.as_str().to_owned()),
-    ]);
-    if volume.name != name
-        || volume.driver != "local"
-        || labels.len() != expected.len()
-        || !expected
-            .iter()
-            .all(|(key, value)| labels.get(*key) == Some(value))
-    {
-        return Err(Failure::not_proven("volume ownership"));
-    }
-    Ok(())
+    let connection_id = context
+        .journal
+        .scoped_connection()
+        .map_or("", |scope| scope.connection_id().as_str());
+    identity::validate_volume(volume, name, role, identity, connection_id)
+        .map_err(|_| Failure::not_proven("volume ownership"))
 }
 
 pub(in crate::launch::completion::cleanup::native) async fn remove_network(

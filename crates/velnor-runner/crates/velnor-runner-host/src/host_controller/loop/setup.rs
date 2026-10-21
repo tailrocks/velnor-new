@@ -1,6 +1,6 @@
 //! Connection binding and session setup used by the controller.
 
-use std::{path::Path, str, sync::Arc};
+use std::{path::Path, sync::Arc};
 
 use bollard::Docker;
 
@@ -18,6 +18,10 @@ use super::state::PreparedConnection;
 
 #[path = "setup/connection.rs"]
 mod connection;
+#[path = "setup/credential.rs"]
+mod credential;
+
+pub(crate) use credential::connection_pat;
 
 pub(super) struct PrepareConnectionRequest<'a> {
     pub(super) state: &'a Path,
@@ -205,16 +209,6 @@ pub(crate) fn requested_header_capacity_after(
     let index = u32::try_from(index).map_err(|_| HostError::Config)?;
     let extra = u32::from(index < total % count);
     base.checked_add(extra).ok_or(HostError::Config)
-}
-
-pub(super) fn connection_pat(credential: &[u8]) -> Result<&str, HostError> {
-    if credential.is_empty()
-        || credential.len() > 4096
-        || credential.iter().any(|byte| !byte.is_ascii_graphic())
-    {
-        return Err(HostError::Keychain);
-    }
-    str::from_utf8(credential).map_err(|_| HostError::Keychain)
 }
 
 #[cfg(test)]

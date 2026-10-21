@@ -1,7 +1,21 @@
 use crate::{error::HostError, launch::bootstrap::cleanup::runtime_tests::cleanup_runtime_fixture};
 
-#[tokio::test]
-async fn cleanup_binding_rejects_changed_docker_root_device() -> Result<(), HostError> {
+#[test]
+fn cleanup_binding_rejects_changed_docker_root_device() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "cleanup_binding_rejects_changed_docker_root_device",
+        || {
+            Box::pin(async {
+                cleanup_binding_rejects_changed_docker_root_device_on_fixture_stack()
+                    .await
+                    .map_err(|error| error.to_string())
+            })
+        },
+    )
+}
+
+async fn cleanup_binding_rejects_changed_docker_root_device_on_fixture_stack()
+-> Result<(), HostError> {
     let fixture = cleanup_runtime_fixture().await?;
     let identity = fixture
         .scope
@@ -22,8 +36,22 @@ async fn cleanup_binding_rejects_changed_docker_root_device() -> Result<(), Host
     Ok(())
 }
 
-#[tokio::test]
-async fn cleanup_binding_rejects_changed_nonmetadata_volume_device() -> Result<(), HostError> {
+#[test]
+fn cleanup_binding_rejects_changed_nonmetadata_volume_device() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "cleanup_binding_rejects_changed_nonmetadata_volume_device",
+        || {
+            Box::pin(async {
+                cleanup_binding_rejects_changed_nonmetadata_volume_device_on_fixture_stack()
+                    .await
+                    .map_err(|error| error.to_string())
+            })
+        },
+    )
+}
+
+async fn cleanup_binding_rejects_changed_nonmetadata_volume_device_on_fixture_stack()
+-> Result<(), HostError> {
     let fixture = cleanup_runtime_fixture().await?;
     let identity = fixture
         .scope

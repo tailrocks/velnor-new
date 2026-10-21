@@ -19,7 +19,7 @@ pub(crate) use containers::{
     BootstrapContainerRole, BootstrapStartReceipt, PendingBootstrapPair, StartedBootstrapPair,
     VerifiedBootstrapContainerCreated, VerifiedBootstrapMountHandoff, VerifiedCreatedStorageObject,
     VerifiedStorageNetworkCreated, VerifiedStorageNetworkRemoved, create_owned_network,
-    remove_owned_network, start_bootstrap_pair,
+    remove_owned_network, remove_owned_network_for_retirement, start_bootstrap_pair,
 };
 #[cfg(test)]
 use containers::{create_spec, verify_pre_jit_created};
@@ -55,5 +55,5 @@ pub(crate) use containers::test_bootstrap_mount_handoff;
 #[cfg(test)]
 pub(crate) use cleanup::runtime_tests::{
     CleanupRuntimeFixture, cleanup_runtime_fixture, cleanup_runtime_fixture_for_base,
-    verify_storage_cleanup_for_scope,
+    cleanup_runtime_fixture_for_base_with_capacity, verify_storage_cleanup_for_scope,
 };

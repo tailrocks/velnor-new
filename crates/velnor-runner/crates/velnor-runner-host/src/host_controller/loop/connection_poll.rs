@@ -1,6 +1,6 @@
 //! Poll active Scale Set sessions and reconcile their event handoffs.
 
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use bollard::Docker;
 
@@ -27,7 +27,7 @@ pub(super) struct ConnectionPollContext<'a> {
     pub(super) selected_engine: &'a SelectedEngineContext,
     pub(super) worker_images: &'a VerifiedWorkerImages,
     pub(super) state: &'a Path,
-    pub(super) release_read_secret: &'a ReleaseReadSecret,
+    pub(super) release_read_secret: &'a Arc<ReleaseReadSecret>,
     pub(super) admission_ready: bool,
 }
 

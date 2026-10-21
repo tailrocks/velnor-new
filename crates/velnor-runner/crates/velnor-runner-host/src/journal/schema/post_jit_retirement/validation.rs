@@ -7,8 +7,7 @@ use super::{ddl, guards};
 mod acquire_proof;
 mod pending_claims;
 
-const INSERT_GUARDS: [&str; 4] = [
-    guards::CLAIM_INSERT_GUARD,
+const INSERT_GUARDS: [&str; 3] = [
     guards::PROGRESS_INSERT_GUARD,
     guards::REMOTE_ABSENCE_INSERT_GUARD,
     guards::RETIREMENT_INSERT_GUARD,
@@ -24,7 +23,10 @@ const IMMUTABLE_GUARDS: [&str; 8] = [
     guards::RETIREMENTS_NO_DELETE,
 ];
 
-pub(super) async fn validate_objects(conn: &turso::Connection) -> Result<(), HostError> {
+pub(super) async fn validate_objects(
+    conn: &turso::Connection,
+    claim_guard: &str,
+) -> Result<(), HostError> {
     let mut expected = Vec::new();
     expected.extend(
         ddl::TABLE_NAMES
@@ -42,6 +44,7 @@ pub(super) async fn validate_objects(conn: &turso::Connection) -> Result<(), Hos
         "physical_attempt_terminal_proofs",
         ddl::TERMINAL_PROOFS_VIEW,
     ));
+    expected.push(("trigger", trigger_name(claim_guard), claim_guard));
     expected.extend(
         INSERT_GUARDS
             .into_iter()
@@ -83,7 +86,7 @@ pub(super) async fn validate_objects(conn: &turso::Connection) -> Result<(), Hos
     Ok(())
 }
 
-fn trigger_name(sql: &'static str) -> &'static str {
+fn trigger_name(sql: &str) -> &str {
     let body = sql.strip_prefix("CREATE TRIGGER ").unwrap_or(sql);
     body.split_ascii_whitespace().next().unwrap_or("")
 }

@@ -87,6 +87,10 @@ async fn insert_claim(
 #[tokio::test]
 async fn acquired_witness_digest_accepts_null_attempt_creation_snapshot() -> Result<(), HostError> {
     let fixture = crate::journal::request_lifecycle::tests::native_started_intake_fixture().await?;
+    crate::journal::connection::reservation::post_jit_retirement::test_support::recover_fixture(
+        &fixture,
+    )
+    .await?;
     let attempt = fixture
         .scope
         .current_physical_attempt(fixture.reservation_id)
@@ -95,9 +99,28 @@ async fn acquired_witness_digest_accepts_null_attempt_creation_snapshot() -> Res
     assert!(attempt.acquire_response_digest.is_none());
 
     let response_digest = fixture_response_digest(&fixture).await?;
-    insert_claim(&fixture, &response_digest).await?;
+    assert_eq!(attempt.acquire_response_digest, None);
+    let claim = fixture
+        .scope
+        .claim_post_jit_retirement(fixture.reservation_id, 60)
+        .await?
+        .ok_or(HostError::Journal)?;
     let connection = fixture.journal.connection().await?;
-    super::validate(&connection).await?;
+    let mut rows = connection
+        .query(
+            "SELECT acquire_response_digest FROM physical_attempt_post_jit_retirement_claims WHERE reservation_id=?1 AND claim_generation=?2",
+            (fixture.reservation_id, claim.claim_generation()),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let row = rows
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?;
+    let claim_response: String = row.get(0).map_err(|_| HostError::Journal)?;
+    assert_eq!(claim_response, response_digest);
+    super::validate_v37(&connection).await?;
     Ok(())
 }
 

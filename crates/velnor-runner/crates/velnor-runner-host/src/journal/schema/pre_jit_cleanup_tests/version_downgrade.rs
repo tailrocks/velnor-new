@@ -5,40 +5,10 @@ async fn version_thirty_one_upgrade_installs_only_the_typed_create_receipt() -> 
     let scratch = super::Scratch::new();
     std::fs::create_dir_all(&scratch.0).map_err(|_| "The test directory could not be created.")?;
     let path = scratch.database();
-    drop(
-        Journal::open(&path)
-            .await
-            .map_err(|_| "The journal could not be created.")?,
-    );
+    crate::journal::schema::historical_fixture::install(&path, 31)
+        .await
+        .map_err(|_| "The test could not install the version 31 historical fixture.")?;
     let path_text = path.to_str().ok_or("The journal path is not UTF-8.")?;
-    let database = turso::Builder::new_local(path_text)
-        .build()
-        .await
-        .map_err(|_| "The test database could not be opened.")?;
-    let connection = database
-        .connect()
-        .map_err(|_| "The test connection could not be opened.")?;
-    for trigger in [
-        "pre_jit_create_response_insert_guard",
-        "pre_jit_create_response_no_update",
-        "pre_jit_create_response_no_delete",
-    ] {
-        connection
-            .execute(&format!("DROP TRIGGER {trigger}"), ())
-            .await
-            .map_err(|_| "The test trigger could not be removed.")?;
-    }
-    connection
-        .execute(
-            "DROP TABLE capacity_reservation_pre_jit_create_responses",
-            (),
-        )
-        .await
-        .map_err(|_| "The test table could not be removed.")?;
-    super::remove_v32_pre_jit_schema(&connection).await?;
-    drop(connection);
-    drop(database);
-
     drop(
         Journal::open(&path)
             .await

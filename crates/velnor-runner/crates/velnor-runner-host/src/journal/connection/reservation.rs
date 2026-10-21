@@ -8,6 +8,10 @@ mod physical_attempt;
 pub(in crate::journal) mod post_jit_retirement;
 mod provisioning;
 
+pub(crate) use post_jit_retirement::{
+    PostJitRetirementCandidate, PostJitRetirementClaim, PreparedRetirementRemoteAbsence,
+};
+
 pub(in crate::journal) use provisioning::validate_retirement_digest;
 
 pub(in crate::journal) async fn release_ready(

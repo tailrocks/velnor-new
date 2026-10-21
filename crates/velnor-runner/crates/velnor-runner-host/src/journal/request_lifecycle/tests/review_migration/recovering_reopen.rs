@@ -1,8 +1,22 @@
 use crate::error::HostError;
 use crate::journal::{AssignmentIdentity, ConnectionJournal, Journal, ReservationState};
 
-#[tokio::test]
-async fn completed_recovering_reservation_is_read_after_reopen() -> Result<(), HostError> {
+#[test]
+fn completed_recovering_reservation_is_read_after_reopen() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "completed_recovering_reservation_is_read_after_reopen",
+        || {
+            Box::pin(async {
+                completed_recovering_reservation_is_read_after_reopen_on_fixture_stack()
+                    .await
+                    .map_err(|error| error.to_string())
+            })
+        },
+    )
+}
+
+async fn completed_recovering_reservation_is_read_after_reopen_on_fixture_stack()
+-> Result<(), HostError> {
     let (_scratch, journal, scope, launch, reservation_id, intent_id, runner, dind, _) =
         completed_recovering_launch(false).await?;
     let reservation = scope
@@ -18,8 +32,22 @@ async fn completed_recovering_reservation_is_read_after_reopen() -> Result<(), H
     Ok(())
 }
 
-#[tokio::test]
-async fn incomplete_cleanup_proofs_keep_recovering_charge_after_reopen() -> Result<(), HostError> {
+#[test]
+fn incomplete_cleanup_proofs_keep_recovering_charge_after_reopen() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "incomplete_cleanup_proofs_keep_recovering_charge_after_reopen",
+        || {
+            Box::pin(async {
+                incomplete_cleanup_proofs_keep_recovering_charge_after_reopen_on_fixture_stack()
+                    .await
+                    .map_err(|error| error.to_string())
+            })
+        },
+    )
+}
+
+async fn incomplete_cleanup_proofs_keep_recovering_charge_after_reopen_on_fixture_stack()
+-> Result<(), HostError> {
     let (_scratch, journal, scope, launch, _reservation_id, _, _, _, assignment) =
         completed_recovering_launch(true).await?;
     let reservation = scope

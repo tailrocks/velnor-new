@@ -2,7 +2,7 @@
 
 use crate::error::HostError;
 use crate::journal::connection::ConnectionJournal;
-use crate::journal::request_lifecycle::{PhysicalRunnerStartClaim, RunnerJitClaim};
+use crate::journal::request_lifecycle::RunnerJitClaim;
 use crate::journal::sql::token_rejected;
 
 pub(in crate::journal) async fn mark_runner_cleaned_after_cleanup(
@@ -38,20 +38,6 @@ pub(super) fn validate_jit_claim(
         || claim.scale_set_id <= 0
         || claim.intent_id <= 0
         || claim.witness_request_id <= 0
-    {
-        return Err(HostError::Identity);
-    }
-    Ok(())
-}
-
-pub(super) fn validate_start_claim(
-    scope: &ConnectionJournal,
-    claim: &PhysicalRunnerStartClaim,
-) -> Result<(), HostError> {
-    if &claim.connection_id != scope.connection_id()
-        || claim.scale_set_id <= 0
-        || claim.intent_id <= 0
-        || !valid_worker_volume(&claim.worker_volume)
     {
         return Err(HostError::Identity);
     }
@@ -121,12 +107,4 @@ fn valid_nonce(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
-
-pub(super) fn valid_worker_volume(value: &str) -> bool {
-    value.strip_prefix('w').is_some_and(valid_nonce)
-}
-
-pub(super) fn valid_resource_id(value: &str) -> bool {
-    !token_rejected(value) && value.len() <= 256 && !value.chars().any(char::is_control)
 }

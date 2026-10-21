@@ -11,7 +11,7 @@ async fn physical_attempt_schema_rejects_missing_guard() -> Result<(), HostError
     super::physical_attempts::bootstrap(&connection)
         .await
         .expect("The new attempt DDL must apply.");
-    super::physical_attempts::validate(&connection)
+    super::physical_attempts::validate_v35(&connection)
         .await
         .expect("The new attempt DDL must match the required schema.");
     connection
@@ -20,7 +20,7 @@ async fn physical_attempt_schema_rejects_missing_guard() -> Result<(), HostError
         .map_err(|_| HostError::Journal)?;
 
     assert!(
-        super::physical_attempts::validate(&connection)
+        super::physical_attempts::validate_v35(&connection)
             .await
             .is_err()
     );

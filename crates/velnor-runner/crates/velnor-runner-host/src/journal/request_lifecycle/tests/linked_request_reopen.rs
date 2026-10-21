@@ -21,14 +21,37 @@ async fn orphaned_reservation_link_fails_journal_reopen() -> Result<(), HostErro
     fixtures::reject_orphaned_reservation_link(fixture).await
 }
 
-#[tokio::test]
-async fn linked_reservation_reopens_for_same_request_through_cleanup_and_replay()
+#[test]
+fn linked_reservation_reopens_for_same_request_through_cleanup_and_replay() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "linked_reservation_reopens_for_same_request_through_cleanup_and_replay",
+        || {
+            Box::pin(async {
+                linked_reservation_reopens_for_same_request_through_cleanup_and_replay_on_fixture_stack().await.map_err(|error| error.to_string())
+            })
+        },
+    )
+}
+
+async fn linked_reservation_reopens_for_same_request_through_cleanup_and_replay_on_fixture_stack()
 -> Result<(), HostError> {
     exercise_linked_lifecycle(WITNESS_REQUEST_ID, WITNESS_REQUEST_ID, 'a').await
 }
 
-#[tokio::test]
-async fn linked_reservation_reopens_for_swapped_request_through_cleanup_and_replay()
+#[test]
+fn linked_reservation_reopens_for_swapped_request_through_cleanup_and_replay() -> Result<(), String>
+{
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "linked_reservation_reopens_for_swapped_request_through_cleanup_and_replay",
+        || {
+            Box::pin(async {
+                linked_reservation_reopens_for_swapped_request_through_cleanup_and_replay_on_fixture_stack().await.map_err(|error| error.to_string())
+            })
+        },
+    )
+}
+
+async fn linked_reservation_reopens_for_swapped_request_through_cleanup_and_replay_on_fixture_stack()
 -> Result<(), HostError> {
     exercise_linked_lifecycle(WITNESS_REQUEST_ID, 101, 'b').await
 }

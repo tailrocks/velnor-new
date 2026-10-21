@@ -12,6 +12,7 @@ mod cleanup_observer_witness_tests;
 mod connection;
 mod current_columns;
 mod doctor_probe;
+mod driver;
 mod execution_authorization;
 mod execution_publication;
 mod image_import;
@@ -54,7 +55,7 @@ mod storage_root_backing;
 mod v30_migration_tests;
 mod validation;
 
-pub(super) const JOURNAL_VERSION: i64 = 36;
+pub(super) const JOURNAL_VERSION: i64 = 37;
 use current_columns::CURRENT_COLUMNS;
 pub(super) use validation::validate_persisted_schema_v35;
 
@@ -80,7 +81,7 @@ pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError>
 }
 
 async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError> {
-    let mut version = journal_version(conn).await?;
+    let version = journal_version(conn).await?;
     if version == JOURNAL_VERSION {
         // Repair only the exact v26 attachment/path contracts before
         // provisioning validation requires the current v27 definitions.
@@ -104,65 +105,12 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
         storage_root_backing::upgrade_v31(conn).await?;
         storage_handoff::bootstrap(conn).await?;
         cleanup_observer_witness::bootstrap(conn).await?;
-        post_jit_retirement::validate(conn).await?;
+        post_jit_retirement::validate_v37(conn).await?;
         post_jit_effect_fences::validate(conn).await?;
     } else {
-        while version != JOURNAL_VERSION {
-            let expected = expected_next_version(version).ok_or(HostError::Journal)?;
-            match version {
-                0 => migration::from_version_zero(conn).await?,
-                1 => migration::from_version_one(conn).await?,
-                2 => migration::from_version_two(conn).await?,
-                3 => migration::from_version_three(conn).await?,
-                4 => migration::from_version_four(conn).await?,
-                5 => migration::from_version_five(conn).await?,
-                6 => migration::from_version_six(conn).await?,
-                7 => migration::from_version_seven(conn).await?,
-                8 => migration::from_version_eight(conn).await?,
-                9 => migration::from_version_nine(conn).await?,
-                10 => migration::from_version_ten(conn).await?,
-                11 => migration::from_version_eleven(conn).await?,
-                12 => migration::from_version_twelve(conn).await?,
-                13 => migration::from_version_thirteen(conn).await?,
-                14 => migration::from_version_fourteen(conn).await?,
-                15 => migration::from_version_fifteen(conn).await?,
-                16 => migration::from_version_sixteen(conn).await?,
-                17 => migration::from_version_seventeen(conn).await?,
-                18 => migration::from_version_eighteen(conn).await?,
-                19 => migration::from_version_nineteen(conn).await?,
-                20 => migration::from_version_twenty(conn).await?,
-                21 => migration::from_version_twenty_one(conn).await?,
-                22 => migration::from_version_twenty_two(conn).await?,
-                23 => migration::from_version_twenty_three(conn).await?,
-                24 => migration::from_version_twenty_four(conn).await?,
-                25 => migration::from_version_twenty_five(conn).await?,
-                26 => migration::from_version_twenty_six(conn).await?,
-                27 => migration::from_version_twenty_seven(conn).await?,
-                28 => migration::from_version_twenty_eight(conn).await?,
-                29 => migration::from_version_twenty_nine(conn).await?,
-                30 => migration::from_version_thirty(conn).await?,
-                31 => migration::from_version_thirty_one(conn).await?,
-                32 => migration::from_version_thirty_two(conn).await?,
-                33 => migration::from_version_thirty_three(conn).await?,
-                34 => migration::from_version_thirty_four(conn).await?,
-                35 => migration::from_version_thirty_five(conn).await?,
-                _ => return Err(HostError::Journal),
-            }
-            version = journal_version(conn).await?;
-            if version != expected {
-                return Err(HostError::Journal);
-            }
-        }
+        driver::migrate_to_current(conn, version).await?;
     }
     validate_persisted_schema(conn).await
-}
-
-fn expected_next_version(version: i64) -> Option<i64> {
-    match version {
-        0..=8 | 10..=35 => Some(version + 1),
-        9 => Some(11),
-        _ => None,
-    }
 }
 
 #[cfg(test)]
@@ -174,8 +122,24 @@ mod migration_driver_tests;
 pub(crate) mod historical_fixture;
 
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_persisted_schema_v37(conn).await
+}
+
+pub(super) async fn validate_persisted_schema_v36(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
     validate_persisted_schema_v35(conn).await?;
     post_jit_effect_fences::validate(conn).await
+}
+
+pub(super) async fn validate_persisted_schema_v37(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
+    validate_persisted_schema_v32_core(conn).await?;
+    storage_network::validate_v33(conn).await?;
+    physical_attempts::validate_v35(conn).await?;
+    post_jit_effect_fences::validate(conn).await?;
+    post_jit_retirement::validate_v37(conn).await
 }
 
 pub(super) async fn validate_persisted_schema_v33(

@@ -1,3 +1,6 @@
+#[path = "post_jit_retirement/fixture_stack_cases.rs"]
+mod fixture_stack_cases;
+
 use crate::error::HostError;
 use crate::journal::connection::storage::{in_transaction, read_transaction};
 use crate::journal::{Journal, MetadataSettlementResult};
@@ -12,58 +15,31 @@ pub(crate) mod late_events;
 #[path = "post_jit_retirement/reciprocal.rs"]
 mod reciprocal;
 
-#[tokio::test]
-async fn retirement_settlement_writes_terminal_before_release_and_reopens() -> Result<(), HostError>
-{
-    Box::pin(retirement_settlement_writes_terminal_before_release_and_reopens_inner()).await
-}
-
-async fn retirement_settlement_writes_terminal_before_release_and_reopens_inner()
--> Result<(), HostError> {
-    let fixture = prepared_fixture().await?;
-    seed_mocked_external_evidence(&fixture).await?;
-    record_storage_and_network_proofs(&fixture).await?;
-    let claim =
-        helpers::create_cleaned_settlement_probe(&fixture.scope, &fixture.provisioned, 'a').await?;
-    let sample = helpers::settlement_sample(&fixture.scope, &claim).await?;
-    let outcome = fixture
-        .scope
-        .record_storage_metadata_settlement(&claim, sample)
-        .await?;
-    assert_eq!(outcome, MetadataSettlementResult::Settled);
-    assert_terminal_state(&fixture).await?;
-    let reopened = Journal::open(&fixture.database_path).await?;
-    assert_reopened_terminal_state(&reopened, &fixture).await
-}
-
-#[tokio::test]
-async fn retirement_settlement_rolls_back_terminal_and_release_when_current_delete_fails()
--> Result<(), HostError> {
-    Box::pin(
-        retirement_settlement_rolls_back_terminal_and_release_when_current_delete_fails_inner(),
+#[test]
+fn retirement_settlement_writes_terminal_before_release_and_reopens() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "retirement_settlement_writes_terminal_before_release_and_reopens",
+        || {
+            Box::pin(async {
+                fixture_stack_cases::retirement_settlement_writes_terminal_before_release_and_reopens_on_fixture_stack()
+                    .await
+                    .map_err(|error| error.to_string())
+            })
+        },
     )
-    .await
 }
 
-async fn retirement_settlement_rolls_back_terminal_and_release_when_current_delete_fails_inner()
--> Result<(), HostError> {
-    let fixture = prepared_fixture().await?;
-    seed_mocked_external_evidence(&fixture).await?;
-    record_storage_and_network_proofs(&fixture).await?;
-    let claim =
-        helpers::create_cleaned_settlement_probe(&fixture.scope, &fixture.provisioned, 'b').await?;
-    let sample = helpers::settlement_sample(&fixture.scope, &claim).await?;
-    install_current_delete_failure(&fixture).await?;
-    assert!(
-        fixture
-            .scope
-            .record_storage_metadata_settlement(&claim, sample)
-            .await
-            .is_err()
-    );
-    drop_current_delete_failure(&fixture).await?;
-    assert_held_without_terminal(&fixture).await?;
-    Ok(())
+#[test]
+fn retirement_settlement_rolls_back_terminal_and_release_when_current_delete_fails()
+-> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "retirement_settlement_rolls_back_terminal_and_release_when_current_delete_fails",
+        || {
+            Box::pin(async {
+                fixture_stack_cases::retirement_settlement_rolls_back_terminal_and_release_when_current_delete_fails_on_fixture_stack().await.map_err(|error| error.to_string())
+            })
+        },
+    )
 }
 
 #[tokio::test]
@@ -145,7 +121,12 @@ async fn record_witness_runner_event(
 }
 
 async fn prepared_fixture() -> Result<NativeStartedIntakeFixture, HostError> {
-    super::native_started_intake_fixture().await
+    let fixture = super::native_started_intake_fixture().await?;
+    crate::journal::connection::reservation::post_jit_retirement::test_support::recover_fixture(
+        &fixture,
+    )
+    .await?;
+    Ok(fixture)
 }
 
 async fn seed_mocked_external_evidence(
@@ -158,6 +139,11 @@ async fn seed_mocked_external_evidence(
         .ok_or(HostError::Journal)?;
     let scope = fixture.scope.clone();
     let reservation_id = fixture.reservation_id;
+    let claim = scope
+        .claim_post_jit_retirement(reservation_id, 60)
+        .await?
+        .ok_or(HostError::Journal)?;
+    let claim_generation = claim.claim_generation();
     in_transaction(scope.journal_ref(), async |connection| {
         let mut rows = connection.query(
             "SELECT auth.acquire_response_digest,state.instance_binding_digest,j.runner_id,j.runner_name FROM connection_request_authorizations auth JOIN capacity_reservation_provisioning_state state ON state.reservation_id=?1 JOIN connection_runner_jits j ON j.intent_id=?2 AND j.connection_id=?3 WHERE auth.connection_id=?3 AND auth.scale_set_id=?4 AND auth.request_id=?5 AND auth.acquire_state='acquired'",
@@ -186,15 +172,23 @@ async fn seed_mocked_external_evidence(
             runner_id,
             runner_name: runner_name.as_str(),
         })?;
-        connection.execute(
-            "INSERT INTO physical_attempt_post_jit_retirement_claims (reservation_id,claim_generation,lineage_id,generation,intent_id,connection_id,scale_set_id,witness_request_id,binding_digest,source_digest,acquire_response_digest,engine_id,docker_root_digest,instance_binding_digest,runner_id,runner_name,snapshot_sha256,lease_until,created_at) VALUES (?1,1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,unixepoch()+600,unixepoch())",
-            (reservation_id, attempt.lineage_id, attempt.generation, attempt.intent_id,
-             scope.connection_id().as_str(), fixture.runner.runner_scale_set_id,
-             attempt.witness_request_id, attempt.binding_digest.as_str(), attempt.source_digest.as_str(),
-             acquire_digest.as_str(), attempt.engine_id.as_str(), attempt.docker_root_digest.as_str(),
-             instance_binding.as_str(), runner_id, runner_name.as_str(), snapshot.as_str()),
-        ).await.map_err(|_| HostError::Journal)?;
-        insert_phase(connection, reservation_id, 0, "claimed", snapshot.as_str()).await?;
+        let mut rows = connection
+            .query(
+                "SELECT snapshot_sha256 FROM physical_attempt_post_jit_retirement_claims WHERE reservation_id=?1 AND claim_generation=?2",
+                (reservation_id, claim_generation),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        let row = rows
+            .next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .ok_or(HostError::Journal)?;
+        let persisted_snapshot: String = row.get(0).map_err(|_| HostError::Journal)?;
+        assert_eq!(persisted_snapshot, snapshot);
+        if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
+            return Err(HostError::Journal);
+        }
         let mocked_stop = digest(b"mocked runner stop evidence for storage-only retirement test");
         insert_phase(connection, reservation_id, 1, "runner_stopped", mocked_stop.as_str()).await?;
         let request_digest = digest(b"mocked external runner lookup request");

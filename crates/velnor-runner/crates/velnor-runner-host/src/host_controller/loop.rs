@@ -33,6 +33,7 @@ pub(crate) use connection_poll::fairness::{FairnessTurn, HeaderPollPlan};
 use controller::run_controller;
 #[cfg(test)]
 pub(crate) use polling::PollKind;
+pub(crate) use setup::connection_pat;
 #[cfg(test)]
 pub(crate) use setup::{requested_header_capacity, requested_header_capacity_after};
 #[cfg(test)]

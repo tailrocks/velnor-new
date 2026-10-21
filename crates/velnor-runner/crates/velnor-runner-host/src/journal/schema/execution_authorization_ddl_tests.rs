@@ -135,8 +135,12 @@ async fn v28_rebuild_preserves_published_proof_and_reopens() -> Result<(), HostE
     drop(source);
     drop(channel);
 
-    let reopened = crate::journal::Journal::open(&database_path).await?;
-    let connection = reopened.connection().await?;
+    let path_text = database_path.to_str().ok_or(HostError::Path)?;
+    let reopened = turso::Builder::new_local(path_text)
+        .build()
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let connection = reopened.connect().map_err(|_| HostError::Journal)?;
     let after = migration::proof_facts(&connection, reservation_id).await?;
     if before != after || after.0 != connection_id {
         return Err(HostError::Journal);

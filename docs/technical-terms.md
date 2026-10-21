@@ -119,3 +119,6 @@
 | Flow list | A YAML list written between square brackets. |
 | Block list | A YAML list with one item on each line after a hyphen. |
 | OCI image index | A document that lists image manifests for one or more platforms. |
+| Orphaned physical attempt | A physical attempt that the journal identifies for recovery after an interruption. |
+| Keychain | The macOS service that stores credentials and controls access to them. |
+| Unix epoch | The time reference at 00:00:00 UTC on 1 January 1970. |

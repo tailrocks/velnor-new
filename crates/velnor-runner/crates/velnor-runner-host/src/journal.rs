@@ -56,6 +56,9 @@ pub(crate) use connection::TerminalReplayBinding;
 pub(crate) use connection::{
     PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation, ReservationState,
 };
+pub(crate) use connection::{
+    PostJitRetirementCandidate, PostJitRetirementClaim, PreparedRetirementRemoteAbsence,
+};
 
 pub(crate) use connection::{
     AssignmentIdentity, AssignmentKey, BootstrapContainerCreateClaim, BootstrapStartClaim,

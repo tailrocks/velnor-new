@@ -1,3 +1,6 @@
+#[path = "tests/fixture_stack_cases.rs"]
+mod fixture_stack_cases;
+
 use crate::{error::HostError, journal::MetadataSettlementResult};
 
 use super::finish_after_settlement;
@@ -97,68 +100,32 @@ async fn native_completion_reads_exact_charged_reservation() -> Result<(), HostE
     Ok(())
 }
 
-#[tokio::test]
-async fn native_capacity_retry_does_not_repeat_proven_cleanup_effects() -> Result<(), HostError> {
-    let fixture = capacity_retry_fixture().await?;
-    let (launch, now) = seed_completion(&fixture).await?;
-    let first_claim = fixture
-        .scope
-        .claim_completion_cleanup_at(launch.intent.id, now, 90)
-        .await?
-        .ok_or(HostError::Journal)?;
-    let first_generation =
-        assert_capacity_hold_keeps_attempt(&fixture, &launch, first_claim, now).await?;
-    assert_retry_settlement_is_idempotent(&fixture, &launch, now, first_generation).await
+#[test]
+fn native_capacity_retry_does_not_repeat_proven_cleanup_effects() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "native_capacity_retry_does_not_repeat_proven_cleanup_effects",
+        || {
+            Box::pin(async {
+                fixture_stack_cases::native_capacity_retry_does_not_repeat_proven_cleanup_effects_on_fixture_stack()
+                    .await
+                    .map_err(|error| error.to_string())
+            })
+        },
+    )
 }
 
-#[tokio::test]
-async fn terminal_replay_requires_the_exact_intent_and_normal_outcome() -> Result<(), HostError> {
-    let fixture = capacity_retry_fixture().await?;
-    let (launch, now) = seed_completion(&fixture).await?;
-    let claim = fixture
-        .scope
-        .claim_completion_cleanup_at(launch.intent.id, now, 90)
-        .await?
-        .ok_or(HostError::Journal)?;
-    assert!(
-        fixture
-            .scope
-            .record_completion_runner_absent_at(launch.intent.id, claim.generation, now)
-            .await?
-    );
-    assert!(matches!(
-        run_native_cleanup(&fixture, &launch, claim).await?,
-        Err(super::super::Failure {
-            phase: "metadata capacity hold",
-            ..
-        })
-    ));
-
-    assert!(
-        fixture
-            .scope
-            .record_completion_cleanup_at(launch.intent.id, claim.generation, now)
-            .await?
-    );
-    assert!(
-        !fixture
-            .scope
-            .terminal_settlement_matches_at(launch.intent.id, claim.generation)
-            .await?
-    );
-    assert!(
-        !fixture
-            .scope
-            .terminal_settlement_matches_at(launch.intent.id + 1, claim.generation)
-            .await?
-    );
-    assert!(
-        !fixture
-            .scope
-            .record_completion_cleanup_at(launch.intent.id, claim.generation, now + 1)
-            .await?
-    );
-    Ok(())
+#[test]
+fn terminal_replay_requires_the_exact_intent_and_normal_outcome() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "terminal_replay_requires_the_exact_intent_and_normal_outcome",
+        || {
+            Box::pin(async {
+                fixture_stack_cases::terminal_replay_requires_the_exact_intent_and_normal_outcome_on_fixture_stack()
+                    .await
+                    .map_err(|error| error.to_string())
+            })
+        },
+    )
 }
 
 async fn assert_capacity_hold_keeps_attempt(

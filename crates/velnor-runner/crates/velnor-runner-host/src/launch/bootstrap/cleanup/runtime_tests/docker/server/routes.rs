@@ -80,9 +80,9 @@ fn create_probe(
         state.capacity_runs = state.capacity_runs.saturating_add(1);
     }
     let capacity_available = if state.capacity_runs == 1 {
-        0
+        state.capacity_first
     } else {
-        19 * 1024 * 1024 * 1024
+        state.capacity_after_first
     };
     let probe = ProbeState {
         id: PROBE_ID.to_owned(),

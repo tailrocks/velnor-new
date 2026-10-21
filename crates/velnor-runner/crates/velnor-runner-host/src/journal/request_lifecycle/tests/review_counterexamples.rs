@@ -195,12 +195,32 @@ async fn review_completed_runner_cleanup_remains_reopenable() -> Result<(), Host
 async fn independent_recovered_unassigned_runner_allows_replacement_for_same_request()
 -> Result<(), HostError> {
     let f = ready().await?;
+    let completion_generation = record_runner_completion_for_cleanup(
+        &f.scope,
+        &f.request,
+        f.intent,
+        None,
+        703,
+        &event_source(101, 1070),
+        &f.runner,
+    )
+    .await?;
     let reservation = f
         .scope
         .reservation(&f.physical)
         .await?
         .ok_or(HostError::Journal)?;
     f.scope.mark_recovering(reservation.reservation_id).await?;
+    let recovering = f
+        .scope
+        .reservation(&f.physical)
+        .await?
+        .ok_or(HostError::Journal)?;
+    assert_eq!(
+        recovering.state,
+        crate::journal::ReservationState::Recovering
+    );
+    assert!(!recovering.resume_eligible);
     record_observed_storage_cleanup(&f.scope, reservation.reservation_id).await?;
     record_owned_network_cleanup(&f.scope, reservation.reservation_id).await?;
     f.scope
@@ -209,10 +229,16 @@ async fn independent_recovered_unassigned_runner_allows_replacement_for_same_req
     f.scope
         .record_local_cleanup(reservation.reservation_id)
         .await?;
+    record_runner_absent_for_cleanup(&f.scope, f.intent, completion_generation).await?;
     assert!(!f.scope.intent(f.intent).await?.cleanup_proven);
     assert_eq!(
         settle_storage_metadata(&f.scope, &f.provisioned, 'd').await?,
         crate::journal::MetadataSettlementResult::Settled
+    );
+    assert!(f.scope.intent(f.intent).await?.cleanup_proven);
+    assert_eq!(
+        f.scope.reservation(&f.physical).await?.map(|row| row.state),
+        Some(crate::journal::ReservationState::Released)
     );
     let path = f.scratch.file();
     let binding = f.binding.clone();

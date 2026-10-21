@@ -48,7 +48,7 @@ struct CapacityCpuAncestor {
 }
 
 impl CapacityRecord {
-    pub(super) fn new(available: u64) -> Self {
+    pub(super) fn new(available: u64, total: u64) -> Self {
         Self {
             schema_version: 5,
             docker_root_mount_target: "/velnor/docker-root".to_owned(),
@@ -63,8 +63,8 @@ impl CapacityRecord {
             docker_root_fs_type_name: "btrfs".to_owned(),
             docker_root_filesystem_id: 17,
             guest_boot_id: "12345678-1234-1234-1234-123456789abc".to_owned(),
-            docker_root_free_bytes: 20 * 1024 * 1024 * 1024,
-            docker_root_total_bytes: 40 * 1024 * 1024 * 1024,
+            docker_root_free_bytes: available.max(20 * 1024 * 1024 * 1024),
+            docker_root_total_bytes: total,
             docker_root_available_bytes: available,
             docker_root_inode_total: 0,
             docker_root_inode_free: 0,

@@ -10,7 +10,8 @@ async fn synthetic_v27_pair_rebuild_preserves_published_proof() -> Result<(), Ho
     let before = proof_facts(&connection, reservation_id).await?;
     recreate_pair_as_v27(&connection).await?;
     crate::journal::schema::execution_authorization::upgrade_v28(&connection).await?;
-    if proof_facts(&connection, reservation_id).await? != before {
+    let after = proof_facts(&connection, reservation_id).await?;
+    if after != before {
         return Err(HostError::Journal);
     }
     drop(connection);
@@ -21,8 +22,12 @@ async fn synthetic_v27_pair_rebuild_preserves_published_proof() -> Result<(), Ho
     } = fixture;
     drop(_journal);
 
-    let reopened = crate::journal::Journal::open(&database_path).await?;
-    let connection = reopened.connection().await?;
+    let path_text = database_path.to_str().ok_or(HostError::Path)?;
+    let reopened = turso::Builder::new_local(path_text)
+        .build()
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let connection = reopened.connect().map_err(|_| HostError::Journal)?;
     if proof_facts(&connection, reservation_id).await? != before {
         return Err(HostError::Journal);
     }

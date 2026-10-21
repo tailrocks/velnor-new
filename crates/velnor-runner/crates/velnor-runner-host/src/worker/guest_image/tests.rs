@@ -85,8 +85,17 @@ fn writer_publishes_canonical_read_only_guest_claims_only() -> Result<(), HostEr
     Ok(())
 }
 
-#[tokio::test]
-async fn verified_immutable_image_ids_and_metadata_reach_bootstrap_docker_config()
+#[test]
+fn verified_immutable_image_ids_and_metadata_reach_bootstrap_docker_config() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "verified_immutable_image_ids_and_metadata_reach_bootstrap_docker_config",
+        || {
+            Box::pin(verified_immutable_image_ids_and_metadata_reach_bootstrap_docker_config_on_fixture_stack())
+        },
+    )
+}
+
+async fn verified_immutable_image_ids_and_metadata_reach_bootstrap_docker_config_on_fixture_stack()
 -> Result<(), String> {
     let failure = crate::launch::steps::runner_create_409().await?;
     let images = failure.images().clone();

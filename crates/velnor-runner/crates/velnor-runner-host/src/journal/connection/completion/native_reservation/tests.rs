@@ -28,8 +28,21 @@ async fn completed_native_launch()
     Ok((fixture, launches.remove(0)))
 }
 
-#[tokio::test]
-async fn reader_rejects_reservation_engine_mismatch() -> Result<(), HostError> {
+#[test]
+fn reader_rejects_reservation_engine_mismatch() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "reader_rejects_reservation_engine_mismatch",
+        || {
+            Box::pin(async {
+                reader_rejects_reservation_engine_mismatch_on_fixture_stack()
+                    .await
+                    .map_err(|error| error.to_string())
+            })
+        },
+    )
+}
+
+async fn reader_rejects_reservation_engine_mismatch_on_fixture_stack() -> Result<(), HostError> {
     let (fixture, launch) = completed_native_launch().await?;
     let connection = fixture.scope.journal.connection().await?;
     connection
@@ -48,9 +61,22 @@ async fn reader_rejects_reservation_engine_mismatch() -> Result<(), HostError> {
     Ok(())
 }
 
-#[tokio::test]
-async fn reader_accepts_a_completed_launch_with_a_recovering_reservation() -> Result<(), HostError>
-{
+#[test]
+fn reader_accepts_a_completed_launch_with_a_recovering_reservation() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "reader_accepts_a_completed_launch_with_a_recovering_reservation",
+        || {
+            Box::pin(async {
+                reader_accepts_a_completed_launch_with_a_recovering_reservation_on_fixture_stack()
+                    .await
+                    .map_err(|error| error.to_string())
+            })
+        },
+    )
+}
+
+async fn reader_accepts_a_completed_launch_with_a_recovering_reservation_on_fixture_stack()
+-> Result<(), HostError> {
     let (fixture, launch) = completed_native_launch().await?;
     fixture
         .scope
@@ -75,8 +101,22 @@ async fn reader_accepts_a_completed_launch_with_a_recovering_reservation() -> Re
     Ok(())
 }
 
-#[tokio::test]
-async fn provisioning_rejects_engine_mismatch_with_reservation() -> Result<(), HostError> {
+#[test]
+fn provisioning_rejects_engine_mismatch_with_reservation() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "provisioning_rejects_engine_mismatch_with_reservation",
+        || {
+            Box::pin(async {
+                provisioning_rejects_engine_mismatch_with_reservation_on_fixture_stack()
+                    .await
+                    .map_err(|error| error.to_string())
+            })
+        },
+    )
+}
+
+async fn provisioning_rejects_engine_mismatch_with_reservation_on_fixture_stack()
+-> Result<(), HostError> {
     let (fixture, launch) = completed_native_launch().await?;
     let connection = fixture.scope.journal.connection().await?;
     assert!(connection

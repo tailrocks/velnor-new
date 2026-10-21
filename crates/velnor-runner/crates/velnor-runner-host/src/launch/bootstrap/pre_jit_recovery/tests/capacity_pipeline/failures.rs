@@ -1,13 +1,34 @@
 use super::*;
 
-#[tokio::test]
-async fn volume_delete_transport_failure_keeps_the_reservation_charged() -> Result<(), String> {
+#[test]
+fn volume_delete_transport_failure_keeps_the_reservation_charged() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "volume_delete_transport_failure_keeps_the_reservation_charged",
+        || {
+            Box::pin(
+                volume_delete_transport_failure_keeps_the_reservation_charged_on_fixture_stack(),
+            )
+        },
+    )
+}
+
+async fn volume_delete_transport_failure_keeps_the_reservation_charged_on_fixture_stack()
+-> Result<(), String> {
     assert_volume_failure_keeps_charge(false).await
 }
 
-#[tokio::test]
-async fn post_delete_volume_inspection_failure_keeps_the_reservation_charged() -> Result<(), String>
-{
+#[test]
+fn post_delete_volume_inspection_failure_keeps_the_reservation_charged() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "post_delete_volume_inspection_failure_keeps_the_reservation_charged",
+        || {
+            Box::pin(post_delete_volume_inspection_failure_keeps_the_reservation_charged_on_fixture_stack())
+        },
+    )
+}
+
+async fn post_delete_volume_inspection_failure_keeps_the_reservation_charged_on_fixture_stack()
+-> Result<(), String> {
     assert_volume_failure_keeps_charge(true).await
 }
 

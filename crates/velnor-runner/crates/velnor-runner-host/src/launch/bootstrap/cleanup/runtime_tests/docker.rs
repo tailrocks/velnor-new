@@ -14,6 +14,8 @@ use crate::{error::HostError, journal::StorageCleanupIdentity, launch::VerifiedW
 const ENGINE: &str = "11111111-1111-4111-8111-111111111111";
 const ROOT: &str = "/var/lib/docker";
 const PROBE_ID: &str = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+const DEFAULT_PROBE_CAPACITY: u64 = 19 * 1024 * 1024 * 1024;
+const DEFAULT_PROBE_TOTAL: u64 = 40 * 1024 * 1024 * 1024;
 
 pub(crate) struct StatefulDocker {
     docker: Docker,
@@ -29,6 +31,24 @@ impl StatefulDocker {
         identity: StorageCleanupIdentity,
         probe_config: serde_json::Value,
     ) -> Result<Self, HostError> {
+        Self::open_with_capacity(
+            images,
+            identity,
+            probe_config,
+            0,
+            DEFAULT_PROBE_CAPACITY,
+            DEFAULT_PROBE_TOTAL,
+        )
+    }
+
+    pub(crate) fn open_with_capacity(
+        images: &VerifiedWorkerImages,
+        identity: StorageCleanupIdentity,
+        probe_config: serde_json::Value,
+        capacity_first: u64,
+        capacity_after_first: u64,
+        capacity_total: u64,
+    ) -> Result<Self, HostError> {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let socket_id = NEXT.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
@@ -36,7 +56,14 @@ impl StatefulDocker {
             std::process::id()
         ));
         let listener = UnixListener::bind(&path).map_err(|_| HostError::Path)?;
-        let state = Arc::new(Mutex::new(ServerState::new(images, identity, probe_config)));
+        let state = Arc::new(Mutex::new(ServerState::new(
+            images,
+            identity,
+            probe_config,
+            capacity_first,
+            capacity_after_first,
+            capacity_total,
+        )));
         let request_count = Arc::new(AtomicU64::new(0));
         let effects = Arc::new(EffectCounts::default());
         let task = tokio::spawn(server::serve(
@@ -108,6 +135,9 @@ struct ServerState {
     identity: StorageCleanupIdentity,
     probe: Option<ProbeState>,
     capacity_runs: u64,
+    capacity_first: u64,
+    capacity_after_first: u64,
+    capacity_total: u64,
 }
 
 impl ServerState {
@@ -115,6 +145,9 @@ impl ServerState {
         images: &VerifiedWorkerImages,
         identity: StorageCleanupIdentity,
         probe_config: serde_json::Value,
+        capacity_first: u64,
+        capacity_after_first: u64,
+        capacity_total: u64,
     ) -> Self {
         Self {
             images: [
@@ -128,6 +161,9 @@ impl ServerState {
             identity,
             probe: None,
             capacity_runs: 0,
+            capacity_first,
+            capacity_after_first,
+            capacity_total,
         }
     }
 }

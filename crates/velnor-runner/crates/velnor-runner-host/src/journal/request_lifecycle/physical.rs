@@ -1,6 +1,6 @@
-//! One-shot JIT and Docker start claims for physical runner capacity rows.
+//! One-shot JIT claims for physical runner capacity rows.
 
-use super::{PhysicalRunnerStartClaim, RunnerJitClaim};
+use super::RunnerJitClaim;
 use crate::error::HostError;
 use crate::journal::connection::ConnectionJournal;
 use crate::journal::connection::storage::in_transaction;
@@ -14,8 +14,8 @@ use super::set_scope::set_is_exclusive;
 mod support;
 pub(in crate::journal) use support::mark_runner_cleaned_after_cleanup;
 use support::{
-    has_legacy_receipts, has_uncertain_acquire, physical_intent_is_fresh, valid_resource_id,
-    valid_runner_name, valid_worker_volume, validate_jit_claim, validate_start_claim,
+    has_legacy_receipts, has_uncertain_acquire, physical_intent_is_fresh, valid_runner_name,
+    validate_jit_claim,
 };
 
 impl ConnectionJournal {
@@ -227,124 +227,6 @@ impl ConnectionJournal {
                 .await
                 .map_err(|_| HostError::Journal)?;
             Ok(())
-        })
-        .await
-    }
-
-    /// Record the unique worker volume and permission for one Docker start.
-    pub(crate) async fn claim_physical_runner_start(
-        &self,
-        intent_id: i64,
-        worker_volume: &str,
-    ) -> Result<Option<PhysicalRunnerStartClaim>, HostError> {
-        if intent_id <= 0 || !valid_worker_volume(worker_volume) {
-            return Err(HostError::Identity);
-        }
-        let connection_id = self.connection_id().as_str().to_owned();
-        let worker_volume = worker_volume.to_owned();
-        let scale_set_id = in_transaction(self.journal_ref(), async |connection| {
-            self.validate_scope(connection).await?;
-            let set_id = bound_set_id(connection, &connection_id).await?;
-            let ready = connection
-                .execute(
-                    "UPDATE connection_runner_jits SET state = 'start_requested' WHERE intent_id = ?1 AND connection_id = ?2 AND scale_set_id = ?3 AND state = 'bound' AND runner_id IS NOT NULL AND runner_name IS NOT NULL",
-                    (intent_id, connection_id.as_str(), set_id),
-                )
-                .await
-                .map_err(|_| HostError::Journal)?;
-            if ready != 1 {
-                return Ok(None);
-            }
-            let changed = connection
-                .execute(
-                    "UPDATE connection_intents SET worker_volume = ?1, launch_phase = 'docker_requested' WHERE id = ?2 AND connection_id = ?3 AND scale_set_id = ?4 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND launch_phase = 'jit_bound' AND worker_volume IS NULL AND docker_id IS NULL AND dind_id IS NULL AND NOT EXISTS (SELECT 1 FROM connection_intents WHERE worker_volume = ?1)",
-                    (worker_volume.as_str(), intent_id, connection_id.as_str(), set_id),
-                )
-                .await
-                .map_err(|_| HostError::Journal)?;
-            if changed == 1 {
-                Ok(Some(set_id))
-            } else {
-                Err(HostError::Journal)
-            }
-        })
-        .await?;
-        let Some(scale_set_id) = scale_set_id else {
-            return Ok(None);
-        };
-        Ok(Some(PhysicalRunnerStartClaim {
-            connection_id: self.connection_id().clone(),
-            scale_set_id,
-            intent_id,
-            worker_volume,
-        }))
-    }
-
-    /// If Docker returns no full response, mark the Docker start uncertain. Keep its capacity reservation.
-    pub(crate) async fn mark_physical_runner_start_uncertain(
-        &self,
-        claim: PhysicalRunnerStartClaim,
-    ) -> Result<(), HostError> {
-        validate_start_claim(self, &claim)?;
-        in_transaction(self.journal_ref(), async |connection| {
-            self.validate_scope(connection).await?;
-            let changed = connection
-                .execute(
-                    "UPDATE connection_runner_jits SET state = 'start_uncertain' WHERE intent_id = ?1 AND connection_id = ?2 AND scale_set_id = ?3 AND state = 'start_requested'",
-                    (claim.intent_id, self.connection_id().as_str(), claim.scale_set_id),
-                )
-                .await
-                .map_err(|_| HostError::Journal)?;
-            if changed != 1 {
-                return Err(HostError::Journal);
-            }
-            connection
-                .execute(
-                    "UPDATE connection_intents SET state = 'uncertain', launch_phase = 'docker_uncertain' WHERE id = ?1 AND connection_id = ?2 AND scale_set_id = ?3 AND worker_volume = ?4 AND cleanup_proven = 0",
-                    (claim.intent_id, self.connection_id().as_str(), claim.scale_set_id, claim.worker_volume.as_str()),
-                )
-                .await
-                .map_err(|_| HostError::Journal)?;
-            Ok(())
-        })
-        .await
-    }
-
-    /// Record the created and inspected worker pair for the one-time start permission.
-    pub(crate) async fn record_physical_worker_ready(
-        &self,
-        claim: PhysicalRunnerStartClaim,
-        runner_container_id: &str,
-        dind_container_id: &str,
-    ) -> Result<(), HostError> {
-        validate_start_claim(self, &claim)?;
-        if !valid_resource_id(runner_container_id) || !valid_resource_id(dind_container_id) {
-            return Err(HostError::Identity);
-        }
-        in_transaction(self.journal_ref(), async |connection| {
-            self.validate_scope(connection).await?;
-            let changed = connection
-                .execute(
-                    "UPDATE connection_intents SET docker_id = ?1, dind_id = ?2, launch_phase = 'worker_ready' WHERE id = ?3 AND connection_id = ?4 AND scale_set_id = ?5 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND worker_volume = ?6 AND launch_phase = 'docker_requested' AND (docker_id IS NULL OR docker_id = ?1) AND (dind_id IS NULL OR dind_id = ?2)",
-                    (runner_container_id, dind_container_id, claim.intent_id, self.connection_id().as_str(), claim.scale_set_id, claim.worker_volume.as_str()),
-                )
-                .await
-                .map_err(|_| HostError::Journal)?;
-            if changed != 1 {
-                return Err(HostError::Journal);
-            }
-            let changed = connection
-                .execute(
-                    "UPDATE connection_runner_jits SET state = 'ready' WHERE intent_id = ?1 AND connection_id = ?2 AND scale_set_id = ?3 AND state = 'start_requested' AND runner_id IS NOT NULL",
-                    (claim.intent_id, self.connection_id().as_str(), claim.scale_set_id),
-                )
-                .await
-                .map_err(|_| HostError::Journal)?;
-            if changed == 1 {
-                Ok(())
-            } else {
-                Err(HostError::Journal)
-            }
         })
         .await
     }

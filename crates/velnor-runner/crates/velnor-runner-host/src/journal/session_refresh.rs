@@ -6,11 +6,17 @@ use crate::launch::SessionRefreshStartupAuthority;
 use super::Journal;
 use super::connection::storage::in_transaction;
 
+mod orphan_recovery;
+
+#[cfg(test)]
+#[path = "session_refresh/orphan_recovery_tests.rs"]
+mod orphan_recovery_tests;
+
 impl Journal {
     /// After the controller obtains exclusive startup ownership, reconcile local host work.
     ///
-    /// One database transaction changes credential refreshes, Doctor probe requests, and probe leases.
-    /// This operation does not complete polls, headers, capacity reservations, cursors, or remote effects.
+    /// One database transaction recovers interrupted proof effects, marks eligible ready reservations,
+    /// and changes credential refreshes, Doctor probe requests, and probe leases.
     pub(crate) async fn recover_interrupted_host_work(
         &self,
         authority: SessionRefreshStartupAuthority<'_>,
@@ -35,6 +41,8 @@ impl Journal {
                 )
                 .await
                 .map_err(|_| HostError::Journal)?;
+            super::execution_authorization::recover_at_startup(connection).await?;
+            orphan_recovery::mark_interrupted_ready_reservations(connection).await?;
             super::doctor_probe::recover_at_startup(connection).await
         })
         .await

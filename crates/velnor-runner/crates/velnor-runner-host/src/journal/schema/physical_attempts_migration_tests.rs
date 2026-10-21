@@ -17,18 +17,14 @@ async fn v32_shaped_migration_preserves_live_link_as_current_attempt() -> Result
     assert_eq!(initial_attempt.generation, 1);
     assert_eq!(initial_attempt.witness_request_id, fixture.request_id);
     let connection = fixture.journal.connection().await?;
-    for table in [
-        "physical_attempt_outcomes",
-        "physical_attempt_current",
-        "physical_attempts",
-        "physical_attempt_lineages",
-    ] {
-        connection
-            .execute(&format!("DROP TABLE {table}"), ())
-            .await
-            .map_err(|_| HostError::Journal)?;
-    }
+    super::physical_attempts_v34_migration_tests::downgrade_to_v34(&connection).await?;
+    remove_physical_attempt_schema(&connection).await?;
     super::storage_network::restore_v32_transition_for_test(&connection).await?;
+    connection
+        .execute("PRAGMA user_version = 32", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    super::validate_persisted_schema_v32(&connection).await?;
     connection
         .execute("PRAGMA user_version = 32", ())
         .await
@@ -63,7 +59,10 @@ async fn v32_shaped_migration_preserves_live_link_as_current_attempt() -> Result
     assert_eq!(current_reservation_id, reservation_id);
     assert_eq!(witness_request_id, 101);
     assert_eq!(nonce.len(), 32);
-    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 34);
+    assert_eq!(
+        scalar(&connection, "PRAGMA user_version").await?,
+        super::JOURNAL_VERSION
+    );
     let link_count = scalar(
         &connection,
         "SELECT COUNT(*) FROM connection_request_reservations",
@@ -71,6 +70,63 @@ async fn v32_shaped_migration_preserves_live_link_as_current_attempt() -> Result
     .await?;
     assert_eq!(link_count, 1);
     Ok(())
+}
+
+async fn remove_physical_attempt_schema(connection: &turso::Connection) -> Result<(), HostError> {
+    connection
+        .execute("PRAGMA foreign_keys = OFF", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    for table in [
+        "physical_attempt_outcomes",
+        "physical_attempt_current",
+        "physical_attempts",
+        "physical_attempt_lineages",
+    ] {
+        for action in ["insert", "update", "delete"] {
+            connection
+                .execute(
+                    &format!("DROP TRIGGER IF EXISTS {table}_revision_{action}"),
+                    (),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+        }
+    }
+    for trigger in [
+        "physical_attempt_lineages_no_update",
+        "physical_attempt_lineages_no_delete",
+        "physical_attempts_no_update",
+        "physical_attempts_no_delete",
+        "physical_attempt_insert_guard",
+        "physical_attempt_outcomes_no_update",
+        "physical_attempt_outcomes_no_delete",
+        "physical_attempt_outcome_insert_guard",
+        "physical_attempt_current_insert_guard",
+        "physical_attempt_current_no_update",
+        "physical_attempt_current_delete_guard",
+    ] {
+        connection
+            .execute(&format!("DROP TRIGGER IF EXISTS {trigger}"), ())
+            .await
+            .map_err(|_| HostError::Journal)?;
+    }
+    for table in [
+        "physical_attempt_outcomes",
+        "physical_attempt_current",
+        "physical_attempts",
+        "physical_attempt_lineages",
+    ] {
+        connection
+            .execute(&format!("DROP TABLE IF EXISTS {table}"), ())
+            .await
+            .map_err(|_| HostError::Journal)?;
+    }
+    connection
+        .execute("PRAGMA foreign_keys = ON", ())
+        .await
+        .map(|_| ())
+        .map_err(|_| HostError::Journal)
 }
 
 async fn scalar(connection: &turso::Connection, sql: &str) -> Result<i64, HostError> {

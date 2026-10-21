@@ -15,6 +15,7 @@ mod retirement;
 #[path = "host_controller/retirement_tests.rs"]
 mod retirement_tests;
 
+pub(crate) use loop_driver::connection_pat;
 pub use loop_driver::run_host_blocking;
 
 #[cfg(test)]

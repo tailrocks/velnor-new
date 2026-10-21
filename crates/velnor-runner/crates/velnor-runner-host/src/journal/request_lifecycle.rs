@@ -72,25 +72,3 @@ impl RunnerJitClaim {
         &self.requested_name
     }
 }
-
-/// One-time permission to start Docker for a recorded physical runner.
-pub(crate) struct PhysicalRunnerStartClaim {
-    connection_id: ConnectionId,
-    scale_set_id: i64,
-    intent_id: i64,
-    worker_volume: String,
-}
-
-impl PhysicalRunnerStartClaim {
-    /// Give the physical capacity intent ID.
-    #[must_use]
-    pub(crate) const fn intent_id(&self) -> i64 {
-        self.intent_id
-    }
-
-    /// Give the unique volume identity recorded before Docker is called.
-    #[must_use]
-    pub(crate) fn worker_volume(&self) -> &str {
-        &self.worker_volume
-    }
-}

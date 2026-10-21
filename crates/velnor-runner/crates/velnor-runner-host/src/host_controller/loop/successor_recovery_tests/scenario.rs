@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::super::{
     polling::{PositivePollContext, reconcile_assigned_population},
     state::{PreparedConnection, SessionCredentials},
@@ -18,7 +20,7 @@ pub(super) async fn max_jobs_one_successor() -> Result<(), String> {
     let attempt = FailedAttempt::start().await?;
     attempt.release_failed_attempt().await?;
     attempt.recover_controller_demand().await?;
-    attempt.finish_and_check().await
+    Box::pin(attempt.finish_and_check()).await
 }
 
 impl FailedAttempt {
@@ -120,6 +122,7 @@ impl FailedAttempt {
             self.failure.engine(),
             self.failure.images().source_sha(),
         );
+        let secret = Arc::new(secret);
         let context = PositivePollContext {
             config,
             journal: &self.journal,

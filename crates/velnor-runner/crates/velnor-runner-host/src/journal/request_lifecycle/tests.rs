@@ -151,7 +151,7 @@ pub(crate) async fn publish_native_fixture_challenge(
 /// Build the durable state required for a native Started message.
 pub(crate) async fn native_started_intake_fixture()
 -> Result<NativeStartedIntakeFixture, crate::error::HostError> {
-    native_started_intake_fixture_with_filesystem_digest(None).await
+    Box::pin(native_started_intake_fixture_with_filesystem_digest(None)).await
 }
 
 pub(crate) async fn native_started_intake_fixture_with_filesystem_digest(

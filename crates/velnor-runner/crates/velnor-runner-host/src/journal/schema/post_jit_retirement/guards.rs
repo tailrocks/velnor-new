@@ -53,6 +53,24 @@ WHEN NOT EXISTS (
 )
 BEGIN SELECT RAISE(ABORT,'The physical retirement claim is invalid.'); END";
 
+pub(super) fn claim_insert_guard_v37() -> Result<String, crate::error::HostError> {
+    let recovering = CLAIM_INSERT_GUARD.replace(
+        "(NEW.claim_generation=1\n         AND i.cleanup_proven=0",
+        "(NEW.claim_generation=1\n         AND r.state='recovering'\n         AND i.cleanup_proven=0",
+    );
+    if recovering == CLAIM_INSERT_GUARD {
+        return Err(crate::error::HostError::Journal);
+    }
+    let marker = recovering.replace(
+        "proof.proof_state='pending' AND proof.actual_request_id IS NULL AND proof.started_event_digest IS NULL AND proof.challenge_state='published'",
+        "proof.proof_state='denied' AND proof.deny_code='interrupted_after_restart' AND proof.actual_request_id IS NULL AND proof.started_event_digest IS NULL AND proof.challenge_state='abandoned'",
+    );
+    if marker == recovering {
+        return Err(crate::error::HostError::Journal);
+    }
+    Ok(marker)
+}
+
 pub(super) const PROGRESS_INSERT_GUARD: &str = r"CREATE TRIGGER physical_attempt_post_jit_retirement_progress_insert_guard BEFORE INSERT ON physical_attempt_post_jit_retirement_progress
 WHEN NOT EXISTS (SELECT 1 FROM physical_attempt_post_jit_retirement_claims c
  WHERE c.reservation_id=NEW.reservation_id AND c.claim_generation=NEW.claim_generation

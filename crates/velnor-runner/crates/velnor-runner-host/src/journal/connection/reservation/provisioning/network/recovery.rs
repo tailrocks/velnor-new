@@ -157,12 +157,55 @@ impl ConnectionJournal {
         }
         in_transaction(self.journal_ref(), async |connection| {
             self.validate_scope(connection).await?;
-            let changed = connection.execute(
-                "UPDATE capacity_reservation_networks SET remove_state = 'removed' WHERE reservation_id = ?1 AND connection_id = ?2 AND operation_id = ?3 AND network_name = ?4 AND network_id IS ?5 AND remove_state = 'requested'",
-                (claim.reservation_id, claim.connection_id.as_str(), claim.operation_id, claim.network_name.as_str(), claim.network_id.as_deref()),
-            ).await.map_err(|_| HostError::Journal)?;
-            if changed == 1 { Ok(()) } else { Err(HostError::Journal) }
-        }).await
+            record_removed_in_transaction(connection, claim).await
+        })
+        .await
+    }
+
+    /// Record network absence and its retirement phase in one transaction.
+    pub(crate) async fn record_storage_network_removed_for_retirement(
+        &self,
+        retirement: &crate::journal::connection::reservation::post_jit_retirement::PostJitRetirementClaim,
+        claim: &StorageNetworkRemovalClaim,
+        proof: &VerifiedStorageNetworkRemoved,
+    ) -> Result<(), HostError> {
+        validate_remove_claim(self, claim)?;
+        if retirement.reservation_id() != claim.reservation_id
+            || retirement.intent_id() != claim.operation_id
+            || retirement.engine_id() != claim.engine_id
+            || retirement.docker_root_digest() != claim.docker_root_digest
+            || claim.network_id.is_none()
+            || proof.reservation_id() != claim.reservation_id
+            || proof.operation_id() != claim.operation_id
+            || proof.engine_id() != claim.engine_id
+            || proof.docker_root_digest() != claim.docker_root_digest
+            || proof.network_name() != claim.network_name
+            || proof.network_id() != claim.network_id.as_deref()
+            || proof.labels() != &claim.labels
+        {
+            return Err(HostError::Identity);
+        }
+        let result = in_transaction(self.journal_ref(), async |connection| {
+            self.validate_scope(connection).await?;
+            crate::journal::connection::reservation::post_jit_retirement::validate_claim_in_transaction(
+                connection,
+                self,
+                retirement,
+            )
+            .await?;
+            record_removed_in_transaction(connection, claim).await?;
+            crate::journal::connection::reservation::post_jit_retirement::record_network_phase_in_transaction(
+                connection,
+                self,
+                retirement,
+            )
+            .await
+        })
+        .await;
+        if result.is_err() {
+            let _ = self.mark_storage_network_removal_uncertain(claim).await;
+        }
+        result
     }
 
     /// Keep the reservation charged when network removal is uncertain.
@@ -210,6 +253,30 @@ impl ConnectionJournal {
             }
         })
         .await
+    }
+}
+
+async fn record_removed_in_transaction(
+    connection: &turso::Connection,
+    claim: &StorageNetworkRemovalClaim,
+) -> Result<(), HostError> {
+    let changed = connection
+        .execute(
+            "UPDATE capacity_reservation_networks SET remove_state = 'removed' WHERE reservation_id = ?1 AND connection_id = ?2 AND operation_id = ?3 AND network_name = ?4 AND network_id IS ?5 AND remove_state = 'requested'",
+            (
+                claim.reservation_id,
+                claim.connection_id.as_str(),
+                claim.operation_id,
+                claim.network_name.as_str(),
+                claim.network_id.as_deref(),
+            ),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    if changed == 1 {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
     }
 }
 

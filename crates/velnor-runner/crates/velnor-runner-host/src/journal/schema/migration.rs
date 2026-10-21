@@ -375,3 +375,22 @@ pub(super) async fn from_version_thirty_five(conn: &turso::Connection) -> Result
         .map_err(|_| HostError::Journal)?;
     super::post_jit_effect_fences::validate(conn).await
 }
+
+pub(super) async fn from_version_thirty_six(conn: &turso::Connection) -> Result<(), HostError> {
+    super::validate_persisted_schema_v36(conn).await?;
+    conn.execute(
+        "DROP TRIGGER physical_attempt_post_jit_retirement_claim_insert_guard",
+        (),
+    )
+    .await
+    .map_err(|_| HostError::Journal)?;
+    let guard = super::post_jit_retirement::claim_insert_guard_v37()?;
+    conn.execute(&guard, ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    super::validate_persisted_schema_v37(conn).await?;
+    conn.execute("PRAGMA user_version = 37", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(())
+}

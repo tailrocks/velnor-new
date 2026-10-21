@@ -1,7 +1,15 @@
 use super::*;
 
-#[tokio::test]
-async fn foreign_image_bundles_fail_before_worker_docker_effects() -> Result<(), String> {
+#[test]
+fn foreign_image_bundles_fail_before_worker_docker_effects() -> Result<(), String> {
+    crate::launch::test_harness_stack::run_on_test_harness_stack(
+        "foreign_image_bundles_fail_before_worker_docker_effects",
+        || Box::pin(foreign_image_bundles_fail_before_worker_docker_effects_on_fixture_stack()),
+    )
+}
+
+async fn foreign_image_bundles_fail_before_worker_docker_effects_on_fixture_stack()
+-> Result<(), String> {
     let setup = BootstrapSetup::open().await?;
     let before = setup.api.activity_snapshot()?;
     let pending = setup

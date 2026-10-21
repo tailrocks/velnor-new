@@ -1,0 +1,148 @@
+{
+  "record_version": 2,
+  "purpose": "Recover interrupted post-JIT work before the host releases capacity.",
+  "source": {
+    "base_commit": "e96e894fe50dce5f64fcfdbff5cc799216d82453",
+    "overlay_manifest": "post-jit-retirement-source-20261021.json",
+    "overlay_sha256": "3efb33a4aaed6f4b18bbaf15adfb3b759c096d3bd6b8e6d9f58c99b43f56ad2a"
+  },
+  "nextest": {
+    "status": "PASS",
+    "exit_status": 0,
+    "run_id": "7cd3e515-bf9f-4d4a-a8d1-1892a382ee0d",
+    "tests": 1593,
+    "passed": 1593,
+    "skipped": 0,
+    "duration_seconds": 197.245,
+    "log_path": "evidence/retirement-integrated-nextest-v3-20261021.log",
+    "log_sha256": "9a42de34f8fea7095dadf75ea99b721f1867a72945ca217059666da7a5eab8c7",
+    "tools": {
+      "rust": "1.99.1",
+      "mbx": "1.25.0",
+      "nextest": "0.9.148"
+    },
+    "workspace_manifest": "crates/velnor-runner/Cargo.toml",
+    "RUST_MIN_STACK": "UNSET",
+    "argv": [
+      "mise",
+      "--no-config",
+      "--no-env",
+      "--no-hooks",
+      "exec",
+      "rust@1.99.1",
+      "mr-boxington@1.25.0",
+      "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
+      "--",
+      "mbx",
+      "nextest",
+      "run",
+      "--manifest-path",
+      "crates/velnor-runner/Cargo.toml",
+      "--workspace",
+      "--locked",
+      "--target-dir",
+      "/Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02",
+      "--no-fail-fast",
+      "--no-tests",
+      "fail"
+    ],
+    "command_started_at": "2026-10-21T02:46:53.508250+00:00",
+    "log_finished_at": "2026-10-21T02:50:52.511434+00:00",
+    "author": "/root"
+  },
+  "test_stack": {
+    "bytes": 8388608,
+    "test_count": 22,
+    "production_runtime_changed": false,
+    "reviewer": "/root/runtime_stack_architecture",
+    "receipt_sha256": "56ed3b0f55090fb0892c003a9c8b9f75d19b46800107d05871cbbae4a9754f53"
+  },
+  "strict_clippy": {
+    "status": "FAIL",
+    "exit_status": 101,
+    "lib_test_reported_errors": 527,
+    "log_path": "evidence/retirement-integrated-clippy-v3-20261021.log",
+    "log_sha256": "27a9430c2a5ee3fe794210e0e23aadbcbf94a55a09a11a536ecedf8a2201160c"
+  },
+  "consumer_activation": {
+    "status": "NOT_RUN"
+  },
+  "production_stack_qualification": {
+    "status": "NOT_RUN"
+  },
+  "remaining_work": [
+    "Remove obsolete completion APIs after independent review.",
+    "Complete the strict Clippy check.",
+    "Complete the release gates before installation."
+  ],
+  "format": {
+    "status": "PASS",
+    "exit_status": 0,
+    "log_path": "evidence/retirement-integrated-format-check-v3-20261021.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "current_full_suite": {
+    "status": "NOT_RUN",
+    "note": "Three source files changed after the full test run."
+  },
+  "follow_up_changes": [
+    {
+      "path": "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema.rs",
+      "preimage_sha256": "f7f8f23edec25d5a1d717b4af57441e232196c1a8424c6904686d4cdaa111752",
+      "final_sha256": "491fa801d57bb8e7e027ee270fe3bf2dd3f556d429ecad80e2f1ad0f494b7e9f"
+    },
+    {
+      "path": "crates/velnor-runner/crates/velnor-runner-host/src/journal/connection/reservation/post_jit_retirement/progress.rs",
+      "preimage_sha256": "330beaa54d9a49830b30fefc7f0d2b6e29e67e45eeb8ebf5038d6378815fef64",
+      "final_sha256": "2619fc1b8f4211dfa30651f4777c856647193f83ac1b2facfe57324379969370"
+    },
+    {
+      "path": "crates/velnor-runner/crates/velnor-runner-host/src/journal/connection/reservation/post_jit_retirement/effect_fence_tests.rs",
+      "preimage_sha256": "6ee722a02e0e2bbc9ff8a58e133db094ce3dda8ec142fb256be6a095e507ca30",
+      "final_sha256": "55ef9324213d936dff7eb453dfbd2324c65daa62e18c1174e327fff99eeb8254"
+    }
+  ],
+  "follow_up_tests": {
+    "status": "PASS",
+    "exit_status": 0,
+    "run_id": "003a3224-82ac-4e86-9578-c8fb357c627a",
+    "tests": 119,
+    "passed": 119,
+    "excluded_by_filter": 1475,
+    "duration_seconds": 98.844,
+    "log_path": "evidence/retirement-post-hook-nextest-20261021.log",
+    "log_sha256": "1e4a709a7d44e75c441f721c7c486f18621226176586c425ae34add303d24c8a",
+    "filter": "test(post_jit_retirement) | test(journal::schema)",
+    "argv": [
+      "mise",
+      "--no-config",
+      "--no-env",
+      "--no-hooks",
+      "exec",
+      "rust@1.99.1",
+      "mr-boxington@1.25.0",
+      "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
+      "--",
+      "mbx",
+      "nextest",
+      "run",
+      "--manifest-path",
+      "crates/velnor-runner/Cargo.toml",
+      "--workspace",
+      "--locked",
+      "--target-dir",
+      "/Users/donbeave/Downloads/velnor-goal/build/shipping-only-hook-target-20261020-02",
+      "--no-fail-fast",
+      "-E",
+      "test(post_jit_retirement) | test(journal::schema)"
+    ],
+    "command_started_at": "2026-10-21T02:57:08.930461+00:00",
+    "log_finished_at": "2026-10-21T02:59:26.878211+00:00",
+    "author": "/root"
+  },
+  "follow_up_reviewers": [
+    "/root/runtime_stack_architecture",
+    "/root/execution_source_security_review",
+    "/root/runner_context_review"
+  ]
+}

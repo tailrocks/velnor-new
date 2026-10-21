@@ -10,6 +10,9 @@ use super::{PositivePollContext, acquired::start_acquired, pre_jit, successor};
 use crate::host_controller::AssignedPopulationAction;
 use crate::host_controller::loop_driver::state::PreparedConnection;
 
+#[path = "assigned_population/retirement.rs"]
+mod retirement;
+
 const SCAN_LIMIT: u32 = 64;
 
 struct PopulationPlan {
@@ -27,6 +30,7 @@ pub(super) async fn reconcile(
     prepared: &mut PreparedConnection,
     context: &PositivePollContext<'_>,
 ) -> Result<(), HostError> {
+    retirement::reconcile(prepared, context).await;
     Box::pin(pre_jit::reconcile(prepared, context)).await?;
     let Some(assigned_total) = prepared.assigned_total else {
         return Ok(());
