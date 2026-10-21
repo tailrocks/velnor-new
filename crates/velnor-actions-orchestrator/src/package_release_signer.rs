@@ -1,6 +1,6 @@
 //! Credentialed signer for a plan-bound native package release.
 //!
-//! This module consumes only the static plan and retained producer bytes. It
+//! This module consumes an admitted static policy/plan and retained producer bytes. It
 //! never loads repository configuration, resolves task code, or executes source.
 
 use std::path::{Path, PathBuf};
@@ -8,7 +8,6 @@ use std::path::{Path, PathBuf};
 use velnor_actions_contract::{
     PackageReleasePlan,
     package_release::{PackageReleaseAssetKind, PackageReleaseEvent, PackageReleaseReceipt},
-    parse_package_release_plan,
 };
 
 use crate::{
@@ -19,6 +18,8 @@ use crate::{
     },
 };
 
+#[path = "package_release_signer_request.rs"]
+mod request;
 mod runtime;
 use runtime::{
     absolute_env, read_regular_file, release_companions, release_version,
@@ -38,7 +39,6 @@ mod tests;
 
 /// Private CLI operation for signing a statically planned package release.
 pub const SIGN_PACKAGE_RELEASE_OP: &str = "sign-package-release-v1";
-const PLAN_FILE: &str = "package-release-plan.json";
 const INPUT_DIR: &str = "release-output";
 const OUTPUT_DIR: &str = "release-signed";
 const PUBLISH_INPUT_DIR: &str = "release-publish-input";
@@ -114,7 +114,7 @@ impl VerifiedSignedPackage {
 }
 
 /// Execute the private signer operation using fixed runner paths and a strict
-/// static plan request. No path or signer identity comes from producer data.
+/// static policy request. No path or signer identity comes from producer data.
 ///
 /// # Errors
 /// Returns a contract error if the request, identity, or signed artifact is invalid.
@@ -122,13 +122,7 @@ pub fn sign_package_release_from_env() -> Result<(), OrchestratorError> {
     let runner_temp = absolute_env("RUNNER_TEMP")?;
     let root = runner_temp.join("velnor");
     require_private_directory(&root)?;
-    let request = absolute_env("VELNOR_REQUEST_FILE")?;
-    if request != root.join(PLAN_FILE) {
-        return Err(internal("package_signer_request_path_mismatch"));
-    }
-    let plan_bytes = read_regular_file(&request, 1024 * 1024)?;
-    let plan = parse_package_release_plan(&plan_bytes)
-        .map_err(|_| internal("package_signer_plan_invalid"))?;
+    let plan = request::admitted_plan(&root)?;
     let input = root.join(INPUT_DIR);
     let output = root.join(OUTPUT_DIR);
     require_private_directory(&input)?;
@@ -140,22 +134,23 @@ pub fn sign_package_release_from_env() -> Result<(), OrchestratorError> {
 /// Verify retained signer bytes and GitHub's exact run attestation before publication.
 pub(crate) fn verify_attested_signed_package_from_env()
 -> Result<VerifiedAttestedSignedPackage, OrchestratorError> {
-    if uses_retained_preview(
-        std::env::var("GITHUB_EVENT_NAME").ok().as_deref(),
-        std::env::var("VELNOR_INTERNAL_OP").ok().as_deref(),
-    ) {
-        return crate::package_release_publish::verify_original_for_promotion();
+    match request::verification_route()? {
+        request::VerificationRoute::Retained => {
+            crate::package_release_publish::verify_original_for_promotion()
+        }
+        request::VerificationRoute::DirectTap => {
+            let root = absolute_env("RUNNER_TEMP")?.join("velnor");
+            let plan = request::direct_tap_plan(&root)?;
+            let expected = runtime::published_identity_from_env(&plan)?;
+            let input = root.join(PUBLISH_INPUT_DIR);
+            require_private_directory(&input)?;
+            verify_attested_signed_package(&input, &plan, &expected)
+        }
+        request::VerificationRoute::Admitted => {
+            let (plan, expected, input) = publisher_context_from_env(None)?;
+            verify_attested_signed_package(&input, &plan, &expected)
+        }
     }
-    let (plan, expected, input) = publisher_context_from_env(None)?;
-    verify_attested_signed_package(&input, &plan, &expected)
-}
-
-fn uses_retained_preview(event: Option<&str>, operation: Option<&str>) -> bool {
-    matches!(event, Some("workflow_dispatch" | "schedule"))
-        && matches!(
-            operation,
-            Some("admit-homebrew-tap-v1" | "write-homebrew-tap-pr-v1" | "merge-homebrew-tap-pr-v1")
-        )
 }
 
 /// Verify signed assets and the GitHub attestation using an authenticated
@@ -209,13 +204,7 @@ fn publisher_context_from_env(
 ) -> Result<(PackageReleasePlan, PackageReleaseSigningIdentity, PathBuf), OrchestratorError> {
     let runner_temp = absolute_env("RUNNER_TEMP")?;
     let root = runner_temp.join("velnor");
-    let request = absolute_env("VELNOR_REQUEST_FILE")?;
-    if request != root.join(PLAN_FILE) {
-        return Err(internal("package_signer_request_path_mismatch"));
-    }
-    let bytes = read_regular_file(&request, 1024 * 1024)?;
-    let plan =
-        parse_package_release_plan(&bytes).map_err(|_| internal("package_signer_plan_invalid"))?;
+    let plan = request::admitted_plan(&root)?;
     let input = root.join(PUBLISH_INPUT_DIR);
     require_private_directory(&input)?;
     let expected = match repository_id {
