@@ -83,6 +83,7 @@ fn plan_and_workflow_ids_agree() -> TestResult {
             ".github/actions/velnor-tools-prelude-u26/action.yml",
             ".github/scripts/velnor-tools-cache-identity.sh",
             ".github/velnor/task-execution-manifest-v1.json",
+            ".github/workflows/cache-prune.yml",
             ".github/workflows/ci.yml"
         ]
     );
@@ -169,7 +170,7 @@ fn malformed_toolchain_recommends_without_writes() -> TestResult {
     assert!(text.contains("tooling_input_invalid"), "{text}");
     assert!(text.contains("mise.lock"), "{text}");
     assert!(text.contains("continues with its pinned tools"), "{text}");
-    assert_eq!(report.files_written.len(), 11);
+    assert_eq!(report.files_written.len(), 12);
     for rel in ["mise.toml", "rust-toolchain.toml", ".velnor/config.toml"] {
         assert_eq!(
             before.get(rel).map(|(bytes, _)| bytes),

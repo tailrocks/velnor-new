@@ -23,6 +23,7 @@ Repository: <repo>
 .github/scripts/velnor-tools-cache-identity.sh
 .github/velnor/task-execution-manifest-v1.json
 .github/workflows/cache-cleanup.yml
+.github/workflows/cache-prune.yml
 .github/workflows/ci.yml
 .github/workflows/freshness.yml
 .github/workflows/job-image-candidate.yml
