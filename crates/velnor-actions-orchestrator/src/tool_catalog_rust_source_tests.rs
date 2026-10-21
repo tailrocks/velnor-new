@@ -11,8 +11,7 @@ use super::{DISAGREES_CODE, MISSING_SOURCE_CODE};
 use crate::pins::tests::config_with;
 use crate::tool_catalog_resolve::resolve_tool_catalog;
 
-const MISE: &str =
-    "[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"1.26.0\"\n";
+const MISE: &str = "[tools]\nrust = { version = \"1.99.1\", components = [\"clippy\", \"rustfmt\"], targets = [\"aarch64-unknown-linux-gnu\", \"x86_64-unknown-linux-gnu\"], mr_boxington = true }\nmr-boxington = \"1.26.0\"\n";
 
 fn opted_in() -> VelnorConfig {
     let mut cfg = config_with(BTreeMap::new());

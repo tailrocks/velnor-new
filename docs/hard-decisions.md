@@ -171,6 +171,11 @@ declaration, because Mise (idiomatic version files) and rustup both read it.
   `${VELNOR_TOOL_<NAME>}` instead of the version: shell form in `run:` text
   and task argv, `${{ env.VELNOR_TOOL_<NAME> }}` in `with:`, `env:`, and cache
   keys.
+- When `rust-toolchain.toml` and the `mise.toml` rust entry both declare
+  Rust, they must be identical (channel/version, `components`, `targets`,
+  `profile`), because Mise ignores the file's options while rustup-only tools
+  read only the file: `rust_toolchain_mirror_mismatch`. Adopted with the
+  owner's standard layout (2026-10-22); owner may revisit.
 - Generation fails, naming the tool and the file, instead of guessing: a
   declared version that is not an exact `X.Y.Z` (loose, `latest`, a range, a
   template, an array, a target-triple channel, a leading zero:

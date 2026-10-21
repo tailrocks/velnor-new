@@ -9,7 +9,8 @@
   `[stacks.rust] toolchain_source = "mise"` agreement check; velnor-new on
   the same layout.
 - Acceptance evidence: `impl_consumer_mbx_setup` (orchestrator integration
-  tests), `tool_catalog_resolve::rust_source::tests`.
+  tests), `tool_catalog_resolve::rust_mirror::tests`,
+  `tool_catalog_resolve::rust_source::tests`.
 - Deviations: none
 - Follow-up: Rust 1.100 (about 2026-11-12) brings Cargo's new build-dir
   layout, which lets MBX collect unused units one at a time and seed new
@@ -26,7 +27,7 @@ newest stable version of each tool when applying it.
 min_version = "2026.10.17"
 
 [tools]
-rust = { version = "1.99.1", mr_boxington = true }
+rust = { version = "1.99.1", components = ["clippy", "rustfmt"], targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"], mr_boxington = true }
 mr-boxington = "1.26.0"
 hk = "2.8.0"
 cargo-binstall = "1.26.0"
@@ -41,7 +42,8 @@ command = "mbx"
 env = { MBX_CARGO_SHIM_MODE = "1" }
 ```
 
-`rust-toolchain.toml`, whose `channel` must equal the `mise.toml` rust version:
+`rust-toolchain.toml`, an exact mirror of the `mise.toml` rust entry (never
+edited alone):
 
 ```toml
 [toolchain]
@@ -50,8 +52,27 @@ components = ["clippy", "rustfmt"]
 targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
 ```
 
+- Why both files: once `mise.toml` pins Rust, Mise ignores the toolchain
+  file completely, including its `components` and `targets`. rustup-only
+  consumers (editors and rust-analyzer, hooks run outside Mise, GUI git,
+  Docker `rust:` images, a plain shell) read only the file and otherwise fall
+  back to rustup's default toolchain. So the Mise entry must carry the
+  components and targets too (or cross builds under Mise fail with E0463 and
+  `mise.lock` records no options), and the file must repeat them.
+- Generation enforces the mirror: when both declare Rust, a different
+  `channel`/`version`, `components`, `targets` or `profile` fails with
+  `rust_toolchain_mirror_mismatch:<key>:rust-toolchain.toml=[...],mise.toml=[...]`.
+  Set `profile` in both or in neither.
+- `idiomatic_version_file_enable_tools = ["rust"]` is a no-op while
+  `mise.toml` pins Rust; it is part of the standard as a fallback.
 - `mr_boxington = true` and the `[wrappers.cargo]` entry both route every
   `cargo` through MBX. They need `mr-boxington` in the same active `[tools]`.
+- Install hk hooks with `hk install --mise` (or `HK_MISE=1`), so cargo-based
+  hook steps run inside the Mise environment even from GUI git clients.
+- Dockerfiles take the version from Mise, not from the toolchain file:
+  pass `--build-arg RUST_VERSION="$(mise current rust)"`, and in the base
+  layer run `rustup component add clippy rustfmt` and `rustup target add`
+  with the file's targets, so builds do not download them after `COPY . .`.
 - Add other tools the project uses (for example
   `"aqua:nextest-rs/nextest/cargo-nextest"`) to `[tools]` with exact pins.
 - `lockfile = true`: run `mise lock` and commit `mise.lock` (packslip entries
@@ -62,29 +83,15 @@ targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
 - `mbx setup` is only needed for rust-analyzer. Choose "Create the shim
   without activating it"; do not pass `--yes`, `--global` or `--local`.
 
-### Enforce that the versions agree
+### Optional: name `mise.toml` the authority
 
-Hard decision 4 already fails generation when two sources declare different
-versions (`conflicting_project_tool_versions`). To make `mise.toml` the named
-authority, opt in from `.velnor/config.toml`:
-
-```toml
-[stacks.rust]
-toolchain_source = "mise"
-```
-
-Generation then requires a `rust` entry in a Mise config
-(`rust_not_declared_in_mise` otherwise), and fails with
-`rust_version_disagrees_with_mise:<file>=<v>,mise.toml=<v>` when any other
-declaration differs from it:
-
-- `rust-toolchain.toml` or `rust-toolchain` at the root or in any
-  subdirectory;
-- a `rust` line in `.tool-versions`;
-- `[stacks.rust] toolchain` or `[tools] rust` in `.velnor/config.toml`.
-
-An agreeing `rust-toolchain.toml` is accepted, which is the standard layout.
-A toolchain file without a `channel` declares no version and is accepted.
+The mirror check above is always on. `[stacks.rust] toolchain_source = "mise"`
+in `.velnor/config.toml` additionally requires a `rust` entry in a Mise config
+(`rust_not_declared_in_mise`) and names it as the authority for every other
+declaration: a nested toolchain file, `.tool-versions` or a
+`.velnor/config.toml` pin that differs fails with
+`rust_version_disagrees_with_mise:<file>=<v>,mise.toml=<v>`. It is not part
+of the standard layout and is not enabled in any repository.
 
 ## 2. What CI does with it
 
@@ -190,7 +197,8 @@ mbx gc --dry-run && mbx doctor
 velnor-new uses the same layout: `mise.toml` with `min_version`,
 `rust = { version, mr_boxington = true }`, `mr-boxington`, `hk`,
 `cargo-binstall`, Nextest, the three settings and `[wrappers.cargo]`, plus a
-`rust-toolchain.toml` that mirrors the version. Its `.velnor/config.toml`
+`rust-toolchain.toml` that mirrors the rust entry (channel, components,
+targets). Its `.velnor/config.toml`
 keeps `[stacks.rust] compile_driver = "mbx"` as a sticky declaration that the
 Mise evidence agrees with. `scripts/toml-tool-pin.awk` reads both the plain
 and the inline-table form of a `[tools]` entry, so `verify-local.sh` and
