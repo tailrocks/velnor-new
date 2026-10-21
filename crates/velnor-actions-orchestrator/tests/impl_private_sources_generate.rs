@@ -78,6 +78,7 @@ const SEED_STEPS: &[&str] = &[
     "Prepare pinned tools",
     "Prepare Rust components",
     "Verify Rust channel manifest",
+    "Restore Cargo sources",
     "Verify Rust before MBX action",
     "Set up MBX",
     "Verify native MBX version",
@@ -116,6 +117,23 @@ fn mbx_seed_job_with_private_sources_stages_the_helper_before_the_fetch() -> Tes
             velnor_actions_mise::catalog::MR_BOXINGTON_VERSION
         ),
     )?;
+    fs::create_dir_all(repo.path().join("nested/src"))?;
+    fs::write(
+        repo.path().join("nested/Cargo.toml"),
+        "[package]\nname = 'nested'\nversion = '0.1.0'\nedition = '2021'\n",
+    )?;
+    fs::write(repo.path().join("nested/src/lib.rs"), "pub fn f() {}\n")?;
+    fs::copy(
+        repo.path().join("mise.toml"),
+        repo.path().join("nested/mise.toml"),
+    )?;
+    // Seed grouping follows the locked workspace roots used for source preparation.
+    for (root, name) in [("", "demo"), ("nested", "nested")] {
+        fs::write(
+            repo.path().join(root).join("Cargo.lock"),
+            format!("version = 4\n[[package]]\nname = '{name}'\nversion = '0.1.0'\n"),
+        )?;
+    }
     git(&["add", "."], repo.path())?;
     let prep = prepare(repo.path())?;
     assert_eq!(
@@ -131,11 +149,23 @@ fn mbx_seed_job_with_private_sources_stages_the_helper_before_the_fetch() -> Tes
         },
     )?;
     let workflow = fs::read_to_string(preview.join(".github/workflows/ci.yml"))?;
+    for id in ["dependency-seed", "dependency-seed-nested"] {
+        assert_private_seed(&workflow, id)?;
+    }
+    Ok(())
+}
+
+fn assert_private_seed(workflow: &str, id: &str) -> TestResult {
     let seed = workflow
-        .split("\n  dependency-seed:\n")
+        .split(&format!("\n  {id}:\n"))
         .nth(1)
-        .ok_or("dependency-seed job")?;
-    let seed = seed.split("\n  rust-").next().unwrap_or(seed);
+        .ok_or_else(|| format!("missing private-source seed {id}"))?;
+    let seed = seed
+        .lines()
+        .take_while(|line| line.is_empty() || line.starts_with("    "))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(seed.contains("continue-on-error: true"), "{id}: {seed}");
     let acquire = seed
         .find("Acquire Velnor")
         .ok_or("seed stages the helper")?;
@@ -156,6 +186,29 @@ fn mbx_seed_job_with_private_sources_stages_the_helper_before_the_fetch() -> Tes
         .skip(1)
         .take_while(|name| *name != "Plan")
         .collect();
-    assert_eq!(names, SEED_STEPS);
+    let mut expected: Vec<_> = SEED_STEPS
+        .iter()
+        .map(|name| {
+            if *name == "Fetch Cargo sources" && id != "dependency-seed" {
+                "Fetch Cargo sources (nested/Cargo.toml)"
+            } else {
+                *name
+            }
+        })
+        .collect();
+    if id != "dependency-seed" {
+        // Equal tool identities elect one saver; the root seed owns this key.
+        let save = [
+            "Admit optional cache save",
+            "Save Mise tools",
+            "Report optional cache save failure",
+        ];
+        let at = expected
+            .windows(3)
+            .position(|steps| steps == save)
+            .ok_or("missing tool-cache save expectation")?;
+        expected.drain(at..at + 3);
+    }
+    assert_eq!(names, expected);
     Ok(())
 }

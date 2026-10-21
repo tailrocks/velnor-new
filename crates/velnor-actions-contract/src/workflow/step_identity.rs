@@ -31,7 +31,6 @@ pub const TOFU_PROVIDERS_KEY_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outpu
 pub const TOFU_PROVIDERS_PATH_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outputs.cache-path }}";
 /// Run MBX workspace cleanup only after the exact-version/store guard passed.
 pub const MBX_WORKSPACE_CLEAN_CONDITION: &str = "always() && steps.mbx-ready.outcome == 'success'";
-
 /// App installation token minted for private sources (HD-7).
 pub const PRIVATE_TOKEN_OUTPUT_EXPR: &str = "${{ steps.deps-token.outputs.token }}";
 /// Expression of the job token bound to the npm registry phase (HD-7).
@@ -62,6 +61,8 @@ pub enum StepRole {
     PreparePinnedTools,
     /// Install the pinned Rust components used by task work.
     PrepareRustComponents,
+    /// Verify the pinned Rust channel manifest and installed component hashes.
+    VerifyRustManifest,
     /// Pinned Mise action that owns its built-in tools cache.
     MiseSetup,
     /// Authenticated cargo-deny analyzer bootstrap.
@@ -241,6 +242,7 @@ impl StepRole {
             | Self::MbxSeedBuild
             | Self::MbxBundleExport
             | Self::PrepareRustComponents
+            | Self::VerifyRustManifest
             | Self::CargoDeny
             | Self::CargoMachete
             | Self::Actionlint

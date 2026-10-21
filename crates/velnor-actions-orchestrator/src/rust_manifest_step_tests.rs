@@ -1,6 +1,6 @@
 //! `Verify Rust channel manifest` step tests.
 
-use velnor_actions_contract::StepKind;
+use velnor_actions_contract::{StepKind, StepRole};
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_mise::catalog::{RUST_CHANNEL_MANIFESTS, RUST_VERSION};
 
@@ -9,6 +9,7 @@ use super::{NOT_CATALOGUED_CODE, VERIFY_RUST_MANIFEST_STEP, verify_rust_manifest
 fn run_text(catalog: &ToolCatalog) -> (String, std::collections::BTreeMap<String, String>) {
     let step = verify_rust_manifest_step(catalog).expect("step");
     assert_eq!(step.name, VERIFY_RUST_MANIFEST_STEP);
+    assert_eq!(step.role, Some(StepRole::VerifyRustManifest));
     let StepKind::Shell { run, env } = step.kind else {
         panic!("shell step");
     };
