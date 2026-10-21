@@ -6,7 +6,9 @@ use velnor_actions_contract::{ReleaseTarget, VelnorConfig};
 use velnor_actions_mise::{
     MiseInstall, PinnedTool, PinnedToolExec, PrepareRustTarget, ToolCatalog,
 };
-use velnor_actions_workflow_renderer::toolchain_env::with_env_unset_argv;
+use velnor_actions_workflow_renderer::toolchain_env::{
+    with_credential_unset_script, with_env_unset_argv,
+};
 use velnor_actions_workflow_renderer::{MiseSetup, ProductReleasePins};
 
 use crate::OrchestratorError;
@@ -88,12 +90,7 @@ pub(crate) fn resolve(
         resource_probe_build_argv: resource_probe_build_argv(&catalog)?,
         // The release gates lint the committed tree exactly as the CI lint
         // job does, with the same token scrub: the linter needs no credential.
-        lint_argv: with_env_unset_argv(&exec_argv(
-            &[PinnedTool::Jactionlint, PinnedTool::Shellcheck],
-            "bash",
-            &["-c", &velnor_actions_actionlint::workflow_lint_script()],
-            &catalog,
-        )?),
+        lint_argv: scrubbed_inline(crate::workflow_jobs::workflow_lint_argv(&catalog)?),
         verify_lint_argv: crate::workflow::jactionlint_verify_argv(&catalog),
         // Scrubbed like the validator vector: an empty-string GH_TOKEN
         // makes zizmor abort, while an absent one is clean offline.
@@ -112,6 +109,16 @@ pub(crate) fn resolve(
         rust_version: catalog.version(PinnedTool::Rust).to_owned(),
         mr_boxington_version: catalog.version(PinnedTool::MrBoxington).to_owned(),
     })
+}
+
+/// `bash -c` argv whose script first unsets the credential variables, the
+/// same scrub the renderer gives an inline CI script (an `env -u` prefix
+/// would leave the inner script single-quoted for `ShellCheck`, SC2016).
+fn scrubbed_inline(mut argv: Vec<String>) -> Vec<String> {
+    if let Some(script) = argv.get_mut(2) {
+        *script = with_credential_unset_script(script);
+    }
+    argv
 }
 
 fn resource_probe_target_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {

@@ -25,7 +25,6 @@ use velnor_actions_contract::{
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::render::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, RenderContext,
-    WORKFLOW_PATH,
 };
 use velnor_actions_workflow_renderer::steps::PLAN_OPERATION;
 
@@ -35,10 +34,10 @@ use crate::workflow_jobs::{PlanJobToolNeeds, final_job, lint_job, plan_job};
 
 #[path = "workflow_policy.rs"]
 pub(super) mod workflow_policy;
-pub(crate) use workflow_policy::prepare_rust_components_step;
 pub(crate) use workflow_policy::jactionlint_verify_step::{
     VERIFY_JACTIONLINT_STEP, argv as jactionlint_verify_argv, verify_jactionlint_step,
 };
+pub(crate) use workflow_policy::prepare_rust_components_step;
 pub(crate) use workflow_policy::rust_manifest_step::{
     NOT_CATALOGUED_CODE, VERIFY_RUST_MANIFEST_STEP, verify_rust_manifest_step,
 };

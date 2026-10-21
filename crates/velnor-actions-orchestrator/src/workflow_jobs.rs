@@ -149,21 +149,12 @@ pub(crate) fn plan_job(
 /// `Builtins.jactionlint` checks locally (workflows, composite actions and
 /// Dependabot; never golden trees elsewhere in the repository).
 pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, OrchestratorError> {
-    let tools = vec![PinnedTool::Jactionlint, PinnedTool::Shellcheck];
-    let exec = PinnedToolExec::new(
-        tools.clone(),
-        &OsString::from("bash"),
-        vec![
-            OsString::from("-c"),
-            OsString::from(velnor_actions_actionlint::workflow_lint_script()),
-        ],
-    )
-    .map_err(|err| OrchestratorError::Contract {
-        problem: err.to_string(),
-    })?;
-    let argv = strings_of(exec.argv(catalog))
-        .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let prepare = prepare_pinned_tools_step(catalog, tools, false)?;
+    let argv = workflow_lint_argv(catalog)?;
+    let prepare = prepare_pinned_tools_step(
+        catalog,
+        vec![PinnedTool::Jactionlint, PinnedTool::Shellcheck],
+        false,
+    )?;
     let verify = crate::workflow::verify_jactionlint_step(catalog)?;
     let mut lint =
         velnor_actions_workflow_renderer::shell_step("Run jactionlint", argv, BTreeMap::new())
@@ -184,6 +175,35 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
         steps: vec![checkout_action()?, prepare, verify, lint],
         cache_mode: None,
     })
+}
+
+/// `bash -c` argv linting the committed hk file set with pinned jactionlint.
+///
+/// The pinned `mise ... exec jactionlint@<v> shellcheck@<v> -- jactionlint`
+/// prefix goes inside the script, after the file globs expand, so the outer
+/// command stays a plain inline shell the renderer quotes whole. Shared by
+/// the CI lint job and the release gates.
+///
+/// # Errors
+///
+/// Returns a contract error when the Mise adapter rejects the request.
+pub(crate) fn workflow_lint_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
+    let exec = PinnedToolExec::new(
+        vec![PinnedTool::Jactionlint, PinnedTool::Shellcheck],
+        &OsString::from("jactionlint"),
+        Vec::new(),
+    )
+    .map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
+    })?;
+    let command = strings_of(exec.argv(catalog))
+        .map_err(|problem| OrchestratorError::Contract { problem })?
+        .join(" ");
+    Ok(vec![
+        "bash".to_owned(),
+        "-c".to_owned(),
+        velnor_actions_actionlint::workflow_lint_script(&command),
+    ])
 }
 
 /// Final gate with the exact required-check name and `always()` condition.

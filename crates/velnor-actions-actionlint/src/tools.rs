@@ -93,19 +93,31 @@ impl Default for JactionlintToolchain {
     }
 }
 
+/// `find` arguments enumerating [`LINT_FILE_GLOBS`] portably: the same set
+/// as the globs, without needing bash 4 `globstar` (macOS ships bash 3.2).
+const LINT_FILE_FINDS: [&str; 3] = [
+    ".github/workflows -maxdepth 1 -type f -name \"*.y*ml\"",
+    ".github/actions -type f -name \"action.y*ml\"",
+    ".github -maxdepth 1 -type f -name \"dependabot.y*ml\"",
+];
+
 /// Inline script for every generated repository-wide jactionlint step.
 ///
 /// The CI `jactionlint` job and the release eligibility gates lint the
-/// committed tree, so they share this one script: it expands
-/// [`LINT_FILE_GLOBS`] (`nullglob`, `globstar`), fails closed when nothing
-/// matched (a bare run would scan the whole repository), and runs
-/// `jactionlint` with GitHub annotations plus [`LINT_FLAGS`]. Run it as
-/// `bash -c <script>` inside `mise exec`.
+/// committed tree, so they share this one script: it lists the files
+/// [`LINT_FILE_GLOBS`] match (sorted, byte order), fails closed when there
+/// are none (a bare run would scan the whole repository, golden trees
+/// included), then `exec`s `jactionlint_command` (the caller's pinned
+/// `mise ... exec ... -- jactionlint` prefix, plain words only) with GitHub
+/// annotations, [`LINT_FLAGS`] and the files. Run it as `bash -c <script>`.
 #[must_use]
-pub fn workflow_lint_script() -> String {
+pub fn workflow_lint_script(jactionlint_command: &str) -> String {
+    let finds = LINT_FILE_FINDS
+        .iter()
+        .map(|args| format!("find {args}; "))
+        .collect::<String>();
     format!(
-        "shopt -s nullglob globstar; set -- {globs}; if [ \"$#\" -eq 0 ]; then echo \"jactionlint: no workflow files matched\" >&2; exit 3; fi; exec jactionlint --config-file {JACTIONLINT_CONFIG_PATH} --format github {flags} \"$@\"",
-        globs = LINT_FILE_GLOBS.join(" "),
+        "files=(); while IFS= read -r file; do files+=(\"$file\"); done < <({{ {finds}}} 2>/dev/null | LC_ALL=C sort); if [ \"${{#files[@]}}\" -eq 0 ]; then echo \"jactionlint: no workflow files matched\" >&2; exit 3; fi; exec {jactionlint_command} --config-file {JACTIONLINT_CONFIG_PATH} --format github {flags} \"${{files[@]}}\"",
         flags = LINT_FLAGS.join(" "),
     )
 }

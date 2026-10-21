@@ -109,7 +109,7 @@ change; Velnor emits no new aliases into composite `action.yml` files.
 - **Velnor Implementation**:
   - `Step::parallel` in `velnor-actions-contract` marks a member of a contiguous group; members may not carry an id, a typed role or an internal operation. `velnor-actions-workflow-renderer` (`parallel_steps`) renders each member with `background: true` and joins each group with one generated `Wait for parallel checks` `wait-all` step; composite renderers, lane sharing and obligation extraction reject or skip parallel members.
   - Each Rust crate job uses one such group for its checks (see [hard decisions](../hard-decisions.md#1-one-job-per-crate-with-parallel-check-steps) and [native Rust crate jobs](../implemented/native-rust-crate-jobs.md)).
-  - Pinned `actionlint` v1.7.12 does not parse the keys (rhysd/actionlint#693). `velnor-actions-actionlint` passes the two exact `STEP_PARALLELISM_IGNORES` to generation-time and CI actionlint; members stay fully validated in the `background` spelling, whereas actionlint skips `parallel:` children entirely. Pinned `zizmor` v1.31.1 (support since v1.27.0) parses the syntax.
+  - Pinned `jactionlint` v2.3.0 parses and validates `background:` members and the body-less `wait-all` join natively (rejecting `background: "yes"`, a `wait-all` with `run:`, and a step with neither `run` nor `uses`), so generation-time and CI lint pass no ignore pattern ([hard decision 10](../jactionlint-decision.md)). The superseded actionlint v1.7.12 could not parse the keys (rhysd/actionlint#693). Pinned `zizmor` v1.31.1 (support since v1.27.0) parses the syntax.
 
 ### 2. Workflow Execution Protections — `2026-09-17`
 - **Upstream Contract** ([Changelog](https://github.blog/changelog/2026-09-17-actions-new-workflow-execution-protections/)):
@@ -141,7 +141,7 @@ change; Velnor emits no new aliases into composite `action.yml` files.
 - **Velnor Implementation**:
   - `velnor-actions-contract` defines `CacheMode` (`Read`, `Write`, `WriteOnly`, `None`, `Expression(String)`) and optional `cache_mode: Option<CacheMode>` on both `WorkflowIr` and `Job`, with `CacheMode::for_pull_request_policy(PullRequestCachePolicy)` mapping `PullRequestCachePolicy::ReadOnly` to `CacheMode::Expression("${{ github.event_name == 'pull_request' && 'read' || 'write' }}")` and `PullRequestCachePolicy::SharedSeed` to `CacheMode::Write`.
   - `velnor-actions-workflow-renderer` emits top-level and job-level `cache-mode:` when `cache_mode` is `Some(...)` and omits it when `None`.
-  - `velnor-actions-actionlint` tracks `native_cache_mode` in `ActionlintCapabilities` (`supports_native_cache_mode()`, `qualify_native_cache_mode()`, `check_native_cache_mode()`), defaulting to `false` for pinned `actionlint` `v1.7.12` until upstream `actionlint` recognizes `cache-mode`.
+  - Pinned `jactionlint` v2.3.0 parses workflow- and job-level `cache-mode` literals (`read`, `write`, `write-only`, `none`) and rejects any other value, including a `${{ }}` expression; `JactionlintCapabilities::check_step_syntax(StepSyntax::CacheMode)` records the capability and generation vets it.
 
 ### 4. Dependabot Default Package Cooldown & Velnor Freshness — `2026-07-14`
 - **Upstream Contract** ([Changelog](https://github.blog/changelog/2026-07-14-supply-chain-defense-by-default-dependabot-adds-3-day-package-cooldown/)):

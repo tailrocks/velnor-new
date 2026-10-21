@@ -145,7 +145,9 @@ impl RenderContext {
         steps::checkout_step(&self.checkout_uses).map(|_| ())?;
         for command in &self.validator_commands {
             if command.validator == ValidatorKind::Jactionlint {
-                return Err(RenderError::BadCommand("jactionlint_not_support".to_owned()));
+                return Err(RenderError::BadCommand(
+                    "jactionlint_not_support".to_owned(),
+                ));
             }
             if command.name.trim().is_empty() {
                 return Err(RenderError::BadCommand("empty_validator_name".to_owned()));

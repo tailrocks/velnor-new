@@ -37,69 +37,6 @@ concurrency:
   group: velnor-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  actionlint:
-    name: Actionlint
-    runs-on: ubuntu-26.04
-    timeout-minutes: 5
-    env:
-      VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
-    steps:
-      - name: Record optional cache budget
-        id: velnor-cache-clock
-        run: "set -eu\nunavailable() { printf '%s\\n' '::warning::cache_unavailable: invalid first-step clock or output'; }\noutput=${GITHUB_OUTPUT-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$now\" \"$seconds\"; do\n  case \"$value\" in ''|*[!0-9]*) unavailable; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) unavailable; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { unavailable; exit 0; }\ndone\nif [ -z \"$output\" ] || ! printf 'started=%s\\ndeadline=%s\\n' \"$now\" \"$((now + seconds))\" 2>/dev/null >> \"$output\"; then\n  unavailable\nfi\n"
-        env:
-          VELNOR_CACHE_JOB_SECONDS: "300"
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: "false"
-      - name: Setup Mise
-        uses: jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde
-        with:
-          cache: "false"
-          cache_save: "false"
-          env: "false"
-          install: "false"
-          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
-          version: 2026.10.17
-      - name: V2 identity
-        id: v2
-        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
-        with:
-          d: 7bfdcef3e7974b7f1e5323b191b163c4e6d43c29fd0eeb8ce7eb86858490aff7
-      - name: Restore Mise tools
-        id: tools-restore
-        if: steps.v2.outputs.enabled == 'true'
-        uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
-        with:
-          key: mise-tools-v2-${{steps.v2.outputs.identity}}
-          mise-sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
-          seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
-      - name: Prepare pinned tools
-        run: mise --no-config --no-env --no-hooks install actionlint@1.7.12 shellcheck@0.11.0
-      - name: Run actionlint
-        run: "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color -ignore '^unexpected key \"background\" for step to (run shell command|execute action)\\. ' -ignore '^step must run script with \"run\" section or run action with \"uses\" section$'"
-      - name: Admit optional cache save
-        id: velnor-optional-tools-save-budget
-        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
-        run: "set -eu\noutput=${GITHUB_OUTPUT-}\nemit() { [ -n \"$output\" ] && printf '%s\\n' \"$1\" 2>/dev/null >> \"$output\"; }\nrefuse() {\n  emit 'admitted=false' || :\n  printf '%s\\n' '::warning::cache_unavailable: optional save has no safe remaining job budget or output'\n}\nstarted=${VELNOR_CACHE_STARTED-}\ndeadline=${VELNOR_CACHE_DEADLINE-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nrequired=${VELNOR_CACHE_REQUIRED_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$started\" \"$deadline\" \"$now\" \"$seconds\" \"$required\"; do\n  case \"$value\" in ''|*[!0-9]*) refuse; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) refuse; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { refuse; exit 0; }\ndone\nif [ \"$now\" -lt \"$started\" ] || [ \"$deadline\" -lt \"$started\" ] ||\n   [ \"$((deadline - started))\" -ne \"$seconds\" ] ||\n   [ \"$((deadline - now))\" -lt \"$required\" ]; then\n  refuse\nelif ! emit 'admitted=true'; then\n  refuse\nfi\n"
-        env:
-          VELNOR_CACHE_JOB_SECONDS: "300"
-          VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
-          VELNOR_CACHE_DEADLINE: ${{ steps.velnor-cache-clock.outputs.deadline }}
-          VELNOR_CACHE_REQUIRED_SECONDS: "90"
-      - name: Save Mise tools
-        if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true') && steps.velnor-optional-tools-save-budget.outputs.admitted == 'true'
-        id: velnor-optional-tools-save
-        timeout-minutes: 1
-        continue-on-error: true
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          key: mise-tools-v2-${{steps.v2.outputs.identity}}
-          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
-      - name: Report optional cache save failure
-        if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
-        run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
   dependency-seed:
     name: Dependency seed
     runs-on: ubuntu-26.04
@@ -309,6 +246,71 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; [ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be a real directory'\\'' >&2; exit 1; }; [ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] && [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] && check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '\\''%s\\n'\\'' '\\''MBX store path changed before cleanup'\\'' >&2; exit 1; }; mbx_disk_sample() { boundary=$1; case \"${RUNNER_TEMP:-}\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute'\\'' >&2; return 0 ;; esac; if [ -d \"$RUNNER_TEMP\" ] && [ ! -L \"$RUNNER_TEMP\" ]; then printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\\n'\\'' \"$boundary\"; if df -Pk \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\\n'\\'' \"$boundary\" >&2; fi; printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\\n'\\'' \"$boundary\"; if df -Pi \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\\n'\\'' \"$boundary\" >&2; return 0; fi; store_path=\"$RUNNER_TEMP/velnor/mbx\"; if [ \"${MBX_CACHE_DIR:-}\" = \"$store_path\" ] && [ -d \"$store_path\" ] && [ ! -L \"$store_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\\n'\\'' \"$boundary\"; if du -sk \"$store_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\\n'\\'' \"$boundary\" >&2; fi; target_path=\"${target_dir:-target}\"; if [ ! -d \"$target_path\" ]; then for candidate in */target crates/*/target \"$RUNNER_TEMP/velnor/target\"; do if [ -d \"$candidate\" ]; then target_path=\"$candidate\"; break; fi; done; fi; if [ -L \"$target_path\" ]; then printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\\n'\\'' \"$boundary\" >&2; elif [ -d \"$target_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target\\n'\\'' \"$boundary\"; if du -sk \"$target_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\\n'\\'' \"$boundary\"; fi; }; target_dir=\"target\"; mbx_disk_sample before-final-clean; if ! mbx_bin=$(command -v mbx); then printf '\\''%s\\n'\\'' '\\''action-owned MBX is not on PATH'\\'' >&2; exit 1; fi; case \"$mbx_bin\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be absolute'\\'' >&2; exit 1 ;; esac; if [ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]; then printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be an executable file'\\'' >&2; exit 1; fi; clean_status=0; if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- \"$mbx_bin\" clean; then clean_status=0; else clean_status=$?; fi; mbx_disk_sample after-final-clean; exit \"$clean_status\"'"
+  jactionlint:
+    name: Jactionlint
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    env:
+      VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
+    steps:
+      - name: Record optional cache budget
+        id: velnor-cache-clock
+        run: "set -eu\nunavailable() { printf '%s\\n' '::warning::cache_unavailable: invalid first-step clock or output'; }\noutput=${GITHUB_OUTPUT-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$now\" \"$seconds\"; do\n  case \"$value\" in ''|*[!0-9]*) unavailable; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) unavailable; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { unavailable; exit 0; }\ndone\nif [ -z \"$output\" ] || ! printf 'started=%s\\ndeadline=%s\\n' \"$now\" \"$((now + seconds))\" 2>/dev/null >> \"$output\"; then\n  unavailable\nfi\n"
+        env:
+          VELNOR_CACHE_JOB_SECONDS: "300"
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Setup Mise
+        uses: jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde
+        with:
+          cache: "false"
+          cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          version: 2026.10.17
+      - name: V2 identity
+        id: v2
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
+        with:
+          d: 1d3f477f98a5db904c415b9849fe1dfba6538259a6b977821ee1e965485325b9
+      - name: Restore Mise tools
+        id: tools-restore
+        if: steps.v2.outputs.enabled == 'true'
+        uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
+        with:
+          key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          mise-sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
+      - name: Prepare pinned tools
+        run: mise --no-config --no-env --no-hooks install jactionlint@2.3.0 shellcheck@0.11.0
+      - name: Verify jactionlint
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; v=\"2.3.0\"; case \"${RUNNER_OS-}-${RUNNER_ARCH-}\" in Linux-X64) p=linux-x64;; Linux-ARM64) p=linux-arm64;; macOS-ARM64) p=macos-arm64;; macOS-X64) p=macos-x64;; *) p=unsupported;; esac; case \"$v/$p\" in 2.3.0/linux-arm64) want=7b6c395e8fb7c407d7b3358da1deab23434a75840dc76768ddb30119ce1041c0;; 2.3.0/linux-x64) want=3566633b33780130c5bea5342ad8c5505092e40094c7d6e25ee74e382899a5c7;; 2.3.0/macos-arm64) want=b6853a909613dc9381548b1d61d278e1c4b1ab8334212f67ea6efa46f1f5d34b;; 2.3.0/macos-x64) want=1aa284dc8b12ebd6bee858dcbbfb94c0b92e457cd7e4bdaee07ae2b9238dba45;; *) want=;; esac; if [ -z \"$want\" ]; then if [ \"$v\" = \"2.3.0\" ]; then printf \"%s\\n\" \"::error::jactionlint_executable_not_catalogued: jactionlint $v on $p has no executable digest in this Velnor catalog\" >&2; exit 1; fi; printf \"%s\\n\" \"::notice::jactionlint $v on $p has no Velnor executable digest; the Mise release digest and GitHub attestation checks still applied\"; exit 0; fi; d=\"$RUNNER_TEMP/velnor/jactionlint-verify\"; rm -rf \"$d\"; mkdir -p \"$d\"; mise --no-config --no-env --no-hooks which --tool \"jactionlint@$v\" jactionlint > \"$d/path\" || { printf \"%s\\n\" \"::error::jactionlint_not_installed: jactionlint@$v\" >&2; exit 1; }; IFS= read -r exe < \"$d/path\"; test -f \"$exe\" || { printf \"%s\\n\" \"::error::jactionlint_executable_missing: $exe\" >&2; exit 1; }; printf \"%s  %s\\n\" \"$want\" \"$exe\" > \"$d/executable.sha256\"; if command -v sha256sum >/dev/null 2>&1; then sha256sum -c \"$d/executable.sha256\" >/dev/null; else shasum -a 256 -c \"$d/executable.sha256\" >/dev/null; fi || { printf \"%s\\n\" \"::error::jactionlint_executable_digest_mismatch: $exe is not SHA-256 $want\" >&2; exit 1; }; printf \"%s\\n\" \"velnor: jactionlint $v ($p) executable SHA-256 $want verified\"'"
+      - name: Run jactionlint
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; files=(); while IFS= read -r file; do files+=(\"$file\"); done < <({ find .github/workflows -maxdepth 1 -type f -name \"*.y*ml\"; find .github/actions -type f -name \"action.y*ml\"; find .github -maxdepth 1 -type f -name \"dependabot.y*ml\"; } 2>/dev/null | LC_ALL=C sort); if [ \"${#files[@]}\" -eq 0 ]; then echo \"jactionlint: no workflow files matched\" >&2; exit 3; fi; exec mise --no-config --no-env --no-hooks exec jactionlint@2.3.0 shellcheck@0.11.0 -- jactionlint --config-file .github/jactionlint.yaml --format github --strict-exit --no-online --shellcheck=shellcheck --pyflakes= --no-color \"${files[@]}\"'"
+      - name: Admit optional cache save
+        id: velnor-optional-tools-save-budget
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        run: "set -eu\noutput=${GITHUB_OUTPUT-}\nemit() { [ -n \"$output\" ] && printf '%s\\n' \"$1\" 2>/dev/null >> \"$output\"; }\nrefuse() {\n  emit 'admitted=false' || :\n  printf '%s\\n' '::warning::cache_unavailable: optional save has no safe remaining job budget or output'\n}\nstarted=${VELNOR_CACHE_STARTED-}\ndeadline=${VELNOR_CACHE_DEADLINE-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nrequired=${VELNOR_CACHE_REQUIRED_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$started\" \"$deadline\" \"$now\" \"$seconds\" \"$required\"; do\n  case \"$value\" in ''|*[!0-9]*) refuse; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) refuse; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { refuse; exit 0; }\ndone\nif [ \"$now\" -lt \"$started\" ] || [ \"$deadline\" -lt \"$started\" ] ||\n   [ \"$((deadline - started))\" -ne \"$seconds\" ] ||\n   [ \"$((deadline - now))\" -lt \"$required\" ]; then\n  refuse\nelif ! emit 'admitted=true'; then\n  refuse\nfi\n"
+        env:
+          VELNOR_CACHE_JOB_SECONDS: "300"
+          VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
+          VELNOR_CACHE_DEADLINE: ${{ steps.velnor-cache-clock.outputs.deadline }}
+          VELNOR_CACHE_REQUIRED_SECONDS: "90"
+      - name: Save Mise tools
+        if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true') && steps.velnor-optional-tools-save-budget.outputs.admitted == 'true'
+        id: velnor-optional-tools-save
+        timeout-minutes: 1
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+      - name: Report optional cache save failure
+        if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
+        run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
   plan:
     name: Plan
     runs-on: ubuntu-26.04
@@ -355,7 +357,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: a7e6ddd4362bde0fefed5e56b1d7b58c2b148e60f2bd337ba17804d22cd06a3a
+          d: c18c40f46d667430b2f9b56f2d1737de2164ec2cc70d6aee9be95af12a1d3bb6
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -368,7 +370,9 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install rust@1.99.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.31.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.149
+        run: mise --no-config --no-env --no-hooks install rust@1.99.1 jactionlint@2.3.0 shellcheck@0.11.0 zizmor@1.31.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.149
+      - name: Verify jactionlint
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; v=\"2.3.0\"; case \"${RUNNER_OS-}-${RUNNER_ARCH-}\" in Linux-X64) p=linux-x64;; Linux-ARM64) p=linux-arm64;; macOS-ARM64) p=macos-arm64;; macOS-X64) p=macos-x64;; *) p=unsupported;; esac; case \"$v/$p\" in 2.3.0/linux-arm64) want=7b6c395e8fb7c407d7b3358da1deab23434a75840dc76768ddb30119ce1041c0;; 2.3.0/linux-x64) want=3566633b33780130c5bea5342ad8c5505092e40094c7d6e25ee74e382899a5c7;; 2.3.0/macos-arm64) want=b6853a909613dc9381548b1d61d278e1c4b1ab8334212f67ea6efa46f1f5d34b;; 2.3.0/macos-x64) want=1aa284dc8b12ebd6bee858dcbbfb94c0b92e457cd7e4bdaee07ae2b9238dba45;; *) want=;; esac; if [ -z \"$want\" ]; then if [ \"$v\" = \"2.3.0\" ]; then printf \"%s\\n\" \"::error::jactionlint_executable_not_catalogued: jactionlint $v on $p has no executable digest in this Velnor catalog\" >&2; exit 1; fi; printf \"%s\\n\" \"::notice::jactionlint $v on $p has no Velnor executable digest; the Mise release digest and GitHub attestation checks still applied\"; exit 0; fi; d=\"$RUNNER_TEMP/velnor/jactionlint-verify\"; rm -rf \"$d\"; mkdir -p \"$d\"; mise --no-config --no-env --no-hooks which --tool \"jactionlint@$v\" jactionlint > \"$d/path\" || { printf \"%s\\n\" \"::error::jactionlint_not_installed: jactionlint@$v\" >&2; exit 1; }; IFS= read -r exe < \"$d/path\"; test -f \"$exe\" || { printf \"%s\\n\" \"::error::jactionlint_executable_missing: $exe\" >&2; exit 1; }; printf \"%s  %s\\n\" \"$want\" \"$exe\" > \"$d/executable.sha256\"; if command -v sha256sum >/dev/null 2>&1; then sha256sum -c \"$d/executable.sha256\" >/dev/null; else shasum -a 256 -c \"$d/executable.sha256\" >/dev/null; fi || { printf \"%s\\n\" \"::error::jactionlint_executable_digest_mismatch: $exe is not SHA-256 $want\" >&2; exit 1; }; printf \"%s\\n\" \"velnor: jactionlint $v ($p) executable SHA-256 $want verified\"'"
       - name: Verify Rust channel manifest
         env:
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -482,7 +486,7 @@ jobs:
       - plan
       - rust-parity-app
       - rust-parity-tool
-      - actionlint
+      - jactionlint
     if: ${{ !cancelled() }}
     steps:
       - name: Setup Mise
@@ -518,14 +522,14 @@ jobs:
         env:
           VELNOR_INTERNAL_OP: write-request-v1
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
-          VELNOR_NEEDS_EXPECTED: "[\"actionlint\",\"plan\",\"rust-parity-app\",\"rust-parity-tool\"]"
+          VELNOR_NEEDS_EXPECTED: "[\"jactionlint\",\"plan\",\"rust-parity-app\",\"rust-parity-tool\"]"
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
         run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.37'"
       - name: Merge reports
         env:
           VELNOR_INTERNAL_OP: merge-v1
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
-          VELNOR_NEEDS_EXPECTED: "[\"actionlint\",\"plan\",\"rust-parity-app\",\"rust-parity-tool\"]"
+          VELNOR_NEEDS_EXPECTED: "[\"jactionlint\",\"plan\",\"rust-parity-app\",\"rust-parity-tool\"]"
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
         run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.37'"
       - name: Publish final report
@@ -591,7 +595,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 89efc09b9f163786a52accf687a2b30b5ec5f7a680b3f2d4dc902acb4d434c41
+          d: 8178c75544e77e695abcb21a2b19ce60bab220d9537a87dd578927d2cbd89b39
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -612,7 +616,9 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install rust@1.99.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.31.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.149
+        run: mise --no-config --no-env --no-hooks install rust@1.99.1 jactionlint@2.3.0 shellcheck@0.11.0 zizmor@1.31.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.149
+      - name: Verify jactionlint
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; v=\"2.3.0\"; case \"${RUNNER_OS-}-${RUNNER_ARCH-}\" in Linux-X64) p=linux-x64;; Linux-ARM64) p=linux-arm64;; macOS-ARM64) p=macos-arm64;; macOS-X64) p=macos-x64;; *) p=unsupported;; esac; case \"$v/$p\" in 2.3.0/linux-arm64) want=7b6c395e8fb7c407d7b3358da1deab23434a75840dc76768ddb30119ce1041c0;; 2.3.0/linux-x64) want=3566633b33780130c5bea5342ad8c5505092e40094c7d6e25ee74e382899a5c7;; 2.3.0/macos-arm64) want=b6853a909613dc9381548b1d61d278e1c4b1ab8334212f67ea6efa46f1f5d34b;; 2.3.0/macos-x64) want=1aa284dc8b12ebd6bee858dcbbfb94c0b92e457cd7e4bdaee07ae2b9238dba45;; *) want=;; esac; if [ -z \"$want\" ]; then if [ \"$v\" = \"2.3.0\" ]; then printf \"%s\\n\" \"::error::jactionlint_executable_not_catalogued: jactionlint $v on $p has no executable digest in this Velnor catalog\" >&2; exit 1; fi; printf \"%s\\n\" \"::notice::jactionlint $v on $p has no Velnor executable digest; the Mise release digest and GitHub attestation checks still applied\"; exit 0; fi; d=\"$RUNNER_TEMP/velnor/jactionlint-verify\"; rm -rf \"$d\"; mkdir -p \"$d\"; mise --no-config --no-env --no-hooks which --tool \"jactionlint@$v\" jactionlint > \"$d/path\" || { printf \"%s\\n\" \"::error::jactionlint_not_installed: jactionlint@$v\" >&2; exit 1; }; IFS= read -r exe < \"$d/path\"; test -f \"$exe\" || { printf \"%s\\n\" \"::error::jactionlint_executable_missing: $exe\" >&2; exit 1; }; printf \"%s  %s\\n\" \"$want\" \"$exe\" > \"$d/executable.sha256\"; if command -v sha256sum >/dev/null 2>&1; then sha256sum -c \"$d/executable.sha256\" >/dev/null; else shasum -a 256 -c \"$d/executable.sha256\" >/dev/null; fi || { printf \"%s\\n\" \"::error::jactionlint_executable_digest_mismatch: $exe is not SHA-256 $want\" >&2; exit 1; }; printf \"%s\\n\" \"velnor: jactionlint $v ($p) executable SHA-256 $want verified\"'"
       - name: Prepare Rust components
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -796,7 +802,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 89efc09b9f163786a52accf687a2b30b5ec5f7a680b3f2d4dc902acb4d434c41
+          d: 8178c75544e77e695abcb21a2b19ce60bab220d9537a87dd578927d2cbd89b39
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -817,7 +823,9 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install rust@1.99.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.31.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.149
+        run: mise --no-config --no-env --no-hooks install rust@1.99.1 jactionlint@2.3.0 shellcheck@0.11.0 zizmor@1.31.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.149
+      - name: Verify jactionlint
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; v=\"2.3.0\"; case \"${RUNNER_OS-}-${RUNNER_ARCH-}\" in Linux-X64) p=linux-x64;; Linux-ARM64) p=linux-arm64;; macOS-ARM64) p=macos-arm64;; macOS-X64) p=macos-x64;; *) p=unsupported;; esac; case \"$v/$p\" in 2.3.0/linux-arm64) want=7b6c395e8fb7c407d7b3358da1deab23434a75840dc76768ddb30119ce1041c0;; 2.3.0/linux-x64) want=3566633b33780130c5bea5342ad8c5505092e40094c7d6e25ee74e382899a5c7;; 2.3.0/macos-arm64) want=b6853a909613dc9381548b1d61d278e1c4b1ab8334212f67ea6efa46f1f5d34b;; 2.3.0/macos-x64) want=1aa284dc8b12ebd6bee858dcbbfb94c0b92e457cd7e4bdaee07ae2b9238dba45;; *) want=;; esac; if [ -z \"$want\" ]; then if [ \"$v\" = \"2.3.0\" ]; then printf \"%s\\n\" \"::error::jactionlint_executable_not_catalogued: jactionlint $v on $p has no executable digest in this Velnor catalog\" >&2; exit 1; fi; printf \"%s\\n\" \"::notice::jactionlint $v on $p has no Velnor executable digest; the Mise release digest and GitHub attestation checks still applied\"; exit 0; fi; d=\"$RUNNER_TEMP/velnor/jactionlint-verify\"; rm -rf \"$d\"; mkdir -p \"$d\"; mise --no-config --no-env --no-hooks which --tool \"jactionlint@$v\" jactionlint > \"$d/path\" || { printf \"%s\\n\" \"::error::jactionlint_not_installed: jactionlint@$v\" >&2; exit 1; }; IFS= read -r exe < \"$d/path\"; test -f \"$exe\" || { printf \"%s\\n\" \"::error::jactionlint_executable_missing: $exe\" >&2; exit 1; }; printf \"%s  %s\\n\" \"$want\" \"$exe\" > \"$d/executable.sha256\"; if command -v sha256sum >/dev/null 2>&1; then sha256sum -c \"$d/executable.sha256\" >/dev/null; else shasum -a 256 -c \"$d/executable.sha256\" >/dev/null; fi || { printf \"%s\\n\" \"::error::jactionlint_executable_digest_mismatch: $exe is not SHA-256 $want\" >&2; exit 1; }; printf \"%s\\n\" \"velnor: jactionlint $v ($p) executable SHA-256 $want verified\"'"
       - name: Prepare Rust components
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo

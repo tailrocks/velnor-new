@@ -1,6 +1,6 @@
 //! `[workflow.lint]`: rule strength of the generated workflow linter.
 //!
-//! jactionlint is Velnor's only workflow linter (hard decision 12). The one
+//! jactionlint is Velnor's only workflow linter (hard decision 10). The one
 //! knob is its profile; every other jactionlint setting (rules, ignores,
 //! `paths`, baselines, online checks) stays generator-owned, so a consumer
 //! cannot turn a finding off from configuration.

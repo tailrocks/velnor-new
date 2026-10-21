@@ -19,8 +19,8 @@ use super::workflow_policy::{
     plan_uses_all_features, plan_uses_nextest, plan_uses_opentofu, plan_uses_rust,
 };
 use super::{
-    WorkflowPlan, build_plan_job, lint_config_input, check_jobs, insert_format_step,
-    insert_gate_jobs, support_workflow, wire_w1, workflow_context, workflow_ir,
+    WorkflowPlan, build_plan_job, check_jobs, insert_format_step, insert_gate_jobs,
+    lint_config_input, support_workflow, wire_w1, workflow_context, workflow_ir,
 };
 
 /// Inputs used to prepare the workflow's plan, task, and support jobs.

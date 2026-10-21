@@ -200,7 +200,7 @@ fn rendered_inventory_validator_failure_fails_required() -> TestResult {
 fn required_validators() -> [&'static str; 6] {
     [
         "plan",
-        "actionlint",
+        "jactionlint",
         "alint",
         "cargo-deny",
         "cargo-machete",

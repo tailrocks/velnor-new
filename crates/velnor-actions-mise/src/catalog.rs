@@ -91,7 +91,8 @@ pub const GH_VERSION: &str = "2.102.1";
 /// identity `https://github.com/jdx/jactionlint/.github/workflows/release.yaml@refs/tags/v2.3.0`,
 /// issuer `https://token.actions.githubusercontent.com`) and
 /// `gh attestation verify -R jdx/jactionlint --signer-workflow jdx/jactionlint/.github/workflows/release.yaml`
-/// both passed for the linux amd64, linux arm64 and darwin arm64 archives.
+/// both passed for the linux amd64, linux arm64, darwin arm64 and darwin
+/// amd64 archives.
 /// Per-platform digests: [`JACTIONLINT_DIGESTS`].
 /// Source: `https://api.github.com/repos/jdx/jactionlint/releases/latest`; checked 2026-10-22.
 pub const JACTIONLINT_VERSION: &str = "2.3.0";

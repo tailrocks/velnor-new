@@ -201,15 +201,6 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-21T07:08:59.528319+00:00",
-      "latest": "v1.7.12",
-      "name": "actionlint",
-      "pinned": "1.7.12",
-      "qualified": "1.7.12",
-      "source": "https://api.github.com/repos/rhysd/actionlint/releases/latest",
-      "status": "current"
-    },
-    {
       "checked_at": "2026-10-21T20:52:00+00:00",
       "latest": "v2.3.0",
       "name": "jactionlint",

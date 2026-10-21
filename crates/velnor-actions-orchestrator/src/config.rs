@@ -219,7 +219,7 @@ struct PartialWorkflow {
     verify: VerifyConfig,
     /// `[workflow.lint]`: jactionlint profile.
     #[serde(default)]
-    lint: velnor_actions_contract::WorkflowLintConfig,
+    lint: velnor_actions_contract::config::WorkflowLintConfig,
     /// Optional `workflow_dispatch` inputs for suite workflows.
     #[serde(default)]
     dispatch: velnor_actions_contract::WorkflowDispatchConfig,

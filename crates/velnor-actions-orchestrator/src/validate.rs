@@ -46,7 +46,11 @@ pub(crate) fn validate_staged(tree: &RenderedTree) -> Result<Vec<String>, Orches
     write_tree(&staging.path().join(".github"), tree)?;
     let workflows = staged_workflows(tree)?;
     let catalog = ToolCatalog::pinned();
-    run_jactionlint(&catalog, staging.path(), &staged_lint_files(tree, &workflows))?;
+    run_jactionlint(
+        &catalog,
+        staging.path(),
+        &staged_lint_files(tree, &workflows),
+    )?;
     run_shellcheck_probe(&catalog, staging.path())?;
     write_zizmor_config(staging.path(), tree)?;
     run_zizmor(&catalog, staging.path())?;
@@ -101,12 +105,9 @@ pub(crate) fn is_workflow_path(path: &str) -> bool {
 }
 
 /// Composite action metadata files: `.github/actions/**/action.y*ml`.
-#[expect(
-    clippy::case_sensitive_file_extension_comparisons,
-    reason = "rendered tree paths are exact lowercase by construction"
-)]
 pub(crate) fn is_action_path(path: &str) -> bool {
-    path.starts_with(ACTIONS_DIR) && (path.ends_with("/action.yml") || path.ends_with("/action.yaml"))
+    path.starts_with(ACTIONS_DIR)
+        && (path.ends_with("/action.yml") || path.ends_with("/action.yaml"))
 }
 
 /// Staged workflows then staged composite actions: the generated part of
@@ -246,7 +247,12 @@ mod tests {
             .collect();
         assert_eq!(
             argv[0..4],
-            ["--config-file", ".github/jactionlint.yaml", "--format", "oneline"]
+            [
+                "--config-file",
+                ".github/jactionlint.yaml",
+                "--format",
+                "oneline"
+            ]
         );
         assert_eq!(argv[4..9], velnor_actions_actionlint::LINT_FLAGS);
         assert_eq!(argv[9..], files);

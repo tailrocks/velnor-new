@@ -7,13 +7,18 @@ use super::*;
 use velnor_actions_contract::StepKind;
 
 #[test]
-fn lint_job_installs_exact_actionlint_tools_before_exec() -> Result<(), Box<dyn std::error::Error>>
-{
+fn lint_job_installs_and_verifies_exact_jactionlint_tools_before_exec()
+-> Result<(), Box<dyn std::error::Error>> {
     let job = lint_job("ubuntu-26.04", &ToolCatalog::pinned())?;
     let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
     assert_eq!(
         names,
-        ["Checkout", PREPARE_PINNED_TOOLS_STEP, "Run actionlint"]
+        [
+            "Checkout",
+            PREPARE_PINNED_TOOLS_STEP,
+            crate::workflow::VERIFY_JACTIONLINT_STEP,
+            "Run jactionlint"
+        ]
     );
     let StepKind::Shell { run, .. } = &job.steps[1].kind else {
         return Err("pinned preparation must be a shell step".into());
@@ -23,11 +28,19 @@ fn lint_job_installs_exact_actionlint_tools_before_exec() -> Result<(), Box<dyn 
     assert_eq!(
         installed,
         Some(vec![
-            "actionlint@1.7.12".to_owned(),
+            "jactionlint@2.3.0".to_owned(),
             "shellcheck@0.11.0".to_owned()
         ])
     );
-    assert_eq!(job.steps[2].role, Some(StepRole::Actionlint));
+    assert_eq!(job.steps[3].role, Some(StepRole::Jactionlint));
+    let StepKind::Shell { run, .. } = &job.steps[3].kind else {
+        return Err("lint must be a shell step".into());
+    };
+    assert_eq!(run[..2], ["bash", "-c"]);
+    assert!(
+        run[2].contains("exec mise --no-config --no-env --no-hooks exec jactionlint@2.3.0 shellcheck@0.11.0 -- jactionlint --config-file .github/jactionlint.yaml"),
+        "{run:?}"
+    );
     Ok(())
 }
 
@@ -75,7 +88,7 @@ fn pure_tofu_plan_drops_all_rust_setup() {
     assert_eq!(
         specs,
         [
-            catalog.tool_spec(PinnedTool::Actionlint),
+            catalog.tool_spec(PinnedTool::Jactionlint),
             catalog.tool_spec(PinnedTool::Shellcheck),
             catalog.tool_spec(PinnedTool::Zizmor),
             catalog.tool_spec(PinnedTool::Opentofu),

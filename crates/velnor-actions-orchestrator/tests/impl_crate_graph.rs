@@ -203,7 +203,7 @@ fn assert_crate_job_prepares_required_tools(task: &str) -> TestResult {
         "prepare installs the driver:\n{task}"
     );
     for tool in [
-        PinnedTool::Actionlint,
+        PinnedTool::Jactionlint,
         PinnedTool::Shellcheck,
         PinnedTool::Zizmor,
     ] {

@@ -67,16 +67,26 @@ fn workflow_script_lints_exactly_the_hk_file_set() {
             ".github/dependabot.y*ml",
         ]
     );
-    let script = workflow_lint_script();
-    assert!(script.starts_with("shopt -s nullglob globstar; set -- "));
-    assert!(script.contains(&format!("set -- {};", LINT_FILE_GLOBS.join(" "))));
-    assert!(script.contains("if [ \"$#\" -eq 0 ]; then"), "{script}");
+    let script = workflow_lint_script("mise exec jactionlint@2.3.0 -- jactionlint");
+    for find in [
+        "find .github/workflows -maxdepth 1 -type f -name \"*.y*ml\";",
+        "find .github/actions -type f -name \"action.y*ml\";",
+        "find .github -maxdepth 1 -type f -name \"dependabot.y*ml\";",
+    ] {
+        assert!(script.contains(find), "{find}: {script}");
+    }
+    assert!(script.contains("| LC_ALL=C sort)"), "{script}");
+    assert!(
+        script.contains("if [ \"${#files[@]}\" -eq 0 ]; then"),
+        "{script}"
+    );
     assert!(script.contains("exit 3"), "{script}");
     assert!(script.ends_with(&format!(
-        "exec jactionlint --config-file .github/jactionlint.yaml --format github {} \"$@\"",
+        "exec mise exec jactionlint@2.3.0 -- jactionlint --config-file .github/jactionlint.yaml --format github {} \"${{files[@]}}\"",
         LINT_FLAGS.join(" ")
     )));
     assert!(!script.contains("JACTIONLINT_NO_HINTS"), "{script}");
     assert!(!script.contains("docs/"), "{script}");
     assert!(!script.contains('\''), "{script}");
+    assert!(!script.contains("$("), "{script}");
 }

@@ -200,14 +200,14 @@ fn strict_wires_runtime_qualified_tools_cache_after_setup_and_saves_once()
 -> Result<(), velnor_actions_workflow_renderer::RenderError> {
     use velnor_actions_workflow_renderer::checkout_step;
     let lint = job(
-        "actionlint",
-        "Actionlint",
+        "jactionlint",
+        "Jactionlint",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
             scrubbed_shell_step(
-                "Run actionlint",
-                mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
+                "Run jactionlint",
+                mise_argv("jactionlint@2.3.0", "jactionlint", &["-color"]),
             )?,
         ],
     );
@@ -219,7 +219,7 @@ fn strict_wires_runtime_qualified_tools_cache_after_setup_and_saves_once()
         &mise(),
     )?;
     let text = &rendered.yaml;
-    let names = step_names(text, "actionlint");
+    let names = step_names(text, "jactionlint");
     assert_eq!(names.iter().filter(|s| *s == TOOLS_RESTORE_NAME).count(), 1);
     assert_eq!(names.iter().filter(|s| *s == TOOLS_SAVE_NAME).count(), 1);
     assert_eq!(
@@ -280,14 +280,14 @@ fn seed_and_tools_prelude_require_the_configured_unconditional_checkout()
     let shell_checkout = scrubbed_shell_step("Checkout", vec!["true".to_owned()])?;
     let run = || {
         let job = job(
-            "actionlint",
-            "Actionlint",
+            "jactionlint",
+            "Jactionlint",
             Vec::new(),
             vec![
                 shell_checkout.clone(),
                 scrubbed_shell_step(
-                    "Run actionlint",
-                    mise_argv("actionlint@1.7.12", "actionlint", &[]),
+                    "Run jactionlint",
+                    mise_argv("jactionlint@2.3.0", "jactionlint", &[]),
                 )?,
             ],
         );
@@ -301,14 +301,14 @@ fn seed_and_tools_prelude_require_the_configured_unconditional_checkout()
     let mut renamed = checkout_step(&checkout_pin())?;
     renamed.name = "Source checkout".to_owned();
     let real = job(
-        "actionlint",
-        "Actionlint",
+        "jactionlint",
+        "Jactionlint",
         Vec::new(),
         vec![
             renamed,
             scrubbed_shell_step(
-                "Run actionlint",
-                mise_argv("actionlint@1.7.12", "actionlint", &[]),
+                "Run jactionlint",
+                mise_argv("jactionlint@2.3.0", "jactionlint", &[]),
             )?,
         ],
     );
@@ -325,14 +325,14 @@ fn seed_and_tools_prelude_require_the_configured_unconditional_checkout()
     let mut conditional = checkout_step(&checkout_pin())?;
     conditional.condition = Some("false".to_owned());
     let conditional = job(
-        "actionlint",
-        "Actionlint",
+        "jactionlint",
+        "Jactionlint",
         Vec::new(),
         vec![
             conditional,
             scrubbed_shell_step(
-                "Run actionlint",
-                mise_argv("actionlint@1.7.12", "actionlint", &[]),
+                "Run jactionlint",
+                mise_argv("jactionlint@2.3.0", "jactionlint", &[]),
             )?,
         ],
     );

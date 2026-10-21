@@ -7,17 +7,22 @@ use std::path::Path;
 use std::process::{Command, Output};
 
 use sha2::{Digest, Sha256};
-use velnor_actions_mise::{JACTIONLINT_VERSION, PinnedTool, ToolCatalog, jactionlint_executable_sha256};
+use velnor_actions_mise::{
+    JACTIONLINT_VERSION, PinnedTool, ToolCatalog, jactionlint_executable_sha256,
+};
 
 use super::{NOT_CATALOGUED_CODE, VERIFY_JACTIONLINT_STEP, script, verify_jactionlint_step};
 
 const FAKE_BYTES: &[u8] = b"fake jactionlint executable\n";
 
 fn hex(bytes: &[u8]) -> String {
-    Sha256::digest(bytes)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(64);
+    for byte in Sha256::digest(bytes) {
+        out.push(char::from(HEX[usize::from(byte >> 4)]));
+        out.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    out
 }
 
 /// A temp root with `bin/mise` printing the fake executable's path.
@@ -64,11 +69,13 @@ fn a_matching_executable_passes_for_every_runner_platform() -> Result<(), Box<dy
         ("Linux", "X64", "linux-x64"),
         ("Linux", "ARM64", "linux-arm64"),
         ("macOS", "ARM64", "macos-arm64"),
+        ("macOS", "X64", "macos-x64"),
     ] {
         let root = tempfile::tempdir()?;
         fake_runner(root.path())?;
         // Swap in the fake executable's digest for this platform's row only.
-        let text = script(&ToolCatalog::pinned()).replace(pinned_digest(platform)?, &hex(FAKE_BYTES));
+        let text =
+            script(&ToolCatalog::pinned()).replace(pinned_digest(platform)?, &hex(FAKE_BYTES));
         let output = run(root.path(), &text, os, arch)?;
         assert!(
             output.status.success(),
@@ -76,11 +83,16 @@ fn a_matching_executable_passes_for_every_runner_platform() -> Result<(), Box<dy
             String::from_utf8_lossy(&output.stderr)
         );
         let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(stdout.contains(&format!("({platform}) executable SHA-256")), "{stdout}");
+        assert!(
+            stdout.contains(&format!("({platform}) executable SHA-256")),
+            "{stdout}"
+        );
         let log = fs::read_to_string(root.path().join("mise.log"))?;
         assert_eq!(
             log.trim(),
-            format!("--no-config --no-env --no-hooks which --tool jactionlint@{JACTIONLINT_VERSION} jactionlint")
+            format!(
+                "--no-config --no-env --no-hooks which --tool jactionlint@{JACTIONLINT_VERSION} jactionlint"
+            )
         );
     }
     Ok(())
@@ -104,7 +116,12 @@ fn a_different_executable_fails_closed() -> Result<(), Box<dyn Error>> {
 fn the_catalog_pin_on_an_unknown_platform_fails_closed() -> Result<(), Box<dyn Error>> {
     let root = tempfile::tempdir()?;
     fake_runner(root.path())?;
-    let output = run(root.path(), &script(&ToolCatalog::pinned()), "Windows", "X64")?;
+    let output = run(
+        root.path(),
+        &script(&ToolCatalog::pinned()),
+        "Windows",
+        "X64",
+    )?;
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains(NOT_CATALOGUED_CODE));
     assert!(!root.path().join("mise.log").exists(), "mise must not run");
@@ -120,7 +137,11 @@ fn a_project_version_without_a_digest_keeps_mise_verification() -> Result<(), Bo
     assert!(text.contains("v=\"${VELNOR_TOOL_JACTIONLINT}\""), "{text}");
     let root = tempfile::tempdir()?;
     fake_runner(root.path())?;
-    let path = format!("{}:{}", root.path().join("bin").display(), std::env::var("PATH")?);
+    let path = format!(
+        "{}:{}",
+        root.path().join("bin").display(),
+        std::env::var("PATH")?
+    );
     let output = Command::new("sh")
         .arg("-c")
         .arg(&text)

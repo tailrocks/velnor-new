@@ -30,17 +30,22 @@ pub(crate) fn script(catalog: &ToolCatalog) -> String {
     let cases = JACTIONLINT_DIGESTS
         .iter()
         .map(|row| {
-            format!(
-                "{}/{}) want={};; ",
-                row.version, row.platform, row.executable_sha256
-            )
+            [
+                row.version,
+                "/",
+                row.platform,
+                ") want=",
+                row.executable_sha256,
+                ";; ",
+            ]
+            .concat()
         })
         .collect::<String>();
     let fail = "printf \"%s\\n\" \"::error::";
     [
         "set -eu".to_owned(),
         format!("v=\"{version}\""),
-        "case \"${RUNNER_OS-}-${RUNNER_ARCH-}\" in Linux-X64) p=linux-x64;; Linux-ARM64) p=linux-arm64;; macOS-ARM64) p=macos-arm64;; *) p=unsupported;; esac".to_owned(),
+        "case \"${RUNNER_OS-}-${RUNNER_ARCH-}\" in Linux-X64) p=linux-x64;; Linux-ARM64) p=linux-arm64;; macOS-ARM64) p=macos-arm64;; macOS-X64) p=macos-x64;; *) p=unsupported;; esac".to_owned(),
         format!("case \"$v/$p\" in {cases}*) want=;; esac"),
         format!(
             "if [ -z \"$want\" ]; then if [ \"$v\" = \"{JACTIONLINT_VERSION}\" ]; then {fail}{NOT_CATALOGUED_CODE}: jactionlint $v on $p has no executable digest in this Velnor catalog\" >&2; exit 1; fi; printf \"%s\\n\" \"::notice::jactionlint $v on $p has no Velnor executable digest; the Mise release digest and GitHub attestation checks still applied\"; exit 0; fi"

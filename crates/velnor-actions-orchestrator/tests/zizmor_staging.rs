@@ -178,8 +178,8 @@ fn stage(preview: &Path, yaml: &str) -> Result<TempDir, Box<dyn std::error::Erro
     fs::create_dir_all(root.join(".github/workflows"))?;
     fs::write(root.join(WORKFLOW_PATH), yaml)?;
     fs::write(
-        root.join(".github/actionlint.yaml"),
-        fs::read(preview.join(".github/actionlint.yaml"))?,
+        root.join(".github/jactionlint.yaml"),
+        fs::read(preview.join(".github/jactionlint.yaml"))?,
     )?;
     for relative in [
         ".github/AGENTS.md",
@@ -253,7 +253,7 @@ fn velnor_policy_blessed_sha_validates_green() -> TestResult {
     assert_eq!(
         validated_by,
         vec![
-            "actionlint@1.7.12".to_owned(),
+            "jactionlint@2.3.0".to_owned(),
             "shellcheck@0.11.0".to_owned(),
             "zizmor@1.31.1".to_owned(),
         ]

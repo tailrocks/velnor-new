@@ -20,7 +20,7 @@
 pub struct JactionlintDigest {
     /// Exact jactionlint version.
     pub version: &'static str,
-    /// Mise platform (`linux-x64`, `linux-arm64`, `macos-arm64`).
+    /// Mise platform (`linux-x64`, `linux-arm64`, `macos-arm64`, `macos-x64`).
     pub platform: &'static str,
     /// Upstream release asset name.
     pub asset: &'static str,
@@ -53,6 +53,13 @@ pub const JACTIONLINT_DIGESTS: &[JactionlintDigest] = &[
         archive_sha256: "f96afa36578b21290203ae8df4fa7ac3bf5aba08ed288df28cb0530af7ca6e55",
         executable_sha256: "b6853a909613dc9381548b1d61d278e1c4b1ab8334212f67ea6efa46f1f5d34b",
     },
+    JactionlintDigest {
+        version: "2.3.0",
+        platform: "macos-x64",
+        asset: "jactionlint_2.3.0_darwin_amd64.tar.gz",
+        archive_sha256: "a61006b669ec0ab1266c73e3561eecf839537eb6e8b3b6be766a55ba17fcbe42",
+        executable_sha256: "1aa284dc8b12ebd6bee858dcbbfb94c0b92e457cd7e4bdaee07ae2b9238dba45",
+    },
 ];
 
 fn row(version: &str, platform: &str) -> Option<&'static JactionlintDigest> {
@@ -78,7 +85,7 @@ mod tests {
     use super::{JACTIONLINT_DIGESTS, jactionlint_archive_sha256, jactionlint_executable_sha256};
     use crate::catalog::{JACTIONLINT_VERSION, validate_concrete_exact_version};
 
-    const PLATFORMS: [&str; 3] = ["linux-arm64", "linux-x64", "macos-arm64"];
+    const PLATFORMS: [&str; 4] = ["linux-arm64", "linux-x64", "macos-arm64", "macos-x64"];
 
     fn is_sha256(value: &str) -> bool {
         value.len() == 64

@@ -52,7 +52,7 @@ fn repeated_generate_is_fixed_point() -> TestResult {
     assert_eq!(
         report.validated_by,
         vec![
-            "actionlint@1.7.12".to_owned(),
+            "jactionlint@2.3.0".to_owned(),
             "shellcheck@0.11.0".to_owned(),
             "zizmor@1.31.1".to_owned(),
         ],

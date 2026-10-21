@@ -311,7 +311,7 @@ fn tofu_validator_fold_marks_exact_set() -> TestResult {
     let reports = passing_reports(&plan)?;
     let matrix = serde_json::to_value(&plan.matrix)?;
     let plan_value = serde_json::to_value(&plan)?;
-    let inventory = json!(["plan", "actionlint", "tofu-stacks-a"]);
+    let inventory = json!(["plan", "jactionlint", "tofu-stacks-a"]);
     let run = |jobs: serde_json::Value| {
         let mut request = merge_request(
             &plan_value,
@@ -326,7 +326,7 @@ fn tofu_validator_fold_marks_exact_set() -> TestResult {
     // A missing tofu validator fails, and the report marks it missing.
     let jobs = json!([
         {"job_id": "plan", "conclusion": "success"},
-        {"job_id": "actionlint", "conclusion": "success"},
+        {"job_id": "jactionlint", "conclusion": "success"},
     ]);
     let report = run(jobs)?;
     assert_eq!(report.status, FinalStatus::PlanningFailed);
@@ -342,7 +342,7 @@ fn tofu_validator_fold_marks_exact_set() -> TestResult {
     // A failing tofu validator fails Required with its conclusion.
     let jobs = json!([
         {"job_id": "plan", "conclusion": "success"},
-        {"job_id": "actionlint", "conclusion": "success"},
+        {"job_id": "jactionlint", "conclusion": "success"},
         {"job_id": "tofu-stacks-a", "conclusion": "failure"},
     ]);
     assert_eq!(run(jobs)?.status, FinalStatus::Failed);
@@ -350,7 +350,7 @@ fn tofu_validator_fold_marks_exact_set() -> TestResult {
     // Exact coverage passes.
     let jobs = json!([
         {"job_id": "plan", "conclusion": "success"},
-        {"job_id": "actionlint", "conclusion": "success"},
+        {"job_id": "jactionlint", "conclusion": "success"},
         {"job_id": "tofu-stacks-a", "conclusion": "success"},
     ]);
     assert_eq!(run(jobs)?.status, FinalStatus::Passed);

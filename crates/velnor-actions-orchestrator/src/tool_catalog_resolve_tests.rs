@@ -53,13 +53,11 @@ fn resolves_config_only_rust_and_tool_overrides_with_rustup_export() {
     cfg.tools.overrides = BTreeMap::from([
         ("rust".to_owned(), "1.94.1".to_owned()),
         ("cargo-nextest".to_owned(), "0.9.150".to_owned()),
-        ("actionlint".to_owned(), "1.7.13".to_owned()),
         ("jactionlint".to_owned(), "2.3.1".to_owned()),
     ]);
     let catalog = resolve_tool_catalog(dir.path(), &cfg).expect("resolve");
     assert_eq!(catalog.version(PinnedTool::Rust), "1.94.1");
     assert_eq!(catalog.version(PinnedTool::Nextest), "0.9.150");
-    assert_eq!(catalog.version(PinnedTool::Actionlint), "1.7.13");
     assert_eq!(catalog.version(PinnedTool::Jactionlint), "2.3.1");
     assert!(!catalog.is_project_declared(PinnedTool::Jactionlint));
     assert!(catalog.exports_rustup_toolchain());
