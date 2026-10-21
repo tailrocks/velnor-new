@@ -19,9 +19,12 @@ use velnor_actions_workflow_renderer::shell_step;
 use super::ansible_inventory::{AnsibleRoot, CFG_NAME};
 use super::stack_support::{LockedArchive, bash, quote};
 use crate::OrchestratorError;
+use crate::workflow_task_jobs::stack_family_cache;
 
 /// Job-owned working directory at run time.
 const WORK: &str = "$RUNNER_TEMP/velnor/ansible";
+/// The `ansible-collections` family directory (verified tarballs).
+const COLLECTIONS_DIR: &str = "$RUNNER_TEMP/velnor/ansible-collections";
 const UV_URL_CHECK: &str = "want=\"https://github.com/astral-sh/uv/releases/download/${VELNOR_TOOL_UV}/uv-x86_64-unknown-linux-gnu.tar.gz\"; \
 if [ \"${url:-}\" != \"$want\" ]; then echo 'velnor: the mise.lock uv url is not the admitted archive' >&2; exit 1; fi";
 const PYTHON_URL_CHECK: &str = "prefix='https://github.com/astral-sh/python-build-standalone/releases/download/'; \
@@ -120,22 +123,27 @@ fn collections_step(
     catalog: &ToolCatalog,
     root: &AnsibleRoot,
 ) -> Result<Step, OrchestratorError> {
+    // The verified tarballs live in the family cache directory: a restored one
+    // is kept only when it still matches the declared SHA-256, otherwise it is
+    // downloaded again; either way it is verified before the offline install.
     let download = |collection: &AnsibleCollection| {
         let file = collection_file(collection);
         format!(
-            "curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --retry 3 -o \"$a/dl/{file}\" {url}; \
-printf '%s  %s\\n' '{sha}' \"$a/dl/{file}\" > \"$a/dl/{file}.sha256\"; sha256sum -c \"$a/dl/{file}.sha256\"; ",
+            "printf '%s  %s\\n' '{sha}' \"$c/{file}\" > \"$a/dl/{file}.sha256\"; \
+if [ ! -f \"$c/{file}\" ] || ! sha256sum -c \"$a/dl/{file}.sha256\" > /dev/null 2>&1; then rm -f \"$c/{file}\"; \
+curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --retry 3 -o \"$c/{file}\" {url}; \
+sha256sum -c \"$a/dl/{file}.sha256\"; fi; ",
             url = quote(&collection_url(collection)),
             sha = collection.sha256,
         )
     };
     let tarballs = collections
         .iter()
-        .map(|collection| format!("\"$a/dl/{}\"", collection_file(collection)))
+        .map(|collection| format!("\"$c/{}\"", collection_file(collection)))
         .collect::<Vec<_>>()
         .join(" ");
     let script = format!(
-        "set -euo pipefail; cd -P -- \"$GITHUB_WORKSPACE\"; {export}; a=\"{WORK}\"; rm -rf \"$a/dl\" \"$a/collections\"; mkdir -p \"$a/dl\" \"$a/collections\"; {downloads}\
+        "set -euo pipefail; cd -P -- \"$GITHUB_WORKSPACE\"; {export}; a=\"{WORK}\"; c=\"{COLLECTIONS_DIR}\"; rm -rf \"$a/dl\" \"$a/collections\"; mkdir -p \"$a/dl\" \"$a/collections\" \"$c\"; {downloads}\
 \"$a/venv/bin/ansible-galaxy\" collection install --offline --no-deps -p \"$a/collections\" {tarballs}",
         export = export_config(root),
         downloads = collections.iter().map(download).collect::<String>(),
@@ -227,11 +235,19 @@ pub(crate) fn root_steps(
             },
             catalog,
         )?,
-        environment_step(config, catalog)?,
-        config_step(catalog, root)?,
     ];
-    if !config.collections.is_empty() {
+    let venv = stack_family_cache::python_venv(&config.python_requirements);
+    let collections = (!config.collections.is_empty())
+        .then(|| stack_family_cache::ansible_collections(&config.collections));
+    let mut plans = vec![venv.clone()];
+    plans.extend(collections.clone());
+    steps.extend(stack_family_cache::prelude(&plans)?);
+    steps.push(environment_step(config, catalog)?);
+    steps.extend(stack_family_cache::after_producer(&venv)?);
+    steps.push(config_step(catalog, root)?);
+    if let Some(collections_plan) = &collections {
         steps.push(collections_step(&config.collections, catalog, root)?);
+        steps.extend(stack_family_cache::after_producer(collections_plan)?);
     }
     for check in config.effective_checks() {
         steps.push(match check {

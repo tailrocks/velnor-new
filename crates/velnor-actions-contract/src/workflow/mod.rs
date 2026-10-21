@@ -2,6 +2,7 @@
 pub mod artifacts;
 pub mod cache_family;
 pub mod cache_family_mbx;
+pub mod cache_family_steps;
 pub mod cache_ids;
 pub mod crate_job;
 mod dependency_seed;

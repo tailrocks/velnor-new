@@ -35,7 +35,7 @@ pub(super) fn install_selected_tools_script(
     ]);
     statements.extend(private_environment());
     statements.extend([
-        "export MISE_CEILING_PATHS=\"$task_root\"".to_owned(),
+        "export MISE_CEILING_PATHS=\"${task_root%/*}\"".to_owned(),
         "export MISE_TRUSTED_CONFIG_PATHS=\"$task_root\"".to_owned(),
         "export MISE_NO_HOOKS=1".to_owned(),
         format!("export {CARGO_BINSTALL_ONLY_ENV}=1"),
@@ -72,7 +72,7 @@ pub(super) fn source_guard_script(policy: &BuildTaskPolicy) -> Result<String, Re
     statements.extend(private_environment());
     statements.extend([
         "export MISE_TRUSTED_CONFIG_PATHS=\"$GITHUB_WORKSPACE\"".to_owned(),
-        "export MISE_CEILING_PATHS=\"$GITHUB_WORKSPACE\"".to_owned(),
+        "export MISE_CEILING_PATHS=\"$GITHUB_WORKSPACE/..\"".to_owned(),
         "export MISE_NO_HOOKS=1".to_owned(),
         format!("export {CARGO_BINSTALL_ONLY_ENV}=1"),
         "unset MISE_CONFIG_FILE MISE_ENV MISE_ENV_FILE".to_owned(),

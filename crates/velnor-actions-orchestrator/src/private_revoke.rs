@@ -5,7 +5,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::OrchestratorError;
-use crate::config::private_fetch_session::{Token, http_status, scrub_dir};
+use crate::config::private_fetch_http::http_status;
+use crate::config::private_fetch_session::{Token, scrub_dir};
 use crate::internal::internal;
 
 /// Status transport for the revoke; the real one is `curl` under the fetch policy.

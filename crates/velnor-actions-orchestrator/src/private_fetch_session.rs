@@ -8,14 +8,14 @@
 //! revoke step. The workspace forbids `unsafe`, which rules out inheriting a
 //! pipe descriptor into `git`, so a file stands in for the design's pipe.
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use velnor_actions_mise::MISE_GLOBAL_FLAGS;
 use velnor_actions_mise::command::IsolatedCommand;
-use velnor_actions_mise::{MISE_GLOBAL_FLAGS, PinnedTool, ToolCatalog};
 
 use crate::OrchestratorError;
 use crate::internal::internal;
@@ -23,9 +23,9 @@ use crate::internal::internal;
 /// GitHub REST API origin; every request is built from this constant.
 pub(crate) const API_ORIGIN: &str = "https://api.github.com";
 const API_VERSION: &str = "2022-11-28";
-const CURL_TIMEOUT_SECS: u64 = 900;
+pub(crate) const CURL_TIMEOUT_SECS: u64 = 900;
 const CARGO_TIMEOUT: Duration = Duration::from_mins(30);
-const CAPTURE_BYTES: usize = 1024 * 1024;
+pub(crate) const CAPTURE_BYTES: usize = 1024 * 1024;
 const GIT_USER: &str = "x-access-token";
 
 /// An installation token that never prints.
@@ -152,7 +152,7 @@ pub(crate) fn curl_config(
     Ok(text)
 }
 
-fn write_private(path: &Path, text: &str) -> Result<(), OrchestratorError> {
+pub(crate) fn write_private(path: &Path, text: &str) -> Result<(), OrchestratorError> {
     let io =
         |err: std::io::Error| OrchestratorError::io(path.display().to_string(), err.to_string());
     let mut options = fs::OpenOptions::new();
@@ -163,7 +163,7 @@ fn write_private(path: &Path, text: &str) -> Result<(), OrchestratorError> {
     file.write_all(text.as_bytes()).map_err(io)
 }
 
-fn create_private_dir(path: &Path) -> Result<(), OrchestratorError> {
+pub(crate) fn create_private_dir(path: &Path) -> Result<(), OrchestratorError> {
     let io =
         |err: std::io::Error| OrchestratorError::io(path.display().to_string(), err.to_string());
     fs::create_dir_all(path.parent().unwrap_or_else(|| Path::new("."))).map_err(io)?;
@@ -203,7 +203,6 @@ pub(crate) struct Session {
     dir: PathBuf,
     token: Token,
     owned_env: Vec<(String, String)>,
-    catalog: ToolCatalog,
     runner_temp: PathBuf,
     requests: std::cell::Cell<u32>,
 }
@@ -219,7 +218,6 @@ impl Session {
         owner: &str,
         repositories: &[String],
         owned_env: Vec<(String, String)>,
-        catalog: ToolCatalog,
     ) -> Result<Self, OrchestratorError> {
         let dir = runner_temp.join("velnor").join("private-fetch");
         scrub_dir(&dir)?;
@@ -228,7 +226,6 @@ impl Session {
             dir,
             token,
             owned_env,
-            catalog,
             runner_temp: runner_temp.to_owned(),
             requests: std::cell::Cell::new(0),
         };
@@ -248,7 +245,29 @@ impl Session {
         self.dir.join("gitconfig")
     }
 
-    /// The `cargo fetch --locked` child for one manifest.
+    /// One credential-free `mise` child under the private-fetch policy.
+    fn mise(&self, tail: &[&OsStr], cwd: PathBuf) -> Result<IsolatedCommand, OrchestratorError> {
+        let mut args: Vec<OsString> = MISE_GLOBAL_FLAGS.iter().map(OsString::from).collect();
+        args.extend(tail.iter().map(|arg| (*arg).to_owned()));
+        let git = self.git_config_file();
+        IsolatedCommand::private_fetch("mise", args, cwd, &git, &self.owned_env, None)
+            .map_err(|err| internal(&format!("private_mise_command:{err}")))
+    }
+
+    /// `mise where <rust>`, which fails for a missing toolchain. `mise exec`
+    /// only warns and runs the ambient `cargo` with the ambient `CARGO_HOME`.
+    pub(crate) fn rust_check_command(
+        &self,
+        rust: &str,
+    ) -> Result<IsolatedCommand, OrchestratorError> {
+        self.mise(
+            &["where".as_ref(), rust.as_ref()],
+            self.runner_temp.join("velnor"),
+        )
+    }
+
+    /// The `cargo fetch --locked` child for one manifest under `rust`
+    /// (`rust@<version>`, the project-declared toolchain).
     ///
     /// Runs from the runner-owned isolation directory so no repository
     /// `.cargo/config.toml` is read, with git configured through the Velnor
@@ -256,35 +275,30 @@ impl Session {
     pub(crate) fn cargo_fetch_command(
         &self,
         manifest: &Path,
+        rust: &str,
     ) -> Result<IsolatedCommand, OrchestratorError> {
         let isolation = self.runner_temp.join("velnor").join("cargo-clean");
         fs::create_dir_all(&isolation).map_err(|err| {
             OrchestratorError::io(isolation.display().to_string(), err.to_string())
         })?;
-        let mut args: Vec<OsString> = MISE_GLOBAL_FLAGS.iter().map(OsString::from).collect();
-        args.push(OsString::from("exec"));
-        args.push(OsString::from(self.catalog.tool_spec(PinnedTool::Rust)));
-        args.extend(
-            ["--", "cargo", "fetch", "--locked", "--manifest-path"]
-                .iter()
-                .map(OsString::from),
-        );
-        args.push(manifest.as_os_str().to_owned());
-        IsolatedCommand::private_fetch(
-            "mise",
-            args,
-            isolation,
-            &self.git_config_file(),
-            &self.owned_env,
-            None,
-        )
-        .map_err(|err| internal(&format!("private_cargo_fetch_command:{err}")))
+        let mut tail: Vec<&OsStr> = vec!["exec".as_ref(), rust.as_ref()];
+        tail.extend(["--", "cargo", "fetch", "--locked", "--manifest-path"].map(OsStr::new));
+        tail.push(manifest.as_os_str());
+        self.mise(&tail, isolation)
     }
 
-    /// Run `cargo fetch --locked` for one manifest.
-    pub(crate) fn cargo_fetch(&self, manifest: &Path) -> Result<(), OrchestratorError> {
+    /// Run `cargo fetch --locked` for one manifest once `rust` is proven installed.
+    pub(crate) fn cargo_fetch(&self, manifest: &Path, rust: &str) -> Result<(), OrchestratorError> {
+        let check = self
+            .rust_check_command(rust)?
+            .run_bounded(CAPTURE_BYTES, Duration::from_mins(1))
+            .map_err(|err| internal(&format!("private_rust_toolchain_spawn:{err}")))?;
+        if !check.success {
+            eprintln!("{}", String::from_utf8_lossy(&check.stderr));
+            return Err(internal(&format!("private_rust_toolchain_missing:{rust}")));
+        }
         let output = self
-            .cargo_fetch_command(manifest)?
+            .cargo_fetch_command(manifest, rust)?
             .run_bounded(CAPTURE_BYTES * 8, CARGO_TIMEOUT)
             .map_err(|err| internal(&format!("private_cargo_fetch_spawn:{err}")))?;
         if !output.success {
@@ -336,54 +350,6 @@ impl Drop for Session {
     fn drop(&mut self) {
         drop(scrub_dir(&self.dir));
     }
-}
-
-/// HTTP status of one authenticated request, body discarded.
-///
-/// # Errors
-/// Fails when curl cannot run or prints no numeric status.
-pub(crate) fn http_status(
-    runner_temp: &Path,
-    token: &Token,
-    method: &str,
-    route: &str,
-) -> Result<u16, OrchestratorError> {
-    let dir = runner_temp.join("velnor").join("private-revoke");
-    scrub_dir(&dir)?;
-    create_private_dir(&dir)?;
-    let result = (|| {
-        let file = dir.join("curl.conf");
-        let text = curl_config(
-            token,
-            method,
-            route,
-            "application/vnd.github+json",
-            Path::new("/dev/null"),
-            true,
-        )?
-        .replace("fail-with-body\n", "");
-        write_private(&file, &text)?;
-        let command = IsolatedCommand::private_fetch(
-            "curl",
-            vec![OsString::from("--config"), file.as_os_str().to_owned()],
-            dir.clone(),
-            &dir.join("unused-gitconfig"),
-            &[],
-            None,
-        )
-        .map_err(|err| internal(&format!("private_curl_command:{err}")))?;
-        let output = command
-            .run_bounded(CAPTURE_BYTES, Duration::from_secs(CURL_TIMEOUT_SECS))
-            .map_err(|err| internal(&format!("private_curl_spawn:{err}")))?;
-        String::from_utf8_lossy(&output.stdout)
-            .trim()
-            .parse::<u16>()
-            .map_err(|_| internal("private_http_status_unreadable"))
-    })();
-    let cleanup = scrub_dir(&dir);
-    let status = result?;
-    cleanup?;
-    Ok(status)
 }
 
 #[cfg(test)]
