@@ -63,6 +63,7 @@ pub(super) enum BindMountKind {
 }
 
 impl BindMount {
+    #[cfg(test)]
     pub(super) fn action_archive(source: String) -> Self {
         Self {
             source,
