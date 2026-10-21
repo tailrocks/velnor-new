@@ -87,6 +87,7 @@ fn tofu_cross_checkout_determinism() -> TestResult {
                 ".github/actions/velnor-tools-cache-restore/action.yml",
                 ".github/actions/velnor-tools-prelude-u26/action.yml",
                 ".github/scripts/velnor-tools-cache-identity.sh",
+                ".github/workflows/cache-prune.yml",
                 ".github/workflows/ci.yml",
             ],
             "tofu workflows compose with generated agent docs (PR #11)"
