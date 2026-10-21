@@ -300,44 +300,47 @@ async fn assert_capacity_probe_retired(
     Ok(())
 }
 
-async fn finish_and_assert_storage_volumes_removed(
+fn finish_and_assert_storage_volumes_removed(
     failure: crate::launch::steps::RunnerCreateFailure,
-) -> Result<(), String> {
-    let expected = failure.journaled_volume_expectations().await?;
-    let connection_id = failure.binding().connection_id.as_str().to_owned();
-    let reservation_id = failure.reservation_id();
-    let captured = failure.finish().await?;
-    if let Some(error) = captured.server_error {
-        return Err(format!("The Docker fixture failed. Error: {error}."));
-    }
-    crate::launch::steps::RunnerCreateFailure::assert_journaled_volume_create_requests(
-        &expected,
-        &connection_id,
-        reservation_id,
-        &captured.requests,
-    )?;
-    let mut created = captured
-        .requests
-        .iter()
-        .filter(|request| request.method == "POST" && request.target.starts_with("/volumes/create"))
-        .map(|request| {
-            let body: serde_json::Value =
-                serde_json::from_slice(&request.body).map_err(|error| error.to_string())?;
-            body["Name"]
-                .as_str()
-                .map(str::to_owned)
-                .ok_or_else(|| "A journaled storage create has no volume name.".to_owned())
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    created.sort_unstable();
-    created.dedup();
-    if created.len() != 5 {
-        return Err(format!(
-            "The acquired bootstrap must create each of its five journaled volumes once; found {}.",
-            created.len()
-        ));
-    }
-    let mut removed = captured
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), String>>>> {
+    Box::pin(async move {
+        let expected = failure.journaled_volume_expectations().await?;
+        let connection_id = failure.binding().connection_id.as_str().to_owned();
+        let reservation_id = failure.reservation_id();
+        let captured = failure.finish().await?;
+        if let Some(error) = captured.server_error {
+            return Err(format!("The Docker fixture failed. Error: {error}."));
+        }
+        crate::launch::steps::RunnerCreateFailure::assert_journaled_volume_create_requests(
+            &expected,
+            &connection_id,
+            reservation_id,
+            &captured.requests,
+        )?;
+        let mut created = captured
+            .requests
+            .iter()
+            .filter(|request| {
+                request.method == "POST" && request.target.starts_with("/volumes/create")
+            })
+            .map(|request| {
+                let body: serde_json::Value =
+                    serde_json::from_slice(&request.body).map_err(|error| error.to_string())?;
+                body["Name"]
+                    .as_str()
+                    .map(str::to_owned)
+                    .ok_or_else(|| "A journaled storage create has no volume name.".to_owned())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        created.sort_unstable();
+        created.dedup();
+        if created.len() != 5 {
+            return Err(format!(
+                "The acquired bootstrap must create each of its five journaled volumes once; found {}.",
+                created.len()
+            ));
+        }
+        let mut removed = captured
         .requests
         .iter()
         .filter(|request| request.method == "DELETE" && request.target.starts_with("/volumes/"))
@@ -369,11 +372,12 @@ async fn finish_and_assert_storage_volumes_removed(
             Ok(name.to_owned())
         })
         .collect::<Result<Vec<_>, _>>()?;
-    removed.sort_unstable();
-    if removed != created {
-        return Err(format!(
-            "Cleanup did not delete exactly the five journaled storage volumes: {removed:?}."
-        ));
-    }
-    Ok(())
+        removed.sort_unstable();
+        if removed != created {
+            return Err(format!(
+                "Cleanup did not delete exactly the five journaled storage volumes: {removed:?}."
+            ));
+        }
+        Ok(())
+    })
 }
