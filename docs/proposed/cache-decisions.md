@@ -1,7 +1,7 @@
 # Cache redesign decisions
 
 Status: adopted by the human owner for the CI cache redesign (seven decisions,
-recorded 2026-10-20; decision 8 adopted per the split brief, owner may revisit). Each decision below states what main implements now and
+recorded 2026-10-20; decisions 8 and 9 adopted per the split brief, owner may revisit). Each decision below states what main implements now and
 what the follow-up PRs deliver. This page is the decision record that
 [`cache-contract.md`](cache-contract.md) section 2 and
 [`hard-decisions.md`](../hard-decisions.md) decision 1 cite. A change to any
@@ -26,6 +26,7 @@ Successful and failed jobs are both covered: see decision 1 and the cases table.
 | 6 | **Drop ImageVersion from keys.** Runner image version is not part of any cache identity. `ImageOS`, runner OS and architecture, and the toolchain digest remain. | **Implemented** (platform identity, qualification runtime platform, tools runtime identity `velnor-tools-runtime-v3`). | None. |
 | 7 | **Reword hard decision 1.** Lanes live in the dependency-seed family and the MBX bundle, not in a target-mode payload. The seed job is not a crate job: it runs no checks, is excluded from Required, and the one-job-per-crate rule governs crate jobs only. | Wording updated with this record. | None. |
 | 8 | **Bun families.** `bun-install` (Bun package cache, keyed by `bun.lock`) and `playwright-browsers` (hash-pinned browser install, `trusted` writers only) join the typed families, each with a size ceiling and retained-entry count under the budget rule. `node_modules` is never cached. | Specs, ceilings, pins, the budget test and the fail-closed cache-doctor arms are implemented ([cache families](cache-families.md)). | Plan-job keys, restore and save steps in Bun jobs, per-family pruning. |
+| 9 | **dbt and Ansible families.** `dbt-packages` (per project, keyed by `package-lock.yml`), `python-venv` (uv wheel cache, keyed by the hash-pinned requirements file) and `ansible-collections` (verified tarballs, keyed by the declared set) join the typed families with ceilings under the budget rule; `trusted` writers only; every restored byte is re-verified against a committed hash or lock. | Specs, ceilings, pins, the budget test and the fail-closed cache-doctor arms are implemented ([cache families](cache-families.md)). | Plan-job keys, restore and save steps in the dbt and Ansible jobs, per-family pruning. |
 
 ## Cases the design covers
 
