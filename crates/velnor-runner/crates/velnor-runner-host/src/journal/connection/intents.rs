@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 //! Connection-scoped idempotent intents.
 
 use crate::error::HostError;

@@ -2,7 +2,9 @@
 
 use crate::error::HostError;
 
+#[cfg(test)]
 use super::super::storage::read_transaction;
+#[cfg(test)]
 use super::super::{AssignmentIdentity, ConnectionJournal};
 
 /// Durable capacity state of one assignment.
@@ -35,6 +37,7 @@ pub(crate) struct ReservationSnapshot {
     pub(crate) memory_bytes: u64,
 }
 
+#[cfg(test)]
 impl ConnectionJournal {
     /// Read one assignment's scoped reservation without changing charge or permit state.
     pub(crate) async fn reservation(
