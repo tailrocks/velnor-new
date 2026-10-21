@@ -15,7 +15,7 @@ use super::super::projection::{DockerRoot, ProbeProjection, VerifiedProbeImage};
 use super::super::provider::{
     VerifiedCandidate, daemon_architecture as provider_daemon_architecture, daemon_platform_matches,
 };
-use super::super::sample::Observation;
+use super::super::sample::{Observation, ObservationInput};
 use super::PROBE_TIMEOUT;
 
 pub(in crate::launch::resource_probe) fn observation(
@@ -25,17 +25,17 @@ pub(in crate::launch::resource_probe) fn observation(
     engine_id: String,
     root_digest: String,
 ) -> Option<Observation> {
-    Observation::new(
-        output.record,
-        cpu_count,
-        output.container_host_pid,
-        memory_total,
+    Observation::new(ObservationInput {
+        record: output.record,
+        cpus: cpu_count,
+        inspected_host_pid: output.container_host_pid,
+        memory_total_bytes: memory_total,
         engine_id,
-        root_digest,
-        output.sample_generation_id,
-        output.observed_at,
-        output.startup_evidence?,
-    )
+        docker_root_digest: root_digest,
+        sample_generation_id: output.sample_generation_id,
+        observed_at: output.observed_at,
+        startup_evidence: output.startup_evidence?,
+    })
 }
 
 pub(super) fn verified_image(
