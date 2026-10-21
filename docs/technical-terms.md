@@ -128,6 +128,8 @@
 | MBX bundle | A set of cache files that MBX exports or imports as one unit. |
 | PAX metadata | Additional file information stored in a tar archive. |
 | Dependency seed | A job that compiles a workspace and saves an MBX bundle for crate jobs to restore. |
+| Mirror | A server that supplies a copy of the same file. |
+| Cache pruning | Removal of older cache entries under a retention policy. |
 | dbt adapter | A dbt component that connects a project to a database. |
 | Event payload | JSON data that describes a GitHub event. |
 | Operational reserve | CPU and memory capacity kept available for operational work. |

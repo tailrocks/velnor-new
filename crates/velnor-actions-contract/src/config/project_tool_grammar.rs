@@ -7,13 +7,14 @@ use std::collections::BTreeSet;
 pub const JAVA_TOOL_VARIABLE: &str = "VELNOR_TOOL_JAVA";
 
 /// Variable of the dbt-fusion declaration, whose grammar is the adapter-specific
-/// HD-4a form `X.Y.Z-preview.N` instead of exact `X.Y.Z`.
+/// HD-4a form `X.Y.Z-preview.N` or stable `X.Y.Z`.
 pub const DBT_FUSION_TOOL_VARIABLE: &str = "VELNOR_TOOL_DBT_FUSION";
 
 /// Exact-grammar checker of the JDK declaration (HD-4a), appended only for jobs that reference the JDK.
 ///
 /// `velnor_exact_java` accepts exactly
-/// `<vendor>-<X.Y.Z>[+<build>[.<n>]*][.LTS]` over `[A-Za-z0-9.+-]`, so the
+/// `<vendor>-<X.Y.Z[.N]*>[+<build>[.<n>]*][.LTS]` (three or more numeric parts,
+/// as Oracle `GraalVM` `25.0.4.1.1`) over `[A-Za-z0-9.+-]`, so the
 /// single-line `$GITHUB_ENV` write cannot be injected.
 const JAVA_FUNCTIONS: &str = r#"velnor_exact_java() {
   v=$2
@@ -29,7 +30,11 @@ const JAVA_FUNCTIONS: &str = r#"velnor_exact_java() {
   core=${rest%%+*}
   build=
   case "$rest" in *+*) build=${rest#*+}; [ -n "$build" ] || velnor_fail "$1 has an empty build in '$(velnor_safe "$v")'" ;; esac
-  velnor_exact "$1" "$core"
+  case "$core" in
+    ''|*[!0-9.]*|.*|*.|*..*|0[0-9]*|*.0[0-9]*) velnor_fail "$1 must declare an exact JDK version of three or more numeric parts, not '$(velnor_safe "$v")'" ;;
+    *.*.*) ;;
+    *) velnor_fail "$1 must declare an exact JDK version of three or more numeric parts, not '$(velnor_safe "$v")'" ;;
+  esac
   case "$build" in
     '') ;;
     *[!0-9.]*|.*|*.|*..*) velnor_fail "$1 has a malformed build in '$(velnor_safe "$v")'" ;;
@@ -39,14 +44,17 @@ const JAVA_FUNCTIONS: &str = r#"velnor_exact_java() {
 
 /// dbt-fusion checker (HD-4a), appended only for jobs that reference it.
 ///
-/// `velnor_exact_fusion` accepts exactly `X.Y.Z-preview.N` over `[A-Za-z0-9.-]`,
+/// `velnor_exact_fusion` accepts exactly `X.Y.Z-preview.N` or the stable `X.Y.Z` over `[A-Za-z0-9.-]`,
 /// so the single-line `$GITHUB_ENV` write cannot be injected.
 const FUSION_FUNCTIONS: &str = r#"velnor_exact_fusion() {
   v=$2
   case "$v" in
-    ''|*[!A-Za-z0-9.-]*) velnor_fail "$1 must declare an exact dbt-fusion such as 2.0.0-preview.219, not '$(velnor_safe "$v")'" ;;
+    ''|*[!A-Za-z0-9.-]*) velnor_fail "$1 must declare an exact dbt-fusion such as 2.0.9 or 2.0.0-preview.219, not '$(velnor_safe "$v")'" ;;
   esac
-  case "$v" in *-preview.*) ;; *) velnor_fail "$1 must be X.Y.Z-preview.N, not '$(velnor_safe "$v")'" ;; esac
+  case "$v" in
+    *-*) case "$v" in *-preview.*) ;; *) velnor_fail "$1 must be X.Y.Z or X.Y.Z-preview.N, not '$(velnor_safe "$v")'" ;; esac ;;
+    *) velnor_exact "$1" "$v"; return 0 ;;
+  esac
   core=${v%%-preview.*}
   number=${v#*-preview.}
   velnor_exact "$1" "$core"

@@ -12,6 +12,8 @@ pub mod cache_elect;
 pub mod cache_p08;
 mod cache_p08_detect;
 mod cache_plan_outputs;
+pub mod cache_prune;
+mod cache_rest_client;
 mod cache_save_budget;
 mod cache_steps;
 mod cache_tar_action;

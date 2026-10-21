@@ -38,9 +38,11 @@ Wrapper gate details:
    Snapshots, release candidates, other hosts and query strings fail.
 2. `distributionSha256Sum` must be present and equal the catalog digest for
    that version and flavour. The catalog (`catalog`) holds the official
-   `services.gradle.org` digests and was read on 2026-10-20; rows are added by
-   hand with their evidence date until `velnor-actions-freshness` maintains
-   them. The digest is never taken from the repository under test.
+   `services.gradle.org` digests. The catalog was read on 2026-10-20.
+   On 2026-10-21, it was extended through 9.8.2, including every final release after 9.5.1.
+   Do not type rows by hand.
+   `scripts/refresh-gradle-catalog.sh <version>...` prints rows from the official `.sha256` files.
+   Use this script until `velnor-actions-freshness` maintains the rows. The digest is never taken from the repository under test.
 3. The SHA-256 of `gradle/wrapper/gradle-wrapper.jar` must be an official
    wrapper-jar digest.
 
@@ -56,7 +58,9 @@ All three are adopted per the split brief; the owner may revisit.
 
 **HD-4a, adapter-specific exact version grammars.** Hard decision 4's "exact
 `X.Y.Z`" is widened per adapter, never loosened: `java` accepts
-`<vendor>-<X.Y.Z>[+<build>[.<n>]*][.LTS]` (vendor one of `temurin`,
+`<vendor>-<X.Y.Z[.N]*>[+<build>[.<n>]*][.LTS]` (three or more numeric parts,
+because Oracle GraalVM versions are `25.0.4.1.1`; the Java feature version
+is the first part; vendor one of `temurin`,
 `oracle-graalvm`, `graalvm-community`, `corretto`, `zulu`); Gradle accepts
 `N.N` or `N.N.N` from the wrapper URL. Majors, `lts`, `latest`, ranges,
 templates and leading zeros still fail with `project_tool_version_not_exact`;

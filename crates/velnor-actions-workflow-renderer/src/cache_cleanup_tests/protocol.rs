@@ -30,7 +30,7 @@ fn rest_client_lists_every_exact_ref_before_deleting_ids() {
         ),
     ];
     let server = thread::spawn(move || serve(&listener, &exchanges));
-    let output = run_client(CLIENT, &format!("http://{address}"));
+    let output = run_client(&super::client_script(), &format!("http://{address}"));
     let requests = server
         .join()
         .expect("The mock API thread did not complete.");
@@ -77,7 +77,7 @@ fn client_rejects_a_mismatched_ref_before_any_delete() {
             r#"{"total_count":1,"actions_caches":[{"id":11,"ref":"refs/heads/main"}]}"#,
         );
     });
-    let output = run_client(CLIENT, &format!("http://{address}"));
+    let output = run_client(&super::client_script(), &format!("http://{address}"));
     server
         .join()
         .expect("The mock API thread did not complete.");
@@ -113,7 +113,7 @@ fn client_does_not_follow_redirects_with_the_token() {
         )
         .expect("The mock API could not write the redirect response.");
     });
-    let output = run_client(CLIENT, &format!("http://{address}"));
+    let output = run_client(&super::client_script(), &format!("http://{address}"));
     server
         .join()
         .expect("The mock API thread did not complete.");
@@ -183,7 +183,7 @@ fn delete_failures_are_reported_and_fail_the_workflow() {
         ),
     ];
     let server = thread::spawn(move || serve(&listener, &exchanges));
-    let output = run_client(CLIENT, &format!("http://{address}"));
+    let output = run_client(&super::client_script(), &format!("http://{address}"));
     let requests = server
         .join()
         .expect("The mock API thread did not complete.");
@@ -202,7 +202,7 @@ fn client_stops_after_the_page_limit() {
         .local_addr()
         .expect("The test could not read the mock API address.");
     let server = thread::spawn(move || serve_short_pages(&listener));
-    let output = run_client(CLIENT, &format!("http://{address}"));
+    let output = run_client(&super::client_script(), &format!("http://{address}"));
     let requests = server
         .join()
         .expect("The mock API thread did not complete.");
@@ -219,7 +219,7 @@ fn client_enforces_its_total_response_budget() {
         .local_addr()
         .expect("The test could not read the mock API address.");
     let server = thread::spawn(move || serve_large_pages(&listener));
-    let output = run_client(CLIENT, &format!("http://{address}"));
+    let output = run_client(&super::client_script(), &format!("http://{address}"));
     let requests = server
         .join()
         .expect("The mock API thread did not complete.");
@@ -230,8 +230,12 @@ fn client_enforces_its_total_response_budget() {
 
 #[test]
 fn client_stops_before_network_access_after_its_deadline() {
-    let script = CLIENT.replace("if __name__ == \"__main__\":\n    main()", "main(0)");
-    assert_ne!(script, CLIENT);
+    let client = super::client_script();
+    let script = client.replace(
+        "if __name__ == \"__main__\":\n    main()",
+        "time.monotonic = iter((100, 311)).__next__\n\nif __name__ == \"__main__\":\n    main()",
+    );
+    assert_ne!(script, client);
     let output = run_client(&script, "https://api.github.com");
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("deadline_exceeded"));

@@ -204,7 +204,11 @@ fn per_job_mise_keys_qualified_without_job_suffix() -> TestResult {
                 .iter()
                 .map(|(job, _)| job.as_str())
                 .collect::<Vec<_>>(),
-            ["actionlint", "plan", "rust-a", "rust-b"],
+            if mbx {
+                vec!["actionlint", "dependency-seed", "plan", "rust-a", "rust-b"]
+            } else {
+                vec!["actionlint", "plan", "rust-a", "rust-b"]
+            },
             "each tool consumer has one cache key (mbx={mbx})"
         );
         for (job, key) in &pairs {
@@ -228,6 +232,13 @@ fn per_job_mise_keys_qualified_without_job_suffix() -> TestResult {
             a, b,
             "the package tool sets have the same key (mbx={mbx}): {pairs:?}"
         );
+        if mbx {
+            assert_eq!(
+                key_for("dependency-seed"),
+                a,
+                "The dependency seed must use the shared qualified cache key."
+            );
+        }
     }
     Ok(())
 }

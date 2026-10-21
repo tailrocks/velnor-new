@@ -14,7 +14,9 @@ use velnor_actions_orchestrator::{
 };
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
-use super::impl_common::{TestResult, config_with_branch, err_of, make_repo, snapshot};
+use super::impl_common::{
+    GENERATED_TASK_FILES, TestResult, config_with_branch, err_of, make_repo, snapshot,
+};
 
 #[path = "impl_generate_p09_preview_contract.rs"]
 mod contract;
@@ -220,11 +222,17 @@ fn concurrent_generate_lock_refused() -> TestResult {
     assert_eq!(fs::read(github.join("workflows/old.yml"))?, b"old: true\n");
     fs::remove_dir(root.join(".github.velnor-generate.lock"))?;
     let report = generate(&prep, &opts)?;
+    let expected = GENERATED_TASK_FILES
+        .into_iter()
+        .collect::<std::collections::BTreeSet<_>>();
+    let actual = report
+        .files_written
+        .iter()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(
-        report.files_written.len(),
-        12,
-        "lock removal unblocks with generated task assets: {:?}",
-        report.files_written
+        actual, expected,
+        "Removing the lock must permit generation of the expected task files."
     );
     assert!(
         report

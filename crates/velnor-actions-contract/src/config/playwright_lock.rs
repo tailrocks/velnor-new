@@ -24,6 +24,15 @@ pub const PLAYWRIGHT_DOWNLOAD_HOSTS: [&str; 2] = [
     "cdn.playwright.dev",
     "playwright.download.prss.microsoft.com",
 ];
+/// Playwright's `PLAYWRIGHT_CDN_MIRRORS`, in registry order
+/// (`packages/playwright-core/src/server/registry/index.ts`, v1.64.1).
+pub const PLAYWRIGHT_CDN_MIRRORS: [&str; 3] = [
+    "https://cdn.playwright.dev/dbazure/download/playwright",
+    "https://playwright.download.prss.microsoft.com/dbazure/download/playwright",
+    "https://cdn.playwright.dev",
+];
+/// Path prefix whose archives Playwright serves from `cdn.playwright.dev` only (`cftUrl`).
+const PLAYWRIGHT_SINGLE_MIRROR_PREFIX: &str = "builds/cft/";
 /// Internal operation of the Playwright browser install step (HD-6).
 pub const PLAYWRIGHT_INSTALL_OPERATION: &str = "playwright-browsers-install-v1";
 /// Largest archive the install accepts (bytes).
@@ -214,6 +223,35 @@ impl PlaywrightLock {
         }
         Ok(selected)
     }
+}
+
+/// Return download URLs for a locked archive.
+/// The locked URL comes first, followed by the other mirrors in Playwright registry order.
+/// Archives under `builds/cft/` use only the locked URL.
+/// The original URL is returned unchanged.
+/// Additional URLs pass [`is_playwright_download_url`].
+/// If the original URL does not match a known mirror, the function returns only that URL.
+/// The caller's expected SHA-256 and size do not change with the host.
+#[must_use]
+pub fn playwright_download_candidates(url: &str) -> Vec<String> {
+    let mut candidates = vec![url.to_owned()];
+    let path = PLAYWRIGHT_CDN_MIRRORS.iter().find_map(|mirror| {
+        url.strip_prefix(mirror)
+            .and_then(|rest| rest.strip_prefix('/'))
+    });
+    let Some(path) = path else {
+        return candidates;
+    };
+    if path.starts_with(PLAYWRIGHT_SINGLE_MIRROR_PREFIX) {
+        return candidates;
+    }
+    for mirror in PLAYWRIGHT_CDN_MIRRORS {
+        let candidate = format!("{mirror}/{path}");
+        if !candidates.contains(&candidate) && is_playwright_download_url(&candidate) {
+            candidates.push(candidate);
+        }
+    }
+    candidates
 }
 
 /// The `directory:sha256` pin list the install step carries literally.
