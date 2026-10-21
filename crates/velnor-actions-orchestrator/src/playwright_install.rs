@@ -16,6 +16,7 @@ use std::time::Duration;
 use velnor_actions_bun::parse_lock;
 use velnor_actions_contract::config::playwright_lock::{
     PLAYWRIGHT_MAX_ARCHIVE_BYTES, PlaywrightLock, is_browser_directory, is_playwright_download_url,
+    playwright_download_candidates,
 };
 use velnor_actions_mise::{CheckDeadline, IsolatedCommand};
 use velnor_actions_workflow_renderer::verification_jobs::{
@@ -203,6 +204,46 @@ fn is_installed(directory: &Path, sha256: &str) -> bool {
         && fs::read_to_string(directory.join(PIN_MARKER)).is_ok_and(|text| text.trim() == sha256)
 }
 
+/// Fetch `archive` to `file` from its locked URL, then the Playwright mirrors
+/// for the same artifact. Each host gets the transport's own retries; the lock's
+/// sha256 and size must match whichever host served the bytes.
+fn download_verified(
+    downloader: &dyn Downloader,
+    archive: &velnor_actions_contract::config::playwright_lock::LockedArchive,
+    file: &Path,
+) -> Result<(), OrchestratorError> {
+    let mut failure = internal("playwright_download_failed");
+    for url in playwright_download_candidates(&archive.url) {
+        let host = url
+            .strip_prefix("https://")
+            .and_then(|rest| rest.split('/').next())
+            .unwrap_or("?");
+        if let Err(err) = downloader.download(&url, file, PLAYWRIGHT_MAX_ARCHIVE_BYTES) {
+            eprintln!(
+                "velnor: playwright {} download from {host} failed",
+                archive.directory
+            );
+            failure = err;
+            continue;
+        }
+        let (actual, bytes) = hash_file(file, PLAYWRIGHT_MAX_ARCHIVE_BYTES)?;
+        if actual == archive.sha256 && bytes == archive.bytes {
+            println!(
+                "velnor: playwright {} downloaded from {host}",
+                archive.directory
+            );
+            return Ok(());
+        }
+        fs::remove_file(file).map_err(|err| io_error(file, &err))?;
+        eprintln!(
+            "velnor: playwright {} from {host} rejected: digest mismatch",
+            archive.directory
+        );
+        failure = internal(&format!("playwright_sha256_mismatch:{}", archive.directory));
+    }
+    Err(failure)
+}
+
 /// Install every pinned archive; returns how many were downloaded.
 ///
 /// # Errors
@@ -232,15 +273,7 @@ pub(crate) fn install(
         }
         let name = archive.url.clone();
         let file = downloads.join(format!("{}.zip", archive.directory));
-        downloader.download(&name, &file, PLAYWRIGHT_MAX_ARCHIVE_BYTES)?;
-        let (actual, bytes) = hash_file(&file, PLAYWRIGHT_MAX_ARCHIVE_BYTES)?;
-        if actual != archive.sha256 || bytes != archive.bytes {
-            fs::remove_file(&file).map_err(|err| io_error(&file, &err))?;
-            return Err(internal(&format!(
-                "playwright_sha256_mismatch:{}",
-                archive.directory
-            )));
-        }
+        download_verified(downloader, archive, &file)?;
         let partial = browsers.join(format!("{}.partial", archive.directory));
         if partial.exists() {
             fs::remove_dir_all(&partial).map_err(|err| io_error(&partial, &err))?;

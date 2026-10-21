@@ -233,7 +233,16 @@ hash-pinned lock. Decisions:
   `INSTALLATION_COMPLETE` and `velnor-sha256`. A directory that already carries
   the pinned digest (a restored cache) is reused; any other is replaced. URLs
   must be https on `cdn.playwright.dev` or
-  `playwright.download.prss.microsoft.com`. It holds no credential.
+  `playwright.download.prss.microsoft.com`. It tries the locked URL first, then
+  the other mirrors Playwright's registry uses for the same artifact
+  (`PLAYWRIGHT_CDN_MIRRORS` in `packages/playwright-core/src/server/registry/index.ts`,
+  v1.64.1: `cdn.playwright.dev/dbazure/download/playwright`,
+  `playwright.download.prss.microsoft.com/dbazure/download/playwright`,
+  `cdn.playwright.dev`, in that order; `builds/cft/` archives have no mirror
+  upstream and get none). Each host keeps curl's own retries and backoff, the
+  host that served the bytes is logged, and the lock's SHA-256 and size must
+  match whichever host answered: a fallback changes only where the bytes come
+  from. It holds no credential.
 - Script steps of such a member get `PLAYWRIGHT_BROWSERS_PATH`,
   `PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu26.04-x64` and
   `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`, so Playwright cannot fetch or choose
