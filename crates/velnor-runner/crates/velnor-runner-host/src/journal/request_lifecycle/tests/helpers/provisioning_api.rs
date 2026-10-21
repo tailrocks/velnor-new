@@ -1,3 +1,6 @@
+use std::future::Future;
+use std::pin::Pin;
+
 pub(crate) async fn provision_acquired_request_with_initialization(
     scope: &ConnectionJournal,
     request_id: i64,
@@ -125,14 +128,34 @@ pub(crate) async fn provision_acquired_request_with_initialization_and_filesyste
     .await
 }
 
-async fn provision_assignment_with_initialization(
-    scope: &ConnectionJournal,
+fn provision_assignment_with_initialization<'a>(
+    scope: &'a ConnectionJournal,
     assignment: crate::journal::AssignmentIdentity,
     request: Option<crate::journal::AssignmentIdentity>,
     nonce: char,
     sample_nonce: char,
     filesystem_instance_digest: Option<String>,
-    engine_id: &str,
+    engine_id: &'a str,
+) -> Pin<Box<dyn Future<Output = Result<JobFactsReaderFixture, HostError>> + Send + 'a>> {
+    Box::pin(provision_assignment_with_initialization_inner(
+        scope,
+        assignment,
+        request,
+        nonce,
+        sample_nonce,
+        filesystem_instance_digest,
+        engine_id,
+    ))
+}
+
+async fn provision_assignment_with_initialization_inner<'a>(
+    scope: &'a ConnectionJournal,
+    assignment: crate::journal::AssignmentIdentity,
+    request: Option<crate::journal::AssignmentIdentity>,
+    nonce: char,
+    sample_nonce: char,
+    filesystem_instance_digest: Option<String>,
+    engine_id: &'a str,
 ) -> Result<JobFactsReaderFixture, HostError> {
     use crate::journal::{
         ReservationRequest, ReservationResult, fixture_storage_provisioning_admission_for_profile,
