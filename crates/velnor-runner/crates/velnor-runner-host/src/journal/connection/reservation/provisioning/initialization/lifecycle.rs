@@ -233,7 +233,7 @@ impl ConnectionJournal {
                 engine_id: row.get(4).map_err(|_| HostError::Journal)?, docker_root_digest: row.get(5).map_err(|_| HostError::Journal)?,
                 image_runtime_id: row.get(6).map_err(|_| HostError::Journal)?, image_source_sha: row.get(7).map_err(|_| HostError::Journal)?,
                 home_volume: row.get(8).map_err(|_| HostError::Journal)?, work_volume: row.get(9).map_err(|_| HostError::Journal)?,
-                nano_cpus: row.get(10).map_err(|_| HostError::Journal)?, memory_bytes: row.get(11).map_err(|_| HostError::Journal)?, pids_limit: row.get(12).map_err(|_| HostError::Journal)?, abort_helper_id: row.get(13).map_err(|_| HostError::Journal)?, abort_claim_generation: row.get(14).map_err(|_| HostError::Journal)?, helper_id: row.get(15).map_err(|_| HostError::Journal)?, start_state: row.get(16).map_err(|_| HostError::Journal)?, result_state: row.get(17).map_err(|_| HostError::Journal)?, remove_state: row.get(18).map_err(|_| HostError::Journal)?,
+                nano_cpus: row.get(10).map_err(|_| HostError::Journal)?, memory_bytes: row.get(11).map_err(|_| HostError::Journal)?, pids_limit: row.get(12).map_err(|_| HostError::Journal)?, abort_helper_id: row.get(13).map_err(|_| HostError::Journal)?, abort_claim_generation: row.get(14).map_err(|_| HostError::Journal)?, helper_id: row.get(15).map_err(|_| HostError::Journal)?,
                 layout_version: row.get(19).map_err(|_| HostError::Journal)?, metadata_volume: row.get(20).map_err(|_| HostError::Journal)?, metadata_volume_id: row.get(21).map_err(|_| HostError::Journal)?,
             };
             if claim.operation_id != context.operation_id

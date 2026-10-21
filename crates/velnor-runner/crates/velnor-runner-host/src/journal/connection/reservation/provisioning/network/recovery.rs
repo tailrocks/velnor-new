@@ -45,6 +45,7 @@ impl ConnectionJournal {
                 docker_root_digest: row.get(2).map_err(|_| HostError::Journal)?,
                 network_name: row.get(3).map_err(|_| HostError::Journal)?,
                 network_id: row.get(4).map_err(|_| HostError::Journal)?, labels,
+                #[cfg(test)]
                 create_state: row.get(6).map_err(|_| HostError::Journal)?,
                 remove_state: row.get(7).map_err(|_| HostError::Journal)?,
             }))

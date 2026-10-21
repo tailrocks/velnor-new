@@ -77,7 +77,6 @@ pub(crate) struct PreJitBootstrapContainer {
     name: String,
     id: Option<String>,
     create_state: String,
-    start_state: String,
 }
 
 impl PreJitBootstrapContainer {
@@ -157,12 +156,6 @@ pub(crate) struct PreJitInitializerIdentity {
     work_volume: String,
     metadata_volume: String,
     metadata_volume_id: Option<String>,
-    create_dispatch_state: String,
-    create_state: String,
-    start_state: String,
-    result_state: String,
-    remove_state: String,
-    abort_state: String,
     cpu_nano: i64,
     memory_bytes: i64,
     pids_limit: i64,
@@ -329,12 +322,6 @@ async fn read_initializer(
         work_volume: row.get(10).map_err(|_| HostError::Journal)?,
         metadata_volume: row.get(11).map_err(|_| HostError::Journal)?,
         metadata_volume_id: row.get(12).map_err(|_| HostError::Journal)?,
-        create_dispatch_state: row.get(13).map_err(|_| HostError::Journal)?,
-        create_state: row.get(14).map_err(|_| HostError::Journal)?,
-        start_state: row.get(15).map_err(|_| HostError::Journal)?,
-        result_state: row.get(16).map_err(|_| HostError::Journal)?,
-        remove_state: row.get(17).map_err(|_| HostError::Journal)?,
-        abort_state: row.get(18).map_err(|_| HostError::Journal)?,
         cpu_nano: row.get(19).map_err(|_| HostError::Journal)?,
         memory_bytes: row.get(20).map_err(|_| HostError::Journal)?,
         pids_limit: row.get(21).map_err(|_| HostError::Journal)?,

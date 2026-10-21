@@ -69,9 +69,6 @@ impl ConnectionJournal {
                 layout_version: row.get(23).map_err(|_| HostError::Journal)?,
                 metadata_volume: row.get(24).map_err(|_| HostError::Journal)?,
                 metadata_volume_id: row.get(25).map_err(|_| HostError::Journal)?,
-                start_state: row.get(18).map_err(|_| HostError::Journal)?,
-                result_state: row.get(19).map_err(|_| HostError::Journal)?,
-                remove_state: row.get(20).map_err(|_| HostError::Journal)?,
                 abort_helper_id: row.get(13).map_err(|_| HostError::Journal)?,
                 abort_claim_generation: row.get(14).map_err(|_| HostError::Journal)?,
             };

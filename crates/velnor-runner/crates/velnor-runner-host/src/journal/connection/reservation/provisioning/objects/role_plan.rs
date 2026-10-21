@@ -6,6 +6,7 @@ use crate::journal::connection::{
 use super::super::HoldContext;
 
 pub(super) struct ObjectRolePlan {
+    #[cfg(test)]
     pub(super) pool_id: String,
     pub(super) medium: StorageMedium,
     pub(super) filesystem_kind: StorageFilesystemKind,
@@ -13,6 +14,7 @@ pub(super) struct ObjectRolePlan {
     pub(super) charge_bytes: u64,
     pub(super) charge_inodes: u64,
     pub(super) retained_memory_bytes: u64,
+    #[cfg(test)]
     pub(super) publication_policy_digest: Option<String>,
 }
 
@@ -125,6 +127,7 @@ pub(super) async fn load_object_role_plan(
     }
 
     Ok(ObjectRolePlan {
+        #[cfg(test)]
         pool_id,
         medium,
         filesystem_kind,
@@ -132,6 +135,7 @@ pub(super) async fn load_object_role_plan(
         charge_bytes,
         charge_inodes,
         retained_memory_bytes,
+        #[cfg(test)]
         publication_policy_digest,
     })
 }

@@ -43,9 +43,6 @@ pub(crate) struct StorageInitializationClaim {
     memory_bytes: i64,
     pids_limit: i64,
     helper_id: Option<String>,
-    start_state: String,
-    result_state: String,
-    remove_state: String,
     abort_helper_id: Option<String>,
     abort_claim_generation: i64,
 }

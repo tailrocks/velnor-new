@@ -132,7 +132,7 @@ impl ConnectionJournal {
                 metadata_volume: metadata_identity.as_ref().map(|value| value.0.clone()),
                 metadata_volume_id: metadata_identity.as_ref().map(|value| value.1.clone()),
                 nano_cpus: limits.cpu_nano(), memory_bytes: limits.memory_bytes(),
-                pids_limit: limits.pids(), helper_id: None, start_state: "not_requested".to_owned(), result_state: "not_requested".to_owned(), remove_state: "not_requested".to_owned(), abort_helper_id: None, abort_claim_generation: 0,
+                pids_limit: limits.pids(), helper_id: None, abort_helper_id: None, abort_claim_generation: 0,
             }))
         }))
         .await?;

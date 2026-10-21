@@ -20,7 +20,6 @@ pub(super) async fn read_bootstrap(
             name: row.get(1).map_err(|_| HostError::Journal)?,
             id: row.get(2).map_err(|_| HostError::Journal)?,
             create_state: row.get(3).map_err(|_| HostError::Journal)?,
-            start_state: row.get(4).map_err(|_| HostError::Journal)?,
         });
     }
     Ok(records)

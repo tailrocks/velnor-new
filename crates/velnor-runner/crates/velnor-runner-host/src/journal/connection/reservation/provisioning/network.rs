@@ -39,14 +39,13 @@ impl StorageNetworkCreateClaim {
 
 /// Durable identity for a network that passed the host inspection checks.
 pub(crate) struct RecordedStorageNetwork {
-    connection_id: String,
     reservation_id: i64,
     operation_id: i64,
     engine_id: String,
     docker_root_digest: String,
     network_name: String,
+    #[cfg(test)]
     network_id: String,
-    labels: BTreeMap<String, String>,
 }
 
 impl RecordedStorageNetwork {
@@ -80,6 +79,7 @@ pub(crate) struct StorageNetworkRecoveryIdentity {
     network_name: String,
     network_id: Option<String>,
     labels: BTreeMap<String, String>,
+    #[cfg(test)]
     create_state: String,
     remove_state: String,
 }
@@ -214,10 +214,11 @@ impl ConnectionJournal {
             ).await.map_err(|_| HostError::Journal)?;
             if changed != 1 { return Err(HostError::Journal); }
             Ok(RecordedStorageNetwork {
-                connection_id: claim.connection_id.clone(), reservation_id: claim.reservation_id,
+                reservation_id: claim.reservation_id,
                 operation_id: claim.operation_id, engine_id: claim.engine_id.clone(),
                 docker_root_digest: claim.docker_root_digest.clone(), network_name: claim.network_name.clone(),
-                network_id: network_id.clone(), labels: claim.labels.clone(),
+                #[cfg(test)]
+                network_id: network_id.clone(),
             })
         }).await
     }

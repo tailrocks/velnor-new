@@ -19,9 +19,12 @@ pub(crate) struct StorageObjectCreateClaim {
     docker_root_digest: String,
     role: StorageRole,
     docker_name: String,
+    #[cfg(test)]
     profile_generation_id: String,
+    #[cfg(test)]
     profile_digest: String,
     sample_generation_id: String,
+    #[cfg(test)]
     pool_id: String,
     medium: StorageMedium,
     filesystem_kind: StorageFilesystemKind,
@@ -29,6 +32,7 @@ pub(crate) struct StorageObjectCreateClaim {
     charge_bytes: u64,
     charge_inodes: u64,
     retained_memory_bytes: u64,
+    #[cfg(test)]
     publication_policy_digest: Option<String>,
 }
 
@@ -157,9 +161,12 @@ impl ConnectionJournal {
                 docker_root_digest: context.docker_root_digest,
                 role,
                 docker_name,
+                #[cfg(test)]
                 profile_generation_id: context.profile_generation_id,
+                #[cfg(test)]
                 profile_digest: context.profile_digest,
                 sample_generation_id: context.sample_generation_id,
+                #[cfg(test)]
                 pool_id: plan.pool_id,
                 medium: plan.medium,
                 filesystem_kind: plan.filesystem_kind,
@@ -167,6 +174,7 @@ impl ConnectionJournal {
                 charge_bytes: plan.charge_bytes,
                 charge_inodes: plan.charge_inodes,
                 retained_memory_bytes: plan.retained_memory_bytes,
+                #[cfg(test)]
                 publication_policy_digest: plan.publication_policy_digest,
             }))
         })
