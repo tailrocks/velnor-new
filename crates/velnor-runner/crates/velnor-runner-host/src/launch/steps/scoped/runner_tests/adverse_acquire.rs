@@ -20,21 +20,21 @@ mod ack_replay;
 
 #[tokio::test]
 async fn empty_acquire_releases_charge_and_rejects_replay() -> Result<(), String> {
-    assert_definite_acquire(
+    Box::pin(assert_definite_acquire(
         "empty-acquire",
         exchange(200, r#"{"count":0,"value":[]}"#),
         RequestAcquireState::NoEffect,
-    )
+    ))
     .await
 }
 
 #[tokio::test]
 async fn forbidden_acquire_releases_charge_and_rejects_replay() -> Result<(), String> {
-    assert_definite_acquire(
+    Box::pin(assert_definite_acquire(
         "forbidden-acquire",
         exchange(403, "{}"),
         RequestAcquireState::Rejected,
-    )
+    ))
     .await
 }
 
@@ -43,6 +43,37 @@ async fn assert_definite_acquire(
     response: velnor_runner_github::Exchange,
     expected_state: RequestAcquireState,
 ) -> Result<(), String> {
+    let (fixture, poll, expected) =
+        Box::pin(prepare_definite_acquire(label, response, expected_state)).await?;
+    let fixture = fixture.reopen().await?;
+    assert_wrong_source_is_blocked(&fixture, &poll, expected_state).await?;
+    assert_terminal_no_acquire(&fixture, &poll, expected_state).await?;
+    let reopened_state = ActiveHostState::new(&fixture.binding)?;
+    let reopened_context = drive(&fixture, &reopened_state.path);
+    assert_eq!(
+        fixture
+            .scope
+            .request_acquire_state(&fixture.request)
+            .await
+            .map_err(|error| error.to_string())?,
+        Some(expected_state)
+    );
+    assert_eq!(
+        fixture
+            .journal
+            .occupied_reservation_count()
+            .await
+            .map_err(|error| error.to_string())?,
+        0
+    );
+    assert_no_acquire_replay(&reopened_context, &poll, &expected, expected_state).await
+}
+
+async fn prepare_definite_acquire(
+    label: &str,
+    response: velnor_runner_github::Exchange,
+    expected_state: RequestAcquireState,
+) -> Result<(Fixture, Poll, crate::launch::SelectedEngineContext), String> {
     let fixture = Fixture::open(label).await?;
     prepare_capacity(&fixture).await?;
     fixture
@@ -90,8 +121,14 @@ async fn assert_definite_acquire(
             .map_err(|error| error.to_string())?,
         0
     );
+    Ok((fixture, poll, expected))
+}
 
-    let fixture = fixture.reopen().await?;
+async fn assert_wrong_source_is_blocked(
+    fixture: &Fixture,
+    poll: &Poll,
+    expected_state: RequestAcquireState,
+) -> Result<(), String> {
     let mut wrong_poll = poll.clone();
     if let Poll::Batch(batch) = &mut wrong_poll {
         batch.jobs[0].source.repository_name = Some("other-repository".to_owned());
@@ -129,14 +166,21 @@ async fn assert_definite_acquire(
             .map_err(|error| error.to_string())?,
         Some(expected_state)
     );
+    Ok(())
+}
 
+async fn assert_terminal_no_acquire(
+    fixture: &Fixture,
+    poll: &Poll,
+    expected_state: RequestAcquireState,
+) -> Result<(), String> {
     let mut source_api = SourceApi::default();
     let authorization = crate::launch::authorize_positive_offer_with(
         &fixture.binding,
         &fixture.scope,
         "test-token",
         SET_ID,
-        &poll,
+        poll,
         || async {
             let Poll::Batch(batch) = &poll else {
                 return Err(EnsureError::AdmissionClosed);
@@ -162,31 +206,22 @@ async fn assert_definite_acquire(
     assert_eq!(terminal.state(), expected_state);
     assert!(terminal.reservation_released());
     assert_eq!(source_api.calls, 1);
-    let reopened_state = ActiveHostState::new(&fixture.binding)?;
-    let reopened_context = drive(&fixture, &reopened_state.path);
-    assert_eq!(
-        fixture
-            .scope
-            .request_acquire_state(&fixture.request)
-            .await
-            .map_err(|error| error.to_string())?,
-        Some(expected_state)
-    );
-    assert_eq!(
-        fixture
-            .journal
-            .occupied_reservation_count()
-            .await
-            .map_err(|error| error.to_string())?,
-        0
-    );
+    Ok(())
+}
+
+async fn assert_no_acquire_replay(
+    reopened_context: &crate::launch::Drive,
+    poll: &Poll,
+    expected: &crate::launch::SelectedEngineContext,
+    expected_state: RequestAcquireState,
+) -> Result<(), String> {
     let mut replay = FakeLane::new([]);
     let replayed = crate::launch::steps::acquire_scoped(
         &mut replay,
-        &reopened_context,
-        &poll,
+        reopened_context,
+        poll,
         StartPermit::test_fixture_with_available_memory(&"e".repeat(32), 32 * 1024 * 1024 * 1024),
-        &expected,
+        expected,
     )
     .await
     .map_err(|error| error.to_string())?;
@@ -196,8 +231,8 @@ async fn assert_definite_acquire(
     assert_eq!(replayed.request().request_id(), Some(REQUEST_ID));
     assert_eq!(replayed.state(), expected_state);
     assert!(replayed.reservation_released());
-    assert!(replay.methods.is_empty());
-    assert!(replay.paths.is_empty());
+    assert_eq!(replay.methods, Vec::<Method>::new());
+    assert_eq!(replay.paths, Vec::<String>::new());
     Ok(())
 }
 
@@ -211,7 +246,7 @@ async fn unusable_acquire_successes_hold_charge_and_block_replay() -> Result<(),
         ),
         ("server-error", exchange(500, "{}")),
     ] {
-        assert_unusable_acquire_case(label, response).await?;
+        Box::pin(assert_unusable_acquire_case(label, response)).await?;
     }
     Ok(())
 }
