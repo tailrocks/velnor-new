@@ -34,7 +34,7 @@ use super::project_tool_refs::{
 /// `(variable, [tools] keys)` for every catalog tool; the first key is the
 /// canonical spelling, the rest are other backends' spellings of the
 /// same tool, which declare its version just the same.
-pub const PROJECT_TOOL_KEYS: [(&str, &[&str]); 15] = [
+pub const PROJECT_TOOL_KEYS: [(&str, &[&str]); 16] = [
     ("VELNOR_TOOL_RUST", &["rust", "core:rust"]),
     (
         "VELNOR_TOOL_MR_BOXINGTON",
@@ -49,6 +49,14 @@ pub const PROJECT_TOOL_KEYS: [(&str, &[&str]); 15] = [
     (
         "VELNOR_TOOL_ACTIONLINT",
         &["actionlint", "aqua:rhysd/actionlint"],
+    ),
+    (
+        "VELNOR_TOOL_JACTIONLINT",
+        &[
+            "jactionlint",
+            "github:jdx/jactionlint",
+            "packslip:github.com/jdx/jactionlint",
+        ],
     ),
     (
         "VELNOR_TOOL_SHELLCHECK",

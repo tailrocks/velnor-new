@@ -144,6 +144,28 @@ are installed through Mise. `taiki-e/install-action` and other tool-installer
 actions are forbidden. V1 emits no Python run steps, so it does not install
 Pyflakes.
 
+jactionlint v2.3.0 (`jdx/jactionlint`, published 2026-10-21) is the catalog
+pin for the workflow, composite action and Dependabot linter (checked
+2026-10-22). It installs through the Mise registry name `jactionlint`
+(backend `github:jdx/jactionlint`), so the lock key, the project
+`[tools]` key and the CI install spec share one spelling; the
+`github:jdx/jactionlint` and `packslip:github.com/jdx/jactionlint` keys
+declare the same tool. Mise checks the release-API digest and the GitHub
+artifact attestation on every install. Velnor's own control is the
+per-platform table in `crates/velnor-actions-mise/src/catalog_jactionlint_digests.rs`:
+the archive and extracted-executable SHA-256 for `linux-x64`, `linux-arm64`,
+`macos-arm64` and `macos-x64` (every runner platform Velnor's own jobs use),
+measured when the version is bumped. Provenance is checked
+at bump time, never at generate time: `cosign verify-blob-attestation` on the
+release `packslip.sigstore.json` (type `https://packslip.dev/release/v1`,
+identity `release.yaml@refs/tags/v<version>`, issuer
+`https://token.actions.githubusercontent.com`) and
+`gh attestation verify --signer-workflow jdx/jactionlint/.github/workflows/release.yaml`
+must both pass for every table platform, and the evidence is recorded in the
+`JACTIONLINT_VERSION` doc comment. A bump without new table rows fails the
+catalog tests. A project that declares `jactionlint` in its Mise config uses
+its own version (hard decision 4).
+
 The only per-project pin override is `[actions.overrides]` in
 `.velnor/config.toml`. Each ordinary value contains an exact 40-hex commit SHA
 and its matching stable version. Keys must be exact allowlisted action

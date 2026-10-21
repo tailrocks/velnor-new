@@ -1,10 +1,11 @@
 //! Tool catalog pin cases.
 use velnor_actions_mise::catalog::{MbxProvisioning, NEXTEST_VERSION};
 use velnor_actions_mise::{
-    ACTIONLINT_VERSION, GH_VERSION, MISE_VERSION, MR_BOXINGTON_VERSION, MiseError,
-    OPENTOFU_SHA256_DARWIN_AMD64, OPENTOFU_SHA256_DARWIN_ARM64, OPENTOFU_SHA256_LINUX_AMD64,
-    OPENTOFU_SHA256_LINUX_ARM64, OPENTOFU_VERSION, PinnedTool, RUST_TARGET_TRIPLE, RUST_VERSION,
-    SHELLCHECK_VERSION, ToolCatalog, ZIZMOR_VERSION, validate_exact_version,
+    ACTIONLINT_VERSION, GH_VERSION, JACTIONLINT_VERSION, MISE_VERSION, MR_BOXINGTON_VERSION,
+    MiseError, OPENTOFU_SHA256_DARWIN_AMD64, OPENTOFU_SHA256_DARWIN_ARM64,
+    OPENTOFU_SHA256_LINUX_AMD64, OPENTOFU_SHA256_LINUX_ARM64, OPENTOFU_VERSION, PinnedTool,
+    RUST_TARGET_TRIPLE, RUST_VERSION, SHELLCHECK_VERSION, ToolCatalog, ZIZMOR_VERSION,
+    validate_exact_version,
 };
 
 #[test]
@@ -15,6 +16,7 @@ fn pinned_catalog_matches_qualified_versions() {
     assert_eq!(catalog.version(PinnedTool::MrBoxington), "1.26.0");
     assert_eq!(catalog.version(PinnedTool::Gh), "2.102.1");
     assert_eq!(catalog.version(PinnedTool::Actionlint), "1.7.12");
+    assert_eq!(catalog.version(PinnedTool::Jactionlint), "2.3.0");
     assert_eq!(catalog.version(PinnedTool::Shellcheck), "0.11.0");
     assert_eq!(catalog.version(PinnedTool::Zizmor), "1.31.1");
     assert_eq!(catalog.version(PinnedTool::Nextest), "0.9.149");
@@ -23,6 +25,7 @@ fn pinned_catalog_matches_qualified_versions() {
     assert_eq!(MR_BOXINGTON_VERSION, "1.26.0");
     assert_eq!(GH_VERSION, "2.102.1");
     assert_eq!(ACTIONLINT_VERSION, "1.7.12");
+    assert_eq!(JACTIONLINT_VERSION, "2.3.0");
     assert_eq!(SHELLCHECK_VERSION, "0.11.0");
     assert_eq!(ZIZMOR_VERSION, "1.31.1");
     assert_eq!(NEXTEST_VERSION, "0.9.149");
@@ -43,6 +46,10 @@ fn tool_specs_use_registry_names() {
         "actionlint@1.7.12"
     );
     assert_eq!(
+        catalog.tool_spec(PinnedTool::Jactionlint),
+        "jactionlint@2.3.0"
+    );
+    assert_eq!(
         catalog.tool_spec(PinnedTool::Shellcheck),
         "shellcheck@0.11.0"
     );
@@ -60,7 +67,7 @@ fn tool_specs_use_registry_names() {
 
 #[test]
 fn tool_names_roundtrip_and_reject_aliases() {
-    assert_eq!(PinnedTool::ALL.len(), 11);
+    assert_eq!(PinnedTool::ALL.len(), 12);
     for tool in PinnedTool::ALL {
         assert_eq!(PinnedTool::from_tool_name(tool.tool_name()), Ok(tool));
     }
