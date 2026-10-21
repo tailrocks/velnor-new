@@ -6,11 +6,11 @@ use crate::{
     config::{ApprovedJobAuthorityPolicy, RepositoryConnection},
     error::HostError,
     journal::{
-        ConnectionJournal, Journal,
+        ConnectionJournal,
         execution_authorization::{ExecutionProofProgress, StartedRequestTimeoutResult},
     },
     launch::{
-        ReleaseReadSecret, SelectedEngineContext, VerifiedWorkerImages,
+        SelectedEngineContext, VerifiedWorkerImages,
         execution_authorization::{AuthorizedExecutionSource, verify_execution_source},
     },
     worker::execution_authorization::VerifiedExecutionRequest,
@@ -37,8 +37,9 @@ impl PendingScopedExecution {
         let acquired = match self {
             Self::Jit(pending) => pending.bound().prepared().acquired(),
             Self::Channel(ready, _) => ready.bound().prepared().acquired(),
-            Self::RequestTimeout(runner) => runner.bound().prepared().acquired(),
-            Self::Runner(runner, _, _) => runner.bound().prepared().acquired(),
+            Self::RequestTimeout(runner) | Self::Runner(runner, _, _) => {
+                runner.bound().prepared().acquired()
+            }
         };
         acquired.intent_id()
     }
@@ -51,7 +52,8 @@ impl PendingScopedExecution {
 /// Keep the authorized source and live pair for terminal cleanup.
 #[must_use]
 pub(crate) struct AuthorizedScopedExecution {
-    runner: RunnerReadyBootstrap,
+    // Keep the exact delivered runner alive until terminal cleanup completes.
+    _runner: RunnerReadyBootstrap,
     source: AuthorizedExecutionSource,
 }
 
@@ -62,16 +64,8 @@ fn pending_scoped_execution_error_stays_bounded() {
 }
 
 impl AuthorizedScopedExecution {
-    pub(crate) fn runner(&self) -> &RunnerReadyBootstrap {
-        &self.runner
-    }
-
     pub(crate) fn source(&self) -> &AuthorizedExecutionSource {
         &self.source
-    }
-
-    pub(crate) fn intent_id(&self) -> i64 {
-        self.source.request().intent_id()
     }
 }
 
@@ -141,7 +135,17 @@ pub(crate) async fn authorize_started_execution(
         ));
     }
     if let Err(error) = publish_decision(
-        &runner, &source, docker, host, scoped, secret, engine, images, deadline,
+        &runner,
+        &source,
+        ScopedHostContext {
+            docker,
+            host,
+            scoped,
+            secret,
+            engine,
+            images,
+        },
+        deadline,
     )
     .await
     {
@@ -151,7 +155,10 @@ pub(crate) async fn authorize_started_execution(
             error,
         ));
     }
-    Ok(AuthorizedScopedExecution { runner, source })
+    Ok(AuthorizedScopedExecution {
+        _runner: runner,
+        source,
+    })
 }
 
 async fn read_request_or_pending(
@@ -224,25 +231,21 @@ async fn prepare_decision(
 async fn publish_decision(
     runner: &RunnerReadyBootstrap,
     source: &AuthorizedExecutionSource,
-    docker: &bollard::Docker,
-    host: &Journal,
-    scoped: &ConnectionJournal,
-    secret: &ReleaseReadSecret,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
+    context: ScopedHostContext<'_>,
     deadline: Instant,
 ) -> Result<(), HostError> {
-    let claim = scoped
+    let claim = context
+        .scoped
         .claim_execution_decision_delivery(source.request().intent_id())
         .await?
         .ok_or(HostError::Journal)?;
     let receipt = match crate::launch::resource_probe::publication::publish_decision(
         crate::launch::resource_probe::publication::ControlPublicationInput {
-            docker,
-            journal: host,
-            selected: engine,
-            images,
-            release_secret: secret,
+            docker: context.docker,
+            journal: context.host,
+            selected: context.engine,
+            images: context.images,
+            release_secret: context.secret,
             metadata: runner.bound().metadata(),
             channel: runner.channel(),
             guest_boot_id: runner.bound().guest_boot_id(),
@@ -254,15 +257,22 @@ async fn publish_decision(
     {
         Ok(receipt) => receipt,
         Err(error) => {
-            scoped.mark_execution_decision_uncertain(&claim).await?;
+            context
+                .scoped
+                .mark_execution_decision_uncertain(&claim)
+                .await?;
             return Err(error);
         }
     };
-    if let Err(error) = scoped
+    if let Err(error) = context
+        .scoped
         .record_execution_decision_delivered(&claim, &receipt)
         .await
     {
-        scoped.mark_execution_decision_uncertain(&claim).await?;
+        context
+            .scoped
+            .mark_execution_decision_uncertain(&claim)
+            .await?;
         return Err(error);
     }
     Ok(())

@@ -32,25 +32,17 @@ pub(crate) struct JitReadyBootstrap {
 #[must_use]
 pub(crate) struct ChannelReadyBootstrap {
     bound: BoundScopedBootstrap,
+    #[cfg(test)]
     runner: RunnerReference,
     jit: EncodedJit,
     channel: VerifiedProofChannelBinding,
-}
-
-impl JitReadyBootstrap {
-    pub(crate) fn bound(&self) -> &BoundScopedBootstrap {
-        &self.bound
-    }
-
-    pub(crate) fn runner(&self) -> &RunnerReference {
-        &self.runner
-    }
 }
 
 /// Keep a bound runner when JIT creation or journal binding fails.
 #[must_use]
 pub(crate) struct PendingJitBootstrap {
     bound: Box<BoundScopedBootstrap>,
+    #[cfg(test)]
     failure: EnsureError,
 }
 
@@ -58,6 +50,7 @@ pub(crate) struct PendingJitBootstrap {
 #[must_use]
 pub(crate) struct RunnerReadyBootstrap {
     bound: BoundScopedBootstrap,
+    #[cfg(test)]
     runner: RunnerReference,
     channel: VerifiedProofChannelBinding,
 }
@@ -75,6 +68,7 @@ impl RunnerReadyBootstrap {
         &self.bound
     }
 
+    #[cfg(test)]
     pub(crate) fn runner(&self) -> &RunnerReference {
         &self.runner
     }
@@ -89,6 +83,7 @@ impl PendingJitBootstrap {
         &self.bound
     }
 
+    #[cfg(test)]
     pub(crate) const fn failure(&self) -> EnsureError {
         self.failure
     }
@@ -108,6 +103,7 @@ where
     let Some(request_id) = acquired.request().request_id() else {
         return Err(PendingJitBootstrap {
             bound: Box::new(bound),
+            #[cfg(test)]
             failure: EnsureError::Uncertain,
         });
     };
@@ -121,20 +117,25 @@ where
         lane,
         admin_token,
         scoped,
-        intent_id,
-        reservation_id,
-        request_id,
-        &runner_name,
-        scale_set_id,
-        policy_generation,
-        &policy_digest,
+        JitRequestIdentity {
+            intent_id,
+            reservation_id,
+            request_id,
+            runner_name: &runner_name,
+            scale_set_id,
+            policy_generation,
+            policy_digest: &policy_digest,
+        },
     )
     .await
     {
         Ok(result) => result,
         Err(failure) => {
+            #[cfg(not(test))]
+            let _ = &failure;
             return Err(PendingJitBootstrap {
                 bound: Box::new(bound),
+                #[cfg(test)]
                 failure,
             });
         }
@@ -147,36 +148,40 @@ where
 }
 
 /// Claim and bind one JIT operation for a journal-bound physical intent.
+struct JitRequestIdentity<'a> {
+    intent_id: i64,
+    reservation_id: i64,
+    request_id: i64,
+    runner_name: &'a str,
+    scale_set_id: i64,
+    policy_generation: u64,
+    policy_digest: &'a str,
+}
+
 async fn request_and_bind<T>(
     lane: &mut T,
     admin_token: &str,
     scoped: &ConnectionJournal,
-    intent_id: i64,
-    reservation_id: i64,
-    request_id: i64,
-    runner_name: &str,
-    scale_set_id: i64,
-    policy_generation: u64,
-    policy_digest: &str,
+    request: JitRequestIdentity<'_>,
 ) -> Result<(RunnerReference, EncodedJit), EnsureError>
 where
     T: Transport + Lane,
 {
-    let body = jit_request(runner_name).map_err(|_| EnsureError::Malformed)?;
+    let body = jit_request(request.runner_name).map_err(|_| EnsureError::Malformed)?;
     lane.on_admin().map_err(|_| EnsureError::Endpoint)?;
     let claim = scoped
         .claim_runner_jit_for_request(
-            intent_id,
-            reservation_id,
-            request_id,
-            runner_name,
-            policy_generation,
-            policy_digest,
+            request.intent_id,
+            request.reservation_id,
+            request.request_id,
+            request.runner_name,
+            request.policy_generation,
+            request.policy_digest,
         )
         .await
         .map_err(|_| EnsureError::Uncertain)?
         .ok_or(EnsureError::Uncertain)?;
-    let result = match jit(lane, scale_set_id, admin_token, &body) {
+    let result = match jit(lane, request.scale_set_id, admin_token, &body) {
         Ok(result) => result,
         Err(error) => {
             let failure = crate::listen::map_listen(error);
@@ -187,7 +192,7 @@ where
             return Err(failure);
         }
     };
-    if !runner_matches(&result.runner, scale_set_id, runner_name) {
+    if !runner_matches(&result.runner, request.scale_set_id, request.runner_name) {
         scoped
             .mark_runner_jit_uncertain(claim)
             .await
@@ -230,16 +235,22 @@ impl JitReadyBootstrap {
         match channel {
             Ok(channel) => Ok(ChannelReadyBootstrap {
                 bound: self.bound,
+                #[cfg(test)]
                 runner: self.runner,
                 jit: self.jit,
                 channel,
             }),
-            Err(failure) => Err(PendingChannelBootstrap {
-                bound: Box::new(self.bound),
-                runner: self.runner,
-                jit: self.jit,
-                failure,
-            }),
+            Err(failure) => {
+                #[cfg(not(test))]
+                let _ = &failure;
+                Err(PendingChannelBootstrap {
+                    bound: Box::new(self.bound),
+                    _runner: self.runner,
+                    _jit: self.jit,
+                    #[cfg(test)]
+                    failure,
+                })
+            }
         }
     }
 }
@@ -248,8 +259,10 @@ impl JitReadyBootstrap {
 #[must_use]
 pub(crate) struct PendingChannelBootstrap {
     bound: Box<BoundScopedBootstrap>,
-    runner: RunnerReference,
-    jit: EncodedJit,
+    // Keep the runner reference and JIT value alive while this pending channel state exists.
+    _runner: RunnerReference,
+    _jit: EncodedJit,
+    #[cfg(test)]
     failure: crate::error::HostError,
 }
 
@@ -258,10 +271,7 @@ impl PendingChannelBootstrap {
         &self.bound
     }
 
-    pub(crate) fn runner(&self) -> &RunnerReference {
-        &self.runner
-    }
-
+    #[cfg(test)]
     pub(crate) fn failure(&self) -> &crate::error::HostError {
         &self.failure
     }
@@ -270,10 +280,6 @@ impl PendingChannelBootstrap {
 impl ChannelReadyBootstrap {
     pub(crate) fn bound(&self) -> &BoundScopedBootstrap {
         &self.bound
-    }
-
-    pub(crate) fn runner(&self) -> &RunnerReference {
-        &self.runner
     }
 
     pub(crate) fn channel(&self) -> &VerifiedProofChannelBinding {
@@ -286,26 +292,23 @@ impl ChannelReadyBootstrap {
         deadline: Instant,
     ) -> Result<RunnerReadyBootstrap, PendingJitBootstrap> {
         let reservation_id = self.bound.prepared.acquired().reservation_id();
-        let claim = match scoped.claim_listener_delivery(reservation_id).await {
-            Ok(Some(claim)) => claim,
-            Ok(None) | Err(_) => {
-                return Err(PendingJitBootstrap {
-                    bound: Box::new(self.bound),
-                    failure: EnsureError::Uncertain,
-                });
-            }
+        let Ok(Some(claim)) = scoped.claim_listener_delivery(reservation_id).await else {
+            return Err(PendingJitBootstrap {
+                bound: Box::new(self.bound),
+                #[cfg(test)]
+                failure: EnsureError::Uncertain,
+            });
         };
-        let proof = if let Ok(proof) = self
+        let Ok(proof) = self
             .bound
             .started
             .deliver_jit(&claim, self.jit, deadline)
             .await
-        {
-            proof
-        } else {
+        else {
             let _marked = scoped.mark_listener_delivery_uncertain(&claim).await;
             return Err(PendingJitBootstrap {
                 bound: Box::new(self.bound),
+                #[cfg(test)]
                 failure: EnsureError::Uncertain,
             });
         };
@@ -317,11 +320,13 @@ impl ChannelReadyBootstrap {
             let _marked = scoped.mark_listener_delivery_uncertain(&claim).await;
             return Err(PendingJitBootstrap {
                 bound: Box::new(self.bound),
+                #[cfg(test)]
                 failure: EnsureError::Uncertain,
             });
         }
         Ok(RunnerReadyBootstrap {
             bound: self.bound,
+            #[cfg(test)]
             runner: self.runner,
             channel: self.channel,
         })

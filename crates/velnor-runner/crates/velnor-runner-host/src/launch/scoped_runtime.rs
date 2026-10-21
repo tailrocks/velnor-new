@@ -76,7 +76,8 @@ pub(crate) type ScopedPrepareFuture<'a> =
 #[must_use]
 pub(crate) struct BoundScopedBootstrap {
     prepared: PreparedAcquiredBootstrap,
-    network: RecordedStorageNetwork,
+    // Retain the exact network proof with the bound bootstrap until its owner drops.
+    _network: RecordedStorageNetwork,
     started: StartedBootstrapPair,
     metadata: VerifiedMetadataInitialization,
     initialization: VerifiedStorageInitializationReady,
@@ -89,10 +90,7 @@ impl BoundScopedBootstrap {
         &self.prepared
     }
 
-    pub(crate) fn network(&self) -> &RecordedStorageNetwork {
-        &self.network
-    }
-
+    #[cfg(test)]
     pub(crate) fn started(&self) -> &StartedBootstrapPair {
         &self.started
     }
@@ -105,6 +103,7 @@ impl BoundScopedBootstrap {
         &self.initialization
     }
 
+    #[cfg(test)]
     pub(crate) fn binding(&self) -> &super::bootstrap::VerifiedStorageResourceBinding {
         &self.binding
     }
@@ -118,10 +117,12 @@ impl BoundScopedBootstrap {
 #[must_use]
 pub(crate) struct PendingScopedBootstrap {
     prepared: PreparedAcquiredBootstrap,
-    network: Option<RecordedStorageNetwork>,
-    started: Option<StartedBootstrapPair>,
-    pending_pair: Option<PendingBootstrapPair>,
-    initialization: Option<VerifiedStorageInitializationReady>,
+    // Keep every acquired handle and proof alive while terminal cleanup remains pending.
+    _network: Option<RecordedStorageNetwork>,
+    _started: Option<StartedBootstrapPair>,
+    _pending_pair: Option<PendingBootstrapPair>,
+    _initialization: Option<VerifiedStorageInitializationReady>,
+    #[cfg(test)]
     failure: HostError,
 }
 
@@ -130,22 +131,7 @@ impl PendingScopedBootstrap {
         &self.prepared
     }
 
-    pub(crate) fn network(&self) -> Option<&RecordedStorageNetwork> {
-        self.network.as_ref()
-    }
-
-    pub(crate) fn started(&self) -> Option<&StartedBootstrapPair> {
-        self.started.as_ref()
-    }
-
-    pub(crate) fn pending_pair(&self) -> Option<&PendingBootstrapPair> {
-        self.pending_pair.as_ref()
-    }
-
-    pub(crate) fn initialization(&self) -> Option<&VerifiedStorageInitializationReady> {
-        self.initialization.as_ref()
-    }
-
+    #[cfg(test)]
     pub(crate) fn failure(&self) -> &HostError {
         &self.failure
     }
@@ -158,6 +144,14 @@ struct ScopedPrepareContext<'a, P> {
     provider: &'a P,
     engine: &'a SelectedEngineContext,
     images: &'a VerifiedWorkerImages,
+}
+
+impl<P> Copy for ScopedPrepareContext<'_, P> {}
+
+impl<P> Clone for ScopedPrepareContext<'_, P> {
+    fn clone(&self) -> Self {
+        *self
+    }
 }
 
 fn prepare_and_bind_scoped_with_provider<'a, P: ImageProvider + 'a>(
@@ -272,12 +266,15 @@ fn pending_with_initialization(
     initialization: Option<VerifiedStorageInitializationReady>,
     failure: HostError,
 ) -> ScopedRuntimeOutcome {
+    #[cfg(not(test))]
+    let _ = &failure;
     ScopedRuntimeOutcome::Pending(PendingScopedBootstrap {
         prepared,
-        network,
-        started,
-        pending_pair,
-        initialization,
+        _network: network,
+        _started: started,
+        _pending_pair: pending_pair,
+        _initialization: initialization,
+        #[cfg(test)]
         failure,
     })
 }

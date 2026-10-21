@@ -78,13 +78,15 @@ async fn acquired_physical_job_binds_one_exact_jit_and_rejects_replay() -> Resul
         &mut transport,
         "test-admin-token",
         &scope,
-        fixture.intent_id,
-        fixture.reservation_id,
-        REQUEST_ID,
-        &runner_name,
-        501,
-        policy_generation,
-        &policy_digest,
+        super::JitRequestIdentity {
+            intent_id: fixture.intent_id,
+            reservation_id: fixture.reservation_id,
+            request_id: REQUEST_ID,
+            runner_name: &runner_name,
+            scale_set_id: 501,
+            policy_generation,
+            policy_digest: &policy_digest,
+        },
     )
     .await
     .map_err(|_| HostError::Journal)?;
@@ -112,13 +114,15 @@ async fn acquired_physical_job_binds_one_exact_jit_and_rejects_replay() -> Resul
         &mut transport,
         "test-admin-token",
         &scope,
-        fixture.intent_id,
-        fixture.reservation_id,
-        REQUEST_ID,
-        &runner_name,
-        501,
-        policy_generation,
-        &policy_digest,
+        super::JitRequestIdentity {
+            intent_id: fixture.intent_id,
+            reservation_id: fixture.reservation_id,
+            request_id: REQUEST_ID,
+            runner_name: &runner_name,
+            scale_set_id: 501,
+            policy_generation,
+            policy_digest: &policy_digest,
+        },
     )
     .await;
     assert!(matches!(replay, Err(EnsureError::Uncertain)));

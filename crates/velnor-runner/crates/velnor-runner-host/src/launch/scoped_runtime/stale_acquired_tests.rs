@@ -15,7 +15,7 @@ use crate::{
 
 #[tokio::test]
 async fn stale_acquired_witness_is_rejected_before_jit_or_docker_effects() -> Result<(), String> {
-    assert_stale_acquired_path().await
+    Box::pin(assert_stale_acquired_path()).await
 }
 
 async fn assert_stale_acquired_path() -> Result<(), String> {
@@ -42,7 +42,7 @@ async fn assert_stale_acquired_path() -> Result<(), String> {
         engine.docker_root_digest(),
         acquired.sample_generation_id(),
     ));
-    let docker = DockerStub::open(Vec::new()).map_err(|error| error.to_string())?;
+    let docker = DockerStub::open(Vec::new()).map_err(|error| error.clone())?;
     let result = prepare_acquired(outcome, &docker.docker, &fixture.scope, &engine, &images).await;
     if !matches!(result, Err(HostError::Identity)) {
         return Err(format!(
@@ -50,12 +50,12 @@ async fn assert_stale_acquired_path() -> Result<(), String> {
             result.as_ref().err()
         ));
     }
-    assert!(
+    assert_eq!(
         docker
             .finish_observed()
             .await
-            .map_err(|error| error.to_string())?
-            .is_empty()
+            .map_err(|error| error.clone())?,
+        Vec::<String>::new()
     );
     assert_eq!(lane.methods, [Method::Post]);
     assert_eq!(
@@ -104,7 +104,7 @@ async fn assert_acquired_charge(
     assert_eq!(
         row.acquired_request
             .as_ref()
-            .and_then(|request| request.request_id()),
+            .and_then(crate::journal::AssignmentIdentity::request_id),
         Some(request_id)
     );
     Ok(())

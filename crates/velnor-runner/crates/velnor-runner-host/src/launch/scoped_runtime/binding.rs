@@ -1,8 +1,7 @@
 use super::{
-    BoundScopedBootstrap, ConnectionJournal, Docker, HostError, ImageProvider, Journal,
-    PendingBootstrapPair, PreparedAcquiredBootstrap, RecordedStorageNetwork, ScopedRuntimeOutcome,
-    SelectedEngineContext, StartedBootstrapPair, VerifiedMetadataInitialization,
-    VerifiedStorageInitializationReady, VerifiedWorkerImages,
+    BoundScopedBootstrap, HostError, ImageProvider, PendingBootstrapPair,
+    PreparedAcquiredBootstrap, RecordedStorageNetwork, ScopedPrepareContext, ScopedRuntimeOutcome,
+    StartedBootstrapPair, VerifiedMetadataInitialization, VerifiedStorageInitializationReady,
 };
 
 pub(super) async fn cleanup_failed_pair<P: ImageProvider>(
@@ -10,23 +9,18 @@ pub(super) async fn cleanup_failed_pair<P: ImageProvider>(
     network: RecordedStorageNetwork,
     error: HostError,
     pending_pair: Option<PendingBootstrapPair>,
-    docker: &Docker,
-    scoped: &ConnectionJournal,
-    host: &Journal,
-    provider: &P,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
     reservation_id: i64,
+    context: ScopedPrepareContext<'_, P>,
 ) -> ScopedRuntimeOutcome {
     let cleaned = Box::pin(
         super::super::bootstrap::remove_bootstrap_after_terminal_failure(
-            docker,
-            scoped,
-            host,
-            engine,
-            images,
+            context.docker,
+            context.scoped,
+            context.host,
+            context.engine,
+            context.images,
             reservation_id,
-            provider,
+            context.provider,
         ),
     )
     .await
@@ -46,20 +40,15 @@ pub(super) async fn bind_started<P: ImageProvider>(
     started: StartedBootstrapPair,
     metadata: VerifiedMetadataInitialization,
     initialization: VerifiedStorageInitializationReady,
-    docker: &Docker,
-    scoped: &ConnectionJournal,
-    host: &Journal,
-    provider: &P,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
+    context: ScopedPrepareContext<'_, P>,
 ) -> Result<ScopedRuntimeOutcome, HostError> {
     let binding = match super::super::bootstrap::observe_storage_resources_with_provider(
-        docker,
-        scoped,
-        host,
-        provider,
-        engine,
-        images,
+        context.docker,
+        context.scoped,
+        context.host,
+        context.provider,
+        context.engine,
+        context.images,
         &prepared,
         &started,
         &initialization,
@@ -78,7 +67,8 @@ pub(super) async fn bind_started<P: ImageProvider>(
         }
     };
     let guest_boot_id = binding.guest_boot_id().to_owned();
-    if let Err(error) = scoped
+    if let Err(error) = context
+        .scoped
         .bind_storage_resources(prepared.acquired().reservation_id(), &binding)
         .await
     {
@@ -92,7 +82,7 @@ pub(super) async fn bind_started<P: ImageProvider>(
     }
     Ok(ScopedRuntimeOutcome::Bound(BoundScopedBootstrap {
         prepared,
-        network,
+        _network: network,
         started,
         metadata,
         initialization,

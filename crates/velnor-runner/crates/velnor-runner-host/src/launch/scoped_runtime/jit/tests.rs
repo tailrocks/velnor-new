@@ -12,6 +12,8 @@ use crate::{
 };
 use velnor_runner_github::{Exchange, Method, SessionRequest, Transport, TransportFail};
 
+const SET_ID: i64 = 501;
+
 #[test]
 fn pending_jit_bootstrap_error_stays_bounded() {
     assert!(std::mem::size_of::<super::PendingJitBootstrap>() <= 128);
@@ -51,16 +53,11 @@ impl Lane for ConflictTransport {
 
 #[tokio::test]
 async fn jit_conflict_keeps_resources_charged_and_never_replays() -> Result<(), HostError> {
+    use crate::journal::Journal;
     use crate::journal::request_lifecycle::tests::helpers::{
         Scratch, binding, created_scope, provision_acquired_request_with_initialization,
     };
-    use crate::journal::{
-        AssignmentKey, Journal, ReservationRequest, ReservationResult,
-        fixture_storage_provisioning_admission,
-    };
-    use crate::launch::StartPermit;
 
-    const SET_ID: i64 = 501;
     let scratch = Scratch::new()?;
     let journal = Journal::open(&scratch.file()).await?;
     journal
@@ -77,26 +74,61 @@ async fn jit_conflict_keeps_resources_charged_and_never_replays() -> Result<(), 
     let (policy_generation, policy_digest) = scope.test_active_authority_identity().await?;
     let calls = Arc::new(AtomicUsize::new(0));
     let mut transport = ConflictTransport(calls.clone());
-
-    let result = super::request_and_bind(
-        &mut transport,
-        "test-admin-token",
-        &scope,
-        physical.intent_id,
-        physical.reservation_id,
-        70,
-        &runner_name,
-        SET_ID,
+    let attempt = JitConflictAttempt {
+        scope: &scope,
+        intent_id: physical.intent_id,
+        reservation_id: physical.reservation_id,
+        runner_name,
         policy_generation,
-        &policy_digest,
+        policy_digest,
+    };
+
+    assert_initial_conflict(&attempt, &mut transport, &calls).await?;
+    assert_competing_request_is_rejected_at_capacity(&scope).await?;
+    assert_replay_is_uncertain(&attempt, &mut transport, &calls).await?;
+    drop(attempt);
+    drop(scope);
+    drop(journal);
+    assert_reopened_conflict_stays_uncertain(&scratch, &repository, physical.reservation_id)
+        .await?;
+    Ok(())
+}
+
+struct JitConflictAttempt<'a> {
+    scope: &'a crate::journal::ConnectionJournal,
+    intent_id: i64,
+    reservation_id: i64,
+    runner_name: String,
+    policy_generation: u64,
+    policy_digest: String,
+}
+
+async fn assert_initial_conflict(
+    attempt: &JitConflictAttempt<'_>,
+    transport: &mut ConflictTransport,
+    calls: &AtomicUsize,
+) -> Result<(), HostError> {
+    let result = super::request_and_bind(
+        transport,
+        "test-admin-token",
+        attempt.scope,
+        super::JitRequestIdentity {
+            intent_id: attempt.intent_id,
+            reservation_id: attempt.reservation_id,
+            request_id: 70,
+            runner_name: &attempt.runner_name,
+            scale_set_id: SET_ID,
+            policy_generation: attempt.policy_generation,
+            policy_digest: &attempt.policy_digest,
+        },
     )
     .await;
     assert!(matches!(result, Err(EnsureError::Conflict)));
 
-    let rows = scope.physical_runner_reservations().await?;
+    let rows = attempt.scope.physical_runner_reservations().await?;
     let row = rows
         .iter()
-        .find(|row| row.reservation_id == physical.reservation_id)
+        .find(|row| row.reservation_id == attempt.reservation_id)
         .ok_or(HostError::Journal)?;
     assert_eq!(row.reservation.state, ReservationState::Uncertain);
     assert_eq!(format!("{:?}", row.jit_state), "Uncertain");
@@ -105,11 +137,24 @@ async fn jit_conflict_keeps_resources_charged_and_never_replays() -> Result<(), 
     assert_eq!(row.launch_phase, Some(LaunchPhase::JitUncertain));
     assert_eq!(calls.load(Ordering::SeqCst), 1);
     assert!(
-        scope
-            .claim_listener_delivery(physical.reservation_id)
+        attempt
+            .scope
+            .claim_listener_delivery(attempt.reservation_id)
             .await?
             .is_none()
     );
+    Ok(())
+}
+
+async fn assert_competing_request_is_rejected_at_capacity(
+    scope: &crate::journal::ConnectionJournal,
+) -> Result<(), HostError> {
+    use crate::journal::{
+        AssignmentKey, ReservationRequest, ReservationResult,
+        fixture_storage_provisioning_admission,
+    };
+    use crate::launch::StartPermit;
+
     let competing_generation = "c".repeat(32);
     let competing_permit = StartPermit::test_fixture_with_engine_id(
         &competing_generation,
@@ -139,46 +184,63 @@ async fn jit_conflict_keeps_resources_charged_and_never_replays() -> Result<(), 
         )
         .await?;
     assert_eq!(competing, ReservationResult::AtCapacity);
+    Ok(())
+}
 
+async fn assert_replay_is_uncertain(
+    attempt: &JitConflictAttempt<'_>,
+    transport: &mut ConflictTransport,
+    calls: &AtomicUsize,
+) -> Result<(), HostError> {
     let replay = super::request_and_bind(
-        &mut transport,
+        transport,
         "test-admin-token",
-        &scope,
-        physical.intent_id,
-        physical.reservation_id,
-        70,
-        &runner_name,
-        SET_ID,
-        policy_generation,
-        &policy_digest,
+        attempt.scope,
+        super::JitRequestIdentity {
+            intent_id: attempt.intent_id,
+            reservation_id: attempt.reservation_id,
+            request_id: 70,
+            runner_name: &attempt.runner_name,
+            scale_set_id: SET_ID,
+            policy_generation: attempt.policy_generation,
+            policy_digest: &attempt.policy_digest,
+        },
     )
     .await;
     assert!(matches!(replay, Err(EnsureError::Uncertain)));
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 
-    let rows = scope.physical_runner_reservations().await?;
+    let rows = attempt.scope.physical_runner_reservations().await?;
     let row = rows
         .iter()
-        .find(|row| row.reservation_id == physical.reservation_id)
+        .find(|row| row.reservation_id == attempt.reservation_id)
         .ok_or(HostError::Journal)?;
     assert_eq!(row.reservation.state, ReservationState::Uncertain);
     assert_eq!(format!("{:?}", row.jit_state), "Uncertain");
     assert_eq!(row.launch_phase, Some(LaunchPhase::JitUncertain));
-    drop(scope);
-    drop(journal);
+    Ok(())
+}
+
+async fn assert_reopened_conflict_stays_uncertain(
+    scratch: &crate::journal::request_lifecycle::tests::helpers::Scratch,
+    repository: &crate::config::RepositoryConnection,
+    reservation_id: i64,
+) -> Result<(), HostError> {
+    use crate::journal::Journal;
+
     let reopened = Journal::open(&scratch.file()).await?;
-    let reopened_scope = reopened.connection_scope(&repository).await?;
+    let reopened_scope = reopened.connection_scope(repository).await?;
     let rows = reopened_scope.physical_runner_reservations().await?;
     let row = rows
         .iter()
-        .find(|row| row.reservation_id == physical.reservation_id)
+        .find(|row| row.reservation_id == reservation_id)
         .ok_or(HostError::Journal)?;
     assert_eq!(row.reservation.state, ReservationState::Uncertain);
     assert_eq!(format!("{:?}", row.jit_state), "Uncertain");
     assert_eq!(row.launch_phase, Some(LaunchPhase::JitUncertain));
     assert!(
         reopened_scope
-            .claim_listener_delivery(physical.reservation_id)
+            .claim_listener_delivery(reservation_id)
             .await?
             .is_none()
     );

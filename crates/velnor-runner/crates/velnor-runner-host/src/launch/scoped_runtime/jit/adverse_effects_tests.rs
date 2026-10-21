@@ -133,13 +133,15 @@ async fn assert_jit_failure_holds_native_charge(
         &mut transport,
         "admin-token",
         &native.scope,
-        physical.intent_id,
-        physical.reservation_id,
-        REQUEST_ID,
-        runner_name,
-        SET_ID,
-        native.policy_generation,
-        &native.policy_digest,
+        super::JitRequestIdentity {
+            intent_id: physical.intent_id,
+            reservation_id: physical.reservation_id,
+            request_id: REQUEST_ID,
+            runner_name,
+            scale_set_id: SET_ID,
+            policy_generation: native.policy_generation,
+            policy_digest: &native.policy_digest,
+        },
     )
     .await;
     assert_eq!(result.err(), Some(expected_error), "{label}");
@@ -156,13 +158,15 @@ async fn assert_jit_failure_holds_native_charge(
         &mut transport,
         "admin-token",
         &native.scope,
-        physical.intent_id,
-        reservation_id,
-        REQUEST_ID,
-        runner_name,
-        SET_ID,
-        native.policy_generation,
-        &native.policy_digest,
+        super::JitRequestIdentity {
+            intent_id: physical.intent_id,
+            reservation_id,
+            request_id: REQUEST_ID,
+            runner_name,
+            scale_set_id: SET_ID,
+            policy_generation: native.policy_generation,
+            policy_digest: &native.policy_digest,
+        },
     )
     .await;
     assert!(matches!(replay, Err(EnsureError::Uncertain)), "{label}");
@@ -177,16 +181,18 @@ async fn assert_jit_failure_holds_native_charge(
     drop(scope);
     drop(journal);
     verify_reopened_uncertain(
-        &scratch,
-        &binding,
-        reservation_id,
-        intent_id,
-        &requested_name,
-        policy_generation,
-        &policy_digest,
+        ReopenedJitAttempt {
+            scratch: &scratch,
+            binding: &binding,
+            reservation_id,
+            intent_id,
+            requested_name: &requested_name,
+            policy_generation,
+            policy_digest: &policy_digest,
+            label,
+        },
         &mut transport,
         &calls,
-        label,
     )
     .await
 }
@@ -240,23 +246,27 @@ async fn verify_uncertain_charge(
     Ok(())
 }
 
-async fn verify_reopened_uncertain(
-    scratch: &Scratch,
-    binding: &RepositoryConnection,
+struct ReopenedJitAttempt<'a> {
+    scratch: &'a Scratch,
+    binding: &'a RepositoryConnection,
     reservation_id: i64,
     intent_id: i64,
-    requested_name: &str,
+    requested_name: &'a str,
     policy_generation: u64,
-    policy_digest: &str,
+    policy_digest: &'a str,
+    label: &'a str,
+}
+
+async fn verify_reopened_uncertain(
+    attempt: ReopenedJitAttempt<'_>,
     transport: &mut ReplyTransport,
     calls: &AtomicUsize,
-    label: &str,
 ) -> Result<(), String> {
-    let reopened = Journal::open(&scratch.file())
+    let reopened = Journal::open(&attempt.scratch.file())
         .await
         .map_err(|error| error.to_string())?;
     let reopened_scope = reopened
-        .connection_scope(&binding)
+        .connection_scope(attempt.binding)
         .await
         .map_err(|error| error.to_string())?;
     assert_eq!(
@@ -272,7 +282,8 @@ async fn verify_reopened_uncertain(
             .await
             .map_err(|error| error.to_string())?,
         Some(crate::journal::RequestAcquireState::Acquired),
-        "{label}"
+        "{}",
+        attempt.label
     );
     assert_eq!(
         reopened
@@ -280,7 +291,8 @@ async fn verify_reopened_uncertain(
             .await
             .map_err(|error| error.to_string())?,
         1,
-        "{label}"
+        "{}",
+        attempt.label
     );
     let rows = reopened_scope
         .physical_runner_reservations()
@@ -288,36 +300,44 @@ async fn verify_reopened_uncertain(
         .map_err(|error| error.to_string())?;
     let row = rows
         .iter()
-        .find(|row| row.reservation_id == reservation_id)
-        .ok_or_else(|| format!("{label}: reopened reservation is absent"))?;
-    assert_eq!(row.intent_id, intent_id, "{label}");
+        .find(|row| row.reservation_id == attempt.reservation_id)
+        .ok_or_else(|| format!("{}: The reopened reservation is absent.", attempt.label))?;
+    assert_eq!(row.intent_id, attempt.intent_id, "{}", attempt.label);
     assert_eq!(
         row.reservation.state,
         ReservationState::Uncertain,
-        "{label}"
+        "{}",
+        attempt.label
     );
     let replay = super::request_and_bind(
         transport,
         "admin-token",
         &reopened_scope,
-        intent_id,
-        reservation_id,
-        REQUEST_ID,
-        requested_name,
-        SET_ID,
-        policy_generation,
-        policy_digest,
+        super::JitRequestIdentity {
+            intent_id: attempt.intent_id,
+            reservation_id: attempt.reservation_id,
+            request_id: REQUEST_ID,
+            runner_name: attempt.requested_name,
+            scale_set_id: SET_ID,
+            policy_generation: attempt.policy_generation,
+            policy_digest: attempt.policy_digest,
+        },
     )
     .await;
-    assert!(matches!(replay, Err(EnsureError::Uncertain)), "{label}");
-    assert_eq!(calls.load(Ordering::SeqCst), 1, "{label}");
+    assert!(
+        matches!(replay, Err(EnsureError::Uncertain)),
+        "{}",
+        attempt.label
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 1, "{}", attempt.label);
     assert!(
         reopened_scope
-            .claim_listener_delivery(reservation_id)
+            .claim_listener_delivery(attempt.reservation_id)
             .await
             .map_err(|error| error.to_string())?
             .is_none(),
-        "{label}"
+        "{}",
+        attempt.label
     );
     Ok(())
 }

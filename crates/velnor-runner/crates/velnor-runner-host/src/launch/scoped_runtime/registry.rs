@@ -87,7 +87,7 @@ mod tests {
 
         assert_eq!(registry.record_started([42, 41, 41, -1]), [41]);
         assert_eq!(registry.take_started(41), Some("runner-41"));
-        assert!(registry.record_started([41]).is_empty());
+        assert_eq!(registry.record_started([41]), [] as [i64; 0]);
         assert_eq!(registry.take_started(41), None);
     }
 

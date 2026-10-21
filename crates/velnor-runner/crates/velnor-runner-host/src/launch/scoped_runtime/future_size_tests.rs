@@ -47,7 +47,7 @@ async fn shared_scoped_prepare_future_stays_small_and_preserves_no_start() {
     let docker = Docker::connect_with_socket(
         socket_path.to_str().expect("socket path must be UTF-8"),
         120,
-        &bollard::API_DEFAULT_VERSION,
+        bollard::API_DEFAULT_VERSION,
     )
     .expect("a lazy Docker client must be constructible");
     let future = super::prepare_and_bind_scoped_with_provider(
