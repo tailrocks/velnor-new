@@ -26,17 +26,22 @@ complete.
 [stacks.dbt]
 projects = ["chainargos-dbt"]        # required, sorted, unique; "." is the repository root
 services = ["postgres"]              # closed catalog; needed by compile
-env = { DBT_HOST = "127.0.0.1", DBT_PORT = "40000", DBT_USER = "chainargos", DBT_PASSWORD = "chainargos", DBT_DBNAME = "chainargos", DBT_PROFILES_DIR = "." }
+env = { DBT_HOST = "127.0.0.1", DBT_PORT = "40000", DBT_USER = "chainargos", DBT_PASSWORD = "chainargos", DBT_DBNAME = "chainargos" }
 checks = ["parse", "compile"]        # closed; default ["parse"]; "compile" requires a service
 timeout_minutes = 10                 # 1..=360; default workflow.crate_timeout_minutes
 ```
 
 The table is strict. There is no shell, argv, YAML or `uses:` field. `dbt deps`
-always runs first and is not configurable. `env` keys are `DBT_[A-Z0-9_]+` and
-values are inert literals over `[A-Za-z0-9._:/-]` (at most 128 bytes, 32
-entries): no expression, quote, `$` or whitespace, so a value can never carry
-syntax. `DBT_PASSWORD` is a fixed non-secret placeholder for a service container
-and is never a credential. With `services = ["postgres"]`, `DBT_PORT`,
+always runs first and is not configurable. `env` accepts only the profile-data
+keys `DBT_HOST`, `DBT_PORT`, `DBT_USER`, `DBT_PASSWORD`, and `DBT_DBNAME`;
+project, profile, package, target, state, metadata, index, and log path
+overrides are rejected. Values are inert literals over `[A-Za-z0-9._:/-]` (at
+most 128 bytes, 32 entries): no expression, quote, `$` or whitespace, so a
+value can never carry syntax. The generator sets `DBT_PROJECT_DIR` and
+`DBT_PROFILES_DIR` to `.` on every dbt step, keeping Fusion's profile and
+project resolution inside the configured project directory. `DBT_PASSWORD`
+is a fixed non-secret placeholder for a service container and is never a
+credential. With `services = ["postgres"]`, `DBT_PORT`,
 `DBT_USER`, `DBT_PASSWORD` and `DBT_DBNAME`, when present, must equal what the
 catalog service publishes (host port `40000`, user, password and database
 `chainargos`); a different value fails generation with

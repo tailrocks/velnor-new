@@ -2,8 +2,8 @@
 //!
 //! The table is strict (unknown keys are errors) and carries no shell, argv,
 //! YAML or `uses:` field: checks are a closed enum, services are a closed
-//! catalog and `env` is a map of `DBT_*` names to inert literals. `dbt deps`
-//! always runs first and is not configurable.
+//! catalog and `env` contains only closed profile-data names with inert
+//! values. `dbt deps` always runs first and is not configurable.
 
 use super::tofu::Utf8RepoRelDir;
 use crate::errors::ContractError;
@@ -28,7 +28,7 @@ pub struct DbtStackConfig {
     /// Service containers the job starts (closed catalog), sorted and unique.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub services: Vec<DbtService>,
-    /// Inert `DBT_*` environment for the job (profile inputs, never credentials).
+    /// Closed profile-data inputs; project and path options are owned by Velnor.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub env: BTreeMap<String, String>,
     /// Checks the job runs after `dbt deps`; defaults to [`DbtCheck::Parse`] alone.
@@ -169,16 +169,13 @@ impl DbtStackConfig {
     }
 }
 
-/// True for `DBT_` followed by upper-case alphanumerics and `_`.
+/// True for the closed set of environment-driven profile data inputs.
 #[must_use]
 pub(super) fn is_valid_env_name(name: &str) -> bool {
-    name.strip_prefix("DBT_").is_some_and(|rest| {
-        !rest.is_empty()
-            && name.len() <= 64
-            && rest
-                .bytes()
-                .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
-    })
+    matches!(
+        name,
+        "DBT_HOST" | "DBT_PORT" | "DBT_USER" | "DBT_PASSWORD" | "DBT_DBNAME"
+    )
 }
 
 /// True for a value that can carry no expression, quote, shell or YAML syntax.

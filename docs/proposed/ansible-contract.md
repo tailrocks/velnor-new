@@ -37,8 +37,11 @@ sha256 = "<64 lower-case hex>"
 ```
 
 The table is strict. There is no shell, argv, YAML or `uses:` field, and no
-host, vault or SSH field. Paths are repository-relative file paths over
-`[A-Za-z0-9._-]` segments.
+host, vault or SSH field. `ansible.cfg` path values are literal, nonempty
+root-relative paths using only ASCII letters, digits, `.`, `_`, `-`, and `/`;
+expansion syntax, quotes, backslashes, empty list elements and traversal
+outside the root are rejected. `inventory` uses comma-separated paths and
+`roles_path` uses colon-separated paths; the other separator is invalid.
 
 ## Implemented: `velnor-actions-ansible`
 
@@ -124,8 +127,10 @@ job per configured root; the orchestrator resolves it in `ansible_inventory`
   only the inert keys `defaults.{inventory, roles_path, host_key_checking,
   retry_files_enabled, interpreter_python, forks, gathering, timeout, nocows,
   deprecation_warnings, display_skipped_hosts, any_errors_fatal}` and
-  `ssh_connection.{pipelining, retries}` with every path inside the root
+  `ssh_connection.{pipelining, retries}` with literal path-list grammar and
+  every path inside the root
   (`ansible_cfg_missing`, `ansible_cfg_key_forbidden:<section.key>`,
+  `ansible_cfg_path_invalid:<key>`,
   `ansible_cfg_path_escapes_root:<key>`), and the job re-checks the file's SHA-256
   against the digest recorded at generation. `ansible-lint` runs from a
   Velnor-written config (`profile`, `offline: true`), never the repository's
