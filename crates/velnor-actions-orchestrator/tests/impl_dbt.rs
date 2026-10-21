@@ -227,7 +227,7 @@ fn project_policy_failures_stop_generation() -> TestResult {
     let cases = [
         ("[tools]\nnode = \"24.20.0\"\n", "dbt_fusion_not_declared"),
         (
-            "[tools]\ndbt-fusion = \"2.0.0\"\n",
+            "[tools]\ndbt-fusion = \"2.0.0-beta.1\"\n",
             "project_tool_version_not_exact",
         ),
     ];
