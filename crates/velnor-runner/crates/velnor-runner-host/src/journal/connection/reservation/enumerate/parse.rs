@@ -13,6 +13,8 @@ use super::{PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReser
 
 mod decode;
 use decode::{jit_is_consistent, parse_runner, read_intent, read_reservation, read_runner_jit};
+mod identity;
+use identity::{ReservationIdentityContext, reservation_identity_is_known};
 
 struct ReservationRow {
     reservation_id: i64,
@@ -77,18 +79,18 @@ pub(super) fn parse_reservation(
     let assignment = parse_assignment(scope, set_id, &reservation.key);
     let runner = parse_runner(&intent, &jit, set_id);
     let expected_name = assignment.as_ref().map(physical_runner_name);
-    let known = reservation_identity_is_known(
-        &reservation,
-        &intent,
-        &jit,
+    let known = reservation_identity_is_known(ReservationIdentityContext {
+        reservation: &reservation,
+        intent: &intent,
+        jit: &jit,
         scope,
         set_id,
         current_set_id,
-        assignment.is_some(),
-        expected_name.as_deref(),
-        runner.is_some(),
+        assignment_found: assignment.is_some(),
+        expected_name: expected_name.as_deref(),
+        runner_found: runner.is_some(),
         request_link_is_consistent,
-    );
+    });
     let ownership = match (known, assignment) {
         (true, Some(identity)) => PhysicalRunnerOwnership::Known(identity),
         _ => PhysicalRunnerOwnership::Unknown,
@@ -103,44 +105,6 @@ pub(super) fn parse_reservation(
         resume_eligible,
         acquired_request,
     ))
-}
-
-fn reservation_identity_is_known(
-    reservation: &ReservationRow,
-    intent: &IntentSnapshot,
-    jit: &RunnerJitSnapshot,
-    scope: &ConnectionJournal,
-    set_id: i64,
-    current_set_id: Option<i64>,
-    assignment_found: bool,
-    expected_name: Option<&str>,
-    runner_found: bool,
-    request_link_is_consistent: bool,
-) -> bool {
-    intent.row_id == Some(reservation.intent_id)
-        && intent.kind.as_deref() == Some("launch")
-        && intent.key.as_deref() == Some(reservation.key.as_str())
-        && intent.set_id == Some(set_id)
-        && intent.state.is_some()
-        && intent.cleanup_proven == Some(false)
-        && reservation.binding_digest == scope.binding_digest()
-        && current_set_id == Some(set_id)
-        && assignment_found
-        && intent.acquire_attempted == Some(false)
-        && intent.acquire_resolved == Some(false)
-        && intent.acquired == Some(false)
-        && jit.state_known
-        && jit_is_consistent(
-            reservation,
-            intent,
-            jit,
-            set_id,
-            expected_name,
-            runner_found,
-        )
-        && phase_matches_jit(jit.state, intent.phase)
-        && request_ids_are_consistent(intent, jit)
-        && request_link_is_consistent
 }
 
 fn request_ids_are_consistent(intent: &IntentSnapshot, jit: &RunnerJitSnapshot) -> bool {
