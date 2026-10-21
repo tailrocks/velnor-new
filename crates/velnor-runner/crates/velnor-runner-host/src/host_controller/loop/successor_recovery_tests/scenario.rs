@@ -193,16 +193,20 @@ async fn poll_fresh_assigned_demand(
 ) -> Result<(), String> {
     let poll = controller::assigned_statistics(1);
     let response = crate::launch::test_positive_poll_once_with_response(
-        link,
-        prepared.set_id,
-        session,
-        scope,
-        prepared.session_intent,
-        &controller::header_allocation(scope, prepared.session_intent).await?,
-        0,
-        poll,
-        "https://queue.example.invalid/messages".to_owned(),
-        Some("queue-token".to_owned()),
+        crate::launch::PositivePollContext {
+            link,
+            set_id: prepared.set_id,
+            session,
+            scoped: scope,
+            session_intent_id: prepared.session_intent,
+            allocation: &controller::header_allocation(scope, prepared.session_intent).await?,
+            cursor: 0,
+        },
+        crate::launch::TestPollResponse {
+            polled: poll,
+            path: "https://queue.example.invalid/messages".to_owned(),
+            queue: Some("queue-token".to_owned()),
+        },
         async |_link, _session, _path, _queue, _polled| Ok(()),
         async |_link, _poll, _origin, _path, _queue, _admin| {
             Err(crate::scale_set::EnsureError::AdmissionClosed)

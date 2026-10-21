@@ -116,16 +116,20 @@ async fn missing_stats_completion_ack_allows_the_next_poll_on_fixture_stack() ->
     let acknowledgement_calls = Cell::new(0);
 
     let outcome = launch::test_positive_poll_once_with_response(
-        &mut link,
-        fixture.runner.runner_scale_set_id,
-        &mut session,
-        &fixture.scope,
-        intent_id,
-        &allocation,
-        0,
-        completion_response(&fixture, 96),
-        "https://queue.example.invalid/messages".to_owned(),
-        Some("queue-token".to_owned()),
+        launch::PositivePollContext {
+            link: &mut link,
+            set_id: fixture.runner.runner_scale_set_id,
+            session: &mut session,
+            scoped: &fixture.scope,
+            session_intent_id: intent_id,
+            allocation: &allocation,
+            cursor: 0,
+        },
+        launch::TestPollResponse {
+            polled: completion_response(&fixture, 96),
+            path: "https://queue.example.invalid/messages".to_owned(),
+            queue: Some("queue-token".to_owned()),
+        },
         async |_link, _session, _path, _queue, _polled| {
             acknowledgement_calls.set(acknowledgement_calls.get() + 1);
             Ok(())
@@ -141,16 +145,20 @@ async fn missing_stats_completion_ack_allows_the_next_poll_on_fixture_stack() ->
     assert!(outcome.started_request_ids.is_empty());
 
     let next_poll = test_positive_poll_once_with_response(
-        &mut link,
-        fixture.runner.runner_scale_set_id,
-        &mut session,
-        &fixture.scope,
-        intent_id,
-        &allocation,
-        0,
-        Poll::Empty,
-        "https://queue.example.invalid/messages".to_owned(),
-        Some("queue-token".to_owned()),
+        launch::PositivePollContext {
+            link: &mut link,
+            set_id: fixture.runner.runner_scale_set_id,
+            session: &mut session,
+            scoped: &fixture.scope,
+            session_intent_id: intent_id,
+            allocation: &allocation,
+            cursor: 0,
+        },
+        launch::TestPollResponse {
+            polled: Poll::Empty,
+            path: "https://queue.example.invalid/messages".to_owned(),
+            queue: Some("queue-token".to_owned()),
+        },
         async |_link, _session, _path, _queue, _polled| {
             acknowledgement_calls.set(acknowledgement_calls.get() + 1);
             Ok(())
@@ -185,16 +193,20 @@ async fn acknowledgement_error_propagates_before_admission_on_fixture_stack() ->
     let admission_calls = Cell::new(0);
 
     let result = test_positive_poll_once_with_response(
-        &mut link,
-        fixture.runner.runner_scale_set_id,
-        &mut session,
-        &fixture.scope,
-        intent_id,
-        &allocation,
-        0,
-        completion_response(&fixture, 98),
-        "https://queue.example.invalid/messages".to_owned(),
-        Some("queue-token".to_owned()),
+        launch::PositivePollContext {
+            link: &mut link,
+            set_id: fixture.runner.runner_scale_set_id,
+            session: &mut session,
+            scoped: &fixture.scope,
+            session_intent_id: intent_id,
+            allocation: &allocation,
+            cursor: 0,
+        },
+        launch::TestPollResponse {
+            polled: completion_response(&fixture, 98),
+            path: "https://queue.example.invalid/messages".to_owned(),
+            queue: Some("queue-token".to_owned()),
+        },
         async |_link, _session, _path, _queue, _polled| {
             acknowledgement_calls.set(acknowledgement_calls.get() + 1);
             Err(EnsureError::Uncertain)

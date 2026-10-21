@@ -210,16 +210,20 @@ async fn http_401_ack_keeps_offer_durable_for_exact_replay() -> Result<(), Strin
     let mut pending_offer = Some(offer);
     let mut link = fixture.link;
     let outcome = test_positive_poll_once_with_response(
-        &mut link,
-        10_101,
-        &mut fixture.session,
-        &fixture.scope,
-        fixture.intent_id,
-        &fixture.allocation,
-        0,
-        polled.clone(),
-        "messages".to_owned(),
-        None,
+        crate::launch::PositivePollContext {
+            link: &mut link,
+            set_id: 10_101,
+            session: &mut fixture.session,
+            scoped: &fixture.scope,
+            session_intent_id: fixture.intent_id,
+            allocation: &fixture.allocation,
+            cursor: 0,
+        },
+        crate::launch::TestPollResponse {
+            polled: polled.clone(),
+            path: "messages".to_owned(),
+            queue: None,
+        },
         async |_link, session, path, _queue, response| {
             ack_calls.set(ack_calls.get() + 1);
             let Poll::Batch(batch) = response else {
@@ -275,16 +279,20 @@ async fn two_available_request_ids_stop_before_acquisition() -> Result<(), Strin
     let ack_calls = Cell::new(0);
     let mut link = fixture.link;
     let result = test_positive_poll_once_with_response(
-        &mut link,
-        10_101,
-        &mut fixture.session,
-        &fixture.scope,
-        fixture.intent_id,
-        &fixture.allocation,
-        0,
-        polled.clone(),
-        "messages".to_owned(),
-        None,
+        crate::launch::PositivePollContext {
+            link: &mut link,
+            set_id: 10_101,
+            session: &mut fixture.session,
+            scoped: &fixture.scope,
+            session_intent_id: fixture.intent_id,
+            allocation: &fixture.allocation,
+            cursor: 0,
+        },
+        crate::launch::TestPollResponse {
+            polled: polled.clone(),
+            path: "messages".to_owned(),
+            queue: None,
+        },
         async |_link, _session, _path, _queue, _response| {
             ack_calls.set(ack_calls.get() + 1);
             Ok(())

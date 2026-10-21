@@ -113,16 +113,20 @@ async fn acquire_through_positive_poll(
     let acknowledgement_calls = poll_session.acknowledgement_calls.clone();
     let mut lane = FakeLane::new([Ok(exchange(200, r#"{"count":1,"value":[41]}"#))]);
     let outcome = crate::launch::test_positive_poll_once_with_response(
-        &mut link,
-        SET_ID,
-        &mut session,
-        &fixture.scope,
-        poll_session.intent_id,
-        &poll_session.allocation,
-        0,
-        polled.clone(),
-        "https://queue.example.invalid/messages".to_owned(),
-        Some("queue-token".to_owned()),
+        crate::launch::PositivePollContext {
+            link: &mut link,
+            set_id: SET_ID,
+            session: &mut session,
+            scoped: &fixture.scope,
+            session_intent_id: poll_session.intent_id,
+            allocation: &poll_session.allocation,
+            cursor: 0,
+        },
+        crate::launch::TestPollResponse {
+            polled: polled.clone(),
+            path: "https://queue.example.invalid/messages".to_owned(),
+            queue: Some("queue-token".to_owned()),
+        },
         async |_link, _session, _path, _queue, _polled| {
             acknowledgement_calls.set(acknowledgement_calls.get() + 1);
             Ok(())

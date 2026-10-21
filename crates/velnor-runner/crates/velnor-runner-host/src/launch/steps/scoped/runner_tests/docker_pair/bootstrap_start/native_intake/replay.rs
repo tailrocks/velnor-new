@@ -187,16 +187,20 @@ async fn poll_once_with_test_effects(
     acknowledgement_calls: &std::cell::Cell<usize>,
 ) -> Result<crate::launch::PositivePollOutcome, crate::scale_set::EnsureError> {
     crate::launch::test_positive_poll_once_with_response(
-        link,
-        SET_ID,
-        session,
-        scoped,
-        poll_session.intent_id,
-        &poll_session.allocation,
-        0,
-        polled,
-        "https://queue.example.invalid/messages".to_owned(),
-        Some("queue-token".to_owned()),
+        crate::launch::PositivePollContext {
+            link,
+            set_id: SET_ID,
+            session,
+            scoped,
+            session_intent_id: poll_session.intent_id,
+            allocation: &poll_session.allocation,
+            cursor: 0,
+        },
+        crate::launch::TestPollResponse {
+            polled,
+            path: "https://queue.example.invalid/messages".to_owned(),
+            queue: Some("queue-token".to_owned()),
+        },
         async |_link, _session, path, queue, _polled| {
             assert_eq!(path, "https://queue.example.invalid/messages");
             assert_eq!(queue.as_deref(), Some("queue-token"));

@@ -19,6 +19,13 @@ pub(crate) struct PositivePollContext<'a> {
 }
 
 #[cfg(test)]
+pub(crate) struct TestPollResponse {
+    pub(crate) polled: Poll,
+    pub(crate) path: String,
+    pub(crate) queue: Option<String>,
+}
+
+#[cfg(test)]
 use super::completion_intake::IntakeDecision;
 use super::completion_intake::completion_error;
 use super::completion_intake::intake_and_ack_if_only_scoped;

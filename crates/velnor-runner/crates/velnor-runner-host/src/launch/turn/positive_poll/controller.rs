@@ -1,12 +1,11 @@
+#[cfg(test)]
+use super::TestPollResponse;
 use super::finish::FinishContext;
 use super::{
     Acknowledgement, AsyncFnMut, ConnectionJournal, EnsureError, Link, Poll, PositiveAdmission,
     PositivePollContext, PositivePollOutcome, QueueSession, ack_ready, begin_poll,
     completion_error, intake_and_ack_if_only_scoped, invoke_admission, poll_scoped_queue,
 };
-#[cfg(test)]
-use crate::journal::HeaderAllocation;
-
 pub(crate) async fn positive_poll_once<F>(
     context: PositivePollContext<'_>,
     admit: F,
@@ -43,16 +42,8 @@ where
 
 #[cfg(test)]
 pub(crate) async fn test_positive_poll_once_with_response<F, A>(
-    link: &mut Link,
-    set_id: i64,
-    session: &mut QueueSession,
-    scoped: &ConnectionJournal,
-    session_intent_id: i64,
-    allocation: &HeaderAllocation,
-    cursor: i64,
-    polled: Poll,
-    path: String,
-    queue: Option<String>,
+    context: PositivePollContext<'_>,
+    response: TestPollResponse,
     acknowledge: A,
     admit: F,
 ) -> Result<PositivePollOutcome, EnsureError>
@@ -73,19 +64,12 @@ where
         &Poll,
     ) -> Result<(), EnsureError>,
 {
-    let mut response = Some((polled, path, queue));
+    let mut response = Some(response);
     positive_poll_once_core(
-        PositivePollContext {
-            link,
-            set_id,
-            session,
-            scoped,
-            session_intent_id,
-            allocation,
-            cursor,
-        },
+        context,
         async |_link, _session, _scoped, _session_intent_id, _set_id, _header, _cursor| {
-            response.take().ok_or(EnsureError::Uncertain)
+            let response = response.take().ok_or(EnsureError::Uncertain)?;
+            Ok((response.polled, response.path, response.queue))
         },
         acknowledge,
         admit,

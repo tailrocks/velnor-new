@@ -115,21 +115,25 @@ async fn poll_without_statistics(
     )
     .map_err(show_error)?;
     crate::launch::test_positive_poll_once_with_response(
-        &mut link,
-        prepared.set_id,
-        &mut session,
-        scope,
-        prepared.session_intent,
-        &allocation,
-        0,
-        velnor_runner_github::Poll::Batch(velnor_runner_github::ParsedBatch {
-            message_id: 92_001,
-            raw_body: String::new(),
-            statistics: None,
-            jobs: Vec::new(),
-        }),
-        "https://queue.example.invalid/messages".to_owned(),
-        Some("queue-token".to_owned()),
+        crate::launch::PositivePollContext {
+            link: &mut link,
+            set_id: prepared.set_id,
+            session: &mut session,
+            scoped: scope,
+            session_intent_id: prepared.session_intent,
+            allocation: &allocation,
+            cursor: 0,
+        },
+        crate::launch::TestPollResponse {
+            polled: velnor_runner_github::Poll::Batch(velnor_runner_github::ParsedBatch {
+                message_id: 92_001,
+                raw_body: String::new(),
+                statistics: None,
+                jobs: Vec::new(),
+            }),
+            path: "https://queue.example.invalid/messages".to_owned(),
+            queue: Some("queue-token".to_owned()),
+        },
         async |_link, _session, _path, _queue, _polled| Ok(()),
         async |_link, _poll, _origin, _path, _queue, _admin| {
             admissions.fetch_add(1, Ordering::Relaxed);
