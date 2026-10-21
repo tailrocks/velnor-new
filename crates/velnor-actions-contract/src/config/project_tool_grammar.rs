@@ -13,7 +13,8 @@ pub const DBT_FUSION_TOOL_VARIABLE: &str = "VELNOR_TOOL_DBT_FUSION";
 /// Exact-grammar checker of the JDK declaration (HD-4a), appended only for jobs that reference the JDK.
 ///
 /// `velnor_exact_java` accepts exactly
-/// `<vendor>-<X.Y.Z>[+<build>[.<n>]*][.LTS]` over `[A-Za-z0-9.+-]`, so the
+/// `<vendor>-<X.Y.Z[.N]*>[+<build>[.<n>]*][.LTS]` (three or more numeric parts,
+/// as Oracle `GraalVM` `25.0.4.1.1`) over `[A-Za-z0-9.+-]`, so the
 /// single-line `$GITHUB_ENV` write cannot be injected.
 const JAVA_FUNCTIONS: &str = r#"velnor_exact_java() {
   v=$2
@@ -29,7 +30,11 @@ const JAVA_FUNCTIONS: &str = r#"velnor_exact_java() {
   core=${rest%%+*}
   build=
   case "$rest" in *+*) build=${rest#*+}; [ -n "$build" ] || velnor_fail "$1 has an empty build in '$(velnor_safe "$v")'" ;; esac
-  velnor_exact "$1" "$core"
+  case "$core" in
+    ''|*[!0-9.]*|.*|*.|*..*|0[0-9]*|*.0[0-9]*) velnor_fail "$1 must declare an exact JDK version of three or more numeric parts, not '$(velnor_safe "$v")'" ;;
+    *.*.*) ;;
+    *) velnor_fail "$1 must declare an exact JDK version of three or more numeric parts, not '$(velnor_safe "$v")'" ;;
+  esac
   case "$build" in
     '') ;;
     *[!0-9.]*|.*|*.|*..*) velnor_fail "$1 has a malformed build in '$(velnor_safe "$v")'" ;;

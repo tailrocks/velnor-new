@@ -171,7 +171,7 @@ fn copy_repository_content(
 }
 
 /// Keep workflow, declared-format, and release outputs generator-owned unless preserved.
-fn generator_owned(relative: &Path, preserve_workflows: &[String]) -> bool {
+pub(super) fn generator_owned(relative: &Path, preserve_workflows: &[String]) -> bool {
     if relative == Path::new("workflows") {
         return preserve_workflows.is_empty();
     }
@@ -195,7 +195,7 @@ fn generator_owned(relative: &Path, preserve_workflows: &[String]) -> bool {
 }
 
 /// Recognize generated shared actions by exact path shape and marker.
-fn generated_shared_action(
+pub(super) fn generated_shared_action(
     relative: &Path,
     source: &Path,
     metadata: &std::fs::Metadata,
@@ -214,7 +214,7 @@ fn generated_shared_action(
 ///
 /// Unmarked files under `scripts/` stay repository-owned; only a marked
 /// file is generator-owned and skipped during preserve-copy.
-fn generated_marked_script(
+pub(super) fn generated_marked_script(
     relative: &Path,
     source: &Path,
     metadata: &std::fs::Metadata,
@@ -232,7 +232,7 @@ fn generated_marked_script(
 /// collides with the generated file and generation refuses to overwrite it;
 /// without `[dco]` it is preserved untouched. A marked file is generator
 /// output, so it is retired when `[dco]` is removed.
-fn generated_marked_dco(
+pub(super) fn generated_marked_dco(
     relative: &Path,
     source: &Path,
     metadata: &std::fs::Metadata,

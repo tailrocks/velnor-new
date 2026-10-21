@@ -81,6 +81,7 @@ fn config_validation_reports_key_paths() {
         actions: ActionsConfig::default(),
         tools: velnor_actions_contract::ToolsConfig::default(),
         agents: velnor_actions_contract::AgentsConfig::default(),
+        github: velnor_actions_contract::GithubConfig::default(),
         dco: None,
         execution: None,
     };
@@ -155,6 +156,7 @@ fn runner_label_uses_exact_catalog_match() {
         actions: ActionsConfig::default(),
         tools: velnor_actions_contract::ToolsConfig::default(),
         agents: velnor_actions_contract::AgentsConfig::default(),
+        github: velnor_actions_contract::GithubConfig::default(),
         dco: None,
         execution: None,
     };

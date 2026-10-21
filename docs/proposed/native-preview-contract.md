@@ -86,8 +86,12 @@ carries the selected channel and literal version; a producer cannot choose them.
 A consumer may choose its declared preview Cargo profile from that typed request.
 Stable continues to use the consumer's declared stable release profile.
 
-Producer budgets accept one through twenty minutes, default five, and retain
-one original operation clock including cleanup. Updater budgets remain one
+Producer native-operation budgets accept one through thirty minutes, default five,
+and retain one original operation clock including cleanup. Each payload and assembly
+job adds a fixed five-minute lifecycle allowance outside that operation budget:
+one, five and thirty-minute operations therefore receive six, ten and thirty-five
+minute job limits. This bounded allowance covers setup, evidence retention and
+job cleanup; it is not a guarantee that every setup or cold build fits. Updater budgets remain one
 through five minutes. Signer, publisher, acquisition and control jobs remain
 five minutes. General crate-job policy is independent and is not changed here.
 

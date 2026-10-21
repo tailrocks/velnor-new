@@ -46,6 +46,9 @@ fn accepts_the_documented_forms() {
     let harness = harness().expect("harness");
     for ok in [
         "oracle-graalvm-25.0.3",
+        "oracle-graalvm-25.0.4",
+        "oracle-graalvm-25.0.4.1",
+        "oracle-graalvm-25.0.4.1.1",
         "temurin-21.0.8+9.0.LTS",
         "temurin-21.0.8+9",
         "corretto-17.0.12",
@@ -68,6 +71,12 @@ fn rejects_loose_unknown_and_hostile_declarations() {
         "oracle-graalvm-25",
         "oracle-graalvm-25.0",
         "oracle-graalvm-25.0.03",
+        "oracle-graalvm-25.0.4.1.",
+        "oracle-graalvm-25.0.4..1",
+        "oracle-graalvm-25.0.4.01",
+        "oracle-graalvm-25.0.4.x",
+        "oracle-graalvm-25.0.4.*",
+        "oracle-graalvm-~25.0.4.1",
         "openjdk-21.0.1",
         "temurin-21.0.8+",
         "temurin-21.0.8+x",

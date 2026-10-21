@@ -1,7 +1,9 @@
 //! Adapter-specific exact version grammars (HD-4a).
 //!
-//! `java` accepts `<vendor>-<X.Y.Z>[+<build>[.<n>]*][.LTS]` where the vendor
-//! is one of [`JAVA_VENDORS`]; Gradle accepts `N.N` or `N.N.N`. Bare majors,
+//! `java` accepts `<vendor>-<X.Y.Z[.N]*>[+<build>[.<n>]*][.LTS]` where the vendor
+//! is one of [`JAVA_VENDORS`] and the core has three or more numeric parts
+//! (Oracle `GraalVM` ships `25.0.4.1.1`; the first part is the Java feature
+//! version); Gradle accepts `N.N` or `N.N.N`. Bare majors,
 //! `lts`, `latest`, ranges and templates are rejected. Accepted strings are
 //! lower-case ASCII over `[a-z0-9.+-]` only, so they can be written to the
 //! single-line `$GITHUB_ENV` resolver output without escaping.
@@ -55,7 +57,7 @@ impl fmt::Display for VersionError {
 pub struct JavaVersion {
     /// Vendor from [`JAVA_VENDORS`].
     pub vendor: &'static str,
-    /// Exact `X.Y.Z` core.
+    /// Exact core of three or more numeric parts (`X.Y.Z[.N]*`).
     pub core: String,
     /// `<build>[.<n>]*` after `+`, when present.
     pub build: Option<String>,
@@ -116,7 +118,7 @@ pub fn parse_java(text: &str) -> Result<JavaVersion, VersionError> {
         Some((core, build)) => (core, Some(build)),
         None => (rest, None),
     };
-    if !is_exact_triple(core) {
+    if !is_exact_core(core) {
         return Err(VersionError::Core);
     }
     if let Some(build) = build
@@ -153,7 +155,7 @@ fn is_number(part: &str) -> bool {
         && part.len() <= 9
 }
 
-fn is_exact_triple(core: &str) -> bool {
+fn is_exact_core(core: &str) -> bool {
     let parts: Vec<&str> = core.split('.').collect();
-    parts.len() == 3 && parts.iter().all(|part| is_number(part))
+    parts.len() >= 3 && parts.iter().all(|part| is_number(part))
 }

@@ -22,6 +22,7 @@ pub(crate) fn run_public() -> ExitCode {
         Command::Generate {
             output_dir, mode, ..
         } => crate::dispatch_generate::run_generate(output_dir, mode),
+        Command::Unmanaged => crate::dispatch_unmanaged::run_unmanaged(),
         Command::Config { command } => crate::dispatch_config::run_config(&command),
         Command::Deps { command } => crate::dispatch_deps::run_deps(&command),
         Command::Playwright { command } => crate::dispatch_deps::run_playwright(&command),
