@@ -53,6 +53,7 @@ impl KnownNoAcquire {
         Self::new(request, state, reservation_released)
     }
 
+    #[cfg(test)]
     pub(crate) fn request(&self) -> &crate::journal::AssignmentIdentity {
         &self.request
     }
