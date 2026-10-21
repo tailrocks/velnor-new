@@ -231,6 +231,8 @@ fn freshness_gate_is_read_only_and_bounded_by_stuck_days() {
         "pins_not_latest",
         "upgrade_pull_request_stuck",
         "upgrade_prepare_failed",
+        "upgrade_scope_needs_migration",
+        "VELNOR_SCOPE_FAILED: ${{ needs.prepare.outputs.failed }}",
     ] {
         assert!(gate.contains(code), "{code}:\n{gate}");
     }

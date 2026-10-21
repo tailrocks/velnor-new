@@ -287,6 +287,24 @@ impl Sandbox {
         self.run(super::RELEASE, &[("GH_TOKEN", "fixture-read-token")])
     }
 
+    /// The prepare job: its release step, then the bump script, with the
+    /// prepare `mise` stand-in and `env` on top.
+    pub(super) fn prepare(&self, env: &[(&str, &str)]) -> TestResult<Output> {
+        self.stub("mise-impl", super::exec_fakes::PREPARE_MISE)?;
+        let release = self.verify_release()?;
+        if !release.status.success() {
+            return Ok(release);
+        }
+        let mut all = vec![
+            ("MISE_MINIMUM_RELEASE_AGE", "0s"),
+            ("MISE_YES", "1"),
+            ("VELNOR_CARGO_EDIT_VERSION", "0.13.13"),
+            ("VELNOR_CATALOG_BUMPER_SOURCE", ""),
+        ];
+        all.extend_from_slice(env);
+        self.run(&super::prepare_script(), &all)
+    }
+
     /// Run the verify job, then (only when it accepted the patch) the
     /// publish job's check and push steps, each from a fresh checkout.
     pub(super) fn pipeline(&self) -> TestResult<Pipeline> {
