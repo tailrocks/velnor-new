@@ -10,6 +10,9 @@ use super::{PositivePollContext, acquired::start_acquired, pre_jit, successor};
 use crate::host_controller::AssignedPopulationAction;
 use crate::host_controller::loop_driver::state::PreparedConnection;
 
+#[cfg(test)]
+#[path = "assigned_population/missing_statistics.rs"]
+mod missing_statistics;
 #[path = "assigned_population/retirement.rs"]
 mod retirement;
 
