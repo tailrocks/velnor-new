@@ -140,3 +140,5 @@
 | Ubuntu archive snapshot | A saved state of the Ubuntu package archive at a specified time. |
 | Verified marker | A file that records the private sources verified by one completed fetch. It does not authenticate later repository changes. |
 | SIGKILL | A Unix signal that requests immediate process termination and cannot be caught or ignored. |
+| Tokio runtime | A Tokio component that runs asynchronous Rust tasks and provides timers and network operations. |
+| Thread | An execution sequence that can run separately within a process. |
