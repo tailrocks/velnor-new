@@ -49,6 +49,18 @@ fn generated(config: &str) -> Result<(String, String, Vec<String>), Box<dyn std:
     ))
 }
 
+/// The `permissions:` entries of one job, in rendered order.
+fn job_permissions(yaml: &str, job: &str) -> Vec<String> {
+    let header = format!("  {job}:");
+    yaml.lines()
+        .skip_while(|line| *line != header)
+        .skip_while(|line| line.trim() != "permissions:")
+        .skip(1)
+        .take_while(|line| line.starts_with("      ") && !line.starts_with("       "))
+        .map(|line| line.trim().to_owned())
+        .collect()
+}
+
 #[test]
 fn git_tag_emits_publication_workflow_and_config_only() -> TestResult {
     let (_, _, files) = generated(GIT_TAG_CONFIG)?;
@@ -96,7 +108,7 @@ fn release_plz_config_creates_tags_and_releases_only() -> TestResult {
 }
 
 #[test]
-fn tag_release_is_gated_unprivileged_beyond_contents_write() -> TestResult {
+fn tag_release_is_gated_unprivileged_beyond_contents_write_and_pull_requests_read() -> TestResult {
     let (yaml, _, _) = generated(GIT_TAG_CONFIG)?;
     assert!(yaml.contains("branches:\n      - testmain"), "{yaml}");
     assert!(
@@ -109,7 +121,6 @@ fn tag_release_is_gated_unprivileged_beyond_contents_write() -> TestResult {
         "workflow_dispatch",
         "id-token",
         "CARGO_REGISTRY_TOKEN",
-        "pull-requests",
     ] {
         assert!(!yaml.contains(forbidden), "{forbidden}:\n{yaml}");
     }
@@ -118,7 +129,16 @@ fn tag_release_is_gated_unprivileged_beyond_contents_write() -> TestResult {
         "{yaml}"
     );
     assert!(yaml.contains("environment: release"), "{yaml}");
-    assert!(yaml.contains("contents: write"), "{yaml}");
+    assert_eq!(
+        job_permissions(&yaml, "rust-tag-release"),
+        ["contents: write", "pull-requests: read"],
+        "{yaml}"
+    );
+    assert_eq!(
+        job_permissions(&yaml, "publish-branch-authority"),
+        ["contents: read", "checks: read"],
+        "{yaml}"
+    );
     assert!(
         yaml.contains("Wait for Required check") && yaml.contains("check_name=Required"),
         "{yaml}"
