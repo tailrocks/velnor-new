@@ -51,13 +51,15 @@ so each compiles in its own lane through `CARGO_TARGET_DIR`:
 | Documentation | `<workspace>/target/velnor-doc` |
 | Format | none (no compilation) |
 
-The lanes live inside the workspace `target/`, which is exactly the payload the
-MBX action's `github-cache-mode: target` saves and restores, so every lane is
-cached under the crate job's single cache key; the action prunes each nested
-profile the same way as `target/debug`. MBX shares one compiler CPU/memory
-budget and deduplicates identical in-flight compilations across target
-directories (upstream "Parallel Cargo steps" guidance). The final MBX cleanup
-also preserves each lane's `doc/` output, which the restore step puts back.
+The lanes live inside the workspace `target/`. Compiled state reaches the next
+run as the opaque `mbx cache export` bundle of the job's builds (every lane
+builds with the job's `MBX_CACHE_EXPORT_GROUP`), not as a `target/` payload.
+MBX shares one compiler CPU/memory budget and deduplicates identical in-flight
+compilations across target directories (upstream "Parallel Cargo steps"
+guidance). The `Record MBX producer success` marker follows the test build, so
+the bundle is exported and saved after the final parallel join on a trusted
+push even when a later check failed
+([cache decisions](../proposed/cache-decisions.md) 1 and 3).
 The contract admits `CARGO_TARGET_DIR` only as a workspace-relative
 `target/velnor-<lane>` path.
 

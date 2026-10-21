@@ -178,6 +178,7 @@ pub fn finalize_jobs(
 
 /// Validate every finalized job after policy merging and internal expansion.
 fn validate_final_jobs(ir: &WorkflowIr, jobs: &mut JobMap) -> Result<(), RenderError> {
+    crate::cache_steps::append_bundle_postludes(jobs)?;
     crate::cache_steps::append_workspace_cleanups(jobs)?;
     let mut finalized = ir.clone();
     finalized.jobs.clone_from(jobs);

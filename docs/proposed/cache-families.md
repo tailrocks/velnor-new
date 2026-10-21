@@ -23,6 +23,7 @@ digest inputs only with a schema bump.
 | `dbt-packages` (1) | `$RUNNER_TEMP/velnor/dbt-packages/{root}` (one directory per dbt project) | family, schema, `uname -sm`, resolved `dbt-fusion` version | sha256 of the project's `package-lock.yml` | the project's own job, `trusted` only | contract only |
 | `python-venv` (1) | `$RUNNER_TEMP/velnor/uv-cache` (`UV_CACHE_DIR`) | family, schema, `uname -sm`, resolved `uv` and `python` versions | sha256 of the hash-pinned requirements file | the Ansible job, `trusted` only | contract only |
 | `ansible-collections` (1) | `$RUNNER_TEMP/velnor/ansible-collections` (verified tarballs) | family, schema, `uname -sm` | sorted `name\tversion\tsha256` lines of `[[stacks.ansible.collections]]` | the Ansible job, `trusted` only | contract only |
+| `mbx-bundle` (1) | `$RUNNER_TEMP/velnor/mbx-bundle` (the directory `mbx cache export --format directory` writes) | family, schema, path, `unit` (`crate` or `suite`), MBX version, Rust toolchain, workspace root, `uname -sm`, ceiling | sha256 of the workspace `Cargo.lock` | crate and suite jobs, `trusted` only; computed in the job (`Compute MBX bundle key`), not in the Plan job | yes |
 
 `node_modules` is never cached: the isolated linker rebuilds it from the Bun
 cache in seconds, and a cached `node_modules` would carry lifecycle-script
@@ -63,6 +64,24 @@ output across trust scopes.
   that later trusted runs reuse), and none archives a credential or an
   inventory/vault file.
 
+## MBX bundle family
+
+- The bundle is opaque. Velnor never lists, parses or rewrites it; the only
+  producer is `mbx cache export --group velnor --format directory` and the only
+  consumer is `mbx cache import`, which moves the objects into the store and
+  removes the restored directory.
+- Compat does not name a job: crate jobs of one workspace share the entry
+  (the first trusted writer wins; GitHub entries are immutable), and the key
+  changes only when the lock, toolchain, MBX version or platform changes. The
+  `unit` keeps crate and suite bundles apart.
+- A restore may fall back to any snapshot of the same compat (the newest
+  trusted entry), which `mbx cache import` then reuses object by object.
+- The size check reads the on-disk bytes of the exported directory
+  (`du -sk`), a conservative upper bound of the compressed entry. Over the
+  ceiling the export is deleted and the save refused (`over_ceiling`).
+- The bundle save has its own three-minute optional-save budget; the other
+  families keep one minute.
+
 ## Size ceilings and the budget rule
 
 Each spec carries `ceiling_bytes` (largest stored entry; a save that would
@@ -70,7 +89,7 @@ exceed it is refused and reported as `over_ceiling`) and `retained_entries`
 (newest entries kept per unit; older exact keys are pruned per family,
 [decision 4](cache-decisions.md)). `worst_case_bytes(units)` multiplies them.
 A test sums the reference repository (ChainArgos: four Bun roots, two OpenTofu
-roots, one Playwright version, one dbt project, one requirements file, one collection set, plus a 1.5 GiB allowance for the tools layer)
+roots, one Playwright version, one dbt project, one requirements file, one collection set, one Cargo workspace bundle, plus a 1.5 GiB allowance for the tools layer)
 and fails when it exceeds 85 % of the 10 GiB quota.
 
 | Family | Ceiling per entry | Retained per unit | Unit | Reference units | Worst case | Measured |
@@ -82,8 +101,9 @@ and fails when it exceeds 85 % of the 10 GiB quota.
 | `python-venv` | 384 MiB | 2 | requirements file | 1 | 768 MiB | not measured; ceiling is a placeholder to revise with data |
 | `ansible-collections` | 128 MiB | 2 | collection set | 1 | 256 MiB | not measured; ceiling is a placeholder to revise with data |
 | `playwright-browsers` | 512 MiB | 2 | Playwright version | 1 | 1 GiB | 328 MB of Chromium archives (Chromium, headless shell, ffmpeg; Playwright 1.64.1) |
+| `mbx-bundle` | 512 MiB | 1 | Cargo workspace | 1 | 512 MiB | not measured; ceiling is a placeholder to revise with data (a superseded entry is pruned by decision 4) |
 
-The reference total with the tools allowance is about 7.5 GiB against the
+The reference total with the tools allowance is about 8 GiB against the
 8.5 GiB budget (85 % of 10 GiB). A real Bun root that stores more than 256 MiB is
 refused at save time and reported, never silently truncated; the owner raises
 that ceiling with a measurement.

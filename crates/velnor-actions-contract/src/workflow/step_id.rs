@@ -27,6 +27,12 @@ pub enum StepId {
     ToolsRestore,
     /// Private-source App token mint whose output feeds the fetch and revoke steps.
     DepsToken,
+    /// MBX bundle key step whose outputs feed the restore and save.
+    MbxBundleKey,
+    /// MBX bundle restore whose hit outputs gate the import and the save.
+    MbxBundleRestore,
+    /// MBX bundle export whose `exported` output gates the save.
+    MbxBundleExport,
 }
 
 impl StepId {
@@ -43,6 +49,9 @@ impl StepId {
             Self::SourcesFetch => "sources-fetch",
             Self::ToolsRestore => "tools-restore",
             Self::DepsToken => "deps-token",
+            Self::MbxBundleKey => "mbx-bundle-key",
+            Self::MbxBundleRestore => "mbx-bundle-restore",
+            Self::MbxBundleExport => "mbx-bundle-export",
         }
     }
 }

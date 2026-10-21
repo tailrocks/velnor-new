@@ -6,7 +6,7 @@ use velnor_actions_contract::workflow::cache_family::{
 };
 use velnor_actions_contract::{Job, JobTimeout, PullRequestCachePolicy, Step, StepKind};
 
-use super::{MBX_TARGET_MODE_DOCTOR_EXEMPTION, check};
+use super::{MBX_OBJECTS_MODE_DOCTOR_EXEMPTION, check};
 
 const RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -241,11 +241,12 @@ fn i7_rejects_ungated_or_misplaced_saves() {
 }
 
 #[test]
-fn only_the_named_mbx_target_mode_exemption_skips_the_doctor() {
-    let mbx = format!("{MBX_TARGET_MODE_DOCTOR_EXEMPTION}47ce49b32025d93a7a2f4570815afaa2b7092240");
+fn only_the_named_mbx_objects_mode_exemption_skips_the_doctor() {
+    let mbx =
+        format!("{MBX_OBJECTS_MODE_DOCTOR_EXEMPTION}47ce49b32025d93a7a2f4570815afaa2b7092240");
     let key = "velnor-mbx-1.26.0-job-${{ github.job }}";
     check(&with_reader(action(
-        "Restore MBX objects",
+        "Set up MBX",
         &mbx,
         &[("cache-key", key)],
         None,

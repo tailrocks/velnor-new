@@ -35,7 +35,7 @@ fn report_wrapped_mbx_task() -> Result<velnor_actions_contract::Step, RenderErro
 fn mbx_emitted_only_for_mbx_driver() -> Result<(), RenderError> {
     let [preflight, selected, version_check] = mbx_tool_steps(&mbx_pin(), "1.19.0", "1.98.1")?;
     assert_eq!(preflight.name, "Verify Rust before MBX action");
-    assert_eq!(selected.name, "Restore MBX objects");
+    assert_eq!(selected.name, "Set up MBX");
     assert_eq!(version_check.name, "Verify native MBX version");
     assert!(
         mbx_steps_for_driver(
@@ -44,7 +44,7 @@ fn mbx_emitted_only_for_mbx_driver() -> Result<(), RenderError> {
             "1.19.0",
             "1.98.1",
             mbx_tool_env("1.98.1"),
-            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            velnor_actions_workflow_renderer::steps::MbxTransport::InstallOnly,
             None,
         )?
         .is_none()
@@ -56,7 +56,7 @@ fn mbx_emitted_only_for_mbx_driver() -> Result<(), RenderError> {
             "1.19.0",
             "1.98.1",
             mbx_tool_env("1.98.1"),
-            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            velnor_actions_workflow_renderer::steps::MbxTransport::InstallOnly,
             None,
         )
         .is_err_and(|err| format!("{err:?}").contains("not_mbx_action")),
@@ -69,7 +69,7 @@ fn mbx_emitted_only_for_mbx_driver() -> Result<(), RenderError> {
             "latest",
             "1.98.1",
             mbx_tool_env("1.98.1"),
-            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            velnor_actions_workflow_renderer::steps::MbxTransport::InstallOnly,
             None,
         )
         .is_err_and(|err| format!("{err:?}").contains("bad_mbx_version")),

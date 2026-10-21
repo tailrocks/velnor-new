@@ -239,6 +239,7 @@ fn build_single_suite_job(
         false,
         standalone_workflow,
     )?);
+    job_steps.extend(suite_steps::producer_mark_steps(spec)?);
     append_suite_artifact_uploads(&mut job_steps, suite, false)?;
     Ok(suite_job_record(
         format!("Suite ({name})"),
@@ -267,6 +268,7 @@ fn build_sharded_archive_jobs(
     build_steps.extend(compile_driver_steps(spec)?);
     build_steps.push(install_suite_tools_step(spec)?);
     build_steps.push(nextest_archive_step(suite, spec)?);
+    build_steps.extend(suite_steps::producer_mark_steps(spec)?);
     build_steps.push(steps::upload_suite_archive_step(
         &archive_artifact,
         &archive_file_expr,
@@ -314,6 +316,7 @@ fn build_sharded_inline_job(
         false,
         standalone_workflow,
     )?);
+    job_steps.extend(suite_steps::producer_mark_steps(spec)?);
     append_suite_artifact_uploads(&mut job_steps, suite, true)?;
     Ok(suite_job_record(
         format!("Suite ({name})"),

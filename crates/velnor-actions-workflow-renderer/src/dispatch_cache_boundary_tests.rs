@@ -102,7 +102,7 @@ fn acquire_step(staged: &str) -> Result<Step, crate::RenderError> {
 fn dispatch_plan_job(staged: &str) -> Result<Job, crate::RenderError> {
     let action = Step {
         parallel: false,
-        name: "Restore MBX objects".to_owned(),
+        name: "Set up MBX".to_owned(),
         id: None,
         role: None,
         condition: None,
@@ -112,7 +112,7 @@ fn dispatch_plan_job(staged: &str) -> Result<Job, crate::RenderError> {
                 env: BTreeMap::from([
                     ("VELNOR_MBX_VERSION".to_owned(), "1.21.1".to_owned()),
                     (
-                        crate::cache_steps::MBX_CACHE_MODE_ENV.to_owned(),
+                        "ACTIONS_CACHE_MODE".to_owned(),
                         "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}".to_owned(),
                     ),
                 ]),
@@ -253,15 +253,13 @@ fn assert_native_mbx_step(plan: &Job) {
     let mbx = plan
         .steps
         .iter()
-        .find(|step| step.name == "Restore MBX objects")
+        .find(|step| step.name == "Set up MBX")
         .expect("MBX action");
     assert!(mbx.condition.as_deref().is_some_and(|condition| {
         condition.contains("github.event_name != 'workflow_dispatch'")
     }));
     let native_mode = match &mbx.kind {
-        StepKind::Action { env, .. } => env
-            .get(crate::cache_steps::MBX_CACHE_MODE_ENV)
-            .map(String::as_str),
+        StepKind::Action { env, .. } => env.get("ACTIONS_CACHE_MODE").map(String::as_str),
         _ => None,
     };
     assert_eq!(

@@ -29,7 +29,7 @@ fn restored_tools_keys(yaml: &str) -> BTreeSet<String> {
 }
 
 fn assert_save_counts(yaml: &str, tools_keys: usize) {
-    let mbx_saves = yaml.matches("- name: Save MBX single bundle").count();
+    let mbx_saves = yaml.matches("- name: Save MBX bundle").count();
     assert_eq!(
         yaml.matches("actions/cache/save@").count(),
         1 + tools_keys + mbx_saves,
@@ -43,8 +43,8 @@ fn assert_save_counts(yaml: &str, tools_keys: usize) {
 }
 
 fn assert_save_steps_are_push_gated(yaml: &str, tools_keys: usize) {
-    let mbx_saves = yaml.matches("- name: Save MBX single bundle").count();
-    let mbx_exports = yaml.matches("- name: Export MBX single bundle").count();
+    let mbx_saves = yaml.matches("- name: Save MBX bundle").count();
+    let mbx_exports = yaml.matches("- name: Export MBX bundle").count();
     assert_eq!(
         count_steps_with_gate(
             yaml,
@@ -71,15 +71,20 @@ fn assert_save_steps_are_push_gated(yaml: &str, tools_keys: usize) {
     assert_eq!(
         count_steps_with_gate(
             yaml,
-            &["Export MBX single bundle", "Save MBX single bundle"],
-            &[
-                "runner.environment != 'github-hosted'",
-                "github.event_name == 'push'",
-                "github.event_name != 'workflow_dispatch'",
-            ],
+            &["Export MBX bundle"],
+            &["steps.mbx-bundle-key.outputs.save == 'true'", "always() && !cancelled()"],
         ),
-        mbx_saves + mbx_exports,
-        "MBX bundle export and save stay Scale Set and push-gated:\n{yaml}"
+        mbx_exports,
+        "MBX bundle exports run only where the key step granted a trusted push save:\n{yaml}"
+    );
+    assert_eq!(
+        count_steps_with_gate(
+            yaml,
+            &["Save MBX bundle"],
+            &["steps.mbx-bundle-export.outputs.exported == 'true'"],
+        ),
+        mbx_saves,
+        "MBX bundle saves need an admitted export:\n{yaml}"
     );
 }
 
@@ -87,8 +92,8 @@ fn assert_restore_steps_are_dispatch_denied(yaml: &str) {
     let restore_names = [
         "Restore Cargo sources",
         "Restore Mise tools",
-        "Restore MBX objects",
-        "Restore MBX single bundle",
+        "Set up MBX",
+        "Restore MBX bundle",
         "Restore Tofu providers",
     ];
     let restore_count = restore_names
