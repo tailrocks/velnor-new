@@ -35,6 +35,8 @@ pub(crate) mod dbt_inventory;
 mod dbt_steps;
 #[path = "dbt_tasks.rs"]
 mod dbt_tasks;
+#[path = "stack_family_cache.rs"]
+pub(crate) mod stack_family_cache;
 #[path = "stack_support.rs"]
 pub(crate) mod stack_support;
 

@@ -61,6 +61,7 @@ impl BunMemberPolicy {
             }
             if matches!(step.kind, StepKind::Action { .. })
                 && step.role != Some(StepRole::PrivateTokenMint)
+                && !crate::verification_jobs::stack_jobs::is_family_cache_role(step.role)
             {
                 return Err(invalid("bun_job_action_step"));
             }

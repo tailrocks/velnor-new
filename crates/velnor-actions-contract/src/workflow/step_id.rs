@@ -33,6 +33,18 @@ pub enum StepId {
     MbxBundleRestore,
     /// MBX bundle export whose `exported` output gates the save.
     MbxBundleExport,
+    /// Per-job runtime keys and trust of the generated stack family caches.
+    FamilyKeys,
+    /// Size admission of the Bun package cache before its save.
+    FamilySizeBunInstall,
+    /// Size admission of the Playwright browsers before their save.
+    FamilySizePlaywrightBrowsers,
+    /// Size admission of the dbt packages before their save.
+    FamilySizeDbtPackages,
+    /// Size admission of the uv wheel cache before its save.
+    FamilySizePythonVenv,
+    /// Size admission of the Ansible collection tarballs before their save.
+    FamilySizeAnsibleCollections,
 }
 
 impl StepId {
@@ -52,6 +64,12 @@ impl StepId {
             Self::MbxBundleKey => "mbx-bundle-key",
             Self::MbxBundleRestore => "mbx-bundle-restore",
             Self::MbxBundleExport => "mbx-bundle-export",
+            Self::FamilyKeys => "family-keys",
+            Self::FamilySizeBunInstall => "family-size-bun-install",
+            Self::FamilySizePlaywrightBrowsers => "family-size-playwright-browsers",
+            Self::FamilySizeDbtPackages => "family-size-dbt-packages",
+            Self::FamilySizePythonVenv => "family-size-python-venv",
+            Self::FamilySizeAnsibleCollections => "family-size-ansible-collections",
         }
     }
 }
