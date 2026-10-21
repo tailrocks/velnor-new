@@ -179,7 +179,7 @@ fn install_script(policy: &VerificationTaskPolicy) -> Result<String, RenderError
     ]);
     statements.extend(private_environment());
     statements.extend([
-        "export MISE_CEILING_PATHS=\"$task_root\"".to_owned(),
+        "export MISE_CEILING_PATHS=\"${task_root%/*}\"".to_owned(),
         "export MISE_TRUSTED_CONFIG_PATHS=\"$task_root\"".to_owned(),
         "export MISE_NO_HOOKS=1".to_owned(),
         "export MISE_CARGO_BINSTALL_ONLY=1".to_owned(),
