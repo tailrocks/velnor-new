@@ -10,12 +10,12 @@ autotests = false
 test-render-capture = []
 
 [dependencies]
-velnor-actions-actionlint = { version = "=0.1.36", path = "../velnor-actions-actionlint" }
-velnor-actions-contract = { version = "=0.1.36", path = "../velnor-actions-contract" }
+velnor-actions-actionlint = { version = "=0.1.37", path = "../velnor-actions-actionlint" }
+velnor-actions-contract = { version = "=0.1.37", path = "../velnor-actions-contract" }
 
 [dev-dependencies]
 serde_json = { workspace = true }
-velnor-actions-mise = { version = "=0.1.36", path = "../velnor-actions-mise" }
+velnor-actions-mise = { version = "=0.1.37", path = "../velnor-actions-mise" }
 
 [lints]
 workspace = true

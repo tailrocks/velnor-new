@@ -56,6 +56,7 @@ pub(crate) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> Vel
         },
         actions: ActionsConfig { overrides },
         agents: velnor_actions_contract::AgentsConfig::default(),
+        github: velnor_actions_contract::GithubConfig::default(),
         dco: None,
         execution: None,
         tools: velnor_actions_contract::ToolsConfig::default(),

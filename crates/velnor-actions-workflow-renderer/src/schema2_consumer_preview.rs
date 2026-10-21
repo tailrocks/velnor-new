@@ -56,7 +56,7 @@ pub struct ConsumerReleaseSpec {
     pub policy: PackageReleasePolicy,
     /// Producer platform selected by validated native configuration.
     pub producer_runner: VerificationRunner,
-    /// Producer task time limit.
+    /// Native operation time limit; producer jobs add fixed lifecycle headroom.
     pub producer_timeout_minutes: u16,
     /// Verified helper acquisition for Linux policy/signing/publication jobs.
     pub linux_acquire: Step,
