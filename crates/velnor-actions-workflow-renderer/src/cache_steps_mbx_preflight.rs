@@ -64,9 +64,11 @@ pub fn mbx_steps_for_driver(
 pub enum MbxTransport {
     /// Install MBX only: release and product jobs never restore or save compiled caches.
     InstallOnly,
-    /// Restore the opaque bundle on entry and export it after the producer of a crate job.
-    CrateBundle,
-    /// The same for a declared Rust suite job (its own bundle: other compile inputs).
+    /// Restore the dependency-seed bundle read-only (crate jobs never write it).
+    SeedRead,
+    /// The dependency-seed job: restore, and export plus save after its producer.
+    SeedWrite,
+    /// A declared Rust suite job: its own bundle (other compile inputs), written by the job.
     SuiteBundle,
 }
 
@@ -75,7 +77,7 @@ impl MbxTransport {
     pub(crate) const fn unit(self) -> Option<&'static str> {
         match self {
             Self::InstallOnly => None,
-            Self::CrateBundle => Some("crate"),
+            Self::SeedRead | Self::SeedWrite => Some("seed"),
             Self::SuiteBundle => Some("suite"),
         }
     }

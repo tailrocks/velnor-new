@@ -74,8 +74,9 @@ fn plan_tools_saves(
                 owners
                     .iter()
                     .filter(|id| {
-                        jobs.get(*id)
-                            .is_some_and(|job| !crate::matrix::suites::has_suite_matrix(job))
+                        jobs.get(*id).is_some_and(|job| {
+                            !crate::matrix::suites::has_suite_matrix(job) && !is_seed_job(job)
+                        })
                     })
                     .min()
             })
@@ -116,6 +117,14 @@ fn plan_tools_saves(
         }
     }
     Ok(planned)
+}
+
+/// True for a dependency-seed job: it runs only on trusted pushes and its
+/// failure must not decide whether the shared tools entry is written.
+fn is_seed_job(job: &Job) -> bool {
+    job.steps
+        .iter()
+        .any(|step| step.role == Some(StepRole::MbxSeedBuild))
 }
 
 /// True when a job carries one typed V2 tools restore or identity step.

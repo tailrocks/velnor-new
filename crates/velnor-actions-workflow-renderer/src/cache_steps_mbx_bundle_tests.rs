@@ -80,7 +80,7 @@ fn with_of(step: &Step) -> &BTreeMap<String, String> {
 
 #[test]
 fn bundle_prelude_follows_the_ready_check_and_install_only_action() {
-    let steps = steps(MbxTransport::CrateBundle, None);
+    let steps = steps(MbxTransport::SeedWrite, None);
     let roles: Vec<_> = steps.iter().map(|step| step.role).collect();
     assert_eq!(
         roles,
@@ -119,7 +119,7 @@ fn install_only_transport_adds_no_bundle_steps() {
 
 #[test]
 fn restore_reads_the_same_compatibility_prefix_and_family_path() {
-    let steps = steps(MbxTransport::CrateBundle, Some("backend-rust"));
+    let steps = steps(MbxTransport::SeedWrite, Some("backend-rust"));
     let restore = with_of(&steps[4]);
     assert_eq!(
         restore.get("key").map(String::as_str),
@@ -140,13 +140,13 @@ fn restore_reads_the_same_compatibility_prefix_and_family_path() {
 
 #[test]
 fn bundle_key_has_no_run_job_file_or_version_literal() {
-    let steps = steps(MbxTransport::CrateBundle, None);
+    let steps = steps(MbxTransport::SeedWrite, None);
     let script = run_of(&steps[3]);
     for banned in ["github.job", "github.run_", "hashFiles", "ImageVersion"] {
         assert!(!script.contains(banned), "{banned}");
     }
     assert!(script.contains("velnor-v1-mbx-bundle-trusted-"));
-    assert!(script.contains("unit=crate"));
+    assert!(script.contains("unit=seed"));
     assert!(script.contains("[ \"$trust\" != trusted ] || save=true"));
     let StepKind::Shell { env, .. } = &steps[3].kind else {
         panic!("key step must be a shell step");
@@ -162,10 +162,10 @@ fn bundle_key_has_no_run_job_file_or_version_literal() {
 }
 
 #[test]
-fn suite_and_crate_bundles_never_share_a_compatibility_digest() {
-    let crate_key = run_of(&steps(MbxTransport::CrateBundle, None)[3]).to_owned();
+fn seed_and_suite_bundles_never_share_a_compatibility_digest() {
+    let seed_key = run_of(&steps(MbxTransport::SeedWrite, None)[3]).to_owned();
     let suite_key = run_of(&steps(MbxTransport::SuiteBundle, None)[3]).to_owned();
-    assert_ne!(crate_key, suite_key);
+    assert_ne!(seed_key, suite_key);
     assert!(suite_key.contains("unit=suite"));
 }
 
@@ -176,7 +176,7 @@ fn producer_mark_and_postlude_gate_the_save_on_the_producer_not_later_checks() {
     assert!(mark.condition.is_none(), "default success() gates the mark");
     assert!(run_of(&mark).contains("mbx-producer-ok"));
 
-    let mut body = steps(MbxTransport::CrateBundle, None);
+    let mut body = steps(MbxTransport::SeedWrite, None);
     body.push(mark);
     let mut jobs = BTreeMap::from([("rust-demo".to_owned(), job(body))]);
     append_bundle_postludes(&mut jobs).expect("postlude");
@@ -211,8 +211,29 @@ fn producer_mark_and_postlude_gate_the_save_on_the_producer_not_later_checks() {
 }
 
 #[test]
+fn readers_share_the_seed_key_and_never_get_an_export() {
+    let reader = steps(MbxTransport::SeedRead, None);
+    let writer = steps(MbxTransport::SeedWrite, None);
+    assert_eq!(
+        run_of(&reader[3]),
+        run_of(&writer[3]),
+        "crate jobs read the entry the seed job writes"
+    );
+    let mut jobs = BTreeMap::from([("rust-demo".to_owned(), job(reader))]);
+    append_bundle_postludes(&mut jobs).expect("reader");
+    let roles: Vec<_> = jobs["rust-demo"]
+        .steps
+        .iter()
+        .map(|step| step.role)
+        .collect();
+    assert!(!roles.contains(&Some(StepRole::MbxBundleExport)));
+    assert!(!roles.contains(&Some(StepRole::MbxBundleSave)));
+}
+
+#[test]
 fn postlude_rejects_a_half_built_lifecycle_and_skips_other_jobs() {
-    let mut body = steps(MbxTransport::CrateBundle, None);
+    let mut body = steps(MbxTransport::SeedWrite, None);
+    body.push(mbx_producer_mark_step().expect("mark"));
     let mut jobs = BTreeMap::from([("rust-demo".to_owned(), job(body.clone()))]);
     append_bundle_postludes(&mut jobs).expect("first postlude");
     assert!(

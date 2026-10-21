@@ -139,7 +139,7 @@ const MBX_BUNDLE: FamilySpec = FamilySpec {
     layer: "mbx-bundle",
     schema: 1,
     paths: &MBX_BUNDLE_PATHS,
-    ceiling_bytes: 512 * MIB,
+    ceiling_bytes: 384 * MIB,
     retained_entries: 1,
 };
 

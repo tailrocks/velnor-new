@@ -18,10 +18,11 @@ Workflow to generate
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
     - actionlint (7 steps)
+    - dependency-seed (21 steps)
     - plan (11 steps)
     - required (8 steps)
     - required-gate (1 steps)
-    - rust-app (26 steps)
+    - rust-app (23 steps)
     - 1 Rust crate job
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check

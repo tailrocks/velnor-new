@@ -85,7 +85,8 @@ fn write_exec(path: &Path, body: &str) {
 }
 
 fn export_script() -> String {
-    let steps = steps(MbxTransport::CrateBundle, None);
+    let mut steps = steps(MbxTransport::SeedWrite, None);
+    steps.push(crate::cache_steps::mbx_producer_mark_step().expect("mark"));
     let mut jobs = BTreeMap::from([("rust-demo".to_owned(), job(steps))]);
     append_bundle_postludes(&mut jobs).expect("postlude");
     let steps = &jobs["rust-demo"].steps;
@@ -131,7 +132,7 @@ fn export_script_reports_a_failed_export_without_failing_the_job() {
 }
 
 fn import_script() -> String {
-    run_of(&steps(MbxTransport::CrateBundle, None)[5]).to_owned()
+    run_of(&steps(MbxTransport::SeedWrite, None)[5]).to_owned()
 }
 
 #[test]
@@ -155,7 +156,7 @@ fn import_script_consumes_the_restored_bundle_and_discards_a_corrupt_one() {
 
 #[test]
 fn key_script_grants_a_save_only_to_a_trusted_push() {
-    let key_script = run_of(&steps(MbxTransport::CrateBundle, None)[3]).to_owned();
+    let key_script = run_of(&steps(MbxTransport::SeedWrite, None)[3]).to_owned();
     let cases = [
         (
             [
