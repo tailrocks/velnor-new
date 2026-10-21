@@ -210,7 +210,7 @@ async fn publish_prepared_job_facts(
         input.ready,
         input.channel,
         &expected_request,
-        record,
+        &record,
     )
 }
 

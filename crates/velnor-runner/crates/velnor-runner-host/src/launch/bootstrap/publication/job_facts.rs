@@ -12,6 +12,7 @@ use crate::{
 mod identity;
 use self::identity::{digest, lower_hex};
 
+#[cfg(test)]
 const BTRFS_SUPER_MAGIC: u64 = 0x9123_683e;
 
 /// Proof that the controller published the exact cache projection below the fixed read-only job-facts mount.
@@ -30,11 +31,6 @@ pub(crate) struct JobFactsPublication {
     path: String,
     projection_digest: String,
     mount_id: u64,
-    device_major: u32,
-    device_minor: u32,
-    statx_device_major: u32,
-    statx_device_minor: u32,
-    fs_type_magic: u64,
     directory_device_major: u32,
     directory_device_minor: u32,
     directory_inode: u64,
@@ -100,18 +96,6 @@ impl JobFactsPublication {
         self.mount_id
     }
 
-    pub(crate) const fn device(&self) -> (u32, u32) {
-        (self.device_major, self.device_minor)
-    }
-
-    pub(crate) const fn statx_device(&self) -> (u32, u32) {
-        (self.statx_device_major, self.statx_device_minor)
-    }
-
-    pub(crate) const fn fs_type_magic(&self) -> u64 {
-        self.fs_type_magic
-    }
-
     pub(crate) const fn directory_identity(&self) -> (u32, u32, u64) {
         (
             self.directory_device_major,
@@ -140,7 +124,7 @@ pub(crate) fn job_facts_publication(
     ready: &VerifiedStorageInitializationReady,
     channel: &VerifiedProofChannelBinding,
     request: &velnor_resource_probe::job_facts_wire::JobFactsPublicationContext,
-    record: JobFactsPublicationRecord,
+    record: &JobFactsPublicationRecord,
 ) -> Result<JobFactsPublication, crate::error::HostError> {
     let pair_sha256 = velnor_resource_probe::job_facts_wire::paired_payload_sha256(request)
         .map_err(|_| crate::error::HostError::Identity)?;
@@ -150,7 +134,7 @@ pub(crate) fn job_facts_publication(
         ready,
         channel,
         request,
-        record: &record,
+        record,
         pair_sha256: &pair_sha256,
         job_facts_sha256: &digest(snapshot.bytes()),
     };
