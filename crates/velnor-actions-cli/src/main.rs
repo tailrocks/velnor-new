@@ -12,6 +12,7 @@ mod dispatch_local_release;
 mod dispatch_qualification;
 mod dispatch_qualify_tools;
 mod dispatch_repo_policy;
+mod dispatch_unmanaged;
 
 use std::process::ExitCode;
 
