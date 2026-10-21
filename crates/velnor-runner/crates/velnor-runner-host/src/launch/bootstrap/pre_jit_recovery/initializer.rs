@@ -63,19 +63,8 @@ impl InitializerCleanup<'_> {
         {
             return Err(HostError::Ownership);
         }
-        record_absence(
-            self.docker,
-            self.journal,
-            self.engine,
-            self.images,
-            self.claim,
-            identity,
-            None,
-            None,
-            "already_absent",
-            self.deadline,
-        )
-        .await
+        self.record_absence(identity, None, None, "already_absent")
+            .await
     }
 
     async fn remove_present(
@@ -227,12 +216,7 @@ impl InitializerCleanup<'_> {
         {
             return Err(HostError::Ownership);
         }
-        record_absence(
-            self.docker,
-            self.journal,
-            self.engine,
-            self.images,
-            self.claim,
+        self.record_absence(
             identity,
             Some(helper_id),
             stopped
@@ -240,9 +224,51 @@ impl InitializerCleanup<'_> {
                 .as_ref()
                 .and_then(|config| config.labels.clone()),
             "removed_and_absent",
-            self.deadline,
         )
         .await
+    }
+
+    async fn record_absence(
+        &self,
+        identity: &PreJitInitializerIdentity,
+        observed_id: Option<&str>,
+        labels: Option<std::collections::HashMap<String, String>>,
+        outcome: &'static str,
+    ) -> Result<(), HostError> {
+        let selected = verify_selection(
+            self.docker,
+            self.engine,
+            self.images,
+            self.claim,
+            self.deadline,
+        )
+        .await?;
+        let evidence = serde_json::to_vec(&InitializerAbsenceEvidence {
+            engine_id: selected.engine_id,
+            docker_root_digest: selected.docker_root_digest,
+            helper_name: identity.helper_name(),
+            helper_id: identity.helper_id(),
+            operation_key: identity.operation_key(),
+            image_runtime_id: identity.image_runtime_id(),
+            image_source_sha: identity.image_source_sha(),
+            layout_version: identity.layout_version(),
+            home_volume: identity.home_volume(),
+            work_volume: identity.work_volume(),
+            metadata_volume: identity.metadata_volume(),
+            observed_id,
+            labels,
+            outcome,
+        })
+        .map_err(|_| HostError::Identity)?;
+        let proof = PreJitCleanupPhaseProof::after_observed_phase(
+            self.claim,
+            PreJitCleanupPhase::BootstrapAbsent,
+            PreJitCleanupPhase::InitializerAbsent,
+            &evidence,
+        )?;
+        self.journal
+            .record_pre_jit_cleanup_phase(self.claim, &proof)
+            .await
     }
 }
 
@@ -290,45 +316,6 @@ fn valid_volume(
         && rows[0].name() == name
         && id.is_none_or(|expected| rows[0].id() == Some(expected))
         && rows[0].create_state() == "created"
-}
-
-async fn record_absence(
-    docker: &Docker,
-    journal: &ConnectionJournal,
-    engine: &SelectedEngineContext,
-    images: &VerifiedWorkerImages,
-    claim: &PreJitCleanupClaim,
-    identity: &PreJitInitializerIdentity,
-    observed_id: Option<&str>,
-    labels: Option<std::collections::HashMap<String, String>>,
-    outcome: &'static str,
-    deadline: Instant,
-) -> Result<(), HostError> {
-    let selected = verify_selection(docker, engine, images, claim, deadline).await?;
-    let evidence = serde_json::to_vec(&InitializerAbsenceEvidence {
-        engine_id: selected.engine_id,
-        docker_root_digest: selected.docker_root_digest,
-        helper_name: identity.helper_name(),
-        helper_id: identity.helper_id(),
-        operation_key: identity.operation_key(),
-        image_runtime_id: identity.image_runtime_id(),
-        image_source_sha: identity.image_source_sha(),
-        layout_version: identity.layout_version(),
-        home_volume: identity.home_volume(),
-        work_volume: identity.work_volume(),
-        metadata_volume: identity.metadata_volume(),
-        observed_id,
-        labels,
-        outcome,
-    })
-    .map_err(|_| HostError::Identity)?;
-    let proof = PreJitCleanupPhaseProof::after_observed_phase(
-        claim,
-        PreJitCleanupPhase::BootstrapAbsent,
-        PreJitCleanupPhase::InitializerAbsent,
-        &evidence,
-    )?;
-    journal.record_pre_jit_cleanup_phase(claim, &proof).await
 }
 
 #[derive(Serialize)]
