@@ -4,21 +4,12 @@ dir=$VELNOR_UPGRADE_DIR
 velnor_gh() { mise --no-config --no-env --no-hooks exec "gh@${VELNOR_GH_VERSION:?}" -- gh "$@"; }
 patch=$dir/upgrade.patch
 test -s "$patch"
-# The patch came from a job that ran repository code; ship only the paths the
-# upgrade owns, exactly as the prepare job filtered them.
-git apply --numstat "$patch" | cut -f3 > "$dir/paths"
-while IFS= read -r path; do
-  case "$path" in
-    mise.toml|.mise.toml|mise.lock|.mise.lock|.velnor/release-manifest.json|.github/*) ;;
-    rust-toolchain.toml|*/rust-toolchain.toml|rust-toolchain|*/rust-toolchain) ;;
-    Cargo.toml|Cargo.lock|*/Cargo.toml|*/Cargo.lock) ;;
-    package.json|bun.lock|*/package.json|*/bun.lock) ;;
-    gradle/libs.versions.toml|*/gradle/libs.versions.toml|gradle.lockfile|*/gradle.lockfile|gradle/verification-metadata.xml|*/gradle/verification-metadata.xml) ;;
-    "") ;;
-    *) echo "::error::upgrade_patch_path_rejected: $path"; exit 1 ;;
-  esac
-done < "$dir/paths"
-git -c core.hooksPath=/dev/null apply --index --binary "$patch"
+# The patch came from a job that ran repository code: the filter checks its
+# text and the index it produces in a scratch index before the worktree or
+# the real index sees a byte, then checks the real index again.
+velnor_upgrade_check_patch_applies "$patch" "$dir/check.index" || exit 1
+git -c core.hooksPath=/dev/null apply --index "$patch"
+velnor_upgrade_check_index strict || exit 1
 tree=$(git write-tree)
 base=$(git rev-parse HEAD)
 velnor_gh auth setup-git --hostname github.com

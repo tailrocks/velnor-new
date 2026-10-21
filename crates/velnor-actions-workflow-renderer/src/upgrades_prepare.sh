@@ -145,23 +145,12 @@ if ! generate; then
   fi
 fi
 
-# 7. Keep only upgrade-owned paths; anything else is reported, not shipped.
+# 7. Keep only what the patch filter admits (upgrade-owned regular files,
+# no rename, mode change, symlink, foreign deletion or binary); anything
+# else is unstaged and reported, not shipped.
 git add -A
-git diff --cached --name-only > "$dir/paths"
-: > "$dir/rejected"
-while IFS= read -r path; do
-  case "$path" in
-    mise.toml|.mise.toml|mise.lock|.mise.lock|.velnor/release-manifest.json|.github/*) ;;
-    rust-toolchain.toml|*/rust-toolchain.toml|rust-toolchain|*/rust-toolchain) ;;
-    Cargo.toml|Cargo.lock|*/Cargo.toml|*/Cargo.lock) ;;
-    package.json|bun.lock|*/package.json|*/bun.lock) ;;
-    gradle/libs.versions.toml|*/gradle/libs.versions.toml|gradle.lockfile|*/gradle.lockfile|gradle/verification-metadata.xml|*/gradle/verification-metadata.xml) ;;
-    *) printf '%s\n' "$path" >> "$dir/rejected" ;;
-  esac
-done < "$dir/paths"
-if [ -s "$dir/rejected" ]; then
-  while IFS= read -r path; do git reset --quiet -- "$path"; failed "unexpected change left out of the upgrade: $path"; done < "$dir/rejected"
-fi
+velnor_upgrade_check_index drop > "$dir/rejected"
+while read -r code path; do failed "unexpected change left out of the upgrade ($code): $path"; done < "$dir/rejected"
 {
   echo "Velnor upgrades every pin to the latest stable release (no cooldown)."
   echo
@@ -174,6 +163,8 @@ if git diff --cached --quiet; then
   cat "$summary"
   exit 0
 fi
-git diff --cached --binary > "$dir/out/upgrade.patch"
+git diff --cached --no-renames --full-index --no-ext-diff --no-textconv > "$dir/out/upgrade.patch"
+# Self-check: publish runs exactly this filter again before it trusts a byte.
+velnor_upgrade_check_patch_applies "$dir/out/upgrade.patch" "$dir/check.index" || exit 1
 echo "changed=true" >> "$GITHUB_OUTPUT"
 cat "$summary"
