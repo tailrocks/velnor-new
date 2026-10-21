@@ -76,7 +76,7 @@ fn cross_checkout_determinism() -> TestResult {
     let right_bytes = preview_bytes(right.path())?;
     assert_eq!(
         left_bytes.keys().len(),
-        11,
+        12,
         "generated files: {:?}",
         left_bytes.keys().collect::<Vec<_>>()
     );

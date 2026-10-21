@@ -22,6 +22,7 @@ cf150540078e2948e378aaf1a2db0a0a7570467763021bcd77779706d23ee6b6  ./.github/acti
 64fb6c325630238deb8ea5c5e511abe423efda0d6bc754217f03d7b3e7a9c0eb  ./.github/scripts/velnor-tools-cache-identity.sh
 9c79068329a9fb5a7e1eff55703a2220971c1a6b9d3b2b41e36c62036100361b  ./.github/velnor/task-execution-manifest-v1.json
 9b5373a1751a57e90732b724ee98c38b01d60595fda429174d104ffa72c06301  ./.github/workflows/cache-cleanup.yml
+5fad151f5bf46aeb6860959cf952ed0c2534bc4f15a4634c18b0ce2284ac43df  ./.github/workflows/cache-prune.yml
 131511bdd6a6ab0fbedda83f009c587ee2c0968298953da8b771cfebc6b0b705  ./.github/workflows/ci.yml
 e3bbd8948592606953b0b86542a0d62129255b6ed8cd92189f23efc1bf7ed8e7  ./.github/workflows/freshness.yml
 39b3358132e483506a4c051c8ac77426e629e712541cfc384186ce7f3c8c5e72  ./.github/workflows/job-image-candidate.yml
