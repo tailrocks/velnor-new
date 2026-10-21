@@ -28,6 +28,8 @@ pub(crate) mod bun;
 mod changes;
 #[path = "select_checkout.rs"]
 mod checkout;
+#[path = "select_dbt.rs"]
+pub(crate) mod dbt;
 #[path = "select_images.rs"]
 pub(crate) mod images;
 pub(crate) use images::ChangeEvidence;

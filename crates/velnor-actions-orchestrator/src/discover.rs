@@ -89,6 +89,8 @@ pub struct Discovery {
     pub affected: crate::affected_inputs::AffectedInputs,
     /// Bun workspaces named by `[stacks.bun]`, read from the same index.
     pub(crate) bun: crate::workflow_task_jobs::bun_inventory::BunInventory,
+    /// dbt projects named by `[stacks.dbt]`, analysed from the same index.
+    pub(crate) dbt: crate::workflow_task_jobs::dbt_inventory::DbtInventory,
 }
 
 /// Run file index, detection, inventory, profiles, and task derivation.
@@ -192,6 +194,8 @@ fn discover_inner(
     let (consumer_manifest_json, consumer_manifest_stand_in) =
         consumer_manifest::for_policy(root, config.workflow.policy)?;
     let bun = bun_inventory(root, &index, config)?;
+    let dbt =
+        crate::workflow_task_jobs::dbt_inventory::DbtInventory::for_config(root, &index, config)?;
     let gradle_roots = gradle_jobs::analyze_roots(root, &index, config)?;
     Ok(Discovery {
         gradle_roots,
@@ -210,6 +214,7 @@ fn discover_inner(
         tofu_units,
         affected: crate::affected_inputs::AffectedInputs { resolves, rules },
         bun,
+        dbt,
     })
 }
 

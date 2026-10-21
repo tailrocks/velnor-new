@@ -13,6 +13,7 @@ mod impl_consumer_manifest_file;
 mod impl_crate_build_jobs;
 mod impl_crate_graph;
 mod impl_crate_tools_mr_boxington;
+mod impl_dbt;
 mod impl_discovery_cache;
 mod impl_e2e_scrub;
 mod impl_e2e_tools_save;
