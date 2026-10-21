@@ -29,13 +29,13 @@ struct ScopedEventRecords {
 }
 
 impl ScopedEventRecords {
-    fn record(&mut self, event: RecordedScopedEvent) {
+    fn record(&mut self, event: &RecordedScopedEvent) {
         match event {
-            RecordedScopedEvent::Started(request_id) => self.started.push(request_id),
+            RecordedScopedEvent::Started(request_id) => self.started.push(*request_id),
             RecordedScopedEvent::HistoricalStarted => {}
             RecordedScopedEvent::Completed(request_id, active) => {
-                self.completed.push(request_id);
-                self.active_completion |= active;
+                self.completed.push(*request_id);
+                self.active_completion |= *active;
             }
         }
     }
@@ -97,12 +97,11 @@ pub(super) fn session_delete_candidate(polled: &Poll) -> bool {
 }
 
 fn scoped_lifecycle_only(polled: &Poll) -> bool {
+    // An undecodable body has no proven message-kind set. Keep it on the
+    // queue even though `record_scoped_events` also stores it durably.
     match polled {
-        // An undecodable body has no proven message-kind set. Keep it on the
-        // queue even though `record_scoped_events` also stores it durably.
-        Poll::Quarantined(_) => false,
+        Poll::Quarantined(_) | Poll::Empty => false,
         Poll::Batch(batch) => lifecycle_jobs_only(batch.message_id, &batch.jobs),
-        Poll::Empty => false,
     }
 }
 
@@ -149,7 +148,7 @@ async fn record_scoped_events(
     let mut events = ScopedEventRecords::default();
     for job in jobs.iter().filter(|job| is_scoped_event(job)) {
         match record_scoped_event(journal, set_id, message_id, job).await {
-            Ok(Some(event)) => events.record(event),
+            Ok(Some(event)) => events.record(&event),
             Ok(None) => {}
             Err(_) => matched = false,
         }
@@ -290,7 +289,7 @@ async fn retry_scoped_one(
     let mut events = ScopedEventRecords::default();
     for job in jobs.iter().filter(|job| is_scoped_event(job)) {
         match record_scoped_event(journal, entry.scale_set_id, entry.message_id, job).await {
-            Ok(Some(event)) => events.record(event),
+            Ok(Some(event)) => events.record(&event),
             Ok(None) => {}
             Err(_) => matched = false,
         }
