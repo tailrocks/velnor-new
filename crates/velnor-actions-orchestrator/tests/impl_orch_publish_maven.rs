@@ -277,3 +277,30 @@ fn a_root_without_a_database_keeps_a_service_free_bundle_build() -> TestResult {
     assert!(build.contains("VELNOR_GRADLE_DATABASE: \"0\""), "{build}");
     Ok(())
 }
+
+#[test]
+fn attestation_is_default_on_and_an_opt_out_is_a_visible_warning_with_its_reason() -> TestResult {
+    let on = preview(repo(CONFIG, PROPERTIES)?.path())?;
+    let attest = section(&on, "maven-attest-processor-shared-libs")?;
+    assert!(attest.contains("attest-build-provenance"), "{attest}");
+    assert!(!attest.contains("attestation disabled"), "{attest}");
+
+    let off_config = format!(
+        "{CONFIG}attest = false\nattest_reason = \"private repository on a plan without artifact attestations\"\n"
+    );
+    let off = preview(repo(&off_config, PROPERTIES)?.path())?;
+    let attest = section(&off, "maven-attest-processor-shared-libs")?;
+    assert!(!attest.contains("attest-build-provenance"), "{attest}");
+    assert!(
+        attest.contains("::warning title=Provenance attestation disabled::")
+            && attest.contains("without artifact attestations"),
+        "{attest}"
+    );
+    assert!(attest.contains("Verify checksum"), "{attest}");
+
+    let no_reason = format!("{CONFIG}attest = false\n");
+    let bad = repo(&no_reason, PROPERTIES)?;
+    let err = err_of(prepare(bad.path()), "attest = false without a reason")?.to_string();
+    assert!(err.contains("attest_reason"), "{err}");
+    Ok(())
+}

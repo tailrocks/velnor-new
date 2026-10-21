@@ -180,3 +180,58 @@ fn the_upload_never_overwrites_an_existing_asset() {
     assert!(script.contains("--verify-tag"));
     assert!(!script.contains("--clobber"));
 }
+
+/// A fake `gh` over a directory standing in for the release's assets.
+const FAKE_GH: &str = r#"gh() { case "$1 $2" in
+  "release view") case "$*" in *--json*) ls "$FAKE_RELEASE" ;; *) test -d "$FAKE_RELEASE" ;; esac ;;
+  "release download") shift 2; pat=; dir=; while [ $# -gt 0 ]; do case "$1" in --pattern) pat=$2; shift ;; --dir) dir=$2; shift ;; esac; shift; done; cp "$FAKE_RELEASE/$pat" "$dir/$pat" ;;
+  "release upload") shift 3; shift 2; for f in "$@"; do cp "$f" "$FAKE_RELEASE/"; done ;;
+  "release create") echo created >&2; exit 9 ;;
+esac; }"#;
+
+fn run_upload(release: &Path, temp: &Path) -> std::io::Result<Output> {
+    Command::new("sh")
+        .args(["-c", &upload_script(FAKE_GH, "libs")])
+        .env_clear()
+        .env("PATH", std::env::var("PATH").unwrap_or_default())
+        .env("RUNNER_TEMP", temp)
+        .env("GITHUB_REF_NAME", "libs-v1.0.0")
+        .env("GITHUB_REPOSITORY", "acme/widgets")
+        .env("FAKE_RELEASE", release)
+        .output()
+}
+
+#[test]
+fn an_existing_identical_asset_is_skipped_and_a_different_one_refused() -> TestResult {
+    if !tools_present() {
+        return Ok(());
+    }
+    let temp = TempDir::new()?;
+    let release = TempDir::new()?;
+    let bundle = temp.path().join("bundle");
+    fs::create_dir_all(&bundle)?;
+    for name in ["libs-1.0.0-maven.zip", "libs-1.0.0-maven.zip.sha256"] {
+        fs::write(bundle.join(name), name)?;
+        fs::write(release.path().join(name), name)?;
+    }
+    let same = run_upload(release.path(), temp.path())?;
+    assert!(same.status.success(), "{same:?}");
+    assert!(String::from_utf8_lossy(&same.stdout).contains("same sha256, skipping"));
+    fs::write(release.path().join("libs-1.0.0-maven.zip"), "manual upload")?;
+    let different = run_upload(release.path(), temp.path())?;
+    assert!(!different.status.success());
+    assert!(String::from_utf8_lossy(&different.stderr).contains("refusing to overwrite"));
+    assert_eq!(
+        fs::read_to_string(release.path().join("libs-1.0.0-maven.zip"))?,
+        "manual upload"
+    );
+    fs::remove_file(release.path().join("libs-1.0.0-maven.zip.sha256"))?;
+    fs::write(
+        release.path().join("libs-1.0.0-maven.zip"),
+        "libs-1.0.0-maven.zip",
+    )?;
+    let partial = run_upload(release.path(), temp.path())?;
+    assert!(partial.status.success(), "{partial:?}");
+    assert!(release.path().join("libs-1.0.0-maven.zip.sha256").exists());
+    Ok(())
+}

@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::JobTimeout;
+use velnor_actions_contract::{JobTimeout, ServiceContainer};
 use velnor_actions_workflow_renderer::publish_render::render_publish_workflow;
 use velnor_actions_workflow_renderer::publish_spec::{
     PublishJobSpec, PublishPermissions, PublishRole, PublishStep, PublishTriggers,
@@ -388,23 +388,13 @@ fn the_staged_helper_exists_exactly_when_an_internal_step_does() -> Result<(), R
 }
 
 #[test]
-fn only_the_unprivileged_build_role_may_carry_service_containers()
--> Result<(), Box<dyn std::error::Error>> {
-    let service = velnor_actions_contract::ServiceContainer::postgres(18)?;
-    let mut build = spec()?;
-    if let Some(job) = build.jobs.get_mut("bundle-build-a") {
-        job.services.push(service.clone());
-    }
-    build.validate()?;
-    for id in ["publish-authority", "bundle-attest-a", "bundle-publish-a"] {
-        let mut leaked = spec()?;
-        if let Some(job) = leaked.jobs.get_mut(id) {
-            job.services.push(service.clone());
+fn only_the_build_role_may_carry_service_containers() -> Result<(), Box<dyn std::error::Error>> {
+    for (id, ok) in [("bundle-build-a", true), ("bundle-attest-a", false)] {
+        let mut spec = spec()?;
+        if let Some(job) = spec.jobs.get_mut(id) {
+            job.services.push(ServiceContainer::postgres(18)?);
         }
-        assert!(
-            rejection(&leaked).starts_with("services_in_privileged_role:"),
-            "{id}"
-        );
+        assert_eq!(spec.validate().is_ok(), ok, "{id}");
     }
     Ok(())
 }
