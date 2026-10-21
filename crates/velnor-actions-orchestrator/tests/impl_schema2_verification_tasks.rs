@@ -10,6 +10,20 @@ use crate::impl_schema2_routing::{job_body, required_file};
 const SCALE_RUNS: &str = "runs-on: [velnor, ubuntu-26.04-scale-set, verification-worker]";
 
 #[test]
+fn generated_verification_jobs_accept_the_hosted_image_jq_line() -> TestResult {
+    let repo = make_repo(&config("hosted"))?;
+    write_verification_task_config(repo.path())?;
+    let tree = render_staged_tree(&prepare(repo.path())?)?;
+    let workflow = required_file(&tree, ".github/workflows/ci.yml")?;
+    assert!(
+        workflow.contains(r"jq-1\\.8\\.[0-9]+"),
+        "jq guard accepts every 1.8 patch: {workflow}"
+    );
+    assert!(!workflow.contains("jq-1.8.2"), "no exact patch pin");
+    Ok(())
+}
+
+#[test]
 fn verification_tasks_follow_eligible_lanes_and_stay_required() -> TestResult {
     for mode in ["hosted", "scale-set", "both"] {
         let repo = make_repo(&config(mode))?;
