@@ -3,8 +3,6 @@ use std::io::Write;
 use std::path::Path;
 use std::process::Stdio;
 
-use velnor_actions_mise::ToolCatalog;
-
 use super::*;
 
 const SECRET: &str = "ghs_SecretToken123";
@@ -198,7 +196,6 @@ fn the_session_directory_is_private_and_vanishes_on_drop() {
         "ChainArgos",
         &["processor-shared".to_owned()],
         Vec::new(),
-        ToolCatalog::pinned(),
     )
     .expect("session");
     let dir = temp.path().join("velnor/private-fetch");
@@ -226,7 +223,6 @@ fn a_stale_directory_is_scrubbed_before_a_new_session_starts() {
         "ChainArgos",
         &["a".to_owned()],
         Vec::new(),
-        ToolCatalog::pinned(),
     )
     .expect("session");
     assert_eq!(
@@ -245,11 +241,10 @@ fn cargo_fetch_is_locked_isolated_and_carries_no_token() {
         "ChainArgos",
         &["processor-shared".to_owned()],
         vec![("MISE_CARGO_HOME".to_owned(), "/runner/cargo".to_owned())],
-        ToolCatalog::pinned(),
     )
     .expect("session");
     let command = session
-        .cargo_fetch_command(Path::new("/work/Cargo.toml"))
+        .cargo_fetch_command(Path::new("/work/Cargo.toml"), "rust@1.98.1")
         .expect("command");
     let argv: Vec<String> = command
         .argv()
@@ -313,4 +308,64 @@ fn cargo_fetch_is_locked_isolated_and_carries_no_token() {
     for (_, value) in &env {
         assert!(!value.to_string_lossy().contains(SECRET));
     }
+}
+
+fn rust_session(temp: &Path) -> Session {
+    Session::create(
+        temp,
+        token(),
+        "ChainArgos",
+        &["processor-shared-rust".to_owned()],
+        vec![("MISE_CARGO_HOME".to_owned(), "/runner/cargo".to_owned())],
+    )
+    .expect("session")
+}
+
+fn argv_of(command: &IsolatedCommand) -> Vec<String> {
+    command
+        .argv()
+        .iter()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect()
+}
+
+#[test]
+fn cargo_fetch_runs_exactly_the_rust_it_is_given() {
+    let temp = tempfile::tempdir().expect("temp");
+    let session = rust_session(temp.path());
+    let argv = argv_of(
+        &session
+            .cargo_fetch_command(Path::new("/work/Cargo.toml"), "rust@1.98.1")
+            .expect("command"),
+    );
+    let exec = argv.iter().position(|a| a == "exec").expect("exec");
+    assert_eq!(argv[exec + 1], "rust@1.98.1", "{argv:?}");
+}
+
+#[test]
+fn the_toolchain_check_asks_mise_where_for_the_same_rust_and_carries_no_token() {
+    let temp = tempfile::tempdir().expect("temp");
+    let session = rust_session(temp.path());
+    let command = session.rust_check_command("rust@1.98.1").expect("command");
+    let argv = argv_of(&command);
+    assert_eq!(argv[0], "mise");
+    let tail: Vec<&str> = argv[argv.len() - 2..].iter().map(String::as_str).collect();
+    assert_eq!(tail, ["where", "rust@1.98.1"], "{argv:?}");
+    for flag in ["--no-config", "--no-env", "--no-hooks"] {
+        assert!(argv.iter().any(|a| a == flag), "{flag}: {argv:?}");
+    }
+    let env = command.spawn_env(&[(
+        OsString::from("VELNOR_PRIVATE_FETCH_TOKEN"),
+        OsString::from(SECRET),
+    )]);
+    assert!(
+        env.iter().all(
+            |(k, v)| k != "VELNOR_PRIVATE_FETCH_TOKEN" && !v.to_string_lossy().contains(SECRET)
+        )
+    );
+    assert!(
+        env.iter()
+            .any(|(k, v)| k == "MISE_CARGO_HOME" && v == "/runner/cargo"),
+        "the check sees the same owned Mise env as the fetch"
+    );
 }

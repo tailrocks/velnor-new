@@ -31,10 +31,14 @@ pub(crate) mod playwright_lock;
 pub(crate) mod playwright_resolve;
 #[path = "private_fetch.rs"]
 pub(crate) mod private_fetch;
+#[path = "private_fetch_http.rs"]
+pub(crate) mod private_fetch_http;
 #[path = "private_fetch_root.rs"]
 pub(crate) mod private_fetch_root;
 #[path = "private_fetch_session.rs"]
 pub(crate) mod private_fetch_session;
+#[path = "private_fetch_verified.rs"]
+pub(crate) mod private_fetch_verified;
 #[path = "private_revoke.rs"]
 pub(crate) mod private_revoke;
 #[path = "private_sources.rs"]

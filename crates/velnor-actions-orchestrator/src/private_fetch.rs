@@ -10,22 +10,21 @@
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use velnor_actions_contract::config::{PrivateSourcesConfig, split_repository};
 use velnor_actions_contract::deps_lock::{DepsLock, LockedAsset};
-use velnor_actions_mise::{CheckDeadline, ToolCatalog};
 use velnor_actions_workflow_renderer::private_source_steps::{
     PRIVATE_OWNER_ENV, PRIVATE_REPOSITORIES_ENV, PRIVATE_ROOTS_ENV, PRIVATE_SOURCES_ENV,
 };
 
 use crate::OrchestratorError;
-use crate::check_runtime::preparation::acquisition::archive::{ArchiveBudget, extract_archive};
+use crate::check_runtime::preparation::acquisition::archive::ArchiveBudget;
 use crate::config::deps_layout::maven_bundle_dir;
 use crate::config::deps_lock::{FoundAsset, parse_commit, parse_release_asset, read_deps_lock};
 use crate::config::load_config;
-use crate::config::private_fetch_root::prepare_deps_root;
+use crate::config::private_fetch_root::{extract_into, prepare_deps_root};
 use crate::config::private_fetch_session::{Session, Token, scrub_dir};
+use crate::config::private_fetch_verified::{Verified, VerifiedSource};
 use crate::config::private_sources::{SourceKind, job_allowlist};
 use crate::discover::workspace_manifest;
 use crate::internal::internal;
@@ -39,7 +38,6 @@ const UPPER_HEX: &[u8; 16] = b"0123456789ABCDEF";
 const JSON: &str = "application/vnd.github+json";
 const OCTET: &str = "application/octet-stream";
 const JSON_LIMIT: u64 = 4 * 1024 * 1024;
-const ARCHIVE_DEADLINE: Duration = Duration::from_mins(30);
 
 /// Parsed and validated fetch input.
 #[derive(Debug)]
@@ -62,13 +60,14 @@ pub(crate) struct FetchSummary {
 
 /// Transport the fetch uses; the real one is the credential [`Session`].
 pub(crate) trait FetchBackend {
-    fn cargo_fetch(&self, manifest: &Path) -> Result<(), OrchestratorError>;
+    /// `rust` is the `rust@<version>` the checkout declares.
+    fn cargo_fetch(&self, manifest: &Path, rust: &str) -> Result<(), OrchestratorError>;
     fn download(&self, route: &str, accept: &str, dest: &Path) -> Result<(), OrchestratorError>;
 }
 
 impl FetchBackend for Session {
-    fn cargo_fetch(&self, manifest: &Path) -> Result<(), OrchestratorError> {
-        Session::cargo_fetch(self, manifest)
+    fn cargo_fetch(&self, manifest: &Path, rust: &str) -> Result<(), OrchestratorError> {
+        Session::cargo_fetch(self, manifest, rust)
     }
 
     fn download(&self, route: &str, accept: &str, dest: &Path) -> Result<(), OrchestratorError> {
@@ -169,7 +168,7 @@ pub(crate) fn execute(
     scrub_dir(&downloads)?;
     std::fs::create_dir_all(&downloads)
         .map_err(|err| OrchestratorError::io(downloads.display().to_string(), err.to_string()))?;
-    let result = fetch_all(request, backend, lock.as_ref(), &deps, &downloads);
+    let result = fetch_all(request, &config, backend, lock.as_ref(), &deps, &downloads);
     drop(scrub_dir(&downloads));
     result
 }
@@ -189,15 +188,21 @@ fn check_lock(
 
 fn fetch_all(
     request: &FetchRequest,
+    config: &velnor_actions_contract::VelnorConfig,
     backend: &dyn FetchBackend,
     lock: Option<&DepsLock>,
     deps: &Path,
     downloads: &Path,
 ) -> Result<FetchSummary, OrchestratorError> {
     let mut summary = FetchSummary::default();
-    if request.kinds.contains(&SourceKind::Cargo) {
+    if request.kinds.contains(&SourceKind::Cargo) && !request.roots.is_empty() {
+        // The Rust the checkout declares (hard decision 4), resolved as generation
+        // does: the version the generated resolver exports as `VELNOR_TOOL_RUST`
+        // and installs into the owned Cargo home, never the Velnor pin.
+        let rust = crate::tool_catalog_resolve::resolve_tool_catalog(&request.workspace, config)?
+            .tool_spec(velnor_actions_mise::PinnedTool::Rust);
         for root in &request.roots {
-            backend.cargo_fetch(&request.workspace.join(workspace_manifest(root)))?;
+            backend.cargo_fetch(&request.workspace.join(workspace_manifest(root)), &rust)?;
             summary.cargo_roots += 1;
         }
     }
@@ -205,13 +210,17 @@ fn fetch_all(
         return Ok(summary);
     };
     let mut budget = ArchiveBudget::new();
-    let mut assets: Vec<(&LockedAsset, PathBuf)> = Vec::new();
+    let mut verified = Vec::new();
+    let mut assets: Vec<(SourceKind, &LockedAsset, PathBuf, String)> = Vec::new();
     if request.kinds.contains(&SourceKind::MavenBundles) {
-        assets.extend(
-            lock.maven_bundles
-                .iter()
-                .map(|bundle| (bundle, maven_bundle_dir(deps, &bundle.id))),
-        );
+        assets.extend(lock.maven_bundles.iter().map(|bundle| {
+            (
+                SourceKind::MavenBundles,
+                bundle,
+                maven_bundle_dir(deps, &bundle.id),
+                format!("maven/{}", bundle.id),
+            )
+        }));
     }
     if request.kinds.contains(&SourceKind::ReleaseAssets) {
         for asset in &lock.release_assets {
@@ -219,11 +228,17 @@ fn fetch_all(
                 .extract_to
                 .as_deref()
                 .ok_or_else(|| internal("private_asset_without_extract_to"))?;
-            assets.push((asset, deps.join(target)));
+            assets.push((
+                SourceKind::ReleaseAssets,
+                asset,
+                deps.join(target),
+                target.to_owned(),
+            ));
         }
     }
-    for (asset, destination) in assets {
+    for (kind, asset, destination, relative) in assets {
         fetch_asset(backend, asset, &destination, downloads, &mut budget)?;
+        verified.push(VerifiedSource::asset(kind, asset, &relative));
         summary.assets += 1;
     }
     if request.kinds.contains(&SourceKind::GitTrees) {
@@ -238,9 +253,11 @@ fn fetch_all(
             )?;
             let destination = deps.join("git").join(&tree.id);
             extract_into(&archive, &destination, &mut budget)?;
+            verified.push(VerifiedSource::tree(tree, &format!("git/{}", tree.id)));
             summary.trees += 1;
         }
     }
+    Verified::new(verified).write(deps)?;
     Ok(summary)
 }
 
@@ -330,23 +347,6 @@ fn fetch_asset(
     extract_into(&archive, destination, budget)
 }
 
-fn extract_into(
-    archive: &Path,
-    destination: &Path,
-    budget: &mut ArchiveBudget,
-) -> Result<(), OrchestratorError> {
-    if let Some(parent) = destination.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|err| OrchestratorError::io(parent.display().to_string(), err.to_string()))?;
-    }
-    let name = archive
-        .file_name()
-        .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
-    let deadline =
-        CheckDeadline::after(ARCHIVE_DEADLINE).map_err(|err| internal(&err.to_string()))?;
-    extract_archive(archive, destination, &name, budget, deadline)
-}
-
 /// Run `private-fetch-v1` from the step environment.
 ///
 /// # Errors
@@ -376,7 +376,6 @@ pub fn run_private_fetch() -> Result<(), OrchestratorError> {
         &request.owner,
         &request.repositories,
         owned_env,
-        ToolCatalog::pinned(),
     )?;
     let summary = execute(&request, &session)?;
     drop(session);
