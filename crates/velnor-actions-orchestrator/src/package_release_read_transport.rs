@@ -1,7 +1,6 @@
 //! Bounded JSON reads shared by release transport and exact-source metadata.
 use super::{GitHubApi, JSON_LIMIT, RepositoryResponse};
 use crate::{OrchestratorError, internal::internal};
-use std::ffi::OsString;
 
 impl GitHubApi {
     pub(in crate::package_release_publish) fn verify_repository_identity(
@@ -35,7 +34,10 @@ impl GitHubApi {
             return serde_json::from_value(fixture.read(route)?)
                 .map_err(|_| internal("package_publish_api_json"));
         }
-        let bytes = self.request(vec![OsString::from(route)], limit.min(8 * 1024 * 1024))?;
+        let bytes = self.request(
+            crate::github_authority_read::arguments(route)?,
+            limit.min(8 * 1024 * 1024),
+        )?;
         serde_json::from_slice(&bytes).map_err(|_| internal("package_publish_api_json"))
     }
 }

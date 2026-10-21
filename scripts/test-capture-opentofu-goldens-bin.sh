@@ -147,6 +147,8 @@ write_test_manifest() {
 }
 
 source "$ROOT/scripts/generator-release/test-qualification-output-bindings.sh"
+source "$ROOT/scripts/generator-release/test-fixture-git.sh"
+test_fixture_git_isolation || exit 1
 
 expect_release_check_match() {
   local status=0 log="$WORK/release-check.log" after

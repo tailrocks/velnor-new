@@ -23,7 +23,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::Step;
+use velnor_actions_contract::{Step, StepRole};
 use velnor_actions_mise::catalog::RUST_CHANNEL_MANIFESTS;
 use velnor_actions_mise::{PinnedTool, ToolCatalog, ToolHomes};
 
@@ -54,11 +54,15 @@ fn owned_home_step(
         phase,
         RUST_CHANNEL_MANIFESTS,
     );
-    Ok(velnor_actions_workflow_renderer::steps::shell_step(
+    let mut step = velnor_actions_workflow_renderer::steps::shell_step(
         name,
         vec!["sh".to_owned(), "-c".to_owned(), script],
         env,
-    )?)
+    )?;
+    // Both phases are the same cache-safe check (the dependency-seed job
+    // admits only cache roles).
+    step.role = Some(StepRole::VerifyRustManifest);
+    Ok(step)
 }
 
 /// Typed, credential-scrubbed verification of the job's installed Rust.

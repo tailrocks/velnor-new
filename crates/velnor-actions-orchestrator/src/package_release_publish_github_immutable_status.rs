@@ -20,14 +20,16 @@ impl GitHubApi {
             env::var("GH_TOKEN").ok().as_deref(),
             env::var("VELNOR_TAP_TOKEN").ok().as_deref(),
         )?;
-        let args = vec![
+        let mut args = vec![
             OsString::from("api"),
             OsString::from("-H"),
             OsString::from("Accept: application/vnd.github+json"),
             OsString::from("-H"),
             OsString::from(format!("X-GitHub-Api-Version: {API_VERSION}")),
-            OsString::from(self.route("immutable-releases")),
         ];
+        args.extend(crate::github_authority_read::arguments(
+            &self.route("immutable-releases"),
+        )?);
         let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args)
             .map_err(|_| internal("package_publish_gh_unavailable"))?;
         let result = exec
