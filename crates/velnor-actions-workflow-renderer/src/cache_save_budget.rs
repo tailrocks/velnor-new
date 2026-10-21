@@ -108,13 +108,13 @@ fn family_save_id(step: &Step) -> Result<String, RenderError> {
     let StepKind::Action { with, .. } = &step.kind else {
         return Err(invalid());
     };
-    let stem = with
+    let family_stem = with
         .get("key")
         .and_then(|key| key.strip_prefix(&format!("${{{{steps.{FAMILY_KEYS_ID}.outputs.")))
         .and_then(|rest| rest.strip_suffix("_key}}"))
-        .filter(|stem| family_for_stem(stem).is_some())
+        .filter(|candidate| family_for_stem(candidate).is_some())
         .ok_or_else(invalid)?;
-    Ok(format!("{FAMILY_SAVE_ID_PREFIX}{stem}-save"))
+    Ok(format!("{FAMILY_SAVE_ID_PREFIX}{family_stem}-save"))
 }
 
 /// Add one clock before the original job steps and admission before each save.
