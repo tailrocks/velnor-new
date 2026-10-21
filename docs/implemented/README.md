@@ -8,6 +8,8 @@ acceptance checks. It is not a proposal or a list of work in progress.
 - [Private sources](private-sources.md) — GitHub App token minted, used and revoked before any repository-controlled step (hard decision 7).
 - [Host jq range and install-step Mise ceiling](host-jq-range.md) — task scripts accept any jq 1.8 patch and cap Mise discovery above the task root.
 - [Affected selection](affected-selection.md) — pull requests run only the crate jobs their change can affect (hard decision 4).
+- [Daily upgrades](upgrades.md) — opt-in `upgrades.yml`: one upgrade pull request per repository to the latest stable Rust, tools, dependencies and Velnor, plus a non-required freshness gate.
+- [Verified Rust installs](rust-channel-manifest.md) — the channel-manifest SHA-256 pinned per Rust release closes `core:rust`'s `no_checksums` gap.
 - [Consumer Rust setup](consumer-rust-setup.md) — `mise.toml` as the only Rust source, `mr_boxington = true` selecting MBX and its bundles, profiles, and MBX GC on developer machines.
 
 ## Implementation records (Velnor Actions V1, Gates 0–8)

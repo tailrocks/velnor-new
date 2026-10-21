@@ -89,6 +89,10 @@ Add `[stacks.rust] compile_driver = "mbx"` only if generation reports
 `transient_evidence_requires_declaration` (MBX seen only in a transient
 place such as a hand-written workflow).
 
+Every job that installs Rust also verifies it against the catalog's
+channel-manifest digest ([verified Rust installs](rust-channel-manifest.md)),
+so pin a Rust release the Velnor catalog knows.
+
 Velnor never injects `RUSTFLAGS` or `CARGO_PROFILE_*`: CI builds with the
 repository's own profile, so developer and CI cache keys match.
 

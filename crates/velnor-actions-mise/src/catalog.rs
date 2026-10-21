@@ -45,6 +45,11 @@ pub use versions::{
     check_freshness_requirements, validate_concrete_exact_version, validate_exact_version,
 };
 
+/// Pinned Rust channel-manifest digests (verifiable `core:rust` installs).
+#[path = "catalog_rust_manifests.rs"]
+mod rust_manifests;
+pub use rust_manifests::{RUST_CHANNEL_MANIFESTS, rust_channel_manifest_sha256};
+
 /// The typed catalog tool names (`PinnedTool`).
 #[path = "catalog_tool.rs"]
 mod tool;

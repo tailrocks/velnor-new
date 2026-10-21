@@ -328,6 +328,7 @@ fn render_job(
     )?);
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
+        steps.push(crate::workflow::verify_rust_manifest_step(catalog)?);
     }
     steps.extend(crate::source_cache::restore_step_for_crate(
         fetch_roots,

@@ -41,6 +41,9 @@ pub(crate) fn declared_config_variables(config: &VelnorConfig) -> Vec<String> {
     if let Some(private) = &config.private_sources {
         names.insert(private.app_id_variable.clone());
     }
+    if let Some(upgrades) = config.upgrades.as_ref().filter(|upgrades| upgrades.enabled) {
+        names.insert(upgrades.app_id_variable.clone());
+    }
     if let Some(tap) = config
         .distribution
         .homebrew_tap

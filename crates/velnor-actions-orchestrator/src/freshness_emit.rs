@@ -15,6 +15,10 @@ use crate::OrchestratorError;
 use crate::prepare::GenerationPreparation;
 use crate::workflow::CHECKOUT_USES;
 
+/// Opt-in daily upgrade pull request plus freshness gate (`[upgrades]`).
+#[path = "upgrades_emit.rs"]
+pub(crate) mod upgrades;
+
 /// True when the freshness workflow is emitted for this preparation.
 ///
 /// Single predicate shared by emission and plan listing, so the two

@@ -78,10 +78,19 @@ fn publish_file_lines(out: &mut String, prep: &GenerationPreparation) {
     }
 }
 
-/// Freshness workflow path, exactly when `generate` emits it.
+/// Freshness and upgrade workflow paths, exactly when `generate` emits them.
 fn freshness_file_lines(out: &mut String, prep: &GenerationPreparation) {
     if crate::freshness_emit::freshness_enabled(prep) {
         push(out, &format!("  {FRESHNESS_WORKFLOW_PATH}"));
+    }
+    if crate::freshness_emit::upgrades::upgrades_enabled(prep) {
+        push(
+            out,
+            &format!(
+                "  {}",
+                velnor_actions_contract::config::UPGRADES_WORKFLOW_PATH
+            ),
+        );
     }
 }
 
