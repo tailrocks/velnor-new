@@ -54,9 +54,10 @@ pub(crate) fn mbx_tool_steps(
         mbx_version,
         rust_toolchain,
         mbx_tool_env(rust_toolchain),
-        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        velnor_actions_workflow_renderer::steps::MbxTransport::InstallOnly,
         None,
     )?
+    .and_then(|steps| <[Step; 3]>::try_from(steps).ok())
     .ok_or_else(|| RenderError::InvalidWorkflow("mbx_steps_missing".to_owned()))
 }
 
@@ -128,6 +129,7 @@ pub(crate) fn job(id: &str, display: &str, needs: Vec<String>, steps: Vec<Step>)
     (
         id.to_owned(),
         Job {
+            services: Vec::new(),
             display_name: display.to_owned(),
             runs_on: LABEL.to_owned(),
             check_runner: None,

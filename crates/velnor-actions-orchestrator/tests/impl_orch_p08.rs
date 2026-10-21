@@ -123,11 +123,12 @@ fn c4_mbx_and_restore_precede_fetch_with_offline_skip() -> TestResult {
         "sources hit, skipping fetch",
         "sources miss (source_missing)",
         "cargo fetch --locked",
-        "github-cache-mode: target",
+        "backend: local",
+        "Compute MBX bundle key",
     ] {
         assert!(yaml.contains(need), "fetch/mbx misses {need}");
     }
-    assert!(!yaml.contains("github-cache-mode: objects"), "target only");
+    assert!(!yaml.contains("github-cache-mode"), "install-only action");
     Ok(())
 }
 
@@ -275,8 +276,7 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
     let (keys, saves) = tools_cache_identities(yaml);
     assert!(!keys.is_empty(), "at least one restored tools key:\n{yaml}");
     assert_one_save_per_identity(&keys, &saves, yaml);
-    let mbx_saves = yaml.matches("- name: Save MBX single bundle").count();
-    let mbx_exports = yaml.matches("- name: Export MBX single bundle").count();
+    let mbx_saves = yaml.matches("- name: Save MBX bundle").count();
     assert_eq!(
         yaml.matches("actions/cache/save@").count(),
         1 + saves.len() + mbx_saves,
@@ -287,14 +287,6 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
             .count(),
         saves.len(),
         "tools saves stay push-gated:\n{yaml}"
-    );
-    assert_eq!(
-        yaml.matches(
-            "if: runner.environment != 'github-hosted' && success() && github.event_name == 'push'"
-        )
-        .count(),
-        mbx_saves + mbx_exports,
-        "MBX bundle export and save stay on Scale Set and push-gated:\n{yaml}"
     );
     assert!(
         !yaml.contains("- name: Restore Cargo sources\n        if:")

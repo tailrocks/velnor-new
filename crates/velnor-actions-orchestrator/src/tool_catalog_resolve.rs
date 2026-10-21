@@ -59,6 +59,8 @@ pub(crate) fn resolve_tool_catalog(
     root: &Path,
     config: &VelnorConfig,
 ) -> Result<ToolCatalog, OrchestratorError> {
+    // First, so the named conflict is the second source itself.
+    rust_source::enforce_when_opted_in(root, config)?;
     let toml_tc = read_toolchain_file(root, RUST_TOOLCHAIN_FILE)?;
     let legacy_tc = read_toolchain_file(root, RUST_TOOLCHAIN_LEGACY_FILE)?;
     if let (Some((_, raw_toml, _)), Some((_, raw_legacy, _))) = (&toml_tc, &legacy_tc)
@@ -298,6 +300,10 @@ fn read_toolchain_file(
         .unwrap_or_else(|| version.clone());
     Ok(Some((rel, raw_channel, version)))
 }
+
+/// Opt-in `[stacks.rust] toolchain_source = "mise"` enforcement.
+#[path = "tool_catalog_rust_source.rs"]
+pub(crate) mod rust_source;
 
 #[cfg(test)]
 #[path = "tool_catalog_resolve_tests.rs"]

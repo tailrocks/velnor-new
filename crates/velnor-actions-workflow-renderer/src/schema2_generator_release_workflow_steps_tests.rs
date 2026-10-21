@@ -73,9 +73,9 @@ fn typed_gh_function_shadows_incompatible_cli_and_exports_to_script() -> Result<
         "used the incompatible system gh"
     );
     let invocation = fs::read_to_string(mise_log)?;
-    assert!(invocation.contains("--no-config --no-env --no-hooks exec gh@2.102.0 -- gh api test"));
+    assert!(invocation.contains("--no-config --no-env --no-hooks exec gh@2.102.1 -- gh api test"));
     assert!(
-        invocation.contains("--no-config --no-env --no-hooks exec gh@2.102.0 -- gh api nested")
+        invocation.contains("--no-config --no-env --no-hooks exec gh@2.102.1 -- gh api nested")
     );
     assert!(
         !timeout_called.exists(),
@@ -136,7 +136,7 @@ fn confirmation_deadline_is_inherited_and_clamps_inflight_cleanup() -> Result<()
     )?;
     let function = gh_confirmation_function(&pinned_gh_argv())?;
     let script = format!(
-        "{function}\ndeadline=$((SECONDS + 7)); sleep 1\nparent_seconds=$SECONDS\n(( parent_seconds >= 1 )) || exit 99\n( test \"$SECONDS\" -ge \"$parent_seconds\" ) || exit 99\ngh_until \"$deadline\" release verify fixture"
+        "{function}\ndeadline=$((SECONDS + 7)); sleep 1\nparent_seconds=$SECONDS\n(( parent_seconds >= 1 )) || exit 99\n( test \"$SECONDS\" -ge \"$parent_seconds\" ) || exit 99\ntrap '' TERM\ngh_until \"$deadline\" release verify fixture"
     );
     let started = std::time::Instant::now();
     let output = Command::new("bash")
@@ -184,7 +184,7 @@ fn mise_install_requires_the_scoped_workflow_token_before_invocation() -> Result
             "--no-env".to_owned(),
             "--no-hooks".to_owned(),
             "install".to_owned(),
-            "mr-boxington@1.25.0".to_owned(),
+            "mr-boxington@1.26.0".to_owned(),
         ],
     )?;
     let Yaml::Map(fields) = step else {
@@ -209,7 +209,7 @@ fn mise_install_requires_the_scoped_workflow_token_before_invocation() -> Result
         run.starts_with("set -eu\n: \"${GITHUB_TOKEN:?missing workflow token}\"\n"),
         "token guard must precede the install command"
     );
-    assert!(run.contains("mise --no-config --no-env --no-hooks install mr-boxington@1.25.0"));
+    assert!(run.contains("mise --no-config --no-env --no-hooks install mr-boxington@1.26.0"));
 
     let scratch = Scratch::new()?;
     let mock_bin = scratch.0.join("mock-bin");
@@ -240,7 +240,7 @@ fn pinned_gh_argv() -> Vec<String> {
         "--no-env",
         "--no-hooks",
         "exec",
-        "gh@2.102.0",
+        "gh@2.102.1",
         "--",
         "gh",
     ]

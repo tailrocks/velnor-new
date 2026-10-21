@@ -7,14 +7,29 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Step, StepKind};
 
+#[path = "cache_steps_family.rs"]
+mod family;
+#[path = "cache_steps_mbx_bundle.rs"]
+mod mbx_bundle;
 #[path = "cache_steps_mbx_command.rs"]
 mod mbx_command;
 #[path = "cache_steps_mbx_gate.rs"]
 mod mbx_gate;
-#[path = "cache_steps_mbx_mode.rs"]
-mod mbx_mode;
 #[path = "cache_steps_mbx_preflight.rs"]
 mod mbx_preflight;
+pub use family::{
+    FAMILY_KEYS_NAME, FamilyCachePlan, FamilySnapshot, family_keys_step, family_restore_step,
+    family_save_step, family_size_step,
+};
+pub use mbx_bundle::{
+    MBX_BUNDLE_EXPORT_NAME, MBX_BUNDLE_IMPORT_NAME, MBX_BUNDLE_KEY_NAME, MBX_BUNDLE_RESTORE_NAME,
+    MBX_BUNDLE_SAVE_NAME, MBX_EXPORT_GROUP_ENV, MBX_EXPORT_GROUP_VALUE, MBX_PRODUCER_MARK_NAME,
+    mbx_producer_mark_step,
+};
+pub(crate) use mbx_bundle::{
+    append_bundle_postludes, export_step as mbx_bundle_export_step,
+    import_step as mbx_bundle_import_step,
+};
 pub(crate) use mbx_gate::append_workspace_cleanups;
 pub use mbx_gate::check_mbx_gating;
 pub(crate) use mbx_gate::is_mbx_action;
@@ -25,7 +40,7 @@ pub(crate) use mbx_preflight::{
     mbx_workspace_clean_step_for_action,
 };
 pub use mbx_preflight::{
-    MBX_CACHE_MODE_ENV, MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, MBX_VERSION_CHECK_NAME,
+    MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, MBX_VERSION_CHECK_NAME, MbxTransport,
     mbx_steps_for_driver,
 };
 
@@ -125,7 +140,10 @@ pub fn cache_action_step(
     if !uses.starts_with(&format!("{want}@")) {
         return Err(RenderError::BadActionRef(format!("bad_cache_uses:{uses}")));
     }
-    if !matches!(layer, "sources" | "task" | "tools" | "tofu-providers") {
+    if !matches!(
+        layer,
+        "sources" | "task" | "tools" | "tofu-providers" | "mbx-bundle"
+    ) {
         return Err(RenderError::BadCommand("mbx_needs_objects_mode".to_owned()));
     }
     if key.trim().is_empty() || key.contains(' ') || key.contains('\n') {
@@ -157,6 +175,8 @@ fn validate_cache_path(layer: &str, path: &str) -> Result<(), RenderError> {
         || layer == "task" && path == TASK_ARTIFACTS_DIR
         || layer == "tools" && tools::tools_cache_path_ok(path)
         || layer == "tofu-providers" && crate::tofu_cache::tofu_providers_path_ok(path)
+        || layer == "mbx-bundle"
+            && path == velnor_actions_contract::workflow::cache_family_mbx::MBX_BUNDLE_PATH_EXPR
     {
         Ok(())
     } else {

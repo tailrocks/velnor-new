@@ -1,7 +1,6 @@
-use velnor_actions_contract::cachekey::mbx_cache_generation;
 use velnor_actions_contract::{Step, StepKind, WorkflowPolicy};
 use velnor_actions_workflow_renderer::steps::{
-    CompileDriver, MBX_CACHE_MODE_ENV, MBX_PREFLIGHT_NAME, mbx_steps_for_driver,
+    CompileDriver, MBX_PREFLIGHT_NAME, mbx_steps_for_driver,
 };
 use velnor_actions_workflow_renderer::toolchain_env::credential_scrub;
 use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
@@ -22,9 +21,10 @@ fn steps(
         version,
         rust,
         mbx_tool_env(rust),
-        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        velnor_actions_workflow_renderer::steps::MbxTransport::InstallOnly,
         None,
     )?
+    .and_then(|steps| <[Step; 3]>::try_from(steps).ok())
     .ok_or_else(|| {
         velnor_actions_workflow_renderer::RenderError::InvalidWorkflow(
             "mbx_steps_missing".to_owned(),
@@ -45,7 +45,7 @@ fn assert_action_mbx_version_binding(run: &str) {
 }
 
 #[test]
-fn native_action_installs_exact_version_and_owns_object_cache() {
+fn native_action_installs_exact_version_and_leaves_transport_to_velnor() {
     let [preflight, action, version_check] =
         steps(TEST_MBX_VERSION, TEST_RUST_TOOLCHAIN).expect("MBX steps");
     assert_eq!(preflight.name, MBX_PREFLIGHT_NAME);
@@ -75,9 +75,24 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
         "PATH check inherits action-owned settings and adds only the fixed shell credential scrub"
     );
     assert_eq!(uses, MBX_ACTION);
-    assert_eq!(
-        with.get("github-cache-mode").map(String::as_str),
-        Some("target")
+    assert_eq!(with.get("backend").map(String::as_str), Some("local"));
+    for retired in [
+        "github-cache-mode",
+        "cache-key",
+        "restore-keys",
+        "cache-generation",
+        "save-on-pull-request",
+        "save-on-workflow-dispatch",
+        "save-on-protected-branch",
+    ] {
+        assert!(
+            !with.contains_key(retired),
+            "target mode input {retired} is gone"
+        );
+    }
+    assert!(
+        !env.contains_key("ACTIONS_CACHE_MODE"),
+        "the install-only action receives no cache write gate"
     );
     assert_eq!(
         with.get("toolchain").map(String::as_str),
@@ -89,57 +104,13 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
     );
     assert!(!with.contains_key("cache-key-suffix"));
     assert!(!with.contains_key("isolate-objects-cache"));
-    assert_root_target_cache_keys(&with);
-    assert_eq!(
-        env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
-        Some(
-            "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}"
-        )
-    );
     assert_eq!(
         env.get("MBX_CACHE_DIR").map(String::as_str),
         Some("${{ runner.temp }}/velnor/mbx"),
-        "action main and post use the runner-private stable logical store path"
+        "the stable runner-private logical store path"
     );
     assert_eq!(env.get("RUSTUP_HOME"), env.get("MISE_RUSTUP_HOME"));
     assert_eq!(env.get("CARGO_HOME"), env.get("MISE_CARGO_HOME"));
-    for key in ["save-on-pull-request", "save-on-workflow-dispatch"] {
-        assert_eq!(with.get(key).map(String::as_str), Some("false"));
-    }
-    assert_eq!(
-        with.get("save-on-protected-branch").map(String::as_str),
-        Some("true")
-    );
-}
-
-fn assert_root_target_cache_keys(with: &std::collections::BTreeMap<String, String>) {
-    let expected_generation = format!(
-        "{}-gc-auto-off-final-clean-v1-action-{}-lane-${{{{ runner.environment }}}}-job-${{{{ github.job }}}}",
-        mbx_cache_generation(TEST_MBX_VERSION),
-        "a".repeat(40)
-    );
-    let expected_lock_hash = "${{ hashFiles('Cargo.lock','Cargo.toml','**/Cargo.toml','rust-toolchain.toml','rust-toolchain','.config/nextest.toml','!target/**') }}";
-    let expected_source_hash =
-        "${{ hashFiles('Cargo.lock','Cargo.toml','**/Cargo.toml','**/*.rs','!target/**') }}";
-    let expected_cache_key = format!(
-        "{expected_generation}-target-rust-{TEST_RUST_TOOLCHAIN}-{expected_lock_hash}-{expected_source_hash}"
-    );
-    let expected_restore_keys = format!(
-        "{expected_generation}-target-rust-{TEST_RUST_TOOLCHAIN}-{expected_lock_hash}-\n{expected_generation}-target-rust-{TEST_RUST_TOOLCHAIN}-"
-    );
-    assert_eq!(
-        with.get("cache-generation").map(String::as_str),
-        Some(expected_generation.as_str()),
-        "cache-generation separates jobs and lanes"
-    );
-    assert_eq!(
-        with.get("cache-key").map(String::as_str),
-        Some(expected_cache_key.as_str())
-    );
-    assert_eq!(
-        with.get("restore-keys").map(String::as_str),
-        Some(expected_restore_keys.as_str())
-    );
 }
 
 #[test]
@@ -156,7 +127,7 @@ fn action_construction_rejects_floating_refs_and_tool_versions() {
                 TEST_MBX_VERSION,
                 TEST_RUST_TOOLCHAIN,
                 env.clone(),
-                velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+                velnor_actions_workflow_renderer::steps::MbxTransport::InstallOnly,
                 None,
             )
             .is_err(),
@@ -178,7 +149,7 @@ fn action_construction_rejects_floating_refs_and_tool_versions() {
                 TEST_MBX_VERSION,
                 rust,
                 env,
-                velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+                velnor_actions_workflow_renderer::steps::MbxTransport::InstallOnly,
                 None,
             )
             .is_err(),
@@ -196,7 +167,7 @@ fn cargo_driver_emits_neither_preflight_nor_mbx_action() {
             TEST_MBX_VERSION,
             TEST_RUST_TOOLCHAIN,
             mbx_tool_env(TEST_RUST_TOOLCHAIN),
-            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            velnor_actions_workflow_renderer::steps::MbxTransport::InstallOnly,
             None,
         )
         .expect("Cargo driver")
@@ -220,7 +191,7 @@ fn rendered_action_has_rust_homes_and_native_owner_policy() -> Result<(), Render
         .expect("rendered Rust preflight");
     let action = names
         .iter()
-        .position(|name| name == "Restore MBX objects")
+        .position(|name| name == "Set up MBX")
         .expect("rendered MBX action");
     assert!(preflight < action, "rendered order: {names:?}");
     let rustup_home = "$".to_owned() + "{{ runner.temp }}/velnor/rustup";
@@ -252,102 +223,57 @@ fn rendered_action_has_rust_homes_and_native_owner_policy() -> Result<(), Render
     assert!(text.contains("name: Clean MBX workspace outputs"));
     assert!(text.contains("if: always() && steps.mbx-ready.outcome == 'success'"));
     assert!(text.contains(
-        "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \\\"$mbx_bin\\\" cache dir >/dev/null 2>&1"
+        "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \\\"$mbx_bin\\\" clean"
     ));
-    assert!(text.contains(".velnor-doc"));
-    assert!(text.contains(".velnor-source-oids"));
+    assert!(
+        !text.contains(".velnor-doc") && !text.contains(".velnor-source-oids"),
+        "no target-payload preparation remains"
+    );
     Ok(())
 }
 
 #[test]
-fn same_repo_scoped_pr_cache_policy_enables_pr_cache_writes() {
-    let [_, action, _] = mbx_steps_for_driver(
+fn install_step_sets_working_directory_for_nested_workspaces() {
+    let nested = mbx_steps_for_driver(
         MBX_ACTION,
         CompileDriver::Mbx,
         TEST_MBX_VERSION,
         TEST_RUST_TOOLCHAIN,
         mbx_tool_env(TEST_RUST_TOOLCHAIN),
-        velnor_actions_contract::PullRequestCachePolicy::SameRepositoryScoped,
-        None,
-    )
-    .expect("driver steps")
-    .expect("MBX steps");
-    let StepKind::Action { with, env, .. } = action.kind else {
-        panic!("restore must be an action");
-    };
-    assert_eq!(
-        with.get("save-on-pull-request").map(String::as_str),
-        Some(
-            "${{ github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork }}"
-        )
-    );
-    assert_eq!(
-        env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
-        Some(
-            "${{ ((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && 'write' || 'read' }}"
-        )
-    );
-}
-
-fn assert_nested_target_cache_keys(
-    with: &std::collections::BTreeMap<String, String>,
-    generation: &str,
-) {
-    let manifest_hash = "${{ hashFiles('crates/velnor-runner/Cargo.lock','crates/velnor-runner/Cargo.toml','crates/velnor-runner/**/Cargo.toml','rust-toolchain.toml','rust-toolchain','crates/velnor-runner/.config/nextest.toml','!crates/velnor-runner/target/**') }}";
-    let source_hash = "${{ hashFiles('crates/velnor-runner/Cargo.lock','crates/velnor-runner/Cargo.toml','crates/velnor-runner/**/Cargo.toml','crates/velnor-runner/**/*.rs','!crates/velnor-runner/target/**') }}";
-    assert_eq!(
-        with.get("cache-key"),
-        Some(&format!(
-            "{generation}-target-rust-{TEST_RUST_TOOLCHAIN}-{manifest_hash}-{source_hash}"
-        )),
-        "nested workspace recursively hashes its inputs and excludes only its actual target"
-    );
-    assert_eq!(
-        with.get("restore-keys"),
-        Some(&format!(
-            "{generation}-target-rust-{TEST_RUST_TOOLCHAIN}-{manifest_hash}-\n{generation}-target-rust-{TEST_RUST_TOOLCHAIN}-"
-        ))
-    );
-}
-
-#[test]
-fn mbx_objects_step_sets_working_directory_for_nested_workspaces() {
-    let [_, action, _] = mbx_steps_for_driver(
-        MBX_ACTION,
-        CompileDriver::Mbx,
-        TEST_MBX_VERSION,
-        TEST_RUST_TOOLCHAIN,
-        mbx_tool_env(TEST_RUST_TOOLCHAIN),
-        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        velnor_actions_workflow_renderer::steps::MbxTransport::SeedRead,
         Some("crates/velnor-runner"),
     )
     .expect("driver steps")
     .expect("MBX steps");
+    let action = nested[1].clone();
+    assert!(
+        matches!(&nested[5].kind, StepKind::Shell { run, .. }
+            if run[2].contains("cd \"$GITHUB_WORKSPACE/crates/velnor-runner\"")),
+        "the import runs inside the nested workspace"
+    );
     let StepKind::Action { with, .. } = action.kind else {
         panic!("restore must be an action");
     };
     assert_eq!(
         with.get("working-directory").map(String::as_str),
         Some("crates/velnor-runner"),
-        "nested workspace must configure working-directory for target cache"
+        "nested workspace must configure working-directory"
     );
-    let generation = with.get("cache-generation").expect("generation");
-    assert_nested_target_cache_keys(&with, generation);
 
-    let [_, root_action, _] = mbx_steps_for_driver(
+    let root = mbx_steps_for_driver(
         MBX_ACTION,
         CompileDriver::Mbx,
         TEST_MBX_VERSION,
         TEST_RUST_TOOLCHAIN,
         mbx_tool_env(TEST_RUST_TOOLCHAIN),
-        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        velnor_actions_workflow_renderer::steps::MbxTransport::InstallOnly,
         None,
     )
     .expect("driver steps")
     .expect("MBX steps");
     let StepKind::Action {
         with: root_with, ..
-    } = root_action.kind
+    } = root[1].kind.clone()
     else {
         panic!("restore must be an action");
     };
@@ -355,24 +281,19 @@ fn mbx_objects_step_sets_working_directory_for_nested_workspaces() {
         !root_with.contains_key("working-directory"),
         "root workspace must omit working-directory"
     );
-    let [preflight, action, version_check] = mbx_steps_for_driver(
+    let native = mbx_steps_for_driver(
         MBX_ACTION,
         CompileDriver::Mbx,
         TEST_MBX_VERSION,
         TEST_RUST_TOOLCHAIN,
         mbx_tool_env(TEST_RUST_TOOLCHAIN),
-        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        velnor_actions_workflow_renderer::steps::MbxTransport::InstallOnly,
         Some("native"),
     )
     .expect("driver steps")
     .expect("MBX steps");
     let text = render_workflow_ir(
-        &fixture_ir(vec![job(
-            "demo",
-            "Demo",
-            Vec::new(),
-            vec![preflight, action, version_check],
-        )]),
+        &fixture_ir(vec![job("demo", "Demo", Vec::new(), native)]),
         WorkflowPolicy::ConsumerV1,
         None,
         &fixture_ctx(),

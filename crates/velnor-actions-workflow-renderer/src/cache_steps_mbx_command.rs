@@ -269,7 +269,7 @@ fn is_mbx_selector(word: &str) -> bool {
 pub(super) fn uses_mbx_command(step: &Step) -> bool {
     if matches!(
         step.role,
-        Some(StepRole::PreseedBuild | StepRole::PreseedVerifyBuild)
+        Some(StepRole::PreseedBuild | StepRole::PreseedVerifyBuild | StepRole::MbxSeedBuild)
     ) {
         return true;
     }

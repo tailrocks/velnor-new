@@ -1,6 +1,8 @@
 //! Stack-neutral workflow IR, matrix, plan, and report types.
 pub mod artifacts;
 pub mod cache_family;
+pub mod cache_family_mbx;
+pub mod cache_family_steps;
 pub mod cache_ids;
 pub mod crate_job;
 pub mod dispatch;
@@ -21,8 +23,11 @@ pub mod qualification_dispatch;
 pub mod qualification_phase;
 pub mod report;
 mod report_validate;
+pub mod services;
 pub mod step;
 mod step_id;
+mod step_payloads;
+pub use step_id::GRADLE_RUN_OPERATION;
 pub mod step_identity;
 mod step_mbx_lifecycle;
 mod step_protocol;
@@ -103,6 +108,7 @@ pub use report::{
     CacheLayer, CacheOutcome, CacheResult, MatrixReport, MatrixStatus, MatrixTaskEntry,
     NotSelectedReason, TaskReport, TaskStatus, TaskTiming,
 };
+pub use services::ServiceContainer;
 pub use step::{MAX_TASK_EXECUTION_ARGV, MAX_TASK_EXECUTION_ENV, Step, StepKind};
 pub use step_identity::{
     BUN_REGISTRY_INSTALL_OPERATION, MBX_WORKSPACE_CLEAN_CONDITION, PRIVATE_FETCH_OPERATION,

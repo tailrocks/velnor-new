@@ -1,18 +1,20 @@
-Velnor Actions plan 0.1.30
+Velnor Actions plan 0.1.37
 Repository: <repo>
 
 Detected stacks
   Rust: selected
   Mise check maintenance-helpers: test-maintenance-helpers (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
-  Workspace crates: 18
+  Workspace crates: 20
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib, test; depends on velnor-actions-contract]
+    - velnor-actions-ansible (crates/velnor-actions-ansible/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-bun (crates/velnor-actions-bun/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin, test; depends on velnor-actions-freshness, velnor-actions-orchestrator]
     - velnor-actions-contract (crates/velnor-actions-contract/Cargo.toml) [lib, test]
+    - velnor-actions-dbt (crates/velnor-actions-dbt/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-freshness (crates/velnor-actions-freshness/Cargo.toml) [lib, test]
     - velnor-actions-gradle (crates/velnor-actions-gradle/Cargo.toml) [lib, test]
     - velnor-actions-mise (crates/velnor-actions-mise/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-tofu]
-    - velnor-actions-orchestrator (crates/velnor-actions-orchestrator/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-bun, velnor-actions-contract, velnor-actions-mise, velnor-actions-rust, velnor-actions-tofu, velnor-actions-workflow-renderer]
+    - velnor-actions-orchestrator (crates/velnor-actions-orchestrator/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-ansible, velnor-actions-bun, velnor-actions-contract, velnor-actions-dbt, velnor-actions-gradle, velnor-actions-mise, velnor-actions-rust, velnor-actions-tofu, velnor-actions-workflow-renderer]
     - velnor-actions-rust (crates/velnor-actions-rust/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-tofu (crates/velnor-actions-tofu/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-workflow-renderer (crates/velnor-actions-workflow-renderer/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-contract, velnor-actions-mise]
@@ -27,13 +29,13 @@ Detected stacks
   Nextest profile .: ci (.config/nextest.toml)
     evidence .config/nextest.toml:4 [profile.ci] [durable]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
-    evidence mise.toml:1 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:6 rust = { version = "1.99.1", mr_boxington = true } [durable]
   Profile crates/velnor-runner: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile crates/velnor-runner: ci (crates/velnor-runner/.config/nextest.toml)
     evidence .config/nextest.toml:4 [profile.ci] [durable]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
     evidence crates/velnor-runner/.config/nextest.toml:3 [profile.ci] [durable]
-    evidence mise.toml:1 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:6 rust = { version = "1.99.1", mr_boxington = true } [durable]
 
 Workflow to generate
   .github/actionlint.yaml
@@ -49,34 +51,40 @@ Workflow to generate
     - cargo-deny (6 steps)
     - cargo-machete (7 steps)
     - check-maintenance-helpers (8 steps)
+    - dependency-seed (21 steps)
+    - dependency-seed-crates-velnor-runner (21 steps)
     - plan (25 steps)
     - required (10 steps)
     - required-gate (1 steps)
-    - rust-velnor-actions-actionlint (24 steps)
-    - rust-velnor-actions-bun (23 steps)
-    - rust-velnor-actions-cli (24 steps)
-    - rust-velnor-actions-contract (23 steps)
-    - rust-velnor-actions-gradle (23 steps)
-    - rust-velnor-actions-mise (24 steps)
-    - rust-velnor-actions-orchestrator (24 steps)
-    - rust-velnor-actions-rust (23 steps)
-    - rust-velnor-actions-tofu (23 steps)
-    - rust-velnor-actions-workflow-renderer (23 steps)
-    - rust-velnor-resource-probe (23 steps)
-    - rust-velnor-runner-attestation (22 steps)
-    - rust-velnor-runner-cli (23 steps)
-    - rust-velnor-runner-core (23 steps)
-    - rust-velnor-runner-github (23 steps)
-    - rust-velnor-runner-host (23 steps)
+    - rust-velnor-actions-actionlint (27 steps)
+    - rust-velnor-actions-ansible (26 steps)
+    - rust-velnor-actions-bun (26 steps)
+    - rust-velnor-actions-cli (27 steps)
+    - rust-velnor-actions-contract (26 steps)
+    - rust-velnor-actions-dbt (26 steps)
+    - rust-velnor-actions-gradle (26 steps)
+    - rust-velnor-actions-mise (27 steps)
+    - rust-velnor-actions-orchestrator (27 steps)
+    - rust-velnor-actions-rust (26 steps)
+    - rust-velnor-actions-tofu (26 steps)
+    - rust-velnor-actions-workflow-renderer (26 steps)
+    - rust-velnor-resource-probe (26 steps)
+    - rust-velnor-runner-attestation (25 steps)
+    - rust-velnor-runner-cli (26 steps)
+    - rust-velnor-runner-core (26 steps)
+    - rust-velnor-runner-github (26 steps)
+    - rust-velnor-runner-host (26 steps)
     - zizmor (7 steps)
-    - 16 Rust crate jobs
+    - 18 Rust crate jobs
       Timeout: 8 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
       Entries:
         - rust-velnor-actions-actionlint
+        - rust-velnor-actions-ansible
         - rust-velnor-actions-bun
         - rust-velnor-actions-cli
         - rust-velnor-actions-contract
+        - rust-velnor-actions-dbt
         - rust-velnor-actions-gradle
         - rust-velnor-actions-mise
         - rust-velnor-actions-orchestrator
@@ -96,6 +104,12 @@ Workflow to generate
         - stack/rust/crates/velnor-actions-actionlint/doctest/default
         - stack/rust/crates/velnor-actions-actionlint/fmt/default
         - stack/rust/crates/velnor-actions-actionlint/nextest/default
+        - stack/rust/crates/velnor-actions-ansible/build/default
+        - stack/rust/crates/velnor-actions-ansible/clippy/default
+        - stack/rust/crates/velnor-actions-ansible/doc/default
+        - stack/rust/crates/velnor-actions-ansible/doctest/default
+        - stack/rust/crates/velnor-actions-ansible/fmt/default
+        - stack/rust/crates/velnor-actions-ansible/nextest/default
         - stack/rust/crates/velnor-actions-bun/build/default
         - stack/rust/crates/velnor-actions-bun/clippy/default
         - stack/rust/crates/velnor-actions-bun/doc/default
@@ -113,6 +127,12 @@ Workflow to generate
         - stack/rust/crates/velnor-actions-contract/doctest/default
         - stack/rust/crates/velnor-actions-contract/fmt/default
         - stack/rust/crates/velnor-actions-contract/nextest/default
+        - stack/rust/crates/velnor-actions-dbt/build/default
+        - stack/rust/crates/velnor-actions-dbt/clippy/default
+        - stack/rust/crates/velnor-actions-dbt/doc/default
+        - stack/rust/crates/velnor-actions-dbt/doctest/default
+        - stack/rust/crates/velnor-actions-dbt/fmt/default
+        - stack/rust/crates/velnor-actions-dbt/nextest/default
         - stack/rust/crates/velnor-actions-gradle/build/default
         - stack/rust/crates/velnor-actions-gradle/clippy/default
         - stack/rust/crates/velnor-actions-gradle/doc/default
@@ -184,7 +204,7 @@ Workflow to generate
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/doctest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/default
-  Parallel: 16 execution jobs; dependencies preserved; no matrix fan-out
+  Parallel: 18 execution jobs; dependencies preserved; no matrix fan-out
   Critical path: stack/rust/crates/velnor-actions-actionlint/build/default -> stack/rust/crates/velnor-actions-actionlint/nextest/default (2 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
@@ -214,4 +234,4 @@ Recommendations
   mise.toml is read-only input; Velnor never modifies it
   rust-toolchain.toml not found; Velnor will not create it
   shadowed_nextest_config: .config/nextest.toml shadowed by crates/velnor-runner/.config/nextest.toml; profile selected from crates/velnor-runner/.config/nextest.toml
-  tool_install_unverified:8 installs skip verification: actionlint@1.7.12(no_entry), cargo-deny@0.20.2(no_entry), cargo-machete@0.9.2(no_entry), gh@2.102.0(no_entry), opentofu@1.13.1(no_entry), rust@1.99.1(no_checksums), shellcheck@0.11.0(no_entry), zizmor@1.31.1(no_entry); install on the CI platform and commit the lock to verify them
+  tool_install_unverified:8 installs skip verification: actionlint@1.7.12(no_entry), cargo-deny@0.20.2(no_entry), cargo-machete@0.9.2(no_entry), gh@2.102.1(no_entry), opentofu@1.13.1(no_entry), rust@1.99.1(no_checksums), shellcheck@0.11.0(no_entry), zizmor@1.31.1(no_entry); install on the CI platform and commit the lock to verify them

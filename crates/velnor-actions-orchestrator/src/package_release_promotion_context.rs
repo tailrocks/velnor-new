@@ -1,7 +1,7 @@
 //! Actual caller contexts for publication recovery and read-only tap continuation.
 use super::super::{
     github::GitHubApi,
-    run_identity::{RunSource, run_matches},
+    run_identity::{CurrentRun, RunSource, continuation_job_name, release_job_name},
 };
 use crate::{OrchestratorError, internal::internal};
 use velnor_actions_contract::{PackageReleasePlan, package_release::PackageReleaseChannel};
@@ -90,28 +90,58 @@ impl Invocation {
         let workflow = api.admitted_workflow(path, name)?;
         let id = super::positive_env("GITHUB_RUN_ID")?;
         let attempt = super::positive_env_u32("GITHUB_RUN_ATTEMPT")?;
-        for run in [
-            api.workflow_run(id, attempt)?,
-            api.get_json(&api.route(&format!("actions/runs/{id}")))?,
-        ] {
-            if !run_matches(
-                &run,
-                &workflow,
+        let job = continuation_job_name(plan.channel, &super::env_text("GITHUB_JOB")?)?;
+        api.verify_current_role(
+            &CurrentRun {
                 id,
                 attempt,
-                RunSource {
+                source: RunSource {
                     repository_id: repo_id,
                     sha: &self.source_sha,
                     branch: &plan.default_branch,
                 },
-                &self.event,
-            ) || run.status.as_deref() != Some("in_progress")
-                || run.conclusion.is_some()
-            {
-                return Err(internal("tap_continuation_current_run"));
-            }
-        }
+                workflow: &workflow,
+                event: &self.event,
+            },
+            job,
+        )?;
         Ok(())
+    }
+
+    pub(in crate::package_release_publish) fn authenticate_recovery(
+        &self,
+        plan: &PackageReleasePlan,
+        api: &GitHubApi,
+        repo_id: u64,
+    ) -> Result<(), OrchestratorError> {
+        self.validate(plan, Purpose::PublicationRecovery)?;
+        let expected = format!(
+            "{}-recovery",
+            match plan.channel {
+                PackageReleaseChannel::Preview => "preview",
+                PackageReleaseChannel::Stable => "stable",
+            }
+        );
+        if super::env_text("GITHUB_JOB")? != expected {
+            return Err(internal("package_recovery_role"));
+        }
+        let job = release_job_name(plan, &expected)?;
+        let workflow =
+            api.admitted_workflow(plan.channel.workflow_path(), plan.channel.workflow_name())?;
+        api.verify_current_role(
+            &CurrentRun {
+                id: super::positive_env("GITHUB_RUN_ID")?,
+                attempt: super::positive_env_u32("GITHUB_RUN_ATTEMPT")?,
+                source: RunSource {
+                    repository_id: repo_id,
+                    sha: &self.source_sha,
+                    branch: &plan.default_branch,
+                },
+                workflow: &workflow,
+                event: &self.event,
+            },
+            &job,
+        )
     }
 
     fn expected_workflow(plan: &PackageReleasePlan, path: &str) -> String {

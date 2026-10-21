@@ -12,7 +12,7 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID};
-use velnor_actions_workflow_renderer::steps::STAGED_BINARY_PREFIX;
+use velnor_actions_workflow_renderer::steps::{MbxTransport, STAGED_BINARY_PREFIX};
 use velnor_actions_workflow_renderer::{
     PreseedStageSource, preseed_build_step, preseed_download_step, preseed_manifest_step,
     preseed_manifest_verify_step, preseed_stage_step, preseed_upload_step, preseed_verify_step,
@@ -125,11 +125,7 @@ pub(crate) fn attach_preseed(
             problem: "plan_job_missing".to_owned(),
         });
     };
-    insert_plan_mbx_restore(
-        catalog,
-        &mut plan.steps,
-        workflow.context.pull_request_cache_policy,
-    )?;
+    insert_plan_mbx_restore(catalog, &mut plan.steps)?;
     let at = preseed_anchor(&plan.steps);
     plan.steps.splice(at..at, plan_steps);
     let Some(final_gate) = workflow.ir.jobs.get_mut(FINAL_JOB_ID) else {
@@ -179,7 +175,6 @@ fn after_prepare(steps: &[Step]) -> usize {
 fn insert_plan_mbx_restore(
     catalog: &ToolCatalog,
     steps: &mut Vec<Step>,
-    policy: velnor_actions_contract::PullRequestCachePolicy,
 ) -> Result<(), OrchestratorError> {
     if steps.iter().any(is_mbx_action) {
         return Err(OrchestratorError::Contract {
@@ -190,9 +185,10 @@ fn insert_plan_mbx_restore(
         .iter()
         .position(|step| step.role == Some(StepRole::CargoSourcesRestore))
         .map_or_else(|| after_rust_setup(steps), |index| index + 1);
-    for (offset, step) in crate::mbx_preflight::steps_for_catalog(catalog, policy, None)?
-        .into_iter()
-        .enumerate()
+    for (offset, step) in
+        crate::mbx_preflight::steps_for_catalog(catalog, MbxTransport::InstallOnly, None)?
+            .into_iter()
+            .enumerate()
     {
         steps.insert(restore_at + offset, step);
     }

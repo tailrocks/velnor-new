@@ -21,6 +21,39 @@ with fixtures and qualification tests, not against live private repositories.
 | Generated placement in the Plan job and Rust crate jobs | orchestrator `private_wiring.rs` | `private_wiring_tests.rs`, `private_wiring_workflow_tests.rs` |
 | Placement in `cargo_bin` image build jobs (helper staging, mint, fetch, revoke before the Cargo source fetch and the BuildKit build) | orchestrator `image_prebuilt.rs` | `image_prebuilt_tests.rs` |
 
+## Decisions
+
+- Bundle location (adopted per the split brief; owner may revisit). Bundles are
+  extracted to `<workspace>/.velnor/deps/<id>/`, not `$RUNNER_TEMP`, so the local
+  fetch layout and the CI layout match and one `.cargo/config.toml` serves both.
+  No security reason requires keeping bundles outside the workspace: they carry
+  no credential and the token is already revoked when repository code runs. The
+  hostile-checkout cases (a planted `.velnor/deps` symlink or content) are
+  neutralized by `prepare_deps_root` and tested in `private_fetch_attack_tests.rs`.
+- The generated `actionlint.yaml` declares `private_sources.app_id_variable`
+  (`declared_config_variables`); `tests/impl_private_sources_generate.rs`
+  generates a `[private_sources]` repository through the pinned actionlint.
+
+- Cargo git sources land in the owned Cargo home. The fetch runs the
+  project-declared Rust, not the Velnor pin, and refuses to start when that
+  toolchain is not installed. Before this, a project whose Rust differed from
+  the Velnor pin (bitcoin-processor-rust run 39591265476: project 1.98.1, pin
+  1.99.1) fetched into `~/.cargo`: `mise exec` warned about the missing pin
+  and ran the ambient `cargo`. The step logged success, the next
+  `Fetch Cargo sources` step missed offline and failed an unauthenticated
+  clone of the private repository. Tests:
+  `cargo_sources_are_fetched_with_the_rust_the_project_declares`,
+  `cargo_fetch_runs_exactly_the_rust_it_is_given`,
+  `the_toolchain_check_asks_mise_where_for_the_same_rust_and_carries_no_token`.
+
+- Verified marker (`private_fetch_verified.rs`, adopted per the split brief;
+  owner may revisit): after a successful fetch,
+  `.velnor/deps/verified.json` records each verified bundle's tag, commit,
+  asset and archive SHA-256 so repository code can check the extracted trees
+  against the lock offline. Contract: "Verified marker" in the private sources
+  contract. Tests: `private_fetch_verified_tests.rs` and the tampered-asset case
+  in `private_fetch_attack_tests.rs`.
+
 ## Threat-model checks and where they are tested
 
 - Token unavailable (fork pull request) fails closed: `impl_cli_private.rs`, `Token` tests.

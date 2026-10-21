@@ -22,17 +22,18 @@ use velnor_actions_orchestrator::{
     ACQUIRE_RELEASE_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP, ADMIT_RELEASE_AGGREGATE_OP,
     ADMIT_RELEASE_POLICY_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_REGISTRY_INSTALL_OP,
     CAPTURE_REVIEW_COMPLETION_OP, DYNAMIC_MATRIX_OUTPUT_MODE, EMIT_REVIEW_COMPLETION_OP,
-    EXECUTE_CHECK_OP, EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP,
-    OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PLAYWRIGHT_INSTALL_OP,
-    PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP, PRIVATE_REVOKE_OP,
-    PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP, REPORT_OP,
-    REQUEST_FILE_ENV, SELECT_RELEASE_TAP_CONTINUATION_OP, SELECT_STABLE_RELEASE_SOURCE_OP,
-    SIGN_PACKAGE_RELEASE_OP, TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP,
-    WRITE_REQUEST_OP, WRITE_STABLE_TAG_INTENT_OP, WRITE_STABLE_TAG_ORIGIN_OP, execute_check,
-    merge_internal, merge_passed, plan_internal, plan_outputs, publish_final_report,
-    publish_plan_files, resolve_task_execution, response_path_for, retrieve_reports,
-    run_bun_registry_install, run_playwright_install, run_private_fetch, run_private_revoke,
-    write_preseed_manifest, write_request, write_task_report,
+    EXECUTE_CHECK_OP, EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, GRADLE_RUN_OP,
+    MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP,
+    PLAYWRIGHT_INSTALL_OP, PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP,
+    PRIVATE_REVOKE_OP, PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP,
+    REPORT_OP, REQUEST_FILE_ENV, SELECT_RELEASE_TAP_CONTINUATION_OP,
+    SELECT_STABLE_RELEASE_SOURCE_OP, SIGN_PACKAGE_RELEASE_OP, TASK_EXECUTION_RESOLVER_OP,
+    WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, WRITE_STABLE_TAG_INTENT_OP,
+    WRITE_STABLE_TAG_ORIGIN_OP, execute_check, merge_internal, merge_passed, plan_internal,
+    plan_outputs, publish_final_report, publish_plan_files, resolve_task_execution,
+    response_path_for, retrieve_reports, run_bun_registry_install, run_gradle_run,
+    run_playwright_install, run_private_fetch, run_private_revoke, write_preseed_manifest,
+    write_request, write_task_report,
 };
 
 #[path = "dispatch/fileless.rs"]
@@ -163,6 +164,7 @@ fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
         InternalOp::Fetch
         | InternalOp::Report
         | InternalOp::BunRegistryInstall
+        | InternalOp::GradleRun
         | InternalOp::PlaywrightInstall
         | InternalOp::PrivateFetch
         | InternalOp::PrivateRevoke
@@ -181,6 +183,14 @@ fn request_can_be_materialized(path: &Path) -> bool {
 }
 
 /// Run one validated private operation.
+/// Exit code of a unit-returning private operation.
+fn unit_exit(result: Result<(), OrchestratorError>) -> ExitCode {
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => fail_internal(&error.to_string()),
+    }
+}
+
 fn run_internal(request: &InternalRequest) -> ExitCode {
     match request.op {
         InternalOp::ExecuteCheck => match execute_check() {
@@ -222,6 +232,7 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
             Ok(_) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
         },
+        InternalOp::GradleRun => unit_exit(run_gradle_run()),
         InternalOp::BunRegistryInstall => match run_bun_registry_install() {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),

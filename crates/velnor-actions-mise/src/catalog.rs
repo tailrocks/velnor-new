@@ -55,20 +55,20 @@ pub use tool::PinnedTool;
 pub mod project;
 use versions::tool_source;
 
-/// Selected Mise release (tag `v2026.10.15`); official asset bytes, signed
-/// checksums and signed inventory were verified 2026-10-20. Runtime and hosted
+/// Selected Mise release (tag `v2026.10.17`); official asset bytes and the signed
+/// checksums file were verified 2026-10-21. Runtime and hosted
 /// qualification remain part of the release gates.
-/// Source: `https://api.github.com/repos/jdx/mise/releases/tags/v2026.10.15`.
-pub const MISE_VERSION: &str = "2026.10.15";
+/// Source: `https://api.github.com/repos/jdx/mise/releases/tags/v2026.10.17`.
+pub const MISE_VERSION: &str = "2026.10.17";
 /// Selected Rust stable toolchain (2026-10-15 official stable manifest).
 /// Source: `https://static.rust-lang.org/dist/channel-rust-stable.toml`; checked 2026-10-18.
 pub const RUST_VERSION: &str = "1.99.1";
-/// Selected `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.25.0`).
-/// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-10-20.
-pub const MR_BOXINGTON_VERSION: &str = "1.25.0";
-/// Qualified GitHub CLI (tag `v2.102.0`).
-/// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-09-30.
-pub const GH_VERSION: &str = "2.102.0";
+/// Selected `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.26.0`).
+/// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-10-21.
+pub const MR_BOXINGTON_VERSION: &str = "1.26.0";
+/// Qualified GitHub CLI (tag `v2.102.1`).
+/// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-10-21.
+pub const GH_VERSION: &str = "2.102.1";
 /// Qualified actionlint release (tag `v1.7.12`).
 /// Source: `https://api.github.com/repos/rhysd/actionlint/releases/latest`; checked 2026-09-28.
 pub const ACTIONLINT_VERSION: &str = "1.7.12";
@@ -80,9 +80,9 @@ pub const SHELLCHECK_VERSION: &str = "0.11.0";
 /// 2026-10-17. Source: `https://api.github.com/repos/zizmorcore/zizmor/releases/tags/v1.31.1`.
 pub const ZIZMOR_VERSION: &str = "1.31.1";
 /// Qualified cargo-nextest release (`nextest-rs/nextest` tag
-/// `cargo-nextest-0.9.148`, published 2026-10-07).
-/// Source: `https://crates.io/api/v1/crates/cargo-nextest`; checked 2026-10-08.
-pub const NEXTEST_VERSION: &str = "0.9.148";
+/// `cargo-nextest-0.9.149`, published 2026-10-20).
+/// Source: `https://crates.io/api/v1/crates/cargo-nextest`; checked 2026-10-21.
+pub const NEXTEST_VERSION: &str = "0.9.149";
 /// Qualified `OpenTofu` engine release (tag `v1.13.1`).
 /// Source: `https://github.com/opentofu/opentofu/releases/tag/v1.13.1`; checked 2026-10-02.
 /// Install: bare `opentofu@<exact>` via the aqua backend (isolated probe
@@ -119,12 +119,14 @@ pub const CRANE_VERSION: &str = "0.22.1";
 /// Source: `https://api.github.com/repos/oven-sh/bun/releases/latest`; checked 2026-10-20.
 /// Install: Mise core `bun@<exact>`.
 pub const BUN_VERSION: &str = "1.4.3";
-/// Fixed Cosign signer helper (release tag `v3.1.3`), not installed by Mise.
-/// Source release assets and GitHub API SHA-256 digest were verified 2026-10-18.
-pub const COSIGN_VERSION: &str = "3.1.3";
-/// Official Linux `x86_64` Cosign asset digest from the v3.1.3 release API.
+/// Fixed Cosign signer helper (release tag `v3.1.4`), not installed by Mise.
+/// Source release assets and GitHub API SHA-256 digest were verified 2026-10-21.
+pub const COSIGN_VERSION: &str = "3.1.4";
+/// Exact bytes in the pinned Linux amd64 Cosign executable; bounds transport and reads.
+pub const COSIGN_LINUX_AMD64_BYTES: usize = 145_688_404;
+/// Official Linux `x86_64` Cosign asset digest from the v3.1.4 release API.
 pub const COSIGN_LINUX_AMD64_SHA256: &str =
-    "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71";
+    "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa";
 
 // Nextest needs its backend-qualified aqua-registry path: no `nextest`
 // shorthand exists, `github:` tags carry a `cargo-nextest-` prefix, and

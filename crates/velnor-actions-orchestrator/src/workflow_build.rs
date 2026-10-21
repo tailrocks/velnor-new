@@ -209,9 +209,22 @@ fn build_workflow_jobs(
     for (id, job) in built.jobs {
         jobs.insert(id, job);
     }
+    // Seeds run no checks and are never required (cache decision 2).
+    for (id, job) in built.seeds {
+        jobs.insert(id, job);
+    }
     for (id, job) in
         check_jobs::build_check_jobs(prepared.policy, input.discovery, &prepared.catalog)?
     {
+        required_ids.push(id.clone());
+        jobs.insert(id, job);
+    }
+    for (id, job) in crate::config::gradle_jobs::build_jobs(
+        input.config,
+        &input.discovery.gradle_roots,
+        prepared.acquire.as_ref(),
+        prepared.private.as_ref(),
+    )? {
         required_ids.push(id.clone());
         jobs.insert(id, job);
     }

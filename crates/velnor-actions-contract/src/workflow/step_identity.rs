@@ -1,6 +1,10 @@
 //! Typed workflow step identity and semantic role.
 
 use super::step::{Step, StepKind};
+use super::step_payloads::{
+    valid_checkout_payload, valid_configured_checkout_payload, valid_mise_setup,
+    valid_tool_seed_payload,
+};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -28,7 +32,7 @@ pub const TOFU_PROVIDERS_PATH_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outp
 /// Run MBX workspace cleanup only after the exact-version/store guard passed.
 pub const MBX_WORKSPACE_CLEAN_CONDITION: &str = "always() && steps.mbx-ready.outcome == 'success'";
 
-/// Expression of the App installation token minted for private sources (HD-7).
+/// App installation token minted for private sources (HD-7).
 pub const PRIVATE_TOKEN_OUTPUT_EXPR: &str = "${{ steps.deps-token.outputs.token }}";
 /// Expression of the job token bound to the npm registry phase (HD-7).
 pub const PRIVATE_NPM_READ_EXPR: &str = "${{ github.token }}";
@@ -46,7 +50,6 @@ pub const BUN_REGISTRY_INSTALL_OPERATION: &str = "bun-registry-install-v1";
 pub const PRIVATE_TOKEN_MINT_ACTION_PREFIX: &str = "actions/create-github-app-token@";
 
 pub use super::step_id::StepId;
-
 /// Semantic step role used for workflow composition and validation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -141,8 +144,30 @@ pub enum StepRole {
     MbxVersionCheck,
     /// Exact MBX and Rust toolchain preflight.
     MbxPreflight,
-    /// Final workspace-target cleanup before the native MBX action post step.
+    /// Final workspace-target cleanup after the MBX bundle save.
     MbxWorkspaceCleanup,
+    /// Trust, compatibility and snapshot key of the opaque MBX bundle.
+    MbxBundleKey,
+    /// Restore of the opaque MBX bundle directory (`actions/cache/restore`).
+    MbxBundleRestore,
+    /// `mbx cache import` of the restored bundle; a failed import is discarded.
+    MbxBundleImport,
+    /// Marker written once the family's producer (the compile) succeeded.
+    MbxProducerMark,
+    /// One dependency-seed lane compile through `mbx`; the seed job's producer.
+    MbxSeedBuild,
+    /// `mbx cache export --format directory` gated on the producer marker.
+    MbxBundleExport,
+    /// Trusted-only `actions/cache/save` of the exported bundle directory.
+    MbxBundleSave,
+    /// Runtime trust and keys of the stack family caches (Bun, dbt, Ansible).
+    FamilyKeys,
+    /// Read-only restore of one stack family cache.
+    FamilyRestore,
+    /// On-disk size admission of one stack family cache against its ceiling.
+    FamilySizeCheck,
+    /// Trusted-only `actions/cache/save` of one stack family cache.
+    FamilySave,
     /// Mint of the read-only App installation token for private sources (HD-7).
     PrivateTokenMint,
     /// Velnor-owned private-source fetch; with the revoke, the only credential binding (HD-7).
@@ -184,15 +209,18 @@ impl StepRole {
             | Self::MatrixReportUpload
             | Self::PublishFinal
             | Self::PreseedUpload => action_has_prefix_for_kind(kind, "actions/upload-artifact@"),
-            Self::ToolsCacheSave | Self::CargoSourcesSave => {
-                action_has_prefix_for_kind(kind, "actions/cache/save@")
-            }
+            Self::ToolsCacheSave
+            | Self::CargoSourcesSave
+            | Self::MbxBundleSave
+            | Self::FamilySave => action_has_prefix_for_kind(kind, "actions/cache/save@"),
             Self::ToolsCacheIdentity => valid_tools_cache_identity(kind),
             Self::ToolsCacheRestore => matches!(
                 kind,
                 StepKind::Action { uses, .. } if uses == TOOLS_CACHE_RESTORE_USES
             ),
-            Self::CargoSourcesRestore => action_has_prefix_for_kind(kind, "actions/cache/restore@"),
+            Self::CargoSourcesRestore | Self::MbxBundleRestore | Self::FamilyRestore => {
+                action_has_prefix_for_kind(kind, "actions/cache/restore@")
+            }
             Self::TofuProvidersRestore => super::step_protocol::valid_provider_restore(kind),
             Self::TofuProvidersSave => super::step_protocol::valid_provider_save(kind),
             Self::PrivateTokenMint => matches!(kind,
@@ -200,11 +228,18 @@ impl StepRole {
             Self::PrivateFetch => internal_operation(kind, PRIVATE_FETCH_OPERATION),
             Self::PrivateRevoke => internal_operation(kind, PRIVATE_REVOKE_OPERATION),
             Self::BunRegistryInstall => internal_operation(kind, BUN_REGISTRY_INSTALL_OPERATION),
-            Self::MbxCache => valid_mbx_cache(kind),
+            Self::MbxCache => super::step_mbx_lifecycle::valid_mbx_cache(kind),
             Self::PlaywrightInstall => super::step_protocol::valid_playwright_install(kind),
             Self::PreparePinnedTools
             | Self::MbxVersionCheck
             | Self::MbxWorkspaceCleanup
+            | Self::MbxBundleKey
+            | Self::FamilyKeys
+            | Self::FamilySizeCheck
+            | Self::MbxBundleImport
+            | Self::MbxProducerMark
+            | Self::MbxSeedBuild
+            | Self::MbxBundleExport
             | Self::PrepareRustComponents
             | Self::CargoDeny
             | Self::CargoMachete
@@ -240,6 +275,10 @@ impl StepRole {
             Self::CacheKeys => Some(StepId::CacheKeys),
             Self::ToolsCacheRestore => Some(StepId::ToolsRestore),
             Self::PrivateTokenMint => Some(StepId::DepsToken),
+            Self::MbxBundleKey => Some(StepId::MbxBundleKey),
+            Self::MbxBundleRestore => Some(StepId::MbxBundleRestore),
+            Self::MbxBundleExport => Some(StepId::MbxBundleExport),
+            Self::FamilyKeys => Some(StepId::FamilyKeys),
             _ => None,
         }
     }
@@ -256,6 +295,15 @@ impl StepRole {
             StepId::SourcesFetch => Self::CargoSourcesFetch,
             StepId::ToolsRestore => Self::ToolsCacheRestore,
             StepId::DepsToken => Self::PrivateTokenMint,
+            StepId::MbxBundleKey => Self::MbxBundleKey,
+            StepId::MbxBundleRestore => Self::MbxBundleRestore,
+            StepId::MbxBundleExport => Self::MbxBundleExport,
+            StepId::FamilyKeys => Self::FamilyKeys,
+            StepId::FamilySizeBunInstall
+            | StepId::FamilySizePlaywrightBrowsers
+            | StepId::FamilySizeDbtPackages
+            | StepId::FamilySizePythonVenv
+            | StepId::FamilySizeAnsibleCollections => Self::FamilySizeCheck,
         }
     }
 }
@@ -278,35 +326,6 @@ pub fn is_tool_seed_step(step: &Step) -> bool {
     step.role == Some(StepRole::ToolSeed)
         && step.condition.is_none()
         && valid_tool_seed_payload(&step.kind)
-}
-
-/// Require the standard credential-free checkout action payload.
-fn valid_checkout_payload(kind: &StepKind) -> bool {
-    matches!(kind, StepKind::Action { uses, with, .. }
-        if action_has_prefix(uses, "actions/checkout@")
-            && with.get("persist-credentials").is_some_and(|value| value == "false"))
-}
-
-/// Require the simple generated checkout shape used before host-seed reads.
-fn valid_configured_checkout_payload(kind: &StepKind) -> bool {
-    matches!(kind, StepKind::Action { with, env, .. }
-        if valid_checkout_payload(kind)
-            && with.iter().all(|(key, value)| match key.as_str() {
-                "persist-credentials" => value == "false",
-                "fetch-depth" => value == "0",
-                "lfs" => value == "true",
-                _ => false,
-            })
-            && env.is_empty())
-}
-
-/// Require the fixed local seed action and its one explicit cache identity.
-fn valid_tool_seed_payload(kind: &StepKind) -> bool {
-    matches!(kind, StepKind::Action { uses, with, env }
-        if uses == TOOL_SEED_USES
-            && with.len() == 1
-            && with.get("cache_key").is_some_and(|key| !key.is_empty())
-            && env.is_empty())
 }
 
 /// Require the fixed generated hosted identity-and-seed composite and digest.
@@ -335,27 +354,6 @@ fn internal_operation(kind: &StepKind, expected: &str) -> bool {
     matches!(kind, StepKind::Internal { operation, .. } if operation == expected)
 }
 
-/// Validate the typed Mise setup payload shape shared by render paths.
-fn valid_mise_setup(kind: &StepKind) -> bool {
-    matches!(kind, StepKind::Action { uses, with, .. }
-        if action_has_prefix(uses, "jdx/mise-action@")
-            && with.get("version").is_some_and(|value| !value.is_empty())
-            && with.get("sha256").is_some_and(|value| !value.is_empty())
-            && with.get("install").is_some_and(|value| value == "false")
-            && with.get("env").is_some_and(|value| value == "false")
-            && with.get("cache").is_some_and(|value| value == "false" || value == "true")
-            && with.get("cache_save").is_some_and(|value| value == "false" || value == "true"))
-}
-
-/// Validate the native MBX action that owns the object-cache lifecycle.
-fn valid_mbx_cache(kind: &StepKind) -> bool {
-    matches!(kind, StepKind::Action { uses, with, .. }
-        if action_has_prefix(uses, "jdx/mr-boxington-action@")
-            && with.get("github-cache-mode").is_some_and(|mode| mode == "target" || mode == "objects")
-            && with.get("version").is_some_and(|version| !version.is_empty())
-            && with.get("toolchain").is_some_and(|toolchain| !toolchain.is_empty())
-            && with.get("cache-generation").is_some_and(|generation| !generation.is_empty()))
-}
 /// Validate one serialized step scope, including role payloads and unique output IDs.
 ///
 /// Workflow jobs and composite actions use separate output-ID scopes, so renderers

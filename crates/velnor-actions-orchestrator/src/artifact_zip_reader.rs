@@ -48,12 +48,25 @@ pub(super) fn open<R: Read + Seek>(
         return Err(invalid("compressed_limit"));
     }
     input.rewind().map_err(|_| invalid("seek"))?;
-    let operations = Rc::new(Cell::new(Some(profile.entries() * 32)));
+    // zip 9 searches at most 65 overlapping 1024-byte windows for the EOCD
+    // (22 fixed bytes + the 16-bit comment limit). Reserve 256 operations for
+    // those read/seek pairs and fixed EOCD/ZIP64 probes, then 32 per entry for
+    // central/local headers, variable fields and consistency checks. Malformed
+    // candidate storms still stop at this finite cap, regardless of body size.
+    let operations = Rc::new(Cell::new(Some(256 + profile.entries() * 32)));
     let cursor = CheckedCursor {
         cursor: input,
         metadata_ops: Rc::clone(&operations),
     };
-    let mut archive = zip::ZipArchive::new(cursor).map_err(|_| invalid("invalid"))?;
+    // Native Actions ZIP offsets are absolute within the supplied archive.
+    // Detect would scan the entire compressed payload to infer an SFX offset,
+    // exhausting metadata fuel on legitimate large files. Known(0) checks the
+    // declared directory directly and never falls back to payload scanning.
+    let config = zip::read::Config {
+        archive_offset: zip::read::ArchiveOffset::Known(0),
+    };
+    let mut archive =
+        zip::ZipArchive::with_config(config, cursor).map_err(|_| invalid("invalid"))?;
     if archive.is_empty() || archive.len() > profile.entries() {
         return Err(invalid("entry_limit"));
     }

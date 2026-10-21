@@ -38,9 +38,10 @@ Wrapper gate details:
    Snapshots, release candidates, other hosts and query strings fail.
 2. `distributionSha256Sum` must be present and equal the catalog digest for
    that version and flavour. The catalog (`catalog`) holds the official
-   `services.gradle.org` digests and was read on 2026-10-20; rows are added by
-   hand with their evidence date until `velnor-actions-freshness` maintains
-   them. The digest is never taken from the repository under test.
+   `services.gradle.org` digests and was read on 2026-10-20 and extended on 2026-10-21
+   through 9.8.2 (every final release after 9.5.1). Rows are never typed by
+   hand: `scripts/refresh-gradle-catalog.sh <version>...` prints them from the
+   official `.sha256` files, until `velnor-actions-freshness` maintains them. The digest is never taken from the repository under test.
 3. The SHA-256 of `gradle/wrapper/gradle-wrapper.jar` must be an official
    wrapper-jar digest.
 
@@ -56,7 +57,9 @@ All three are adopted per the split brief; the owner may revisit.
 
 **HD-4a, adapter-specific exact version grammars.** Hard decision 4's "exact
 `X.Y.Z`" is widened per adapter, never loosened: `java` accepts
-`<vendor>-<X.Y.Z>[+<build>[.<n>]*][.LTS]` (vendor one of `temurin`,
+`<vendor>-<X.Y.Z[.N]*>[+<build>[.<n>]*][.LTS]` (three or more numeric parts,
+because Oracle GraalVM versions are `25.0.4.1.1`; the Java feature version
+is the first part; vendor one of `temurin`,
 `oracle-graalvm`, `graalvm-community`, `corretto`, `zulu`); Gradle accepts
 `N.N` or `N.N.N` from the wrapper URL. Majors, `lts`, `latest`, ranges,
 templates and leading zeros still fail with `project_tool_version_not_exact`;
@@ -79,12 +82,35 @@ private libraries ship as `<id>-<version>-maven.zip` release assets with a
 Packages Maven cannot serve other private repositories with a scoped
 credential.
 
+## Implemented: `[stacks.gradle]`, jobs and `gradle-run-v1`
+
+```toml
+[stacks.gradle]
+roots = ["backend"]          # each: settings.gradle(.kts), gradlew, wrapper
+timeout_minutes = 15         # 1..=360, default workflow.crate_timeout_minutes
+max_workers = 4              # 1..=64
+
+[stacks.gradle.projects.":eth-domain"]
+services = ["postgres"]      # closed catalog (workflow-contract: service containers)
+```
+
+Generation analyses each root statically and fails closed with the finding
+codes above (`gradle_stack_findings:<root>: <code>`). Each project with a build
+script gets job `gradle-<root>-<project>` (`Gradle / <project>`, HD-5):
+checkout, the staged helper, the mint/fetch/revoke block for the lock's Maven
+bundles (`PrivateWiring::steps_for_gradle`, App id variable and private key
+secret from `[private_sources]`), Mise, the generated project-tool resolver
+(`VELNOR_TOOL_JAVA`), then the `gradle-run-v1` step. That operation re-verifies
+the wrapper before `./gradlew` runs, installs the exact JDK, writes the
+Velnor-owned Gradle home (toolchain pinning, and an init script that adds each
+fetched bundle's `repository/` for the `com.chainargos` group) and runs
+`:p:assemble :p:check` as one `--continue --dependency-verification strict`
+invocation in a cleared environment. Consumer policy only (the helper is
+required). There is no `Stack::Gradle` detector: roots are configured, as for Bun.
+
 ## Not yet implemented
 
-- `[stacks.gradle]` configuration, `Stack::Gradle`, generated per-project jobs
-  (HD-5), the JDK resolver key (`VELNOR_TOOL_JAVA`) and the Gradle cache
-  families.
-- Service containers (`Job.services`, closed `postgres` catalog).
+- The Gradle cache families, groups and `Stack::Gradle` detection.
 - `[[publish.maven]]` build, attest and publish jobs.
 - In-job graph and task-input verification, affected selection for Gradle.
 - Freshness maintenance of the Gradle checksum catalog.

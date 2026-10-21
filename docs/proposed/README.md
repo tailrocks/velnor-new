@@ -84,5 +84,7 @@ The generator crates MUST NOT implement a runner, a Scale Set client, or an Acti
 27. [Image publication contract](image-publication-contract.md) defines `[[images]]`, Dockerfile pinning rules, and the build, publish and promote jobs.
 28. [Private sources contract](private-sources-contract.md) defines private cross-repository dependency credentials (HD-7): the `[private_sources]` config, `.velnor/deps.lock`, the mint, fetch and revoke steps, and the credential boundary.
 29. [Bun contract](bun-contract.md) defines the Bun stack (hard decision 6): `[stacks.bun]`, the `bun.lock`-only policy, workspace members, the Velnor-written `bunfig.toml`, affected-member claims, Playwright browsers and npm publication.
+30. [dbt contract](dbt-contract.md) defines the dbt-fusion stack: `[stacks.dbt]`, the `X.Y.Z-preview.N` or stable `X.Y.Z` version grammar (HD-4a), the package-lock and profile policies, artifact admission and affected-project claims.
+31. [Ansible contract](ansible-contract.md) defines the Ansible stack: `[stacks.ansible]`, hash-pinned Python requirements, offline collection pins, playbook discovery, vault refusal and affected-root claims; host deployment stays operator-run (HD-9).
 
 The listed documents are intended to be implementable without inventing behavior. If a behavior is not specified, fail with a clear error and add a decision to the spec before implementing it. Do not silently broaden V1.

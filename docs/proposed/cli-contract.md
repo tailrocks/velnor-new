@@ -20,6 +20,7 @@ options are the only global options. The exact user-facing command tree is:
 velnor-actions init
 velnor-actions plan
 velnor-actions generate [--output-dir PATH]
+velnor-actions unmanaged
 ```
 
 `velnor-actions deps lock` pins private sources; see the [private sources contract](private-sources-contract.md). `velnor-actions playwright lock` pins the Playwright browser archives of Bun members; see the [Bun contract](bun-contract.md).
@@ -182,7 +183,7 @@ schema = 1
 # [workflow]
 # name = "CI"                         # Workflow display name.
 # policy = "consumer-v1"              # Only consumer policy; Velnor's reserved policy works only in tailrocks/velnor-new.
-# default_branch = "<branch>"         # Push branch override; omit to use origin/HEAD. Required if origin/HEAD is unavailable.
+# default_branch = "<branch>"         # Push branch override; omit to use origin/HEAD, then the CI event payload. Required if neither is available.
 # runner_label = "<latest pinned label>" # Exact latest pinned runner; omit for the default.
 # generator_validation = "bootstrap"  # Generator validation mode.
 # max_parallel_jobs = 2                # Maximum generated matrix concurrency.

@@ -127,6 +127,7 @@ fn image_policy() -> NativeImageTaskPolicy {
 
 fn required_job() -> Job {
     Job {
+        services: Vec::new(),
         display_name: "Required verdict".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,
@@ -164,7 +165,9 @@ fn jobs_for(policies: &[WorkflowTaskPolicy]) -> BTreeMap<String, Job> {
                 task.job_id(),
                 build_native_image_job(task, CHECKOUT).expect("image job"),
             ),
-            WorkflowTaskPolicy::Image(_) | WorkflowTaskPolicy::Bun(_) => {
+            WorkflowTaskPolicy::Image(_)
+            | WorkflowTaskPolicy::Bun(_)
+            | WorkflowTaskPolicy::Stack(_) => {
                 unreachable!("not part of this fixture")
             }
         };

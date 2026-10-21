@@ -132,6 +132,7 @@ fn selected_prebuilt_tools_are_isolated_and_task_tools_are_skipped_at_runtime() 
         )
     );
     assert!(!install_script.contains("codebook-lsp"));
+    assert_install_ceiling_is_above_task_root(install_script);
     let velnor_actions_contract::StepKind::Shell { run, .. } = &job.steps[3].kind else {
         panic!("task run is a shell step");
     };
@@ -195,6 +196,7 @@ fn all_declared_tasks_join_required_fan_in() {
         (
             crate::render::FINAL_JOB_ID.to_owned(),
             Job {
+                services: Vec::new(),
                 display_name: "Required verdict".to_owned(),
                 runs_on: "ubuntu-26.04".to_owned(),
                 check_runner: None,
@@ -248,6 +250,7 @@ fn paired_task_lanes_are_complete_and_join_required_together() {
         (
             crate::render::FINAL_JOB_ID.to_owned(),
             Job {
+                services: Vec::new(),
                 display_name: "Required verdict".to_owned(),
                 runs_on: "ubuntu-26.04".to_owned(),
                 check_runner: None,
@@ -298,4 +301,48 @@ fn emitted_verification_scripts_are_single_line_without_command_substitution() {
             }
         }
     }
+}
+
+/// mise on Linux ignores the config in the ceiling directory itself, so the
+/// install step (which writes `mise.toml` into `$task_root`) must cap
+/// discovery at the parent of `$task_root`.
+fn assert_install_ceiling_is_above_task_root(install_script: &str) {
+    assert!(
+        install_script.contains(r#"export MISE_CEILING_PATHS="${task_root%/*}""#),
+        "{install_script}"
+    );
+    assert!(
+        !install_script.contains(r#"export MISE_CEILING_PATHS="$task_root""#),
+        "{install_script}"
+    );
+}
+
+#[test]
+fn linux_install_step_ceiling_does_not_exclude_its_own_mise_config() {
+    let mut task = policy("linux-tools", VerificationRunner::LinuxX64);
+    task.mise_lock_sha256 = Some("b".repeat(64));
+    task.selected_tools = vec![BuildTaskTool {
+        key: "aqua:vendor/tool".to_owned(),
+        version: "1.2.3".to_owned(),
+        backend: "aqua:vendor/tool".to_owned(),
+        os: vec!["linux".to_owned()],
+        config_options: BTreeMap::new(),
+        lock_options: BTreeMap::new(),
+        artifact: Some(BuildTaskArtifact {
+            checksum: format!("sha256:{}", "c".repeat(64)),
+            url: "https://github.com/vendor/tool/releases/download/v1.2.3/tool-linux.tar.gz"
+                .to_owned(),
+            url_api: None,
+            signer: None,
+            provenance: None,
+        }),
+    }];
+    let job = build_verification_task_job(&task, CHECKOUT).expect("linux tools job");
+    let velnor_actions_contract::StepKind::Shell { run, .. } = &job.steps[2].kind else {
+        panic!("install step");
+    };
+    let script = run.last().expect("script");
+    assert_install_ceiling_is_above_task_root(script);
+    assert!(script.contains(r"grep -Eqx 'jq-1\.8\.[0-9]+'"), "{script}");
+    assert!(!script.contains("jq-1.8.2"), "{script}");
 }

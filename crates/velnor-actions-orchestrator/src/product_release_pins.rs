@@ -13,6 +13,7 @@ use crate::OrchestratorError;
 use crate::mbx_preflight::steps_for_catalog;
 use crate::pins::resolve_mise_setup_for_release_target;
 use crate::utf8::strings_of;
+use velnor_actions_workflow_renderer::steps::MbxTransport;
 
 /// Build every release command through the Mise adapter's typed requests.
 fn resolve_setups(
@@ -51,11 +52,12 @@ pub(crate) fn resolve(
             &catalog,
         )?,
         install_qualify_tools_argv: qualify_install_argv(&catalog)?,
-        qualify_mbx_action_steps: steps_for_catalog(
-            &catalog,
-            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-            None,
-        )?,
+        qualify_mbx_action_steps: {
+            let steps = steps_for_catalog(&catalog, MbxTransport::InstallOnly, None)?;
+            <[_; 3]>::try_from(steps).map_err(|_| OrchestratorError::Contract {
+                problem: "release_mbx_steps_not_install_only".to_owned(),
+            })?
+        },
         install_runner_build_tools_argv: install_argv(&[PinnedTool::Rust], &catalog)?,
         install_gh_argv: install_argv(&[PinnedTool::Gh], &catalog)?,
         build_argv: mbx_build_argv(&[], &catalog)?,

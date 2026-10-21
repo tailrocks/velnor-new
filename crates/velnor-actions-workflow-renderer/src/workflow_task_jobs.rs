@@ -7,6 +7,7 @@ use velnor_actions_contract::{Job, WORKFLOW_TASK_JOB_PREFIX};
 use super::{
     build_task_jobs::BuildTaskPolicy, bun_member_jobs::BunMemberPolicy,
     image_build_jobs::ImageBuildPolicy, native_image_jobs::NativeImageTaskPolicy,
+    stack_jobs::StackJobPolicy,
 };
 use crate::{RenderError, VerificationTaskPolicy};
 
@@ -27,6 +28,8 @@ pub enum WorkflowTaskPolicy {
     Image(ImageBuildPolicy),
     /// One Bun workspace member job (hard decision 6), hosted-only.
     Bun(BunMemberPolicy),
+    /// One dbt project or Ansible root job, hosted-only.
+    Stack(StackJobPolicy),
 }
 
 impl WorkflowTaskPolicy {
@@ -39,6 +42,7 @@ impl WorkflowTaskPolicy {
             Self::NativeImage(policy) => &policy.task.id,
             Self::Image(policy) => &policy.image.id,
             Self::Bun(policy) => &policy.id,
+            Self::Stack(policy) => &policy.id,
         }
     }
 
@@ -55,6 +59,7 @@ impl WorkflowTaskPolicy {
             Self::Bun(policy) => {
                 (policy.id == job_id).then_some(super::bun_member_jobs::BUN_RUNNER)
             }
+            Self::Stack(policy) => (policy.id == job_id).then_some(super::stack_jobs::STACK_RUNNER),
         }
     }
 
@@ -63,7 +68,7 @@ impl WorkflowTaskPolicy {
     pub fn uses_pinned_tools(&self) -> bool {
         match self {
             Self::Image(policy) => policy.uses_pinned_tools(),
-            Self::Bun(_) => true,
+            Self::Bun(_) | Self::Stack(_) => true,
             _ => false,
         }
     }
@@ -77,6 +82,7 @@ impl WorkflowTaskPolicy {
             Self::NativeImage(policy) => policy.job_id() == job_id,
             Self::Image(policy) => policy.platform_for_job(job_id).is_some(),
             Self::Bun(policy) => policy.id == job_id,
+            Self::Stack(policy) => policy.id == job_id,
         }
     }
 }
@@ -127,6 +133,14 @@ pub(crate) fn validate_workflow_task_jobs(
                     checkout_uses,
                 )?,
             ),
+            WorkflowTaskPolicy::Stack(task) => {
+                let ids = crate::verification_jobs::stack_jobs::validate_stack_job(
+                    jobs,
+                    task,
+                    checkout_uses,
+                )?;
+                job_ids.extend(ids);
+            }
             WorkflowTaskPolicy::NativeImage(task) => job_ids.extend(
                 crate::verification_jobs::native_image_jobs::validate_native_image_jobs(
                     jobs,

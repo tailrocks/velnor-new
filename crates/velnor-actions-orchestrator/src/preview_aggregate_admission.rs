@@ -57,36 +57,76 @@ fn admit_until(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
         &archive_dir,
         deadline,
     )?;
-    let metadata = artifact_zip::read_manifest_file(
+    let (downloaded, proof, source_manifest) = extract_aggregate(
         artifact.archive.reader()?,
+        &temp,
+        &policy_sha256,
+        &plan,
+        &authenticated_context,
+        deadline,
+    )?;
+    artifact.archive.verify(deadline)?;
+    drop(artifact);
+    stage_signer_input(
+        &temp,
+        &downloaded,
+        &proof,
+        &source_manifest,
+        &plan,
+        &authenticated_context,
+        deadline,
+    )
+}
+
+fn extract_aggregate(
+    archive: &mut std::fs::File,
+    temp: &Path,
+    policy_sha256: &str,
+    plan: &velnor_actions_contract::PackageReleasePlan,
+    authenticated_context: &velnor_actions_contract::preview_production::ReleaseProductionContext,
+    deadline: CheckDeadline,
+) -> Result<(std::path::PathBuf, PreviewAggregateManifest, Vec<u8>), OrchestratorError> {
+    let metadata = artifact_zip::read_manifest_file(
+        &mut *archive,
         ZipProfile::PreviewAggregate,
         handoff::AGGREGATE_MANIFEST,
         handoff::MAX_NATIVE_MANIFEST,
         deadline,
     )?;
     let proof =
-        PreviewAggregateManifest::parse(&metadata, &policy_sha256, &plan, &authenticated_context)?;
+        PreviewAggregateManifest::parse(&metadata, policy_sha256, plan, authenticated_context)?;
     let source_manifest = artifact_zip::read_manifest_file(
-        artifact.archive.reader()?,
+        &mut *archive,
         ZipProfile::PreviewAggregate,
         "package-output.json",
         crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES,
         deadline,
     )?;
-    let downloaded = handoff::fresh_directory(&temp, "preview-aggregate-acquired")?;
+    let downloaded = handoff::fresh_directory(temp, "preview-aggregate-acquired")?;
     let entries = entries(&proof, &metadata, &source_manifest);
     artifact_zip::extract_file(
-        artifact.archive.reader()?,
+        &mut *archive,
         ZipProfile::PreviewAggregate,
         &downloaded,
         &entries,
         deadline,
     )?;
-    artifact.archive.verify(deadline)?;
-    drop(artifact);
-    let input = handoff::fresh_directory(&temp, "preview-input")?;
-    copy_full_input(&downloaded, &input, &proof, &source_manifest, deadline)?;
-    let companions = preview_companions(&plan);
+    Ok((downloaded, proof, source_manifest))
+}
+
+fn stage_signer_input(
+    temp: &Path,
+    downloaded: &Path,
+    proof: &PreviewAggregateManifest,
+    source_manifest: &[u8],
+    plan: &velnor_actions_contract::PackageReleasePlan,
+    authenticated_context: &velnor_actions_contract::preview_production::ReleaseProductionContext,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    validate_destinations(plan)?;
+    let input = handoff::fresh_directory(temp, crate::package_release_signer::SIGNER_INPUT_DIR)?;
+    copy_full_input(downloaded, &input, proof, source_manifest, plan, deadline)?;
+    let companions = preview_companions(plan);
     let verified = verify_package_output(
         &input,
         "package-output.json",
@@ -166,15 +206,18 @@ fn copy_full_input(
     input: &Path,
     proof: &PreviewAggregateManifest,
     manifest: &[u8],
+    plan: &velnor_actions_contract::PackageReleasePlan,
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     for asset in &proof.assets {
-        handoff::copy_verified(
-            &downloaded.join(&asset.name),
-            &input.join(&asset.name),
-            asset,
-            deadline,
-        )?;
+        let relative = plan
+            .companions
+            .iter()
+            .find(|companion| companion.asset_name == asset.name)
+            .map_or(asset.name.as_str(), |companion| companion.path.as_str());
+        let destination = input.join(relative);
+        create_parents(input, relative)?;
+        handoff::copy_verified(&downloaded.join(&asset.name), &destination, asset, deadline)?;
     }
     write_exclusive_until(
         &input.join("package-output.json"),
@@ -192,3 +235,58 @@ fn runner_temp() -> Result<std::path::PathBuf, OrchestratorError> {
     crate::exclusive_write::create_dir_no_symlink(&temp, &root)?;
     Ok(root)
 }
+
+// Reject aliases and file/directory collisions across the entire restored tree
+// before creating it, including fixed handoff and generated SBOM destinations.
+fn validate_destinations(
+    plan: &velnor_actions_contract::PackageReleasePlan,
+) -> Result<(), OrchestratorError> {
+    plan.validate()
+        .map_err(|_| internal("preview_signer_input_plan"))?;
+    let mut paths = vec!["package-output.json".to_owned()];
+    for product in &plan.products {
+        for target in &product.targets {
+            let payload = format!("{}-{target}.tar.gz", product.id);
+            paths.push(format!("{payload}.sbom.json"));
+            paths.push(payload);
+        }
+    }
+    paths.extend(
+        plan.companions
+            .iter()
+            .map(|companion| companion.path.clone()),
+    );
+    let destinations = paths
+        .iter()
+        .map(Path::new)
+        .collect::<std::collections::BTreeSet<_>>();
+    if destinations.len() != paths.len()
+        || destinations.iter().any(|path| {
+            path.ancestors()
+                .skip(1)
+                .any(|parent| destinations.contains(parent))
+        })
+    {
+        return Err(internal("preview_signer_input_path_collision"));
+    }
+    Ok(())
+}
+
+// Paths come only from the validated source plan, never ZIP or manifest paths.
+fn create_parents(root: &Path, relative: &str) -> Result<(), OrchestratorError> {
+    let mut parent = root.to_path_buf();
+    let components = Path::new(relative).components().collect::<Vec<_>>();
+    for component in components.iter().take(components.len().saturating_sub(1)) {
+        let std::path::Component::Normal(name) = component else {
+            return Err(internal("preview_signer_input_path"));
+        };
+        let next = parent.join(name);
+        crate::exclusive_write::create_dir_no_symlink(&parent, &next)?;
+        parent = next;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "preview_aggregate_admission_tests.rs"]
+mod tests;

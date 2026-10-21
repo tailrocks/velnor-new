@@ -5,7 +5,9 @@
 //! stack-focused load tests.
 
 use serde::Deserialize;
-use velnor_actions_contract::config::{BunStackConfig, RustBinaryReleaseConfig, RustReleaseConfig};
+use velnor_actions_contract::config::{
+    AnsibleStackConfig, BunStackConfig, DbtStackConfig, RustBinaryReleaseConfig, RustReleaseConfig,
+};
 use velnor_actions_contract::{
     DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig, StacksConfig,
     TofuStackConfig, Utf8RepoRelDir,
@@ -27,6 +29,11 @@ pub(crate) struct PartialStacks {
     tofu: Option<PartialTofuStack>,
     /// Bun stack options (strict: `roots` is required).
     bun: Option<BunStackConfig>,
+    gradle: Option<velnor_actions_contract::config::gradle::GradleStackConfig>,
+    /// dbt stack options (strict: `projects` is required).
+    dbt: Option<DbtStackConfig>,
+    /// Ansible stack options (strict: `roots` is required).
+    ansible: Option<AnsibleStackConfig>,
 }
 
 /// Rust stack section with every value optional.
@@ -55,6 +62,9 @@ pub(crate) struct PartialRustStack {
     /// Optional exact `X.Y.Z` Rust toolchain channel override.
     #[serde(default)]
     toolchain: Option<String>,
+    /// Opt-in single Rust version source (`"mise"`).
+    #[serde(default)]
+    toolchain_source: Option<velnor_actions_contract::config::RustToolchainSource>,
     /// Per-package options (`[stacks.rust.crates.<package>]`).
     #[serde(default)]
     crates: std::collections::BTreeMap<String, velnor_actions_contract::RustCrateConfig>,
@@ -87,6 +97,7 @@ impl PartialStacks {
                 binary_release: stack.binary_release.unwrap_or_default(),
                 suites: stack.suites,
                 toolchain: stack.toolchain,
+                toolchain_source: stack.toolchain_source,
                 crates: stack.crates,
                 inputs: stack.inputs,
             }
@@ -111,6 +122,9 @@ impl PartialStacks {
             rust,
             tofu,
             bun: self.bun,
+            gradle: self.gradle,
+            dbt: self.dbt,
+            ansible: self.ansible,
         })
     }
 }
@@ -118,3 +132,7 @@ impl PartialStacks {
 #[cfg(test)]
 #[path = "config_stacks_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "config_stacks_adapter_tests.rs"]
+mod adapter_tests;

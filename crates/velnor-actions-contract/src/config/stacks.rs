@@ -1,6 +1,9 @@
 //! Stack selection and per-stack options.
+use super::ansible::AnsibleStackConfig;
 use super::binary_release::RustBinaryReleaseConfig;
 use super::bun::BunStackConfig;
+use super::dbt::DbtStackConfig;
+use super::gradle::GradleStackConfig;
 use super::release::RustReleaseConfig;
 use super::rust_inputs::RustInputRule;
 use super::rust_suites::RustSuiteConfig;
@@ -13,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Stack selection and per-stack options.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StacksConfig {
     /// Sorted, duplicate-free exact registered stack IDs to ignore.
@@ -28,6 +31,15 @@ pub struct StacksConfig {
     /// Bun stack options; absent means no Bun workspaces (hard decision 6).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bun: Option<BunStackConfig>,
+    /// Gradle stack options; absent means no Gradle jobs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gradle: Option<GradleStackConfig>,
+    /// dbt-fusion stack options; absent means no dbt projects.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dbt: Option<DbtStackConfig>,
+    /// Ansible stack options; absent means no Ansible roots.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ansible: Option<AnsibleStackConfig>,
 }
 
 /// Declared compile driver (`[stacks.rust] compile_driver`).
@@ -60,6 +72,10 @@ pub struct RustStackConfig {
     /// Optional exact `major.minor.patch` Rust toolchain override (`[stacks.rust] toolchain`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub toolchain: Option<String>,
+    /// Opt-in single source for the Rust version (`[stacks.rust] toolchain_source`);
+    /// absent keeps every source hard decision 4 accepts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub toolchain_source: Option<super::RustToolchainSource>,
     /// Sticky declared compile driver; conflicts with durable evidence fail closed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compile_driver: Option<DeclaredCompileDriver>,
@@ -187,6 +203,7 @@ impl RustStackConfig {
         Self {
             configurations: default_configurations(),
             toolchain: None,
+            toolchain_source: None,
             compile_driver: None,
             test_runner: None,
             run_ignored: None,
@@ -242,6 +259,15 @@ impl StacksConfig {
         }
         if let Some(bun) = &self.bun {
             bun.validate(file)?;
+        }
+        if let Some(gradle) = &self.gradle {
+            gradle.validate(file)?;
+        }
+        if let Some(dbt) = &self.dbt {
+            dbt.validate(file)?;
+        }
+        if let Some(ansible) = &self.ansible {
+            ansible.validate(file)?;
         }
         Ok(())
     }

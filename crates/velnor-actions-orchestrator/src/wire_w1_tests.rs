@@ -367,6 +367,24 @@ reviewer_app_id_variable = "CUSTOM_R"
         declared_config_variables(&config),
         ["ANOTHER_R", "CUSTOM_C", "CUSTOM_O", "CUSTOM_R", "CUSTOM_W"]
     );
+    config.private_sources = Some(
+        toml::from_str(
+            "owner = 'acme'\napp_id_variable = 'CUSTOM_P'\napp_private_key_secret = 'PRIVATE_P_KEY'\n",
+        )
+        .expect("private sources"),
+    );
+    assert_eq!(
+        declared_config_variables(&config),
+        [
+            "ANOTHER_R",
+            "CUSTOM_C",
+            "CUSTOM_O",
+            "CUSTOM_P",
+            "CUSTOM_R",
+            "CUSTOM_W"
+        ]
+    );
+    config.private_sources = None;
     config
         .distribution
         .homebrew_tap

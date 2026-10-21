@@ -11,8 +11,21 @@ const CLOCK_ID: &str = "velnor-cache-clock";
 const SOURCES_ID: &str = "velnor-optional-sources-save";
 const TOOLS_ID: &str = "velnor-optional-tools-save";
 const PROVIDERS_ID: &str = "velnor-optional-providers-save";
+/// Save-id prefix of the stack family saves (`...-<stem>-save`).
+const FAMILY_SAVE_ID_PREFIX: &str = "velnor-optional-family-";
+const MBX_BUNDLE_ID: &str = "velnor-optional-mbx-bundle-save";
 const RESERVE_SECONDS: u32 = 30;
 const WRITE_SECONDS: u32 = 60;
+/// A compiled bundle is larger than the other families; it gets a longer attempt.
+const BUNDLE_WRITE_SECONDS: u32 = 180;
+
+fn write_seconds(id: &str) -> u32 {
+    if id == MBX_BUNDLE_ID {
+        BUNDLE_WRITE_SECONDS
+    } else {
+        WRITE_SECONDS
+    }
+}
 
 const CLOCK_SCRIPT: &str = r#"set -eu
 unavailable() { printf '%s\n' '::warning::cache_unavailable: invalid first-step clock or output'; }
@@ -61,10 +74,12 @@ pub(crate) fn decorate(
     entries: &mut Vec<(String, Yaml)>,
     job_context: bool,
 ) -> Result<(), RenderError> {
-    let id = match step.role {
-        Some(StepRole::CargoSourcesSave) => SOURCES_ID,
-        Some(StepRole::ToolsCacheSave) => TOOLS_ID,
-        Some(StepRole::TofuProvidersSave) => PROVIDERS_ID,
+    let id: String = match step.role {
+        Some(StepRole::CargoSourcesSave) => SOURCES_ID.to_owned(),
+        Some(StepRole::ToolsCacheSave) => TOOLS_ID.to_owned(),
+        Some(StepRole::TofuProvidersSave) => PROVIDERS_ID.to_owned(),
+        Some(StepRole::MbxBundleSave) => MBX_BUNDLE_ID.to_owned(),
+        Some(StepRole::FamilySave) => family_save_id(step)?,
         _ => return Ok(()),
     };
     let StepKind::Action { uses, .. } = &step.kind else {
@@ -77,11 +92,29 @@ pub(crate) fn decorate(
         return Err(invalid());
     }
     entries.extend([
-        ("id".to_owned(), Yaml::str(id)),
-        ("timeout-minutes".to_owned(), Yaml::Int(1)),
+        ("id".to_owned(), Yaml::str(id.as_str())),
+        (
+            "timeout-minutes".to_owned(),
+            Yaml::Int(i64::from(write_seconds(&id) / 60)),
+        ),
         ("continue-on-error".to_owned(), Yaml::Bool(true)),
     ]);
     Ok(())
+}
+
+/// Per-family save id, from the family stem of the save's key expression.
+fn family_save_id(step: &Step) -> Result<String, RenderError> {
+    use velnor_actions_contract::workflow::cache_family_steps::{FAMILY_KEYS_ID, family_for_stem};
+    let StepKind::Action { with, .. } = &step.kind else {
+        return Err(invalid());
+    };
+    let family_stem = with
+        .get("key")
+        .and_then(|key| key.strip_prefix(&format!("${{{{steps.{FAMILY_KEYS_ID}.outputs.")))
+        .and_then(|rest| rest.strip_suffix("_key}}"))
+        .filter(|candidate| family_for_stem(candidate).is_some())
+        .ok_or_else(invalid)?;
+    Ok(format!("{FAMILY_SAVE_ID_PREFIX}{family_stem}-save"))
 }
 
 /// Add one clock before the original job steps and admission before each save.
@@ -118,11 +151,7 @@ fn validate_ids(steps: &[Yaml]) -> Result<(), RenderError> {
     let mut seen = std::collections::BTreeSet::new();
     for step in steps {
         let Some(id) = step_id(step) else { continue };
-        if id == CLOCK_ID
-            || id == format!("{SOURCES_ID}-budget")
-            || id == format!("{TOOLS_ID}-budget")
-            || id == format!("{PROVIDERS_ID}-budget")
-        {
+        if id == CLOCK_ID || id.ends_with("-save-budget") {
             return Err(invalid());
         }
         if save_id(step).is_some() && !seen.insert(id) {
@@ -150,7 +179,10 @@ fn step_id(step: &Yaml) -> Option<&str> {
 }
 
 fn save_id(step: &Yaml) -> Option<&str> {
-    step_id(step).filter(|id| matches!(*id, SOURCES_ID | TOOLS_ID | PROVIDERS_ID))
+    step_id(step).filter(|id| {
+        matches!(*id, SOURCES_ID | TOOLS_ID | PROVIDERS_ID | MBX_BUNDLE_ID)
+            || (id.starts_with(FAMILY_SAVE_ID_PREFIX) && id.ends_with("-save"))
+    })
 }
 
 fn clock(minutes: u16) -> Yaml {
@@ -182,7 +214,7 @@ fn admission(id: &str, minutes: u16, condition: &str) -> Yaml {
         ),
         (
             "VELNOR_CACHE_REQUIRED_SECONDS".to_owned(),
-            Yaml::str((WRITE_SECONDS + RESERVE_SECONDS).to_string()),
+            Yaml::str((write_seconds(id) + RESERVE_SECONDS).to_string()),
         ),
     ]);
     Yaml::Map(vec![

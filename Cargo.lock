@@ -647,9 +647,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.15"
+version = "0.103.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3c3cf1d8b1e7d4927e2d154c3fcb02979afb9939629c62cd9048d4f07b60ac2"
+checksum = "4443b1b6d39d7c663139942cc4558262562d2c84123bb6282ef177009ca8b281"
 dependencies = [
  "ring",
  "rustls-pki-types",
@@ -975,14 +975,23 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-actionlint"
-version = "0.1.30"
+version = "0.1.37"
 dependencies = [
  "velnor-actions-contract",
 ]
 
 [[package]]
+name = "velnor-actions-ansible"
+version = "0.1.37"
+dependencies = [
+ "thiserror",
+ "toml",
+ "velnor-actions-contract",
+]
+
+[[package]]
 name = "velnor-actions-bun"
-version = "0.1.30"
+version = "0.1.37"
 dependencies = [
  "serde_json",
  "thiserror",
@@ -992,7 +1001,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-cli"
-version = "0.1.30"
+version = "0.1.37"
 dependencies = [
  "clap",
  "proc-macro2",
@@ -1005,7 +1014,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-contract"
-version = "0.1.30"
+version = "0.1.37"
 dependencies = [
  "blake3",
  "serde",
@@ -1015,8 +1024,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "velnor-actions-dbt"
+version = "0.1.37"
+dependencies = [
+ "thiserror",
+ "toml",
+ "velnor-actions-contract",
+]
+
+[[package]]
 name = "velnor-actions-freshness"
-version = "0.1.30"
+version = "0.1.37"
 dependencies = [
  "flate2",
  "rustix",
@@ -1030,14 +1048,14 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-gradle"
-version = "0.1.30"
+version = "0.1.37"
 dependencies = [
  "sha2",
 ]
 
 [[package]]
 name = "velnor-actions-mise"
-version = "0.1.30"
+version = "0.1.37"
 dependencies = [
  "rustix",
  "serde",
@@ -1049,7 +1067,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator"
-version = "0.1.30"
+version = "0.1.37"
 dependencies = [
  "base64",
  "flate2",
@@ -1066,8 +1084,11 @@ dependencies = [
  "thiserror",
  "toml",
  "velnor-actions-actionlint",
+ "velnor-actions-ansible",
  "velnor-actions-bun",
  "velnor-actions-contract",
+ "velnor-actions-dbt",
+ "velnor-actions-gradle",
  "velnor-actions-mise",
  "velnor-actions-rust",
  "velnor-actions-tofu",
@@ -1077,7 +1098,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-rust"
-version = "0.1.30"
+version = "0.1.37"
 dependencies = [
  "serde",
  "serde_json",
@@ -1087,7 +1108,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-tofu"
-version = "0.1.30"
+version = "0.1.37"
 dependencies = [
  "hcl-rs",
  "serde",
@@ -1097,7 +1118,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-workflow-renderer"
-version = "0.1.30"
+version = "0.1.37"
 dependencies = [
  "serde_json",
  "velnor-actions-actionlint",
@@ -1107,7 +1128,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-archive-guard"
-version = "0.1.30"
+version = "0.1.37"
 dependencies = [
  "flate2",
  "sha2",

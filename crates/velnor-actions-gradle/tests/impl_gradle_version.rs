@@ -25,6 +25,29 @@ fn accepts_the_documented_forms() {
 }
 
 #[test]
+fn accepts_four_and_five_part_graalvm_cores() {
+    for (text, major) in [
+        ("oracle-graalvm-25.0.4", 25),
+        ("oracle-graalvm-25.0.4.1", 25),
+        ("oracle-graalvm-25.0.4.1.1", 25),
+        ("temurin-21.0.8.1+9", 21),
+    ] {
+        let java = parse_java(text).expect(text);
+        assert_eq!(java.major(), major, "{text}");
+        assert_eq!(java.to_string(), text);
+    }
+    for bad in [
+        "oracle-graalvm-25.0.4.1.",
+        "oracle-graalvm-25.0.4..1",
+        "oracle-graalvm-25.0.4.01",
+        "oracle-graalvm-25.0.4.x",
+        "oracle-graalvm-25.0.4.*",
+    ] {
+        assert!(parse_java(bad).is_err(), "{bad:?}");
+    }
+}
+
+#[test]
 fn rejects_loose_and_unknown_declarations() {
     for bad in [
         "21",

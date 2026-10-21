@@ -2,15 +2,16 @@
 
 use super::{RunSource, WorkflowMetadata};
 use crate::{OrchestratorError, internal::internal};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Default)]
 pub(in crate::package_release_publish) struct RunIdentityCache {
     workflows: Vec<(u64, String, String)>,
     completed: BTreeSet<CompletedAttempt>,
+    active_jobs: BTreeMap<(CompletedAttempt, String), u64>,
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) struct CompletedAttempt {
     repository_id: u64,
     source: String,
@@ -79,6 +80,26 @@ impl RunIdentityCache {
             return Err(internal("package_ci_cache_bound"));
         }
         self.completed.insert(attempt);
+        Ok(())
+    }
+}
+
+impl RunIdentityCache {
+    pub(super) fn active_job(&self, key: &CompletedAttempt, name: &str) -> Option<u64> {
+        self.active_jobs
+            .get(&(key.clone(), name.to_owned()))
+            .copied()
+    }
+    pub(super) fn admit_active_job(
+        &mut self,
+        key: CompletedAttempt,
+        name: &str,
+        id: u64,
+    ) -> Result<(), OrchestratorError> {
+        if self.active_jobs.len() >= 64 {
+            return Err(internal("package_active_job_cache_bound"));
+        }
+        self.active_jobs.insert((key, name.to_owned()), id);
         Ok(())
     }
 }

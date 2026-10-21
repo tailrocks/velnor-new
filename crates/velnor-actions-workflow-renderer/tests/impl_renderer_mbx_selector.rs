@@ -168,7 +168,7 @@ fn rust_nextest_exec_remains_outside_the_mbx_selector_gate() -> Result<(), Rende
     let step = shell_step(
         "Run tests",
         mise_exec(
-            &["rust@1.98.1", "cargo-nextest@0.9.148"],
+            &["rust@1.98.1", "cargo-nextest@0.9.149"],
             &["cargo", "nextest", "run", "--locked"],
         ),
         BTreeMap::new(),

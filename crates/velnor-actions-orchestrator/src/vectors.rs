@@ -57,10 +57,12 @@ const VALIDATOR_TOOL_SPECS: [&str; 5] = [
 /// crates, never fixtures or tooling trees (a bare walk previously
 /// errored on a symlink-hazard fixture; hazards now live only in
 /// TempDir-built tests, never in the tree).
-const MACHETE_SCAN_CRATES: [&str; 9] = [
+const MACHETE_SCAN_CRATES: [&str; 11] = [
     "crates/velnor-actions-contract",
     "crates/velnor-actions-rust",
     "crates/velnor-actions-tofu",
+    "crates/velnor-actions-ansible",
+    "crates/velnor-actions-dbt",
     "crates/velnor-actions-gradle",
     "crates/velnor-actions-mise",
     "crates/velnor-actions-actionlint",
@@ -137,7 +139,7 @@ fn tofu_task_argv(
 }
 
 /// Fixed vector: pinned tools plus a literal payload through Mise.
-fn exec_argv(
+pub(crate) fn exec_argv(
     tools: Vec<PinnedTool>,
     program: &str,
     args: &[&str],

@@ -45,6 +45,7 @@ fn group(package: &str) -> ProposedTask {
 /// Discovery shell carrying only task proposals.
 fn discovery(groups: Vec<ProposedTask>) -> Discovery {
     Discovery {
+        gradle_roots: Vec::new(),
         mise_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
@@ -63,6 +64,8 @@ fn discovery(groups: Vec<ProposedTask>) -> Discovery {
         tofu_units: Vec::new(),
         affected: crate::affected_inputs::AffectedInputs::default(),
         bun: crate::workflow_task_jobs::bun_inventory::BunInventory::default(),
+        dbt: crate::workflow_task_jobs::dbt_inventory::DbtInventory::default(),
+        ansible: crate::workflow_task_jobs::ansible_inventory::AnsibleInventory::default(),
     }
 }
 
@@ -93,6 +96,8 @@ fn tofu_install_follows_executed_suite_per_policy() {
         "velnor-actions-tofu",
         "velnor-actions-bun",
         "velnor-actions-gradle",
+        "velnor-actions-dbt",
+        "velnor-actions-ansible",
         "velnor-actions-workflow-renderer",
         "velnor-actions-actionlint",
         "velnor-actions-freshness",
@@ -118,6 +123,8 @@ fn tofu_install_follows_executed_suite_per_policy() {
         "velnor-actions-tofu",
         "velnor-actions-bun",
         "velnor-actions-gradle",
+        "velnor-actions-dbt",
+        "velnor-actions-ansible",
         "velnor-actions-workflow-renderer",
         "velnor-actions-actionlint",
         "velnor-actions-freshness",
@@ -155,7 +162,6 @@ fn mise_crate_job_prepare_installs_opentofu() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -219,6 +225,8 @@ fn every_workspace_member_is_classified_for_tofu() {
             "velnor-actions-tofu",
             "velnor-actions-bun",
             "velnor-actions-gradle",
+            "velnor-actions-dbt",
+            "velnor-actions-ansible",
             "velnor-actions-workflow-renderer",
             "velnor-actions-actionlint",
             "velnor-actions-freshness",

@@ -401,4 +401,4 @@ deleting a published release asset or moving a published tag.
 exception and manual stable version/tag authority are recorded in
 [release publication decisions](release-publication-decisions.md).
 
-**Gradle stack decisions (HD-4a adapter version grammars, HD-5 one job per Gradle project) and the release-asset Maven bundle choice** are recorded in [Gradle stack contract](proposed/gradle-contract.md#decisions); adopted per the split brief, owner may revisit.
+**Gradle stack decisions (HD-4a adapter version grammars, HD-5 one job per Gradle project) and the release-asset Maven bundle choice** are recorded in [Gradle stack contract](proposed/gradle-contract.md#decisions); adopted per the split brief, owner may revisit. **Host deployment (HD-9)** stays operator-run, outside generated CI/CD: [host deployment decision](host-deployment-decision.md); adopted per the split brief, owner may revisit.

@@ -11,6 +11,9 @@
 
 use velnor_actions_contract::config::VersionSource;
 
+/// Maven bundle publication scripts (hard decision 8).
+#[path = "publish_maven_scripts.rs"]
+pub mod maven;
 /// npm publication scripts (hard decision 8).
 #[path = "publish_npm_scripts.rs"]
 pub mod npm;
@@ -132,22 +135,49 @@ pub fn pack_script(id: &str, paths: &[String]) -> String {
 /// Re-verify the checksum sidecar against the downloaded tarball.
 #[must_use]
 pub fn verify_checksum_script(id: &str) -> String {
+    verify_sidecar_script(&format!("{id}-$ver.tar.gz"))
+}
+
+/// Re-verify `file`'s `.sha256` sidecar; the directory holds exactly the two files.
+///
+/// `file` may use the shell variable `$ver` (the tag's version).
+#[must_use]
+pub fn verify_sidecar_script(file: &str) -> String {
     format!(
         "set -eu; ver=${{GITHUB_REF_NAME##*-v}}; cd \"$RUNNER_TEMP/bundle\"; \
-         ls | wc -l | grep -Eqx ' *2'; sha256sum -c -- \"{id}-$ver.tar.gz.sha256\""
+         ls | wc -l | grep -Eqx ' *2'; sha256sum -c -- \"{file}.sha256\""
     )
 }
 
 /// Upload the bundle as immutable assets of the tag's GitHub release.
 #[must_use]
 pub fn upload_script(gh: &str, id: &str) -> String {
-    let files = format!(
-        "\"$RUNNER_TEMP/bundle/{id}-$ver.tar.gz\" \"$RUNNER_TEMP/bundle/{id}-$ver.tar.gz.sha256\""
-    );
+    upload_assets_script(gh, &format!("{id}-$ver.tar.gz"))
+}
+
+/// Upload `file` and its `.sha256` from the bundle directory as immutable
+/// assets. A release that already holds an asset is never overwritten: the
+/// existing asset is downloaded and compared by sha256, an identical one is
+/// skipped and a different one fails the job.
+#[must_use]
+pub fn upload_assets_script(gh: &str, file: &str) -> String {
+    let files = format!("\"$RUNNER_TEMP/bundle/{file}\" \"$RUNNER_TEMP/bundle/{file}.sha256\"");
     format!(
-        "set -eu; {gh}; ver=${{GITHUB_REF_NAME##*-v}}; \
-         if gh release view \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" > /dev/null 2>&1; \
-         then gh release upload \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" {files}; \
+        "set -eu; {gh}; ver=${{GITHUB_REF_NAME##*-v}}; b=\"$RUNNER_TEMP/bundle\"; \
+         t=\"$RUNNER_TEMP/published\"; \
+         if gh release view \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" > /dev/null 2>&1; then \
+         rm -rf -- \"$t\"; mkdir -p -- \"$t\"; \
+         gh release view \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" \
+         --json assets --jq '.assets[].name' > \"$t/names\"; \
+         for f in \"{file}\" \"{file}.sha256\"; do \
+         if grep -Fxq -- \"$f\" \"$t/names\"; then \
+         gh release download \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" --pattern \"$f\" --dir \"$t\"; \
+         sha256sum < \"$t/$f\" > \"$t/old.sum\"; sha256sum < \"$b/$f\" > \"$t/new.sum\"; \
+         if cmp -s \"$t/old.sum\" \"$t/new.sum\"; then \
+         printf 'velnor: %s already published with the same sha256, skipping\\n' \"$f\"; \
+         else printf 'velnor: %s already published with a different sha256, refusing to overwrite\\n' \"$f\" >&2; \
+         exit 1; fi; \
+         else gh release upload \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" \"$b/$f\"; fi; done; \
          else gh release create \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" --verify-tag \
          --title \"$GITHUB_REF_NAME\" --notes 'Release asset bundle' {files}; fi"
     )

@@ -33,6 +33,11 @@ const SOURCES_PATHS: [&str; 3] = [
 const TOFU_PROVIDERS_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/tofu-cache/{root}"];
 const BUN_INSTALL_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/bun-cache"];
 const PLAYWRIGHT_BROWSERS_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/ms-playwright"];
+const DBT_PACKAGES_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/dbt-packages/{root}"];
+const PYTHON_VENV_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/uv-cache"];
+const ANSIBLE_COLLECTIONS_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/ansible-collections"];
+use super::cache_family_mbx::MBX_BUNDLE_PATH_EXPR;
+const MBX_BUNDLE_PATHS: [&str; 1] = [MBX_BUNDLE_PATH_EXPR];
 
 /// Repository cache quota the budget rule is computed against (GitHub's 10 GB
 /// default, taken as 10 GiB; [cache decisions](../../../../docs/proposed/cache-decisions.md)).
@@ -52,6 +57,14 @@ pub enum CacheFamily {
     BunInstall,
     /// Playwright browser archives installed from the hash-pinned browser lock.
     PlaywrightBrowsers,
+    /// One dbt project's installed packages (`dbt deps` output), keyed by `package-lock.yml`.
+    DbtPackages,
+    /// uv's wheel cache the hash-pinned Python venv is built from, keyed by the requirements file.
+    PythonVenv,
+    /// Verified Ansible collection tarballs, keyed by the declared collection set.
+    AnsibleCollections,
+    /// Opaque `mbx cache export` bundle of one Cargo workspace, keyed by its lock.
+    MbxBundle,
 }
 
 /// Static identity of one family: key layer, schema, and archive paths.
@@ -100,13 +113,47 @@ const PLAYWRIGHT_BROWSERS: FamilySpec = FamilySpec {
     retained_entries: 2,
 };
 
+const DBT_PACKAGES: FamilySpec = FamilySpec {
+    layer: "dbt-packages",
+    schema: 1,
+    paths: &DBT_PACKAGES_PATHS,
+    ceiling_bytes: 64 * MIB,
+    retained_entries: 2,
+};
+const PYTHON_VENV: FamilySpec = FamilySpec {
+    layer: "python-venv",
+    schema: 1,
+    paths: &PYTHON_VENV_PATHS,
+    ceiling_bytes: 384 * MIB,
+    retained_entries: 2,
+};
+const ANSIBLE_COLLECTIONS: FamilySpec = FamilySpec {
+    layer: "ansible-collections",
+    schema: 1,
+    paths: &ANSIBLE_COLLECTIONS_PATHS,
+    ceiling_bytes: 128 * MIB,
+    retained_entries: 2,
+};
+
+const MBX_BUNDLE: FamilySpec = FamilySpec {
+    layer: "mbx-bundle",
+    schema: 1,
+    paths: &MBX_BUNDLE_PATHS,
+    ceiling_bytes: 384 * MIB,
+    retained_entries: 1,
+};
+
 impl CacheFamily {
     /// Every family, in key-prefix order.
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 8] = [
         Self::Sources,
         Self::TofuProviders,
         Self::BunInstall,
         Self::PlaywrightBrowsers,
+        Self::DbtPackages,
+        Self::PythonVenv,
+        Self::AnsibleCollections,
+        Self::MbxBundle,
     ];
 
     /// Static family identity.
@@ -117,6 +164,10 @@ impl CacheFamily {
             Self::TofuProviders => &TOFU_PROVIDERS,
             Self::BunInstall => &BUN_INSTALL,
             Self::PlaywrightBrowsers => &PLAYWRIGHT_BROWSERS,
+            Self::DbtPackages => &DBT_PACKAGES,
+            Self::PythonVenv => &PYTHON_VENV,
+            Self::AnsibleCollections => &ANSIBLE_COLLECTIONS,
+            Self::MbxBundle => &MBX_BUNDLE,
         }
     }
 

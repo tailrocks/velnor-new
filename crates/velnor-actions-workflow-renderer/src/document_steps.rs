@@ -56,6 +56,7 @@ fn internal_env(
     }
     if op == velnor_actions_contract::PRIVATE_FETCH_OPERATION
         || op == velnor_actions_contract::PRIVATE_REVOKE_OPERATION
+        || op == velnor_actions_contract::GRADLE_RUN_OPERATION
         || op == velnor_actions_contract::BUN_REGISTRY_INSTALL_OPERATION
         || op == velnor_actions_contract::config::playwright_lock::PLAYWRIGHT_INSTALL_OPERATION
     {
@@ -279,6 +280,8 @@ pub(crate) fn step_to_yaml(
                 velnor_actions_contract::StepRole::CargoSourcesSave
                     | velnor_actions_contract::StepRole::ToolsCacheSave
                     | velnor_actions_contract::StepRole::TofuProvidersSave
+                    | velnor_actions_contract::StepRole::MbxBundleSave
+                    | velnor_actions_contract::StepRole::FamilySave
             )
         ) {
             return Err(RenderError::InvalidWorkflow(

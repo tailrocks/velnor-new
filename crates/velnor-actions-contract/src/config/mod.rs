@@ -4,15 +4,19 @@
 
 mod actions;
 mod agents;
+mod ansible;
 mod binary_release;
 mod build_task;
 mod bun;
 mod check_receipt_budget;
+mod dbt;
 mod dco;
 mod discovery;
 mod distribution;
 mod dockerfile;
 mod execution;
+mod github;
+pub mod gradle;
 mod host_container;
 mod image_grammar;
 mod image_jobs;
@@ -22,11 +26,13 @@ mod mise;
 pub mod playwright_lock;
 mod preview_policy;
 mod private_sources;
+/// Generated run-time resolver for project-declared versions (hard decision 5).
+mod project_tool_grammar;
 /// Run-time references to project-declared tool versions (hard decision 5).
 pub mod project_tool_refs;
-/// Generated run-time resolver for project-declared versions (hard decision 5).
 pub mod project_tool_resolver;
 mod publish;
+mod publish_maven;
 mod publish_npm;
 mod qualified_tools;
 mod release;
@@ -36,6 +42,7 @@ mod runs_on;
 mod rust_inputs;
 mod rust_suites;
 mod rust_suites_validate;
+mod rust_toolchain_source;
 mod stacks;
 mod task_source;
 mod tofu;
@@ -50,6 +57,9 @@ pub(crate) use binary_release::validate_static_release_inventory;
 
 pub use actions::{ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
 pub use agents::{AgentsConfig, ClaudeMdMode};
+pub use ansible::{
+    ANSIBLE_JOB_PREFIX, AnsibleCheck, AnsibleCollection, AnsibleStackConfig, LintProfile,
+};
 pub use binary_release::{
     RustBinaryPreviewConfig, RustBinaryPreviewVersioning, RustBinaryReleaseArchive,
     RustBinaryReleaseCompanion, RustBinaryReleaseConfig, RustBinaryReleaseEvidence,
@@ -63,15 +73,8 @@ pub use bun::{
     BUN_JOB_PREFIX, BunBrowser, BunInputRule, BunMemberConfig, BunStackConfig, DEFAULT_BUN_SCRIPTS,
     MAX_BUN_TIMEOUT_MINUTES, is_valid_member_name, is_valid_script_name,
 };
-pub use check_receipt_budget::{
-    MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES, MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,
-    MAX_CHECK_CONTAINER_DAEMON_CAPTURE_BYTES, MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES,
-    MAX_CHECK_CONTAINER_PATH_BYTES, MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
-    MAX_CHECK_CONTAINER_RUNTIME_ENTRIES, MAX_CHECK_CONTAINER_RUNTIME_ENTRY_PATH_BYTES,
-    MAX_CHECK_EXECUTION_RECEIPT_BYTES, MAX_CHECK_QUALIFIED_PROBE_CAPTURE_BYTES,
-    MAX_CHECK_QUALIFIED_PROBE_EXPECTED_BYTES, MAX_CHECK_SOURCE_BYTES,
-    MAX_CHECK_SYSTEM_VERSION_BYTES, check_execution_receipt_upper_bound,
-};
+pub use check_receipt_budget::*;
+pub use dbt::{DBT_JOB_PREFIX, DbtCheck, DbtService, DbtStackConfig};
 pub use dco::{DCO_CONFIG_PATH, DcoConfig, DcoRemediationCommits, DcoRequire};
 pub use discovery::DiscoveryConfig;
 pub use distribution::{
@@ -84,6 +87,7 @@ pub use execution::{
     ExecutionConfig, ExecutionMode, ExecutionOverride, ExecutionParity, ExecutionProfile,
     ExecutionRole, HOSTED_PROFILE_ID, ProfileKind, RoutingWorkflow, SCALE_SET_PROFILE_ID,
 };
+pub use github::{GithubConfig, UnmanagedPolicy};
 pub use host_container::{
     ContainerPlatform, DaemonIdentityPolicy, HostContainerProfile, HostDockerCli, HostDockerDaemon,
     HostOrbStackSdk,
@@ -106,6 +110,9 @@ pub use private_sources::{
 pub use publish::{
     PublishBundle, PublishConfig, RELEASE_TAG_GLOB, ReleaseTag, VersionSource, is_artifact_id,
     is_strict_semver,
+};
+pub use publish_maven::{
+    MAVEN_BUNDLE_OUTPUT_DIR, MAVEN_BUNDLE_TASK, MAVEN_VERSION_FILE, PublishMaven,
 };
 pub use publish_npm::{NPM_PUBLISH_REGISTRY_URL, NpmRegistry, PublishNpm};
 pub use qualified_tools::{
@@ -135,6 +142,7 @@ pub use rust_suites::{
 pub use rust_suites_validate::{
     validate_preserve_workflows, validate_rust_suites, validate_suites_with_dispatch,
 };
+pub use rust_toolchain_source::RustToolchainSource;
 pub use stacks::{
     DeclaredCompileDriver, DeclaredTestRunner, MAX_CRATE_BUILD_JOBS, RustConfiguration,
     RustCrateConfig, RustStackConfig, StacksConfig, is_valid_feature_name, is_valid_rust_target,
@@ -187,6 +195,9 @@ pub struct VelnorConfig {
     /// Generated dco2 configuration (`[dco]`); absent emits no `.github/dco.yml`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dco: Option<DcoConfig>,
+    /// Policy for `.github` entries the generator does not emit (`[github]`).
+    #[serde(default, skip_serializing_if = "GithubConfig::is_default")]
+    pub github: GithubConfig,
     /// Schema 2 routing. Absent on schema 1.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution: Option<ExecutionConfig>,
@@ -225,6 +236,7 @@ impl VelnorConfig {
         self.resources.validate(file)?;
         self.test_sharding.validate(file)?;
         self.stacks.validate(file)?;
+        self.github.validate(file)?;
         self.tools.validate(file)?;
         if let Some(dco) = &self.dco {
             dco.validate(file)?;
@@ -353,29 +365,6 @@ impl VelnorConfig {
             }),
         }
     }
-
-    /// Reject shard counts beyond the test-process budget (par §8).
-    /// # Errors
-    pub fn check_shard_budgets(&self, file: &str) -> Result<(), ContractError> {
-        let budget = self.resources.test_process_budget;
-        if self.test_sharding.default_shards > budget {
-            return Err(ContractError::config(
-                file,
-                "test_sharding.default_shards",
-                "exceeds_test_process_budget",
-            ));
-        }
-        for (manifest, shards) in &self.test_sharding.by_manifest {
-            if *shards > budget {
-                return Err(ContractError::config(
-                    file,
-                    format!("test_sharding.by_manifest.{manifest}"),
-                    "exceeds_test_process_budget",
-                ));
-            }
-        }
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -383,13 +372,7 @@ impl VelnorConfig {
 mod check_tool_reference_tests;
 
 #[cfg(test)]
-mod preview_policy_tests;
-
-#[cfg(test)]
-mod images_tests;
-
-#[cfg(test)]
-mod dockerfile_tests;
+mod unit_tests;
 
 mod review_completion;
 pub(crate) use distribution::valid_review_check_name;

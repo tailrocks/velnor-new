@@ -42,10 +42,19 @@ pub(super) fn compile_driver_steps(spec: &RustSuitesRenderSpec) -> Result<Vec<St
         mbx_version,
         &spec.rust_version,
         base_suite_env(spec),
-        spec.pull_request_cache_policy,
+        steps::MbxTransport::SuiteBundle,
         None,
     )?;
-    Ok(steps.map_or_else(Vec::new, Into::into))
+    Ok(steps.unwrap_or_default())
+}
+
+/// Marker after the suite's compile (the whole step when compile and test are one).
+pub(super) fn producer_mark_steps(spec: &RustSuitesRenderSpec) -> Result<Vec<Step>, RenderError> {
+    if spec.compile_driver == CompileDriver::Mbx {
+        Ok(vec![steps::mbx_producer_mark_step()?])
+    } else {
+        Ok(Vec::new())
+    }
 }
 
 pub(super) fn install_suite_tools_step(spec: &RustSuitesRenderSpec) -> Result<Step, RenderError> {

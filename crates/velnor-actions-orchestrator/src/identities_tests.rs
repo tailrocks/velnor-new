@@ -293,6 +293,7 @@ fn tofu_cache_format_is_distinct_and_valid() {
 /// Minimal discovery with no workspaces or tool checks.
 fn empty_discovery() -> crate::discover::Discovery {
     crate::discover::Discovery {
+        gradle_roots: Vec::new(),
         mise_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
@@ -311,6 +312,8 @@ fn empty_discovery() -> crate::discover::Discovery {
         tofu_units: Vec::new(),
         affected: crate::affected_inputs::AffectedInputs::default(),
         bun: crate::workflow_task_jobs::bun_inventory::BunInventory::default(),
+        dbt: crate::workflow_task_jobs::dbt_inventory::DbtInventory::default(),
+        ansible: crate::workflow_task_jobs::ansible_inventory::AnsibleInventory::default(),
     }
 }
 

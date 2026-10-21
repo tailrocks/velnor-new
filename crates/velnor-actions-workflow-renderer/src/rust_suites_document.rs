@@ -125,6 +125,7 @@ fn finalize_suite_workflow_jobs(
         crate::cache_p08::check_mbx_before_fetch(id, job)?;
     }
     crate::cache_p08::elect_cache_writers_with_policy(jobs, spec.pull_request_cache_policy)?;
+    crate::cache_steps::append_bundle_postludes(jobs)?;
     crate::cache_steps::append_workspace_cleanups(jobs)?;
     crate::cache_doctor::check(jobs)
 }
@@ -358,11 +359,12 @@ fn extract_suite_job_env(job: &Job, native_mbx: bool) -> BTreeMap<String, String
     if native_mbx {
         use crate::cache_steps::{
             MBX_BUILD_SCRIPT_EXECUTION_ENV, MBX_BUILD_SCRIPT_EXECUTION_VALUE, MBX_CC_ENV,
-            MBX_CC_VALUE, MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, MBX_SHARE_OUT_DIR_ENV,
-            MBX_SHARE_OUT_DIR_VALUE,
+            MBX_CC_VALUE, MBX_EXPORT_GROUP_ENV, MBX_EXPORT_GROUP_VALUE, MBX_GC_AUTO_ENV,
+            MBX_GC_AUTO_VALUE, MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE,
         };
         for (key, val) in [
             (MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE),
+            (MBX_EXPORT_GROUP_ENV, MBX_EXPORT_GROUP_VALUE),
             (MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE),
             (MBX_CC_ENV, MBX_CC_VALUE),
             (

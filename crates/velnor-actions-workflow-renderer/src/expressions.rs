@@ -76,7 +76,7 @@ const ENV_EXPRESSIONS: [&str; 14] = [
 /// Run-scoped names, runner paths, matrix coordinates, the
 /// push-gated cache-save flag, and runtime cache identities. Notably absent: every `secrets.*` handle (rejected
 /// separately as `secret_in_action_input`).
-const WITH_EXPRESSIONS: [&str; 16] = [
+const WITH_EXPRESSIONS: [&str; 18] = [
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
@@ -93,6 +93,8 @@ const WITH_EXPRESSIONS: [&str; 16] = [
     "steps.cache-keys.outputs.sources_restore_keys",
     "needs.plan.outputs.sources_key",
     "needs.plan.outputs.sources_restore_keys",
+    "steps.mbx-bundle-key.outputs.key",
+    "steps.mbx-bundle-key.outputs.restore_keys",
 ];
 
 /// True for an output of the image publication assemble step.
@@ -103,6 +105,18 @@ fn is_image_publish_output(inner: &str) -> bool {
     inner
         .strip_prefix("steps.image.outputs.")
         .is_some_and(|name| matches!(name, "digest" | "digest_amd64" | "digest_arm64"))
+}
+
+/// True for a stack family key or restore-keys output of the job's own key step.
+fn is_family_key_output(inner: &str) -> bool {
+    use velnor_actions_contract::workflow::cache_family_steps::{FAMILY_KEYS_ID, family_for_stem};
+    inner
+        .strip_prefix(&format!("steps.{FAMILY_KEYS_ID}.outputs."))
+        .and_then(|name| {
+            name.strip_suffix("_restore_keys")
+                .or_else(|| name.strip_suffix("_key"))
+        })
+        .is_some_and(|stem| family_for_stem(stem).is_some())
 }
 
 /// True for a Plan-published per-root provider key (`tofu_providers_key_<n>`).
@@ -277,6 +291,7 @@ pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError
             && !is_tofu_providers_plan_key(inner)
             && !is_private_mint_input(key, inner)
             && !is_image_publish_output(inner)
+            && !is_family_key_output(inner)
         {
             return Err(RenderError::BadActionRef(format!(
                 "bad_with_expression:{key}"

@@ -60,7 +60,6 @@ fn provider_restore_precedes_init_obligation() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -99,7 +98,6 @@ fn provider_restore_keys_are_per_root() {
         max_parallel_jobs: 5,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -141,7 +139,6 @@ fn rust_jobs_carry_no_provider_restore() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -171,7 +168,6 @@ fn mixed_job_restores_both_sources_and_providers() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })

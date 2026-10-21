@@ -112,6 +112,8 @@ fn private_fetch_is_unreachable_from_analysis() -> TestResult {
             name.as_str(),
             "private_fetch.rs"
                 | "bun_registry_install.rs"
+                | "private_fetch_http.rs"
+                | "private_fetch_root.rs"
                 | "private_fetch_session.rs"
                 | "private_revoke.rs"
                 | "api.rs"

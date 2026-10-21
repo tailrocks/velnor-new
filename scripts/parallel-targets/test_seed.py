@@ -38,6 +38,12 @@ class SeedTests(unittest.TestCase):
         self.assertEqual(list(self.target.glob(".velnor-seed-*")), [])
         return output.getvalue()
 
+    def test_old_python_skips_without_touching_the_target(self):
+        with mock.patch.object(seed.sys, "version_info", (3, 10, 12)):
+            output = self.run_seed()
+        self.assertIn("Python 3.11 or newer required", output)
+        self.assertFalse((self.target / "velnor-clippy").exists())
+
     def test_complete_independent_copies_preserve_bytes_mtime_and_exclude_lock(self):
         self.run_seed()
         for lane in ("velnor-clippy", "velnor-doc"):

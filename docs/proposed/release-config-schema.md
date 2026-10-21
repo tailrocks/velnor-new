@@ -105,7 +105,7 @@ Rules (`RustReleaseConfig::validate`, then generation):
   not apply, because nothing is uploaded.
 - Generation emits `publish.yml` and `.github/release-plz.toml` and no
   `release.yml` or bootstrap config. The release job holds `contents: write`
-  only, runs in the `release` environment and needs the default-branch
+  and `pull-requests: read` only, runs in the `release` environment and needs the default-branch
   authority job. See the
   [package publication contract](package-publication-contract.md) §6.
 - `release-plz.toml` sets `publish = false`, `git_only = true`,

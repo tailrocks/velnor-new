@@ -6,7 +6,8 @@ use velnor_actions_contract::Job;
 
 use crate::cache_steps::{
     MBX_BUILD_SCRIPT_EXECUTION_ENV, MBX_BUILD_SCRIPT_EXECUTION_VALUE, MBX_CC_ENV, MBX_CC_VALUE,
-    MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE,
+    MBX_EXPORT_GROUP_ENV, MBX_EXPORT_GROUP_VALUE, MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE,
+    MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE,
 };
 use crate::render::{PLAN_ATTEMPT_ENV, PLAN_JOB_ID};
 
@@ -43,6 +44,7 @@ pub(super) fn extend_job_env(
     if native_mbx {
         for (key, val) in [
             (MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE),
+            (MBX_EXPORT_GROUP_ENV, MBX_EXPORT_GROUP_VALUE),
             (MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE),
             (MBX_CC_ENV, MBX_CC_VALUE),
             (

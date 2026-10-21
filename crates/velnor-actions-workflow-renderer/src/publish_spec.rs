@@ -50,6 +50,8 @@ pub struct PublishJobSpec {
     pub permissions: PublishPermissions,
     /// Ordered steps.
     pub steps: Vec<PublishStep>,
+    /// Local service containers (only the unprivileged build role may carry them).
+    pub services: Vec<velnor_actions_contract::ServiceContainer>,
 }
 
 /// Trusted publication triggers.
@@ -72,7 +74,18 @@ pub struct PublishWorkflowSpec {
     pub triggers: PublishTriggers,
     /// Jobs keyed by job id.
     pub jobs: BTreeMap<String, PublishJobSpec>,
+    /// Staged helper binary path (`$RUNNER_TEMP/velnor/bin/...`) that renders
+    /// the build-side internal steps; required exactly when one exists.
+    pub staged_binary: Option<String>,
 }
+
+/// Internal operations an unprivileged build job may run: the Gradle build and
+/// the private-source fetch and revoke that feed it. No other role may run one.
+const BUILD_INTERNAL_OPS: [&str; 3] = [
+    velnor_actions_contract::GRADLE_RUN_OPERATION,
+    velnor_actions_contract::PRIVATE_FETCH_OPERATION,
+    velnor_actions_contract::PRIVATE_REVOKE_OPERATION,
+];
 
 impl PublishJobSpec {
     /// Validate job shape, role matrix and step content.
@@ -89,6 +102,9 @@ impl PublishJobSpec {
         crate::guard::validate_runs_on(&self.runs_on)?;
         if self.steps.is_empty() {
             return Err(bad("empty_steps"));
+        }
+        if !self.services.is_empty() && self.role != PublishRole::ArtifactBuild {
+            return Err(bad("services_in_privileged_role"));
         }
         if self.permissions != PublishPermissions::expected(self.role) {
             return Err(bad("permission_matrix"));
@@ -126,6 +142,9 @@ impl PublishJobSpec {
             return Err(bad("bad_step_id"));
         }
         match &step.step.kind {
+            StepKind::Internal { operation, .. }
+                if self.role == PublishRole::ArtifactBuild
+                    && BUILD_INTERNAL_OPS.contains(&operation.as_str()) => {}
             StepKind::Internal { .. } | StepKind::TaskExecution { .. } => {
                 return Err(bad("publish_internal_op"));
             }
@@ -183,6 +202,7 @@ impl PublishWorkflowSpec {
         scan_for_private_subcommands(&self.name)?;
         validate_repository(&self.repository)?;
         self.validate_triggers()?;
+        self.validate_staged_binary()?;
         let mut authorities = BTreeMap::new();
         for (id, job) in &self.jobs {
             validate_job_id(id).map_err(RenderError::Contract)?;
@@ -199,6 +219,24 @@ impl PublishWorkflowSpec {
             ));
         }
         self.check_needs(&authorities)
+    }
+
+    /// The staged helper path is present exactly when an internal step needs it.
+    fn validate_staged_binary(&self) -> Result<(), RenderError> {
+        let internal = self.jobs.values().any(|job| {
+            job.steps
+                .iter()
+                .any(|step| matches!(step.step.kind, StepKind::Internal { .. }))
+        });
+        match (&self.staged_binary, internal) {
+            (Some(path), true) if path.starts_with("$RUNNER_TEMP/velnor/bin/velnor-actions-") => {
+                Ok(())
+            }
+            (None, false) => Ok(()),
+            _ => Err(RenderError::InvalidWorkflow(
+                "publish_staged_binary".to_owned(),
+            )),
+        }
     }
 
     /// Validate branches and the tag glob.

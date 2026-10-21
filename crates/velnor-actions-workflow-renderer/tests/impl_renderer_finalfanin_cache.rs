@@ -32,7 +32,7 @@ fn checkoutless_required_job_does_not_call_local_cache_action() -> Result<(), Re
                     "--no-env".to_owned(),
                     "--no-hooks".to_owned(),
                     "install".to_owned(),
-                    "gh@2.102.0".to_owned(),
+                    "gh@2.102.1".to_owned(),
                 ],
                 BTreeMap::new(),
             )?,

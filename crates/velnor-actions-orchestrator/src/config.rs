@@ -15,8 +15,14 @@ use crate::config_stacks::PartialStacks;
 
 #[path = "bun_registry_install.rs"]
 pub(crate) mod bun_registry_install;
+#[path = "deps_layout.rs"]
+pub(crate) mod deps_layout;
 #[path = "deps_lock.rs"]
 pub(crate) mod deps_lock;
+#[path = "gradle_jobs.rs"]
+pub(crate) mod gradle_jobs;
+#[path = "gradle_run.rs"]
+pub(crate) mod gradle_run;
 #[path = "playwright_install.rs"]
 pub(crate) mod playwright_install;
 #[path = "playwright_lock.rs"]
@@ -25,8 +31,14 @@ pub(crate) mod playwright_lock;
 pub(crate) mod playwright_resolve;
 #[path = "private_fetch.rs"]
 pub(crate) mod private_fetch;
+#[path = "private_fetch_http.rs"]
+pub(crate) mod private_fetch_http;
+#[path = "private_fetch_root.rs"]
+pub(crate) mod private_fetch_root;
 #[path = "private_fetch_session.rs"]
 pub(crate) mod private_fetch_session;
+#[path = "private_fetch_verified.rs"]
+pub(crate) mod private_fetch_verified;
 #[path = "private_revoke.rs"]
 pub(crate) mod private_revoke;
 #[path = "private_sources.rs"]
@@ -135,6 +147,9 @@ struct PartialConfig {
     /// Agent instruction file policy.
     #[serde(default)]
     agents: velnor_actions_contract::AgentsConfig,
+    /// Policy for unmanaged `.github` entries.
+    #[serde(default)]
+    github: velnor_actions_contract::GithubConfig,
     /// Generated dco2 configuration.
     #[serde(default)]
     dco: Option<velnor_actions_contract::DcoConfig>,
@@ -263,6 +278,7 @@ impl PartialConfig {
             discovery: self.discovery.materialize(),
             actions: self.actions.materialize(),
             agents: self.agents,
+            github: self.github,
             dco: self.dco,
             execution: self.execution,
             checks: self.checks,

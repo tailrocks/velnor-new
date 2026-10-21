@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.30
+Velnor Actions plan 0.1.37
 Repository: <repo>
 
 Detected stacks
@@ -57,4 +57,4 @@ Recommendations
   mise.toml not found; Velnor will use its pinned tools
   persist_evidence: no MBX or Nextest usage detected; to adopt either, add a durable signal
   rust-toolchain.toml not found; Velnor will not create it
-  tool_install_unverified:6 installs skip verification (no mise.lock): actionlint@1.7.12, gh@2.102.0, nextest@0.9.148, rust@1.99.1, shellcheck@0.11.0, zizmor@1.31.1; install on the CI platform and commit the resulting lock
+  tool_install_unverified:6 installs skip verification (no mise.lock): actionlint@1.7.12, gh@2.102.1, nextest@0.9.149, rust@1.99.1, shellcheck@0.11.0, zizmor@1.31.1; install on the CI platform and commit the resulting lock

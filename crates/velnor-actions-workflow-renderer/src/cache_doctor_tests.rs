@@ -6,7 +6,7 @@ use velnor_actions_contract::workflow::cache_family::{
 };
 use velnor_actions_contract::{Job, JobTimeout, PullRequestCachePolicy, Step, StepKind};
 
-use super::{MBX_TARGET_MODE_DOCTOR_EXEMPTION, check};
+use super::{MBX_OBJECTS_MODE_DOCTOR_EXEMPTION, check};
 
 const RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -31,6 +31,7 @@ fn action(name: &str, uses: &str, with: &[(&str, &str)], condition: Option<&str>
 
 fn job(steps: Vec<Step>) -> Job {
     Job {
+        services: Vec::new(),
         display_name: "Job".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,
@@ -240,11 +241,12 @@ fn i7_rejects_ungated_or_misplaced_saves() {
 }
 
 #[test]
-fn only_the_named_mbx_target_mode_exemption_skips_the_doctor() {
-    let mbx = format!("{MBX_TARGET_MODE_DOCTOR_EXEMPTION}47ce49b32025d93a7a2f4570815afaa2b7092240");
-    let key = "velnor-mbx-1.25.0-job-${{ github.job }}";
+fn only_the_named_mbx_objects_mode_exemption_skips_the_doctor() {
+    let mbx =
+        format!("{MBX_OBJECTS_MODE_DOCTOR_EXEMPTION}47ce49b32025d93a7a2f4570815afaa2b7092240");
+    let key = "velnor-mbx-1.26.0-job-${{ github.job }}";
     check(&with_reader(action(
-        "Restore MBX objects",
+        "Set up MBX",
         &mbx,
         &[("cache-key", key)],
         None,
@@ -287,8 +289,14 @@ fn tools_identity_binds_resolved_versions_never_hashed_files() {
 }
 
 #[test]
-fn bun_families_fail_closed_until_a_generator_emits_them() {
+fn stack_families_reject_a_hand_written_literal_key() {
     for (family, path) in [
+        ("dbt-packages", "${{ runner.temp }}/velnor/dbt-packages/x"),
+        ("python-venv", "${{ runner.temp }}/velnor/uv-cache"),
+        (
+            "ansible-collections",
+            "${{ runner.temp }}/velnor/ansible-collections",
+        ),
         ("bun-install", "${{ runner.temp }}/velnor/bun-cache"),
         (
             "playwright-browsers",
@@ -306,10 +314,7 @@ fn bun_families_fail_closed_until_a_generator_emits_them() {
             let step = action("Cache", uses, &[("key", &key), ("path", path)], condition);
             let jobs = with_reader(step);
             let text = check(&jobs).expect_err(family).to_string();
-            assert!(
-                text.contains("i2_path_not_from_spec") || text.contains("i7_save_not_trust_gated"),
-                "{family}: {text}"
-            );
+            assert!(text.contains("unknown_family"), "{family}: {text}");
         }
     }
 }

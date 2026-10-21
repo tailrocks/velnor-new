@@ -41,12 +41,14 @@ fn disable_mise_cache(step: &mut Step) {
 }
 
 fn is_cache_access(step: &Step) -> bool {
-    let StepKind::Action { uses, .. } = &step.kind else {
+    let StepKind::Action { uses, with, .. } = &step.kind else {
         return false;
     };
     uses.starts_with("actions/cache@")
         || uses.starts_with("actions/cache/")
-        || uses.starts_with("jdx/mr-boxington-action@")
+        // The install-only MBX action (`backend: local`) touches no cache.
+        || (uses.starts_with("jdx/mr-boxington-action@")
+            && with.get("backend").map(String::as_str) != Some("local"))
 }
 
 fn is_tool_seed(step: &Step) -> bool {
@@ -120,6 +122,20 @@ fn is_push_only_cache_save(step: &Step) -> bool {
             == Some(velnor_actions_contract::workflow::cache_family::SOURCES_SAVE_CONDITION)
         || condition
             == Some(velnor_actions_contract::workflow::cache_family::TOFU_PROVIDERS_SAVE_CONDITION)
+        || condition
+            == Some(velnor_actions_contract::workflow::cache_family_mbx::MBX_BUNDLE_SAVE_CONDITION)
+        || (step.role == Some(velnor_actions_contract::StepRole::FamilySave)
+            && velnor_actions_contract::workflow::cache_family_steps::STACK_FAMILIES
+                .into_iter()
+                .any(|family| {
+                    condition
+                        == Some(
+                            velnor_actions_contract::workflow::cache_family_steps::family_save_condition(
+                                family,
+                            )
+                            .as_str(),
+                        )
+                }))
         || (step.role == Some(velnor_actions_contract::StepRole::ToolsCacheSave)
             && (condition == Some(tools_save_readonly.as_str())
                 || condition == Some(tools_save_pr_scoped.as_str())));

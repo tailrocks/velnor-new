@@ -2,9 +2,11 @@
   "version": 1,
   "packages": [
     "velnor-actions-actionlint",
+    "velnor-actions-ansible",
     "velnor-actions-bun",
     "velnor-actions-cli",
     "velnor-actions-contract",
+    "velnor-actions-dbt",
     "velnor-actions-mise",
     "velnor-actions-orchestrator",
     "velnor-actions-rust",

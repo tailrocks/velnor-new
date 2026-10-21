@@ -22,6 +22,10 @@
 
 use std::collections::BTreeSet;
 
+use super::project_tool_grammar::push_grammar_functions;
+pub use super::project_tool_grammar::{
+    DBT_FUSION_TOOL_VARIABLE, GRAMMAR_TOOLS, JAVA_TOOL_VARIABLE,
+};
 use super::project_tool_refs::{
     PROJECT_MISE_CONFIG_PATTERNS, PROJECT_TOOL_LOCK_FILES, PROJECT_TOOL_VERSIONS_FILE,
     RUST_TOOLCHAIN_SOURCE_FILES, project_tool_lock_base, project_tool_lock_name,
@@ -30,7 +34,7 @@ use super::project_tool_refs::{
 /// `(variable, [tools] keys)` for every catalog tool; the first key is the
 /// canonical spelling, the rest are other backends' spellings of the
 /// same tool, which declare its version just the same.
-pub const PROJECT_TOOL_KEYS: [(&str, &[&str]); 12] = [
+pub const PROJECT_TOOL_KEYS: [(&str, &[&str]); 15] = [
     ("VELNOR_TOOL_RUST", &["rust", "core:rust"]),
     (
         "VELNOR_TOOL_MR_BOXINGTON",
@@ -78,11 +82,13 @@ pub const PROJECT_TOOL_KEYS: [(&str, &[&str]); 12] = [
     ),
     ("VELNOR_TOOL_BUN", &["bun", "core:bun"]),
     ("VELNOR_TOOL_JAVA", &["java", "core:java"]),
+    (
+        "VELNOR_TOOL_DBT_FUSION",
+        &["dbt-fusion", "aqua:getdbt.com/dbt-fusion"],
+    ),
+    ("VELNOR_TOOL_PYTHON", &["python", "core:python"]),
+    ("VELNOR_TOOL_UV", &["uv", "aqua:astral-sh/uv"]),
 ];
-
-/// Variable of the JDK declaration, whose grammar is the adapter-specific
-/// HD-4a form instead of exact `X.Y.Z`.
-pub const JAVA_TOOL_VARIABLE: &str = "VELNOR_TOOL_JAVA";
 
 /// `[tools]` keys declaring the tool behind one reference variable.
 #[must_use]
@@ -261,55 +267,6 @@ velnor_lock() {
 }
 "##;
 
-/// JDK resolution (HD-4a), appended only for jobs that reference the JDK.
-///
-/// `velnor_exact_java` accepts exactly
-/// `<vendor>-<X.Y.Z>[+<build>[.<n>]*][.LTS]` over `[A-Za-z0-9.+-]`, so the
-/// single-line `$GITHUB_ENV` write cannot be injected.
-const JAVA_FUNCTIONS: &str = r#"velnor_exact_java() {
-  v=$2
-  case "$v" in
-    ''|*[!A-Za-z0-9.+-]*) velnor_fail "$1 must declare an exact JDK such as oracle-graalvm-25.0.3, not '$(velnor_safe "$v")'" ;;
-  esac
-  rest=
-  for vendor in temurin oracle-graalvm graalvm-community corretto zulu; do
-    case "$v" in "$vendor"-*) rest=${v#"$vendor"-} ;; esac
-  done
-  [ -n "$rest" ] || velnor_fail "$1 must name a vendor (temurin, oracle-graalvm, graalvm-community, corretto, zulu), not '$(velnor_safe "$v")'"
-  case "$rest" in *.LTS) rest=${rest%.LTS} ;; esac
-  core=${rest%%+*}
-  build=
-  case "$rest" in *+*) build=${rest#*+}; [ -n "$build" ] || velnor_fail "$1 has an empty build in '$(velnor_safe "$v")'" ;; esac
-  velnor_exact "$1" "$core"
-  case "$build" in
-    '') ;;
-    *[!0-9.]*|.*|*.|*..*) velnor_fail "$1 has a malformed build in '$(velnor_safe "$v")'" ;;
-  esac
-}
-velnor_tool_java() {
-  name=$1
-  shift
-  resolved=
-  origin=
-  while IFS="$velnor_tab" read -r file key value; do
-    matched=0
-    for want in "$@"; do
-      if [ "$key" = "$want" ]; then matched=1; fi
-    done
-    if [ "$matched" = 0 ]; then continue; fi
-    velnor_exact_java "$file $key" "$value"
-    if [ -n "$resolved" ] && [ "$resolved" != "$value" ]; then
-      velnor_fail "$name: $file $key declares $value, $origin declares $resolved"
-    fi
-    if [ -z "$resolved" ]; then origin="$file $key"; fi
-    resolved=$value
-  done < "$velnor_db"
-  [ -n "$resolved" ] || velnor_fail "$name: the project config no longer declares this tool; regenerate the workflow"
-  printf '%s=%s\n' "$name" "$resolved" >> "$GITHUB_ENV"
-  printf 'velnor: %s=%s\n' "$name" "$resolved"
-}
-"#;
-
 /// Fixed resolver script for the referenced variables, in sorted order.
 ///
 /// A `NAME_LOCK` reference resolves `NAME` too and then exports its lock
@@ -322,9 +279,7 @@ pub fn project_tool_resolver_script(names: &BTreeSet<String>, export_rustup: boo
         .map(|name| project_tool_lock_base(name).unwrap_or(name))
         .collect();
     let mut script = PRELUDE.to_owned();
-    if tools.contains(JAVA_TOOL_VARIABLE) {
-        script.push_str(JAVA_FUNCTIONS);
-    }
+    push_grammar_functions(&mut script, &tools);
     script.push_str("velnor_locks='");
     script.push_str(&PROJECT_TOOL_LOCK_FILES.join(" "));
     script.push_str("'\n");
@@ -367,12 +322,14 @@ pub fn project_tool_resolver_script(names: &BTreeSet<String>, export_rustup: boo
     for name in tools {
         let lock = project_tool_lock_name(name);
         let lock = names.contains(&lock).then_some(lock);
-        let tool_function = if name == JAVA_TOOL_VARIABLE {
-            "velnor_tool_java "
-        } else {
-            "velnor_tool "
-        };
-        for (function, variable) in std::iter::once((tool_function, name))
+        let tool_function = GRAMMAR_TOOLS
+            .iter()
+            .find(|(variable, _, _)| *variable == name)
+            .map_or_else(
+                || "velnor_tool ".to_owned(),
+                |(_, kind, _)| format!("velnor_tool_{kind} "),
+            );
+        for (function, variable) in std::iter::once((tool_function.as_str(), name))
             .chain(lock.as_deref().map(|lock| ("velnor_lock ", lock)))
         {
             script.push_str(function);

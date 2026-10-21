@@ -107,20 +107,20 @@ Each path has one owner:
 |---|---|---|
 | Mise tools and Rust components | V2 tools layer | Archive exact tool, Rustup, and Cargo-bin paths under typed static and runtime-qualified identity; disable Mise's built-in cache |
 | Cargo registry and Git sources | Velnor source layer | Archive only `registry/index`, `registry/cache`, and `git/db`; exclude binaries and credentials; Rust jobs set `CARGO_CACHE_AUTO_CLEAN_FREQUENCY=never` |
-| Compiler objects and scheduler state | `jdx/mr-boxington-action` when MBX is selected | The action runs in `github-cache-mode: target` with content-addressed `cache-key` and layered `restore-keys` over lock/toolchain and source hashes, and owns the cache transport and post step. Velnor sets `MBX_GC_AUTO=0`, `MBX_SHARE_OUT_DIR=0`, `MBX_CC=0`, and `MBX_BUILD_SCRIPT_EXECUTION=0` during active work, restores cached `target/doc` and unchanged tracked source `mtime`s via Git blob OIDs in `Verify native MBX version`, and in `Clean MBX workspace outputs` prunes transient directories (`tmp`, `debug/examples`, `debug/incremental`, `velnor-cli-nested-cargo`) while preserving linked test binaries in `target/debug/deps`, stashing `target/doc` into `debug/.mbx-build-script-shims/.velnor-doc`, and recording tracked file blob OIDs and `mtime`s in `debug/.mbx-build-script-shims/.velnor-source-oids` before action post. The stable logical store path is `$RUNNER_TEMP/velnor/mbx`. Velnor does not install MBX through Mise or implement the object format |
+| Compiler objects and scheduler state | Velnor bundle steps over `mbx cache export` and `mbx cache import` when MBX is selected | The pinned `jdx/mr-boxington-action` is install-only (`backend: local`); `github-cache-mode: target` is removed. A `Compute MBX bundle key` step derives the `mbx-bundle` family key in the job (compat: family, schema, path, `unit` `seed` or `suite`, MBX version, toolchain, workspace root, `uname`; snapshot: the workspace `Cargo.lock`), `Restore MBX bundle` reads the same-compatibility prefix, and `Import MBX bundle` runs `mbx cache import` on the restored directory (a failed import is discarded as `cache_corrupt`). Only the non-crate `Dependency seed` job (and a suite job) writes it: after the compile step a `Record MBX producer success` marker is written; the final `Export MBX bundle` runs `always() && !cancelled()` on trusted pushes only, exports `mbx cache export --group velnor --format directory` only when the marker exists and the directory is within the family ceiling (`over_ceiling` otherwise), and `Save MBX bundle` writes the exact key only when the export step admitted it. Velnor sets `MBX_GC_AUTO=0`, `MBX_SHARE_OUT_DIR=0`, `MBX_CC=0`, `MBX_BUILD_SCRIPT_EXECUTION=0` and `MBX_CACHE_EXPORT_GROUP=velnor` during active work, and `Clean MBX workspace outputs` runs `mbx clean` last. The stable logical store path is `$RUNNER_TEMP/velnor/mbx`. Velnor does not install MBX through Mise or implement the object format |
 | Mutable target directory | Matrix job | Reuse sequentially; never share concurrently. MBX manifest and Rust-source input hashes recurse through custom member layouts and exclude only this workspace's mutable `target/` (`!target/**`, or `!<workspace>/target/**` for a scoped workspace). A source member named `target` below another directory remains an input; never use a blanket `!**/target/**` exclusion. The mutable output root itself is not a source location. |
 | Successful task result | Mise task cache | Use only for qualified deterministic tasks and complete outputs |
 
 The orchestrator decides whether each cache operation is allowed and records that decision in the plan. The
 workflow renderer serializes approved GitHub cache operations from typed workflow IR; it does not choose
 keys, trust, eligibility, or save timing. For an MBX profile, the pinned Mr. Boxington action installs the
-exact MBX binary and owns the object format, cache transport, and post step. Velnor's GitHub cache steps do
-not transport MBX objects.
+exact MBX binary and nothing else; MBX owns the object format. Velnor's GitHub cache steps move only the
+opaque directory `mbx cache export` writes, and restore it only through `mbx cache import`.
 
 Cache save is allowed only after its producer succeeded, the current run is trusted for that namespace, and
 the export has a useful delta within the family's size ceiling ([cache decisions](cache-decisions.md)). Sources have one writer, the Plan job, saving when not cancelled, after the
 last fetch succeeded, with `trusted` or `pr` trust (a PR-scoped entry visible only to that PR), and unless the
-restore already holds the snapshot; crate jobs restore read-only, forks and merge groups never write. A task-result cache hit, failed/cancelled task, untrusted PR, empty export, or
+restore already holds the snapshot; crate jobs restore read-only (compiled bundles are written only by the `Dependency seed` job), forks and merge groups never write. A task-result cache hit, failed/cancelled task, untrusted PR, empty export, or
 unavailable producer MUST NOT trigger a trusted save. Restore and save destinations MUST not overlap active
 compiler writers.
 
@@ -188,6 +188,8 @@ Velnor MUST NOT save unchanged data, use an unbounded stable key, globally prune
 superseded exact keys is not global pruning; decision 4), or restore one cache layer through two mechanisms. MBX objects, Cargo sources, and Mise task artifacts MUST remain independently
 restorable. The default branch MUST produce warm snapshots through ordinary CI; no unconditional warm-up
 workflow is allowed.
+Family pruning runs only in the push-only `cache-prune.yml` workflow, whose one job alone holds `actions: write` (never
+the Plan job or a pull request), and keeps the newest `retained_entries` per unit of a family's `trusted` entries.
 
 ## 3. Miss reasons, artifacts, and report schema
 

@@ -10,6 +10,7 @@ use velnor_actions_contract::cachekey::{RUST_EXTENSION_SCHEMA, TOFU_EXTENSION_SC
 /// Minimal discovery with no workspaces or tool checks.
 fn empty_discovery() -> Discovery {
     Discovery {
+        gradle_roots: Vec::new(),
         mise_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
@@ -28,6 +29,8 @@ fn empty_discovery() -> Discovery {
         tofu_units: Vec::new(),
         affected: crate::affected_inputs::AffectedInputs::default(),
         bun: crate::workflow_task_jobs::bun_inventory::BunInventory::default(),
+        dbt: crate::workflow_task_jobs::dbt_inventory::DbtInventory::default(),
+        ansible: crate::workflow_task_jobs::ansible_inventory::AnsibleInventory::default(),
     }
 }
 

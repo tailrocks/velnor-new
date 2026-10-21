@@ -20,6 +20,7 @@ use velnor_actions_rust::{
 
 use crate::OrchestratorError;
 use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
+use crate::config::gradle_jobs;
 use crate::discover_index::build_file_index;
 use crate::internal::phase_timing::PlanPhaseTimings;
 use crate::inventory::{qualify_workspaces, run_inventories, run_inventories_with_phase_timings};
@@ -45,6 +46,8 @@ pub struct PlannedWorkspace {
 /// Full detection output feeding planning and rendering.
 #[derive(Debug, Clone, Default)]
 pub struct Discovery {
+    /// Analysed Gradle roots (stack contract: findings fail generation).
+    pub(crate) gradle_roots: Vec<crate::config::gradle_jobs::GradleRoot>,
     /// Explicit repository-owned checks, independent of detected workspaces.
     pub mise_checks: Vec<velnor_actions_mise::DiscoveredCheck>,
     /// Per-project selection states.
@@ -86,6 +89,10 @@ pub struct Discovery {
     pub affected: crate::affected_inputs::AffectedInputs,
     /// Bun workspaces named by `[stacks.bun]`, read from the same index.
     pub(crate) bun: crate::workflow_task_jobs::bun_inventory::BunInventory,
+    /// dbt projects named by `[stacks.dbt]`, analysed from the same index.
+    pub(crate) dbt: crate::workflow_task_jobs::dbt_inventory::DbtInventory,
+    /// Ansible roots named by `[stacks.ansible]`, analysed from the same index.
+    pub(crate) ansible: crate::workflow_task_jobs::ansible_inventory::AnsibleInventory,
 }
 
 /// Run file index, detection, inventory, profiles, and task derivation.
@@ -109,6 +116,42 @@ pub(crate) fn discover_with_phase_timings(
     phases: &mut PlanPhaseTimings,
 ) -> Result<Discovery, OrchestratorError> {
     discover_inner(root, config, catalog, Some(phases))
+}
+
+type TaskInventories = (
+    crate::workflow_task_jobs::bun_inventory::BunInventory,
+    crate::workflow_task_jobs::dbt_inventory::DbtInventory,
+    crate::workflow_task_jobs::ansible_inventory::AnsibleInventory,
+);
+
+/// Bun member inventory for the configured `[stacks.bun]` (empty without it).
+fn bun_inventory(
+    root: &Path,
+    index: &FileIndex,
+    config: &VelnorConfig,
+) -> Result<crate::workflow_task_jobs::bun_inventory::BunInventory, OrchestratorError> {
+    match &config.stacks.bun {
+        Some(stack) => {
+            crate::workflow_task_jobs::bun_inventory::BunInventory::load(root, index, stack)
+        }
+        None => Ok(crate::workflow_task_jobs::bun_inventory::BunInventory::default()),
+    }
+}
+
+/// The Bun, dbt and Ansible inventories of the configured stacks.
+fn task_inventories(
+    root: &Path,
+    index: &FileIndex,
+    config: &VelnorConfig,
+) -> Result<TaskInventories, OrchestratorError> {
+    use crate::workflow_task_jobs::{
+        ansible_inventory::AnsibleInventory, dbt_inventory::DbtInventory,
+    };
+    Ok((
+        bun_inventory(root, index, config)?,
+        DbtInventory::for_config(root, index, config)?,
+        AnsibleInventory::for_config(root, index, config)?,
+    ))
 }
 
 fn discover_inner(
@@ -174,13 +217,10 @@ fn discover_inner(
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
     let (consumer_manifest_json, consumer_manifest_stand_in) =
         consumer_manifest::for_policy(root, config.workflow.policy)?;
-    let bun = match &config.stacks.bun {
-        Some(stack) => {
-            crate::workflow_task_jobs::bun_inventory::BunInventory::load(root, &index, stack)?
-        }
-        None => crate::workflow_task_jobs::bun_inventory::BunInventory::default(),
-    };
+    let (bun, dbt, ansible) = task_inventories(root, &index, config)?;
+    let gradle_roots = gradle_jobs::analyze_roots(root, &index, config)?;
     Ok(Discovery {
+        gradle_roots,
         mise_checks,
         statuses,
         workspaces,
@@ -196,6 +236,8 @@ fn discover_inner(
         tofu_units,
         affected: crate::affected_inputs::AffectedInputs { resolves, rules },
         bun,
+        dbt,
+        ansible,
     })
 }
 

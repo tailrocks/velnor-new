@@ -27,6 +27,8 @@ pub(crate) mod image_build_jobs;
 pub(crate) mod native_image_jobs;
 #[path = "playwright_install_step.rs"]
 pub(crate) mod playwright_install_step;
+#[path = "stack_jobs.rs"]
+pub(crate) mod stack_jobs;
 #[path = "task_script.rs"]
 pub(crate) mod task_script;
 #[path = "verification_task_mise.rs"]
@@ -49,6 +51,7 @@ pub use playwright_install_step::{
     PLAYWRIGHT_INSTALL_STEP_NAME, PLAYWRIGHT_PINS_ENV, PLAYWRIGHT_ROOT_ENV, PLAYWRIGHT_VERSION_ENV,
     playwright_install_step,
 };
+pub use stack_jobs::{STACK_RUNNER, StackJobKind, StackJobPolicy, build_stack_job};
 pub use workflow_task_jobs::WorkflowTaskPolicy;
 
 #[cfg(test)]
@@ -111,6 +114,7 @@ pub fn build_verification_task_job(
     let timeout = JobTimeout::new(policy.task.timeout_minutes).map_err(RenderError::Contract)?;
     let steps = verification_steps(policy, checkout_uses)?;
     Ok(Job {
+        services: Vec::new(),
         display_name: format!("Verify {}", policy.task.id),
         runs_on: policy.runner_label.clone(),
         check_runner: None,

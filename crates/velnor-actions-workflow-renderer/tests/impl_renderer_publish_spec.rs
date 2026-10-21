@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::JobTimeout;
+use velnor_actions_contract::{JobTimeout, ServiceContainer};
 use velnor_actions_workflow_renderer::publish_render::render_publish_workflow;
 use velnor_actions_workflow_renderer::publish_spec::{
     PublishJobSpec, PublishPermissions, PublishRole, PublishStep, PublishTriggers,
@@ -35,6 +35,7 @@ fn job(role: PublishRole, needs: &[&str]) -> Result<PublishJobSpec, RenderError>
         outputs: BTreeMap::new(),
         permissions: PublishPermissions::expected(role),
         steps: vec![shell("Work")?],
+        services: Vec::new(),
     })
 }
 
@@ -65,6 +66,7 @@ fn spec() -> Result<PublishWorkflowSpec, RenderError> {
             tag_glob: Some("*-v[0-9]*.[0-9]*.[0-9]*".to_owned()),
         },
         jobs,
+        staged_binary: None,
     })
 }
 
@@ -244,6 +246,7 @@ fn release_spec() -> Result<PublishWorkflowSpec, RenderError> {
             tag_glob: None,
         },
         jobs,
+        staged_binary: None,
     })
 }
 
@@ -308,5 +311,90 @@ fn each_authority_role_appears_at_most_once_and_may_be_conditional() -> Result<(
         job(PublishRole::BranchAuthority, &[])?,
     );
     assert_eq!(rejection(&spec), "publish_authority_count");
+    Ok(())
+}
+
+fn internal(operation: &str) -> PublishStep {
+    PublishStep {
+        id: None,
+        step: velnor_actions_contract::Step {
+            parallel: false,
+            name: "Gradle mavenBundle".to_owned(),
+            id: None,
+            role: None,
+            condition: None,
+            kind: velnor_actions_contract::StepKind::Internal {
+                operation: operation.to_owned(),
+                env: BTreeMap::from([(
+                    "VELNOR_GRADLE_TASKS".to_owned(),
+                    ":mavenBundle".to_owned(),
+                )]),
+            },
+        },
+    }
+}
+
+const STAGED: &str = "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.28";
+
+fn with_internal(
+    role_job: &str,
+    operation: &str,
+    staged: Option<&str>,
+) -> Result<PublishWorkflowSpec, RenderError> {
+    let mut spec = spec()?;
+    if let Some(job) = spec.jobs.get_mut(role_job) {
+        job.steps.push(internal(operation));
+    }
+    spec.staged_binary = staged.map(str::to_owned);
+    Ok(spec)
+}
+
+#[test]
+fn only_the_build_role_may_run_the_closed_set_of_internal_operations() -> Result<(), RenderError> {
+    let ctx = ReleaseRenderContext {
+        generator_version: "0.1.28".to_owned(),
+        runs_on: LABEL.to_owned(),
+    };
+    let ok = with_internal("bundle-build-a", "gradle-run-v1", Some(STAGED))?;
+    ok.validate()?;
+    let yaml = render_publish_workflow(&ok, &ctx)?.bytes;
+    assert!(yaml.contains("VELNOR_INTERNAL_OP: gradle-run-v1"), "{yaml}");
+    assert!(
+        yaml.contains("VELNOR_GRADLE_TASKS: \":mavenBundle\""),
+        "{yaml}"
+    );
+    assert!(yaml.contains("velnor/bin/velnor-actions-0.1.28"), "{yaml}");
+    for job in ["bundle-attest-a", "bundle-publish-a", "publish-authority"] {
+        let spec = with_internal(job, "gradle-run-v1", Some(STAGED))?;
+        assert_eq!(rejection(&spec), format!("publish_internal_op:{job}"));
+    }
+    for operation in ["plan-v1", "fetch-reports-v1", "merge-v1"] {
+        let spec = with_internal("bundle-build-a", operation, Some(STAGED))?;
+        assert_eq!(rejection(&spec), "publish_internal_op:bundle-build-a");
+    }
+    Ok(())
+}
+
+#[test]
+fn the_staged_helper_exists_exactly_when_an_internal_step_does() -> Result<(), RenderError> {
+    let missing = with_internal("bundle-build-a", "gradle-run-v1", None)?;
+    assert_eq!(rejection(&missing), "publish_staged_binary");
+    let stray = with_internal("bundle-build-a", "gradle-run-v1", Some("/usr/bin/sh"))?;
+    assert_eq!(rejection(&stray), "publish_staged_binary");
+    let mut unused = spec()?;
+    unused.staged_binary = Some(STAGED.to_owned());
+    assert_eq!(rejection(&unused), "publish_staged_binary");
+    Ok(())
+}
+
+#[test]
+fn only_the_build_role_may_carry_service_containers() -> Result<(), Box<dyn std::error::Error>> {
+    for (id, ok) in [("bundle-build-a", true), ("bundle-attest-a", false)] {
+        let mut spec = spec()?;
+        if let Some(job) = spec.jobs.get_mut(id) {
+            job.services.push(ServiceContainer::postgres(18)?);
+        }
+        assert_eq!(spec.validate().is_ok(), ok, "{id}");
+    }
     Ok(())
 }

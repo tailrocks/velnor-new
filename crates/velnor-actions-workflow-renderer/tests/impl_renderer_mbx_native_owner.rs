@@ -42,12 +42,13 @@ fn render_mbx_job(scale_set: bool) -> Result<String, RenderError> {
 }
 
 #[test]
-fn native_action_is_the_only_mbx_cache_owner_on_both_lanes() -> Result<(), RenderError> {
+fn native_action_is_install_only_on_both_lanes() -> Result<(), RenderError> {
     for scale_set in [false, true] {
         let yaml = render_mbx_job(scale_set)?;
         assert!(yaml.contains("uses: jdx/mr-boxington-action@"), "{yaml}");
         assert!(yaml.contains("version: 1.21.1"), "{yaml}");
-        assert!(yaml.contains("github-cache-mode: target"), "{yaml}");
+        assert!(yaml.contains("backend: local"), "{yaml}");
+        assert!(!yaml.contains("github-cache-mode"), "{yaml}");
         assert!(
             yaml.contains("MBX_GC_AUTO: \"0\""),
             "native MBX consumers set the shared collection policy: {yaml}"
@@ -66,22 +67,23 @@ fn native_action_is_the_only_mbx_cache_owner_on_both_lanes() -> Result<(), Rende
             !yaml.contains("\n      MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx\n"),
             "runner.temp must never appear in jobs.<id>.env: {yaml}"
         );
-        assert!(yaml.contains("runner.environment"), "lane identity: {yaml}");
         assert!(
             yaml.contains("Read MBX store during build")
                 && yaml.contains("test -n \\\"$MBX_CACHE_DIR\\\""),
             "a later build step inherits the preflight-exported store: {yaml}"
         );
-        assert!(yaml.contains("cache-generation: "), "{yaml}");
         assert!(yaml.contains("name: Clean MBX workspace outputs"), "{yaml}");
-        assert!(
-            yaml.contains("cache-key: "),
-            "content-addressed target cache key is set: {yaml}"
-        );
-        assert!(
-            yaml.contains("restore-keys: "),
-            "layered target restore-keys prefix is set: {yaml}"
-        );
+        for retired in [
+            "cache-generation: ",
+            "cache-key: ",
+            "restore-keys: ",
+            "save-on-",
+        ] {
+            assert!(
+                !yaml.contains(retired),
+                "target mode input {retired} is gone: {yaml}"
+            );
+        }
         assert!(
             !yaml.contains("cache-key-suffix:"),
             "v1.7-only suffix input is absent"
@@ -90,13 +92,16 @@ fn native_action_is_the_only_mbx_cache_owner_on_both_lanes() -> Result<(), Rende
             !yaml.contains("isolate-objects-cache:"),
             "v1.7-only isolation input is absent"
         );
-        for removed in [
+        // This job is install-only: the bundle steps belong to crate and suite jobs.
+        for absent in [
             "mbx-bundle",
-            "MBX_BUNDLE",
             "actions/cache/restore@",
             "actions/cache/save@",
         ] {
-            assert!(!yaml.contains(removed), "legacy owner {removed}: {yaml}");
+            assert!(
+                !yaml.contains(absent),
+                "unexpected transport {absent}: {yaml}"
+            );
         }
     }
     Ok(())

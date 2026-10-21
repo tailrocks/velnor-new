@@ -18,7 +18,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 use super::plan::{ObligationDecision, Plan, WorkflowEvent};
-use crate::config::{BUN_JOB_PREFIX, IMAGE_JOB_PREFIX};
+use crate::config::{ANSIBLE_JOB_PREFIX, BUN_JOB_PREFIX, DBT_JOB_PREFIX, IMAGE_JOB_PREFIX};
 use crate::errors::ContractError;
 use crate::graph::check_sorted_by;
 
@@ -127,6 +127,8 @@ pub(crate) fn validate_plan_jobs(plan: &Plan) -> Result<(), ContractError> {
         let ownerless = [
             (IMAGE_JOB_PREFIX, "image_job_owns_work"),
             (BUN_JOB_PREFIX, "bun_job_owns_work"),
+            (DBT_JOB_PREFIX, "dbt_job_owns_work"),
+            (ANSIBLE_JOB_PREFIX, "ansible_job_owns_work"),
         ]
         .into_iter()
         .find(|(prefix, _)| job_id.starts_with(prefix));

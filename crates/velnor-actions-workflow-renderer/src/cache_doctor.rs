@@ -22,6 +22,13 @@ use velnor_actions_contract::workflow::cache_family::{
     SOURCES_RESTORE_KEYS_STEP_EXPR, SOURCES_SAVE_CONDITION, TOFU_PROVIDER_CACHE_BASE_EXPR,
     TOFU_PROVIDERS_SAVE_CONDITION, is_plan_cache_output,
 };
+use velnor_actions_contract::workflow::cache_family_mbx::{
+    MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_PATH_EXPR, MBX_BUNDLE_RESTORE_KEYS_EXPR,
+    MBX_BUNDLE_SAVE_CONDITION,
+};
+use velnor_actions_contract::workflow::cache_family_steps::{
+    STACK_FAMILIES, family_key_expr, family_save_condition,
+};
 use velnor_actions_contract::workflow::step_identity::{
     TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDERS_KEY_OUTPUT_EXPR, TOFU_PROVIDERS_PATH_OUTPUT_EXPR,
 };
@@ -29,10 +36,13 @@ use velnor_actions_contract::{Job, PullRequestCachePolicy, Step, StepKind};
 
 use crate::RenderError;
 
-/// The MBX target-mode action keys on `github.job`, `hashFiles`, and tool
-/// versions and saves on same-repository PRs. It is exempt from the doctor
-/// only until target mode is deleted (the next cache PR removes this).
-pub(crate) const MBX_TARGET_MODE_DOCTOR_EXEMPTION: &str = "jdx/mr-boxington-action@";
+#[path = "cache_doctor_stack.rs"]
+mod stack;
+
+/// The install-only MBX action carries no cache input, so the doctor sees
+/// only the objects-mode action (qualification), whose run-bound generation
+/// keys are checked by the qualification contract instead.
+pub(crate) const MBX_OBJECTS_MODE_DOCTOR_EXEMPTION: &str = "jdx/mr-boxington-action@";
 
 /// Families the doctor knows: the runtime-keyed families plus V2 tools.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -94,7 +104,7 @@ fn classify<'a>(job: &str, step: &'a Step) -> Result<Option<CacheInputs<'a>>, Re
     let StepKind::Action { uses, with, .. } = &step.kind else {
         return Ok(None);
     };
-    if uses.starts_with(MBX_TARGET_MODE_DOCTOR_EXEMPTION) {
+    if uses.starts_with(MBX_OBJECTS_MODE_DOCTOR_EXEMPTION) {
         return Ok(None);
     }
     let get = |name: &str| with.get(name).map(String::as_str);
@@ -119,13 +129,26 @@ fn family_for_key(key: &str) -> Option<Family> {
     if key == SOURCES_KEY_STEP_EXPR || key == SOURCES_KEY_PLAN_EXPR {
         return Some(Family::Runtime(CacheFamily::Sources));
     }
+    if key == MBX_BUNDLE_KEY_EXPR {
+        return Some(Family::Runtime(CacheFamily::MbxBundle));
+    }
+    if let Some(family) = STACK_FAMILIES
+        .into_iter()
+        .find(|family| key == family_key_expr(*family))
+    {
+        return Some(Family::Runtime(family));
+    }
     if key == TOFU_PROVIDERS_KEY_OUTPUT_EXPR || is_tofu_plan_key(key) {
         return Some(Family::Runtime(CacheFamily::TofuProviders));
     }
     if crate::cache_p08::is_v2_cache_key_expression(key) {
         return Some(Family::Tools);
     }
-    CacheFamily::for_key(key).map(Family::Runtime)
+    // A stack family key is only the generated expression; a literal key that
+    // merely shares its prefix would bypass the per-job key step.
+    CacheFamily::for_key(key)
+        .filter(|family| !STACK_FAMILIES.contains(family))
+        .map(Family::Runtime)
 }
 
 fn is_tofu_plan_key(key: &str) -> bool {
@@ -247,12 +270,20 @@ fn check_paths(job: &str, step: &Step, cache: &CacheUse<'_>) -> Result<(), Rende
                     path == CacheFamily::TofuProviders.spec().path_input(Some(slug))
                 })
         }
-        // No generated step uses the Bun families yet (the contract and specs
-        // exist first); a hand-written step on one fails closed.
-        (Family::Runtime(_), None)
-        | (Family::Runtime(CacheFamily::BunInstall | CacheFamily::PlaywrightBrowsers), Some(_)) => {
-            false
+        (Family::Runtime(CacheFamily::MbxBundle), Some(path)) => {
+            path == MBX_BUNDLE_PATH_EXPR && mbx_bundle_restore_keys_ok(step, cache.save)
         }
+        (
+            Family::Runtime(
+                family @ (CacheFamily::BunInstall
+                | CacheFamily::PlaywrightBrowsers
+                | CacheFamily::DbtPackages
+                | CacheFamily::PythonVenv
+                | CacheFamily::AnsibleCollections),
+            ),
+            Some(path),
+        ) => stack::path_ok(family, path) && stack::restore_keys_ok(step, family, cache.save),
+        (Family::Runtime(_), None) => false,
     };
     if ok {
         Ok(())
@@ -276,6 +307,18 @@ fn sources_restore_keys_ok(step: &Step, save: bool) -> bool {
     }
 }
 
+/// A bundle restore reads the same-compatibility prefix; its save names no restore keys.
+fn mbx_bundle_restore_keys_ok(step: &Step, save: bool) -> bool {
+    let StepKind::Action { with, .. } = &step.kind else {
+        return false;
+    };
+    if save {
+        !with.contains_key("restore-keys")
+    } else {
+        with.get("restore-keys").map(String::as_str) == Some(MBX_BUNDLE_RESTORE_KEYS_EXPR)
+    }
+}
+
 fn tofu_slug(path: &str) -> Option<&str> {
     path.strip_prefix(&format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/"))
         .filter(|slug| {
@@ -294,7 +337,14 @@ fn check_save(job: &str, step: &Step, family: Family) -> Result<(), RenderError>
             condition == SOURCES_SAVE_CONDITION && job == crate::render::PLAN_JOB_ID
         }
         Family::Runtime(CacheFamily::TofuProviders) => condition == TOFU_PROVIDERS_SAVE_CONDITION,
-        Family::Runtime(CacheFamily::BunInstall | CacheFamily::PlaywrightBrowsers) => false,
+        Family::Runtime(CacheFamily::MbxBundle) => condition == MBX_BUNDLE_SAVE_CONDITION,
+        Family::Runtime(
+            family @ (CacheFamily::BunInstall
+            | CacheFamily::PlaywrightBrowsers
+            | CacheFamily::DbtPackages
+            | CacheFamily::PythonVenv
+            | CacheFamily::AnsibleCollections),
+        ) => condition == family_save_condition(family),
         Family::Tools => [
             PullRequestCachePolicy::ReadOnly,
             PullRequestCachePolicy::SameRepositoryScoped,

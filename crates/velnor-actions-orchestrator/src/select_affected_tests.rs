@@ -24,6 +24,7 @@ fn two_package_discovery() -> Discovery {
         v1_task_owner: velnor_actions_rust::VelnorV1TaskOwner::Project,
     };
     Discovery {
+        gradle_roots: Vec::new(),
         mise_checks: Vec::new(),
         statuses: Vec::new(),
         feature_fallbacks: Vec::new(),
@@ -63,6 +64,8 @@ fn two_package_discovery() -> Discovery {
         tofu_units: Vec::new(),
         affected: crate::affected_inputs::AffectedInputs::default(),
         bun: crate::workflow_task_jobs::bun_inventory::BunInventory::default(),
+        dbt: crate::workflow_task_jobs::dbt_inventory::DbtInventory::default(),
+        ansible: crate::workflow_task_jobs::ansible_inventory::AnsibleInventory::default(),
     }
 }
 

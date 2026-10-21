@@ -1,11 +1,11 @@
-wrappers = { cargo = { command = "mbx", env = { MBX_CARGO_SHIM_MODE = "1" } } }
 [tools]
-rust = "1.99.1"
-# `mbx` binary required by wrappers.cargo.command above (P07-9). Generated
-# CI reads every version in this table at run time (hard decision 5); clean
-# checkouts resolve MBX from this file via `mise install`, never globally.
-mr-boxington = "1.25.0"
-"aqua:nextest-rs/nextest/cargo-nextest" = "0.9.148"
+# `mr_boxington = true` makes Mise run every `cargo` through MBX (Mise >=
+# 2026.9.2; no `[wrappers.cargo]`, no `mbx setup`). Generated CI reads every
+# version in this table at run time (hard decision 5); clean checkouts
+# resolve MBX from this file via `mise install`, never globally.
+rust = { version = "1.99.1", mr_boxington = true }
+mr-boxington = "1.26.0"
+"aqua:nextest-rs/nextest/cargo-nextest" = "0.9.149"
 
 [tasks.test-maintenance-helpers]
 description = "Run repository-only maintenance helper test suites"

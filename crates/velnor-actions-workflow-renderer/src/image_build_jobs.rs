@@ -119,6 +119,7 @@ pub fn build_image_build_job(
     policy.validate()?;
     let timeout = JobTimeout::new(policy.image.timeout_minutes).map_err(RenderError::Contract)?;
     Ok(Job {
+        services: Vec::new(),
         display_name: format!(
             "Build image {} ({})",
             policy.image.id,
