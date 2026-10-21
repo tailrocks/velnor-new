@@ -77,6 +77,7 @@ pub(crate) fn discovery(groups: Vec<ProposedTask>) -> Discovery {
         tofu_units: Vec::new(),
         affected: crate::affected_inputs::AffectedInputs::default(),
         bun: crate::workflow_task_jobs::bun_inventory::BunInventory::default(),
+        dbt: crate::workflow_task_jobs::dbt_inventory::DbtInventory::default(),
     }
 }
 

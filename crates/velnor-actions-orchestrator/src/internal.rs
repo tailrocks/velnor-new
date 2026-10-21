@@ -139,13 +139,18 @@ fn plan_internal_inner(
         changed.as_ref(),
         &evidence,
     ));
-    plan.jobs.extend(crate::select::bun::dispositions(
-        &prep.config,
-        &prep.discovery,
-        request.event,
-        changed.as_ref(),
-        &evidence,
-    ));
+    for dispositions in [
+        crate::select::bun::dispositions,
+        crate::select::dbt::dispositions,
+    ] {
+        plan.jobs.extend(dispositions(
+            &prep.config,
+            &prep.discovery,
+            request.event,
+            changed.as_ref(),
+            &evidence,
+        ));
+    }
     plan.jobs
         .sort_by(|left, right| left.job_id.cmp(&right.job_id));
     plan.validate().map_err(internal_contract)?;

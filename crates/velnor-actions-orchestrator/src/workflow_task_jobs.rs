@@ -8,7 +8,7 @@ use velnor_actions_workflow_renderer::{
     build_verification_task_job,
     verification_jobs::{
         WorkflowTaskPolicy, build_build_task_job, build_bun_member_job, build_image_build_job,
-        build_native_image_job,
+        build_native_image_job, build_stack_job,
     },
 };
 
@@ -23,6 +23,12 @@ pub(crate) mod bun_inventory;
 pub(crate) mod bun_steps;
 #[path = "bun_tasks.rs"]
 mod bun_tasks;
+#[path = "dbt_inventory.rs"]
+pub(crate) mod dbt_inventory;
+#[path = "dbt_steps.rs"]
+mod dbt_steps;
+#[path = "dbt_tasks.rs"]
+mod dbt_tasks;
 
 /// Resolve every declared task variant into one sorted policy inventory.
 pub(crate) fn policies(
@@ -49,6 +55,7 @@ pub(crate) fn policies(
         },
     )?;
     let bun_policies = bun_tasks::policies(root, config, discovery, catalog, acquire, private)?;
+    let dbt_policies = dbt_tasks::policies(config, discovery, catalog)?;
     let mut workflow_tasks = verification_policies
         .iter()
         .cloned()
@@ -67,6 +74,7 @@ pub(crate) fn policies(
         )
         .chain(image_policies.into_iter().map(WorkflowTaskPolicy::Image))
         .chain(bun_policies.into_iter().map(WorkflowTaskPolicy::Bun))
+        .chain(dbt_policies.into_iter().map(WorkflowTaskPolicy::Stack))
         .collect::<Vec<_>>();
     workflow_tasks.sort_by(|left, right| left.id().cmp(right.id()));
     Ok(workflow_tasks)
@@ -95,6 +103,9 @@ pub(crate) fn insert_jobs(
                 policy.id.clone(),
                 build_bun_member_job(policy, CHECKOUT_USES)?,
             )],
+            WorkflowTaskPolicy::Stack(policy) => {
+                vec![(policy.id.clone(), build_stack_job(policy, CHECKOUT_USES)?)]
+            }
             WorkflowTaskPolicy::Image(policy) => policy
                 .image
                 .platforms

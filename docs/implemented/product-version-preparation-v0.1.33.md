@@ -1,13 +1,13 @@
 # Product version preparation for v0.1.33
 
 This prepares workspace metadata and generated outputs for a proposed 0.1.33
-release. It carries the v0.1.32 Gradle and Maven release features forward and
-includes the native artifact ZIP metadata correction. This document records
+release. It carries the v0.1.32 Gradle and Maven release features forward, integrates
+the subsequent cache-family and dbt changes from main, and includes the native artifact ZIP metadata correction. This document records
 preparation only: the complete local and hosted verification, reviewed main
 merge, exact-source release admission, and protected release approval remain
 required. No v0.1.33 release or tag is claimed here.
 
-All 14 workspace packages now use 0.1.33. The 22 exact internal path
+All 14 workspace packages now use 0.1.33. The 23 exact internal path
 requirements and the 14 local package records in the root `Cargo.lock` were
 updated together. The independently versioned runner, nested runner lockfile,
 external dependency versions and edges, historical release manifests,
@@ -25,6 +25,11 @@ Native artifact metadata parsing uses declared archive offsets instead of
 scanning compressed payloads. A fixed footer allowance and bounded per-entry
 work cover maximum ZIP comments without increasing payload-dependent work.
 Existing integrity, inventory, size, and deadline checks remain enforced.
+
+The integrated dbt stack accepts only its five documented profile-data environment
+variables. Velnor owns the project and profile directories, keeping runtime
+inputs inside the same project boundary that discovery validates and PR planning
+tracks. Engine-option environment overrides are rejected before generation.
 
 Release admission requires the complete root workspace and nested runner formatting,
 Clippy, Nextest, config, dependency-policy, and freshness gates, followed by
