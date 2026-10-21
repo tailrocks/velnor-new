@@ -3,41 +3,82 @@ use super::*;
 #[test]
 fn publication_accepts_namespace_local_mount_ids_for_same_volume_directory() {
     let channel = fixture();
-    let control = channel.control();
-    assert!(publication_matches_channel_directory(
-        control,
-        channel.metadata_volume_name(),
-        channel.metadata_volume_id(),
-        channel.metadata_volume_name(),
-        channel.metadata_volume_id(),
-        999,
-        control.directory_inode,
-        control.filesystem_id(),
-        control.filesystem_instance_digest(),
-        control.device(),
-        control.statx_device(),
-        control.fs_type_magic(),
-    ));
+    let published = published_directory(&channel, 999);
+    assert!(publication_matches_channel_directory(&channel, &published));
 }
 
 #[test]
 fn publication_rejects_wrong_volume_even_when_mount_facts_match() {
     let channel = fixture();
-    let control = channel.control();
+    let published = published_directory(&channel, channel.control().mount_id());
+    let mismatches = [
+        PublishedChannelDirectory {
+            volume_name: "foreign-volume",
+            ..published
+        },
+        PublishedChannelDirectory {
+            volume_id: "foreign-volume-id",
+            ..published
+        },
+        PublishedChannelDirectory {
+            publisher_mount_id: 0,
+            ..published
+        },
+        PublishedChannelDirectory {
+            control_directory_inode: published.control_directory_inode + 1,
+            ..published
+        },
+        PublishedChannelDirectory {
+            filesystem_id: published.filesystem_id + 1,
+            ..published
+        },
+        PublishedChannelDirectory {
+            filesystem_instance_digest: "d",
+            ..published
+        },
+        PublishedChannelDirectory {
+            device: (8, 2),
+            ..published
+        },
+        PublishedChannelDirectory {
+            statx_device: (8, 2),
+            ..published
+        },
+        PublishedChannelDirectory {
+            fs_type_magic: 1,
+            ..published
+        },
+    ];
+    assert!(
+        mismatches
+            .iter()
+            .all(|observed| !publication_matches_channel_directory(&channel, observed))
+    );
+
+    let mut invalid_channel = fixture();
+    invalid_channel.control.mount_id = 0;
     assert!(!publication_matches_channel_directory(
-        control,
-        channel.metadata_volume_name(),
-        channel.metadata_volume_id(),
-        "foreign-volume",
-        channel.metadata_volume_id(),
-        control.mount_id(),
-        control.directory_inode,
-        control.filesystem_id(),
-        control.filesystem_instance_digest(),
-        control.device(),
-        control.statx_device(),
-        control.fs_type_magic(),
+        &invalid_channel,
+        &published_directory(&invalid_channel, 999),
     ));
+}
+
+fn published_directory(
+    channel: &ProofChannelRecord,
+    publisher_mount_id: u64,
+) -> PublishedChannelDirectory<'_> {
+    let control = channel.control();
+    PublishedChannelDirectory {
+        volume_name: channel.metadata_volume_name(),
+        volume_id: channel.metadata_volume_id(),
+        publisher_mount_id,
+        control_directory_inode: control.directory_inode,
+        filesystem_id: control.filesystem_id(),
+        filesystem_instance_digest: control.filesystem_instance_digest(),
+        device: control.device(),
+        statx_device: control.statx_device(),
+        fs_type_magic: control.fs_type_magic(),
+    }
 }
 
 fn fixture() -> ProofChannelRecord {

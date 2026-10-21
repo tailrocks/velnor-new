@@ -236,23 +236,21 @@ fn receipt_matches(
     receipt: &ExecutionDecisionDeliveryReceipt,
 ) -> Result<bool, HostError> {
     let channel = ProofChannelRecord::parse(claim.channel_json(), claim.channel_digest())?;
-    let control = channel.control();
     let (inode, bytes) = receipt.file_identity();
     let (uid, gid) = receipt.file_owner();
-    let same_directory = super::super::records::publication_matches_channel_directory(
-        control,
-        channel.metadata_volume_name(),
-        channel.metadata_volume_id(),
-        receipt.metadata_volume_name(),
-        receipt.metadata_volume_id(),
-        receipt.mount_id(),
-        receipt.control_directory_inode(),
-        receipt.filesystem_id(),
-        receipt.filesystem_instance_digest(),
-        receipt.device(),
-        receipt.statx_device(),
-        receipt.fs_type_magic(),
-    );
+    let published = super::super::records::PublishedChannelDirectory {
+        volume_name: receipt.metadata_volume_name(),
+        volume_id: receipt.metadata_volume_id(),
+        publisher_mount_id: receipt.mount_id(),
+        control_directory_inode: receipt.control_directory_inode(),
+        filesystem_id: receipt.filesystem_id(),
+        filesystem_instance_digest: receipt.filesystem_instance_digest(),
+        device: receipt.device(),
+        statx_device: receipt.statx_device(),
+        fs_type_magic: receipt.fs_type_magic(),
+    };
+    let same_directory =
+        super::super::records::publication_matches_channel_directory(&channel, &published);
     let device_binding_valid =
         receipt.device() == receipt.statx_device() || receipt.fs_type_magic() == BTRFS_SUPER_MAGIC;
     Ok(receipt.reservation_id() == claim.reservation_id()

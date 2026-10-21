@@ -219,30 +219,34 @@ fn valid_mount_root(
         && !root.chars().any(char::is_control)
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct PublishedChannelDirectory<'a> {
+    pub(crate) volume_name: &'a str,
+    pub(crate) volume_id: &'a str,
+    pub(crate) publisher_mount_id: u64,
+    pub(crate) control_directory_inode: u64,
+    pub(crate) filesystem_id: u64,
+    pub(crate) filesystem_instance_digest: &'a str,
+    pub(crate) device: (u32, u32),
+    pub(crate) statx_device: (u32, u32),
+    pub(crate) fs_type_magic: u64,
+}
+
 pub(crate) fn publication_matches_channel_directory(
-    control: &ProofChannelMountRecord,
-    expected_volume_name: &str,
-    expected_volume_id: &str,
-    volume_name: &str,
-    volume_id: &str,
-    publisher_mount_id: u64,
-    control_directory_inode: u64,
-    filesystem_id: u64,
-    filesystem_instance_digest: &str,
-    device: (u32, u32),
-    statx_device: (u32, u32),
-    fs_type_magic: u64,
+    channel: &ProofChannelRecord,
+    published: &PublishedChannelDirectory<'_>,
 ) -> bool {
-    volume_name == expected_volume_name
-        && volume_id == expected_volume_id
-        && publisher_mount_id > 0
+    let control = channel.control();
+    published.volume_name == channel.metadata_volume_name()
+        && published.volume_id == channel.metadata_volume_id()
+        && published.publisher_mount_id > 0
         && control.mount_id > 0
-        && control_directory_inode == control.directory_inode
-        && filesystem_id == control.filesystem_id
-        && filesystem_instance_digest == control.filesystem_instance_digest
-        && device == control.device()
-        && statx_device == control.statx_device()
-        && fs_type_magic == control.fs_type_magic
+        && published.control_directory_inode == control.directory_inode
+        && published.filesystem_id == control.filesystem_id
+        && published.filesystem_instance_digest == control.filesystem_instance_digest
+        && published.device == control.device()
+        && published.statx_device == control.statx_device()
+        && published.fs_type_magic == control.fs_type_magic
 }
 
 impl ProofChannelMountRecord {

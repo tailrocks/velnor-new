@@ -3,7 +3,7 @@ use crate::error::HostError;
 #[path = "channel_record.rs"]
 mod channel_record;
 pub(crate) use channel_record::ProofChannelRecord;
-pub(crate) use channel_record::publication_matches_channel_directory;
+pub(crate) use channel_record::{PublishedChannelDirectory, publication_matches_channel_directory};
 
 pub(crate) enum ExecutionProofProgress {
     SourceRecorded,
