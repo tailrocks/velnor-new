@@ -18,7 +18,7 @@ on top of 0.1.33:
   the `[stacks.dbt].env` allowlist stays closed.
 - V4 (#273): the default branch resolves from the config key, `origin/HEAD`,
   then the CI event payload, so `[workflow] default_branch` is optional in CI.
-  The generated output is unchanged by V3 and V4.
+  Velnor’s own generated workflows are unchanged by V3 and V4.
 
 It does not change the release protocol or weaken source, attempt, role,
 signature or protected-environment admission.

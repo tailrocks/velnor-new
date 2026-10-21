@@ -33,6 +33,34 @@ pub(super) fn signing_identity_for_repository(
     repository_id: u64,
     started: std::time::Instant,
 ) -> Result<PackageReleaseSigningIdentity, OrchestratorError> {
+    let identity = identity_for_repository(plan, repository_id)?;
+    if plan.channel == PackageReleaseChannel::Stable {
+        let deadline = velnor_actions_mise::CheckDeadline::from_start_with_cleanup_reserve(
+            started,
+            Duration::from_secs(
+                u64::from(velnor_actions_contract::workflow::JobTimeout::DEFAULT_MINUTES) * 60,
+            ),
+        )
+        .map_err(|_| internal("package_signer_deadline"))?;
+        let admitted = crate::stable_tag_origin::admitted_production_context(plan, deadline)?;
+        require_stable_context(plan, &identity, &admitted)?;
+    }
+    Ok(identity)
+}
+
+// Published reads authenticate the exact current Tap caller and remote stable
+// origin downstream; they never acquire signing authority from this identity.
+pub(super) fn published_identity_from_env(
+    plan: &PackageReleasePlan,
+) -> Result<PackageReleaseSigningIdentity, OrchestratorError> {
+    let repository_id = query_repository_id(&required_env("GITHUB_REPOSITORY")?)?;
+    identity_for_repository(plan, repository_id)
+}
+
+fn identity_for_repository(
+    plan: &PackageReleasePlan,
+    repository_id: u64,
+) -> Result<PackageReleaseSigningIdentity, OrchestratorError> {
     let repository = required_env("GITHUB_REPOSITORY")?;
     let source_sha = required_env("GITHUB_SHA")?;
     let source_ref = required_env("GITHUB_REF")?;
@@ -64,17 +92,6 @@ pub(super) fn signing_identity_for_repository(
         commit_count,
     };
     validate_identity(plan, &identity)?;
-    if plan.channel == PackageReleaseChannel::Stable {
-        let deadline = velnor_actions_mise::CheckDeadline::from_start_with_cleanup_reserve(
-            started,
-            Duration::from_secs(
-                u64::from(velnor_actions_contract::workflow::JobTimeout::DEFAULT_MINUTES) * 60,
-            ),
-        )
-        .map_err(|_| internal("package_signer_deadline"))?;
-        let admitted = crate::stable_tag_origin::admitted_production_context(plan, deadline)?;
-        require_stable_context(plan, &identity, &admitted)?;
-    }
     Ok(identity)
 }
 
