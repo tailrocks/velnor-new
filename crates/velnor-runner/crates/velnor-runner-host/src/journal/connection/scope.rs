@@ -226,6 +226,7 @@ impl ConnectionJournal {
     /// # Errors
     ///
     /// Returns [`HostError::Journal`] when the scope identity cannot be read or written.
+    #[cfg(test)]
     pub(crate) async fn retire_if_drained(&self) -> Result<bool, HostError> {
         in_transaction(&self.journal, async |connection| {
             let Some((identity, _)) = connection_record(connection, self.connection_id.as_str()).await?
