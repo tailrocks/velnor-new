@@ -8,6 +8,7 @@ use super::super::storage_plan::load as load_storage_plan;
 use super::super::{hold_context, hold_is_claimable, mark_hold_uncertain};
 use super::BootstrapContainerCreateClaim;
 mod pre_jit_spec;
+#[cfg(test)]
 mod terminal_response;
 
 impl ConnectionJournal {

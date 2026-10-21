@@ -7,6 +7,7 @@ mod create;
 mod start;
 
 /// This type stores the terminal reply to one exact pre-JIT Docker create request.
+#[cfg(test)]
 #[must_use]
 pub(crate) struct BootstrapContainerCreateTerminalResponse {
     connection_id: String,
@@ -21,6 +22,7 @@ pub(crate) struct BootstrapContainerCreateTerminalResponse {
     status_code: u16,
 }
 
+#[cfg(test)]
 impl BootstrapContainerCreateTerminalResponse {
     pub(crate) fn connection_id(&self) -> &str {
         &self.connection_id
