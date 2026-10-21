@@ -71,6 +71,7 @@ impl StorageProvisioningRole {
 pub(crate) struct StorageProvisioningPlan {
     reservation_id: i64,
     operation_id: i64,
+    #[cfg(test)]
     scale_set_id: i64,
     engine_id: String,
     docker_root_digest: String,
@@ -89,6 +90,7 @@ impl StorageProvisioningPlan {
         self.operation_id
     }
 
+    #[cfg(test)]
     pub(crate) const fn scale_set_id(&self) -> i64 {
         self.scale_set_id
     }
@@ -170,6 +172,7 @@ pub(super) async fn load(
     Ok(StorageProvisioningPlan {
         reservation_id,
         operation_id: context.operation_id,
+        #[cfg(test)]
         scale_set_id: context.scale_set_id,
         engine_id: context.engine_id.clone(),
         docker_root_digest: context.docker_root_digest.clone(),
