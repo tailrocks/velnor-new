@@ -118,7 +118,13 @@ impl MiseBinary {
         let explicit_binary = std::env::var_os(BINARY_ENV).is_some();
         let path = match std::env::var_os(BINARY_ENV) {
             Some(path) => PathBuf::from(path),
-            None => find_on_path("mise")?,
+            None => match find_on_path("mise") {
+                Ok(path) if path_mise_is_pinned(&path) => path,
+                // The host's own mise is not the qualified release (or is
+                // absent): fetch the digest-verified official release instead
+                // of failing on whatever the host happens to have installed.
+                _ => provision_official_release()?,
+            },
         };
         let path = path.canonicalize().map_err(|err| err.to_string())?;
         if !path.is_file() {
@@ -174,6 +180,89 @@ impl MiseBinary {
             eprintln!("mise official_release={version} sha256={sha256}");
         }
         Ok(Self { path, version })
+    }
+}
+
+fn path_mise_is_pinned(path: &Path) -> bool {
+    Command::new(path)
+        .arg("--version")
+        .env("MISE_NO_CONFIG", "1")
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| {
+            String::from_utf8_lossy(&output.stdout)
+                .split_whitespace()
+                .next()
+                .map(str::to_owned)
+        })
+        .is_some_and(|version| version == PINNED_MISE)
+}
+
+/// Download the qualified official release into a digest-checked temp cache.
+fn provision_official_release() -> Result<PathBuf, String> {
+    let platform = match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("linux", "x86_64") => "linux-x64",
+        ("macos", "aarch64") => "macos-arm64",
+        (os, arch) => return Err(format!("unqualified mise platform: {os}/{arch}")),
+    };
+    let expected = official_release_digest(PINNED_MISE)?;
+    let cache = std::env::temp_dir().join(format!("velnor-mise-official-{PINNED_MISE}"));
+    let binary = cache.join("mise/bin/mise");
+    if binary.is_file() && sha256_file(&binary).is_ok_and(|digest| digest == expected) {
+        return Ok(binary);
+    }
+    let staging = cache.with_extension(format!("staging-{}", std::process::id()));
+    std::fs::remove_dir_all(&staging).ok();
+    std::fs::create_dir_all(&staging).map_err(|err| err.to_string())?;
+    let archive = staging.join("mise.tar.gz");
+    let url = format!(
+        "https://github.com/jdx/mise/releases/download/v{PINNED_MISE}/mise-v{PINNED_MISE}-{platform}.tar.gz"
+    );
+    let fetched = Command::new("curl")
+        .args([
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--location",
+            "--output",
+        ])
+        .arg(&archive)
+        .arg(&url)
+        .output()
+        .map_err(|err| format!("curl unavailable to fetch pinned mise: {err}"))?;
+    if !fetched.status.success() {
+        return Err(format!(
+            "PATH mise is not {PINNED_MISE}; fetching {url} failed: {}; set {BINARY_ENV} to an official {PINNED_MISE} binary",
+            output_text(&fetched)
+        ));
+    }
+    let unpacked = Command::new("tar")
+        .arg("-xzf")
+        .arg(&archive)
+        .arg("-C")
+        .arg(&staging)
+        .output()
+        .map_err(|err| err.to_string())?;
+    if !unpacked.status.success() {
+        return Err(format!("tar failed: {}", output_text(&unpacked)));
+    }
+    let staged = staging.join("mise/bin/mise");
+    let actual = sha256_file(&staged)?;
+    if actual != expected {
+        return Err(format!(
+            "downloaded mise digest mismatch: {actual} != {expected}"
+        ));
+    }
+    std::fs::remove_dir_all(&cache).ok();
+    match std::fs::rename(&staging, &cache) {
+        Ok(()) => Ok(binary),
+        // A concurrent test process published the same verified release.
+        Err(_) if binary.is_file() => {
+            std::fs::remove_dir_all(&staging).ok();
+            Ok(binary)
+        }
+        Err(err) => Err(err.to_string()),
     }
 }
 
