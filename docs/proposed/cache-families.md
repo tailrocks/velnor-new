@@ -18,11 +18,11 @@ digest inputs only with a schema bump.
 |---|---|---|---|---|---|
 | `sources` (2) | `$RUNNER_TEMP/velnor/cargo/{registry/index,registry/cache,git/db}` | family, schema, paths, `uname -s`/`-m`, `CARGO_HOME`; never a toolchain or tool version | sorted `<root>\t<sha256 of Cargo.lock>` lines | the Plan job, `trusted` or `pr` | yes |
 | `tofu-providers` (2) | `$RUNNER_TEMP/velnor/tofu-cache/{root}` | as `sources`, plus `tofu version` | the root's lock file | the root's own job, `trusted` only | yes |
-| `bun-install` (1) | `$RUNNER_TEMP/velnor/bun-cache` (`BUN_INSTALL_CACHE_DIR`) | family, schema, `uname -sm`, resolved Bun version | sha256 of the root's `bun.lock` | the install job on a protected push (`trusted`), plus the PR scope as for `sources` | contract only |
-| `playwright-browsers` (1) | `$RUNNER_TEMP/velnor/ms-playwright` | family, schema, `uname -sm`, Playwright version from `bun.lock` | sha256 of the `directory:sha256` pins of the member's `.velnor/playwright.lock` archives | `trusted` only | contract only |
-| `dbt-packages` (1) | `$RUNNER_TEMP/velnor/dbt-packages/{root}` (one directory per dbt project) | family, schema, `uname -sm`, resolved `dbt-fusion` version | sha256 of the project's `package-lock.yml` | the project's own job, `trusted` only | contract only |
-| `python-venv` (1) | `$RUNNER_TEMP/velnor/uv-cache` (`UV_CACHE_DIR`) | family, schema, `uname -sm`, resolved `uv` and `python` versions | sha256 of the hash-pinned requirements file | the Ansible job, `trusted` only | contract only |
-| `ansible-collections` (1) | `$RUNNER_TEMP/velnor/ansible-collections` (verified tarballs) | family, schema, `uname -sm` | sorted `name\tversion\tsha256` lines of `[[stacks.ansible.collections]]` | the Ansible job, `trusted` only | contract only |
+| `bun-install` (1) | `$RUNNER_TEMP/velnor/bun-cache` (`BUN_INSTALL_CACHE_DIR`) | family, schema, `uname -sm`, resolved Bun version | sha256 of the root's `bun.lock` | the Bun member job, `trusted` only, right after the install | yes |
+| `playwright-browsers` (1) | `$RUNNER_TEMP/velnor/ms-playwright` | family, schema, `uname -sm`, Playwright version from `bun.lock` | sha256 of the `directory:sha256` pins of the member's `.velnor/playwright.lock` archives | `trusted` only, right after the Playwright install | yes |
+| `dbt-packages` (1) | `$RUNNER_TEMP/velnor/dbt-packages/{root}` (one directory per dbt project) | family, schema, `uname -sm`, resolved `dbt-fusion` version | sha256 of the project's `package-lock.yml` | the project's own job, `trusted` only, right after `dbt deps` | yes |
+| `python-venv` (1) | `$RUNNER_TEMP/velnor/uv-cache` (`UV_CACHE_DIR`) | family, schema, `uname -sm`, resolved `uv` and `python` versions | sha256 of the hash-pinned requirements file | the Ansible job, `trusted` only, right after the environment step | yes |
+| `ansible-collections` (1) | `$RUNNER_TEMP/velnor/ansible-collections` (verified tarballs) | family, schema, `uname -sm` | sorted `name\tversion\tsha256` lines of `[[stacks.ansible.collections]]` | the Ansible job, `trusted` only, right after the collections install | yes |
 | `mbx-bundle` (1) | `$RUNNER_TEMP/velnor/mbx-bundle` (the directory `mbx cache export --format directory` writes) | family, schema, path, `unit` (`seed` or `suite`), MBX version, Rust toolchain, workspace root, `uname -sm`, ceiling | sha256 of the workspace `Cargo.lock` | the `Dependency seed` job (unit `seed`) and suite jobs (unit `suite`), `trusted` only; crate jobs read `seed`; computed in the job (`Compute MBX bundle key`), not in the Plan job | yes |
 
 `node_modules` is never cached: the isolated linker rebuilds it from the Bun
@@ -99,7 +99,7 @@ and fails when it exceeds 85 % of the 10 GiB quota.
 | Family | Ceiling per entry | Retained per unit | Unit | Reference units | Worst case | Measured |
 |---|---:|---:|---|---:|---:|---|
 | `sources` | 128 MiB | 3 | repository | 1 | 384 MiB | 16.8 MiB stored ([measurements](../implemented/cache-measurements.md)) |
-| `tofu-providers` | 256 MiB | 3 | OpenTofu root | 2 | 1.5 GiB | not measured; ceiling is a placeholder to revise with data |
+| `tofu-providers` | 256 MiB | 3 | OpenTofu root | 2 | 1.5 GiB | 131.5 MiB stored (zstd) and 792 MiB on disk for `hashicorp/aws` + `hashicorp/random` with OpenTofu 1.13.1; ceiling kept at about 1.9 times the heaviest common provider set |
 | `bun-install` | 256 MiB | 2 | Bun root | 4 | 2 GiB | 30.3 MB gzip (115 MB raw) for a 61-package frontend (Bun 1.4.2) |
 | `dbt-packages` | 64 MiB | 2 | dbt project | 1 | 128 MiB | not measured; ceiling is a placeholder to revise with data |
 | `python-venv` | 384 MiB | 2 | requirements file | 1 | 768 MiB | not measured; ceiling is a placeholder to revise with data |
@@ -112,12 +112,27 @@ The reference total with the tools allowance is about 8.25 GiB against the
 refused at save time and reported, never silently truncated; the owner raises
 that ceiling with a measurement.
 
+## Stack family steps
+
+The Bun, dbt and Ansible jobs compute their keys in the job, like `mbx-bundle`
+(one `Compute family cache keys` step: trust from the event, compat from the
+family, schema, paths, platform and the job's tool versions, snapshot from the
+job's lock files; absent file counts as `absent`). Each family restores
+read-only before its producer; right after the producer a size admission
+(`tar | zstd | wc -c` against the ceiling, `du` without zstd) and a trusted-push
+save follow, so a later failing check never starves the cache (decision 1) and
+an oversize directory is refused as `over_ceiling`. Bun adds a `root` compat
+line so each Bun root is its own pruning unit; dbt copies the restored
+directory into the project's `dbt_packages` before `dbt deps` and back to the
+family directory after it (the install path is a project setting dbt owns, and
+`dbt deps` still runs against the lock every time, so the entry is a
+head start, never trusted content); the Ansible job keeps verified tarballs in
+the family directory and re-downloads any whose SHA-256 no longer matches. The
+cache doctor accepts these steps only in the generated shape (the key
+expression, the spec path, no restore keys on a save, the exact save condition)
+and rejects a hand-written step on these families.
+
 ## Remaining
 
-The Plan `Compute cache keys` step emits keys for `sources` and
-`tofu-providers` only. Generating the `bun-install`, `playwright-browsers`,
-`dbt-packages`, `python-venv` and `ansible-collections`
-restore and save steps (per-root keys as Plan outputs, saves gated on the
-producer step and `cache_trust`, the pruning step) follows the `tofu-providers`
-per-root pattern and is not done yet; until then the cache doctor rejects any
-step on these families, so a hand-written step cannot bypass the gates.
+`tofu-providers` still saves without a size admission; the same stored-size
+check follows. Its ceiling was re-measured (see the table).
