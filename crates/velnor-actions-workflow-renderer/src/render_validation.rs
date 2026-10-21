@@ -36,6 +36,7 @@ pub(super) fn validate_final_jobs(
     ir: &WorkflowIr,
     jobs: &mut BTreeMap<String, Job>,
 ) -> Result<(), RenderError> {
+    crate::cache_steps::append_bundle_postludes(jobs)?;
     crate::cache_steps::append_workspace_cleanups(jobs)?;
     let mut finalized = ir.clone();
     finalized.jobs.clone_from(jobs);

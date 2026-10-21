@@ -12,8 +12,19 @@ const CLOCK_ID: &str = "velnor-cache-clock";
 const SOURCES_ID: &str = "velnor-optional-sources-save";
 const TOOLS_ID: &str = "velnor-optional-tools-save";
 const PROVIDERS_ID: &str = "velnor-optional-providers-save";
+const MBX_BUNDLE_ID: &str = "velnor-optional-mbx-bundle-save";
 const RESERVE_SECONDS: u32 = 30;
 const WRITE_SECONDS: u32 = 60;
+/// A compiled bundle is larger than the other families; it gets a longer attempt.
+const BUNDLE_WRITE_SECONDS: u32 = 180;
+
+fn write_seconds(id: &str) -> u32 {
+    if id == MBX_BUNDLE_ID {
+        BUNDLE_WRITE_SECONDS
+    } else {
+        WRITE_SECONDS
+    }
+}
 
 const CLOCK_SCRIPT: &str = r#"set -eu
 unavailable() { printf '%s\n' '::warning::cache_unavailable: invalid first-step clock or output'; }
@@ -93,6 +104,7 @@ pub(crate) fn decorate(
         Some(StepRole::CargoSourcesSave) => SOURCES_ID,
         Some(StepRole::ToolsCacheSave) => TOOLS_ID,
         Some(StepRole::TofuProvidersSave) => PROVIDERS_ID,
+        Some(StepRole::MbxBundleSave) => MBX_BUNDLE_ID,
         _ => return Ok(()),
     };
     if !job_context {
@@ -109,7 +121,10 @@ pub(crate) fn decorate(
     }
     entries.extend([
         ("id".to_owned(), Yaml::str(id)),
-        ("timeout-minutes".to_owned(), Yaml::Int(1)),
+        (
+            "timeout-minutes".to_owned(),
+            Yaml::Int(i64::from(write_seconds(id) / 60)),
+        ),
         ("continue-on-error".to_owned(), Yaml::Bool(true)),
     ]);
     Ok(())
@@ -153,6 +168,7 @@ fn validate_ids(steps: &[Yaml]) -> Result<(), RenderError> {
             || id == format!("{SOURCES_ID}-budget")
             || id == format!("{TOOLS_ID}-budget")
             || id == format!("{PROVIDERS_ID}-budget")
+            || id == format!("{MBX_BUNDLE_ID}-budget")
         {
             return Err(invalid());
         }
@@ -240,7 +256,7 @@ fn admission(id: &str, minutes: u16, condition: &str) -> Yaml {
         ("VELNOR_CACHE_DEADLINE".to_owned(), Yaml::str(deadline)),
         (
             "VELNOR_CACHE_REQUIRED_SECONDS".to_owned(),
-            Yaml::str((WRITE_SECONDS + RESERVE_SECONDS).to_string()),
+            Yaml::str((write_seconds(id) + RESERVE_SECONDS).to_string()),
         ),
     ];
     Yaml::Map(vec![

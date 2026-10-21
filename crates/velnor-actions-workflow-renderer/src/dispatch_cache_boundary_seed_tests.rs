@@ -40,7 +40,7 @@ fn dispatch_denies_the_local_tool_seed_action() {
 fn dispatch_denies_native_mbx_object_restore_before_use() {
     let native = cache_step(
         &format!("{}@{}", crate::cache_steps::MBX_ACTION_NAME, "a".repeat(40)),
-        "Restore MBX objects",
+        "Set up MBX",
     );
     let mut jobs = BTreeMap::from([("plan".to_owned(), job(&[], native))]);
 

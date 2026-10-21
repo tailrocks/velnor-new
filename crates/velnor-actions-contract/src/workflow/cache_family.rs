@@ -38,6 +38,8 @@ const PLAYWRIGHT_BROWSERS_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/ms-play
 const DBT_PACKAGES_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/dbt-packages/{root}"];
 const PYTHON_VENV_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/uv-cache"];
 const ANSIBLE_COLLECTIONS_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/ansible-collections"];
+use super::cache_family_mbx::MBX_BUNDLE_PATH_EXPR;
+const MBX_BUNDLE_PATHS: [&str; 1] = [MBX_BUNDLE_PATH_EXPR];
 
 /// Repository cache quota the budget rule is computed against (GitHub's 10 GB
 /// default, taken as 10 GiB; [cache decisions](../../../../docs/proposed/cache-decisions.md)).
@@ -63,6 +65,8 @@ pub enum CacheFamily {
     PythonVenv,
     /// Verified Ansible collection tarballs, keyed by the declared collection set.
     AnsibleCollections,
+    /// Opaque `mbx cache export` bundle of one Cargo workspace, keyed by its lock.
+    MbxBundle,
 }
 
 /// Static identity of one family: key layer, schema, and archive paths.
@@ -133,9 +137,17 @@ const ANSIBLE_COLLECTIONS: FamilySpec = FamilySpec {
     retained_entries: 2,
 };
 
+const MBX_BUNDLE: FamilySpec = FamilySpec {
+    layer: "mbx-bundle",
+    schema: 1,
+    paths: &MBX_BUNDLE_PATHS,
+    ceiling_bytes: 512 * MIB,
+    retained_entries: 1,
+};
+
 impl CacheFamily {
     /// Every family, in key-prefix order.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Sources,
         Self::TofuProviders,
         Self::BunInstall,
@@ -143,6 +155,7 @@ impl CacheFamily {
         Self::DbtPackages,
         Self::PythonVenv,
         Self::AnsibleCollections,
+        Self::MbxBundle,
     ];
 
     /// Static family identity.
@@ -156,6 +169,7 @@ impl CacheFamily {
             Self::DbtPackages => &DBT_PACKAGES,
             Self::PythonVenv => &PYTHON_VENV,
             Self::AnsibleCollections => &ANSIBLE_COLLECTIONS,
+            Self::MbxBundle => &MBX_BUNDLE,
         }
     }
 

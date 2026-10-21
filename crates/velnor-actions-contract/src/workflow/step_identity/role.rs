@@ -1,9 +1,7 @@
 use super::super::step::StepKind;
-use super::super::step_id::StepId;
 use super::payload::{
     action_has_prefix_for_kind, internal_operation, valid_cache_tar_launcher,
-    valid_checkout_payload, valid_mbx_cache, valid_mise_setup, valid_tool_seed_payload,
-    valid_tools_cache_identity,
+    valid_checkout_payload, valid_tools_cache_identity,
 };
 use super::{
     BUN_REGISTRY_INSTALL_OPERATION, NORMAL_TOOLS_CACHE_EXPORT_OPERATION,
@@ -13,6 +11,8 @@ use super::{
 };
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
+
+mod identity;
 
 /// Semantic step role used for workflow composition and validation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -114,6 +114,18 @@ pub enum StepRole {
     PreseedVerifyManifest,
     /// Native MBX action owns hosted and local object-cache lifecycle.
     MbxCache,
+    /// Calculate the cache key for an MBX bundle.
+    MbxBundleKey,
+    /// Restore an MBX bundle from the cache.
+    MbxBundleRestore,
+    /// Import a restored MBX bundle.
+    MbxBundleImport,
+    /// Record producer success before exporting an MBX bundle.
+    MbxProducerMark,
+    /// Export the MBX bundle.
+    MbxBundleExport,
+    /// Save the MBX bundle to the trusted cache.
+    MbxBundleSave,
     /// Exact MBX binary and object-store verification after the native action.
     MbxVersionCheck,
     /// Exact MBX and Rust toolchain preflight.
@@ -192,8 +204,8 @@ impl StepRole {
         }
         match self {
             Self::Checkout => valid_checkout_payload(kind),
-            Self::ToolSeed => valid_tool_seed_payload(kind),
-            Self::MiseSetup => valid_mise_setup(kind),
+            Self::ToolSeed => super::valid_tool_seed_payload(kind),
+            Self::MiseSetup => super::valid_mise_setup(kind),
             Self::TofuProviderUse => super::super::step_protocol::valid_provider_use(kind),
             Self::DownloadPlan | Self::AttestationDownload | Self::PreseedDownload => {
                 action_has_prefix_for_kind(kind, "actions/download-artifact@")
@@ -203,20 +215,19 @@ impl StepRole {
             | Self::PublishFinal
             | Self::QualificationCacheReceiptUpload
             | Self::PreseedUpload => action_has_prefix_for_kind(kind, "actions/upload-artifact@"),
-            Self::ToolsCacheSave | Self::CargoSourcesSave => {
-                action_has_prefix_for_kind(kind, "actions/cache/save@")
-            }
+            Self::ToolsCacheSave
+            | Self::CargoSourcesSave
+            | Self::QualificationCacheSave
+            | Self::MbxBundleSave => action_has_prefix_for_kind(kind, "actions/cache/save@"),
             Self::ToolsCacheIdentity => valid_tools_cache_identity(kind),
-            Self::QualificationCacheRestore => {
-                action_has_prefix_for_kind(kind, "actions/cache/restore@")
-            }
-            Self::QualificationCacheSave => action_has_prefix_for_kind(kind, "actions/cache/save@"),
+            Self::QualificationCacheRestore
+            | Self::CargoSourcesRestore
+            | Self::MbxBundleRestore => action_has_prefix_for_kind(kind, "actions/cache/restore@"),
             Self::ToolsCacheRestore => matches!(
                 kind,
                 StepKind::Action { uses, .. } if uses == TOOLS_CACHE_RESTORE_USES
             ),
             Self::CacheTarLaunchers => valid_cache_tar_launcher(kind),
-            Self::CargoSourcesRestore => action_has_prefix_for_kind(kind, "actions/cache/restore@"),
             Self::TofuProvidersRestore => super::super::step_protocol::valid_provider_restore(kind),
             Self::TofuProvidersSave => super::super::step_protocol::valid_provider_save(kind),
             Self::PrivateTokenMint => matches!(kind,
@@ -230,7 +241,11 @@ impl StepRole {
                         if uses.starts_with("./.github/actions/qualification-cache-")
                 )
             }
-            Self::MbxCache => valid_mbx_cache(kind),
+            Self::MbxCache => super::super::step_mbx_lifecycle::valid_mbx_cache(kind),
+            Self::MbxBundleKey
+            | Self::MbxBundleImport
+            | Self::MbxProducerMark
+            | Self::MbxBundleExport => matches!(kind, StepKind::Shell { .. }),
             Self::PlaywrightInstall => super::super::step_protocol::valid_playwright_install(kind),
             Self::MbxVersionCheck | Self::MbxWorkspaceCleanup => {
                 matches!(kind, StepKind::Shell { .. })
@@ -259,98 +274,6 @@ impl StepRole {
             | Self::PreseedVerifyManifest
             | Self::MbxPreflight => matches!(kind, StepKind::Shell { .. }),
             _ => false,
-        }
-    }
-
-    /// Output identity required for a role that publishes step outputs.
-    pub(crate) const fn required_id(self) -> Option<StepId> {
-        match self {
-            Self::PlanProducer => Some(StepId::Plan),
-            Self::BaselinePublisher => Some(StepId::PublishBaseline),
-            Self::ToolsCacheIdentity => Some(StepId::ToolsCacheIdentity),
-            Self::ToolsCacheRestore => Some(StepId::ToolsRestore),
-            Self::NormalToolsCacheStage => Some(StepId::NormalToolsCacheStage),
-            Self::NormalToolsCacheImport => Some(StepId::NormalToolsCacheImport),
-            Self::NormalToolsCacheExport => Some(StepId::NormalToolsCacheExport),
-            Self::CacheTarLaunchers => Some(StepId::CacheTarLaunchers),
-            Self::PreseedStage => Some(StepId::PreseedStage),
-            Self::TofuProvidersRestore => Some(StepId::TofuProviders),
-            Self::MbxVersionCheck => Some(StepId::MbxReady),
-            Self::CacheKeys => Some(StepId::CacheKeys),
-            Self::PrivateTokenMint => Some(StepId::DepsToken),
-            Self::QualificationCacheReceipt => Some(StepId::QualificationCacheReceipt),
-            _ => None,
-        }
-    }
-
-    /// Role required for a typed step output identity.
-    pub(crate) const fn for_id(id: StepId) -> Self {
-        match id {
-            StepId::Plan => Self::PlanProducer,
-            StepId::PublishBaseline => Self::BaselinePublisher,
-            StepId::ToolsCacheIdentity => Self::ToolsCacheIdentity,
-            StepId::NormalToolsCacheStage => Self::NormalToolsCacheStage,
-            StepId::NormalToolsCacheImport => Self::NormalToolsCacheImport,
-            StepId::NormalToolsCacheExport => Self::NormalToolsCacheExport,
-            StepId::CacheTarLaunchers => Self::CacheTarLaunchers,
-            StepId::PreseedStage => Self::PreseedStage,
-            StepId::TofuProviders => Self::TofuProvidersRestore,
-            StepId::MbxReady => Self::MbxVersionCheck,
-            StepId::CacheKeys => Self::CacheKeys,
-            StepId::SourcesRestore => Self::CargoSourcesRestore,
-            StepId::SourcesFetch => Self::CargoSourcesFetch,
-            StepId::ToolsRestore => Self::ToolsCacheRestore,
-            StepId::DepsToken => Self::PrivateTokenMint,
-            StepId::QualificationCache(identity) => match identity.stage() {
-                super::super::step_id::QualificationCacheStepStage::RuntimeIdentity => {
-                    Self::QualificationRuntimeIdentity
-                }
-                super::super::step_id::QualificationCacheStepStage::RuntimeIdentityAfterImport => {
-                    Self::QualificationCacheRuntimeIdentityAfterImport
-                }
-                super::super::step_id::QualificationCacheStepStage::Roots => {
-                    Self::QualificationCacheRoots
-                }
-                super::super::step_id::QualificationCacheStepStage::Bind => {
-                    Self::QualificationCacheBind
-                }
-                super::super::step_id::QualificationCacheStepStage::Restore => {
-                    Self::QualificationCacheRestore
-                }
-                super::super::step_id::QualificationCacheStepStage::Save => {
-                    Self::QualificationCacheSave
-                }
-                super::super::step_id::QualificationCacheStepStage::RestoreCensus
-                | super::super::step_id::QualificationCacheStepStage::SaveBeforeCensus
-                | super::super::step_id::QualificationCacheStepStage::SaveAfterCensus => {
-                    Self::QualificationCacheCensus
-                }
-                super::super::step_id::QualificationCacheStepStage::Import => {
-                    Self::QualificationCachePayloadImport
-                }
-                super::super::step_id::QualificationCacheStepStage::Export => {
-                    Self::QualificationCachePayloadExport
-                }
-                super::super::step_id::QualificationCacheStepStage::OwnerLayerEvidence => {
-                    Self::QualificationCacheOwnerLayerEvidence
-                }
-                super::super::step_id::QualificationCacheStepStage::OwnerAggregate => {
-                    Self::QualificationCacheOwnerAggregate
-                }
-            },
-            StepId::QualificationCacheComposite(identity) => match identity.phase() {
-                super::super::step_id::QualificationCacheCompositePhase::Prepare => {
-                    Self::QualificationCachePrepareComposite
-                }
-                super::super::step_id::QualificationCacheCompositePhase::BeforeSave => {
-                    Self::QualificationCacheBeforeSaveComposite
-                }
-                super::super::step_id::QualificationCacheCompositePhase::AfterSave => {
-                    Self::QualificationCacheAfterSaveComposite
-                }
-            },
-            StepId::QualificationRuntimeIdentity => Self::QualificationRuntimeIdentity,
-            StepId::QualificationCacheReceipt => Self::QualificationCacheReceipt,
         }
     }
 }

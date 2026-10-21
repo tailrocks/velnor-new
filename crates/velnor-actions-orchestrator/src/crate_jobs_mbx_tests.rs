@@ -15,7 +15,6 @@ fn drivers_follow_per_crate_selection() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -29,7 +28,7 @@ fn drivers_follow_per_crate_selection() {
         .expect("MBX preflight");
     let restore = steps
         .iter()
-        .position(|name| *name == "Restore MBX objects")
+        .position(|name| *name == "Set up MBX")
         .expect("MBX restore");
     let version_check = steps
         .iter()
@@ -48,7 +47,7 @@ fn drivers_follow_per_crate_selection() {
         "every MBX action has one strict preflight"
     );
     let steps = names(&found.jobs[1].1);
-    assert!(!steps.contains(&"Restore MBX objects"), "{steps:?}");
+    assert!(!steps.contains(&"Set up MBX"), "{steps:?}");
     assert!(
         !steps.contains(&"Verify Rust before MBX action"),
         "Cargo jobs have no MBX preflight: {steps:?}"

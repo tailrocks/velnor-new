@@ -202,14 +202,14 @@ Cargo sources family and a task-owned builder with no remote cache. Why a
    its 400-line limit and must be split before it can describe one.
 2. [`cache-decisions.md`](cache-decisions.md) requires every hot family to
    have a measured size and a refused-and-reported save above its ceiling.
-   Decisions 2 to 4 (dependency seed, opaque MBX bundles, per-family pruning)
+   Decisions 2 and 4 (dependency seed, per-family pruning)
    are not implemented, and `cache-measurements.md` holds no BuildKit figure. A
    `type=local,mode=max` export is unbounded without them. `type=gha` stays
    rejected because it hands `ACTIONS_RUNTIME_TOKEN` to BuildKit.
-3. The only MBX transport on main is the action's `github-cache-mode: target`;
-   decision 3 replaces it with `mbx cache export` and `import` bundles (not
-   implemented). Wiring `cargo_bin` jobs to target mode would add a consumer to
-   a mode scheduled for removal.
+3. The MBX transport on main is the `mbx cache export` and `import` bundle of
+   decision 3 (`github-cache-mode: target` is removed). Wiring `cargo_bin`
+   jobs to it needs the dependency-seed family of decision 2, so no image job
+   saves a bundle yet.
 
 Unblocked by: decisions 2 to 4 landing with measured ceilings. The image
 jobs then add one family (`buildkit-<id>`, schema 1, a local export directory

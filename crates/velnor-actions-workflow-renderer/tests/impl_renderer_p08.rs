@@ -220,7 +220,7 @@ fn mbx_restore_precedes_fetch() {
     };
     let mut mbx = velnor_actions_contract::Step {
         parallel: false,
-        name: "Restore MBX objects".to_owned(),
+        name: "Set up MBX".to_owned(),
         id: None,
         role: Some(velnor_actions_contract::StepRole::MbxCache),
         condition: None,

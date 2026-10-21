@@ -22,7 +22,6 @@ fn groups_obligations_into_one_ordered_job_per_crate() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -83,7 +82,6 @@ fn duplicate_rust_display_names_include_manifest_context() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -116,7 +114,6 @@ fn rust_qualification_reuses_one_job_for_all_configurations_and_tasks() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     };
@@ -132,7 +129,6 @@ fn rust_qualification_reuses_one_job_for_all_configurations_and_tasks() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -185,7 +181,6 @@ fn skips_testless_and_workspace_groups() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -215,7 +210,6 @@ fn member_binding_agrees_with_built_jobs() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })

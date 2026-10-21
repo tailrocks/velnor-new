@@ -155,7 +155,7 @@ fn reference_family_ceilings_fit_the_budget_rule() {
     const MIB: u64 = 1024 * 1024;
     // ChainArgos reference: four Bun roots, two `OpenTofu` roots, one Playwright
     // version in use, one dbt project, one Python requirements file and one
-    // Ansible collection set. The legacy tools layer measured 1,307,773,873 B and gets
+    // Ansible collection set, plus one Cargo workspace bundle. The legacy tools layer measured 1,307,773,873 B and gets
     // 1.5 GiB (cache-measurements.md).
     let tools_allowance = 1536 * MIB;
     let units = |family: CacheFamily| match family {
@@ -163,7 +163,8 @@ fn reference_family_ceilings_fit_the_budget_rule() {
         | CacheFamily::PlaywrightBrowsers
         | CacheFamily::DbtPackages
         | CacheFamily::PythonVenv
-        | CacheFamily::AnsibleCollections => 1,
+        | CacheFamily::AnsibleCollections
+        | CacheFamily::MbxBundle => 1,
         CacheFamily::TofuProviders => 2,
         CacheFamily::BunInstall => 4,
     };

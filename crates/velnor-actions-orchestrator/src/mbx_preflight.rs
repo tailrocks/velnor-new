@@ -6,17 +6,18 @@ use velnor_actions_actionlint::PinnedActionRef;
 use velnor_actions_actionlint::actions::{MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION};
 use velnor_actions_contract::Step;
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
-use velnor_actions_workflow_renderer::steps::{CompileDriver, mbx_steps_for_driver};
+use velnor_actions_workflow_renderer::steps::{CompileDriver, MbxTransport, mbx_steps_for_driver};
 
 use crate::OrchestratorError;
 
-/// Build the strict preflight and restore pair from the compiled catalog pins.
+/// Build the strict preflight, install-only action, ready check and bundle
+/// restore from the compiled catalog pins.
 /// # Errors
 pub(crate) fn steps_for_catalog(
     catalog: &ToolCatalog,
-    policy: velnor_actions_contract::PullRequestCachePolicy,
+    transport: MbxTransport,
     working_directory: Option<&str>,
-) -> Result<[Step; 3], OrchestratorError> {
+) -> Result<Vec<Step>, OrchestratorError> {
     let uses = PinnedActionRef::new(
         "jdx/mr-boxington-action",
         None,
@@ -31,7 +32,7 @@ pub(crate) fn steps_for_catalog(
         catalog.version(PinnedTool::MrBoxington),
         catalog.version(PinnedTool::Rust),
         env,
-        policy,
+        transport,
         working_directory,
     )?;
     steps.ok_or_else(|| OrchestratorError::Contract {

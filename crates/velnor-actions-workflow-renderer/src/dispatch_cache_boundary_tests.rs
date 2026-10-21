@@ -100,24 +100,25 @@ fn acquire_step(staged: &str) -> Result<Step, crate::RenderError> {
 }
 
 fn dispatch_plan_job(staged: &str) -> Result<Job, crate::RenderError> {
-    let action = Step {
-        parallel: false,
-        name: "Restore MBX objects".to_owned(),
-        id: None,
-        role: None,
-        condition: None,
-            kind: StepKind::Action {
-                uses: format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
-                with: BTreeMap::from([("toolchain".to_owned(), "1.98.1".to_owned())]),
-                env: BTreeMap::from([
-                    ("VELNOR_MBX_VERSION".to_owned(), "1.21.1".to_owned()),
-                    (
-                        crate::cache_steps::MBX_CACHE_MODE_ENV.to_owned(),
-                        "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}".to_owned(),
-                    ),
-                ]),
-            },
-        };
+    let mbx_steps = crate::steps::mbx_steps_for_driver(
+        &format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
+        crate::steps::CompileDriver::Mbx,
+        "1.21.1",
+        "1.89.0",
+        BTreeMap::from([
+            (
+                "MISE_RUSTUP_HOME".to_owned(),
+                "${{ runner.temp }}/velnor/rustup".to_owned(),
+            ),
+            (
+                "MISE_CARGO_HOME".to_owned(),
+                "${{ runner.temp }}/velnor/cargo".to_owned(),
+            ),
+        ]),
+        crate::steps::MbxTransport::InstallOnly,
+        None,
+    )?
+    .expect("The MBX driver did not emit setup that only installs tools.");
     Ok(Job {
         services: Vec::new(),
         display_name: "Velnor Plan".to_owned(),
@@ -128,11 +129,13 @@ fn dispatch_plan_job(staged: &str) -> Result<Job, crate::RenderError> {
         condition: None,
         permissions: None,
         environment: None,
-        steps: vec![
-            crate::steps::checkout_step(&format!("actions/checkout@{}", "c".repeat(40)))?,
-            acquire_step(staged)?,
-            action,
-            Step {
+        steps: {
+            let mut steps = vec![
+                crate::steps::checkout_step(&format!("actions/checkout@{}", "c".repeat(40)))?,
+                acquire_step(staged)?,
+            ];
+            steps.extend(mbx_steps);
+            steps.push(Step {
                 parallel: false,
                 name: "Build".to_owned(),
                 id: None,
@@ -152,9 +155,10 @@ fn dispatch_plan_job(staged: &str) -> Result<Job, crate::RenderError> {
                             .map(|key| (key.to_owned(), String::new())),
                     ),
                 },
-            },
-            crate::steps::plan_step(),
-        ],
+            });
+            steps.push(crate::steps::plan_step());
+            steps
+        },
         cache_mode: None,
     })
 }

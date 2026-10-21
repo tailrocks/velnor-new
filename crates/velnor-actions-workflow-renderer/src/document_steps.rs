@@ -151,7 +151,7 @@ fn shell_step_to_yaml(
     job_env: &BTreeMap<String, String>,
     composite: bool,
 ) -> Result<Yaml, RenderError> {
-    crate::action_mbx_shell::validate_step_argv(run, step.role)?;
+    crate::action_mbx_shell::validate_step_argv(run, step.role, env)?;
     if composite {
         commands::validate_composite_env(env)?;
     } else {

@@ -46,6 +46,12 @@ pub enum StepId {
     ToolsRestore,
     /// Private-source App token mint whose output feeds the fetch and revoke steps.
     DepsToken,
+    /// Restore and save steps use this MBX bundle key output.
+    MbxBundleKey,
+    /// Import and save steps use this MBX bundle restore output.
+    MbxBundleRestore,
+    /// The cache save step uses this MBX bundle export output.
+    MbxBundleExport,
     /// Lane/layer owner for a qualification cache action.
     QualificationCache(QualificationCacheStepId),
     /// Typed output owner for one grouped qualification-cache composite.
@@ -76,6 +82,9 @@ impl StepId {
             Self::SourcesFetch => "sources-fetch",
             Self::ToolsRestore => "tools-restore",
             Self::DepsToken => "deps-token",
+            Self::MbxBundleKey => "mbx-bundle-key",
+            Self::MbxBundleRestore => "mbx-bundle-restore",
+            Self::MbxBundleExport => "mbx-bundle-export",
             Self::QualificationCache(_) => "qualification-cache",
             Self::QualificationCacheComposite(_) => "qualification-cache-composite",
             Self::QualificationRuntimeIdentity => "qualification-runtime-identity",

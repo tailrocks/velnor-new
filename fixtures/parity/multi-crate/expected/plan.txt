@@ -22,8 +22,8 @@ Workflow to generate
     - publish-baseline (6 steps)
     - required (10 steps)
     - required-gate (1 steps)
-    - rust-parity-app (24 steps)
-    - rust-parity-tool (22 steps)
+    - rust-parity-app (30 steps)
+    - rust-parity-tool (28 steps)
     - 2 Rust package jobs
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check

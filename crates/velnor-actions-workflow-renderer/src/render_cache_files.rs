@@ -63,5 +63,12 @@ fn append_runtime_files(
             version,
         )?);
     }
+    if jobs.values().any(|job| {
+        job.steps
+            .iter()
+            .any(|step| step.role == Some(velnor_actions_contract::StepRole::MbxBundleKey))
+    }) {
+        files.push(crate::cache_steps::mbx_bundle_helper_file(version)?);
+    }
     Ok(files)
 }

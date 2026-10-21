@@ -160,7 +160,7 @@ pub(super) fn assert_restore_before_obligations(
         let at = |name: &str| names.iter().position(|seen| *seen == name);
         let (Some(restore), Some(mbx), Some(fetch)) = (
             at("Restore Cargo sources"),
-            at("Restore MBX objects"),
+            at("Set up MBX"),
             at("Fetch Cargo sources"),
         ) else {
             return Err(format!("{id} cache order missing: {names:?}").into());

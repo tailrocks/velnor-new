@@ -189,10 +189,14 @@ fn validate_id_kind(step: &Step, job: &str) -> Result<(), ContractError> {
         StepId::TofuProviders => {
             matches!(kind, StepKind::Action { uses, .. } if uses == TOFU_PROVIDER_ADMISSION_USES)
         }
-        StepId::MbxReady | StepId::CacheKeys | StepId::SourcesFetch => {
+        StepId::MbxReady
+        | StepId::CacheKeys
+        | StepId::SourcesFetch
+        | StepId::MbxBundleKey
+        | StepId::MbxBundleExport => {
             matches!(kind, StepKind::Shell { .. })
         }
-        StepId::SourcesRestore => {
+        StepId::SourcesRestore | StepId::MbxBundleRestore => {
             matches!(kind, StepKind::Action { uses, .. } if uses.starts_with("actions/cache/restore@"))
         }
         StepId::DepsToken => {

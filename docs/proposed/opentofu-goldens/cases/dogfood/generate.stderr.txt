@@ -241,6 +241,7 @@ Repository: <repo>
 .github/actions/velnor-tools-cache-restore/action.yml
 .github/actions/velnor-tools-prelude-u26/action.yml
 .github/dco.yml
+.github/scripts/velnor-mbx-bundle.sh
 .github/scripts/velnor-tools-cache-identity.sh
 .github/velnor/task-execution-manifest-v1.json
 .github/workflows/ci.yml

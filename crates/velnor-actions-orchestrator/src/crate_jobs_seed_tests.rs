@@ -12,7 +12,6 @@ fn seeded(tasks: Vec<ProposedTask>, enabled: bool, roots: &[String]) -> CrateBui
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         seed_parallel_targets: enabled,
         crates: &BTreeMap::from([(
             "demo".to_owned(),

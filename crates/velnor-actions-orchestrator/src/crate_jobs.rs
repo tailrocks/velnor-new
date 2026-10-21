@@ -122,7 +122,6 @@ pub(crate) fn workflow_job_inputs<'a>(
         timeout: JobTimeout::new(config.workflow.crate_timeout_minutes)
             .map_err(crate::internal::internal_contract)?,
         helper_version,
-        cache_policy: config.workflow.pull_request_cache_policy,
         seed_parallel_targets: config
             .stacks
             .rust
@@ -145,7 +144,6 @@ pub(crate) struct CrateJobInputs<'a> {
     /// Literal timeout for each emitted crate job.
     pub(crate) timeout: JobTimeout,
     pub(crate) helper_version: &'a str,
-    pub(crate) cache_policy: velnor_actions_contract::PullRequestCachePolicy,
     /// Initialize missing independent check targets from the completed build.
     pub(crate) seed_parallel_targets: bool,
     /// Per-package Rust options keyed by Cargo package name.
@@ -340,7 +338,6 @@ fn build_job_for_members(
         input.acquire,
         input.max_parallel_jobs,
         input.helper_version,
-        input.cache_policy,
         input.timeout,
         needs,
         qualification,

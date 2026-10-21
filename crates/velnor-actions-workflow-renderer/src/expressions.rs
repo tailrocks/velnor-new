@@ -81,7 +81,7 @@ const ENV_EXPRESSIONS: [&str; 16] = [
 /// Run-scoped names, runner paths, matrix coordinates, the
 /// push-gated cache-save flag, and runtime cache identities. Notably absent: every `secrets.*` handle (rejected
 /// separately as `secret_in_action_input`).
-const WITH_EXPRESSIONS: [&str; 19] = [
+const WITH_EXPRESSIONS: [&str; 21] = [
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
@@ -101,6 +101,8 @@ const WITH_EXPRESSIONS: [&str; 19] = [
     "needs.plan.outputs.sources_key",
     "needs.plan.outputs.sources_restore_keys",
     "steps.qualification-cache-receipt.outputs.receipt_path",
+    "steps.mbx-bundle-key.outputs.key",
+    "steps.mbx-bundle-key.outputs.restore_keys",
 ];
 
 /// True for a Plan-published per-root provider key (`tofu_providers_key_<n>`).

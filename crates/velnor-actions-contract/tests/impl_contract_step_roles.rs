@@ -67,7 +67,7 @@ fn role_kind_mismatch_fails_even_when_display_name_matches() {
 fn mbx_cleanup_requires_the_successful_ready_outcome_guard() {
     let action = Step {
         parallel: false,
-        name: "Restore MBX objects".to_owned(),
+        name: "Set up MBX".to_owned(),
         id: None,
         role: Some(StepRole::MbxCache),
         condition: None,

@@ -1,7 +1,7 @@
 use super::super::step::StepKind;
 use super::{
     CACHE_TAR_LAUNCHER_SHA256_INPUT, CACHE_TAR_LAUNCHER_USES, PRESEED_HELPER_SHA256_OUTPUT_EXPR,
-    TOOL_SEED_USES, TOOLS_CACHE_IDENTITY_DIGEST_INPUT, TOOLS_CACHE_PRELUDE_USES,
+    TOOLS_CACHE_IDENTITY_DIGEST_INPUT, TOOLS_CACHE_PRELUDE_USES,
 };
 
 /// Require the standard credential-free checkout action payload.
@@ -21,15 +21,6 @@ pub(super) fn valid_configured_checkout_payload(kind: &StepKind) -> bool {
                 "lfs" => value == "true",
                 _ => false,
             })
-            && env.is_empty())
-}
-
-/// Require the fixed local seed action and its one explicit cache identity.
-pub(super) fn valid_tool_seed_payload(kind: &StepKind) -> bool {
-    matches!(kind, StepKind::Action { uses, with, env }
-        if uses == TOOL_SEED_USES
-            && with.len() == 1
-            && with.get("cache_key").is_some_and(|key| !key.is_empty())
             && env.is_empty())
 }
 
@@ -57,29 +48,6 @@ fn action_has_prefix(uses: &str, prefix: &str) -> bool {
 /// True when an internal operation matches its role contract.
 pub(super) fn internal_operation(kind: &StepKind, expected: &str) -> bool {
     matches!(kind, StepKind::Internal { operation, .. } if operation == expected)
-}
-
-/// Validate the typed Mise setup payload shape shared by render paths.
-pub(super) fn valid_mise_setup(kind: &StepKind) -> bool {
-    matches!(kind, StepKind::Action { uses, with, .. }
-        if action_has_prefix(uses, "jdx/mise-action@")
-            && with.get("version").is_some_and(|value| !value.is_empty())
-            && with.get("sha256").is_some_and(|value| !value.is_empty())
-            && with.get("install").is_some_and(|value| value == "false")
-            && with.get("env").is_some_and(|value| value == "false")
-            && with.get("cache").is_some_and(|value| value == "false" || value == "true")
-            && with.get("cache_save").is_some_and(|value| value == "false" || value == "true"))
-}
-
-/// Validate the local provider admission call and exact same-restore outputs.
-/// Validate the native MBX action that owns the object-cache lifecycle.
-pub(super) fn valid_mbx_cache(kind: &StepKind) -> bool {
-    matches!(kind, StepKind::Action { uses, with, .. }
-        if action_has_prefix(uses, "jdx/mr-boxington-action@")
-            && with.get("github-cache-mode").is_some_and(|mode| mode == "target" || mode == "objects")
-            && with.get("version").is_some_and(|version| !version.is_empty())
-            && with.get("toolchain").is_some_and(|toolchain| !toolchain.is_empty())
-            && with.get("cache-generation").is_some_and(|generation| !generation.is_empty()))
 }
 
 pub(in crate::workflow) fn valid_cache_tar_launcher(kind: &StepKind) -> bool {
