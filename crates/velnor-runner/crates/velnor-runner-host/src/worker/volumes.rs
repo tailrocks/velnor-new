@@ -1,12 +1,17 @@
 //! Named volumes belong to one durable worker identity.
 
+#[cfg(test)]
 use bollard::Docker;
+#[cfg(test)]
 use bollard::errors::Error as DockerError;
+#[cfg(test)]
 use bollard::models::Volume;
+#[cfg(test)]
 use bollard::query_parameters::RemoveVolumeOptions;
 
 use super::names::WorkerIdentityNames;
 pub(crate) use super::names::WorkerVolumeRole;
+#[cfg(test)]
 use crate::docker_client::docker_deadline;
 use crate::docker_spec::Mount as PlannedMount;
 use crate::error::HostError;
@@ -14,17 +19,21 @@ use velnor_runner_core::runner_work_path;
 
 #[derive(Debug, Eq, PartialEq)]
 struct WorkerVolume {
+    #[cfg(test)]
     worker: String,
     name: String,
+    #[cfg(test)]
     role: WorkerVolumeRole,
 }
 
 /// Private proof that one exact volume passed checks for its worker and role.
+#[cfg(test)]
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) struct VerifiedWorkerVolume {
     volume: WorkerVolume,
 }
 
+#[cfg(test)]
 impl VerifiedWorkerVolume {
     /// Send one delete request for this previously verified volume.
     pub(crate) async fn remove_request(&self, docker: &Docker) -> Result<(), HostError> {
@@ -47,6 +56,7 @@ impl VerifiedWorkerVolume {
 }
 
 /// Result of verifying one exact worker volume.
+#[cfg(test)]
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) enum WorkerVolumeVerification {
     /// The named volume was confirmed absent by Docker's 404 response.
@@ -58,6 +68,7 @@ pub(crate) enum WorkerVolumeVerification {
 }
 
 /// Result after deleting one previously verified worker volume.
+#[cfg(test)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum WorkerVolumeRemoval {
     /// The exact volume was removed and confirmed absent afterwards.
@@ -70,6 +81,7 @@ pub(crate) enum WorkerVolumeRemoval {
 ///
 /// Only Docker's confirmed 404 means absent. A verified token is returned only
 /// when the name and both ownership labels match the expected identity.
+#[cfg(test)]
 pub(crate) async fn verify_worker_volume(
     docker: &Docker,
     worker: &str,
@@ -94,6 +106,7 @@ pub(crate) async fn verify_worker_volume(
 ///
 /// This performs no inspect before deletion so callers can recheck durable
 /// cleanup authority after verification and immediately before the delete.
+#[cfg(test)]
 pub(crate) async fn remove_verified_worker_volume(
     docker: &Docker,
     verified: &VerifiedWorkerVolume,
@@ -102,6 +115,7 @@ pub(crate) async fn remove_verified_worker_volume(
     verified.confirm_removed(docker).await
 }
 
+#[cfg(test)]
 async fn inspect_volume(docker: &Docker, name: &str) -> Result<Option<Volume>, HostError> {
     match docker_deadline(docker.inspect_volume(name)).await? {
         Ok(volume) => Ok(Some(volume)),
@@ -122,8 +136,10 @@ fn valid_worker(worker: &str) -> bool {
 fn worker_volume(worker: &str, role: WorkerVolumeRole) -> Result<WorkerVolume, HostError> {
     let names = WorkerIdentityNames::from_private_volume(worker)?;
     Ok(WorkerVolume {
+        #[cfg(test)]
         worker: worker.to_owned(),
         name: names.volume_name(role),
+        #[cfg(test)]
         role,
     })
 }
@@ -187,10 +203,12 @@ fn target(role: WorkerVolumeRole, container: ContainerKind) -> Option<String> {
 ///
 /// An unlabeled name, a foreign label, a partial label, or an extra label
 /// keeps the volume. Removal fails closed toward a leak, never a delete.
+#[cfg(test)]
 fn owns(expected: &WorkerVolume, observed: &Volume) -> bool {
     observed.labels.len() == 2 && labeled(expected, observed)
 }
 
+#[cfg(test)]
 fn labeled(expected: &WorkerVolume, observed: &Volume) -> bool {
     observed.name == expected.name
         && observed.labels.get("velnor.worker").map(String::as_str)

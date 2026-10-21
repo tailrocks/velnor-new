@@ -2,10 +2,12 @@
 //!
 //! JIT is not a field. `start_pair` writes it on stdin and does not store it.
 
+#[cfg(test)]
 use bollard::Docker;
 use bollard::models::ContainerCreateBody;
 use bollard::query_parameters::CreateContainerOptions;
 
+#[cfg(test)]
 use crate::docker_client::docker_deadline;
 use crate::docker_spec::{ContainerPlan, audit_plan, runner_mounts, runner_plan};
 use crate::error::HostError;
@@ -14,11 +16,13 @@ mod names;
 pub(crate) mod resources;
 mod volumes;
 pub(crate) use names::{WorkerContainerRole, WorkerIdentityNames};
+pub(crate) use volumes::WorkerVolumeRole;
 #[cfg(test)]
 pub(crate) use volumes::{
     VerifiedWorkerVolume, WorkerVolumeRemoval, remove_verified_worker_volume,
 };
-pub(crate) use volumes::{WorkerVolumeRole, WorkerVolumeVerification, verify_worker_volume};
+#[cfg(test)]
+pub(crate) use volumes::{WorkerVolumeVerification, verify_worker_volume};
 pub(crate) mod execution_authorization;
 pub(crate) mod guest_image;
 mod mounts;
@@ -101,6 +105,7 @@ pub fn runner_create(
 /// # Errors
 ///
 /// Gives [`HostError::ForbiddenMount`] when `dind_id` is not a 64-character string of hexadecimal digits.
+#[cfg(test)]
 pub(crate) fn join_dind_net(
     mut spec: CreateProjection,
     dind_id: &str,
@@ -112,6 +117,7 @@ pub(crate) fn join_dind_net(
     Ok(spec)
 }
 
+#[cfg(test)]
 fn dind_container_id(id: &str) -> bool {
     id.len() == 64 && id.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
@@ -161,15 +167,6 @@ pub fn dind_create(
     })
 }
 
-/// Stable `DinD` container name used by cleanup and recovery.
-///
-/// This function does not use a resource budget.
-/// Cleanup does not use the current resource budget.
-pub(crate) fn dind_container_name(private_volume: &str) -> Result<String, HostError> {
-    runner_plan(private_volume)?;
-    Ok(format!("{private_volume}-dind"))
-}
-
 /// Bollard config for [`bollard::Docker::create_container`]. No JIT parameter.
 ///
 /// # Errors
@@ -212,6 +209,7 @@ fn none_if_empty(items: &[String]) -> Option<Vec<String>> {
     }
 }
 
+#[cfg(test)]
 pub(crate) async fn worker_id_for_name(
     docker: &Docker,
     name: &str,
