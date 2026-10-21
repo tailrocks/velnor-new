@@ -1,6 +1,6 @@
-#[cfg(test)]
-use super::ObservedStorageAttachment;
 use super::StorageRole;
+#[cfg(test)]
+use sha2::{Digest, Sha256};
 
 /// Link a container's logical root mount to its measured backing filesystem.
 pub(crate) struct VerifiedRootBackingMapping {
@@ -27,21 +27,22 @@ pub(crate) struct VerifiedRootBackingMapping {
 impl VerifiedRootBackingMapping {
     #[cfg(test)]
     pub(crate) fn test_fixture(
-        reservation_id: i64,
-        operation_id: i64,
-        connection_id: &str,
-        engine_id: &str,
-        docker_root_digest: &str,
-        sample_generation_id: &str,
-        role: StorageRole,
-        container_id: &str,
-        image_runtime_id: &str,
-        image_source_sha: &str,
-        attachment: &ObservedStorageAttachment,
-        backing_filesystem_instance_digest: &str,
+        input: crate::launch::bootstrap::RootBackingMappingFixtureInput<'_>,
     ) -> Self {
-        use sha2::{Digest, Sha256};
-
+        let crate::launch::bootstrap::RootBackingMappingFixtureInput {
+            reservation_id,
+            operation_id,
+            connection_id,
+            engine_id,
+            docker_root_digest,
+            sample_generation_id,
+            role,
+            container_id,
+            image_runtime_id,
+            image_source_sha,
+            attachment,
+            backing_filesystem_instance_digest,
+        } = input;
         let canonical_record = serde_json::to_string(&serde_json::json!({
             "schema_version": 1,
             "reservation_id": reservation_id,
@@ -72,11 +73,7 @@ impl VerifiedRootBackingMapping {
         let mut digest = Sha256::new();
         digest.update(b"velnor-root-backing-map-v1\0");
         digest.update(canonical_record.as_bytes());
-        let mapping_digest = digest
-            .finalize()
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect();
+        let mapping_digest = crate::digest_hex::lowercase_hex(&digest.finalize());
         Self {
             reservation_id,
             operation_id,

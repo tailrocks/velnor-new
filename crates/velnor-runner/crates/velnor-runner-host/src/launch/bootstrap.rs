@@ -41,6 +41,42 @@ pub(in crate::launch) use storage::observe_storage_resources_with_provider;
 pub(crate) use storage::{ObservedContainerCgroup, ObservedStorageAttachment, ObservedStorageRole};
 
 #[cfg(test)]
+#[derive(Clone, Copy)]
+pub(crate) struct RootBackingMappingFixtureInput<'a> {
+    pub(crate) reservation_id: i64,
+    pub(crate) operation_id: i64,
+    pub(crate) connection_id: &'a str,
+    pub(crate) engine_id: &'a str,
+    pub(crate) docker_root_digest: &'a str,
+    pub(crate) sample_generation_id: &'a str,
+    pub(crate) role: crate::journal::StorageRole,
+    pub(crate) container_id: &'a str,
+    pub(crate) image_runtime_id: &'a str,
+    pub(crate) image_source_sha: &'a str,
+    pub(crate) attachment: &'a ObservedStorageAttachment,
+    pub(crate) backing_filesystem_instance_digest: &'a str,
+}
+
+#[cfg(test)]
+pub(crate) struct VerifiedStorageResourceBindingFixture {
+    pub(crate) reservation_id: i64,
+    pub(crate) operation_id: i64,
+    pub(crate) engine_id: String,
+    pub(crate) docker_root_digest: String,
+    pub(crate) sample_generation_id: String,
+    pub(crate) profile_generation_id: String,
+    pub(crate) profile_digest: String,
+    pub(crate) runner_container_id: String,
+    pub(crate) dind_container_id: String,
+    pub(crate) connection_id: String,
+    pub(crate) instance_binding_digest: String,
+    pub(crate) roles: Vec<ObservedStorageRole>,
+    pub(crate) attachments: Vec<ObservedStorageAttachment>,
+    pub(crate) cgroups: Vec<ObservedContainerCgroup>,
+    pub(crate) guest_boot_id: String,
+}
+
+#[cfg(test)]
 mod test_fixtures;
 
 #[cfg(test)]
