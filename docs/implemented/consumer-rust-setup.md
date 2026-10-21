@@ -4,71 +4,95 @@
 - Specification: [task execution contract](../proposed/task-execution-contract.md)
   (durable `mr_boxington` evidence), [cache contract](../proposed/cache-contract.md)
   (MBX bundle family), [hard decision 4](../hard-decisions.md#4-tool-versions-come-from-the-projects-mise-config)
-- Delivered: the recommended consumer layout below; a test that proves the
-  Mise option alone selects MBX in CI; the opt-in
-  `[stacks.rust] toolchain_source = "mise"` check; velnor-new's own
-  `mise.toml` on `mr_boxington = true`.
+- Delivered: the owner's standard consumer layout below; a test that proves
+  it selects MBX in CI (also with private sources); the opt-in
+  `[stacks.rust] toolchain_source = "mise"` agreement check; velnor-new on
+  the same layout.
 - Acceptance evidence: `impl_consumer_mbx_setup` (orchestrator integration
-  tests), `tool_catalog_rust_source::tests`, `config_stacks::tests::rust_toolchain_source_loads_only_the_mise_value`.
+  tests), `tool_catalog_resolve::rust_mirror::tests`,
+  `tool_catalog_resolve::rust_source::tests`.
 - Deviations: none
 - Follow-up: Rust 1.100 (about 2026-11-12) brings Cargo's new build-dir
   layout, which lets MBX collect unused units one at a time and seed new
   worktrees from existing ones; bump the catalog when it ships.
 
-## 1. `mise.toml`
+## 1. `mise.toml` and `rust-toolchain.toml` (owner standard layout)
 
-`mise.toml` is the only source of the Rust version. Put the version, profile,
-components and any cross targets in the `rust` entry, and pin MBX exactly:
+The owner's standard layout (2026-10-22) for every Rust project. Use the
+newest stable version of each tool when applying it.
+
+`mise.toml`:
 
 ```toml
-[settings]
-# Owner rule: always the latest stable, no cooldown. Exact pins are exempt from
-# Mise's default 24 h minimum_release_age anyway; this also covers `latest`
-# resolution in `mise upgrade --bump`.
-minimum_release_age = "0s"
+min_version = "2026.10.17"
 
 [tools]
-rust = { version = "1.99.1", profile = "minimal", components = ["clippy", "rustfmt"], mr_boxington = true }
-mr-boxington = "1.26.0"   # exact pin; mise.lock records it (packslip, sha256 + sigstore signer)
-"aqua:nextest-rs/nextest/cargo-nextest" = "0.9.149"
+rust = { version = "1.99.1", profile = "minimal", components = ["clippy", "rustfmt"], targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"], mr_boxington = true }
+mr-boxington = "1.26.0"
+hk = "2.8.0"
+cargo-binstall = "1.26.0"
+
+[settings]
+cargo.binstall = true
+idiomatic_version_file_enable_tools = ["rust"]
+lockfile = true
+
+[wrappers.cargo]
+command = "mbx"
+env = { MBX_CARGO_SHIM_MODE = "1" }
 ```
 
-- `mr_boxington = true` makes Mise (2026.9.2 or newer) run every `cargo`
-  through MBX. It needs `mr-boxington` in the same active `[tools]`. Do not
-  add `[wrappers.cargo]`: an explicit wrapper takes precedence over the option.
-- Add `targets = ["aarch64-unknown-linux-gnu", ...]` to the `rust` entry for
-  cross targets instead of a `rust-toolchain.toml`.
-- Delete `rust-toolchain.toml`/`rust-toolchain` and
-  `[settings] idiomatic_version_file_enable_tools = ["rust"]`. Inside Mise,
-  `RUSTUP_TOOLCHAIN` already outranks the file, so it adds nothing but a
-  second place to edit. Repoint anything that read it (Dockerfiles, docs) to
-  `mise current rust`.
-- Run `mise lock --platform linux-x64,linux-arm64,macos-arm64` and commit
-  `mise.lock`.
+`rust-toolchain.toml`, an exact mirror of the `mise.toml` rust entry (never
+edited alone):
+
+```toml
+[toolchain]
+channel = "1.99.1"
+profile = "minimal"
+components = ["clippy", "rustfmt"]
+targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
+```
+
+- Why both files: once `mise.toml` pins Rust, Mise ignores the toolchain
+  file completely, including its `components` and `targets`. rustup-only
+  consumers (editors and rust-analyzer, hooks run outside Mise, GUI git,
+  Docker `rust:` images, a plain shell) read only the file and otherwise fall
+  back to rustup's default toolchain. So the Mise entry must carry the
+  components and targets too (or cross builds under Mise fail with E0463 and
+  `mise.lock` records no options), and the file must repeat them.
+- Generation enforces the mirror: when both declare Rust, a different
+  `channel`/`version`, `components`, `targets` or `profile` fails with
+  `rust_toolchain_mirror_mismatch:<key>:rust-toolchain.toml=[...],mise.toml=[...]`.
+  Set `profile` in both or in neither; `minimal` skips rust-docs.
+- `idiomatic_version_file_enable_tools = ["rust"]` is a no-op while
+  `mise.toml` pins Rust; it is part of the standard as a fallback.
+- `mr_boxington = true` and the `[wrappers.cargo]` entry both route every
+  `cargo` through MBX. They need `mr-boxington` in the same active `[tools]`.
+- Install hk hooks with `hk install --mise` (or `HK_MISE=1`), so cargo-based
+  hook steps run inside the Mise environment even from GUI git clients.
+- Dockerfiles take the version from Mise, not from the toolchain file:
+  pass `--build-arg RUST_VERSION="$(mise current rust)"`, and in the base
+  layer run `rustup component add clippy rustfmt` and `rustup target add`
+  with the file's targets, so builds do not download them after `COPY . .`.
+- Add other tools the project uses (for example
+  `"aqua:nextest-rs/nextest/cargo-nextest"`) to `[tools]` with exact pins.
+- `lockfile = true`: run `mise lock` and commit `mise.lock` (packslip entries
+  record a sha256 and a sigstore signer for `mr-boxington`).
+- `min_version` requires Mise 2026.10.17 or newer on every machine. An older
+  global Mise fails every command in the project, including the `cargo`
+  command wrapper (`mise self-update`).
 - `mbx setup` is only needed for rust-analyzer. Choose "Create the shim
   without activating it"; do not pass `--yes`, `--global` or `--local`.
 
-### Enforce the single source
+### Optional: name `mise.toml` the authority
 
-Opt in from `.velnor/config.toml`:
-
-```toml
-[stacks.rust]
-toolchain_source = "mise"
-```
-
-Generation then fails with `rust_version_source_not_mise`, naming both
-files, when any of these exists next to the Mise `rust` entry, even if the
-versions agree:
-
-- `rust-toolchain.toml` or `rust-toolchain` at the root or in any
-  subdirectory;
-- a `rust` line in `.tool-versions`;
-- `[stacks.rust] toolchain` or `[tools] rust` in `.velnor/config.toml`.
-
-It fails with `rust_not_declared_in_mise` when no Mise config declares Rust.
-Without the option, hard decision 4 is unchanged: every source is accepted
-as long as they agree on one exact version.
+The mirror check above is always on. `[stacks.rust] toolchain_source = "mise"`
+in `.velnor/config.toml` additionally requires a `rust` entry in a Mise config
+(`rust_not_declared_in_mise`) and names it as the authority for every other
+declaration: a nested toolchain file, `.tool-versions` or a
+`.velnor/config.toml` pin that differs fails with
+`rust_version_disagrees_with_mise:<file>=<v>,mise.toml=<v>`. It is not part
+of the standard layout and is not enabled in any repository.
 
 ## 2. What CI does with it
 
@@ -171,10 +195,13 @@ mbx gc --dry-run && mbx doctor
 
 ## 6. velnor-new itself
 
-velnor-new uses the same option: its `mise.toml` declares
-`rust = { version = "...", mr_boxington = true }` and `mr-boxington`, with no
-`[wrappers.cargo]`. Its `.velnor/config.toml` keeps
-`[stacks.rust] compile_driver = "mbx"` as a sticky declaration that the Mise
-evidence now agrees with. `scripts/toml-tool-pin.awk` reads both the plain
+velnor-new uses the same layout: `mise.toml` with `min_version`,
+`rust = { version, mr_boxington = true }`, `mr-boxington`, `hk`,
+`cargo-binstall`, Nextest, the three settings and `[wrappers.cargo]`, plus a
+`rust-toolchain.toml` that mirrors the rust entry (channel, components,
+targets). Its `.velnor/config.toml`
+keeps `[stacks.rust] compile_driver = "mbx"` as a sticky declaration that the
+Mise evidence agrees with. `scripts/toml-tool-pin.awk` reads both the plain
 and the inline-table form of a `[tools]` entry, so `verify-local.sh` and
-`local-cargo.sh` still report the local pin.
+`local-cargo.sh` still report the local pin. The hk configuration (`hk.pkl`
+and its secret scanners) comes with the hk rollout, not this page.

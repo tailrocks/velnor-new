@@ -1,4 +1,4 @@
-//! `[stacks.rust] toolchain_source`: opt-in single Rust version source.
+//! `[stacks.rust] toolchain_source`: opt-in Mise-authoritative Rust version.
 
 use serde::{Deserialize, Serialize};
 
@@ -7,9 +7,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RustToolchainSource {
-    /// The project's Mise config is the only source: generation fails on a
-    /// `rust-toolchain.toml`/`rust-toolchain` file anywhere in the
-    /// repository, on a Rust declaration in `.tool-versions`, on a
-    /// `.velnor/config.toml` Rust pin, and when no Mise config declares Rust.
+    /// The project's Mise config declares the Rust version and every other
+    /// declaration (`rust-toolchain.toml`/`rust-toolchain` at the root or
+    /// nested, `.tool-versions`, a `.velnor/config.toml` pin) must equal it;
+    /// generation fails on a mismatch and when no Mise config declares Rust.
     Mise,
 }

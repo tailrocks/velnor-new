@@ -62,7 +62,7 @@ pub(crate) struct PartialRustStack {
     /// Optional exact `X.Y.Z` Rust toolchain channel override.
     #[serde(default)]
     toolchain: Option<String>,
-    /// Opt-in single Rust version source (`"mise"`).
+    /// Opt-in Mise-authoritative Rust version (`"mise"`).
     #[serde(default)]
     toolchain_source: Option<velnor_actions_contract::config::RustToolchainSource>,
     /// Per-package options (`[stacks.rust.crates.<package>]`).
