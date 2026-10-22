@@ -67,7 +67,7 @@ where
         if path <= previous_path {
             return Err("qualification_cache_payload_path_order_invalid");
         }
-        previous_path = path.clone();
+        previous_path.clone_from(&path);
         state.add_member(&path)?;
         let fields = canonical_header(&entry)?;
         state.read_member(&mut entry, &path, fields)?;
@@ -75,6 +75,7 @@ where
     state.finish(manifest.clone(), roots)
 }
 
+#[derive(Clone, Copy)]
 struct HeaderFields {
     kind: EntryType,
     mode: u32,
@@ -216,7 +217,7 @@ fn hash_entry<R: Read>(
         hasher.update(prefix);
     }
     let mut read = 0_u64;
-    let mut buffer = [0_u8; 64 * 1024];
+    let mut buffer = vec![0_u8; 64 * 1024].into_boxed_slice();
     while read < size {
         let cap = usize::try_from((size - read).min(buffer.len() as u64)).unwrap_or(buffer.len());
         let amount = entry

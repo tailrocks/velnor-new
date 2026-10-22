@@ -44,6 +44,7 @@ pub(super) async fn migrate_to_current(
             34 => super::migration::from_version_thirty_four(conn).await?,
             35 => super::migration::from_version_thirty_five(conn).await?,
             36 => super::migration::from_version_thirty_six(conn).await?,
+            37 => super::migration::from_version_thirty_seven(conn).await?,
             _ => return Err(HostError::Journal),
         }
         version = super::journal_version(conn).await?;
@@ -56,7 +57,7 @@ pub(super) async fn migrate_to_current(
 
 pub(super) const fn expected_next_version(version: i64) -> Option<i64> {
     match version {
-        0..=8 | 10..=36 => Some(version + 1),
+        0..=8 | 10..=37 => Some(version + 1),
         9 => Some(11),
         _ => None,
     }

@@ -14,6 +14,7 @@ mod file_identity;
 pub(crate) mod header_authority;
 mod image_import;
 mod launch;
+pub(crate) mod pr_source_transition;
 mod read;
 #[cfg(not(test))]
 pub(in crate::journal) mod request_lifecycle;

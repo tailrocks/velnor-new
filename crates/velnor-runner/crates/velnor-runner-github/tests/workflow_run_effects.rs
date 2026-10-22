@@ -226,6 +226,7 @@ fn retarget_requires_exact_preflight_and_sends_one_patch() -> Result<(), String>
     let mut script = Script::responses(&responses);
     let receipt = update_pull_request_base(&mut script, base_target(), base_request(), "token")
         .map_err(|error| error.to_string())?;
+    assert_eq!(receipt.base_repository_id(), BASE_REPOSITORY_ID);
     assert_eq!(receipt.target_base_sha(), NEW_BASE);
     assert_eq!(script.seen.len(), 4);
     let request = script.seen.get(2).ok_or("PATCH request")?;
@@ -285,6 +286,32 @@ fn malformed_retarget_response_stays_uncertain_after_one_patch() {
     script.replies.push_back(Ok(Exchange {
         status: 200,
         body: b"not json".to_vec(),
+    }));
+    assert_eq!(
+        update_pull_request_base(&mut script, base_target(), base_request(), "token"),
+        Err(WorkflowRunError::Uncertain)
+    );
+    assert_eq!(script.seen.len(), 3);
+    assert_eq!(script.seen[2].method, Method::Patch);
+}
+
+#[test]
+fn foreign_base_repository_response_cannot_make_a_retarget_receipt() {
+    let before = [
+        (
+            200,
+            repository(BASE_REPOSITORY_ID, OWNER, BASE_REPOSITORY, true),
+        ),
+        (200, pull_json("main", OLD_BASE, OLD_HEAD)),
+    ];
+    let mut script = Script::responses(&before);
+    let mut foreign_base: serde_json::Value =
+        serde_json::from_str(&pull_json("sea/integration", NEW_BASE, OLD_HEAD))
+            .expect("test pull request JSON");
+    foreign_base["base"]["repo"]["id"] = serde_json::json!(999);
+    script.replies.push_back(Ok(Exchange {
+        status: 200,
+        body: serde_json::to_vec(&foreign_base).expect("test JSON serialization"),
     }));
     assert_eq!(
         update_pull_request_base(&mut script, base_target(), base_request(), "token"),
