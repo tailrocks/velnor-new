@@ -107,45 +107,42 @@ fn fixture() -> ProofChannelRecord {
 }
 
 fn control_mount() -> ProofChannelMountRecord {
-    mount_record(
-        CONTROL_TARGET,
-        CONTROL_SUBPATH,
-        21,
-        31,
-        101,
-        0,
-        0,
-        0o555,
-        true,
-    )
+    mount_record(&MountRecordSpec {
+        target: CONTROL_TARGET,
+        subpath: CONTROL_SUBPATH,
+        mount_id: 21,
+        filesystem_id: 31,
+        directory_inode: 101,
+        owner: (0, 0),
+        mode: 0o555,
+        read_only: true,
+    })
 }
 
 fn inbox_mount() -> ProofChannelMountRecord {
-    mount_record(
-        INBOX_TARGET,
-        INBOX_SUBPATH,
-        22,
-        32,
-        102,
-        1000,
-        1000,
-        0o700,
-        false,
-    )
+    mount_record(&MountRecordSpec {
+        target: INBOX_TARGET,
+        subpath: INBOX_SUBPATH,
+        mount_id: 22,
+        filesystem_id: 32,
+        directory_inode: 102,
+        owner: (1000, 1000),
+        mode: 0o700,
+        read_only: false,
+    })
 }
 
 fn job_facts_mount() -> ProofChannelMountRecord {
-    mount_record(
-        JOB_FACTS_TARGET,
-        JOB_FACTS_SUBPATH,
-        23,
-        33,
-        103,
-        0,
-        0,
-        0o555,
-        true,
-    )
+    mount_record(&MountRecordSpec {
+        target: JOB_FACTS_TARGET,
+        subpath: JOB_FACTS_SUBPATH,
+        mount_id: 23,
+        filesystem_id: 33,
+        directory_inode: 103,
+        owner: (0, 0),
+        mode: 0o555,
+        read_only: true,
+    })
 }
 
 fn observation() -> ExecutionChannelObservation {
@@ -161,88 +158,89 @@ fn observation() -> ExecutionChannelObservation {
 }
 
 fn control_directory() -> velnor_resource_probe::execution_channel_wire::ExecutionChannelDirectory {
-    directory_record(
-        CONTROL_TARGET,
-        101,
-        21,
-        8,
-        1,
-        0xef53,
-        31,
-        true,
-        "ext4",
-        "/dev/vdb",
-    )
+    directory_record(&DirectoryRecordSpec {
+        target: CONTROL_TARGET,
+        inode: 101,
+        mount_id: 21,
+        device_major: 8,
+        device_minor: 1,
+        fs_type_magic: 0xef53,
+        filesystem_id: 31,
+        read_only: true,
+        filesystem_type_name: "ext4",
+        mount_source: "/dev/vdb",
+    })
 }
 
 fn inbox_directory() -> velnor_resource_probe::execution_channel_wire::ExecutionChannelDirectory {
-    directory_record(
-        INBOX_TARGET,
-        102,
-        22,
-        0,
-        42,
-        0x0102_1994,
-        32,
-        false,
-        "tmpfs",
-        "tmpfs",
-    )
+    directory_record(&DirectoryRecordSpec {
+        target: INBOX_TARGET,
+        inode: 102,
+        mount_id: 22,
+        device_major: 0,
+        device_minor: 42,
+        fs_type_magic: 0x0102_1994,
+        filesystem_id: 32,
+        read_only: false,
+        filesystem_type_name: "tmpfs",
+        mount_source: "tmpfs",
+    })
 }
 
 fn job_facts_directory() -> velnor_resource_probe::execution_channel_wire::ExecutionChannelDirectory
 {
-    directory_record(
-        JOB_FACTS_TARGET,
-        103,
-        23,
-        8,
-        1,
-        0xef53,
-        33,
-        true,
-        "ext4",
-        "/dev/vdb",
-    )
+    directory_record(&DirectoryRecordSpec {
+        target: JOB_FACTS_TARGET,
+        inode: 103,
+        mount_id: 23,
+        device_major: 8,
+        device_minor: 1,
+        fs_type_magic: 0xef53,
+        filesystem_id: 33,
+        read_only: true,
+        filesystem_type_name: "ext4",
+        mount_source: "/dev/vdb",
+    })
 }
 
-fn mount_record(
-    target: &str,
-    subpath: &str,
+struct MountRecordSpec<'a> {
+    target: &'a str,
+    subpath: &'a str,
     mount_id: u64,
     filesystem_id: u64,
     directory_inode: u64,
-    uid: u32,
-    gid: u32,
+    owner: (u32, u32),
     mode: u32,
     read_only: bool,
-) -> ProofChannelMountRecord {
+}
+
+fn mount_record(spec: &MountRecordSpec<'_>) -> ProofChannelMountRecord {
     ProofChannelMountRecord {
-        target: target.to_owned(),
-        subpath: subpath.to_owned(),
-        mount_id,
-        device_major: if target == INBOX_TARGET { 0 } else { 8 },
-        device_minor: if target == INBOX_TARGET { 42 } else { 1 },
-        statx_device_major: if target == INBOX_TARGET { 0 } else { 8 },
-        statx_device_minor: if target == INBOX_TARGET { 42 } else { 1 },
-        fs_type_magic: if target == INBOX_TARGET {
+        target: spec.target.to_owned(),
+        subpath: spec.subpath.to_owned(),
+        mount_id: spec.mount_id,
+        device_major: if spec.target == INBOX_TARGET { 0 } else { 8 },
+        device_minor: if spec.target == INBOX_TARGET { 42 } else { 1 },
+        statx_device_major: if spec.target == INBOX_TARGET { 0 } else { 8 },
+        statx_device_minor: if spec.target == INBOX_TARGET { 42 } else { 1 },
+        fs_type_magic: if spec.target == INBOX_TARGET {
             0x0102_1994
         } else {
             0xef53
         },
-        filesystem_id,
+        filesystem_id: spec.filesystem_id,
         filesystem_instance_digest: "c".repeat(64),
-        directory_inode,
-        owner_uid: uid,
-        owner_gid: gid,
-        mode,
-        read_only,
+        directory_inode: spec.directory_inode,
+        owner_uid: spec.owner.0,
+        owner_gid: spec.owner.1,
+        mode: spec.mode,
+        read_only: spec.read_only,
         no_copy: true,
     }
 }
 
-fn directory_record(
-    target: &str,
+struct DirectoryRecordSpec<'a> {
+    target: &'a str,
     inode: u64,
     mount_id: u64,
     device_major: u32,
@@ -250,33 +248,41 @@ fn directory_record(
     fs_type_magic: u64,
     filesystem_id: u64,
     read_only: bool,
-    filesystem_type_name: &str,
-    mount_source: &str,
+    filesystem_type_name: &'a str,
+    mount_source: &'a str,
+}
+
+fn directory_record(
+    spec: &DirectoryRecordSpec<'_>,
 ) -> velnor_resource_probe::execution_channel_wire::ExecutionChannelDirectory {
     velnor_resource_probe::execution_channel_wire::ExecutionChannelDirectory {
-        target: target.to_owned(),
-        inode,
-        owner_uid: if target == INBOX_TARGET { 1000 } else { 0 },
-        owner_gid: if target == INBOX_TARGET { 1000 } else { 0 },
-        mode: if target == INBOX_TARGET { 0o700 } else { 0o555 },
-        mount_id,
-        statx_mount_id: mount_id,
-        mount_root: match target {
+        target: spec.target.to_owned(),
+        inode: spec.inode,
+        owner_uid: if spec.target == INBOX_TARGET { 1000 } else { 0 },
+        owner_gid: if spec.target == INBOX_TARGET { 1000 } else { 0 },
+        mode: if spec.target == INBOX_TARGET {
+            0o700
+        } else {
+            0o555
+        },
+        mount_id: spec.mount_id,
+        statx_mount_id: spec.mount_id,
+        mount_root: match spec.target {
             CONTROL_TARGET => "/volume/source-proof/control",
             INBOX_TARGET => "/source-proof/inbox",
             JOB_FACTS_TARGET => "/volume/job-facts",
             _ => "/invalid",
         }
         .to_owned(),
-        mount_source: mount_source.to_owned(),
-        mount_device_major: device_major,
-        mount_device_minor: device_minor,
-        statx_device_major: device_major,
-        statx_device_minor: device_minor,
-        filesystem_type_magic: fs_type_magic,
-        filesystem_type_name: filesystem_type_name.to_owned(),
-        filesystem_id,
-        read_only,
+        mount_source: spec.mount_source.to_owned(),
+        mount_device_major: spec.device_major,
+        mount_device_minor: spec.device_minor,
+        statx_device_major: spec.device_major,
+        statx_device_minor: spec.device_minor,
+        filesystem_type_magic: spec.fs_type_magic,
+        filesystem_type_name: spec.filesystem_type_name.to_owned(),
+        filesystem_id: spec.filesystem_id,
+        read_only: spec.read_only,
         executable_mount: false,
     }
 }
