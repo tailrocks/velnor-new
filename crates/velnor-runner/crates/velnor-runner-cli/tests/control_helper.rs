@@ -309,3 +309,6 @@ fn child_and_boolean_output_share_the_input_deadline() -> Result<(), Box<dyn Err
     );
     Ok(())
 }
+
+#[path = "control_helper/transport_frames.rs"]
+mod transport_frames;

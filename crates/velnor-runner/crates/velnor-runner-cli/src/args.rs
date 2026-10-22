@@ -248,13 +248,8 @@ mod tests {
             .position(|argument| *argument == "--endpoint")
             .ok_or("The test fixture has no --endpoint argument.")?;
         arguments.drain(endpoint_index..=endpoint_index + 1);
-        let error = match Cli::try_parse_from(arguments) {
-            Ok(_) => {
-                return Err(
-                    "The connect command accepted arguments without an endpoint.".to_owned(),
-                );
-            }
-            Err(error) => error,
+        let Err(error) = Cli::try_parse_from(arguments) else {
+            return Err("The connect command accepted arguments without an endpoint.".to_owned());
         };
         if error.kind() != ErrorKind::MissingRequiredArgument
             || !error.to_string().contains("--endpoint")

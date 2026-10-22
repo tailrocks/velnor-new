@@ -1,7 +1,7 @@
 use clap::{Parser, error::ErrorKind};
 
 #[test]
-fn connect_requires_all_host_resource_limits() {
+fn connect_accepts_all_host_resource_limits() {
     let complete = [
         "velnor-host",
         "connect",
@@ -47,6 +47,10 @@ fn connect_requires_all_host_resource_limits() {
         "unix:///Users/example/.orbstack/run/docker.sock",
     ];
     assert!(crate::Cli::try_parse_from(complete).is_ok());
+}
+
+#[test]
+fn connect_rejects_missing_runner_memory_limit() {
     let missing_memory = [
         "velnor-host",
         "connect",

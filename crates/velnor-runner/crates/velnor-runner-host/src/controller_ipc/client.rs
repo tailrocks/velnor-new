@@ -1,9 +1,8 @@
 //! Synchronous CLI requests to the lineage-owning daemon.
 
 use std::fs;
-use std::io::{Read, Write};
-use std::os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt, PermissionsExt};
-use std::os::unix::net::UnixStream;
+use std::io::Read;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -12,10 +11,12 @@ use super::server::{read_drain_token, valid_token};
 use super::wire::{Request, Response, SOCKET_NAME, Target};
 use crate::config::{ConnectionId, HostConfig, RepositoryConnection};
 use crate::error::HostError;
-use crate::ipc::{MAX_FRAME, encode_frame};
 
 mod doctor_result;
 mod readiness;
+mod transport;
+
+use transport::call_socket_response_with_timeout;
 
 pub use readiness::controller_readiness_status;
 
@@ -256,63 +257,6 @@ fn call_socket(path: &Path, request: &Request) -> Result<bool, HostError> {
 
 fn call_socket_response(path: &Path, request: &Request) -> Result<Response, HostError> {
     call_socket_response_with_timeout(path, request, CALL_TIMEOUT)
-}
-
-fn call_socket_response_with_timeout(
-    path: &Path,
-    request: &Request,
-    timeout: Duration,
-) -> Result<Response, HostError> {
-    let deadline = Instant::now()
-        .checked_add(timeout)
-        .ok_or(HostError::Frame)?;
-    validate_socket(path)?;
-    let mut stream = UnixStream::connect(path).map_err(|_| HostError::Lock)?;
-    set_socket_deadline(&stream, deadline)?;
-    let request = request.encode().map_err(|()| HostError::Frame)?;
-    stream
-        .write_all(&encode_frame(&request)?)
-        .map_err(|_| HostError::Frame)?;
-    let mut prefix = [0; 4];
-    set_socket_deadline(&stream, deadline)?;
-    stream
-        .read_exact(&mut prefix)
-        .map_err(|_| HostError::Frame)?;
-    let length = usize::try_from(u32::from_be_bytes(prefix)).map_err(|_| HostError::Frame)?;
-    if length == 0 || length > 4096 || length > MAX_FRAME {
-        return Err(HostError::Frame);
-    }
-    let mut bytes = vec![0; length];
-    set_socket_deadline(&stream, deadline)?;
-    stream
-        .read_exact(&mut bytes)
-        .map_err(|_| HostError::Frame)?;
-    Response::decode(&bytes).map_err(|()| HostError::Frame)
-}
-
-fn set_socket_deadline(stream: &UnixStream, deadline: Instant) -> Result<(), HostError> {
-    let remaining = deadline.saturating_duration_since(Instant::now());
-    if remaining.is_zero() {
-        return Err(HostError::Frame);
-    }
-    stream
-        .set_read_timeout(Some(remaining))
-        .map_err(|_| HostError::Lock)?;
-    stream
-        .set_write_timeout(Some(remaining))
-        .map_err(|_| HostError::Lock)
-}
-
-fn validate_socket(path: &Path) -> Result<(), HostError> {
-    let metadata = fs::symlink_metadata(path).map_err(|_| HostError::Lock)?;
-    let owner = rustix::process::geteuid().as_raw();
-    if !metadata.file_type().is_socket()
-        || metadata.uid() != owner
-        || metadata.permissions().mode() & 0o777 != 0o600
-    {
-        return Err(HostError::Path);
-    }
-    Ok(())
 }
 
 fn read_connection(
