@@ -562,7 +562,7 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Setup Mise
-        uses: jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde
+        uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550
         with:
           cache: "false"
           cache_save: "false"
@@ -576,7 +576,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: f33d7752b71f673e6e2a4b2934da1804f8c05e3c283c879def677b28cc931013-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}
+          d: 6693558aef57f8228183e7094807c3198f660220c1f323fdd5b0e3999faa76f7-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
