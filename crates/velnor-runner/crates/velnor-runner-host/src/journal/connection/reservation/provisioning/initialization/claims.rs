@@ -249,13 +249,15 @@ impl ConnectionJournal {
         if let Some(response) = response
             && (!proof_matches(
                 claim,
-                response.reservation_id(),
-                response.operation_id(),
-                response.generation(),
-                response.operation_key(),
-                response.engine_id(),
-                response.docker_root_digest(),
-                response.helper_name(),
+                &StorageInitializerIdentity {
+                    reservation_id: response.reservation_id(),
+                    operation_id: response.operation_id(),
+                    generation: response.generation(),
+                    operation_key: response.operation_key(),
+                    engine_id: response.engine_id(),
+                    docker_root_digest: response.docker_root_digest(),
+                    helper_name: response.helper_name(),
+                },
             ) || !valid_hex(response.container_id(), 64))
             {
                 return Err(HostError::Identity);

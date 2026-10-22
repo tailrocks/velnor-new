@@ -189,5 +189,6 @@ async fn create_connection_session(
         .record_created_session(&claim, &session.session_id, requested_header_capacity)
         .await
         .map_err(map_journal)?;
+    crate::launch::trace::session(&session);
     Ok((session, bound.intent_id(), bound.allocation().clone()))
 }

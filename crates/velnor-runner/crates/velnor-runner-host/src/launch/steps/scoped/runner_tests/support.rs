@@ -15,10 +15,7 @@ use crate::journal::{
 };
 use crate::launch::resource_probe::StartPermit;
 use crate::launch::steps::source::test_receipt;
-use crate::launch::{
-    SelectedEngineContext, VerifiedWorkerImages,
-    inspect_tests::{DockerStub, http},
-};
+use crate::launch::{SelectedEngineContext, VerifiedWorkerImages};
 
 #[path = "support/image.rs"]
 mod image;
@@ -329,41 +326,6 @@ pub(super) fn selected_engine(
         images,
     )
     .map_err(|error| error.to_string())
-}
-
-pub(super) fn docker_identity_stub(images: &VerifiedWorkerImages) -> Result<DockerStub, String> {
-    let response_set = || {
-        vec![
-            http(
-                200,
-                &engine_info(images.engine_id(), DOCKER_ROOT, "aarch64"),
-            ),
-            http(
-                200,
-                &image_inspect(images, "velnor-runner", images.runner()),
-            ),
-            http(200, &image_inspect(images, "velnor-dind", images.dind())),
-            http(
-                200,
-                &engine_info(images.engine_id(), DOCKER_ROOT, "aarch64"),
-            ),
-        ]
-    };
-    let mut responses = response_set();
-    responses.extend(response_set());
-    DockerStub::open(responses)
-}
-
-pub(super) fn assert_runner_name(name: &str) -> Result<(), String> {
-    if name.len() != 33
-        || !name.starts_with('v')
-        || !name[1..]
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-    {
-        return Err("runner name did not use one lower-case 128-bit nonce".to_owned());
-    }
-    Ok(())
 }
 
 pub(super) fn engine_info(engine_id: &str, root: &str, architecture: &str) -> String {

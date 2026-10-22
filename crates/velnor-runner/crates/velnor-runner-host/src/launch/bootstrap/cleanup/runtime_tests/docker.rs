@@ -12,11 +12,8 @@ use tokio::{net::UnixListener, sync::Mutex};
 
 use crate::{error::HostError, journal::StorageCleanupIdentity, launch::VerifiedWorkerImages};
 
-const ENGINE: &str = "11111111-1111-4111-8111-111111111111";
 const ROOT: &str = "/var/lib/docker";
 const PROBE_ID: &str = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
-const DEFAULT_PROBE_CAPACITY: u64 = 19 * 1024 * 1024 * 1024;
-const DEFAULT_PROBE_TOTAL: u64 = 40 * 1024 * 1024 * 1024;
 
 pub(crate) struct StatefulDocker {
     docker: Docker,
@@ -28,21 +25,6 @@ pub(crate) struct StatefulDocker {
 }
 
 impl StatefulDocker {
-    pub(crate) fn open(
-        images: &VerifiedWorkerImages,
-        identity: StorageCleanupIdentity,
-        probe_config: serde_json::Value,
-    ) -> Result<Self, HostError> {
-        Self::open_with_capacity(
-            images,
-            identity,
-            probe_config,
-            0,
-            DEFAULT_PROBE_CAPACITY,
-            DEFAULT_PROBE_TOTAL,
-        )
-    }
-
     pub(crate) fn open_with_capacity(
         images: &VerifiedWorkerImages,
         identity: StorageCleanupIdentity,

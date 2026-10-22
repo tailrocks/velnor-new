@@ -271,6 +271,7 @@ impl Journal {
             return Err(HostError::Journal);
         }
         let next = match outcome {
+            #[cfg(test)]
             DoctorProbeOutcome::Failed => DoctorProbeState::Failed,
             DoctorProbeOutcome::Completed => DoctorProbeState::Completed,
             DoctorProbeOutcome::Stale => DoctorProbeState::Stale,

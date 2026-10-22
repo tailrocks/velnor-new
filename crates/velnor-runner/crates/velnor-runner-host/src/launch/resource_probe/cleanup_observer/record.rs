@@ -76,6 +76,7 @@ fn validate_record(
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn binding_digest(
     binding: &velnor_resource_probe::cleanup_observer_wire::CleanupObserverBinding,
 ) -> Result<String, HostError> {

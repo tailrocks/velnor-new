@@ -31,6 +31,7 @@ pub(crate) fn poll_cursor(cursor: i64, retry_at: Option<Instant>, now: Instant) 
 }
 
 /// Message id from one poll. Empty is zero.
+#[cfg(test)]
 pub(super) fn message_id(polled: &Poll) -> i64 {
     match polled {
         Poll::Batch(batch) => batch.message_id,
@@ -49,6 +50,7 @@ pub(super) fn response_message_id(polled: &Poll) -> Option<i64> {
 }
 
 /// An empty poll while a head message is skipped must not spin.
+#[cfg(test)]
 pub(crate) const fn pause_empty(cursor: i64) -> bool {
     cursor > 0
 }

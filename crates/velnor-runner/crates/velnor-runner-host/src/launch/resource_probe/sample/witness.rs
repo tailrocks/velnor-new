@@ -21,12 +21,40 @@ pub(crate) struct ProbeStorageMountWitness {
     filesystem_type_name: String,
     filesystem_id: u64,
     guest_boot_id: String,
+    #[expect(
+        dead_code,
+        reason = "retains byte capacity facts in the immutable filesystem observation receipt"
+    )]
     total_bytes: u64,
+    #[expect(
+        dead_code,
+        reason = "retains byte capacity facts in the immutable filesystem observation receipt"
+    )]
     free_bytes: u64,
+    #[expect(
+        dead_code,
+        reason = "retains byte capacity facts in the immutable filesystem observation receipt"
+    )]
     available_bytes: u64,
+    #[expect(
+        dead_code,
+        reason = "retains inode capacity facts in the immutable filesystem observation receipt"
+    )]
     inode_total: u64,
+    #[expect(
+        dead_code,
+        reason = "retains inode capacity facts in the immutable filesystem observation receipt"
+    )]
     inode_free: u64,
+    #[expect(
+        dead_code,
+        reason = "retains inode capacity facts in the immutable filesystem observation receipt"
+    )]
     inode_available: u64,
+    #[expect(
+        dead_code,
+        reason = "retains the inode policy in the immutable filesystem observation receipt"
+    )]
     inode_policy: &'static str,
 }
 
@@ -96,24 +124,52 @@ impl ProbeStorageMountWitness {
     pub(crate) fn guest_boot_id(&self) -> &str {
         &self.guest_boot_id
     }
+    #[expect(
+        dead_code,
+        reason = "exposes full filesystem capacity for future physical-backing checks"
+    )]
     pub(crate) const fn total_bytes(&self) -> u64 {
         self.total_bytes
     }
+    #[expect(
+        dead_code,
+        reason = "exposes full filesystem capacity for future physical-backing checks"
+    )]
     pub(crate) const fn free_bytes(&self) -> u64 {
         self.free_bytes
     }
+    #[expect(
+        dead_code,
+        reason = "exposes full filesystem capacity for future physical-backing checks"
+    )]
     pub(crate) const fn available_bytes(&self) -> u64 {
         self.available_bytes
     }
+    #[expect(
+        dead_code,
+        reason = "exposes inode capacity for future physical-backing checks"
+    )]
     pub(crate) const fn inode_total(&self) -> u64 {
         self.inode_total
     }
+    #[expect(
+        dead_code,
+        reason = "exposes inode capacity for future physical-backing checks"
+    )]
     pub(crate) const fn inode_free(&self) -> u64 {
         self.inode_free
     }
+    #[expect(
+        dead_code,
+        reason = "exposes inode capacity for future physical-backing checks"
+    )]
     pub(crate) const fn inode_available(&self) -> u64 {
         self.inode_available
     }
+    #[expect(
+        dead_code,
+        reason = "exposes inode policy for future physical-backing checks"
+    )]
     pub(crate) const fn inode_policy(&self) -> &'static str {
         self.inode_policy
     }
@@ -156,12 +212,6 @@ impl StartObservationWitness {
 
     pub(crate) fn storage_mount(&self) -> &ProbeStorageMountWitness {
         &self.storage_mount
-    }
-
-    /// Return the sample ID for this check.
-    #[must_use]
-    pub(crate) fn sample_generation_id(&self) -> &str {
-        &self.sample_generation_id
     }
 
     pub(super) fn bind_recovery_sample(&mut self, admission_sample_generation_id: &str) {

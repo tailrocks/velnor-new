@@ -40,12 +40,11 @@ pub(super) async fn delete_removed_connection_session_with<T: Transport + ?Sized
     {
         return SessionDeleteOutcome::NotReady;
     }
-    let attempt = match scoped
+    let Ok(attempt) = scoped
         .begin_session_delete(session_intent_id, allocation)
         .await
-    {
-        Ok(attempt) => attempt,
-        Err(_) => return SessionDeleteOutcome::NotReady,
+    else {
+        return SessionDeleteOutcome::NotReady;
     };
 
     if delete_session(
@@ -62,15 +61,14 @@ pub(super) async fn delete_removed_connection_session_with<T: Transport + ?Sized
         return SessionDeleteOutcome::Held;
     }
 
-    let proof = match DeletedSession204::after_response(
+    let Ok(proof) = DeletedSession204::after_response(
         attempt,
         allocation,
         scoped,
         allocation.scale_set_id(),
         &session.session_id,
-    ) {
-        Ok(proof) => proof,
-        Err(_) => return SessionDeleteOutcome::Held,
+    ) else {
+        return SessionDeleteOutcome::Held;
     };
     match scoped
         .retire_session_after_delete(session_intent_id, proof)
