@@ -94,7 +94,7 @@ fn prepare_holds_no_credential_and_runs_without_cooldown() {
         "bump-gradle-catalog.py",
         "bin/velnor-actions",
         "rust_channel_manifest_not_catalogued",
-        "git diff --cached --binary",
+        "git diff --cached --no-renames",
     ] {
         assert!(prepare.contains(scope), "{scope}:\n{prepare}");
     }
