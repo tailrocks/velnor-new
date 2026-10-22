@@ -213,7 +213,8 @@ hash-pinned lock. Decisions:
 - Never `playwright install --with-deps` and never repository-resolved code with
   `sudo`; system dependencies come from the hosted image.
 - `velnor-actions playwright lock` (operator-run, like `deps lock`) writes
-  `.velnor/playwright.lock`. For each Playwright version it downloads the
+  `.velnor/playwright.lock` for the union of each member's `browsers` and the
+  `browsers` of every suite it declares (a suites-only member is locked too). For each Playwright version it downloads the
   `playwright-core` tarball from the npm registry, verifies it against the
   integrity `bun.lock` records (`playwright_core_integrity_mismatch`), and runs
   its `install --dry-run <browser>` under the project Bun with
