@@ -100,10 +100,10 @@ fn catalog_identities_validate() {
     assert!(err.to_string().contains("placeholder_digest"), "{err}");
     for tool in PinnedTool::ALL {
         let identity = catalog.tool_identity(tool);
-        if tool == PinnedTool::Opentofu {
+        if matches!(tool, PinnedTool::Opentofu | PinnedTool::Jactionlint) {
             assert!(
                 identity.validate("catalog").is_ok(),
-                "opentofu digest is bound (T15)"
+                "{tool:?} digest is bound to its measured linux-x64 archive"
             );
         } else {
             let err = identity
@@ -119,12 +119,12 @@ fn catalog_identities_validate() {
         RUST_VERSION
     );
     let custom = ToolCatalog::new(
-        "1.98.1", "1.19.0", "2.101.0", "1.7.12", "0.11.0", "1.31.1", "0.9.148", "1.13.0",
+        "1.98.1", "1.19.0", "2.101.0", "1.7.12", "0.11.0", "0.9.148", "1.13.0",
     );
     assert!(custom.is_ok());
     assert!(
         ToolCatalog::new(
-            "latest", "1.19.0", "2.101.0", "1.7.12", "0.11.0", "1.31.1", "0.9.148", "1.13.0"
+            "latest", "1.19.0", "2.101.0", "1.7.12", "0.11.0", "0.9.148", "1.13.0"
         )
         .is_err()
     );

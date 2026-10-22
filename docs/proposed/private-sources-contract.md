@@ -182,12 +182,14 @@ is the repository root) and the owned toolchain env. `private-fetch-v1`:
    widen what the minted token can reach);
 3. runs `cargo fetch --locked` per root from the runner-owned isolation
    directory (no repository `.cargo/config.toml`), under the private-fetch policy,
-   with the resolved Rust version. The fetch resolves it as generation does,
-   including the Velnor pin when the project declares no version.
-   Before invoking Cargo, the fetch requires `mise where` to find the installed toolchain.
-   A missing toolchain fails with `private_rust_toolchain_missing:<spec>`.
-   The fetch does not substitute ambient Cargo or its home.
-   It shares the managed `$RUNNER_TEMP/velnor/cargo` home with later offline steps and the Cargo sources cache;
+   with the Rust the project declares (hard decision 4, resolved from the
+   checkout exactly as generation does, so it is the version the generated
+   resolver exports as `VELNOR_TOOL_RUST`), after `mise where` proves that
+   toolchain installed (`private_rust_toolchain_missing:<spec>` otherwise).
+   `mise exec` with a missing version only warns and runs the ambient `cargo`
+   with the ambient `CARGO_HOME`; the git database would then miss the owned
+   `$RUNNER_TEMP/velnor/cargo` that the later offline steps and the Cargo
+   sources cache read;
 4. for each locked asset: checks the tag still resolves to the locked commit
    (`private_tag_moved`), the published digest equals the locked SHA-256, the
    downloaded bytes hash to it (`private_asset_sha256_mismatch`), then extracts
@@ -199,37 +201,35 @@ is the repository root) and the owned toolchain env. `private-fetch-v1`:
 `private-revoke-v1` runs `always()` after a successful mint: it removes any
 leftover credential directory, sends `DELETE /installation/token` (204, or 401
 for an already dead token), then calls the API with the same token and requires
-401. GitHub can take time to invalidate a deleted token. The step retries
-other response statuses after waits of 0.5, 1, 2, 4, 8, 8, and 6 seconds.
-These waits total 29.5 seconds and exclude HTTP request time.
-If the final status is not 401, the step fails with
-`private_token_still_valid:<status>`. Transport errors stop the step.
-Requests use `curl` under the
+401. GitHub invalidates a deleted token eventually, so the probe is retried
+with a bounded backoff (0.5, 1, 2, 4, 8, 8 and 6 seconds, 29.5 s in total); the
+step fails closed with `private_token_still_valid:<status>` only when the token
+still authenticates at the end. Requests use `curl` under the
 private-fetch policy with an `https`-only, API-origin-only configuration file;
 curl drops the `Authorization` header when a redirect leaves the API host.
 
 ## Bundle location
 
-Extract bundles under `<workspace>/.velnor/deps/`. Local fetch scripts use
-this location too. Both environments can use one `.cargo/config.toml`. Its
-`[env]` entries can use `relative = true` to select bundle paths for `build.rs`.
-Add `.velnor/deps/` to `.gitignore`.
-
-Bundles contain no credentials. The workflow revokes the token before
-repository code runs. Build scripts can read the checked bundle files.
-
-Before extraction, resolve the workspace path and require `.velnor` to be a
-directory. Remove existing `.velnor/deps` entries without following symbolic
-links. The archive reader rejects symbolic links in parent directories.
-Downloads, credential files, and revoke state remain under
-`$RUNNER_TEMP/velnor/`.
+Bundles land under `<workspace>/.velnor/deps/`, the path a consumer's local
+fetch script (for example `mise run fetch-deps`) already uses, so one
+`.cargo/config.toml` (`[env]` entries with `relative = true` that point
+`build.rs` at `.velnor/deps/<id>/...`) works locally and in CI. Consumers
+gitignore `.velnor/deps/`. A bundle holds no credential: the token is revoked
+before any repository step runs, so a repository build script reading the
+bundle gains nothing it could not read from the locked, digest-verified
+download. The workspace is repository-controlled, so before extracting, the
+fetch resolves the workspace path, requires `.velnor` to be a real directory
+and removes whatever occupies `.velnor/deps` (planted files, stale content or a
+symlink) without following links. The archive reader then refuses symlinked
+ancestors, so extraction cannot leave the workspace. Downloads, the credential
+directory and the revoke state stay under `$RUNNER_TEMP/velnor/`.
 
 ## Verified marker
 
 After every requested bundle and tree is verified and extracted, the fetch
-writes `<workspace>/.velnor/deps/verified.json`. Repository code can use it to
-check that the extracted trees match `.velnor/deps.lock` without fetching
-again:
+writes `<workspace>/.velnor/deps/verified.json`. It is a stable contract for
+repository code (a `build.rs`, a test, a local script) that wants to confirm
+the extracted trees match `.velnor/deps.lock` without fetching again:
 
 ```json
 {
@@ -249,17 +249,30 @@ again:
 }
 ```
 
-The marker uses schema 1 and lists exactly the verified sources, sorted by `kind` and `id`.
-The fetch writes a temporary file, then renames it to publish the marker last.
-A failed fetch leaves no marker.
-A fetch with no extracted bundle writes no marker and creates no `.velnor/deps`.
-An asset targeting `verified.json` fails with `private_verified_marker_collision`.
-The marker records verification at fetch time.
-Later repository code can change both the trees and marker.
-Use the marker for consistency checks against the lock. Do not treat it as proof of those later files.
+- `schema` is `1`; any incompatible change bumps it. New optional fields may
+  be added within schema 1, so readers ignore unknown fields.
+- `sources` lists exactly what this job verified, sorted by `kind` then `id`.
+  `kind` is `git-trees`, `maven-bundles` or `release-assets`; `path` is the
+  extracted directory relative to `.velnor/deps` (`<extract_to>`,
+  `maven/<id>` or `git/<id>`); `commit` is the commit the tag resolved to,
+  equal to the lock; `asset` and `sha256` (the digest of the downloaded
+  archive bytes, equal to the lock) are absent for git trees, which the commit
+  pins.
+- It is written last and atomically, so its presence means the whole fetch
+  succeeded. A failed fetch leaves none. The bundle root is reset at the start
+  of every fetch, so a marker planted in the checkout never survives.
+- A job whose fetch extracts nothing (Cargo sources only) writes no marker and
+  creates no `.velnor/deps`.
+- A release asset whose `extract_to` is `verified.json` fails the fetch with
+  `private_verified_marker_collision`.
 
-The generated `actionlint.yaml` declares private-source variable names through
-`config-variables`. This list includes `private_sources.app_id_variable`.
+The marker records verification at fetch time. It is not a signature: code
+running later in the same job can edit the tree and the marker alike, so treat
+it as a consistency check against the lock, not a trust anchor.
+
+Every `vars.*` the generator emits for private sources is declared:
+`config-variables` in the generated `jactionlint.yaml` lists
+`private_sources.app_id_variable` next to the review and tap variables.
 
 ## Credential boundary
 

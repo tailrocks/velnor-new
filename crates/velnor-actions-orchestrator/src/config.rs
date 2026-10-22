@@ -201,6 +201,8 @@ struct PartialWorkflow {
     generator_validation: Option<GeneratorValidation>,
     /// Maximum parallel matrix jobs.
     max_parallel_jobs: Option<u32>,
+    /// Planner-job timeout in minutes.
+    plan_timeout_minutes: Option<u16>,
     /// Crate-job timeout in minutes.
     crate_timeout_minutes: Option<u16>,
     /// Workflow-level Mise silencing override.
@@ -222,6 +224,9 @@ struct PartialWorkflow {
     /// Consumer-selected verification jobs.
     #[serde(default)]
     verify: VerifyConfig,
+    /// `[workflow.lint]`: jactionlint profile.
+    #[serde(default)]
+    lint: velnor_actions_contract::config::WorkflowLintConfig,
     /// Optional `workflow_dispatch` inputs for suite workflows.
     #[serde(default)]
     dispatch: velnor_actions_contract::WorkflowDispatchConfig,
@@ -312,6 +317,9 @@ impl PartialWorkflow {
                 .generator_validation
                 .unwrap_or(GeneratorValidation::Bootstrap),
             max_parallel_jobs: self.max_parallel_jobs.unwrap_or(2),
+            plan_timeout_minutes: self
+                .plan_timeout_minutes
+                .unwrap_or_else(velnor_actions_contract::config::default_plan_timeout_minutes),
             crate_timeout_minutes: self
                 .crate_timeout_minutes
                 .unwrap_or_else(velnor_actions_contract::config::default_crate_timeout_minutes),
@@ -323,6 +331,7 @@ impl PartialWorkflow {
             tofu_apply: self.tofu_apply,
             review_completion: self.review_completion,
             verify: self.verify,
+            lint: self.lint,
             dispatch: self.dispatch,
             preserve_workflows: self.preserve_workflows,
         }

@@ -1,4 +1,4 @@
-//! Canonical response paths and artifact publication.
+//! Canonical plan/final artifact publication for internal operations.
 
 use std::path::{Path, PathBuf};
 
@@ -12,39 +12,16 @@ use crate::OrchestratorError;
 use crate::decisions::plan_artifact_dir;
 use crate::internal::{PlanResponse, check_schema, internal, internal_contract};
 
-/// Derive the sibling `<op>-response.json` path for one request path.
+/// Publish `plan.json` and `matrix.json` for a non-qualification plan.
+///
+/// Qualification plans require the typed directive outputs passed to
+/// [`publish_plan_files_with_outputs`].
 ///
 /// # Errors
 ///
-/// Returns [`OrchestratorError::Internal`] unless the file name is exactly
-/// `<op>-request.json` with a non-empty op.
-pub fn response_path_for(request_path: &Path) -> Result<PathBuf, OrchestratorError> {
-    let name = request_path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or_default();
-    let Some(op) = name
-        .strip_suffix("-request.json")
-        .filter(|op| !op.is_empty())
-    else {
-        return Err(internal("bad_request_file_name"));
-    };
-    let parent = request_path.parent().unwrap_or_else(|| Path::new("."));
-    Ok(parent.join(format!("{op}-response.json")))
-}
-
-/// Publish `plan.json` + `matrix.json` for the plan artifact.
-///
-/// Contract §4 fixes the artifact content under `<velnor-dir>/<run-key>/`
-/// (the plan step passes `$RUNNER_TEMP/velnor`), which `Publish plan`
-/// uploads; without these files the upload fails with no-files-found.
-/// The run key comes from the response plan, so the files always land in
-/// the directory the upload step names.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for malformed responses and
-/// [`OrchestratorError::Io`] for unwritable directories.
+/// Returns [`OrchestratorError::Internal`] for malformed responses or
+/// missing qualification directives, and [`OrchestratorError::Io`] for
+/// unwritable directories.
 pub fn publish_plan_files(
     response_json: &str,
     velnor_dir: &Path,
@@ -55,18 +32,17 @@ pub fn publish_plan_files(
     Ok(dir)
 }
 
-/// Write plan artifacts and the cache directives that passed validation.
+/// Publish plan artifacts and the validated qualification-cache directives.
 ///
-/// The qualification directives are in the same directory as `plan.json`.
-/// They can exceed the operating system limit for one environment variable.
-/// The `bind-qualification-cache-v1` operation reads the fixed file from the
-/// directory named by the plan's run key.
+/// The before-snapshot must already be staged in the run directory. This
+/// binds the planner's outputs to that exact snapshot before the plan
+/// artifact becomes visible.
 ///
 /// # Errors
 ///
-/// Gives [`OrchestratorError::Internal`] when the response or directives fail
-/// validation, and [`OrchestratorError::Io`] when the destination cannot be
-/// written.
+/// Returns [`OrchestratorError::Internal`] for response, run-key, snapshot,
+/// or directive validation failures, and [`OrchestratorError::Io`] when the
+/// destination cannot be written.
 pub fn publish_plan_files_with_outputs(
     response_json: &str,
     velnor_dir: &Path,
@@ -86,18 +62,13 @@ pub fn publish_plan_files_with_outputs(
     Ok(dir)
 }
 
-/// Write canonical `plan.json` plus `matrix.json` into one directory.
-///
-/// `matrix.json` is exactly `{"include": [...]}`: the same matrix the
-/// plan step emits through `$GITHUB_OUTPUT`. When obligations covered,
-/// the trusted `baseline.json` rides along so the merge revalidates
-/// covered claims against the exact planner evidence.
+/// Write canonical plan artifacts and, for qualification plans, directives.
 ///
 /// # Errors
 ///
-/// Returns [`OrchestratorError::Internal`] for encoding failures and
-/// [`OrchestratorError::Io`] for unwritable directories.
-pub(crate) fn write_plan_files(
+/// Returns [`OrchestratorError::Internal`] for encoding or qualification
+/// validation failures, and [`OrchestratorError::Io`] for unwritable paths.
+fn write_plan_files(
     response: &PlanResponse,
     velnor_dir: &Path,
     dir: &Path,
@@ -145,16 +116,11 @@ pub(crate) fn write_plan_files(
     Ok(())
 }
 
-/// Publish `final-report.json` for the final artifact.
-///
-/// Contract §3 fixes the verdict file under `<velnor-dir>/<run-key>/`
-/// (the merge step passes `$RUNNER_TEMP/velnor`), which `Publish final
-/// report` uploads; without it the upload fails with no-files-found.
-/// Runs for every verdict, passing or not, before the exit-code check.
+/// Publish the canonical `final-report.json` for the final artifact.
 ///
 /// # Errors
 ///
-/// Returns [`OrchestratorError::Internal`] for malformed responses and
+/// Returns [`OrchestratorError::Internal`] for malformed responses or
 /// [`OrchestratorError::Io`] for unwritable directories.
 pub fn publish_final_report(
     response_json: &str,
@@ -176,9 +142,6 @@ pub fn publish_final_report(
 
 /// True when one `merge-v1` response is a passing verdict.
 ///
-/// Only `passed` passes: `no_work` proves nothing validated, so the gate
-/// stays red; every other status fails.
-///
 /// # Errors
 ///
 /// Returns [`OrchestratorError::Internal`] for malformed responses.
@@ -196,11 +159,6 @@ pub fn merge_passed(response_json: &str) -> Result<bool, OrchestratorError> {
 }
 
 /// Trust root for artifact dirs: the runner-owned parent of `velnor_dir`.
-///
-/// `velnor_dir` itself (`$RUNNER_TEMP/velnor`) is first created by a
-/// producer, so it cannot anchor: a planted symlink there would sail
-/// through its own anchor check. Its parent is runner-created (or
-/// test-staged) and exists before any producer runs.
 fn artifact_anchor(velnor_dir: &Path) -> Result<&Path, OrchestratorError> {
     velnor_dir
         .parent()

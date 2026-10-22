@@ -32,6 +32,9 @@ pub(super) fn render_job(
     let suite: Option<crate::matrix_step::CrateSuite> =
         crate::matrix_step::suite_for_package(&model.package_name);
     let needs_validators = crate::matrix_step::crate_needs_generate_validators(policy, suite);
+    if use_rust {
+        steps.push(crate::workflow::verify_restored_rust_step(catalog)?);
+    }
     steps.push(crate::matrix_step::prepare_crate_tools_step(
         catalog,
         use_rust,
@@ -39,6 +42,8 @@ pub(super) fn render_job(
         crate::matrix_step::prepare_install_opentofu(policy, suite, use_opentofu),
         needs_validators,
     )?);
+    let verify = needs_validators.then(|| crate::workflow::verify_jactionlint_step(catalog));
+    steps.extend(verify.transpose()?);
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
         steps.push(crate::workflow::verify_rust_manifest_step(catalog)?);
@@ -68,16 +73,12 @@ pub(super) fn render_job(
         )?);
     }
     if use_rust {
-        let all_features = obligations_use_all_features(&model.obligations);
-        let scoped_roots = crate::source_prep::crate_fetch_roots(
-            &model.manifest,
-            fetch_roots,
-            policy == WorkflowPolicy::VelnorRepositoryV1 && needs_validators,
-        );
-        steps.extend(crate::source_prep::fetch_steps_for_crate_with_all_features(
+        steps.extend(render_rust_fetch_steps(
+            model,
             catalog,
-            &scoped_roots,
-            all_features,
+            fetch_roots,
+            policy,
+            needs_validators,
         )?);
     }
     steps.extend(render_terminal_steps(
@@ -102,6 +103,22 @@ pub(super) fn render_job(
         steps,
         cache_mode: None,
     })
+}
+
+fn render_rust_fetch_steps(
+    model: &CrateJob,
+    catalog: &ToolCatalog,
+    fetch_roots: &[String],
+    policy: WorkflowPolicy,
+    needs_validators: bool,
+) -> Result<Vec<Step>, OrchestratorError> {
+    let all_features = obligations_use_all_features(&model.obligations);
+    let scoped_roots = crate::source_prep::crate_fetch_roots(
+        &model.manifest,
+        fetch_roots,
+        policy == WorkflowPolicy::VelnorRepositoryV1 && needs_validators,
+    );
+    crate::source_prep::fetch_steps_for_crate(catalog, &scoped_roots, all_features)
 }
 
 fn render_terminal_steps(

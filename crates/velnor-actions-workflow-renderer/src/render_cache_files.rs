@@ -9,8 +9,9 @@ pub(crate) fn with_runtime_identity_files(
     files: Vec<RenderedFile>,
     jobs: &BTreeMap<String, Job>,
     version: &str,
+    tool_pins: &[String],
 ) -> Result<Vec<RenderedFile>, RenderError> {
-    append_runtime_files(files, jobs, version, None)
+    append_runtime_files(files, jobs, version, None, tool_pins)
 }
 
 pub(crate) fn with_runtime_identity_and_cache_tar_files(
@@ -19,8 +20,15 @@ pub(crate) fn with_runtime_identity_and_cache_tar_files(
     version: &str,
     staged_binary: &str,
     helper_version: &str,
+    tool_pins: &[String],
 ) -> Result<Vec<RenderedFile>, RenderError> {
-    append_runtime_files(files, jobs, version, Some((staged_binary, helper_version)))
+    append_runtime_files(
+        files,
+        jobs,
+        version,
+        Some((staged_binary, helper_version)),
+        tool_pins,
+    )
 }
 
 fn append_runtime_files(
@@ -28,6 +36,7 @@ fn append_runtime_files(
     jobs: &BTreeMap<String, Job>,
     version: &str,
     cache_tar: Option<(&str, &str)>,
+    tool_pins: &[String],
 ) -> Result<Vec<RenderedFile>, RenderError> {
     let lanes: BTreeSet<String> = jobs
         .values()
@@ -44,7 +53,9 @@ fn append_runtime_files(
     }
     if !lanes.is_empty() {
         files.push(cache_p08::runtime_identity_script_file(version)?);
-        files.push(crate::cache_steps::tools_restore_action_file(version)?);
+        files.push(crate::cache_steps::tools_restore_action_file(
+            version, tool_pins,
+        )?);
         files.push(crate::tool_seed::action_file(version)?);
     }
     if jobs.values().any(|job| {

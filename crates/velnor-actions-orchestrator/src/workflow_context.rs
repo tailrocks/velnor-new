@@ -6,7 +6,7 @@ use velnor_actions_contract::{
     ExecutionMode, GeneratorValidation, ReleaseTarget, ScaleSetSelector, ValidatorKind,
     VelnorConfig, WorkflowPolicy,
 };
-use velnor_actions_mise::{IsolatedCommand, PinnedTool, ToolCatalog};
+use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::render::{CandidateSpec, RenderContext, ValidatorCommand};
 use velnor_actions_workflow_renderer::steps::{
     DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX,
@@ -15,11 +15,12 @@ use velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
-use crate::vectors::{
-    ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, machete_install_argv, zizmor_argv,
-};
+use crate::vectors::{candidate_spec, deny_argv, machete_argv, machete_install_argv};
 
 use super::{CHECKOUT_USES, REQUEST_DIR};
+
+#[path = "tool_cache_pins.rs"]
+mod tool_cache_pins;
 
 /// Inputs used to derive renderer context from the workflow build.
 pub(super) struct RenderContextInputs<'a> {
@@ -58,6 +59,7 @@ pub(super) fn render_context(
     let (verified_cache_helpers, require_verified_cache_helper) =
         verified_cache_helpers(&input, cache_helper_scale_set_selector.as_ref())?;
     Ok(RenderContext {
+        tool_pins: tool_cache_pins::catalog_tool_pins(input.catalog),
         generator_version: input.generator_version.to_owned(),
         report_helper_version: input.report_helper_version.to_owned(),
         runs_on: input.label.to_owned(),
@@ -157,35 +159,17 @@ fn validator_commands(
             });
         }
         let machete_install = machete_install_argv()?;
-        let zizmor_install = IsolatedCommand::mise_install(&[format!(
-            "zizmor@{}",
-            input.catalog.version(PinnedTool::Zizmor)
-        )])
-        .map_err(|err| OrchestratorError::Contract {
-            problem: err.to_string(),
-        })?;
-        let zizmor_install = crate::utf8::strings_of(zizmor_install.argv())
-            .map_err(|problem| OrchestratorError::Contract { problem })?;
-        validator_commands.extend([
-            ValidatorCommand {
-                validator: ValidatorKind::CargoMachete,
-                name: MACHETE_STEP_NAME.to_owned(),
-                argv: machete_argv()?,
-                prepare_argv: machete_install,
-            },
-            ValidatorCommand {
-                validator: ValidatorKind::Zizmor,
-                name: ZIZMOR_STEP_NAME.to_owned(),
-                argv: zizmor_argv(input.catalog)?,
-                prepare_argv: zizmor_install,
-            },
-        ]);
+        validator_commands.push(ValidatorCommand {
+            validator: ValidatorKind::CargoMachete,
+            name: MACHETE_STEP_NAME.to_owned(),
+            argv: machete_argv()?,
+            prepare_argv: machete_install,
+        });
     }
     crate::verify::push_verify_commands(
         &mut validator_commands,
         input.verify,
         &input.config.workflow.verify,
-        input.catalog,
     )?;
     Ok(validator_commands)
 }

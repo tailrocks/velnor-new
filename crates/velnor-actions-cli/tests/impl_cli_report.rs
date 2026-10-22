@@ -130,7 +130,7 @@ fn plan_lists_full_field_set() -> Result<(), Box<dyn Error>> {
         "Profile apple:",
         "compile driver",
         "test runner",
-        ".github/actionlint.yaml",
+        ".github/jactionlint.yaml",
         ".github/workflows/ci.yml",
         "Push branch: main",
         "Runner: ubuntu-",
@@ -145,7 +145,7 @@ fn plan_lists_full_field_set() -> Result<(), Box<dyn Error>> {
         "Obligations:",
         "Parallel:",
         "Cache layers:",
-        "Actionlint:",
+        "Jactionlint:",
         "Action pins:",
     ] {
         assert!(stdout.contains(field), "missing {field}:\n{stdout}");

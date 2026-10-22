@@ -153,7 +153,7 @@ pub(crate) fn lockful_roots(root: &Path, workspaces: &[PlannedWorkspace]) -> Vec
 /// # Errors
 ///
 /// Returns contract errors for rejected roots or step-env failures.
-pub(crate) fn fetch_steps_for_crate_with_all_features(
+pub(crate) fn fetch_steps_for_crate(
     catalog: &ToolCatalog,
     roots: &[String],
     all_features: bool,
@@ -185,7 +185,7 @@ pub(crate) fn fetch_steps_for_crate_with_env(
 /// # Errors
 ///
 /// Returns contract errors for rejected roots or step-env failures.
-pub(crate) fn fetch_steps_for_plan_with_all_features(
+pub(crate) fn fetch_steps_for_plan(
     catalog: &ToolCatalog,
     roots: &[String],
     all_features: bool,

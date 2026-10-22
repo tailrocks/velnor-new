@@ -7,7 +7,7 @@
 
 use std::fs;
 
-use velnor_actions_mise::{ACTIONLINT_VERSION, MR_BOXINGTON_VERSION, RUST_VERSION};
+use velnor_actions_mise::{JACTIONLINT_VERSION, MR_BOXINGTON_VERSION, RUST_VERSION};
 use velnor_actions_orchestrator::{plan_internal, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::RenderedTree;
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
@@ -184,9 +184,9 @@ fn undeclared_tools_keep_the_velnor_pin() -> TestResult {
     assert!(!ci.contains("Resolve project tool versions"), "{ci}");
     let declared = render(MR_BOXINGTON_VERSION, "0.9.977")?;
     let ci = declared.get(WORKFLOW_PATH).ok_or("missing ci.yml")?;
-    // actionlint is velnor-internal here: the project declares no version.
+    // jactionlint is velnor-internal here: the project declares no version.
     assert!(
-        ci.contains(&format!("actionlint@{ACTIONLINT_VERSION}")),
+        ci.contains(&format!("jactionlint@{JACTIONLINT_VERSION}")),
         "{ci}"
     );
     // A declared tool is a reference even when it equals the Velnor pin.
@@ -215,7 +215,7 @@ fn declarations_outside_the_root_mise_toml_still_render_as_references() -> TestR
     fs::write(root.join(".tool-versions"), "mr-boxington 1.30.7\n")?;
     fs::write(
         root.join("mise.ci.toml"),
-        "[tools]\nactionlint = \"1.7.11\"\n",
+        "[tools]\njactionlint = \"2.2.0\"\n",
     )?;
     let tree = render_staged_tree(&prepare(root)?)?;
     let ci = tree.get(WORKFLOW_PATH).ok_or("missing ci.yml")?;
@@ -223,7 +223,7 @@ fn declarations_outside_the_root_mise_toml_still_render_as_references() -> TestR
         "VELNOR_TOOL_RUST",
         "VELNOR_TOOL_MR_BOXINGTON",
         "VELNOR_TOOL_NEXTEST",
-        "VELNOR_TOOL_ACTIONLINT",
+        "VELNOR_TOOL_JACTIONLINT",
     ] {
         assert!(
             ci.contains(&format!("velnor_tool {name} '")),
@@ -231,7 +231,7 @@ fn declarations_outside_the_root_mise_toml_still_render_as_references() -> TestR
         );
     }
     assert!(!ci.contains("1.30.7") && !ci.contains("0.9.977"), "{ci}");
-    assert!(!ci.contains("actionlint@1.7.11"), "{ci}");
+    assert!(!ci.contains("jactionlint@2.2.0"), "{ci}");
     // The resolver reads every location Mise reads.
     for location in [
         ".config/mise.toml",

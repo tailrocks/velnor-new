@@ -7,7 +7,7 @@ use crate::workflow::{CHECKOUT_USES, REQUEST_DIR};
 use crate::workflow_jobs::{PlanJobToolNeeds, PlanRustNeed, final_job, plan_job};
 use std::collections::BTreeMap;
 use velnor_actions_contract::{Concurrency, Job, JobTimeout, Permissions, Trigger};
-use velnor_actions_workflow_renderer::render::{RenderContext, WORKFLOW_PATH};
+use velnor_actions_workflow_renderer::render::RenderContext;
 
 fn rust_plan_needs() -> PlanJobToolNeeds {
     PlanJobToolNeeds {
@@ -82,8 +82,10 @@ fn lock_acquire_inserts_digest_verified_stage() {
         names,
         [
             "Checkout",
+            "Verify restored Rust toolchain",
             "Prepare pinned tools",
             "Acquire Velnor",
+            "Verify jactionlint",
             "Prepare Rust components",
             "Verify Rust channel manifest",
             "Write request",
@@ -159,7 +161,7 @@ fn lock_acquire_records_source_commit() {
 
 /// Plan-shaped workflow with plan, crate, and final jobs.
 fn preseed_attach_plan(catalog: &ToolCatalog) -> WorkflowPlan {
-    use velnor_actions_actionlint::ActionlintConfigInput;
+    use velnor_actions_actionlint::JactionlintConfigInput;
     WorkflowPlan {
         ir: bare_ir(BTreeMap::from([
             (
@@ -176,6 +178,7 @@ fn preseed_attach_plan(catalog: &ToolCatalog) -> WorkflowPlan {
         ])),
         support: None,
         context: RenderContext {
+            tool_pins: Vec::new(),
             generator_version: "0.1.0".to_owned(),
             report_helper_version: "0.1.0".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
@@ -194,7 +197,7 @@ fn preseed_attach_plan(catalog: &ToolCatalog) -> WorkflowPlan {
             mise_quiet: true,
             plan_consumer_env: std::collections::BTreeMap::new(),
         },
-        actionlint: ActionlintConfigInput::new("0.1.0").with_workflow_path(WORKFLOW_PATH),
+        lint_config: JactionlintConfigInput::new("0.1.0"),
     }
 }
 
@@ -216,7 +219,9 @@ fn preseed_attach_builds_once_and_sets_mode() {
         names,
         [
             "Checkout",
+            "Verify restored Rust toolchain",
             "Prepare pinned tools",
+            "Verify jactionlint",
             "Prepare Rust components",
             "Verify Rust channel manifest",
             MBX_PREFLIGHT_NAME,
@@ -296,7 +301,7 @@ fn assert_preseed_consumers(plan: &WorkflowPlan) {
 
 /// Pre-seed fixture plan over one plan job plus the final gate.
 fn preseed_fixture(fetch_roots: &[String]) -> WorkflowPlan {
-    use velnor_actions_actionlint::ActionlintConfigInput;
+    use velnor_actions_actionlint::JactionlintConfigInput;
     let catalog = ToolCatalog::pinned();
     WorkflowPlan {
         ir: bare_ir(BTreeMap::from([
@@ -319,6 +324,7 @@ fn preseed_fixture(fetch_roots: &[String]) -> WorkflowPlan {
         ])),
         support: None,
         context: RenderContext {
+            tool_pins: Vec::new(),
             generator_version: "0.1.0".to_owned(),
             report_helper_version: "0.1.0".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
@@ -337,7 +343,7 @@ fn preseed_fixture(fetch_roots: &[String]) -> WorkflowPlan {
             mise_quiet: true,
             plan_consumer_env: BTreeMap::new(),
         },
-        actionlint: ActionlintConfigInput::new("0.1.0").with_workflow_path(WORKFLOW_PATH),
+        lint_config: JactionlintConfigInput::new("0.1.0"),
     }
 }
 

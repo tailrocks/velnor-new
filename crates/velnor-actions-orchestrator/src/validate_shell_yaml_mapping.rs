@@ -7,10 +7,14 @@ use crate::OrchestratorError;
 use super::super::shellcheck_fail;
 use super::{alias_scope, mapping_entry, run_anchor};
 
+#[path = "validate_shell_yaml_mapping_compact.rs"]
+mod compact;
 #[path = "validate_shell_yaml_mapping_shape.rs"]
 mod shape;
 
 const MAX_INPUT: usize = 500_000;
+#[cfg(all(test, feature = "test-render-capture"))]
+const MAX_EQUIVALENCE_INPUT: usize = 2_000_000;
 const MAX_DEPTH: usize = 32;
 const MAX_NODES: usize = 262_144;
 const MAX_BYTES: usize = 16 * 1024 * 1024;
@@ -43,7 +47,16 @@ struct Normalizer {
 }
 
 pub(super) fn normalize(text: &str) -> Result<String, OrchestratorError> {
-    if text.len() > MAX_INPUT {
+    normalize_with_input_limit(text, MAX_INPUT)
+}
+
+#[cfg(all(test, feature = "test-render-capture"))]
+pub(super) fn normalize_for_equivalence(text: &str) -> Result<String, OrchestratorError> {
+    normalize_with_input_limit(text, MAX_EQUIVALENCE_INPUT)
+}
+
+fn normalize_with_input_limit(text: &str, input_limit: usize) -> Result<String, OrchestratorError> {
+    if text.len() > input_limit {
         return Err(fail("input_limit"));
     }
     let lines = text
@@ -61,6 +74,7 @@ pub(super) fn normalize(text: &str) -> Result<String, OrchestratorError> {
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let lines = compact::normalize(&lines)?;
     let mut normalizer = Normalizer::default();
     let expanded = normalizer.lines(&lines, Vec::new(), 0)?;
     let mut output = String::new();

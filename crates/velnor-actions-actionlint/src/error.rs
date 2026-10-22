@@ -1,10 +1,10 @@
-//! Typed errors for actionlint configuration and action-schema validation.
+//! Typed errors for jactionlint configuration and action-schema validation.
 
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use velnor_actions_contract::ContractError;
 
-/// Errors for actionlint config rendering, capability gates, pinned action
-/// refs, overrides, action inputs, and lint-tool pins.
+/// Errors for jactionlint config rendering, capability gates, pinned action
+/// refs, overrides, and action inputs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ActionlintError {
@@ -17,26 +17,6 @@ pub enum ActionlintError {
     InvalidConfigVariable {
         /// Rejected variable name.
         name: String,
-    },
-    /// A declared workflow path is not a narrow `.github/workflows` file.
-    InvalidWorkflowPath {
-        /// Rejected path.
-        path: String,
-    },
-    /// Consumer policy forbids every ignore entry.
-    ConsumerIgnoreForbidden {
-        /// Rule of the rejected entry.
-        rule: String,
-    },
-    /// An ignore path is broad (glob, directory, or outside workflows).
-    BroadIgnore {
-        /// Rejected path.
-        path: String,
-    },
-    /// A protected-policy ignore entry is malformed.
-    InvalidIgnore {
-        /// Machine-readable problem code plus detail.
-        problem: String,
     },
     /// A `uses:` value names an action outside the pinned allowlist.
     UnknownAction {
@@ -80,22 +60,15 @@ pub enum ActionlintError {
         /// Machine-readable problem code plus detail.
         problem: String,
     },
-    /// Requested workflow syntax is not qualified for the pinned actionlint.
+    /// Requested workflow syntax is not qualified for the pinned jactionlint.
     UnsupportedSyntax {
         /// Requested syntax identifier.
         syntax: &'static str,
     },
-    /// The bridge runner label is missing or outside the label catalog.
+    /// A runner label could break the generated YAML block.
     InvalidRunnerLabel {
         /// Rejected label (empty when unset).
         label: String,
-    },
-    /// A lint-tool version is not the required exact pin.
-    InvalidToolVersion {
-        /// Tool identifier.
-        tool: &'static str,
-        /// Rejected version string.
-        version: String,
     },
 }
 
@@ -108,14 +81,6 @@ impl Display for ActionlintError {
             Self::InvalidConfigVariable { name } => {
                 write!(f, "invalid_config_variable: {name}")
             }
-            Self::InvalidWorkflowPath { path } => {
-                write!(f, "invalid_workflow_path: {path}")
-            }
-            Self::ConsumerIgnoreForbidden { rule } => {
-                write!(f, "consumer_ignore_forbidden: {rule}")
-            }
-            Self::BroadIgnore { path } => write!(f, "broad_ignore: {path}"),
-            Self::InvalidIgnore { problem } => write!(f, "invalid_ignore: {problem}"),
             Self::UnknownAction { uses } => write!(f, "unknown_action: {uses}"),
             Self::InvalidPin { uses, problem } => {
                 write!(f, "invalid_pin: {uses}: {problem}")
@@ -136,9 +101,6 @@ impl Display for ActionlintError {
             } => write!(f, "invalid_action_input: {action}: {input}: {problem}"),
             Self::UnsupportedSyntax { syntax } => write!(f, "unsupported_syntax: {syntax}"),
             Self::InvalidRunnerLabel { label } => write!(f, "invalid_runner_label: {label}"),
-            Self::InvalidToolVersion { tool, version } => {
-                write!(f, "invalid_tool_version: {tool}: {version}")
-            }
         }
     }
 }
@@ -168,8 +130,8 @@ impl From<ActionlintError> for ContractError {
                 Self::identity("uses", error.config_problem())
             }
             _ => Self::config(
-                ".github/actionlint.yaml",
-                "actionlint",
+                ".github/jactionlint.yaml",
+                "jactionlint",
                 error.config_problem(),
             ),
         }

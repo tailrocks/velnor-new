@@ -9,6 +9,11 @@ max_parallel_jobs = 2
 crate_timeout_minutes = 8
 pull_request_cache_policy = "same-repository-scoped"
 
+[workflow.lint]
+# jactionlint's security and policy rules (hard decision 10); velnor-new is
+# the first repository on them.
+profile = "default"
+
 [dco]
 # The dco-2 app is installed organization-wide; this repository requires no sign-off.
 require = { members = false }

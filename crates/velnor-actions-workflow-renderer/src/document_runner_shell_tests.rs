@@ -45,6 +45,7 @@ fn job(runs_on: &str) -> Job {
 
 fn context() -> RenderContext {
     RenderContext {
+        tool_pins: Vec::new(),
         generator_version: "0.1.0".to_owned(),
         report_helper_version: "0.1.0".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
@@ -145,6 +146,7 @@ fn mise_quiet_opt_out_removes_exactly_the_quiet_line() {
     let jobs = BTreeMap::from([("probe".to_owned(), job("ubuntu-26.04"))]);
     let quiet_ctx = context();
     let loud_ctx = RenderContext {
+        tool_pins: Vec::new(),
         mise_quiet: false,
         ..context()
     };

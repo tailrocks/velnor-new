@@ -7,7 +7,6 @@ impl StepRole {
     pub(crate) const fn required_id(self) -> Option<StepId> {
         match self {
             Self::PlanProducer => Some(StepId::Plan),
-            Self::BaselinePublisher => Some(StepId::PublishBaseline),
             Self::ToolsCacheIdentity => Some(StepId::ToolsCacheIdentity),
             Self::ToolsCacheRestore => Some(StepId::ToolsRestore),
             Self::NormalToolsCacheStage => Some(StepId::NormalToolsCacheStage),
@@ -32,7 +31,6 @@ impl StepRole {
     pub(crate) const fn for_id(id: StepId) -> Self {
         match id {
             StepId::Plan => Self::PlanProducer,
-            StepId::PublishBaseline => Self::BaselinePublisher,
             StepId::ToolsCacheIdentity => Self::ToolsCacheIdentity,
             StepId::NormalToolsCacheStage => Self::NormalToolsCacheStage,
             StepId::NormalToolsCacheImport => Self::NormalToolsCacheImport,

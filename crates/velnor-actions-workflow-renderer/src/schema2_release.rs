@@ -60,7 +60,7 @@ pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Y
         .ok_or_else(|| RenderError::InvalidWorkflow("product_release_pins_missing".to_owned()))?;
     let install = join_argv_for_run(&pins.install_build_tools_argv)?;
     let build = format!(
-        "set -eu\n: \"${{VELNOR_SOURCE_SHA:?}}\"\n{}\nhelper_path=crates/velnor-runner/target/release/velnor-runner-attestation-helper\ntest -s \"$helper_path\"\nhelper_sha=\"$(shasum -a 256 \"$helper_path\" | awk 'NR == 1 {{ print $1 }}')\"\n[[ \"$helper_sha\" =~ ^[0-9a-f]{{64}}$ ]]\nenv VELNOR_RUNNER_BUILD_SOURCE_SHA=\"$VELNOR_SOURCE_SHA\" VELNOR_RUNNER_BUILD_HELPER_SHA256=\"$helper_sha\" {}\ncp crates/velnor-runner/target/release/velnor-host velnor-host\ncp \"$helper_path\" velnor-runner-attestation-helper\ntest -s velnor-host\ntest -s velnor-runner-attestation-helper\ntest \"$(shasum -a 256 velnor-runner-attestation-helper | awk 'NR == 1 {{ print $1 }}')\" = \"$helper_sha\"",
+        "set -euo pipefail\n: \"${{VELNOR_SOURCE_SHA:?}}\"\n{}\nhelper_path=crates/velnor-runner/target/release/velnor-runner-attestation-helper\ntest -s \"$helper_path\"\nhelper_sha=\"$(shasum -a 256 \"$helper_path\" | awk 'NR == 1 {{ print $1 }}')\"\n[[ \"$helper_sha\" =~ ^[0-9a-f]{{64}}$ ]]\nenv VELNOR_RUNNER_BUILD_SOURCE_SHA=\"$VELNOR_SOURCE_SHA\" VELNOR_RUNNER_BUILD_HELPER_SHA256=\"$helper_sha\" {}\ncp crates/velnor-runner/target/release/velnor-host velnor-host\ncp \"$helper_path\" velnor-runner-attestation-helper\ntest -s velnor-host\ntest -s velnor-runner-attestation-helper\ntest \"$(shasum -a 256 velnor-runner-attestation-helper | awk 'NR == 1 {{ print $1 }}')\" = \"$helper_sha\"",
         join_argv_for_run(&pins.attestation_helper_build_argv)?,
         join_argv_for_run(&pins.runner_build_argv)?,
     );
@@ -77,6 +77,7 @@ pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Y
                 vec![
                     generator_release::mise_setup_step(pins, ReleaseTarget::MacosArm64)?,
                     run_step("Install pinned Rust and MBX", &install),
+                    generator_release::verify_rust_step(pins)?,
                     run_step("Build helper and bind digest into velnor-host", &build),
                     run_step("Verify Mach-O architecture", BINARY_VERIFY),
                     run_step("Checksum built bytes", BINARY_SUM),

@@ -4,7 +4,6 @@
 mod affected_inputs;
 mod api;
 mod attach;
-mod baseline_publish;
 mod binary_preview_emit;
 mod binary_release_emit;
 mod stable_release_emit;
@@ -39,6 +38,7 @@ mod generate;
 mod generator;
 mod gh_download;
 mod git_paths;
+mod github_authority_read;
 mod image_build_tasks;
 mod image_prebuilt;
 mod init;
@@ -132,7 +132,6 @@ mod toolfindings;
 mod utf8;
 mod validate;
 mod validate_shell;
-mod validate_zizmor;
 mod validators;
 mod vectors;
 mod verification_tasks;
@@ -144,7 +143,6 @@ mod workflow_task_jobs;
 
 #[cfg(test)]
 mod test_support_modules;
+pub use api::*;
 #[cfg(test)]
 pub(crate) use test_support_modules::{git_fixture, tap_test_support};
-
-pub use api::*;

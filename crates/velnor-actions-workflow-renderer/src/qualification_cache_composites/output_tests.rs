@@ -15,6 +15,11 @@ fn restore_action_fields_cross_the_prepare_boundary_for_the_same_layer() {
         QualificationCacheLayer::TaskResult,
     ] {
         let all = outputs("rust-demo").expect("prepare outputs");
+        assert!(all.iter().all(|output| {
+            !output.name.contains("_restore_census_")
+                || output.name.ends_with("_restore_census_action_hit")
+                || output.name.ends_with("_restore_census_action_matched_key")
+        }));
         let action_id = cache_id(QualificationCacheStepStage::Import, layer, "rust-demo")
             .expect("import identity");
         for (name, field) in [

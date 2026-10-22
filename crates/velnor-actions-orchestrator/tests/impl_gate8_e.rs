@@ -50,6 +50,7 @@ fn manifest_text(sha: &str) -> String {
 
 fn ctx() -> RenderContext {
     RenderContext {
+        tool_pins: Vec::new(),
         generator_version: GENERATOR_VERSION.to_owned(),
         report_helper_version: GENERATOR_VERSION.to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),

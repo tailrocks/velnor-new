@@ -278,5 +278,13 @@ fn build_render_spec(
         mbx_action,
         pull_request_cache_policy: config.workflow.pull_request_cache_policy,
         export_rustup_toolchain: catalog.exports_rustup_toolchain(),
+        verify_restored_rust_argv: crate::workflow::verify_rust_owned_argv(
+            catalog,
+            crate::workflow::ToolchainPhase::Restored,
+        ),
+        verify_rust_argv: crate::workflow::verify_rust_owned_argv(
+            catalog,
+            crate::workflow::ToolchainPhase::Installed,
+        ),
     }))
 }

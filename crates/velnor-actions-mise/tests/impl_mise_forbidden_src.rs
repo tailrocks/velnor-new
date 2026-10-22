@@ -19,6 +19,7 @@ const EXPECTED_MODULES: &[&str] = &[
     "cache_trust.rs",
     "catalog.rs",
     "catalog_identity.rs",
+    "catalog_jactionlint_digests.rs",
     "catalog_mbx.rs",
     "catalog_owned_source.rs",
     "catalog_owned_source_tests.rs",

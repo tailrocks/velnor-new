@@ -6,7 +6,7 @@ use velnor_actions_contract::{Job, Step, StepRole, is_crate_job_id};
 
 use crate::{
     RenderError,
-    render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID},
+    render::{FINAL_JOB_ID, PLAN_JOB_ID},
 };
 
 const PLAN_FAILURE_GUARD_NAME: &str = "Require successful pre-seed plan";
@@ -140,7 +140,7 @@ fn has_preseed_consumer_step(job: &Job) -> bool {
 }
 
 fn is_required_consumer_id(id: &str) -> bool {
-    id == FINAL_JOB_ID || id == PUBLISH_JOB_ID || is_crate_job_id(id)
+    id == FINAL_JOB_ID || is_crate_job_id(id)
 }
 
 fn plan_failure_guard_step() -> Result<Step, RenderError> {

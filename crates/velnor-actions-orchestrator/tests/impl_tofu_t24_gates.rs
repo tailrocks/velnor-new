@@ -98,11 +98,7 @@ pub(crate) fn token_hits(
 
 /// True for generated crate jobs (neither plan, lint, gate, nor publish).
 pub(crate) fn is_crate_job(id: &str) -> bool {
-    id != PLAN_JOB_ID
-        && id != "actionlint"
-        && id != FINAL_JOB_ID
-        && id != "publish-baseline"
-        && id != "required-gate"
+    id != PLAN_JOB_ID && id != "jactionlint" && id != FINAL_JOB_ID && id != "required-gate"
 }
 
 /// Step names of one finalized job.

@@ -22,8 +22,8 @@ use std::path::Path;
 
 use velnor_actions_contract::VelnorConfig;
 use velnor_actions_mise::catalog::{
-    ACTIONLINT_VERSION, GH_VERSION, MR_BOXINGTON_VERSION, NEXTEST_VERSION, OPENTOFU_VERSION,
-    RUST_VERSION, SHELLCHECK_VERSION, ZIZMOR_VERSION,
+    GH_VERSION, JACTIONLINT_VERSION, MR_BOXINGTON_VERSION, NEXTEST_VERSION, OPENTOFU_VERSION,
+    RUST_VERSION, SHELLCHECK_VERSION,
 };
 use velnor_actions_mise::{
     DOT_MISE_TOML_FILE, MISE_TOML_FILE, PinnedTool, ToolCatalog, validate_exact_version,
@@ -108,8 +108,10 @@ pub(crate) fn resolve_tool_catalog(
         resolve_wrapped_mr_boxington_pin(repo_mise.as_ref(), config.tools.get("mr-boxington"))?;
     }
     let declared = project_declarations(&sources)?;
-    rust_mirror::check_toolchain_mirror(root)?;
+    // A nested channel that differs from the root keeps its own code; the
+    // mirror then compares every toolchain file key by key.
     reject_divergent_nested_toolchains(root, declared.get(&PinnedTool::Rust))?;
+    rust_mirror::check_toolchain_mirror(root)?;
     let pins = PinInputs {
         declared: &declared,
         config,
@@ -124,9 +126,8 @@ pub(crate) fn resolve_tool_catalog(
             MR_BOXINGTON_VERSION,
         )?,
         &pin(PinnedTool::Gh, "gh", GH_VERSION)?,
-        &pin(PinnedTool::Actionlint, "actionlint", ACTIONLINT_VERSION)?,
+        &pin(PinnedTool::Jactionlint, "jactionlint", JACTIONLINT_VERSION)?,
         &pin(PinnedTool::Shellcheck, "shellcheck", SHELLCHECK_VERSION)?,
-        &pin(PinnedTool::Zizmor, "zizmor", ZIZMOR_VERSION)?,
         &pin(PinnedTool::Nextest, "cargo-nextest", NEXTEST_VERSION)?,
         &pin(PinnedTool::Opentofu, "opentofu", OPENTOFU_VERSION)?,
     )

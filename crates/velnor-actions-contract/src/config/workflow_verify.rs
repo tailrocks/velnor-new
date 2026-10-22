@@ -1,6 +1,13 @@
-use super::VerifyConfig;
+//! Validation for `[workflow.verify]` configuration.
+
 use crate::errors::ContractError;
 use crate::workflow::ValidatorKind;
+
+use super::VerifyConfig;
+
+/// The retired zizmor job (hard decision 10): jactionlint's `default` profile
+/// runs its audits, so naming it is an error that says what to set instead.
+const RETIRED_ZIZMOR_JOB: &str = "zizmor";
 
 impl VerifyConfig {
     /// True when no verification job is selected.
@@ -14,6 +21,13 @@ impl VerifyConfig {
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         let mut seen = std::collections::BTreeSet::new();
         for job in &self.jobs {
+            if job == RETIRED_ZIZMOR_JOB {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.verify.jobs",
+                    "zizmor_retired:jactionlint covers the zizmor audits; set [workflow.lint] profile = \"default\" and remove \"zizmor\" (hard decision 10)".to_owned(),
+                ));
+            }
             if ValidatorKind::from_verify_name(job).is_none() {
                 return Err(ContractError::config(
                     file,

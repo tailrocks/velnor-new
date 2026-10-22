@@ -182,6 +182,13 @@ fn input_depth_nodes_and_expansion_are_bounded() {
     assert!(normalize(&text).is_err_and(|error| error.to_string().contains("expansion_limit")));
 }
 
+#[cfg(all(test, feature = "test-render-capture"))]
+#[test]
+fn equivalence_scanner_has_a_separate_hard_input_ceiling() {
+    let text = format!("value: \"{}\"\n", "x".repeat(MAX_EQUIVALENCE_INPUT));
+    assert!(normalize_for_equivalence(&text).is_err());
+}
+
 #[test]
 fn whole_step_aliases_cannot_hide_bash_code_from_posix_shellcheck() -> Result<(), String> {
     let staging = tempfile::tempdir().map_err(|error| error.to_string())?;

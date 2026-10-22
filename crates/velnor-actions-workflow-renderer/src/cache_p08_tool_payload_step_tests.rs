@@ -95,7 +95,7 @@ fn restore_composite_binds_marker_pin_key_and_paths() {
         velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     );
     assert_eq!(save.condition.as_deref(), Some(save_condition.as_str()));
-    let restore_action = crate::cache_steps::tools_restore_action_file("0.1.0")
+    let restore_action = crate::cache_steps::tools_restore_action_file("0.1.0", &[])
         .expect("generated tools restore action");
     let bytes = &restore_action.bytes;
     let marker = crate::marker::marker_for_version("0.1.0").expect("generator marker");

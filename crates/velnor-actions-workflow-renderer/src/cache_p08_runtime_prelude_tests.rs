@@ -25,7 +25,7 @@ fn payload_with_source(
         runs_on,
         target: "x86_64-unknown-linux-gnu",
         mise_setup: &setup,
-        tool_specs: &["rust@1.98.1".to_owned(), "actionlint@1.7.12".to_owned()],
+        tool_specs: &["rust@1.98.1".to_owned(), "jactionlint@2.3.0".to_owned()],
         rustup_toolchain: Some("1.98.1"),
         rustup_components: &[],
         scale_set_image_source_sha,
@@ -354,7 +354,8 @@ fn generated_files_exist_only_for_real_v2_consumers() -> Result<(), RenderError>
         cache_mode: None,
     };
     let jobs = BTreeMap::from([("fixture".to_owned(), job)]);
-    let files = crate::render_cache_files::with_runtime_identity_files(Vec::new(), &jobs, "0.1.0")?;
+    let files =
+        crate::render_cache_files::with_runtime_identity_files(Vec::new(), &jobs, "0.1.0", &[])?;
     let paths = files
         .iter()
         .map(|file| file.path.as_str())
@@ -369,6 +370,7 @@ fn generated_files_exist_only_for_real_v2_consumers() -> Result<(), RenderError>
         Vec::new(),
         &BTreeMap::new(),
         "0.1.0",
+        &[],
     )?;
     assert_eq!(no_cache_files, [] as [crate::RenderedFile; 0]);
     Ok(())

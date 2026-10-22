@@ -1,1 +1,1 @@
-pub const RUNNER_LABEL_BRIDGE: &str = "ubuntu-26.04";
+pub const LATEST_RUNNER_LABEL: &str = "ubuntu-26.04";

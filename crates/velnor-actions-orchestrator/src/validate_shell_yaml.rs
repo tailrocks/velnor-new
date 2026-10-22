@@ -100,8 +100,20 @@ pub(super) fn staged_runs(
     Ok(runs)
 }
 
-fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
+pub(super) fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
     let normalized = mapping::normalize(text)?;
+    scan_normalized_workflow(&normalized)
+}
+
+#[cfg(all(test, feature = "test-render-capture"))]
+pub(super) fn scan_workflow_for_equivalence(
+    text: &str,
+) -> Result<Vec<StagedRun>, OrchestratorError> {
+    let normalized = mapping::normalize_for_equivalence(text)?;
+    scan_normalized_workflow(&normalized)
+}
+
+fn scan_normalized_workflow(normalized: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
     let mut scan = WorkflowScan::default();
     for raw in normalized.lines() {
         let (indent, content) = mapping::indent_content(raw)?;

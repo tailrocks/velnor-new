@@ -251,7 +251,7 @@ fn tofu_skipped_validator_fails_required_not_run() -> TestResult {
     let reports = passing_reports(&plan)?;
     let jobs = json!([
         {"job_id": "plan", "conclusion": "success"},
-        {"job_id": "actionlint", "conclusion": "success"},
+        {"job_id": "jactionlint", "conclusion": "success"},
         {"job_id": "tofu-stacks-a", "conclusion": "skipped"},
     ]);
     let plan_value = serde_json::to_value(&plan)?;
@@ -261,7 +261,7 @@ fn tofu_skipped_validator_fails_required_not_run() -> TestResult {
         &serde_json::to_value(&reports)?,
         &jobs,
     );
-    request["required_job_ids"] = json!(["plan", "actionlint", "tofu-stacks-a"]);
+    request["required_job_ids"] = json!(["plan", "jactionlint", "tofu-stacks-a"]);
     complete_matrix_job_results(&plan, &mut request)?;
     assert_eq!(merge(&request)?.status, FinalStatus::NotRun);
     Ok(())
@@ -274,7 +274,7 @@ fn tofu_cancelled_validator_fails_required_cancelled() -> TestResult {
     let reports = passing_reports(&plan)?;
     let jobs = json!([
         {"job_id": "plan", "conclusion": "success"},
-        {"job_id": "actionlint", "conclusion": "success"},
+        {"job_id": "jactionlint", "conclusion": "success"},
         {"job_id": "tofu-stacks-a", "conclusion": "cancelled"},
     ]);
     let plan_value = serde_json::to_value(&plan)?;
@@ -284,7 +284,7 @@ fn tofu_cancelled_validator_fails_required_cancelled() -> TestResult {
         &serde_json::to_value(&reports)?,
         &jobs,
     );
-    request["required_job_ids"] = json!(["plan", "actionlint", "tofu-stacks-a"]);
+    request["required_job_ids"] = json!(["plan", "jactionlint", "tofu-stacks-a"]);
     complete_matrix_job_results(&plan, &mut request)?;
     assert_eq!(merge(&request)?.status, FinalStatus::Cancelled);
     Ok(())

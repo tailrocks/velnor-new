@@ -22,10 +22,7 @@ fn capture_exact_consumer_marked_workflow_before_size_guard()
         .execution
         .as_ref()
         .ok_or("missing execution config")?;
-    assert_eq!(
-        execution.mode,
-        Some(velnor_actions_contract::ExecutionMode::Both)
-    );
+    assert!(execution.mode.is_none());
     assert!(
         execution
             .workflows
@@ -37,11 +34,24 @@ fn capture_exact_consumer_marked_workflow_before_size_guard()
         velnor_actions_workflow_renderer::render::test_render_capture::with_full_tree_capture(
             || crate::render_staged_tree_with(&preparation, None),
         )?;
-    crate::validate::validate_staged(&tree)?;
     let capture = velnor_actions_workflow_renderer::render::test_render_capture::take()
         .ok_or("render boundary did not record a workflow")?;
-    std::fs::write(output.join("canonical.yml"), capture.canonical)?;
-    std::fs::write(output.join("selected.yml"), capture.selected)?;
+    assert!(capture.canonical.len() > 500_000);
+    assert!(capture.selected.len() <= 500_000);
+    std::fs::write(output.join("canonical.yml"), &capture.canonical)?;
+    std::fs::write(output.join("selected.yml"), &capture.selected)?;
+    assert!(
+        velnor_actions_workflow_renderer::render::test_render_capture::workflow_yaml_is_semantically_equal(
+            &capture.canonical,
+            &capture.selected,
+        )?
+    );
+    assert_eq!(
+        crate::validate_shell::staged_run_signatures_for_equivalence(&capture.canonical)?,
+        crate::validate_shell::staged_run_signatures(&capture.selected)?,
+        "compact sharing must preserve ordered shell bodies and dialects"
+    );
+    crate::validate::validate_staged(&tree)?;
     assert!(tree.get(".github/workflows/ci.yml").is_some());
     Ok(())
 }

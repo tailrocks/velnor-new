@@ -26,16 +26,16 @@ pub enum StepRole {
     PreparePinnedTools,
     /// Install the pinned Rust components used by task work.
     PrepareRustComponents,
+    /// Verify the pinned Rust channel manifest and installed component hashes.
+    VerifyRustManifest,
     /// Pinned Mise action that owns its built-in tools cache.
     MiseSetup,
     /// Authenticated cargo-deny analyzer bootstrap.
     CargoDeny,
     /// Authenticated cargo-machete analyzer bootstrap.
     CargoMachete,
-    /// Authenticated actionlint analyzer bootstrap.
-    Actionlint,
-    /// Authenticated zizmor analyzer bootstrap.
-    Zizmor,
+    /// Workflow lint analyzer (jactionlint).
+    Jactionlint,
     /// Authenticated markdownlint analyzer bootstrap.
     Markdownlint,
     /// Authenticated strict-JSON check bootstrap.
@@ -48,8 +48,6 @@ pub enum StepRole {
     NativeValidators,
     /// Planner producing the plan outputs.
     PlanProducer,
-    /// Baseline publisher producing the artifact name output.
-    BaselinePublisher,
     /// Digest-verified Velnor executable acquisition.
     AcquireVelnor,
     /// Pre-seed copy of the helper into runner-temp staging.
@@ -280,8 +278,8 @@ fn is_shell_role(role: StepRole) -> bool {
             | StepRole::PrepareRustComponents
             | StepRole::CargoDeny
             | StepRole::CargoMachete
-            | StepRole::Actionlint
-            | StepRole::Zizmor
+            | StepRole::Jactionlint
+            | StepRole::VerifyRustManifest
             | StepRole::Markdownlint
             | StepRole::StrictJson
             | StepRole::FrontmatterId
@@ -305,7 +303,6 @@ fn is_shell_role(role: StepRole) -> bool {
 fn internal_operation_for_role(role: StepRole) -> Option<&'static str> {
     match role {
         StepRole::PlanProducer => Some("plan-v1"),
-        StepRole::BaselinePublisher => Some("publish-baseline-v1"),
         StepRole::FetchReports => Some("fetch-reports-v1"),
         StepRole::NormalToolsCacheStage => Some(NORMAL_TOOLS_CACHE_STAGE_OPERATION),
         StepRole::NormalToolsCacheImport => Some(NORMAL_TOOLS_CACHE_IMPORT_OPERATION),

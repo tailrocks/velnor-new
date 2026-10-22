@@ -7,11 +7,11 @@ use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use velnor_actions_mise::catalog::NEXTEST_VERSION;
 use velnor_actions_mise::{
-    ACTIONLINT_VERSION, CandidateBuild, GH_VERSION, IsolatedCommand, MR_BOXINGTON_VERSION,
+    CandidateBuild, GH_VERSION, IsolatedCommand, JACTIONLINT_VERSION, MR_BOXINGTON_VERSION,
     MetadataDiscovery, MetadataQualification, MiseInstall, NextestArchive, NextestDriver,
     NextestList, NextestPartition, NextestRun, OPENTOFU_VERSION, PinnedTool, PinnedToolExec,
     PreparePinnedTools, RUST_VERSION, RouteDriver, SHELLCHECK_VERSION, TaskCacheMode, TestRunner,
-    ToolCatalog, ToolHomes, VerifyPreparedInputs, VerifySpec, VerifyToolchain, ZIZMOR_VERSION,
+    ToolCatalog, ToolHomes, VerifyPreparedInputs, VerifySpec, VerifyToolchain,
     is_allowed_mise_subcommand, qualified_task_run_argv,
 };
 
@@ -156,9 +156,8 @@ fn catalog_pins_ignore_project_selectors() -> Result<(), String> {
         RUST_VERSION,
         MR_BOXINGTON_VERSION,
         GH_VERSION,
-        ACTIONLINT_VERSION,
+        JACTIONLINT_VERSION,
         SHELLCHECK_VERSION,
-        ZIZMOR_VERSION,
         NEXTEST_VERSION,
         OPENTOFU_VERSION,
     )

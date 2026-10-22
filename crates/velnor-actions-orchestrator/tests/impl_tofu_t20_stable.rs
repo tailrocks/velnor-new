@@ -34,9 +34,8 @@ fn tofu_generate_is_fixed_point_and_validated() -> TestResult {
     assert_eq!(
         report.validated_by,
         vec![
-            "actionlint@1.7.12".to_owned(),
+            "jactionlint@2.3.0".to_owned(),
             "shellcheck@0.11.0".to_owned(),
-            "zizmor@1.31.1".to_owned(),
         ],
         "tofu steps pass the staged validators: {:?}",
         report.validated_by
@@ -80,13 +79,13 @@ fn tofu_cross_checkout_determinism() -> TestResult {
             [
                 ".github/AGENTS.md",
                 ".github/CLAUDE.md",
-                ".github/actionlint.yaml",
                 ".github/actions/tofu-provider-admission/action.yml",
                 ".github/actions/u26/action.yml",
                 ".github/actions/velnor-cache-tar-launchers/action.yml",
                 ".github/actions/velnor-tool-seed/action.yml",
                 ".github/actions/velnor-tools-cache-restore/action.yml",
                 ".github/actions/velnor-tools-prelude-u26/action.yml",
+                ".github/jactionlint.yaml",
                 ".github/scripts/velnor-tools-cache-identity.sh",
                 ".github/workflows/cache-prune.yml",
                 ".github/workflows/ci.yml",

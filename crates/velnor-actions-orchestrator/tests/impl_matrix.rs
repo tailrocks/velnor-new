@@ -43,8 +43,10 @@ fn crate_yaml_shape_exact() -> TestResult {
         "    name: Rust / demo",
         "  required:",
         "  plan:",
-        "  actionlint:",
-        "      - rust-demo",
+        "  jactionlint:",
+        "      - rust-demo\n",
+        "        background: true",
+        "        wait-all:",
     ] {
         assert!(text.contains(line), "missing {line}:\n{text}");
     }

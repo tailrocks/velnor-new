@@ -4,6 +4,9 @@
 
 use std::path::{Path, PathBuf};
 
+#[path = "rust_install_audit.rs"]
+mod rust_install_audit;
+
 use velnor_actions_contract::ExecutionMode;
 use velnor_actions_workflow_renderer::guard::{self, SafeTreePath};
 use velnor_actions_workflow_renderer::render::RenderedTree;
@@ -79,7 +82,7 @@ pub struct GenerateReport {
 ///
 /// # Errors
 ///
-/// Returns profile, render, actionlint, preview, unsafe-path, or IO
+/// Returns profile, render, workflow-lint, preview, unsafe-path, or IO
 /// errors; the profile gate runs before any write, leaving outputs untouched.
 pub fn generate(
     prep: &GenerationPreparation,
@@ -129,7 +132,7 @@ pub fn generate_dispatched(
 ///
 /// # Errors
 ///
-/// Returns lock, render, actionlint, or unsafe-path errors.
+/// Returns lock, render, workflow-lint, or unsafe-path errors.
 pub fn render_staged_tree(prep: &GenerationPreparation) -> Result<RenderedTree, OrchestratorError> {
     render_staged_tree_with(prep, None)
 }

@@ -1,7 +1,6 @@
 //! Release candidate builds, target assets, and qualification.
 
-use velnor_actions_contract::JobTimeout;
-use velnor_actions_contract::ReleaseTarget;
+use velnor_actions_contract::{JobTimeout, ReleaseTarget};
 
 use super::super::features::{base, finish};
 use super::archive;
@@ -156,6 +155,7 @@ pub(super) fn build_steps(
             &pins.install_intel_target_argv,
         )?);
     }
+    steps.push(workflow_steps::verify_rust_step(pins)?);
     steps.extend([
         workflow_steps::bash_step("Build velnor-actions with MBX", &build),
         workflow_steps::bash_step(verify_name, verify),
@@ -333,15 +333,12 @@ pub(super) fn source_gate_job(
     hosted: Yaml,
     pins: &crate::schema2::ProductReleasePins,
 ) -> Result<(String, Yaml), crate::RenderError> {
-    let steps = vec![
+    let mut steps = vec![
         checkout_step(),
         workflow_steps::mise_step(pins.setup_for(ReleaseTarget::LinuxX86_64))?,
-        workflow_steps::command_step(
-            "Install pinned release gate tools",
-            &pins.install_gate_tools_argv,
-        )?,
-        workflow_steps::command_step("Run actionlint", &pins.actionlint_argv)?,
-        workflow_steps::command_step("Run zizmor", &pins.zizmor_argv)?,
+    ];
+    steps.extend(super::lint_gate_steps(pins)?);
+    steps.extend([
         ci_check_step(pins)?,
         workflow_steps::bash_step(
             "Check release freshness gate",
@@ -354,7 +351,7 @@ pub(super) fn source_gate_job(
             ),
             &pins.gh_argv,
         )?,
-    ];
+    ]);
     let mut fields = with_permissions(
         base(
             "Verify generator release source",

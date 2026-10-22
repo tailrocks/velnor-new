@@ -166,7 +166,7 @@ fn tools_cache_prelude(
         version: "2026.10.4".to_owned(),
         sha256: "2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75".to_owned(),
     };
-    let specs = ["actionlint@1.7.12".to_owned()];
+    let specs = ["jactionlint@2.3.0".to_owned()];
     let payload = crate::cache_p08::ToolsCachePayload::new(crate::cache_p08::ToolsCacheInputs {
         runs_on,
         target: "x86_64-unknown-linux-gnu",

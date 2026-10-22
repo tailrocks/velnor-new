@@ -6,7 +6,7 @@ use velnor_actions_contract::workflow::{
     QualificationCacheCompositeId, QualificationCacheCompositePhase, QualificationCacheLayer,
     QualificationCacheStepId, QualificationCacheStepStage,
 };
-use velnor_actions_contract::{Job, Step, StepKind, StepRole};
+use velnor_actions_contract::{Job, Step, StepRole};
 
 use crate::RenderError;
 use crate::tree::RenderedFile;
@@ -202,18 +202,17 @@ fn tail_range(steps: &[Step]) -> Option<std::ops::Range<usize>> {
 }
 
 fn is_prepare_step(step: &Step) -> bool {
-    match step.role {
-        Some(StepRole::QualificationCacheCensus) => census_phase(step) == Some("restore"),
+    matches!(
+        step.role,
         Some(
             StepRole::QualificationRuntimeIdentity
-            | StepRole::QualificationCacheRoots
-            | StepRole::QualificationCacheBind
-            | StepRole::QualificationCacheRestore
-            | StepRole::QualificationCachePayloadImport
-            | StepRole::QualificationCacheRuntimeIdentityAfterImport,
-        ) => true,
-        _ => false,
-    }
+                | StepRole::QualificationCacheRoots
+                | StepRole::QualificationCacheBind
+                | StepRole::QualificationCacheRestore
+                | StepRole::QualificationCachePayloadImport
+                | StepRole::QualificationCacheRuntimeIdentityAfterImport,
+        )
+    )
 }
 
 fn is_finish_step(step: &Step) -> bool {
@@ -226,14 +225,6 @@ fn is_finish_step(step: &Step) -> bool {
                 | StepRole::QualificationCacheOwnerAggregate,
         )
     )
-}
-
-fn census_phase(step: &Step) -> Option<&str> {
-    let StepKind::Internal { env, .. } = &step.kind else {
-        return None;
-    };
-    env.get("VELNOR_QUALIFICATION_CACHE_CENSUS_PHASE")
-        .map(String::as_str)
 }
 
 fn composite_id(

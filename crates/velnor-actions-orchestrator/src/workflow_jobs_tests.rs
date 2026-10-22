@@ -238,9 +238,8 @@ fn plan_tools_follow_role_in_all_order() {
         plan_tools(needs(PlanRustNeed::CompilerAndComponents)),
         vec![
             PinnedTool::Rust,
-            PinnedTool::Actionlint,
+            PinnedTool::Jactionlint,
             PinnedTool::Shellcheck,
-            PinnedTool::Zizmor,
         ]
     );
     assert_eq!(
@@ -249,9 +248,8 @@ fn plan_tools_follow_role_in_all_order() {
             ..needs(PlanRustNeed::None)
         }),
         vec![
-            PinnedTool::Actionlint,
+            PinnedTool::Jactionlint,
             PinnedTool::Shellcheck,
-            PinnedTool::Zizmor,
             PinnedTool::Opentofu,
         ],
         "pure-tofu plans carry opentofu plus the validators, no Rust"
@@ -264,9 +262,8 @@ fn plan_tools_follow_role_in_all_order() {
         }),
         vec![
             PinnedTool::Rust,
-            PinnedTool::Actionlint,
+            PinnedTool::Jactionlint,
             PinnedTool::Shellcheck,
-            PinnedTool::Zizmor,
             PinnedTool::Nextest,
             PinnedTool::Opentofu,
         ],
@@ -321,8 +318,8 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
             .position(|name| *name == PREPARE_PINNED_TOOLS_STEP);
         assert_eq!(
             prepare_at,
-            Some(1),
-            "prepare sits after checkout: {names:?}"
+            Some(2),
+            "prepare sits after checkout and the restored-toolchain check: {names:?}"
         );
         let write_at = names.iter().position(|name| *name == "Write request");
         let plan_at = names.iter().position(|name| *name == "Plan");
@@ -338,9 +335,8 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
         let install_at = run.iter().position(|arg| arg == "install");
         let mut specs = vec![
             catalog.tool_spec(PinnedTool::Rust),
-            catalog.tool_spec(PinnedTool::Actionlint),
+            catalog.tool_spec(PinnedTool::Jactionlint),
             catalog.tool_spec(PinnedTool::Shellcheck),
-            catalog.tool_spec(PinnedTool::Zizmor),
         ];
         if use_nextest {
             specs.push(catalog.tool_spec(PinnedTool::Nextest));

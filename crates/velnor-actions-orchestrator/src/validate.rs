@@ -11,7 +11,6 @@ use velnor_actions_workflow_renderer::render::RenderedTree;
 use crate::OrchestratorError;
 use crate::generate::write_tree;
 use crate::validate_shell::{run_shellcheck_bodies, run_shellcheck_probe};
-use crate::validate_zizmor::{run_zizmor, write_zizmor_config};
 
 /// Velnor-repository-only bootstrap lock (never read for consumers).
 const GENERATOR_LOCK_REL: &str = ".velnor/generator.lock";
@@ -19,11 +18,14 @@ const GENERATOR_LOCK_REL: &str = ".velnor/generator.lock";
 /// Velnor-repository-only version-policy mirror (never read for consumers).
 const VERSION_POLICY_REL: &str = ".velnor/version-policy.toml";
 
-/// Staged actionlint config consumed via `-config-file`.
-const ACTIONLINT_CONFIG: &str = ".github/actionlint.yaml";
+/// Staged jactionlint config consumed via `--config-file`.
+const LINT_CONFIG: &str = velnor_actions_actionlint::JACTIONLINT_CONFIG_PATH;
 
 /// Staged workflows directory prefix.
 const WORKFLOWS_DIR: &str = ".github/workflows/";
+
+/// Staged composite actions directory prefix.
+const ACTIONS_DIR: &str = ".github/actions/";
 
 /// Cap for validator diagnostics embedded in errors.
 const DIAG_CAP: usize = 4000;
@@ -43,15 +45,16 @@ pub(crate) fn validate_staged(tree: &RenderedTree) -> Result<Vec<String>, Orches
     write_tree(&staging.path().join(".github"), tree)?;
     let workflows = staged_workflows(tree)?;
     let catalog = ToolCatalog::pinned();
-    run_actionlint(&catalog, staging.path(), &workflows)?;
+    run_jactionlint(
+        &catalog,
+        staging.path(),
+        &staged_lint_files(tree, &workflows),
+    )?;
     run_shellcheck_probe(&catalog, staging.path())?;
-    write_zizmor_config(staging.path(), tree)?;
-    run_zizmor(&catalog, staging.path())?;
     run_shellcheck_bodies(&catalog, staging.path(), &workflows)?;
     let mut validated = vec![
-        catalog.tool_spec(PinnedTool::Actionlint),
+        catalog.tool_spec(PinnedTool::Jactionlint),
         catalog.tool_spec(PinnedTool::Shellcheck),
-        catalog.tool_spec(PinnedTool::Zizmor),
     ];
     validated.sort();
     Ok(validated)
@@ -97,12 +100,33 @@ pub(crate) fn is_workflow_path(path: &str) -> bool {
     path.starts_with(WORKFLOWS_DIR) && (path.ends_with(".yml") || path.ends_with(".yaml"))
 }
 
+/// Composite action metadata files: `.github/actions/**/action.y*ml`.
+pub(crate) fn is_action_path(path: &str) -> bool {
+    path.starts_with(ACTIONS_DIR)
+        && (path.ends_with("/action.yml") || path.ends_with("/action.yaml"))
+}
+
+/// Staged workflows then staged composite actions: the generated part of
+/// the file set CI and `hk` lint, so generation never accepts a tree that
+/// CI then fails. jactionlint's shellcheck integration covers the `run:`
+/// bodies of both.
+fn staged_lint_files(tree: &RenderedTree, workflows: &[String]) -> Vec<String> {
+    let mut actions: Vec<String> = tree
+        .files
+        .iter()
+        .map(|file| file.path.clone())
+        .filter(|path| is_action_path(path))
+        .collect();
+    actions.sort();
+    workflows.iter().cloned().chain(actions).collect()
+}
+
 /// Staged workflow files, sorted; empty is a fail-closed error.
 fn staged_workflows(tree: &RenderedTree) -> Result<Vec<String>, OrchestratorError> {
-    if !tree.files.iter().any(|file| file.path == ACTIONLINT_CONFIG) {
+    if !tree.files.iter().any(|file| file.path == LINT_CONFIG) {
         return Err(OrchestratorError::Validation {
-            tool: "actionlint".to_owned(),
-            problem: "missing_actionlint_config".to_owned(),
+            tool: "jactionlint".to_owned(),
+            problem: "missing_jactionlint_config".to_owned(),
         });
     }
     let mut workflows: Vec<String> = tree
@@ -114,40 +138,39 @@ fn staged_workflows(tree: &RenderedTree) -> Result<Vec<String>, OrchestratorErro
     workflows.sort();
     if workflows.is_empty() {
         return Err(OrchestratorError::Validation {
-            tool: "actionlint".to_owned(),
+            tool: "jactionlint".to_owned(),
             problem: "no_workflows_to_validate".to_owned(),
         });
     }
     Ok(workflows)
 }
 
-/// Staged actionlint argv from the actionlint toolchain (GEN-2.16).
-fn actionlint_argv(workflows: &[String]) -> Vec<OsString> {
-    velnor_actions_actionlint::ActionlintToolchain::staged_lint_argv(ACTIONLINT_CONFIG, workflows)
+/// Staged jactionlint argv from the adapter toolchain (GEN-2.16).
+fn jactionlint_argv(files: &[String]) -> Vec<OsString> {
+    velnor_actions_actionlint::JactionlintToolchain::staged_lint_argv(LINT_CONFIG, files)
         .iter()
         .map(OsString::from)
         .collect()
 }
 
-/// Run pinned actionlint, with shellcheck on, over staged workflows.
-fn run_actionlint(
+/// Run pinned jactionlint, with the pinned shellcheck, over staged files.
+fn run_jactionlint(
     catalog: &ToolCatalog,
     staging: &Path,
-    workflows: &[String],
+    files: &[String],
 ) -> Result<(), OrchestratorError> {
-    let args = actionlint_argv(workflows);
     let output = pinned_output(
         catalog,
-        "actionlint",
-        vec![PinnedTool::Actionlint, PinnedTool::Shellcheck],
-        args,
+        "jactionlint",
+        vec![PinnedTool::Jactionlint, PinnedTool::Shellcheck],
+        jactionlint_argv(files),
         staging,
     )?;
     if output.success {
         Ok(())
     } else {
         Err(OrchestratorError::Validation {
-            tool: "actionlint".to_owned(),
+            tool: "jactionlint".to_owned(),
             problem: diagnose(&output),
         })
     }
@@ -209,31 +232,48 @@ mod tests {
     use super::*;
 
     #[test]
-    fn actionlint_argv_has_single_config_file_first() {
-        let workflows = vec![".github/workflows/ci.yml".to_owned()];
-        let argv: Vec<String> = actionlint_argv(&workflows)
+    fn jactionlint_argv_names_the_config_once_and_lints_workflows_then_actions() {
+        let files = vec![
+            ".github/workflows/ci.yml".to_owned(),
+            ".github/actions/declared-task-0/action.yml".to_owned(),
+        ];
+        let argv: Vec<String> = jactionlint_argv(&files)
             .iter()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
         assert_eq!(
             argv[0..4],
             [
-                "-no-color",
-                "-oneline",
-                "-config-file",
-                ".github/actionlint.yaml"
+                "--config-file",
+                ".github/jactionlint.yaml",
+                "--format",
+                "oneline"
             ]
         );
-        assert_eq!(
-            argv[4..8],
-            velnor_actions_actionlint::step_parallelism_ignore_args()
-        );
-        assert_eq!(argv[8], workflows[0]);
+        assert_eq!(argv[4..9], velnor_actions_actionlint::LINT_FLAGS);
+        assert_eq!(argv[9..], files);
         assert_eq!(
             argv.iter()
-                .filter(|arg| arg.as_str() == "-config-file")
+                .filter(|arg| arg.as_str() == "--config-file")
                 .count(),
             1
         );
+    }
+
+    #[test]
+    fn composite_actions_are_lint_files_and_goldens_are_not() {
+        for path in [
+            ".github/actions/declared-task-0/action.yml",
+            ".github/actions/u26/nested/action.yaml",
+        ] {
+            assert!(is_action_path(path), "{path}");
+        }
+        for path in [
+            ".github/actions/declared-task-0/script.sh",
+            "docs/proposed/opentofu-goldens/cases/dogfood/preview/.github/actions/x/action.yml",
+            ".github/workflows/ci.yml",
+        ] {
+            assert!(!is_action_path(path), "{path}");
+        }
     }
 }

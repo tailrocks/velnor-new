@@ -12,6 +12,8 @@ use super::{Family, ProductRelease, render};
 
 #[path = "schema2_product_release_exec_tests.rs"]
 mod exec_tests;
+#[path = "schema2_product_release_gate_tests.rs"]
+mod gate_tests;
 #[path = "schema2_product_release_prepare_tests.rs"]
 mod prepare_tests;
 #[path = "schema2_product_release_rerun_tests.rs"]
@@ -256,6 +258,7 @@ fn binary_release_binds_the_built_helper_and_publishes_both_files() -> Result<()
     assert!(helper_position < digest_position && digest_position < host_position);
     assert!(body.contains("VELNOR_RUNNER_BUILD_SOURCE_SHA"));
     assert!(body.contains("VELNOR_RUNNER_BUILD_HELPER_SHA256"));
+    assert!(body.contains("set -euo pipefail"));
     assert!(body.contains("$VELNOR_SOURCE_SHA"));
     assert!(body.contains("$helper_sha"));
     assert!(!body.contains("export VELNOR_ATTESTATION_HELPER_SHA256="));

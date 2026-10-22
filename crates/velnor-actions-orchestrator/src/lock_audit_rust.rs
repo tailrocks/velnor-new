@@ -5,6 +5,19 @@ use velnor_actions_mise::catalog::rust_channel_manifest_sha256;
 use velnor_actions_mise::toolfiles::lockfile::InstallSubject;
 
 /// Whether an audit subject is the `core:rust` toolchain.
+/// A `jactionlint` install whose version has catalog executable digests.
+pub(super) fn is_catalogued_jactionlint(subject: &InstallSubject) -> bool {
+    subject
+        .display
+        .strip_prefix(PinnedTool::Jactionlint.tool_name())
+        .and_then(|rest| rest.strip_prefix('@'))
+        .is_some_and(|version| {
+            velnor_actions_mise::JACTIONLINT_DIGESTS
+                .iter()
+                .any(|row| row.version == version)
+        })
+}
+
 pub(super) fn is_rust(subject: &InstallSubject) -> bool {
     subject
         .display

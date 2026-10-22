@@ -4,13 +4,14 @@
 pub const QUALIFICATION_CACHE_FORMAT_VERSION: u8 = 4;
 
 pub mod artifacts;
-pub mod baseline_publication;
 pub mod cache_family;
 pub mod cache_family_mbx;
 pub mod cache_family_steps;
 pub mod cache_ids;
 pub mod crate_job;
+mod dependency_seed;
 pub mod dispatch;
+pub use dependency_seed::DEPENDENCY_SEED_JOB_CONDITION;
 pub mod execute;
 pub mod ir;
 pub mod jobs;
@@ -46,7 +47,6 @@ pub use artifacts::{
     MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, check_matrix_agreement, matrix_json_bytes,
     plan_json_bytes,
 };
-pub use baseline_publication::ManifestTaskProof;
 pub use cache_ids::EntryCacheIds;
 pub use crate_job::{CrateJob, CrateObligation};
 pub use dispatch::{DispatchInput, DispatchInputType, WorkflowDispatch};

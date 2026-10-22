@@ -16,7 +16,7 @@ fn output(stdout: Vec<u8>, success: bool, code: Option<i32>) -> ProcessOutput {
 
 #[test]
 fn mise_lookup_uses_fixed_exact_selector_command() {
-    let request = MiseExecutableLookup::mise("actionlint@1.7.7", "actionlint")
+    let request = MiseExecutableLookup::mise("jactionlint@2.3.0", "jactionlint")
         .expect("valid catalog tool selector");
     assert_eq!(request.command().program(), "mise");
     assert_eq!(
@@ -27,9 +27,9 @@ fn mise_lookup_uses_fixed_exact_selector_command() {
             "--no-env",
             "--no-hooks",
             "which",
-            "actionlint",
+            "jactionlint",
             "--tool",
-            "actionlint@1.7.7",
+            "jactionlint@2.3.0",
         ]
         .map(OsString::from)
     );
@@ -88,9 +88,11 @@ fn mise_lookup_preserves_the_catalog_aqua_selector_for_nextest() {
 #[test]
 fn lookup_rejects_unknown_tools_loose_pins_and_wrong_binary() {
     assert!(MiseExecutableLookup::mise("unknown@1.2.3", "unknown").is_err());
-    assert!(MiseExecutableLookup::mise("actionlint@latest", "actionlint").is_err());
-    assert!(MiseExecutableLookup::mise("actionlint@1.2", "actionlint").is_err());
-    assert!(MiseExecutableLookup::mise("actionlint@1.2.3", "cargo").is_err());
+    assert!(MiseExecutableLookup::mise("jactionlint@latest", "jactionlint").is_err());
+    assert!(MiseExecutableLookup::mise("jactionlint@1.2", "jactionlint").is_err());
+    assert!(MiseExecutableLookup::mise("jactionlint@1.2.3", "cargo").is_err());
+    assert!(MiseExecutableLookup::mise("actionlint@1.7.7", "actionlint").is_err());
+    assert!(MiseExecutableLookup::mise("zizmor@1.31.1", "zizmor").is_err());
 }
 
 #[test]

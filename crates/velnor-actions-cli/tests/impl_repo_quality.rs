@@ -210,7 +210,7 @@ fn qc_disambiguates_homonyms() -> Result<(), Box<dyn Error>> {
         "cargo-fmt",
         "tofu fmt",
         "repository-structure alint",
-        "workflow-syntax actionlint",
+        "workflow-syntax jactionlint",
     ] {
         assert!(qc.contains(anchor), "QC misses homonym note {anchor}");
     }

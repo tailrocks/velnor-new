@@ -4,7 +4,7 @@
 pub(crate) const GENERATED_TASK_FILES: [&str; 13] = [
     ".github/AGENTS.md",
     ".github/CLAUDE.md",
-    ".github/actionlint.yaml",
+    ".github/jactionlint.yaml",
     ".github/actions/declared-task-0/action.yml",
     ".github/actions/u26/action.yml",
     ".github/actions/velnor-cache-tar-launchers/action.yml",

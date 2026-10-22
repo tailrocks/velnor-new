@@ -9,7 +9,7 @@ use velnor_actions_workflow_renderer::cache_p08::{
     ToolsCacheInputs, ToolsCachePayload, elect_cache_writers,
 };
 
-const TOOL: &str = "actionlint@1.7.12";
+const TOOL: &str = "jactionlint@2.3.0";
 
 fn keyed_job() -> Result<Job, RenderError> {
     let tool_specs = [TOOL.to_owned()];

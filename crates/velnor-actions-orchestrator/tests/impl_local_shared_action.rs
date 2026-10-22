@@ -1,4 +1,4 @@
-//! Local shared actions must pass pinned actionlint and zizmor.
+//! Local shared actions must pass pinned jactionlint.
 use std::fs;
 
 use velnor_actions_orchestrator::{
@@ -20,7 +20,7 @@ fn committed_repo() -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn both_mode_generate_passes_actionlint_and_zizmor() -> TestResult {
+fn both_mode_generate_passes_jactionlint() -> TestResult {
     let repo = committed_repo()?;
     let prep = prepare(repo.path())?;
     let preview = tempfile::TempDir::new()?;
@@ -33,13 +33,12 @@ fn both_mode_generate_passes_actionlint_and_zizmor() -> TestResult {
     assert_eq!(
         report.validated_by,
         vec![
-            "actionlint@1.7.12".to_owned(),
+            "jactionlint@2.3.0".to_owned(),
             "shellcheck@0.11.0".to_owned(),
-            "zizmor@1.31.1".to_owned(),
         ]
     );
     let ci = fs::read_to_string(preview.path().join(".github/workflows/ci.yml"))?;
-    let actionlint = fs::read_to_string(preview.path().join(".github/actionlint.yaml"))?;
+    let actionlint = fs::read_to_string(preview.path().join(".github/jactionlint.yaml"))?;
     assert!(ci.contains("uses: ./.github/actions/"), "{ci}");
     assert!(!ci.contains("uses: $"), "{ci}");
     assert!(ci.len() <= 500_000, "ci.yml is {} bytes", ci.len());
@@ -68,9 +67,9 @@ fn both_mode_generate_passes_actionlint_and_zizmor() -> TestResult {
         hosted
             .validated_by
             .iter()
-            .any(|spec| spec == "actionlint@1.7.12")
+            .any(|spec| spec == "jactionlint@2.3.0")
     );
-    let hosted_lint = fs::read_to_string(hosted_dir.path().join(".github/actionlint.yaml"))?;
+    let hosted_lint = fs::read_to_string(hosted_dir.path().join(".github/jactionlint.yaml"))?;
     let hosted_ci = fs::read_to_string(hosted_dir.path().join(".github/workflows/ci.yml"))?;
     assert!(!hosted_lint.contains("paths:"), "{hosted_lint}");
     assert!(!hosted_ci.contains("uses: $"), "{hosted_ci}");
@@ -78,7 +77,7 @@ fn both_mode_generate_passes_actionlint_and_zizmor() -> TestResult {
 }
 
 #[test]
-fn scale_set_mode_generate_passes_actionlint_and_zizmor() -> TestResult {
+fn scale_set_mode_generate_passes_jactionlint() -> TestResult {
     let repo = committed_repo()?;
     let prep = prepare(repo.path())?;
     let preview = tempfile::TempDir::new()?;
@@ -92,9 +91,8 @@ fn scale_set_mode_generate_passes_actionlint_and_zizmor() -> TestResult {
     assert_eq!(
         report.validated_by,
         vec![
-            "actionlint@1.7.12".to_owned(),
+            "jactionlint@2.3.0".to_owned(),
             "shellcheck@0.11.0".to_owned(),
-            "zizmor@1.31.1".to_owned(),
         ]
     );
     let ci = fs::read_to_string(preview.path().join(".github/workflows/ci.yml"))?;
@@ -131,7 +129,7 @@ fn configured_and_dispatched_modes_route_every_ci_job_for_all_policies() -> Test
                 continue;
             };
             let support_id = if policy == "consumer" {
-                "actionlint"
+                "jactionlint"
             } else {
                 "alint"
             };

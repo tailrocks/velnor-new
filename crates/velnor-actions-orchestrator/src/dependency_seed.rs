@@ -21,9 +21,6 @@ use crate::discover::Discovery;
 
 /// Identify the seed job for the workspace at the repository root.
 pub(crate) const SEED_JOB_ID: &str = "dependency-seed";
-/// Run the seed job only for a protected push to the default branch.
-pub(crate) const SEED_JOB_CONDITION: &str = "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true";
-
 /// Identify one MBX Cargo workspace that needs a seed job.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SeedWorkspace {
@@ -124,6 +121,7 @@ fn seed_job(
     let catalog = input.catalog;
     crate::source_prep::validate_root(&workspace.root)?;
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
+    steps.push(crate::workflow::verify_restored_rust_step(catalog)?);
     steps.push(crate::matrix_step::prepare_crate_tools_step(
         catalog,
         true,
@@ -156,7 +154,7 @@ fn seed_job(
         }
         steps.extend(private_steps);
     }
-    steps.extend(crate::source_prep::fetch_steps_for_crate_with_all_features(
+    steps.extend(crate::source_prep::fetch_steps_for_crate(
         catalog, &roots, false,
     )?);
     steps.extend(lane_steps(catalog, workspace)?);
@@ -168,7 +166,9 @@ fn seed_job(
         check_runner: None,
         timeout_minutes: input.timeout,
         needs: vec![velnor_actions_workflow_renderer::render::PLAN_JOB_ID.to_owned()],
-        condition: Some(SEED_JOB_CONDITION.to_owned()),
+        condition: Some(
+            velnor_actions_contract::workflow::DEPENDENCY_SEED_JOB_CONDITION.to_owned(),
+        ),
         permissions: None,
         environment: None,
         steps,

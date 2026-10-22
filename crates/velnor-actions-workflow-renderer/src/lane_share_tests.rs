@@ -17,6 +17,7 @@ const LOGICAL_JOBS: usize = 21;
 
 pub(super) fn ctx() -> RenderContext {
     RenderContext {
+        tool_pins: Vec::new(),
         generator_version: "0.1.0".to_owned(),
         report_helper_version: "0.1.0".to_owned(),
         runs_on: HOSTED_RUNS.to_owned(),
@@ -268,13 +269,13 @@ fn unsafe_logical_id_fails_closed() {
 fn unpaired_jobs_stay_inline() {
     let mut jobs = BTreeMap::new();
     jobs.insert(
-        "actionlint".to_owned(),
-        lane_job("actionlint", HOSTED_RUNS, vec![echo_step(0, "one")]),
+        "jactionlint".to_owned(),
+        lane_job("jactionlint", HOSTED_RUNS, vec![echo_step(0, "one")]),
     );
     let shared = share_lanes(&jobs, &ctx()).expect("share");
     assert!(shared.calls.is_empty());
     assert_eq!(shared.files, [] as [crate::RenderedFile; 0]);
-    let kept = shared.jobs.get("actionlint").expect("actionlint");
+    let kept = shared.jobs.get("jactionlint").expect("jactionlint");
     assert_eq!(kept.steps.len(), 1);
 }
 

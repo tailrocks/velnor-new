@@ -249,7 +249,7 @@ The report MUST list detected stacks and their selected/ignored state; Rust work
 roots; each crate's package name, relative manifest path, targets, and local dependency
 names; planned workflow file paths; job groups and their purpose; Rust phase and Tofu
 root job counts and their shared `timeout-minutes`; obligation names; runner label;
-planned cache layers; actionlint version/configuration; selected action pins; detected
+planned cache layers; jactionlint version/configuration; selected action pins; detected
 Rust test runner and compile driver with evidence; and concise reasons for ignored or
 ineligible work. It MUST list every discovered crate in stable package/path order.
 Tool-file recommendations MUST match `generate`.
@@ -277,7 +277,7 @@ Detected stacks
     - service (crates/service/Cargo.toml) [lib; depends on core, storage]
 
 Workflow to generate
-  .github/actionlint.yaml
+  .github/jactionlint.yaml
   .github/workflows/ci.yml
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:

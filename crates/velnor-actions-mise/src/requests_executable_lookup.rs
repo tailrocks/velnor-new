@@ -15,12 +15,11 @@ const LOOKUP_TIMEOUT: Duration = Duration::from_secs(15);
 const RUST_COMPONENTS: [&str; 5] = ["rustc", "cargo", "cargo-clippy", "cargo-fmt", "rustfmt"];
 const EXECUTABLE_MAX_BYTES: u64 = 256 * 1024 * 1024;
 const HEX: &[u8; 16] = b"0123456789abcdef";
-const CATALOG_EXECUTABLES: [(&str, &str, &str); 8] = [
+const CATALOG_EXECUTABLES: [(&str, &str, &str); 7] = [
     ("mr-boxington", "mr-boxington", "mbx"),
     ("gh", "gh", "gh"),
-    ("actionlint", "actionlint", "actionlint"),
+    ("jactionlint", "jactionlint", "jactionlint"),
     ("shellcheck", "shellcheck", "shellcheck"),
-    ("zizmor", "zizmor", "zizmor"),
     (
         "aqua:nextest-rs/nextest/cargo-nextest",
         "nextest",

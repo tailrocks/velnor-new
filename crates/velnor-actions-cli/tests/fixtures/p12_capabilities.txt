@@ -1,1 +1,1 @@
-pub const ACTIONLINT_VERSION: &str = "1.7.12";
+pub const JACTIONLINT_VERSION: &str = "2.3.0";

@@ -75,6 +75,7 @@ pub(crate) fn mise() -> MiseSetup {
 
 pub(crate) fn fixture_ctx() -> RenderContext {
     RenderContext {
+        tool_pins: Vec::new(),
         generator_version: VERSION.to_owned(),
         report_helper_version: VERSION.to_owned(),
         runs_on: LABEL.to_owned(),
@@ -261,7 +262,6 @@ pub(crate) fn validator_commands() -> Vec<ValidatorCommand> {
     [
         (ValidatorKind::CargoDeny, "Run cargo-deny"),
         (ValidatorKind::CargoMachete, "Run cargo-machete"),
-        (ValidatorKind::Zizmor, "Run zizmor"),
     ]
     .iter()
     .map(|(validator, name)| ValidatorCommand {

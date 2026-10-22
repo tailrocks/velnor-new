@@ -3,10 +3,10 @@
 #[path = "review_completion_workflow_emit.rs"]
 mod review_completion_workflow_emit;
 
-use velnor_actions_actionlint::render_actionlint_yaml;
+use velnor_actions_actionlint::render_jactionlint_yaml;
 use velnor_actions_contract::{ExecutionMode, expand_workflow_with_qualification_sources};
 use velnor_actions_workflow_renderer::render::{RenderedFile, RenderedTree};
-use velnor_actions_workflow_renderer::steps::rehead_actionlint_marker;
+use velnor_actions_workflow_renderer::steps::rehead_lint_config_marker;
 use velnor_actions_workflow_renderer::tree::render_tree_with_claude_mode;
 use velnor_actions_workflow_renderer::validate_generated_workflow_calls_with_ir;
 
@@ -46,8 +46,8 @@ pub(super) fn render_all(
     })?;
     let mut render_context = prep.workflow.context.clone();
     render_context.scale_set_selector = scale_set_selector_for_dispatch(&prep.config, dispatch)?;
-    let mut actionlint_input = prep.workflow.actionlint.clone();
-    actionlint_input.extra_runner_labels = super::runner_labels::collect(
+    let mut lint_input = prep.workflow.lint_config.clone();
+    lint_input.runner_labels = super::runner_labels::collect(
         &prep.config,
         &ir,
         render_context.scale_set_selector.as_ref(),
@@ -62,8 +62,7 @@ pub(super) fn render_all(
             &routing,
         )?;
     let workflow = rendered.yaml;
-    let actionlint = render_actionlint_yaml(&actionlint_input)?;
-    let actionlint = rehead_actionlint_marker(&actionlint.yaml, version)?;
+    let lint_config = rehead_lint_config_marker(&render_jactionlint_yaml(&lint_input)?, version)?;
     let mut extra = crate::release_emit::release_files(prep, &mise, &routing)?;
     extra.extend(crate::publish_emit::publish_files(prep, &mise, &routing)?);
     extra.extend(crate::binary_release_emit::files(prep, &routing)?);
@@ -92,9 +91,14 @@ pub(super) fn render_all(
         )?);
     }
     extra.extend(rendered.shared);
+    super::rust_install_audit::audit(&extra)?;
+    super::rust_install_audit::audit(&[RenderedFile {
+        path: velnor_actions_workflow_renderer::render::WORKFLOW_PATH.to_owned(),
+        bytes: workflow.clone(),
+    }])?;
     let tree = render_tree_with_claude_mode(
         &workflow,
-        &actionlint,
+        &lint_config,
         &extra,
         version,
         prep.config.agents.claude_md,

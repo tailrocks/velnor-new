@@ -36,7 +36,7 @@ fn job_tools_inferred_from_install_and_exec() {
             .expect("prepare"),
             velnor_actions_workflow_renderer::shell_step(
                 "Run lint",
-                mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
+                mise_argv("jactionlint@2.3.0", "jactionlint", &["-color"]),
                 BTreeMap::new(),
             )
             .expect("lint"),
@@ -45,7 +45,7 @@ fn job_tools_inferred_from_install_and_exec() {
     };
     let tools = infer_job_tools(&job);
     assert!(tools.contains(&"rust@1.98.1".to_owned()), "{tools:?}");
-    assert!(tools.contains(&"actionlint@1.7.12".to_owned()), "{tools:?}");
+    assert!(tools.contains(&"jactionlint@2.3.0".to_owned()), "{tools:?}");
 }
 
 #[test]

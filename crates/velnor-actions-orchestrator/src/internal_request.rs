@@ -53,9 +53,8 @@ pub(crate) use plan::{PlanRequest, checked_plan_request};
 
 #[path = "internal_request_publish.rs"]
 mod publish;
-pub use self::publish::{
+pub use publish::{
     merge_passed, publish_final_report, publish_plan_files, publish_plan_files_with_outputs,
-    response_path_for,
 };
 
 /// Materialize the canonical request file from the GitHub environment.
@@ -158,16 +157,6 @@ fn write_request_parts_with_lanes(
     if op == MERGE_OP {
         return crate::merge_request::write_merge_request(&path);
     }
-    if op == crate::baseline_publish::PUBLISH_OP {
-        return crate::baseline_publish::write_publish_request(
-            &path,
-            event_name,
-            payload_json,
-            github_sha,
-            repository,
-            anchor,
-        );
-    }
     let payload: serde_json::Value =
         serde_json::from_str(payload_json).map_err(|_| internal("malformed_event_payload"))?;
     let event = workflow_event_for(event_name, &payload)?;
@@ -207,6 +196,27 @@ fn write_request_parts_with_lanes(
     Ok(path)
 }
 
+/// Derive the sibling `<op>-response.json` path for one request path.
+///
+/// # Errors
+///
+/// Returns [`OrchestratorError::Internal`] unless the file name is exactly
+/// `<op>-request.json` with a non-empty op.
+pub fn response_path_for(request_path: &Path) -> Result<PathBuf, OrchestratorError> {
+    let name = request_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    let Some(op) = name
+        .strip_suffix("-request.json")
+        .filter(|op| !op.is_empty())
+    else {
+        return Err(internal("bad_request_file_name"));
+    };
+    let parent = request_path.parent().unwrap_or_else(|| Path::new("."));
+    Ok(parent.join(format!("{op}-response.json")))
+}
+
 /// Explicit run key, else `r<run-id>-a<attempt>` from the GitHub environment.
 pub(crate) fn resolve_run_key(explicit: Option<&str>) -> Result<String, OrchestratorError> {
     if let Some(key) = explicit.filter(|key| !key.trim().is_empty()) {
@@ -237,7 +247,7 @@ fn request_op(path: &Path) -> Result<String, OrchestratorError> {
         .and_then(|name| name.to_str())
         .unwrap_or_default();
     let op = name.strip_suffix("-request.json").unwrap_or_default();
-    if op == PLAN_OP || op == MERGE_OP || op == crate::baseline_publish::PUBLISH_OP {
+    if op == PLAN_OP || op == MERGE_OP {
         Ok(op.to_owned())
     } else {
         Err(internal("unknown_request_op"))
