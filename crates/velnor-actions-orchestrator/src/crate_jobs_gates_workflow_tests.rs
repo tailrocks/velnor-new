@@ -109,7 +109,7 @@ fn assert_plan_timeout_is_independent(
     jobs: &std::collections::BTreeMap<String, velnor_actions_contract::Job>,
 ) {
     assert_eq!(jobs["plan"].timeout_minutes.minutes(), 15);
-    assert_eq!(jobs["actionlint"].timeout_minutes.minutes(), 5);
+    assert_eq!(jobs["jactionlint"].timeout_minutes.minutes(), 5);
     assert_eq!(jobs["required"].timeout_minutes.minutes(), 5);
     assert_eq!(jobs["rust-demo"].timeout_minutes.minutes(), 5);
 }
