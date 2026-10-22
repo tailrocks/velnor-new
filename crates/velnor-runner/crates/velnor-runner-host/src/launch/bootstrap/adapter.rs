@@ -52,8 +52,9 @@ pub(crate) async fn prepare_acquired(
     images: &VerifiedWorkerImages,
 ) -> Result<Option<PreparedAcquiredBootstrap>, HostError> {
     let acquired = match outcome {
-        ScopedProvisioningOutcome::NoStart => return Ok(None),
-        ScopedProvisioningOutcome::KnownNoAcquire(_) => return Ok(None),
+        ScopedProvisioningOutcome::NoStart | ScopedProvisioningOutcome::KnownNoAcquire(_) => {
+            return Ok(None);
+        }
         ScopedProvisioningOutcome::Acquired(acquired) => acquired,
         ScopedProvisioningOutcome::Recovered(recovery) => recovery.into_acquired(),
     };
