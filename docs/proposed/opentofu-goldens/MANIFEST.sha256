@@ -10,7 +10,7 @@ dbc1c27433b0f64654f29947e943a2324d8c9d2f2f9e05feadb4835408be6feb  ./dogfood/prev
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./dogfood/preview/.github/CLAUDE.md
 952c78c7e8f944dc89ae7733a76f912e2c6b7f7e6013bb2bad00ae85e5ceed3a  ./dogfood/preview/.github/PULL_REQUEST_TEMPLATE.md
 03c92202e24794ef7df7ea36b0210507a400aad329545081030af1517a4af71f  ./dogfood/preview/.github/actionlint.yaml
-5f0065197b77740701278255c5c455b9935e4aa09879c151de107908e957c1fb  ./dogfood/preview/.github/actions/declared-task-0/action.yml
+15df6788e71545b4c4f057275c6ec0dc0d1a79f89b52e6dffe5fd4ce0211ebc5  ./dogfood/preview/.github/actions/declared-task-0/action.yml
 17a0be5bafac61a4264317120fdf6aca21a1a1d52463935415fe6682cd7a568b  ./dogfood/preview/.github/actions/generator-release-attest-linux/action.yml
 95cf81b04d0b544d8c0b2418baca100b7efda45d3b35a557eb8914163bb1403d  ./dogfood/preview/.github/actions/generator-release-attest-macos-intel/action.yml
 fb31d52f4dd3ce07a61ddb61ff3749ba841f39888605cdd232b340932383c4f3  ./dogfood/preview/.github/actions/generator-release-attest-macos/action.yml
@@ -18,7 +18,7 @@ fb31d52f4dd3ce07a61ddb61ff3749ba841f39888605cdd232b340932383c4f3  ./dogfood/prev
 199cb334752a74eed7aed279a127c6393bb8b9f415caa5b01a5221c1e431f6d8  ./dogfood/preview/.github/actions/generator-release-build-linux/action.yml
 5b04f407352a6cdb557502ddfc39c10063f02419ce9ae430ce4052f0ce62677a  ./dogfood/preview/.github/actions/generator-release-build-macos-intel/action.yml
 be960d0e0576c89b91d15c4ced9fefeaa111c5ebea463cbf252389da77c0f7d0  ./dogfood/preview/.github/actions/generator-release-build-macos/action.yml
-3bfb07f8f406fbb4a626dd26f71ca1a9753931a1534b1814fd0922ecefa6d3e4  ./dogfood/preview/.github/actions/generator-release-publish/action.yml
+077e33eb3175af6f52454fbc990282d4886d44d58a21a78ae47330d93af4f16d  ./dogfood/preview/.github/actions/generator-release-publish/action.yml
 61a380e377c7e59882bae84b734da53aec51236c65dafecbf79ddac429581d36  ./dogfood/preview/.github/actions/generator-release-qualify-linux/action.yml
 c890bc89ee9e6f6c9239ca110e2abb306ae9f23eff2a6c6e427d223e38f28279  ./dogfood/preview/.github/actions/generator-release-qualify-macos-intel/action.yml
 773e97539836ebe79832bc88dc0b7d01b7693d5d50b8729c0406f2dc43988c42  ./dogfood/preview/.github/actions/generator-release-qualify-macos/action.yml
@@ -33,13 +33,13 @@ dbba20679f2e791bfdcf0e6541644a35efaeb7d4d4068c5bd3f5b252cffbe45a  ./dogfood/prev
 51865c7b32cbe8f74fadd7eb665ea3ec799b26ec21b03f02122b54c6e3d6acad  ./dogfood/preview/.github/workflows/cache-prune.yml
 bca33870500b04d1de3612a4b59d1097cb4861c8cf0c957abf25cac65e4e63c1  ./dogfood/preview/.github/workflows/ci.yml
 bc9bdf45936f0eb4321aaa09fc0b2517d50942889af16cd4845c5a473dded7c0  ./dogfood/preview/.github/workflows/freshness.yml
-12f2f353fc46e808bb5b52443e7c818d8528a69a007ad29dfe5dff58528972fb  ./dogfood/preview/.github/workflows/job-image-candidate.yml
-d68886da9c19304c710d907ae56edccd2136bbb87617cf74ead0e0a9ddc5a5f6  ./dogfood/preview/.github/workflows/product-release-binary.yml
-77c7e0ebc03f6c45152b5e7f361969f3d7f6ea02a3e8223f74f00d50e99b753c  ./dogfood/preview/.github/workflows/product-release-generator.yml
-3909772cea642597d8f2ff4682c9ba2422d645e1c2e50d98874c9adbdb168b8b  ./dogfood/preview/.github/workflows/product-release-images.yml
-7279dfed7623bdfc68dc5928ebe213004422a920d241b811fe3f1603fb9e4fa8  ./dogfood/preview/.github/workflows/product-release.yml
+350c1924a605d522ce9c98fbff815beac02850d841352a6526ac6f188b52d549  ./dogfood/preview/.github/workflows/job-image-candidate.yml
+a92871e0f95e35accadd289e330063a71b080675cc2c09c0f6e59d91f2d3a18b  ./dogfood/preview/.github/workflows/product-release-binary.yml
+9fec42fd7b2b75af092301ec8157553f14a7ba29bae1678246f5260bef1dc113  ./dogfood/preview/.github/workflows/product-release-generator.yml
+46db5a1e9ae57384d6232cffed85233143d797293ad7970c23388acc6370be03  ./dogfood/preview/.github/workflows/product-release-images.yml
+88b939d057d82c90069431eb6e6f28de22220342c72a28cd22ed06c40969fd4d  ./dogfood/preview/.github/workflows/product-release.yml
 7a7bacd338cb234a042d115866b0683fd82745f52e2d20942c3d8293f218f4e8  ./dogfood/preview/.github/workflows/qualification.yml
-fe764b95cdc8fdc60480fc0196f28264e71804e5a3cb19a17a95d079f7da5590  ./dogfood/tree.sha256
+9fd25fe0dfaa5cf4cc5ab4908cf602855315857c09aa77f50cfefcaa9f01571d  ./dogfood/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./empty-suite/generate.exit
 e86d4f811ac9e81ccc0b39cf52880e364ddb54a1ac21c62e06e5ceacd03cf4c2  ./empty-suite/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./empty-suite/generate.stdout.txt
@@ -49,7 +49,7 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./empty-suite/
 dbc1c27433b0f64654f29947e943a2324d8c9d2f2f9e05feadb4835408be6feb  ./empty-suite/preview/.github/AGENTS.md
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./empty-suite/preview/.github/CLAUDE.md
 8474dd1ff6c354ad8e67e83c16ae9c82b5a8cbcb3ff726a01d260bc5d783ef68  ./empty-suite/preview/.github/actionlint.yaml
-5f0065197b77740701278255c5c455b9935e4aa09879c151de107908e957c1fb  ./empty-suite/preview/.github/actions/declared-task-0/action.yml
+15df6788e71545b4c4f057275c6ec0dc0d1a79f89b52e6dffe5fd4ce0211ebc5  ./empty-suite/preview/.github/actions/declared-task-0/action.yml
 6664fefa17e669ea22122423a796928c19e33d3ad2a69d834657b65ea11b93f2  ./empty-suite/preview/.github/actions/u26/action.yml
 03adc6b5092f81c9b48e57fc62ee04b4d2581a6827dcbfadd7a0374661f2b346  ./empty-suite/preview/.github/actions/velnor-tool-seed/action.yml
 2f4a171aeb50fba41a246819a70db915394ab39024202c609190decc7bece38e  ./empty-suite/preview/.github/actions/velnor-tools-cache-restore/action.yml
@@ -58,7 +58,7 @@ dbc1c27433b0f64654f29947e943a2324d8c9d2f2f9e05feadb4835408be6feb  ./empty-suite/
 7d8e2d5526e7cf9f93931212f1492b13c9a0ba617d901ade81dfadf5105d4c13  ./empty-suite/preview/.github/velnor/task-execution-manifest-v1.json
 51865c7b32cbe8f74fadd7eb665ea3ec799b26ec21b03f02122b54c6e3d6acad  ./empty-suite/preview/.github/workflows/cache-prune.yml
 51e459e134523876cc5740380f3044ff2b7af4a411e2842865a776c533dbf572  ./empty-suite/preview/.github/workflows/ci.yml
-07772f1837075094c6119ee2555b62a9da116fcf06fb551a6d82aefdded51597  ./empty-suite/tree.sha256
+85ece3ec9c265b17cacdb98d90de6906b5ffd15e1c6a14c8159e5b7464d61693  ./empty-suite/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./mbx-nextest/generate.exit
 a5792e57ee58257365afe156f0bf5c7d32b2d01b1476583b4b5c2195067ce663  ./mbx-nextest/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./mbx-nextest/generate.stdout.txt
@@ -68,7 +68,7 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./mbx-nextest/
 dbc1c27433b0f64654f29947e943a2324d8c9d2f2f9e05feadb4835408be6feb  ./mbx-nextest/preview/.github/AGENTS.md
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./mbx-nextest/preview/.github/CLAUDE.md
 8474dd1ff6c354ad8e67e83c16ae9c82b5a8cbcb3ff726a01d260bc5d783ef68  ./mbx-nextest/preview/.github/actionlint.yaml
-5f0065197b77740701278255c5c455b9935e4aa09879c151de107908e957c1fb  ./mbx-nextest/preview/.github/actions/declared-task-0/action.yml
+15df6788e71545b4c4f057275c6ec0dc0d1a79f89b52e6dffe5fd4ce0211ebc5  ./mbx-nextest/preview/.github/actions/declared-task-0/action.yml
 6664fefa17e669ea22122423a796928c19e33d3ad2a69d834657b65ea11b93f2  ./mbx-nextest/preview/.github/actions/u26/action.yml
 03adc6b5092f81c9b48e57fc62ee04b4d2581a6827dcbfadd7a0374661f2b346  ./mbx-nextest/preview/.github/actions/velnor-tool-seed/action.yml
 2f4a171aeb50fba41a246819a70db915394ab39024202c609190decc7bece38e  ./mbx-nextest/preview/.github/actions/velnor-tools-cache-restore/action.yml
@@ -77,7 +77,7 @@ dbc1c27433b0f64654f29947e943a2324d8c9d2f2f9e05feadb4835408be6feb  ./mbx-nextest/
 69815bb232cf1773c74539bd5219b01f0225685e49580571e2b10512f54bd5eb  ./mbx-nextest/preview/.github/velnor/task-execution-manifest-v1.json
 51865c7b32cbe8f74fadd7eb665ea3ec799b26ec21b03f02122b54c6e3d6acad  ./mbx-nextest/preview/.github/workflows/cache-prune.yml
 66938803dac6d9ca178d1487b65db3edc242cdfde5613f0f30d67907f3f628d0  ./mbx-nextest/preview/.github/workflows/ci.yml
-6dfcf23987c16a87999c2d1a4d6f3cb7ab2420207a4f6e213d8a4988a9fc1f03  ./mbx-nextest/tree.sha256
+cb08c2436895e2644917b840ad5d11113928649f62c4e2f34f2fc5de17a1dab7  ./mbx-nextest/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./minimal-cargo/generate.exit
 41617c81ce3fa1b9fcb46488b9bb4de26f0fe670ff475f0d379fa65b73f7cdd2  ./minimal-cargo/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./minimal-cargo/generate.stdout.txt
@@ -87,7 +87,7 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./minimal-carg
 dbc1c27433b0f64654f29947e943a2324d8c9d2f2f9e05feadb4835408be6feb  ./minimal-cargo/preview/.github/AGENTS.md
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./minimal-cargo/preview/.github/CLAUDE.md
 8474dd1ff6c354ad8e67e83c16ae9c82b5a8cbcb3ff726a01d260bc5d783ef68  ./minimal-cargo/preview/.github/actionlint.yaml
-5f0065197b77740701278255c5c455b9935e4aa09879c151de107908e957c1fb  ./minimal-cargo/preview/.github/actions/declared-task-0/action.yml
+15df6788e71545b4c4f057275c6ec0dc0d1a79f89b52e6dffe5fd4ce0211ebc5  ./minimal-cargo/preview/.github/actions/declared-task-0/action.yml
 6664fefa17e669ea22122423a796928c19e33d3ad2a69d834657b65ea11b93f2  ./minimal-cargo/preview/.github/actions/u26/action.yml
 03adc6b5092f81c9b48e57fc62ee04b4d2581a6827dcbfadd7a0374661f2b346  ./minimal-cargo/preview/.github/actions/velnor-tool-seed/action.yml
 2f4a171aeb50fba41a246819a70db915394ab39024202c609190decc7bece38e  ./minimal-cargo/preview/.github/actions/velnor-tools-cache-restore/action.yml
@@ -96,7 +96,7 @@ dbc1c27433b0f64654f29947e943a2324d8c9d2f2f9e05feadb4835408be6feb  ./minimal-carg
 5695dd0ce6158b0585579a34e38ee5695022de34b9be55aa819138678eec9eb2  ./minimal-cargo/preview/.github/velnor/task-execution-manifest-v1.json
 51865c7b32cbe8f74fadd7eb665ea3ec799b26ec21b03f02122b54c6e3d6acad  ./minimal-cargo/preview/.github/workflows/cache-prune.yml
 f87a348c8276524f8fa9da3da91a0d52bb23529951dcbba8b852a7819fbbdcee  ./minimal-cargo/preview/.github/workflows/ci.yml
-b68497a7c180609eab8bc72210eec949b0b489df1365739e08259b59bd2d8fa8  ./minimal-cargo/tree.sha256
+b1ebb758092d18f73510dc52c83500572fc13bbe7d936622325b921391d866db  ./minimal-cargo/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./nested/generate.exit
 41617c81ce3fa1b9fcb46488b9bb4de26f0fe670ff475f0d379fa65b73f7cdd2  ./nested/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./nested/generate.stdout.txt
@@ -106,7 +106,7 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./nested/plan.
 dbc1c27433b0f64654f29947e943a2324d8c9d2f2f9e05feadb4835408be6feb  ./nested/preview/.github/AGENTS.md
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./nested/preview/.github/CLAUDE.md
 8474dd1ff6c354ad8e67e83c16ae9c82b5a8cbcb3ff726a01d260bc5d783ef68  ./nested/preview/.github/actionlint.yaml
-5f0065197b77740701278255c5c455b9935e4aa09879c151de107908e957c1fb  ./nested/preview/.github/actions/declared-task-0/action.yml
+15df6788e71545b4c4f057275c6ec0dc0d1a79f89b52e6dffe5fd4ce0211ebc5  ./nested/preview/.github/actions/declared-task-0/action.yml
 6664fefa17e669ea22122423a796928c19e33d3ad2a69d834657b65ea11b93f2  ./nested/preview/.github/actions/u26/action.yml
 03adc6b5092f81c9b48e57fc62ee04b4d2581a6827dcbfadd7a0374661f2b346  ./nested/preview/.github/actions/velnor-tool-seed/action.yml
 2f4a171aeb50fba41a246819a70db915394ab39024202c609190decc7bece38e  ./nested/preview/.github/actions/velnor-tools-cache-restore/action.yml
@@ -115,4 +115,4 @@ dbc1c27433b0f64654f29947e943a2324d8c9d2f2f9e05feadb4835408be6feb  ./nested/previ
 3255f606d6c4248c2762da7ffc75779ac17fb715e82dccdc18596a2db9cc2af3  ./nested/preview/.github/velnor/task-execution-manifest-v1.json
 51865c7b32cbe8f74fadd7eb665ea3ec799b26ec21b03f02122b54c6e3d6acad  ./nested/preview/.github/workflows/cache-prune.yml
 256a65fa183e6844c518c385b0d45da9e52b9ebb3ee03b7b00fff08923453975  ./nested/preview/.github/workflows/ci.yml
-5080536309af83620226e0c59a062ed45608d00c05d923562c03589747cb53f0  ./nested/tree.sha256
+503419eff2084eac91805f4181fa92072f259f5b685ebeff8a427b66b01ed182  ./nested/tree.sha256
