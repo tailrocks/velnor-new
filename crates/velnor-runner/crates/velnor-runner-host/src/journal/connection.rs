@@ -90,9 +90,10 @@ pub(crate) use reservation::{
     StorageFilesystemKind, StorageInitializationClaim, StorageInodePolicy, StorageMedium,
     StorageMetadataSettlementClaim, StorageNetworkCreateClaim, StorageNetworkRemovalClaim,
     StorageObjectCreateClaim, StorageObserver, StoragePoolLimit, StoragePoolObservation,
-    StorageProfile, StorageProvisioningAdmission, StorageProvisioningMemoryObservation,
-    StorageProvisioningPlan, StorageProvisioningRole, StorageRole, StorageRoleLimit,
-    StorageSampleIdentity, VerifiedMetadataInitialization, VerifiedMetadataInitializationHandoff,
+    StoragePoolObservationInput, StorageProfile, StorageProvisioningAdmission,
+    StorageProvisioningMemoryObservation, StorageProvisioningPlan, StorageProvisioningRole,
+    StorageRole, StorageRoleLimit, StorageSampleIdentity, VerifiedMetadataInitialization,
+    VerifiedMetadataInitializationHandoff,
 };
 #[cfg(test)]
 pub(crate) use reservation::{CreateCommitStage, arm_create_commit_gate};

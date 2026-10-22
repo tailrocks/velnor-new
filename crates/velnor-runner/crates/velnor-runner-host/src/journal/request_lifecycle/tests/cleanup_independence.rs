@@ -24,14 +24,20 @@ async fn cleanup_releases_one_charge_without_changing_another_live_pair() -> Res
     let second_network_id =
         assert_distinct_reserved_pairs(&journal, &scope, &first, &second).await?;
     start_both_jobs(
-        &scope,
-        &scope,
-        &first,
-        &second,
-        &first_runner,
-        &second_runner,
-        101,
-        101,
+        JobStartInput {
+            scope: &scope,
+            fixture: &first,
+            runner: &first_runner,
+            repository_id: 101,
+            message_id: 1_070,
+        },
+        JobStartInput {
+            scope: &scope,
+            fixture: &second,
+            runner: &second_runner,
+            repository_id: 101,
+            message_id: 1_071,
+        },
     )
     .await?;
     complete_and_clean_first(&scope, &first, &first_runner).await?;
@@ -73,14 +79,20 @@ async fn cleanup_in_one_repository_scope_keeps_other_scope_charged() -> Result<(
     )
     .await?;
     start_both_jobs(
-        &first_scope,
-        &second_scope,
-        &first,
-        &second,
-        &first_runner,
-        &second_runner,
-        101,
-        202,
+        JobStartInput {
+            scope: &first_scope,
+            fixture: &first,
+            runner: &first_runner,
+            repository_id: 101,
+            message_id: 1_070,
+        },
+        JobStartInput {
+            scope: &second_scope,
+            fixture: &second,
+            runner: &second_runner,
+            repository_id: 202,
+            message_id: 1_071,
+        },
     )
     .await?;
     complete_and_clean_first(&first_scope, &first, &first_runner).await?;
@@ -170,39 +182,34 @@ async fn assert_distinct_reserved_pairs(
     Ok(second_network_id)
 }
 
+struct JobStartInput<'a> {
+    scope: &'a ConnectionJournal,
+    fixture: &'a super::helpers::JobFactsReaderFixture,
+    runner: &'a RunnerReference,
+    repository_id: i64,
+    message_id: i64,
+}
+
 async fn start_both_jobs(
-    first_scope: &ConnectionJournal,
-    second_scope: &ConnectionJournal,
-    first: &super::helpers::JobFactsReaderFixture,
-    second: &super::helpers::JobFactsReaderFixture,
-    first_runner: &RunnerReference,
-    second_runner: &RunnerReference,
-    first_repository_id: i64,
-    second_repository_id: i64,
+    first: JobStartInput<'_>,
+    second: JobStartInput<'_>,
 ) -> Result<(), HostError> {
+    start_job(first).await?;
+    start_job(second).await
+}
+
+async fn start_job(job: JobStartInput<'_>) -> Result<(), HostError> {
     assert_eq!(
-        first_scope
+        job.scope
             .record_job_started(
-                &first.assignment,
-                1_070,
-                &event_source(first_repository_id, 1_070),
-                first_runner,
-                None
+                &job.fixture.assignment,
+                job.message_id,
+                &event_source(job.repository_id, job.message_id),
+                job.runner,
+                None,
             )
             .await?,
-        first.intent_id
-    );
-    assert_eq!(
-        second_scope
-            .record_job_started(
-                &second.assignment,
-                1_071,
-                &event_source(second_repository_id, 1_071),
-                second_runner,
-                None
-            )
-            .await?,
-        second.intent_id
+        job.fixture.intent_id
     );
     Ok(())
 }

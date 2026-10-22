@@ -3,9 +3,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use super::storage_budget::{
     StorageAdmission, StorageAdmissionSample, StorageFilesystemKind, StorageInodePolicy,
     StorageMedium, StorageMemoryObservation, StoragePoolLimit, StoragePoolObservation,
-    StorageProfile, StorageProvisioningAdmission, StorageProvisioningMemoryObservation,
-    StorageReservationPlan, StorageRole, StorageRoleCharge, StorageRoleLimit,
-    StorageSampleIdentity,
+    StoragePoolObservationInput, StorageProfile, StorageProvisioningAdmission,
+    StorageProvisioningMemoryObservation, StorageReservationPlan, StorageRole, StorageRoleCharge,
+    StorageRoleLimit, StorageSampleIdentity,
 };
 use crate::error::HostError;
 use crate::launch::StartPermit;
@@ -170,14 +170,16 @@ pub(crate) fn fixture_storage_provisioning_admission_for_profile(
         )?,
         Instant::now(),
         vec![StoragePoolObservation::new_with_filesystem(
-            "1".repeat(64),
-            filesystem_instance_digest,
-            StorageMedium::Disk,
-            StorageFilesystemKind::Btrfs,
-            64_u64 << 30,
-            60_u64 << 30,
-            0,
-            0,
+            StoragePoolObservationInput {
+                pool_id: "1".repeat(64),
+                filesystem_instance_digest,
+                medium: StorageMedium::Disk,
+                filesystem_kind: StorageFilesystemKind::Btrfs,
+                total_bytes: 64_u64 << 30,
+                available_bytes: 60_u64 << 30,
+                total_inodes: 0,
+                available_inodes: 0,
+            },
         )?],
         None,
     )?;
