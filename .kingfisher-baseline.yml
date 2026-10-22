@@ -1,13 +1,12 @@
-# Kingfisher 2.14.0 exact-fingerprint baseline for git://github.com/tailrocks/velnor-new.
-# Scan (matches the security-audit hook plus --no-dedup): scan . --git-history full --confidence low --no-validate --redact --no-update-check --no-dedup,
-# run on a fresh full clone (all published branches) at main 9953910d6 plus this change. 597 raw findings, 310 unique fingerprints, all listed below.
-# --no-dedup matters: without it kingfisher reports one arbitrary instance of each duplicated secret per run, so every instance must be baselined.
-# Exact fingerprints only; scanner rules were not weakened; no live validation was performed. Every entry is a reviewed placeholder or fixture:
-#   - dist/**/index.js (195): the public Azure Storage emulator account key (devstoreaccount1) bundled in third-party action code
-#   - age-secret-key (26) and generic-credential-uri (81): test keys and user:password placeholder URIs in the vendored mise sources, e2e scripts and docs
-#   - ibm-cloud-user-api-key (6): velnor-qcache-v2-campaign-1-mbx_objects-k1 style cache-key names in dispatch-cache tests, not credentials
-#   - private-key (2): the tough TUF snakeoil.pem test fixture, protects nothing
-#   - generic-credential-uri in runner log projection test: example.invalid placeholder URI
+# Exact-fingerprint Kingfisher 2.14.0 baseline for https://github.com/tailrocks/velnor-new.
+# Reproduced locally with --git-history full --confidence low --no-validate --redact --no-update-check --no-dedup;
+# this command is not claimed to match a repository hook. Candidate 660a5aa includes main 1d3e5f2 and 641 published refs
+# (5 branch heads, 341 pull-request heads, 295 tags), plus the candidate itself: 19,016 reachable commits.
+# The unbaselined run reported 598 occurrence rows across 310 unique fingerprints; this exact baseline leaves 0 findings (exit 0).
+# The 310 fingerprints map to reviewed committed-source occurrences: public Azurite test fixtures, test keys, placeholder URIs,
+# cache-name markers, and TUF snakeoil fixtures. Nine rescue-only findings remain unsuppressed and are outside this published-ref scan.
+# Exact fingerprints only; scanner rules were not weakened. No credential validation or network credential probes were performed.
+# Raw scanner reports were not persisted. Hidden-findings mode was not enabled, so this baseline makes no hidden-findings claim.
 version: 2
 fingerprint_algorithm: kingfisher-v1
 repositories:
