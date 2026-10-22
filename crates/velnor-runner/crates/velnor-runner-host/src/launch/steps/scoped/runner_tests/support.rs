@@ -45,91 +45,10 @@ impl Fixture {
         let journal = Journal::open(&scratch.file())
             .await
             .map_err(|error| error.to_string())?;
-        journal
-            .configure_storage_profile(crate::journal::fixture_profile())
-            .await
-            .map_err(|error| error.to_string())?;
-        journal
-            .bind_engine(engine_id)
-            .await
-            .map_err(|error| error.to_string())?;
-        journal
-            .configure_capacity_with_operational_limits(
-                CapacityLimits {
-                    jobs: 1,
-                    cpu_millicores: 2_000,
-                    memory_bytes: 8_589_934_592,
-                },
-                OperationalCapacityLimits {
-                    cpu_millicores: 1_000,
-                    memory_bytes: 268_435_456,
-                },
-            )
-            .await
-            .map_err(|error| error.to_string())?;
+        configure_fixture_journal(&journal, engine_id).await?;
         let binding = binding()?;
-        let scope = journal
-            .connection_scope(&binding)
-            .await
-            .map_err(|error| error.to_string())?;
-        let create = ScaleSetCreateRequest::new(&binding, 7).map_err(|error| error.to_string())?;
-        let prepared = scope
-            .prepare_scale_set_create(&create)
-            .await
-            .map_err(|error| error.to_string())?;
-        let claim = scope
-            .claim_scale_set_create(&prepared)
-            .await
-            .map_err(|error| error.to_string())?
-            .ok_or_else(|| "Scale Set create claim is absent".to_owned())?;
-        let response = CreatedScaleSetResponse::verified(
-            &create,
-            SET_ID,
-            create.selector_name(),
-            create.selector_labels(),
-            true,
-        )
-        .map_err(|error| error.to_string())?;
-        scope
-            .record_scale_set_created(claim, response)
-            .await
-            .map_err(|error| error.to_string())?;
-        scope
-            .bind_engine_context(engine_id, "unix:///var/run/docker.sock", "linux/amd64")
-            .await
-            .map_err(|error| error.to_string())?;
-        let config = crate::config::HostConfig::test_with_job_authority_policy(&binding)
-            .map_err(|error| error.to_string())?;
-        scope
-            .install_job_authority_policy(&config)
-            .await
-            .map_err(|error| error.to_string())?;
-        let authority_policy = config
-            .validated_job_authority_policy(&binding.connection_id)
-            .map_err(|error| error.to_string())?
-            .cloned()
-            .ok_or_else(|| "The test authority policy is missing.".to_owned())?;
-        let request = scope
-            .assignment_identity(AssignmentKey::AssignedRequest {
-                request_id: REQUEST_ID,
-            })
-            .await
-            .map_err(|error| error.to_string())?;
-        let source_binding = scope
-            .source_authorization_binding()
-            .await
-            .map_err(|error| error.to_string())?;
-        let receipt = test_receipt(
-            &source_binding,
-            REQUEST_ID,
-            MESSAGE_ID,
-            verified_source(),
-            SourcePolicyMode::Repository,
-        );
-        scope
-            .record_source_authorization(&request, &receipt)
-            .await
-            .map_err(|error| error.to_string())?;
+        let scope = create_fixture_scale_set(&journal, &binding, engine_id).await?;
+        let (request, authority_policy) = install_fixture_authority(&scope, &binding).await?;
         Ok(Self {
             scratch,
             journal,
@@ -177,6 +96,141 @@ impl Fixture {
     pub(super) fn journal_file(&self) -> PathBuf {
         self.scratch.file()
     }
+}
+
+pub(super) async fn configure_provisioning_profile(
+    fixture: &Fixture,
+) -> Result<crate::journal::StorageProfile, String> {
+    fixture
+        .journal
+        .configure_capacity_with_operational_limits(
+            CapacityLimits {
+                jobs: 1,
+                cpu_millicores: 4_000,
+                memory_bytes: 32 * 1024 * 1024 * 1024,
+            },
+            OperationalCapacityLimits {
+                cpu_millicores: 1_000,
+                memory_bytes: 268_435_456,
+            },
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    let profile = crate::journal::fixture_provisioning_profile();
+    fixture
+        .journal
+        .configure_storage_profile(profile.clone())
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(profile)
+}
+
+async fn configure_fixture_journal(journal: &Journal, engine_id: &str) -> Result<(), String> {
+    journal
+        .configure_storage_profile(crate::journal::fixture_profile())
+        .await
+        .map_err(|error| error.to_string())?;
+    journal
+        .bind_engine(engine_id)
+        .await
+        .map_err(|error| error.to_string())?;
+    journal
+        .configure_capacity_with_operational_limits(
+            CapacityLimits {
+                jobs: 1,
+                cpu_millicores: 2_000,
+                memory_bytes: 8_589_934_592,
+            },
+            OperationalCapacityLimits {
+                cpu_millicores: 1_000,
+                memory_bytes: 268_435_456,
+            },
+        )
+        .await
+        .map_err(|error| error.to_string())
+}
+
+async fn create_fixture_scale_set(
+    journal: &Journal,
+    binding: &RepositoryConnection,
+    engine_id: &str,
+) -> Result<ConnectionJournal, String> {
+    let scope = journal
+        .connection_scope(binding)
+        .await
+        .map_err(|error| error.to_string())?;
+    let create = ScaleSetCreateRequest::new(binding, 7).map_err(|error| error.to_string())?;
+    let prepared = scope
+        .prepare_scale_set_create(&create)
+        .await
+        .map_err(|error| error.to_string())?;
+    let claim = scope
+        .claim_scale_set_create(&prepared)
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "Scale Set create claim is absent".to_owned())?;
+    let response = CreatedScaleSetResponse::verified(
+        &create,
+        SET_ID,
+        create.selector_name(),
+        create.selector_labels(),
+        true,
+    )
+    .map_err(|error| error.to_string())?;
+    scope
+        .record_scale_set_created(claim, response)
+        .await
+        .map_err(|error| error.to_string())?;
+    scope
+        .bind_engine_context(engine_id, "unix:///var/run/docker.sock", "linux/amd64")
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(scope)
+}
+
+async fn install_fixture_authority(
+    scope: &ConnectionJournal,
+    binding: &RepositoryConnection,
+) -> Result<
+    (
+        crate::journal::AssignmentIdentity,
+        crate::config::ApprovedJobAuthorityPolicy,
+    ),
+    String,
+> {
+    let config = crate::config::HostConfig::test_with_job_authority_policy(binding)
+        .map_err(|error| error.to_string())?;
+    scope
+        .install_job_authority_policy(&config)
+        .await
+        .map_err(|error| error.to_string())?;
+    let authority_policy = config
+        .validated_job_authority_policy(&binding.connection_id)
+        .map_err(|error| error.to_string())?
+        .cloned()
+        .ok_or_else(|| "The test authority policy is missing.".to_owned())?;
+    let request = scope
+        .assignment_identity(AssignmentKey::AssignedRequest {
+            request_id: REQUEST_ID,
+        })
+        .await
+        .map_err(|error| error.to_string())?;
+    let source_binding = scope
+        .source_authorization_binding()
+        .await
+        .map_err(|error| error.to_string())?;
+    let receipt = test_receipt(
+        &source_binding,
+        REQUEST_ID,
+        MESSAGE_ID,
+        verified_source(),
+        SourcePolicyMode::Repository,
+    );
+    scope
+        .record_source_authorization(&request, &receipt)
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok((request, authority_policy))
 }
 
 pub(super) fn fixture_storage(permit: &StartPermit) -> Result<StorageAdmission, String> {

@@ -204,8 +204,13 @@ impl ConnectionJournal {
             .await
         })
         .await;
-        if result.is_err() {
-            let _ = self.mark_storage_network_removal_uncertain(claim).await;
+        if result.is_err()
+            && let Err(failure) = self.mark_storage_network_removal_uncertain(claim).await
+        {
+            eprintln!(
+                "The host could not record uncertain network removal state. Error code: {}.",
+                failure.code()
+            );
         }
         result
     }
