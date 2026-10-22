@@ -84,6 +84,7 @@ pub(crate) enum DoctorProbePrepareResult {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DoctorProbeOutcome {
+    #[cfg(test)]
     Failed,
     Completed,
     Stale,

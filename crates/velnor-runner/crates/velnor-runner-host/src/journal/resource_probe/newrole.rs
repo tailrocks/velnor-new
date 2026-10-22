@@ -12,13 +12,6 @@ pub(crate) enum HostHelperRole {
 }
 
 impl HostHelperRole {
-    pub(crate) const fn as_str(self) -> &'static str {
-        match self {
-            Self::ResourceProbe => "resource-probe",
-            Self::ExecutionPublication => "execution-publication",
-        }
-    }
-
     pub(in crate::journal) fn parse(value: &str) -> Result<Self, HostError> {
         match value {
             "resource-probe" => Ok(Self::ResourceProbe),
