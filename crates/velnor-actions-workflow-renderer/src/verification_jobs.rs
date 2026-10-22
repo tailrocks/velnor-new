@@ -46,9 +46,10 @@ pub use build_task_jobs::{
     BuildTaskArtifact, BuildTaskPolicy, BuildTaskTool, build_build_task_job,
 };
 pub use bun_artifact_steps::{
-    BUN_ARTIFACT_PREFIX, BUN_ASSETS_DIR, BUN_ASSETS_INDEX, BUN_BLOB_DIR, BUN_BLOBS_DIR,
-    BUN_REPORT_DIR, NOT_CANCELLED, bun_assets_download_step, bun_assets_upload_step,
-    bun_blob_upload_step, bun_blobs_download_step, bun_report_upload_step, bun_results_upload_step,
+    BUN_ARTIFACT_PREFIX, BUN_ASSETS_ARCHIVE_PREFIX, BUN_ASSETS_DIR, BUN_ASSETS_STAGE_DIR,
+    BUN_BLOB_DIR, BUN_BLOBS_DIR, BUN_REPORT_DIR, NOT_CANCELLED, bun_assets_archive_name,
+    bun_assets_download_step, bun_assets_upload_step, bun_blob_upload_step,
+    bun_blobs_download_step, bun_report_upload_step, bun_results_upload_step,
 };
 pub use bun_assets_jobs::{BUN_ASSETS_SUFFIX, BunAssetsPolicy, build_bun_assets_job};
 pub use bun_member_jobs::{BUN_RUNNER, BunMemberPolicy, build_bun_member_job};

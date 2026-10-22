@@ -87,8 +87,10 @@ pub(crate) const PW_BLOB_DIR: &str = "velnor/pw-blob";
 
 /// Every step after checkout, in execution order.
 pub(crate) fn member_steps(input: &MemberInputs<'_>) -> Result<Vec<Step>, OrchestratorError> {
-    let staged =
-        !input.scopes.is_empty() || !input.private.is_empty() || input.playwright.is_some();
+    let staged = !input.scopes.is_empty()
+        || !input.private.is_empty()
+        || !input.handoff.is_empty()
+        || input.playwright.is_some();
     let mut steps = Vec::new();
     if staged {
         steps.extend(input.acquire.cloned());

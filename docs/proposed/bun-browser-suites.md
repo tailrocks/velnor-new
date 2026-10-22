@@ -81,16 +81,19 @@ shards = 2                                   # 1..=64, per project when projects
 - In a repository whose `.velnor/deps.lock` pins release assets, suites never
   copy the App-token block (HD-7). One job per member, `bun-<slug>--assets`
   (`Bun / <name> / assets`, `needs: [plan]`, the member's disposition, not in
-  Required), runs the staged helper, mint, fetch and revoke, indexes the
-  verified `.velnor/deps` tree file by file (`velnor-assets.sha256`) and
-  uploads it as `velnor-pw-assets-<member job id>` (1 day). Every suite job
-  (each leg, and the report job) needs it, downloads the tree and, before
-  any install or script, checks every file against the index, refuses a file
-  outside it, and finds every archive digest the lock pins (rendered
-  literally as `VELNOR_ASSET_PINS`) in `verified.json`:
-  `private_asset_digest_mismatch`, `private_asset_unlisted_file`,
-  `private_asset_pin_missing:<id>`. A failed fetch (a fork pull request has no
-  secret) skips the suites, so Required fails closed with
+  Required), runs the staged helper, mint, fetch and revoke, then bundles the
+  verified `.velnor/deps` tree as one bounded `tar.gz` file. Upload uses
+  `archive: false`, preserving executable bits and safe symlinks across
+  artifact transport; the filename is `velnor-pw-assets-<member job id>.tar.gz`
+  (1 day). Every suite job (each leg, and the report job) needs it. Before any
+  tool setup or repository install, the job removes stale or planted
+  `.velnor/deps`, resets private runner-temp staging, downloads the one archive,
+  extracts it through the bounded archive reader, and checks the typed
+  `verified.json` release-asset digests against `VELNOR_BUN_ASSET_PINS`. The
+  extractor rejects traversal, duplicate paths, special files and unsafe
+  symlinks. The archive inventory includes nested files named
+  `velnor-assets.sha256` as ordinary payload. A failed fetch (a fork pull
+  request has no secret) skips the suites, so Required fails closed with
   `planned_job_skipped`. The member job keeps its own block, unchanged.
 
 Validation codes (`stacks.bun.members.suites`): `bad_suite_id:<id>`

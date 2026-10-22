@@ -128,11 +128,15 @@ pub fn bun_report_upload_step(suite_job_id: &str, retention: u16) -> Result<Step
 
 /// Directory of the private release assets a suite job receives (HD-7 layout).
 pub const BUN_ASSETS_DIR: &str = ".velnor/deps";
-/// Per-file SHA-256 index the assets job writes beside the assets.
-pub const BUN_ASSETS_INDEX: &str = "velnor-assets.sha256";
+/// Filename prefix of the raw tar.gz asset artifact.
+pub const BUN_ASSETS_ARCHIVE_PREFIX: &str = "velnor-pw-assets-";
+/// Runner-temp directory used to stage the raw asset archive.
+pub const BUN_ASSETS_STAGE_DIR: &str = "${{ runner.temp }}/velnor/bun-assets";
 
-fn assets_artifact(member_job_id: &str) -> String {
-    format!("{BUN_ARTIFACT_PREFIX}assets-{member_job_id}")
+/// Stable archive filename and raw artifact name for one member.
+#[must_use]
+pub fn bun_assets_archive_name(member_job_id: &str) -> String {
+    format!("{BUN_ASSETS_ARCHIVE_PREFIX}{member_job_id}.tar.gz")
 }
 
 /// The assets job's upload of the verified `.velnor/deps` tree (1 day).
@@ -141,14 +145,17 @@ fn assets_artifact(member_job_id: &str) -> String {
 ///
 /// Returns render errors for an invalid step.
 pub fn bun_assets_upload_step(member_job_id: &str) -> Result<Step, RenderError> {
+    let archive = bun_assets_archive_name(member_job_id);
     action_step(
         "Upload private assets",
         UPLOAD_ARTIFACT_USES,
         BTreeMap::from([
-            ("name".to_owned(), assets_artifact(member_job_id)),
-            ("path".to_owned(), BUN_ASSETS_DIR.to_owned()),
+            (
+                "path".to_owned(),
+                format!("{BUN_ASSETS_STAGE_DIR}/{member_job_id}/{archive}"),
+            ),
+            ("archive".to_owned(), "false".to_owned()),
             ("if-no-files-found".to_owned(), "error".to_owned()),
-            ("include-hidden-files".to_owned(), "true".to_owned()),
             ("overwrite".to_owned(), "true".to_owned()),
             (
                 "retention-days".to_owned(),
@@ -164,12 +171,17 @@ pub fn bun_assets_upload_step(member_job_id: &str) -> Result<Step, RenderError> 
 ///
 /// Returns render errors for an invalid step.
 pub fn bun_assets_download_step(member_job_id: &str) -> Result<Step, RenderError> {
+    let archive = bun_assets_archive_name(member_job_id);
     action_step(
         "Download private assets",
         DOWNLOAD_ARTIFACT_USES,
         BTreeMap::from([
-            ("name".to_owned(), assets_artifact(member_job_id)),
-            ("path".to_owned(), BUN_ASSETS_DIR.to_owned()),
+            ("name".to_owned(), archive),
+            (
+                "path".to_owned(),
+                format!("{BUN_ASSETS_STAGE_DIR}/{member_job_id}"),
+            ),
+            ("digest-mismatch".to_owned(), "error".to_owned()),
         ]),
     )
 }
@@ -185,11 +197,15 @@ pub(crate) fn is_bun_artifact_step(step: &Step) -> bool {
         with.get(key)
             .is_some_and(|name| name.starts_with(BUN_ARTIFACT_PREFIX))
     };
-    let assets = with
+    let assets_archive = with
+        .get("path")
+        .is_some_and(|path| path.contains("/velnor-pw-assets-") && path.ends_with(".tar.gz"));
+    let assets_download = with
         .get("name")
-        .is_some_and(|name| name.starts_with(&format!("{BUN_ARTIFACT_PREFIX}assets-")));
+        .is_some_and(|name| name.starts_with(BUN_ASSETS_ARCHIVE_PREFIX));
     step.role.is_none()
-        && ((uses == UPLOAD_ARTIFACT_USES && named("name"))
-            || (uses == DOWNLOAD_ARTIFACT_USES && named("pattern") && !with.contains_key("name"))
-            || (uses == DOWNLOAD_ARTIFACT_USES && assets && !with.contains_key("pattern")))
+        && ((uses == UPLOAD_ARTIFACT_USES && (named("name") || assets_archive))
+            || (uses == DOWNLOAD_ARTIFACT_USES
+                && ((named("pattern") && !with.contains_key("name"))
+                    || (assets_download && !with.contains_key("pattern")))))
 }
