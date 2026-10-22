@@ -63,7 +63,7 @@ when tool pins or protocol integrations are updated.
 - [jactionlint v2.3.0 release](https://github.com/jdx/jactionlint/releases/tag/v2.3.0)
 - [hk `Builtins.jactionlint`](https://hk.jdx.dev/builtins.html)
 - [actionlint native parallel-step syntax support issue](https://github.com/rhysd/actionlint/issues/693) (why actionlint was replaced)
-- [zizmor](https://woodruffw.github.io/zizmor/)
+- [zizmor](https://woodruffw.github.io/zizmor/) (retired; jactionlint honours its ignore annotations)
 - [Sigstore Cosign blob signing](https://docs.sigstore.dev/cosign/signing/signing_with_blobs/)
 - [Sigstore Cosign blob verification](https://docs.sigstore.dev/cosign/verifying/verify/)
 - [Sigstore Cosign installation and binary verification](https://docs.sigstore.dev/cosign/system_config/installation/)

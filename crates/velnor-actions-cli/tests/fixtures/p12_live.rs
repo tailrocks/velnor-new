@@ -233,7 +233,6 @@ fn policy_file_is_complete() -> Result<(), Box<dyn Error>> {
         "gh = \"2.102.1\"",
         "jactionlint = \"2.3.0\"",
         "shellcheck = \"0.11.0\"",
-        "zizmor = \"1.31.1\"",
         "nextest = \"0.9.149\"",
         "crane = \"0.22.1\"",
         "bun = \"1.4.3\"",

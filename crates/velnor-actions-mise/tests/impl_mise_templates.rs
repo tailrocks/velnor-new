@@ -10,7 +10,6 @@ fn template_names_are_stable() {
             "fmt-check",
             "dependencies",
             "jactionlint",
-            "zizmor",
             "clippy",
             "test-build",
             "test",
@@ -19,7 +18,7 @@ fn template_names_are_stable() {
             "msrv",
         ]
     );
-    assert_eq!(TaskTemplate::ALL.len(), 10);
+    assert_eq!(TaskTemplate::ALL.len(), 9);
 }
 
 #[test]

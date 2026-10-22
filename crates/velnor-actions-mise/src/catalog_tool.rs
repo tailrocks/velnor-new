@@ -15,8 +15,6 @@ pub enum PinnedTool {
     Jactionlint,
     /// Shell linter (`shellcheck`).
     Shellcheck,
-    /// Workflow security linter (`zizmor`).
-    Zizmor,
     /// Nextest test runner (`nextest`, invoked as `cargo nextest`).
     Nextest,
     /// `OpenTofu` engine (`opentofu`, invoked as `tofu`).
@@ -31,13 +29,12 @@ pub enum PinnedTool {
 
 impl PinnedTool {
     /// Every catalog tool in stable order.
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 10] = [
         Self::Rust,
         Self::MrBoxington,
         Self::Gh,
         Self::Jactionlint,
         Self::Shellcheck,
-        Self::Zizmor,
         Self::Nextest,
         Self::Opentofu,
         Self::ReleasePlz,
@@ -54,7 +51,6 @@ impl PinnedTool {
             Self::Gh => "gh",
             Self::Jactionlint => "jactionlint",
             Self::Shellcheck => "shellcheck",
-            Self::Zizmor => "zizmor",
             Self::Nextest => "nextest",
             Self::Opentofu => "opentofu",
             Self::ReleasePlz => "release-plz",

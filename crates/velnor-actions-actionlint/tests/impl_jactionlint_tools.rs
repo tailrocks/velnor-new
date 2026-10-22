@@ -1,7 +1,7 @@
 //! Pinned lint tools and the one jactionlint argument contract.
 use velnor_actions_actionlint::{
     JACTIONLINT_CONFIG_PATH, JACTIONLINT_VERSION, JactionlintToolchain, LINT_FILE_GLOBS,
-    LINT_FLAGS, SHELLCHECK_VERSION, WorkflowLintTools, ZizmorToolchain, workflow_lint_script,
+    LINT_FLAGS, SHELLCHECK_VERSION, WorkflowLintTools, workflow_lint_script,
 };
 
 #[test]
@@ -11,18 +11,13 @@ fn pinned_tool_specs_are_exact_and_mirror_the_catalog() {
     let parts: Vec<&str> = JACTIONLINT_VERSION.split('.').collect();
     assert_eq!(parts.len(), 3, "{JACTIONLINT_VERSION}");
     assert!(parts.iter().all(|part| part.parse::<u32>().is_ok()));
-    let tools = WorkflowLintTools::new("1.31.1").expect("exact zizmor");
     assert_eq!(
-        tools.mise_tool_specs(),
+        WorkflowLintTools::pinned().mise_tool_specs(),
         vec![
             format!("jactionlint@{JACTIONLINT_VERSION}"),
             format!("shellcheck@{SHELLCHECK_VERSION}"),
-            "zizmor@1.31.1".to_owned(),
         ]
     );
-    for loose in ["latest", "v1.31.1", "1.31", "1.31.1-rc1", ""] {
-        assert!(ZizmorToolchain::new(loose).is_err(), "{loose}");
-    }
 }
 
 #[test]

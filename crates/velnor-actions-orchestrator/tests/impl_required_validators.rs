@@ -163,7 +163,7 @@ fn rendered_inventory_validator_failure_fails_required() -> TestResult {
                 "plan gates: {inventory:?}"
             );
             assert!(
-                inventory.contains(&"zizmor".to_owned()),
+                inventory.contains(&"cargo-machete".to_owned()),
                 "global validator gates: {inventory:?}"
             );
             assert!(
@@ -188,8 +188,8 @@ fn rendered_inventory_validator_failure_fails_required() -> TestResult {
                     JobConclusion::Cancelled,
                 ),
             ] {
-                let report = merge_with_validator(&plan, &inventory, "zizmor", conclusion)?;
-                assert_validator_blamed(&report, "zizmor", blame, verdict);
+                let report = merge_with_validator(&plan, &inventory, "cargo-machete", conclusion)?;
+                assert_validator_blamed(&report, "cargo-machete", blame, verdict);
             }
             Ok(())
         },
@@ -197,14 +197,13 @@ fn rendered_inventory_validator_failure_fails_required() -> TestResult {
 }
 
 /// Every Required-gating validator job ID in the rendered workflow.
-fn required_validators() -> [&'static str; 6] {
+fn required_validators() -> [&'static str; 5] {
     [
         "plan",
         "jactionlint",
         "alint",
         "cargo-deny",
         "cargo-machete",
-        "zizmor",
     ]
 }
 
@@ -301,7 +300,8 @@ fn rendered_inventory_all_success_passes_required() -> TestResult {
         let yaml = rendered_workflow(&prepare(root)?)?;
         let inventory = rendered_needs_inventory(&yaml)?;
         assert!(
-            inventory.contains(&"plan".to_owned()) && inventory.contains(&"zizmor".to_owned()),
+            inventory.contains(&"plan".to_owned())
+                && inventory.contains(&"cargo-machete".to_owned()),
             "upstream plan and validators still gate: {inventory:?}"
         );
 
@@ -316,7 +316,7 @@ fn rendered_inventory_all_success_passes_required() -> TestResult {
         // Every validator succeeds (a skipped-by-condition downstream
         // publish contributes no conclusion because it is not
         // expected): Required must be satisfiable, not stuck red.
-        let report = merge_with_validator(&plan, &inventory, "zizmor", "success")?;
+        let report = merge_with_validator(&plan, &inventory, "cargo-machete", "success")?;
         assert_eq!(report.status, FinalStatus::Passed, "clean tree passes");
         assert!(
             merge_passed(&serde_json::to_string(&report)?)?,
@@ -353,20 +353,20 @@ fn rendered_inventory_validator_failure_fails_without_work() -> TestResult {
             let yaml = rendered_workflow(&prepare(root)?)?;
             let inventory = rendered_needs_inventory(&yaml)?;
             assert!(
-                inventory.contains(&"zizmor".to_owned()),
+                inventory.contains(&"cargo-machete".to_owned()),
                 "global validator gates: {inventory:?}"
             );
 
             // A failing validator fails Required even with no crate work.
-            let report = merge_with_validator(&plan, &inventory, "zizmor", "failure")?;
+            let report = merge_with_validator(&plan, &inventory, "cargo-machete", "failure")?;
             assert_validator_blamed(
                 &report,
-                "zizmor",
+                "cargo-machete",
                 JobConclusion::Failure,
                 FinalStatus::Failed,
             );
             // Clean validators with no work passes the gate.
-            let clean = merge_with_validator(&plan, &inventory, "zizmor", "success")?;
+            let clean = merge_with_validator(&plan, &inventory, "cargo-machete", "success")?;
             assert_eq!(clean.status, FinalStatus::NoWork);
             assert!(
                 merge_passed(&serde_json::to_string(&clean)?)?,
