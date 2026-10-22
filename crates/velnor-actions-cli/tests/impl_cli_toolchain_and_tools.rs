@@ -37,9 +37,6 @@ fn config_with_suites(extra_rust: &str, extra_root: &str) -> String {
 name = "CI"
 default_branch = "main"
 
-[workflow.verify]
-jobs = ["zizmor"]
-
 [stacks.rust]
 test_runner = "cargo_nextest"
 {extra_rust}
@@ -318,7 +315,6 @@ fn tools_table_overrides_versions_across_generated_workflows() -> Result<(), Box
 cargo-nextest = "0.9.150"
 jactionlint = "2.3.1"
 shellcheck = "0.11.1"
-zizmor = "1.31.0"
 gh = "2.103.0"
 "#;
     let cfg = config_with_suites("", extra_root);
@@ -353,7 +349,6 @@ gh = "2.103.0"
         "aqua:nextest-rs/nextest/cargo-nextest@0.9.150",
         "jactionlint@2.3.1",
         "shellcheck@0.11.1",
-        "zizmor@1.31.0",
         "gh@2.103.0",
     ] {
         assert!(

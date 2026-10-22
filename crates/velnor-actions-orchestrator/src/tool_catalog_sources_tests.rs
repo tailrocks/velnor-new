@@ -87,15 +87,18 @@ fn declarations_in_every_mise_location_are_project_owned() {
             "{file}"
         );
         assert_eq!(catalog.version(PinnedTool::Jactionlint), "2.2.0", "{file}");
-        assert!(!catalog.is_project_declared(PinnedTool::Zizmor), "{file}");
+        assert!(
+            !catalog.is_project_declared(PinnedTool::Shellcheck),
+            "{file}"
+        );
     }
     let both = resolve_with(&[
         (".config/mise.toml", "[tools]\njactionlint = \"2.2.0\"\n"),
-        (".tool-versions", "zizmor 1.30.0\n"),
+        (".tool-versions", "shellcheck 0.10.0\n"),
     ])
     .expect("resolve");
     assert_eq!(both.version(PinnedTool::Jactionlint), "2.2.0");
-    assert_eq!(both.version(PinnedTool::Zizmor), "1.30.0");
+    assert_eq!(both.version(PinnedTool::Shellcheck), "0.10.0");
 }
 
 #[test]
@@ -110,11 +113,11 @@ fn extensionless_toml_rust_toolchain_declares_rust() {
 fn a_loose_or_templated_version_fails_generation_naming_tool_and_file() {
     for (file, key, value) in [
         ("mise.toml", "aqua:nextest-rs/nextest/cargo-nextest", "0.9"),
-        (".config/mise.toml", "zizmor", "latest"),
+        (".config/mise.toml", "shellcheck", "latest"),
         ("mise.local.toml", "rust", "stable"),
         ("mise.toml", "jactionlint", "^2.3.0"),
         ("mise.toml", "opentofu", "01.13.1"),
-        ("mise.toml", "zizmor", "{{ exec(command='id') }}"),
+        ("mise.toml", "shellcheck", "{{ exec(command='id') }}"),
     ] {
         let text = format!("[tools]\n\"{key}\" = \"{value}\"\n");
         let err = resolve_with(&[(file, &text)]).expect_err("loose version must fail");
@@ -128,13 +131,14 @@ fn a_loose_or_templated_version_fails_generation_naming_tool_and_file() {
         assert!(err.contains(file), "{err}");
     }
     let err =
-        resolve_with(&[("mise.toml", "[tools]\nzizmor = [\"1.31.1\"]\n")]).expect_err("array");
+        resolve_with(&[("mise.toml", "[tools]\nshellcheck = [\"0.11.0\"]\n")]).expect_err("array");
     assert!(
-        err.contains("project_tool_version_not_exact:tool=zizmor"),
+        err.contains("project_tool_version_not_exact:tool=shellcheck"),
         "{err}"
     );
-    let err = resolve_with(&[(".tool-versions", "zizmor 1.31.1 1.31.0\n")]).expect_err("fallback");
-    assert!(err.contains("tool=zizmor,file=.tool-versions"), "{err}");
+    let err =
+        resolve_with(&[(".tool-versions", "shellcheck 0.11.0 0.10.0\n")]).expect_err("fallback");
+    assert!(err.contains("tool=shellcheck,file=.tool-versions"), "{err}");
 }
 
 #[test]
