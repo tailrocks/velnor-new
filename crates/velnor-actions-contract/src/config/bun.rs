@@ -7,6 +7,7 @@
 
 use super::tofu::Utf8RepoRelDir;
 use crate::errors::ContractError;
+use crate::workflow::timeout::JobTimeout;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -47,6 +48,10 @@ pub struct BunMemberConfig {
     /// Playwright browsers the member's scripts need, installed by Velnor.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub browsers: Vec<BunBrowser>,
+    /// Timeout of this member's job in minutes (`1..=360`); defaults to
+    /// `stacks.bun.timeout_minutes`, then `workflow.crate_timeout_minutes`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_minutes: Option<u32>,
 }
 
 /// Closed set of Playwright browsers Velnor provisions.
@@ -150,6 +155,9 @@ impl BunStackConfig {
                 validate_scripts(scripts, "stacks.bun.members.scripts", file)?;
             }
             validate_browsers(&member.browsers, file)?;
+            if let Some(minutes) = member.timeout_minutes {
+                JobTimeout::check_config(minutes, file, "stacks.bun.members.timeout_minutes")?;
+            }
         }
         self.validate_inputs(file)
     }
