@@ -39,7 +39,7 @@ pub(crate) enum PositiveAdmission {
     /// The offer has a durable source authorization and can be acknowledged safely.
     Deferred(crate::launch::DeferredAuthorizedOffer),
     /// The journal recorded acquire and reserved its physical capacity.
-    Acquired(AcquiredProvisioning),
+    Acquired(Box<AcquiredProvisioning>),
     /// The journal recorded a definite no-acquire result and its reservation disposition.
     KnownNoAcquire(KnownNoAcquire),
     /// The exact Available message belongs to a durable terminal request.

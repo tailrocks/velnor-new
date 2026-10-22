@@ -93,10 +93,10 @@ fn admission_for_scoped_outcome(
             PositiveAdmission::KnownNoAcquire(receipt)
         }
         crate::launch::steps::ScopedProvisioningOutcome::Acquired(acquired) => {
-            PositiveAdmission::Acquired(acquired)
+            PositiveAdmission::Acquired(Box::new(acquired))
         }
         crate::launch::steps::ScopedProvisioningOutcome::Recovered(recovery) => {
-            PositiveAdmission::Acquired(recovery.into_acquired())
+            PositiveAdmission::Acquired(Box::new(recovery.into_acquired()))
         }
     }
 }

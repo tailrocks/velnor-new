@@ -9,6 +9,10 @@ use crate::launch::bootstrap::{
     BootstrapContainerRole, ObservedContainerCgroup, ObservedStorageAttachment, ObservedStorageRole,
 };
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the storage fixture varies capacity, inode, charge, and ownership facts independently before production validation"
+)]
 pub(crate) fn test_observed_storage_role(
     role: StorageRole,
     pool_id: String,
@@ -44,6 +48,10 @@ pub(crate) fn test_observed_storage_role(
     Ok(value)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the attachment fixture varies observer, mount, device, and filesystem identity facts independently before validation"
+)]
 pub(crate) fn test_observed_storage_attachment(
     role: StorageRole,
     observer: StorageObserver,

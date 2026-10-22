@@ -4,8 +4,8 @@ set -euo pipefail
 project_root=$(cd "$(dirname "$0")/.." && pwd)
 guard_script="$project_root/scripts/hk-fix-write-guard.sh"
 hk_bin=${HK_BIN:-$(mise x hk -- which hk)}
-if [[ "$($hk_bin --version)" != 'hk 2.7.0' ]]; then
-  printf '%s\n' 'This test requires hk 2.7.0.' >&2
+if [[ "$($hk_bin --version)" != 'hk 2.8.0' ]]; then
+  printf '%s\n' 'This test requires hk 2.8.0.' >&2
   exit 1
 fi
 printf 'Using %s\n' "$($hk_bin --version)"

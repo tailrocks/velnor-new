@@ -44,7 +44,7 @@ async fn assert_legacy_cleanup_keeps_reservation_held(
     );
     assert_eq!(
         query_i64(
-            &migrated,
+            migrated,
             "SELECT topology_version FROM capacity_reservation_provisioning_topology WHERE reservation_id = ?1",
             reservation_id,
         )
@@ -53,7 +53,7 @@ async fn assert_legacy_cleanup_keeps_reservation_held(
     );
     assert_eq!(
         query_i64(
-            &migrated,
+            migrated,
             "SELECT COUNT(*) FROM capacity_reservation_provisioning_objects WHERE reservation_id = ?1",
             reservation_id,
         )
@@ -91,7 +91,7 @@ async fn assert_legacy_cleanup_keeps_reservation_held(
     );
     assert_eq!(
         query_i64(
-            &migrated,
+            migrated,
             "SELECT COUNT(*) FROM capacity_reservation_provisioning_cleanups WHERE reservation_id = ?1",
             reservation_id,
         )
@@ -101,7 +101,7 @@ async fn assert_legacy_cleanup_keeps_reservation_held(
     );
     assert_eq!(
         query_i64(
-            &migrated,
+            migrated,
             "SELECT storage_cleanup_proven FROM capacity_reservation_provisioning_state WHERE reservation_id = ?1",
             reservation_id,
         )

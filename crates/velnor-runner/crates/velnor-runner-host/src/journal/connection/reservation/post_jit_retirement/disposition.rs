@@ -9,12 +9,54 @@ pub(in crate::journal) enum EventRetirementStatus {
 
 /// Identity data for a late lifecycle event. These data do not permit job execution.
 pub(in crate::journal) struct EventRetirementDisposition {
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "retained authenticated identity is checked against independent attempt and claim records in tests"
+        )
+    )]
     pub(in crate::journal) lineage_id: i64,
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "retained authenticated identity is checked against independent attempt and claim records in tests"
+        )
+    )]
     pub(in crate::journal) physical_generation: i64,
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "retained authenticated identity is checked against independent attempt and claim records in tests"
+        )
+    )]
     pub(in crate::journal) reservation_id: i64,
     pub(in crate::journal) intent_id: i64,
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "retained authenticated identity is checked against independent attempt and claim records in tests"
+        )
+    )]
     pub(in crate::journal) witness_request_id: i64,
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "retained authenticated identity is checked against independent attempt and claim records in tests"
+        )
+    )]
     pub(in crate::journal) actual_request_id: i64,
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "retained authenticated identity is checked against independent attempt and claim records in tests"
+        )
+    )]
     pub(in crate::journal) claim_generation: i64,
     pub(in crate::journal) status: EventRetirementStatus,
 }

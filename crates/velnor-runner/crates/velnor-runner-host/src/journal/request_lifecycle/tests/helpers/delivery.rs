@@ -44,7 +44,9 @@ pub(super) async fn prepare_jit_and_job_facts_for_engine(
     filesystem_instance_digest: &str,
     engine_id: &str,
 ) -> Result<(), HostError> {
-    use crate::launch::bootstrap::test_job_facts_publication;
+    use crate::launch::bootstrap::{
+        JobFactsPublicationFixtureInput, test_job_facts_publication,
+    };
 
     let (generation, digest) = scope.test_active_authority_identity().await?;
     let jit = scope
@@ -68,29 +70,29 @@ pub(super) async fn prepare_jit_and_job_facts_for_engine(
         .current_storage_profile()
         .await?
         .ok_or(HostError::Journal)?;
-    let proof = test_job_facts_publication(
-        provisioned.reservation_id,
-        provisioned.intent_id,
-        engine_id.to_owned(),
-        provisioned.docker_root_digest.clone(),
-        provisioned.sample_generation_id.clone(),
-        profile.generation_id().to_owned(),
-        profile.profile_digest().to_owned(),
-        provisioned.runner_container_id.clone(),
-        provisioned.dind_container_id.clone(),
-        runner.clone(),
-        provisioned.instance_binding_digest.clone(),
-        "/opt/velnor/job-facts/storage-cache-admission.json".to_owned(),
-        "9".repeat(64),
-        501,
-        (0, 46),
-        (0, 46),
-        0x0102_1994,
-        (0, 46, 77),
-        46_u64,
-        filesystem_instance_digest.to_owned(),
-        true,
-    )?;
+    let proof = test_job_facts_publication(JobFactsPublicationFixtureInput {
+        reservation_id: provisioned.reservation_id,
+        operation_id: provisioned.intent_id,
+        engine_id: engine_id.to_owned(),
+        docker_root_digest: provisioned.docker_root_digest.clone(),
+        sample_generation_id: provisioned.sample_generation_id.clone(),
+        profile_generation_id: profile.generation_id().to_owned(),
+        profile_digest: profile.profile_digest().to_owned(),
+        runner_container_id: provisioned.runner_container_id.clone(),
+        dind_container_id: provisioned.dind_container_id.clone(),
+        runner: runner.clone(),
+        instance_binding_digest: provisioned.instance_binding_digest.clone(),
+        path: "/opt/velnor/job-facts/storage-cache-admission.json".to_owned(),
+        projection_digest: "9".repeat(64),
+        mount_id: 501,
+        device: (0, 46),
+        statx_device: (0, 46),
+        fs_type_magic: 0x0102_1994,
+        directory_identity: (0, 46, 77),
+        filesystem_id: 46_u64,
+        filesystem_instance_digest: filesystem_instance_digest.to_owned(),
+        read_only: true,
+    })?;
     scope
         .record_job_facts_published(&publication, &proof)
         .await?;
