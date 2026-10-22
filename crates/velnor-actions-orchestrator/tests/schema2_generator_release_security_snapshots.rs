@@ -363,33 +363,30 @@ fn write_executable(path: &Path, content: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub(super) fn assert_exact_empty_verifier_credentials(
-    body: &str,
-    verifier_steps: &[&str],
-) -> Result<(), Box<dyn Error>> {
-    let expected_keys = velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST
-        .into_iter()
-        .chain(velnor_actions_workflow_renderer::toolchain_env::STEP_ENDPOINT_DENYLIST)
-        .collect::<std::collections::BTreeSet<_>>();
+type SnapshotStep = (String, Option<Vec<(String, String)>>);
+
+fn finish_snapshot_step(
+    steps: &mut Vec<SnapshotStep>,
+    name: &mut Option<String>,
+    env: &mut Option<Vec<(String, String)>>,
+) {
+    if let Some(name) = name.take() {
+        steps.push((name, env.take()));
+    }
+}
+
+fn parse_snapshot_steps(body: &str) -> Result<Vec<SnapshotStep>, Box<dyn Error>> {
     let mut steps = Vec::new();
     let mut step_name: Option<String> = None;
     let mut step_indent: Option<usize> = None;
     let mut env_entries: Option<Vec<(String, String)>> = None;
     let mut in_env = false;
 
-    let finish_step = |steps: &mut Vec<(String, Option<Vec<(String, String)>>)>,
-                       name: &mut Option<String>,
-                       env: &mut Option<Vec<(String, String)>>| {
-        if let Some(name) = name.take() {
-            steps.push((name, env.take()));
-        }
-    };
-
     for line in body.lines() {
         let indent = line.len() - line.trim_start().len();
         let trimmed = line.trim_start();
         if let Some(name) = trimmed.strip_prefix("- name: ") {
-            finish_step(&mut steps, &mut step_name, &mut env_entries);
+            finish_snapshot_step(&mut steps, &mut step_name, &mut env_entries);
             step_name = Some(name.to_owned());
             step_indent = Some(indent);
             in_env = false;
@@ -446,8 +443,22 @@ pub(super) fn assert_exact_empty_verifier_credentials(
             }
         }
     }
-    finish_step(&mut steps, &mut step_name, &mut env_entries);
+    finish_snapshot_step(&mut steps, &mut step_name, &mut env_entries);
+    Ok(steps)
+}
 
+fn expected_credential_keys() -> std::collections::BTreeSet<&'static str> {
+    velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST
+        .into_iter()
+        .chain(velnor_actions_workflow_renderer::toolchain_env::STEP_ENDPOINT_DENYLIST)
+        .collect()
+}
+
+fn assert_verifier_envs(
+    steps: &[SnapshotStep],
+    verifier_steps: &[&str],
+    expected_keys: &std::collections::BTreeSet<&'static str>,
+) -> Result<(), Box<dyn Error>> {
     for expected_name in verifier_steps {
         let matching = steps
             .iter()
@@ -481,23 +492,37 @@ pub(super) fn assert_exact_empty_verifier_credentials(
             return Err(format!("verifier credential env set differs in {expected_name:?}").into());
         }
     }
+    Ok(())
+}
 
-    for (name, env) in &steps {
+fn assert_no_misplaced_credentials(
+    steps: &[SnapshotStep],
+    verifier_steps: &[&str],
+    expected_keys: &std::collections::BTreeSet<&'static str>,
+) -> Result<(), Box<dyn Error>> {
+    for (name, env) in steps {
         if verifier_steps.contains(&name.as_str()) {
             continue;
         }
-        if let Some(entries) = env {
-            if let Some((key, _)) = entries.iter().find(|(key, _)| {
+        if let Some(entries) = env
+            && let Some((key, _)) = entries.iter().find(|(key, _)| {
                 expected_keys.contains(key.as_str()) || key.to_ascii_uppercase().contains("TOKEN")
-            }) {
-                return Err(
-                    format!("credential binding {key:?} is misplaced in step {name:?}").into(),
-                );
-            }
+            })
+        {
+            return Err(format!("credential binding {key:?} is misplaced in step {name:?}").into());
         }
     }
-
     Ok(())
+}
+
+pub(super) fn assert_exact_empty_verifier_credentials(
+    body: &str,
+    verifier_steps: &[&str],
+) -> Result<(), Box<dyn Error>> {
+    let expected_keys = expected_credential_keys();
+    let steps = parse_snapshot_steps(body)?;
+    assert_verifier_envs(&steps, verifier_steps, &expected_keys)?;
+    assert_no_misplaced_credentials(&steps, verifier_steps, &expected_keys)
 }
 
 pub(super) fn assert_release_workflow_verifier(
