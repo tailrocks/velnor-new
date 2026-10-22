@@ -126,6 +126,54 @@ pub fn bun_report_upload_step(suite_job_id: &str, retention: u16) -> Result<Step
     )
 }
 
+/// Directory of the private release assets a suite job receives (HD-7 layout).
+pub const BUN_ASSETS_DIR: &str = ".velnor/deps";
+/// Per-file SHA-256 index the assets job writes beside the assets.
+pub const BUN_ASSETS_INDEX: &str = "velnor-assets.sha256";
+
+fn assets_artifact(member_job_id: &str) -> String {
+    format!("{BUN_ARTIFACT_PREFIX}assets-{member_job_id}")
+}
+
+/// The assets job's upload of the verified `.velnor/deps` tree (1 day).
+///
+/// # Errors
+///
+/// Returns render errors for an invalid step.
+pub fn bun_assets_upload_step(member_job_id: &str) -> Result<Step, RenderError> {
+    action_step(
+        "Upload private assets",
+        UPLOAD_ARTIFACT_USES,
+        BTreeMap::from([
+            ("name".to_owned(), assets_artifact(member_job_id)),
+            ("path".to_owned(), BUN_ASSETS_DIR.to_owned()),
+            ("if-no-files-found".to_owned(), "error".to_owned()),
+            ("include-hidden-files".to_owned(), "true".to_owned()),
+            ("overwrite".to_owned(), "true".to_owned()),
+            (
+                "retention-days".to_owned(),
+                BUN_BLOB_RETENTION_DAYS.to_string(),
+            ),
+        ]),
+    )
+}
+
+/// A suite job's download of the assets its member's assets job verified.
+///
+/// # Errors
+///
+/// Returns render errors for an invalid step.
+pub fn bun_assets_download_step(member_job_id: &str) -> Result<Step, RenderError> {
+    action_step(
+        "Download private assets",
+        DOWNLOAD_ARTIFACT_USES,
+        BTreeMap::from([
+            ("name".to_owned(), assets_artifact(member_job_id)),
+            ("path".to_owned(), BUN_ASSETS_DIR.to_owned()),
+        ]),
+    )
+}
+
 /// True for one of the pinned artifact actions above, by its generated shape:
 /// no role, the pinned upload or download action, a `velnor-pw-` name or
 /// pattern. The job reconstruction then compares every input byte for byte.
@@ -137,7 +185,11 @@ pub(crate) fn is_bun_artifact_step(step: &Step) -> bool {
         with.get(key)
             .is_some_and(|name| name.starts_with(BUN_ARTIFACT_PREFIX))
     };
+    let assets = with
+        .get("name")
+        .is_some_and(|name| name.starts_with(&format!("{BUN_ARTIFACT_PREFIX}assets-")));
     step.role.is_none()
         && ((uses == UPLOAD_ARTIFACT_USES && named("name"))
-            || (uses == DOWNLOAD_ARTIFACT_USES && named("pattern") && !with.contains_key("name")))
+            || (uses == DOWNLOAD_ARTIFACT_USES && named("pattern") && !with.contains_key("name"))
+            || (uses == DOWNLOAD_ARTIFACT_USES && assets && !with.contains_key("pattern")))
 }
