@@ -65,6 +65,10 @@ pub(super) fn verify_release_channel_environment(
 #[path = "package_release_publish_preflight_tests.rs"]
 mod tests;
 
+#[cfg(test)]
+#[path = "package_release_publish_preflight_classic_tests.rs"]
+mod classic_tests;
+
 #[path = "package_release_publish_preflight_validation.rs"]
 mod validation;
 #[cfg(test)]
