@@ -61,7 +61,10 @@ pub(super) fn assert_candidate_qualification(
         !action_body.contains("Attest built artifacts"),
         "{action_body}"
     );
-    assert!(!action_body.contains("GH_TOKEN:"), "{action_body}");
+    super::security_snapshots::assert_exact_empty_verifier_credentials(
+        action_body,
+        &["Verify Rust channel manifest", "Verify jactionlint"],
+    )?;
     assert!(
         !action_body.contains("actions/upload-artifact@"),
         "{action_body}"

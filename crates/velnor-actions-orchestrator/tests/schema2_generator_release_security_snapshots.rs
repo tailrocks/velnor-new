@@ -177,7 +177,10 @@ fn assert_qualifier_action_boundary(qualifier_body: &str) -> Result<(), Box<dyn 
             .count(),
         1
     );
-    assert!(!qualifier_body.contains("GH_TOKEN:"), "{qualifier_body}");
+    assert_exact_empty_verifier_credentials(
+        qualifier_body,
+        &["Verify Rust channel manifest", "Verify jactionlint"],
+    )?;
     assert!(
         !qualifier_body.contains("Attest built artifacts"),
         "{qualifier_body}"
@@ -358,4 +361,342 @@ fn write_executable(path: &Path, content: &str) -> Result<(), Box<dyn Error>> {
     permissions.set_mode(0o755);
     fs::set_permissions(path, permissions)?;
     Ok(())
+}
+
+pub(super) fn assert_exact_empty_verifier_credentials(
+    body: &str,
+    verifier_steps: &[&str],
+) -> Result<(), Box<dyn Error>> {
+    let expected_keys = velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST
+        .into_iter()
+        .chain(velnor_actions_workflow_renderer::toolchain_env::STEP_ENDPOINT_DENYLIST)
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut steps = Vec::new();
+    let mut step_name: Option<String> = None;
+    let mut step_indent: Option<usize> = None;
+    let mut env_entries: Option<Vec<(String, String)>> = None;
+    let mut in_env = false;
+
+    let finish_step = |steps: &mut Vec<(String, Option<Vec<(String, String)>>)>,
+                       name: &mut Option<String>,
+                       env: &mut Option<Vec<(String, String)>>| {
+        if let Some(name) = name.take() {
+            steps.push((name, env.take()));
+        }
+    };
+
+    for line in body.lines() {
+        let indent = line.len() - line.trim_start().len();
+        let trimmed = line.trim_start();
+        if let Some(name) = trimmed.strip_prefix("- name: ") {
+            finish_step(&mut steps, &mut step_name, &mut env_entries);
+            step_name = Some(name.to_owned());
+            step_indent = Some(indent);
+            in_env = false;
+            continue;
+        }
+
+        let env_indent = step_indent.map(|level| level + 2);
+        let values_indent = step_indent.map(|level| level + 4);
+        if step_name.is_some() && Some(indent) == env_indent && trimmed == "env:" {
+            let name = step_name.as_ref().ok_or("step name disappeared")?;
+            if env_entries.is_some() {
+                return Err(format!("duplicate env mapping in step {name:?}").into());
+            }
+            env_entries = Some(Vec::new());
+            in_env = true;
+            continue;
+        }
+
+        if let Some(name) = step_name.as_ref()
+            && in_env
+            && !trimmed.is_empty()
+        {
+            if Some(indent) == values_indent {
+                let Some((key, value)) = trimmed.split_once(": ") else {
+                    return Err(format!("malformed env entry in step {name:?}: {trimmed:?}").into());
+                };
+                env_entries
+                    .as_mut()
+                    .ok_or("env entry without env mapping")?
+                    .push((key.to_owned(), value.to_owned()));
+                continue;
+            }
+            if Some(indent) > values_indent {
+                return Err(format!(
+                    "unsupported nested env mapping in step {name:?}: {trimmed:?}"
+                )
+                .into());
+            }
+            in_env = false;
+        }
+
+        if let Some((key, value)) = trimmed.split_once(':') {
+            let normalized_key = key.trim().trim_matches(['"', '\'']).to_ascii_uppercase();
+            if normalized_key.contains("TOKEN")
+                || matches!(normalized_key.as_str(), "GH_HOST" | "GH_CONFIG_DIR")
+            {
+                return Err(format!(
+                    "credential or endpoint key outside a verifier env mapping: {line:?}"
+                )
+                .into());
+            }
+            if normalized_key == "ENV" && value.to_ascii_uppercase().contains("TOKEN") {
+                return Err(format!("inline token environment is not accepted: {line:?}").into());
+            }
+        }
+    }
+    finish_step(&mut steps, &mut step_name, &mut env_entries);
+
+    for expected_name in verifier_steps {
+        let matching = steps
+            .iter()
+            .filter(|(name, _)| name == expected_name)
+            .collect::<Vec<_>>();
+        if matching.len() != 1 {
+            return Err(format!(
+                "expected exactly one {expected_name:?} step, found {}",
+                matching.len()
+            )
+            .into());
+        }
+        let Some(entries) = matching[0].1.as_ref() else {
+            return Err(format!("missing env mapping in verifier step {expected_name:?}").into());
+        };
+        let mut observed = std::collections::BTreeMap::new();
+        for (key, value) in entries {
+            if observed.insert(key.as_str(), value.as_str()).is_some() {
+                return Err(format!("duplicate {key:?} env binding in {expected_name:?}").into());
+            }
+            if !expected_keys.contains(key.as_str()) {
+                return Err(format!("unexpected env binding {key:?} in {expected_name:?}").into());
+            }
+            if value != "\"\"" {
+                return Err(format!("{key:?} must be exactly empty in {expected_name:?}").into());
+            }
+        }
+        if observed.len() != expected_keys.len()
+            || expected_keys.iter().any(|key| !observed.contains_key(key))
+        {
+            return Err(format!("verifier credential env set differs in {expected_name:?}").into());
+        }
+    }
+
+    for (name, env) in &steps {
+        if verifier_steps.contains(&name.as_str()) {
+            continue;
+        }
+        if let Some(entries) = env {
+            if let Some((key, _)) = entries.iter().find(|(key, _)| {
+                expected_keys.contains(key.as_str()) || key.to_ascii_uppercase().contains("TOKEN")
+            }) {
+                return Err(
+                    format!("credential binding {key:?} is misplaced in step {name:?}").into(),
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+pub(super) fn assert_release_workflow_verifier(
+    workflow: &str,
+    step_name: &str,
+    globally_scoped_key: &str,
+) -> Result<(), Box<dyn Error>> {
+    let step = named_step(workflow, step_name)?;
+    assert_exact_empty_verifier_credentials(&step, &[step_name])?;
+    let key = format!("{globally_scoped_key}:");
+    let occurrences = workflow.matches(&key).count();
+    if occurrences != 1 {
+        return Err(format!(
+            "{globally_scoped_key} must occur exactly once in the workflow, found {occurrences}"
+        )
+        .into());
+    }
+    let exact_empty_mapping = format!("{globally_scoped_key}: \"\"");
+    if !step.lines().any(|line| line.trim() == exact_empty_mapping) {
+        return Err(format!("{globally_scoped_key} must be exactly empty in {step_name:?}").into());
+    }
+    Ok(())
+}
+
+fn named_step(body: &str, expected_name: &str) -> Result<String, Box<dyn Error>> {
+    let mut current_name: Option<String> = None;
+    let mut current = String::new();
+    let mut matches = Vec::new();
+    for line in body.lines() {
+        if let Some(name) = line.trim_start().strip_prefix("- name: ") {
+            if current_name.as_deref() == Some(expected_name) {
+                matches.push(current.clone());
+            }
+            current_name = Some(name.to_owned());
+            current.clear();
+        }
+        if current_name.is_some() {
+            current.push_str(line);
+            current.push('\n');
+        }
+    }
+    if current_name.as_deref() == Some(expected_name) {
+        matches.push(current);
+    }
+    if matches.len() != 1 {
+        return Err(format!(
+            "expected exactly one step named {expected_name:?}, found {}",
+            matches.len()
+        )
+        .into());
+    }
+    Ok(matches.pop().ok_or("step disappeared")?)
+}
+
+#[cfg(test)]
+mod credential_environment_tests {
+    use super::{assert_exact_empty_verifier_credentials, assert_release_workflow_verifier};
+
+    const VALID: &str = include_str!("snapshots/generator-release-qualify-linux.yml");
+
+    #[test]
+    fn exact_empty_credentials_are_limited_to_both_verifier_steps() {
+        assert!(
+            assert_exact_empty_verifier_credentials(
+                VALID,
+                &["Verify Rust channel manifest", "Verify jactionlint"],
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn rejects_live_or_expression_credentials() {
+        for value in ["\"literal\"", "\"${{ github.token }}\""] {
+            let tampered = VALID.replacen("GH_TOKEN: \"\"", &format!("GH_TOKEN: {value}"), 1);
+            assert!(
+                assert_exact_empty_verifier_credentials(
+                    &tampered,
+                    &["Verify Rust channel manifest", "Verify jactionlint"],
+                )
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_duplicate_missing_and_alternate_token_bindings() {
+        let duplicate = VALID.replacen(
+            "        GH_TOKEN: \"\"\n",
+            "        GH_TOKEN: \"\"\n        GH_TOKEN: \"\"\n",
+            1,
+        );
+        assert!(
+            assert_exact_empty_verifier_credentials(
+                &duplicate,
+                &["Verify Rust channel manifest", "Verify jactionlint"],
+            )
+            .is_err()
+        );
+
+        let missing = VALID.replacen("        GH_TOKEN: \"\"\n", "", 1);
+        assert!(
+            assert_exact_empty_verifier_credentials(
+                &missing,
+                &["Verify Rust channel manifest", "Verify jactionlint"],
+            )
+            .is_err()
+        );
+
+        let alternate = VALID.replacen(
+            "        GH_TOKEN: \"\"\n",
+            "        GH_TOKEN: \"\"\n        EXTRA_TOKEN: \"\"\n",
+            1,
+        );
+        assert!(
+            assert_exact_empty_verifier_credentials(
+                &alternate,
+                &["Verify Rust channel manifest", "Verify jactionlint"],
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn rejects_credentials_outside_verifier_steps() {
+        let misplaced = VALID.replacen(
+            "    - name: Setup Mise\n",
+            "    - name: Setup Mise\n      env:\n        GH_TOKEN: \"\"\n",
+            1,
+        );
+        assert!(
+            assert_exact_empty_verifier_credentials(
+                &misplaced,
+                &["Verify Rust channel manifest", "Verify jactionlint"],
+            )
+            .is_err()
+        );
+
+        let root_level = VALID.replacen("runs:\n", "runs:\n  env:\n    GH_TOKEN: \"\"\n", 1);
+        assert!(
+            assert_exact_empty_verifier_credentials(
+                &root_level,
+                &["Verify Rust channel manifest", "Verify jactionlint"],
+            )
+            .is_err()
+        );
+
+        let inline = VALID.replacen(
+            "    - name: Setup Mise\n",
+            "    - name: Setup Mise\n      env: { GH_TOKEN: \"\" }\n",
+            1,
+        );
+        assert!(
+            assert_exact_empty_verifier_credentials(
+                &inline,
+                &["Verify Rust channel manifest", "Verify jactionlint"],
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn release_workflow_keeps_registry_token_empty_only_on_verifier() {
+        const WORKFLOW: &str = include_str!("snapshots/product-release-images.yml");
+        assert!(
+            assert_release_workflow_verifier(
+                WORKFLOW,
+                "Verify Rust channel manifest",
+                "CARGO_REGISTRY_TOKEN",
+            )
+            .is_ok()
+        );
+
+        let live = WORKFLOW.replacen(
+            "CARGO_REGISTRY_TOKEN: \"\"",
+            "CARGO_REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}",
+            1,
+        );
+        assert!(
+            assert_release_workflow_verifier(
+                &live,
+                "Verify Rust channel manifest",
+                "CARGO_REGISTRY_TOKEN",
+            )
+            .is_err()
+        );
+
+        let misplaced = WORKFLOW.replacen(
+            "      - name: Build runner and DinD images\n",
+            "      - name: Build runner and DinD images\n        env:\n          CARGO_REGISTRY_TOKEN: \"\"\n",
+            1,
+        );
+        assert!(
+            assert_release_workflow_verifier(
+                &misplaced,
+                "Verify Rust channel manifest",
+                "CARGO_REGISTRY_TOKEN",
+            )
+            .is_err()
+        );
+    }
 }
