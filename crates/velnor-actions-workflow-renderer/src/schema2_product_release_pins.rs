@@ -42,8 +42,6 @@ pub struct ProductReleasePins {
     pub lint_argv: Vec<String>,
     /// `sh -c` argv verifying the installed jactionlint executable digest.
     pub verify_lint_argv: Vec<String>,
-    /// Exact pinned zizmor argv.
-    pub zizmor_argv: Vec<String>,
     /// Exact pinned GitHub CLI invocation prefix.
     pub gh_argv: Vec<String>,
     /// Exact Rust toolchain release selected by the Mise catalog.

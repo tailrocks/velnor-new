@@ -103,9 +103,9 @@ const SAMPLE_BODY: &str = r#"schema = 1
 
 # Optional verification jobs, one support job per entry, all covered by the
 # required gate. Unknown names fail generate. Enabled jobs may need
-# repository-owned policy files (.alint.yml, .zizmor.yml).
+# repository-owned policy files (.alint.yml).
 # [workflow.verify]
-# jobs = ["zizmor", "alint", "markdownlint", "strict-json", "frontmatter-id", "link-check", "native-validators"]
+# jobs = ["alint", "markdownlint", "strict-json", "frontmatter-id", "link-check", "native-validators"]
 # strict_json_files = [".github/marketplace.json"] # Optional explicit scope; omit to check every JSON file.
 # lychee_args = ["--offline", "--include-fragments"] # Optional Lychee args; preserved as separate argv values.
 

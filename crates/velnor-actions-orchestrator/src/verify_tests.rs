@@ -42,7 +42,7 @@ fn verify_kinds_emit_canonical_order() {
 fn verify_vectors_carry_pins_and_payloads() {
     let catalog = ToolCatalog::pinned();
     let joined = |kind: ValidatorKind| {
-        verify_command(kind, &VerifyConfig::default(), &catalog)
+        verify_command(kind, &VerifyConfig::default())
             .expect("command builds")
             .expect("shell kind has a command")
             .argv
@@ -89,12 +89,12 @@ fn verify_vectors_carry_pins_and_payloads() {
     assert_eq!(native[1], "-c");
     assert!(native[2].contains("claude plugin validate --strict"));
     assert!(
-        verify_command(ValidatorKind::Alint, &VerifyConfig::default(), &catalog)
+        verify_command(ValidatorKind::Alint, &VerifyConfig::default())
             .expect("alint resolves")
             .is_none(),
         "alint renders as an action step"
     );
-    let err = verify_command(ValidatorKind::CargoDeny, &VerifyConfig::default(), &catalog)
+    let err = verify_command(ValidatorKind::CargoDeny, &VerifyConfig::default())
         .expect_err("deny rejected");
     assert!(err.to_string().contains("verify_kind_rejected"), "{err}");
 }
@@ -112,14 +112,14 @@ fn configured_content_verifiers_retain_argument_boundaries() {
             "docs/**".to_owned(),
         ],
     };
-    let strict = verify_command(ValidatorKind::StrictJson, &options, &catalog)
+    let strict = verify_command(ValidatorKind::StrictJson, &options)
         .expect("strict JSON vector builds")
         .expect("strict JSON command exists");
     assert_eq!(
         strict.argv.last().map(String::as_str),
         Some("[\".github/marketplace.json\"]")
     );
-    let links = verify_command(ValidatorKind::LinkCheck, &options, &catalog)
+    let links = verify_command(ValidatorKind::LinkCheck, &options)
         .expect("link check vector builds")
         .expect("link check command exists");
     let position = links
@@ -193,8 +193,7 @@ fn strict_json_scope_rejects_missing_and_symlinked_files() {
 fn verify_vectors_pass_renderer_argv_gates() {
     let catalog = ToolCatalog::pinned();
     for kind in ValidatorKind::consumer_verify() {
-        let Some(command) =
-            verify_command(kind, &VerifyConfig::default(), &catalog).expect("command builds")
+        let Some(command) = verify_command(kind, &VerifyConfig::default()).expect("command builds")
         else {
             continue;
         };
@@ -228,8 +227,7 @@ fn verify_vectors_pass_renderer_argv_gates() {
 fn verify_exec_pairs_with_matching_install() {
     let catalog = ToolCatalog::pinned();
     for kind in ValidatorKind::consumer_verify() {
-        let Some(command) =
-            verify_command(kind, &VerifyConfig::default(), &catalog).expect("command builds")
+        let Some(command) = verify_command(kind, &VerifyConfig::default()).expect("command builds")
         else {
             continue;
         };

@@ -88,13 +88,18 @@ pub struct WorkflowConfig {
     pub preserve_workflows: Vec<String>,
 }
 
+/// The retired zizmor verification job (hard decision 10): its audits run in
+/// jactionlint's `default` profile, so naming it is a configuration error
+/// that says what to set instead.
+const RETIRED_ZIZMOR_JOB: &str = "zizmor";
+
 /// `[workflow.verify]`: config-selected verification jobs.
 ///
 /// Each entry names a [`ValidatorKind::consumer_verify`] job ID; the
 /// generator emits one support job per entry on any policy and the
 /// required gate covers them. Unknown or duplicated names fail
 /// validation closed. Enabled jobs may require repository-owned
-/// policy files (`.alint.yml`, `.zizmor.yml`); a missing file fails
+/// policy files (`.alint.yml`); a missing file fails
 /// that job, never silently.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -290,6 +295,13 @@ impl VerifyConfig {
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         let mut seen = std::collections::BTreeSet::new();
         for job in &self.jobs {
+            if job == RETIRED_ZIZMOR_JOB {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.verify.jobs",
+                    "zizmor_retired:jactionlint covers the zizmor audits; set [workflow.lint] profile = \"default\" and remove \"zizmor\" (hard decision 10)".to_owned(),
+                ));
+            }
             if ValidatorKind::from_verify_name(job).is_none() {
                 return Err(ContractError::config(
                     file,

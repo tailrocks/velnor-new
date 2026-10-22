@@ -142,7 +142,7 @@ pub(super) fn release_gate_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>,
 }
 
 /// Install the gate tools, verify the jactionlint executable, then lint the
-/// committed tree with jactionlint and zizmor: one sequence for every gate.
+/// committed tree with jactionlint: one sequence for every gate.
 pub(super) fn lint_gate_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, RenderError> {
     Ok(vec![
         workflow_steps::command_step(
@@ -151,7 +151,6 @@ pub(super) fn lint_gate_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, Re
         )?,
         workflow_steps::command_step("Verify jactionlint", &pins.verify_lint_argv)?,
         workflow_steps::command_step("Run jactionlint", &pins.lint_argv)?,
-        workflow_steps::command_step("Run zizmor", &pins.zizmor_argv)?,
     ])
 }
 

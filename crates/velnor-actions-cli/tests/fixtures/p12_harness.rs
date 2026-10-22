@@ -346,7 +346,6 @@ const PROBE_DATA: &[&str] = &[
     "https://api.github.com/repos/cli/cli/releases/latest\tgh.json\t{\"tag_name\": \"v2.102.0\"}",
     "https://api.github.com/repos/jdx/jactionlint/releases/latest\tjactionlint.json\t{\"tag_name\": \"v2.3.0\"}",
     "https://api.github.com/repos/koalaman/shellcheck/releases/latest\tshellcheck.json\t{\"tag_name\": \"v0.11.0\"}",
-    "https://api.github.com/repos/zizmorcore/zizmor/releases/latest\tzizmor.json\t{\"tag_name\": \"v1.31.1\"}",
     "https://crates.io/api/v1/crates/cargo-nextest\tnextest.json\t{\"crate\": {\"max_version\": \"0.9.148\"}}",
     "https://crates.io/api/v1/crates/release-plz\trelease-plz.json\t{\"crate\": {\"max_version\": \"0.3.172\"}}",
     "https://api.github.com/repos/opentofu/opentofu/releases/latest\topentofu.json\t{\"tag_name\": \"v1.13.1\"}",

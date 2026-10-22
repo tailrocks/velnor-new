@@ -3,7 +3,7 @@
 //!
 //! Owns generated `.github/jactionlint.yaml` bytes, the pinned jactionlint
 //! capability flags and lint argv, pinned action refs with override/input
-//! validation, the staging-only zizmor config, and lint-tool pins. Pure
+//! validation, and lint-tool pins. Pure
 //! data plus validation: never spawns processes, never reads the
 //! filesystem; Mise executes tools while the orchestrator invokes this
 //! crate for config and validation. The crate keeps its historical
@@ -16,7 +16,6 @@ pub mod error;
 pub mod metadata;
 pub mod overrides;
 pub mod tools;
-pub mod zizmor;
 
 pub use actions::{
     ALINT_ACTION, ALINT_ACTION_SHA, ALINT_ACTION_VERSION, ALLOWED_ACTIONS, ATTEST_ACTION,
@@ -47,7 +46,7 @@ pub use overrides::{
 };
 pub use tools::{
     JACTIONLINT_CONFIG_PATH, JactionlintToolchain, LINT_FILE_GLOBS, LINT_FLAGS, SHELLCHECK_VERSION,
-    ShellcheckToolchain, WorkflowLintTools, ZizmorToolchain, workflow_lint_script,
+    ShellcheckToolchain, WorkflowLintTools, workflow_lint_script,
 };
 
 /// Stable identifier for the workflow-lint tool metadata.

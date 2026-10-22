@@ -90,8 +90,6 @@ pub enum ValidatorKind {
     CargoMachete,
     /// Workflow, composite action and Dependabot lint (jactionlint).
     Jactionlint,
-    /// Workflow security audit.
-    Zizmor,
     /// Markdown lint over repository docs.
     Markdownlint,
     /// Strict JSON syntax plus duplicate-key rejection.
@@ -113,7 +111,6 @@ impl ValidatorKind {
             Self::CargoDeny => "cargo-deny",
             Self::CargoMachete => "cargo-machete",
             Self::Jactionlint => "jactionlint",
-            Self::Zizmor => "zizmor",
             Self::Markdownlint => "markdownlint",
             Self::StrictJson => "strict-json",
             Self::FrontmatterId => "frontmatter-id",
@@ -130,7 +127,6 @@ impl ValidatorKind {
             Self::CargoDeny => "Cargo Deny",
             Self::CargoMachete => "Cargo Machete",
             Self::Jactionlint => "Jactionlint",
-            Self::Zizmor => "Zizmor",
             Self::Markdownlint => "Markdownlint",
             Self::StrictJson => "Strict JSON",
             Self::FrontmatterId => "Frontmatter ID",
@@ -141,13 +137,12 @@ impl ValidatorKind {
 
     /// Every validator kind in emission order.
     #[must_use]
-    pub fn all() -> [Self; 10] {
+    pub fn all() -> [Self; 9] {
         [
             Self::Alint,
             Self::CargoDeny,
             Self::CargoMachete,
             Self::Jactionlint,
-            Self::Zizmor,
             Self::Markdownlint,
             Self::StrictJson,
             Self::FrontmatterId,
@@ -160,13 +155,8 @@ impl ValidatorKind {
     ///
     /// Jactionlint is always-on base IR on both policies, never support.
     #[must_use]
-    pub fn repository_validators() -> [Self; 4] {
-        [
-            Self::Alint,
-            Self::CargoDeny,
-            Self::CargoMachete,
-            Self::Zizmor,
-        ]
+    pub fn repository_validators() -> [Self; 3] {
+        [Self::Alint, Self::CargoDeny, Self::CargoMachete]
     }
 }
 
@@ -178,9 +168,8 @@ impl ValidatorKind {
     /// Cargo-backed validators stay Velnor-only: their vectors assume
     /// the Velnor workspace layout.
     #[must_use]
-    pub fn consumer_verify() -> [Self; 7] {
+    pub fn consumer_verify() -> [Self; 6] {
         [
-            Self::Zizmor,
             Self::Alint,
             Self::Markdownlint,
             Self::StrictJson,
