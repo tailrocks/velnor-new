@@ -1,66 +1,1875 @@
 # Kingfisher 2.14.0 exact-fingerprint baseline for git://github.com/tailrocks/velnor-new.
-# Scan: --quiet --no-update-check scan <repository> --git-history full --no-validate --redact --format json --confidence low --no-dedup.
-# Scope: default-visible findings on main 172bdd84dbe6b584b0b92cfa577f9453b859a080 across 1167 locally available refs including all primary refs and 24 detached worktree HEADs, 7318 reachable commits, non-shallow.
-# --include-hidden-findings was omitted; this baseline makes no claim about hidden findings.
-# Validation and update checks were disabled; no live credential validation was performed.
-# Exact fingerprints only; scanner rules were not weakened.
-# The nine retained findings are reviewed test fixtures: dispatch-cache API-key placeholders, bundled TUF snakeoil key, and runner log-projection URI placeholder.
+# Scan (matches the security-audit hook plus --no-dedup): scan . --git-history full --confidence low --no-validate --redact --no-update-check --no-dedup,
+# run on a fresh full clone (all published branches) at main 9953910d6 plus this change. 597 raw findings, 310 unique fingerprints, all listed below.
+# --no-dedup matters: without it kingfisher reports one arbitrary instance of each duplicated secret per run, so every instance must be baselined.
+# Exact fingerprints only; scanner rules were not weakened; no live validation was performed. Every entry is a reviewed placeholder or fixture:
+#   - dist/**/index.js (195): the public Azure Storage emulator account key (devstoreaccount1) bundled in third-party action code
+#   - age-secret-key (26) and generic-credential-uri (81): test keys and user:password placeholder URIs in the vendored mise sources, e2e scripts and docs
+#   - ibm-cloud-user-api-key (6): velnor-qcache-v2-campaign-1-mbx_objects-k1 style cache-key names in dispatch-cache tests, not credentials
+#   - private-key (2): the tough TUF snakeoil.pem test fixture, protects nothing
+#   - generic-credential-uri in runner log projection test: example.invalid placeholder URI
 version: 2
 fingerprint_algorithm: kingfisher-v1
 repositories:
 - id: git://github.com/tailrocks/velnor-new
   findings:
-  - path: crates/velnor-actions-orchestrator/src/qualification_cache_payload/tests/dispatch_cache_transfer_tests.rs
-    fingerprint: '14012431181956290570'
-    rule_id: betterleaks.ibm-cloud-user-api-key
-    line: 302
-    first_seen_at: 2026-10-22T11:11:39.920683+00:00
-    last_updated_at: 2026-10-22T11:11:39.920683+00:00
-  - path: crates/velnor-actions-cli/tests/dispatch_cache_transfer_tests.rs
-    fingerprint: '15412528421502453484'
-    rule_id: betterleaks.ibm-cloud-user-api-key
-    line: 265
-    first_seen_at: 2026-10-22T11:11:39.920683+00:00
-    last_updated_at: 2026-10-22T11:11:39.920683+00:00
+  - path: ./crates/velnor-runner/crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem
+    fingerprint: '3870778852293062565'
+    rule_id: betterleaks.private-key
+    line: 1
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: crates/mise-util/src/http.rs
+    fingerprint: '7182110086334088314'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3844
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: crates/mise-util/src/http.rs
+    fingerprint: '6912589291642784532'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3847
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: crates/mise-util/src/http.rs
+    fingerprint: '5438136313796085723'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3903
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: crates/mise-util/src/http.rs
+    fingerprint: '7559723983075478666'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3906
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: crates/mise-util/src/http/tests/auth.rs
+    fingerprint: '18041208027185875629'
+    rule_id: betterleaks.generic-credential-uri
+    line: 432
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: crates/mise-util/src/http/tests/auth.rs
+    fingerprint: '9402921445166639216'
+    rule_id: betterleaks.generic-credential-uri
+    line: 488
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
   - path: crates/velnor-actions-cli/src/dispatch_cache_transfer_tests.rs
     fingerprint: '15553855787233172094'
     rule_id: betterleaks.ibm-cloud-user-api-key
     line: 265
-    first_seen_at: 2026-10-22T11:11:39.920683+00:00
-    last_updated_at: 2026-10-22T11:11:39.920683+00:00
-  - path: crates/velnor-runner/crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem
-    fingerprint: '17024251161024570094'
-    rule_id: betterleaks.private-key
-    line: 1
-    first_seen_at: 2026-10-22T11:11:39.920683+00:00
-    last_updated_at: 2026-10-22T11:11:39.920683+00:00
-  - path: crates/velnor-actions-orchestrator/src/qualification_cache_payload/tests/dispatch_cache_transfer_tests.rs
-    fingerprint: '2238494316586704290'
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: crates/velnor-actions-cli/tests/dispatch_cache_transfer_tests.rs
+    fingerprint: '15412528421502453484'
     rule_id: betterleaks.ibm-cloud-user-api-key
-    line: 302
-    first_seen_at: 2026-10-22T11:11:39.920683+00:00
-    last_updated_at: 2026-10-22T11:11:39.920683+00:00
+    line: 265
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
   - path: crates/velnor-actions-orchestrator/src/qualification_cache_payload/tests/dispatch_cache_transfer_tests.rs
     fingerprint: '249851791336491913'
     rule_id: betterleaks.ibm-cloud-user-api-key
     line: 271
-    first_seen_at: 2026-10-22T11:11:39.920683+00:00
-    last_updated_at: 2026-10-22T11:11:39.920683+00:00
-  - path: crates/velnor-runner/crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem
-    fingerprint: '3870778852293062565'
-    rule_id: betterleaks.private-key
-    line: 1
-    first_seen_at: 2026-10-22T11:11:39.920683+00:00
-    last_updated_at: 2026-10-22T11:11:39.920683+00:00
-  - path: crates/velnor-runner/crates/velnor-runner-host/src/launch/completion/diagnostics/runner_logs/tests/projection.rs
-    fingerprint: '7916316234911776429'
-    rule_id: betterleaks.generic-credential-uri
-    line: 31
-    first_seen_at: 2026-10-22T11:11:39.920683+00:00
-    last_updated_at: 2026-10-22T11:11:39.920683+00:00
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: crates/velnor-actions-orchestrator/src/qualification_cache_payload/tests/dispatch_cache_transfer_tests.rs
+    fingerprint: '14012431181956290570'
+    rule_id: betterleaks.ibm-cloud-user-api-key
+    line: 302
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: crates/velnor-actions-orchestrator/src/qualification_cache_payload/tests/dispatch_cache_transfer_tests.rs
+    fingerprint: '2238494316586704290'
+    rule_id: betterleaks.ibm-cloud-user-api-key
+    line: 302
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
   - path: crates/velnor-actions-orchestrator/src/qualification_cache_payload/tests/dispatch_cache_transfer_tests.rs
     fingerprint: '8665750521513737175'
     rule_id: betterleaks.ibm-cloud-user-api-key
     line: 302
-    first_seen_at: 2026-10-22T11:11:39.920683+00:00
-    last_updated_at: 2026-10-22T11:11:39.920683+00:00
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: crates/velnor-runner/crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem
+    fingerprint: '17024251161024570094'
+    rule_id: betterleaks.private-key
+    line: 1
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: crates/velnor-runner/crates/velnor-runner-host/src/launch/completion/diagnostics/runner_logs/tests/projection.rs
+    fingerprint: '7916316234911776429'
+    rule_id: betterleaks.generic-credential-uri
+    line: 31
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '10548234055238284060'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 89
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '10807161425170748287'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 89
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '12296021669985613240'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 89
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '12634693429758137500'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 89
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '17304959454812676236'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 89
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '3480103320474822812'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 89
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '6421128483203200787'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 89
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '12340871070894494662'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 90
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '1339628470729509112'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 90
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '14138327673581769342'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 90
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '14880476399102966016'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 90
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '15339136355097357291'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 90
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '16760609797367889424'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 90
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '16955370416887949178'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 90
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '17684403861457483877'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 90
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '18349113288357813585'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 90
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '2525481188676774267'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 90
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '253219666726416695'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 90
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '3634440233992418953'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 90
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '3668259932096162017'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 90
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '5197085353151836507'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 90
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '6474457427542010319'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 90
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '6766033356009475382'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 90
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/index.js
+    fingerprint: '842745428071639628'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 90
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '9134984525613389871'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23204
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '16814241343024264478'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23344
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '10997002770093320247'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23387
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '7624086435443231886'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23391
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '17568602373605722611'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23573
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '18287702028616793721'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23593
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '137094531810101372'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23594
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '10042994585794590976'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23603
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '6989207679935974233'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23604
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '10593049428106770601'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23606
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '11533929770560955291'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23607
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '1281162511034338406'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 29352
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '16741952463288986634'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 29678
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '17133345880467659761'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 29681
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '4876987529954276526'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 29682
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '2585741389230651107'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 30458
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '16467953365103373982'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 30466
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '7862701974996784188'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 30549
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '11137111026455078450'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 30593
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '15967365890952942358'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 30619
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '4322635432224062310'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 31590
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '1341875766738863451'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 31626
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '2809339976600153914'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 31626
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '11849989363368416015'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 33215
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '6349160625803476738'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 33216
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '14652573852810368646'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 33220
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '11552770860290553847'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 33225
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '3882669171376971531'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 36355
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '10009960685135960156'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 36356
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '10325025473633118601'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 36356
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '18262575433884161490'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 36356
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '16855096553208057373'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 36381
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '7549478553808058960'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 36407
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '14350389291042851159'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 36408
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '12448462406983204967'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 36472
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '1172319697626599120'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 56126
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '12918868965121463242'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 57964
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '13062747503209272728'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 58638
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '2170780812625477708'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 60440
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '2693797953839477909'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 61960
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '8893996268219975344'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 63583
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '11589431114920474028'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 64135
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '16804301783260917251'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 65758
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '4132547383940053051'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 73714
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '9667199617526558788'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 76809
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '8498394450831481426'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 77590
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '429833098651397334'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 77622
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '12306709317513113146'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 78498
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '12148928256722989689'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 78644
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '4894224905009803568'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 80729
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '7455244658044680557'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 80761
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '9014962059343686180'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 81692
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '351669311088305166'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 81838
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '10630214332777942908'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 100991
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '4605291940961728324'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 101159
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '11861221740573090445'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 102758
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '9063724797427134637'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 103416
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '13475181184599186859'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 104086
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '5766568858304111623'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 104254
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '16140383598348354181'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 104537
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '6412879638580467390'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 104647
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '4154334263579591171'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 105115
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '7213096529361863642'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 105115
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '8408897448102207324'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 105897
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '18047322524336558808'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 106555
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '10304172048755784185'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 107632
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '2853881731481004262'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 107786
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '1814736534285490616'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 108254
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '8826061181192153773'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 108254
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '7032271755807135436'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 130025
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore-only/index.js
+    fingerprint: '16063575370703991622'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 133164
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '617680661799071575'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 17399
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '17963726387540897391'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 17400
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '14097808108044832813'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 18285
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '3124162008716656861'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 18285
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '11863870775529764779'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 20772
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '16532439659217018580'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 20830
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '9893159358997428218'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 20833
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '9501095591500093892'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 20943
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '3199672668369923913'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 21426
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '17944848023636923239'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 22843
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '11759333794464765631'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 22873
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '861471065659493897'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 22877
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '13751317334163352443'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 22999
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '8195441079458959860'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23023
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '7758334258535670227'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23025
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '8330733532910067608'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23026
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '5101365320227380366'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23112
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '17976242231420888810'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23151
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '173040027581193812'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23157
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '11282917409341594070'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23163
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '14495593484617021871'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23177
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '5320898080081349548'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23252
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '4862043000541860920'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23295
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '3457672568722728517'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23299
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '16287173760009998957'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23346
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '13433767950414349623'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23368
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '9396044519607038773'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23368
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '8850607638716435329'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23391
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '6461789570146744407'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23407
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '7700639090120994499'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23431
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '7598877343544722833'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23486
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '9798143174239388497'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23506
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '14971588004190003665'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23507
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '6690212575197628474'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23511
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '10422458367046475973'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23512
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '11672559138343288994'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23514
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '5307130553210277802'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23515
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '1886600254879480402'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 56126
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '12684977614805162988'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 57964
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '2137601852713334941'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 58638
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '7990751593887875161'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 60440
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '10872000710840296538'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 61960
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '4175818651153612660'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 63583
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '6331716788876068391'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 64135
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/restore/index.js
+    fingerprint: '17744892618869141361'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 65758
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '10867047380683604163'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23168
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '15372204142214922924'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23308
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '10215544998131476504'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23351
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '3154331546134062187'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23355
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '15669906283902791518'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23542
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '8203513410127296140'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23562
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '8603553338310797351'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23563
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '10451087038607925934'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23567
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '2666108775617754966'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23568
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '3025426521055480075'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23570
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '15175298026612214577'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 23571
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '8253709605591157920'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 56132
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '2372492563302586115'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 57970
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '15808280523306936418'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 58644
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '10250936023529970706'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 60446
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '14882550778346178364'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 61966
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '17514089534146162368'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 63589
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '8529515887520302446'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 64141
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '16963045792861101638'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 65764
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '494253689164228529'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 73727
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '3606343483596886194'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 76822
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '51847102876779051'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 77603
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '2977735389351972976'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 77635
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '8717899954494777947'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 78511
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '13245198881075396650'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 78657
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '12883445922850969787'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 80742
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '10311115838960463415'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 80774
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '10174187016601153961'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 81705
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '16810377439836163957'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 81851
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '2100289234804214943'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 101004
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '5667450590489025138'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 101172
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '15286301152941715277'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 102771
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '4252112234405003221'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 103429
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '12056956083147822609'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 104099
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '9465239632433778338'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 104267
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '5043443293303893954'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 104550
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '6239427917518371715'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 104660
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '18231625001709675185'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 105128
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '411032227639550696'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 105128
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '14671037616106365086'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 105910
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '12719444164203515149'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 106568
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '12482727980541515739'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 107645
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '1489229237383822501'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 107799
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '2168419578899560068'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 108267
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '4235301040449751655'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 108267
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '15358056083008836647'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 130038
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save-only/index.js
+    fingerprint: '10918893812938992029'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 133177
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save/index.js
+    fingerprint: '13166820439424469835'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 56132
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save/index.js
+    fingerprint: '14701425065362030667'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 57970
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save/index.js
+    fingerprint: '4732406452961541933'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 58644
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save/index.js
+    fingerprint: '43551314558949698'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 60446
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save/index.js
+    fingerprint: '10378144301772750821'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 61966
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save/index.js
+    fingerprint: '13597848308604444545'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 63589
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save/index.js
+    fingerprint: '17403190636417318023'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 64141
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: dist/save/index.js
+    fingerprint: '7410366915452653620'
+    rule_id: betterleaks.azure-storage-account-key
+    line: 65764
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: docs/environments/index.md
+    fingerprint: '8618282725888832461'
+    rule_id: betterleaks.generic-credential-uri
+    line: 185
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: docs/environments/index.md
+    fingerprint: '12071139561170299329'
+    rule_id: betterleaks.generic-credential-uri
+    line: 186
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: docs/environments/index.md
+    fingerprint: '4936860879911317836'
+    rule_id: betterleaks.generic-credential-uri
+    line: 187
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: docs/environments/index.md
+    fingerprint: '12264561914909608209'
+    rule_id: betterleaks.generic-credential-uri
+    line: 207
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: docs/environments/index.md
+    fingerprint: '2038329327009677804'
+    rule_id: betterleaks.generic-credential-uri
+    line: 207
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: docs/environments/index.md
+    fingerprint: '12797565245273769476'
+    rule_id: betterleaks.generic-credential-uri
+    line: 208
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: docs/environments/index.md
+    fingerprint: '254082549888900291'
+    rule_id: betterleaks.generic-credential-uri
+    line: 217
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: docs/environments/index.md
+    fingerprint: '15424157573982217777'
+    rule_id: betterleaks.generic-credential-uri
+    line: 221
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: docs/environments/index.md
+    fingerprint: '13392264425582171145'
+    rule_id: betterleaks.generic-credential-uri
+    line: 229
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: docs/environments/index.md
+    fingerprint: '10740190495753846123'
+    rule_id: betterleaks.generic-credential-uri
+    line: 247
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: docs/environments/index.md
+    fingerprint: '4037964197792931227'
+    rule_id: betterleaks.generic-credential-uri
+    line: 247
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: docs/plugin-publishing.md
+    fingerprint: '5634494675201433175'
+    rule_id: betterleaks.generic-credential-uri
+    line: 287
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: docs/plugin-publishing.md
+    fingerprint: '637749521854476968'
+    rule_id: betterleaks.generic-credential-uri
+    line: 303
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: docs/plugin-publishing.md
+    fingerprint: '11455161259269052915'
+    rule_id: betterleaks.generic-credential-uri
+    line: 306
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: docs/plugin-publishing.md
+    fingerprint: '13237597827053063134'
+    rule_id: betterleaks.generic-credential-uri
+    line: 306
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: docs/plugin-publishing.md
+    fingerprint: '17091448620554133742'
+    rule_id: betterleaks.generic-credential-uri
+    line: 306
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: docs/plugin-publishing.md
+    fingerprint: '5879553181184665995'
+    rule_id: betterleaks.generic-credential-uri
+    line: 306
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: e2e/cli/test_age_settings_paths
+    fingerprint: '11213773530691776110'
+    rule_id: betterleaks.age-secret-key
+    line: 6
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: e2e/cli/test_dotfiles_allow_plaintext_history
+    fingerprint: '1403004332685489986'
+    rule_id: betterleaks.age-secret-key
+    line: 4
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: e2e/cli/test_dotfiles_encrypted_capture
+    fingerprint: '4724459139061455025'
+    rule_id: betterleaks.age-secret-key
+    line: 6
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: e2e/cli/test_dotfiles_encrypted_diff
+    fingerprint: '1964055182152240265'
+    rule_id: betterleaks.age-secret-key
+    line: 5
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: e2e/cli/test_dotfiles_manifest_bootstrap
+    fingerprint: '10288766694245839936'
+    rule_id: betterleaks.age-secret-key
+    line: 72
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: e2e/cli/test_dotfiles_manifest_bootstrap
+    fingerprint: '5628339131114478570'
+    rule_id: betterleaks.age-secret-key
+    line: 72
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: e2e/cli/test_dotfiles_ordinary_sync
+    fingerprint: '9578612066886495614'
+    rule_id: betterleaks.age-secret-key
+    line: 33
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: e2e/cli/test_dotfiles_sync_files_encrypted
+    fingerprint: '1358287658820264644'
+    rule_id: betterleaks.age-secret-key
+    line: 6
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: e2e/cli/test_dotfiles_sync_files_encrypted
+    fingerprint: '18337565384815187339'
+    rule_id: betterleaks.age-secret-key
+    line: 8
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: e2e/cli/test_dotfiles_sync_preflight
+    fingerprint: '1053998709412254726'
+    rule_id: betterleaks.generic-credential-uri
+    line: 24
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: e2e/cli/test_dotfiles_sync_preflight
+    fingerprint: '1806338156390362435'
+    rule_id: betterleaks.generic-credential-uri
+    line: 25
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: e2e/secrets/test_sops_multiple_age_keys
+    fingerprint: '11869927406309941537'
+    rule_id: betterleaks.age-secret-key
+    line: 8
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: e2e/secrets/test_sops_multiple_age_keys
+    fingerprint: '3440391772175155684'
+    rule_id: betterleaks.age-secret-key
+    line: 11
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/backend/conda.rs
+    fingerprint: '5649813662614042798'
+    rule_id: betterleaks.generic-credential-uri
+    line: 1176
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/backend/conda.rs
+    fingerprint: '7385670684629948807'
+    rule_id: betterleaks.generic-credential-uri
+    line: 1176
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/backend/conda.rs
+    fingerprint: '14546455353978238044'
+    rule_id: betterleaks.generic-credential-uri
+    line: 1208
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/backend/conda.rs
+    fingerprint: '16167767726312994840'
+    rule_id: betterleaks.generic-credential-uri
+    line: 1208
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/backend/conda.rs
+    fingerprint: '16926539744261240460'
+    rule_id: betterleaks.generic-credential-uri
+    line: 1358
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/backend/conda.rs
+    fingerprint: '12049420865300096869'
+    rule_id: betterleaks.generic-credential-uri
+    line: 1365
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/backend/conda.rs
+    fingerprint: '14605554477700178163'
+    rule_id: betterleaks.generic-credential-uri
+    line: 1365
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/backend/conda.rs
+    fingerprint: '7964533230404371985'
+    rule_id: betterleaks.generic-credential-uri
+    line: 1365
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/backend/conda.rs
+    fingerprint: '11356655911260478775'
+    rule_id: betterleaks.generic-credential-uri
+    line: 1390
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/backend/conda.rs
+    fingerprint: '12762323773733456789'
+    rule_id: betterleaks.generic-credential-uri
+    line: 1397
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/backend/conda.rs
+    fingerprint: '3811208237256074413'
+    rule_id: betterleaks.generic-credential-uri
+    line: 1397
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/backend/conda.rs
+    fingerprint: '4916128628699771742'
+    rule_id: betterleaks.generic-credential-uri
+    line: 1397
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/backend/gem.rs
+    fingerprint: '15155031541835836336'
+    rule_id: betterleaks.generic-credential-uri
+    line: 848
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/backend/gem.rs
+    fingerprint: '12048917186990944869'
+    rule_id: betterleaks.generic-credential-uri
+    line: 851
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/backend/go.rs
+    fingerprint: '17643749508752888256'
+    rule_id: betterleaks.generic-credential-uri
+    line: 1010
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/backend/go.rs
+    fingerprint: '12965323522191540849'
+    rule_id: betterleaks.generic-credential-uri
+    line: 1111
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/backend/go.rs
+    fingerprint: '12867478522208835319'
+    rule_id: betterleaks.generic-credential-uri
+    line: 1219
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/backend/go.rs
+    fingerprint: '1349721632094540038'
+    rule_id: betterleaks.generic-credential-uri
+    line: 1219
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/backend/go.rs
+    fingerprint: '148718990244849471'
+    rule_id: betterleaks.generic-credential-uri
+    line: 1219
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/backend/go.rs
+    fingerprint: '2519709273030408949'
+    rule_id: betterleaks.generic-credential-uri
+    line: 1261
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/config/env_directive/file.rs
+    fingerprint: '14093795542059020954'
+    rule_id: betterleaks.age-secret-key
+    line: 189
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/config/env_directive/file.rs
+    fingerprint: '8324044881133162364'
+    rule_id: betterleaks.age-secret-key
+    line: 219
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/config/env_directive/file.rs
+    fingerprint: '8638305060394720325'
+    rule_id: betterleaks.age-secret-key
+    line: 219
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/config/env_directive/file.rs
+    fingerprint: '12927984705348789707'
+    rule_id: betterleaks.age-secret-key
+    line: 299
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/config/env_directive/file.rs
+    fingerprint: '12230807870484400485'
+    rule_id: betterleaks.age-secret-key
+    line: 301
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/config/env_directive/file.rs
+    fingerprint: '2556736873009423518'
+    rule_id: betterleaks.age-secret-key
+    line: 302
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/config/env_directive/file.rs
+    fingerprint: '9079478509722539779'
+    rule_id: betterleaks.age-secret-key
+    line: 304
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/config/env_directive/file.rs
+    fingerprint: '18051604787131035767'
+    rule_id: betterleaks.age-secret-key
+    line: 305
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/config/env_directive/file.rs
+    fingerprint: '17878487898446246243'
+    rule_id: betterleaks.age-secret-key
+    line: 308
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/config/env_directive/file.rs
+    fingerprint: '11707360228647061043'
+    rule_id: betterleaks.age-secret-key
+    line: 310
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/config/env_directive/file.rs
+    fingerprint: '17052536932053281928'
+    rule_id: betterleaks.age-secret-key
+    line: 322
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/config/env_directive/file.rs
+    fingerprint: '5787996257730113157'
+    rule_id: betterleaks.age-secret-key
+    line: 322
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/config/env_directive/file.rs
+    fingerprint: '1772597853925738312'
+    rule_id: betterleaks.age-secret-key
+    line: 324
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/config/env_directive/file.rs
+    fingerprint: '6221940279879606164'
+    rule_id: betterleaks.age-secret-key
+    line: 324
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/config/env_directive/file.rs
+    fingerprint: '9307423505618858037'
+    rule_id: betterleaks.age-secret-key
+    line: 324
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/hooks.rs
+    fingerprint: '6544894344698507651'
+    rule_id: betterleaks.generic-credential-uri
+    line: 943
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/hooks.rs
+    fingerprint: '11817268999145332005'
+    rule_id: betterleaks.generic-credential-uri
+    line: 960
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/hooks.rs
+    fingerprint: '13549594770319268054'
+    rule_id: betterleaks.generic-credential-uri
+    line: 960
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/hooks.rs
+    fingerprint: '17343242393502157397'
+    rule_id: betterleaks.generic-credential-uri
+    line: 960
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/hooks.rs
+    fingerprint: '17353963855999789559'
+    rule_id: betterleaks.generic-credential-uri
+    line: 960
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/hooks.rs
+    fingerprint: '3287081407759387566'
+    rule_id: betterleaks.generic-credential-uri
+    line: 960
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/hooks.rs
+    fingerprint: '7117433477281825148'
+    rule_id: betterleaks.generic-credential-uri
+    line: 973
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '2708605564781947426'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3193
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '14502475587476700987'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3196
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '10061002218520960625'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3209
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '152266649949102556'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3252
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '10396127188233302665'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3255
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '14735095152882643829'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3268
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '1655161509323356784'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3364
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '7062896363182233432'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3369
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '10039249078830656001'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3423
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '12301476231317408536'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3428
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '7321022588319196172'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3556
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '13594509188577228874'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3575
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '2610199451544881292'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3578
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '983125693478432299'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3578
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '17565765399393433352'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3615
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '11322086384575610708'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3634
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '7540979620163465833'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3637
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '7958001571806539487'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3637
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '7540146286501297863'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3772
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '11370466998814021871'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3829
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '5983196241228537084'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3829
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '1784007240305643212'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3831
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '7265781281863394591'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3888
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/http.rs
+    fingerprint: '727737812553527362'
+    rule_id: betterleaks.generic-credential-uri
+    line: 3888
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/system/remote_repository.rs
+    fingerprint: '11320685586205327672'
+    rule_id: betterleaks.generic-credential-uri
+    line: 413
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/system/remote_repository.rs
+    fingerprint: '4847355208554731237'
+    rule_id: betterleaks.generic-credential-uri
+    line: 551
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/system/remote_repository.rs
+    fingerprint: '10892844219202884161'
+    rule_id: betterleaks.generic-credential-uri
+    line: 556
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: src/system/remote_repository.rs
+    fingerprint: '7529332453618480942'
+    rule_id: betterleaks.generic-credential-uri
+    line: 556
+    first_seen_at: 2026-10-22T00:00:00+00:00
+    last_updated_at: 2026-10-22T00:00:00+00:00
