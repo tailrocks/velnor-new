@@ -27,7 +27,6 @@ pub(super) struct MissingSourceFixture {
     docker: Docker,
     docker_listener: UnixListener,
     docker_path: PathBuf,
-    guest_image: crate::worker::guest_image::GuestImageFile,
     state: PathBuf,
     provider: IntakeCompositionProvider,
     secret: std::sync::Arc<ReleaseReadSecret>,
@@ -52,9 +51,8 @@ impl MissingSourceFixture {
             .ok_or_else(|| "The test authority policy is missing.".to_owned())?;
         let state = scratch.path().join("state");
         std::fs::create_dir(&state).map_err(|error| error.to_string())?;
-        let guest_image =
-            crate::worker::guest_image::write_guest_image(&state, &guest.connection, &guest.images)
-                .map_err(|error| error.to_string())?;
+        crate::worker::guest_image::write_guest_image(&state, &guest.connection, &guest.images)
+            .map_err(|error| error.to_string())?;
         let docker_path = socket_path("missing-source")?;
         let docker_listener =
             UnixListener::bind(&docker_path).map_err(|error| error.to_string())?;
@@ -81,7 +79,6 @@ impl MissingSourceFixture {
             docker,
             docker_listener,
             docker_path,
-            guest_image,
             state,
             provider,
             secret: std::sync::Arc::new(ReleaseReadSecret::test_token()),
@@ -115,7 +112,6 @@ impl MissingSourceFixture {
             budget,
             set_id: SCALE_SET_ID,
             scoped: &self.scope,
-            guest_image: &self.guest_image,
             pat: "test-pat",
             allocated_header: 1,
         };

@@ -9,7 +9,6 @@ use crate::launch::{
 };
 use crate::listen::Link;
 use crate::scale_set::EnsureError;
-use crate::worker::guest_image::GuestImageFile;
 
 use super::PositivePollContext;
 
@@ -20,7 +19,6 @@ pub(super) struct PositiveOfferInputs<'a, 'context> {
     pub(super) budget: ResourceBudget,
     pub(super) set_id: i64,
     pub(super) scoped: &'a ConnectionJournal,
-    pub(super) guest_image: &'a GuestImageFile,
     pub(super) pat: &'a str,
     pub(super) allocated_header: u32,
 }
@@ -70,8 +68,6 @@ pub(super) async fn admit_positive_offer(
                 scoped_journal: input.scoped,
                 release_read_secret: input.context.release_read_secret,
                 selected_engine: input.context.selected_engine,
-                worker_images: input.context.worker_images,
-                guest_image: input.guest_image,
                 resource_budget: input.budget,
                 allocated_header: input.allocated_header,
                 admission_state: input.context.state,

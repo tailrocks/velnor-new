@@ -46,9 +46,6 @@ impl Lane for ConflictTransport {
     fn on_queue(&mut self) -> Result<(), EnsureError> {
         Ok(())
     }
-    fn use_github_api(&mut self) -> Result<(), EnsureError> {
-        Ok(())
-    }
 }
 
 #[tokio::test]

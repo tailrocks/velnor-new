@@ -201,15 +201,22 @@ async fn authorization_binding_rejects_changed_policy_before_source_lookup() -> 
         .source_authorization_binding()
         .await
         .map_err(|error| error.to_string())?;
+    let mut transport = SourceApiFixture {
+        authorization: None,
+        authorizations: Vec::new(),
+        pull_request_responses: false,
+        paths: Vec::new(),
+    };
 
     assert_eq!(
-        super::authorize_job(
+        super::authorize_job_with_transport(
             &changed,
             &binding,
             &velnor_runner_github::SourceMetadata::default(),
             44,
             7,
             "test-token",
+            &mut transport,
         ),
         Err(SourceBlock::SourceMismatch)
     );
@@ -217,16 +224,18 @@ async fn authorization_binding_rejects_changed_policy_before_source_lookup() -> 
     different_connection.connection_id =
         ConnectionId::parse("different-source-binding").map_err(|error| error.to_string())?;
     assert_eq!(
-        super::authorize_job(
+        super::authorize_job_with_transport(
             &different_connection,
             &binding,
             &velnor_runner_github::SourceMetadata::default(),
             44,
             7,
             "test-token",
+            &mut transport,
         ),
         Err(SourceBlock::SourceMismatch)
     );
+    assert!(transport.paths.is_empty());
     Ok(())
 }
 

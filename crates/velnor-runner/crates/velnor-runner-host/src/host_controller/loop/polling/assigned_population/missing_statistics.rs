@@ -29,7 +29,7 @@ fn missing_statistics_poll_reconciles_before_initial_none_guard() -> Result<(), 
 
 async fn missing_statistics_poll_case(initial_assigned_total: Option<i64>) -> Result<(), String> {
     let fixture = Box::pin(retirement_fixture()).await.map_err(show_error)?;
-    recover_startup(&fixture._base).await?;
+    recover_startup(&fixture.base).await?;
     assert_one_recoverable_candidate(&fixture.scope, fixture.reservation_id).await?;
 
     let binding =
@@ -43,7 +43,7 @@ async fn missing_statistics_poll_case(initial_assigned_total: Option<i64>) -> Re
     let secret = Arc::new(crate::launch::ReleaseReadSecret::test_token());
     let provider = crate::launch::IntakeCompositionProvider::new(&selected, images.source_sha());
     let state = fixture
-        ._base
+        .base
         .database_path
         .parent()
         .ok_or_else(|| "The retirement fixture has no state directory.".to_owned())?;

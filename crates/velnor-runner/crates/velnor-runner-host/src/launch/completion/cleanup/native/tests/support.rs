@@ -31,7 +31,7 @@ pub(in crate::launch::completion::cleanup::native) async fn seed_completion(
 ) -> Result<(crate::journal::CompletedLaunch, i64), HostError> {
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    let crate::launch::bootstrap::CleanupRuntimeFixture { _base: base, .. } = fixture;
+    let crate::launch::bootstrap::CleanupRuntimeFixture { base, .. } = fixture;
     let completed = fixture
         .scope
         .record_job_completed(
@@ -85,7 +85,7 @@ pub(in crate::launch::completion::cleanup::native) fn diagnostics_root(
 ) -> Result<crate::launch::completion::diagnostics::DiagnosticsRoot, HostError> {
     use std::os::unix::fs::PermissionsExt;
 
-    let crate::launch::bootstrap::CleanupRuntimeFixture { _base: base, .. } = fixture;
+    let crate::launch::bootstrap::CleanupRuntimeFixture { base, .. } = fixture;
     let crate::journal::request_lifecycle::tests::NativeStartedIntakeFixture {
         _scratch: scratch,
         ..

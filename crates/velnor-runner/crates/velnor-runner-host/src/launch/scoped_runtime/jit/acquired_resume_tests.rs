@@ -42,10 +42,6 @@ impl Lane for SuccessfulJitTransport {
     fn on_queue(&mut self) -> Result<(), EnsureError> {
         Ok(())
     }
-
-    fn use_github_api(&mut self) -> Result<(), EnsureError> {
-        Ok(())
-    }
 }
 
 #[tokio::test]

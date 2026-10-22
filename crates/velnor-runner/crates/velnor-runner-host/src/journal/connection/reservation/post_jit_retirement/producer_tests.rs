@@ -266,7 +266,7 @@ async fn network_phase_failure_keeps_reservation_charged_and_uncertain_inner()
 async fn prepare_local_remote(
     fixture: &crate::launch::bootstrap::CleanupRuntimeFixture,
 ) -> Result<super::claim::PostJitRetirementClaim, HostError> {
-    test_support::recover_fixture(&fixture._base).await?;
+    test_support::recover_fixture(&fixture.base).await?;
     let claim = fixture
         .scope
         .claim_post_jit_retirement(fixture.reservation_id, 60)
@@ -280,7 +280,7 @@ async fn prepare_local_remote(
     .await?;
     Box::pin(fixture.scope.record_retirement_local_absence(&claim, proof)).await?;
     let mut transport = ScriptedTransport::new([(200, br#"{"count":0,"value":[]}"#.to_vec())]);
-    let receipt = ensure_runner_absent(&mut transport, &fixture._base.runner, "test-admin-token")
+    let receipt = ensure_runner_absent(&mut transport, &fixture.base.runner, "test-admin-token")
         .map_err(|_| HostError::Identity)?;
     Box::pin(
         fixture

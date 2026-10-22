@@ -41,14 +41,6 @@ impl ListenerDeliveryReceipt {
         &self.runner
     }
 
-    pub(crate) const fn jit_bytes_written(&self) -> bool {
-        self.jit_bytes_written > 0
-    }
-
-    pub(crate) const fn stdin_closed(&self) -> bool {
-        self.stdin_closed
-    }
-
     pub(crate) const fn delivered(&self) -> bool {
         self.jit_bytes_written > 0 && self.stdin_closed
     }
