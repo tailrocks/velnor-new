@@ -45,6 +45,17 @@ output across trust scopes.
 - Neither family archives credentials: the registry phase writes its token into
   a Velnor-written config under `$RUNNER_TEMP/velnor/bun/`, which is not an
   archive path.
+- Matrix legs of a sharded Bun suite ([Bun browser suites](bun-browser-suites.md))
+  restore both families like any job, but only leg 1 may save them: the key step
+  of a leg job carries `VELNOR_FAMILY_WRITER: ${{ matrix.leg }}` and writes
+  `save=false` for every other value. Without it, N legs of one key would each
+  tar up to 512 MiB and race one reservation (`actions/cache/save` keeps the
+  first and warns for the rest). The save step and its condition are unchanged,
+  and a job outside a leg matrix keeps the key step byte for byte.
+- Neither family is keyed on `ImageVersion` (decision 6). The browser archives
+  are self-contained builds pinned by SHA-256 and system libraries come from the
+  image at run time, so a weekly image release would only churn identical bytes.
+  The `uname -sm` platform line and the lock-pin snapshot are the identity.
 
 ## dbt and Ansible families
 
@@ -129,8 +140,9 @@ family directory after it (the install path is a project setting dbt owns, and
 head start, never trusted content); the Ansible job keeps verified tarballs in
 the family directory and re-downloads any whose SHA-256 no longer matches. The
 cache doctor accepts these steps only in the generated shape (the key
-expression, the spec path, no restore keys on a save, the exact save condition)
-and rejects a hand-written step on these families.
+expression, the spec path, no restore keys on a save, the exact save condition,
+a key step whose env is the default-branch ref plus, in a Bun leg matrix only,
+`VELNOR_FAMILY_WRITER`) and rejects a hand-written step on these families.
 
 ## Remaining
 
