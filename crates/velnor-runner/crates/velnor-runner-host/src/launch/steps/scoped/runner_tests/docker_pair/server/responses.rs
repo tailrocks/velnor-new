@@ -15,7 +15,7 @@ enum InjectedVolumeInspection {
 }
 
 impl CapturedRequest {
-    pub(crate) fn inject_preexisting_owned_volume(name: &str, labels: Value) {
+    pub(crate) fn inject_preexisting_owned_volume(name: &str, labels: &Value) {
         inject_volume_inspection(
             name,
             InjectedVolumeInspection::Existing(json!({
@@ -97,7 +97,6 @@ fn network_response(
 
 pub(super) fn answer(
     images: &crate::launch::VerifiedWorkerImages,
-    initializer_image_id: Option<&str>,
     request: &CapturedRequest,
     volumes: &HashMap<String, Value>,
     networks: &HashMap<String, Value>,
@@ -124,11 +123,7 @@ pub(super) fn answer(
             Ok((200, info.to_string().into_bytes()))
         }
         ("GET", path) if path.starts_with("/images/") => {
-            if initializer_image_id.is_some_and(|image_id| path.contains(image_id)) {
-                Ok((200, image_inspection(images, path)?.into_bytes()))
-            } else {
-                Ok((200, image_inspection(images, path)?.into_bytes()))
-            }
+            Ok((200, image_inspection(images, path)?.into_bytes()))
         }
         ("GET", path) if path.starts_with("/containers/") && path.ends_with("/json") => {
             let name = path

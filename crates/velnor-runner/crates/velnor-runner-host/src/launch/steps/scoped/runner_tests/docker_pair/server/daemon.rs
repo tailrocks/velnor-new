@@ -35,29 +35,25 @@ use self::responses::{record_jit_input, write_response};
 #[path = "exec_fixture.rs"]
 mod exec_fixture;
 
-pub(super) async fn serve(
-    listener: UnixListener,
-    images: crate::launch::VerifiedWorkerImages,
-    initializer: Option<(
+pub(super) struct ServerConfig {
+    pub(super) images: crate::launch::VerifiedWorkerImages,
+    pub(super) initializer: Option<(
         String,
         Arc<AsyncMutex<crate::worker::storage_initialization::InitializationTestResponder>>,
     )>,
-    runner_create_status: Option<u16>,
-    probe_available_bytes: Arc<AtomicU64>,
-    requests: Arc<std::sync::Mutex<Vec<CapturedRequest>>>,
-    jit_input: Arc<std::sync::Mutex<Vec<u8>>>,
-    tamper_channel_response: Arc<AtomicU8>,
+    pub(super) runner_create_status: Option<u16>,
+    pub(super) probe_available_bytes: Arc<AtomicU64>,
+    pub(super) requests: Arc<std::sync::Mutex<Vec<CapturedRequest>>>,
+    pub(super) jit_input: Arc<std::sync::Mutex<Vec<u8>>>,
+    pub(super) tamper_channel_response: Arc<AtomicU8>,
+}
+
+pub(super) async fn serve(
+    listener: UnixListener,
+    config: ServerConfig,
     mut stop: oneshot::Receiver<bool>,
 ) -> Result<(), String> {
-    let mut state = ServerState::new(
-        images,
-        initializer,
-        runner_create_status,
-        probe_available_bytes,
-        requests,
-        jit_input,
-        tamper_channel_response,
-    );
+    let mut state = ServerState::new(config);
     loop {
         let accepted = tokio::select! {
             drain_open_attachments = &mut stop => {
@@ -102,28 +98,17 @@ struct ExecRecord {
 }
 
 impl ServerState {
-    fn new(
-        images: crate::launch::VerifiedWorkerImages,
-        initializer: Option<(
-            String,
-            Arc<AsyncMutex<crate::worker::storage_initialization::InitializationTestResponder>>,
-        )>,
-        runner_create_status: Option<u16>,
-        probe_available_bytes: Arc<AtomicU64>,
-        requests: Arc<std::sync::Mutex<Vec<CapturedRequest>>>,
-        jit_input: Arc<std::sync::Mutex<Vec<u8>>>,
-        tamper_channel_response: Arc<AtomicU8>,
-    ) -> Self {
+    fn new(config: ServerConfig) -> Self {
         Self {
-            images,
-            initializer,
-            runner_create_status,
+            images: config.images,
+            initializer: config.initializer,
+            runner_create_status: config.runner_create_status,
             runner_create_rejected: false,
-            probe_available_bytes,
+            probe_available_bytes: config.probe_available_bytes,
             initializer_container_id: None,
-            requests,
-            jit_input,
-            tamper_channel_response,
+            requests: config.requests,
+            jit_input: config.jit_input,
+            tamper_channel_response: config.tamper_channel_response,
             volumes: HashMap::new(),
             networks: HashMap::new(),
             containers: HashMap::new(),
@@ -252,13 +237,12 @@ impl ServerState {
     }
 
     fn reply_docker(&mut self, request: &CapturedRequest) -> Result<(u16, Vec<u8>), String> {
-        if !self.runner_create_rejected {
-            if let Some(response) =
+        if !self.runner_create_rejected
+            && let Some(response) =
                 runner_failure::create_rejection(self.runner_create_status, request)
-            {
-                self.runner_create_rejected = true;
-                return Ok(response);
-            }
+        {
+            self.runner_create_rejected = true;
+            return Ok(response);
         }
         if request.method == "POST"
             && route(request).starts_with("/containers/")
@@ -272,10 +256,8 @@ impl ServerState {
         {
             return self.inspect_exec(request);
         }
-        let initializer_image = self.initializer.as_ref().map(|(image, _)| image.as_str());
         let response = super::responses::answer(
             &self.images,
-            initializer_image,
             request,
             &self.volumes,
             &self.networks,
@@ -346,13 +328,11 @@ impl ServerState {
         self.initializer.as_ref().is_some_and(|(image, _)| {
             request.method == "POST"
                 && route(request) == "/containers/create"
-                && serde_json::from_slice::<Value>(&request.body)
-                    .ok()
-                    .is_some_and(|body| {
-                        body["Image"].as_str() == Some(image)
-                            && body["Labels"]["velnor.role"].as_str() == Some("storage-initializer")
-                            && body["Labels"]["velnor.operation"].as_str().is_some()
-                    })
+                && serde_json::from_slice::<Value>(&request.body).is_ok_and(|body| {
+                    body["Image"].as_str() == Some(image)
+                        && body["Labels"]["velnor.role"].as_str() == Some("storage-initializer")
+                        && body["Labels"]["velnor.operation"].as_str().is_some()
+                })
         })
     }
 
