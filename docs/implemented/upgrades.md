@@ -7,10 +7,13 @@
   contract](../proposed/generated-file-contract.md)).
 - Delivered: `UpgradesConfig` (`velnor-actions-contract`, `config/upgrades.rs`),
   `render_upgrades_workflow` (`velnor-actions-workflow-renderer`,
-  `upgrades.rs` plus `upgrades_{prepare,publish,gate}.sh`),
+  `upgrades.rs` plus `upgrades_{prepare,publish,gate}.sh` and the shared
+  `upgrades_patch_filter.sh`),
   `scripts/upgrades/bump-gradle-catalog.py`, and emission and plan listing
   in `velnor-actions-orchestrator` (`upgrades_emit.rs`).
-- Acceptance evidence: `config::upgrades::tests`, `upgrades::tests` (including
+- Acceptance evidence: `config::upgrades::tests`, `upgrades::filter_exec_tests`
+  (the rendered scripts executed against crafted attack patches, see
+  [Patch filter](#patch-filter)), `upgrades::tests` (including
   the byte-exact golden `crates/velnor-actions-workflow-renderer/tests/goldens/upgrades.yml`),
   `impl_upgrades`. The golden passes actionlint 1.7.12 with shellcheck 0.11.0
   and zizmor 1.31.1 with no findings.
@@ -69,17 +72,16 @@ default branch. One concurrency group, never cancelled.
      that Velnor's [channel-manifest catalog](rust-channel-manifest.md), the
      Rust bump alone is rolled back and recorded, so the pull request stays
      green and the gate stays red until a Velnor release adds the digest.
-   - Only upgrade-owned paths are kept (`mise.toml`, `mise.lock`,
-     `rust-toolchain.toml`/`rust-toolchain`,
-     `.velnor/release-manifest.json`, `.github/**`, `Cargo.toml`/`Cargo.lock`,
-     `package.json`/`bun.lock`, Gradle catalog, lock and verification files).
-     Anything else is left out and reported. The result is uploaded as a
-     binary patch plus a Markdown summary.
+   - Only what the [patch filter](#patch-filter) admits is kept. Anything
+     else is unstaged and reported. The result is uploaded as a text patch
+     (`git diff --cached --no-renames --full-index`, never `--binary`) plus a
+     Markdown summary, after the filter has checked that exact patch.
    - A scope that fails (for example a private git or npm source that needs a
      fetch credential, which this job never holds) is rolled back and listed
      under **Needs migration** in the pull request body.
 2. **Open or update the upgrade pull request** (`contents: read`; runs only
-   when there is a patch): re-checks every patch path, mints an App
+   when there is a patch): runs the patch filter again on the downloaded
+   patch, in a scratch index, before the worktree sees a byte, mints an App
    installation token for this repository only, applies the patch with hooks
    disabled, and commits it as a merge of the previous `velnor/upgrades` head
    and the current default branch. The branch only fast-forwards (no force
@@ -93,6 +95,31 @@ default branch. One concurrency group, never cancelled.
    is older than `stuck_days`. It exists only in `upgrades.yml`, never in
    `ci.yml` or `Required`, so an upstream release never blocks unrelated pull
    requests.
+
+## Patch filter
+
+`upgrades_patch_filter.sh` is shared by prepare and publish. It validates the
+patch text and the index the patch produces; it never relies on `git apply`
+rejecting anything.
+
+| Rule | Code |
+|---|---|
+| Every path is upgrade-owned: `mise.toml`, `.mise.toml`, `mise.lock`, `.mise.lock`, `rust-toolchain.toml`/`rust-toolchain`, `.velnor/release-manifest.json`, `.github/**`, `Cargo.toml`/`Cargo.lock`, `package.json`/`bun.lock`, Gradle `libs.versions.toml`, `gradle.lockfile` and `verification-metadata.xml` | `upgrade_patch_path_rejected` |
+| Paths are plain and relative: no leading `/`, empty, `.` or `..` segment, no `.git` segment in any case, only `A-Za-z0-9._/@+-` | `upgrade_patch_path_rejected` |
+| No rename or copy, whatever its source or destination (`rename`/`copy from`/`to`, `similarity index`); prepare builds the patch with `--no-renames`, so a move is its deletion plus its addition and both paths are checked | `upgrade_patch_rename_rejected` |
+| Only generated `.github/**` files may be deleted | `upgrade_patch_delete_rejected` (owned) or `upgrade_patch_path_rejected` (foreign) |
+| Every file stays a regular, non-executable file (mode `100644`): no `old mode`/`new mode`, no other `new file mode`, `deleted file mode` or `index` mode, no type change | `upgrade_patch_mode_rejected` |
+| No symlink (`120000`), new or replacing a file | `upgrade_patch_symlink_rejected` |
+| No binary change (`GIT binary patch`, `Binary files`, a `-` numstat); no path is allowed one | `upgrade_patch_binary_rejected` |
+| Every file patch is a `diff --git` section, one per `git apply --numstat -z` record; no CR bytes | `upgrade_patch_malformed` |
+
+Publish checks the text, applies the patch to a scratch index built from
+`HEAD` and checks every entry of that index against `HEAD`
+(`git diff --cached --raw -z --no-renames`, so modes come from Git's own
+index), and only then applies it to the real index and worktree and checks
+again. Prepare runs the same index check in drop mode (each violation is
+unstaged and listed under **Needs migration**) and then the full check on the
+patch it uploads.
 
 ## Credentials
 
