@@ -120,7 +120,7 @@ fn print_doctor(state: &Path, probe: bool) -> ExitCode {
                 ExitCode::SUCCESS
             }
             Err(error) => {
-                eprintln!("doctor probe failed: {error}");
+                eprintln!("doctor probe failed ({}): {error}", error.code());
                 ExitCode::from(1)
             }
         };

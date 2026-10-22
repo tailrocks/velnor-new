@@ -96,7 +96,7 @@ pub(crate) async fn collect(
     let provider_token = secret.as_provider_token()?;
     let provider = ReleaseImageProvider::from_compiled_source(provider_token, journal)
         .map_err(|_| HostError::Docker)?;
-    collect_with_provider(docker, journal, &provider).await
+    Box::pin(collect_with_provider(docker, journal, &provider)).await
 }
 
 pub(crate) async fn collect_with_provider<P: super::provider::ImageProvider>(

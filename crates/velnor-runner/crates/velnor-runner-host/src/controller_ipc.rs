@@ -10,4 +10,6 @@ pub use client::{
     reactivate_connection_if_drained, run_doctor_probe, wait_for_connection_detached,
     wait_for_connection_drain, wait_for_drain,
 };
-pub(crate) use server::{ControlServer, ControlState, SessionPollReceipt};
+pub(crate) use server::{
+    ControlServer, ControlState, ControllerReadinessProof, SessionPollReceipt,
+};

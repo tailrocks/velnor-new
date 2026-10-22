@@ -10,22 +10,22 @@ use super::ControlState;
 use super::session_polls::SessionPollReceipt;
 
 #[derive(Clone, Debug)]
-pub(super) struct ControllerReadinessProof {
-    config_sha256: String,
-    engine_id: String,
-    docker_root_digest: String,
-    journal_instance_id: String,
-    journal_revision: u64,
-    sample_generation: String,
-    sample_observed_at: Instant,
-    collection_started_at: Instant,
-    collection_finished_at: Instant,
-    capacity: ReadinessCapacityUsage,
-    sample_cpu_millicores: u64,
-    sample_memory_total_bytes: u64,
-    sample_memory_available_bytes: u64,
-    inventory_sha256: String,
-    poll_receipts: Vec<SessionPollReceipt>,
+pub(crate) struct ControllerReadinessProof {
+    pub(crate) config_sha256: String,
+    pub(crate) engine_id: String,
+    pub(crate) docker_root_digest: String,
+    pub(crate) journal_instance_id: String,
+    pub(crate) journal_revision: u64,
+    pub(crate) sample_generation: String,
+    pub(crate) sample_observed_at: Instant,
+    pub(crate) collection_started_at: Instant,
+    pub(crate) collection_finished_at: Instant,
+    pub(crate) capacity: ReadinessCapacityUsage,
+    pub(crate) sample_cpu_millicores: u64,
+    pub(crate) sample_memory_total_bytes: u64,
+    pub(crate) sample_memory_available_bytes: u64,
+    pub(crate) inventory_sha256: String,
+    pub(crate) poll_receipts: Vec<SessionPollReceipt>,
 }
 
 impl ControlState {
@@ -60,64 +60,34 @@ impl ControlState {
 
     pub(crate) fn publish_readiness(
         &self,
-        config_sha256: String,
-        engine_id: String,
-        docker_root_digest: String,
-        journal_instance_id: String,
-        journal_revision: u64,
-        sample_generation: String,
-        sample_observed_at: Instant,
-        collection_started_at: Instant,
-        collection_finished_at: Instant,
-        capacity: ReadinessCapacityUsage,
-        sample_cpu_millicores: u64,
-        sample_memory_total_bytes: u64,
-        sample_memory_available_bytes: u64,
-        inventory_sha256: String,
-        poll_receipts: Vec<SessionPollReceipt>,
+        proof: ControllerReadinessProof,
     ) -> Result<(), HostError> {
         if !self.admission_ready()
-            || config_sha256.len() != 64
-            || engine_id.trim().is_empty()
-            || docker_root_digest.len() != 64
-            || journal_instance_id.trim().is_empty()
-            || journal_revision == 0
-            || sample_generation.trim().is_empty()
-            || collection_started_at > collection_finished_at
-            || sample_observed_at > collection_finished_at
-            || !capacity.valid_for_guest(
-                sample_cpu_millicores,
-                sample_memory_total_bytes,
-                sample_memory_available_bytes,
+            || proof.config_sha256.len() != 64
+            || proof.engine_id.trim().is_empty()
+            || proof.docker_root_digest.len() != 64
+            || proof.journal_instance_id.trim().is_empty()
+            || proof.journal_revision == 0
+            || proof.sample_generation.trim().is_empty()
+            || proof.collection_started_at > proof.collection_finished_at
+            || proof.sample_observed_at > proof.collection_finished_at
+            || !proof.capacity.valid_for_guest(
+                proof.sample_cpu_millicores,
+                proof.sample_memory_total_bytes,
+                proof.sample_memory_available_bytes,
             )
-            || !lower_hex_digest(&inventory_sha256)
-            || poll_receipts.is_empty()
+            || !lower_hex_digest(&proof.inventory_sha256)
+            || proof.poll_receipts.is_empty()
         {
             return Err(HostError::Identity);
         }
         let current = self
             .complete_session_poll_receipts()?
             .ok_or(HostError::Identity)?;
-        if current != poll_receipts {
+        if current != proof.poll_receipts {
             return Err(HostError::Identity);
         }
-        *self.readiness.write().map_err(|_| HostError::Journal)? = Some(ControllerReadinessProof {
-            config_sha256,
-            engine_id,
-            docker_root_digest,
-            journal_instance_id,
-            journal_revision,
-            sample_generation,
-            sample_observed_at,
-            collection_started_at,
-            collection_finished_at,
-            capacity,
-            sample_cpu_millicores,
-            sample_memory_total_bytes,
-            sample_memory_available_bytes,
-            inventory_sha256,
-            poll_receipts,
-        });
+        *self.readiness.write().map_err(|_| HostError::Journal)? = Some(proof);
         Ok(())
     }
 

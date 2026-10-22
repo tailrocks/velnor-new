@@ -8,6 +8,8 @@ use std::path::PathBuf;
 
 const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 
+#[path = "server/doctor_report_tests.rs"]
+mod doctor_report_tests;
 #[path = "server/readiness_tests.rs"]
 mod readiness_tests;
 
@@ -250,10 +252,12 @@ async fn doctor_probe_start_and_status_use_the_durable_ticket() -> Result<(), St
     )
     .await
     .map_err(|error| format!("status request: {error}"))?;
+    let readiness = status.readiness;
     let status = status.doctor_probe.ok_or("status response is missing")?;
     if status.state != "queued"
         || status.request_id != started.request_id
         || status.report.is_some()
+        || readiness != Some(crate::readiness::Readiness::Reconciling)
     {
         return Err("status did not return the same queued ticket".to_owned());
     }

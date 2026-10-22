@@ -11,6 +11,12 @@ use super::{
     transport::{marker_exists, read_drain_token},
 };
 
+#[derive(Clone, Copy)]
+struct ControllerIdentity<'a> {
+    engine_id: &'a str,
+    docker_root_digest: &'a str,
+}
+
 pub(super) async fn handle(
     journal: &Journal,
     state: &ControlState,
@@ -32,7 +38,17 @@ pub(super) async fn handle(
         Request::DoctorProbeStart { nonce } => {
             doctor_probe_start(journal, &nonce, engine_id, docker_root_digest).await
         }
-        Request::DoctorProbeStatus { nonce } => doctor_probe_status(journal, state, &nonce).await,
+        Request::DoctorProbeStatus { nonce } => {
+            doctor_probe_status(
+                journal,
+                state,
+                state_path,
+                &nonce,
+                engine_id,
+                docker_root_digest,
+            )
+            .await
+        }
         Request::ControllerReadiness {
             config_sha256,
             engine_id: requested_engine,
@@ -43,10 +59,14 @@ pub(super) async fn handle(
                 state,
                 state_path,
                 &config_sha256,
-                &requested_engine,
-                &requested_root,
-                engine_id,
-                docker_root_digest,
+                ControllerIdentity {
+                    engine_id: &requested_engine,
+                    docker_root_digest: &requested_root,
+                },
+                ControllerIdentity {
+                    engine_id,
+                    docker_root_digest,
+                },
             )
             .await
         }
@@ -150,14 +170,19 @@ async fn doctor_probe_start(
             report: None,
         },
     };
-    Ok(probe_response(reply))
+    Ok(probe_response(reply, None))
 }
 
 async fn doctor_probe_status(
     journal: &Journal,
     state: &ControlState,
+    state_path: &Path,
     nonce: &str,
+    engine_id: &str,
+    docker_root_digest: &str,
 ) -> Result<Response, HostError> {
+    let readiness =
+        current_readiness(journal, state, state_path, engine_id, docker_root_digest).await?;
     let reply = match journal.doctor_probe_request_by_nonce(nonce).await? {
         Some(record) => DoctorProbeReply {
             request_id: Some(record.request_id()),
@@ -174,7 +199,35 @@ async fn doctor_probe_status(
             report: None,
         },
     };
-    Ok(probe_response(reply))
+    Ok(probe_response(reply, Some(readiness)))
+}
+
+async fn current_readiness(
+    journal: &Journal,
+    state: &ControlState,
+    state_path: &Path,
+    engine_id: &str,
+    docker_root_digest: &str,
+) -> Result<crate::readiness::Readiness, HostError> {
+    let Some((_, config_sha256)) = crate::readiness_scan::controller_config(state_path) else {
+        return Ok(crate::readiness::Readiness::Reconciling);
+    };
+    let response = controller_readiness(
+        journal,
+        state,
+        state_path,
+        &config_sha256,
+        ControllerIdentity {
+            engine_id,
+            docker_root_digest,
+        },
+        ControllerIdentity {
+            engine_id,
+            docker_root_digest,
+        },
+    )
+    .await?;
+    response.readiness.ok_or(HostError::Journal)
 }
 
 fn boolean_response(value: bool) -> Response {
@@ -185,11 +238,14 @@ fn boolean_response(value: bool) -> Response {
     }
 }
 
-fn probe_response(reply: DoctorProbeReply) -> Response {
+fn probe_response(
+    reply: DoctorProbeReply,
+    readiness: Option<crate::readiness::Readiness>,
+) -> Response {
     Response {
         value: None,
         doctor_probe: Some(reply),
-        readiness: None,
+        readiness,
     }
 }
 
@@ -198,12 +254,12 @@ async fn controller_readiness(
     state: &ControlState,
     state_path: &Path,
     config_sha256: &str,
-    requested_engine: &str,
-    requested_root: &str,
-    engine_id: &str,
-    docker_root_digest: &str,
+    requested: ControllerIdentity<'_>,
+    observed: ControllerIdentity<'_>,
 ) -> Result<Response, HostError> {
-    let readiness = if requested_engine != engine_id || requested_root != docker_root_digest {
+    let readiness = if requested.engine_id != observed.engine_id
+        || requested.docker_root_digest != observed.docker_root_digest
+    {
         crate::readiness::Readiness::Reconciling
     } else if let Some((config, current_hash)) =
         crate::readiness_scan::controller_config(state_path)
@@ -214,11 +270,11 @@ async fn controller_readiness(
             let instance_id = journal.instance_id().await?;
             let revision = journal.revision().await?;
             let current_engine = journal.engine_id().await?;
-            let ready = current_engine == engine_id
+            let ready = current_engine == observed.engine_id
                 && state.readiness_matches(
                     config_sha256,
-                    engine_id,
-                    docker_root_digest,
+                    observed.engine_id,
+                    observed.docker_root_digest,
                     &instance_id,
                     revision,
                     std::time::Instant::now(),

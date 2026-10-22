@@ -15,6 +15,14 @@ use std::{
 
 use bollard::Docker;
 
+#[path = "threaded/state.rs"]
+mod state;
+use state::ServerState;
+
+#[cfg(test)]
+#[path = "threaded/tests.rs"]
+mod tests;
+
 use super::{
     DockerResponse, reason,
     request::{RequestFraming, RequestTrace},
@@ -27,6 +35,7 @@ pub(crate) struct BackgroundDockerStub {
     thread: Option<JoinHandle<Result<Vec<String>, String>>>,
     expected: usize,
     observed: Arc<Mutex<Vec<RequestTrace>>>,
+    state: Arc<ServerState>,
 }
 
 impl BackgroundDockerStub {
@@ -44,17 +53,32 @@ impl BackgroundDockerStub {
         let expected = responses.len();
         let observed = Arc::new(Mutex::new(Vec::new()));
         let thread_observed = Arc::clone(&observed);
+        let state = Arc::new(ServerState::default());
+        let thread_state = Arc::clone(&state);
         let (stop, stopped) = mpsc::channel();
         let server = thread::Builder::new()
             .name("velnor-docker-test-stub".to_owned())
-            .spawn(move || serve(listener, responses, stopped, thread_observed))
+            .spawn(move || {
+                serve(
+                    &listener,
+                    responses,
+                    &stopped,
+                    &thread_observed,
+                    &thread_state,
+                )
+            })
             .map_err(|error| error.to_string())?;
-        let socket = path
-            .to_str()
-            .ok_or_else(|| "The Docker socket path is not valid UTF-8.".to_owned())?;
+        let Some(socket) = path.to_str() else {
+            state.request_stop();
+            let _sent = stop.send(());
+            let _joined = server.join();
+            let _removed = std::fs::remove_file(&path).err().map(|error| error.kind());
+            return Err("The Docker socket path is not valid UTF-8.".to_owned());
+        };
         let docker = match Docker::connect_with_unix(socket, 120, bollard::API_DEFAULT_VERSION) {
             Ok(docker) => docker,
             Err(error) => {
+                state.request_stop();
                 let _sent = stop.send(());
                 let _joined = server.join();
                 let _removed = std::fs::remove_file(&path).err().map(|error| error.kind());
@@ -68,14 +92,24 @@ impl BackgroundDockerStub {
             thread: Some(server),
             expected,
             observed,
+            state,
         })
     }
 
+    #[expect(
+        clippy::unused_async_trait_impl,
+        reason = "Keep the shared async finish interface used by both Docker test stubs."
+    )]
+    #[expect(
+        clippy::unused_async,
+        reason = "Keep the shared async finish interface used by both Docker test stubs."
+    )]
     pub(crate) async fn finish_observed(mut self) -> Result<Vec<String>, String> {
         let stop = self
             .stop
             .take()
             .ok_or_else(|| "The Docker test server has already stopped.".to_owned())?;
+        self.state.request_stop();
         let _sent = stop.send(());
         let server = self
             .thread
@@ -84,7 +118,7 @@ impl BackgroundDockerStub {
         let requests = server
             .join()
             .map_err(|_| "The Docker test server thread failed.".to_owned())??;
-        let _removed = std::fs::remove_file(&self.path).map_err(|error| error.to_string())?;
+        std::fs::remove_file(&self.path).map_err(|error| error.to_string())?;
         if requests.len() != self.expected {
             return Err(format!(
                 "The Docker test server expected {} requests but received {}.",
@@ -105,6 +139,7 @@ impl BackgroundDockerStub {
 
 impl Drop for BackgroundDockerStub {
     fn drop(&mut self) {
+        self.state.request_stop();
         if let Some(stop) = self.stop.take() {
             let _sent = stop.send(());
         }
@@ -118,22 +153,31 @@ impl Drop for BackgroundDockerStub {
 }
 
 fn serve(
-    listener: UnixListener,
+    listener: &UnixListener,
     responses: Vec<DockerResponse>,
-    stopped: mpsc::Receiver<()>,
-    observed: Arc<Mutex<Vec<RequestTrace>>>,
+    stopped: &mpsc::Receiver<()>,
+    observed: &Mutex<Vec<RequestTrace>>,
+    state: &ServerState,
 ) -> Result<Vec<String>, String> {
     let mut requests = Vec::with_capacity(responses.len());
     let mut responses = responses.into_iter();
     loop {
-        if stopped.try_recv().is_ok() {
+        if stopped.try_recv().is_ok() || state.is_stopping() {
             return Ok(requests);
         }
         match listener.accept() {
             Ok((mut stream, _)) => {
+                normalize_accepted_stream(&stream).map_err(|error| error.to_string())?;
+                if !state.register(&stream).map_err(|error| error.to_string())? {
+                    return Ok(requests);
+                }
                 let line = match read_request(&mut stream) {
                     Ok(line) => line,
                     Err(failure) => {
+                        state.clear_active();
+                        if state.is_stopping() {
+                            return Ok(requests);
+                        }
                         observed
                             .lock()
                             .map_err(|_| {
@@ -155,6 +199,10 @@ fn serve(
                     delay: Duration::ZERO,
                 });
                 let response_index = requests.len() - 1;
+                if state.is_stopping() {
+                    state.clear_active();
+                    return Ok(requests);
+                }
                 observed
                     .lock()
                     .map_err(|_| "The test could not lock the Docker request trace.".to_owned())?
@@ -164,7 +212,9 @@ fn serve(
                         response_status: response.status,
                         failure: None,
                     });
-                write_response(&mut stream, &response)?;
+                let response_result = write_response(&mut stream, &response);
+                state.clear_active();
+                response_result?;
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 thread::sleep(Duration::from_millis(5));
@@ -172,6 +222,10 @@ fn serve(
             Err(error) => return Err(error.to_string()),
         }
     }
+}
+
+fn normalize_accepted_stream(stream: &UnixStream) -> std::io::Result<()> {
+    stream.set_nonblocking(false)
 }
 
 fn read_request(stream: &mut UnixStream) -> Result<String, super::request::RequestFailure> {

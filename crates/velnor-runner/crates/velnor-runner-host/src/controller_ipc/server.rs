@@ -22,7 +22,7 @@ use transport::{
 #[path = "server/requests.rs"]
 mod requests;
 mod state;
-pub(crate) use state::{ControlState, SessionPollReceipt};
+pub(crate) use state::{ControlState, ControllerReadinessProof, SessionPollReceipt};
 #[path = "server/transport.rs"]
 mod transport;
 pub(super) use transport::{read_drain_token, valid_token};

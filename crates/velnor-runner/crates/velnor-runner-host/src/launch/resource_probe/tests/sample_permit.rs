@@ -30,6 +30,21 @@ fn doctor_report_uses_selected_guest_values_and_expires_after_thirty_seconds() -
     assert_eq!(recent["load_milli"], 125);
     assert_eq!(recent["cpu_count"], 8);
     assert_eq!(
+        recent["docker_root_total_bytes"],
+        40 * 1024 * 1024 * 1024_u64
+    );
+    assert_eq!(
+        recent["docker_root_available_bytes"],
+        24 * 1024 * 1024 * 1024_u64
+    );
+    assert_eq!(recent["docker_root_inode_total"], 0);
+    assert_eq!(recent["docker_root_inode_free"], 0);
+    assert_eq!(recent["docker_root_inode_available"], 0);
+    assert_eq!(recent["docker_root_inode_policy"], "dynamic_btrfs");
+    assert_eq!(recent["docker_root_fs_type_name"], "btrfs");
+    assert_eq!(recent["docker_root_filesystem_id"], 17);
+    assert!(recent["memory_psi_some_avg10_bps"].is_null());
+    assert_eq!(
         recent["memory_available_bytes"],
         10 * 1024 * 1024 * 1024_u64
     );
@@ -50,6 +65,55 @@ fn doctor_report_uses_selected_guest_values_and_expires_after_thirty_seconds() -
     )?;
     assert!(stale.doctor_report().is_none());
     Ok(())
+}
+
+#[test]
+fn observation_rejects_startup_evidence_for_another_engine_or_root() -> Result<(), String> {
+    let engine_id = "selected-engine";
+    let root_digest = "a".repeat(64);
+    if observation_with_startup_evidence(engine_id, &root_digest, engine_id, &root_digest).is_none()
+    {
+        return Err("matching probe startup evidence was rejected".to_owned());
+    }
+    if observation_with_startup_evidence(engine_id, &root_digest, "other-engine", &root_digest)
+        .is_some()
+    {
+        return Err("probe startup evidence from another engine was accepted".to_owned());
+    }
+    if observation_with_startup_evidence(engine_id, &root_digest, engine_id, &"b".repeat(64))
+        .is_some()
+    {
+        return Err("probe startup evidence from another root was accepted".to_owned());
+    }
+    Ok(())
+}
+
+fn observation_with_startup_evidence(
+    engine_id: &str,
+    root_digest: &str,
+    evidence_engine_id: &str,
+    evidence_root_digest: &str,
+) -> Option<Observation> {
+    let record = sample_record(24 * 1024 * 1024 * 1024);
+    let generation = "f".repeat(32);
+    let startup_evidence = super::super::ProbeStartupEvidence::test_fixture(
+        &generation,
+        evidence_engine_id,
+        evidence_root_digest,
+    );
+    let memory_total_bytes = record.docker_root_total_bytes;
+    let inspected_host_pid = record.probe_host_pid;
+    Observation::new(super::super::sample::ObservationInput {
+        record,
+        cpus: 8,
+        inspected_host_pid,
+        memory_total_bytes,
+        engine_id: engine_id.to_owned(),
+        docker_root_digest: root_digest.to_owned(),
+        sample_generation_id: generation,
+        observed_at: Instant::now(),
+        startup_evidence,
+    })
 }
 
 fn observation(

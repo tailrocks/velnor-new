@@ -86,3 +86,56 @@ impl Response {
         serde_json::from_slice(bytes).map_err(|_| ())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{DoctorProbeReply, Response};
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct LegacyDoctorProbeReply {
+        request_id: Option<i64>,
+        state: String,
+        report: Option<serde_json::Value>,
+    }
+
+    #[test]
+    fn doctor_readiness_stays_outside_the_legacy_reply_shape() {
+        let response = Response {
+            value: None,
+            doctor_probe: Some(DoctorProbeReply {
+                request_id: Some(17),
+                state: "completed".to_owned(),
+                report: Some(serde_json::json!({"cpu_count": 8})),
+            }),
+            readiness: Some(crate::readiness::Readiness::Ready),
+        };
+        let encoded = serde_json::to_value(response).expect("response serializes");
+        let legacy: LegacyDoctorProbeReply =
+            serde_json::from_value(encoded["doctor_probe"].clone())
+                .expect("legacy doctor client accepts the unchanged nested reply");
+        assert_eq!(legacy.request_id, Some(17));
+        assert_eq!(legacy.state, "completed");
+        assert_eq!(legacy.report, Some(serde_json::json!({"cpu_count": 8})));
+        assert_eq!(encoded["readiness"], "ready");
+    }
+
+    #[test]
+    fn new_client_accepts_an_old_doctor_response_without_readiness() {
+        let response: Response = serde_json::from_value(serde_json::json!({
+            "value": null,
+            "doctor_probe": {
+                "request_id": 17,
+                "state": "completed",
+                "report": {"cpu_count": 8}
+            }
+        }))
+        .expect("new client accepts the old response");
+        assert!(response.readiness.is_none());
+        let reply = response.doctor_probe.expect("old doctor reply is present");
+        assert_eq!(reply.request_id, Some(17));
+        assert_eq!(reply.state, "completed");
+        assert_eq!(reply.report, Some(serde_json::json!({"cpu_count": 8})));
+    }
+}
