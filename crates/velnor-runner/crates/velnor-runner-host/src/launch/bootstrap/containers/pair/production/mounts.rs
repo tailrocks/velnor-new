@@ -43,20 +43,17 @@ pub(super) fn inspect_volume_mounts(
         append(&mut bytes, if read_only { "ro" } else { "rw" })?;
     }
     for (target, options) in expected_tmpfs_targets {
-        append(&mut bytes, &target)?;
-        append(&mut bytes, &options)?;
+        append(&mut bytes, target)?;
+        append(&mut bytes, options)?;
     }
     Ok(lower_hex(&Sha256::digest(bytes)))
 }
 
-fn verified_tmpfs_targets(
-    expected: &std::collections::HashMap<String, String>,
+fn verified_tmpfs_targets<'a>(
+    expected: &'a std::collections::HashMap<String, String>,
     actual: &[MountPoint],
-) -> Result<Vec<(String, String)>, HostError> {
-    let mut expected_targets = expected
-        .iter()
-        .map(|(target, options)| (target.clone(), options.clone()))
-        .collect::<Vec<_>>();
+) -> Result<Vec<(&'a String, &'a String)>, HostError> {
+    let mut expected_targets = expected.iter().collect::<Vec<_>>();
     let mut actual_targets = actual
         .iter()
         .filter(|mount| mount.typ.as_deref() == Some("tmpfs"))
@@ -73,7 +70,7 @@ fn verified_tmpfs_targets(
     {
         return Err(HostError::Ownership);
     }
-    expected_targets.sort_by(|left, right| left.0.cmp(&right.0));
+    expected_targets.sort_by(|left, right| left.0.cmp(right.0));
     actual_targets.sort();
     if expected_targets
         .iter()
