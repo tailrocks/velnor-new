@@ -8,6 +8,8 @@ mod impl_adapter_wire_renderer;
 mod impl_renderer_acquire;
 #[path = "impl_renderer_bun.rs"]
 mod impl_renderer_bun;
+#[path = "impl_renderer_bun_assets.rs"]
+mod impl_renderer_bun_assets;
 #[path = "impl_renderer_cache_script.rs"]
 mod impl_renderer_cache_script;
 #[path = "impl_renderer_cache_steps.rs"]

@@ -282,6 +282,9 @@ fn generic_registry_id_generates_without_catalog_fallback_and_keeps_plan_identit
     );
 }
 
+#[path = "check_jobs_shellcheck_tests.rs"]
+mod shellcheck_tests;
+
 #[test]
 fn fork_admission_skips_external_runner_and_required_rejects_skip() {
     let runner = CheckRunner {

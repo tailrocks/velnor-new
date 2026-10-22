@@ -230,6 +230,9 @@ fn canonical_fingerprint_ignores_dependency_transport_order() {
     );
 }
 
+#[path = "check_qualified_tool_shellcheck_tests.rs"]
+mod shellcheck_tests;
+
 fn discovered_qualification() -> super::super::DiscoveredCheck {
     use velnor_actions_contract::config::{CheckExecutor, CheckRunner, MiseCheck};
     let resolved = names::resolve_on(&[rust()], &["rust".to_owned()], CheckPlatform::LinuxX64)

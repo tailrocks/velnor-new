@@ -316,3 +316,6 @@ mod rust_tests;
 
 #[path = "impl_mise_tool_probe_rustfmt_tests.rs"]
 mod rustfmt_tests;
+
+#[path = "impl_mise_tool_probe_shellcheck_tests.rs"]
+mod shellcheck_tests;

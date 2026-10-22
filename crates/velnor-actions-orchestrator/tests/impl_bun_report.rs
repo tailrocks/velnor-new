@@ -24,6 +24,30 @@ fn ci(playwright: &str) -> Result<String, Box<dyn std::error::Error>> {
     Ok(required_file(&tree, ".github/workflows/ci.yml")?.to_owned())
 }
 
+fn ci_with_private_assets(playwright: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let extra = format!(
+        "{SUITE}{playwright}\n[private_sources]\nowner = \"acme\"\napp_id_variable = \"VELNOR_DEPS_APP_ID\"\n\
+app_private_key_secret = \"VELNOR_DEPS_APP_PRIVATE_KEY\"\nnpm_scopes = [\"@chainargos\"]\n\
+[[private_sources.release_assets]]\nid = \"ui-assets\"\nrepository = \"acme/ui-assets\"\n\
+tag = \"v1.0.0\"\nasset = \"assets.tar.gz\"\nextract_to = \"ui-assets\"\n"
+    );
+    let repo = playwright_repo_with(&extra, Some(&core_integrity()))?;
+    fs::write(
+        repo.path().join("frontend/docs/package.json"),
+        r#"{"name":"chainargos-docs","scripts":{"typecheck":"tsc","test:browser":"playwright test"}}"#,
+    )?;
+    fs::write(
+        repo.path().join(".velnor/deps.lock"),
+        "schema = 1\n[[release_assets]]\nid = \"ui-assets\"\nrepository = \"acme/ui-assets\"\n\
+tag = \"v1.0.0\"\ncommit = \"0123456789abcdef0123456789abcdef01234567\"\n\
+asset = \"assets.tar.gz\"\nsha256 = \"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\"\n\
+extract_to = \"ui-assets\"\n",
+    )?;
+    git(&["add", "."], repo.path())?;
+    let tree = render_staged_tree(&prepare(repo.path())?)?;
+    Ok(required_file(&tree, ".github/workflows/ci.yml")?.to_owned())
+}
+
 fn after<'a>(body: &'a str, name: &str) -> Result<&'a str, Box<dyn std::error::Error>> {
     Ok(body
         .split(&format!("- name: {name}\n"))
@@ -144,6 +168,43 @@ fn a_merge_report_job_runs_after_the_legs_outside_required() -> TestResult {
     );
     let legs = job_body(&ci, "bun-chainargos-docs--browser")?;
     assert!(legs.contains("retention-days: \"2\""), "{legs}");
+    Ok(())
+}
+
+#[test]
+fn report_job_hands_off_private_assets_before_tools_and_merge() -> TestResult {
+    let ci = ci_with_private_assets("shards = 2\nreport = \"merge\"\n")?;
+    let report = job_body(&ci, "bun-chainargos-docs--browser--report")?;
+    let prepare = report
+        .find("name: Prepare private asset handoff")
+        .ok_or("prepare handoff")?;
+    let download = report
+        .find("name: Download private assets")
+        .ok_or("download")?;
+    let import = report
+        .find("name: Import and verify private assets")
+        .ok_or("import")?;
+    let tools = report.find("name: Prepare pinned tools").ok_or("tools")?;
+    let install = report
+        .find("name: Install dependencies (registry phase)")
+        .ok_or("install")?;
+    let merge = report
+        .find("name: Merge Playwright reports")
+        .ok_or("merge")?;
+    assert!(
+        prepare < download && download < import && import < tools,
+        "{report}"
+    );
+    assert!(tools < install && install < merge, "{report}");
+    assert!(report.contains("bun-assets-import-v1"), "{report}");
+    assert!(report.contains("VELNOR_BUN_ASSET_PINS"), "{report}");
+    for secret in [
+        "deps-token",
+        "VELNOR_DEPS_APP_PRIVATE_KEY",
+        "Mint read-only token",
+    ] {
+        assert!(!report.contains(secret), "{secret} in report job: {report}");
+    }
     Ok(())
 }
 

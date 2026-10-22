@@ -118,12 +118,53 @@ fn private_operations_without_runner_temp_fall_through_to_usage() -> Result<(), 
         "gradle-run-v1",
         "bun-registry-install-v1",
         "playwright-browsers-install-v1",
+        "bun-assets-export-v1",
+        "bun-assets-prepare-v1",
+        "bun-assets-import-v1",
     ] {
         let gated = spawn_isolated(&[], &[("VELNOR_INTERNAL_OP", op)], &tmp)?;
         let bare = spawn_isolated(&[], &[], &tmp)?;
         assert_eq!(code(&gated), 2, "{op}");
         assert_eq!(gated.stderr, bare.stderr, "{op}: public behavior unchanged");
     }
+    cleanup(&tmp);
+    Ok(())
+}
+
+#[test]
+fn bun_assets_prepare_is_a_runner_temp_gated_internal_operation() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("smoke-bun-assets-prepare")?;
+    let workspace = tmp.join("workspace");
+    let runner = tmp.join("runner");
+    std::fs::create_dir_all(workspace.join(".velnor/deps/stale"))?;
+    std::fs::create_dir_all(runner.join("velnor"))?;
+    std::fs::write(workspace.join(".velnor/deps/stale/file"), b"stale")?;
+    let runner_text = runner.to_string_lossy().into_owned();
+    let workspace_text = workspace.to_string_lossy().into_owned();
+    let output = spawn_isolated(
+        &[],
+        &[
+            ("VELNOR_INTERNAL_OP", "bun-assets-prepare-v1"),
+            ("VELNOR_BUN_ASSET_ID", "bun-member"),
+            (
+                "VELNOR_BUN_ASSET_PINS",
+                "ui-assets:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            ),
+            ("RUNNER_TEMP", &runner_text),
+            ("GITHUB_WORKSPACE", &workspace_text),
+        ],
+        &tmp,
+    )?;
+
+    assert_eq!(
+        code(&output),
+        0,
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(output.stdout, b"");
+    assert!(std::fs::symlink_metadata(workspace.join(".velnor/deps")).is_err());
+    assert!(runner.join("velnor/bun-assets/bun-member").is_dir());
     cleanup(&tmp);
     Ok(())
 }

@@ -91,6 +91,7 @@ pub(super) fn validate_recipe(
             } else {
                 super::probes::validate_recipe_probe(
                     &recipe.version,
+                    &recipe.backend,
                     platform.platform,
                     executable,
                     file,
