@@ -53,6 +53,7 @@ mod verification;
 mod workflow;
 mod workflow_flags;
 mod workflow_task;
+mod workflow_timeouts;
 
 pub(crate) use binary_release::validate_static_release_inventory;
 
@@ -160,7 +161,7 @@ pub use verification::{VerificationRunner, VerificationTask};
 pub use workflow::{
     GeneratorValidation, LATEST_RUNNER_LABEL, PullRequestCachePolicy, RUNNER_LABEL_CATALOG,
     RunnerSelection, VelnorSupportWorkflow, VerifyConfig, WorkflowConfig, WorkflowPolicy,
-    default_crate_timeout_minutes,
+    default_crate_timeout_minutes, default_plan_timeout_minutes,
 };
 pub use workflow_task::{WORKFLOW_TASK_JOB_PREFIX, WorkflowTask, is_valid_workflow_task_id};
 
