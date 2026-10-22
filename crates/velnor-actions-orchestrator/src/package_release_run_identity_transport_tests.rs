@@ -1,7 +1,7 @@
 use super::*;
 use serde_json::Value;
 
-fn jobs_page(jobs: Value, total_count: usize) -> Value {
+fn jobs_page(jobs: &Value, total_count: usize) -> Value {
     json!({"total_count":total_count,"jobs":jobs})
 }
 
@@ -36,11 +36,11 @@ fn real_api_admits_required_job_and_latest_ci_from_later_inventory_pages() {
         .collect::<Vec<_>>();
     let mut latest = run_json();
     latest["run_number"] = json!(101);
-    let mut responses = first_three(jobs_page(json!(fillers), 101));
+    let mut responses = first_three(jobs_page(&json!(fillers), 101));
     responses.extend([
         (
             route("actions/runs/22/attempts/3/jobs?per_page=100&page=2"),
-            jobs_page(json!([required()]), 101),
+            jobs_page(&json!([required()]), 101),
         ),
         (list_route_page(1), first_run_page()),
         (list_route_page(2), json!({"workflow_runs":[latest]})),
@@ -62,7 +62,7 @@ fn later_run_inventory_page_supersedes_older_success_with_failed_or_pending_run(
         let mut newer = inventory_run(23, 101);
         newer["status"] = json!(status);
         newer["conclusion"] = conclusion;
-        let mut responses = first_three(jobs_page(json!([required()]), 1));
+        let mut responses = first_three(jobs_page(&json!([required()]), 1));
         responses.extend([
             (list_route_page(1), first_run_page()),
             (list_route_page(2), json!({"workflow_runs":[newer]})),
@@ -84,7 +84,7 @@ fn latest_run_listing_rejects_a_different_run_or_attempt() {
         run["run_attempt"] = json!(4);
         run
     }] {
-        let mut responses = first_three(jobs_page(json!([required()]), 1));
+        let mut responses = first_three(jobs_page(&json!([required()]), 1));
         responses.push((list_route_page(1), json!({"workflow_runs":[latest]})));
         let (api, fixture) = GitHubApi::with_fixture("example/app", responses);
         assert!(api.verify_ci_identity(22, 3, source(), true).is_err());

@@ -1,6 +1,6 @@
 use super::*;
 
-fn jobs_page(jobs: serde_json::Value, total_count: usize) -> serde_json::Value {
+fn jobs_page(jobs: &serde_json::Value, total_count: usize) -> serde_json::Value {
     json!({"total_count":total_count,"jobs":jobs})
 }
 
@@ -25,7 +25,7 @@ fn ci_inventory_page_caps_fail_closed() {
             json!({"id":100+n,"run_id":22,"name":format!("Other {n}"),"head_sha":source().sha,"status":"completed","conclusion":"success"})
         })
         .collect::<Vec<_>>();
-    let responses = first_three(jobs_page(json!(jobs), 2_001));
+    let responses = first_three(jobs_page(&json!(jobs), 2_001));
     let (api, fixture) = GitHubApi::with_fixture("example/app", responses);
     assert!(api.verify_ci_identity(22, 3, source(), false).is_err());
     fixture.assert_drained();
@@ -36,7 +36,7 @@ fn ci_inventory_page_caps_fail_closed() {
             json!({"id":100+n,"run_id":22,"name":format!("Other {n}"),"head_sha":source().sha,"status":"completed","conclusion":"success"})
         })
         .collect::<Vec<_>>();
-    let mut responses = first_three(jobs_page(json!(first_page), 2_000));
+    let mut responses = first_three(jobs_page(&json!(first_page), 2_000));
     for page in 2..=20 {
         let jobs = (0..100)
             .map(|n| {
@@ -48,7 +48,7 @@ fn ci_inventory_page_caps_fail_closed() {
             route(&format!(
                 "actions/runs/22/attempts/3/jobs?per_page=100&page={page}"
             )),
-            jobs_page(json!(jobs), 2_000),
+            jobs_page(&json!(jobs), 2_000),
         ));
     }
     let (api, fixture) = GitHubApi::with_fixture("example/app", responses);
