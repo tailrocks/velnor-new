@@ -252,6 +252,12 @@ hash-pinned lock. Decisions:
   `playwright-browsers` [cache family](cache-families.md) (trusted writers only;
   its restore and save steps are not generated yet).
 
+## Suites and Playwright sharding
+
+Declared suites (separate jobs for groups of a member's scripts, optionally a
+Playwright project and shard matrix) are specified in
+[Bun browser suites](bun-browser-suites.md).
+
 ## Remaining work
 
 - `bun-install` and `playwright-browsers` cache families (design 3.4): the Bun

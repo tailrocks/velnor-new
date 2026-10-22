@@ -87,5 +87,6 @@ The generator crates MUST NOT implement a runner, a Scale Set client, or an Acti
 30. [dbt contract](dbt-contract.md) defines the dbt-fusion stack: `[stacks.dbt]`, the `X.Y.Z-preview.N` or stable `X.Y.Z` version grammar (HD-4a), the package-lock and profile policies, artifact admission and affected-project claims.
 31. [Ansible contract](ansible-contract.md) defines the Ansible stack: `[stacks.ansible]`, hash-pinned Python requirements, offline collection pins, playbook discovery, vault refusal and affected-root claims; host deployment stays operator-run (HD-9).
 32. [Workflow lint contract](workflow-lint-contract.md) defines jactionlint as the only workflow linter (hard decision 10): `[workflow.lint] profile`, the generated `.github/jactionlint.yaml`, the shared `hk` file set and flags, executable digest verification and the check-only `hk` step.
+33. [Bun browser suites](bun-browser-suites.md) amends hard decision 6: declared suites run groups of a member's scripts in their own jobs, optionally as a Playwright project and shard matrix with leg blob verification and one merged report.
 
 The listed documents are intended to be implementable without inventing behavior. If a behavior is not specified, fail with a clear error and add a decision to the spec before implementing it. Do not silently broaden V1.
