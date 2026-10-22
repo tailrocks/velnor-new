@@ -2,6 +2,7 @@
 mod impl_ansible;
 mod impl_bench_p13;
 mod impl_bun;
+mod impl_bun_golden;
 mod impl_bun_playwright;
 mod impl_bun_select;
 mod impl_cache_fixtures;

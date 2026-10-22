@@ -20,6 +20,7 @@ consumed directly (via `include_str!` in
 | hostile-config/ | unknown keys, bad types, traversal | REJECT validation |
 | conflicting-runners/ | cargo test AND nextest scripts | REJECT ambiguous_test_runner |
 | empty-suite/ | Nextest library with `test = false` and `doctest = false` | valid_no_test_targets |
+| bun-workspace/ | Bun root workspace, two members, Chromium on one, no suites | byte golden `expected/.github/workflows/ci.yml` (`impl_bun_golden.rs`, refresh with `VELNOR_UPDATE_GOLDENS=1`) |
 
 ## Parity corpus (`parity/`)
 
