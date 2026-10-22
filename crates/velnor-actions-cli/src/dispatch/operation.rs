@@ -1,7 +1,8 @@
 //! Closed private operation identities; no public dispatch aliases.
 use super::{
     ACQUIRE_PREVIEW_SOURCE_OP, ACQUIRE_RELEASE_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP,
-    ADMIT_RELEASE_AGGREGATE_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_REGISTRY_INSTALL_OP,
+    ADMIT_RELEASE_AGGREGATE_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_ASSETS_EXPORT_OP,
+    BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, BUN_REGISTRY_INSTALL_OP,
     CAPTURE_REVIEW_COMPLETION_OP, EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP,
     EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, FINALIZE_PREVIEW_SOURCE_OP, GRADLE_RUN_OP,
     MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OP_ENV, PLAN_OP, PLAYWRIGHT_INSTALL_OP,
@@ -79,6 +80,12 @@ pub(super) enum InternalOp {
     GradleRun,
     /// Registry phase of `bun install` under the job token (HD-6, HD-7).
     BunRegistryInstall,
+    /// Export the verified Bun assets tarball.
+    BunAssetsExport,
+    /// Reset the workspace assets and prepare the download directory.
+    BunAssetsPrepare,
+    /// Safely import and pin-check the Bun assets tarball.
+    BunAssetsImport,
     /// Hash-verified Playwright browser install (HD-6).
     PlaywrightInstall,
     /// Isolated App-authenticated PR writer for a validated tap candidate.
@@ -117,6 +124,9 @@ pub(super) fn from_env() -> Option<InternalOp> {
         Ok(tag) if tag == PRIVATE_FETCH_OP => InternalOp::PrivateFetch,
         Ok(tag) if tag == PRIVATE_REVOKE_OP => InternalOp::PrivateRevoke,
         Ok(tag) if tag == BUN_REGISTRY_INSTALL_OP => InternalOp::BunRegistryInstall,
+        Ok(tag) if tag == BUN_ASSETS_EXPORT_OP => InternalOp::BunAssetsExport,
+        Ok(tag) if tag == BUN_ASSETS_PREPARE_OP => InternalOp::BunAssetsPrepare,
+        Ok(tag) if tag == BUN_ASSETS_IMPORT_OP => InternalOp::BunAssetsImport,
         Ok(tag) if tag == GRADLE_RUN_OP => InternalOp::GradleRun,
         Ok(tag) if tag == PLAYWRIGHT_INSTALL_OP => InternalOp::PlaywrightInstall,
         Ok(tag) if tag == SIGN_PACKAGE_RELEASE_OP => InternalOp::PackageSigner,

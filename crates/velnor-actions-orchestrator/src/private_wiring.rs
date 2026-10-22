@@ -113,6 +113,19 @@ impl PrivateWiring {
         self.steps_for_kinds(&[root.to_owned()], &BUN_JOB_KINDS)
     }
 
+    /// `id:sha256` of every release asset the lock pins, sorted: the archive
+    /// digests a suite job checks in the `verified.json` its assets job wrote.
+    pub(crate) fn release_asset_pins(&self) -> Vec<String> {
+        let mut pins: Vec<String> = self
+            .lock
+            .iter()
+            .flat_map(|lock| &lock.release_assets)
+            .map(|asset| format!("{}:{}", asset.id, asset.sha256))
+            .collect();
+        pins.sort();
+        pins
+    }
+
     /// The block for a Gradle job: it retrieves Maven bundles only.
     ///
     /// # Errors

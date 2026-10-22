@@ -1,5 +1,10 @@
 //! Public orchestrator API re-exports.
 
+pub use super::bun_assets_handoff::{
+    ASSET_ID_ENV as BUN_ASSETS_ID_ENV, ASSET_PINS_ENV as BUN_ASSETS_PINS_ENV, BUN_ASSETS_EXPORT_OP,
+    BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, run_bun_assets_export, run_bun_assets_import,
+    run_bun_assets_prepare,
+};
 pub use super::check_runtime::{EXECUTE_CHECK_OP, execute_check};
 pub use super::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 pub use super::config::bun_registry_install::{BUN_REGISTRY_INSTALL_OP, run_bun_registry_install};

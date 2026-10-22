@@ -103,6 +103,13 @@ the installed repositories: this is the self-attestation limit above, with
 review and CODEOWNERS on `.github/**` and `.velnor/**` as the trust root.
 The credential boundary and the threat model live in the
 [private sources contract](../proposed/private-sources-contract.md).
+Bun suites and their Playwright legs hold no secret: one assets job per member
+mints, fetches and revokes, and the suites receive the verified tree as an
+artifact of the same run, never across runs, so a fork cannot plant one. On a
+fork pull request that job's mint fails, the suites are skipped and `Required`
+fails closed. Fork runs restore the Bun family caches read-only and never
+save; only leg 1 of a trusted push saves. A consistent malicious regen could
+drop a suite from `needs`: that is the self-attestation limit above.
 
 ## Image publication
 
