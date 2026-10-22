@@ -116,7 +116,6 @@ pub(crate) struct BootstrapStartClaim {
     docker_root_digest: String,
     runner_container_id: String,
     dind_container_id: String,
-    storage_plan: StorageProvisioningPlan,
 }
 
 impl BootstrapStartClaim {
@@ -142,10 +141,6 @@ impl BootstrapStartClaim {
 
     pub(crate) fn docker_root_digest(&self) -> &str {
         &self.docker_root_digest
-    }
-
-    pub(crate) fn storage_plan(&self) -> &StorageProvisioningPlan {
-        &self.storage_plan
     }
 }
 

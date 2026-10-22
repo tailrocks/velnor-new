@@ -77,7 +77,7 @@ pub(super) async fn reserve_in_transaction(
     }
 
     let Some(profile) =
-        validated_profile_for_admission(connection, request, permit, admission).await?
+        validated_profile_for_admission(connection, request, permit.as_ref(), admission).await?
     else {
         return Ok(ReservationResult::AtCapacity);
     };
@@ -114,7 +114,7 @@ pub(super) async fn reserve_in_transaction(
 async fn validated_profile_for_admission(
     connection: &turso::Connection,
     request: ReservationRequest<'_>,
-    permit: &Option<StartPermit>,
+    permit: Option<&StartPermit>,
     admission: &StorageProvisioningAdmission,
 ) -> Result<Option<super::super::storage_budget::StorageProfile>, HostError> {
     let Some(profile) = super::super::storage_budget::current_profile(connection).await? else {
@@ -134,7 +134,7 @@ async fn validated_profile_for_admission(
         || !capacity_fits(connection, request, retained_memory).await?
         || !super::super::storage::guest_capacity_fits(
             connection,
-            permit.as_ref().ok_or(HostError::Journal)?,
+            permit.ok_or(HostError::Journal)?,
             request.memory_bytes,
             retained_memory,
             None,

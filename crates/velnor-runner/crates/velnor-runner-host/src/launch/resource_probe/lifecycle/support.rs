@@ -7,7 +7,8 @@ use uuid::Uuid;
 use crate::docker_client::DOCKER_OPERATION_TIMEOUT;
 use crate::error::HostError;
 use crate::journal::{
-    DoctorProbePrepareResult, DoctorProbeTicket, Journal, ProbeSeed, ResourceProbePurpose,
+    DoctorProbePrepareResult, DoctorProbeTicket, Journal, ProbeSeed, ProbeWork,
+    ResourceProbePurpose,
 };
 
 use super::super::execute;
@@ -128,16 +129,45 @@ pub(super) async fn projection(
         request_sha256: projection.request_sha256.clone(),
     };
     match doctor_ticket {
-        Some(ticket) => match deadline
-            .within(journal.prepare_probe_for_doctor_request(ticket, seed))
-            .await??
-        {
-            DoctorProbePrepareResult::Prepared(_) | DoctorProbePrepareResult::AlreadyLinked(_) => {}
-            DoctorProbePrepareResult::WaitingForProbe => return Err(HostError::Journal),
-        },
+        Some(ticket) => {
+            let child = match deadline
+                .within(journal.prepare_probe_for_doctor_request(ticket, seed))
+                .await??
+            {
+                DoctorProbePrepareResult::Prepared(child)
+                | DoctorProbePrepareResult::AlreadyLinked(child) => child,
+                DoctorProbePrepareResult::WaitingForProbe => return Err(HostError::Journal),
+            };
+            let ProbeWork::ResourceProbe {
+                purpose: ResourceProbePurpose::Capacity,
+                request_sha256,
+                request_context: None,
+            } = child.work()
+            else {
+                return Err(HostError::Journal);
+            };
+            if !doctor_child_identity_matches(
+                &child.operation_id,
+                request_sha256,
+                &projection.operation_id,
+                &projection.request_sha256,
+            ) {
+                return Err(HostError::Journal);
+            }
+        }
         None => deadline.within(journal.prepare_probe(seed)).await??,
     }
     Ok(projection)
+}
+
+fn doctor_child_identity_matches(
+    child_operation_id: &str,
+    child_request_sha256: &str,
+    projection_operation_id: &str,
+    projection_request_sha256: &str,
+) -> bool {
+    child_operation_id == projection_operation_id
+        && child_request_sha256 == projection_request_sha256
 }
 
 pub(in crate::launch::resource_probe) fn same_guest(
@@ -219,5 +249,32 @@ impl Deadline {
         tokio::time::timeout(timeout, future)
             .await
             .map_err(|_| HostError::DockerTimeout)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn doctor_child_identity_requires_the_exact_operation_and_request_digest() {
+        let operation_id = "a".repeat(32);
+        let request_sha256 = "b".repeat(64);
+        assert!(super::doctor_child_identity_matches(
+            &operation_id,
+            &request_sha256,
+            &operation_id,
+            &request_sha256,
+        ));
+        assert!(!super::doctor_child_identity_matches(
+            &"c".repeat(32),
+            &request_sha256,
+            &operation_id,
+            &request_sha256,
+        ));
+        assert!(!super::doctor_child_identity_matches(
+            &operation_id,
+            &"d".repeat(64),
+            &operation_id,
+            &request_sha256,
+        ));
     }
 }

@@ -45,8 +45,8 @@ pub(crate) fn owned_cgroup_record(
         "daemon": process_witness(1410, 1, 1, "/system.slice/docker.service"),
         "containers": [runner, dind],
         "root_backings": [
-            root_backing("runner", &request.runner_container_id, boot, runner_witness, runner_helper),
-            root_backing("dind", &request.dind_container_id, boot, dind_witness, dind_helper)
+            root_backing("runner", &request.runner_container_id, boot, &runner_witness, &runner_helper),
+            root_backing("dind", &request.dind_container_id, boot, &dind_witness, &dind_helper)
         ]
     });
     let record: velnor_resource_probe::worker_binding::OwnedCgroupObservation =
@@ -133,7 +133,7 @@ fn docker_root_attachment() -> Value {
     })
 }
 
-fn root_backing(role: &str, id: &str, boot: &str, init: Value, helper: Value) -> Value {
+fn root_backing(role: &str, id: &str, boot: &str, init: &Value, helper: &Value) -> Value {
     let directories = [
         ("upper", format!("/var/lib/docker/overlay2/{id}/diff")),
         ("work", format!("/var/lib/docker/overlay2/{id}/work")),

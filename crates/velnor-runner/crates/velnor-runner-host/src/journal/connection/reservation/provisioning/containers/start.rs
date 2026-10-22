@@ -30,7 +30,7 @@ impl ConnectionJournal {
             {
                 return Ok(None);
             }
-            let storage_plan = load_storage_plan(connection, reservation_id, &context).await?;
+            let _ = load_storage_plan(connection, reservation_id, &context).await?;
             let Some((runner_container_id, dind_container_id)) =
                 created_container_ids(connection, reservation_id).await?
             else {
@@ -64,7 +64,6 @@ impl ConnectionJournal {
                 docker_root_digest: context.docker_root_digest,
                 runner_container_id,
                 dind_container_id,
-                storage_plan,
             }))
         })
         .await
