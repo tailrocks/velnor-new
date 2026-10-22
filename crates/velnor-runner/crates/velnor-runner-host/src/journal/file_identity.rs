@@ -50,7 +50,13 @@ impl JournalFile {
         Ok(file)
     }
 
-    pub(super) async fn connection(&self) -> Result<turso::Connection, HostError> {
+    pub(super) fn connection(
+        &self,
+    ) -> impl std::future::Future<Output = Result<turso::Connection, HostError>> + '_ {
+        std::future::poll_fn(|_| std::task::Poll::Ready(self.connect_verified()))
+    }
+
+    fn connect_verified(&self) -> Result<turso::Connection, HostError> {
         self.verify()?;
         let connection = self.database.connect().map_err(|_| HostError::Journal)?;
         self.verify()?;
@@ -315,11 +321,12 @@ mod tests {
         let scratch = Scratch::new();
         let path = scratch.file();
         let file = JournalFile::open(&path).await.expect("open journal file");
+        let connection = file.connection();
         let moved = scratch.0.join("old-journal.db");
         std::fs::rename(&path, &moved).expect("move original journal");
         std::fs::write(&path, b"replacement").expect("write replacement file");
 
-        assert!(matches!(file.connection().await, Err(HostError::Path)));
+        assert!(matches!(connection.await, Err(HostError::Path)));
     }
 
     #[cfg(unix)]
