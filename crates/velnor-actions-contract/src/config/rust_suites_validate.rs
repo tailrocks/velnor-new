@@ -10,8 +10,8 @@ use crate::workflow::ScheduleTrigger;
 
 use super::rust_suites::{
     DEFAULT_SUITE_WORKFLOW_SLUG, GENERATOR_OWNED_WORKFLOW_FILES, MAX_SUITE_PARTITIONS,
-    MAX_SUITE_TEST_THREADS, RESERVED_SUITE_IDS, RESERVED_SUITE_WORKFLOW_SLUGS, RustSuiteConfig,
-    RustSuiteTrigger, WorkflowDispatchConfig, WorkflowDispatchInputType,
+    MAX_SUITE_TEST_THREADS, RESERVED_SUITE_IDS, RESERVED_SUITE_WORKFLOW_SLUGS, RustSuiteArtifact,
+    RustSuiteConfig, RustSuiteTrigger, WorkflowDispatchConfig, WorkflowDispatchInputType,
 };
 use super::workflow::RUNNER_LABEL_CATALOG;
 use rules::{
@@ -22,6 +22,31 @@ use rules::{
 
 fn cfg_err(file: &str, key: impl Into<String>, problem: impl Into<String>) -> ContractError {
     ContractError::config(file, key, problem)
+}
+
+/// Validate a task-suite artifact with one path pattern and shared retention bounds.
+/// Task suites have no shards, so artifact-name templates are not permitted.
+pub(crate) fn validate_task_suite_artifact(
+    artifact: &RustSuiteArtifact,
+    file: &str,
+    prefix: &str,
+) -> Result<(), ContractError> {
+    if artifact.name.contains('{') || artifact.name.contains('}') {
+        return Err(cfg_err(
+            file,
+            format!("{prefix}.name"),
+            format!("task_suite_artifact_name_must_be_literal:{}", artifact.name),
+        ));
+    }
+    rules::validate_suite_artifact(artifact, file, prefix)?;
+    if artifact.paths.len() > 1 {
+        return Err(cfg_err(
+            file,
+            format!("{prefix}.paths"),
+            "task_suite_artifact_requires_one_path_pattern",
+        ));
+    }
+    Ok(())
 }
 
 /// Validate all declared Rust suites (`stacks.rust.suites`).

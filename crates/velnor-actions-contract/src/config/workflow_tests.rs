@@ -21,6 +21,7 @@ fn named(name: &str) -> WorkflowConfig {
         pull_request_cache_policy: PullRequestCachePolicy::default(),
         runner_label: None,
         tasks: Vec::new(),
+        task_suites: Vec::new(),
         tofu_apply: None,
         review_completion: None,
         verify: VerifyConfig::default(),
@@ -373,3 +374,6 @@ fn verify_jobs_reject_unknown_and_duplicates() {
 
 #[path = "workflow_crate_timeout_tests.rs"]
 mod crate_timeout;
+
+#[path = "workflow_mise_task_suite_tests.rs"]
+mod mise_task_suite_tests;

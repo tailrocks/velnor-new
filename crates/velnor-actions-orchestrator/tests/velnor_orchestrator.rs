@@ -59,6 +59,7 @@ mod impl_merge_full_event;
 mod impl_merge_plan;
 mod impl_merge_tamper;
 mod impl_merge_trust;
+mod impl_mise_task_suites;
 mod impl_neg_pipeline_p13;
 mod impl_orch_broaden;
 mod impl_orch_cold_validators;

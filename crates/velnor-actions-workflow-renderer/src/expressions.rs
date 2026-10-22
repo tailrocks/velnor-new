@@ -301,9 +301,21 @@ pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError
     Ok(())
 }
 
+/// Permit the immutable event SHA only as checkout's `ref` input.
+pub(crate) fn check_with_action_value(
+    uses: &str,
+    key: &str,
+    value: &str,
+) -> Result<(), RenderError> {
+    if uses.starts_with("actions/checkout@") && key == "ref" && value == "${{ github.sha }}" {
+        return Ok(());
+    }
+    check_with_value(key, value)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::check_with_value;
+    use super::{check_with_action_value, check_with_value};
 
     #[test]
     fn check_with_value_accepts_glob_hash_files() {
@@ -342,5 +354,33 @@ mod tests {
             let value = format!("prefix-${{{{ hashFiles({arguments}) }}}}");
             assert!(check_with_value("cache-key", &value).is_err(), "{value}");
         }
+    }
+
+    #[test]
+    fn event_sha_is_allowed_only_for_checkout_ref() {
+        assert!(
+            check_with_action_value(
+                "actions/checkout@0123456789012345678901234567890123456789",
+                "ref",
+                "${{ github.sha }}"
+            )
+            .is_ok()
+        );
+        assert!(
+            check_with_action_value(
+                "actions/upload-artifact@0123456789012345678901234567890123456789",
+                "ref",
+                "${{ github.sha }}"
+            )
+            .is_err()
+        );
+        assert!(
+            check_with_action_value(
+                "actions/checkout@0123456789012345678901234567890123456789",
+                "ref",
+                "prefix-${{ github.sha }}"
+            )
+            .is_err()
+        );
     }
 }
