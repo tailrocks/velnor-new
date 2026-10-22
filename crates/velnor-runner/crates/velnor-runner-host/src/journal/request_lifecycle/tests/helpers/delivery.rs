@@ -133,14 +133,6 @@ pub(super) async fn publish_test_execution_challenge(
         .await
 }
 
-pub(super) async fn claim_listener_delivery(
-    scope: &ConnectionJournal,
-    provisioned: &ProvisionedRunner,
-    runner: &velnor_runner_github::RunnerReference,
-) -> Result<crate::journal::ListenerDeliveryClaim, HostError> {
-    claim_listener_delivery_for_engine(scope, provisioned, runner, TEST_ENGINE_ID).await
-}
-
 pub(super) async fn claim_listener_delivery_for_engine(
     scope: &ConnectionJournal,
     provisioned: &ProvisionedRunner,

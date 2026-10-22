@@ -40,6 +40,7 @@ impl PostJitRetirementCandidate {
         self.identity.reservation_id
     }
 
+    #[cfg(test)]
     pub(crate) const fn generation(&self) -> i64 {
         self.identity.generation
     }
