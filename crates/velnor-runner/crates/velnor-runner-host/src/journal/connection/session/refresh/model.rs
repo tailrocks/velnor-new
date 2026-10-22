@@ -60,24 +60,6 @@ pub(crate) struct SessionRefreshRecord {
 
 #[cfg(test)]
 impl SessionRefreshRecord {
-    /// Give the repository connection that owns this attempt.
-    #[must_use]
-    pub(crate) fn connection_id(&self) -> &ConnectionId {
-        &self.connection_id
-    }
-
-    /// Give the selected Scale Set ID.
-    #[must_use]
-    pub(crate) const fn scale_set_id(&self) -> i64 {
-        self.scale_set_id
-    }
-
-    /// Give the scoped session intent.
-    #[must_use]
-    pub(crate) const fn session_intent_id(&self) -> i64 {
-        self.session_intent_id
-    }
-
     /// Give the exact session identifier.
     #[must_use]
     pub(crate) fn session_id(&self) -> &str {

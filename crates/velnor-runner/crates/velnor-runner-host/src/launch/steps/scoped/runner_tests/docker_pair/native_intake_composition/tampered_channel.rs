@@ -19,8 +19,8 @@ fn invalid_channel_record_sends_no_ack_and_keeps_acquired_charge() -> Result<(),
 }
 
 async fn check_invalid_channel_records() -> Result<(), String> {
-    check_invalid_channel_record(false).await?;
-    check_invalid_channel_record(true).await
+    Box::pin(check_invalid_channel_record(false)).await?;
+    Box::pin(check_invalid_channel_record(true)).await
 }
 
 async fn check_invalid_channel_record(tamper_attachment: bool) -> Result<(), String> {
@@ -39,7 +39,7 @@ async fn check_invalid_channel_record(tamper_attachment: bool) -> Result<(), Str
         setup.images.source_sha(),
     );
     let bound = Box::pin(bind_acquired(&setup, &provider, acquired)).await?;
-    let failure = create_and_measure_channel(&setup, bound)
+    let failure = Box::pin(create_and_measure_channel(&setup, bound))
         .await
         .err()
         .ok_or_else(|| "The invalid channel record was accepted.".to_owned())?;
@@ -99,6 +99,6 @@ async fn check_invalid_channel_record(tamper_attachment: bool) -> Result<(), Str
             "The Docker exec server failed unexpectedly. Error: {server_error}."
         ));
     }
-    assert!(captured.jit_input.is_empty());
+    assert_eq!(captured.jit_input, [] as [u8; 0]);
     Ok(())
 }

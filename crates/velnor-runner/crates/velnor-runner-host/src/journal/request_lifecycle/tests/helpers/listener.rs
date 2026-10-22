@@ -1,8 +1,7 @@
 pub(crate) struct ListenerDeliveryFixture {
     pub(crate) _scratch: Scratch,
-    pub(crate) scope: ConnectionJournal,
+    pub(crate) _scope: ConnectionJournal,
     pub(crate) claim: crate::journal::ListenerDeliveryClaim,
-    pub(crate) runner: velnor_runner_github::RunnerReference,
 }
 
 pub(crate) async fn listener_delivery_fixture(
@@ -27,9 +26,8 @@ pub(crate) async fn listener_delivery_fixture(
             .await?;
     Ok(ListenerDeliveryFixture {
         _scratch: scratch,
-        scope,
+        _scope: scope,
         claim,
-        runner,
     })
 }
 

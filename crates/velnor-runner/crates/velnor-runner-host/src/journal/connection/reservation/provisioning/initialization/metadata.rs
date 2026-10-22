@@ -95,6 +95,10 @@ impl VerifiedMetadataInitialization {
     pub(crate) fn operation_key(&self) -> &str {
         &self.operation_key
     }
+    #[expect(
+        clippy::unused_self,
+        reason = "The receiver carries verified version-two metadata readiness; callers must hold that witness."
+    )]
     pub(crate) const fn layout_version(&self) -> i64 {
         2
     }

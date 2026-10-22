@@ -70,11 +70,22 @@ impl PairStartFailure {
 }
 
 /// Running pair with the Runner stdin channel retained and JIT withheld.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "preserves explicit listener delivery facts and the attempt-before-await cancellation fence; output release requires successful write and stdin shutdown"
+)]
 #[must_use]
 pub(crate) struct StartedBootstrapPair {
     receipt: super::BootstrapStartReceipt,
     mount_handoff: super::VerifiedBootstrapMountHandoff,
     stdin: Pin<Box<dyn tokio::io::AsyncWrite + Send>>,
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "keeps the attached Runner stream alive while the bootstrap pair owns it"
+        )
+    )]
     output: Option<RunnerOutput>,
     stdin_open: bool,
     jit_withheld: bool,
@@ -111,6 +122,13 @@ impl StartedBootstrapPair {
         self.jit_withheld
     }
 
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "keeps stream handoff gated on successful delivery, closed stdin, and released JIT"
+        )
+    )]
     pub(crate) fn take_output(&mut self) -> Option<RunnerOutput> {
         if !self.delivery_succeeded || self.stdin_open || self.jit_withheld {
             return None;

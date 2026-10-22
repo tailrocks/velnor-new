@@ -73,9 +73,15 @@ pub(in crate::launch::steps::scoped::runner::tests::docker_pair) async fn open_c
     let poll_session_ref = poll_session
         .as_ref()
         .ok_or_else(|| "The native intake poll session is absent.".to_owned())?;
-    let outcome =
-        acquire_through_positive_poll(&fixture, poll_session_ref, &drive, permit, &engine, poll)
-            .await?;
+    let outcome = Box::pin(acquire_through_positive_poll(
+        &fixture,
+        poll_session_ref,
+        &drive,
+        permit,
+        &engine,
+        poll,
+    ))
+    .await?;
     let guest_image =
         crate::worker::guest_image::test_support::TestGuestImage::for_connection_and_images(
             fixture.binding.clone(),
@@ -92,7 +98,7 @@ pub(in crate::launch::steps::scoped::runner::tests::docker_pair) async fn open_c
         images,
         guest_image,
         poll_session,
-        _state: state,
+        state,
     })
 }
 
@@ -155,6 +161,14 @@ async fn acquire_through_positive_poll(
     )
     .await
     .map_err(|error| format!("The shared positive-poll admission failed: {error}"))?;
+    acquired_request_from_positive_poll(&lane, outcome, polled)
+}
+
+fn acquired_request_from_positive_poll(
+    lane: &FakeLane,
+    outcome: crate::launch::PositivePollOutcome,
+    polled: &velnor_runner_github::Poll,
+) -> Result<crate::launch::steps::ScopedProvisioningOutcome, String> {
     if lane.paths.len() != 1 || !lane.paths[0].ends_with("/acquirejobs") {
         return Err(format!("Unexpected native Acquire paths: {:?}", lane.paths));
     }
