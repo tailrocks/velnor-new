@@ -14,6 +14,8 @@ use super::{Family, ProductRelease, render};
 
 #[path = "schema2_product_release_exec_tests.rs"]
 mod exec_tests;
+#[path = "schema2_product_release_gate_tests.rs"]
+mod gate_tests;
 #[path = "schema2_product_release_rerun_tests.rs"]
 mod rerun_tests;
 #[path = "schema2_product_release_timeout_tests.rs"]

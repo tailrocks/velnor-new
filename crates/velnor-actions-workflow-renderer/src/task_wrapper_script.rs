@@ -37,7 +37,7 @@ fn append_frame_header(script: &mut String, helper_version: &str) {
 if ! env VELNOR_INTERNAL_OP=resolve-task-execution-v1 "$helper" > "$frame_file"; then fail_frame; fi
 frame_bytes=$(wc -c < "$frame_file")
 frame_bytes=${frame_bytes//[[:space:]]/}
-[[ "$frame_bytes" =~ ^[0-9]{1,7}$ ]] && (( frame_bytes <= @MAX_FRAME_BYTES@ )) || fail_frame
+{ [[ "$frame_bytes" =~ ^[0-9]{1,7}$ ]] && (( frame_bytes <= @MAX_FRAME_BYTES@ )); } || fail_frame
 last_byte=$(tail -c 1 "$frame_file" | od -An -t x1)
 last_byte=${last_byte//[[:space:]]/}
 [[ "$last_byte" == 00 ]] || fail_frame
@@ -64,7 +64,7 @@ fn append_frame_counts(script: &mut String) {
         r#"
 case "${frame[7]}" in
   0) [[ -z "${frame[8]}" ]] || fail_frame ;;
-  1) [[ "${frame[8]}" =~ ^[1-9][0-9]{0,9}$ ]] && (( frame[8] <= @U32_MAX@ )) || fail_frame ;;
+  1) { [[ "${frame[8]}" =~ ^[1-9][0-9]{0,9}$ ]] && (( frame[8] <= @U32_MAX@ )); } || fail_frame ;;
   *) fail_frame ;;
 esac
 [[ "${frame[9]}" =~ ^[1-9][0-9]{0,2}$ ]] || fail_frame
@@ -110,11 +110,11 @@ for ((index = 0; index < env_count; index++)); do
   fi
   seen_keys+=("$key")
   case "$key" in
-    VELNOR_TASK_ID|VELNOR_TASK_DIGEST|VELNOR_MATRIX_ID|VELNOR_MATRIX_KEY|VELNOR_INTERNAL_OP|VELNOR_GENERATOR_VERSION|VELNOR_TASK_EXECUTION_DIGEST|VELNOR_RUNTIME_RUNNER_TEMP|"#,
+    "#,
     );
-    script.push_str(&toolchain_env::STEP_CREDENTIAL_DENYLIST.join("|"));
+    script.push_str(&reserved_frame_env_patterns().join("|"));
     script.push_str(
-        r#"|CARGO_REGISTRIES_*|*_TOKEN|ACTIONS_ID_TOKEN_REQUEST_URL|GH_HOST|GH_CONFIG_DIR|CHECKPOINT_*) fail_frame ;;
+        r#") fail_frame ;;
     TF_*)
       case "$key" in TF_IN_AUTOMATION|TF_INPUT) ;; *) fail_frame ;; esac ;;
   esac
@@ -123,6 +123,48 @@ for ((index = 0; index < env_count; index++)); do
 done
 "#,
     );
+}
+
+/// Wrapper-owned and credential-bearing names a task frame may not set.
+const RESERVED_FRAME_ENV: [&str; 8] = [
+    "VELNOR_TASK_ID",
+    "VELNOR_TASK_DIGEST",
+    "VELNOR_MATRIX_ID",
+    "VELNOR_MATRIX_KEY",
+    "VELNOR_INTERNAL_OP",
+    "VELNOR_GENERATOR_VERSION",
+    "VELNOR_TASK_EXECUTION_DIGEST",
+    "VELNOR_RUNTIME_RUNNER_TEMP",
+];
+
+/// Credential and endpoint patterns beyond the shared step denylist.
+const RESERVED_FRAME_ENV_PATTERNS: [&str; 6] = [
+    "CARGO_REGISTRIES_*",
+    "*_TOKEN",
+    "ACTIONS_ID_TOKEN_REQUEST_URL",
+    "GH_HOST",
+    "GH_CONFIG_DIR",
+    "CHECKPOINT_*",
+];
+
+/// Every rejected frame key pattern once, in a stable order.
+///
+/// The shared denylist and the local patterns overlap
+/// (`ACTIONS_ID_TOKEN_REQUEST_URL`); a repeated `case` pattern can never
+/// match and `ShellCheck` reports it (SC2221/SC2222), so duplicates are
+/// dropped here rather than kept in step by hand.
+pub(super) fn reserved_frame_env_patterns() -> Vec<&'static str> {
+    let mut patterns: Vec<&'static str> = Vec::new();
+    for pattern in RESERVED_FRAME_ENV
+        .into_iter()
+        .chain(toolchain_env::STEP_CREDENTIAL_DENYLIST)
+        .chain(RESERVED_FRAME_ENV_PATTERNS)
+    {
+        if !patterns.contains(&pattern) {
+            patterns.push(pattern);
+        }
+    }
+    patterns
 }
 
 fn append_env_checks(script: &mut String) {

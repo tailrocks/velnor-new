@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use super::{ELIGIBILITY_SCRIPT, JOB_ID, REQUIRED_JOB_JQ, job, script};
+use super::{ELIGIBILITY_FUNCTION, JOB_ID, REQUIRED_JOB_JQ, job, script};
 use crate::schema2::product_release_test_pins::test_pins;
 
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -310,7 +310,7 @@ fn script_uses_paginated_selectors_and_fails_fast_without_waiting() -> Result<()
     assert!(REQUIRED_JOB_JQ.contains(".name == \"Required\""));
     assert!(REQUIRED_JOB_JQ.contains(".run_attempt == $run_attempt"));
     assert!(rendered.contains("head_repository.full_name == $repository"));
-    assert!(ELIGIBILITY_SCRIPT.contains("GITHUB_WORKFLOW_REF"));
+    assert!(ELIGIBILITY_FUNCTION.contains("GITHUB_WORKFLOW_REF"));
     Ok(())
 }
 

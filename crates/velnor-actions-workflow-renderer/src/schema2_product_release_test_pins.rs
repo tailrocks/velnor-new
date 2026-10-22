@@ -64,7 +64,7 @@ pub(super) fn test_pins() -> ProductReleasePins {
         install_resource_probe_target_argv,
         runner_build_argv: build.runner,
         resource_probe_build_argv: build.resource_probe,
-        actionlint_argv: exec_argv(
+        actionlint_argv: with_env_unset_argv(&exec_argv(
             &[PinnedTool::Actionlint, PinnedTool::Shellcheck],
             "actionlint",
             &velnor_actions_actionlint::workflow_lint_args()
@@ -72,7 +72,7 @@ pub(super) fn test_pins() -> ProductReleasePins {
                 .map(String::as_str)
                 .collect::<Vec<_>>(),
             &catalog,
-        ),
+        )),
         zizmor_argv: with_env_unset_argv(&exec_argv(
             &[PinnedTool::Zizmor],
             "zizmor",

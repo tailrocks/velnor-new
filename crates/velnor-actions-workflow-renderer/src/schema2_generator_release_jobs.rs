@@ -29,16 +29,13 @@ pub(super) fn build_job(
     fields = workflow_steps::with_needs(fields, &["verify-release-source"]);
     fields.push((
         "outputs".to_owned(),
-        Yaml::Map(vec![
-            (
-                "artifact_id".to_owned(),
-                Yaml::str("${{ steps.upload.outputs.artifact-id }}"),
-            ),
-            (
-                "artifact_digest".to_owned(),
-                Yaml::str("${{ steps.upload.outputs.artifact-digest }}"),
-            ),
-        ]),
+        // Qualifiers and attesters download by immutable artifact ID, and
+        // the download action checks the artifact digest itself; a digest
+        // output would have no reader.
+        Yaml::Map(vec![(
+            "artifact_id".to_owned(),
+            Yaml::str("${{ steps.upload.outputs.artifact-id }}"),
+        )]),
     ));
     Ok(finish(
         id,
@@ -251,7 +248,7 @@ fn publish_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, RenderError> {
         &pins.gh_argv,
     )?);
     steps.push(workflow_steps::publish_step(
-        &manifest::publish_script(pins)?,
+        &manifest::publish_script(pins),
         &pins.gh_argv,
     )?);
     Ok(steps)
