@@ -153,10 +153,6 @@ impl SessionRefreshStartupAuthority<'_> {
     pub(crate) fn revision(&self) -> u64 {
         self.revision
     }
-
-    pub(crate) fn lineage_guard(&self) -> &EngineLineageGuard {
-        self.lineage_guard
-    }
 }
 
 impl<'a> SessionRefreshStartupAuthority<'a> {
