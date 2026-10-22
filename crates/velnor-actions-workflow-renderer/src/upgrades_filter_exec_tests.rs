@@ -6,15 +6,14 @@ use std::os::unix::fs::{PermissionsExt, symlink};
 
 use super::exec_support::{Sandbox, TestResult, text};
 
-/// Publish must refuse the patch, push nothing and leave the checkout alone.
+/// The workflow must refuse the patch before any token exists, push nothing
+/// and leave the checkout alone.
 fn assert_publish_rejects(sandbox: &Sandbox, code: &str) -> TestResult {
     let head = sandbox.git(&["rev-parse", "HEAD"])?;
-    let output = sandbox.publish()?;
-    let log = text(&output);
-    assert!(
-        !output.status.success(),
-        "publish accepted the patch:\n{log}"
-    );
+    let run = sandbox.pipeline()?;
+    let log = run.log();
+    assert!(run.publish.is_none(), "verify accepted the patch:\n{log}");
+    assert!(!sandbox.token_minted(), "a token was minted:\n{log}");
     assert!(
         log.contains(&format!("::error::{code}: ")),
         "{code}:\n{log}"
@@ -39,8 +38,9 @@ fn publish_ships_an_owned_patch() -> TestResult {
     sandbox.write("Cargo.lock", "version = 4\n# bumped\n")?;
     sandbox.write("mise.toml", "[tools]\nrust = \"1.99.1\"\n")?;
     sandbox.capture_patch(&[])?;
-    let output = sandbox.publish()?;
-    assert!(output.status.success(), "{}", text(&output));
+    let run = sandbox.pipeline()?;
+    let publish = run.publish.as_ref().ok_or_else(|| run.log())?;
+    assert!(publish.status.success(), "{}", run.log());
     let pushed = sandbox.pushed_branch()?.ok_or("nothing pushed")?;
     assert_eq!(pushed.len(), 40);
     assert!(sandbox.calls()?.contains("gh pr create"));
@@ -102,13 +102,23 @@ fn deleting_an_owned_lockfile_is_rejected() -> TestResult {
 }
 
 #[test]
-fn deleting_a_generated_workflow_is_allowed() -> TestResult {
+fn a_release_that_retires_a_generated_workflow_may_delete_it() -> TestResult {
     let sandbox = Sandbox::new("delete-generated")?;
-    fs::remove_file(sandbox.repo.join(".github/workflows/ci.yml"))?;
+    sandbox.write(".github/workflows/retired.yml", "name: Retired\n")?;
+    sandbox.git(&["add", "-A"])?;
+    sandbox.git(&["commit", "--quiet", "-m", "retired workflow"])?;
+    sandbox.release("0.2.0")?;
+    sandbox.bump_velnor("0.2.0")?;
+    fs::remove_file(sandbox.repo.join(".github/workflows/retired.yml"))?;
     sandbox.capture_patch(&[])?;
-    let output = sandbox.publish()?;
-    assert!(output.status.success(), "{}", text(&output));
-    assert!(sandbox.pushed_branch()?.is_some());
+    let run = sandbox.pipeline()?;
+    let publish = run.publish.as_ref().ok_or_else(|| run.log())?;
+    assert!(publish.status.success(), "{}", run.log());
+    assert!(
+        sandbox
+            .pushed_file(".github/workflows/retired.yml")
+            .is_err()
+    );
     Ok(())
 }
 

@@ -1,16 +1,22 @@
 //! Opt-in daily upgrade workflow (`upgrades.yml`, `[upgrades]`).
 //!
-//! Three jobs, each with the least authority it needs:
+//! Four jobs, each with the least authority it needs:
 //!
-//! - `prepare` (`contents: read`, no credential): bumps Velnor, every Mise
-//!   tool (Rust last, so a Rust release the selected Velnor cannot verify yet
-//!   rolls back alone), Cargo, Bun and Gradle catalog dependencies to the
-//!   newest stable release with `MISE_MINIMUM_RELEASE_AGE=0s`, regenerates
-//!   `.github/` with the selected Velnor, and uploads a path-filtered patch.
-//! - `publish` (`contents: read`): re-checks the patch paths, mints a GitHub
-//!   App token for this repository only, fast-forwards `velnor/upgrades`
-//!   (never a force push) and opens or updates the one upgrade pull request.
-//!   The token never coexists with repository code.
+//! - `prepare` (`contents: read`, no credential once repository code runs):
+//!   resolves and verifies the newest stable Velnor first, then bumps it,
+//!   every Mise tool (Rust last, so a Rust release that Velnor cannot verify
+//!   yet rolls back alone), Cargo, Bun and Gradle catalog dependencies with
+//!   `MISE_MINIMUM_RELEASE_AGE=0s`, regenerates `.github/` and uploads a
+//!   filtered patch. Everything it produces is untrusted.
+//! - `verify` (`contents: read`, runs no prepared byte): re-verifies the same
+//!   Velnor release, regenerates `.github/` from the default branch plus that
+//!   release manifest, and accepts the patch only when prepare's `.github/`
+//!   is exactly that regeneration. It outputs the accepted tree.
+//! - `publish` (`contents: read`): checks the patch is the verified one and
+//!   applies to the accepted tree, and only then mints a GitHub App token for
+//!   this repository (workflows permission only when a workflow changes),
+//!   fast-forwards `velnor/upgrades` (never a force push) and opens or
+//!   updates the one upgrade pull request.
 //! - `freshness` (`contents: read`, `pull-requests: read`): fails while any
 //!   pin lags the latest stable release or the pull request has been open
 //!   longer than `stuck_days`. It runs only on this schedule, so it is never
@@ -37,9 +43,9 @@ pub const CARGO_EDIT_VERSION: &str = "0.13.13";
 mod jobs;
 #[path = "upgrades_scripts.rs"]
 mod scripts;
-use jobs::{env, gate_job, prepare_job, publish_job};
+use jobs::{env, gate_job, prepare_job, publish_job, verify_job};
 #[cfg(test)]
-use scripts::{FILTER, publish_script};
+use scripts::{FILTER, PUBLISH, RELEASE, publish_check_script, verify_script};
 const CATALOG_BUMPER: &str = include_str!("../../../scripts/upgrades/bump-gradle-catalog.py");
 const WORK_DIR: &str = "${{ runner.temp }}/velnor-upgrades";
 const ON_DEFAULT_BRANCH: &str =
@@ -60,6 +66,9 @@ pub struct UpgradesSpec {
     pub gh_version: String,
     /// Exact generator version for the marker.
     pub generator_version: String,
+    /// Exact Velnor-pinned tools `velnor-actions generate` executes
+    /// (`name@version`), installed before each regeneration.
+    pub generate_tools: Vec<String>,
 }
 
 impl UpgradesSpec {
@@ -84,8 +93,25 @@ impl UpgradesSpec {
         {
             return Err(RenderError::BadCommand("bad_gh_version".to_owned()));
         }
+        if self.generate_tools.is_empty()
+            || !self.generate_tools.iter().all(|spec| exact_tool(spec))
+        {
+            return Err(RenderError::BadCommand("bad_generate_tools".to_owned()));
+        }
         Ok(())
     }
+}
+
+/// `name@exact-version` with only portable characters and no expression.
+fn exact_tool(spec: &str) -> bool {
+    spec.split_once('@').is_some_and(|(name, version)| {
+        !name.is_empty()
+            && name
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+            && crate::commands::is_exact_or_project_version(version)
+            && !version.starts_with("${")
+    })
 }
 
 /// Render `upgrades.yml` from a validated spec.
@@ -122,6 +148,7 @@ pub fn render_upgrades_workflow(spec: &UpgradesSpec) -> Result<RenderedFile, Ren
             "jobs".to_owned(),
             Yaml::Map(vec![
                 ("prepare".to_owned(), prepare_job(spec)?),
+                ("verify".to_owned(), verify_job(spec)?),
                 ("publish".to_owned(), publish_job(spec)?),
                 ("freshness".to_owned(), gate_job(spec)?),
             ]),
@@ -144,9 +171,17 @@ pub fn render_upgrades_workflow(spec: &UpgradesSpec) -> Result<RenderedFile, Ren
 mod tests;
 
 #[cfg(test)]
+#[path = "upgrades_exec_fakes.rs"]
+mod exec_fakes;
+
+#[cfg(test)]
 #[path = "upgrades_exec_test_support.rs"]
 mod exec_support;
 
 #[cfg(test)]
 #[path = "upgrades_filter_exec_tests.rs"]
 mod filter_exec_tests;
+
+#[cfg(test)]
+#[path = "upgrades_verify_exec_tests.rs"]
+mod verify_exec_tests;
