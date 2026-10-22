@@ -158,12 +158,6 @@ impl StartObservationWitness {
         &self.storage_mount
     }
 
-    /// Return the sample ID for this check.
-    #[must_use]
-    pub(crate) fn sample_generation_id(&self) -> &str {
-        &self.sample_generation_id
-    }
-
     pub(super) fn bind_recovery_sample(&mut self, admission_sample_generation_id: &str) {
         self.admission_binding =
             ObservationAdmissionBinding::Recovered(admission_sample_generation_id.to_owned());
