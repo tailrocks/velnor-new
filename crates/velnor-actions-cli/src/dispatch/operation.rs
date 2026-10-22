@@ -3,7 +3,8 @@ use std::path::PathBuf;
 
 use super::{
     ACQUIRE_RELEASE_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP, ADMIT_RELEASE_AGGREGATE_OP,
-    ADMIT_RELEASE_POLICY_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_REGISTRY_INSTALL_OP, CACHE_RECEIPT_OP,
+    ADMIT_RELEASE_POLICY_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_ASSETS_EXPORT_OP,
+    BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, BUN_REGISTRY_INSTALL_OP, CACHE_RECEIPT_OP,
     CAPTURE_REVIEW_COMPLETION_OP, EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP,
     EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, GRADLE_RUN_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP,
     OP_ENV, PLAN_OP, PLAYWRIGHT_INSTALL_OP, PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP,
@@ -65,6 +66,9 @@ pub(super) enum InternalOp {
     StableTagOrigin,
     StableTagAdmission,
     BunRegistryInstall,
+    BunAssetsExport,
+    BunAssetsPrepare,
+    BunAssetsImport,
     PlaywrightInstall,
 }
 
@@ -126,6 +130,9 @@ pub(super) fn from_env() -> Option<InternalOp> {
         Ok(tag) if tag == PRIVATE_FETCH_OP => InternalOp::PrivateFetch,
         Ok(tag) if tag == PRIVATE_REVOKE_OP => InternalOp::PrivateRevoke,
         Ok(tag) if tag == BUN_REGISTRY_INSTALL_OP => InternalOp::BunRegistryInstall,
+        Ok(tag) if tag == BUN_ASSETS_EXPORT_OP => InternalOp::BunAssetsExport,
+        Ok(tag) if tag == BUN_ASSETS_PREPARE_OP => InternalOp::BunAssetsPrepare,
+        Ok(tag) if tag == BUN_ASSETS_IMPORT_OP => InternalOp::BunAssetsImport,
         Ok(tag) if tag == GRADLE_RUN_OP => InternalOp::GradleRun,
         Ok(tag) if tag == PLAYWRIGHT_INSTALL_OP => InternalOp::PlaywrightInstall,
         Ok(tag) if tag == SIGN_PACKAGE_RELEASE_OP => InternalOp::PackageSigner,

@@ -52,10 +52,7 @@ fn reservation(
         worker_volume: None,
         runner_container_id: None,
         dind_container_id: None,
-        intent_cleanup_proven: false,
-        worker_cleanup_proven: false,
-        remote_cleanup_proven: false,
-        local_cleanup_proven: false,
+        cleanup_evidence: Default::default(),
         completion_cleanup_pending: false,
     }
 }

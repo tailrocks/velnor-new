@@ -5,7 +5,7 @@ use std::error::Error;
 use crate::impl_repo_policy::{manifest, read};
 
 #[test]
-fn freshness_support_is_private_and_has_a_crate_job() -> Result<(), Box<dyn Error>> {
+fn freshness_support_is_private_and_has_a_maintenance_gate() -> Result<(), Box<dyn Error>> {
     let cli = manifest("crates/velnor-actions-cli")?;
     let orchestrator = manifest("crates/velnor-actions-orchestrator")?;
     let support = manifest("crates/velnor-actions-freshness")?;
@@ -19,7 +19,7 @@ fn freshness_support_is_private_and_has_a_crate_job() -> Result<(), Box<dyn Erro
         assert!(contract.contains("velnor-actions-freshness"));
         assert!(contract.contains("velnor-archive-guard"));
         assert!(contract.contains("repository-only"));
-        assert!(contract.contains("one Rust crate job"));
+        assert!(contract.contains("maintenance-helpers"));
     }
     let cli_contract = read("docs/proposed/cli-contract.md")?;
     assert!(cli_contract.contains("repo-policy-v1"));

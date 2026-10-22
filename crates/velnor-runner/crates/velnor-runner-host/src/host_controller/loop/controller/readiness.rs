@@ -3,7 +3,7 @@
 use std::time::Instant;
 
 use crate::{
-    controller_ipc::ControlState,
+    controller_ipc::{ControlState, ControllerReadinessProof},
     docker_client::docker_deadline,
     error::HostError,
     journal::Journal,
@@ -91,37 +91,39 @@ async fn refresh_with_dependencies(
         return Ok(());
     };
     if !inputs_unchanged(
-        state,
         journal,
         control,
-        &config,
-        &config_sha256,
-        &polls,
-        &instance_id,
-        revision,
+        ReadinessSnapshot {
+            state,
+            config: &config,
+            config_sha256: &config_sha256,
+            polls: &polls,
+            instance_id: &instance_id,
+            revision,
+        },
     )
     .await?
     {
         control.clear_readiness()?;
         return Ok(());
     }
-    control.publish_readiness(
+    control.publish_readiness(ControllerReadinessProof {
         config_sha256,
-        selected.engine_id().to_owned(),
-        selected.docker_root_digest().to_owned(),
-        instance_id,
-        revision,
-        sample.generation().to_owned(),
-        sample.observed_at(),
+        engine_id: selected.engine_id().to_owned(),
+        docker_root_digest: selected.docker_root_digest().to_owned(),
+        journal_instance_id: instance_id,
+        journal_revision: revision,
+        sample_generation: sample.generation().to_owned(),
+        sample_observed_at: sample.observed_at(),
         collection_started_at,
-        Instant::now(),
+        collection_finished_at: Instant::now(),
         capacity,
-        sample.effective_cpu_millicores(),
-        sample.memory_total_bytes(),
-        sample.memory_available_bytes(),
-        inventory,
-        polls,
-    )
+        sample_cpu_millicores: sample.effective_cpu_millicores(),
+        sample_memory_total_bytes: sample.memory_total_bytes(),
+        sample_memory_available_bytes: sample.memory_available_bytes(),
+        inventory_sha256: inventory,
+        poll_receipts: polls,
+    })
 }
 
 async fn validated_inventory(
@@ -195,22 +197,28 @@ async fn sample_for_refresh(
     Ok(Some(sample))
 }
 
+struct ReadinessSnapshot<'a> {
+    state: &'a std::path::Path,
+    config: &'a crate::config::HostConfig,
+    config_sha256: &'a str,
+    polls: &'a [crate::controller_ipc::SessionPollReceipt],
+    instance_id: &'a str,
+    revision: u64,
+}
+
 async fn inputs_unchanged(
-    state: &std::path::Path,
     journal: &Journal,
     control: &ControlState,
-    config: &crate::config::HostConfig,
-    config_sha256: &str,
-    polls: &[crate::controller_ipc::SessionPollReceipt],
-    instance_id: &str,
-    revision: u64,
+    snapshot: ReadinessSnapshot<'_>,
 ) -> Result<bool, HostError> {
-    let config_matches = crate::readiness_scan::controller_config(state)
+    let config_matches = crate::readiness_scan::controller_config(snapshot.state)
         .as_ref()
-        .is_some_and(|(current, hash)| current == config && hash == config_sha256);
+        .is_some_and(|(current, hash)| {
+            current == snapshot.config && hash == snapshot.config_sha256
+        });
     Ok(config_matches
-        && control.matches_config(config)?
-        && control.complete_session_poll_receipts()?.as_deref() == Some(polls)
-        && journal.instance_id().await? == instance_id
-        && journal.revision().await? == revision)
+        && control.matches_config(snapshot.config)?
+        && control.complete_session_poll_receipts()?.as_deref() == Some(snapshot.polls)
+        && journal.instance_id().await? == snapshot.instance_id
+        && journal.revision().await? == snapshot.revision)
 }

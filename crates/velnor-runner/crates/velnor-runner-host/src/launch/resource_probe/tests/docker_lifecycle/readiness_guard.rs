@@ -12,12 +12,15 @@ async fn readiness_sampler_leaves_an_active_prepared_probe_untouched() -> Result
         .map_err(|error| error.to_string())?
         .ok_or_else(|| "The prepared probe fixture is missing.".to_owned())?;
     let docker = DockerStub::open(Vec::new())?;
-    let observation =
-        readiness::collect_with_provider(&docker.docker, &journal, &UnavailableImageProvider)
-            .await
-            .map_err(|error| error.to_string())?;
+    let observation = Box::pin(readiness::collect_with_provider(
+        &docker.docker,
+        &journal,
+        &UnavailableImageProvider,
+    ))
+    .await
+    .map_err(|error| error.to_string())?;
     assert!(observation.is_none());
-    assert!(docker.finish_observed().await?.is_empty());
+    assert_eq!(docker.finish_observed().await?, Vec::<String>::new());
     let after = journal
         .active_probe()
         .await
@@ -49,15 +52,15 @@ async fn readiness_collect_rejects_missing_release_identity_without_docker_or_ca
         .map_err(|error| error.to_string())?;
     let docker = DockerStub::open(Vec::new())?;
 
-    let result = readiness::collect(
+    let result = Box::pin(readiness::collect(
         &docker.docker,
         &journal,
         &crate::launch::ReleaseReadSecret::test_token(),
-    )
+    ))
     .await;
 
     assert!(matches!(result, Err(HostError::Docker)));
-    assert!(docker.finish_observed().await?.is_empty());
+    assert_eq!(docker.finish_observed().await?, Vec::<String>::new());
     assert_eq!(
         journal
             .active_probe()

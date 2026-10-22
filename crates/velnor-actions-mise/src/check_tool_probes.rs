@@ -90,7 +90,8 @@ pub fn verify_qualified_executable(
     let args = match declared.probe {
         QualifiedToolProbe::Version { .. }
         | QualifiedToolProbe::CargoNextestVersion { .. }
-        | QualifiedToolProbe::RustfmtVersion { .. } => {
+        | QualifiedToolProbe::RustfmtVersion { .. }
+        | QualifiedToolProbe::ShellCheckVersion { .. } => {
             vec![OsString::from("--version")]
         }
         QualifiedToolProbe::VersionSubcommand { .. } => vec![OsString::from("version")],
@@ -275,6 +276,7 @@ fn validate_output(
         | QualifiedToolProbe::VersionSubcommand { expected }
         | QualifiedToolProbe::CargoNextestVersion { expected }
         | QualifiedToolProbe::RustfmtVersion { expected }
+        | QualifiedToolProbe::ShellCheckVersion { expected }
         | QualifiedToolProbe::RustcVerbose { expected } => expected,
     };
     if matches!(probe, QualifiedToolProbe::RustfmtVersion { .. }) {
@@ -290,7 +292,9 @@ fn validate_output(
             Err(invalid("exact_version_output_mismatch"))
         };
     }
-    let actual = if matches!(probe, QualifiedToolProbe::RustcVerbose { .. }) {
+    let actual = if matches!(probe, QualifiedToolProbe::ShellCheckVersion { .. }) {
+        stdout.strip_suffix('\n').unwrap_or(stdout)
+    } else if matches!(probe, QualifiedToolProbe::RustcVerbose { .. }) {
         stdout.trim_end_matches(['\r', '\n'])
     } else {
         stdout
@@ -305,7 +309,9 @@ fn validate_output(
     }
     if matches!(probe, QualifiedToolProbe::RustcVerbose { .. }) {
         validate_rustc(version, platform, actual)
-    } else if version_token(actual, version) {
+    } else if matches!(probe, QualifiedToolProbe::ShellCheckVersion { .. })
+        || version_token(actual, version)
+    {
         Ok(())
     } else {
         Err(invalid("declared_version_token_missing"))

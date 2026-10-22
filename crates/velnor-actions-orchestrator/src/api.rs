@@ -2,6 +2,12 @@
 
 pub use super::qualification_candidate::qualify_tools;
 
+pub use super::bun_assets_handoff::{
+    ASSET_ID_ENV as BUN_ASSETS_ID_ENV, ASSET_PINS_ENV as BUN_ASSETS_PINS_ENV, BUN_ASSETS_EXPORT_OP,
+    BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, run_bun_assets_export, run_bun_assets_import,
+    run_bun_assets_prepare,
+};
+
 /// Version marker for the orchestrator shell.
 pub const ORCHESTRATOR_VERSION: u32 = 0;
 

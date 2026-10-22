@@ -1,7 +1,7 @@
 //! Bounded readonly probe identity admission; output is data, never shell code.
 use crate::config::{
-    CheckPlatform, MAX_CHECK_QUALIFIED_PROBE_EXPECTED_BYTES, QualifiedToolExecutableRecipe,
-    QualifiedToolProbe,
+    CheckPlatform, MAX_CHECK_QUALIFIED_PROBE_EXPECTED_BYTES, QualifiedToolBackend,
+    QualifiedToolExecutableRecipe, QualifiedToolProbe,
 };
 use crate::errors::ContractError;
 
@@ -17,6 +17,7 @@ fn exact_version_token(output: &str, version: &str) -> bool {
 
 pub(super) fn validate_recipe_probe(
     version: &str,
+    backend: &QualifiedToolBackend,
     platform: CheckPlatform,
     executable: &QualifiedToolExecutableRecipe,
     file: &str,
@@ -26,6 +27,12 @@ pub(super) fn validate_recipe_probe(
     let (expected, multiline) = match &executable.probe {
         QualifiedToolProbe::Version { expected }
         | QualifiedToolProbe::VersionSubcommand { expected } => (expected, false),
+        QualifiedToolProbe::ShellCheckVersion { expected }
+            if executable.name == "shellcheck"
+                && matches!(backend, QualifiedToolBackend::Aqua { package } if package == "koalaman/shellcheck") =>
+        {
+            (expected, true)
+        }
         QualifiedToolProbe::CargoNextestVersion { expected }
             if executable.name == "cargo-nextest" =>
         {
@@ -46,7 +53,14 @@ pub(super) fn validate_recipe_probe(
     {
         return Err(bad());
     }
-    if multiline {
+    let shellcheck = matches!(
+        &executable.probe,
+        QualifiedToolProbe::ShellCheckVersion { .. }
+    );
+    if shellcheck && expected != &shellcheck_banner(version) {
+        return Err(bad());
+    }
+    if multiline && !shellcheck {
         let lines: Vec<_> = expected.lines().collect();
         if lines
             .iter()
@@ -73,4 +87,10 @@ pub(super) fn validate_recipe_probe(
         }
     }
     Ok(())
+}
+
+fn shellcheck_banner(version: &str) -> String {
+    format!(
+        "ShellCheck - shell script analysis tool\nversion: {version}\nlicense: GNU General Public License, version 3\nwebsite: https://www.shellcheck.net"
+    )
 }

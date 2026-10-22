@@ -4,6 +4,7 @@ use super::payload::{
     valid_tools_cache_identity,
 };
 use super::{
+    BUN_ASSETS_EXPORT_OPERATION, BUN_ASSETS_IMPORT_OPERATION, BUN_ASSETS_PREPARE_OPERATION,
     BUN_REGISTRY_INSTALL_OPERATION, NORMAL_TOOLS_CACHE_EXPORT_OPERATION,
     NORMAL_TOOLS_CACHE_IMPORT_OPERATION, NORMAL_TOOLS_CACHE_STAGE_OPERATION,
     PRIVATE_FETCH_OPERATION, PRIVATE_REVOKE_OPERATION, PRIVATE_TOKEN_MINT_ACTION_PREFIX,
@@ -145,6 +146,8 @@ pub enum StepRole {
     QualificationCacheRoots,
     /// Bun registry install using the workflow-scoped npm token.
     BunRegistryInstall,
+    /// Credential-free private asset archive handoff.
+    BunAssetsHandoff,
     /// Hash-verified Playwright browser install; holds no credential.
     PlaywrightInstall,
     /// Binding of one emitted job owner and cache layer.
@@ -254,6 +257,13 @@ impl StepRole {
                         if uses.starts_with("./.github/actions/qualification-cache-")
                 )
             }
+            Self::BunAssetsHandoff => [
+                BUN_ASSETS_EXPORT_OPERATION,
+                BUN_ASSETS_PREPARE_OPERATION,
+                BUN_ASSETS_IMPORT_OPERATION,
+            ]
+            .into_iter()
+            .any(|operation| internal_operation(kind, operation)),
             Self::MbxCache => super::super::step_mbx_lifecycle::valid_mbx_cache(kind),
             Self::MbxBundleKey
             | Self::MbxBundleImport

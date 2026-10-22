@@ -47,11 +47,11 @@ contains only its named stack. Alint is the sole repository-structure linter
 and runs as a separate GitHub Actions job.
 
 The workspace includes `velnor-actions-freshness` and `velnor-archive-guard`.
-Each support package has one Rust crate job in VelnorRepositoryV1. Freshness
-does a check of Velnor policy files. Repository scripts run the compiler for
-the archive guard. Owner metadata can stop this policy from making package
-tasks. ConsumerV1 makes tasks for packages with this metadata. Package names
-and paths do not change the task list.
+The required `maintenance-helpers` check runs both packages' Rust test suites
+in VelnorRepositoryV1. Freshness checks Velnor policy files. Repository scripts
+run the compiler for the archive guard. Owner metadata can stop this policy
+from making package tasks. ConsumerV1 makes tasks for packages with this
+metadata. Package names and paths do not change the task list.
 
 | Crate | Owns | Must not own |
 |---|---|---|

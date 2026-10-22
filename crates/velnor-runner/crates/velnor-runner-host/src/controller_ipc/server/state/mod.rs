@@ -10,6 +10,7 @@ use crate::error::HostError;
 use crate::launch::ReadinessSample;
 
 mod readiness;
+pub(crate) use readiness::ControllerReadinessProof;
 mod session_polls;
 pub(crate) use session_polls::SessionPollReceipt;
 
@@ -85,8 +86,12 @@ impl ControlState {
     pub(crate) fn set_admission_ready(&self, ready: bool) {
         self.admission_ready.store(ready, Ordering::Release);
         if !ready {
-            let _ = self.clear_readiness();
-            let _ = self.clear_readiness_sample();
+            if let Err(error) = self.clear_readiness() {
+                eprintln!("The controller could not clear readiness evidence. Error: {error}.");
+            }
+            if let Err(error) = self.clear_readiness_sample() {
+                eprintln!("The controller could not clear the readiness sample. Error: {error}.");
+            }
         }
     }
 

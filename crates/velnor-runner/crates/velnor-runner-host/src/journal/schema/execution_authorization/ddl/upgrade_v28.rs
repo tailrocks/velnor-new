@@ -47,6 +47,22 @@ async fn upgrade_inner(
 
     let proof_count = row_count(connection, "connection_execution_proofs").await?;
     let decision_count = row_count(connection, "connection_execution_decisions").await?;
+    rebuild_tables(connection, failpoint).await?;
+    restore_guards(connection).await?;
+
+    if row_count(connection, "connection_execution_proofs").await? != proof_count
+        || row_count(connection, "connection_execution_decisions").await? != decision_count
+    {
+        return Err(HostError::Journal);
+    }
+    ensure_foreign_keys(connection).await?;
+    super::validate_objects(connection).await
+}
+
+async fn rebuild_tables(
+    connection: &turso::Connection,
+    failpoint: Option<UpgradeFailpoint>,
+) -> Result<(), HostError> {
     connection
         .execute(
             &format!("CREATE TEMP TABLE {PROOF_ROWS} AS SELECT * FROM connection_execution_proofs"),
@@ -114,6 +130,10 @@ async fn upgrade_inner(
         .await
         .map_err(|_| HostError::Journal)?;
 
+    Ok(())
+}
+
+async fn restore_guards(connection: &turso::Connection) -> Result<(), HostError> {
     for (_, statement) in guards::PROOF_INSERT_GUARDS {
         connection
             .execute(statement, ())
@@ -139,14 +159,7 @@ async fn upgrade_inner(
             .map_err(|_| HostError::Journal)?;
     }
     super::install_revision_triggers(connection).await?;
-
-    if row_count(connection, "connection_execution_proofs").await? != proof_count
-        || row_count(connection, "connection_execution_decisions").await? != decision_count
-    {
-        return Err(HostError::Journal);
-    }
-    ensure_foreign_keys(connection).await?;
-    super::validate_objects(connection).await
+    Ok(())
 }
 
 async fn drop_dependent_guards(connection: &turso::Connection) -> Result<(), HostError> {

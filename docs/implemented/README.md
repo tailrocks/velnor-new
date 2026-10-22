@@ -11,6 +11,7 @@ acceptance checks. It is not a proposal or a list of work in progress.
 - [Daily upgrades](upgrades.md) — opt-in `upgrades.yml`: one upgrade pull request per repository to the latest stable Rust, tools, dependencies and Velnor, plus a non-required freshness gate.
 - [Verified Rust installs](rust-channel-manifest.md) — check installed Rust manifest metadata against a channel manifest digest pinned for each release.
 - [Consumer Rust setup](consumer-rust-setup.md) — `mise.toml` as the only Rust source, `mr_boxington = true` selecting MBX and its bundles, profiles, and MBX GC on developer machines.
+- [Bun browser suites qualification](bun-browser-suites-qualification.md) — Q1-Q4 are unbound historical fixture observations; Q5 is fixture timing only; Q6-Q7 and #337 end-to-end qualification remain pending.
 
 ## Implementation records (Velnor Actions V1, Gates 0–8)
 

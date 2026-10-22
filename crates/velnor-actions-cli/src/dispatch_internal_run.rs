@@ -26,6 +26,9 @@ use super::{
 
 /// Run one validated private operation.
 pub(super) fn run_internal(request: &InternalRequest) -> ExitCode {
+    if let Some(code) = super::bun_assets::run(request.op) {
+        return code;
+    }
     match request.op {
         InternalOp::TapContinuation => tap_continuation::run(),
         InternalOp::CaptureReviewCompletion => review_completion::capture(),
@@ -55,6 +58,9 @@ pub(super) fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::Fetch => finish_internal_result(retrieve_reports()),
         InternalOp::Report => finish_internal_result(write_task_report()),
         InternalOp::BunRegistryInstall => finish_internal_result(run_bun_registry_install()),
+        InternalOp::BunAssetsExport
+        | InternalOp::BunAssetsPrepare
+        | InternalOp::BunAssetsImport => ExitCode::FAILURE,
         InternalOp::GradleRun => finish_internal_result(run_gradle_run()),
         InternalOp::PlaywrightInstall => {
             finish_internal_result(velnor_actions_orchestrator::run_playwright_install())

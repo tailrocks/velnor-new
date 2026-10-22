@@ -9,6 +9,7 @@ use crate::{
 };
 
 use super::{ControlState, handle_request, test_state};
+use crate::controller_ipc::ControllerReadinessProof;
 
 #[tokio::test]
 async fn readiness_ipc_stays_reconciling_without_controller_evidence() -> Result<(), String> {
@@ -88,7 +89,7 @@ async fn publish_ready_test_proof(
     );
     let config_text = host_config(&[connection], 1);
     fs::write(state_path.join("host.toml"), &config_text).map_err(|error| error.to_string())?;
-    let (config, config_sha256) = crate::readiness_scan::controller_config(&state_path)
+    let (config, config_sha256) = crate::readiness_scan::controller_config(state_path)
         .ok_or_else(|| "The test configuration did not parse.".to_owned())?;
     let binding = config
         .connections()
@@ -133,23 +134,23 @@ async fn publish_ready_test_proof(
         );
     }
     state
-        .publish_readiness(
-            config_sha256.clone(),
-            "readiness-engine".to_owned(),
-            "a".repeat(64),
-            instance_id,
-            revision,
-            "b".repeat(32),
-            now,
-            now,
-            now,
-            full_capacity,
-            2_500,
-            3_000,
-            512,
-            "c".repeat(64),
-            polls,
-        )
+        .publish_readiness(ControllerReadinessProof {
+            config_sha256: config_sha256.clone(),
+            engine_id: "readiness-engine".to_owned(),
+            docker_root_digest: "a".repeat(64),
+            journal_instance_id: instance_id,
+            journal_revision: revision,
+            sample_generation: "b".repeat(32),
+            sample_observed_at: now,
+            collection_started_at: now,
+            collection_finished_at: now,
+            capacity: full_capacity,
+            sample_cpu_millicores: 2_500,
+            sample_memory_total_bytes: 3_000,
+            sample_memory_available_bytes: 512,
+            inventory_sha256: "c".repeat(64),
+            poll_receipts: polls,
+        })
         .map_err(|error| format!("The controller could not publish its proof. Error: {error}."))?;
     Ok((state, config_sha256))
 }

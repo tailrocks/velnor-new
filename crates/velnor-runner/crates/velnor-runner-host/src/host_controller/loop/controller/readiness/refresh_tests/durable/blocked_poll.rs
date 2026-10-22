@@ -235,18 +235,18 @@ fn start_refresh_worker(
                 },
                 None => poll_started,
             };
-            let result = collect_and_refresh(
-                &state,
-                &sample_journal,
-                &journal,
-                &engine_id,
-                &docker,
-                &selected,
-                &control,
-                &binding,
-                &expected,
-                poll_entered_at,
-            )
+            let result = collect_and_refresh(RefreshInputs {
+                state: &state,
+                sample_journal: &sample_journal,
+                journal: &journal,
+                engine_id: &engine_id,
+                docker: &docker,
+                selected: &selected,
+                control: &control,
+                binding: &binding,
+                expected: &expected,
+                poll_started: poll_entered_at,
+            })
             .await;
             match result {
                 Ok(revision) => {
@@ -262,18 +262,33 @@ fn start_refresh_worker(
     })
 }
 
-async fn collect_and_refresh(
-    state: &std::path::Path,
-    sample_journal: &crate::journal::Journal,
-    journal: &crate::journal::Journal,
-    engine_id: &str,
-    docker: &bollard::Docker,
-    selected: &SelectedEngineContext,
-    control: &ControlState,
-    binding: &RepositoryConnection,
-    expected: &velnor_runner_github::RunnerReference,
+#[derive(Clone, Copy)]
+struct RefreshInputs<'a> {
+    state: &'a std::path::Path,
+    sample_journal: &'a crate::journal::Journal,
+    journal: &'a crate::journal::Journal,
+    engine_id: &'a str,
+    docker: &'a bollard::Docker,
+    selected: &'a SelectedEngineContext,
+    control: &'a ControlState,
+    binding: &'a RepositoryConnection,
+    expected: &'a velnor_runner_github::RunnerReference,
     poll_started: Instant,
-) -> Result<u64, RefreshFailure> {
+}
+
+async fn collect_and_refresh(inputs: RefreshInputs<'_>) -> Result<u64, RefreshFailure> {
+    let RefreshInputs {
+        state,
+        sample_journal,
+        journal,
+        engine_id,
+        docker,
+        selected,
+        control,
+        binding,
+        expected,
+        poll_started,
+    } = inputs;
     let sample_started = poll_started.elapsed();
     let sample_result = crate::launch::collect_sample_for_engine(sample_journal, engine_id).await;
     let sample_timing = SampleTiming {
@@ -284,7 +299,7 @@ async fn collect_and_refresh(
         refresh_failure(
             "sample_lifecycle",
             HostError::Docker,
-            Some(error.to_string()),
+            Some(error.clone()),
             sample_timing,
         )
     })?;

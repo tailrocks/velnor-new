@@ -137,5 +137,5 @@ fn remote_runner_audit_rejects_a_runner_outside_the_polled_scale_set() {
         )
         .is_err()
     );
-    assert!(transport.paths.is_empty());
+    assert_eq!(transport.paths, Vec::<String>::new());
 }
