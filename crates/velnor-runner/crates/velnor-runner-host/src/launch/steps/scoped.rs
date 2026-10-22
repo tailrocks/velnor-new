@@ -12,6 +12,10 @@ use super::{assignment, source_blocked};
 mod acquire;
 mod runner;
 #[cfg(test)]
+#[expect(
+    unused_imports,
+    reason = "retains the scoped test entry point for native quarantine composition"
+)]
 pub(crate) use runner::run_native_quarantine_composition;
 pub(crate) use runner::{AcquiredProvisioning, CheckedAcquiredRecovery};
 
