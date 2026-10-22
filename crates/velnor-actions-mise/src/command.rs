@@ -49,6 +49,22 @@ use std::time::Duration;
 
 use crate::error::MiseError;
 
+fn cleared_parent_passthrough(
+    policy: EnvPolicy,
+    parent: &[(OsString, OsString)],
+) -> Vec<(OsString, OsString)> {
+    match policy {
+        // Mise needs PATH and HOME, with only its owned data cache optional.
+        EnvPolicy::GitHubToken => parent
+            .iter()
+            .filter(|(key, _)| key == "PATH" || key == "HOME" || key == "MISE_DATA_DIR")
+            .cloned()
+            .collect(),
+        policy if policy.allows_proxy_passthrough() => proxy_passthrough(parent),
+        _ => Vec::new(),
+    }
+}
+
 /// Mise global flags, always placed before the subcommand.
 ///
 /// Every mise invocation carries all three, installs included: no mise
@@ -303,10 +319,8 @@ impl IsolatedCommand {
             strip_credentials(&mut command, self.policy);
         } else {
             command.env_clear();
-            if self.policy.allows_proxy_passthrough() {
-                let parent: Vec<(OsString, OsString)> = std::env::vars_os().collect();
-                command.envs(proxy_passthrough(&parent));
-            }
+            let parent: Vec<(OsString, OsString)> = std::env::vars_os().collect();
+            command.envs(cleared_parent_passthrough(self.policy, &parent));
         }
         for (key, value) in self.full_env() {
             command.env(key, value);
