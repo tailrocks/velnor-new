@@ -37,6 +37,8 @@ pub use consumer_preview::{
 };
 #[path = "schema2_basic_workflows.rs"]
 mod basic_workflows;
+#[path = "schema2_ci_run_lookup.rs"]
+mod ci_run_lookup;
 #[path = "schema2_consumer_binary_release.rs"]
 mod consumer_binary_release;
 #[path = "schema2_consumer_release_eligibility.rs"]

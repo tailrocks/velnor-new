@@ -9,7 +9,7 @@ e4efc100b18565c29a54f3281573cc649fe760c5f766b65e9f046a436c20a891  ./.github/acti
 dcb7c10923a0cf34215a6f226cb389fdd6a89eb43fca11f81975bb356ca6c190  ./.github/actions/generator-release-build-linux/action.yml
 f5643026eeb8bd0928c535b96c72d656d93f451a83b56a3a5dd162e8a96a1ee2  ./.github/actions/generator-release-build-macos-intel/action.yml
 4851584154eeed90a6186a4f4acdabf1866a15435ce2166a9e0dfc14841ae481  ./.github/actions/generator-release-build-macos/action.yml
-d310f60aa3570c3d3d0de1efe519e1dd989e72e6685c482fcfea5c78c82f84b3  ./.github/actions/generator-release-publish/action.yml
+aa83b0fdd1cef3d4616d494887082680f2bf99d70bb2ccccbd532ff9ce881587  ./.github/actions/generator-release-publish/action.yml
 46da206aaa3f465912825dc7cf202ba4b3a3ba9db5fcb301e5bcab3a210cfcf6  ./.github/actions/generator-release-qualify-linux/action.yml
 3ac49b8ee11503c22f6b71236a2935a0c6d709938e52692ebcd2193e18af0b62  ./.github/actions/generator-release-qualify-macos-intel/action.yml
 31341c16af98ed3c7ef1fb703bc70d412f5c1b2721d55b26bb84dbf050961cdf  ./.github/actions/generator-release-qualify-macos/action.yml
@@ -248,8 +248,8 @@ fd6cbb3d8d08321929341dde86bc3c93275fe92f58846b9a4e0b6362a8b75e33  ./.github/work
 1cdd6681e2a5c200ebc78f979704832ffe0c54c69cf3b2762d4dfd9b5573e180  ./.github/workflows/ci.yml
 f2d4514b75633c12a3f687a95559c3125c8c5e4bb8d7a67400576d8693a21cb1  ./.github/workflows/freshness.yml
 430af0aa5ad99a2fd13c2bbab6f475a6c67d0d507c62bc990667b64b43df495d  ./.github/workflows/job-image-candidate.yml
-7fefd372201325fe5c59e3da5d31f46a0fe7934e2ef17c3ed7f909fb4295371c  ./.github/workflows/product-release-binary.yml
-99c1327a5e26cd5989e88e3a451b94ba0e4de596810bd6960e171eaef43e8247  ./.github/workflows/product-release-generator.yml
-5ea6b699a02c6c031c5d3b2246d61d613df8e044a2724f168d756670ff55818d  ./.github/workflows/product-release-images.yml
-1235fa43f7637c7168cc8a824e172e992442789a0d4cf1ed7c2dfa048e711e75  ./.github/workflows/product-release.yml
+721fd44378270f171e4346c1346a200ebbddc18fc9edbb49f15ce85783b9316d  ./.github/workflows/product-release-binary.yml
+ab54f7a8a4173eb4ce7f5d951a5f9f11bf5cd82f427a5e7377246b72b984f8c2  ./.github/workflows/product-release-generator.yml
+12be7ea1e356b2a180eaf0488b0e2194e77a719ad7560f18cf3416a353062001  ./.github/workflows/product-release-images.yml
+3d8e94268df781edf44a934fc9c3c1540d1142c1bcf64401d0ade80d164f6dae  ./.github/workflows/product-release.yml
 3974ee1247d642c7df38eb58d0d51cb6b56ab3ac0e88a673784bd6c50473f502  ./.github/workflows/qualification.yml

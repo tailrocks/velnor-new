@@ -8,6 +8,8 @@ use velnor_runner_github::{Exchange, Transport, TransportFail, ensure_runner_abs
 
 #[path = "producer_tests/local_identity.rs"]
 mod local_identity;
+#[path = "producer_tests/network_failure.rs"]
+mod network_failure;
 #[path = "producer_tests/network_id.rs"]
 mod network_id;
 #[path = "producer_tests/retry.rs"]
