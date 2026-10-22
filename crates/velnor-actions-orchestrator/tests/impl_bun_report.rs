@@ -38,15 +38,29 @@ fn every_leg_verifies_and_uploads_its_blob_and_failure_results() -> TestResult {
     let wait = job.find("wait-all").ok_or("join")?;
     let verify = job.find("- name: Verify Playwright blob").ok_or("verify")?;
     let blob = job.find("- name: Upload Playwright blob").ok_or("blob")?;
-    let results = job.find("- name: Upload Playwright results").ok_or("results")?;
+    let results = job
+        .find("- name: Upload Playwright results")
+        .ok_or("results")?;
     assert!(wait < verify && verify < blob && blob < results, "{job}");
     let verify = after(job, "Verify Playwright blob")?;
     assert!(verify.contains("if: \"!cancelled()\""), "{verify}");
-    assert!(verify.contains("VELNOR_PW_LEG: ${{ matrix.leg }}"), "{verify}");
-    assert!(verify.contains("VELNOR_PW_PROJECT: ${{ matrix.project }}"), "{verify}");
+    assert!(
+        verify.contains("VELNOR_PW_LEG: ${{ matrix.leg }}"),
+        "{verify}"
+    );
+    assert!(
+        verify.contains("VELNOR_PW_PROJECT: ${{ matrix.project }}"),
+        "{verify}"
+    );
     assert!(verify.contains("unzip -p"), "{verify}");
-    assert!(verify.contains("playwright_blob_shard_mismatch"), "{verify}");
-    assert!(verify.contains("playwright_blob_project_mismatch"), "{verify}");
+    assert!(
+        verify.contains("playwright_blob_shard_mismatch"),
+        "{verify}"
+    );
+    assert!(
+        verify.contains("playwright_blob_project_mismatch"),
+        "{verify}"
+    );
     let blob = after(job, "Upload Playwright blob")?;
     assert!(blob.contains("if: \"!cancelled()\""), "{blob}");
     assert!(
@@ -58,24 +72,40 @@ fn every_leg_verifies_and_uploads_its_blob_and_failure_results() -> TestResult {
     assert!(blob.contains("if-no-files-found: error"), "{blob}");
     let results = after(job, "Upload Playwright results")?;
     assert!(results.contains("if: failure()"), "{results}");
-    assert!(results.contains("path: frontend/docs/test-results"), "{results}");
+    assert!(
+        results.contains("path: frontend/docs/test-results"),
+        "{results}"
+    );
     assert!(results.contains("retention-days: \"7\""), "{results}");
     assert!(results.contains("if-no-files-found: warn"), "{results}");
-    assert!(!ci.contains("velnor-pw-report-"), "no report job without report = merge");
+    assert!(
+        !ci.contains("velnor-pw-report-"),
+        "no report job without report = merge"
+    );
     Ok(())
 }
 
 #[test]
 fn a_merge_report_job_runs_after_the_legs_outside_required() -> TestResult {
-    let ci = ci("shards = 3\nreport = \"merge\"\nreport_retention_days = 30\nresults_retention_days = 2\n")?;
+    let ci = ci(
+        "shards = 3\nreport = \"merge\"\nreport_retention_days = 30\nresults_retention_days = 2\n",
+    )?;
     let report = job_body(&ci, "bun-chainargos-docs--browser--report")?;
-    assert!(report.contains("name: Bun / chainargos-docs / browser / report"), "{report}");
-    assert!(report.contains("continue-on-error: true"), "{report}");
     assert!(
-        report.contains("if: \"!cancelled() && needs.bun-chainargos-docs--browser.result != 'skipped'\""),
+        report.contains("name: Bun / chainargos-docs / browser / report"),
         "{report}"
     );
-    assert!(report.contains("- plan\n      - bun-chainargos-docs--browser\n"), "{report}");
+    assert!(report.contains("continue-on-error: true"), "{report}");
+    assert!(
+        report.contains(
+            "if: \"!cancelled() && needs.bun-chainargos-docs--browser.result != 'skipped'\""
+        ),
+        "{report}"
+    );
+    assert!(
+        report.contains("- plan\n      - bun-chainargos-docs--browser\n"),
+        "{report}"
+    );
     assert!(report.contains("timeout-minutes: 25"), "{report}");
     assert!(report.contains("contents: read"), "{report}");
     assert!(!report.contains("strategy:"), "{report}");
@@ -86,15 +116,29 @@ fn a_merge_report_job_runs_after_the_legs_outside_required() -> TestResult {
     );
     assert!(report.contains("merge-multiple: \"true\""), "{report}");
     assert!(
-        report.contains(r"'\\''playwright'\\'' '\\''merge-reports'\\'' '\\''--reporter=html,json'\\''"),
+        report.contains(
+            r"'\\''playwright'\\'' '\\''merge-reports'\\'' '\\''--reporter=html,json'\\''"
+        ),
         "{report}"
     );
-    assert!(report.contains("name: velnor-pw-report-bun-chainargos-docs--browser"), "{report}");
+    assert!(
+        report.contains("name: velnor-pw-report-bun-chainargos-docs--browser"),
+        "{report}"
+    );
     assert!(report.contains("retention-days: \"30\""), "{report}");
-    assert!(!ci.contains("VELNOR_SUITE_ALLOW_FAILURE"), "marker scrubbed");
+    assert!(
+        !ci.contains("VELNOR_SUITE_ALLOW_FAILURE"),
+        "marker scrubbed"
+    );
     let required = job_body(&ci, "required")?;
-    assert!(required.contains("- bun-chainargos-docs--browser\n"), "{required}");
-    assert!(!required.contains("--report"), "the report never gates: {required}");
+    assert!(
+        required.contains("- bun-chainargos-docs--browser\n"),
+        "{required}"
+    );
+    assert!(
+        !required.contains("--report"),
+        "the report never gates: {required}"
+    );
     let legs = job_body(&ci, "bun-chainargos-docs--browser")?;
     assert!(legs.contains("retention-days: \"2\""), "{legs}");
     Ok(())

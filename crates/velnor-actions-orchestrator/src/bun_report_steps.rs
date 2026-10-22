@@ -64,7 +64,10 @@ unzip -p \"$f\" report.jsonl | {{ grep -E '^[{{]\"method\":\"(onBlobReportMetada
     let mut env = step_env(input.catalog)?;
     env.insert(PW_LEG_ENV.to_owned(), "${{ matrix.leg }}".to_owned());
     if leg.projects {
-        env.insert(PW_PROJECT_ENV.to_owned(), "${{ matrix.project }}".to_owned());
+        env.insert(
+            PW_PROJECT_ENV.to_owned(),
+            "${{ matrix.project }}".to_owned(),
+        );
     }
     if leg.sharded {
         env.insert(

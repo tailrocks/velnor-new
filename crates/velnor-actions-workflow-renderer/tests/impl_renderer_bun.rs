@@ -10,10 +10,10 @@ use velnor_actions_workflow_renderer::private_source_steps::{
 };
 use velnor_actions_workflow_renderer::verification_jobs::{
     BUN_ROOT_ENV, BUN_RUNNER, BUN_SCOPES_ENV, BunLegMatrix, BunMemberPolicy, BunReportPolicy,
-    BunSuitePolicy, build_bun_report_job, bun_blob_upload_step, bun_blobs_download_step,
-    bun_report_upload_step, bun_results_upload_step, PLAYWRIGHT_PINS_ENV,
-    PLAYWRIGHT_ROOT_ENV, PLAYWRIGHT_VERSION_ENV, build_bun_member_job, build_bun_suite_job,
-    bun_registry_step, playwright_install_step,
+    BunSuitePolicy, PLAYWRIGHT_PINS_ENV, PLAYWRIGHT_ROOT_ENV, PLAYWRIGHT_VERSION_ENV,
+    build_bun_member_job, build_bun_report_job, build_bun_suite_job, bun_blob_upload_step,
+    bun_blobs_download_step, bun_registry_step, bun_report_upload_step, bun_results_upload_step,
+    playwright_install_step,
 };
 use velnor_actions_workflow_renderer::{RenderError, shell_step};
 
@@ -367,6 +367,9 @@ fn a_report_job_is_non_gating_and_needs_its_legs() -> Result<(), RenderError> {
     let mut lonely = suite(vec![step("Test", true)?]);
     lonely.report = policy.report.clone();
     let error = build_bun_suite_job(&lonely, CHECKOUT).expect_err("report without legs");
-    assert!(error.to_string().contains("bun_report_without_matrix"), "{error}");
+    assert!(
+        error.to_string().contains("bun_report_without_matrix"),
+        "{error}"
+    );
     Ok(())
 }
