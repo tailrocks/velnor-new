@@ -2,7 +2,7 @@
 
 Status: implemented: suites, their jobs, timeouts and Required membership,
 the Playwright leg matrix, leg blob verification and artifacts, the merged
-report job. Proposed: the single cache writer for legs and the one-job
+report job, and the single cache writer for legs. Proposed: the one-job
 release-asset fetch for suites (until then suites refuse pinned release
 assets). Hard decision:
 [decision 6](../hard-decisions.md#6-one-job-per-bun-workspace-member-with-parallel-script-steps).
@@ -195,7 +195,7 @@ conclusions are the verdict, and a broken merge must neither mask nor fake it.
   leg target at most `timeout_minutes` minus 2-4 minutes of setup.
 
 Matrix legs restore the `bun-install` and `playwright-browsers` families
-read-only; only leg 1 may save them (`VELNOR_FAMILY_WRITER`, proposed). No leg
+read-only; only leg 1 may save them (`VELNOR_FAMILY_WRITER`, cache decision 11). No leg
 ever holds the App secret (see the private-asset rule above).
 
 Playwright blob metadata does not record `--project`. For a non-empty
