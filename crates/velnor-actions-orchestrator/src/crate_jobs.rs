@@ -15,8 +15,8 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    CrateJob, Job, JobTimeout, ProposedTask, RustCrateConfig, Stack, Step, VelnorConfig,
-    WorkflowPolicy, crate_display_name, tofu_display_name,
+    CrateJob, Job, JobTimeout, ProposedTask, Stack, Step, VelnorConfig, WorkflowPolicy,
+    crate_display_name, tofu_display_name,
 };
 use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
@@ -28,6 +28,12 @@ use crate::config::private_wiring::PrivateWiring;
 use crate::crate_job_ids::{JobOwners, group_is_tofu, group_runnable};
 use crate::discover::Discovery;
 use crate::internal::internal;
+
+#[path = "crate_jobs_inputs.rs"]
+mod inputs;
+pub(crate) use inputs::CrateJobInputs;
+#[cfg(test)]
+pub(crate) use inputs::build_crate_jobs_with;
 
 #[path = "dependency_seed.rs"]
 pub(crate) mod dependency_seed;
@@ -88,7 +94,7 @@ pub(crate) fn build_for_workflow(
         .as_ref()
         .map_or(&no_crates, |rust| &rust.crates);
     reject_unknown_crates(crates, discovery)?;
-    build_crate_jobs_with(
+    build_crate_jobs_with_seed_timeout(
         CrateJobInputs {
             label,
             policy: config.workflow.policy,
@@ -107,26 +113,8 @@ pub(crate) fn build_for_workflow(
                 .is_some_and(|rust| rust.seed_parallel_targets),
         },
         private,
+        JobTimeout::new(config.workflow.dependency_seed_timeout_minutes)?,
     )
-}
-
-/// All authority and rendering inputs for one crate-job build.
-#[derive(Clone, Copy)]
-pub(crate) struct CrateJobInputs<'a> {
-    pub(crate) label: &'a str,
-    pub(crate) policy: WorkflowPolicy,
-    pub(crate) discovery: &'a Discovery,
-    pub(crate) catalog: &'a ToolCatalog,
-    pub(crate) fetch_roots: &'a [String],
-    pub(crate) acquire: Option<&'a Step>,
-    pub(crate) max_parallel_jobs: u32,
-    /// Literal timeout for every emitted crate job.
-    pub(crate) timeout: JobTimeout,
-    pub(crate) helper_version: &'a str,
-    /// Opt-in cold target initialization; never changes obligation ownership.
-    pub(crate) seed_parallel_targets: bool,
-    /// Per-package Rust options keyed by Cargo package name.
-    pub(crate) crates: &'a BTreeMap<String, RustCrateConfig>,
 }
 
 /// Build one ordered IR job for each runnable package/configuration.
@@ -148,15 +136,10 @@ pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, 
     build_crate_jobs_with(input, None)
 }
 
-/// [`build_crate_jobs`] plus the private-source block (HD-7) for jobs whose
-/// lock closure is non-empty.
-///
-/// # Errors
-///
-/// Returns contract, render-context, or tool-request errors.
-pub(crate) fn build_crate_jobs_with(
+fn build_crate_jobs_with_seed_timeout(
     input: CrateJobInputs<'_>,
     private: Option<&PrivateWiring>,
+    seed_timeout: JobTimeout,
 ) -> Result<CrateBuild, OrchestratorError> {
     let CrateJobInputs {
         discovery,
@@ -229,7 +212,7 @@ pub(crate) fn build_crate_jobs_with(
         .into_iter()
         .map(|(root, nextest)| dependency_seed::SeedWorkspace { root, nextest })
         .collect();
-    let seeds = dependency_seed::seed_jobs(&input, &workspaces, private)?;
+    let seeds = dependency_seed::seed_jobs(&input, &workspaces, private, seed_timeout)?;
     for (id, _) in &seeds {
         drivers.insert(id.clone(), RenderDriver::Mbx);
     }
