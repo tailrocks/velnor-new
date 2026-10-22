@@ -222,6 +222,9 @@ fails verification because it provides no project evidence.
 
 ## Verification
 
+Qualification evidence (Q1-Q7):
+[Bun browser suites qualification](../implemented/bun-browser-suites-qualification.md).
+
 - Contract: suite tables, every suite code, timeout bounds and defaults
   omitted (`config/bun_tests.rs`).
 - Adapter: claimed scripts, member-job omission and suite job ids
