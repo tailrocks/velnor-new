@@ -25,8 +25,13 @@ struct Scenario {
     second_main_sha: Option<String>,
     runs: String,
     second_runs: Option<String>,
+    /// Per-call listing overrides: `(call, body)`, or `(call, FAIL)` to fail that call.
+    runs_by_call: Vec<(usize, String)>,
     jobs: String,
 }
+
+/// A `runs_by_call` body that makes that listing call exit non-zero.
+const FAIL: &str = "@FAIL@";
 
 impl Scenario {
     fn valid() -> Self {
@@ -61,6 +66,7 @@ impl Scenario {
                 vec![newest],
             ]),
             second_runs: None,
+            runs_by_call: Vec::new(),
             jobs: job_pages(&[required_job(42, 3, SHA, "main", "completed", "success")]),
         }
     }
@@ -71,6 +77,7 @@ struct Execution {
     stderr: String,
     output: String,
     calls: String,
+    sleeps: String,
 }
 
 struct Fixture {
@@ -97,6 +104,15 @@ const TIMEOUT_STUB: &str = r"#!/bin/sh
 echo 'poison: timeout must never be invoked' >&2
 exit 99
 ";
+
+/// Records the empty-listing backoff delays instead of waiting; every other
+/// `sleep` (the `gh` watchdog's 60 and 5 seconds) runs for real.
+const SLEEP_STUB: &str = r#"#!/bin/sh
+case "$1" in
+  3|6|12|24|45) printf '%s\n' "$1" >> "$VELNOR_TEST_SLEEPS"; exit 0 ;;
+esac
+exec /bin/sleep "$@"
+"#;
 
 const GIT_STUB: &str = r#"#!/bin/sh
 set -eu
@@ -126,6 +142,7 @@ case "$endpoint" in
     [ ! -f "$counter" ] || IFS= read -r count < "$counter"
     count=$((count + 1))
     printf '%s\n' "$count" > "$counter"
+    [ ! -f "$VELNOR_TEST_FIXTURES/runs-$count.fail" ] || { echo 'HTTP 502' >&2; exit 1; }
     response="$VELNOR_TEST_FIXTURES/runs-$count.json"
     [ -f "$response" ] || response="$VELNOR_TEST_FIXTURES/runs.json"
     cat "$response"
@@ -161,6 +178,13 @@ fn create_fixture(scenario: &Scenario) -> Result<Fixture, Box<dyn Error>> {
     if let Some(runs) = &scenario.second_runs {
         fs::write(directory.join("runs-2.json"), runs)?;
     }
+    for (call, body) in &scenario.runs_by_call {
+        if body == FAIL {
+            fs::write(directory.join(format!("runs-{call}.fail")), "")?;
+        } else {
+            fs::write(directory.join(format!("runs-{call}.json")), body)?;
+        }
+    }
     fs::write(directory.join("jobs.json"), &scenario.jobs)?;
     let calls = directory.join("calls");
     let output = directory.join("outputs");
@@ -170,6 +194,8 @@ fn create_fixture(scenario: &Scenario) -> Result<Fixture, Box<dyn Error>> {
     write_executable(&bin.join("gh"), GH_STUB)?;
     write_executable(&bin.join("timeout"), TIMEOUT_STUB)?;
     write_executable(&bin.join("git"), GIT_STUB)?;
+    write_executable(&bin.join("sleep"), SLEEP_STUB)?;
+    fs::write(directory.join("sleeps"), "")?;
     Ok(Fixture {
         directory,
         bin,
@@ -227,6 +253,7 @@ fn execute(scenario: Scenario) -> Result<Execution, Box<dyn Error>> {
         .env("PATH", format!("{}:{path}", fixture.bin.display()))
         .env("VELNOR_TEST_FIXTURES", &fixture.directory)
         .env("VELNOR_TEST_CALLS", &fixture.calls)
+        .env("VELNOR_TEST_SLEEPS", fixture.directory.join("sleeps"))
         .env("GITHUB_REPOSITORY", scenario.repository)
         .env("GITHUB_REF", scenario.ref_name)
         .env("GITHUB_EVENT_NAME", scenario.event)
@@ -241,6 +268,7 @@ fn execute(scenario: Scenario) -> Result<Execution, Box<dyn Error>> {
         stderr: String::from_utf8(output.stderr)?,
         output: fs::read_to_string(&fixture.output)?,
         calls: fs::read_to_string(&fixture.calls)?,
+        sleeps: fs::read_to_string(fixture.directory.join("sleeps"))?,
     };
     fs::remove_dir_all(&fixture.directory)?;
     Ok(execution)
@@ -311,6 +339,22 @@ fn script_uses_paginated_selectors_and_fails_fast_without_waiting() -> Result<()
     assert!(REQUIRED_JOB_JQ.contains(".run_attempt == $run_attempt"));
     assert!(rendered.contains("head_repository.full_name == $repository"));
     assert!(ELIGIBILITY_FUNCTION.contains("GITHUB_WORKFLOW_REF"));
+    // The listing filters by head_sha only; identity stays in jq (see ci_run_lookup).
+    assert!(
+        rendered.contains("/actions/workflows/ci.yml/runs?head_sha=$source_sha&per_page=100\"")
+    );
+    assert!(!rendered.contains("&branch=main"));
+    assert!(!rendered.contains("&event=push"));
+    for check in [
+        ".path == $workflow_path",
+        ".event == \"push\"",
+        ".head_branch == \"main\"",
+        ".head_sha == $source_sha",
+        ".head_repository.full_name == $repository",
+    ] {
+        assert!(rendered.contains(check), "{check}");
+    }
+    assert!(rendered.contains("list_exact_source_ci_runs() {"));
     Ok(())
 }
 
