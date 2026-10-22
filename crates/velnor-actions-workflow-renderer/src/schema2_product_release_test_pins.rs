@@ -11,7 +11,6 @@ use velnor_actions_mise::{
 
 use crate::schema2::ProductReleasePins;
 use crate::setup::MiseSetup;
-use crate::toolchain_env::with_env_unset_argv;
 
 struct BuildArgv {
     product: Vec<String>,

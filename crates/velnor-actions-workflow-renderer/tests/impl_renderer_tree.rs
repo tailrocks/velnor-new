@@ -192,13 +192,7 @@ fn consumer_tree_has_no_codeowners_merges_verify_and_rejects_candidate() -> Resu
 fn consumer_rejects_support_job_ids_in_ir() -> Result<(), RenderError> {
     let mut ir = fixture_ir()?;
     let ctx = fixture_ctx();
-    for forbidden in [
-        "alint",
-        "cargo-deny",
-        "cargo-machete",
-        "zizmor",
-        "candidate",
-    ] {
+    for forbidden in ["alint", "cargo-deny", "cargo-machete", "candidate"] {
         let mut with_job = ir.clone();
         with_job.jobs.insert(forbidden.to_owned(), plan_job()?);
         assert!(
@@ -217,7 +211,6 @@ fn validator_commands() -> Vec<ValidatorCommand> {
     [
         (ValidatorKind::CargoDeny, "Run cargo-deny"),
         (ValidatorKind::CargoMachete, "Run cargo-machete"),
-        (ValidatorKind::Zizmor, "Run zizmor"),
     ]
     .iter()
     .map(|(validator, name)| ValidatorCommand {
@@ -242,7 +235,7 @@ fn velnor_policy_renders_validators_only() -> Result<(), RenderError> {
         Some(&support),
         &ctx,
     )?;
-    for id in ["alint:", "cargo-deny:", "cargo-machete:", "zizmor:"] {
+    for id in ["alint:", "cargo-deny:", "cargo-machete:"] {
         assert!(text.contains(id), "missing {id}:\n{text}");
     }
     assert!(text.contains(ALINT_USES));

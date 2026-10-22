@@ -286,6 +286,7 @@ fn repo_config_sample_covers_schema_keys() -> TestResult {
                 "crate_timeout_minutes",
                 "pull_request_cache_policy",
                 "runner_label",
+                "lint",
             ]
             .contains(&key.as_str()),
             "workflow key outside schema: {key}"

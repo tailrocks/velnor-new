@@ -163,7 +163,6 @@ fn assert_source_gate(parent: &str) -> Result<(), Box<dyn std::error::Error>> {
         "actions/workflows/ci.yml/runs",
         "Required",
         "jactionlint",
-        "zizmor",
     ] {
         assert!(gate.contains(required), "missing {required}: {gate}");
     }

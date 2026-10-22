@@ -230,10 +230,6 @@ impl ToolCatalog {
     ///
     /// Returns [`MiseError::InvalidToolVersion`] for the first version
     /// that is not exact `major.minor.patch`.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "catalog carries seven exact pins at once"
-    )]
     pub fn new(
         rust: &str,
         mr_boxington: &str,

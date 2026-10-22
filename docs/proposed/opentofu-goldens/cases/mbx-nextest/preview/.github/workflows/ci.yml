@@ -350,7 +350,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 67931ab4dc1e5fb6aadc5cc038eac764d93a3d82b3049707903bb5c1c6a9ad92-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: a8108375fb00990de4dc5b750dbf257bcec455a4ec51b1dd7b28e20c7450fd21-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -363,7 +363,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: "mise --no-config --no-env --no-hooks install 'rust@'\"${VELNOR_TOOL_RUST}\" jactionlint@2.3.0 shellcheck@0.11.0 zizmor@1.31.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.149"
+        run: "mise --no-config --no-env --no-hooks install 'rust@'\"${VELNOR_TOOL_RUST}\" jactionlint@2.3.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.149"
       - name: Verify jactionlint
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; v=\"2.3.0\"; case \"${RUNNER_OS-}-${RUNNER_ARCH-}\" in Linux-X64) p=linux-x64;; Linux-ARM64) p=linux-arm64;; macOS-ARM64) p=macos-arm64;; macOS-X64) p=macos-x64;; *) p=unsupported;; esac; case \"$v/$p\" in 2.3.0/linux-arm64) want=7b6c395e8fb7c407d7b3358da1deab23434a75840dc76768ddb30119ce1041c0;; 2.3.0/linux-x64) want=3566633b33780130c5bea5342ad8c5505092e40094c7d6e25ee74e382899a5c7;; 2.3.0/macos-arm64) want=b6853a909613dc9381548b1d61d278e1c4b1ab8334212f67ea6efa46f1f5d34b;; 2.3.0/macos-x64) want=1aa284dc8b12ebd6bee858dcbbfb94c0b92e457cd7e4bdaee07ae2b9238dba45;; *) want=;; esac; if [ -z \"$want\" ]; then if [ \"$v\" = \"2.3.0\" ]; then printf \"%s\\n\" \"::error::jactionlint_executable_not_catalogued: jactionlint $v on $p has no executable digest in this Velnor catalog\" >&2; exit 1; fi; printf \"%s\\n\" \"::notice::jactionlint $v on $p has no Velnor executable digest; the Mise release digest and GitHub attestation checks still applied\"; exit 0; fi; d=\"$RUNNER_TEMP/velnor/jactionlint-verify\"; rm -rf \"$d\"; mkdir -p \"$d\"; mise --no-config --no-env --no-hooks which --tool \"jactionlint@$v\" jactionlint > \"$d/path\" || { printf \"%s\\n\" \"::error::jactionlint_not_installed: jactionlint@$v\" >&2; exit 1; }; IFS= read -r exe < \"$d/path\"; test -f \"$exe\" || { printf \"%s\\n\" \"::error::jactionlint_executable_missing: $exe\" >&2; exit 1; }; printf \"%s  %s\\n\" \"$want\" \"$exe\" > \"$d/executable.sha256\"; if command -v sha256sum >/dev/null 2>&1; then sha256sum -c \"$d/executable.sha256\" >/dev/null; else shasum -a 256 -c \"$d/executable.sha256\" >/dev/null; fi || { printf \"%s\\n\" \"::error::jactionlint_executable_digest_mismatch: $exe is not SHA-256 $want\" >&2; exit 1; }; printf \"%s\\n\" \"velnor: jactionlint $v ($p) executable SHA-256 $want verified\"'"
       - name: Verify Rust channel manifest
@@ -546,7 +546,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: dfae3e792235fb76d4b8df51a2996dd42decc0c52e314e79f06962a0c95f0902-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: 5af40179bddb8cd5bb1dbc6c13b8a1d4287ed440614722f2499330da5c3ac706-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -567,7 +567,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: "mise --no-config --no-env --no-hooks install 'rust@'\"${VELNOR_TOOL_RUST}\" jactionlint@2.3.0 shellcheck@0.11.0 zizmor@1.31.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.149"
+        run: "mise --no-config --no-env --no-hooks install 'rust@'\"${VELNOR_TOOL_RUST}\" jactionlint@2.3.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.149"
       - name: Verify jactionlint
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; v=\"2.3.0\"; case \"${RUNNER_OS-}-${RUNNER_ARCH-}\" in Linux-X64) p=linux-x64;; Linux-ARM64) p=linux-arm64;; macOS-ARM64) p=macos-arm64;; macOS-X64) p=macos-x64;; *) p=unsupported;; esac; case \"$v/$p\" in 2.3.0/linux-arm64) want=7b6c395e8fb7c407d7b3358da1deab23434a75840dc76768ddb30119ce1041c0;; 2.3.0/linux-x64) want=3566633b33780130c5bea5342ad8c5505092e40094c7d6e25ee74e382899a5c7;; 2.3.0/macos-arm64) want=b6853a909613dc9381548b1d61d278e1c4b1ab8334212f67ea6efa46f1f5d34b;; 2.3.0/macos-x64) want=1aa284dc8b12ebd6bee858dcbbfb94c0b92e457cd7e4bdaee07ae2b9238dba45;; *) want=;; esac; if [ -z \"$want\" ]; then if [ \"$v\" = \"2.3.0\" ]; then printf \"%s\\n\" \"::error::jactionlint_executable_not_catalogued: jactionlint $v on $p has no executable digest in this Velnor catalog\" >&2; exit 1; fi; printf \"%s\\n\" \"::notice::jactionlint $v on $p has no Velnor executable digest; the Mise release digest and GitHub attestation checks still applied\"; exit 0; fi; d=\"$RUNNER_TEMP/velnor/jactionlint-verify\"; rm -rf \"$d\"; mkdir -p \"$d\"; mise --no-config --no-env --no-hooks which --tool \"jactionlint@$v\" jactionlint > \"$d/path\" || { printf \"%s\\n\" \"::error::jactionlint_not_installed: jactionlint@$v\" >&2; exit 1; }; IFS= read -r exe < \"$d/path\"; test -f \"$exe\" || { printf \"%s\\n\" \"::error::jactionlint_executable_missing: $exe\" >&2; exit 1; }; printf \"%s  %s\\n\" \"$want\" \"$exe\" > \"$d/executable.sha256\"; if command -v sha256sum >/dev/null 2>&1; then sha256sum -c \"$d/executable.sha256\" >/dev/null; else shasum -a 256 -c \"$d/executable.sha256\" >/dev/null; fi || { printf \"%s\\n\" \"::error::jactionlint_executable_digest_mismatch: $exe is not SHA-256 $want\" >&2; exit 1; }; printf \"%s\\n\" \"velnor: jactionlint $v ($p) executable SHA-256 $want verified\"'"
       - name: Prepare Rust components

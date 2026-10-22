@@ -88,9 +88,8 @@ pub struct WorkflowConfig {
     pub preserve_workflows: Vec<String>,
 }
 
-/// The retired zizmor verification job (hard decision 10): its audits run in
-/// jactionlint's `default` profile, so naming it is a configuration error
-/// that says what to set instead.
+/// The retired zizmor job (hard decision 10): jactionlint's `default` profile
+/// runs its audits, so naming it is an error that says what to set instead.
 const RETIRED_ZIZMOR_JOB: &str = "zizmor";
 
 /// `[workflow.verify]`: config-selected verification jobs.
