@@ -65,6 +65,7 @@ pub(super) fn build_snapshot(
         ),
         profile: model::profile(facts.profile_generation, facts.profile_digest),
         sample: model::sample(facts.sample_generation, facts.observed_at),
+        guest_image_sha256: context.guest_image_sha256.to_owned(),
         instance_binding: model::instance_binding(model::InstanceBindingParts {
             connection_id: context.connection_id.to_owned(),
             scale_set_id: facts.scale_set_id,

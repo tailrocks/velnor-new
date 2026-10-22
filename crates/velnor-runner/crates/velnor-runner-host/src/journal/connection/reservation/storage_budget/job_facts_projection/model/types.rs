@@ -24,6 +24,8 @@ pub(in crate::journal::connection::reservation::storage_budget::job_facts_projec
         InstanceBinding,
     pub(in crate::journal::connection::reservation::storage_budget::job_facts_projection) instance_binding_digest:
         String,
+    pub(in crate::journal::connection::reservation::storage_budget::job_facts_projection) guest_image_sha256:
+        String,
     pub(in crate::journal::connection::reservation::storage_budget::job_facts_projection) cache:
         Cache,
     pub(in crate::journal::connection::reservation::storage_budget::job_facts_projection) job_facts_mount:

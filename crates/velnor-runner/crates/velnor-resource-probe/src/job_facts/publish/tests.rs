@@ -223,6 +223,7 @@ fn document() -> serde_json::Value {
         "sample": {},
         "instance_binding": {},
         "instance_binding_digest": "a".repeat(64),
+        "guest_image_sha256": "c".repeat(64),
         "cache": {},
         "job_facts_mount": {},
         "projection_digest": "b".repeat(64)
@@ -278,7 +279,10 @@ fn context(bytes: &[u8]) -> JobFactsPublicationContext {
 
 #[test]
 fn accepts_the_fixed_consumer_document_shape() {
-    let bytes = serde_json::to_vec(&document()).expect("serialize document");
+    let mut admission = document();
+    let guest_bytes = serde_json::to_vec(&guest_document()).expect("serialize guest image");
+    admission["guest_image_sha256"] = json!(hex(&Sha256::digest(&guest_bytes)));
+    let bytes = serde_json::to_vec(&admission).expect("serialize document");
     assert!(valid_document_shape(
         &serde_json::from_slice(&bytes).expect("parse document")
     ));
@@ -334,5 +338,12 @@ fn rejects_changes_to_guest_image_or_runtime_directory_identity() {
 
     let mut request = context(&bytes);
     request.expected_runner_runtime_identity.inode += 1;
+    assert!(validate_context(&request).is_err());
+}
+
+#[test]
+fn rejects_an_admission_projection_bound_to_another_guest_image() {
+    let bytes = serde_json::to_vec(&document()).expect("serialize document");
+    let request = context(&bytes);
     assert!(validate_context(&request).is_err());
 }

@@ -11,7 +11,12 @@ async fn bound_journal_snapshot_reopens_with_thirteen_roles_and_exact_aliases() 
         .expect("revision before read-only snapshot");
     let first = fixture
         .scope
-        .job_facts_snapshot(&fixture.claim, &fixture.ready.ready, &fixture.channel)
+        .job_facts_snapshot(
+            &fixture.claim,
+            &fixture.ready.ready,
+            &fixture.channel,
+            &"a".repeat(64),
+        )
         .await
         .expect("snapshot from bound journal rows");
     assert_eq!(
@@ -30,6 +35,10 @@ async fn bound_journal_snapshot_reopens_with_thirteen_roles_and_exact_aliases() 
     );
     let value: serde_json::Value =
         serde_json::from_slice(&first_bytes).expect("consumer document JSON");
+    assert_eq!(
+        value["guest_image_sha256"],
+        serde_json::json!("a".repeat(64))
+    );
     let roles = value["instance_binding"]["roles"]
         .as_array()
         .expect("roles array");
@@ -75,7 +84,7 @@ async fn bound_journal_snapshot_reopens_with_thirteen_roles_and_exact_aliases() 
         .await
         .expect("reopen connection scope");
     let after_reopen = reopened_scope
-        .job_facts_snapshot(&claim, &ready.ready, &channel)
+        .job_facts_snapshot(&claim, &ready.ready, &channel, &"a".repeat(64))
         .await
         .expect("same durable facts after reopen");
     assert_eq!(after_reopen.bytes(), first_bytes);

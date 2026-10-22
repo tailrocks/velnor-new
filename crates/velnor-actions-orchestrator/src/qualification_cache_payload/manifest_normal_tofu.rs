@@ -40,6 +40,39 @@ impl PayloadManifest {
             roots: payload_roots,
         })
     }
+
+    pub(crate) fn parse_for_normal_tofu_restore(
+        text: &str,
+        cache_key: &str,
+        runtime: &ValidatedTofuRuntime,
+        roots: &CacheRootSet,
+    ) -> Result<Self, &'static str> {
+        let manifest = super::parse::parse_canonical(text)?;
+        validate_digest(&runtime.runtime_identity_digest)?;
+        let expected_scope = PayloadScope::NormalTofuProviders {
+            target: runtime.target.clone(),
+            tofu_version: runtime.tofu_version.clone(),
+            root: runtime.root.clone(),
+            lockfile_sha256: runtime.lockfile_sha256.clone(),
+        };
+        if roots.owner_id != "normal-tofu-providers"
+            || roots.layer.as_str() != "tofu_providers"
+            || super::super::normal_tofu::cache_key(
+                &runtime.target,
+                &runtime.tofu_version,
+                &runtime.root,
+                &runtime.lockfile_sha256,
+            )? != cache_key
+            || manifest.scope != expected_scope
+            || manifest.cache_key != cache_key
+            || manifest.runtime_identity_digest != runtime.runtime_identity_digest
+        {
+            return Err("normal_tofu_manifest_binding_mismatch");
+        }
+        validate_payload_roots(roots, &manifest.roots)
+            .map_err(|_| "normal_tofu_manifest_binding_mismatch")?;
+        Ok(manifest)
+    }
 }
 
 pub(super) fn to_json(manifest: &PayloadManifest, roots: &[Value]) -> Value {
@@ -112,3 +145,7 @@ fn string_field<'a>(object: &'a Map<String, Value>, key: &str) -> Result<&'a str
         .filter(|value| !value.is_empty())
         .ok_or("qualification_cache_manifest_invalid")
 }
+
+#[cfg(test)]
+#[path = "tests/normal_tofu_manifest_restore_tests.rs"]
+mod tests;

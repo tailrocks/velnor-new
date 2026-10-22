@@ -124,6 +124,23 @@ pub(super) fn validate_mountinfo(
     )
 }
 
+pub(super) fn validate_read_only_mountinfo(
+    mountinfo: &str,
+    target: &str,
+    mount_id: u64,
+    device_major: u32,
+    device_minor: u32,
+) -> Result<(), &'static str> {
+    validate_local_mountinfo(
+        mountinfo,
+        target,
+        mount_id,
+        device_major,
+        device_minor,
+        true,
+    )
+}
+
 fn validate_local_mountinfo(
     mountinfo: &str,
     target: &str,

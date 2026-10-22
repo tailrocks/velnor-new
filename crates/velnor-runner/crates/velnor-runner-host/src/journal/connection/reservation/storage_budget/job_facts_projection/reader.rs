@@ -28,6 +28,7 @@ pub(crate) struct JobFactsReadContext<'a> {
     pub(crate) profile_generation_id: &'a str,
     pub(crate) profile_digest: &'a str,
     pub(crate) sample_generation_id: &'a str,
+    pub(crate) guest_image_sha256: &'a str,
 }
 
 /// Read and validate the complete storage document inside one read transaction.
@@ -68,6 +69,7 @@ fn validate_inputs(
         || channel.dind_container_id() != context.dind_container_id
         || channel.instance_binding_digest() != context.instance_binding_digest
         || !values::valid_digest(context.instance_binding_digest)
+        || !values::valid_digest(context.guest_image_sha256)
     {
         return Err(HostError::Identity);
     }

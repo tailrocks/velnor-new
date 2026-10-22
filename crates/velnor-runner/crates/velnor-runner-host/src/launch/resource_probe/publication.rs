@@ -105,18 +105,19 @@ async fn prepare_job_facts_publication<'a>(
     input: &'a JobFactsPublicationInput<'_>,
 ) -> Result<PreparedJobFactsPublication<'a>, HostError> {
     validate_job_facts_binding(input.claim, input.ready, input.selected, input.channel)?;
+    let guest_image_bytes = input
+        .guest_image
+        .verified_document_bytes(input.connection, input.images)?;
+    let guest_image_sha256 = sha256_hex(guest_image_bytes);
     let snapshot = input
         .connection_journal
-        .job_facts_snapshot(input.claim, input.ready, input.channel)
+        .job_facts_snapshot(input.claim, input.ready, input.channel, &guest_image_sha256)
         .await?;
     if snapshot.physical_binding_digest() != input.claim.instance_binding_digest()
         || input.channel.instance_binding_digest() != input.claim.instance_binding_digest()
     {
         return Err(HostError::Identity);
     }
-    let guest_image_bytes = input
-        .guest_image
-        .verified_document_bytes(input.connection, input.images)?;
     let runtime_identity = input.ready.runtime_identity();
     let runtime_identity_directory =
         velnor_resource_probe::job_facts_wire::JobFactsRuntimeIdentityDirectory {
@@ -139,6 +140,21 @@ async fn prepare_job_facts_publication<'a>(
         runtime_identity: runtime_identity_directory,
         binding_sha256,
     })
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest as _, Sha256};
+
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    Sha256::digest(bytes)
+        .iter()
+        .flat_map(|byte| {
+            [
+                char::from(HEX[usize::from(byte >> 4)]),
+                char::from(HEX[usize::from(byte & 0x0f)]),
+            ]
+        })
+        .collect()
 }
 
 async fn publish_job_facts_inner<P: crate::launch::resource_probe::ImageProvider>(

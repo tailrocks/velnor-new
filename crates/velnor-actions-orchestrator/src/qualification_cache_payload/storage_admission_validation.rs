@@ -27,6 +27,7 @@ pub(super) fn validate_document(
         return Err("cache_storage_runner_binding_mismatch");
     }
     validate_digest(&document.instance_binding_digest)?;
+    validate_digest(&document.guest_image_sha256)?;
     if canonical_instance_binding_digest(&document.instance_binding)?
         != document.instance_binding_digest
     {
@@ -294,6 +295,7 @@ pub(super) fn canonical_projection_digest(
         sample: &document.sample,
         instance_binding: &document.instance_binding,
         instance_binding_digest: &document.instance_binding_digest,
+        guest_image_sha256: &document.guest_image_sha256,
         cache: &document.cache,
         job_facts_mount: &document.job_facts_mount,
     };
