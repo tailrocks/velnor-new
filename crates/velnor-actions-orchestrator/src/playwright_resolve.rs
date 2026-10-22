@@ -187,7 +187,7 @@ pub fn lock_playwright_browsers(root: &Path) -> Result<String, OrchestratorError
     };
     let inventory =
         crate::workflow_task_jobs::bun_inventory::BunInventory::load_unindexed(root, bun)?;
-    let requests = core_requests(&config, &inventory)?;
+    let requests = core_requests(bun, &inventory)?;
     if requests.is_empty() {
         return Err(OrchestratorError::config(
             crate::config::CONFIG_REL,
