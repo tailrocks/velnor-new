@@ -61,6 +61,9 @@ fn every_leg_verifies_and_uploads_its_blob_and_failure_results() -> TestResult {
         verify.contains("playwright_blob_project_mismatch"),
         "{verify}"
     );
+    assert!(verify.contains("dependencies"), "{verify}");
+    assert!(verify.contains("teardown"), "{verify}");
+    assert!(verify.contains("empty_unsharded_blob"), "{verify}");
     let blob = after(job, "Upload Playwright blob")?;
     assert!(blob.contains("if: \"!cancelled()\""), "{blob}");
     assert!(

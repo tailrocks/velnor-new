@@ -1,14 +1,12 @@
 //! Leg blob verification and the report job of a sharded Playwright suite.
 //!
-//! Each leg proves at run time that its `--project`/`--shard` reached
-//! Playwright: the blob's metadata event (Playwright 1.64.1
-//! `packages/playwright/src/reporters/blob.ts`, `currentBlobReportVersion = 2`:
-//! the first `report.jsonl` line is `{"method":"onBlobReportMetadata",
-//! "params":{"version":2,...,"shard":{"current":i,"total":n}}}`, `shard`
-//! omitted when unsharded) and its `onProject` events (`params.project.name`)
-//! must match the leg. A wrapper script that drops the arguments, a compound
-//! script or a config without the blob reporter fails the leg instead of
-//! silently running the whole suite. The check is a fixed program run by the
+//! The blob metadata proves the requested shard reached Playwright. For a
+//! non-empty project-selected leg, `onProject` events must contain the
+//! requested project and no projects outside its transitive dependency and
+//! teardown closure. Referenced projects may be absent from events when
+//! `--no-deps` is used. Playwright 1.64.1 removes empty suites before emitting
+//! those events, so an empty shard proves only its shard metadata; blob
+//! metadata does not record `--project`. The check is a fixed program run by
 //! pinned Bun over the zip's one `report.jsonl` entry; it extracts nothing.
 
 use std::collections::BTreeMap;
@@ -44,10 +42,19 @@ const VERIFY_JS: &str = concat!(
     "const want=process.env.VELNOR_PW_SHARD||\"\";",
     "if(got!==want)f(\"playwright_blob_shard_mismatch:\"+want+\":\"+got);",
     "const p=process.env.VELNOR_PW_PROJECT||\"\";",
-    "const n=[...new Set(e.filter(x=>x.method===\"onProject\").map(x=>x.params.project.name))].sort();",
-    "if(n.length===0||(p!==\"\"&&(n.length!==1||n[0]!==p)))",
-    "f(\"playwright_blob_project_mismatch:\"+p+\":\"+n.join(\",\"));",
-    "console.log(\"velnor: blob verified shard=\"+(got||\"none\")+\" projects=\"+n.join(\",\"));",
+    "const r=e.filter(x=>x.method===\"onProject\").map(x=>x.params.project);",
+    "const n=[...new Set(r.map(x=>x.name))].sort();",
+    "if(r.length!==n.length)f(\"playwright_blob_project_mismatch:\"+p+\":\"+n.join(\",\"));",
+    "if(n.length===0&&want===\"\")f(\"playwright_blob_project_mismatch:\"+p+\":empty_unsharded_blob\");",
+    "if(p!==\"\"&&n.length>0){",
+    "const by=new Map(r.map(x=>[x.name,x]));const a=new Set([p]);",
+    "if(!by.has(p))f(\"playwright_blob_project_mismatch:\"+p+\":\"+n.join(\",\"));",
+    "for(const k of a){const x=by.get(k);if(!x)continue;",
+    "const d=x.dependencies||[];if(!Array.isArray(d))f(\"playwright_blob_project_mismatch:\"+p+\":bad_dependencies\");",
+    "for(const v of d){if(typeof v!==\"string\")f(\"playwright_blob_project_mismatch:\"+p+\":bad_dependencies\");a.add(v);}",
+    "if(x.teardown!==undefined){if(typeof x.teardown!==\"string\")f(\"playwright_blob_project_mismatch:\"+p+\":bad_teardown\");a.add(x.teardown);}}",
+    "if(n.some(x=>!a.has(x)))f(\"playwright_blob_project_mismatch:\"+p+\":\"+n.join(\",\"));}",
+    "console.log(\"velnor: blob verified shard=\"+(got||\"none\")+\" projects=\"+(n.join(\",\")||\"none\"));",
 );
 
 /// Verify one leg's blob against the leg's own project and shard.
@@ -111,6 +118,10 @@ pub(crate) fn report_steps(
     steps.push(bun_report_upload_step(suite_job_id, retention_days)?);
     Ok(steps)
 }
+
+#[cfg(test)]
+#[path = "bun_report_steps_tests.rs"]
+mod tests;
 
 fn merge_step(input: &MemberInputs<'_>) -> Result<Step, OrchestratorError> {
     // `playwright` resolves to node_modules/.bin: generation refused a member
