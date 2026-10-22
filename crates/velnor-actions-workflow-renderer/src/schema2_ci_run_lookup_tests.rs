@@ -120,7 +120,7 @@ fn a_listing_with_a_run_is_returned_without_waiting() -> Result<(), Box<dyn Erro
     assert!(outcome.success, "{}", outcome.stderr);
     assert_eq!(outcome.stdout.trim(), listing);
     assert_eq!(outcome.listings, 1);
-    assert!(outcome.sleeps.is_empty());
+    assert_eq!(outcome.sleeps, Vec::<String>::new());
     Ok(())
 }
 
@@ -168,7 +168,7 @@ fn an_empty_page_beside_a_run_is_not_empty() -> Result<(), Box<dyn Error>> {
     let outcome = run(&[&listing], &[])?;
     assert!(outcome.success, "{}", outcome.stderr);
     assert_eq!(outcome.listings, 1);
-    assert!(outcome.sleeps.is_empty());
+    assert_eq!(outcome.sleeps, Vec::<String>::new());
     Ok(())
 }
 
@@ -182,7 +182,7 @@ fn a_mismatching_run_is_final_and_never_retried() -> Result<(), Box<dyn Error>> 
     assert!(outcome.success, "{}", outcome.stderr);
     assert_eq!(outcome.stdout.trim(), listing);
     assert_eq!(outcome.listings, 1);
-    assert!(outcome.sleeps.is_empty());
+    assert_eq!(outcome.sleeps, Vec::<String>::new());
     Ok(())
 }
 
@@ -195,7 +195,7 @@ fn a_failed_listing_fails_at_once() -> Result<(), Box<dyn Error>> {
     let first_failure = run(&[&page(&[RUN])], &[22])?;
     assert!(!first_failure.success);
     assert_eq!(first_failure.listings, 1);
-    assert!(first_failure.sleeps.is_empty());
+    assert_eq!(first_failure.sleeps, Vec::<String>::new());
     Ok(())
 }
 
@@ -210,7 +210,7 @@ fn output_that_is_not_a_listing_is_passed_on_unretried() -> Result<(), Box<dyn E
         assert!(outcome.success, "{response}: {}", outcome.stderr);
         assert_eq!(outcome.stdout.trim(), response);
         assert_eq!(outcome.listings, 1, "{response}");
-        assert!(outcome.sleeps.is_empty(), "{response}");
+        assert_eq!(outcome.sleeps, Vec::<String>::new(), "{response}");
     }
     Ok(())
 }

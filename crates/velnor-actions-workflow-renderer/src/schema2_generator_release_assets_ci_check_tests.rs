@@ -192,7 +192,10 @@ fn never_retries_a_mismatch_or_a_failed_listing() -> Result<(), Box<dyn Error>> 
         run_json(SHA, "push", "topic"),
         run_json(SHA, "push", "main").replace(REPOSITORY, "fork/velnor-new"),
     ] {
-        let outcome = execute(&valid, &[(1, Some(listing(&[mismatch.clone()])))])?;
+        let outcome = execute(
+            &valid,
+            &[(1, Some(listing(std::slice::from_ref(&mismatch))))],
+        )?;
         assert!(!outcome.success, "{mismatch}");
         assert!(
             outcome.stderr.contains("no exact-source main CI run"),

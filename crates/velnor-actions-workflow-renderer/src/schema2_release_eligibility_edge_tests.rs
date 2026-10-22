@@ -204,7 +204,7 @@ fn fails_closed_when_the_listing_stays_empty() -> Result<(), Box<dyn Error>> {
     scenario.runs = pages(&[vec![]]);
     let result = execute(scenario)?;
     assert!(!result.success);
-    assert!(result.output.is_empty());
+    assert_eq!(result.output, "");
     assert!(result.stderr.contains("stayed empty after 6 attempts"));
     assert!(
         result
@@ -285,8 +285,13 @@ fn never_retries_a_mismatching_listing() -> Result<(), Box<dyn Error>> {
         assert_eq!(result.sleeps, "", "{mismatch}");
         assert_eq!(listing_calls(&result), 1, "{mismatch}");
     }
+    Ok(())
+}
 
+#[test]
+fn never_retries_a_mismatching_recheck_listing() -> Result<(), Box<dyn Error>> {
     // A recheck that lists only a mismatching run fails at once as well.
+    let other_sha = "fedcba9876543210fedcba9876543210fedcba98";
     let mut recheck = Scenario::valid();
     recheck.second_runs = Some(pages(&[vec![run(
         42,
