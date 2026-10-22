@@ -292,7 +292,7 @@ compiled catalog default; malformed toolchain files, non-exact channels (such as
 `rust-toolchain`, and `.velnor/config.toml` fail closed (`invalid_rust_toolchain`,
 `conflicting_rust_toolchain`, or `conflicting_rust_toolchain_files`). `[tools]` validates
 tool names against the overridable catalog allowlist (`rust`, `mr-boxington`, `gh`,
-`jactionlint`, `shellcheck`, `zizmor`, `cargo-nextest` / `nextest`, and `opentofu`),
+`jactionlint`, `shellcheck`, `cargo-nextest` / `nextest`, and `opentofu`),
 requires exact `X.Y.Z` semver format (`invalid_tool_version`), and rejects specifying
 both `nextest` and `cargo-nextest` simultaneously (`duplicate_nextest_tool_override`). Exec steps MUST NOT
 load or modify consumer `mise.toml`, `mise.lock`, or environment files;

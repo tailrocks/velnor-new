@@ -353,6 +353,9 @@ must agree with independently fetched canonical CI metadata.
 
 ## Native completion trigger scanner disposition (2026-10-18)
 
+zizmor has since been retired ([hard decision 10](../jactionlint-decision.md#zizmor-is-retired));
+the annotation below is kept because jactionlint honours it.
+
 Pinned zizmor 1.31.1, original commit
 `effdb35fa7868863f11655db256d9008922fa427`, emits `dangerous-triggers`
 [unconditionally for `workflow_run`](https://github.com/zizmorcore/zizmor/blob/effdb35fa7868863f11655db256d9008922fa427/crates/zizmor/src/audit/dangerous_triggers.rs#L51-L98).

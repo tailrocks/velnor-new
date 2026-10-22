@@ -157,7 +157,7 @@ declaration, because Mise (idiomatic version files) and rustup both read it.
 **Mechanism.**
 
 - Generation classifies every catalog tool (Rust, MBX, Nextest, jactionlint,
-  shellcheck, zizmor, OpenTofu, release-plz) as project-declared
+  shellcheck, OpenTofu, release-plz) as project-declared
   when **any** project source names it under any backend spelling (for
   example `"aqua:nextest-rs/nextest/cargo-nextest"` or `core:rust`). The
   sources are every location Mise reads `[tools]` from at the project root:
@@ -397,4 +397,4 @@ deleting a published release asset or moving a published tag.
 exception and manual stable version/tag authority are recorded in
 [release publication decisions](release-publication-decisions.md).
 
-**Gradle stack decisions (HD-4a adapter version grammars, HD-5 one job per Gradle project) and the release-asset Maven bundle choice** are recorded in [Gradle stack contract](proposed/gradle-contract.md#decisions); adopted per the split brief, owner may revisit. **Host deployment (HD-9)** stays operator-run, outside generated CI/CD: [host deployment decision](host-deployment-decision.md); adopted per the split brief, owner may revisit. **Workflow linter (hard decision 10)**: jactionlint replaces actionlint completely and is the only workflow linter, per the owner's instruction of 2026-10-22: [jactionlint decision](jactionlint-decision.md).
+**Gradle stack decisions (HD-4a adapter version grammars, HD-5 one job per Gradle project) and the release-asset Maven bundle choice** are recorded in [Gradle stack contract](proposed/gradle-contract.md#decisions); adopted per the split brief, owner may revisit. **Host deployment (HD-9)** stays operator-run, outside generated CI/CD: [host deployment decision](host-deployment-decision.md); adopted per the split brief, owner may revisit. **Workflow linter (hard decision 10)**: jactionlint replaces actionlint completely and is the only workflow linter, per the owner's instruction of 2026-10-22, and also retires the separate zizmor job: [jactionlint decision](jactionlint-decision.md).
