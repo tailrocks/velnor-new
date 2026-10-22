@@ -32,6 +32,64 @@ async fn add_excess_attachment(journal: &Journal, reservation_id: i64) -> Result
     usize::try_from(count).map_err(|_| HostError::Journal)
 }
 
+fn assert_identity_matches_provisioned(
+    identity: &crate::journal::StorageCleanupIdentity,
+    provisioned: &super::helpers::ProvisionedRunner,
+) {
+    assert_eq!(identity.reservation_id(), provisioned.reservation_id);
+    assert_eq!(identity.operation_id(), provisioned.intent_id);
+    assert_eq!(identity.engine_id(), super::helpers::TEST_ENGINE_ID);
+    assert_eq!(
+        identity.docker_root_digest(),
+        provisioned.docker_root_digest
+    );
+    assert_eq!(
+        identity.runner_container_id(),
+        provisioned.runner_container_id
+    );
+    assert_eq!(identity.dind_container_id(), provisioned.dind_container_id);
+    assert_eq!(
+        identity.instance_binding_digest(),
+        provisioned.instance_binding_digest
+    );
+    assert_eq!(identity.private_volume(), format!("w{}", provisioned.nonce));
+    assert_ne!(identity.guest_boot_id(), "");
+}
+
+fn assert_identity_shape(
+    identity: &crate::journal::StorageCleanupIdentity,
+) -> Result<usize, HostError> {
+    match identity.topology_version() {
+        1 => assert_eq!(identity.volumes().len(), 4),
+        2 => assert_eq!(identity.volumes().len(), 5),
+        _ => return Err(HostError::Journal),
+    }
+    let expected_mounts = if identity.topology_version() == 1 {
+        14
+    } else {
+        crate::journal::connection::StorageRole::PHYSICAL
+            .iter()
+            .map(|role| role.attachments().len())
+            .sum()
+    };
+    assert_eq!(identity.mounts().len(), expected_mounts);
+    assert_eq!(identity.cgroups().len(), 2);
+    assert!(identity.mounts().iter().any(|mount| {
+        mount.role() == "engine-metadata"
+            && mount.observer() == "probe"
+            && mount.target() == "/velnor/docker-root"
+            && mount.source() == Some("/var/lib/docker")
+            && mount.read_only()
+    }));
+    assert!(
+        identity
+            .cgroups()
+            .iter()
+            .all(|cgroup| cgroup.memory_max_bytes() > 0 && !cgroup.path().is_empty())
+    );
+    Ok(expected_mounts)
+}
+
 #[tokio::test]
 async fn cleanup_identity_requires_a_bound_held_reservation_and_reads_exact_owned_rows()
 -> Result<(), HostError> {
@@ -60,24 +118,7 @@ async fn cleanup_identity_requires_a_bound_held_reservation_and_reads_exact_owne
         .storage_cleanup_identity(provisioned.reservation_id)
         .await?
         .ok_or(HostError::Journal)?;
-    assert_eq!(identity.reservation_id(), provisioned.reservation_id);
-    assert_eq!(identity.operation_id(), provisioned.intent_id);
-    assert_eq!(identity.engine_id(), super::helpers::TEST_ENGINE_ID);
-    assert_eq!(
-        identity.docker_root_digest(),
-        provisioned.docker_root_digest
-    );
-    assert_eq!(
-        identity.runner_container_id(),
-        provisioned.runner_container_id
-    );
-    assert_eq!(identity.dind_container_id(), provisioned.dind_container_id);
-    assert_eq!(
-        identity.instance_binding_digest(),
-        provisioned.instance_binding_digest
-    );
-    assert_eq!(identity.private_volume(), format!("w{}", provisioned.nonce));
-    assert_ne!(identity.guest_boot_id(), "");
+    assert_identity_matches_provisioned(&identity, &provisioned);
     let connection = journal.connection().await?;
     connection
         .execute("DROP TRIGGER bound_storage_path_no_update", ())
@@ -108,34 +149,7 @@ async fn cleanup_identity_requires_a_bound_held_reservation_and_reads_exact_owne
         .await?
     );
 
-    match identity.topology_version() {
-        1 => assert_eq!(identity.volumes().len(), 4),
-        2 => assert_eq!(identity.volumes().len(), 5),
-        _ => return Err(HostError::Journal),
-    }
-    let expected_mounts = if identity.topology_version() == 1 {
-        14
-    } else {
-        crate::journal::connection::StorageRole::PHYSICAL
-            .iter()
-            .map(|role| role.attachments().len())
-            .sum()
-    };
-    assert_eq!(identity.mounts().len(), expected_mounts);
-    assert_eq!(identity.cgroups().len(), 2);
-    assert!(identity.mounts().iter().any(|mount| {
-        mount.role() == "engine-metadata"
-            && mount.observer() == "probe"
-            && mount.target() == "/velnor/docker-root"
-            && mount.source() == Some("/var/lib/docker")
-            && mount.read_only()
-    }));
-    assert!(
-        identity
-            .cgroups()
-            .iter()
-            .all(|cgroup| cgroup.memory_max_bytes() > 0 && !cgroup.path().is_empty())
-    );
+    let expected_mounts = assert_identity_shape(&identity)?;
     assert_eq!(
         add_excess_attachment(&journal, provisioned.reservation_id).await?,
         expected_mounts + 1
