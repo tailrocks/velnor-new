@@ -14,6 +14,10 @@ pub(crate) mod runtime_tests;
 
 /// This type records that the selected engine has no containers or named volumes for this capacity reservation.
 /// The proof does not cover shared `EngineMetadata`.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the cleanup receipt keeps separate container, volume, mount, and cgroup absence proofs"
+)]
 pub(crate) struct VerifiedStorageCleanup {
     reservation_id: i64,
     operation_id: i64,
@@ -75,6 +79,14 @@ impl VerifiedStorageCleanup {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::fn_params_excessive_bools,
+    reason = "negative fixtures must vary the four independent cleanup absence proofs"
+)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the test fixture mirrors every receipt input so malformed evidence can be varied independently"
+)]
 pub(crate) fn test_verified_storage_cleanup(
     reservation_id: i64,
     operation_id: i64,
