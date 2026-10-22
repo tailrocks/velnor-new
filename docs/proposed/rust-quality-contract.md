@@ -15,7 +15,6 @@ nested `crates/velnor-runner` are governed by `docs/proposed/macos-scaleset-runn
 which defines its own workspace lints, rust version, and quality invariants.
 
 The words **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative.
-See [Technical Terms](../technical-terms.md) for definitions.
 
 ## 1. Repository shape and authority
 
@@ -55,13 +54,14 @@ All first-party Rust packages MUST be under `crates/`; root MUST be virtual with
 exactly the eight product package names below plus repository-only member `velnor-actions-freshness`
 and utility `velnor-archive-guard`. Cargo metadata defines membership; V1 adds
 no custom architecture linter; §5, Alint, Clippy, tests, and review govern boundaries.
-Within V1 product behavior, Rust/Cargo metadata and `rust-toolchain.toml` belong to `velnor-actions-rust`; Mise syntax, environment, and task metadata belong to `velnor-actions-mise`; actionlint metadata belongs to `velnor-actions-actionlint`.
-Freshness does a check of Velnor policy files. Repository scripts run the
-compiler for the archive guard. Each support package has one Rust crate job in
-VelnorRepositoryV1. Owner metadata can stop this policy from making package
-tasks. The Rust adapter rejects unknown owner values. ConsumerV1 makes tasks
-for packages with this metadata. Package names and paths do not change the task
-list. Alint enforces only configured
+Within V1 product behavior, Rust/Cargo metadata and `rust-toolchain.toml` belong to `velnor-actions-rust`; Mise syntax, environment, and task metadata belong to `velnor-actions-mise`; jactionlint metadata belongs to `velnor-actions-actionlint`.
+Freshness may inspect Velnor-owned Cargo/Mise sources for private maintenance;
+results MUST NOT feed V1 planning. Scripts provision archive guard. Neither
+helper enters V1 Rust task derivation or the product crate matrix. The
+canonical Velnor repository uses the existing named-Mise-check contract to
+run both helper packages' Rust test suites as one required
+`maintenance-helpers` repository-quality check; ordinary ConsumerV1
+configurations do not declare this repository-owned check. Alint enforces only configured
 generic file/path, required-file, and line-count rules.
 The CLI package MUST declare binary `velnor-actions`, the only target name without the package-purpose suffix. Non-Rust directories MAY remain in their own conventional locations.
 
@@ -73,7 +73,7 @@ The `velnor-actions` binary is owned by package `velnor-actions-cli`. Future sta
 | `velnor-actions-contract` | Stack-neutral workflow/task contracts, task graph, identities, reports, recommendations | Rust/Cargo, Mise, process, filesystem, YAML implementation, CLI, generic application models |
 | `velnor-actions-rust` | All Rust/Cargo discovery, metadata conversion, targets, graph, affected selection, Rust task proposals, `rust-toolchain.toml` inspection | Mise config/commands, workflow YAML, process execution, or non-Rust stack behavior |
 | `velnor-actions-mise` | Mise tool selection, pinned command construction, fixed subprocess/environment wrapper, bounded file filter, `mise.toml`/`mise.lock` inspection, Mise cache integration | Cargo metadata, Rust graph/selection rules, `rust-toolchain.toml`, GitHub YAML, stack discovery |
-| `velnor-actions-actionlint` | actionlint pin/capability metadata, generated config, action-schema validation | Mise process execution, stack scanning, generic workflow rendering |
+| `velnor-actions-actionlint` | jactionlint pin/capability metadata, generated config, action-schema validation | Mise process execution, stack scanning, generic workflow rendering |
 | `velnor-actions-workflow-renderer` | Generic GitHub Actions workflow YAML from typed workflow IR | Rust/Cargo, Mise syntax, repository scanning, subprocesses, stack policy |
 | `velnor-actions-orchestrator` | Composition, obligation selection, cache evidence, scheduling, generation coordination, typed process-request coordination | Parsing Cargo/Mise files, direct YAML templates, CLI parsing, OS process details and process creation/control, except the read-only `rustix::process::geteuid()` caller-owner lookup in the private generation-stage validator |
 | `velnor-actions-cli` | Clap parser, typed dispatch, concise deterministic human plan renderer, generation output, and exit-code formatting; emits binary `velnor-actions` | Orchestration algorithms or Rust, Mise, and renderer domain rules; process creation or any `std::process` item but `ExitCode`, under any import spelling or namespace alias (checked on Rust syntax by `impl_repo_deps_process_policy.rs`) |
@@ -81,38 +81,23 @@ The `velnor-actions` binary is owned by package `velnor-actions-cli`. Future sta
 | `velnor-actions-freshness` (repository-only support) | Read-only repository freshness/pin/lock/advisory checks and bounded bootstrap metadata operations behind the existing CLI private gate | V1 planning, task graph or selection, runner behavior, product evidence claims, public commands, or workflow generation |
 | `velnor-archive-guard` (repository-only security utility) | Bounded framing validation of owned candidate, Cargo-package, and cache-payload tar bytes through explicit profiles | V1 stack behavior, task derivation, workflow generation, cache paths/manifests/links, extraction, or product behavior beyond the explicit orchestrator framing call |
 
-These two packages are repository support tools. Each has one Rust crate job.
-The CLI private gate uses freshness at runtime. Repository scripts run the compiler
-for the archive guard binary. The orchestrator links its library for bounded
-cache-payload raw-tar framing. The guard does not inspect cache paths or
-manifests, validate links, or extract files.
+Both repository-only members are outside the eight-product V1 task graph. The
+CLI private gate consumes freshness at runtime, repository scripts provision
+archive guard, and the orchestrator links its library for bounded cache-payload
+raw-tar framing. The guard does not inspect cache paths or manifests, validate
+links, or extract files. The canonical repository's `maintenance-helpers`
+named Mise check runs their package test suites independently of Rust task
+derivation and the product matrix; this repository's VelnorRepositoryV1
+configuration makes it required.
 
-The private file filter runs fixed zstd operations for archive compression.
-Callers MUST pass open regular files. The filter MUST use the shared command
-factory, fixed arguments, input and output byte limits, and a child deadline.
-File operations can continue after the child deadline.
-
-The source policy MUST allow one bounded output write in
-`bounded_file_filter_process.rs` and one read-only symbolic-link metadata lookup
-in `bounded_file_filter.rs`. It MUST reject extra or relocated expressions.
-All other file writes, path changes, links, and installer operations remain
-forbidden in Mise source.
-Freshness and archive-guard test tasks run in their own Rust crate jobs.
-The local `test-maintenance-helpers` Mise task remains for manual checks.
-
-Cargo package metadata can specify the task owner:
+Each repository-only package declares its task owner with Cargo package metadata:
 
 ```toml
 [package.metadata.velnor]
 v1-task-owner = "repository-maintenance"
 ```
 
-The Rust adapter uses this value to select an owner type. The Rust adapter
-rejects unknown values. VelnorRepositoryV1 includes root-workspace packages
-without this owner.
-`prepare` does a check of the canonical origin first. ConsumerV1 makes tasks
-for packages with this metadata. Package names and paths do not change the task
-list.
+The Rust metadata adapter maps that value to a typed owner and rejects unknown owner values. Under `VelnorRepositoryV1`, the orchestrator omits only root-workspace packages with this owner from V1 task derivation and feature union; `prepare` verifies the canonical origin first. Under `ConsumerV1`, the same metadata does not exclude a same-named project. Package names and paths alone never grant this exclusion.
 
 Hard invariants 10–12 (spec §3.3) are normative throughout. 10 — One owner per
 domain rule per the table above; extend an existing owner before making a new
@@ -175,17 +160,11 @@ release qualification, not every pull request. It MUST match the selected
 stable toolchain's major/minor unless compatibility requires otherwise. A
 pinned nightly MAY exist only for a check that needs it.
 
-Velnor MUST check for `rust-toolchain.toml`, `mise.toml`, and `mise.lock`.
-It MAY report their versions, components, tasks, lock coverage, and conflicts.
-Velnor MUST NOT create, synchronize, lock, or rewrite these files. A declared
-tool version replaces the matching Velnor pin (hard decision 5).
-
-A missing file produces a manual recommendation. It does not cause automatic
-repair or generation failure. A malformed or unusable declaration causes
-generation to fail and name the file. Unusable declarations include values
-that do not parse, loose versions, and versions that disagree across sources.
-A Velnor pin MUST NOT silently replace such a declaration. See the
-[tooling input contract](tooling-input-contract.md).
+Velnor MUST check for `rust-toolchain.toml`, `mise.toml`, and `mise.lock`; it
+MAY report their versions, components, tasks, lock coverage, and conflicts.
+They are never generated, synchronized, locked, or rewritten; their declared
+tool versions replace the corresponding Velnor pins (hard decision 5). Missing files produce manual recommendations, not
+automatic repair or generation failure; a malformed or unusable declaration (unparseable, loose, or disagreeing with another source) fails generation naming the file, because a Velnor pin must never silently replace it. See the [tooling input contract](tooling-input-contract.md).
 
 Every member MUST inherit the workspace metadata and lints:
 
@@ -365,7 +344,7 @@ Velnor's own `.velnor/config.toml` MUST set
 `workflow.policy = "velnor-repository-v1"`, which emits a dedicated
 `alint` job. The job MUST use the configured Alint action, defaulting to the
 full-SHA pin (repository-structure alint, distinct
-from workflow-syntax actionlint):
+from workflow-syntax jactionlint):
 
 ```yaml
 - uses: asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87 # v0.19.0

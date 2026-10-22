@@ -53,12 +53,13 @@ fn resolves_config_only_rust_and_tool_overrides_with_rustup_export() {
     cfg.tools.overrides = BTreeMap::from([
         ("rust".to_owned(), "1.94.1".to_owned()),
         ("cargo-nextest".to_owned(), "0.9.150".to_owned()),
-        ("actionlint".to_owned(), "1.7.13".to_owned()),
+        ("jactionlint".to_owned(), "2.3.1".to_owned()),
     ]);
     let catalog = resolve_tool_catalog(dir.path(), &cfg).expect("resolve");
     assert_eq!(catalog.version(PinnedTool::Rust), "1.94.1");
     assert_eq!(catalog.version(PinnedTool::Nextest), "0.9.150");
-    assert_eq!(catalog.version(PinnedTool::Actionlint), "1.7.13");
+    assert_eq!(catalog.version(PinnedTool::Jactionlint), "2.3.1");
+    assert!(!catalog.is_project_declared(PinnedTool::Jactionlint));
     assert!(catalog.exports_rustup_toolchain());
     assert_eq!(catalog.rustup_toolchain_env(), Some("1.94.1"));
 }
@@ -269,4 +270,39 @@ fn os_restricted_mr_boxington_records_fail_closed_naming_the_filter() {
             .contains("rust_mr_boxington_requires_unfiltered_pin:os=macos,linux"),
         "got {err}"
     );
+}
+
+#[test]
+fn jactionlint_follows_the_project_declaration_and_the_catalog_pin() {
+    let silent = tempfile::tempdir().expect("tempdir");
+    let cfg = config_with(BTreeMap::new());
+    let catalog = resolve_tool_catalog(silent.path(), &cfg).expect("resolve");
+    assert_eq!(
+        catalog.version(PinnedTool::Jactionlint),
+        velnor_actions_mise::JACTIONLINT_VERSION
+    );
+    assert!(!catalog.is_project_declared(PinnedTool::Jactionlint));
+    for key in [
+        "jactionlint",
+        "\"github:jdx/jactionlint\"",
+        "\"packslip:github.com/jdx/jactionlint\"",
+    ] {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            dir.path().join("mise.toml"),
+            format!("[tools]\n{key} = \"2.4.0\"\n"),
+        )
+        .expect("write mise.toml");
+        let catalog = resolve_tool_catalog(dir.path(), &cfg).expect("resolve");
+        assert_eq!(catalog.version(PinnedTool::Jactionlint), "2.4.0", "{key}");
+        assert!(
+            catalog.is_project_declared(PinnedTool::Jactionlint),
+            "{key}"
+        );
+        assert_eq!(
+            catalog.for_emission().tool_spec(PinnedTool::Jactionlint),
+            "jactionlint@${VELNOR_TOOL_JACTIONLINT}",
+            "{key}"
+        );
+    }
 }

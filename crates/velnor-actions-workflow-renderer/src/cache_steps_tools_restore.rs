@@ -56,8 +56,16 @@ pub(super) fn is_mise_sha256(value: &str) -> bool {
 /// `~/.local/share/mise/bin`. A miss therefore sweeps every other entry of
 /// the Mise root, and both paths then re-verify that binary against the
 /// job's pinned digest, so no restored or seeded Mise binary runs unchecked.
+///
+/// Setup Mise has already put the restored `bin/` and `shims/` on `PATH`
+/// ahead of the system directories, so the script first resets `PATH` to
+/// [`crate::VERIFY_PATH`] (and the step's shell is [`crate::VERIFY_SHELL`]),
+/// and `bin/` may hold nothing but what Setup Mise writes there: the binary
+/// and its plain `mise-version` record.
 /// Semicolons keep this valid after `quote_run_line_env_paths` joins words with spaces.
 const TOOLS_CACHE_ADMISSION_SCRIPT: &str = r#"set -eu;
+PATH=/usr/bin:/bin:/usr/sbin:/sbin;
+export PATH;
 [ -n "$HOME" ] && [ -n "$RUNNER_TEMP" ] || exit 1;
 case "$HOME" in /*) ;; *) exit 1 ;; esac;
 case "$RUNNER_TEMP" in /*) ;; *) exit 1 ;; esac;
@@ -70,8 +78,16 @@ mise_sha256="${TOOLS_MISE_SHA256-}";
 mise_root="$HOME/.local/share/mise";
 [[ "$mise_sha256" =~ ^[0-9a-f]{64}$ ]] || exit 1;
 verify_mise() {
-[ ! -L "$mise_root" ] && [ ! -L "$mise_root/bin" ] && [ ! -L "$mise_root/bin/mise" ] && [ -f "$mise_root/bin/mise" ] || { echo "Setup Mise binary is missing" >&2; exit 1; };
-actual=$(sha256sum "$mise_root/bin/mise");
+[ ! -L "$mise_root" ] && [ ! -L "$mise_root/bin" ] && [ -d "$mise_root/bin" ] && [ ! -L "$mise_root/bin/mise" ] && [ -f "$mise_root/bin/mise" ] || { echo "Setup Mise binary is missing" >&2; exit 1; };
+while IFS= read -r -d '' entry; do
+name=${entry##*/};
+case "$name" in
+mise) ;;
+mise-version) [ -f "$entry" ] && [ ! -L "$entry" ] && [ ! -x "$entry" ] || { echo "mise-version is not a plain Setup Mise record" >&2; exit 1; } ;;
+*) printf '%s is not part of the Setup Mise install\n' "bin/$name" >&2; exit 1 ;;
+esac;
+done < <(find "$mise_root/bin" -mindepth 1 -maxdepth 1 -print0);
+if command -v sha256sum >/dev/null 2>&1; then actual=$(sha256sum "$mise_root/bin/mise"); else actual=$(shasum -a 256 "$mise_root/bin/mise"); fi;
 [ "${actual%% *}" = "$mise_sha256" ] || { echo "Mise binary does not match its pinned SHA-256" >&2; exit 1; };
 };
 keep=false;
@@ -148,7 +164,7 @@ fn admission_step() -> Yaml {
             "name".to_owned(),
             Yaml::str("Keep only an exact cache hit or validated seed on a miss"),
         ),
-        ("shell".to_owned(), Yaml::str("bash")),
+        ("shell".to_owned(), Yaml::str(crate::VERIFY_SHELL)),
         ("env".to_owned(), Yaml::Map(env)),
         ("run".to_owned(), Yaml::str(TOOLS_CACHE_ADMISSION_SCRIPT)),
     ])
@@ -221,7 +237,44 @@ fn action_outputs() -> Yaml {
     ])
 }
 
-fn action_body() -> Result<Yaml, RenderError> {
+/// Re-verify every restored Mise install against its pinned archive; a
+/// mismatch is discarded so `Prepare pinned tools` reinstalls it.
+const INSTALLS_VERIFY_SCRIPT: &str = include_str!("cache_steps_tools_installs_verify.sh");
+
+/// Display name of the composite's install re-verification step.
+pub(crate) const INSTALLS_VERIFY_NAME: &str = "Re-verify restored Mise installs";
+
+fn installs_verify_step(tool_pins: &[String]) -> Result<Yaml, RenderError> {
+    for pin in tool_pins {
+        let fields: Vec<&str> = pin.split(' ').collect();
+        let ok = fields.len() == 5
+            && fields.iter().all(|field| {
+                !field.is_empty()
+                    && field
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || b"._-:/@+".contains(&b))
+            })
+            && fields[3].starts_with("https://")
+            && fields[4].len() == 64;
+        if !ok {
+            return Err(RenderError::InvalidWorkflow(format!("bad_tool_pin:{pin}")));
+        }
+    }
+    Ok(Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str(INSTALLS_VERIFY_NAME)),
+        ("shell".to_owned(), Yaml::str(crate::VERIFY_SHELL)),
+        (
+            "env".to_owned(),
+            Yaml::Map(vec![(
+                "VELNOR_TOOL_PINS".to_owned(),
+                Yaml::str(tool_pins.join("\n")),
+            )]),
+        ),
+        ("run".to_owned(), Yaml::str(INSTALLS_VERIFY_SCRIPT)),
+    ]))
+}
+
+fn action_body(tool_pins: &[String]) -> Result<Yaml, RenderError> {
     Ok(Yaml::Map(vec![
         (
             "name".to_owned(),
@@ -239,7 +292,11 @@ fn action_body() -> Result<Yaml, RenderError> {
                 ("using".to_owned(), Yaml::str("composite")),
                 (
                     "steps".to_owned(),
-                    Yaml::Seq(vec![restore_step()?, admission_step()]),
+                    Yaml::Seq(vec![
+                        restore_step()?,
+                        admission_step(),
+                        installs_verify_step(tool_pins)?,
+                    ]),
                 ),
             ]),
         ),
@@ -248,8 +305,11 @@ fn action_body() -> Result<Yaml, RenderError> {
 
 /// Build the pinned restore action with its renderer-owned archive paths.
 /// # Errors
-pub(crate) fn action_file(version: &str) -> Result<RenderedFile, RenderError> {
-    let body = action_body()?;
+pub(crate) fn action_file(
+    version: &str,
+    tool_pins: &[String],
+) -> Result<RenderedFile, RenderError> {
+    let body = action_body(tool_pins)?;
     let bytes = marker::with_marker(version, &crate::yaml::render_yaml(&body))?;
     steps::scan_for_private_subcommands(&bytes)?;
     let action_directory = super::TOOLS_RESTORE_USES
@@ -308,3 +368,11 @@ pub(crate) fn assert_rendered_admission_parses(bytes: &str) {
 #[cfg(test)]
 #[path = "cache_steps_tools_restore_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "cache_steps_tools_installs_verify_tests.rs"]
+mod installs_verify_tests;
+
+#[cfg(test)]
+#[path = "cache_steps_tools_restore_path_tests.rs"]
+mod path_tests;

@@ -1,6 +1,6 @@
 #[test]
 fn rendered_action_wires_seed_admission_and_unset_miss_outputs() {
-    let file = super::super::action_file("0.1.0").expect("restore action");
+    let file = super::super::action_file("0.1.0", &[]).expect("restore action");
     for expected in [
         "seed-admitted:",
         "default: \"false\"",
@@ -30,7 +30,7 @@ fn generated_action_tree_scopes_seed_input_to_the_restore_composite() {
             .unwrap_or_else(|| panic!("missing mapping field {key}"))
     }
 
-    let body = super::super::action_body().expect("restore action tree");
+    let body = super::super::action_body(&[]).expect("restore action tree");
     let seed_input = field(field(&body, "inputs"), "seed-admitted");
     assert_eq!(field(seed_input, "required"), &Yaml::Bool(false));
     assert_eq!(

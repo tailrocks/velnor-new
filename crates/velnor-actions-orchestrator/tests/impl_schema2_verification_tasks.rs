@@ -34,7 +34,7 @@ fn verification_tasks_follow_eligible_lanes_and_stay_required() -> TestResult {
         let tree = render_staged_tree(&prepare(repo.path())?)?;
         let workflow = required_file(&tree, ".github/workflows/ci.yml")?;
         let required = job_body(workflow, "required")?;
-        let actionlint = job_body(workflow, "actionlint")?;
+        let actionlint = job_body(workflow, "jactionlint")?;
         let macos = job_body(workflow, "task-native-format")?;
         assert!(
             macos.contains(r#"cd -P \"$workspace_root/native\""#),

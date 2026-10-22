@@ -98,6 +98,11 @@ fn fixture(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {
         producer_setup: setup.clone(),
         linux_setup: setup,
         install_gh_argv: vec!["mise".into(), "install".into(), "gh@2.102.1".into()],
+        verify_rust_argv: vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            "echo verify-rust".to_owned(),
+        ],
         install_rust_argv: vec!["mise".into(), "install".into(), "rust@1.99.1".into()],
         producer_source_prep: vec![],
         producer_cargo_env: [

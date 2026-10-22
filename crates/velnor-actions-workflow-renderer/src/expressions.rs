@@ -92,7 +92,7 @@ const ENV_EXPRESSIONS: [&str; 16] = [
 /// Run-scoped names, runner paths, matrix coordinates, the
 /// push-gated cache-save flag, and runtime cache identities. Notably absent: every `secrets.*` handle (rejected
 /// separately as `secret_in_action_input`).
-const WITH_EXPRESSIONS: [&str; 21] = [
+const WITH_EXPRESSIONS: [&str; 20] = [
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
@@ -106,7 +106,6 @@ const WITH_EXPRESSIONS: [&str; 21] = [
     "steps.tofu-providers.outputs.cache-key",
     "steps.tofu-providers.outputs.cache-path",
     "steps.preseed-stage.outputs.helper-sha256",
-    "steps.publish-baseline.outputs.artifact_name",
     "steps.cache-keys.outputs.sources_key",
     "steps.cache-keys.outputs.sources_restore_keys",
     "needs.plan.outputs.sources_key",

@@ -33,7 +33,7 @@ mod names;
 use names::subject_names;
 #[path = "lock_audit_rust.rs"]
 mod rust;
-use rust::{is_rust, rust_manifest_coverage};
+use rust::{is_catalogued_jactionlint, is_rust, rust_manifest_coverage};
 #[path = "lock_audit_vectors.rs"]
 mod vectors;
 use vectors::classify_mise_vectors;
@@ -100,6 +100,10 @@ pub(crate) fn audit_prepare_installs_with_catalog(
             .steps
             .iter()
             .any(|step| step.name == crate::workflow::VERIFY_RUST_MANIFEST_STEP);
+        let jactionlint_verified = job
+            .steps
+            .iter()
+            .any(|step| step.name == crate::workflow::VERIFY_JACTIONLINT_STEP);
         for step in &job.steps {
             if step.role != Some(StepRole::PreparePinnedTools) {
                 continue;
@@ -119,6 +123,11 @@ pub(crate) fn audit_prepare_installs_with_catalog(
                     Some(subject) if manifest_verified && is_rust(&subject) => {
                         rust_manifest_coverage(&subject, &mut blocking);
                     }
+                    // `Verify jactionlint` checks the installed executable
+                    // against the catalog digest table, so a catalogued
+                    // version needs no `mise.lock` row to be verified.
+                    Some(subject)
+                        if jactionlint_verified && is_catalogued_jactionlint(&subject) => {}
                     Some(subject) => subjects.push(subject),
                     None => blocking.push(format!("unauditable_install_spec:{spec}")),
                 }

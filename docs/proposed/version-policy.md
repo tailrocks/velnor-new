@@ -60,7 +60,7 @@ requirement exists.
 The compiled-in catalog MUST identify each tool called by generated workflows
 with its exact stable version, canonical upstream source, supported platforms,
 and artifact digest when available. It includes Rust, MBX, Nextest, `gh`,
-cargo-deny, cargo-machete, actionlint, zizmor, and every other generated-task
+cargo-deny, cargo-machete, jactionlint, ShellCheck, and every other generated-task
 tool. Generated workflows embed these exact values and pass them as explicit
 Mise tool arguments; they never read a consumer version-policy file or resolve
 `latest` independently. Velnor's `.velnor/version-policy.toml` MUST mirror
@@ -72,7 +72,7 @@ compiled-in Mise release record in generated workflow output.
 |---|---|---|
 | Rust compiler and components | Compiled-in generator catalog; embedded in generated workflows and run through Mise | Latest stable Rust and matching current components |
 | Mise bootstrap | `.mise-version` and compiled-in Mise release record | Latest qualified stable Mise release; exact artifact digest |
-| MBX, Nextest, `gh`, and policy/CI tools | Compiled-in generator catalog; embedded in generated workflows and run through Mise | Latest stable releases; includes cargo-deny, cargo-machete, actionlint, ShellCheck, and zizmor |
+| MBX, Nextest, `gh`, and policy/CI tools | Compiled-in generator catalog; embedded in generated workflows and run through Mise | Latest stable releases; includes cargo-deny, cargo-machete, jactionlint, and ShellCheck |
 | Direct and transitive Rust crates | Workspace manifests, `Cargo.lock` | Newest stable graph; major updates included; all changed versions pass the full locked gate |
 | Velnor workflow bootstrap | Consumer output embeds the exact generating release version, immutable target asset URL, and binary SHA-256; Velnor dogfood validates an optional `.velnor/generator.lock`; when absent, it builds and verifies a same-source pre-seed helper | Latest qualified stable Velnor release for each supported target |
 | GitHub Actions | Compiled-in Velnor action registry; optional exact overrides in `.velnor/config.toml` | Default record is the latest reviewed stable release; workflow uses immutable full commit SHA |
@@ -138,11 +138,33 @@ exact-path `actions/cache` layer in every Rust mode. All references come from th
 `asamarts/alint` pin is emitted only by the separate Velnor
 repository-policy job.
 `taiki-e/install-action`, `actions/setup-*`, branch refs, unapproved tag refs,
-and floating action refs are forbidden. `actionlint` v1.7.12 and
-ShellCheck v0.11.0 are the verified stable tool defaults on 2026-09-28. Both
-are installed through Mise. `taiki-e/install-action` and other tool-installer
-actions are forbidden. V1 emits no Python run steps, so it does not install
-Pyflakes.
+and floating action refs are forbidden. jactionlint v2.3.0 and ShellCheck
+v0.11.0 are the verified stable tool defaults. Both are installed through
+Mise. `taiki-e/install-action` and other tool-installer actions are
+forbidden. V1 emits no Python run steps, so it does not install Pyflakes, and
+every jactionlint run passes `--pyflakes=` so no other `PATH` binary runs.
+
+jactionlint v2.3.0 (`jdx/jactionlint`, published 2026-10-21) is the catalog
+pin for the workflow, composite action and Dependabot linter (checked
+2026-10-22). It installs through the Mise registry name `jactionlint`
+(backend `github:jdx/jactionlint`), so the lock key, the project
+`[tools]` key and the CI install spec share one spelling; the
+`github:jdx/jactionlint` and `packslip:github.com/jdx/jactionlint` keys
+declare the same tool. Mise checks the release-API digest and the GitHub
+artifact attestation on every install. Velnor's own control is the
+per-platform table in `crates/velnor-actions-mise/src/catalog_jactionlint_digests.rs`:
+the archive and extracted-executable SHA-256 for `linux-x64`, `linux-arm64`,
+`macos-arm64` and `macos-x64` (every runner platform Velnor's own jobs use),
+measured when the version is bumped. Provenance is checked
+at bump time, never at generate time: `cosign verify-blob-attestation` on the
+release `packslip.sigstore.json` (type `https://packslip.dev/release/v1`,
+identity `release.yaml@refs/tags/v<version>`, issuer
+`https://token.actions.githubusercontent.com`) and
+`gh attestation verify --signer-workflow jdx/jactionlint/.github/workflows/release.yaml`
+must both pass for every table platform, and the evidence is recorded in the
+`JACTIONLINT_VERSION` doc comment. A bump without new table rows fails the
+catalog tests. A project that declares `jactionlint` in its Mise config uses
+its own version (hard decision 4).
 
 The only per-project pin override is `[actions.overrides]` in
 `.velnor/config.toml`. Each ordinary value contains an exact 40-hex commit SHA

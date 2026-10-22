@@ -1,14 +1,20 @@
-//! Record Rust channel manifest digests for the `core:rust` verification step.
+//! Rust channel-manifest digests: what makes a `core:rust` install verifiable.
 //!
-//! Mise installs `core:rust` through rustup but records no checksum in `mise.lock`.
-//! Rustup checks downloaded components against hashes in the channel manifest.
-//! The generated `Verify Rust channel manifest` step checks the downloaded manifest against [`RUST_CHANNEL_MANIFESTS`].
-//! It then checks that each recorded installed-manifest hash appears in that manifest.
-//! This checks manifest metadata. It does not hash the installed toolchain files.
+//! Mise's `core:rust` backend installs through rustup and records no
+//! checksum in `mise.lock`, and rustup's per-component check says nothing
+//! about a toolchain restored from a cache. Pinning the manifest's own
+//! SHA-256 here, per Rust version, gives the generated toolchain check its
+//! anchor: it fetches
+//! `https://static.rust-lang.org/dist/channel-rust-<version>.toml`, checks it
+//! against [`RUST_CHANNEL_MANIFESTS`], downloads the component tarballs the
+//! installed toolchain lists, checks each against the SHA-256 that manifest
+//! pins, and compares every installed file with the tarball bytes
+//! (`velnor-actions-orchestrator`, `rust_toolchain_script.rs`).
 //!
-//! For each row, the author downloaded the manifest from static.rust-lang.org on 2026-10-22.
-//! The author hashed its bytes and compared the result with `channel-rust-<version>.toml.sha256`.
-//! Rows use version order and cover stable releases from 1.85.0 (edition 2024) to the catalog pin.
+//! Every row was read from static.rust-lang.org on 2026-10-22: the manifest
+//! bytes were hashed locally and compared with the published
+//! `channel-rust-<version>.toml.sha256`. Rows are sorted by version and
+//! cover every stable release from 1.85.0 (edition 2024) to the catalog pin.
 
 /// `(exact Rust version, channel-rust-<version>.toml SHA-256, manifest date)`.
 pub const RUST_CHANNEL_MANIFESTS: &[(&str, &str, &str)] = &[
@@ -147,7 +153,7 @@ mod tests {
     fn the_catalog_rust_pin_has_a_manifest_digest() {
         assert!(
             rust_channel_manifest_sha256(RUST_VERSION).is_some(),
-            "Update RUST_VERSION and its channel manifest digest together."
+            "bump RUST_VERSION together with its channel-manifest digest"
         );
     }
 
@@ -155,7 +161,7 @@ mod tests {
     fn rows_are_exact_unique_sorted_and_lowercase_sha256() {
         let mut previous: Option<Vec<u64>> = None;
         for (version, digest, date) in RUST_CHANNEL_MANIFESTS {
-            validate_exact_version("rust", version).expect("The Rust version must be exact.");
+            validate_exact_version("rust", version).expect("exact version");
             assert_eq!(digest.len(), 64, "{version}");
             assert!(
                 digest
@@ -166,23 +172,17 @@ mod tests {
             assert_eq!(date.len(), 10, "{version}");
             let key: Vec<u64> = version
                 .split('.')
-                .map(|part| {
-                    part.parse()
-                        .expect("The version component must be a number.")
-                })
+                .map(|part| part.parse().expect("numeric"))
                 .collect();
             if let Some(previous) = &previous {
-                assert!(
-                    previous < &key,
-                    "Version {version} must be unique and in increasing order."
-                );
+                assert!(previous < &key, "{version} sorted and unique");
             }
             previous = Some(key);
         }
         assert_eq!(
             RUST_CHANNEL_MANIFESTS.last().map(|row| row.0),
             Some(RUST_VERSION),
-            "The latest row must match the catalog pin."
+            "the newest row is the catalog pin"
         );
     }
 

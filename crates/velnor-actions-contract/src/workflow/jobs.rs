@@ -17,7 +17,7 @@ use crate::errors::ContractError;
 /// Generated main workflow path (P05-8: `ci.yml`, display `CI`).
 pub const CI_WORKFLOW_PATH: &str = ".github/workflows/ci.yml";
 
-/// Generated qualification workflow path.
+/// Generated qualification workflow path used by the qualification dispatch contract.
 pub const QUALIFICATION_WORKFLOW_PATH: &str = ".github/workflows/qualification.yml";
 
 /// Stale generated workflow paths the generator deletes on migration.
@@ -53,6 +53,7 @@ pub const REQUIRED_VERDICT_DISPLAY_NAME: &str = "Required verdict";
 
 /// Verdict run condition: runs after any needed job failed or was
 /// skipped (it judges every conclusion) but not after cancellation.
+///
 /// `always()` also ran the full verdict after cancellation and held the
 /// concurrency group for 20+ minutes. `!cancelled()` is a status function,
 /// so the implicit `success()` is not added and the verdict still
@@ -83,7 +84,7 @@ pub use validator_kind::ValidatorKind;
 
 /// Package-slug job-ID prefix: IDs below it derive from real package names.
 ///
-/// [`assign_rust_crate_job_ids`] emits one `rust-<slug>` ID per Rust package,
+/// [`assign_crate_job_ids`] emits one `rust-<slug>` ID per rust crate,
 /// so the branding gate in [`validate_job_id`] skips this prefix:
 /// self-hosting repositories keep their package names while
 /// orchestration IDs stay unbranded (P05-7).
@@ -207,11 +208,21 @@ pub fn crate_display_label(package_name: &str, manifest: &str) -> String {
     }
 }
 
-/// Display name for one crate job: `Rust / <label>`.
+/// Display name for one crate job: `Rust / <label>` plus config suffix.
+///
+/// The default configuration shows the bare label; extra feature
+/// configurations append ` (<config>)` so variants never silently drop
+/// checks or multiply default jobs (P05-4). The composed name is
+/// sanitized whole so the configuration suffix is covered too.
 #[must_use]
-pub fn crate_display_name(package_name: &str, manifest: &str) -> String {
+pub fn crate_display_name(package_name: &str, manifest: &str, configuration: &str) -> String {
     let label = crate_display_label(package_name, manifest);
-    sanitize_display_text(&format!("Rust / {label}"))
+    let composed = if configuration == "default" {
+        format!("Rust / {label}")
+    } else {
+        format!("Rust / {label} ({configuration})")
+    };
+    sanitize_display_text(&composed)
 }
 
 /// Display name for one tofu root job: `OpenToFu — <label>`.
@@ -225,7 +236,14 @@ pub fn tofu_display_name(root_label: &str) -> String {
     sanitize_display_text(&format!("{TOFU_DISPLAY_PREFIX}{root_label}"))
 }
 
-/// Give stable IDs to package and configuration groups.
+/// Assign stable collision-safe crate job IDs for one package set.
+///
+/// Base form is `<prefix><slug>` (`<prefix><slug>-<config>` off
+/// default); on slug collision the later key in sorted order takes
+/// `-<digest8>` of its package ID plus configuration. Deterministic
+/// for a fixed set. Callers pass [`CRATE_JOB_ID_PREFIX`] for rust
+/// groups and [`TOFU_JOB_ID_PREFIX`] for all-tofu groups; namespaces
+/// never collide across prefixes.
 #[must_use]
 pub fn assign_crate_job_ids(
     crates: &BTreeSet<(String, String, String)>,

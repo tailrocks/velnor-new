@@ -132,11 +132,6 @@ fn qualification_cache_operation_expressions_are_typed_and_closed() {
     )
     .is_ok());
     assert!(check(
-        "VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_ID",
-        "${{ steps.qualification-cache-restore-census-mbx_objects-0123456789abcdef.outputs.backend_cache_id }}"
-    )
-    .is_ok());
-    assert!(check(
         "VELNOR_QUALIFICATION_CACHE_SAVE_ACTION",
         "${{ steps.qualification-cache-export-mbx_objects-0123456789abcdef.outputs.save_requested == 'true' && steps.qualification-cache-save-mbx_objects-0123456789abcdef.outcome || '' }}"
     )
@@ -173,6 +168,10 @@ fn qualification_cache_operation_expressions_are_typed_and_closed() {
         (
             "VELNOR_QUALIFICATION_CACHE_EXPORT_STATE_DIGEST",
             "${{ steps.untrusted.outputs.state_digest }}",
+        ),
+        (
+            "VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_ID",
+            "${{ steps.qualification-cache-restore-census-mbx_objects-0123456789abcdef.outputs.backend_cache_id }}",
         ),
         (
             "VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_ID",
@@ -216,6 +215,12 @@ fn restore_action_facts_use_the_exact_layered_prepare_boundary() {
         );
         assert!(check_composite_qualification_cache_env_value(key, &boundary).is_ok());
     }
+
+    assert!(check_composite_qualification_cache_env_value(
+        "VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_CACHE_ID",
+        "${{ fromJSON(inputs.prepare_outputs).cache_mbx_objects_restore_census_backend_cache_id }}"
+    )
+    .is_err());
 
     for (key, expression) in [
         (

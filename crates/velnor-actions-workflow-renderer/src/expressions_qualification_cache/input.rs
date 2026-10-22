@@ -107,7 +107,6 @@ fn restore_action_input_field(key: &str) -> Option<&'static str> {
 
 fn composite_env_field(key: &str) -> Option<String> {
     let direct = match key {
-        "VELNOR_QUALIFICATION_RUNTIME_IDENTITY_FILE" => return None,
         "VELNOR_QUALIFICATION_CACHE_RUNTIME_BEFORE_FILE" => "runtime_before",
         "VELNOR_QUALIFICATION_CACHE_RUNTIME_AFTER_FILE" => "runtime_after",
         "VELNOR_QUALIFICATION_CACHE_ROOTS_FILE" => "roots",
@@ -118,39 +117,9 @@ fn composite_env_field(key: &str) -> Option<String> {
         "VELNOR_QUALIFICATION_CACHE_EXPORT_EXPORT_RESULT" => "export_result",
         "VELNOR_QUALIFICATION_CACHE_EXPORT_STATE_DIGEST" => "state_digest",
         "VELNOR_QUALIFICATION_CACHE_EXPORT_SAVE_REQUESTED" => "save_requested",
-        _ => return census_env_field(key),
-    };
-    Some(direct.to_owned())
-}
-
-fn census_env_field(key: &str) -> Option<String> {
-    let (group, suffix) = if let Some(suffix) =
-        key.strip_prefix("VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_")
-    {
-        ("restore", suffix)
-    } else if let Some(suffix) = key.strip_prefix("VELNOR_QUALIFICATION_CACHE_SAVE_BEFORE_CENSUS_")
-    {
-        ("save_before", suffix)
-    } else {
-        let suffix = key.strip_prefix("VELNOR_QUALIFICATION_CACHE_SAVE_AFTER_CENSUS_")?;
-        ("save_after", suffix)
-    };
-    let field = match suffix {
-        "PHASE" => "phase",
-        "KEY" => "key",
-        "STATUS" => "status",
-        "ADMITTED" => "admitted",
-        "CACHE_ID" => "cache_id",
-        "CACHE_KEY" => "cache_key",
-        "CACHE_REF" => "cache_ref",
-        "CACHE_VERSION" => "cache_version",
-        "CACHE_SIZE" => "cache_size",
-        "ACTION_HIT" if group == "restore" => "action_hit",
-        "ACTION_MATCHED_KEY" if group == "restore" => "action_matched_key",
-        "RESTORE_KEY" if group == "restore" => "restore_key",
         _ => return None,
     };
-    Some(format!("{group}_census_{field}"))
+    Some(direct.to_owned())
 }
 
 fn cache_layers() -> [QualificationCacheLayer; 5] {

@@ -21,7 +21,7 @@ use super::{
     GITHUB_OUTPUT_ENV, InternalOp, InternalRequest, RUNNER_TEMP_ENV, cache_bind,
     cache_owner_evidence, cache_receipt, cache_runtime, cache_tar_launcher, fail_internal,
     package_release, package_release_publish, package_release_recovery, preview_production,
-    review_completion, run_publish_internal, tap_continuation, tap_merge, tap_prepare,
+    review_completion, tap_continuation, tap_merge, tap_prepare,
 };
 
 /// Run one validated private operation.
@@ -62,7 +62,6 @@ pub(super) fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::PrivateFetch => finish_internal_result(run_private_fetch()),
         InternalOp::PrivateRevoke => finish_internal_result(run_private_revoke()),
         InternalOp::PreseedManifest => finish_internal_result(write_preseed_manifest()),
-        InternalOp::Publish => run_publish_internal(&request.path),
         InternalOp::RepoPolicy => crate::dispatch_repo_policy::run(&request.path),
         InternalOp::ResolveQualification => crate::dispatch_qualification::run(&request.path),
         InternalOp::BindQualificationCache => cache_bind::run(),

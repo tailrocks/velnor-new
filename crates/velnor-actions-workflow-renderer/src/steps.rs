@@ -37,14 +37,11 @@ pub use crate::steps_shell::{ambient_shell_step, shell_step};
 
 pub use crate::action_ref::validate_uses;
 pub use crate::steps_artifact::{
-    ARTIFACT_NAME_OUTPUT, BASELINE_PUBLISH_UPLOAD_NAME, BASELINE_RETENTION_DAYS, PUBLISH_STEP_ID,
-    baseline_publish_upload_step, crate_job_report_upload_step, download_artifact_step,
-    download_suite_archive_step, matrix_report_upload_step, upload_artifact_step,
-    upload_suite_archive_step, upload_suite_artifact_step,
+    crate_job_report_upload_step, download_artifact_step, download_suite_archive_step,
+    matrix_report_upload_step, upload_artifact_step, upload_suite_archive_step,
+    upload_suite_artifact_step,
 };
-pub use crate::steps_internal::{
-    internal_step, merge_step, plan_step, publish_step, write_request_step,
-};
+pub use crate::steps_internal::{internal_step, merge_step, plan_step, write_request_step};
 pub(crate) use crate::steps_internal::{
     is_qualification_cache_operation, split_internal_operation,
 };
@@ -59,8 +56,6 @@ pub const PLAN_OPERATION: &str = "plan-v1";
 pub const WRITE_PRESEED_MANIFEST_OPERATION: &str = "write-preseed-manifest-v1";
 /// Report-merge operation name.
 pub const MERGE_OPERATION: &str = "merge-v1";
-/// Baseline publication operation name.
-pub const PUBLISH_OPERATION: &str = "publish-baseline-v1";
 /// Matrix-report fetch operation name.
 pub const FETCH_OPERATION: &str = "fetch-reports-v1";
 /// Write-request operation name.
@@ -243,16 +238,16 @@ pub fn cache_tar_launcher_step(helper_sha256: &str) -> Result<Step, RenderError>
     Ok(step)
 }
 
-/// Replace the actionlint header line with the renderer marker.
+/// Replace the lint-config header line with the renderer marker.
 ///
-/// The actionlint adapter emits its own header comment while the renderer
-/// requires its exact marker on every tree file; the composition boundary
-/// normalizes the first line only and passes the body through untouched.
+/// The workflow-lint adapter emits its own header comment while the
+/// renderer requires its exact marker on every tree file; the composition
+/// boundary normalizes the first line only and passes the body through.
 /// # Errors
-pub fn rehead_actionlint_marker(yaml: &str, version: &str) -> Result<String, RenderError> {
+pub fn rehead_lint_config_marker(yaml: &str, version: &str) -> Result<String, RenderError> {
     let Some((_, body)) = yaml.split_once('\n') else {
         return Err(RenderError::BadCommand(
-            "actionlint_without_header".to_owned(),
+            "lint_config_without_header".to_owned(),
         ));
     };
     Ok(format!("{}\n{body}", marker::marker_for_version(version)?))

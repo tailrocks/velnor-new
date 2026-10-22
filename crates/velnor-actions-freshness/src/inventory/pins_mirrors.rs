@@ -18,15 +18,15 @@ pub(super) fn check_local_mirrors(ctx: &mut FreshnessContext) {
             ))
         })
         .collect();
-    let value = ctx.rust_const(CAPABILITIES, "ACTIONLINT_VERSION");
+    let value = ctx.rust_const(CAPABILITIES, "JACTIONLINT_VERSION");
     let expected = ctx
         .tool_pinned
-        .get("actionlint")
+        .get("jactionlint")
         .and_then(Value::as_str)
         .map(str::to_owned);
     compare_pin(
         ctx,
-        "tool actionlint mirror (capabilities.rs)",
+        "tool jactionlint mirror (capabilities.rs)",
         value.as_deref(),
         expected.as_deref(),
     );
@@ -68,7 +68,7 @@ pub(super) fn check_local_mirrors(ctx: &mut FreshnessContext) {
 }
 
 fn check_renderer_action_ref(ctx: &mut FreshnessContext, key: &str, symbol: &str) {
-    // The Actionlint catalog owns the reviewed pin; the renderer carries a
+    // The action-pin adapter owns the reviewed pin; the renderer carries a
     // literal immutable ref that this check independently matches.
     let value = ctx.rust_const(RENDERER_STEPS, symbol);
     let sha = ctx

@@ -8,6 +8,7 @@ use velnor_actions_contract::{
 /// Render context with the given validator commands.
 fn fixture_ctx(commands: Vec<ValidatorCommand>) -> RenderContext {
     let ctx = RenderContext {
+        tool_pins: Vec::new(),
         generator_version: "0.1.0".to_owned(),
         report_helper_version: "0.1.0".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
@@ -109,7 +110,7 @@ fn consumer_rejects_velnor_only_candidate_and_duplicates() {
             .contains("consumer_validator_rejected:cargo-deny"),
         "{err}"
     );
-    let lint = verify_support(vec![ValidatorKind::Actionlint]);
+    let lint = verify_support(vec![ValidatorKind::Jactionlint]);
     let err = merge_consumer_verify(&mut gate_jobs(), Some(&lint), &ctx)
         .expect_err("actionlint rejected");
     assert!(

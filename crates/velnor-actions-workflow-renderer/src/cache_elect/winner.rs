@@ -13,7 +13,7 @@ pub(super) fn choose_tools_cache_writer<'a>(
 ) -> Result<&'a str, RenderError> {
     let eligible: Vec<_> = owners
         .iter()
-        .filter(|id| jobs.get(*id).is_some_and(|job| !super::is_seed_job(job)))
+        .filter(|id| jobs.get(*id).is_some_and(|job| !job.is_dependency_seed()))
         .collect();
     eligible
         .iter()

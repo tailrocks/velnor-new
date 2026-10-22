@@ -112,6 +112,7 @@ impl Job {
             ));
         }
         let effective = self.permissions.as_ref().unwrap_or(workflow);
+        super::super::dependency_seed::validate_job(self, id, effective)?;
         if matches!(effective.id_token, PermissionLevel::Write) && self.environment.is_none() {
             return Err(ContractError::identity(
                 "job.environment",

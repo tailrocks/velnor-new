@@ -18,8 +18,6 @@ pub use qualification_cache::{
 pub enum StepId {
     /// Planner output consumed by downstream jobs.
     Plan,
-    /// Baseline publisher output consumed by the artifact uploader.
-    PublishBaseline,
     /// V2 hosted tools-cache output consumed by restore and save.
     ToolsCacheIdentity,
     /// Staging path output for the normal tools-cache payload.
@@ -80,7 +78,6 @@ impl StepId {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Plan => "plan",
-            Self::PublishBaseline => "publish-baseline",
             Self::ToolsCacheIdentity => "v2",
             Self::NormalToolsCacheStage => "normal-tools-cache-stage",
             Self::NormalToolsCacheImport => "normal-tools-cache-import",

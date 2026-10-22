@@ -216,5 +216,7 @@ fn simple_job(steps: Vec<Step>) -> Job {
 mod frame_tests;
 #[path = "task_wrapper_tests_runner.rs"]
 mod runner_tests;
+#[path = "task_wrapper_tests_script.rs"]
+mod script_tests;
 #[path = "task_wrapper_tests_structure.rs"]
 mod structure_tests;

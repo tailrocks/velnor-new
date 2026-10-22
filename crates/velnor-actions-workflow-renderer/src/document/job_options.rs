@@ -29,6 +29,9 @@ pub(super) fn append_job_options(
             crate::runs_on::SCALE_SET_RUN_SHELL,
         ));
     }
+    if job.is_dependency_seed() {
+        entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
+    }
     let job_env = crate::document_env::exclude_inherited(job_env, workflow_env);
     if !job_env.is_empty() {
         entries.push(("env".to_owned(), string_map_yaml(&job_env)));

@@ -38,15 +38,15 @@ fn every_emitted_step_has_name() -> Result<(), RenderError> {
         ],
     );
     let lint = job(
-        "actionlint",
-        "Actionlint",
+        "jactionlint",
+        "Jactionlint",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
             acquire_fixture()?,
             scrubbed_shell_step(
-                "Run actionlint",
-                mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
+                "Run jactionlint",
+                mise_argv("jactionlint@2.3.0", "jactionlint", &["-color"]),
             )?,
         ],
     );
@@ -108,7 +108,7 @@ fn final_gate_needs_plan_lint_and_support() -> Result<(), RenderError> {
     let mut final_job = job(
         "required",
         "Required verdict",
-        vec!["plan".to_owned(), "actionlint".to_owned()],
+        vec!["plan".to_owned(), "jactionlint".to_owned()],
         vec![merge_step()],
     )
     .1;
@@ -117,8 +117,8 @@ fn final_gate_needs_plan_lint_and_support() -> Result<(), RenderError> {
     let support =
         WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Candidate);
     let lint = job(
-        "actionlint",
-        "Actionlint",
+        "jactionlint",
+        "Jactionlint",
         Vec::new(),
         vec![checkout_step(&checkout_pin())?],
     );
@@ -136,11 +136,10 @@ fn final_gate_needs_plan_lint_and_support() -> Result<(), RenderError> {
     let window = snip(&text, start, 1600);
     for need in [
         "plan",
-        "actionlint",
+        "jactionlint",
         "alint",
         "cargo-deny",
         "cargo-machete",
-        "zizmor",
         "candidate",
     ] {
         assert!(window.contains(need), "missing need {need}:\n{window}");
@@ -198,7 +197,7 @@ fn default_permissions_block_omits_ungranted_actions() -> Result<(), RenderError
 }
 
 #[test]
-fn validators_render_deny_machete_zizmor_in_order() -> Result<(), RenderError> {
+fn validators_render_deny_then_machete() -> Result<(), RenderError> {
     let mut ctx = fixture_ctx();
     ctx.validator_commands = validator_commands();
     let support =
@@ -209,12 +208,8 @@ fn validators_render_deny_machete_zizmor_in_order() -> Result<(), RenderError> {
         Some(&support),
         &ctx,
     )?;
-    let order = [
-        "Checkout",
-        "Run cargo-deny",
-        "Run cargo-machete",
-        "Run zizmor",
-    ];
+    assert!(!text.contains("zizmor:"), "zizmor is retired:\n{text}");
+    let order = ["Checkout", "Run cargo-deny", "Run cargo-machete"];
     let mut at = 0;
     for name in order {
         let found = text[at..]
@@ -332,7 +327,7 @@ fn tree_has_exactly_two_tool_free_files() -> Result<(), RenderError> {
     );
     assert_eq!(tree.files[0].path, ".github/AGENTS.md");
     assert_eq!(tree.files[1].path, ".github/CLAUDE.md");
-    assert_eq!(tree.files[2].path, ".github/actionlint.yaml");
+    assert_eq!(tree.files[2].path, ".github/jactionlint.yaml");
     assert_eq!(tree.files[3].path, ".github/workflows/ci.yml");
     assert_eq!(tree.files[1].bytes, "@AGENTS.md\n");
     let agents = &tree.files[0].bytes;

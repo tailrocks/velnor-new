@@ -108,7 +108,7 @@ fn branding_gate_skips_both_crate_prefixes() {
     assert!(validate_job_id("task-velnor-final").is_err());
     assert!(is_crate_job_id("tofu-stacks-a"));
     assert!(is_crate_job_id("rust-demo"));
-    for id in ["plan", "required", "actionlint", "candidate"] {
+    for id in ["plan", "required", "jactionlint", "candidate"] {
         assert!(!is_crate_job_id(id), "{id}");
     }
 }

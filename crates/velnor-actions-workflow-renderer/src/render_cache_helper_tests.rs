@@ -32,6 +32,7 @@ fn helper(sha256: &str) -> Step {
 
 fn context(expected: Option<Step>, required: bool) -> RenderContext {
     RenderContext {
+        tool_pins: Vec::new(),
         generator_version: "0.1.0".to_owned(),
         report_helper_version: "0.1.0".to_owned(),
         runs_on: RUNS_ON.to_owned(),

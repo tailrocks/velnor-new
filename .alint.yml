@@ -145,7 +145,7 @@ rules:
 
   # The bundled nested-lock rules are excepted above. These replacements
   # still forbid stray locks, and name the two locks the bundles cannot see:
-  # the nested runner workspace, and the npm lock zizmor's `npm ci` requires.
+  # the nested runner workspace, and the npm lock that `npm ci` requires.
   - id: velnor-no-stray-cargo-lock
     kind: file_absent
     paths:

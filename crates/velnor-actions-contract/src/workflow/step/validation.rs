@@ -166,9 +166,6 @@ fn validate_id_kind(step: &Step, job: &str) -> Result<(), ContractError> {
         StepId::Plan => {
             matches!(kind, StepKind::Internal { operation, .. } if operation == "plan-v1")
         }
-        StepId::PublishBaseline => {
-            matches!(kind, StepKind::Internal { operation, .. } if operation == "publish-baseline-v1")
-        }
         StepId::ToolsCacheIdentity => {
             crate::workflow::step_identity::valid_tools_cache_identity(kind)
         }

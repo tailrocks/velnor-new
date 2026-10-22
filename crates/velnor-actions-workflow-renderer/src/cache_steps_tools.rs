@@ -103,8 +103,11 @@ pub(super) fn save_step(key: &str, condition: Option<String>) -> Result<Step, Re
     Ok(step)
 }
 
-pub(crate) fn restore_action_file(version: &str) -> Result<crate::tree::RenderedFile, RenderError> {
-    restore_action::action_file(version)
+pub(crate) fn restore_action_file(
+    version: &str,
+    tool_pins: &[String],
+) -> Result<crate::tree::RenderedFile, RenderError> {
+    restore_action::action_file(version, tool_pins)
 }
 
 #[cfg(test)]

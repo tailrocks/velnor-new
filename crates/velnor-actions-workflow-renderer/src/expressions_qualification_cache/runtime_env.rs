@@ -37,25 +37,6 @@ pub(crate) fn is_operation_output(key: &str, inner: &str) -> bool {
     if key == "VELNOR_QUALIFICATION_CACHE_SAVE_ACTION" {
         return is_save_outcome(inner);
     }
-    for (prefix, stage) in [
-        (
-            "VELNOR_QUALIFICATION_CACHE_RESTORE_CENSUS_",
-            "restore-census",
-        ),
-        (
-            "VELNOR_QUALIFICATION_CACHE_SAVE_BEFORE_CENSUS_",
-            "save-before-census",
-        ),
-        (
-            "VELNOR_QUALIFICATION_CACHE_SAVE_AFTER_CENSUS_",
-            "save-after-census",
-        ),
-    ] {
-        if key.starts_with(prefix) {
-            return cache_census_output(key, prefix)
-                .is_some_and(|output| step_output_for_stage(inner, stage, output));
-        }
-    }
     let (stage, outputs): (&str, &[&str]) = match key {
         "VELNOR_QUALIFICATION_CACHE_RUNTIME_AFTER_FILE" => {
             ("runtime-identity-after-import", &["runtime_identity_path"])
@@ -107,27 +88,6 @@ pub(crate) fn is_restore_action_input(key: &str, inner: &str) -> bool {
             step_output_for_stage(inner, "restore", "cache-matched-key")
         }
         _ => false,
-    }
-}
-
-fn cache_census_output(key: &str, prefix: &str) -> Option<&'static str> {
-    let suffix = key.strip_prefix(prefix).unwrap_or_default();
-    match suffix {
-        "PHASE" => Some("census_phase"),
-        "KEY" => Some("census_key"),
-        "STATUS" => Some("backend_status"),
-        "ADMITTED" => Some("backend_admitted"),
-        "CACHE_ID" => Some("backend_cache_id"),
-        "CACHE_KEY" => Some("backend_cache_key"),
-        "CACHE_REF" => Some("backend_cache_ref"),
-        "CACHE_VERSION" => Some("backend_cache_version"),
-        "CACHE_SIZE" => Some("backend_cache_size"),
-        "ACTION_HIT" if prefix.contains("RESTORE_CENSUS") => Some("restore_action_hit"),
-        "ACTION_MATCHED_KEY" if prefix.contains("RESTORE_CENSUS") => {
-            Some("restore_action_matched_key")
-        }
-        "RESTORE_KEY" if prefix.contains("RESTORE_CENSUS") => Some("restore_key"),
-        _ => None,
     }
 }
 

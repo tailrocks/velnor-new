@@ -67,9 +67,11 @@ pub(crate) fn steps(
     }
     let source_steps =
         crate::source_prep::fetch_steps_for_crate_with_env(catalog, &roots, &env, false)?;
-    let mut steps = vec![crate::matrix_step::prepare_crate_tools_step(
-        catalog, true, false, false, false,
-    )?];
+    let mut steps = vec![
+        crate::workflow::verify_restored_rust_step(catalog)?,
+        crate::matrix_step::prepare_crate_tools_step(catalog, true, false, false, false)?,
+        crate::workflow::verify_rust_manifest_step(catalog)?,
+    ];
     steps.extend(crate::source_cache::restore_step_for_crate(&roots, true)?);
     let block = match private {
         Some(private) => private.steps_for_roots(&roots)?,

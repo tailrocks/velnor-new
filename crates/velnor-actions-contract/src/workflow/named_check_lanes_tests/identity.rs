@@ -22,10 +22,9 @@ fn both_emits_coherent_named_check_and_required_proof_lanes() {
     );
     assert_eq!(expanded.jobs["check-mac"].runs_on, "macos-15");
     assert!(expanded.jobs.contains_key("check-mac"));
-    for id in ["plan", "required", "publish-baseline"] {
+    for id in ["plan", "required"] {
         assert_eq!(expanded.jobs[id].runs_on, "ubuntu-26.04", "{id}");
     }
-    assert_eq!(expanded.jobs["publish-baseline"].needs, ["required"]);
     let required: BTreeSet<&str> = expanded.jobs["required"]
         .needs
         .iter()

@@ -40,14 +40,18 @@ pub struct ProductReleasePins {
     pub attestation_helper_build_argv: Vec<String>,
     /// Exact pinned MBX build argv for the static Linux resource probe.
     pub resource_probe_build_argv: Vec<String>,
-    /// Exact pinned actionlint argv.
-    pub actionlint_argv: Vec<String>,
-    /// Exact pinned zizmor argv.
-    pub zizmor_argv: Vec<String>,
+    /// Exact pinned jactionlint argv over the committed lint file set.
+    pub lint_argv: Vec<String>,
+    /// `sh -c` argv verifying the installed jactionlint executable digest.
+    pub verify_lint_argv: Vec<String>,
     /// Exact pinned GitHub CLI invocation prefix.
     pub gh_argv: Vec<String>,
     /// Exact Rust toolchain release selected by the Mise catalog.
     pub rust_version: String,
+    /// `sh -c` argv verifying the installed Rust toolchain file by file
+    /// against its pinned channel manifest; every job that installs Rust
+    /// runs it right after the install.
+    pub verify_rust_argv: Vec<String>,
     /// Exact MBX release selected by the Mise catalog.
     pub mr_boxington_version: String,
 }

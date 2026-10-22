@@ -11,7 +11,7 @@ use velnor_actions_contract::{
     GeneratorLock, ReleaseTarget, ScaleSetSelector, Step, StepRole, WorkflowIr, is_crate_job_id,
 };
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
-use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID};
+use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID};
 use velnor_actions_workflow_renderer::steps::{MbxTransport, STAGED_BINARY_PREFIX};
 use velnor_actions_workflow_renderer::{
     PreseedStageSource, preseed_build_step, preseed_download_step, preseed_manifest_step,
@@ -66,9 +66,6 @@ pub(crate) fn attach_lock_acquire(
         } else if is_crate_job_id(id) {
             let step = lock_acquire_step(lock, label, &staged)?;
             job.steps.insert(1, step);
-        } else if id == PUBLISH_JOB_ID {
-            let step = lock_acquire_step(lock, label, &staged)?;
-            job.steps.insert(1.min(job.steps.len()), step);
         } else if id.starts_with("suite-") {
             let label = crate::rust_suites_emit::helper_release_label(&job.runs_on);
             let step = lock_acquire_step(lock, &label, &staged)?;
@@ -85,8 +82,8 @@ pub(crate) fn attach_lock_acquire(
 /// vector after the fetch steps that guarantee sources present, verifies
 /// the MBX compile output plus its pinned route, records the source
 /// commit in a manifest, uploads the exactly-named artifact, and stages
-/// its local build; every crate job, the final job, and the publish
-/// job download that artifact, verify the manifest (commit anchored
+/// its local build; every crate job, the final job, and suite job download
+/// that artifact, verify the manifest (commit anchored
 /// to this run's
 /// `$GITHUB_SHA`, generator-rendered target, recomputed sha256), and
 /// stage it instead of rebuilding. Build and verify run under the same
@@ -147,11 +144,7 @@ pub(crate) fn attach_preseed_with_selector(
         .steps
         .splice(0..0, preseed_consumers(target, &staged)?);
     for (id, job) in &mut workflow.ir.jobs {
-        if is_crate_job_id(id)
-            || job.check_runner.is_some()
-            || id.starts_with("suite-")
-            || id == PUBLISH_JOB_ID
-        {
+        if is_crate_job_id(id) || job.check_runner.is_some() || id.starts_with("suite-") {
             let at = 1.min(job.steps.len());
             job.steps
                 .splice(at..at, preseed_consumers(target, &staged)?);
@@ -163,11 +156,7 @@ pub(crate) fn attach_preseed_with_selector(
         .verified_cache_helpers
         .insert(label.to_owned(), helper_steps.clone());
     for (id, job) in &workflow.ir.jobs {
-        if is_crate_job_id(id)
-            || job.check_runner.is_some()
-            || id.starts_with("suite-")
-            || id == PUBLISH_JOB_ID
-        {
+        if is_crate_job_id(id) || job.check_runner.is_some() || id.starts_with("suite-") {
             workflow
                 .context
                 .verified_cache_helpers
@@ -196,8 +185,7 @@ fn validate_preseed_consumer_targets(
         let preseed_consumer = is_crate_job_id(id)
             || job.check_runner.is_some()
             || id.starts_with("suite-")
-            || id == FINAL_JOB_ID
-            || id == PUBLISH_JOB_ID;
+            || id == FINAL_JOB_ID;
         let consumer_target = if let Some(runner) = &job.check_runner {
             Some(runner.platform.target())
         } else if preseed_consumer {

@@ -22,7 +22,7 @@ pub(crate) const SHARED_CARGO_HOME: &str =
 /// Plan-job restore and producer-gated save over the runtime key.
 /// # Errors
 ///
-/// Returns contract, actionlint, or render errors for rejected pins,
+/// Returns contract, workflow-lint, or render errors for rejected pins,
 /// paths, or step shapes.
 pub(crate) fn plan_sources_steps() -> Result<(Step, Step), OrchestratorError> {
     let mut restore = sources_step(true, SOURCES_KEY_STEP_EXPR, SOURCES_RESTORE_KEYS_STEP_EXPR)?;

@@ -1,12 +1,60 @@
-use super::{manifest, release_version, test_pins};
+use super::{Failure, expected_asset_args, manifest, release_version, test_pins};
 use std::error::Error;
 use std::fs;
+use std::io::Write;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::process::Command;
 
+pub(super) fn assert_draft_creation(
+    root: &Path,
+    case: Failure,
+    output: &std::process::Output,
+) -> Result<(), Box<dyn Error>> {
+    assert_eq!(
+        read_publish_marker(root, "created-tag", case, output)?,
+        format!("v{}\n", release_version())
+    );
+    assert_eq!(
+        read_publish_marker(root, "asset-args", case, output)?,
+        expected_asset_args()
+    );
+    Ok(())
+}
+
+fn read_publish_marker(
+    root: &Path,
+    name: &str,
+    case: Failure,
+    output: &std::process::Output,
+) -> Result<String, Box<dyn Error>> {
+    fs::read_to_string(root.join(name)).map_err(|error| {
+        let calls = fs::read_to_string(root.join("gh-calls")).unwrap_or_default();
+        let mise = fs::read_to_string(root.join("mise-calls")).unwrap_or_default();
+        let message = format!(
+            "case {case:?}: missing {name}: {error}; child status={}\nstdout:\n{}\nstderr:\n{}\nGitHub calls:\n{calls}\nMise calls:\n{mise}\nfixture={}\n",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+            root.display()
+        );
+        let preserved = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(root.join("publish-failure-diagnostic.txt"))
+            .and_then(|mut file| file.write_all(message.as_bytes()))
+            .is_ok();
+        Box::new(std::io::Error::new(
+            error.kind(),
+            format!("{message}diagnostic preserved={preserved}"),
+        )) as Box<dyn Error>
+    })
+}
+
 #[test]
 fn publisher_observes_one_release_id_before_and_after_publication() {
-    let script = manifest::publish_script(&test_pins()).expect("pinned publisher script");
+    let script = manifest::publish_script(&test_pins());
     let create_tag = script
         .find("created_ref=")
         .expect("publisher creates the exact source tag");
@@ -26,7 +74,7 @@ fn publisher_observes_one_release_id_before_and_after_publication() {
     assert_eq!(metadata_checks.len(), 3);
     let draft_read = metadata_checks[1];
     let second_ci = script
-        .rfind("actions/workflows/ci.yml/runs?")
+        .rfind("\nrelease_eligibility\n")
         .expect("publisher rechecks Required immediately before publication");
     let final_tag_check = script[second_ci..]
         .find("assert_release_tag_source")
@@ -161,4 +209,26 @@ pub(super) fn assert_success_receipt(root: &Path) -> Result<(), Box<dyn Error>> 
         String::from_utf8_lossy(&output.stderr)
     );
     Ok(())
+}
+
+#[test]
+fn publisher_defines_eligibility_once_and_calls_it_before_tagging_and_publishing() {
+    let script = manifest::publish_script(&test_pins());
+    // The step prepends the one pinned `gh` function; the body never redefines it.
+    assert_eq!(script.matches("gh() {").count(), 0, "{script}");
+    assert_eq!(script.matches("release_eligibility() {").count(), 1);
+    assert_eq!(script.matches("actions/workflows/ci.yml/runs?").count(), 1);
+    let definition = script
+        .find("release_eligibility() {")
+        .expect("eligibility definition");
+    let calls = script
+        .match_indices("\nrelease_eligibility\n")
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    assert_eq!(calls.len(), 2, "{script}");
+    let create_tag = script.find("created_ref=").expect("tag creation");
+    let publish = script
+        .find("--method PATCH -F draft=false")
+        .expect("publication");
+    assert!(definition < calls[0] && calls[0] < create_tag && calls[1] < publish);
 }

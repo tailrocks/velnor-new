@@ -1,4 +1,4 @@
-//! Workflow-IR, render-context, and actionlint-input construction.
+//! Workflow-IR, render-context, and jactionlint config-input construction.
 
 //! W1 emission wiring lives in the child module below.
 #[path = "wire_w1.rs"]
@@ -16,7 +16,7 @@ pub(crate) mod check_jobs;
 
 use std::collections::BTreeMap;
 
-use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy};
+use velnor_actions_actionlint::JactionlintConfigInput;
 use velnor_actions_contract::{
     Concurrency, ExecutionMode, GeneratorValidation, Job, Permissions, ScaleSetSelector, Step,
     StepKind, Trigger, ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr,
@@ -24,8 +24,7 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::render::{
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, PUBLISH_JOB_ID,
-    RenderContext, WORKFLOW_PATH,
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, RenderContext,
 };
 use velnor_actions_workflow_renderer::steps::PLAN_OPERATION;
 
@@ -35,9 +34,13 @@ use crate::workflow_jobs::{PlanJobToolNeeds, final_job, lint_job, plan_job};
 
 #[path = "workflow_policy.rs"]
 pub(super) mod workflow_policy;
+pub(crate) use workflow_policy::jactionlint_verify_step::{
+    VERIFY_JACTIONLINT_STEP, argv as jactionlint_verify_argv, verify_jactionlint_step,
+};
 pub(crate) use workflow_policy::prepare_rust_components_step;
 pub(crate) use workflow_policy::rust_manifest_step::{
-    NOT_CATALOGUED_CODE, VERIFY_RUST_MANIFEST_STEP, verify_rust_manifest_step,
+    NOT_CATALOGUED_CODE, ToolchainPhase, VERIFY_RUST_MANIFEST_STEP, toolchain_script,
+    verify_restored_rust_step, verify_rust_argv, verify_rust_manifest_step, verify_rust_owned_argv,
 };
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
@@ -71,8 +74,8 @@ pub struct WorkflowPlan {
     pub support: Option<VelnorSupportWorkflow>,
     /// Validated renderer scalars.
     pub context: RenderContext,
-    /// Actionlint config input.
-    pub actionlint: ActionlintConfigInput,
+    /// `.github/jactionlint.yaml` input (labels completed at render time).
+    pub lint_config: JactionlintConfigInput,
 }
 
 /// Build the plan job with its deferred format steps attached.
@@ -191,10 +194,7 @@ fn support_workflow(
     Some(support)
 }
 
-/// Insert the lint, final-gate, and baseline-publish jobs.
-///
-/// The publish job closes the graph after the final gate: it needs
-/// Required, so it runs only when the gate passed.
+/// Insert the lint and final-gate jobs.
 ///
 /// # Errors
 ///
@@ -202,7 +202,6 @@ fn support_workflow(
 fn insert_gate_jobs(
     jobs: &mut BTreeMap<String, Job>,
     label: &str,
-    branch: &str,
     crate_ids: &[String],
     acquire: Option<Step>,
     catalog: &ToolCatalog,
@@ -210,20 +209,15 @@ fn insert_gate_jobs(
     jobs.insert(LINT_JOB_ID.to_owned(), lint_job(label, catalog)?);
     jobs.insert(
         FINAL_JOB_ID.to_owned(),
-        final_job(label, crate_ids, acquire.clone(), catalog)?,
-    );
-    jobs.insert(
-        PUBLISH_JOB_ID.to_owned(),
-        crate::publish_emit::baseline::baseline_publish_job(label, branch, acquire)?,
+        final_job(label, crate_ids, acquire, catalog)?,
     );
     Ok(())
 }
 
 /// Insert deferred format-report steps immediately after `Plan`.
 ///
-/// The plan exists only after the planner runs; the publish closure
-/// later lands between `Plan` and these steps, so the plan artifact
-/// carries plan and matrix only, never the format entry's reports.
+/// The plan exists only after the planner runs; these steps stay anchored
+/// immediately after it so their reports remain in the plan artifact.
 /// Without a `plan-v1` anchor the steps close the job.
 fn insert_format_report_steps(plan: &mut Job, reports: Vec<Step>) {
     if reports.is_empty() {
@@ -255,23 +249,12 @@ fn insert_format_step(plan: &mut Job, format: Step) {
     plan.steps.insert(at, format);
 }
 
-/// Actionlint input: generated workflow path plus policy-graded ignores.
+/// jactionlint config input: the configured profile and declared variables.
 ///
-/// The bridge label is the effective configured runner label (F2):
-/// the emitted `self-hosted-runner` entry must match `runs-on`, never
-/// a hardcoded distro.
-fn actionlint_input(config: &VelnorConfig, version: &str, label: &str) -> ActionlintConfigInput {
-    let policy = config.workflow.policy;
-    let mut input = ActionlintConfigInput::new(version)
-        .with_workflow_path(WORKFLOW_PATH)
+/// Runner labels are completed when the tree renders, from the scale-set
+/// selector and the hosted labels the generated jobs use.
+pub(super) fn lint_config_input(config: &VelnorConfig, version: &str) -> JactionlintConfigInput {
+    JactionlintConfigInput::new(version)
+        .with_profile(config.workflow.lint.profile)
         .with_config_variables(wire_w1::declared_config_variables(config))
-        .with_runner_label(label);
-    if let Some(execution) = &config.execution {
-        input.extra_runner_labels = execution.actionlint_labels();
-    }
-    input.policy = match policy {
-        WorkflowPolicy::ConsumerV1 => IgnorePolicy::Consumer,
-        WorkflowPolicy::VelnorRepositoryV1 => IgnorePolicy::VelnorProtected,
-    };
-    input
 }

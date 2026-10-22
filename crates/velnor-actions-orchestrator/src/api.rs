@@ -17,7 +17,6 @@ pub use velnor_actions_contract::workflow::{
     QualificationCacheRestoreResult, QualificationCacheSave, QualificationCacheSaveActionResult,
 };
 
-pub use super::baseline_publish::{PUBLISH_OP, PublishOutputs, baseline_publish};
 pub use super::check_runtime::{EXECUTE_CHECK_OP, execute_check};
 pub use super::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 pub use super::config::bun_registry_install::{BUN_REGISTRY_INSTALL_OP, run_bun_registry_install};

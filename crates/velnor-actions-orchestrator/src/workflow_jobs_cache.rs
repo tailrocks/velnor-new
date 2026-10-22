@@ -23,7 +23,7 @@ pub(crate) struct PlanCache {
 /// Cache steps for the plan job's single-writer role.
 /// # Errors
 ///
-/// Returns contract, actionlint, or render errors for bad roots or pins.
+/// Returns contract, workflow-lint, or render errors for bad roots or pins.
 pub(crate) fn cache_steps_for_plan(
     catalog: &ToolCatalog,
     fetch_roots: &[String],

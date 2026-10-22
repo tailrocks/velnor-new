@@ -2,13 +2,13 @@ Preview: <preview>
 Repository: <repo>
 .github/AGENTS.md
 .github/CLAUDE.md
-.github/actionlint.yaml
 .github/actions/declared-task-0/action.yml
 .github/actions/u26/action.yml
 .github/actions/velnor-cache-tar-launchers/action.yml
 .github/actions/velnor-tool-seed/action.yml
 .github/actions/velnor-tools-cache-restore/action.yml
 .github/actions/velnor-tools-prelude-u26/action.yml
+.github/jactionlint.yaml
 .github/scripts/velnor-tools-cache-identity.sh
 .github/velnor/task-execution-manifest-v1.json
 .github/workflows/cache-prune.yml
@@ -18,4 +18,4 @@ mise.toml not found; Velnor will use its pinned tools
 nextest_recommendation: no explicit test-runner usage; defaulting to `cargo test`
 persist_evidence: no MBX or Nextest usage detected; to adopt either, add a durable signal
 rust-toolchain.toml not found; Velnor will not create it
-tool_install_unverified:4 installs skip verification (no mise.lock): actionlint@1.7.12, gh@2.102.1, shellcheck@0.11.0, zizmor@1.31.1; install on the CI platform and commit the resulting lock
+tool_install_unverified:2 installs skip verification (no mise.lock): gh@2.102.1, shellcheck@0.11.0; install on the CI platform and commit the resulting lock

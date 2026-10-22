@@ -106,3 +106,26 @@ fn name_grammars_admit_nothing_a_shell_could_evaluate() {
         assert!(!is_valid_script_name(name), "{name:?}");
     }
 }
+
+#[test]
+fn member_timeout_is_bounded_and_omitted_at_default() {
+    let member = |minutes: Value| {
+        problem(json!({ "roots": ["."], "members": { "ui": { "timeout_minutes": minutes } } }))
+    };
+    assert!(member(json!(0)).contains("bad_timeout:0:expected_1..=360"));
+    assert!(member(json!(361)).contains("bad_timeout:361:expected_1..=360"));
+    assert!(member(json!(0)).contains("stacks.bun.members.timeout_minutes"));
+    for minutes in [1, 360] {
+        let wire = json!({ "roots": ["."], "members": { "ui": { "timeout_minutes": minutes } } });
+        let config = parse(wire.clone());
+        config.validate("config.toml").expect("valid");
+        assert_eq!(serde_json::to_value(&config).expect("serialize"), wire);
+    }
+    let wire = json!({ "roots": ["."], "members": { "ui": { "browsers": ["chromium"] } } });
+    let config = parse(wire.clone());
+    assert_eq!(
+        config.members.get("ui").and_then(|m| m.timeout_minutes),
+        None
+    );
+    assert_eq!(serde_json::to_value(&config).expect("serialize"), wire);
+}

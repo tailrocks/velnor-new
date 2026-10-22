@@ -98,6 +98,25 @@ mod tool_seed_test_support;
 pub mod toolchain_env;
 pub mod tree;
 pub mod upgrades;
+
+/// Display name of the step that verifies an installed Rust toolchain file
+/// by file against its pinned channel manifest; every generated job that
+/// installs Rust runs it before the toolchain is used.
+pub const VERIFY_RUST_TOOLCHAIN_STEP: &str = "Verify Rust channel manifest";
+
+/// The only `PATH` a cache or toolchain verification script runs with:
+/// root-owned system directories. Setup Mise has already put the Mise
+/// `bin/` and `shims/` directories on `PATH` ahead of them, and the tools
+/// cache restores both, so a bare helper name (`sha256sum`, `curl`, `tar`)
+/// resolved through the inherited `PATH` could run cached code inside the
+/// very check meant to gate it. Each script assigns this first.
+pub const VERIFY_PATH: &str = "/usr/bin:/bin:/usr/sbin:/sbin";
+
+/// Shell of the composite steps that run while restored, unverified bytes
+/// sit on `PATH`. The runner resolves a bare `bash` through `PATH`
+/// (`WhichUtil.Which`, with the `addPath` entries first) but runs a fully
+/// qualified path as given.
+pub const VERIFY_SHELL: &str = "/bin/bash --noprofile --norc -e -o pipefail {0}";
 pub mod verification_jobs;
 mod workflow_policy;
 pub mod workflow_routing;

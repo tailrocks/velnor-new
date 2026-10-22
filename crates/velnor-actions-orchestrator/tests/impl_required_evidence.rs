@@ -43,8 +43,8 @@ fn validator_results_must_match_inventory_exactly() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     let reports = passing_reports(&plan)?;
     let matrix = serde_json::to_value(&plan.matrix)?;
-    let inventory_ids = required_job_ids(&plan, &["actionlint"]);
-    let inventory = json!(inventory_ids);
+    let inventory_ids = required_job_ids(&plan, &["jactionlint"]);
+    let inventory = json!(inventory_ids.clone());
     let plan_value = serde_json::to_value(&plan)?;
     let run = |jobs: serde_json::Value| {
         let mut request = merge_request(
@@ -60,14 +60,14 @@ fn validator_results_must_match_inventory_exactly() -> TestResult {
     // A missing validator fails, and the report marks it missing.
     let report = run(json!(successful_results_except(
         &inventory_ids,
-        &["actionlint"]
+        &["jactionlint"]
     )))?;
     assert_eq!(report.status, FinalStatus::PlanningFailed);
     assert!(
         report
             .required_job_results
             .iter()
-            .any(|job| job.job_id == "actionlint" && job.conclusion == JobConclusion::Missing),
+            .any(|job| job.job_id == "jactionlint" && job.conclusion == JobConclusion::Missing),
         "{:?}",
         report.required_job_results
     );
@@ -101,8 +101,8 @@ fn validator_states_fold_per_validator() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     let reports = passing_reports(&plan)?;
     let matrix = serde_json::to_value(&plan.matrix)?;
-    let inventory_ids = required_job_ids(&plan, &["actionlint"]);
-    for failing in ["plan", "actionlint"] {
+    let inventory_ids = required_job_ids(&plan, &["jactionlint"]);
+    for failing in ["plan", "jactionlint"] {
         for (conclusion, status) in [
             ("failure", FinalStatus::Failed),
             ("cancelled", FinalStatus::Cancelled),
@@ -116,7 +116,7 @@ fn validator_states_fold_per_validator() -> TestResult {
                 &serde_json::to_value(&reports)?,
                 &serde_json::Value::Array(jobs),
             );
-            request["required_job_ids"] = json!(inventory_ids);
+            request["required_job_ids"] = json!(inventory_ids.clone());
             assert_eq!(status_of(&request)?, status, "{failing}={conclusion}");
         }
     }

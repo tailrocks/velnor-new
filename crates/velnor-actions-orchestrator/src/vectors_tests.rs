@@ -79,10 +79,8 @@ fn machete_validator_is_pinned_and_installed_before_execution() {
             "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]"
         ))
     );
-    assert_eq!(
-        validator_install_pin("zizmor@1.31.1"),
-        Some(("zizmor", "1.31.1", "zizmor"))
-    );
+    // zizmor is retired (hard decision 10); its old pin no longer resolves.
+    assert_eq!(validator_install_pin("zizmor@1.31.1"), None);
 }
 
 #[test]
@@ -224,18 +222,6 @@ fn task_runner_tools_follow_test_runner() {
         let argv = task_argv(&task, &catalog).expect("task argv");
         assert_eq!(argv.contains(&nextest), want, "{} nextest", runner.as_str());
     }
-}
-
-#[test]
-fn zizmor_vector_is_pinned_and_offline() {
-    let argv = zizmor_argv(&ToolCatalog::pinned()).expect("zizmor argv");
-    assert_eq!(
-        argv.join(" "),
-        "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL \
-             -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST \
-             -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec zizmor@1.31.1 -- zizmor \
-             --no-online-audits --config .zizmor.yml .github/workflows"
-    );
 }
 
 #[test]

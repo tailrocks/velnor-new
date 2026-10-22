@@ -134,10 +134,6 @@ fn ir(checks: &[(&str, CheckRunner)]) -> WorkflowIr {
             &checks.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
         ),
     );
-    jobs.insert(
-        "publish-baseline".to_owned(),
-        job("publish-baseline", None, &["required"]),
-    );
     WorkflowIr {
         name: "CI".to_owned(),
         triggers: Trigger {

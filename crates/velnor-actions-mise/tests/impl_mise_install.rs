@@ -42,9 +42,8 @@ fn install_carries_specs_only() -> Result<(), String> {
         "rust@1.99.1",
         "mr-boxington@1.26.0",
         "gh@2.102.1",
-        "actionlint@1.7.12",
+        "jactionlint@2.3.0",
         "shellcheck@0.11.0",
-        "zizmor@1.31.1",
         "aqua:nextest-rs/nextest/cargo-nextest@0.9.149",
         "opentofu@1.13.1",
     ] {
@@ -91,7 +90,7 @@ fn install_command_matches_argv_and_keeps_install_enabled() -> Result<(), String
 #[test]
 fn install_specs_come_only_from_catalog() -> Result<(), String> {
     let catalog = ToolCatalog::new(
-        "1.97.0", "1.18.0", "2.100.0", "1.7.11", "0.10.0", "1.30.0", "0.9.145", "1.13.0",
+        "1.97.0", "1.18.0", "2.100.0", "2.2.0", "0.10.0", "0.9.145", "1.13.0",
     )
     .map_err(|err| err.to_string())?;
     let request = MiseInstall::new(vec![PinnedTool::Rust, PinnedTool::MrBoxington])

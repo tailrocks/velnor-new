@@ -1,10 +1,10 @@
 //! Integration test entry point; cases live in the sibling files.
-mod impl_actionlint_bridge;
 mod impl_ansible;
 mod impl_bench_p13;
 mod impl_bun;
 mod impl_bun_playwright;
 mod impl_bun_select;
+mod impl_bun_timeout;
 mod impl_cache_fixtures;
 mod impl_cache_sources_exact;
 mod impl_cache_warm;
@@ -46,6 +46,7 @@ mod impl_git_paths_p10;
 mod impl_images;
 mod impl_images_publish;
 mod impl_images_select;
+mod impl_jactionlint_native;
 mod impl_lane_isolation;
 mod impl_local_release_manifest_fs;
 #[path = "impl_local_shared_action.rs"]

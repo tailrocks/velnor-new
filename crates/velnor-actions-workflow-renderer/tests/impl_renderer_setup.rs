@@ -65,14 +65,14 @@ fn setup_pins_reject_every_shape_violation() {
 #[test]
 fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
     let lint = job(
-        "actionlint",
-        "Actionlint",
+        "jactionlint",
+        "Jactionlint",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
             scrubbed_shell_step(
-                "Run actionlint",
-                mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
+                "Run jactionlint",
+                mise_argv("jactionlint@2.3.0", "jactionlint", &["-color"]),
             )?,
         ],
     );
@@ -145,15 +145,15 @@ fn strict_task_job_always_gets_setup() -> Result<(), RenderError> {
 #[test]
 fn strict_keeps_single_wellformed_setup() -> Result<(), RenderError> {
     let lint = job(
-        "actionlint",
-        "Actionlint",
+        "jactionlint",
+        "Jactionlint",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
             mise_setup_step(&mise())?,
             scrubbed_shell_step(
-                "Run actionlint",
-                mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
+                "Run jactionlint",
+                mise_argv("jactionlint@2.3.0", "jactionlint", &["-color"]),
             )?,
         ],
     );
@@ -167,15 +167,15 @@ fn strict_setup_role_ignores_presentation_name() -> Result<(), RenderError> {
     let mut setup = mise_setup_step(&mise())?;
     setup.name = "Mise installation".to_owned();
     let lint = job(
-        "actionlint",
-        "Actionlint",
+        "jactionlint",
+        "Jactionlint",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
             setup,
             scrubbed_shell_step(
-                "Run actionlint",
-                mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
+                "Run jactionlint",
+                mise_argv("jactionlint@2.3.0", "jactionlint", &["-color"]),
             )?,
         ],
     );
@@ -190,14 +190,14 @@ fn strict_rejects_setup_misuse() -> Result<(), RenderError> {
         Ok(vec![
             checkout_step(&checkout_pin())?,
             scrubbed_shell_step(
-                "Run actionlint",
-                mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
+                "Run jactionlint",
+                mise_argv("jactionlint@2.3.0", "jactionlint", &["-color"]),
             )?,
         ])
     };
     let render = |steps: Vec<Step>| {
         strict(
-            &fixture_ir(vec![job("actionlint", "Actionlint", Vec::new(), steps)]),
+            &fixture_ir(vec![job("jactionlint", "Jactionlint", Vec::new(), steps)]),
             &fixture_ctx(),
         )
     };
@@ -272,7 +272,7 @@ fn strict_mixed_platform_checks_use_native_setup_and_keep_global_runner() -> Res
     assert!(!text.contains("V2 identity"));
     assert!(!text.contains(MISE_BINARY_SHA256_LINUX_X64));
     assert!(!text.contains("mise-v1-"));
-    check.0 = "actionlint".to_owned();
+    check.0 = "jactionlint".to_owned();
     assert!(strict(&fixture_ir(vec![check.clone()]), &fixture_ctx()).is_err());
     check.0 = "check-native".to_owned();
     check.1.check_runner = None;

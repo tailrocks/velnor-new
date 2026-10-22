@@ -50,6 +50,14 @@ pub use versions::{
 mod rust_manifests;
 pub use rust_manifests::{RUST_CHANNEL_MANIFESTS, rust_channel_manifest_sha256};
 
+/// Pinned jactionlint release digests (verifiable `jactionlint` installs).
+#[path = "catalog_jactionlint_digests.rs"]
+mod jactionlint_digests;
+pub use jactionlint_digests::{
+    JACTIONLINT_DIGESTS, JactionlintDigest, jactionlint_archive_sha256,
+    jactionlint_executable_sha256,
+};
+
 /// The typed catalog tool names (`PinnedTool`).
 #[path = "catalog_tool.rs"]
 mod tool;
@@ -74,16 +82,23 @@ pub const MR_BOXINGTON_VERSION: &str = "1.26.0";
 /// Qualified GitHub CLI (tag `v2.102.1`).
 /// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-10-21.
 pub const GH_VERSION: &str = "2.102.1";
-/// Qualified actionlint release (tag `v1.7.12`).
-/// Source: `https://api.github.com/repos/rhysd/actionlint/releases/latest`; checked 2026-09-28.
-pub const ACTIONLINT_VERSION: &str = "1.7.12";
+/// Qualified jactionlint release (`jdx/jactionlint` tag `v2.3.0`, stable,
+/// published 2026-10-21). Install: Mise registry name `jactionlint`
+/// (backend `github:jdx/jactionlint`), which checks the release-API digest
+/// and the GitHub artifact attestation. Provenance was verified at this bump
+/// (2026-10-22), never at generate time: `cosign verify-blob-attestation`
+/// on `packslip.sigstore.json` (`--type https://packslip.dev/release/v1`,
+/// identity `https://github.com/jdx/jactionlint/.github/workflows/release.yaml@refs/tags/v2.3.0`,
+/// issuer `https://token.actions.githubusercontent.com`) and
+/// `gh attestation verify -R jdx/jactionlint --signer-workflow jdx/jactionlint/.github/workflows/release.yaml`
+/// both passed for the linux amd64, linux arm64, darwin arm64 and darwin
+/// amd64 archives.
+/// Per-platform digests: [`JACTIONLINT_DIGESTS`].
+/// Source: `https://api.github.com/repos/jdx/jactionlint/releases/latest`; checked 2026-10-22.
+pub const JACTIONLINT_VERSION: &str = "2.3.0";
 /// Qualified shellcheck release (tag `v0.11.0`).
 /// Source: `https://api.github.com/repos/koalaman/shellcheck/releases/latest`; checked 2026-09-28.
 pub const SHELLCHECK_VERSION: &str = "0.11.0";
-/// Qualified zizmor tool release (`zizmorcore/zizmor` tag `v1.31.1`, stable).
-/// Its official macOS ARM64 binary passed version and repository audit checks
-/// 2026-10-17. Source: `https://api.github.com/repos/zizmorcore/zizmor/releases/tags/v1.31.1`.
-pub const ZIZMOR_VERSION: &str = "1.31.1";
 /// Qualified cargo-nextest release (`nextest-rs/nextest` tag
 /// `cargo-nextest-0.9.149`, published 2026-10-20).
 /// Source: `https://crates.io/api/v1/crates/cargo-nextest`; checked 2026-10-21.
@@ -159,12 +174,10 @@ pub struct ToolCatalog {
     mr_boxington: String,
     /// Pinned GitHub CLI version.
     gh: String,
-    /// Pinned actionlint version.
-    actionlint: String,
+    /// Pinned jactionlint version.
+    jactionlint: String,
     /// Pinned shellcheck version.
     shellcheck: String,
-    /// Pinned zizmor tool version.
-    zizmor: String,
     /// Pinned Nextest runner version.
     nextest: String,
     /// Pinned `OpenTofu` engine version.
@@ -197,9 +210,8 @@ impl ToolCatalog {
             rust: RUST_VERSION.to_owned(),
             mr_boxington: MR_BOXINGTON_VERSION.to_owned(),
             gh: GH_VERSION.to_owned(),
-            actionlint: ACTIONLINT_VERSION.to_owned(),
+            jactionlint: JACTIONLINT_VERSION.to_owned(),
             shellcheck: SHELLCHECK_VERSION.to_owned(),
-            zizmor: ZIZMOR_VERSION.to_owned(),
             nextest: NEXTEST_VERSION.to_owned(),
             opentofu: OPENTOFU_VERSION.to_owned(),
             release_plz: RELEASE_PLZ_VERSION.to_owned(),
@@ -218,17 +230,12 @@ impl ToolCatalog {
     ///
     /// Returns [`MiseError::InvalidToolVersion`] for the first version
     /// that is not exact `major.minor.patch`.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "catalog carries eight exact pins at once"
-    )]
     pub fn new(
         rust: &str,
         mr_boxington: &str,
         gh: &str,
-        actionlint: &str,
+        jactionlint: &str,
         shellcheck: &str,
-        zizmor: &str,
         nextest: &str,
         opentofu: &str,
     ) -> Result<Self, MiseError> {
@@ -236,9 +243,8 @@ impl ToolCatalog {
             (PinnedTool::Rust, rust),
             (PinnedTool::MrBoxington, mr_boxington),
             (PinnedTool::Gh, gh),
-            (PinnedTool::Actionlint, actionlint),
+            (PinnedTool::Jactionlint, jactionlint),
             (PinnedTool::Shellcheck, shellcheck),
-            (PinnedTool::Zizmor, zizmor),
             (PinnedTool::Nextest, nextest),
             (PinnedTool::Opentofu, opentofu),
         ] {
@@ -248,9 +254,8 @@ impl ToolCatalog {
             rust: rust.to_owned(),
             mr_boxington: mr_boxington.to_owned(),
             gh: gh.to_owned(),
-            actionlint: actionlint.to_owned(),
+            jactionlint: jactionlint.to_owned(),
             shellcheck: shellcheck.to_owned(),
-            zizmor: zizmor.to_owned(),
             nextest: nextest.to_owned(),
             opentofu: opentofu.to_owned(),
             release_plz: RELEASE_PLZ_VERSION.to_owned(),
@@ -270,9 +275,8 @@ impl ToolCatalog {
             PinnedTool::Rust => &self.rust,
             PinnedTool::MrBoxington => &self.mr_boxington,
             PinnedTool::Gh => &self.gh,
-            PinnedTool::Actionlint => &self.actionlint,
+            PinnedTool::Jactionlint => &self.jactionlint,
             PinnedTool::Shellcheck => &self.shellcheck,
-            PinnedTool::Zizmor => &self.zizmor,
             PinnedTool::Nextest => &self.nextest,
             PinnedTool::Opentofu => &self.opentofu,
             PinnedTool::ReleasePlz => &self.release_plz,

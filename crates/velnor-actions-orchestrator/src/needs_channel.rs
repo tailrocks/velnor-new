@@ -236,14 +236,14 @@ mod tests {
     #[test]
     fn qualification_keeps_shared_rust_jobs_and_requires_tofu_normal_jobs_skipped() {
         let (inventory, results, errors) = parse_for_event(
-            r#"{"plan":"success","rust-demo":"success","tofu-demo":"skipped","tofu-qualification-0123456789abcdef":"success","actionlint":"success"}"#,
-            r#"["actionlint","plan","rust-demo","tofu-demo","tofu-qualification-0123456789abcdef"]"#,
+            r#"{"plan":"success","rust-demo":"success","tofu-demo":"skipped","tofu-qualification-0123456789abcdef":"success","jactionlint":"success"}"#,
+            r#"["jactionlint","plan","rust-demo","tofu-demo","tofu-qualification-0123456789abcdef"]"#,
             WorkflowEvent::Qualification,
         );
         assert_eq!(
             inventory,
             [
-                "actionlint",
+                "jactionlint",
                 "plan",
                 "rust-demo",
                 "tofu-qualification-0123456789abcdef"
@@ -256,11 +256,11 @@ mod tests {
     #[test]
     fn ordinary_event_keeps_grouped_jobs_and_requires_qualification_jobs_skipped() {
         let (inventory, results, errors) = parse_for_event(
-            r#"{"plan":"success","rust-demo":"success","tofu-demo":"success","tofu-qualification-0123456789abcdef":"skipped","actionlint":"success"}"#,
-            r#"["actionlint","plan","rust-demo","tofu-demo","tofu-qualification-0123456789abcdef"]"#,
+            r#"{"plan":"success","rust-demo":"success","tofu-demo":"success","tofu-qualification-0123456789abcdef":"skipped","jactionlint":"success"}"#,
+            r#"["jactionlint","plan","rust-demo","tofu-demo","tofu-qualification-0123456789abcdef"]"#,
             WorkflowEvent::Push,
         );
-        assert_eq!(inventory, ["actionlint", "plan", "rust-demo", "tofu-demo"]);
+        assert_eq!(inventory, ["jactionlint", "plan", "rust-demo", "tofu-demo"]);
         assert_eq!(results.len(), 4);
         assert!(errors.is_empty(), "{errors:?}");
     }

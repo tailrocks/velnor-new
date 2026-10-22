@@ -294,13 +294,6 @@ pub(super) fn outputs(job_id: &str) -> Result<Vec<Output>, RenderError> {
                 field: "runtime_identity_path",
             });
         }
-        for (field, output) in census_fields() {
-            outputs.push(Output {
-                name: format!("cache_{}_restore_census_{field}", layer.as_str()),
-                id: cache_id(QualificationCacheStepStage::RestoreCensus, layer, job_id)?,
-                field: output,
-            });
-        }
         let import_id = cache_id(QualificationCacheStepStage::Import, layer, job_id)?;
         for (field, action_output) in [
             ("action_hit", "restore_action_hit"),
@@ -335,21 +328,6 @@ pub(super) fn layers() -> [QualificationCacheLayer; 5] {
         QualificationCacheLayer::MiseTools,
         QualificationCacheLayer::TofuProviders,
         QualificationCacheLayer::TaskResult,
-    ]
-}
-
-pub(super) fn census_fields() -> [(&'static str, &'static str); 10] {
-    [
-        ("phase", "census_phase"),
-        ("key", "census_key"),
-        ("status", "backend_status"),
-        ("admitted", "backend_admitted"),
-        ("cache_id", "backend_cache_id"),
-        ("cache_key", "backend_cache_key"),
-        ("cache_ref", "backend_cache_ref"),
-        ("cache_version", "backend_cache_version"),
-        ("cache_size", "backend_cache_size"),
-        ("restore_key", "restore_key"),
     ]
 }
 

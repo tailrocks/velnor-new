@@ -108,15 +108,11 @@ fn completion_only_schema2_generation_validates_declared_variables() -> TestResu
             output_dir: Some(destination.clone()),
         },
     )?;
-    assert_eq!(report.validated_by.len(), 3);
-    let actionlint = fs::read_to_string(destination.join(".github/actionlint.yaml"))?;
-    let vars = actionlint
-        .split("\n\n")
-        .nth(1)
-        .ok_or("variable inventory missing")?;
-    assert_eq!(
-        vars,
-        "config-variables:\n  - COMPLETION_APP_ID\n  - REVIEWER_APP_ID"
+    assert_eq!(report.validated_by.len(), 2);
+    let lint_config = fs::read_to_string(destination.join(".github/jactionlint.yaml"))?;
+    assert!(
+        lint_config.contains("\nconfig-variables:\n  - COMPLETION_APP_ID\n  - REVIEWER_APP_ID\n"),
+        "variable inventory missing:\n{lint_config}"
     );
     assert!(destination.join(REVIEW_COMPLETION_WORKFLOW_PATH).is_file());
     let workflow = destination.join(REVIEW_COMPLETION_WORKFLOW_PATH);
@@ -124,16 +120,16 @@ fn completion_only_schema2_generation_validates_declared_variables() -> TestResu
     let mutated = original.replace("vars.COMPLETION_APP_ID", "vars.UNDECLARED_NATIVE_APP");
     assert_ne!(original, mutated);
     fs::write(workflow, mutated)?;
-    let args = velnor_actions_actionlint::ActionlintToolchain::staged_lint_argv(
-        ".github/actionlint.yaml",
+    let args = velnor_actions_actionlint::JactionlintToolchain::staged_lint_argv(
+        ".github/jactionlint.yaml",
         &[REVIEW_COMPLETION_WORKFLOW_PATH.to_owned()],
     );
     let output = velnor_actions_mise::PinnedToolExec::new(
         vec![
-            velnor_actions_mise::PinnedTool::Actionlint,
+            velnor_actions_mise::PinnedTool::Jactionlint,
             velnor_actions_mise::PinnedTool::Shellcheck,
         ],
-        std::ffi::OsStr::new("actionlint"),
+        std::ffi::OsStr::new("jactionlint"),
         args.into_iter().map(Into::into).collect(),
     )?
     .command(&velnor_actions_mise::ToolCatalog::pinned())?

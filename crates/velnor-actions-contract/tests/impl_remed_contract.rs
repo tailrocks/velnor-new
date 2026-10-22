@@ -32,6 +32,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
             mise_quiet: true,
             checkout_lfs: false,
             max_parallel_jobs: 2,
+            plan_timeout_minutes: 5,
             crate_timeout_minutes: 5,
             pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
@@ -39,6 +40,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
             tofu_apply: None,
             review_completion: None,
             verify: velnor_actions_contract::VerifyConfig::default(),
+            lint: velnor_actions_contract::config::WorkflowLintConfig::default(),
             dispatch: velnor_actions_contract::WorkflowDispatchConfig::default(),
             preserve_workflows: Vec::new(),
         },
@@ -218,14 +220,14 @@ fn gen_declared_github_formats_gate_new_writers() {
     assert_eq!(agents.owner, "velnor-actions-workflow-renderer");
     let claude = find_github_format(CLAUDE_MD_PATH).expect("claude");
     assert_eq!(claude.owner, "velnor-actions-workflow-renderer");
-    let actionlint = find_github_format(".github/actionlint.yaml").expect("actionlint");
+    let actionlint = find_github_format(".github/jactionlint.yaml").expect("jactionlint");
     assert_eq!(actionlint.owner, "velnor-actions-actionlint");
     let workflow = find_github_format(".github/workflows/ci.yml").expect("workflow");
     assert_eq!(workflow.owner, "velnor-actions-workflow-renderer");
     assert!(find_github_format(".github/workflows/other.yml").is_none());
     assert!(is_declared_github_format(AGENTS_MD_PATH));
     assert!(is_declared_github_format(CLAUDE_MD_PATH));
-    assert!(is_declared_github_format(".github/actionlint.yaml"));
+    assert!(is_declared_github_format(".github/jactionlint.yaml"));
     assert!(!is_declared_github_format("mise.toml"));
 }
 

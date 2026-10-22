@@ -203,7 +203,6 @@ fn lychee_cold_install_is_audited_by_exact_backend_key() {
     let command = crate::verify::verify_command(
         ValidatorKind::LinkCheck,
         &velnor_actions_contract::VerifyConfig::default(),
-        &velnor_actions_mise::ToolCatalog::pinned(),
     )
     .expect("link-check vector")
     .expect("link-check shell command");

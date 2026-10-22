@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn tool_closure_is_safe_sorted_bounded_and_requires_mbx() {
-        for key in ["actionlint", "aqua:example/tool", "github:boltffi/boltffi"] {
+        for key in ["jactionlint", "aqua:example/tool", "github:boltffi/boltffi"] {
             assert!(is_valid_build_tool_key(key), "{key}");
         }
         for key in [

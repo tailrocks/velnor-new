@@ -33,8 +33,8 @@ fn consumer_ir() -> Result<velnor_actions_contract::WorkflowIr, RenderError> {
     );
     plan.timeout_minutes = JobTimeout::PLAN;
     let (lint_id, mut lint) = job(
-        "actionlint",
-        "Actionlint",
+        "jactionlint",
+        "Jactionlint",
         Vec::new(),
         vec![shell_step("Run", vec!["true".to_owned()], BTreeMap::new())?],
     );
@@ -67,7 +67,7 @@ fn every_job_emits_its_per_kind_timeout() -> Result<(), RenderError> {
         timeouts,
         BTreeMap::from([
             ("plan".to_owned(), "5".to_owned()),
-            ("actionlint".to_owned(), "5".to_owned()),
+            ("jactionlint".to_owned(), "5".to_owned()),
             ("required".to_owned(), "5".to_owned()),
             ("required-gate".to_owned(), "5".to_owned()),
         ]),
@@ -107,7 +107,6 @@ fn support_candidate_release_and_msrv_jobs_carry_per_kind_timeouts() -> Result<(
         ("alint", "5"),
         ("cargo-deny", "5"),
         ("cargo-machete", "5"),
-        ("zizmor", "5"),
         ("candidate", "5"),
         ("release", "5"),
     ] {

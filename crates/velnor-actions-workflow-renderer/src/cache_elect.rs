@@ -64,7 +64,7 @@ fn plan_tools_saves(
             )));
         }
         if let Some(identity) = identity
-            && !is_seed_job(job)
+            && !job.is_dependency_seed()
         {
             by_identity.entry(identity).or_default().push(id.clone());
         }
@@ -106,14 +106,6 @@ fn plan_tools_saves(
         }
     }
     Ok(planned)
-}
-
-/// Return true for a dependency seed job that runs only on trusted pushes.
-/// Its failure must not prevent a writer from saving the shared tools entry.
-fn is_seed_job(job: &Job) -> bool {
-    job.steps
-        .iter()
-        .any(|step| step.role == Some(StepRole::MbxSeedBuild))
 }
 
 /// True when a job carries one typed V2 tools restore or identity step.

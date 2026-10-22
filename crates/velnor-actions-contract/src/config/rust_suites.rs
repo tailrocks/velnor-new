@@ -24,7 +24,7 @@ pub const DEFAULT_SUITE_WORKFLOW_SLUG: &str = "suites";
 
 /// Reserved job/suite identifiers that a custom suite cannot claim.
 pub const RESERVED_SUITE_IDS: &[&str] =
-    &["plan", "required", "required-gate", "actionlint", "rust"];
+    &["plan", "required", "required-gate", "jactionlint", "rust"];
 
 /// Reserved generator-owned workflow slugs that `suite.workflow` cannot claim.
 pub const RESERVED_SUITE_WORKFLOW_SLUGS: &[&str] = &[
