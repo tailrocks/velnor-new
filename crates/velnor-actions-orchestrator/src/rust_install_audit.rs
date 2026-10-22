@@ -11,10 +11,12 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_workflow_renderer::VERIFY_RUST_TOOLCHAIN_STEP;
+#[cfg(test)]
+use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::render::RenderedFile;
 
 use crate::OrchestratorError;
+use crate::verifier_actions::{VerifierAction, VerifierActionSet};
 
 /// Text that installs or changes a Rust toolchain.
 const INSTALLS: [&str; 9] = [
@@ -48,9 +50,12 @@ const RUNS: [&str; 4] = ["-- rustc", "-- cargo", "-- mbx", "rustc --print"];
 const SELF_VERIFY: &str = "$VELNOR_VERIFY_RUST_SCRIPT";
 
 /// One step: its name and full text.
+#[derive(Clone)]
 struct StepText {
     name: String,
     text: String,
+    fields: Vec<(String, String)>,
+    run_scalar: Option<String>,
 }
 
 /// Fail generation when a rendered file installs Rust without verifying it.
@@ -58,7 +63,30 @@ struct StepText {
 /// # Errors
 ///
 /// Returns a contract error `rust_install_unverified:<path>:<step>`.
+#[cfg(test)]
 pub(crate) fn audit(files: &[RenderedFile]) -> Result<(), OrchestratorError> {
+    let verifiers = VerifierActionSet::build(
+        &ToolCatalog::pinned().for_emission(),
+        env!("CARGO_PKG_VERSION"),
+    )
+    .map_err(|error| OrchestratorError::Contract {
+        problem: format!("verifier_action_templates_invalid:{error}"),
+    })?;
+    audit_with_verifiers(files, &verifiers)
+}
+
+/// Validate all rendered Rust installs against exact verifier call/file
+/// templates generated from the same catalog as the workflow IR.
+///
+/// # Errors
+///
+/// Returns a contract error for an install without its canonical check or an
+/// altered/missing verifier action definition or call.
+pub(crate) fn audit_with_verifiers(
+    files: &[RenderedFile],
+    verifiers: &VerifierActionSet,
+) -> Result<(), OrchestratorError> {
+    check_verifier_files(files, verifiers)?;
     for file in files {
         let yaml = std::path::Path::new(&file.path)
             .extension()
@@ -67,10 +95,93 @@ pub(crate) fn audit(files: &[RenderedFile]) -> Result<(), OrchestratorError> {
             continue;
         }
         for (owner, steps) in step_lists(&file.bytes) {
-            check_steps(&format!("{}:{owner}", file.path), &steps)?;
+            for step in &steps {
+                if !is_verifier_step_valid(step, verifiers) {
+                    return Err(unverified(
+                        &format!("{}:{owner}", file.path),
+                        &step.name,
+                        "noncanonical verifier call or body",
+                    ));
+                }
+            }
+            check_steps(&format!("{}:{owner}", file.path), &steps, verifiers)?;
         }
     }
     Ok(())
+}
+
+fn check_verifier_files(
+    files: &[RenderedFile],
+    verifiers: &VerifierActionSet,
+) -> Result<(), OrchestratorError> {
+    let expected = verifiers.files();
+    let expected_paths: std::collections::BTreeSet<&str> =
+        expected.iter().map(|file| file.path.as_str()).collect();
+    for action in [
+        &verifiers.restored_rust,
+        &verifiers.installed_rust,
+        &verifiers.jactionlint,
+    ] {
+        let matching: Vec<_> = files
+            .iter()
+            .filter(|file| file.path == action.file.path)
+            .collect();
+        if matching.len() != 1 {
+            return Err(unverified(
+                &action.file.path,
+                action.name,
+                "missing or duplicate verifier action definition",
+            ));
+        }
+        if matching[0].bytes != action.file.bytes {
+            return Err(unverified(
+                &action.file.path,
+                action.name,
+                "verifier action body, shell, environment, or marker changed",
+            ));
+        }
+    }
+    for file in files.iter().filter(|file| {
+        file.path
+            .strip_prefix(".github/actions/velnor-verify-")
+            .is_some_and(|_| file.path.ends_with("/action.yml"))
+    }) {
+        if !expected_paths.contains(file.path.as_str()) {
+            return Err(unverified(
+                &file.path,
+                "unregistered verifier action",
+                "unexpected generated verifier definition",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn is_verifier_step_valid(step: &StepText, verifiers: &VerifierActionSet) -> bool {
+    if let Some(uses) = step.uses_value()
+        && let Some(action) = verifiers.by_uses(uses)
+    {
+        return canonical_action_call(step, action);
+    }
+    if verifiers
+        .inline_rust_run_scalars
+        .contains_key(step.name.as_str())
+    {
+        return verifiers.is_canonical_inline_rust_step(&step.name, step.run_scalar.as_deref());
+    }
+    if step.name == verifiers.jactionlint.name {
+        return verifiers.is_canonical_inline_jactionlint_step(step.run_scalar.as_deref());
+    }
+    true
+}
+
+fn canonical_action_call(step: &StepText, action: &VerifierAction) -> bool {
+    step.name == action.name
+        && step.fields.len() == 2
+        && step.fields[0].0 == "name"
+        && step.fields[0].1 == action.name
+        && step.fields[1].0 == "uses"
+        && step.fields[1].1 == format!("{} # zizmor: ignore[self-repository]", action.uses)
 }
 
 fn unverified(path: &str, step: &str, why: &str) -> OrchestratorError {
@@ -79,7 +190,11 @@ fn unverified(path: &str, step: &str, why: &str) -> OrchestratorError {
     }
 }
 
-fn check_steps(path: &str, steps: &[StepText]) -> Result<(), OrchestratorError> {
+fn check_steps(
+    path: &str,
+    steps: &[StepText],
+    verifiers: &VerifierActionSet,
+) -> Result<(), OrchestratorError> {
     let mut index = 0;
     while index < steps.len() {
         if !installs_rust(&steps[index]) {
@@ -101,7 +216,7 @@ fn check_steps(path: &str, steps: &[StepText]) -> Result<(), OrchestratorError> 
                     "no verification follows the install",
                 ));
             };
-            if step.name == VERIFY_RUST_TOOLCHAIN_STEP {
+            if is_rust_verifier(step, verifiers) {
                 break;
             }
             if USES.iter().any(|needle| step.text.contains(needle)) && !installs_rust(step)
@@ -123,25 +238,32 @@ fn check_steps(path: &str, steps: &[StepText]) -> Result<(), OrchestratorError> 
 /// The step verifies its own install: the check runs after every install in
 /// its text and before every use of Rust, Cargo or MBX.
 fn self_verified(step: &StepText) -> bool {
-    let Some(check) = step.text.find(SELF_VERIFY) else {
+    let text = step.run_scalar.as_deref().unwrap_or(&step.text);
+    let Some(check) = text.find(SELF_VERIFY) else {
         return false;
     };
     let last_install = INSTALLS
         .iter()
-        .filter_map(|needle| step.text.rfind(needle))
+        .filter_map(|needle| text.rfind(needle))
         .max()
         .unwrap_or(0);
     let first_use = USES
         .iter()
-        .filter_map(|needle| step.text.find(needle))
+        .filter_map(|needle| text.find(needle))
         .min()
         .unwrap_or(usize::MAX);
     last_install < check && check < first_use
 }
 
 fn installs_rust(step: &StepText) -> bool {
-    step.name != VERIFY_RUST_TOOLCHAIN_STEP
-        && INSTALLS.iter().any(|needle| step.text.contains(needle))
+    INSTALLS.iter().any(|needle| step.text.contains(needle))
+}
+
+fn is_rust_verifier(step: &StepText, verifiers: &VerifierActionSet) -> bool {
+    if step.uses_value() == Some(verifiers.installed_rust.uses) {
+        return canonical_action_call(step, &verifiers.installed_rust);
+    }
+    verifiers.is_canonical_inline_rust_step(&step.name, step.run_scalar.as_deref())
 }
 
 fn indent(line: &str) -> usize {
@@ -153,6 +275,7 @@ fn indent(line: &str) -> usize {
 fn step_lists(text: &str) -> Vec<(String, Vec<StepText>)> {
     let lines: Vec<&str> = text.lines().collect();
     let mut anchors: BTreeMap<String, StepText> = BTreeMap::new();
+    let mut run_anchors: BTreeMap<String, String> = BTreeMap::new();
     let mut lists = Vec::new();
     let mut at = 0;
     while at < lines.len() {
@@ -189,7 +312,7 @@ fn step_lists(text: &str) -> Vec<(String, Vec<StepText>)> {
                     block.push(lines[at]);
                     at += 1;
                 }
-                steps.push(step_text(&block, &mut anchors));
+                steps.push(step_text(&block, &mut anchors, &mut run_anchors));
             }
             lists.push((owner, steps));
             continue;
@@ -200,21 +323,36 @@ fn step_lists(text: &str) -> Vec<(String, Vec<StepText>)> {
 }
 
 /// One step block; `- &sN` records an anchor and `- *sN` resolves one.
-fn step_text(block: &[&str], anchors: &mut BTreeMap<String, StepText>) -> StepText {
+fn step_text(
+    block: &[&str],
+    anchors: &mut BTreeMap<String, StepText>,
+    run_anchors: &mut BTreeMap<String, String>,
+) -> StepText {
     let head = block[0].trim_start().trim_start_matches("- ").trim();
     if let Some(alias) = head.strip_prefix('*') {
         return anchors.get(alias).map_or_else(
             || StepText {
                 name: format!("*{alias}"),
                 text: String::new(),
+                fields: Vec::new(),
+                run_scalar: None,
             },
             |step| StepText {
                 name: step.name.clone(),
                 text: step.text.clone(),
+                fields: step.fields.clone(),
+                run_scalar: step.run_scalar.clone(),
             },
         );
     }
-    let text = block.join("\n");
+    let fields: Vec<(String, String)> = block
+        .iter()
+        .filter_map(|line| {
+            let trimmed = line.trim_start().trim_start_matches("- ").trim();
+            let (key, value) = trimmed.split_once(": ")?;
+            Some((key.to_owned(), value.to_owned()))
+        })
+        .collect();
     let name = block
         .iter()
         .find_map(|line| {
@@ -225,7 +363,30 @@ fn step_text(block: &[&str], anchors: &mut BTreeMap<String, StepText>) -> StepTe
         .trim()
         .trim_matches('"')
         .to_owned();
-    let step = StepText { name, text };
+    let run_scalar = block.iter().find_map(|line| {
+        let trimmed = line.trim_start().trim_start_matches("- ").trim();
+        let raw = trimmed.strip_prefix("run: ")?;
+        if let Some(anchor) = raw.strip_prefix('&') {
+            let (name, value) = anchor.split_once(' ')?;
+            run_anchors.insert(name.to_owned(), value.to_owned());
+            Some(value.to_owned())
+        } else if let Some(alias) = raw.strip_prefix('*') {
+            run_anchors.get(alias).cloned()
+        } else {
+            Some(raw.to_owned())
+        }
+    });
+    let mut text = block.join("\n");
+    if let Some(run_scalar) = &run_scalar {
+        text.push('\n');
+        text.push_str(run_scalar);
+    }
+    let step = StepText {
+        name,
+        text,
+        fields,
+        run_scalar,
+    };
     if let Some(anchor) = head.strip_prefix('&') {
         anchors.insert(
             anchor
@@ -233,13 +394,22 @@ fn step_text(block: &[&str], anchors: &mut BTreeMap<String, StepText>) -> StepTe
                 .next()
                 .unwrap_or(anchor)
                 .to_owned(),
-            StepText {
-                name: step.name.clone(),
-                text: step.text.clone(),
-            },
+            step.clone(),
         );
     }
     step
+}
+
+impl StepText {
+    fn uses_value(&self) -> Option<&str> {
+        self.fields.iter().find_map(|(key, value)| {
+            (key == "uses").then(|| {
+                value
+                    .strip_suffix(" # zizmor: ignore[self-repository]")
+                    .unwrap_or(value)
+            })
+        })
+    }
 }
 
 #[cfg(test)]

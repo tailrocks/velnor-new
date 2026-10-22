@@ -108,6 +108,9 @@ fn orch_gen_plan_matches_generated_tree() -> TestResult {
             ".github/actions/velnor-tool-seed/action.yml",
             ".github/actions/velnor-tools-cache-restore/action.yml",
             ".github/actions/velnor-tools-prelude-u26/action.yml",
+            ".github/actions/velnor-verify-jactionlint/action.yml",
+            ".github/actions/velnor-verify-restored-rust/action.yml",
+            ".github/actions/velnor-verify-rust-manifest/action.yml",
             ".github/jactionlint.yaml",
             ".github/scripts/velnor-tools-cache-identity.sh",
             ".github/velnor/task-execution-manifest-v1.json",
@@ -146,7 +149,11 @@ fn orch_gen_zero_candidate_repo_plans_no_work() -> TestResult {
     assert!(plan.contains("no-work workflow"), "no-work:\n{plan}");
     let parent = TempDir::new()?;
     let report = preview_into(&prep, parent.path().join("preview"))?;
-    assert_eq!(report.files_written.len(), 9, "V2 cache assets are emitted");
+    assert_eq!(
+        report.files_written.len(),
+        12,
+        "V2 and verifier assets are emitted"
+    );
     Ok(())
 }
 

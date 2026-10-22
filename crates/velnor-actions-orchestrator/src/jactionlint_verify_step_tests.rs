@@ -7,11 +7,15 @@ use std::path::Path;
 use std::process::{Command, Output};
 
 use sha2::{Digest, Sha256};
+use velnor_actions_contract::StepKind;
 use velnor_actions_mise::{
     JACTIONLINT_VERSION, PinnedTool, ToolCatalog, jactionlint_executable_sha256,
 };
 
-use super::{NOT_CATALOGUED_CODE, VERIFY_JACTIONLINT_STEP, script, verify_jactionlint_step};
+use super::{
+    NOT_CATALOGUED_CODE, VERIFY_JACTIONLINT_STEP, script, verifier_shell_step,
+    verify_jactionlint_step,
+};
 
 const FAKE_BYTES: &[u8] = b"fake jactionlint executable\n";
 
@@ -158,8 +162,17 @@ fn a_project_version_without_a_digest_keeps_mise_verification() -> Result<(), Bo
 
 #[test]
 fn the_step_is_a_scrubbed_shell_step_with_every_catalogued_digest() -> Result<(), Box<dyn Error>> {
-    let step = verify_jactionlint_step(&ToolCatalog::pinned())?;
+    let step = verify_jactionlint_step(&ToolCatalog::pinned());
     assert_eq!(step.name, VERIFY_JACTIONLINT_STEP);
+    assert!(matches!(
+        step.kind,
+        StepKind::Action { uses, ref with, ref env }
+            if uses == velnor_actions_workflow_renderer::verifier_composite::VERIFY_JACTIONLINT_USES
+                && with.is_empty()
+                && env.is_empty()
+    ));
+    let shell = verifier_shell_step(&ToolCatalog::pinned())?;
+    assert!(matches!(shell.kind, StepKind::Shell { .. }));
     let text = script(&ToolCatalog::pinned());
     for row in velnor_actions_mise::JACTIONLINT_DIGESTS {
         assert!(text.contains(row.executable_sha256), "{}", row.platform);

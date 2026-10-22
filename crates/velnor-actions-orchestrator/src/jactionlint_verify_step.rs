@@ -77,7 +77,16 @@ pub(crate) fn argv(catalog: &ToolCatalog) -> Vec<String> {
 /// # Errors
 ///
 /// Returns a contract error when the renderer rejects the fixed argv.
-pub(crate) fn verify_jactionlint_step(catalog: &ToolCatalog) -> Result<Step, OrchestratorError> {
+pub(crate) fn verify_jactionlint_step(_catalog: &ToolCatalog) -> Step {
+    crate::verifier_actions::call_step(
+        VERIFY_JACTIONLINT_STEP,
+        velnor_actions_workflow_renderer::verifier_composite::VERIFY_JACTIONLINT_USES,
+        None,
+    )
+}
+
+/// Canonical credential-scrubbed shell body for the generated composite.
+pub(crate) fn verifier_shell_step(catalog: &ToolCatalog) -> Result<Step, OrchestratorError> {
     Ok(velnor_actions_workflow_renderer::steps::shell_step(
         VERIFY_JACTIONLINT_STEP,
         argv(catalog),
