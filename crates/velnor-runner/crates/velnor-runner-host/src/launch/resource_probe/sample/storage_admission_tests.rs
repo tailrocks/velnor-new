@@ -124,6 +124,29 @@ fn admission_rejects_wrong_engine_root_and_stale_samples() {
 }
 
 #[test]
+fn startup_profile_rejects_malformed_release_workspace_cleanup_digest() {
+    let mut permit = StartPermit::test_fixture_with_engine_id(&"a".repeat(32), "selected-engine");
+    permit.observation.record.docker_root_total_bytes = 256 * 1024 * 1024 * 1024;
+    permit.observation.record.docker_root_free_bytes = 192 * 1024 * 1024 * 1024;
+    permit.observation.record.docker_root_available_bytes = 192 * 1024 * 1024 * 1024;
+    let valid_images =
+        crate::launch::verified_images::test_worker_images_for_root("/var/lib/docker");
+    assert!(
+        super::production_profile::build(&permit.observation, &valid_images, permit.budget, 1,)
+            .is_some()
+    );
+
+    let invalid_images = crate::launch::verified_images::test_worker_images_for_root_with_mutation(
+        "/var/lib/docker",
+        Some(crate::launch::verified_images::TestWorkerImageMutation::ReleaseWorkspaceCleanup),
+    );
+    assert!(
+        super::production_profile::build(&permit.observation, &invalid_images, permit.budget, 1,)
+            .is_none()
+    );
+}
+
+#[test]
 fn filesystem_identity_does_not_depend_on_namespace_local_mount_id() -> Result<(), String> {
     let profile = fixture_provisioning_profile();
     let first = permit();
