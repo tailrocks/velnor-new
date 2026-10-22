@@ -11,7 +11,6 @@ use crate::launch::StartPermit;
 #[tokio::test]
 async fn private_network_intent_survives_reopen_and_never_replays_implicitly()
 -> Result<(), HostError> {
-    const SAMPLE: &str = "a1";
     let scratch = Scratch::new()?;
     let path = scratch.file();
     let connection = binding("private-network", 7_001)?;
@@ -24,34 +23,7 @@ async fn private_network_intent_survives_reopen_and_never_replays_implicitly()
         })
         .await?;
     let scope = created_scope(&journal, &connection, 7_501).await?;
-    let subject = SAMPLE.repeat(16);
-    let assignment = scope
-        .assignment_identity(AssignmentKey::Remote {
-            kind: "runner".to_owned(),
-            subject,
-        })
-        .await?;
-    let permit = StartPermit::test_fixture_with_engine_id(&SAMPLE.repeat(16), TEST_ENGINE_ID);
-    let sample_generation_id = permit.sample_generation_id().to_owned();
-    let docker_root_digest = permit.docker_root_digest().to_owned();
-    let admission = fixture_storage_provisioning_admission(&permit)?;
-    let result = scope
-        .try_reserve_with_provisioning(
-            ReservationRequest {
-                assignment: &assignment,
-                engine_id: TEST_ENGINE_ID,
-                docker_root_digest: &docker_root_digest,
-                cpu_millicores: 2_000,
-                memory_bytes: 8 * 1024 * 1024 * 1024,
-                sample_generation_id: &sample_generation_id,
-            },
-            permit,
-            admission,
-        )
-        .await?;
-    let ReservationResult::Reserved { reservation_id } = result else {
-        return Err(HostError::Journal);
-    };
+    let reservation_id = reserve_private_network(&scope).await?;
 
     let claim = scope
         .claim_storage_network_create(reservation_id)
@@ -102,4 +74,39 @@ async fn private_network_intent_survives_reopen_and_never_replays_implicitly()
             .is_none()
     );
     Ok(())
+}
+
+async fn reserve_private_network(
+    scope: &crate::journal::ConnectionJournal,
+) -> Result<i64, HostError> {
+    const SAMPLE: &str = "a1";
+    let subject = SAMPLE.repeat(16);
+    let assignment = scope
+        .assignment_identity(AssignmentKey::Remote {
+            kind: "runner".to_owned(),
+            subject,
+        })
+        .await?;
+    let permit = StartPermit::test_fixture_with_engine_id(&SAMPLE.repeat(16), TEST_ENGINE_ID);
+    let sample_generation_id = permit.sample_generation_id().to_owned();
+    let docker_root_digest = permit.docker_root_digest().to_owned();
+    let admission = fixture_storage_provisioning_admission(&permit)?;
+    let result = scope
+        .try_reserve_with_provisioning(
+            ReservationRequest {
+                assignment: &assignment,
+                engine_id: TEST_ENGINE_ID,
+                docker_root_digest: &docker_root_digest,
+                cpu_millicores: 2_000,
+                memory_bytes: 8 * 1024 * 1024 * 1024,
+                sample_generation_id: &sample_generation_id,
+            },
+            permit,
+            admission,
+        )
+        .await?;
+    let ReservationResult::Reserved { reservation_id } = result else {
+        return Err(HostError::Journal);
+    };
+    Ok(reservation_id)
 }
