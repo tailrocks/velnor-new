@@ -390,9 +390,18 @@ fn report_and_retention_are_bounded_and_omitted_at_default() {
         playwright_suite(json!({ "shards": 2 }))
     );
     let cases = [
-        (json!({ "report": "merge" }), "report_requires_shards_or_projects:browser"),
-        (json!({ "shards": 2, "report_retention_days": 0 }), "bad_retention_days:0:expected_1..=90"),
-        (json!({ "shards": 2, "results_retention_days": 91 }), "bad_retention_days:91:expected_1..=90"),
+        (
+            json!({ "report": "merge" }),
+            "report_requires_shards_or_projects:browser",
+        ),
+        (
+            json!({ "shards": 2, "report_retention_days": 0 }),
+            "bad_retention_days:0:expected_1..=90",
+        ),
+        (
+            json!({ "shards": 2, "results_retention_days": 91 }),
+            "bad_retention_days:91:expected_1..=90",
+        ),
     ];
     for (table, code) in cases {
         let got = problem(playwright_suite(table));
@@ -402,7 +411,9 @@ fn report_and_retention_are_bounded_and_omitted_at_default() {
         serde_json::from_value::<BunStackConfig>(playwright_suite(json!({ "report": "html" })))
             .is_err()
     );
-    parse(playwright_suite(json!({ "projects": ["a", "b"], "report": "merge" })))
-        .validate("config.toml")
-        .expect("two legs from projects");
+    parse(playwright_suite(
+        json!({ "projects": ["a", "b"], "report": "merge" }),
+    ))
+    .validate("config.toml")
+    .expect("two legs from projects");
 }

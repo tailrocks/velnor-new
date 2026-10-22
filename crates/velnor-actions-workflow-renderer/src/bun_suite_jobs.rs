@@ -12,8 +12,8 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::{Job, JobTimeout, Step, StepKind};
 
 use crate::matrix::bun::{BUN_LEGS_ENV, BUN_MAX_PARALLEL_ENV};
-use crate::matrix::suites::SUITE_ALLOW_FAILURE_ENV;
 pub use crate::matrix::bun::{BunLeg, BunLegMatrix};
+use crate::matrix::suites::SUITE_ALLOW_FAILURE_ENV;
 
 use crate::verification_jobs::bun_member_jobs::{
     BUN_RUNNER, bun_permissions, same_bun_job, validate_bun_steps,
@@ -163,15 +163,18 @@ pub fn build_bun_report_job(
     checkout_uses: &str,
 ) -> Result<Job, RenderError> {
     policy.validate()?;
-    let report = policy.report.as_ref().ok_or_else(|| {
-        RenderError::InvalidWorkflow(format!("bun_report_missing:{}", policy.id))
-    })?;
+    let report = policy
+        .report
+        .as_ref()
+        .ok_or_else(|| RenderError::InvalidWorkflow(format!("bun_report_missing:{}", policy.id)))?;
     let mut all = vec![steps::checkout_step(checkout_uses)?];
     all.extend(report.steps.iter().cloned());
     // Job-level `continue-on-error: true`, through the Rust suite marker.
-    if let Some(StepKind::Shell { env, .. }) = all.iter_mut().rev().find_map(|step| {
-        matches!(step.kind, StepKind::Shell { .. }).then_some(&mut step.kind)
-    }) {
+    if let Some(StepKind::Shell { env, .. }) = all
+        .iter_mut()
+        .rev()
+        .find_map(|step| matches!(step.kind, StepKind::Shell { .. }).then_some(&mut step.kind))
+    {
         env.insert(SUITE_ALLOW_FAILURE_ENV.to_owned(), "true".to_owned());
     } else {
         return Err(RenderError::InvalidWorkflow(format!(
@@ -222,9 +225,9 @@ pub(crate) fn validate_bun_suite_job(
     }
     if policy.report.is_some() {
         let id = policy.report_id();
-        let actual = jobs.get(&id).ok_or_else(|| {
-            RenderError::InvalidWorkflow(format!("bun_report_job_missing:{id}"))
-        })?;
+        let actual = jobs
+            .get(&id)
+            .ok_or_else(|| RenderError::InvalidWorkflow(format!("bun_report_job_missing:{id}")))?;
         if !same_bun_job(actual, &build_bun_report_job(policy, checkout_uses)?) {
             return Err(RenderError::InvalidWorkflow(format!(
                 "bun_report_job_contract:{id}"
