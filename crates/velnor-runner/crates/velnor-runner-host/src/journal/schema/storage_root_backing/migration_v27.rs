@@ -26,7 +26,7 @@ pub(in crate::journal::schema) async fn upgrade_v27(
         return Ok(());
     }
     let Some(attachment_sql) = attachment_sql else {
-        return absent_attachment(path_sql);
+        return absent_attachment(path_sql.as_deref());
     };
     if is_v29_pair(&attachment_sql, path_sql.as_deref()) {
         return migration_v30::upgrade_v30(connection).await;
@@ -46,7 +46,7 @@ pub(in crate::journal::schema) async fn upgrade_v27(
     Ok(())
 }
 
-fn absent_attachment(path_sql: Option<String>) -> Result<(), HostError> {
+fn absent_attachment(path_sql: Option<&str>) -> Result<(), HostError> {
     if path_sql.is_some() {
         Err(HostError::Journal)
     } else {
