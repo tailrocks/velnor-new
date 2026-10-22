@@ -163,6 +163,8 @@ fn action_step_to_yaml(
         || uses == crate::tool_seed::TOOL_SEED_USES
         || uses == crate::cache_steps::TOOLS_RESTORE_USES
         || uses == crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
+        || velnor_actions_contract::workflow::RUST_VERIFIER_USES.contains(&uses)
+        || uses == crate::verifier_composite::VERIFY_JACTIONLINT_USES
         || crate::action_ref::is_generated_provider_prelude(uses)
         || crate::action_ref::is_crate_obligation_action(uses)
         || crate::action_ref::is_generated_declared_task(uses)
@@ -210,6 +212,7 @@ fn shell_step_to_yaml(
     env: &BTreeMap<String, String>,
     job_env: &BTreeMap<String, String>,
     composite: bool,
+    composite_shell: Option<&str>,
 ) -> Result<Yaml, RenderError> {
     crate::action_mbx_shell::validate_step_argv(run, step.role)?;
     if composite {
@@ -237,7 +240,12 @@ fn shell_step_to_yaml(
     if !filtered_env.is_empty() {
         entries.push(("env".to_owned(), string_map_yaml(&filtered_env)));
     }
-    push_composite_shell(&mut entries, composite);
+    if composite {
+        entries.push((
+            "shell".to_owned(),
+            Yaml::str(composite_shell.unwrap_or("bash")),
+        ));
+    }
     entries.push((
         "run".to_owned(),
         Yaml::str(commands::join_validated_argv_for_run(run)?),
@@ -258,7 +266,7 @@ pub(crate) fn non_internal_step_to_yaml(
         StepKind::Action { uses, with, env } => {
             action_step_to_yaml(job_id, step, uses, with, env, job_env, Some(runs_on))
         }
-        StepKind::Shell { run, env } => shell_step_to_yaml(step, run, env, job_env, false),
+        StepKind::Shell { run, env } => shell_step_to_yaml(step, run, env, job_env, false, None),
         StepKind::Internal { .. } | StepKind::TaskExecution { .. } => Err(
             RenderError::InvalidWorkflow("internal_op_rejected".to_owned()),
         ),
@@ -304,7 +312,7 @@ pub(crate) fn step_to_yaml(
             step_context.runs_on,
         ),
         StepKind::Shell { run, env } => {
-            shell_step_to_yaml(step, run, env, step_context.job_env, composite)
+            shell_step_to_yaml(step, run, env, step_context.job_env, composite, None)
         }
         StepKind::Internal { .. } => {
             internal_step_to_yaml(job_id, step, ctx, needs_envs, composite, step_context)
@@ -313,6 +321,24 @@ pub(crate) fn step_to_yaml(
             "unfactored_task_execution".to_owned(),
         )),
     }
+}
+
+/// Render a canonical shell step for a verifier composite with a fixed,
+/// trusted interpreter rather than resolving `bash` through restored PATH.
+pub(crate) fn verifier_shell_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
+    let StepKind::Shell { run, env } = &step.kind else {
+        return Err(RenderError::InvalidWorkflow(
+            "verifier_composite_requires_shell_step".to_owned(),
+        ));
+    };
+    shell_step_to_yaml(
+        step,
+        run,
+        env,
+        &BTreeMap::new(),
+        true,
+        Some(crate::VERIFY_SHELL),
+    )
 }
 
 /// Render one internal planner step. The operation travels in env, never argv.

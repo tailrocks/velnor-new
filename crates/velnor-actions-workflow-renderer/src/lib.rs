@@ -114,6 +114,7 @@ pub const VERIFY_PATH: &str = "/usr/bin:/bin:/usr/sbin:/sbin";
 /// qualified path as given.
 pub const VERIFY_SHELL: &str = "/bin/bash --noprofile --norc -e -o pipefail {0}";
 pub mod verification_jobs;
+pub mod verifier_composite;
 mod workflow_policy;
 mod workflow_size;
 mod workflow_timeout;

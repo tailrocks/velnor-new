@@ -3,7 +3,7 @@
 
 use crate::RenderError;
 use velnor_actions_contract::workflow::step_identity::{
-    TOOL_SEED_USES, TOOLS_CACHE_PRELUDE_USES, TOOLS_CACHE_RESTORE_USES,
+    RUST_VERIFIER_USES, TOOL_SEED_USES, TOOLS_CACHE_PRELUDE_USES, TOOLS_CACHE_RESTORE_USES,
 };
 
 /// Prefix for renderer-generated shared `ToFu` setup composites.
@@ -23,10 +23,15 @@ pub(crate) const DECLARED_TASK_ACTION_PREFIX: &str = "./.github/actions/declared
 /// Returns [`RenderError::BadActionRef`] for a missing pin, a malformed
 /// name, a forbidden installer action, or a short ref.
 pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
-    if matches!(
-        uses,
-        TOOL_SEED_USES | TOOLS_CACHE_RESTORE_USES | crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
-    ) || TOOLS_CACHE_PRELUDE_USES.contains(&uses)
+    if RUST_VERIFIER_USES.contains(&uses)
+        || uses == crate::verifier_composite::VERIFY_JACTIONLINT_USES
+        || matches!(
+            uses,
+            TOOL_SEED_USES
+                | TOOLS_CACHE_RESTORE_USES
+                | crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
+        )
+        || TOOLS_CACHE_PRELUDE_USES.contains(&uses)
         || is_generated_provider_prelude(uses)
         || is_crate_obligation_action(uses)
         || is_generated_declared_task(uses)
