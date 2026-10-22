@@ -285,3 +285,7 @@ fn validate_playwright(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "bun_suites_tests.rs"]
+mod tests;
