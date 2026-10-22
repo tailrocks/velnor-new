@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use super::super::consume_permit;
 use super::super::record::ProbeRecord;
-use super::super::sample::Observation;
+use super::super::sample::{Observation, ObservationTestInput};
 use crate::worker::{ResourceBudget, test_resource_budget};
 
 fn sample_record(disk_free_bytes: u64) -> ProbeRecord {
@@ -138,16 +138,16 @@ fn observation_with_cpu(
         .docker_root_total_bytes
         .max(budget.pair().memory_bytes);
     let inspected_host_pid = record.probe_host_pid;
-    Observation::test_new(
+    Observation::test_new(ObservationTestInput {
         record,
         cpus,
         inspected_host_pid,
         memory_total_bytes,
-        engine_id.to_owned(),
-        root_digest.to_owned(),
-        "f".repeat(32),
+        engine_id: engine_id.to_owned(),
+        docker_root_digest: root_digest.to_owned(),
+        sample_generation_id: "f".repeat(32),
         observed_at,
-    )
+    })
     .ok_or_else(|| "valid guest record was rejected".to_owned())
 }
 

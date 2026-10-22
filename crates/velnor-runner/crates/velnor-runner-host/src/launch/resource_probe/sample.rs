@@ -51,6 +51,18 @@ pub(super) struct ObservationInput {
     pub(super) startup_evidence: ProbeStartupEvidence,
 }
 
+#[cfg(test)]
+pub(super) struct ObservationTestInput {
+    pub(super) record: ProbeRecord,
+    pub(super) cpus: u32,
+    pub(super) inspected_host_pid: u32,
+    pub(super) memory_total_bytes: u64,
+    pub(super) engine_id: String,
+    pub(super) docker_root_digest: String,
+    pub(super) sample_generation_id: String,
+    pub(super) observed_at: Instant,
+}
+
 impl Observation {
     pub(super) fn new(input: ObservationInput) -> Option<Self> {
         let ObservationInput {
@@ -93,16 +105,17 @@ impl Observation {
     }
 
     #[cfg(test)]
-    pub(super) fn test_new(
-        record: ProbeRecord,
-        cpus: u32,
-        inspected_host_pid: u32,
-        memory_total_bytes: u64,
-        engine_id: String,
-        docker_root_digest: String,
-        sample_generation_id: String,
-        observed_at: Instant,
-    ) -> Option<Self> {
+    pub(super) fn test_new(input: ObservationTestInput) -> Option<Self> {
+        let ObservationTestInput {
+            record,
+            cpus,
+            inspected_host_pid,
+            memory_total_bytes,
+            engine_id,
+            docker_root_digest,
+            sample_generation_id,
+            observed_at,
+        } = input;
         let evidence = ProbeStartupEvidence::test_fixture(
             &sample_generation_id,
             &engine_id,
