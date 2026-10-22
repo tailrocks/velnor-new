@@ -5,7 +5,7 @@ use velnor_actions_contract::workflow::jobs::ValidatorKind;
 use velnor_actions_contract::{
     Concurrency, Job, JobTimeout, Permissions, Step, StepKind, StepRole, Trigger, WorkflowIr,
 };
-use velnor_actions_mise::PREPARE_PINNED_TOOLS_STEP;
+use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, ToolCatalog};
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
 use velnor_actions_workflow_renderer::steps::{DENY_STEP_NAME, MACHETE_STEP_NAME};
 
@@ -102,14 +102,28 @@ fn foreign_spec_and_malformed_argv_block() {
 #[test]
 fn unknown_label_skips_loudly_without_blocking() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let ir = ir_for(shell_job(vec![
+    let catalog = ToolCatalog::pinned();
+    let mut job = shell_job(vec![
         "mise".to_owned(),
         "--no-env".to_owned(),
         "--no-hooks".to_owned(),
         "install".to_owned(),
         "rust@1.99.1".to_owned(),
-    ]));
-    let outcome = audit_prepare_installs(dir.path(), &ir, "self-hosted-1", &[]);
+    ]);
+    // The unsupported runner label skips only lock-platform inspection. The
+    // workflow still needs the canonical verifier sequence for its Rust
+    // install so this test isolates the intended loud, nonblocking skip.
+    job.steps
+        .insert(0, crate::workflow::verify_restored_rust_step(&catalog));
+    job.steps
+        .push(crate::workflow::verify_rust_manifest_step(&catalog));
+    let ir = ir_for(job);
+    // Rust itself is already verified by the channel manifest, so include a
+    // lock-backed validator install to exercise the unsupported-platform path.
+    let validator = deny_command(&format!(
+        "{{ mise --no-env --no-hooks install cargo-deny@{CARGO_DENY_VERSION} && unset FOO }} && payload"
+    ));
+    let outcome = audit_prepare_installs(dir.path(), &ir, "self-hosted-1", &[validator]);
     assert_eq!(outcome.blocking, [] as [std::string::String; 0]);
     let summary = outcome.recommendation.expect("loud skip");
     assert!(summary.contains("self-hosted-1"), "{summary}");

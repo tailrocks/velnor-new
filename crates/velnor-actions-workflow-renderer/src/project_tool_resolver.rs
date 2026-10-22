@@ -25,6 +25,22 @@ use crate::{RenderError, setup::MISE_ACTION_NAME, yaml::Yaml};
 mod quote;
 use quote::quote_run_refs;
 
+/// Apply the canonical shell quoting used when a `run:` scalar references a
+/// project-declared tool version.
+///
+/// Generator-side audits use this same transformation when comparing the
+/// typed pre-render verifier body with the emitted workflow scalar. Keeping
+/// the operation here prevents audits from accepting a looser, separately
+/// implemented approximation.
+///
+/// # Errors
+///
+/// Returns [`RenderError::InvalidWorkflow`] when the run text has malformed
+/// shell quoting around a project tool reference.
+pub fn quote_project_tool_run_refs(text: &str) -> Result<String, RenderError> {
+    quote_run_refs(text)
+}
+
 /// Apply the resolver contract to one rendered workflow document.
 ///
 /// # Errors

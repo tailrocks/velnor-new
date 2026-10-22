@@ -64,7 +64,8 @@ pub fn render_verifier_composite(
     }
 
     let shell = crate::document_steps::verifier_shell_step_to_yaml(step)?;
-    let body = crate::composite::composite_yaml(action_name, vec![shell])?;
+    let mut body = crate::composite::composite_yaml(action_name, vec![shell])?;
+    crate::project_tool_resolver::bind_workflow(&mut body)?;
     let bytes = marker::with_marker(version, &render_yaml(&body))?;
     steps::scan_for_private_subcommands(&bytes)?;
     let logical = uses
@@ -96,7 +97,7 @@ mod tests {
             vec![
                 "sh".to_owned(),
                 "-c".to_owned(),
-                "set -eu; echo verified".to_owned(),
+                "set -eu; echo verified; echo rust@${VELNOR_TOOL_RUST}".to_owned(),
             ],
             BTreeMap::from([
                 (
@@ -131,6 +132,16 @@ mod tests {
         assert!(file.bytes.contains("${{ runner.temp }}/velnor/rustup"));
         assert!(file.bytes.contains("CARGO_HOME:"));
         assert!(file.bytes.contains("${{ runner.temp }}/velnor/cargo"));
+        let resolver = file
+            .bytes
+            .find("name: Resolve project tool versions")
+            .unwrap_or_else(|| panic!("composite lacks its project resolver:\n{}", file.bytes));
+        let verifier = file
+            .bytes
+            .find("name: Verify restored Rust toolchain")
+            .expect("verifier step");
+        assert!(resolver < verifier, "{0}", file.bytes);
+        assert!(file.bytes.contains("velnor_tool VELNOR_TOOL_RUST '"));
         assert!(file.bytes.contains("GITHUB_TOKEN: \"\""));
         let prelude = format!(
             "unset {};",
@@ -138,6 +149,45 @@ mod tests {
         );
         assert!(file.bytes.contains(&prelude));
         assert!(file.bytes.contains("set -eu; echo verified"));
+    }
+
+    #[test]
+    fn jactionlint_composite_uses_the_trusted_shell_and_scrubbed_script() {
+        let step = crate::steps::shell_step(
+            "Verify jactionlint",
+            vec![
+                "sh".to_owned(),
+                "-c".to_owned(),
+                "set -eu; echo digest-verified; echo jactionlint@${VELNOR_TOOL_JACTIONLINT}"
+                    .to_owned(),
+            ],
+            BTreeMap::new(),
+        )
+        .expect("canonical scrubbed shell");
+        let file = render_verifier_composite(VERIFY_JACTIONLINT_USES, &step, "0.1.40")
+            .expect("fixed jactionlint composite");
+        assert_eq!(
+            file.path,
+            ".github/actions/velnor-verify-jactionlint/action.yml"
+        );
+        assert!(file.bytes.contains(&format!("shell: {VERIFY_SHELL}")));
+        assert!(file.bytes.contains("GITHUB_TOKEN: \"\""));
+        let prelude = format!(
+            "unset {};",
+            crate::toolchain_env::CREDENTIAL_UNSET_VARS.join(" ")
+        );
+        assert!(file.bytes.contains(&prelude));
+        assert!(file.bytes.contains("digest-verified"));
+        let resolver = file
+            .bytes
+            .find("name: Resolve project tool versions")
+            .unwrap_or_else(|| panic!("composite lacks its project resolver:\n{}", file.bytes));
+        let verifier = file
+            .bytes
+            .find("name: Verify jactionlint")
+            .expect("verifier step");
+        assert!(resolver < verifier, "{0}", file.bytes);
+        assert!(file.bytes.contains("velnor_tool VELNOR_TOOL_JACTIONLINT '"));
     }
 
     #[test]

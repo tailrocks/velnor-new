@@ -27,6 +27,7 @@ use velnor_actions_mise::toolfiles::lockfile::{
 use velnor_actions_mise::{MISE_LOCK_FILE, ToolCatalog};
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
 
+use crate::verifier_actions::VerifierActionSet;
 use crate::verify::validator_install_pin;
 #[path = "lock_audit_names.rs"]
 mod names;
@@ -86,6 +87,7 @@ pub(crate) fn audit_prepare_installs(
 }
 
 /// Audit emitted install sets against `root/mise.lock` with a resolved [`ToolCatalog`].
+#[cfg(test)]
 pub(crate) fn audit_prepare_installs_with_catalog(
     root: &Path,
     ir: &WorkflowIr,
@@ -93,18 +95,43 @@ pub(crate) fn audit_prepare_installs_with_catalog(
     validator_commands: &[ValidatorCommand],
     catalog: &ToolCatalog,
 ) -> LockAuditOutcome {
+    let verifiers =
+        match VerifierActionSet::build(&catalog.for_emission(), env!("CARGO_PKG_VERSION")) {
+            Ok(verifiers) => verifiers,
+            Err(error) => {
+                return LockAuditOutcome {
+                    recommendation: None,
+                    blocking: vec![format!("verifier_action_templates_invalid:{error}")],
+                };
+            }
+        };
+    audit_prepare_installs_with_catalog_and_verifiers(
+        root,
+        ir,
+        label,
+        validator_commands,
+        catalog,
+        &verifiers,
+    )
+}
+
+/// Audit installs against the resolved catalog and the exact verifier action
+/// templates that generation will emit.
+pub(crate) fn audit_prepare_installs_with_catalog_and_verifiers(
+    root: &Path,
+    ir: &WorkflowIr,
+    label: &str,
+    validator_commands: &[ValidatorCommand],
+    catalog: &ToolCatalog,
+    verifiers: &VerifierActionSet,
+) -> LockAuditOutcome {
     let mut blocking = Vec::new();
     let mut subjects: Vec<InstallSubject> = Vec::new();
     for (id, job) in &ir.jobs {
-        let manifest_verified = job
-            .steps
-            .iter()
-            .any(|step| step.name == crate::workflow::VERIFY_RUST_MANIFEST_STEP);
-        let jactionlint_verified = job
-            .steps
-            .iter()
-            .any(|step| step.name == crate::workflow::VERIFY_JACTIONLINT_STEP);
-        for step in &job.steps {
+        let positions = verifier_positions(id, job, verifiers, &mut blocking);
+        let mut rust_sequence_reported = false;
+        let mut jactionlint_sequence_reported = false;
+        for (step_index, step) in job.steps.iter().enumerate() {
             if step.role != Some(StepRole::PreparePinnedTools) {
                 continue;
             }
@@ -120,14 +147,35 @@ pub(crate) fn audit_prepare_installs_with_catalog(
                 // audit the concrete versions the project declares.
                 let spec = catalog.materialize(&spec);
                 match subject_for_install_spec(&spec, catalog) {
-                    Some(subject) if manifest_verified && is_rust(&subject) => {
-                        rust_manifest_coverage(&subject, &mut blocking);
+                    Some(subject) if is_rust(&subject) => {
+                        if rust_verifier_sequence_valid(job, &positions, Some(step_index)) {
+                            rust_manifest_coverage(&subject, &mut blocking);
+                        } else {
+                            if !rust_sequence_reported {
+                                blocking.push(format!(
+                                    "rust_verifier_sequence_invalid:{id}:expected restored immediately before prepare and installed after toolchain setup"
+                                ));
+                                rust_sequence_reported = true;
+                            }
+                            subjects.push(subject);
+                        }
                     }
                     // `Verify jactionlint` checks the installed executable
                     // against the catalog digest table, so a catalogued
                     // version needs no `mise.lock` row to be verified.
-                    Some(subject)
-                        if jactionlint_verified && is_catalogued_jactionlint(&subject) => {}
+                    Some(subject) if is_catalogued_jactionlint(&subject) => {
+                        if jactionlint_verifier_sequence_valid(&positions, Some(step_index)) {
+                            // The exact digest verifier follows the install.
+                        } else {
+                            if !jactionlint_sequence_reported {
+                                blocking.push(format!(
+                                    "jactionlint_verifier_sequence_invalid:{id}:expected immediately after prepare pinned tools"
+                                ));
+                                jactionlint_sequence_reported = true;
+                            }
+                            subjects.push(subject);
+                        }
+                    }
                     Some(subject) => subjects.push(subject),
                     None => blocking.push(format!("unauditable_install_spec:{spec}")),
                 }
@@ -159,6 +207,98 @@ pub(crate) fn audit_prepare_installs_with_catalog(
     };
     let lock_text = capped_read(&root.join(MISE_LOCK_FILE), MISE_LOCK_FILE, &mut blocking);
     audit_against_lock(lock_text.as_deref(), &subjects, &platform, blocking)
+}
+
+#[derive(Default)]
+struct VerifierPositions {
+    restored_rust: Vec<usize>,
+    installed_rust: Vec<usize>,
+    jactionlint: Vec<usize>,
+}
+
+fn verifier_positions(
+    id: &str,
+    job: &velnor_actions_contract::Job,
+    verifiers: &VerifierActionSet,
+    blocking: &mut Vec<String>,
+) -> VerifierPositions {
+    let mut positions = VerifierPositions::default();
+    for (index, step) in job.steps.iter().enumerate() {
+        let action = match &step.kind {
+            StepKind::Action { uses, .. } => verifiers.by_uses(uses),
+            StepKind::Shell { .. } | StepKind::TaskExecution { .. } | StepKind::Internal { .. } => {
+                None
+            }
+        };
+        if let Some(action) = action {
+            if !VerifierActionSet::canonical_call(step, action) {
+                blocking.push(format!("noncanonical_verifier_call:{id}:{}", action.uses));
+                continue;
+            }
+            match action.uses {
+                uses if uses == verifiers.restored_rust.uses => {
+                    positions.restored_rust.push(index);
+                }
+                uses if uses == verifiers.installed_rust.uses => {
+                    positions.installed_rust.push(index);
+                }
+                uses if uses == verifiers.jactionlint.uses => {
+                    positions.jactionlint.push(index);
+                }
+                _ => unreachable!("lookup returns only registered verifier actions"),
+            }
+        } else if step.role == Some(StepRole::VerifyRustManifest)
+            || matches!(
+                step.name.as_str(),
+                crate::workflow::VERIFY_RESTORED_RUST_STEP
+                    | crate::workflow::VERIFY_RUST_MANIFEST_STEP
+                    | crate::workflow::VERIFY_JACTIONLINT_STEP
+            )
+        {
+            blocking.push(format!("forged_verifier_call:{id}:{}", step.name));
+        }
+    }
+    if positions.restored_rust.len() > 1 {
+        blocking.push(format!("duplicate_verifier_call:{id}:restored-rust"));
+    }
+    if positions.installed_rust.len() > 1 {
+        blocking.push(format!("duplicate_verifier_call:{id}:installed-rust"));
+    }
+    if positions.jactionlint.len() > 1 {
+        blocking.push(format!("duplicate_verifier_call:{id}:jactionlint"));
+    }
+    positions
+}
+
+fn rust_verifier_sequence_valid(
+    job: &velnor_actions_contract::Job,
+    positions: &VerifierPositions,
+    prepare_at: Option<usize>,
+) -> bool {
+    let (Some(prepare_at), [restored_at], [installed_at]) = (
+        prepare_at,
+        positions.restored_rust.as_slice(),
+        positions.installed_rust.as_slice(),
+    ) else {
+        return false;
+    };
+    let components_at = job
+        .steps
+        .iter()
+        .position(|step| step.role == Some(StepRole::PrepareRustComponents));
+    restored_at.checked_add(1) == Some(prepare_at)
+        && *installed_at > prepare_at
+        && components_at.is_none_or(|at| *installed_at > at)
+}
+
+fn jactionlint_verifier_sequence_valid(
+    positions: &VerifierPositions,
+    prepare_at: Option<usize>,
+) -> bool {
+    matches!(
+        (prepare_at, positions.jactionlint.as_slice()),
+        (Some(prepare_at), [verify_at]) if verify_at == &(prepare_at + 1)
+    )
 }
 
 /// Bare-install diagnostic: zero specs means versions would come from
