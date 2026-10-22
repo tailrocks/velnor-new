@@ -4,8 +4,9 @@ use super::*;
 use crate::journal::{
     AssignmentKey, CapacityLimits, EngineContext, Journal, ReservationRequest, ReservationResult,
     StorageAdmissionSample, StorageFilesystemKind, StorageMedium, StoragePoolObservation,
-    StorageProfile, StorageProvisioningAdmission, StorageProvisioningMemoryObservation,
-    StorageRole, StorageSampleIdentity, fixture_provisioning_profile,
+    StoragePoolObservationInput, StorageProfile, StorageProvisioningAdmission,
+    StorageProvisioningMemoryObservation, StorageRole, StorageSampleIdentity,
+    fixture_provisioning_profile,
 };
 use crate::launch::{SelectedEngineContext, StartPermit};
 use crate::worker::{WorkerIdentityNames, WorkerVolumeRole};
@@ -232,16 +233,16 @@ fn disk_pool_observations(profile: &StorageProfile) -> Result<Vec<StoragePoolObs
         .iter()
         .filter(|pool| pool.medium() == StorageMedium::Disk)
         .map(|pool| {
-            StoragePoolObservation::new_with_filesystem(
-                pool.pool_id().to_owned(),
-                pool.pool_id().to_owned(),
-                pool.medium(),
-                StorageFilesystemKind::Btrfs,
-                pool.max_bytes(),
-                pool.max_bytes(),
-                pool.max_inodes(),
-                pool.max_inodes(),
-            )
+            StoragePoolObservation::new_with_filesystem(StoragePoolObservationInput {
+                pool_id: pool.pool_id().to_owned(),
+                filesystem_instance_digest: pool.pool_id().to_owned(),
+                medium: pool.medium(),
+                filesystem_kind: StorageFilesystemKind::Btrfs,
+                total_bytes: pool.max_bytes(),
+                available_bytes: pool.max_bytes(),
+                total_inodes: pool.max_inodes(),
+                available_inodes: pool.max_inodes(),
+            })
         })
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| format!("pool sample: {error}"))

@@ -7,7 +7,8 @@ use crate::{
     journal::{
         ConnectionJournal, Journal, MetadataSettlementResult, StorageAdmissionSample,
         StorageFilesystemKind, StorageInodePolicy, StorageMedium, StoragePoolLimit,
-        StoragePoolObservation, StorageProfile, StorageRole, StorageSampleIdentity,
+        StoragePoolObservation, StoragePoolObservationInput, StorageProfile, StorageRole,
+        StorageSampleIdentity,
     },
 };
 
@@ -168,16 +169,17 @@ pub(super) fn settlement_sample_for_identity(
             statx_device_minor: record.docker_root_statx_device_minor,
             filesystem_id: record.docker_root_filesystem_id,
         });
-    let pool_observation = StoragePoolObservation::new_with_filesystem(
-        pool.pool_id().to_owned(),
-        filesystem_instance_digest,
-        StorageMedium::Disk,
-        filesystem_kind,
-        record.docker_root_total_bytes,
-        record.docker_root_available_bytes,
-        record.docker_root_inode_total,
-        record.docker_root_inode_available,
-    )?;
+    let pool_observation =
+        StoragePoolObservation::new_with_filesystem(StoragePoolObservationInput {
+            pool_id: pool.pool_id().to_owned(),
+            filesystem_instance_digest,
+            medium: StorageMedium::Disk,
+            filesystem_kind,
+            total_bytes: record.docker_root_total_bytes,
+            available_bytes: record.docker_root_available_bytes,
+            total_inodes: record.docker_root_inode_total,
+            available_inodes: record.docker_root_inode_available,
+        })?;
     let sample =
         StorageAdmissionSample::new(identity, output.observed_at, vec![pool_observation], None)?;
     sample.validate_metadata_settlement_for(

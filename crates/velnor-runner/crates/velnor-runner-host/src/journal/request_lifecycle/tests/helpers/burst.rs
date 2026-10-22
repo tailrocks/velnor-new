@@ -6,9 +6,9 @@ use crate::journal::{
     AssignedAcquireResult, CapacityLimits, CreatedScaleSetResponse, Journal,
     OperationalCapacityLimits, RequestPhysicalReservationResult, ReservationRequest,
     ScaleSetCreateRequest, SourceAuthorizationResult, StorageAdmissionSample,
-    StorageFilesystemKind, StorageMedium, StoragePoolLimit, StoragePoolObservation, StorageProfile,
-    StorageProvisioningAdmission, StorageProvisioningMemoryObservation, StorageSampleIdentity,
-    fixture_provisioning_profile,
+    StorageFilesystemKind, StorageMedium, StoragePoolLimit, StoragePoolObservation,
+    StoragePoolObservationInput, StorageProfile, StorageProvisioningAdmission,
+    StorageProvisioningMemoryObservation, StorageSampleIdentity, fixture_provisioning_profile,
 };
 use crate::launch::StartPermit;
 use velnor_runner_github::RunnerReference;
@@ -234,14 +234,16 @@ fn burst_admission(
         )?,
         std::time::Instant::now(),
         vec![StoragePoolObservation::new_with_filesystem(
-            disk.pool_id().to_owned(),
-            "a".repeat(64),
-            StorageMedium::Disk,
-            StorageFilesystemKind::Btrfs,
-            DISK_CAPACITY,
-            DISK_CAPACITY - 12 * 1024 * 1024 * 1024,
-            0,
-            0,
+            StoragePoolObservationInput {
+                pool_id: disk.pool_id().to_owned(),
+                filesystem_instance_digest: "a".repeat(64),
+                medium: StorageMedium::Disk,
+                filesystem_kind: StorageFilesystemKind::Btrfs,
+                total_bytes: DISK_CAPACITY,
+                available_bytes: DISK_CAPACITY - 12 * 1024 * 1024 * 1024,
+                total_inodes: 0,
+                available_inodes: 0,
+            },
         )?],
         None,
     )?;

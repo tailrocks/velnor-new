@@ -193,9 +193,9 @@ pub(crate) use provisioning::{
 pub(crate) use storage_budget::StorageAdmission;
 pub(crate) use storage_budget::{
     BoundJobFactsSnapshot, StorageAdmissionSample, StorageFilesystemKind, StorageInodePolicy,
-    StorageMedium, StorageObserver, StoragePoolLimit, StoragePoolObservation, StorageProfile,
-    StorageProvisioningAdmission, StorageProvisioningMemoryObservation, StorageRole,
-    StorageRoleLimit, StorageSampleIdentity,
+    StorageMedium, StorageObserver, StoragePoolLimit, StoragePoolObservation,
+    StoragePoolObservationInput, StorageProfile, StorageProvisioningAdmission,
+    StorageProvisioningMemoryObservation, StorageRole, StorageRoleLimit, StorageSampleIdentity,
 };
 #[cfg(test)]
 pub(crate) use storage_budget_tests::{

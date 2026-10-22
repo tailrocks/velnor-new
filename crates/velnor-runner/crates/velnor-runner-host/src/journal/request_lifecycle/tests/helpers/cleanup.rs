@@ -339,6 +339,7 @@ pub(super) async fn settlement_sample(
 ) -> Result<crate::journal::StorageAdmissionSample, HostError> {
     use crate::journal::{
         StorageAdmissionSample, StorageFilesystemKind, StorageMedium, StoragePoolObservation,
+        StoragePoolObservationInput,
         StorageSampleIdentity,
     };
 
@@ -356,15 +357,15 @@ pub(super) async fn settlement_sample(
         claim.engine_id().to_owned(),
         claim.docker_root_digest().to_owned(),
     )?;
-    let pool = StoragePoolObservation::new_with_filesystem(
-        disk_pool.pool_id().to_owned(),
-        "a".repeat(64),
-        StorageMedium::Disk,
-        StorageFilesystemKind::Btrfs,
-        64_u64 << 30,
-        60_u64 << 30,
-        0,
-        0,
-    )?;
+    let pool = StoragePoolObservation::new_with_filesystem(StoragePoolObservationInput {
+        pool_id: disk_pool.pool_id().to_owned(),
+        filesystem_instance_digest: "a".repeat(64),
+        medium: StorageMedium::Disk,
+        filesystem_kind: StorageFilesystemKind::Btrfs,
+        total_bytes: 64_u64 << 30,
+        available_bytes: 60_u64 << 30,
+        total_inodes: 0,
+        available_inodes: 0,
+    })?;
     StorageAdmissionSample::new(identity, Instant::now(), vec![pool], None)
 }

@@ -47,7 +47,7 @@ impl ControllerPollOutcome {
             wake_cleanup: outcome.wake_cleanup,
             session_delete_candidate: outcome.session_delete_candidate,
             acquired: match outcome.admission {
-                Some(PositiveAdmission::Acquired(acquired)) => Some(acquired),
+                Some(PositiveAdmission::Acquired(acquired)) => Some(*acquired),
                 None
                 | Some(
                     PositiveAdmission::Deferred(_)

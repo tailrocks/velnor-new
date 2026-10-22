@@ -15,6 +15,17 @@ pub(crate) struct StoragePoolObservation {
     pub(super) available_inodes: u64,
 }
 
+pub(crate) struct StoragePoolObservationInput {
+    pub(crate) pool_id: String,
+    pub(crate) filesystem_instance_digest: String,
+    pub(crate) medium: StorageMedium,
+    pub(crate) filesystem_kind: StorageFilesystemKind,
+    pub(crate) total_bytes: u64,
+    pub(crate) available_bytes: u64,
+    pub(crate) total_inodes: u64,
+    pub(crate) available_inodes: u64,
+}
+
 impl StoragePoolObservation {
     #[cfg(test)]
     pub(crate) fn new(
@@ -30,7 +41,7 @@ impl StoragePoolObservation {
             StorageMedium::Disk => StorageFilesystemKind::Other,
             StorageMedium::Tmpfs => StorageFilesystemKind::Tmpfs,
         };
-        Self::new_with_filesystem(
+        Self::new_with_filesystem(StoragePoolObservationInput {
             pool_id,
             filesystem_instance_digest,
             medium,
@@ -39,19 +50,22 @@ impl StoragePoolObservation {
             available_bytes,
             total_inodes,
             available_inodes,
-        )
+        })
     }
 
     pub(crate) fn new_with_filesystem(
-        pool_id: String,
-        filesystem_instance_digest: String,
-        medium: StorageMedium,
-        filesystem_kind: StorageFilesystemKind,
-        total_bytes: u64,
-        available_bytes: u64,
-        total_inodes: u64,
-        available_inodes: u64,
+        input: StoragePoolObservationInput,
     ) -> Result<Self, HostError> {
+        let StoragePoolObservationInput {
+            pool_id,
+            filesystem_instance_digest,
+            medium,
+            filesystem_kind,
+            total_bytes,
+            available_bytes,
+            total_inodes,
+            available_inodes,
+        } = input;
         if !valid_digest(&pool_id)
             || !valid_digest(&filesystem_instance_digest)
             || total_bytes == 0

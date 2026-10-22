@@ -66,32 +66,44 @@ pub(super) fn owned_container_response(
         })
         .flatten();
     let running = role == "dind" && !state.stopped_owned_containers.contains(id);
-    let body = owned_container_body(
+    let body = owned_container_body(OwnedContainerBody {
         role,
-        &observed_id,
-        &observed_name,
-        &reservation_id,
-        &operation_id,
-        &observed_connection,
+        id: &observed_id,
+        name: &observed_name,
+        reservation_id: &reservation_id,
+        operation_id: &operation_id,
+        connection_id: &observed_connection,
         runner_home,
         running,
-    );
+    });
     Ok(Some((
         200,
         serde_json::to_vec(&body).map_err(|_| HostError::Frame)?,
     )))
 }
 
-fn owned_container_body(
-    role: &str,
-    id: &str,
-    name: &str,
-    reservation_id: &str,
-    operation_id: &str,
-    connection_id: &str,
-    runner_home: Option<&str>,
+struct OwnedContainerBody<'a> {
+    role: &'a str,
+    id: &'a str,
+    name: &'a str,
+    reservation_id: &'a str,
+    operation_id: &'a str,
+    connection_id: &'a str,
+    runner_home: Option<&'a str>,
     running: bool,
-) -> serde_json::Value {
+}
+
+fn owned_container_body(input: OwnedContainerBody<'_>) -> serde_json::Value {
+    let OwnedContainerBody {
+        role,
+        id,
+        name,
+        reservation_id,
+        operation_id,
+        connection_id,
+        runner_home,
+        running,
+    } = input;
     let (status, exit_code, finished_at) = if running {
         ("running", serde_json::Value::Null, "0001-01-01T00:00:00Z")
     } else {
