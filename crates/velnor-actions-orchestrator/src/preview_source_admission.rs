@@ -109,50 +109,21 @@ fn select_until(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
     let current_attempt = u32::try_from(positive_u64("GITHUB_RUN_ATTEMPT")?)
         .map_err(|_| internal("preview_source_context"))?;
     let api = GitHubApi::new(repository);
-    let (source_sha, ci_run_id, ci_attempt, authority) =
-        selection::source_from_invocation(&api, &event, repository_id, &seed, &event_name)?;
-    if !valid_git_sha(&source_sha) || !valid_git_sha(&authority) {
-        return Err(internal("preview_source_sha"));
-    }
-
-    api.verify_preview_main_ancestry(
-        repository_id,
-        &seed.default_branch,
-        &source_sha,
-        &coordinator,
-    )?;
-    let ci_source = RunSource {
-        repository_id,
-        sha: &source_sha,
-        branch: &seed.default_branch,
-    };
-    api.verify_ci_identity(ci_run_id, ci_attempt, ci_source, true)?;
-
-    let workflow =
-        api.admitted_workflow(seed.channel.workflow_path(), seed.channel.workflow_name())?;
-    let current_source = RunSource {
-        repository_id,
-        sha: &coordinator,
-        branch: &seed.default_branch,
-    };
-    let role = release_job_name_seed(seed.channel, &required("GITHUB_JOB")?)?;
-    api.verify_current_role(
-        &CurrentRun {
-            id: current_run,
-            attempt: current_attempt,
-            source: current_source,
-            workflow: &workflow,
-            event: &required("GITHUB_EVENT_NAME")?,
+    selection::select_and_emit_source(
+        &api,
+        &selection::SelectionRequest {
+            event: &event,
+            seed: &seed,
+            repository_id,
+            authority: &coordinator,
+            current_run,
+            current_attempt,
+            event_name: &event_name,
+            job_name: &required("GITHUB_JOB")?,
+            deadline,
         },
-        &role,
-    )?;
-    let checkout_lfs = source_checkout_lfs(&api, &source_sha)?;
-    deadline
-        .remaining()
-        .map_err(|_| internal("preview_source_deadline"))?;
-    append_output(&format!(
-        "source_sha={source_sha}\nworkflow_authority_sha={authority}\nci_run_id={ci_run_id}\nci_attempt={ci_attempt}\ncheckout_lfs={checkout_lfs}\n"
-    ))
+        append_output,
+    )
 }
 
 fn source_checkout_lfs(api: &GitHubApi, source_sha: &str) -> Result<bool, OrchestratorError> {

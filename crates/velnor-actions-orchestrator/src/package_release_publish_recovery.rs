@@ -83,8 +83,8 @@ pub(in crate::package_release_publish) fn verify_preview_original_for_source_sel
         return Err(internal("package_recovery_source_seed_invalid"));
     }
     let root = runner_root()?;
-    let original_run_id = positive_env("VELNOR_RELEASE_ORIGINAL_RUN_ID")?;
-    let original_attempt = positive_env_u32("VELNOR_RELEASE_ORIGINAL_RUN_ATTEMPT")?;
+    let original_run_id = canonical_positive_env("VELNOR_RELEASE_ORIGINAL_RUN_ID")?;
+    let original_attempt = canonical_positive_env_u32("VELNOR_RELEASE_ORIGINAL_RUN_ATTEMPT")?;
     let repository_id = positive_env("GITHUB_REPOSITORY_ID")?;
     let api = GitHubApi::new(seed.repository.clone());
     api.verify_repository(repository_id)?;
@@ -350,8 +350,8 @@ use checks::{
 #[path = "package_release_publish_recovery_files.rs"]
 mod recovery_files;
 use recovery_files::{
-    create_fresh_directory, env_path, env_text, positive_env, positive_env_u32,
-    read_regular_bounded, runner_root,
+    canonical_positive_env, canonical_positive_env_u32, create_fresh_directory, env_path, env_text,
+    positive_env, positive_env_u32, read_regular_bounded, runner_root,
 };
 
 #[path = "package_release_publish_recovery_archive.rs"]

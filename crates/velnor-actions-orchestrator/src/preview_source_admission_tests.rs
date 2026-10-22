@@ -1,5 +1,8 @@
 use super::super::super::github::WorkflowMetadata;
-use super::selection::{source_from_workflow_run_event, validate_preview_source_context};
+use super::selection::{
+    SelectionRequest, select_and_emit_source, source_from_workflow_run_event,
+    validate_preview_source_context,
+};
 use super::*;
 use serde_json::json;
 
@@ -36,6 +39,14 @@ fn event() -> Value {
             "head_repository": {"id": 9, "full_name": "jackin-project/jackin"}
         }
     })
+}
+
+fn selector_event() -> Value {
+    let mut candidate = event();
+    candidate["repository"]["full_name"] = json!("example/app");
+    candidate["workflow_run"]["repository"]["full_name"] = json!("example/app");
+    candidate["workflow_run"]["head_repository"]["full_name"] = json!("example/app");
+    candidate
 }
 
 fn policy() -> PackageReleasePolicy {
@@ -144,6 +155,82 @@ fn source_event_rejects_malformed_envelopes_and_unadmitted_workflow_metadata() {
             source_from_workflow_run_event(&event(), 9, "jackin-project/jackin", &candidate)
                 .is_err(),
             "accepted unadmitted CI workflow metadata"
+        );
+    }
+}
+
+#[test]
+fn selector_event_identity_failures_do_not_emit_checkout_gate_output() {
+    assert_eq!(
+        source_from_workflow_run_event(&selector_event(), 9, "example/app", &workflow())
+            .expect("valid selector event baseline"),
+        ("a".repeat(40), 101, 2)
+    );
+
+    for (pointer, replacement) in [
+        ("/workflow/id", json!(8)),
+        ("/workflow/name", json!("Untrusted CI")),
+        ("/workflow/path", json!(".github/workflows/other.yml")),
+        ("/workflow_run/workflow_id", json!(8)),
+    ] {
+        let mut candidate = selector_event();
+        *candidate
+            .pointer_mut(pointer)
+            .expect("workflow identity field") = replacement;
+        let (api, fixture) = GitHubApi::with_fixture(
+            "example/app",
+            vec![
+                (
+                    "repos/example/app".to_owned(),
+                    json!({"id":9,"full_name":"example/app"}),
+                ),
+                (
+                    "repos/example/app/actions/workflows/ci.yml".to_owned(),
+                    json!({
+                        "id":7,
+                        "name":velnor_actions_contract::WORKFLOW_DISPLAY_NAME,
+                        "path":velnor_actions_contract::CI_WORKFLOW_PATH,
+                        "state":"active"
+                    }),
+                ),
+            ],
+        );
+        let seed = policy();
+        let deadline = CheckDeadline::after(Duration::from_secs(30)).expect("deadline");
+        let mut output = String::from("preserve-existing-output\n");
+        let mut checkout_gate_reached = false;
+        let result = select_and_emit_source(
+            &api,
+            &SelectionRequest {
+                event: &candidate,
+                seed: &seed,
+                repository_id: 9,
+                authority: &"b".repeat(40),
+                current_run: 202,
+                current_attempt: 1,
+                event_name: "workflow_run",
+                job_name: "preview-eligibility",
+                deadline,
+            },
+            |value| {
+                output.push_str(value);
+                checkout_gate_reached = true;
+                Ok(())
+            },
+        );
+        assert!(
+            format!("{result:?}").contains("preview_source_event_identity"),
+            "mutation {pointer} reached the wrong rejection branch: {result:?}"
+        );
+        assert_eq!(output, "preserve-existing-output\n");
+        assert!(!checkout_gate_reached);
+        fixture.assert_drained();
+        assert_eq!(
+            fixture.observed(),
+            [
+                "repos/example/app",
+                "repos/example/app/actions/workflows/ci.yml"
+            ]
         );
     }
 }

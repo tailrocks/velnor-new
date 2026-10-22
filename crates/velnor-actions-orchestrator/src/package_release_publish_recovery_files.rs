@@ -49,6 +49,27 @@ pub(super) fn positive_env_u32(key: &str) -> Result<u32, OrchestratorError> {
         .ok_or_else(|| internal("package_recovery_numeric_context_invalid"))
 }
 
+pub(super) fn canonical_positive_env(key: &str) -> Result<u64, OrchestratorError> {
+    parse_canonical_positive_decimal(&env_text(key)?)
+}
+
+pub(super) fn canonical_positive_env_u32(key: &str) -> Result<u32, OrchestratorError> {
+    parse_canonical_positive_decimal_u32(&env_text(key)?)
+}
+
+fn parse_canonical_positive_decimal(value: &str) -> Result<u64, OrchestratorError> {
+    value
+        .parse::<u64>()
+        .ok()
+        .filter(|parsed| *parsed > 0 && parsed.to_string() == value)
+        .ok_or_else(|| internal("package_recovery_numeric_context_invalid"))
+}
+
+fn parse_canonical_positive_decimal_u32(value: &str) -> Result<u32, OrchestratorError> {
+    u32::try_from(parse_canonical_positive_decimal(value)?)
+        .map_err(|_| internal("package_recovery_numeric_context_invalid"))
+}
+
 pub(super) fn read_regular_bounded(path: &Path, max: u64) -> Result<Vec<u8>, OrchestratorError> {
     let metadata =
         fs::symlink_metadata(path).map_err(|_| internal("package_recovery_plan_missing"))?;
@@ -58,3 +79,7 @@ pub(super) fn read_regular_bounded(path: &Path, max: u64) -> Result<Vec<u8>, Orc
     crate::release_policy_admission::metadata::read(path)
         .map_err(|_| internal("package_recovery_plan_read"))
 }
+
+#[cfg(test)]
+#[path = "package_release_publish_recovery_files_tests.rs"]
+mod tests;

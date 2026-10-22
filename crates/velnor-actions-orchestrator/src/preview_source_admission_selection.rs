@@ -1,12 +1,86 @@
-use super::{positive_value, required, required_value, valid_git_sha};
+use super::{
+    positive_value, release_job_name_seed, required_value, source_checkout_lfs, valid_git_sha,
+};
 use crate::{OrchestratorError, internal::internal};
 use serde_json::Value;
 use velnor_actions_contract::{PackageReleasePolicy, package_release::PackageReleaseChannel};
+use velnor_actions_mise::CheckDeadline;
 
 use super::super::super::{
     github::{GitHubApi, WorkflowMetadata},
-    run_identity::RunSource,
+    run_identity::{CurrentRun, RunSource},
 };
+
+pub(super) struct SelectionRequest<'a> {
+    pub(super) event: &'a Value,
+    pub(super) seed: &'a PackageReleasePolicy,
+    pub(super) repository_id: u64,
+    pub(super) authority: &'a str,
+    pub(super) current_run: u64,
+    pub(super) current_attempt: u32,
+    pub(super) event_name: &'a str,
+    pub(super) job_name: &'a str,
+    pub(super) deadline: CheckDeadline,
+}
+
+pub(super) fn select_and_emit_source(
+    api: &GitHubApi,
+    request: &SelectionRequest<'_>,
+    emit: impl FnOnce(&str) -> Result<(), OrchestratorError>,
+) -> Result<(), OrchestratorError> {
+    let (source_sha, ci_run_id, ci_attempt) = source_from_invocation(
+        api,
+        request.event,
+        request.repository_id,
+        request.seed,
+        request.event_name,
+    )?;
+    if !valid_git_sha(&source_sha) || !valid_git_sha(request.authority) {
+        return Err(internal("preview_source_sha"));
+    }
+    api.verify_preview_main_ancestry(
+        request.repository_id,
+        &request.seed.default_branch,
+        &source_sha,
+        request.authority,
+    )?;
+    let ci_source = RunSource {
+        repository_id: request.repository_id,
+        sha: &source_sha,
+        branch: &request.seed.default_branch,
+    };
+    api.verify_ci_identity(ci_run_id, ci_attempt, ci_source, true)?;
+
+    let workflow = api.admitted_workflow(
+        request.seed.channel.workflow_path(),
+        request.seed.channel.workflow_name(),
+    )?;
+    let current_source = RunSource {
+        repository_id: request.repository_id,
+        sha: request.authority,
+        branch: &request.seed.default_branch,
+    };
+    let role = release_job_name_seed(request.seed.channel, request.job_name)?;
+    api.verify_current_role(
+        &CurrentRun {
+            id: request.current_run,
+            attempt: request.current_attempt,
+            source: current_source,
+            workflow: &workflow,
+            event: request.event_name,
+        },
+        &role,
+    )?;
+    let checkout_lfs = source_checkout_lfs(api, &source_sha)?;
+    request
+        .deadline
+        .remaining()
+        .map_err(|_| internal("preview_source_deadline"))?;
+    emit(&format!(
+        "source_sha={source_sha}\nworkflow_authority_sha={}\nci_run_id={ci_run_id}\nci_attempt={ci_attempt}\ncheckout_lfs={checkout_lfs}\n",
+        request.authority
+    ))
+}
 
 pub(super) fn source_from_invocation(
     api: &GitHubApi,
@@ -14,7 +88,7 @@ pub(super) fn source_from_invocation(
     repository_id: u64,
     seed: &PackageReleasePolicy,
     event_name: &str,
-) -> Result<(String, u64, u32, String), OrchestratorError> {
+) -> Result<(String, u64, u32), OrchestratorError> {
     match event_name {
         "workflow_run" => {
             api.verify_repository_identity(repository_id)?;
@@ -24,7 +98,7 @@ pub(super) fn source_from_invocation(
             )?;
             let (source, run, attempt) =
                 source_from_workflow_run_event(event, repository_id, &seed.repository, &workflow)?;
-            Ok((source, run, attempt, required("GITHUB_SHA")?))
+            Ok((source, run, attempt))
         }
         "workflow_dispatch" => {
             let signed = super::super::super::recovery::verify_preview_original_for_source_selection(
@@ -56,7 +130,6 @@ pub(super) fn source_from_invocation(
                     .run_attempt
                     .filter(|attempt| *attempt > 0)
                     .ok_or_else(|| internal("preview_source_latest_ci_identity"))?,
-                required("GITHUB_SHA")?,
             ))
         }
         _ => Err(internal("preview_source_event_name")),
