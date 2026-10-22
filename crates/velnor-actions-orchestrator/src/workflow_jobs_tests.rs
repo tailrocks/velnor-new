@@ -321,8 +321,8 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
             .position(|name| *name == PREPARE_PINNED_TOOLS_STEP);
         assert_eq!(
             prepare_at,
-            Some(1),
-            "prepare sits after checkout: {names:?}"
+            Some(2),
+            "prepare sits after checkout and the restored-toolchain check: {names:?}"
         );
         let write_at = names.iter().position(|name| *name == "Write request");
         let plan_at = names.iter().position(|name| *name == "Plan");

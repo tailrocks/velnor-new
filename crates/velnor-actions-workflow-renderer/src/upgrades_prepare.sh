@@ -36,15 +36,20 @@ mise_files=$(git ls-files -- mise.toml .mise.toml mise.lock .mise.lock)
 # with it and roll back with it.
 toolchain_files=$(git ls-files -- rust-toolchain.toml '*/rust-toolchain.toml' rust-toolchain '*/rust-toolchain')
 rust_files="$mise_files $toolchain_files"
+# Portable in-place rewrite (no GNU `sed -i`) of the toolchain `channel`.
+set_channel() {
+  sed -E "s/^([[:space:]]*channel[[:space:]]*=[[:space:]]*\")[0-9]+[.][0-9]+[.][0-9]+(\")/\1$new_rust\2/" "$1" > "$1.velnor-next" \
+    && mv "$1.velnor-next" "$1"
+}
 mirror_rust() {
   new_rust=$(mise ls --local --json | jq -r '(.rust // .["core:rust"] // [])[0].requested_version // empty')
   [ -n "$new_rust" ] || return 0
   for file in $toolchain_files; do
     case "$file" in
-      *.toml) sed -i -E "s/^([[:space:]]*channel[[:space:]]*=[[:space:]]*\")[0-9]+[.][0-9]+[.][0-9]+(\")/\1$new_rust\2/" "$file" ;;
+      *.toml) set_channel "$file" ;;
       *)
         if grep -q '^[[:space:]]*\[' "$file"; then
-          sed -i -E "s/^([[:space:]]*channel[[:space:]]*=[[:space:]]*\")[0-9]+[.][0-9]+[.][0-9]+(\")/\1$new_rust\2/" "$file"
+          set_channel "$file"
         else
           printf '%s\n' "$new_rust" > "$file"
         fi
@@ -91,7 +96,7 @@ if [ -n "$cargo_roots" ]; then
       if ! cmp -s "$dir/Cargo.lock.before" "$root/Cargo.lock"; then changed "Cargo dependencies in $root"; fi
     else
       failed "Cargo upgrade in $root failed (private git sources need the fetch credential; resolve by hand)"
-      git diff --name-only -- "$root" | grep -E '(^|/)Cargo[.](toml|lock)$' | xargs -r git checkout --
+      git diff --name-only -- "$root" | { grep -E '(^|/)Cargo[.](toml|lock)$' || true; } | xargs -r git checkout --
     fi
   done
 fi
@@ -147,6 +152,19 @@ while read -r code path; do failed "unexpected change left out of the upgrade ($
   if [ -s "$dir/changes.md" ]; then cat "$dir/changes.md"; else echo "- regenerated files only"; fi
   if [ -s "$failures" ]; then echo; echo "## Needs migration"; cat "$failures"; fi
 } > "$summary"
+# A scope that failed and rolled back is behind even when nothing else
+# changed: the freshness gate reports it as `upgrade_scope_needs_migration`.
+if [ -s "$failures" ]; then
+  delimiter="velnor-failures-$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+  {
+    echo "failed=true"
+    echo "failures<<$delimiter"
+    cat "$failures"
+    echo "$delimiter"
+  } >> "$GITHUB_OUTPUT"
+else
+  echo "failed=false" >> "$GITHUB_OUTPUT"
+fi
 if git diff --cached --quiet; then
   echo "changed=false" >> "$GITHUB_OUTPUT"
   cat "$summary"
