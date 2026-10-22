@@ -5,9 +5,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::{Job, WORKFLOW_TASK_JOB_PREFIX};
 
 use super::{
-    build_task_jobs::BuildTaskPolicy, bun_member_jobs::BunMemberPolicy,
-    bun_suite_jobs::BunSuitePolicy, image_build_jobs::ImageBuildPolicy,
-    native_image_jobs::NativeImageTaskPolicy, stack_jobs::StackJobPolicy,
+    build_task_jobs::BuildTaskPolicy, bun_assets_jobs::BunAssetsPolicy,
+    bun_member_jobs::BunMemberPolicy, bun_suite_jobs::BunSuitePolicy,
+    image_build_jobs::ImageBuildPolicy, native_image_jobs::NativeImageTaskPolicy,
+    stack_jobs::StackJobPolicy,
 };
 use crate::{RenderError, VerificationTaskPolicy};
 
@@ -30,6 +31,8 @@ pub enum WorkflowTaskPolicy {
     Bun(BunMemberPolicy),
     /// One declared Bun suite job beside its member job, hosted-only.
     BunSuite(BunSuitePolicy),
+    /// The one job fetching a member's private release assets for its suites.
+    BunAssets(BunAssetsPolicy),
     /// One dbt project or Ansible root job, hosted-only.
     Stack(StackJobPolicy),
 }
@@ -45,6 +48,7 @@ impl WorkflowTaskPolicy {
             Self::Image(policy) => &policy.image.id,
             Self::Bun(policy) => &policy.id,
             Self::BunSuite(policy) => &policy.id,
+            Self::BunAssets(policy) => &policy.id,
             Self::Stack(policy) => &policy.id,
         }
     }
@@ -67,6 +71,9 @@ impl WorkflowTaskPolicy {
                 .iter()
                 .any(|id| id == job_id)
                 .then_some(super::bun_member_jobs::BUN_RUNNER),
+            Self::BunAssets(policy) => {
+                (policy.id == job_id).then_some(super::bun_member_jobs::BUN_RUNNER)
+            }
             Self::Stack(policy) => (policy.id == job_id).then_some(super::stack_jobs::STACK_RUNNER),
         }
     }
@@ -76,7 +83,7 @@ impl WorkflowTaskPolicy {
     pub fn uses_pinned_tools(&self) -> bool {
         match self {
             Self::Image(policy) => policy.uses_pinned_tools(),
-            Self::Bun(_) | Self::BunSuite(_) | Self::Stack(_) => true,
+            Self::Bun(_) | Self::BunSuite(_) | Self::BunAssets(_) | Self::Stack(_) => true,
             _ => false,
         }
     }
@@ -91,6 +98,7 @@ impl WorkflowTaskPolicy {
             Self::Image(policy) => policy.platform_for_job(job_id).is_some(),
             Self::Bun(policy) => policy.id == job_id,
             Self::BunSuite(policy) => policy.job_ids().iter().any(|id| id == job_id),
+            Self::BunAssets(policy) => policy.id == job_id,
             Self::Stack(policy) => policy.id == job_id,
         }
     }
@@ -135,20 +143,11 @@ pub(crate) fn validate_workflow_task_jobs(
                     checkout_uses,
                 )?,
             ),
-            WorkflowTaskPolicy::Bun(task) => job_ids.extend(
-                crate::verification_jobs::bun_member_jobs::validate_bun_member_job(
-                    jobs,
-                    task,
-                    checkout_uses,
-                )?,
-            ),
-            WorkflowTaskPolicy::BunSuite(task) => job_ids.extend(
-                crate::verification_jobs::bun_suite_jobs::validate_bun_suite_job(
-                    jobs,
-                    task,
-                    checkout_uses,
-                )?,
-            ),
+            WorkflowTaskPolicy::Bun(_)
+            | WorkflowTaskPolicy::BunSuite(_)
+            | WorkflowTaskPolicy::BunAssets(_) => {
+                job_ids.extend(bun_task_job_ids(jobs, policy, checkout_uses)?);
+            }
             WorkflowTaskPolicy::Stack(task) => {
                 let ids = crate::verification_jobs::stack_jobs::validate_stack_job(
                     jobs,
@@ -178,6 +177,27 @@ pub(crate) fn validate_workflow_task_jobs(
         ));
     }
     Ok(job_ids)
+}
+
+/// Reconstruct one Bun task's jobs; the gating ids join Required.
+fn bun_task_job_ids(
+    jobs: &BTreeMap<String, Job>,
+    policy: &WorkflowTaskPolicy,
+    checkout_uses: &str,
+) -> Result<Vec<String>, RenderError> {
+    use crate::verification_jobs::{bun_assets_jobs, bun_member_jobs, bun_suite_jobs};
+    match policy {
+        WorkflowTaskPolicy::Bun(task) => {
+            bun_member_jobs::validate_bun_member_job(jobs, task, checkout_uses)
+        }
+        WorkflowTaskPolicy::BunSuite(task) => {
+            bun_suite_jobs::validate_bun_suite_job(jobs, task, checkout_uses)
+        }
+        WorkflowTaskPolicy::BunAssets(task) => {
+            bun_assets_jobs::validate_bun_assets_job(jobs, task, checkout_uses)
+        }
+        _ => Ok(Vec::new()),
+    }
 }
 
 /// Add every emitted job from the shared task graph to Required's success fan-in.

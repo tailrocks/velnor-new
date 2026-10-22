@@ -26,11 +26,11 @@ mod tar_preflight;
 mod zip_checks;
 use archive_deadline::{DeadlineIo, archive_error, check_deadline, gzip_reader, xz_reader};
 
-const MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
-const MAX_ENTRIES: usize = 100_000;
+pub(crate) const MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
+pub(crate) const MAX_ENTRIES: usize = 100_000;
 const MAX_PATH_BYTES: usize = 4096;
 const MAX_PATH_COMPONENTS: usize = 256;
-const MAX_ENTRY_BYTES: u64 = 256 * 1024 * 1024;
+pub(crate) const MAX_ENTRY_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_BROWSER_ENTRY_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_TOTAL_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 const MAX_GLOBAL_ENTRIES: usize = 200_000;
@@ -73,7 +73,7 @@ impl ArchiveBudget {
         }
     }
 
-    fn admit_entry(&mut self) -> Result<(), OrchestratorError> {
+    pub(crate) fn admit_entry(&mut self) -> Result<(), OrchestratorError> {
         if self.entries == 0 {
             return Err(internal("tool_archive_global_entry_limit"));
         }
@@ -81,7 +81,7 @@ impl ArchiveBudget {
         Ok(())
     }
 
-    fn admit_bytes(&mut self, bytes: u64) -> Result<(), OrchestratorError> {
+    pub(crate) fn admit_bytes(&mut self, bytes: u64) -> Result<(), OrchestratorError> {
         if bytes > self.bytes {
             return Err(internal("tool_archive_global_size_limit"));
         }
