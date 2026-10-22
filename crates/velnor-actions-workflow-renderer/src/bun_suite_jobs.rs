@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::{Job, JobTimeout, Step, StepKind};
 
 use crate::matrix::bun::{BUN_LEGS_ENV, BUN_MAX_PARALLEL_ENV};
+use crate::matrix::suites::SUITE_ALLOW_FAILURE_ENV;
 pub use crate::matrix::bun::{BunLeg, BunLegMatrix};
 
 use crate::verification_jobs::bun_member_jobs::{
@@ -40,6 +41,24 @@ pub struct BunSuitePolicy {
     /// Playwright legs, when the suite is sharded; the job then runs once
     /// per leg and its one script step is the Playwright run.
     pub matrix: Option<BunLegMatrix>,
+    /// The non-gating job that merges the legs' blobs, when configured.
+    pub report: Option<BunReportPolicy>,
+}
+
+/// Job id suffix of a sharded suite's report job.
+pub const BUN_REPORT_SUFFIX: &str = "--report";
+
+/// The report job of a sharded suite (`bun-<slug>--<suite>--report`).
+///
+/// It is diagnostic only: `continue-on-error: true`, never in Required, and
+/// it runs only when the suite job was not skipped, so a broken merge can
+/// neither mask nor fake a test verdict.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BunReportPolicy {
+    /// Timeout (the suite's).
+    pub timeout: JobTimeout,
+    /// Steps after checkout: install, blob download, merge, report upload.
+    pub steps: Vec<Step>,
 }
 
 impl BunSuitePolicy {
@@ -63,7 +82,32 @@ impl BunSuitePolicy {
                 return Err(invalid("bun_suite_matrix_one_script"));
             }
         }
+        if let Some(report) = &self.report {
+            if self.matrix.is_none() {
+                return Err(invalid("bun_report_without_matrix"));
+            }
+            validate_bun_steps(&self.report_id(), &report.steps)?;
+            if report.steps.iter().any(|step| step.parallel) {
+                return Err(invalid("bun_report_parallel_step"));
+            }
+        }
         Ok(())
+    }
+
+    /// Job id of the report job (`<suite job id>--report`).
+    #[must_use]
+    pub fn report_id(&self) -> String {
+        format!("{}{BUN_REPORT_SUFFIX}", self.id)
+    }
+
+    /// Every job id this suite emits: the suite job, then its report job.
+    #[must_use]
+    pub fn job_ids(&self) -> Vec<String> {
+        let mut ids = vec![self.id.clone()];
+        if self.report.is_some() {
+            ids.push(self.report_id());
+        }
+        ids
     }
 
     /// Steps with the leg marker on the one script step of a sharded suite.
@@ -109,6 +153,50 @@ pub fn build_bun_suite_job(
     })
 }
 
+/// Build the report job of a suite that has one.
+///
+/// # Errors
+///
+/// Returns [`RenderError`] for an invalid policy or a suite without a report.
+pub fn build_bun_report_job(
+    policy: &BunSuitePolicy,
+    checkout_uses: &str,
+) -> Result<Job, RenderError> {
+    policy.validate()?;
+    let report = policy.report.as_ref().ok_or_else(|| {
+        RenderError::InvalidWorkflow(format!("bun_report_missing:{}", policy.id))
+    })?;
+    let mut all = vec![steps::checkout_step(checkout_uses)?];
+    all.extend(report.steps.iter().cloned());
+    // Job-level `continue-on-error: true`, through the Rust suite marker.
+    if let Some(StepKind::Shell { env, .. }) = all.iter_mut().rev().find_map(|step| {
+        matches!(step.kind, StepKind::Shell { .. }).then_some(&mut step.kind)
+    }) {
+        env.insert(SUITE_ALLOW_FAILURE_ENV.to_owned(), "true".to_owned());
+    } else {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "bun_report_without_shell_step:{}",
+            policy.id
+        )));
+    }
+    Ok(Job {
+        services: Vec::new(),
+        display_name: format!("Bun / {} / {} / report", policy.member, policy.suite),
+        runs_on: BUN_RUNNER.to_owned(),
+        timeout_minutes: report.timeout,
+        needs: vec![crate::render::PLAN_JOB_ID.to_owned(), policy.id.clone()],
+        condition: Some(format!(
+            "!cancelled() && needs.{}.result != 'skipped'",
+            policy.id
+        )),
+        permissions: Some(bun_permissions(&report.steps)),
+        cache_mode: None,
+        environment: None,
+        steps: all,
+        check_runner: None,
+    })
+}
+
 /// Reconstruct the suite's job and reject an altered or missing one.
 ///
 /// Returns the job ids that join Required: the suite job when it is
@@ -132,6 +220,18 @@ pub(crate) fn validate_bun_suite_job(
             policy.id
         )));
     }
+    if policy.report.is_some() {
+        let id = policy.report_id();
+        let actual = jobs.get(&id).ok_or_else(|| {
+            RenderError::InvalidWorkflow(format!("bun_report_job_missing:{id}"))
+        })?;
+        if !same_bun_job(actual, &build_bun_report_job(policy, checkout_uses)?) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "bun_report_job_contract:{id}"
+            )));
+        }
+    }
+    // The report job is never gating; a non-gating suite is not either.
     Ok(if policy.required {
         vec![policy.id.clone()]
     } else {

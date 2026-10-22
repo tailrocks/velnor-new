@@ -74,7 +74,7 @@ pub use build_task::{
 };
 pub use bun::{
     BUN_JOB_PREFIX, BunBrowser, BunInputRule, BunMemberConfig, BunStackConfig, BunSuiteConfig,
-    BunSuitePlaywright, DEFAULT_BUN_SCRIPTS, MAX_BUN_SUITE_LEGS, MAX_BUN_TIMEOUT_MINUTES,
+    BunSuitePlaywright, BunSuiteReport, DEFAULT_REPORT_RETENTION_DAYS, DEFAULT_RESULTS_RETENTION_DAYS, MAX_BUN_RETENTION_DAYS, DEFAULT_BUN_SCRIPTS, MAX_BUN_SUITE_LEGS, MAX_BUN_TIMEOUT_MINUTES,
     RESERVED_BUN_SUITE_IDS, is_valid_member_name, is_valid_project_name, is_valid_script_name,
     is_valid_suite_id,
 };

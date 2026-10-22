@@ -9,7 +9,9 @@ use velnor_actions_workflow_renderer::private_source_steps::{
     PrivateSourcesSpec, private_source_steps,
 };
 use velnor_actions_workflow_renderer::verification_jobs::{
-    BUN_ROOT_ENV, BUN_RUNNER, BUN_SCOPES_ENV, BunMemberPolicy, BunSuitePolicy, PLAYWRIGHT_PINS_ENV,
+    BUN_ROOT_ENV, BUN_RUNNER, BUN_SCOPES_ENV, BunLegMatrix, BunMemberPolicy, BunReportPolicy,
+    BunSuitePolicy, build_bun_report_job, bun_blob_upload_step, bun_blobs_download_step,
+    bun_report_upload_step, bun_results_upload_step, PLAYWRIGHT_PINS_ENV,
     PLAYWRIGHT_ROOT_ENV, PLAYWRIGHT_VERSION_ENV, build_bun_member_job, build_bun_suite_job,
     bun_registry_step, playwright_install_step,
 };
@@ -238,6 +240,7 @@ fn suite(steps: Vec<Step>) -> BunSuitePolicy {
         required: true,
         steps,
         matrix: None,
+        report: None,
     }
 }
 
@@ -307,5 +310,63 @@ fn a_suite_with_the_registry_phase_reads_packages() -> Result<(), RenderError> {
     let permissions = job.permissions.expect("permissions");
     assert_eq!(permissions.packages, PermissionLevel::Read);
     assert_eq!(permissions.id_token, PermissionLevel::None);
+    Ok(())
+}
+
+#[test]
+fn only_generated_velnor_pw_artifact_actions_enter_a_bun_job() -> Result<(), RenderError> {
+    let leg = [step("Install", false)?, step("Test", true)?];
+    let mut ok = suite(leg.to_vec());
+    ok.steps
+        .push(bun_blob_upload_step("bun-chainargos-ui--unit")?);
+    ok.steps.push(bun_results_upload_step(
+        "bun-chainargos-ui--unit",
+        "packages/ui",
+        7,
+    )?);
+    build_bun_suite_job(&ok, CHECKOUT)?;
+    let mut foreign = suite(leg.to_vec());
+    let mut other = bun_blob_upload_step("bun-chainargos-ui--unit")?;
+    if let StepKind::Action { with, .. } = &mut other.kind {
+        with.insert("name".to_owned(), "something-else".to_owned());
+    }
+    foreign.steps.push(other);
+    let error = build_bun_suite_job(&foreign, CHECKOUT).expect_err("foreign artifact");
+    assert!(error.to_string().contains("bun_job_action_step"), "{error}");
+    Ok(())
+}
+
+#[test]
+fn a_report_job_is_non_gating_and_needs_its_legs() -> Result<(), RenderError> {
+    let mut policy = suite(vec![step("Install", false)?, step("Test", true)?]);
+    policy.matrix = Some(BunLegMatrix::new(&[], 2, None));
+    policy.report = Some(BunReportPolicy {
+        timeout: JobTimeout::DEFAULT,
+        steps: vec![
+            step("Install", false)?,
+            bun_blobs_download_step(&policy.id)?,
+            step("Merge Playwright reports", false)?,
+            bun_report_upload_step(&policy.id, 14)?,
+        ],
+    });
+    assert_eq!(
+        policy.job_ids(),
+        ["bun-chainargos-ui--unit", "bun-chainargos-ui--unit--report"]
+    );
+    let job = build_bun_report_job(&policy, CHECKOUT)?;
+    assert_eq!(job.display_name, "Bun / @chainargos/ui / unit / report");
+    assert_eq!(job.needs, ["plan", "bun-chainargos-ui--unit"]);
+    assert_eq!(
+        job.condition.as_deref(),
+        Some("!cancelled() && needs.bun-chainargos-ui--unit.result != 'skipped'")
+    );
+    assert_eq!(
+        job.permissions.expect("permissions").packages,
+        PermissionLevel::None
+    );
+    let mut lonely = suite(vec![step("Test", true)?]);
+    lonely.report = policy.report.clone();
+    let error = build_bun_suite_job(&lonely, CHECKOUT).expect_err("report without legs");
+    assert!(error.to_string().contains("bun_report_without_matrix"), "{error}");
     Ok(())
 }
