@@ -78,7 +78,16 @@ fn prepare(
         false,
         context,
     )?);
-    job_steps.push(steps::checkout(spec, context.source()));
+    let checkout = if matches!(context, TapInvocationContext::Preview) {
+        steps::checkout_with_lfs(
+            spec,
+            context.source(),
+            "${{ needs.preview-eligibility.outputs.checkout_lfs }}",
+        )
+    } else {
+        steps::checkout(spec, context.source())
+    };
+    job_steps.push(checkout);
     job_steps.push(operation(
         spec,
         tap,
@@ -124,6 +133,23 @@ fn writer(
         ("permissions".to_owned(), source_permissions()),
         ("environment".to_owned(), Yaml::str("tap-update")),
     ]);
+    if !merge && matches!(context, TapInvocationContext::Preview) {
+        fields.push((
+            "outputs".to_owned(),
+            Yaml::Map(vec![(
+                "promotion_state".to_owned(),
+                Yaml::str("${{ steps.release.outputs.promotion_state }}"),
+            )]),
+        ));
+    }
+    if merge && matches!(context, TapInvocationContext::Preview) {
+        fields.push((
+            "if".to_owned(),
+            Yaml::str(
+                "${{ needs.preview-tap-writer.outputs.promotion_state != 'skipped_stale_source' }}",
+            ),
+        ));
+    }
     let mut job_steps = vec![
         steps::setup(&spec.linux_setup),
         run_step(

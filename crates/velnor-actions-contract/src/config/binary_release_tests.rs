@@ -15,7 +15,6 @@ pub(super) fn enabled_preview() -> RustBinaryReleaseConfig {
         version_package: "jackin".to_owned(),
         preview: RustBinaryPreviewConfig {
             enabled: true,
-            release_id: 328_385_904,
             ..RustBinaryPreviewConfig::default()
         },
         version_env: "JACKIN_VERSION_OVERRIDE".to_owned(),

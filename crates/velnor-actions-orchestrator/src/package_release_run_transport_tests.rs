@@ -9,11 +9,16 @@ fn metadata() -> Value {
     json!({"id":7,"name":"CI","path":".github/workflows/ci.yml","state":"active"})
 }
 fn required() -> Value {
-    json!({"run_id":22,"name":"Required","head_sha":source().sha,"status":"completed","conclusion":"success"})
+    json!({"id":81,"run_id":22,"name":"Required","head_sha":source().sha,"status":"completed","conclusion":"success"})
+}
+fn required_with_id(id: u64) -> Value {
+    let mut job = required();
+    job["id"] = json!(id);
+    job
 }
 fn list_route() -> String {
     route(&format!(
-        "actions/workflows/7/runs?head_sha={}&branch=main&event=push&per_page=100&page=1",
+        "actions/workflows/7/runs?head_sha={}&per_page=100&page=1",
         source().sha
     ))
 }
@@ -30,7 +35,7 @@ fn first_three(jobs: Value) -> Vec<(String, Value)> {
 
 #[test]
 fn real_api_ci_admission_checks_full_dispatch_order_and_current_attempt() {
-    let mut responses = first_three(json!({"jobs":[required()]}));
+    let mut responses = first_three(json!({"total_count":1,"jobs":[required()]}));
     responses.extend([
         (list_route(), json!({"workflow_runs":[run_json()]})),
         (route("actions/runs/22"), run_json()),
@@ -70,7 +75,7 @@ fn real_api_rejects_stale_latest_or_new_attempt_before_publication() {
     for newer_at_list in [true, false] {
         let mut newer = run_json();
         newer["run_attempt"] = json!(4);
-        let mut responses = first_three(json!({"jobs":[required()]}));
+        let mut responses = first_three(json!({"total_count":1,"jobs":[required()]}));
         responses.push((
             list_route(),
             json!({"workflow_runs":[if newer_at_list {newer.clone()} else {run_json()}]}),
@@ -89,7 +94,7 @@ fn real_api_rejects_stale_latest_or_new_attempt_before_publication() {
 fn real_api_rejects_duplicate_required_before_any_latest_lookup() {
     let (api, fixture) = GitHubApi::with_fixture(
         "example/app",
-        first_three(json!({"jobs":[required(),required()]})),
+        first_three(json!({"total_count":2,"jobs":[required(),required()]})),
     );
     assert!(api.verify_ci_identity(22, 3, source(), true).is_err());
     fixture.assert_drained();
@@ -98,11 +103,11 @@ fn real_api_rejects_duplicate_required_before_any_latest_lookup() {
 
 #[test]
 fn real_api_reads_required_from_second_job_page_and_preserves_original_ci() {
-    let fillers = (0..100).map(|n| json!({"run_id":22,"name":format!("Other {n}"),"head_sha":source().sha,"status":"completed","conclusion":"success"})).collect::<Vec<_>>();
-    let mut responses = first_three(json!({"jobs":fillers}));
+    let fillers = (0..100).map(|n| json!({"id":n+1,"run_id":22,"name":format!("Other {n}"),"head_sha":source().sha,"status":"completed","conclusion":"success"})).collect::<Vec<_>>();
+    let mut responses = first_three(json!({"total_count":101,"jobs":fillers}));
     responses.push((
         route("actions/runs/22/attempts/3/jobs?per_page=100&page=2"),
-        json!({"jobs":[required()]}),
+        json!({"total_count":101,"jobs":[required_with_id(101)]}),
     ));
     let (api, fixture) = GitHubApi::with_fixture("example/app", responses);
     api.verify_ci_identity(22, 3, source(), false)
@@ -130,7 +135,7 @@ fn unconfigured_mutation_is_rejected_without_any_process_or_network() {
 
 #[test]
 fn warm_completed_evidence_keeps_latest_list_and_current_run_fresh() {
-    let mut responses = first_three(json!({"jobs":[required()]}));
+    let mut responses = first_three(json!({"total_count":1,"jobs":[required()]}));
     for _ in 0..2 {
         responses.extend([
             (list_route(), json!({"workflow_runs":[run_json()]})),
@@ -160,7 +165,7 @@ fn warm_completed_cache_never_accepts_new_attempt_pending_or_failed_current_ci()
     ] {
         let mut changed = run_json();
         changed[field] = value;
-        let mut responses = first_three(json!({"jobs":[required()]}));
+        let mut responses = first_three(json!({"total_count":1,"jobs":[required()]}));
         responses.extend([
             (list_route(), json!({"workflow_runs":[run_json()]})),
             (route("actions/runs/22"), changed),
@@ -178,12 +183,12 @@ fn warm_completed_cache_never_accepts_new_attempt_pending_or_failed_current_ci()
 
 #[test]
 fn failed_required_evidence_is_not_cached_as_success() {
-    let mut responses = first_three(json!({"jobs":[]}));
+    let mut responses = first_three(json!({"total_count":0,"jobs":[]}));
     responses.extend([
         (route("actions/runs/22/attempts/3"), run_json()),
         (
             route("actions/runs/22/attempts/3/jobs?per_page=100&page=1"),
-            json!({"jobs":[required()]}),
+            json!({"total_count":1,"jobs":[required()]}),
         ),
     ]);
     let (api, fixture) = GitHubApi::with_fixture("example/app", responses);
@@ -201,7 +206,7 @@ fn warm_completed_cache_still_rejects_a_newer_source_ci_run() {
     let mut newer = run_json();
     newer["id"] = json!(23);
     newer["run_number"] = json!(13);
-    let mut responses = first_three(json!({"jobs":[required()]}));
+    let mut responses = first_three(json!({"total_count":1,"jobs":[required()]}));
     responses.push((list_route(), json!({"workflow_runs":[newer]})));
     let (api, fixture) = GitHubApi::with_fixture("example/app", responses);
     api.verify_ci_identity(22, 3, source(), false)
@@ -276,8 +281,6 @@ fn historical_signed_attempt_remains_valid_while_new_mutation_rejects_rerun() {
     let mut original = producing_run();
     original["status"] = json!("completed");
     original["conclusion"] = json!("failure");
-    let mut rerun = producing_run();
-    rerun["run_attempt"] = json!(4);
     let (api, fixture) = GitHubApi::with_fixture(
         "example/app",
         vec![
@@ -286,16 +289,21 @@ fn historical_signed_attempt_remains_valid_while_new_mutation_rejects_rerun() {
                 producing_metadata(),
             ),
             (route("actions/runs/22/attempts/3"), original.clone()),
-            (route("actions/runs/22"), rerun),
+            // Even though the aggregate run is now on attempt 4, retained
+            // validation must keep authenticating the signed attempt 3.
             (route("actions/runs/22/attempts/3"), original),
+            (route("actions/runs/22/attempts/3"), {
+                let mut attempt = producing_run();
+                attempt["status"] = json!("completed");
+                attempt["conclusion"] = json!("failure");
+                attempt
+            }),
         ],
     );
     api.verify_release_run(&release_receipt(), true)
         .expect("historical signed attempt");
-    assert!(
-        api.verify_current_release_run(&release_receipt(), true)
-            .is_err()
-    );
+    api.verify_current_release_run(&release_receipt(), true)
+        .expect("retained attempt remains valid after a newer rerun");
     api.verify_release_run(&release_receipt(), true)
         .expect("historical publication still valid");
     fixture.assert_drained();
@@ -379,3 +387,9 @@ fn terminal_publication_reads_keep_queued_original_distinct_from_active_tap_role
 
 #[path = "package_release_direct_caller_tests.rs"]
 mod direct_caller;
+
+#[path = "package_release_run_identity_transport_tests.rs"]
+mod identity_transport_tests;
+
+#[path = "package_release_run_inventory_transport_tests.rs"]
+mod inventory_transport_tests;

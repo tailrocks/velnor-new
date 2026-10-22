@@ -99,11 +99,15 @@ pub use velnor_actions_contract::{DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT
 pub use super::package_publication::{
     PackagePublicationBackend, PackagePublicationOutcome, publish_package_release,
 };
+pub use super::package_release_publish::release_policy_admission::{
+    ACQUIRE_PREVIEW_SOURCE_OP, FINALIZE_PREVIEW_SOURCE_OP, SELECT_PREVIEW_SOURCE_OP,
+    acquire_preview_source_from_env, finalize_preview_source_from_env,
+    select_preview_source_from_env,
+};
 pub use super::package_release_publish::{
-    ADMIT_RELEASE_POLICY_OP, ADMIT_STABLE_TAG_ORIGIN_OP, PUBLISH_PACKAGE_RELEASE_OP,
-    RECOVER_PACKAGE_RELEASE_OP, ReleaseTapContinuationSelection,
-    SELECT_RELEASE_TAP_CONTINUATION_OP, SELECT_STABLE_RELEASE_SOURCE_OP,
-    WRITE_STABLE_TAG_INTENT_OP, WRITE_STABLE_TAG_ORIGIN_OP, admit_release_policy_from_env,
+    ADMIT_STABLE_TAG_ORIGIN_OP, PUBLISH_PACKAGE_RELEASE_OP, RECOVER_PACKAGE_RELEASE_OP,
+    ReleaseTapContinuationSelection, SELECT_RELEASE_TAP_CONTINUATION_OP,
+    SELECT_STABLE_RELEASE_SOURCE_OP, WRITE_STABLE_TAG_INTENT_OP, WRITE_STABLE_TAG_ORIGIN_OP,
     admit_stable_tag_origin_from_env, publish_package_release_from_env,
     recover_package_release_from_env, select_release_tap_continuation_from_env,
     select_stable_release_source_from_env, write_stable_tag_intent_from_env,

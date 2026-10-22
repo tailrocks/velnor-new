@@ -32,27 +32,28 @@ fn continuation_stale_candidate_stops_before_ci_release_or_tag_reads() {
     assert_eq!(fixture.observed().len(), 1);
 }
 #[test]
-fn continuation_without_exact_source_ci_does_not_discover_publication() {
+fn continuation_with_failed_exact_source_ci_does_not_discover_publication() {
     let sha = "a".repeat(40);
-    let (api, fixture) = GitHubApi::with_fixture(
-        "example/app",
-        vec![
-            (
-                "repos/example/app/git/ref/heads/main".to_owned(),
-                json!({"ref":"refs/heads/main","object":{"type":"commit","sha":sha}}),
-            ),
-            (
-                "repos/example/app/actions/workflows/ci.yml".to_owned(),
-                json!({"id":7,"name":"CI","path":".github/workflows/ci.yml","state":"active"}),
-            ),
-            (
-                format!(
-                    "repos/example/app/actions/workflows/7/runs?head_sha={sha}&branch=main&event=push&per_page=100&page=1"
-                ),
-                json!({"workflow_runs":[]}),
-            ),
-        ],
-    );
+    let mut responses = vec![
+        (
+            "repos/example/app/git/ref/heads/main".to_owned(),
+            json!({"ref":"refs/heads/main","object":{"type":"commit","sha":sha}}),
+        ),
+        (
+            "repos/example/app/actions/workflows/ci.yml".to_owned(),
+            json!({"id":7,"name":"CI","path":".github/workflows/ci.yml","state":"active"}),
+        ),
+    ];
+    responses.push((
+        format!("repos/example/app/actions/workflows/7/runs?head_sha={sha}&per_page=100&page=1"),
+        json!({"workflow_runs":[{
+            "id":22,"run_attempt":3,"run_number":12,"workflow_id":7,
+            "name":"CI","path":".github/workflows/ci.yml","head_sha":sha,
+            "head_branch":"main","event":"push","status":"completed",
+            "conclusion":"failure","repository":{"id":9},"head_repository":{"id":9}
+        }]}),
+    ));
+    let (api, fixture) = GitHubApi::with_fixture("example/app", responses);
     assert_eq!(
         select_preview(&api, &plan(), &sha, 9, 17).expect("admitted read-only API result"),
         None

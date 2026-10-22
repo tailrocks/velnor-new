@@ -5,51 +5,59 @@ The complete static `PackageReleasePlan` and public release receipt are unchange
 Source implementation and focused tests do not establish hosted capacity or live
 publication. Official release, consumer adoption and two real upgrades remain gates.
 
-## Literal execution graph
+## Bounded source matrix and complete artifact union
 
-A validated complete preview plan determines sorted product/target pairs, bounded
-by a preview-specific limit of 128. The separate full release archive limit
-remains 256. Each pair receives the fixed indexed job ID `preview-payload-000`
-through `preview-payload-127`. Jackin has six such jobs. The public full plan
-is held in identical production job environment mappings, allowing existing
-workflow mapping sharing to avoid repeating it for every leaf. The rendered
-workflow still must fit the unchanged 500,000-byte limit; irreducible oversized
-graphs are rejected.
-Each builds every declared executable for that pair. Empty or reduced plans,
-partial bin inventories, arbitrary selectors and dynamically selected matrices
-are not supported.
+A validated complete preview plan determines sorted product/target pairs,
+bounded by a preview-specific limit of 128. The separate full release archive
+limit remains 256. Eligibility emits the matrix from the complete A-bound plan;
+one fixed `preview-payload` matrix job builds each pair's complete executable
+inventory. There are no generated literal-leaf job IDs and no reduced or
+caller-selected matrix. Empty plans, partial bin inventories and arbitrary
+selectors are rejected.
 
-`preview-assemble` requires successful eligibility and every literal leaf. It
-receives exact `toJSON(needs)` data: eligibility outputs must match the admitted
-source/CI tuple and each expected leaf must report success with exactly
-`artifact_id` and `artifact_digest`. IDs are distinct positive canonical decimal
-integers; digests are mandatory 64-character lowercase SHA-256 values. Extra,
-missing, duplicate, failed or stale-attempt inputs block assembly.
+`preview-assemble` requires successful eligibility and the matrix job. Native
+admission enumerates the complete authenticated GitHub jobs and artifacts API
+union for the exact current run and attempt, matches every expected pair to
+exactly one successful matrix child and immutable artifact ID, and checks each
+uploaded archive digest against the API digest. Missing, extra, duplicate,
+failed, stale-attempt or mismatched artifacts block assembly. Names are
+consistency checks, never download authority. Assembly downloads only admitted
+numeric IDs, verifies their bytes, and builds the complete plan union with
+configured companions. The matrix and artifact union derive from A's full plan;
+a leaf cannot supply a smaller plan.
 
-Leaf jobs have Contents read permission. Assembly additionally has Actions read
-permission for fixed artifact and run reads. Neither source job has an approval
-environment, OIDC, release writes, tap writes or signing authority. The service
-job display name equals the fixed job ID, permitting exact live-role admission.
-All concrete jobs remain bounded by the existing five-minute maximum.
+Matrix producer jobs have Contents read permission. Assembly additionally has
+Actions read permission for fixed artifact and run reads. Neither source job has
+an approval environment, OIDC, release writes, tap writes or signing authority.
+Generated roles use fixed machine IDs and exact live job observations for
+admission. Jobs and operations remain bounded by their declared limits.
 
 ## Complete production request
 
-Canonical `velnor.preview-production.v1` contains exactly `schema`, `plan`,
-`plan_sha256`, `context`, and `stage`. The SHA-256 covers canonical bytes of the
-entire unchanged static plan, including all products, bins and companions.
-
-Context contains repository/head repository numeric IDs, full source SHA and
-ref, workflow authority SHA, current run ID and attempt, successful upstream CI
-run ID and attempt, full-history commit count and deterministic version.
-Structural validation is not remote authentication. Source jobs independently
-re-derive the plan and history from the exact checkout. The source-free signer
-compares fixed workflow/event/eligibility data with authenticated current GitHub
-run, repository, source, latest CI and job-role observations.
+Canonical `velnor.release-production.v1` contains exactly `schema`, complete
+`plan`, `policy_sha256`, `plan_sha256`, `context`, and `stage`. Hashes bind the
+canonical complete policy and plan from A, including all products, bins and
+companions. Context contains repository/head repository IDs, source A and ref,
+workflow authority B, current run/attempt, successful exact-A CI run/attempt,
+full-history count and deterministic version. Structural validation is not
+remote authentication. Source tasks verify the admitted policy, exact configuration and manifest
+closure, rediscovered task/tool declarations, and history against checkout A. Source-free signer and publisher
+admission authenticates B's current run, workflow, certificate and job roles,
+the A<=B<=H ancestry, and latest exact-A CI evidence.
 
 `stage` is a closed tagged object: `payload` contains one admitted `pair`;
 `assemble` contains the exact sorted complete `inputs` array. Each input has
 `pair`, immutable numeric `artifact_id`, and unprefixed mandatory `sha256`.
 No caller may fabricate a reduced plan to invoke the complete verifier.
+
+Preview execution uses the authenticated static A projection directly; it does
+not run general workspace discovery or Cargo metadata before the declared task.
+The native finalizer derives policy and inventory from exact A blobs, and
+execution rechecks their sealed closure before using the admitted plan. This
+avoids coupling historical A to B's workspace paths, metadata compiler pins or
+project tool declarations. The declared task still acquires its qualified tools
+from A in a fresh isolated home. Stable retains its existing preparation path.
+Source checkouts use A's admitted `checkout_lfs` setting.
 
 ## Source task handoff
 
@@ -91,9 +99,10 @@ Its name is `velnor-preview-aggregate-r{run_id}-a{run_attempt}`. The upload emit
 its immutable service ID and ZIP digest to the source-free signer.
 
 Names are consistency checks, never download authority. Native read-only
-transport authenticates the current run and exact attempt, source/head
-repository identities, workflow and push-CI authority, current main, latest
-successful Required CI and one active fixed consumer job. It admits bounded
+transport authenticates the current B run and exact attempt, source/head
+repository identities, workflow and exact-A push-CI authority, the A<=B<=H
+ancestry, latest successful exact-A `Required` CI and one active fixed consumer
+job. It admits bounded
 complete artifact/job pagination, downloads only the literal immutable ID,
 requires API digest equality, and rechecks downloaded size/digest. There is no
 artifact timestamp heuristic and no failed-only attempt reuse. Assembly

@@ -14,7 +14,7 @@ fn config(stable: bool, preview: bool) -> VelnorConfig {
             "producer":{"task":"release:package","tools":["rust"],"inputs":["mise.toml","Cargo.lock"]},
             "products":[{"id":"jackin","package":"jackin","bins":["jackin"],"targets":["aarch64-apple-darwin"],"archive":"tar.gz"}],
             "stable":{"enabled":stable},
-            "preview":{"enabled":preview,"release_id":328_385_904}
+            "preview":{"enabled":preview}
         }}}
     })).expect("typed config");
     config

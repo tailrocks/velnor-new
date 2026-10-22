@@ -14,7 +14,6 @@ pub(crate) fn jackin_preview() -> RustBinaryReleaseConfig {
         version_package: "jackin".to_owned(),
         preview: crate::config::RustBinaryPreviewConfig {
             enabled: true,
-            release_id: 328_385_904,
             ..crate::config::RustBinaryPreviewConfig::default()
         },
         version_env: "JACKIN_VERSION_OVERRIDE".to_owned(),

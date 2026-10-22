@@ -21,11 +21,14 @@ use crate::{
 #[path = "package_release_signer_request.rs"]
 mod request;
 mod runtime;
+#[path = "package_release_signer_subjects.rs"]
+mod subjects;
 use runtime::{
     absolute_env, read_regular_file, release_companions, release_version,
     require_private_directory, sha256, signing_identity_from_env, validate_identity,
     validate_release_directory, write_new_file,
 };
+use subjects::append_attestation_subject_paths;
 
 #[path = "package_release_signer_attestation.rs"]
 mod attestation;
@@ -294,7 +297,8 @@ pub(crate) fn sign_package_release(
     if bundle.name != "release.json.bundle" {
         return Err(internal("package_signer_receipt_bundle_name"));
     }
-    verify_signed_package(&output_dir, plan, identity)?;
+    let signed = verify_signed_package(&output_dir, plan, identity)?;
+    append_attestation_subject_paths(&signed, root)?;
     Ok(VerifiedSignedPackage {
         plan: plan.clone(),
         receipt,

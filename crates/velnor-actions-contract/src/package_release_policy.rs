@@ -144,6 +144,7 @@ impl PackageReleasePolicy {
         Ok(pairs)
     }
     /// Literal channel job ID for a member of the complete static inventory.
+    /// Preview uses one shared ID; stable uses the member's canonical index.
     /// # Errors
     /// Rejects pairs outside the policy's bounded canonical inventory.
     pub fn payload_job_id(
@@ -154,11 +155,10 @@ impl PackageReleasePolicy {
             .payload_pairs()?
             .binary_search(pair)
             .map_err(|_| invalid("unknown_payload_pair"))?;
-        let prefix = match self.channel {
-            PackageReleaseChannel::Preview => "preview",
-            PackageReleaseChannel::Stable => "stable",
-        };
-        Ok(format!("{prefix}-payload-{index:03}"))
+        match self.channel {
+            PackageReleaseChannel::Preview => Ok("preview-payload".to_owned()),
+            PackageReleaseChannel::Stable => Ok(format!("stable-payload-{index:03}")),
+        }
     }
     /// Construct a fully validated resolved plan; this pure method proves no source authority.
     /// # Errors

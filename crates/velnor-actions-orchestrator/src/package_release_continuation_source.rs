@@ -1,6 +1,6 @@
 //! Read-only current-main and latest exact-source CI admission.
 use super::super::{
-    github::{GitHubApi, GitRefResponse, RepositoryResponse, WorkflowRunList},
+    github::{GitHubApi, GitRefResponse, RepositoryResponse},
     run_identity::{RunSource, ci_run_is_success},
 };
 use crate::{OrchestratorError, internal::internal};
@@ -32,17 +32,18 @@ pub(super) fn latest_ci(
     api: &GitHubApi,
     source: RunSource<'_>,
 ) -> Result<Option<(u64, u32)>, OrchestratorError> {
+    latest_ci_with_sleep(api, source, super::super::run_identity::sleep_for_retry)
+}
+
+fn latest_ci_with_sleep(
+    api: &GitHubApi,
+    source: RunSource<'_>,
+    sleep: impl FnMut(std::time::Duration) -> Result<(), OrchestratorError>,
+) -> Result<Option<(u64, u32)>, OrchestratorError> {
     let workflow = api.admitted_workflow(CI_WORKFLOW_PATH, WORKFLOW_DISPLAY_NAME)?;
-    let first: WorkflowRunList = api.get_json(&api.route(&format!(
-        "actions/workflows/{}/runs?head_sha={}&branch={}&event=push&per_page=100&page=1",
-        workflow.id,
-        super::super::github::encode_segment(source.sha),
-        super::super::github::encode_segment(source.branch)
-    )))?;
-    if first.workflow_runs.is_empty() {
+    let Some(run) = api.latest_source_ci_optional_with_sleep(&workflow, source, sleep)? else {
         return Ok(None);
-    }
-    let run = api.latest_source_ci(&workflow, source)?;
+    };
     let id = run
         .id
         .filter(|id| *id > 0)

@@ -6,11 +6,8 @@ use std::{
 };
 
 use velnor_actions_contract::{
-    PackageReleasePlan, canonical_json_bytes,
-    config::HomebrewTapConfig,
-    homebrew_formula::{
-        HomebrewFormulaCandidate, VerifiedPackageRelease, validate_homebrew_formula_candidate,
-    },
+    PackageReleasePlan, canonical_json_bytes, config::HomebrewTapConfig,
+    homebrew_formula::VerifiedPackageRelease,
 };
 
 use crate::{
@@ -19,6 +16,9 @@ use crate::{
     tap_prepare::HomebrewTapPreparationProof,
 };
 
+#[path = "tap_writer_prepare.rs"]
+mod prepare;
+use prepare::{WriterPreparation, create_pull_request, prepare_writer};
 #[path = "tap_writer_github.rs"]
 mod github;
 #[path = "tap_writer_gitops.rs"]
@@ -30,20 +30,14 @@ mod receipt;
 #[path = "tap_writer_result.rs"]
 mod result;
 use github::{TapGitHubApi, encode_segment};
-use gitops::{
-    BranchRequest, PullRequestRequest, create_or_reconcile_branch, create_or_reconcile_pr,
-};
-use identity::{BotIdentity, verify_app_scope};
+use identity::BotIdentity;
 pub use receipt::{TapPromotionOutcome, TapPromotionReceipt};
 use result::persist_result;
 #[path = "tap_writer_helpers.rs"]
 mod helpers;
 #[path = "tap_writer_history.rs"]
 mod history;
-use helpers::{
-    branch_name, is_sha256, parse_decimal_id, read_formula_base, real_directory, required_env,
-    safe_app_slug, sha256, verify_repository_base,
-};
+use helpers::{is_sha256, parse_decimal_id, real_directory, required_env, safe_app_slug, sha256};
 
 const CANDIDATE_LIMIT: u64 = 1024 * 1024;
 const CANDIDATE_DIR: &str = "tap-candidate";
@@ -58,85 +52,20 @@ pub const WRITE_HOMEBREW_TAP_PR_OP: &str = "write-homebrew-tap-pr-v1";
 /// a stale tap base, a conflicting retry, or any GitHub API failure.
 pub fn write_homebrew_tap_pr_from_env() -> Result<TapPromotionReceipt, OrchestratorError> {
     let inputs = load_writer_inputs()?;
-    let bot = verify_app_scope(
-        &inputs.api,
-        &inputs.policy,
-        inputs.app_id,
-        inputs.installation_id,
-        &inputs.app_slug,
-    )?;
-    let base_sha = verify_repository_base(&inputs.api, &inputs.policy, &inputs.proof)?;
-    let base_tree = read_formula_base(&inputs.api, &inputs.formula_path, &base_sha)?;
-    if sha256(&base_tree.bytes) != inputs.proof.old_formula_sha256 {
-        return Err(internal("tap_candidate_base_digest_mismatch"));
-    }
-    let canonical = validate_homebrew_formula_candidate(&HomebrewFormulaCandidate {
-        source_repository: &inputs.proof.source_repository,
-        plan: &inputs.plan,
-        tap_repository: &inputs.policy.repository,
-        formula_path: &inputs.formula_path,
-        captured_base_sha: &base_sha,
-        base_bytes: &base_tree.bytes,
-        proposed_bytes: &inputs.proposed,
-        release: &inputs.release,
-    })
-    .map_err(|_| internal("tap_writer_formula_rejected"))?;
-    if canonical != inputs.proposed {
-        return Err(internal("tap_writer_formula_noncanonical"));
-    }
-    let preparation_proof_digest =
-        sha256(&canonical_json_bytes(&inputs.proof).map_err(|_| internal("tap_proof_encode"))?);
-    if let Some(result) =
-        already_promoted(&inputs, &bot, &base_tree.bytes, &preparation_proof_digest)?
-    {
+    let preparation = prepare_writer(&inputs)?;
+    let (bot, base_sha, base_tree, proof_digest) = match preparation {
+        WriterPreparation::Stale(receipt) => return Ok(receipt),
+        WriterPreparation::Ready {
+            bot,
+            base_sha,
+            base_tree,
+            proof_digest,
+        } => (bot, base_sha, base_tree, proof_digest),
+    };
+    if let Some(result) = already_promoted(&inputs, &bot, &base_tree.bytes, &proof_digest)? {
         return Ok(result);
     }
-    let branch = branch_name(
-        &inputs.release.receipt_digest,
-        &base_sha,
-        inputs.plan.channel,
-    )?;
-    let mut verify_current = || verify_promotion_authority(&inputs);
-    let head_sha = create_or_reconcile_branch(
-        &inputs.api,
-        &mut BranchRequest {
-            proof: &inputs.proof,
-            formula: &inputs.proposed,
-            base_sha: &base_sha,
-            base_tree_sha: &base_tree.tree_sha,
-            branch: &branch,
-            bot: &bot,
-            verify_current: &mut verify_current,
-        },
-    )?;
-    let pull_request = create_or_reconcile_pr(
-        &inputs.api,
-        &mut PullRequestRequest {
-            policy: &inputs.policy,
-            branch: &branch,
-            head_sha: &head_sha,
-            base_sha: &base_sha,
-            proof_digest: &preparation_proof_digest,
-            release: &inputs.release,
-            bot: &bot,
-            verify_current: &mut verify_current,
-        },
-    )?;
-    let result = TapPromotionReceipt {
-        schema: "velnor.homebrew-tap-pr.v2".to_owned(),
-        repository: inputs.policy.repository.clone(),
-        release_receipt_digest: inputs.release.receipt_digest,
-        preparation_proof_digest: preparation_proof_digest.clone(),
-        outcome: TapPromotionOutcome::PullRequest {
-            pull_request,
-            head_sha,
-            base_sha,
-            branch,
-            candidate_proof_digest: preparation_proof_digest,
-        },
-    };
-    persist_result(&inputs.root, &result)?;
-    Ok(result)
+    create_pull_request(&inputs, &bot, &base_sha, &base_tree.tree_sha, &proof_digest)
 }
 
 fn already_promoted(
@@ -173,7 +102,7 @@ fn already_promoted(
     Ok(Some(result))
 }
 
-fn verify_promotion_authority(inputs: &WriterInputs) -> Result<(), OrchestratorError> {
+fn verify_promotion_authority(inputs: &WriterInputs) -> Result<bool, OrchestratorError> {
     let signed = verify_attested_signed_package_from_env()?;
     crate::package_release_publish::verify_published_release(&signed)?;
     if signed.receipt().canonical_digest().ok().as_deref()
@@ -187,14 +116,16 @@ fn verify_promotion_authority(inputs: &WriterInputs) -> Result<(), OrchestratorE
     )?;
     if inputs.plan.channel
         == velnor_actions_contract::package_release::PackageReleaseChannel::Preview
-    {
-        crate::tap_source_freshness::verify_preview_source_is_current(
+        && !crate::tap_source_freshness::verify_preview_source_is_current(
             &inputs.plan.repository,
             &inputs.plan.default_branch,
+            inputs.release.receipt.repository.id,
             &inputs.release.receipt.source.commit_sha,
-        )?;
+        )?
+    {
+        return Ok(false);
     }
-    Ok(())
+    Ok(true)
 }
 
 struct WriterInputs {

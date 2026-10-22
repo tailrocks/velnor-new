@@ -17,34 +17,42 @@ host tools; they do not install or download an SDK. The producer reuses the
 existing named-check preparation and system-tool verification boundary.
 
 The pure preview identity derives the version from a numeric Cargo base version,
-the full source SHA, and the full-history commit count. Its only public tag is
-literal `preview`; stable uses a permanent version tag.
+source SHA A, and the full-history commit count. The immutable public tag is
+`preview-<full-A-sha>`; stable uses a permanent version tag.
 The canonical `velnor.package-release.v2` receipt validates the entire asset set,
-source/workflow/run identity, product layouts, evidence declarations, and stable
-versus preview identity rules. Parsing rejects duplicate keys, unknown fields,
+source/workflow/run identity separately (A for the source, B for the workflow
+authority), product layouts, evidence declarations, and stable versus preview
+identity rules. Preview requires authenticated `A <= B <= H`; stable retains
+its existing identity rules. Parsing rejects duplicate keys, unknown fields,
 noncanonical bytes, missing/extra assets, and inconsistent subject bindings.
 
-The unprivileged producer entrypoint and CLI operation now bind the canonical
-static plan to the channel event, exact repository/workflow/SHA context and
-source Cargo inventory. Preview requires successful exact-source default-branch
-push CI and enters through `workflow_run`; stable uses its manual coordinator.
-Preview versioning additionally binds the full-history commit count. It executes only
-the isolated declared task in one literal product/target job or complete-union
-assembly job, verifies partial/full manifests and bytes, and stages the exact
-raw upload inventory under runner temp. Native request and artifact contracts
-are described in [native-preview-production.md](../proposed/native-preview-production.md). This is producer-side runtime code;
-it does not establish that the generated workflow, signer, or publisher works.
+The native selector authenticates exact-source CI A and current workflow
+authority B before checkout. A then enters a credential-free, complete-history
+checkout; canonical A configuration, package inventory (via bounded pure
+manifest projection), declared task and qualified-tool declarations are
+admitted before source task execution. Native task discovery uses
+`discover_preview_producer`. B supplies workflow custody and trusted bootstrap
+tools. Preview source execution uses the sealed A projection directly, without
+general workspace discovery or Cargo metadata bootstrap from B. A's declared
+qualified task acquires its own tools in an isolated home; source checkout also
+uses A's `checkout_lfs` setting. Stable keeps its existing preparation path. Preview versioning binds A and its complete-history count. A bounded
+source matrix builds the complete declared product/target inventory, and
+assembly verifies the complete GitHub API artifact union by immutable IDs and
+bytes. Native request and artifact contracts are described in
+[native-preview-production.md](../proposed/native-preview-production.md).
+This status describes source implementation and tests; it does not establish
+that the generated workflow, signer, or publisher works in hosted execution.
 
-Rolling publication requires a qualified existing mutable release with its fixed
-positive ID. Its authenticated journal stages and verifies a complete signed
-generation, replaces the authenticated old assets, verifies the canonical
-inventory and tag, then writes the commit marker. Intermediate asset listings
-are not an atomic publication guarantee.
-Interrupted publication reuses the original signed bytes; stale candidates and
-conflicting retries are rejected. Stable tags and published stable versions are
+Preview publication creates one immutable prerelease for A's full-SHA tag and
+never replaces, deletes, recreates or republishes it. Interrupted publication
+resumes only with the original retained signed bytes and authenticated receipt;
+conflicting retries fail closed. Stable tags and published stable versions are
 never replaced. Every mutation requires independently authenticated observations
 and fresh eligibility. Structural receipt validation is not cryptographic
-verification or publication authority.
+verification or publication authority. A later protected tip does not revoke
+an ancestor A release when `A <= B <= H` remains valid, but Homebrew promotion
+proceeds only while A is the current protected `main` tip; otherwise it returns
+a typed clean skip.
 
 Acceptance tests cover the four stable/preview enablement combinations, missing
 source channels, qualified tool/platform and process limits, closed evidence and
@@ -54,12 +62,14 @@ six archives and 29 release assets, of which 27 appear in the nonrecursive recei
 
 ## Remaining runtime and delivery gates
 
-Preview workflow generation now separates exact-commit eligibility, unprivileged
-production, signing, rolling publication, and original-evidence recovery. The
-eligibility job checks out the exact workflow SHA with complete history before
-running any Git-dependent gate. Privileged jobs acquire the official pinned
-helper without checking out source. Recovery authenticates the original run and
-signed bytes; it never rebuilds or re-signs them.
+Preview workflow generation separates source selection, credential-free A
+checkout/admission, unprivileged production, signing, immutable publication,
+and original-evidence recovery. Source selection authenticates A and B before
+checkout. Eligibility then checks out A with complete history before running
+source-derived gates; B remains the workflow and bootstrap custody authority.
+Privileged jobs acquire the official pinned helper without checking out source.
+Recovery authenticates the original run and signed bytes and rechecks exact-A CI
+plus `A <= B <= H`; it never rebuilds or re-signs them.
 
 Current execution authority also requires the unique generated role's active
 job in the exact run attempt. Aggregate `queued` is permitted only with this
