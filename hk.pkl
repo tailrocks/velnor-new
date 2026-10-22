@@ -4,6 +4,7 @@
 // `hk run security-audit` manually or on a schedule.
 amends "package://github.com/jdx/hk/releases/download/v2.8.0/hk@2.8.0#/Config.pkl"
 import "package://github.com/jdx/hk/releases/download/v2.8.0/hk@2.8.0#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.8.0/hk@2.8.0#/Config.pkl"
 
 jobs = 2
 fail_fast = false
@@ -21,10 +22,19 @@ steps {
     exclude = fixtureTrees
     check { command = "cargo fmt --all --check --manifest-path {{workspace_indicator}}" }
     check_list_files { command = "cargo fmt --all --check --manifest-path {{workspace_indicator}} -- --files-with-diff" }
-    fix { command = "cargo fmt --all --manifest-path {{workspace_indicator}}" }
+    fix = new Config.CommandSpec {
+      command = "bash scripts/hk-fix-write-guard.sh cargo fmt --all --manifest-path {{workspace_indicator}}"
+      effect = "write"
+    }
   }
   ["cargo_check"] = (Builtins.cargo_check) { exclude = fixtureTrees }
-  ["cargo_clippy"] = (Builtins.cargo_clippy) { exclude = fixtureTrees }
+  ["cargo_clippy"] = (Builtins.cargo_clippy) {
+    exclude = fixtureTrees
+    fix = new Config.CommandSpec {
+      command = "bash scripts/hk-fix-write-guard.sh cargo clippy --manifest-path {{workspace_indicator}} --fix --allow-dirty --allow-staged --quiet"
+      effect = "write"
+    }
+  }
   // Both deny.toml files (root and crates/velnor-runner) stay; each governs its own workspace.
   ["cargo_deny"] = (Builtins.cargo_deny) { exclude = fixtureTrees }
   ["rust-toolchain-mirror"] {
