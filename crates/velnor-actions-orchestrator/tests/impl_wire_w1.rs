@@ -249,37 +249,24 @@ fn w1_candidate_build_matches_mise_constructor() -> TestResult {
 }
 
 #[test]
-fn w1_validators_carry_deny_machete_zizmor_in_order() -> TestResult {
-    without_ambient_identity("w1_validators_carry_deny_machete_zizmor_in_order", || {
+fn w1_validators_carry_deny_and_machete_in_order() -> TestResult {
+    without_ambient_identity("w1_validators_carry_deny_and_machete_in_order", || {
         let velnor = make_velnor_repo(VELNOR_CONFIG)?;
         let tree = render_staged_tree(&prepare(velnor.path())?)?;
         let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
         assert!(!yaml.contains("  policy:"), "no umbrella:\n{yaml}");
         let deny_at = yaml.find("  cargo-deny:").ok_or("deny job")?;
         let machete_at = yaml.find("  cargo-machete:").ok_or("machete job")?;
-        let zizmor_at = yaml.find("  zizmor:").ok_or("zizmor job")?;
-        assert!(
-            deny_at < machete_at && machete_at < zizmor_at,
-            "validator order:\n{yaml}"
-        );
+        assert!(deny_at < machete_at, "validator order:\n{yaml}");
+        // zizmor is retired: jactionlint's `default` profile covers its audits.
+        assert!(!yaml.contains("  zizmor:"), "no zizmor job:\n{yaml}");
+        assert!(!yaml.contains("Run zizmor"), "no zizmor step:\n{yaml}");
         let deny = window(yaml, "  cargo-deny:", "  cargo-machete:")?;
         let machete = window(yaml, "  cargo-machete:", "  plan:")?;
-        let zizmor = window(yaml, "  zizmor:", "\nzzz-no-such-job:")?;
         assert!(deny.contains("Run cargo-deny"), "deny step:\n{deny}");
         assert!(
             machete.contains("Run cargo-machete"),
             "machete step:\n{machete}"
-        );
-        assert!(zizmor.contains("Run zizmor"), "zizmor step:\n{zizmor}");
-        let catalog = ToolCatalog::pinned();
-        assert!(
-            zizmor.contains(&catalog.tool_spec(PinnedTool::Zizmor)),
-            "{zizmor}"
-        );
-        assert!(zizmor.contains("--no-online-audits"), "{zizmor}");
-        assert!(
-            zizmor.contains("zizmor --no-online-audits --config .zizmor.yml .github/workflows"),
-            "zizmor input+config:\n{zizmor}"
         );
         Ok(())
     })

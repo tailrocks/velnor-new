@@ -28,7 +28,7 @@ mod probe {
     const FAKE_MISE: &str = "#!/bin/sh
 for arg in \"$@\"; do
   case \"$arg\" in
-    actionlint@*|shellcheck@*|zizmor@*) echo 'fake-mise: validators disabled' >&2; exit 1;;
+    jactionlint@*|shellcheck@*) echo 'fake-mise: validators disabled' >&2; exit 1;;
   esac
 done
 exec \"$VELNOR_REAL_MISE\" \"$@\"
@@ -247,7 +247,3 @@ exec \"$VELNOR_REAL_MISE\" \"$@\"
         Ok(out)
     }
 }
-
-#[cfg(unix)]
-#[path = "zizmor_staging.rs"]
-mod zizmor_staging;

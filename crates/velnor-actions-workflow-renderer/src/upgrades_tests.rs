@@ -21,7 +21,6 @@ fn spec() -> UpgradesSpec {
         generate_tools: vec![
             "jactionlint@2.3.0".to_owned(),
             "shellcheck@0.11.0".to_owned(),
-            "zizmor@1.31.1".to_owned(),
         ],
         verify_rust_script: "v=\"${VELNOR_TOOL_RUST}\"; echo verify \"$v\"".to_owned(),
         jactionlint_verify: "set -eu; echo verify-jactionlint".to_owned(),
@@ -116,7 +115,7 @@ fn prepare_holds_no_credential_and_runs_without_cooldown() {
         "bun update --latest --ignore-scripts",
         "bump-gradle-catalog.py",
         "velnor/bin/velnor-actions\\\" generate",
-        "VELNOR_GENERATE_TOOLS: jactionlint@2.3.0 shellcheck@0.11.0 zizmor@1.31.1",
+        "VELNOR_GENERATE_TOOLS: jactionlint@2.3.0 shellcheck@0.11.0",
         "rust_channel_manifest_not_catalogued",
         "git diff --cached --no-renames",
     ] {
@@ -255,8 +254,8 @@ fn disabled_or_invalid_configs_do_not_render() {
     assert!(render_upgrades_workflow(&floating).is_err());
     for tools in [
         vec![],
-        vec!["zizmor@latest".to_owned()],
-        vec!["zizmor@${{ x }}".to_owned()],
+        vec!["shellcheck@latest".to_owned()],
+        vec!["shellcheck@${{ x }}".to_owned()],
     ] {
         let mut bad_tools = spec();
         bad_tools.generate_tools = tools;

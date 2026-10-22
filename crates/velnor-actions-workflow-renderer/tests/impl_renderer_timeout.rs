@@ -107,7 +107,6 @@ fn support_candidate_release_and_msrv_jobs_carry_per_kind_timeouts() -> Result<(
         ("alint", "5"),
         ("cargo-deny", "5"),
         ("cargo-machete", "5"),
-        ("zizmor", "5"),
         ("candidate", "5"),
         ("release", "5"),
     ] {

@@ -127,7 +127,7 @@ pub enum OrchestratorError {
     /// Staged-tree validation failed before any write.
     #[error("validation: {tool}: {problem}")]
     Validation {
-        /// Validator that failed (`jactionlint`, `shellcheck`, or `zizmor`).
+        /// Validator that failed (`jactionlint` or `shellcheck`).
         tool: String,
         /// Machine-readable problem detail.
         problem: String,

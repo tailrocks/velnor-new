@@ -6,9 +6,7 @@ use velnor_actions_contract::{ReleaseTarget, VelnorConfig};
 use velnor_actions_mise::{
     MiseInstall, PinnedTool, PinnedToolExec, PrepareRustTarget, ToolCatalog,
 };
-use velnor_actions_workflow_renderer::toolchain_env::{
-    with_credential_unset_script, with_env_unset_argv,
-};
+use velnor_actions_workflow_renderer::toolchain_env::with_credential_unset_script;
 use velnor_actions_workflow_renderer::{MiseSetup, ProductReleasePins};
 
 use crate::OrchestratorError;
@@ -45,7 +43,6 @@ pub(crate) fn resolve(
                 PinnedTool::Gh,
                 PinnedTool::Jactionlint,
                 PinnedTool::Shellcheck,
-                PinnedTool::Zizmor,
             ],
             &catalog,
         )?,
@@ -92,19 +89,6 @@ pub(crate) fn resolve(
         // job does, with the same token scrub: the linter needs no credential.
         lint_argv: scrubbed_inline(crate::workflow_jobs::workflow_lint_argv(&catalog)?),
         verify_lint_argv: crate::workflow::jactionlint_verify_argv(&catalog),
-        // Scrubbed like the validator vector: an empty-string GH_TOKEN
-        // makes zizmor abort, while an absent one is clean offline.
-        zizmor_argv: with_env_unset_argv(&exec_argv(
-            &[PinnedTool::Zizmor],
-            "zizmor",
-            &[
-                "--no-online-audits",
-                "--config",
-                ".zizmor.yml",
-                ".github/workflows",
-            ],
-            &catalog,
-        )?),
         gh_argv: exec_argv(&[PinnedTool::Gh], "gh", &[], &catalog)?,
         rust_version: catalog.version(PinnedTool::Rust).to_owned(),
         verify_rust_argv: crate::workflow::verify_rust_argv(&catalog),
@@ -166,7 +150,6 @@ fn qualify_install_argv(catalog: &ToolCatalog) -> Result<Vec<String>, Orchestrat
             PinnedTool::Rust,
             PinnedTool::Jactionlint,
             PinnedTool::Shellcheck,
-            PinnedTool::Zizmor,
         ],
         catalog,
     )

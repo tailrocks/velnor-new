@@ -9,7 +9,6 @@ use velnor_actions_mise::{
 };
 use velnor_actions_rust::tool_needs;
 use velnor_actions_workflow_renderer::render::CandidateSpec;
-use velnor_actions_workflow_renderer::toolchain_env::with_env_unset_argv;
 
 use crate::{OrchestratorError, qualify::QualifyRequest};
 
@@ -70,9 +69,6 @@ const MACHETE_SCAN_CRATES: [&str; 11] = [
     "crates/velnor-actions-orchestrator",
     "crates/velnor-actions-cli",
 ];
-
-/// Contract-fixed display name of the policy zizmor step.
-pub(crate) const ZIZMOR_STEP_NAME: &str = "Run zizmor";
 
 /// V1 fixed vector for one task: pinned `mise` payload plus kind args.
 ///
@@ -239,40 +235,6 @@ fn join_quoted_argv(argv: &[String]) -> Result<String, OrchestratorError> {
         .collect::<Result<Vec<_>, _>>()
         .map(|words| words.join(" "))
         .map_err(OrchestratorError::from)
-}
-
-/// Policy zizmor scan target: generated workflows only.
-///
-/// Never the repo root: `fixtures/` carries intentional negative
-/// workflows that must fail adapter tests, not the policy audit.
-const ZIZMOR_POLICY_INPUT: &str = ".github/workflows";
-
-/// Policy zizmor config: the committed zero-ignore policy file.
-///
-/// Every emitted ref is hash-pinned, so the `unpinned-uses` ignore list
-/// is empty; a missing file errors the scan instead of silently dropping
-/// the policy.
-const ZIZMOR_POLICY_CONFIG: &str = ".zizmor.yml";
-
-/// Fixed validator-job vector: offline zizmor audit through pinned Mise.
-///
-/// The argv carries the credential-unset prefix: an empty-string
-/// `GH_TOKEN` (workflow-level scrub overlay) makes zizmor abort
-/// with `GitHub token cannot be empty`, while a truly-absent
-/// variable falls back to clean unauthenticated operation.
-pub(crate) fn zizmor_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
-    let argv = exec_argv(
-        vec![PinnedTool::Zizmor],
-        "zizmor",
-        &[
-            "--no-online-audits",
-            "--config",
-            ZIZMOR_POLICY_CONFIG,
-            ZIZMOR_POLICY_INPUT,
-        ],
-        catalog,
-    )?;
-    Ok(with_env_unset_argv(&argv))
 }
 
 /// Fixed validator-job vector: verified `cargo machete` release via Mise.

@@ -68,8 +68,8 @@ mod tests {
 
     fn command(prepare_argv: Vec<&str>) -> ValidatorCommand {
         ValidatorCommand {
-            validator: ValidatorKind::Zizmor,
-            name: "Run zizmor".to_owned(),
+            validator: ValidatorKind::CargoDeny,
+            name: "Run cargo-deny".to_owned(),
             prepare_argv: prepare_argv.into_iter().map(str::to_owned).collect(),
             argv: [
                 "mise",
@@ -77,9 +77,9 @@ mod tests {
                 "--no-env",
                 "--no-hooks",
                 "exec",
-                "zizmor@1.31.1",
+                "cargo-deny@0.18.3",
                 "--",
-                "zizmor",
+                "cargo-deny",
             ]
             .into_iter()
             .map(str::to_owned)
@@ -108,7 +108,7 @@ mod tests {
                 "--no-env",
                 "--no-hooks",
                 "install",
-                "zizmor@1.31.1",
+                "cargo-deny@0.18.3",
             ]))
             .is_ok()
         );
@@ -121,14 +121,14 @@ mod tests {
             "mise",
             "--no-config",
             "exec",
-            "zizmor@1.31.1",
+            "cargo-deny@0.18.3",
             "--",
-            "zizmor",
+            "cargo-deny",
             "&&",
             "mise",
             "--no-config",
             "install",
-            "zizmor@1.31.1",
+            "cargo-deny@0.18.3",
         ]
         .into_iter()
         .map(str::to_owned)
@@ -138,14 +138,14 @@ mod tests {
             "mise",
             "--no-config",
             "install",
-            "zizmor@1.31.1",
+            "cargo-deny@0.18.3",
             "&&",
             "mise",
             "--no-config",
             "exec",
-            "zizmor@1.31.1",
+            "cargo-deny@0.18.3",
             "--",
-            "zizmor",
+            "cargo-deny",
         ]
         .into_iter()
         .map(str::to_owned)
@@ -159,19 +159,19 @@ mod tests {
         command.prepare_argv = [
             "mise",
             "exec",
-            "zizmor@1.31.1",
+            "cargo-deny@0.18.3",
             "--",
-            "zizmor",
+            "cargo-deny",
             "&&",
             "mise",
             "install",
-            "zizmor@1.31.1",
+            "cargo-deny@0.18.3",
         ]
         .into_iter()
         .map(str::to_owned)
         .collect();
         assert!(validate_validator_tool_closure(&command).is_err());
-        command.prepare_argv = ["mise", "install", "zizmor@1.31.1"]
+        command.prepare_argv = ["mise", "install", "cargo-deny@0.18.3"]
             .into_iter()
             .map(str::to_owned)
             .collect();

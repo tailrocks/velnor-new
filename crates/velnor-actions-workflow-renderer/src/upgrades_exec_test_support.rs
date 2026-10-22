@@ -267,7 +267,7 @@ impl Sandbox {
             )
             .env(
                 "VELNOR_GENERATE_TOOLS",
-                "jactionlint@2.3.0 shellcheck@0.11.0 zizmor@1.31.1",
+                "jactionlint@2.3.0 shellcheck@0.11.0",
             );
         for (key, value) in env {
             command.env(key, value);

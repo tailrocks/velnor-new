@@ -202,11 +202,7 @@ fn assert_crate_job_prepares_required_tools(task: &str) -> TestResult {
         task[prepare_at..run_at].contains(&catalog.tool_spec(PinnedTool::Rust)),
         "prepare installs the driver:\n{task}"
     );
-    for tool in [
-        PinnedTool::Jactionlint,
-        PinnedTool::Shellcheck,
-        PinnedTool::Zizmor,
-    ] {
+    for tool in [PinnedTool::Jactionlint, PinnedTool::Shellcheck] {
         let spec = catalog.tool_spec(tool);
         assert!(
             task[prepare_at..run_at].contains(&spec),

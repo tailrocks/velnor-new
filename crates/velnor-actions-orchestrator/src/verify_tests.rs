@@ -10,7 +10,6 @@ fn scrambled() -> Vec<String> {
         "frontmatter-id",
         "markdownlint",
         "strict-json",
-        "zizmor",
     ]
     .into_iter()
     .map(str::to_owned)
@@ -24,7 +23,6 @@ fn verify_kinds_emit_canonical_order() {
     assert_eq!(
         ids,
         [
-            "zizmor",
             "alint",
             "markdownlint",
             "strict-json",
@@ -40,9 +38,8 @@ fn verify_kinds_emit_canonical_order() {
 
 #[test]
 fn verify_vectors_carry_pins_and_payloads() {
-    let catalog = ToolCatalog::pinned();
     let joined = |kind: ValidatorKind| {
-        verify_command(kind, &VerifyConfig::default(), &catalog)
+        verify_command(kind, &VerifyConfig::default())
             .expect("command builds")
             .expect("shell kind has a command")
             .argv
@@ -77,31 +74,26 @@ fn verify_vectors_carry_pins_and_payloads() {
         !links.contains("api.github.com/repos/lycheeverse/lychee/releases"),
         "Lychee acquisition uses its hash-pinned direct release asset"
     );
-    let native = verify_command(
-        ValidatorKind::NativeValidators,
-        &VerifyConfig::default(),
-        &catalog,
-    )
-    .expect("command builds")
-    .expect("native has a command")
-    .argv;
+    let native = verify_command(ValidatorKind::NativeValidators, &VerifyConfig::default())
+        .expect("command builds")
+        .expect("native has a command")
+        .argv;
     assert_eq!(native[0], "sh");
     assert_eq!(native[1], "-c");
     assert!(native[2].contains("claude plugin validate --strict"));
     assert!(
-        verify_command(ValidatorKind::Alint, &VerifyConfig::default(), &catalog)
+        verify_command(ValidatorKind::Alint, &VerifyConfig::default())
             .expect("alint resolves")
             .is_none(),
         "alint renders as an action step"
     );
-    let err = verify_command(ValidatorKind::CargoDeny, &VerifyConfig::default(), &catalog)
+    let err = verify_command(ValidatorKind::CargoDeny, &VerifyConfig::default())
         .expect_err("deny rejected");
     assert!(err.to_string().contains("verify_kind_rejected"), "{err}");
 }
 
 #[test]
 fn configured_content_verifiers_retain_argument_boundaries() {
-    let catalog = ToolCatalog::pinned();
     let options = VerifyConfig {
         jobs: vec!["strict-json".to_owned(), "link-check".to_owned()],
         strict_json_files: Some(vec![".github/marketplace.json".to_owned()]),
@@ -112,14 +104,14 @@ fn configured_content_verifiers_retain_argument_boundaries() {
             "docs/**".to_owned(),
         ],
     };
-    let strict = verify_command(ValidatorKind::StrictJson, &options, &catalog)
+    let strict = verify_command(ValidatorKind::StrictJson, &options)
         .expect("strict JSON vector builds")
         .expect("strict JSON command exists");
     assert_eq!(
         strict.argv.last().map(String::as_str),
         Some("[\".github/marketplace.json\"]")
     );
-    let links = verify_command(ValidatorKind::LinkCheck, &options, &catalog)
+    let links = verify_command(ValidatorKind::LinkCheck, &options)
         .expect("link check vector builds")
         .expect("link check command exists");
     let position = links
@@ -191,10 +183,8 @@ fn strict_json_scope_rejects_missing_and_symlinked_files() {
 
 #[test]
 fn verify_vectors_pass_renderer_argv_gates() {
-    let catalog = ToolCatalog::pinned();
     for kind in ValidatorKind::consumer_verify() {
-        let Some(command) =
-            verify_command(kind, &VerifyConfig::default(), &catalog).expect("command builds")
+        let Some(command) = verify_command(kind, &VerifyConfig::default()).expect("command builds")
         else {
             continue;
         };
@@ -226,10 +216,8 @@ fn verify_vectors_pass_renderer_argv_gates() {
 
 #[test]
 fn verify_exec_pairs_with_matching_install() {
-    let catalog = ToolCatalog::pinned();
     for kind in ValidatorKind::consumer_verify() {
-        let Some(command) =
-            verify_command(kind, &VerifyConfig::default(), &catalog).expect("command builds")
+        let Some(command) = verify_command(kind, &VerifyConfig::default()).expect("command builds")
         else {
             continue;
         };
