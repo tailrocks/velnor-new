@@ -1,8 +1,8 @@
 set -euo pipefail
 : "${VELNOR_UPGRADE_DIR:?}" "${GITHUB_OUTPUT:?}"
 dir=$VELNOR_UPGRADE_DIR
-rm -rf "$dir"
-mkdir -p "$dir/out" "$dir/bin"
+rm -rf "$dir/out"
+mkdir -p "$dir/out"
 printf '%s\n' "$VELNOR_CATALOG_BUMPER_SOURCE" > "$dir/bump-gradle-catalog.py"
 summary=$dir/out/summary.md
 failures=$dir/failures.md
@@ -10,35 +10,24 @@ failures=$dir/failures.md
 : > "$failures"
 changed() { printf -- '- %s\n' "$1" >> "$dir/changes.md"; printf 'velnor: %s\n' "$1"; }
 failed() { printf -- '- %s\n' "$1" >> "$failures"; printf '::warning::%s\n' "$1"; }
-fetch() { curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error --location --retry 3 --output "$1" "$2"; }
-sha256_check() {
-  if command -v sha256sum >/dev/null 2>&1; then sha256sum -c "$1" >/dev/null; else shasum -a 256 -c "$1" >/dev/null; fi
-}
 newer() { [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n 1)" = "$2" ]; }
 
-# 1. Velnor itself: the latest published release manifest (no floating
-# endpoint at generation time; this job is the bump).
+# 1. Velnor itself: the newest stable release, verified (digest and build
+# provenance) by the previous step before any repository code ran. The patch
+# may select only that release, and verify regenerates with it.
 manifest=.velnor/release-manifest.json
-fetch "$dir/release-manifest.json" https://github.com/tailrocks/velnor-new/releases/latest/download/release-manifest.json
-jq -e '.schema == 1 and .repository == "tailrocks/velnor-new" and (.version | test("^[0-9]+[.][0-9]+[.][0-9]+$")) and (.commit | test("^[0-9a-f]{40}$"))' "$dir/release-manifest.json" >/dev/null \
-  || { echo "::error::upgrade_velnor_manifest_invalid: the latest tailrocks/velnor-new release manifest failed validation"; exit 1; }
+verified=$dir/velnor/release-manifest.json
 current_velnor=$(jq -r .version "$manifest")
-latest_velnor=$(jq -r .version "$dir/release-manifest.json")
-if newer "$current_velnor" "$latest_velnor"; then
-  cp "$dir/release-manifest.json" "$manifest"
+latest_velnor=$(jq -r .version "$verified")
+if newer "$latest_velnor" "$current_velnor"; then
+  echo "::error::upgrade_velnor_pinned_ahead: $manifest pins velnor-actions $current_velnor, newer than the latest stable release $latest_velnor"
+  exit 1
+fi
+if ! cmp -s "$verified" "$manifest"; then
+  cp "$verified" "$manifest"
   changed "velnor-actions $current_velnor -> $latest_velnor"
 fi
-version=$(jq -r .version "$manifest")
-asset=$(jq -r '.targets[] | select(.target == "x86_64-unknown-linux-gnu") | .artifact' "$manifest")
-digest=$(jq -r '.targets[] | select(.target == "x86_64-unknown-linux-gnu") | .sha256' "$manifest")
-case "$asset" in
-  "https://github.com/tailrocks/velnor-new/releases/download/v$version/velnor-actions-$version-x86_64-unknown-linux-gnu") ;;
-  *) echo "::error::upgrade_velnor_asset_untrusted: $asset"; exit 1 ;;
-esac
-fetch "$dir/bin/velnor-actions" "$asset"
-printf '%s  %s\n' "$digest" "$dir/bin/velnor-actions" > "$dir/velnor.sha256"
-sha256_check "$dir/velnor.sha256" || { echo "::error::upgrade_velnor_digest_mismatch: $asset"; exit 1; }
-chmod 755 "$dir/bin/velnor-actions"
+version=$latest_velnor
 
 # 2. Mise tools other than Rust, then Rust (kept separate so a Rust release
 # the new Velnor catalog does not know yet can be rolled back alone).
@@ -47,15 +36,24 @@ mise_files=$(git ls-files -- mise.toml .mise.toml mise.lock .mise.lock)
 # with it and roll back with it.
 toolchain_files=$(git ls-files -- rust-toolchain.toml '*/rust-toolchain.toml' rust-toolchain '*/rust-toolchain')
 rust_files="$mise_files $toolchain_files"
+# Portable in-place rewrite (no GNU `sed -i`) of the toolchain `channel`,
+# in either TOML string quoting; it fails unless the file then names the new
+# Rust, so an unrecognised layout rolls the Rust scope back.
+set_channel() {
+  sed -E -e "s/^([[:space:]]*channel[[:space:]]*=[[:space:]]*\")[0-9]+[.][0-9]+[.][0-9]+(\")/\1$new_rust\2/" \
+    -e "s/^([[:space:]]*channel[[:space:]]*=[[:space:]]*')[0-9]+[.][0-9]+[.][0-9]+(')/\1$new_rust\2/" "$1" > "$1.velnor-next" \
+    && mv "$1.velnor-next" "$1" \
+    && grep -Eq "^[[:space:]]*channel[[:space:]]*=[[:space:]]*[\"']${new_rust}[\"']" "$1"
+}
 mirror_rust() {
   new_rust=$(mise ls --local --json | jq -r '(.rust // .["core:rust"] // [])[0].requested_version // empty')
   [ -n "$new_rust" ] || return 0
   for file in $toolchain_files; do
     case "$file" in
-      *.toml) sed -i -E "s/^([[:space:]]*channel[[:space:]]*=[[:space:]]*\")[0-9]+[.][0-9]+[.][0-9]+(\")/\1$new_rust\2/" "$file" ;;
+      *.toml) set_channel "$file" || return 1 ;;
       *)
         if grep -q '^[[:space:]]*\[' "$file"; then
-          sed -i -E "s/^([[:space:]]*channel[[:space:]]*=[[:space:]]*\")[0-9]+[.][0-9]+[.][0-9]+(\")/\1$new_rust\2/" "$file"
+          set_channel "$file" || return 1
         else
           printf '%s\n' "$new_rust" > "$file"
         fi
@@ -102,7 +100,7 @@ if [ -n "$cargo_roots" ]; then
       if ! cmp -s "$dir/Cargo.lock.before" "$root/Cargo.lock"; then changed "Cargo dependencies in $root"; fi
     else
       failed "Cargo upgrade in $root failed (private git sources need the fetch credential; resolve by hand)"
-      git diff --name-only -- "$root" | grep -E '(^|/)Cargo[.](toml|lock)$' | xargs -r git checkout --
+      git diff --name-only -- "$root" | { grep -E '(^|/)Cargo[.](toml|lock)$' || true; } | xargs -r git checkout --
     fi
   done
 fi
@@ -133,11 +131,23 @@ for catalog in $(git ls-files -- 'gradle/libs.versions.toml' '*/gradle/libs.vers
 done
 
 # 6. Regenerate .github/ (and every generated file) with the selected Velnor.
-generate() { "$dir/bin/velnor-actions" generate > "$dir/generate.log" 2>&1; }
+generate() { velnor_generate_prerequisites > "$dir/generate.log" 2>&1 && "$dir/velnor/bin/velnor-actions" generate >> "$dir/generate.log" 2>&1; }
+rust_bumped() {
+  [ -d "$dir/pre-rust" ] || return 1
+  for file in $rust_files; do cmp -s "$dir/pre-rust/$file" "$file" || return 0; done
+  return 1
+}
 if ! generate; then
-  if grep -q 'rust_channel_manifest_not_catalogued' "$dir/generate.log" && [ -d "$dir/pre-rust" ]; then
+  if rust_bumped; then
+    # Whatever made regeneration fail after the Rust bump, the Rust scope
+    # rolls back alone and the rest of the upgrade still ships.
+    reason=$(grep -m 1 'velnor-actions:' "$dir/generate.log" | cut -c1-240 || true)
     for file in $rust_files; do cp "$dir/pre-rust/$file" "$file"; done
-    failed "the newest Rust is not in velnor-actions $version's channel-manifest catalog yet; Rust stays pinned until a Velnor release adds it"
+    if grep -q 'rust_channel_manifest_not_catalogued' "$dir/generate.log"; then
+      failed "the newest Rust is not in velnor-actions $version's channel-manifest catalog yet; Rust stays pinned until a Velnor release adds it"
+    else
+      failed "regenerating with the Rust bump failed (${reason:-see the job log}); Rust stays pinned"
+    fi
     generate || { cat "$dir/generate.log"; failed "velnor-actions generate failed; .github/ is not regenerated"; }
   else
     cat "$dir/generate.log"
@@ -145,23 +155,12 @@ if ! generate; then
   fi
 fi
 
-# 7. Keep only upgrade-owned paths; anything else is reported, not shipped.
+# 7. Keep only what the patch filter admits (upgrade-owned regular files,
+# no rename, mode change, symlink, foreign deletion or binary); anything
+# else is unstaged and reported, not shipped.
 git add -A
-git diff --cached --name-only > "$dir/paths"
-: > "$dir/rejected"
-while IFS= read -r path; do
-  case "$path" in
-    mise.toml|.mise.toml|mise.lock|.mise.lock|.velnor/release-manifest.json|.github/*) ;;
-    rust-toolchain.toml|*/rust-toolchain.toml|rust-toolchain|*/rust-toolchain) ;;
-    Cargo.toml|Cargo.lock|*/Cargo.toml|*/Cargo.lock) ;;
-    package.json|bun.lock|*/package.json|*/bun.lock) ;;
-    gradle/libs.versions.toml|*/gradle/libs.versions.toml|gradle.lockfile|*/gradle.lockfile|gradle/verification-metadata.xml|*/gradle/verification-metadata.xml) ;;
-    *) printf '%s\n' "$path" >> "$dir/rejected" ;;
-  esac
-done < "$dir/paths"
-if [ -s "$dir/rejected" ]; then
-  while IFS= read -r path; do git reset --quiet -- "$path"; failed "unexpected change left out of the upgrade: $path"; done < "$dir/rejected"
-fi
+velnor_upgrade_check_index drop > "$dir/rejected"
+while read -r code path; do failed "unexpected change left out of the upgrade ($code): $path"; done < "$dir/rejected"
 {
   echo "Velnor upgrades every pin to the latest stable release (no cooldown)."
   echo
@@ -169,11 +168,26 @@ fi
   if [ -s "$dir/changes.md" ]; then cat "$dir/changes.md"; else echo "- regenerated files only"; fi
   if [ -s "$failures" ]; then echo; echo "## Needs migration"; cat "$failures"; fi
 } > "$summary"
+# A scope that failed and rolled back is behind even when nothing else
+# changed: the freshness gate reports it as `upgrade_scope_needs_migration`.
+if [ -s "$failures" ]; then
+  delimiter="velnor-failures-$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+  {
+    echo "failed=true"
+    echo "failures<<$delimiter"
+    cat "$failures"
+    echo "$delimiter"
+  } >> "$GITHUB_OUTPUT"
+else
+  echo "failed=false" >> "$GITHUB_OUTPUT"
+fi
 if git diff --cached --quiet; then
   echo "changed=false" >> "$GITHUB_OUTPUT"
   cat "$summary"
   exit 0
 fi
-git diff --cached --binary > "$dir/out/upgrade.patch"
+git diff --cached --no-renames --full-index --no-ext-diff --no-textconv > "$dir/out/upgrade.patch"
+# Self-check: publish runs exactly this filter again before it trusts a byte.
+velnor_upgrade_check_patch_applies "$dir/out/upgrade.patch" "$dir/check.index" || exit 1
 echo "changed=true" >> "$GITHUB_OUTPUT"
 cat "$summary"

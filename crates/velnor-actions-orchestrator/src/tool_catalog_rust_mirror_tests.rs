@@ -83,3 +83,86 @@ fn a_plain_string_mise_pin_mirrors_a_bare_toolchain_file() {
     );
     assert!(check_toolchain_mirror(dir.path()).is_ok());
 }
+
+/// A repository holding exactly `files`.
+fn repo_with(files: &[(&str, &str)]) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().expect("tempdir");
+    for (rel, text) in files {
+        let path = dir.path().join(rel);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).expect("dirs");
+        }
+        std::fs::write(path, text).expect("write");
+    }
+    dir
+}
+
+#[test]
+fn the_documented_comma_string_form_mirrors_an_array() {
+    // mise documents `components`/`targets` "as an array or a
+    // comma-separated string"; the string form used to compare as one item.
+    let mise = "[tools]\nrust = { version = \"1.99.1\", components = \"clippy,rustfmt\", targets = \"aarch64-unknown-linux-gnu, x86_64-unknown-linux-gnu\" }\n";
+    assert!(check_toolchain_mirror(repo(Some(mise), Some(TOOLCHAIN)).path()).is_ok());
+    let drifted = mise.replace("clippy,rustfmt", "clippy");
+    let err = error(repo(Some(&drifted), Some(TOOLCHAIN)).path());
+    assert!(
+        err.contains(&format!(
+            "{MIRROR_CODE}:components:rust-toolchain.toml=[clippy,rustfmt],mise.toml=[clippy]"
+        )),
+        "{err}"
+    );
+}
+
+#[test]
+fn every_mise_config_location_mise_reads_is_compared() {
+    // Drift in a config Mise reads used to pass because only `mise.toml`
+    // and `.mise.toml` were compared.
+    let drifted = MISE.replace(", \"aarch64-unknown-linux-gnu\"", "");
+    for file in [
+        ".config/mise.toml",
+        "mise/config.toml",
+        ".mise/config.toml",
+        ".config/mise/conf.d/rust.toml",
+        "mise.ci.toml",
+    ] {
+        let dir = repo_with(&[(file, &drifted), ("rust-toolchain.toml", TOOLCHAIN)]);
+        let err = error(dir.path());
+        assert!(
+            err.contains(&format!("{MIRROR_CODE}:targets:rust-toolchain.toml="))
+                && err.contains(&format!("{file}=[")),
+            "{file}: {err}"
+        );
+        let agreeing = repo_with(&[(file, MISE), ("rust-toolchain.toml", TOOLCHAIN)]);
+        assert!(check_toolchain_mirror(agreeing.path()).is_ok(), "{file}");
+    }
+}
+
+#[test]
+fn nested_and_legacy_toolchain_files_are_compared_key_by_key() {
+    let nested = repo_with(&[
+        ("mise.toml", MISE),
+        ("rust-toolchain.toml", TOOLCHAIN),
+        (
+            "crates/sub/rust-toolchain.toml",
+            "[toolchain]\nchannel = \"1.99.1\"\ncomponents = [\"clippy\"]\ntargets = [\"aarch64-unknown-linux-gnu\", \"x86_64-unknown-linux-gnu\"]\n",
+        ),
+    ]);
+    let err = error(nested.path());
+    assert!(
+        err.contains(&format!(
+            "{MIRROR_CODE}:components:crates/sub/rust-toolchain.toml=[clippy],mise.toml=[clippy,rustfmt]"
+        )),
+        "{err}"
+    );
+    // A legacy plain `rust-toolchain` names only a channel, so it cannot
+    // mirror an entry with components.
+    let plain = repo_with(&[("mise.toml", MISE), ("rust-toolchain", "1.99.1\n")]);
+    assert!(error(plain.path()).contains(&format!("{MIRROR_CODE}:components:rust-toolchain=[]")));
+    let plain_ok = repo_with(&[
+        ("mise.toml", "[tools]\nrust = \"1.99.1\"\n"),
+        ("rust-toolchain", "1.99.1\n"),
+    ]);
+    assert!(check_toolchain_mirror(plain_ok.path()).is_ok());
+    let legacy_toml = repo_with(&[("mise.toml", MISE), ("rust-toolchain", TOOLCHAIN)]);
+    assert!(check_toolchain_mirror(legacy_toml.path()).is_ok());
+}
