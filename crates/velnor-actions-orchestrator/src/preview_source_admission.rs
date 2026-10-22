@@ -51,6 +51,8 @@ mod finalize;
 pub(super) use finalize::finalize;
 #[path = "preview_source_admission_projection.rs"]
 mod projection;
+#[path = "preview_source_admission_selection.rs"]
+mod selection;
 
 struct Finalization {
     seed: PackageReleasePolicy,
@@ -88,33 +90,31 @@ fn select_until(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
     let seed = parse_seed_policy()?;
     let repository = required("GITHUB_REPOSITORY")?;
     let coordinator = required("GITHUB_SHA")?;
-    if seed.repository != repository
-        || seed.channel != PackageReleaseChannel::Preview
-        || seed.default_branch != "main"
-        || coordinator != required("GITHUB_WORKFLOW_SHA")?
-        || !valid_git_sha(&coordinator)
-        || required("GITHUB_REF")? != "refs/heads/main"
-        || required("GITHUB_WORKFLOW_REF")?
-            != format!(
-                "{repository}/{}@refs/heads/main",
-                seed.channel.workflow_path()
-            )
-    {
-        return Err(internal("preview_source_authority_context"));
-    }
+    let workflow_sha = required("GITHUB_WORKFLOW_SHA")?;
+    let ref_name = required("GITHUB_REF")?;
+    let workflow_ref = required("GITHUB_WORKFLOW_REF")?;
+    let event_name = required("GITHUB_EVENT_NAME")?;
+    selection::validate_preview_source_context(
+        &seed,
+        &repository,
+        &coordinator,
+        &workflow_sha,
+        &ref_name,
+        &workflow_ref,
+        &event_name,
+    )?;
     let event = event_json()?;
     let repository_id = positive_u64("GITHUB_REPOSITORY_ID")?;
     let current_run = positive_u64("GITHUB_RUN_ID")?;
     let current_attempt = u32::try_from(positive_u64("GITHUB_RUN_ATTEMPT")?)
         .map_err(|_| internal("preview_source_context"))?;
+    let api = GitHubApi::new(repository);
     let (source_sha, ci_run_id, ci_attempt, authority) =
-        source_from_invocation(&event, repository_id, &seed)?;
+        selection::source_from_invocation(&api, &event, repository_id, &seed, &event_name)?;
     if !valid_git_sha(&source_sha) || !valid_git_sha(&authority) {
         return Err(internal("preview_source_sha"));
     }
 
-    let api = GitHubApi::new(repository);
-    api.verify_repository_identity(repository_id)?;
     api.verify_preview_main_ancestry(
         repository_id,
         &seed.default_branch,
@@ -177,84 +177,6 @@ fn config_checkout_lfs(text: Option<&str>) -> Result<bool, OrchestratorError> {
     Ok(crate::config::load_config_from_text(text)?
         .workflow
         .checkout_lfs)
-}
-
-fn source_from_invocation(
-    event: &Value,
-    repository_id: u64,
-    seed: &PackageReleasePolicy,
-) -> Result<(String, u64, u32, String), OrchestratorError> {
-    match required("GITHUB_EVENT_NAME")?.as_str() {
-        "workflow_run" => {
-            let (source, run, attempt) =
-                source_from_workflow_run_event(event, repository_id, &seed.repository)?;
-            Ok((source, run, attempt, required("GITHUB_SHA")?))
-        }
-        "workflow_dispatch" => {
-            let signed = super::super::recovery::verify_preview_original_for_source_selection(
-                seed,
-                super::super::recovery::PreviewRecoveryVerificationStage::SourceSelection,
-            )?;
-            let receipt = signed.receipt();
-            let source_sha = receipt.source.commit_sha.clone();
-            let api = GitHubApi::new(seed.repository.clone());
-            let workflow = api.admitted_workflow(
-                velnor_actions_contract::CI_WORKFLOW_PATH,
-                velnor_actions_contract::WORKFLOW_DISPLAY_NAME,
-            )?;
-            let latest = api.latest_source_ci(
-                &workflow,
-                RunSource {
-                    repository_id,
-                    sha: &source_sha,
-                    branch: &seed.default_branch,
-                },
-            )?;
-            Ok((
-                source_sha,
-                latest
-                    .id
-                    .filter(|id| *id > 0)
-                    .ok_or_else(|| internal("preview_source_latest_ci_identity"))?,
-                latest
-                    .run_attempt
-                    .filter(|attempt| *attempt > 0)
-                    .ok_or_else(|| internal("preview_source_latest_ci_identity"))?,
-                required("GITHUB_SHA")?,
-            ))
-        }
-        _ => Err(internal("preview_source_event_name")),
-    }
-}
-
-fn source_from_workflow_run_event(
-    event: &Value,
-    repository_id: u64,
-    repository: &str,
-) -> Result<(String, u64, u32), OrchestratorError> {
-    let run = &event["workflow_run"];
-    if event["action"].as_str() != Some("completed")
-        || event["repository"]["id"].as_u64() != Some(repository_id)
-        || event["repository"]["full_name"].as_str() != Some(repository)
-        || run["head_repository"]["id"].as_u64() != Some(repository_id)
-        || run["head_branch"].as_str() != Some("main")
-        || run["event"].as_str() != Some("push")
-        || run["status"].as_str() != Some("completed")
-        || run["conclusion"].as_str() != Some("success")
-        || run["path"].as_str() != Some(velnor_actions_contract::CI_WORKFLOW_PATH)
-        || run["name"].as_str() != Some(velnor_actions_contract::WORKFLOW_DISPLAY_NAME)
-    {
-        return Err(internal("preview_source_event_identity"));
-    }
-    Ok((
-        required_value(&run["head_sha"], "preview_source_event_identity")?,
-        positive_value(&run["id"], "preview_source_event_identity")?,
-        u32::try_from(positive_value(
-            &run["run_attempt"],
-            "preview_source_event_identity",
-        )?)
-        .map_err(|_| internal("preview_source_event_identity"))?,
-    ))
 }
 
 fn parse_seed_policy() -> Result<PackageReleasePolicy, OrchestratorError> {

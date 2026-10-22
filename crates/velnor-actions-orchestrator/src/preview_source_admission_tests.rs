@@ -1,13 +1,30 @@
+use super::super::super::github::WorkflowMetadata;
+use super::selection::{source_from_workflow_run_event, validate_preview_source_context};
 use super::*;
 use serde_json::json;
+
+fn workflow() -> WorkflowMetadata {
+    WorkflowMetadata {
+        id: 7,
+        name: velnor_actions_contract::WORKFLOW_DISPLAY_NAME.to_owned(),
+        path: velnor_actions_contract::CI_WORKFLOW_PATH.to_owned(),
+        state: "active".to_owned(),
+    }
+}
 
 fn event() -> Value {
     json!({
         "action": "completed",
         "repository": {"id": 9, "full_name": "jackin-project/jackin"},
+        "workflow": {
+            "id": 7,
+            "name": velnor_actions_contract::WORKFLOW_DISPLAY_NAME,
+            "path": velnor_actions_contract::CI_WORKFLOW_PATH
+        },
         "workflow_run": {
             "id": 101,
             "run_attempt": 2,
+            "workflow_id": 7,
             "head_sha": "a".repeat(40),
             "head_branch": "main",
             "event": "push",
@@ -15,15 +32,36 @@ fn event() -> Value {
             "conclusion": "success",
             "path": velnor_actions_contract::CI_WORKFLOW_PATH,
             "name": velnor_actions_contract::WORKFLOW_DISPLAY_NAME,
-            "head_repository": {"id": 9}
+            "repository": {"id": 9, "full_name": "jackin-project/jackin"},
+            "head_repository": {"id": 9, "full_name": "jackin-project/jackin"}
         }
     })
+}
+
+fn policy() -> PackageReleasePolicy {
+    serde_json::from_value(json!({
+        "schema": "velnor.package-release-policy.v1",
+        "channel": "preview",
+        "repository": "example/app",
+        "default_branch": "main",
+        "version": {
+            "version_package": "app",
+            "bindings": [{
+                "package": "app",
+                "manifest_path": "Cargo.toml",
+                "workspace_manifest_path": "Cargo.toml"
+            }]
+        },
+        "products": [],
+        "companions": []
+    }))
+    .expect("minimal typed preview policy")
 }
 
 #[test]
 fn completed_main_push_ci_event_admits_source_identity_a() {
     assert_eq!(
-        source_from_workflow_run_event(&event(), 9, "jackin-project/jackin")
+        source_from_workflow_run_event(&event(), 9, "jackin-project/jackin", &workflow())
             .expect("authenticated event shape"),
         ("a".repeat(40), 101, 2)
     );
@@ -34,7 +72,17 @@ fn source_event_rejects_foreign_repositories_wrong_workflow_and_non_success() {
     for (pointer, replacement) in [
         ("/repository/id", json!(10)),
         ("/repository/full_name", json!("attacker/fork")),
+        ("/workflow_run/repository/id", json!(10)),
+        ("/workflow_run/repository/full_name", json!("attacker/fork")),
+        ("/workflow/id", json!(8)),
+        ("/workflow/name", json!("Untrusted CI")),
+        ("/workflow/path", json!(".github/workflows/other.yml")),
+        ("/workflow_run/workflow_id", json!(8)),
         ("/workflow_run/head_repository/id", json!(10)),
+        (
+            "/workflow_run/head_repository/full_name",
+            json!("attacker/fork"),
+        ),
         ("/workflow_run/head_branch", json!("feature")),
         ("/workflow_run/event", json!("pull_request")),
         ("/workflow_run/status", json!("in_progress")),
@@ -46,9 +94,167 @@ fn source_event_rejects_foreign_repositories_wrong_workflow_and_non_success() {
         let mut candidate = event();
         *candidate.pointer_mut(pointer).expect("mutation field") = replacement;
         assert!(
-            source_from_workflow_run_event(&candidate, 9, "jackin-project/jackin").is_err(),
+            source_from_workflow_run_event(&candidate, 9, "jackin-project/jackin", &workflow())
+                .is_err(),
             "accepted modified source event"
         );
+    }
+}
+
+#[test]
+fn source_event_rejects_malformed_envelopes_and_unadmitted_workflow_metadata() {
+    let malformed = [
+        Value::Null,
+        json!({}),
+        json!({"action":"completed","workflow_run":null}),
+        {
+            let mut candidate = event();
+            candidate["workflow"] = Value::Null;
+            candidate
+        },
+        {
+            let mut candidate = event();
+            candidate["workflow_run"] = json!({});
+            candidate
+        },
+    ];
+    for candidate in malformed {
+        assert!(
+            source_from_workflow_run_event(&candidate, 9, "jackin-project/jackin", &workflow())
+                .is_err(),
+            "accepted malformed event envelope"
+        );
+    }
+
+    for candidate in [
+        WorkflowMetadata {
+            id: 0,
+            ..workflow()
+        },
+        WorkflowMetadata {
+            path: ".github/workflows/other.yml".to_owned(),
+            ..workflow()
+        },
+        WorkflowMetadata {
+            name: "Untrusted CI".to_owned(),
+            ..workflow()
+        },
+    ] {
+        assert!(
+            source_from_workflow_run_event(&event(), 9, "jackin-project/jackin", &candidate)
+                .is_err(),
+            "accepted unadmitted CI workflow metadata"
+        );
+    }
+}
+
+#[test]
+fn selector_context_accepts_only_preview_authority_and_supported_triggers() {
+    let seed = policy();
+    validate_preview_source_context(
+        &seed,
+        "example/app",
+        &"a".repeat(40),
+        &"a".repeat(40),
+        "refs/heads/main",
+        "example/app/.github/workflows/binary-preview.yml@refs/heads/main",
+        "workflow_run",
+    )
+    .expect("valid selector context");
+
+    for event_name in [
+        "pull_request",
+        "pull_request_target",
+        "push",
+        "repository_dispatch",
+    ] {
+        let error = validate_preview_source_context(
+            &seed,
+            "example/app",
+            &"a".repeat(40),
+            &"a".repeat(40),
+            "refs/heads/main",
+            "example/app/.github/workflows/binary-preview.yml@refs/heads/main",
+            event_name,
+        )
+        .expect_err("forbidden trigger");
+        assert!(format!("{error:?}").contains("preview_source_event_name"));
+    }
+}
+
+#[test]
+fn selector_context_rejects_untrusted_authority_mutations() {
+    let seed = policy();
+    let mutations = [
+        (
+            "attacker/fork",
+            "a",
+            "a",
+            "refs/heads/main",
+            "example/app/.github/workflows/binary-preview.yml@refs/heads/main".to_owned(),
+            seed.clone(),
+        ),
+        (
+            "example/app",
+            "a",
+            "b",
+            "refs/heads/main",
+            "example/app/.github/workflows/binary-preview.yml@refs/heads/main".to_owned(),
+            seed.clone(),
+        ),
+        (
+            "example/app",
+            "a",
+            "a",
+            "refs/heads/feature",
+            "example/app/.github/workflows/binary-preview.yml@refs/heads/main".to_owned(),
+            seed.clone(),
+        ),
+        (
+            "example/app",
+            "a",
+            "a",
+            "refs/heads/main",
+            "example/app/.github/workflows/other.yml@refs/heads/main".to_owned(),
+            seed.clone(),
+        ),
+        (
+            "example/app",
+            "a",
+            "a",
+            "refs/heads/main",
+            "example/app/.github/workflows/binary-preview.yml@refs/heads/main".to_owned(),
+            {
+                let mut candidate = seed.clone();
+                candidate.default_branch = "release".to_owned();
+                candidate
+            },
+        ),
+        (
+            "example/app",
+            "a",
+            "a",
+            "refs/heads/main",
+            "example/app/.github/workflows/binary-preview.yml@refs/heads/main".to_owned(),
+            {
+                let mut candidate = seed.clone();
+                candidate.channel = PackageReleaseChannel::Stable;
+                candidate
+            },
+        ),
+    ];
+    for (repository, authority, workflow_sha, ref_name, workflow_ref, candidate_seed) in mutations {
+        let error = validate_preview_source_context(
+            &candidate_seed,
+            repository,
+            &authority.repeat(40),
+            &workflow_sha.repeat(40),
+            ref_name,
+            &workflow_ref,
+            "workflow_dispatch",
+        )
+        .expect_err("mismatched authority context");
+        assert!(format!("{error:?}").contains("preview_source_authority_context"));
     }
 }
 
