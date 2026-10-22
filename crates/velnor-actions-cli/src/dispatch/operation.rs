@@ -151,21 +151,3 @@ pub(super) fn from_env() -> Option<InternalOp> {
 fn legacy_release_policy_operation(tag: &str) -> Option<InternalOp> {
     (tag == ADMIT_RELEASE_POLICY_OP).then_some(InternalOp::ReleasePolicyAdmission)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::{InternalOp, legacy_release_policy_operation};
-    use crate::dispatch::ADMIT_RELEASE_POLICY_OP;
-
-    #[test]
-    fn legacy_release_policy_tag_keeps_its_private_route() {
-        assert_eq!(
-            legacy_release_policy_operation(ADMIT_RELEASE_POLICY_OP),
-            Some(InternalOp::ReleasePolicyAdmission)
-        );
-        assert_eq!(
-            legacy_release_policy_operation("not-a-private-operation"),
-            None
-        );
-    }
-}

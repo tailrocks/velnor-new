@@ -144,6 +144,30 @@ fn unknown_op_matches_bare() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn legacy_release_policy_admission_uses_its_private_file_gate_and_route()
+-> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("gate-release-policy-v1")?;
+    let root = tmp.join("velnor");
+    let request = stage_request(&root, "package-release-policy.json", "{}")?;
+    let output = spawn_isolated(
+        &[],
+        &[
+            ("VELNOR_INTERNAL_OP", "admit-release-policy-v1"),
+            ("VELNOR_REQUEST_FILE", request.to_str().unwrap_or("/")),
+            ("RUNNER_TEMP", tmp.to_str().unwrap_or("/")),
+        ],
+        &tmp,
+    )?;
+    assert_eq!(code(&output), 1);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("internal request failed"));
+    assert!(stderr.contains("release_policy_environment"));
+    assert_eq!(output.stdout.as_slice(), b"");
+    cleanup(&tmp);
+    Ok(())
+}
+
+#[test]
 fn missing_gate_pieces_match_bare() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("gate-missing")?;
     let dir = tmp.join("request");
