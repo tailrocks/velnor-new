@@ -7,8 +7,8 @@ use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::{
     build_verification_task_job,
     verification_jobs::{
-        WorkflowTaskPolicy, build_build_task_job, build_bun_member_job, build_bun_suite_job,
-        build_image_build_job, build_native_image_job, build_stack_job,
+        WorkflowTaskPolicy, build_build_task_job, build_bun_member_job, build_bun_report_job,
+        build_bun_suite_job, build_image_build_job, build_native_image_job, build_stack_job,
     },
 };
 
@@ -25,6 +25,8 @@ mod ansible_steps;
 mod ansible_tasks;
 #[path = "bun_inventory.rs"]
 pub(crate) mod bun_inventory;
+#[path = "bun_report_steps.rs"]
+pub(crate) mod bun_report_steps;
 #[path = "bun_steps.rs"]
 pub(crate) mod bun_steps;
 #[path = "bun_tasks.rs"]
@@ -126,10 +128,19 @@ pub(crate) fn insert_jobs(
                 policy.id.clone(),
                 build_bun_member_job(policy, CHECKOUT_USES)?,
             )],
-            WorkflowTaskPolicy::BunSuite(policy) => vec![(
-                policy.id.clone(),
-                build_bun_suite_job(policy, CHECKOUT_USES)?,
-            )],
+            WorkflowTaskPolicy::BunSuite(policy) => {
+                let mut built = vec![(
+                    policy.id.clone(),
+                    build_bun_suite_job(policy, CHECKOUT_USES)?,
+                )];
+                if policy.report.is_some() {
+                    built.push((
+                        policy.report_id(),
+                        build_bun_report_job(policy, CHECKOUT_USES)?,
+                    ));
+                }
+                built
+            }
             WorkflowTaskPolicy::Stack(policy) => {
                 vec![(policy.id.clone(), build_stack_job(policy, CHECKOUT_USES)?)]
             }
