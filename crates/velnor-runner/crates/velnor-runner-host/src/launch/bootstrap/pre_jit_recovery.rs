@@ -199,7 +199,7 @@ impl PreJitCleanupPhaseProof {
         self.generation
     }
 
-    pub(crate) const fn from_phase(&self) -> PreJitCleanupPhase {
+    pub(crate) const fn source_phase(&self) -> PreJitCleanupPhase {
         self.from_phase
     }
 
