@@ -150,7 +150,6 @@ async fn positive_poll_message(
     let budget = context.config.resource_budget()?;
     let set_id = prepared.set_id;
     let scoped = &prepared.scope;
-    let guest_image = &prepared.guest_image;
     let pat = credentials.github_pat.expose();
     let inputs = PositiveOfferInputs {
         context,
@@ -159,7 +158,6 @@ async fn positive_poll_message(
         budget,
         set_id,
         scoped,
-        guest_image,
         pat,
         allocated_header: allocation.target(),
     };

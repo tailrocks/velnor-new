@@ -32,10 +32,18 @@ fn display_names_reject_expressions_and_controls() {
         "$?{{x}}"
     );
     assert_eq!(crate_display_label("", "crates/a\nb/Cargo.toml"), "a?b");
-    assert_eq!(crate_display_name("", "crates/a/Cargo.toml"), "Rust / a");
+    assert_eq!(
+        crate_display_name("", "crates/a/Cargo.toml", "default"),
+        "Rust / a"
+    );
+    assert_eq!(
+        crate_display_name("demo", "crates/demo/Cargo.toml", "tests"),
+        "Rust / demo (tests)"
+    );
     assert!(is_safe_display_name(&crate_display_name(
         "",
-        "crates/${{x}}/Cargo.toml"
+        "crates/${{x}}/Cargo.toml",
+        "default"
     )));
 }
 
@@ -122,7 +130,7 @@ fn verify_names_resolve_exactly() {
     for kind in ValidatorKind::consumer_verify() {
         assert_eq!(ValidatorKind::from_verify_name(kind.job_id()), Some(kind));
     }
-    for name in ["cargo-deny", "cargo-machete", "actionlint", "plan", ""] {
+    for name in ["cargo-deny", "cargo-machete", "jactionlint", "plan", ""] {
         assert_eq!(ValidatorKind::from_verify_name(name), None, "{name}");
     }
 }

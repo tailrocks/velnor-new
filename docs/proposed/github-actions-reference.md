@@ -54,11 +54,11 @@ the host's `xcode-select` setting.
 Jackin run `39495895585`, attempt 1, demonstrated executing producer jobs while the aggregate run remained `queued`; requiring only `in_progress` incorrectly rejected them before checkout. Aggregate status alone never establishes caller authority.
 The official [attempt-specific jobs endpoint](https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt) supplies the bounded complete inventory selecting one generated role's positive job ID. The [individual job endpoint](https://docs.github.com/en/rest/actions/workflow-jobs#get-a-job-for-a-workflow-run) refreshes its identity, status and conclusion using existing Actions read permissions. The runner's [GitHubContext export](https://github.com/actions/runner/blob/main/src/Runner.Worker/GitHubContext.cs) exports `GITHUB_JOB`; Velnor maps this machine identifier to the generated display name through a closed mapping checked against actual rendered jobs.
 Native guards authenticate exact source, workflow, run and attempt; aggregate `queued` or `in_progress` requires no conclusion plus the unique expected job executing with no conclusion. Only immutable locators are cached; subsequent guards fetch the individual job again. Historical signed-run evidence remains separate from the current publisher, recovery or tap caller's authority.
+### Step shell resolution and `addPath` (checked 2026-10-22)
+[`ScriptHandler.cs`](https://github.com/actions/runner/blob/4c989f2f108bb6798e07ea5935bc8bc4aab7de2f/src/Runner.Worker/Handlers/ScriptHandler.cs) resolves a step's shell with `WhichUtil.Which(command, …, prependPath)`, where `prependPath` holds every `core.addPath`/`GITHUB_PATH` entry ahead of the job `PATH`. In a composite action (`IsActionStep`) even `shell: bash` takes this route. [`WhichUtil.cs`](https://github.com/actions/runner/blob/4c989f2f108bb6798e07ea5935bc8bc4aab7de2f/src/Runner.Sdk/Util/WhichUtil.cs) returns a fully qualified command as given when the file exists and never searches `PATH` for it; a custom shell string is split at its first space and must contain `{0}`. `jdx/mise-action` adds the Mise `bin/` and, by default, `shims/` with `core.addPath`, so after a tools-cache restore a bare shell or helper name can resolve to restored bytes. Velnor's restore checks therefore use `/bin/bash --noprofile --norc -e -o pipefail {0}` and reset `PATH` to `/usr/bin:/bin:/usr/sbin:/sbin` first ([hermetic checks](tools-cache-v2.md#the-checks-run-hermetically)).
 ### Workflow YAML sharing (checked 2026-10-19)
 
-GitHub's official [workflow reuse reference](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#yaml-anchors-and-aliases)
-documents same-document environment mapping aliases and an entire job alias
-containing a steps sequence. These are YAML node substitution, not a reusable
+GitHub's official [workflow reuse reference](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#yaml-anchors-and-aliases) documents same-document environment mapping aliases and an entire job alias containing a steps sequence. These are YAML node substitution, not a reusable
 workflow or composite-action call: expressions and environment values retain
 their use-site job and step context. The [official announcement](https://github.blog/changelog/2025-09-18-actions-yaml-anchors-and-non-public-workflow-templates/)
 records workflow anchor/alias support.
@@ -109,7 +109,7 @@ change; Velnor emits no new aliases into composite `action.yml` files.
 - **Velnor Implementation**:
   - `Step::parallel` in `velnor-actions-contract` marks a member of a contiguous group; members may not carry an id, a typed role or an internal operation. `velnor-actions-workflow-renderer` (`parallel_steps`) renders each member with `background: true` and joins each group with one generated `Wait for parallel checks` `wait-all` step; composite renderers, lane sharing and obligation extraction reject or skip parallel members.
   - Each Rust crate job uses one such group for its checks (see [hard decisions](../hard-decisions.md#1-one-job-per-crate-with-parallel-check-steps) and [native Rust crate jobs](../implemented/native-rust-crate-jobs.md)).
-  - Pinned `actionlint` v1.7.12 does not parse the keys (rhysd/actionlint#693). `velnor-actions-actionlint` passes the two exact `STEP_PARALLELISM_IGNORES` to generation-time and CI actionlint; members stay fully validated in the `background` spelling, whereas actionlint skips `parallel:` children entirely. Pinned `zizmor` v1.31.1 (support since v1.27.0) parses the syntax.
+  - Pinned `jactionlint` v2.3.0 parses and validates `background:` members and the body-less `wait-all` join natively (rejecting `background: "yes"`, a `wait-all` with `run:`, and a step with neither `run` nor `uses`), so generation-time and CI lint pass no ignore pattern ([hard decision 10](../jactionlint-decision.md)). The superseded actionlint v1.7.12 could not parse the keys (rhysd/actionlint#693). Pinned `zizmor` v1.31.1 (support since v1.27.0) parses the syntax.
 
 ### 2. Workflow Execution Protections — `2026-09-17`
 - **Upstream Contract** ([Changelog](https://github.blog/changelog/2026-09-17-actions-new-workflow-execution-protections/)):
@@ -141,7 +141,7 @@ change; Velnor emits no new aliases into composite `action.yml` files.
 - **Velnor Implementation**:
   - `velnor-actions-contract` defines `CacheMode` (`Read`, `Write`, `WriteOnly`, `None`, `Expression(String)`) and optional `cache_mode: Option<CacheMode>` on both `WorkflowIr` and `Job`, with `CacheMode::for_pull_request_policy(PullRequestCachePolicy)` mapping `PullRequestCachePolicy::ReadOnly` to `CacheMode::Expression("${{ github.event_name == 'pull_request' && 'read' || 'write' }}")` and `PullRequestCachePolicy::SharedSeed` to `CacheMode::Write`.
   - `velnor-actions-workflow-renderer` emits top-level and job-level `cache-mode:` when `cache_mode` is `Some(...)` and omits it when `None`.
-  - `velnor-actions-actionlint` tracks `native_cache_mode` in `ActionlintCapabilities` (`supports_native_cache_mode()`, `qualify_native_cache_mode()`, `check_native_cache_mode()`), defaulting to `false` for pinned `actionlint` `v1.7.12` until upstream `actionlint` recognizes `cache-mode`.
+  - Pinned `jactionlint` v2.3.0 parses workflow- and job-level `cache-mode` literals (`read`, `write`, `write-only`, `none`) and rejects any other value, including a `${{ }}` expression; `JactionlintCapabilities::check_step_syntax(StepSyntax::CacheMode)` records the capability and generation vets it.
 
 ### 4. Dependabot Default Package Cooldown & Velnor Freshness — `2026-07-14`
 - **Upstream Contract** ([Changelog](https://github.blog/changelog/2026-07-14-supply-chain-defense-by-default-dependabot-adds-3-day-package-cooldown/)):
@@ -317,7 +317,6 @@ Starting a fresh timeout for each phase would permit cumulative overruns.
 Expiration must prevent a success proof or publication handoff; GitHub's outer
 job limit additionally bounds checkout, tool installation, and source fetch.
 
-
 ## Native preview after completed CI (2026-10-18)
 
 The dedicated native preview renderer admits only the canonical CI completion
@@ -342,7 +341,6 @@ artifact is consumed to select source. Signer and publisher retain isolated
 permissions and independent revalidation. Receipt, certificate and SLSA claims
 bind the true producing `workflow_run`; authenticated source CI remains `push`.
 
-
 The payload shape was checked against original `octokit/webhooks` commit
 `aa80c24a3f55354465b8b1438d33dd5602956d0d`: the
 [completed-event schema](https://github.com/octokit/webhooks/blob/aa80c24a3f55354465b8b1438d33dd5602956d0d/payload-schemas/api.github.com/workflow_run/completed.schema.json)
@@ -355,7 +353,7 @@ must agree with independently fetched canonical CI metadata.
 
 ## Native completion trigger scanner disposition (2026-10-18)
 
-Pinned zizmor 1.31.1, original commit
+Pinned zizmor 1.31.1 (since [retired](../jactionlint-decision.md#zizmor-is-retired); jactionlint honours the annotation), original commit
 `effdb35fa7868863f11655db256d9008922fa427`, emits `dangerous-triggers`
 [unconditionally for `workflow_run`](https://github.com/zizmorcore/zizmor/blob/effdb35fa7868863f11655db256d9008922fa427/crates/zizmor/src/audit/dangerous_triggers.rs#L51-L98).
 The rule includes a hidden location covering the entire `on` block. Its inline
@@ -398,3 +396,5 @@ for the bounded diagnostic output protocol and its runner-source references.
 
 See [native release asset upload](../implemented/native-release-upload.md) for
 the qualified upload-host, authentication and binary-input source contract.
+
+See [optional dependency-seed failure isolation](../implemented/optional-dependency-seed.md).

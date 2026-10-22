@@ -12,14 +12,14 @@
   tests), `tool_catalog_resolve::rust_mirror::tests`,
   `tool_catalog_resolve::rust_source::tests`.
 - Deviations: none
-- Follow-up: Rust 1.100 is expected about 2026-11-12 with a new Cargo build directory layout.
-  This layout lets MBX collect unused units separately and prepare new worktrees from existing ones.
-  Update the catalog after the release.
+- Follow-up: Rust 1.100 (about 2026-11-12) brings Cargo's new build-dir
+  layout, which lets MBX collect unused units one at a time and seed new
+  worktrees from existing ones; bump the catalog when it ships.
 
 ## 1. `mise.toml` and `rust-toolchain.toml` (owner standard layout)
 
-Use the owner's standard layout of 2026-10-22 for each Rust project.
-Select the latest stable tool versions.
+The owner's standard layout (2026-10-22) for every Rust project. Use the
+newest stable version of each tool when applying it.
 
 `mise.toml`:
 
@@ -42,8 +42,8 @@ command = "mbx"
 env = { MBX_CARGO_SHIM_MODE = "1" }
 ```
 
-Keep `rust-toolchain.toml` values equal to the Mise Rust entry.
-Update both files together:
+`rust-toolchain.toml`, an exact mirror of the `mise.toml` rust entry (never
+edited alone):
 
 ```toml
 [toolchain]
@@ -53,66 +53,80 @@ components = ["clippy", "rustfmt"]
 targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
 ```
 
-- Keep both files. Mise uses its Rust entry when `mise.toml` declares Rust.
-  Tools outside Mise can use `rust-toolchain.toml` instead.
-  Include components and targets in both declarations.
-  Missing targets can cause cross builds under Mise to fail with `E0463`.
-- Generation checks the toolchain mirror when both files declare Rust.
-  The version, profile, component set, and target set must agree.
-  A difference reports
-  `rust_toolchain_mirror_mismatch:<key>:rust-toolchain.toml=[...],mise.toml=[...]`.
-  Set `profile` in both files or neither file. The `minimal` profile omits rust-docs.
-- `idiomatic_version_file_enable_tools = ["rust"]` has no effect while
-  `mise.toml` declares Rust. The standard includes it as a fallback.
-- `mr_boxington = true` and `[wrappers.cargo]` both route `cargo` through MBX.
-  Include `mr-boxington` in the same active `[tools]` configuration.
-- Install hk hooks with `hk install --mise` or `HK_MISE=1`.
-  Cargo hook steps then use the Mise environment, including from graphical Git clients.
-- Dockerfiles get the version from Mise.
-  Pass `--build-arg RUST_VERSION="$(mise current rust)"`.
-  In the base layer, run `rustup component add clippy rustfmt`.
-  Run `rustup target add` with the toolchain file's targets.
-  This avoids downloads after `COPY . .`.
-- Add other project tools to `[tools]` with exact versions.
-  For example, add `"aqua:nextest-rs/nextest/cargo-nextest"`.
-- With `lockfile = true`, run `mise lock` and commit `mise.lock`.
-  Packslip entries record a SHA-256 digest and a Sigstore signer for `mr-boxington`.
-- `min_version` requires Mise 2026.10.17 or later on every computer.
-  An older global Mise rejects project commands, including the `cargo` wrapper.
-  Use `mise self-update` to update Mise.
-- Only rust-analyzer needs `mbx setup`.
-  Select "Create the shim without activating it".
-  Do not pass `--yes`, `--global`, or `--local`.
+- Why both files: once `mise.toml` pins Rust, Mise ignores the toolchain
+  file completely, including its `components` and `targets`. rustup-only
+  consumers (editors and rust-analyzer, hooks run outside Mise, GUI git,
+  Docker `rust:` images, a plain shell) read only the file and otherwise fall
+  back to rustup's default toolchain. So the Mise entry must carry the
+  components and targets too (or cross builds under Mise fail with E0463 and
+  `mise.lock` records no options), and the file must repeat them.
+- Generation enforces the mirror: when both declare Rust, a different
+  `channel`/`version`, `components`, `targets` or `profile` fails with
+  `rust_toolchain_mirror_mismatch:<key>:<toolchain file>=[...],<mise file>=[...]`.
+  Set `profile` in both or in neither; `minimal` skips rust-docs.
+  - The Mise side is every config Mise reads (`mise.toml`, `.mise.toml`,
+    `mise.<env>.toml`, `.config/mise.toml`, `.config/mise/config.toml`,
+    `.config/mise/conf.d/*.toml`, `mise/config.toml`, `.mise/config.toml`
+    and their `.<env>` forms), each `[tools] rust` entry on its own.
+  - The toolchain side is every `rust-toolchain.toml` and legacy
+    `rust-toolchain`, at the root or nested (every file the upgrade job
+    rewrites). A legacy plain `rust-toolchain` names only a channel, so it
+    mirrors only an entry without components, targets or profile; use
+    `rust-toolchain.toml` otherwise.
+  - `components` and `targets` may be arrays or Mise's comma-separated
+    string (`"clippy,rustfmt"`); order and duplicates do not matter.
+- `idiomatic_version_file_enable_tools = ["rust"]` is a no-op while
+  `mise.toml` pins Rust; it is part of the standard as a fallback.
+- `mr_boxington = true` and the `[wrappers.cargo]` entry both route every
+  `cargo` through MBX. They need `mr-boxington` in the same active `[tools]`.
+- Install hk hooks with `hk install --mise` (or `HK_MISE=1`), so cargo-based
+  hook steps run inside the Mise environment even from GUI git clients.
+- Dockerfiles take the version from Mise, not from the toolchain file:
+  pass `--build-arg RUST_VERSION="$(mise current rust)"`, and in the base
+  layer run `rustup component add clippy rustfmt` and `rustup target add`
+  with the file's targets, so builds do not download them after `COPY . .`.
+- Add other tools the project uses (for example
+  `"aqua:nextest-rs/nextest/cargo-nextest"`) to `[tools]` with exact pins.
+- `lockfile = true`: run `mise lock` and commit `mise.lock` (packslip entries
+  record a sha256 and a sigstore signer for `mr-boxington`).
+- `min_version` requires Mise 2026.10.17 or newer on every machine. An older
+  global Mise fails every command in the project, including the `cargo`
+  command wrapper (`mise self-update`).
+- `mbx setup` is only needed for rust-analyzer. Choose "Create the shim
+  without activating it"; do not pass `--yes`, `--global` or `--local`.
 
 ### Optional: name `mise.toml` the authority
 
-The toolchain mirror check always runs during generation.
-The standard layout does not enable `[stacks.rust] toolchain_source = "mise"`.
-If you enable this option in `.velnor/config.toml`, a Mise config must declare Rust.
-A missing declaration reports `rust_not_declared_in_mise`.
-Other Rust version declarations must agree with the Mise version.
-This includes nested toolchain files, `.tool-versions`, and `.velnor/config.toml` pins.
-A difference reports `rust_version_disagrees_with_mise:<file>=<v>,mise.toml=<v>`.
+The mirror check above is always on. `[stacks.rust] toolchain_source = "mise"`
+in `.velnor/config.toml` additionally requires a `rust` entry in a Mise config
+(`rust_not_declared_in_mise`) and names it as the authority for every other
+declaration: a nested toolchain file, `.tool-versions` or a
+`.velnor/config.toml` pin that differs fails with
+`rust_version_disagrees_with_mise:<file>=<v>,mise.toml=<v>`. It is not part
+of the standard layout and is not enabled in any repository.
 
 ## 2. What CI does with it
 
-The Mise option selects MBX without an additional `compile_driver` declaration in `.velnor/config.toml`.
-The `mr_boxington = true` setting supplies durable evidence for `compile_driver = mbx`. Generation selects:
+Nothing needs to be declared in `.velnor/config.toml`. `mr_boxington = true`
+in `mise.toml` is durable evidence for `compile_driver = mbx`, so generation
+selects:
 
 - the MBX compile driver in every crate job and in the dependency-seed job;
 - the seed-only bundle writer: only the `Dependency seed` job runs
   `Record MBX producer success`, `Export MBX bundle` and `Save MBX bundle`,
   on trusted pushes; crate jobs restore and import read-only;
-- MBX bundle transport with `mbx cache export --group velnor --format directory` and `mbx cache import`.
-  It does not cache Cargo `target/` files. The MBX action only installs MBX and has no `github-cache-mode`.
+- the opaque bundle transport: `mbx cache export --group velnor --format
+  directory` and `mbx cache import`, never a Cargo `target/` cache (the MBX
+  action is install-only, no `github-cache-mode`).
 
 `impl_consumer_mbx_setup` generates the layout above and asserts all three.
 Add `[stacks.rust] compile_driver = "mbx"` only if generation reports
 `transient_evidence_requires_declaration` (MBX seen only in a transient
 place such as a hand-written workflow).
 
-Generated Plan, Rust crate, and dependency seed jobs check installed Rust manifest metadata against the catalog channel manifest digest.
-See [verified Rust installs](rust-channel-manifest.md). Select a Rust release that the Velnor catalog contains.
+Every job that installs Rust also verifies it against the catalog's
+channel-manifest digest ([verified Rust installs](rust-channel-manifest.md)),
+so pin a Rust release the Velnor catalog knows.
 
 Velnor never injects `RUSTFLAGS` or `CARGO_PROFILE_*`: CI builds with the
 repository's own profile, so developer and CI cache keys match.
@@ -124,40 +138,41 @@ repository's own profile, so developer and CI cache keys match.
 debug = "line-tables-only"   # backtraces keep file:line
 [profile.dev.package."*"]
 debug = false                # no debuginfo for dependencies
-# Do not override [profile.test]. It inherits dev.
-# Thus, build, test, and clippy can share dependency units.
+# No [profile.test] override: test inherits dev, so build, test and clippy
+# share every dependency unit.
 ```
 
-Measurements on three ChainArgos workspaces started with an empty target and ran build, tests, and Clippy in that order.
-The profile used 26-43% less space than Cargo defaults with a `debug = 0` test profile.
-It used 49-60% less space than the old Mise tasks.
-A `[profile.test]` that differs from `dev` keeps separate dependency outputs.
-Use `cargo build --profile debug` with Cargo 1.99 or later for debugger sessions.
-Keep the platform default for `split-debuginfo` and do not set `incremental`.
-MBX forces `CARGO_INCREMENTAL=0` and keeps its own learned incremental state. Cargo disables incremental compilation when `CI` is set.
+Measured on three ChainArgos workspaces (build, then tests, then clippy, from
+an empty target): 26-43% smaller than Cargo's defaults with a `debug = 0`
+test profile, and 49-60% smaller than what the old mise tasks produced. A
+`[profile.test]` that differs from `dev` keeps two copies of every
+dependency. Use `cargo build --profile debug` (Cargo 1.99+) for debugger
+sessions. Leave `split-debuginfo` at the platform default and do not set
+`incremental`: MBX forces `CARGO_INCREMENTAL=0` and keeps its own learned
+incremental state, and Cargo turns incremental off when `CI` is set.
 
 ## 4. Tasks
 
-Do not set compiler flags in Mise tasks:
+No inline flags in Mise tasks:
 
 ```toml
 [tasks.test]
 run = "cargo nextest run --locked --workspace"   # not: CARGO_INCREMENTAL=0 RUSTFLAGS='-C debuginfo=0' cargo ...
 ```
 
-`RUSTFLAGS` changes artifact hashes.
-On processor-monitor, the old `RUSTFLAGS='-C debuginfo=0' CARGO_INCREMENTAL=0` tasks added a third artifact set beside plain `cargo` builds.
-This added 1.33 GiB (+48%) and separate MBX cache entries.
-Use one flag set per repository with the profile above.
+`RUSTFLAGS` changes every artifact hash. On processor-monitor the old
+`RUSTFLAGS='-C debuginfo=0' CARGO_INCREMENTAL=0` tasks added a third artifact
+set next to plain `cargo` builds (+1.33 GiB, +48%) and separate MBX cache
+entries. Keep one flag set per repository: the profile above.
 
-Do not set `CARGO_TARGET_DIR`, `build.target-dir`, `build.build-dir`, or `rustc-wrapper` in a repository.
-MBX manages `target/` only when all four are absent.
-If any is set, MBX leaves the directory outside its management and does not collect it.
+Never set `CARGO_TARGET_DIR`, `build.target-dir`, `build.build-dir` or
+`rustc-wrapper` in a repository. MBX manages `target/` only when none of them
+is set; with any of them it leaves the directory alone and never collects it.
 
 ## 5. Developer machines: MBX garbage collection
 
-MBX shares compiled outputs across checkouts through its action store and automatically collects managed targets.
-Set a storage budget that the machine can meet:
+MBX shares compiled outputs across every checkout through its action store
+and collects managed targets automatically. Give it a budget it can meet:
 
 ```sh
 mbx settings unset gc.min_free_size            # default: 10% of the disk, 5-50 GiB
@@ -168,16 +183,18 @@ mbx settings set scheduler.reserve_cpus 2      # keep the editor and browser res
 mbx gc --dry-run && mbx doctor
 ```
 
-- If `gc.min_free_size` exceeds the disk free space available after cleanup, MBX stays in low-disk mode.
-  It collects every 5 minutes and can remove each managed target and shared object.
-  Later builds can then require recompilation. Check `mbx gc --dry-run` after changing the setting.
-- Use one Git worktree per concurrent agent or terminal.
-  Do not start a second `build` or `test` in a checkout that already runs one.
-  The Cargo build directory lock runs them one at a time.
-  With MBX, `check` and `clippy` use a separate check lane and do not wait for that lock.
-- Set `MBX_SCHEDULER_PRIORITY=low` for agents and background builds.
-- Resolve dependencies once with `cargo fetch --locked`.
-  Then build with `--locked --offline` to reduce time spent holding the `$CARGO_HOME` package lock.
+- A `gc.min_free_size` larger than the free space the disk can reach keeps
+  MBX in low-disk mode: it collects every 5 minutes and evicts every managed
+  target and shared object, so every build is cold. Check
+  `mbx gc --dry-run` after changing it.
+- Use one git worktree per concurrent agent or terminal, and never start a
+  second `build`/`test` in a checkout that already runs one: Cargo's own
+  build-directory lock serializes them. `check` and `clippy` use MBX's
+  separate check lane and do not wait.
+- Agents and background builds: `MBX_SCHEDULER_PRIORITY=low`.
+- Resolve dependencies once (`cargo fetch --locked`), then build with
+  `--locked --offline`, so concurrent builds hold the `$CARGO_HOME` package
+  lock only briefly.
 - `mbx adopt --recursive <dir>` moves existing unmanaged `target/`
   directories under management; `mbx clean --under <dir>` drops records of
   deleted checkouts.
@@ -189,12 +206,13 @@ mbx gc --dry-run && mbx doctor
 
 ## 6. velnor-new itself
 
-velnor-new uses the same layout. Its `mise.toml` includes `min_version`,
+velnor-new uses the same layout: `mise.toml` with `min_version`,
 `rust = { version, mr_boxington = true }`, `mr-boxington`, `hk`,
-`cargo-binstall`, Nextest, the three settings, and `[wrappers.cargo]`.
-Its `rust-toolchain.toml` repeats the Rust version, components, and targets.
-Its `.velnor/config.toml` keeps `[stacks.rust] compile_driver = "mbx"`.
-The Mise evidence agrees with this declaration.
-`scripts/toml-tool-pin.awk` reads plain and inline-table `[tools]` entries.
-Thus, `verify-local.sh` and `local-cargo.sh` can report the local version.
-The hk rollout supplies `hk.pkl` and its secret scanners. This page does not supply them.
+`cargo-binstall`, Nextest, the three settings and `[wrappers.cargo]`, plus a
+`rust-toolchain.toml` that mirrors the rust entry (channel, components,
+targets). Its `.velnor/config.toml`
+keeps `[stacks.rust] compile_driver = "mbx"` as a sticky declaration that the
+Mise evidence agrees with. `scripts/toml-tool-pin.awk` reads both the plain
+and the inline-table form of a `[tools]` entry, so `verify-local.sh` and
+`local-cargo.sh` still report the local pin. The hk configuration (`hk.pkl`
+and its secret scanners) comes with the hk rollout, not this page.

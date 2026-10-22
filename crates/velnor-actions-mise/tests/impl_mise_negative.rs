@@ -108,7 +108,7 @@ fn forbidden_rejection_names_program_and_reason() {
 #[test]
 fn specs_derive_only_from_catalog() -> Result<(), String> {
     let catalog = ToolCatalog::new(
-        "1.97.0", "1.18.0", "2.100.0", "1.7.11", "0.10.0", "1.30.0", "0.9.145", "1.13.0",
+        "1.97.0", "1.18.0", "2.100.0", "2.2.0", "0.10.0", "0.9.145", "1.13.0",
     )
     .map_err(|err| err.to_string())?;
     let discovery =
@@ -232,7 +232,7 @@ fn gh_pinned_exec_is_exact() -> Result<(), String> {
     )
     .map_err(|err| err.to_string())?;
     let argv = exec.argv(&pinned());
-    assert_eq!(argv[5], OsString::from("gh@2.102.1"));
+    assert_eq!(argv[5], OsString::from("gh@2.103.0"));
     assert_eq!(argv[7], OsString::from("gh"));
     Ok(())
 }

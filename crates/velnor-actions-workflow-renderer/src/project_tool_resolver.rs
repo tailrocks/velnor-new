@@ -206,8 +206,9 @@ fn bind_composite_steps(steps: &mut Vec<Yaml>) -> Result<(), RenderError> {
 
 /// Job and composite resolvers share the same narrowly validated write.
 fn resolver_run(referenced: &BTreeSet<String>, export_rustup: bool) -> Yaml {
-    // zizmor audits every composite and privileged job `GITHUB_ENV` write;
-    // this one appends only digits-and-dots values and lock digests (64 hex
+    // jactionlint's `github-env` audit (which honours zizmor annotations)
+    // checks every composite and privileged job `GITHUB_ENV` write; this one
+    // appends only digits-and-dots values and lock digests (64 hex
     // characters or `unlocked`) the script validated.
     Yaml::annotated(
         project_tool_resolver_script(referenced, export_rustup),
@@ -235,7 +236,7 @@ fn take_job_rustup(id: &str, env: &mut Yaml) -> Result<bool, RenderError> {
     Ok(pairs.len() != before)
 }
 
-/// Remove a step's `env` mapping once it is empty (actionlint rejects it).
+/// Remove a step's `env` mapping once it is empty (the workflow linter rejects it).
 fn drop_empty_env(step: &mut Yaml) {
     if let Yaml::Map(fields) = step {
         fields.retain(|(key, value)| {

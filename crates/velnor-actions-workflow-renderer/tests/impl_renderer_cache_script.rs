@@ -26,8 +26,8 @@ fn render_cache_fixture(with_plan_dependency: bool) -> Result<RenderedWorkflow, 
     };
     let tool_step = || {
         scrubbed_shell_step(
-            "Run actionlint",
-            mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
+            "Run jactionlint",
+            mise_argv("jactionlint@2.3.0", "jactionlint", &["-color"]),
         )
     };
     let hosted = job(

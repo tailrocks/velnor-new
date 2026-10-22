@@ -2,7 +2,7 @@
 use velnor_actions_contract::{GeneratorValidation, StepKind, WorkflowPolicy};
 use velnor_actions_workflow_renderer::steps::{
     ARTIFACT_RETENTION_DAYS, candidate_manifest_script, download_artifact_step,
-    rehead_actionlint_marker, upload_artifact_step,
+    rehead_lint_config_marker, upload_artifact_step,
 };
 use velnor_actions_workflow_renderer::{
     CANDIDATE_OUTPUT_DIR_EXPR, CANDIDATE_STAGE_DIR_EXPR, PRESEED_OUTPUT_DIR_EXPR,
@@ -158,16 +158,16 @@ fn manifest_script_carries_contract_keys_without_substitution() {
 
 #[test]
 fn rehead_swaps_first_line_only() {
-    let out =
-        rehead_actionlint_marker("# old header\nbody: 1\n", "0.1.0").map_err(|err| err.to_string());
+    let out = rehead_lint_config_marker("# old header\nbody: 1\n", "0.1.0")
+        .map_err(|err| err.to_string());
     assert!(out.is_ok_and(|text| text.ends_with("body: 1\n") && !text.contains("old header")));
-    assert!(rehead_actionlint_marker("no-newline", "0.1.0").is_err());
+    assert!(rehead_lint_config_marker("no-newline", "0.1.0").is_err());
 }
 
 #[test]
 fn rehead_emits_the_single_spec_marker() {
     let text =
-        rehead_actionlint_marker("# old header\nbody: 1\n", "0.1.0").expect("rehead keeps body");
+        rehead_lint_config_marker("# old header\nbody: 1\n", "0.1.0").expect("rehead keeps body");
     let first = text.lines().next().expect("first line");
     assert_eq!(
         first,

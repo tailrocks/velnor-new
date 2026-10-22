@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.37
+Velnor Actions plan 0.1.39
 Repository: <repo>
 
 Detected stacks
@@ -11,19 +11,18 @@ Detected stacks
     evidence mise.toml:5 mr_boxington = true [durable]
 
 Workflow to generate
-  .github/actionlint.yaml
+  .github/jactionlint.yaml
   .github/workflows/ci.yml
   Workflow: CI (consumer-v1)
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
-    - actionlint (9 steps)
-    - dependency-seed (23 steps)
-    - plan (13 steps)
-    - publish-baseline (6 steps)
+    - dependency-seed (24 steps)
+    - jactionlint (10 steps)
+    - plan (15 steps)
     - required (10 steps)
     - required-gate (1 steps)
-    - rust-app (25 steps)
+    - rust-app (27 steps)
     - 1 Rust package job
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
@@ -40,14 +39,14 @@ Workflow to generate
   Critical path: stack/rust/crates/app/build/default -> stack/rust/crates/app/nextest/default (2 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, MBX compilation objects
-  Actionlint: 1.7.12 pinned
+  Jactionlint: 2.3.0 pinned, profile correctness
   Action pins: 7
     - actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
     - actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
     - actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-    - jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde
+    - jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550
     - jdx/mr-boxington-action@47ce49b32025d93a7a2f4570815afaa2b7092240
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
 
@@ -62,4 +61,4 @@ Recommendations
   mise.lock not found; Velnor will not create or refresh it
   mise.toml is read-only input; Velnor never modifies it
   rust-toolchain.toml not found; Velnor will not create it
-  tool_install_unverified:5 installs skip verification (no mise.lock): actionlint@1.7.12, gh@2.102.1, nextest@0.9.149, shellcheck@0.11.0, zizmor@1.31.1; install on the CI platform and commit the resulting lock
+  tool_install_unverified:3 installs skip verification (no mise.lock): gh@2.103.0, nextest@0.9.149, shellcheck@0.11.0; install on the CI platform and commit the resulting lock

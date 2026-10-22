@@ -9,12 +9,11 @@ use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 use crate::impl_common::{TestResult, config_with_branch, make_repo, plan_for};
 
 /// Consumer fixture install set: plan + crate + required Prepare tools.
-const PINS: [(&str, &str); 5] = [
+const PINS: [(&str, &str); 4] = [
     ("rust", "1.99.1"),
-    ("actionlint", "1.7.12"),
+    ("jactionlint", "2.3.0"),
     ("shellcheck", "0.11.0"),
-    ("zizmor", "1.31.1"),
-    ("gh", "2.102.1"),
+    ("gh", "2.103.0"),
 ];
 
 /// v3 lock entry; `platforms` selects checksummed platforms (`rust` takes none).
@@ -36,9 +35,8 @@ fn full_lock() -> String {
     for (tool, pin) in PINS {
         let (platforms, seed): (&[&str], u8) = match tool {
             "rust" => (&[], 0x00),
-            "actionlint" => (&["linux-x64", "macos-arm64"], 0x0a),
+            "jactionlint" => (&["linux-x64", "macos-arm64"], 0x0a),
             "shellcheck" => (&["linux-x64", "macos-arm64"], 0x0b),
-            "zizmor" => (&["linux-x64", "macos-arm64"], 0x0c),
             _ => (&["linux-x64", "macos-arm64"], 0x0d),
         };
         lock.push_str(&entry(tool, pin, platforms, seed));
@@ -83,12 +81,11 @@ fn missing_lock_advises_and_generates() -> TestResult {
         !summary.contains("rust@"),
         "Rust is verified by its channel-manifest digest, not mise.lock: {summary}"
     );
-    for tool in [
-        "actionlint@1.7.12",
-        "shellcheck@0.11.0",
-        "zizmor@1.31.1",
-        "gh@2.102.1",
-    ] {
+    assert!(
+        !summary.contains("jactionlint@"),
+        "jactionlint is verified by its catalog executable digest, not mise.lock: {summary}"
+    );
+    for tool in ["shellcheck@0.11.0", "gh@2.103.0"] {
         assert!(summary.contains(tool), "{summary}");
     }
     let plan = preview_generate(&repo)?;
@@ -120,20 +117,20 @@ fn full_lock_leaves_nothing_unverifiable() -> TestResult {
 
 #[test]
 fn platform_hole_blocks_generate_with_remediation() -> TestResult {
-    let hex = "0a".repeat(32);
+    let hex = "0b".repeat(32);
     let holed = full_lock().replace(
         &format!(
-            "[tools.actionlint.\"platforms.linux-x64\"]\nchecksum = \"sha256:{hex}\"\nurl = \"https://example.invalid/actionlint/linux-x64\"\n"
+            "[tools.shellcheck.\"platforms.linux-x64\"]\nchecksum = \"sha256:{hex}\"\nurl = \"https://example.invalid/shellcheck/linux-x64\"\n"
         ),
         "",
     );
-    assert!(!holed.contains("actionlint.\"platforms.linux-x64\""));
+    assert!(!holed.contains("shellcheck.\"platforms.linux-x64\""));
     let repo = repo_with_lock(Some(&holed))?;
     let prep = prepare(repo.path())?;
     assert_eq!(prep.lock_audit_blocking.len(), 1);
     let diagnostic = &prep.lock_audit_blocking[0];
     assert!(diagnostic.contains("lock_missing_platform"), "{diagnostic}");
-    assert!(diagnostic.contains("actionlint@1.7.12"), "{diagnostic}");
+    assert!(diagnostic.contains("shellcheck@0.11.0"), "{diagnostic}");
     assert!(
         diagnostic.contains("run 'mise lock' and commit the resulting checksums"),
         "{diagnostic}"
@@ -160,7 +157,7 @@ fn platform_hole_blocks_generate_with_remediation() -> TestResult {
 
 #[test]
 fn corrupt_checksum_blocks_generate() -> TestResult {
-    let hex = "0a".repeat(32);
+    let hex = "0b".repeat(32);
     let tampered = full_lock().replace(&format!("sha256:{hex}"), "not-a-checksum");
     let repo = repo_with_lock(Some(&tampered))?;
     let prep = prepare(repo.path())?;
@@ -253,7 +250,9 @@ fn hostile_config_ignored_by_isolated_installs() -> TestResult {
 
 #[test]
 fn drifted_lock_advises_without_blocking() -> TestResult {
-    let drifted = full_lock().replace("version = \"1.7.12\"", "version = \"1.7.11\"");
+    // jactionlint is verified by its executable digest, so drift is shown on
+    // a lock-audited tool.
+    let drifted = full_lock().replace("version = \"0.11.0\"", "version = \"0.10.0\"");
     let repo = repo_with_lock(Some(&drifted))?;
     let prep = prepare(repo.path())?;
     assert_eq!(prep.lock_audit_blocking, [] as [std::string::String; 0]);

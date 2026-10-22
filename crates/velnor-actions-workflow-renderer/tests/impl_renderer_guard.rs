@@ -1,15 +1,15 @@
 //! Output-guard path cases.
 use std::path::Path;
 use velnor_actions_workflow_renderer::{
-    ACTIONLINT_PATH, RenderError, WORKFLOW_PATH, check_no_symlink, join_within_root,
+    JACTIONLINT_PATH, RenderError, WORKFLOW_PATH, check_no_symlink, join_within_root,
     validate_tree_path,
 };
 
 #[test]
 fn guard_accepts_generated_tree_paths() -> Result<(), RenderError> {
     assert_eq!(
-        validate_tree_path(ACTIONLINT_PATH)?.as_str(),
-        ACTIONLINT_PATH
+        validate_tree_path(JACTIONLINT_PATH)?.as_str(),
+        JACTIONLINT_PATH
     );
     assert_eq!(validate_tree_path(WORKFLOW_PATH)?.as_str(), WORKFLOW_PATH);
     assert_eq!(

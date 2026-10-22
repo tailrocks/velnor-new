@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use super::{ELIGIBILITY_SCRIPT, JOB_ID, REQUIRED_JOB_JQ, job, script};
+use super::{ELIGIBILITY_FUNCTION, JOB_ID, REQUIRED_JOB_JQ, job, script};
 use crate::schema2::product_release_test_pins::test_pins;
 
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -86,7 +86,7 @@ set -eu
 [ "$1" = "--no-env" ] && shift
 [ "$1" = "--no-hooks" ] && shift
 [ "$1" = "exec" ] && shift
-[ "$1" = "gh@2.102.1" ] && shift
+[ "$1" = "gh@2.103.0" ] && shift
 [ "$1" = "--" ] && shift
 [ "$1" = "gh" ] && shift
 exec gh "$@"
@@ -310,7 +310,7 @@ fn script_uses_paginated_selectors_and_fails_fast_without_waiting() -> Result<()
     assert!(REQUIRED_JOB_JQ.contains(".name == \"Required\""));
     assert!(REQUIRED_JOB_JQ.contains(".run_attempt == $run_attempt"));
     assert!(rendered.contains("head_repository.full_name == $repository"));
-    assert!(ELIGIBILITY_SCRIPT.contains("GITHUB_WORKFLOW_REF"));
+    assert!(ELIGIBILITY_FUNCTION.contains("GITHUB_WORKFLOW_REF"));
     Ok(())
 }
 
@@ -322,7 +322,7 @@ fn job_renders_a_read_only_source_gate() {
     let rendered = crate::yaml::render_yaml(&crate::yaml::Yaml::Map(vec![(name, value)]));
     assert!(rendered.contains("actions: read"));
     assert!(rendered.contains("contents: read"));
-    assert!(rendered.contains("gh@2.102.1"));
+    assert!(rendered.contains("gh@2.103.0"));
     assert!(rendered.contains("workflow_authority_sha"));
 }
 

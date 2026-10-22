@@ -44,6 +44,7 @@ fn required_job_fixture() -> (BTreeMap<String, Job>, RenderContext) {
         ],
     };
     let ctx = RenderContext {
+        tool_pins: Vec::new(),
         generator_version: "test".to_owned(),
         report_helper_version: "test".to_owned(),
         runs_on: "ubuntu-24.04".to_owned(),

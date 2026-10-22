@@ -3,13 +3,14 @@ use super::{assets, manifest, release_version};
 use crate::schema2::product_release_test_pins::test_pins;
 use std::error::Error;
 use std::fs;
+use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const REPOSITORY: &str = "tailrocks/velnor-new";
 const SOURCE_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
-const PINNED_MISE_ARGUMENTS: &str = "--no-config --no-env --no-hooks exec gh@2.102.1 --";
+const PINNED_MISE_ARGUMENTS: &str = "--no-config --no-env --no-hooks exec gh@2.103.0 --";
 
 #[test]
 fn release_assets_are_bound_to_the_compiled_package_version() {
@@ -41,14 +42,16 @@ impl Scratch {
             "velnor-generator-publish-{}-{nonce}",
             std::process::id()
         ));
-        fs::create_dir(&path)?;
+        fs::DirBuilder::new().mode(0o700).create(&path)?;
         Ok(Self(path))
     }
 }
 
 impl Drop for Scratch {
     fn drop(&mut self) {
-        drop(fs::remove_dir_all(&self.0));
+        if !std::thread::panicking() && !self.0.join("publish-failure-diagnostic.txt").is_file() {
+            drop(fs::remove_dir_all(&self.0));
+        }
     }
 }
 
@@ -133,9 +136,14 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
     fs::write(scratch.0.join("published-release.json"), published_json)?;
     install_mock_gh(&scratch.0)?;
     let script = scratch.0.join("publish.sh");
-    fs::write(&script, manifest::publish_script(&test_pins())?)?;
+    fs::write(&script, manifest::publish_script(&test_pins()))?;
     let gh_function = super::workflow_steps::gh_function(&test_pins().gh_argv)?;
     let output = run_publish_command(&scratch.0, case, &script, &gh_function)?;
+    eprintln!(
+        "publisher fixture {case:?}: child_exit={:?}; child_status={}",
+        output.status.code(),
+        output.status
+    );
     assert_publish_result(&scratch.0, case, &output)?;
     if case == Failure::UntaggedDraftUrls {
         assert!(
@@ -292,12 +300,7 @@ fn assert_publish_result(
             | Failure::TagMovedBeforePublish
     );
     if create_is_expected {
-        let expected_tag = format!("v{}\n", release_version());
-        assert_eq!(fs::read_to_string(root.join("created-tag"))?, expected_tag);
-        assert_eq!(
-            fs::read_to_string(root.join("asset-args"))?,
-            expected_asset_args()
-        );
+        publisher_receipt_tests::assert_draft_creation(root, case, output)?;
         if should_succeed {
             assert!(
                 root.join("release-accepted/release-manifest.json")
@@ -327,6 +330,13 @@ fn assert_publish_result(
         assert!(!root.join("release-accepted").exists());
     }
     if is_draft_validation_failure(case) {
+        assert_eq!(
+            output.status.code(),
+            Some(1),
+            "draft validation must reject via jq, not a transport or watchdog failure: {case:?}; {}{}\nGitHub calls:\n{calls}\nMise calls:\n{mise_calls}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
         assert!(
             !root.join("patch-log").exists() && !calls.contains("--method PATCH"),
             "draft binding failure must stop before publication: {calls}"

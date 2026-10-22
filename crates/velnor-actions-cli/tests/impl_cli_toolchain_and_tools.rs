@@ -37,9 +37,6 @@ fn config_with_suites(extra_rust: &str, extra_root: &str) -> String {
 name = "CI"
 default_branch = "main"
 
-[workflow.verify]
-jobs = ["zizmor"]
-
 [stacks.rust]
 test_runner = "cargo_nextest"
 {extra_rust}
@@ -316,9 +313,8 @@ fn tools_table_overrides_versions_across_generated_workflows() -> Result<(), Box
     let extra_root = r#"
 [tools]
 cargo-nextest = "0.9.150"
-actionlint = "1.7.13"
+jactionlint = "2.3.1"
 shellcheck = "0.11.1"
-zizmor = "1.31.0"
 gh = "2.103.0"
 "#;
     let cfg = config_with_suites("", extra_root);
@@ -334,8 +330,8 @@ gh = "2.103.0"
     );
     let plan_stdout = String::from_utf8_lossy(&plan_out.stdout);
     assert!(
-        plan_stdout.contains("Actionlint: 1.7.13 pinned"),
-        "plan output must report overridden actionlint version:\n{plan_stdout}"
+        plan_stdout.contains("Jactionlint: 2.3.1 pinned, profile correctness"),
+        "plan output must report overridden jactionlint version:\n{plan_stdout}"
     );
 
     let gen_out = spawn(&["generate"], &[], &tmp)?;
@@ -351,9 +347,8 @@ gh = "2.103.0"
 
     for needle in [
         "aqua:nextest-rs/nextest/cargo-nextest@0.9.150",
-        "actionlint@1.7.13",
+        "jactionlint@2.3.1",
         "shellcheck@0.11.1",
-        "zizmor@1.31.0",
         "gh@2.103.0",
     ] {
         assert!(

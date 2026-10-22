@@ -1,4 +1,4 @@
-"""Update a Gradle catalog [versions] table to the latest stable releases."""
+"""Bump a Gradle version catalog's [versions] to the newest stable releases."""
 import re
 import sys
 import tomllib
@@ -25,7 +25,7 @@ def key(version):
 
 
 def shape(version):
-    """Match the release suffix: `32.1.3-jre` and `33.0.0-jre` match; `r09` does not."""
+    """Release line: `32.1.3-jre` and `33.0.0-jre` match, `r09` does not."""
     return re.sub(r"[\d.]+", "#", version)
 
 

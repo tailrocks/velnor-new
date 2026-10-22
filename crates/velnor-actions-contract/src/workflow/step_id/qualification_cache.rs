@@ -186,20 +186,7 @@ pub fn qualification_cache_composite_output_names() -> Vec<String> {
         if layer != QualificationCacheLayer::TaskResult.as_str() {
             names.push(format!("cache_{layer}_runtime_after"));
         }
-        for field in [
-            "phase",
-            "key",
-            "status",
-            "admitted",
-            "cache_id",
-            "cache_key",
-            "cache_ref",
-            "cache_version",
-            "cache_size",
-            "action_hit",
-            "action_matched_key",
-            "restore_key",
-        ] {
+        for field in ["action_hit", "action_matched_key"] {
             names.push(format!("cache_{layer}_restore_census_{field}"));
         }
     }
@@ -216,19 +203,6 @@ pub fn qualification_cache_before_save_output_names(layer: QualificationCacheLay
         format!("{prefix}_state_digest"),
         format!("{prefix}_save_requested"),
     ];
-    for field in [
-        "phase",
-        "key",
-        "status",
-        "admitted",
-        "cache_id",
-        "cache_key",
-        "cache_ref",
-        "cache_version",
-        "cache_size",
-    ] {
-        names.push(format!("{prefix}_save_before_census_{field}"));
-    }
     names.sort();
     names
 }

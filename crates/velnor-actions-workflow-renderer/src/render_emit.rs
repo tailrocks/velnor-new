@@ -16,6 +16,7 @@ pub(crate) struct EmitSettings<'a> {
     pub(crate) suite_matrices: &'a (
         BTreeMap<String, matrix::suites::SuiteMatrix>,
         BTreeSet<String>,
+        BTreeMap<String, matrix::bun::BunLegMatrix>,
     ),
     pub(crate) allow_step_aliases: bool,
 }
@@ -47,6 +48,7 @@ pub(crate) fn emit_shared(
     matrix::attach_crate_job_caps(&mut document, settings.caps)?;
     matrix::suites::attach_suite_allow_failure(&mut document, &settings.suite_matrices.1)?;
     matrix::suites::attach_suite_matrices(&mut document, &settings.suite_matrices.0)?;
+    matrix::bun::attach_bun_matrices(&mut document, &settings.suite_matrices.2)?;
     document = route_workflow_yaml_for_jobs(WORKFLOW_PATH, document, routing, jobs)?;
     let text = if settings.allow_step_aliases {
         fallback::render_checked_workflow(WORKFLOW_PATH, &document, &ctx.generator_version)?
@@ -64,6 +66,7 @@ pub(crate) fn emit_shared(
         &ctx.generator_version,
         &ctx.staged_binary,
         &ctx.report_helper_version,
+        &ctx.tool_pins,
     )?;
     if crate::tool_seed::any_job_has_seed(jobs)? {
         return Err(RenderError::InvalidWorkflow(

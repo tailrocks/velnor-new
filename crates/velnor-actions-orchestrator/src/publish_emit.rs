@@ -29,8 +29,6 @@ use crate::prepare::GenerationPreparation;
 use crate::publish_steps::{BundlePlan, Inputs, PromotionPlan, VersionCheck, assemble_jobs};
 use crate::release_identity::origin_repository;
 
-#[path = "publish_job.rs"]
-pub(crate) mod baseline;
 #[path = "publish_release_steps.rs"]
 pub(crate) mod release;
 

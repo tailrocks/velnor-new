@@ -10,10 +10,8 @@ pub enum ValidatorKind {
     CargoDeny,
     /// Unused-dependency scan.
     CargoMachete,
-    /// Workflow-file lint.
-    Actionlint,
-    /// Workflow security audit.
-    Zizmor,
+    /// Workflow, composite action and Dependabot lint (jactionlint).
+    Jactionlint,
     /// Markdown lint over repository docs.
     Markdownlint,
     /// Strict JSON syntax plus duplicate-key rejection.
@@ -34,8 +32,7 @@ impl ValidatorKind {
             Self::Alint => "alint",
             Self::CargoDeny => "cargo-deny",
             Self::CargoMachete => "cargo-machete",
-            Self::Actionlint => "actionlint",
-            Self::Zizmor => "zizmor",
+            Self::Jactionlint => "jactionlint",
             Self::Markdownlint => "markdownlint",
             Self::StrictJson => "strict-json",
             Self::FrontmatterId => "frontmatter-id",
@@ -51,8 +48,7 @@ impl ValidatorKind {
             Self::Alint => "Alint",
             Self::CargoDeny => "Cargo Deny",
             Self::CargoMachete => "Cargo Machete",
-            Self::Actionlint => "Actionlint",
-            Self::Zizmor => "Zizmor",
+            Self::Jactionlint => "Jactionlint",
             Self::Markdownlint => "Markdownlint",
             Self::StrictJson => "Strict JSON",
             Self::FrontmatterId => "Frontmatter ID",
@@ -63,13 +59,12 @@ impl ValidatorKind {
 
     /// Every validator kind in emission order.
     #[must_use]
-    pub fn all() -> [Self; 10] {
+    pub fn all() -> [Self; 9] {
         [
             Self::Alint,
             Self::CargoDeny,
             Self::CargoMachete,
-            Self::Actionlint,
-            Self::Zizmor,
+            Self::Jactionlint,
             Self::Markdownlint,
             Self::StrictJson,
             Self::FrontmatterId,
@@ -80,15 +75,10 @@ impl ValidatorKind {
 
     /// Velnor-repository validators emitted as support jobs.
     ///
-    /// Actionlint is always-on base IR on both policies, never support.
+    /// Jactionlint is always-on base IR on both policies, never support.
     #[must_use]
-    pub fn repository_validators() -> [Self; 4] {
-        [
-            Self::Alint,
-            Self::CargoDeny,
-            Self::CargoMachete,
-            Self::Zizmor,
-        ]
+    pub fn repository_validators() -> [Self; 3] {
+        [Self::Alint, Self::CargoDeny, Self::CargoMachete]
     }
 }
 
@@ -100,9 +90,8 @@ impl ValidatorKind {
     /// Cargo-backed validators stay Velnor-only: their vectors assume
     /// the Velnor workspace layout.
     #[must_use]
-    pub fn consumer_verify() -> [Self; 7] {
+    pub fn consumer_verify() -> [Self; 6] {
         [
-            Self::Zizmor,
             Self::Alint,
             Self::Markdownlint,
             Self::StrictJson,

@@ -25,8 +25,8 @@ fn enabled_upgrades_emit_the_workflow_and_list_it_in_the_plan() -> TestResult {
         "{yaml}"
     );
     let actionlint = tree
-        .get(".github/actionlint.yaml")
-        .ok_or("The actionlint configuration must exist.")?;
+        .get(".github/jactionlint.yaml")
+        .ok_or("actionlint config")?;
     assert!(actionlint.contains("VELNOR_DEPS_APP_ID"), "{actionlint}");
     let ci = tree
         .get(".github/workflows/ci.yml")
@@ -81,7 +81,7 @@ job_container_image = \"ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     assert_eq!(
         yaml.matches("runs-on: [velnor, ubuntu-26.04-scale-set]")
             .count(),
-        3,
+        4,
         "Every upgrade job must use the configured Scale Set."
     );
     assert!(

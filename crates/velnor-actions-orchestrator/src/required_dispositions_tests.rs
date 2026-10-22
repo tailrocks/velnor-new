@@ -18,15 +18,19 @@ enum Verdict {
 }
 
 fn fold(disposition: Option<JobDisposition>, conclusion: JobConclusion) -> Verdict {
+    fold_job("rust-a", disposition, conclusion)
+}
+
+fn fold_job(id: &str, disposition: Option<JobDisposition>, conclusion: JobConclusion) -> Verdict {
     let planned: Vec<PlanJob> = disposition
         .map(|disposition| PlanJob {
-            job_id: "rust-a".to_owned(),
+            job_id: id.to_owned(),
             disposition,
         })
         .into_iter()
         .collect();
     let observed = [RequiredJobResult {
-        job_id: "rust-a".to_owned(),
+        job_id: id.to_owned(),
         conclusion,
     }];
     let mut signals = Signals::default();
@@ -103,4 +107,32 @@ fn unplanned_jobs_never_pass_when_skipped() {
     );
     assert_eq!(fold(None, JobConclusion::Failure), Verdict::Failed);
     assert_eq!(fold(None, JobConclusion::Cancelled), Verdict::Cancelled);
+}
+
+/// A Bun suite job (one id for every matrix leg: GitHub reports the
+/// aggregate) folds exactly like any planned job (design section 8.3).
+#[test]
+fn bun_suite_matrix_aggregates_fold_like_any_planned_job() {
+    let suite = "bun-chainargos-platform--browser";
+    let run = Some(JobDisposition::Run);
+    let skip = Some(JobDisposition::NotAffected);
+    assert_eq!(fold_job(suite, run, JobConclusion::Success), Verdict::Pass);
+    // A leg that timed out or failed makes the aggregate `failure`.
+    assert_eq!(
+        fold_job(suite, run, JobConclusion::Failure),
+        Verdict::Failed
+    );
+    assert_eq!(
+        fold_job(suite, run, JobConclusion::Cancelled),
+        Verdict::Cancelled
+    );
+    assert_eq!(
+        fold_job(suite, run, JobConclusion::Skipped),
+        Verdict::NotRun(PLANNED_JOB_SKIPPED)
+    );
+    assert_eq!(fold_job(suite, skip, JobConclusion::Skipped), Verdict::Pass);
+    assert_eq!(
+        fold_job(suite, skip, JobConclusion::Success),
+        Verdict::PlanningFailed(GATE_MISMATCH)
+    );
 }

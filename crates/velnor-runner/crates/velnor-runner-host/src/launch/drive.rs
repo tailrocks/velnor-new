@@ -9,10 +9,9 @@ use velnor_runner_github::Poll;
 use crate::config::{ApprovedJobAuthorityPolicy, RepositoryConnection};
 use crate::journal::{ConnectionJournal, Journal};
 use crate::listen::Link;
-use crate::worker::guest_image::GuestImageFile;
 use zeroize::Zeroize;
 
-use super::{HostLane, ReleaseReadSecret, SelectedEngineContext, VerifiedWorkerImages};
+use super::{HostLane, ReleaseReadSecret, SelectedEngineContext};
 use crate::scale_set::EnsureError;
 use crate::worker::ResourceBudget;
 
@@ -161,8 +160,6 @@ pub(crate) struct ScopedAdmissionInput<'a> {
     pub(crate) scoped_journal: &'a ConnectionJournal,
     pub(crate) release_read_secret: &'a ReleaseReadSecret,
     pub(crate) selected_engine: &'a SelectedEngineContext,
-    pub(crate) worker_images: &'a VerifiedWorkerImages,
-    pub(crate) guest_image: &'a GuestImageFile,
     pub(crate) resource_budget: ResourceBudget,
     pub(crate) allocated_header: u32,
     pub(crate) admission_state: &'a Path,
@@ -280,11 +277,4 @@ pub(crate) trait Lane {
     ///
     /// Returns [`EnsureError`] when the origin cannot be selected.
     fn on_queue(&mut self) -> Result<(), EnsureError>;
-
-    /// Use `https://api.github.com` for the runner directory.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`EnsureError::Endpoint`] when the origin is not `https`.
-    fn use_github_api(&mut self) -> Result<(), EnsureError>;
 }

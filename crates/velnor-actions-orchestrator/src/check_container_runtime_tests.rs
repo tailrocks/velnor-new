@@ -156,11 +156,12 @@ mod unix_tests {
         let listener = socket(&path);
         let profile = docker_profile(&path, home_uid(&home));
         let projection = prepare_runtime(&home, &profile).expect("projection");
-        drop(listener);
         fs::remove_file(&path).expect("old socket");
         let replacement = socket(&path);
         assert!(revalidate_runtime(&projection).is_err());
         drop(replacement);
+        // Keep the original inode allocated; this tests stat identity, not inode-reuse handling.
+        drop(listener);
     }
 
     #[test]

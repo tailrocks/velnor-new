@@ -23,7 +23,7 @@ fn checksum(hex: &str) -> String {
 /// v3 lock with one fully checksummed tool plus a checksum-less rust.
 fn lock_text() -> String {
     format!(
-        "# @generated\n\nlockfile_version = 3\n\n[[tools.actionlint]]\nversion = \"1.7.12\"\nbackend = \"aqua:rhysd/actionlint\"\nspecifiers = [\"1.7.12\"]\n\n[tools.actionlint.\"platforms.linux-x64\"]\nchecksum = \"{}\"\nurl = \"https://example.invalid/a\"\n\n[tools.actionlint.\"platforms.macos-arm64\"]\nchecksum = \"{}\"\nurl = \"https://example.invalid/b\"\n\n[[tools.rust]]\nversion = \"1.99.1\"\nbackend = \"core:rust\"\nspecifiers = [\"1.99.1\"]\n",
+        "# @generated\n\nlockfile_version = 3\n\n[[tools.jactionlint]]\nversion = \"2.3.0\"\nbackend = \"github:jdx/jactionlint\"\nspecifiers = [\"2.3.0\"]\n\n[tools.jactionlint.\"platforms.linux-x64\"]\nchecksum = \"{}\"\nurl = \"https://example.invalid/a\"\n\n[tools.jactionlint.\"platforms.macos-arm64\"]\nchecksum = \"{}\"\nurl = \"https://example.invalid/b\"\n\n[[tools.rust]]\nversion = \"1.99.1\"\nbackend = \"core:rust\"\nspecifiers = [\"1.99.1\"]\n",
         checksum(&"a".repeat(64)),
         checksum(&"b".repeat(64)),
     )
@@ -51,13 +51,13 @@ provenance_verified = {}
 #[test]
 fn parses_v3_entries_with_platform_checksums() -> Result<(), String> {
     let lock = parse_mise_lockfile(&lock_text())?;
-    let actionlint = lock.tools.get("actionlint").ok_or("actionlint entry")?;
-    assert_eq!(actionlint.version, "1.7.12");
+    let jactionlint = lock.tools.get("jactionlint").ok_or("jactionlint entry")?;
+    assert_eq!(jactionlint.version, "2.3.0");
     assert_eq!(
-        actionlint.checksums.get("linux-x64").map(String::as_str),
+        jactionlint.checksums.get("linux-x64").map(String::as_str),
         Some(checksum(&"a".repeat(64)).as_str())
     );
-    assert_eq!(actionlint.checksums.len(), 2);
+    assert_eq!(jactionlint.checksums.len(), 2);
     let rust = lock.tools.get("rust").ok_or("rust entry")?;
     assert_eq!(rust.version, "1.99.1");
     assert!(rust.checksums.is_empty());
@@ -190,9 +190,9 @@ fn coverage_matrix_names_every_state() -> Result<(), String> {
     let lock = parse_mise_lockfile(&lock_text())?;
     let catalog = catalog();
     let subjects = [
-        subject(PinnedTool::Actionlint, &catalog)?,
+        subject(PinnedTool::Jactionlint, &catalog)?,
         subject(PinnedTool::Rust, &catalog)?,
-        subject(PinnedTool::Zizmor, &catalog)?,
+        subject(PinnedTool::Shellcheck, &catalog)?,
     ];
     let verdicts = audit_install_coverage(&lock, &subjects, "linux-x64");
     assert_eq!(verdicts[0], InstallCoverage::Verified);
@@ -201,17 +201,17 @@ fn coverage_matrix_names_every_state() -> Result<(), String> {
     assert!(!verdicts[0].is_blocking());
     assert!(!verdicts[1].is_blocking());
     assert!(!verdicts[2].is_blocking());
-    let drifted = lock_text().replace("version = \"1.7.12\"", "version = \"1.7.11\"");
+    let drifted = lock_text().replace("version = \"2.3.0\"", "version = \"2.2.0\"");
     let lock = parse_mise_lockfile(&drifted)?;
     let verdicts = audit_install_coverage(
         &lock,
-        &[subject(PinnedTool::Actionlint, &catalog)?],
+        &[subject(PinnedTool::Jactionlint, &catalog)?],
         "linux-x64",
     );
     assert_eq!(
         verdicts[0],
         InstallCoverage::VersionDrift {
-            locked: "1.7.11".to_owned()
+            locked: "2.2.0".to_owned()
         }
     );
     assert!(!verdicts[0].is_blocking());
@@ -232,7 +232,7 @@ fn platform_hole_and_corrupt_shape_block() -> Result<(), String> {
         .iter()
         .fold(lock_text(), |text, line| text.replacen(line, "", 1));
     let lock = parse_mise_lockfile(&holed)?;
-    let subjects = [subject(PinnedTool::Actionlint, &catalog)?];
+    let subjects = [subject(PinnedTool::Jactionlint, &catalog)?];
     let verdicts = audit_install_coverage(&lock, &subjects, "linux-x64");
     assert_eq!(
         verdicts[0],
@@ -260,7 +260,7 @@ fn platform_hole_and_corrupt_shape_block() -> Result<(), String> {
 #[test]
 fn uppercase_checksums_verify() -> Result<(), String> {
     let catalog = catalog();
-    let subjects = [subject(PinnedTool::Actionlint, &catalog)?];
+    let subjects = [subject(PinnedTool::Jactionlint, &catalog)?];
     let upper = lock_text().replace(&"a".repeat(64), &"A".repeat(64));
     let lock = parse_mise_lockfile(&upper)?;
     let verdicts = audit_install_coverage(&lock, &subjects, "linux-x64");
@@ -277,7 +277,7 @@ fn uppercase_checksums_verify() -> Result<(), String> {
 #[test]
 fn drifted_spec_version_does_not_resolve() {
     let catalog = catalog();
-    for spec in ["rust@1.97.0", "actionlint@1.7.11", "rust@latest", "rust@"] {
+    for spec in ["rust@1.97.0", "jactionlint@2.2.0", "rust@latest", "rust@"] {
         assert_eq!(
             subject_for_install_spec(spec, &catalog),
             None,

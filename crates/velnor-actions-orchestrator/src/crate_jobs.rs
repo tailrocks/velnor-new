@@ -1,7 +1,8 @@
-//! Rust packages use one job for all task configurations.
-//! `ToFu` packages use one job for each configuration.
-//! Each job runs its tasks in the specified order.
-//! The job uses the tools, caches, and setup that its tasks need.
+//! Crate-job construction: one job per crate with parallel check steps.
+//!
+//! Every Rust package/configuration owns one job: checkout, tools, locked sources
+//! and caches are prepared once, then format, lint, tests, docs and doctests run
+//! as ordered or parallel obligations. `OpenTofu` keeps one bounded job per root.
 
 use std::collections::BTreeMap;
 
@@ -296,7 +297,7 @@ fn build_job_for_members(
     let display = if tofu {
         tofu_display_name(&first.display_name)
     } else {
-        crate_display_name(&first.display_name, &manifest)
+        crate_display_name(&first.display_name, &manifest, &first.configuration)
     };
     let use_rust = tasks.iter().any(|task| is_rust(task));
     let use_mbx = tasks.iter().any(|task| is_mbx(task));

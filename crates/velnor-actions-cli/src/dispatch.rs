@@ -2,7 +2,7 @@
 //!
 //! The private gate requires `VELNOR_INTERNAL_OP` plus the exact request file
 //! in `VELNOR_REQUEST_FILE`: `write-request-v1` needs GitHub event env and no
-//! pre-existing file, `plan-v1`/`merge-v1`/`publish-baseline-v1` need a
+//! pre-existing file, `plan-v1`/`merge-v1` need a
 //! pre-existing request file, `fetch-reports-v1`/`write-task-report-v1`
 //! need runner temp plus the numeric run ID instead, and
 //! `write-preseed-manifest-v1` needs runner temp only, and
@@ -22,14 +22,13 @@ use velnor_actions_orchestrator::{
     CAPTURE_REVIEW_COMPLETION_OP, EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP,
     EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, GRADLE_RUN_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP,
     PLAN_OP, PLAYWRIGHT_INSTALL_OP, PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP,
-    PRIVATE_REVOKE_OP, PUBLISH_OP, PUBLISH_PACKAGE_RELEASE_OP, RECOVER_PACKAGE_RELEASE_OP,
-    REPORT_OP, REQUEST_FILE_ENV, SELECT_RELEASE_TAP_CONTINUATION_OP,
-    SELECT_STABLE_RELEASE_SOURCE_OP, SIGN_PACKAGE_RELEASE_OP, SOURCE_EVIDENCE_OP,
-    TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP,
-    WRITE_STABLE_TAG_INTENT_OP, WRITE_STABLE_TAG_ORIGIN_OP,
+    PRIVATE_REVOKE_OP, PUBLISH_PACKAGE_RELEASE_OP, RECOVER_PACKAGE_RELEASE_OP, REPORT_OP,
+    REQUEST_FILE_ENV, SELECT_RELEASE_TAP_CONTINUATION_OP, SELECT_STABLE_RELEASE_SOURCE_OP,
+    SIGN_PACKAGE_RELEASE_OP, SOURCE_EVIDENCE_OP, TASK_EXECUTION_RESOLVER_OP,
+    WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, WRITE_STABLE_TAG_INTENT_OP,
+    WRITE_STABLE_TAG_ORIGIN_OP,
 };
 
-use crate::dispatch_publish::run_publish_internal;
 #[path = "dispatch/diagnostics.rs"]
 mod diagnostics;
 pub(crate) use diagnostics::{fail_internal, fail_public, working_dir};
@@ -193,7 +192,7 @@ fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
                 return None;
             }
         }
-        InternalOp::Plan | InternalOp::Merge | InternalOp::Publish => {
+        InternalOp::Plan | InternalOp::Merge => {
             if !path.is_file() {
                 return None;
             }

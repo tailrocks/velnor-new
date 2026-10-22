@@ -235,7 +235,7 @@ async fn assert_capacity_hold_keeps_attempt(
     assert_eq!(
         fixture
             .scope
-            .reservation(&fixture._base.reservation_assignment)
+            .reservation(&fixture.base.reservation_assignment)
             .await?
             .ok_or(HostError::Journal)?
             .state,
@@ -300,7 +300,7 @@ async fn assert_retry_settlement_is_idempotent(
     assert_eq!(
         fixture
             .scope
-            .reservation(&fixture._base.reservation_assignment)
+            .reservation(&fixture.base.reservation_assignment)
             .await?
             .ok_or(HostError::Journal)?
             .state,

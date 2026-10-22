@@ -3,13 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
-#[cfg(test)]
-use bollard::Docker;
-#[cfg(test)]
-use bollard::models::{ContainerConfig, SystemInfo};
 use reqwest::Client;
-#[cfg(test)]
-use tokio::time::{Duration, Instant, timeout_at};
 
 use crate::compile_identity::CompiledReleaseIdentity;
 use crate::error::HostError;
@@ -46,15 +40,6 @@ pub(crate) struct NativeArtifactProvider<'a> {
     identity: CompiledReleaseIdentity,
     key: CacheKey,
     state_directory: PathBuf,
-}
-
-#[cfg(test)]
-pub(crate) struct ArtifactCandidate {
-    pub(crate) runtime_id: String,
-    pub(crate) platform: String,
-    pub(crate) source_revision: String,
-    pub(crate) binding_fingerprint: String,
-    pub(crate) config: ContainerConfig,
 }
 
 pub(crate) struct ProbeReleaseMaterial {
@@ -98,35 +83,6 @@ impl<'a> NativeArtifactProvider<'a> {
             key,
             state_directory: state_directory.to_path_buf(),
         })
-    }
-
-    #[cfg(test)]
-    pub(crate) async fn verified_candidate(
-        &self,
-        docker: &Docker,
-        engine_id: &str,
-        info: &SystemInfo,
-    ) -> Result<Option<ArtifactCandidate>, HostError> {
-        let deadline = Instant::now() + Duration::from_secs(27);
-        let release = timeout_at(deadline, self.verified_release())
-            .await
-            .map_err(|_| HostError::DockerTimeout)??;
-        if deadline.saturating_duration_since(Instant::now()) <= Duration::from_secs(5) {
-            return Err(HostError::DockerTimeout);
-        }
-        let root = info.docker_root_dir.as_deref().ok_or(HostError::Path)?;
-        if info.id.as_deref() != Some(engine_id) || root.is_empty() {
-            return Err(HostError::Identity);
-        }
-        let runtime = docker::load_and_inspect(docker, engine_id, root, &release, deadline).await?;
-        let fingerprint = image_binding_fingerprint(&release, engine_id, root, &runtime.runtime_id);
-        Ok(Some(ArtifactCandidate {
-            runtime_id: runtime.runtime_id,
-            platform: manifest::PLATFORM.to_owned(),
-            source_revision: release.source_sha.clone(),
-            binding_fingerprint: fingerprint,
-            config: runtime.config,
-        }))
     }
 
     pub(crate) async fn verified_probe_material(&self) -> Result<ProbeReleaseMaterial, HostError> {
@@ -240,7 +196,6 @@ fn validate_fetched_release(
 #[cfg(test)]
 struct RuntimeImage {
     runtime_id: String,
-    config: ContainerConfig,
 }
 
 #[cfg(test)]

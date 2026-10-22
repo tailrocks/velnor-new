@@ -51,7 +51,7 @@ fn app_token_is_explicit_and_scrubs_ambient_credentials() {
 fn app_token_rejects_non_gh_programs_and_mixed_tools() {
     for (tools, program) in [
         (vec![PinnedTool::Gh], "git"),
-        (vec![PinnedTool::Gh, PinnedTool::Actionlint], "gh"),
+        (vec![PinnedTool::Gh, PinnedTool::Jactionlint], "gh"),
     ] {
         let exec = PinnedToolExec::new(tools, OsStr::new(program), vec![OsString::from("api")])
             .expect("valid pinned execution");

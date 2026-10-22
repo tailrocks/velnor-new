@@ -14,7 +14,9 @@ use velnor_actions_mise::{
     PREPARE_PINNED_TOOLS_STEP, PinnedTool, PinnedToolExec, PreparePinnedTools, ToolCatalog,
     ToolHomes,
 };
-use velnor_actions_workflow_renderer::verification_jobs::bun_registry_step;
+use velnor_actions_workflow_renderer::verification_jobs::{
+    bun_blob_upload_step, bun_registry_step, bun_results_upload_step,
+};
 use velnor_actions_workflow_renderer::{ambient_shell_step, shell_step};
 
 use crate::OrchestratorError;
@@ -51,7 +53,34 @@ pub(crate) struct MemberInputs<'a> {
     pub(crate) private: &'a [Step],
     /// Hash-verified Playwright browser install, when the member declares browsers.
     pub(crate) playwright: Option<&'a Step>,
+    /// Matrix leg arguments, when the job is a sharded Playwright suite.
+    pub(crate) leg: Option<&'a LegArgs>,
 }
+
+/// Which flags a sharded suite's leg appends to its one Playwright script,
+/// and where its artifacts go.
+#[derive(Debug, Clone)]
+pub(crate) struct LegArgs {
+    /// Legs pass `--project=$VELNOR_PW_PROJECT`.
+    pub(crate) projects: bool,
+    /// Legs pass `--shard=$VELNOR_PW_SHARD`.
+    pub(crate) sharded: bool,
+    /// Legs pass `--fail-on-flaky-tests`.
+    pub(crate) fail_on_flaky: bool,
+    /// The suite job id, which names every leg artifact.
+    pub(crate) job_id: String,
+    /// Retention of a failed leg's `test-results`.
+    pub(crate) results_retention_days: u16,
+}
+
+/// Leg env: the project of this leg (`matrix.project`).
+pub(crate) const PW_PROJECT_ENV: &str = "VELNOR_PW_PROJECT";
+/// Leg env: `<shard>/<total>` of this leg.
+pub(crate) const PW_SHARD_ENV: &str = "VELNOR_PW_SHARD";
+/// Playwright's blob reporter output file; Velnor fixes one path per leg.
+pub(crate) const PW_BLOB_FILE_ENV: &str = "PLAYWRIGHT_BLOB_OUTPUT_FILE";
+/// Directory of every leg blob, under the runner's temp directory.
+pub(crate) const PW_BLOB_DIR: &str = "velnor/pw-blob";
 
 /// Every step after checkout, in execution order.
 pub(crate) fn member_steps(input: &MemberInputs<'_>) -> Result<Vec<Step>, OrchestratorError> {
@@ -70,7 +99,10 @@ pub(crate) fn member_steps(input: &MemberInputs<'_>) -> Result<Vec<Step>, Orches
         .playwright
         .map(|_| stack_family_cache::playwright_browsers());
     plans.extend(browsers.clone());
-    steps.extend(stack_family_cache::prelude(&plans)?);
+    steps.extend(stack_family_cache::prelude_for(
+        &plans,
+        input.leg.is_some(),
+    )?);
     if input.scopes.is_empty() {
         steps.push(install_step(input)?);
     } else {
@@ -91,6 +123,15 @@ pub(crate) fn member_steps(input: &MemberInputs<'_>) -> Result<Vec<Step>, Orches
         step.parallel = true;
         steps.push(step);
     }
+    if let Some(leg) = input.leg {
+        steps.push(super::bun_report_steps::blob_verify_step(input, leg)?);
+        steps.push(bun_blob_upload_step(&leg.job_id)?);
+        steps.push(bun_results_upload_step(
+            &leg.job_id,
+            &input.member.dir,
+            leg.results_retention_days,
+        )?);
+    }
     Ok(steps)
 }
 
@@ -110,12 +151,14 @@ pub(crate) fn prepare_step(catalog: &ToolCatalog) -> Result<Step, OrchestratorEr
     Ok(step)
 }
 
-fn step_env(catalog: &ToolCatalog) -> Result<BTreeMap<String, String>, OrchestratorError> {
+pub(crate) fn step_env(
+    catalog: &ToolCatalog,
+) -> Result<BTreeMap<String, String>, OrchestratorError> {
     let extra = BTreeMap::from([("BUN_INSTALL_CACHE_DIR".to_owned(), CACHE_DIR.to_owned())]);
     crate::matrix_step::task_step_env(catalog, &extra, false)
 }
 
-fn bash(script: &str) -> Vec<String> {
+pub(crate) fn bash(script: &str) -> Vec<String> {
     vec!["bash".to_owned(), "-c".to_owned(), script.to_owned()]
 }
 
@@ -155,7 +198,7 @@ pub(crate) fn dir_arg(dir: &str) -> String {
     }
 }
 
-fn verify_step(input: &MemberInputs<'_>) -> Result<Step, OrchestratorError> {
+pub(crate) fn verify_step(input: &MemberInputs<'_>) -> Result<Step, OrchestratorError> {
     let root = quote(&dir_arg(input.root));
     let script = format!(
         "set -euo pipefail; cd -P -- \"$GITHUB_WORKSPACE\"; cd -- {root}; test -f bun.lock; test ! -L bun.lock; \
@@ -171,7 +214,7 @@ case \"$pm\" in ''|*\"\\\"bun@${{VELNOR_TOOL_BUN}}\\\"\"*|*\"\\\"bun@${{VELNOR_T
     )?)
 }
 
-fn install_step(input: &MemberInputs<'_>) -> Result<Step, OrchestratorError> {
+pub(crate) fn install_step(input: &MemberInputs<'_>) -> Result<Step, OrchestratorError> {
     let config = velnor_bunfig(input.bunfig, &[], false).map_err(|err| contract(err.code()))?;
     let install = bun_words(
         input.catalog,
@@ -197,7 +240,7 @@ printf '%s\\n' {lines} > \"$cfg\"; {install}"
 
 /// Token-free second phase: rebuild `node_modules` from the warm cache so the
 /// trusted lifecycle scripts run, with the config the registry phase wrote.
-fn lifecycle_step(input: &MemberInputs<'_>) -> Result<Step, OrchestratorError> {
+pub(crate) fn lifecycle_step(input: &MemberInputs<'_>) -> Result<Step, OrchestratorError> {
     let root = quote(&dir_arg(input.root));
     let install = bun_words(
         input.catalog,
@@ -245,20 +288,44 @@ fn browser_env(input: &MemberInputs<'_>) -> Result<BTreeMap<String, String>, Orc
 }
 
 fn script_step(input: &MemberInputs<'_>, script: &str) -> Result<Step, OrchestratorError> {
-    let run = bun_words(
-        input.catalog,
-        &[
-            "run".to_owned(),
-            format!("--cwd={}", dir_arg(&input.member.dir)),
-            script.to_owned(),
-        ],
-    )?;
+    let mut args = vec![
+        "run".to_owned(),
+        format!("--cwd={}", dir_arg(&input.member.dir)),
+        script.to_owned(),
+    ];
+    let mut env = browser_env(input)?;
+    if let Some(leg) = input.leg {
+        // Matrix values reach the shell only through env, never the run text.
+        if leg.projects {
+            args.push("@PW_PROJECT@".to_owned());
+            env.insert(
+                PW_PROJECT_ENV.to_owned(),
+                "${{ matrix.project }}".to_owned(),
+            );
+        }
+        if leg.sharded {
+            args.push("@PW_SHARD@".to_owned());
+            env.insert(
+                PW_SHARD_ENV.to_owned(),
+                "${{ matrix.shard }}/${{ matrix.total }}".to_owned(),
+            );
+        }
+        if leg.fail_on_flaky {
+            args.push("--fail-on-flaky-tests".to_owned());
+        }
+        env.insert(
+            PW_BLOB_FILE_ENV.to_owned(),
+            format!("${{{{ runner.temp }}}}/{PW_BLOB_DIR}/leg-${{{{ matrix.leg }}}}.zip"),
+        );
+    }
+    let run = bun_words(input.catalog, &args)?
+        .replace(
+            "'@PW_PROJECT@'",
+            &format!("\"--project=${PW_PROJECT_ENV}\""),
+        )
+        .replace("'@PW_SHARD@'", &format!("\"--shard=${PW_SHARD_ENV}\""));
     let body = format!("set -euo pipefail; cd -P -- \"$GITHUB_WORKSPACE\"; {run}");
-    Ok(shell_step(
-        &step_name(script),
-        bash(&body),
-        browser_env(input)?,
-    )?)
+    Ok(shell_step(&step_name(script), bash(&body), env)?)
 }
 
 /// Display name of a script step.

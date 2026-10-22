@@ -99,13 +99,14 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # runner_label = "ubuntu-24.04" # Exact older pinned runner for compat; omit for the ubuntu-26.04 default.
 # generator_validation = "bootstrap"  # Generator validation mode.
 # max_parallel_jobs = 2                # Maximum generated matrix concurrency.
+# plan_timeout_minutes = 5              # timeout-minutes for the workflow planning job; bounded 1..=360.
 # crate_timeout_minutes = 5            # timeout-minutes for every Rust crate job and OpenTofu root job; bounded 1..=360.
 
 # Optional verification jobs, one support job per entry, all covered by the
 # required gate. Unknown names fail generate. Enabled jobs may need
-# repository-owned policy files (.alint.yml, .zizmor.yml).
+# repository-owned policy files (.alint.yml).
 # [workflow.verify]
-# jobs = ["zizmor", "alint", "markdownlint", "strict-json", "frontmatter-id", "link-check", "native-validators"]
+# jobs = ["alint", "markdownlint", "strict-json", "frontmatter-id", "link-check", "native-validators"]
 # strict_json_files = [".github/marketplace.json"] # Optional explicit scope; omit to check every JSON file.
 # lychee_args = ["--offline", "--include-fragments"] # Optional Lychee args; preserved as separate argv values.
 
@@ -189,7 +190,7 @@ const SAMPLE_BODY: &str = r#"schema = 1
 
 # Optional exact action-pin overrides. Omitted names use Velnor's bundled latest pins.
 # [actions.overrides]
-# "jdx/mise-action" = { version = "v5.2.1", sha = "fc42bcc7ddbf51124c30f95a877a0c5168a3bfde" }
+# "jdx/mise-action" = { version = "v5.2.2", sha = "8418fedb1110381a0d3ba51a7a415d7c1b884550" }
 # "actions/checkout" = { version = "v7.0.1", sha = "3d3c42e5aac5ba805825da76410c181273ba90b1" }
 # "actions/cache/restore" = { version = "v6.1.0", sha = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9" }
 # "actions/cache/save" = { version = "v6.1.0", sha = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9" }

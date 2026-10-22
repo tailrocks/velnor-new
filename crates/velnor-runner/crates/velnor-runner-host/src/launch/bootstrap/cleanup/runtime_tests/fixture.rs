@@ -9,7 +9,7 @@ use crate::{
 use super::docker::StatefulDocker;
 
 pub(crate) struct CleanupRuntimeFixture {
-    pub(crate) _base: crate::journal::request_lifecycle::tests::NativeStartedIntakeFixture,
+    pub(crate) base: crate::journal::request_lifecycle::tests::NativeStartedIntakeFixture,
     pub(crate) runtime: NativeCleanupRuntime,
     pub(crate) server: StatefulDocker,
     pub(crate) scope: ConnectionJournal,
@@ -53,7 +53,7 @@ pub(crate) async fn cleanup_runtime_fixture_for_base_with_capacity(
     Ok(CleanupRuntimeFixture {
         scope: base.scope.clone(),
         journal: base.journal.clone(),
-        _base: base,
+        base,
         runtime,
         server,
         reservation_id,

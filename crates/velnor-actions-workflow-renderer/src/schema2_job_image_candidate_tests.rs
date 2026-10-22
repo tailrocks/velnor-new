@@ -381,3 +381,26 @@ fn optional_field<'a>(value: &'a Yaml, key: &str) -> Option<&'a Yaml> {
         .iter()
         .find_map(|(name, value)| (name == key).then_some(value))
 }
+
+#[test]
+fn pushes_cancel_superseded_runs_but_dispatches_never_share_their_group() {
+    let workflow = super::render(&request()).expect("Render the job image candidate workflow.");
+    let concurrency = field(&workflow, "concurrency");
+    let group = field(concurrency, "group");
+    let Yaml::Str(group) = group else {
+        panic!("group is a plain string: {group:?}");
+    };
+    assert!(group.contains("${{ github.event_name }}"), "{group}");
+    assert!(group.contains("${{ github.ref }}"), "{group}");
+    assert_eq!(
+        field(concurrency, "cancel-in-progress"),
+        &Yaml::str("${{ github.event_name == 'push' }}")
+    );
+    let build = field(field(&workflow, "jobs"), "build-image-candidate");
+    let outputs = field(build, "outputs");
+    assert!(optional_field(outputs, "artifact_id").is_some());
+    assert!(
+        optional_field(outputs, "artifact_name").is_none(),
+        "no job reads the artifact name"
+    );
+}

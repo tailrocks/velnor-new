@@ -6,8 +6,8 @@ use velnor_actions_contract::{Job, WORKFLOW_TASK_JOB_PREFIX};
 
 use super::{
     build_task_jobs::BuildTaskPolicy, bun_member_jobs::BunMemberPolicy,
-    image_build_jobs::ImageBuildPolicy, native_image_jobs::NativeImageTaskPolicy,
-    stack_jobs::StackJobPolicy,
+    bun_suite_jobs::BunSuitePolicy, image_build_jobs::ImageBuildPolicy,
+    native_image_jobs::NativeImageTaskPolicy, stack_jobs::StackJobPolicy,
 };
 use crate::{RenderError, VerificationTaskPolicy};
 
@@ -28,6 +28,8 @@ pub enum WorkflowTaskPolicy {
     Image(ImageBuildPolicy),
     /// One Bun workspace member job (hard decision 6), hosted-only.
     Bun(BunMemberPolicy),
+    /// One declared Bun suite job beside its member job, hosted-only.
+    BunSuite(BunSuitePolicy),
     /// One dbt project or Ansible root job, hosted-only.
     Stack(StackJobPolicy),
 }
@@ -42,6 +44,7 @@ impl WorkflowTaskPolicy {
             Self::NativeImage(policy) => &policy.task.id,
             Self::Image(policy) => &policy.image.id,
             Self::Bun(policy) => &policy.id,
+            Self::BunSuite(policy) => &policy.id,
             Self::Stack(policy) => &policy.id,
         }
     }
@@ -59,6 +62,11 @@ impl WorkflowTaskPolicy {
             Self::Bun(policy) => {
                 (policy.id == job_id).then_some(super::bun_member_jobs::BUN_RUNNER)
             }
+            Self::BunSuite(policy) => policy
+                .job_ids()
+                .iter()
+                .any(|id| id == job_id)
+                .then_some(super::bun_member_jobs::BUN_RUNNER),
             Self::Stack(policy) => (policy.id == job_id).then_some(super::stack_jobs::STACK_RUNNER),
         }
     }
@@ -68,7 +76,7 @@ impl WorkflowTaskPolicy {
     pub fn uses_pinned_tools(&self) -> bool {
         match self {
             Self::Image(policy) => policy.uses_pinned_tools(),
-            Self::Bun(_) | Self::Stack(_) => true,
+            Self::Bun(_) | Self::BunSuite(_) | Self::Stack(_) => true,
             _ => false,
         }
     }
@@ -82,6 +90,7 @@ impl WorkflowTaskPolicy {
             Self::NativeImage(policy) => policy.job_id() == job_id,
             Self::Image(policy) => policy.platform_for_job(job_id).is_some(),
             Self::Bun(policy) => policy.id == job_id,
+            Self::BunSuite(policy) => policy.job_ids().iter().any(|id| id == job_id),
             Self::Stack(policy) => policy.id == job_id,
         }
     }
@@ -130,6 +139,13 @@ pub(crate) fn validate_workflow_task_jobs(
             ),
             WorkflowTaskPolicy::Bun(task) => job_ids.extend(
                 crate::verification_jobs::bun_member_jobs::validate_bun_member_job(
+                    jobs,
+                    task,
+                    checkout_uses,
+                )?,
+            ),
+            WorkflowTaskPolicy::BunSuite(task) => job_ids.extend(
+                crate::verification_jobs::bun_suite_jobs::validate_bun_suite_job(
                     jobs,
                     task,
                     checkout_uses,

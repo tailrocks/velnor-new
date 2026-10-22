@@ -97,7 +97,16 @@ fn emit_seq_item(item: &Yaml, indent: usize, width: usize, out: &mut String) {
     push_indent(indent, width, out);
     match item {
         Yaml::Map(entries) if !entries.is_empty() => {
-            if let Some(((first_key, first_value), rest)) = entries.split_first() {
+            if width == 1 {
+                // With one-space nesting, a key after `- ` begins two
+                // columns past the dash while following keys need only one
+                // space of indentation. Emit the dash alone so every entry
+                // in the mapping has the same structural indent.
+                out.push_str("-\n");
+                for (key, child) in entries {
+                    emit_map_entry(key, child, indent + 1, width, out);
+                }
+            } else if let Some(((first_key, first_value), rest)) = entries.split_first() {
                 out.push_str("- ");
                 emit_first_entry(first_key, first_value, indent, width, out);
                 for (key, child) in rest {

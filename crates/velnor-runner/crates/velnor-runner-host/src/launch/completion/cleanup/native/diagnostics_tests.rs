@@ -286,7 +286,7 @@ fn diagnostic_path(
     role: &str,
     container_id: &str,
 ) -> Result<PathBuf, HostError> {
-    let crate::launch::bootstrap::CleanupRuntimeFixture { _base: base, .. } = fixture;
+    let crate::launch::bootstrap::CleanupRuntimeFixture { base, .. } = fixture;
     let crate::journal::request_lifecycle::tests::NativeStartedIntakeFixture {
         _scratch: scratch,
         ..
@@ -312,7 +312,7 @@ fn runner_log_state_path(
     fixture: &CleanupRuntimeFixture,
     intent_id: i64,
 ) -> Result<PathBuf, HostError> {
-    let crate::launch::bootstrap::CleanupRuntimeFixture { _base: base, .. } = fixture;
+    let crate::launch::bootstrap::CleanupRuntimeFixture { base, .. } = fixture;
     let crate::journal::request_lifecycle::tests::NativeStartedIntakeFixture {
         _scratch: scratch,
         ..

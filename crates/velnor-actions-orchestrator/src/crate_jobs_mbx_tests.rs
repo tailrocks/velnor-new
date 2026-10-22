@@ -81,7 +81,8 @@ fn mbx_crates_read_seed_and_seed_jobs_are_the_only_bundle_writers() {
     assert_eq!(seed.needs, [PLAN_JOB_ID]);
     assert_eq!(
         seed.condition.as_deref(),
-        Some(crate::crate_jobs::dependency_seed::SEED_JOB_CONDITION)
+        Some(velnor_actions_contract::workflow::DEPENDENCY_SEED_JOB_CONDITION),
+        "only a protected default-branch push seeds"
     );
     let roles: Vec<_> = seed.steps.iter().map(|step| step.role).collect();
     assert_eq!(

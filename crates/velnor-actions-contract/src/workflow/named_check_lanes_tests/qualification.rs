@@ -191,7 +191,6 @@ fn hosted_mode_keeps_configured_runners_and_one_writer() {
     assert_eq!(expanded.jobs["check-linux"].runs_on, "ubuntu-26.04");
     assert_eq!(expanded.jobs["check-mac"].runs_on, "macos-15");
     assert_eq!(expanded.jobs["required"].runs_on, "ubuntu-26.04");
-    assert_eq!(expanded.jobs["publish-baseline"].runs_on, "ubuntu-26.04");
 }
 
 #[test]
@@ -204,13 +203,12 @@ fn scale_set_routes_linux_jobs_once_including_controls_and_writers() {
         .expect("scale-set mode routes every Linux job");
     let runner = "scale-set:velnor+orbstack-linux";
 
-    assert_eq!(expanded.jobs.len(), 4);
-    for id in ["plan", "check-linux", "required", "publish-baseline"] {
+    assert_eq!(expanded.jobs.len(), 3);
+    for id in ["plan", "check-linux", "required"] {
         assert_eq!(expanded.jobs[id].runs_on, runner, "{id}");
     }
     assert_eq!(expanded.jobs["plan"].needs, Vec::<String>::new());
     assert_eq!(expanded.jobs["required"].needs, ["check-linux"]);
-    assert_eq!(expanded.jobs["publish-baseline"].needs, ["required"]);
     assert_eq!(
         expanded.jobs["check-linux"].condition.as_deref(),
         Some(crate::config::EPHEMERAL_CHECK_ADMISSION_CONDITION)
@@ -242,7 +240,7 @@ fn scale_set_default_profile_routes_control_and_writer_roles() {
     execution.default_profile = "local".to_owned();
 
     let expanded = expand_workflow(&source, &config, None).expect("default Scale Set profile");
-    for id in ["plan", "check-linux", "required", "publish-baseline"] {
+    for id in ["plan", "check-linux", "required"] {
         assert_eq!(
             expanded.jobs[id].runs_on, "scale-set:velnor+orbstack-linux",
             "{id}"
@@ -251,7 +249,7 @@ fn scale_set_default_profile_routes_control_and_writer_roles() {
 }
 
 #[test]
-fn role_overrides_route_control_and_writer_jobs_when_mode_is_unset() {
+fn role_overrides_route_control_jobs_when_mode_is_unset() {
     let source = ir(&[(
         "check-linux",
         runner("ubuntu-26.04", CheckPlatform::LinuxX64),
@@ -266,14 +264,6 @@ fn role_overrides_route_control_and_writer_jobs_when_mode_is_unset() {
             role: ExecutionRole::Control,
         },
     );
-    execution.overrides.insert(
-        "publish-baseline".to_owned(),
-        ExecutionOverride {
-            profile: "local".to_owned(),
-            role: ExecutionRole::Release,
-        },
-    );
-
     let expanded = expand_workflow(&source, &config, None).expect("role-scoped overrides");
     assert_eq!(
         expanded.jobs["plan"].runs_on,
@@ -281,10 +271,6 @@ fn role_overrides_route_control_and_writer_jobs_when_mode_is_unset() {
     );
     assert_eq!(expanded.jobs["check-linux"].runs_on, "ubuntu-26.04");
     assert_eq!(expanded.jobs["required"].runs_on, "ubuntu-26.04");
-    assert_eq!(
-        expanded.jobs["publish-baseline"].runs_on,
-        "scale-set:velnor+orbstack-linux"
-    );
 }
 
 #[test]

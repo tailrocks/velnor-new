@@ -142,9 +142,8 @@ fn executable_for(name: &str) -> Result<&'static str, OrchestratorError> {
         "opentofu" => Ok("tofu"),
         "mr-boxington" => Ok("mbx"),
         "gh" => Ok("gh"),
-        "actionlint" => Ok("actionlint"),
+        "jactionlint" => Ok("jactionlint"),
         "shellcheck" => Ok("shellcheck"),
-        "zizmor" => Ok("zizmor"),
         "release-plz" => Ok("release-plz"),
         "aqua:nextest-rs/nextest/cargo-nextest" => Ok("cargo-nextest"),
         _ => Err(internal("qualification_runtime_selector_unsupported")),
@@ -357,4 +356,19 @@ fn contains_version(text: &str, version: &str) -> bool {
         !(character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '_' | '+'))
     })
     .any(|token| token == version || token.strip_prefix('v') == Some(version))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::executable_for;
+
+    #[test]
+    fn runtime_observation_uses_jactionlint_and_rejects_retired_linter_names() {
+        assert_eq!(
+            executable_for("jactionlint").expect("jactionlint"),
+            "jactionlint"
+        );
+        assert!(executable_for("actionlint").is_err());
+        assert!(executable_for("zizmor").is_err());
+    }
 }

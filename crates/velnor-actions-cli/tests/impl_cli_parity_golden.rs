@@ -10,6 +10,9 @@
 //! `malformed_manifest:` token; the trailing Cargo diagnostic is toolchain
 //! wording, asserted non-empty but not byte-pinned).
 //!
+//! `generate-tree.sha256` pins every other generated file by digest
+//! (`impl_cli_parity_golden_tree`).
+//!
 //! Regenerate goldens only deliberately, at a known-good commit, with
 //! `VELNOR_UPDATE_GOLDENS=1`; the default mode compares and never writes.
 
@@ -67,7 +70,7 @@ pub(crate) fn checkout(case: &str) -> Result<(PathBuf, String), Box<dyn Error>> 
 }
 
 /// Compare `actual` against the golden, or refresh it under [`UPDATE_ENV`].
-fn check_golden(case: &str, name: &str, actual: &[u8]) -> Result<(), Box<dyn Error>> {
+pub(crate) fn check_golden(case: &str, name: &str, actual: &[u8]) -> Result<(), Box<dyn Error>> {
     let golden = corpus(case).join("expected").join(name);
     if std::env::var(UPDATE_ENV).is_ok_and(|value| value == "1") {
         if let Some(parent) = golden.parent() {
@@ -311,9 +314,10 @@ fn check_case(case: &str) -> Result<(), Box<dyn Error>> {
     )?;
     check_golden(
         case,
-        "actionlint.yaml",
-        &std::fs::read(preview.join(".github/actionlint.yaml"))?,
+        "jactionlint.yaml",
+        &std::fs::read(preview.join(".github/jactionlint.yaml"))?,
     )?;
+    crate::impl_cli_parity_golden_tree::check(case, &preview)?;
     let response = plan_v1(&repo, &head)?;
     check_golden(
         case,

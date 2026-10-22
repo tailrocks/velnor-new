@@ -78,8 +78,8 @@ fn plan_artifact_downloads_exactly_once_per_job() -> TestResult {
     }
     assert_eq!(crate_jobs, 2, "two tofu stack jobs");
     assert!(
-        jobs.contains_key("publish-baseline"),
-        "baseline publisher remains in workflow"
+        !jobs.contains_key("publish-baseline"),
+        "baseline publication stays outside the required workflow"
     );
     Ok(())
 }

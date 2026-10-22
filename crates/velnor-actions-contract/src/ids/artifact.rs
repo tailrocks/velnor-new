@@ -42,18 +42,6 @@ pub fn artifact_id_for_crate_job(run_key: &str, job_id: &str) -> Result<String, 
     Ok(super::ArtifactId::parse(&id)?.into_inner())
 }
 
-/// Derive `velnor-baseline-<commit>-<compat>` with full IDs (par §5).
-/// # Errors
-pub fn artifact_id_for_baseline(commit: &str, compat: &str) -> Result<String, ContractError> {
-    if !super::is_lower_hex_len(commit, 40) {
-        return Err(ContractError::identity("artifact_id", "bad_source_commit"));
-    }
-    crate::canonical::validate_digest(compat)
-        .map_err(|_| ContractError::identity("artifact_id", "bad_compatibility_id"))?;
-    let id = format!("velnor-baseline-{commit}-{compat}");
-    Ok(super::ArtifactId::parse(&id)?.into_inner())
-}
-
 /// Validate a target-key shape (matches [`target_key`] output grammar).
 /// # Errors
 pub fn validate_target_key(value: &str) -> Result<(), ContractError> {
@@ -95,9 +83,6 @@ pub fn validate_artifact_id(value: &str) -> Result<(), ContractError> {
     }
     if let Some(rest) = value.strip_prefix("velnor-candidate-") {
         return validate_candidate_artifact(rest);
-    }
-    if let Some(rest) = value.strip_prefix("velnor-baseline-") {
-        return validate_baseline_artifact(rest);
     }
     Err(ContractError::identity(
         "artifact_id",
@@ -162,18 +147,6 @@ fn validate_candidate_artifact(rest: &str) -> Result<(), ContractError> {
     ))
 }
 
-/// Validate the commit/compat tail of a baseline artifact name.
-fn validate_baseline_artifact(rest: &str) -> Result<(), ContractError> {
-    let bad = || ContractError::identity("artifact_id", "bad_baseline_artifact");
-    let Some((commit, compat)) = rest.split_once('-') else {
-        return Err(bad());
-    };
-    if !super::is_lower_hex_len(commit, 40) {
-        return Err(bad());
-    }
-    crate::canonical::validate_digest(compat).map_err(|_| bad())
-}
-
 /// Check target-key shape (matches [`target_key`] output grammar).
 fn is_target_key(tail: &str) -> bool {
     !tail.is_empty()
@@ -192,9 +165,7 @@ mod tests {
         TaskReportId,
     };
     use super::validate_artifact_id;
-    use super::{
-        artifact_id_for_baseline, artifact_id_for_crate_job, artifact_id_for_plan, target_key,
-    };
+    use super::{artifact_id_for_crate_job, artifact_id_for_plan, target_key};
     use crate::canonical::{Digest, PosixPath, digest_b3, digest_b3_typed};
 
     /// Parse/serde round-trip must accept `good` and reject `bad`.
@@ -269,17 +240,6 @@ mod tests {
         assert!(artifact_id_for_crate_job("Local", "rust-demo").is_err());
         assert!(artifact_id_for_crate_job("local", "").is_err());
         assert!(artifact_id_for_crate_job("local", "velnor-plan").is_err());
-    }
-
-    #[test]
-    fn published_baseline_artifact_name_keeps_its_schema_identity() {
-        let commit = "a".repeat(40);
-        let compatibility = digest_b3(b"baseline compatibility");
-        let name = artifact_id_for_baseline(&commit, &compatibility).expect("baseline artifact");
-
-        assert_eq!(name, format!("velnor-baseline-{commit}-{compatibility}"));
-        assert!(validate_artifact_id(&name).is_ok());
-        assert!(artifact_id_for_baseline("bad", &compatibility).is_err());
     }
 
     #[test]

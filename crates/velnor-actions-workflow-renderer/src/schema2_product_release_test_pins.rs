@@ -11,7 +11,6 @@ use velnor_actions_mise::{
 
 use crate::schema2::ProductReleasePins;
 use crate::setup::MiseSetup;
-use crate::toolchain_env::with_env_unset_argv;
 
 struct BuildArgv {
     product: Vec<String>,
@@ -40,9 +39,8 @@ pub(super) fn test_pins() -> ProductReleasePins {
         install_gate_tools_argv: install_argv(
             &[
                 PinnedTool::Gh,
-                PinnedTool::Actionlint,
+                PinnedTool::Jactionlint,
                 PinnedTool::Shellcheck,
-                PinnedTool::Zizmor,
             ],
             &catalog,
         ),
@@ -50,9 +48,8 @@ pub(super) fn test_pins() -> ProductReleasePins {
         install_qualify_tools_argv: install_argv(
             &[
                 PinnedTool::Rust,
-                PinnedTool::Actionlint,
+                PinnedTool::Jactionlint,
                 PinnedTool::Shellcheck,
-                PinnedTool::Zizmor,
             ],
             &catalog,
         ),
@@ -66,28 +63,31 @@ pub(super) fn test_pins() -> ProductReleasePins {
         runner_build_argv: build.runner,
         attestation_helper_build_argv: build.attestation_helper,
         resource_probe_build_argv: build.resource_probe,
-        actionlint_argv: exec_argv(
-            &[PinnedTool::Actionlint, PinnedTool::Shellcheck],
-            "actionlint",
-            &velnor_actions_actionlint::workflow_lint_args()
-                .iter()
-                .map(String::as_str)
-                .collect::<Vec<_>>(),
-            &catalog,
-        ),
-        zizmor_argv: with_env_unset_argv(&exec_argv(
-            &[PinnedTool::Zizmor],
-            "zizmor",
-            &[
-                "--no-online-audits",
-                "--config",
-                ".zizmor.yml",
-                ".github/workflows",
-            ],
-            &catalog,
-        )),
+        lint_argv: vec![
+            "bash".to_owned(),
+            "-c".to_owned(),
+            crate::toolchain_env::with_credential_unset_script(
+                &velnor_actions_actionlint::workflow_lint_script(
+                    &exec_argv(
+                        &[PinnedTool::Jactionlint, PinnedTool::Shellcheck],
+                        "jactionlint",
+                        &[],
+                        &catalog,
+                    )
+                    .join(" "),
+                ),
+            ),
+        ],
+        // The orchestrator renders the real digest check; the renderer only
+        // places the step, so the fixture carries a fixed stand-in script.
+        verify_lint_argv: vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            "echo verify jactionlint".to_owned(),
+        ],
         gh_argv: exec_argv(&[PinnedTool::Gh], "gh", &[], &catalog),
         rust_version: catalog.version(PinnedTool::Rust).to_owned(),
+        verify_rust_argv: ["sh", "-c", "echo verify-rust"].map(str::to_owned).to_vec(),
         mr_boxington_version: catalog.version(PinnedTool::MrBoxington).to_owned(),
     }
 }

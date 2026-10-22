@@ -130,11 +130,7 @@ fn crate_tools_follow_selection_with_validators() {
         let StepKind::Shell { run, env } = &step.kind else {
             panic!("prepare must be a shell step");
         };
-        for tool in [
-            PinnedTool::Actionlint,
-            PinnedTool::Shellcheck,
-            PinnedTool::Zizmor,
-        ] {
+        for tool in [PinnedTool::Jactionlint, PinnedTool::Shellcheck] {
             assert_eq!(
                 run.contains(&catalog.tool_spec(tool)),
                 needs_validators,
@@ -205,9 +201,8 @@ fn crate_tools_install_exact_pinned_set() {
             }
             if needs_validators {
                 expected.extend([
-                    catalog.tool_spec(PinnedTool::Actionlint),
+                    catalog.tool_spec(PinnedTool::Jactionlint),
                     catalog.tool_spec(PinnedTool::Shellcheck),
-                    catalog.tool_spec(PinnedTool::Zizmor),
                 ]);
             }
             if use_nextest {
@@ -254,9 +249,8 @@ fn crate_tools_install_the_repo_mr_boxington_pin_only_for_the_wrapper_option() {
             ];
             if needs_validators {
                 expected.extend([
-                    flag_catalog.tool_spec(PinnedTool::Actionlint),
+                    flag_catalog.tool_spec(PinnedTool::Jactionlint),
                     flag_catalog.tool_spec(PinnedTool::Shellcheck),
-                    flag_catalog.tool_spec(PinnedTool::Zizmor),
                 ]);
             }
             if use_nextest {

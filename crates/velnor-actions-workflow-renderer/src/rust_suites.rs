@@ -23,7 +23,6 @@ mod suite_steps;
 #[cfg(test)]
 #[path = "rust_suites_tests.rs"]
 mod tests;
-
 /// Specification for rendering declared Rust test suite jobs and workflows.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustSuitesRenderSpec {
@@ -49,6 +48,12 @@ pub struct RustSuitesRenderSpec {
     pub mbx_action: Option<(String, String)>,
     /// Pull-request cache save policy.
     pub pull_request_cache_policy: PullRequestCachePolicy,
+    /// `sh -c` argv run right after the tools cache restore: discards the
+    /// cached rustup and verifies a restored toolchain file by file.
+    pub verify_restored_rust_argv: Vec<String>,
+    /// `sh -c` argv run right after the suite install: verifies the
+    /// installed toolchain file by file.
+    pub verify_rust_argv: Vec<String>,
     /// Whether step environments export `RUSTUP_TOOLCHAIN`.
     pub export_rustup_toolchain: bool,
 }

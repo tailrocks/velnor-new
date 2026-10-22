@@ -20,8 +20,8 @@ pub use crate::setup::MiseSetup;
 /// ([`velnor_actions_contract::RequiredCheckMigration`]) and the
 /// emitted tree share one source of truth, never retyped mirrors.
 pub const WORKFLOW_PATH: &str = CI_WORKFLOW_PATH;
-/// Generated actionlint config path inside the repository.
-pub const ACTIONLINT_PATH: &str = ".github/actionlint.yaml";
+/// Generated jactionlint config path inside the repository.
+pub const JACTIONLINT_PATH: &str = velnor_actions_actionlint::JACTIONLINT_CONFIG_PATH;
 /// Exact pull-request event types.
 pub const EXPECTED_PR_TYPES: &[&str] = &[
     "opened",
@@ -42,9 +42,6 @@ pub const FINAL_JOB_ID: &str = CONTRACT_REQUIRED_JOB_ID;
 pub const FINAL_DISPLAY_NAME: &str = CONTRACT_REQUIRED_VERDICT_DISPLAY_NAME;
 /// Final gate condition (contract [`CONTRACT_REQUIRED_CONDITION`] alias).
 pub const FINAL_CONDITION: &str = CONTRACT_REQUIRED_CONDITION;
-/// Job ID of the trusted baseline publisher.
-pub const PUBLISH_JOB_ID: &str = "publish-baseline";
-
 /// Condition attached to report upload steps: they run even when the job
 /// fails or the run is cancelled.
 pub const UPLOAD_STEP_CONDITION: &str = "always()";
@@ -55,7 +52,7 @@ pub const TASK_JOB_ID: &str = "velnor-task";
 /// Candidate validation job ID (Velnor policy only).
 pub const CANDIDATE_JOB_ID: &str = "candidate";
 /// Full-SHA Alint pin for the repository-policy `alint` job.
-pub const ALINT_USES: &str = "asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87";
+pub const ALINT_USES: &str = "asamarts/alint@10d1c0a2bafd0bd316dbad9fe63ea5e1e3761c71";
 
 /// Caller-supplied validated scalars the IR cannot carry.
 #[derive(Debug, Clone)]
@@ -118,6 +115,10 @@ pub struct RenderContext {
     /// failed `generate` on ambient homes after plan fetch moved to
     /// owned homes).
     pub plan_consumer_env: BTreeMap<String, String>,
+    /// Catalog-pinned release archives (`<install dir> <version> <platform>
+    /// <url> <sha256>`) the tools-cache restore re-verifies restored Mise
+    /// installs against when `mise.lock` has no entry for them.
+    pub tool_pins: Vec<String>,
 }
 
 /// One fixed validator-job shell step: kind plus display name plus argv.
@@ -174,8 +175,10 @@ impl RenderContext {
         guard::validate_request_dir(&self.request_dir)?;
         steps::checkout_step(&self.checkout_uses).map(|_| ())?;
         for command in &self.validator_commands {
-            if command.validator == ValidatorKind::Actionlint {
-                return Err(RenderError::BadCommand("actionlint_not_support".to_owned()));
+            if command.validator == ValidatorKind::Jactionlint {
+                return Err(RenderError::BadCommand(
+                    "jactionlint_not_support".to_owned(),
+                ));
             }
             if command.name.trim().is_empty() {
                 return Err(RenderError::BadCommand("empty_validator_name".to_owned()));

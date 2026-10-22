@@ -326,7 +326,7 @@ fn preview_bytes(
         },
     )?;
     let workflow = fs::read(preview.join(".github/workflows/ci.yml"))?;
-    let actionlint = fs::read(preview.join(".github/actionlint.yaml"))?;
+    let actionlint = fs::read(preview.join(".github/jactionlint.yaml"))?;
     Ok((workflow, actionlint))
 }
 

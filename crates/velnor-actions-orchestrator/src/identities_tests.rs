@@ -249,7 +249,7 @@ fn tofu_toolchain_pins_opentofu_plus_provider_surface() {
     let task = tofu_task("validate");
     assert_eq!(task.identity.project_root, ".");
     let inputs = toolchain_inputs_for(&task, &ToolCatalog::pinned()).expect("tofu converts");
-    assert_eq!(inputs.tools, vec!["opentofu@1.13.1".to_owned()]);
+    assert_eq!(inputs.tools, vec!["opentofu@1.13.2".to_owned()]);
     assert_eq!(inputs.components.len(), 1);
     let entry = &inputs.components[0];
     assert!(entry.starts_with("tofu-provider-inputs:b3-"), "{entry}");

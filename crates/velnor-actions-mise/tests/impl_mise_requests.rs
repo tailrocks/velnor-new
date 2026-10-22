@@ -190,12 +190,11 @@ fn pinned_exec_accepts_all_catalog_tools() -> Result<(), String> {
     for spec in [
         "rust@1.99.1",
         "mr-boxington@1.26.0",
-        "gh@2.102.1",
-        "actionlint@1.7.12",
+        "gh@2.103.0",
+        "jactionlint@2.3.0",
         "shellcheck@0.11.0",
-        "zizmor@1.31.1",
         "aqua:nextest-rs/nextest/cargo-nextest@0.9.149",
-        "opentofu@1.13.1",
+        "opentofu@1.13.2",
     ] {
         assert!(argv.iter().any(|arg| arg == spec), "missing spec: {spec}");
     }

@@ -340,6 +340,7 @@ fn composite_save_cannot_receive_an_orphaned_job_budget() {
     assert!(decorate(&step, &mut entries, false).is_err());
     assert_eq!(entries.len(), 1);
     let ctx = crate::render::RenderContext {
+        tool_pins: Vec::new(),
         generator_version: "0.1.29".to_owned(),
         report_helper_version: "0.1.29".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),

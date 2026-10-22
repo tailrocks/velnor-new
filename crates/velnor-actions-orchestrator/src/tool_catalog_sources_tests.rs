@@ -64,38 +64,41 @@ fn resolve_with(files: &[(&str, &str)]) -> Result<velnor_actions_mise::ToolCatal
 fn declarations_in_every_mise_location_are_project_owned() {
     // A Velnor pin must never silently override a declaration Mise reads.
     for (file, text) in [
-        (".config/mise.toml", "[tools]\nactionlint = \"1.7.11\"\n"),
+        (".config/mise.toml", "[tools]\njactionlint = \"2.2.0\"\n"),
         (
             ".config/mise/config.toml",
-            "[tools]\nactionlint = \"1.7.11\"\n",
+            "[tools]\njactionlint = \"2.2.0\"\n",
         ),
         (
             ".config/mise/conf.d/10-lint.toml",
-            "[tools]\nactionlint = \"1.7.11\"\n",
+            "[tools]\njactionlint = \"2.2.0\"\n",
         ),
-        ("mise/config.toml", "[tools]\nactionlint = \"1.7.11\"\n"),
-        (".mise/config.toml", "[tools]\nactionlint = \"1.7.11\"\n"),
-        ("mise.local.toml", "[tools]\nactionlint = \"1.7.11\"\n"),
-        ("mise.ci.toml", "[tools]\nactionlint = \"1.7.11\"\n"),
-        (".mise.ci.toml", "[tools]\nactionlint = \"1.7.11\"\n"),
-        (".tool-versions", "actionlint 1.7.11\n"),
-        (".tool-versions", "actionlint 1.7.11 # pinned\n"),
+        ("mise/config.toml", "[tools]\njactionlint = \"2.2.0\"\n"),
+        (".mise/config.toml", "[tools]\njactionlint = \"2.2.0\"\n"),
+        ("mise.local.toml", "[tools]\njactionlint = \"2.2.0\"\n"),
+        ("mise.ci.toml", "[tools]\njactionlint = \"2.2.0\"\n"),
+        (".mise.ci.toml", "[tools]\njactionlint = \"2.2.0\"\n"),
+        (".tool-versions", "jactionlint 2.2.0\n"),
+        (".tool-versions", "jactionlint 2.2.0 # pinned\n"),
     ] {
         let catalog = resolve_with(&[(file, text)]).expect("resolve");
         assert!(
-            catalog.is_project_declared(PinnedTool::Actionlint),
+            catalog.is_project_declared(PinnedTool::Jactionlint),
             "{file}"
         );
-        assert_eq!(catalog.version(PinnedTool::Actionlint), "1.7.11", "{file}");
-        assert!(!catalog.is_project_declared(PinnedTool::Zizmor), "{file}");
+        assert_eq!(catalog.version(PinnedTool::Jactionlint), "2.2.0", "{file}");
+        assert!(
+            !catalog.is_project_declared(PinnedTool::Shellcheck),
+            "{file}"
+        );
     }
     let both = resolve_with(&[
-        (".config/mise.toml", "[tools]\nactionlint = \"1.7.11\"\n"),
-        (".tool-versions", "zizmor 1.30.0\n"),
+        (".config/mise.toml", "[tools]\njactionlint = \"2.2.0\"\n"),
+        (".tool-versions", "shellcheck 0.10.0\n"),
     ])
     .expect("resolve");
-    assert_eq!(both.version(PinnedTool::Actionlint), "1.7.11");
-    assert_eq!(both.version(PinnedTool::Zizmor), "1.30.0");
+    assert_eq!(both.version(PinnedTool::Jactionlint), "2.2.0");
+    assert_eq!(both.version(PinnedTool::Shellcheck), "0.10.0");
 }
 
 #[test]
@@ -110,11 +113,11 @@ fn extensionless_toml_rust_toolchain_declares_rust() {
 fn a_loose_or_templated_version_fails_generation_naming_tool_and_file() {
     for (file, key, value) in [
         ("mise.toml", "aqua:nextest-rs/nextest/cargo-nextest", "0.9"),
-        (".config/mise.toml", "zizmor", "latest"),
+        (".config/mise.toml", "shellcheck", "latest"),
         ("mise.local.toml", "rust", "stable"),
-        ("mise.toml", "actionlint", "^1.7.11"),
+        ("mise.toml", "jactionlint", "^2.3.0"),
         ("mise.toml", "opentofu", "01.13.1"),
-        ("mise.toml", "zizmor", "{{ exec(command='id') }}"),
+        ("mise.toml", "shellcheck", "{{ exec(command='id') }}"),
     ] {
         let text = format!("[tools]\n\"{key}\" = \"{value}\"\n");
         let err = resolve_with(&[(file, &text)]).expect_err("loose version must fail");
@@ -128,36 +131,37 @@ fn a_loose_or_templated_version_fails_generation_naming_tool_and_file() {
         assert!(err.contains(file), "{err}");
     }
     let err =
-        resolve_with(&[("mise.toml", "[tools]\nzizmor = [\"1.31.1\"]\n")]).expect_err("array");
+        resolve_with(&[("mise.toml", "[tools]\nshellcheck = [\"0.11.0\"]\n")]).expect_err("array");
     assert!(
-        err.contains("project_tool_version_not_exact:tool=zizmor"),
+        err.contains("project_tool_version_not_exact:tool=shellcheck"),
         "{err}"
     );
-    let err = resolve_with(&[(".tool-versions", "zizmor 1.31.1 1.31.0\n")]).expect_err("fallback");
-    assert!(err.contains("tool=zizmor,file=.tool-versions"), "{err}");
+    let err =
+        resolve_with(&[(".tool-versions", "shellcheck 0.11.0 0.10.0\n")]).expect_err("fallback");
+    assert!(err.contains("tool=shellcheck,file=.tool-versions"), "{err}");
 }
 
 #[test]
 fn disagreeing_sources_fail_generation_naming_both() {
     let err = resolve_with(&[
-        ("mise.toml", "[tools]\nactionlint = \"1.7.12\"\n"),
+        ("mise.toml", "[tools]\njactionlint = \"2.3.0\"\n"),
         (
             ".config/mise/conf.d/x.toml",
-            "[tools]\nactionlint = \"1.7.11\"\n",
+            "[tools]\njactionlint = \"2.2.0\"\n",
         ),
     ])
     .expect_err("disagree");
     assert!(
-        err.contains("conflicting_project_tool_versions:tool=actionlint")
-            && err.contains("mise.toml actionlint=1.7.12")
-            && err.contains(".config/mise/conf.d/x.toml actionlint=1.7.11"),
+        err.contains("conflicting_project_tool_versions:tool=jactionlint")
+            && err.contains("mise.toml jactionlint=2.3.0")
+            && err.contains(".config/mise/conf.d/x.toml jactionlint=2.2.0"),
         "{err}"
     );
     // Agreement is fine, whatever the spelling.
     assert!(
         resolve_with(&[
-            ("mise.toml", "[tools]\nactionlint = \"1.7.11\"\n"),
-            (".tool-versions", "actionlint 1.7.11\n"),
+            ("mise.toml", "[tools]\njactionlint = \"2.2.0\"\n"),
+            (".tool-versions", "jactionlint 2.2.0\n"),
         ])
         .is_ok()
     );

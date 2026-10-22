@@ -35,7 +35,7 @@ pub const DECLARED_GITHUB_FORMATS: [GithubFormat; 4] = [
         owner: "velnor-actions-workflow-renderer",
     },
     GithubFormat {
-        path: ".github/actionlint.yaml",
+        path: ".github/jactionlint.yaml",
         owner: "velnor-actions-actionlint",
     },
     GithubFormat {

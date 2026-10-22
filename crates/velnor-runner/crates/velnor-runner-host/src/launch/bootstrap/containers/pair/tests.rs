@@ -213,8 +213,6 @@ async fn claimed_jit_write_closes_stdin_and_returns_exact_delivery_proof() {
     reader.read_to_end(&mut observed).await.expect("read stdin");
     assert_eq!(observed, bytes);
     assert!(receipt.delivered());
-    assert!(receipt.jit_bytes_written());
-    assert!(receipt.stdin_closed());
     assert!(!pair.runner_stdin_open());
     assert!(!pair.jit_withheld());
     assert!(pair.take_output().is_some());

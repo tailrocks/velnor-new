@@ -3,12 +3,13 @@
 use std::cell::Cell;
 
 use velnor_runner_github::{
-    AdminConnection, AdminConnectionCall, Poll, QueueSession, RefreshGate, RegistrationScope,
-    RegistrationTokenCall, SessionError, Transport, WireError, admin_connection, poll,
-    registration_token, workflow_run::VerifiedRepositoryScope,
+    AdminConnection, Poll, QueueSession, RefreshGate, SessionError, Transport, WireError, poll,
+    workflow_run::VerifiedRepositoryScope,
 };
 #[cfg(test)]
-use velnor_runner_github::{Exchange, SessionRequest, TransportFail};
+use velnor_runner_github::{
+    AdminConnectionCall, Exchange, SessionRequest, TransportFail, admin_connection,
+};
 use zeroize::Zeroize;
 
 use crate::config::RepositoryConnection;
@@ -160,39 +161,6 @@ impl Link {
         base.clone_into(&mut self.base);
         Ok(())
     }
-}
-
-/// Registration plus the admin service origin.
-///
-/// # Errors
-///
-/// Returns [`EnsureError`] when the token or the admin connection is refused.
-pub(crate) fn admin_link(pat: &str, owner: &str, repo: &str) -> Result<Link, EnsureError> {
-    let mut transport = HttpsTransport::new(GITHUB_API).map_err(map_host)?;
-    let registration = registration_token(
-        &mut transport,
-        &RegistrationTokenCall {
-            scope: RegistrationScope::Repository { owner, repo },
-            pat,
-        },
-    )
-    .map_err(map_listen)?;
-    let config_url = format!("https://github.com/{owner}/{repo}");
-    let admin = admin_connection(
-        &mut transport,
-        &AdminConnectionCall {
-            config_url: &config_url,
-            registration_token: registration.expose(),
-        },
-    )
-    .map_err(map_listen)?;
-    let base = admin.expose_url().to_owned();
-    transport.set_base(&base).map_err(map_host)?;
-    Ok(Link {
-        transport,
-        admin,
-        base,
-    })
 }
 
 /// Move onto an absolute queue host. `None` means the queue is already on this origin.

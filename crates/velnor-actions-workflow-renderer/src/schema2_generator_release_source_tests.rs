@@ -122,7 +122,7 @@ fn assert_source_step(step: &Yaml, job_id: &str) -> Result<(), Box<dyn Error>> {
             && source_run.contains("--depth=1")
             && source_run.contains("--no-tags")
             && source_run
-                .contains("run_git(\"checkout\", \"--quiet\", \"--detach\", \"FETCH_HEAD\"")
+                .contains("run([\"git\", \"checkout\", \"--quiet\", \"--detach\", \"FETCH_HEAD\"]")
             && source_run.contains("head != commit"),
         "{job_id} must validate, fetch, and verify the exact public source commit"
     );

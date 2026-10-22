@@ -21,6 +21,65 @@ ${{ runner.temp }}/velnor/cargo/bin
 sources, credentials, Cargo targets, MBX objects, or task artifacts. The source layer owns only Cargo's
 `registry/index`, `registry/cache`, and `git/db` paths.
 
+Restored Rust is never trusted as restored. In every job that installs Rust, `Verify restored Rust
+toolchain` runs right after the restore (before `Prepare pinned tools`, which already runs `rustup` and
+`rustc` on a hit): it deletes the restored `cargo/bin` (rustup and its proxies; Mise reinstalls a fresh
+rustup) and verifies the restored toolchain file by file against the component tarballs of its pinned
+channel manifest, failing the job on any difference. See
+[verified Rust installs](../implemented/rust-channel-manifest.md).
+
+## Re-verification after restore
+
+The restore composite's last step, `Re-verify restored Mise installs`
+(`cache_steps_tools_installs_verify.sh`), runs after the admission step on
+every hit or seed:
+
+- `plugins/` and `shims/` are deleted (code no pin covers; Mise rebuilds them);
+- for each `installs/<tool>/<version>` except Rust, it looks up the archive URL
+  and SHA-256 for the runner platform in the workspace `mise.lock`, or else in
+  the Velnor catalog pins the generator embeds (`VELNOR_TOOL_PINS`: jactionlint,
+  OpenTofu), downloads the archive over HTTPS, checks its SHA-256, extracts it,
+  and requires every file of the install to be byte-identical to a file of the
+  archive. Mise's own `.mise-*` bookkeeping (the packslip statement, shell
+  completions) is data and may hold no executable file; every symlink must stay
+  inside the install;
+- an install that fails any of this, or has no pin, is deleted with a
+  `velnor: discarding restored <tool>@<version>: <reason>` line, so
+  `Prepare pinned tools` reinstalls it (checked against `mise.lock` again);
+- every entry is visited, dot-named ones included (`find -mindepth 1
+  -maxdepth 1`, never a glob, which skips them): a dot-named tool or version
+  directory is verified like any other, so without a pin it is discarded;
+- a version alias (`1.26 -> ./1.26.0`) is kept only when its target is a bare
+  sibling name that is a real version directory verified in the same pass; a
+  path, a chain of aliases, a dangling link or a link to a discarded directory
+  is removed. Mise's per-tool `.mise.backend.toml` stays only as a plain,
+  non-executable file; any other file is removed.
+
+### The checks run hermetically
+
+Setup Mise runs before the restore and adds `~/.local/share/mise/bin` and
+`~/.local/share/mise/shims` to `PATH` with `core.addPath`; both persist to
+every later step, and the cache restores both directories. A cached
+`bin/sha256sum`, `curl` or `tar` would therefore run inside the very check
+meant to gate it, and a cached `bin/bash` would even be the step's shell,
+because the runner resolves a bare `shell: bash` through that `PATH`
+(`WhichUtil.Which`, `addPath` entries first) but runs a fully qualified
+shell path as given. So:
+
+- the admission and re-verification steps use the shell
+  `/bin/bash --noprofile --norc -e -o pipefail {0}` (`VERIFY_SHELL`);
+- each of them, and the Rust toolchain check
+  ([Rust channel manifest](../implemented/rust-channel-manifest.md)), assigns
+  `PATH=/usr/bin:/bin:/usr/sbin:/sbin` (`VERIFY_PATH`, root-owned system
+  directories a cache restore cannot write) before running anything;
+- the admission's `verify_mise` refuses a `bin/` holding anything besides the
+  binary (checked against its pinned SHA-256) and Setup Mise's plain,
+  non-executable `mise-version` record. A planted `bin/<helper>` fails the job.
+
+After the composite, `shims/` is gone and `bin/` holds only the verified
+binary, so later steps that resolve bare names through `PATH` see no restored
+code.
+
 The generator derives the static digest from exact Mise action and binary pins, selected tool versions, Rust
 toolchain and components, target, runner lane, and the owned paths. A tool the project's Mise config declares
 ([hard decision 5](../hard-decisions.md)) enters the static digest only as its `${VELNOR_TOOL_<NAME>}`

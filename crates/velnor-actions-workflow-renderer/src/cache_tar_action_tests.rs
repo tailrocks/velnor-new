@@ -56,6 +56,7 @@ fn generated_tree_includes_launcher_composite_only_for_cache_jobs() -> Result<()
         "0.1.5",
         "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.4",
         "0.1.4",
+        &[],
     )?;
 
     assert_eq!(files.len(), 1);
@@ -72,6 +73,7 @@ fn generated_tree_includes_launcher_composite_only_for_cache_jobs() -> Result<()
         "0.1.5",
         "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.4",
         "0.1.4",
+        &[],
     )?;
     assert_eq!(no_cache, Vec::new());
     Ok(())

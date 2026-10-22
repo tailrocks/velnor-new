@@ -167,11 +167,13 @@ executor = "hosted"
     let ci = tree.get(".github/workflows/ci.yml").ok_or("CI missing")?;
     assert!(ci.contains("check-native:"));
     assert!(ci.contains("runs-on: macos-26"));
-    let actionlint = tree
-        .get(".github/actionlint.yaml")
-        .ok_or("actionlint config missing")?;
-    assert!(actionlint.contains("    - xcode-27\n"));
-    assert!(actionlint.contains("    - macos-26\n"));
+    let lint_config = tree
+        .get(".github/jactionlint.yaml")
+        .ok_or("jactionlint config missing")?;
+    // jactionlint knows both hosted labels natively, so neither is declared
+    // self-hosted (that would make it treat GitHub's runners as self-hosted).
+    assert!(!lint_config.contains("    - xcode-27\n"), "{lint_config}");
+    assert!(!lint_config.contains("    - macos-26\n"), "{lint_config}");
     let output = tempfile::tempdir()?;
     let report = velnor_actions_orchestrator::generate(
         &prep,
@@ -189,44 +191,9 @@ executor = "hosted"
         report
             .validated_by
             .iter()
-            .any(|tool| tool.starts_with("zizmor@"))
+            .any(|tool| tool.starts_with("jactionlint@"))
     );
     assert!(preview.contains("zizmor: ignore[github-env]"));
-    Ok(())
-}
-
-#[test]
-fn unrelated_privileged_environment_write_still_fails_real_zizmor() -> TestResult {
-    let dir = tempfile::tempdir()?;
-    let workflow = dir.path().join("unsafe.yml");
-    std::fs::write(
-        &workflow,
-        "name: Unsafe environment write\n\"on\": pull_request_target\npermissions: {}\njobs:\n  unsafe:\n    runs-on: ubuntu-26.04\n    steps:\n      - run: echo \"$UNTRUSTED\" >> \"$GITHUB_ENV\"\n",
-    )?;
-    let output = velnor_actions_mise::PinnedToolExec::new(
-        vec![velnor_actions_mise::PinnedTool::Zizmor],
-        std::ffi::OsStr::new("zizmor"),
-        [
-            "--offline",
-            "--no-progress",
-            "--color",
-            "never",
-            "unsafe.yml",
-        ]
-        .into_iter()
-        .map(Into::into)
-        .collect(),
-    )?
-    .command(&velnor_actions_mise::ToolCatalog::pinned())?
-    .with_cwd(dir.path().to_path_buf())
-    .run_bounded(128 * 1024, std::time::Duration::from_secs(30))?;
-    let diagnostics = format!(
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(!output.success, "{diagnostics}");
-    assert!(diagnostics.contains("github-env"), "{diagnostics}");
     Ok(())
 }
 
@@ -272,13 +239,14 @@ fn generator_emits_tap_jobs_from_native_distribution_config() -> TestResult {
     let workflow = tree
         .get(".github/workflows/binary-preview.yml")
         .ok_or("preview workflow missing")?;
-    let actionlint = tree
-        .get(".github/actionlint.yaml")
-        .ok_or("actionlint missing")?;
-    let vars = actionlint.split("\n\n").nth(1).ok_or("variables missing")?;
-    assert_eq!(
-        vars,
-        "config-variables:\n  - REVIEW_COMPLETION_APP_ID\n  - SECURITY_REVIEW_APP_ID\n  - TAP_APP_ID\n  - TAP_PROTECTION_APP_ID"
+    let lint_config = tree
+        .get(".github/jactionlint.yaml")
+        .ok_or("jactionlint config missing")?;
+    assert!(
+        lint_config.contains(
+            "\nconfig-variables:\n  - REVIEW_COMPLETION_APP_ID\n  - SECURITY_REVIEW_APP_ID\n  - TAP_APP_ID\n  - TAP_PROTECTION_APP_ID\n"
+        ),
+        "{lint_config}"
     );
     let prepare = job(workflow, "preview-tap-prepare", Some("preview-tap-writer"))?;
     let writer = job(workflow, "preview-tap-writer", Some("preview-tap-merge"))?;
@@ -344,9 +312,8 @@ fn privileged_preview_gh_pin_cannot_come_from_consumer_catalog() -> TestResult {
         pinned.version(PinnedTool::Rust),
         pinned.version(PinnedTool::MrBoxington),
         "2.0.0",
-        pinned.version(PinnedTool::Actionlint),
+        pinned.version(PinnedTool::Jactionlint),
         pinned.version(PinnedTool::Shellcheck),
-        pinned.version(PinnedTool::Zizmor),
         pinned.version(PinnedTool::Nextest),
         pinned.version(PinnedTool::Opentofu),
     )?;
@@ -393,3 +360,5 @@ fn native_binary_generation_rejects_noncanonical_ci_names_before_discovery() -> 
 
 #[path = "impl_schema2_binary_lfs.rs"]
 mod lfs;
+#[path = "impl_schema2_binary_preview_lint.rs"]
+mod lint;

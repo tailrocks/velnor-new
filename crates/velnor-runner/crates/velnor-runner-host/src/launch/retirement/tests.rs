@@ -146,7 +146,7 @@ async fn verify_settlement(
 fn base_fixture(
     fixture: &crate::launch::bootstrap::CleanupRuntimeFixture,
 ) -> &crate::journal::request_lifecycle::tests::NativeStartedIntakeFixture {
-    let crate::launch::bootstrap::CleanupRuntimeFixture { _base: base, .. } = fixture;
+    let crate::launch::bootstrap::CleanupRuntimeFixture { base, .. } = fixture;
     base
 }
 

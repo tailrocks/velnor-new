@@ -365,7 +365,7 @@ fn validate_generated_workflow(body: &str) -> Result<(), String> {
     let tree = RenderedTree {
         files: vec![
             RenderedFile {
-                path: ".github/actionlint.yaml".to_owned(),
+                path: ".github/jactionlint.yaml".to_owned(),
                 bytes: actionlint,
             },
             RenderedFile {

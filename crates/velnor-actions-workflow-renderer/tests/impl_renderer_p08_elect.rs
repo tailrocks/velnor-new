@@ -62,8 +62,8 @@ pub(crate) fn keyed_job(tool: &str) -> Result<Job, RenderError> {
 #[test]
 fn tools_cache_writer_election_prefers_plan_then_lowest_id() -> Result<(), RenderError> {
     let mut jobs = BTreeMap::from([
-        ("plan".to_owned(), keyed_job("actionlint@1.7.12")?),
-        ("rust-b".to_owned(), keyed_job("actionlint@1.7.12")?),
+        ("plan".to_owned(), keyed_job("jactionlint@2.3.0")?),
+        ("rust-b".to_owned(), keyed_job("jactionlint@2.3.0")?),
         ("rust-c".to_owned(), keyed_job("shellcheck@0.11.0")?),
     ]);
     elect_cache_writers(&mut jobs)?;
@@ -80,8 +80,8 @@ fn tools_cache_writer_election_prefers_plan_then_lowest_id() -> Result<(), Rende
     );
 
     let mut jobs = BTreeMap::from([
-        ("rust-b".to_owned(), keyed_job("actionlint@1.7.12")?),
-        ("rust-a".to_owned(), keyed_job("actionlint@1.7.12")?),
+        ("rust-b".to_owned(), keyed_job("jactionlint@2.3.0")?),
+        ("rust-a".to_owned(), keyed_job("jactionlint@2.3.0")?),
     ]);
     elect_cache_writers(&mut jobs)?;
     assert_eq!(
@@ -123,8 +123,8 @@ fn restore_key(job: &Job) -> Option<&str> {
 #[test]
 fn tools_cache_writer_saves_exact_payload_and_is_push_gated() -> Result<(), RenderError> {
     let mut jobs = BTreeMap::from([
-        ("plan".to_owned(), keyed_job("actionlint@1.7.12")?),
-        ("rust-b".to_owned(), keyed_job("actionlint@1.7.12")?),
+        ("plan".to_owned(), keyed_job("jactionlint@2.3.0")?),
+        ("rust-b".to_owned(), keyed_job("jactionlint@2.3.0")?),
     ]);
     elect_cache_writers(&mut jobs)?;
     let saves = tools_saves(&jobs["plan"]);
@@ -148,7 +148,7 @@ fn tools_cache_writer_saves_exact_payload_and_is_push_gated() -> Result<(), Rend
         with.get("path").map(String::as_str),
         Some(TOOLS_CACHE_PATHS.join("\n").as_str())
     );
-    let mut pr_jobs = BTreeMap::from([("plan".to_owned(), keyed_job("actionlint@1.7.12")?)]);
+    let mut pr_jobs = BTreeMap::from([("plan".to_owned(), keyed_job("jactionlint@2.3.0")?)]);
     elect_cache_writers_with_policy(&mut pr_jobs, PullRequestCachePolicy::SameRepositoryScoped)?;
     assert_eq!(
         tools_saves(&pr_jobs["plan"])[0].condition.as_deref(),
@@ -179,7 +179,7 @@ fn bare_job(display_name: &str) -> Job {
 fn tools_cache_writer_skips_keyless_and_reruns() -> Result<(), RenderError> {
     let mut jobs = BTreeMap::from([
         ("bare".to_owned(), bare_job("Bare")),
-        ("rust-a".to_owned(), keyed_job("actionlint@1.7.12")?),
+        ("rust-a".to_owned(), keyed_job("jactionlint@2.3.0")?),
     ]);
     elect_cache_writers(&mut jobs)?;
     elect_cache_writers(&mut jobs)?;
@@ -350,7 +350,7 @@ fn combined_election_rejects_provider_conflict_before_appending_tools_save()
     let mut losing_provider = provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A);
     losing_provider.steps.push(provider_save()?);
     let mut jobs = BTreeMap::from([
-        ("plan".to_owned(), keyed_job("actionlint@1.7.12")?),
+        ("plan".to_owned(), keyed_job("jactionlint@2.3.0")?),
         (
             "tofu-a".to_owned(),
             provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A),
@@ -375,9 +375,32 @@ fn combined_election_rejects_provider_conflict_before_appending_tools_save()
 
 #[test]
 fn tools_cache_writer_rejects_restore_without_identity() -> Result<(), RenderError> {
-    let mut malformed = keyed_job("actionlint@1.7.12")?;
+    let mut malformed = keyed_job("jactionlint@2.3.0")?;
     malformed.steps.remove(0);
     let mut jobs = BTreeMap::from([("rust-z".to_owned(), malformed)]);
     assert!(elect_cache_writers(&mut jobs).is_err());
+    Ok(())
+}
+
+#[test]
+fn tools_cache_election_binds_restore_to_static_identity_digest() -> Result<(), RenderError> {
+    use velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_IDENTITY_DIGEST_INPUT;
+    let mut jobs = BTreeMap::from([
+        ("rust-a".to_owned(), keyed_job("jactionlint@2.3.0")?),
+        ("rust-b".to_owned(), keyed_job("jactionlint@2.3.0")?),
+    ]);
+    // Same canonical restore key, but a retargeted static digest splits the
+    // election: each identity elects its own writer.
+    let identity = &mut jobs.get_mut("rust-b").expect("second owner").steps[0];
+    let StepKind::Action { with, .. } = &mut identity.kind else {
+        return Err(RenderError::InvalidWorkflow(
+            "test_identity_not_action".to_owned(),
+        ));
+    };
+    with.insert(TOOLS_CACHE_IDENTITY_DIGEST_INPUT.to_owned(), "f".repeat(64));
+    assert_eq!(restore_key(&jobs["rust-a"]), restore_key(&jobs["rust-b"]));
+    elect_cache_writers(&mut jobs)?;
+    assert_eq!(tools_saves(&jobs["rust-a"]).len(), 1);
+    assert_eq!(tools_saves(&jobs["rust-b"]).len(), 1);
     Ok(())
 }

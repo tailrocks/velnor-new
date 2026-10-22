@@ -13,10 +13,8 @@ pub enum TaskTemplate {
     FmtCheck,
     /// Repository-wide dependency policy checks.
     Dependencies,
-    /// Generated workflow syntax validation.
-    Actionlint,
-    /// Generated workflow security validation.
-    Zizmor,
+    /// Generated workflow, composite action and Dependabot validation.
+    Jactionlint,
     /// Configured Clippy validation for one package.
     Clippy,
     /// Single build for one package when the runner needs an archive.
@@ -33,11 +31,10 @@ pub enum TaskTemplate {
 
 impl TaskTemplate {
     /// Every template in stable order.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 9] = [
         Self::FmtCheck,
         Self::Dependencies,
-        Self::Actionlint,
-        Self::Zizmor,
+        Self::Jactionlint,
         Self::Clippy,
         Self::TestBuild,
         Self::Test,
@@ -52,8 +49,7 @@ impl TaskTemplate {
         match self {
             Self::FmtCheck => "fmt-check",
             Self::Dependencies => "dependencies",
-            Self::Actionlint => "actionlint",
-            Self::Zizmor => "zizmor",
+            Self::Jactionlint => "jactionlint",
             Self::Clippy => "clippy",
             Self::TestBuild => "test-build",
             Self::Test => "test",

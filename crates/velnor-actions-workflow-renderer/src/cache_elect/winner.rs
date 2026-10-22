@@ -13,7 +13,7 @@ pub(super) fn choose_tools_cache_writer<'a>(
 ) -> Result<&'a str, RenderError> {
     let eligible: Vec<_> = owners
         .iter()
-        .filter(|id| jobs.get(*id).is_some_and(|job| !super::is_seed_job(job)))
+        .filter(|id| jobs.get(*id).is_some_and(|job| !job.is_dependency_seed()))
         .collect();
     eligible
         .iter()
@@ -24,8 +24,10 @@ pub(super) fn choose_tools_cache_writer<'a>(
                 .iter()
                 .copied()
                 .filter(|id| {
-                    jobs.get(*id)
-                        .is_some_and(|job| !crate::matrix::suites::has_suite_matrix(job))
+                    jobs.get(*id).is_some_and(|job| {
+                        !crate::matrix::suites::has_suite_matrix(job)
+                            && !crate::matrix::bun::has_bun_matrix(job)
+                    })
                 })
                 .min()
         })

@@ -14,7 +14,7 @@ fn values(path: &str, text: &str) -> Vec<(PinnedTool, String, String)> {
 
 #[test]
 fn mise_toml_records_every_spelling_and_shape() {
-    let text = "[tools]\nrust = \"1.99.1\"\n\"core:rust\" = \"1.99.1\"\nnode = \"20\"\ngh = \"2.0.0\"\nzizmor = [\"1.0.0\"]\nopentofu = { version = 3 }\nactionlint = { os = [\"linux\"] }\n\"aqua:nextest-rs/nextest/cargo-nextest\" = { version = \"0.9.148\" }\n";
+    let text = "[tools]\nrust = \"1.99.1\"\n\"core:rust\" = \"1.99.1\"\nnode = \"20\"\ngh = \"2.0.0\"\nshellcheck = [\"1.0.0\"]\nopentofu = { version = 3 }\nactionlint = { os = [\"linux\"] }\n\"aqua:nextest-rs/nextest/cargo-nextest\" = { version = \"0.9.148\" }\n";
     let got = values("mise.toml", text);
     let rendered: Vec<_> = got
         .iter()
@@ -27,7 +27,7 @@ fn mise_toml_records_every_spelling_and_shape() {
             "rust|core:rust|1.99.1",
             "opentofu|opentofu|3",
             "rust|rust|1.99.1",
-            "zizmor|zizmor|[\"1.0.0\"]",
+            "shellcheck|shellcheck|[\"1.0.0\"]",
         ]
     );
 }
@@ -37,13 +37,13 @@ fn tool_versions_and_toolchain_files_parse_like_the_resolver() {
     assert_eq!(
         values(
             ".tool-versions",
-            "# c\nrust 1.99.1 # note\njava 21\nzizmor 1.0.0 1.0.1\n"
+            "# c\nrust 1.99.1 # note\njava 21\nshellcheck 1.0.0 1.0.1\n"
         ),
         [
             (PinnedTool::Rust, "rust".to_owned(), "1.99.1".to_owned()),
             (
-                PinnedTool::Zizmor,
-                "zizmor".to_owned(),
+                PinnedTool::Shellcheck,
+                "shellcheck".to_owned(),
                 "1.0.0 1.0.1".to_owned()
             ),
         ]
@@ -84,7 +84,7 @@ fn every_mise_location_is_read_and_a_symlink_is_refused() {
         fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
         fs::write(path, "[tools]\nrust = \"1.99.1\"\n").expect("write");
     }
-    fs::write(root.join(".tool-versions"), "zizmor 1.31.1\n").expect("write");
+    fs::write(root.join(".tool-versions"), "shellcheck 0.11.0\n").expect("write");
     let files: Vec<String> = read_project_sources(root)
         .expect("read")
         .into_iter()

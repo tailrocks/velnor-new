@@ -183,8 +183,8 @@ fn undetected_stacks_plan_no_work() -> TestResult {
     let plan: Plan = serde_json::from_value(value["plan"].clone())?;
     assert!(plan.task_ids.is_empty(), "no inventory, no work");
     assert!(plan.packages.is_empty());
-    let jobs = serde_json::json!([{"job_id": "plan", "conclusion": "success"}, {"job_id": "actionlint", "conclusion": "success"}]);
-    let merge = serde_json::json!({"schema": 1, "run_key": "local", "actual_event": "push", "plan": plan, "matrix": plan.matrix, "matrix_reports": [], "required_job_ids": ["plan", "actionlint"], "required_jobs": jobs});
+    let jobs = serde_json::json!([{"job_id": "plan", "conclusion": "success"}, {"job_id": "jactionlint", "conclusion": "success"}]);
+    let merge = serde_json::json!({"schema": 1, "run_key": "local", "actual_event": "push", "plan": plan, "matrix": plan.matrix, "matrix_reports": [], "required_job_ids": ["plan", "jactionlint"], "required_jobs": jobs});
     let merged = merge_internal(&merge.to_string())?;
     let final_report: velnor_actions_contract::FinalReport = serde_json::from_str(&merged)?;
     assert_eq!(final_report.status, FinalStatus::NoWork);

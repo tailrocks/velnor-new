@@ -56,7 +56,7 @@ fn elected_save_stays_on_the_winner_job() {
 #[test]
 fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
     let setup = crate::setup::MiseSetup {
-        uses: "jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde".to_owned(),
+        uses: "jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550".to_owned(),
         version: "2026.10.4".to_owned(),
         sha256: "2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75".to_owned(),
     };
@@ -162,11 +162,11 @@ fn tools_cache_prelude(
     needs_plan: bool,
 ) -> Result<Vec<velnor_actions_contract::Step>, crate::RenderError> {
     let setup = crate::setup::MiseSetup {
-        uses: "jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde".to_owned(),
+        uses: "jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550".to_owned(),
         version: "2026.10.4".to_owned(),
         sha256: "2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75".to_owned(),
     };
-    let specs = ["actionlint@1.7.12".to_owned()];
+    let specs = ["jactionlint@2.3.0".to_owned()];
     let payload = crate::cache_p08::ToolsCachePayload::new(crate::cache_p08::ToolsCacheInputs {
         runs_on,
         target: "x86_64-unknown-linux-gnu",

@@ -219,10 +219,6 @@ impl Lane for HostLane<'_> {
         };
         self.link.set_base(&origin)
     }
-
-    fn use_github_api(&mut self) -> Result<(), EnsureError> {
-        self.link.set_base(crate::listen::GITHUB_API)
-    }
 }
 
 #[cfg(test)]

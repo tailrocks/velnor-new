@@ -5,8 +5,8 @@ use velnor_actions_contract::{
     VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_workflow_renderer::{
-    ACTIONLINT_PATH, AGENTS_MD_PATH, ALINT_USES, CANDIDATE_JOB_ID, CLAUDE_MD_PATH,
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, FORBIDDEN_TOKENS, INTERNAL_OP_ENV, REQUEST_FILE_ENV,
+    AGENTS_MD_PATH, ALINT_USES, CANDIDATE_JOB_ID, CLAUDE_MD_PATH, CONCURRENCY_CANCEL,
+    CONCURRENCY_GROUP, FORBIDDEN_TOKENS, INTERNAL_OP_ENV, JACTIONLINT_PATH, REQUEST_FILE_ENV,
     RenderContext, RenderError, ValidatorCommand, WORKFLOW_PATH, checkout_step, plan_step,
     render_tree, render_workflow_ir, with_marker,
 };
@@ -20,6 +20,7 @@ fn checkout_pin() -> String {
 
 pub(crate) fn fixture_ctx() -> RenderContext {
     RenderContext {
+        tool_pins: Vec::new(),
         generator_version: VERSION.to_owned(),
         report_helper_version: VERSION.to_owned(),
         runs_on: LABEL.to_owned(),
@@ -147,7 +148,7 @@ fn consumer_tree_has_exactly_four_sorted_paths() -> Result<(), RenderError> {
     );
     assert_eq!(tree.files[0].path, AGENTS_MD_PATH);
     assert_eq!(tree.files[1].path, CLAUDE_MD_PATH);
-    assert_eq!(tree.files[2].path, ACTIONLINT_PATH);
+    assert_eq!(tree.files[2].path, JACTIONLINT_PATH);
     assert_eq!(tree.files[3].path, WORKFLOW_PATH);
     assert_eq!(tree.files[1].bytes, "@AGENTS.md\n");
     assert_eq!(tree.get(WORKFLOW_PATH), Some(workflow.as_str()));
@@ -199,13 +200,7 @@ fn consumer_tree_has_no_codeowners_merges_verify_and_rejects_candidate() -> Resu
 fn consumer_rejects_support_job_ids_in_ir() -> Result<(), RenderError> {
     let mut ir = fixture_ir()?;
     let ctx = fixture_ctx();
-    for forbidden in [
-        "alint",
-        "cargo-deny",
-        "cargo-machete",
-        "zizmor",
-        "candidate",
-    ] {
+    for forbidden in ["alint", "cargo-deny", "cargo-machete", "candidate"] {
         let mut with_job = ir.clone();
         with_job.jobs.insert(forbidden.to_owned(), plan_job()?);
         assert!(
@@ -224,7 +219,6 @@ fn validator_commands() -> Vec<ValidatorCommand> {
     [
         (ValidatorKind::CargoDeny, "Run cargo-deny"),
         (ValidatorKind::CargoMachete, "Run cargo-machete"),
-        (ValidatorKind::Zizmor, "Run zizmor"),
     ]
     .iter()
     .map(|(validator, name)| ValidatorCommand {
@@ -249,7 +243,7 @@ fn velnor_policy_renders_validators_only() -> Result<(), RenderError> {
         Some(&support),
         &ctx,
     )?;
-    for id in ["alint:", "cargo-deny:", "cargo-machete:", "zizmor:"] {
+    for id in ["alint:", "cargo-deny:", "cargo-machete:"] {
         assert!(text.contains(id), "missing {id}:\n{text}");
     }
     assert!(text.contains(ALINT_USES));

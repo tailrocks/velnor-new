@@ -278,24 +278,19 @@ fn rq53_limits_discipline_no_baseline() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn policy_zizmor_config_matches_derived_ignores() -> Result<(), Box<dyn Error>> {
+fn alint_pin_is_full_sha_and_zizmor_config_is_gone() -> Result<(), Box<dyn Error>> {
     let yaml = read(".github/workflows/ci.yml")?;
     assert!(
-        yaml.contains("uses: asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87"),
+        yaml.contains("uses: asamarts/alint@10d1c0a2bafd0bd316dbad9fe63ea5e1e3761c71"),
         "full-SHA alint pin must exist"
     );
     assert!(
         !yaml.contains("asamarts/alint@v"),
         "no tag-pinned alint ref may remain"
     );
-    let config = read(".zizmor.yml")?;
     assert!(
-        config.contains("ignore: []"),
-        "no unpinned-uses ignores may remain:\n{config}"
-    );
-    assert!(
-        config.contains("version-policy §2"),
-        "config must cite the policy"
+        !repo_root().join(".zizmor.yml").exists(),
+        "zizmor is retired (hard decision 10); no .zizmor.yml may remain"
     );
     Ok(())
 }

@@ -20,8 +20,8 @@ use super::workflow_policy::{
     plan_uses_all_features, plan_uses_nextest, plan_uses_opentofu, plan_uses_rust,
 };
 use super::{
-    WorkflowPlan, actionlint_input, build_plan_job, check_jobs, insert_format_step,
-    insert_gate_jobs, support_workflow, wire_w1, workflow_context, workflow_ir,
+    WorkflowPlan, build_plan_job, check_jobs, insert_format_step, insert_gate_jobs,
+    lint_config_input, support_workflow, wire_w1, workflow_context, workflow_ir,
 };
 
 /// Inputs used to prepare the workflow's plan, task, and support jobs.
@@ -91,18 +91,19 @@ pub(crate) fn build_workflow_for_consumer_release(
         )?;
         plan_job.steps.insert(at, check);
     }
-    let actionlint = actionlint_input(input.config, prepared.generator_version, input.label);
+    let lint_config = lint_config_input(input.config, prepared.generator_version);
     Ok(WorkflowPlan {
         ir,
         support: prepared.support,
         context,
-        actionlint,
+        lint_config,
     })
 }
 
 fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, OrchestratorError> {
     wire_w1::vet_step_syntax(StepSyntax::JobMatrix)?;
     wire_w1::vet_step_syntax(StepSyntax::NativeParallelism)?;
+    wire_w1::vet_step_syntax(StepSyntax::CacheMode)?;
     crate::rust_suites_emit::validate_suites_against_repo(
         input.root,
         input.config,
@@ -187,6 +188,11 @@ fn build_workflow_plan(
         input.discovery,
         prepared.private.as_ref(),
     )?;
+    plan.timeout_minutes =
+        velnor_actions_contract::JobTimeout::new(input.config.workflow.plan_timeout_minutes)
+            .map_err(|err| OrchestratorError::Contract {
+                problem: err.to_string(),
+            })?;
     if let Some(format) = prepared.format.take() {
         insert_format_step(&mut plan, format);
     }
@@ -260,7 +266,6 @@ fn build_workflow_jobs(
     insert_gate_jobs(
         &mut jobs,
         input.label,
-        input.branch,
         &required_ids,
         prepared.acquire.take(),
         &prepared.catalog,

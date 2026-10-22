@@ -104,6 +104,29 @@ fn crate_timeout_defaults_to_five_and_follows_explicit_values() -> Result<(), Bo
 }
 
 #[test]
+fn plan_timeout_defaults_to_five_and_follows_explicit_values() -> Result<(), Box<dyn Error>> {
+    let default = parse_config("schema = 1\n[workflow]\nname = \"CI\"\n")?;
+    assert_eq!(default.workflow.plan_timeout_minutes, 5);
+    for minutes in [1_u16, 15, 360] {
+        let config = parse_config(&format!(
+            "schema = 1\n[workflow]\nname = \"CI\"\nplan_timeout_minutes = {minutes}\n"
+        ))?;
+        assert_eq!(config.workflow.plan_timeout_minutes, minutes);
+    }
+    for minutes in [0_u16, 361] {
+        let error = parse_config(&format!(
+            "schema = 1\n[workflow]\nname = \"CI\"\nplan_timeout_minutes = {minutes}\n"
+        ))
+        .expect_err("out-of-range planning timeout must fail");
+        assert!(
+            error.to_string().contains("workflow.plan_timeout_minutes"),
+            "{error}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn private_sources_parse_from_toml_and_reject_unknown_keys() -> Result<(), Box<dyn Error>> {
     let header = "schema = 1\n[workflow]\nname = \"CI\"\n[private_sources]\nowner = \"ChainArgos\"\napp_id_variable = \"VELNOR_DEPS_APP_ID\"\napp_private_key_secret = \"VELNOR_DEPS_APP_PRIVATE_KEY\"\nnpm_scopes = [\"@chainargos\"]\n";
     let config = parse_config(&format!(

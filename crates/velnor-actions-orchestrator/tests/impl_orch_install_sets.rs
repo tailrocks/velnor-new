@@ -171,7 +171,7 @@ fn velnor_jobs_carry_trio_only_where_executed() -> TestResult {
             .ok_or("rendered workflow missing")?
             .to_owned();
         let runs = prepare_runs(&yaml);
-        let trio = ["actionlint@", "shellcheck@", "zizmor@"];
+        let trio = ["jactionlint@", "shellcheck@"];
         let plan = runs.get("plan").ok_or("plan must prepare tools")?;
         for spec in trio {
             assert!(plan.contains(spec), "plan installs {spec}: {plan}");
@@ -192,24 +192,22 @@ fn velnor_jobs_carry_trio_only_where_executed() -> TestResult {
         for spec in trio {
             assert!(!required.contains(spec), "required must not carry {spec}");
         }
-        let lint = runs.get("actionlint").ok_or("lint must prepare tools")?;
-        assert!(lint.contains("actionlint@1.7.12"), "{lint}");
+        let lint = runs.get("jactionlint").ok_or("lint must prepare tools")?;
+        assert!(lint.contains("jactionlint@2.3.0"), "{lint}");
         assert!(lint.contains("shellcheck@0.11.0"), "{lint}");
         let machete = runs.get("cargo-machete").ok_or("machete must prepare")?;
         assert!(
             machete.contains("http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2"),
             "{machete}"
         );
-        let zizmor = runs.get("zizmor").ok_or("zizmor must prepare")?;
-        assert!(zizmor.contains("zizmor@1.31.1"), "{zizmor}");
+        assert!(!runs.contains_key("zizmor"), "zizmor is retired");
         for (id, tool, command) in [
-            ("actionlint", "actionlint@1.7.12", "Run actionlint"),
+            ("jactionlint", "jactionlint@2.3.0", "Run jactionlint"),
             (
                 "cargo-machete",
                 "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2",
                 "Run cargo-machete",
             ),
-            ("zizmor", "zizmor@1.31.1", "Run zizmor"),
         ] {
             let section = job_section(&yaml, id).ok_or("validator job missing")?;
             assert_pinned_exec(section, tool)?;

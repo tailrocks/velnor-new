@@ -188,7 +188,7 @@ fn required_needs_span_plan_tofu_and_lint() -> TestResult {
     let repo = pure_tofu_repo(&["stacks/a", "stacks/b"], &[])?;
     let yaml = staged_yaml(repo.path())?;
     let needs = job_needs(&yaml, "required");
-    for id in ["plan", "tofu-stacks-a", "tofu-stacks-b", "actionlint"] {
+    for id in ["plan", "tofu-stacks-a", "tofu-stacks-b", "jactionlint"] {
         assert!(
             needs.contains(&id.to_owned()),
             "required needs {id}: {needs:?}"
@@ -203,11 +203,11 @@ fn required_needs_span_plan_tofu_and_lint() -> TestResult {
         "final gate keeps its condition"
     );
     assert!(
-        yaml.contains("    name: Actionlint"),
+        yaml.contains("    name: Jactionlint"),
         "lint keeps its check name"
     );
     let inventory = needs_inventory(&yaml)?;
-    for id in ["plan", "tofu-stacks-a", "tofu-stacks-b", "actionlint"] {
+    for id in ["plan", "tofu-stacks-a", "tofu-stacks-b", "jactionlint"] {
         assert!(
             inventory.contains(&id.to_owned()),
             "merge inventory carries {id}: {inventory:?}"

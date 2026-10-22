@@ -63,14 +63,11 @@ pub(crate) fn tool_source(tool: PinnedTool, version: &str) -> String {
             format!("https://github.com/jdx/mr-boxington/releases/tag/v{version}")
         }
         PinnedTool::Gh => format!("https://github.com/cli/cli/releases/tag/v{version}"),
-        PinnedTool::Actionlint => {
-            format!("https://github.com/rhysd/actionlint/releases/tag/v{version}")
+        PinnedTool::Jactionlint => {
+            format!("https://github.com/jdx/jactionlint/releases/tag/v{version}")
         }
         PinnedTool::Shellcheck => {
             format!("https://github.com/koalaman/shellcheck/releases/tag/v{version}")
-        }
-        PinnedTool::Zizmor => {
-            format!("https://github.com/zizmorcore/zizmor/releases/tag/v{version}")
         }
         PinnedTool::Nextest => {
             format!("https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-{version}")

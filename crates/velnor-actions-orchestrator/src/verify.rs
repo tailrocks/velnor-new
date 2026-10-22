@@ -10,7 +10,7 @@
 
 use velnor_actions_contract::ValidatorKind;
 use velnor_actions_contract::VerifyConfig;
-use velnor_actions_mise::{IsolatedCommand, PinnedTool, ToolCatalog};
+use velnor_actions_mise::IsolatedCommand;
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
 
 use crate::OrchestratorError;
@@ -47,9 +47,6 @@ pub(crate) fn validator_install_pin(spec: &str) -> Option<(&'static str, &str, &
             CARGO_MACHETE_VERSION,
             CARGO_MACHETE_TOOL_SPEC,
         )),
-        "zizmor" if velnor_actions_contract::is_exact_semver(version) => {
-            Some(("zizmor", version, "zizmor"))
-        }
         "npm:markdownlint-cli2" if version == MARKDOWNLINT_VERSION => Some((
             "markdownlint-cli2",
             MARKDOWNLINT_VERSION,
@@ -141,16 +138,9 @@ pub(crate) fn verify_kinds(jobs: &[String]) -> Result<Vec<ValidatorKind>, Orches
 pub(crate) fn verify_command(
     kind: ValidatorKind,
     options: &VerifyConfig,
-    catalog: &ToolCatalog,
 ) -> Result<Option<ValidatorCommand>, OrchestratorError> {
     match kind {
         ValidatorKind::Alint => Ok(None),
-        ValidatorKind::Zizmor => Ok(Some(ValidatorCommand {
-            validator: kind,
-            name: crate::vectors::ZIZMOR_STEP_NAME.to_owned(),
-            argv: crate::vectors::zizmor_argv(catalog)?,
-            prepare_argv: verify_install_argv("zizmor", catalog.version(PinnedTool::Zizmor))?,
-        })),
         ValidatorKind::Markdownlint => Ok(Some(ValidatorCommand {
             validator: kind,
             name: MARKDOWNLINT_STEP_NAME.to_owned(),
@@ -181,7 +171,7 @@ pub(crate) fn verify_command(
             argv: crate::source_prep::native_validators_argv(),
             prepare_argv: Vec::new(),
         })),
-        ValidatorKind::CargoDeny | ValidatorKind::CargoMachete | ValidatorKind::Actionlint => {
+        ValidatorKind::CargoDeny | ValidatorKind::CargoMachete | ValidatorKind::Jactionlint => {
             Err(OrchestratorError::Contract {
                 problem: format!("verify_kind_rejected:{}", kind.job_id()),
             })
@@ -253,7 +243,7 @@ fn verify_install_argv(spec: &str, version: &str) -> Result<Vec<String>, Orchest
 }
 
 /// Append fixed commands for the selection, skipping kinds that
-/// already carry one (the Velnor policy shares the zizmor vector).
+/// already carry one.
 ///
 /// # Errors
 ///
@@ -262,13 +252,12 @@ pub(crate) fn push_verify_commands(
     commands: &mut Vec<ValidatorCommand>,
     verify: &[ValidatorKind],
     options: &VerifyConfig,
-    catalog: &ToolCatalog,
 ) -> Result<(), OrchestratorError> {
     for kind in verify {
         if commands.iter().any(|command| command.validator == *kind) {
             continue;
         }
-        if let Some(command) = verify_command(*kind, options, catalog)? {
+        if let Some(command) = verify_command(*kind, options)? {
             commands.push(command);
         }
     }

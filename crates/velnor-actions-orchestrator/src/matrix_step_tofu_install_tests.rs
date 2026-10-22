@@ -146,7 +146,7 @@ fn mise_crate_job_prepare_installs_opentofu() {
     let catalog = ToolCatalog::pinned();
     let opentofu = catalog.tool_spec(PinnedTool::Opentofu);
     assert_eq!(
-        opentofu, "opentofu@1.13.1",
+        opentofu, "opentofu@1.13.2",
         "render pin names the catalog spec"
     );
     let found = crate::crate_jobs::build_crate_jobs(crate::crate_jobs::CrateJobInputs {

@@ -50,6 +50,14 @@ pub use versions::{
 mod rust_manifests;
 pub use rust_manifests::{RUST_CHANNEL_MANIFESTS, rust_channel_manifest_sha256};
 
+/// Pinned jactionlint release digests (verifiable `jactionlint` installs).
+#[path = "catalog_jactionlint_digests.rs"]
+mod jactionlint_digests;
+pub use jactionlint_digests::{
+    JACTIONLINT_DIGESTS, JactionlintDigest, jactionlint_archive_sha256,
+    jactionlint_executable_sha256,
+};
+
 /// The typed catalog tool names (`PinnedTool`).
 #[path = "catalog_tool.rs"]
 mod tool;
@@ -71,59 +79,66 @@ pub const RUST_VERSION: &str = "1.99.1";
 /// Selected `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.26.0`).
 /// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-10-21.
 pub const MR_BOXINGTON_VERSION: &str = "1.26.0";
-/// Qualified GitHub CLI (tag `v2.102.1`).
-/// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-10-21.
-pub const GH_VERSION: &str = "2.102.1";
-/// Qualified actionlint release (tag `v1.7.12`).
-/// Source: `https://api.github.com/repos/rhysd/actionlint/releases/latest`; checked 2026-09-28.
-pub const ACTIONLINT_VERSION: &str = "1.7.12";
+/// Qualified GitHub CLI (tag `v2.103.0`).
+/// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-10-22.
+pub const GH_VERSION: &str = "2.103.0";
+/// Qualified jactionlint release (`jdx/jactionlint` tag `v2.3.0`, stable,
+/// published 2026-10-21). Install: Mise registry name `jactionlint`
+/// (backend `github:jdx/jactionlint`), which checks the release-API digest
+/// and the GitHub artifact attestation. Provenance was verified at this bump
+/// (2026-10-22), never at generate time: `cosign verify-blob-attestation`
+/// on `packslip.sigstore.json` (`--type https://packslip.dev/release/v1`,
+/// identity `https://github.com/jdx/jactionlint/.github/workflows/release.yaml@refs/tags/v2.3.0`,
+/// issuer `https://token.actions.githubusercontent.com`) and
+/// `gh attestation verify -R jdx/jactionlint --signer-workflow jdx/jactionlint/.github/workflows/release.yaml`
+/// both passed for the linux amd64, linux arm64, darwin arm64 and darwin
+/// amd64 archives.
+/// Per-platform digests: [`JACTIONLINT_DIGESTS`].
+/// Source: `https://api.github.com/repos/jdx/jactionlint/releases/latest`; checked 2026-10-22.
+pub const JACTIONLINT_VERSION: &str = "2.3.0";
 /// Qualified shellcheck release (tag `v0.11.0`).
 /// Source: `https://api.github.com/repos/koalaman/shellcheck/releases/latest`; checked 2026-09-28.
 pub const SHELLCHECK_VERSION: &str = "0.11.0";
-/// Qualified zizmor tool release (`zizmorcore/zizmor` tag `v1.31.1`, stable).
-/// Its official macOS ARM64 binary passed version and repository audit checks
-/// 2026-10-17. Source: `https://api.github.com/repos/zizmorcore/zizmor/releases/tags/v1.31.1`.
-pub const ZIZMOR_VERSION: &str = "1.31.1";
 /// Qualified cargo-nextest release (`nextest-rs/nextest` tag
 /// `cargo-nextest-0.9.149`, published 2026-10-20).
 /// Source: `https://crates.io/api/v1/crates/cargo-nextest`; checked 2026-10-21.
 pub const NEXTEST_VERSION: &str = "0.9.149";
-/// Qualified `OpenTofu` engine release (tag `v1.13.1`).
-/// Source: `https://github.com/opentofu/opentofu/releases/tag/v1.13.1`; checked 2026-10-02.
+/// Qualified `OpenTofu` engine release (tag `v1.13.2`).
+/// Source: `https://github.com/opentofu/opentofu/releases/tag/v1.13.2`; checked 2026-10-22.
 /// Install: bare `opentofu@<exact>` via the aqua backend (isolated probe
-/// passed 2026-10-02); the mise version index lags the release, so pin
+/// passed 2026-10-22); the mise version index lags the release, so pin
 /// exact, never float.
-pub const OPENTOFU_VERSION: &str = "1.13.1";
-/// sha256 of `tofu_1.13.1_linux_amd64.tar.gz` (`v1.13.1` `SHA256SUMS`,
-/// release-API `digest`, and fetched bytes agree; verified 2026-10-02).
+pub const OPENTOFU_VERSION: &str = "1.13.2";
+/// sha256 of `tofu_1.13.2_linux_amd64.tar.gz` (`v1.13.2` `SHA256SUMS`,
+/// release-API `digest`, and fetched bytes agree; Cosign-verified 2026-10-22).
 /// This is the catalog digest: the runner fleet is x64-Linux (§4.3).
 pub const OPENTOFU_SHA256_LINUX_AMD64: &str =
-    "378ada19d4bc70c43732004e8159be771b23b9a5afdf059e5f8a2b3fa2c70a69";
-/// sha256 of `tofu_1.13.1_linux_arm64.tar.gz` (same `SHA256SUMS`, verified 2026-10-02).
+    "ac05d9952662c7db28dd57e93f0a68018837bfdf9342384ec0987977c16a9645";
+/// sha256 of `tofu_1.13.2_linux_arm64.tar.gz` (same `SHA256SUMS`, verified 2026-10-22).
 pub const OPENTOFU_SHA256_LINUX_ARM64: &str =
-    "9c1ef375aa1852db0b2888aa921b640c71f8140d4682aa4fec99378a64fa7dc3";
-/// sha256 of `tofu_1.13.1_darwin_amd64.tar.gz` (same `SHA256SUMS`, verified 2026-10-02).
+    "88e2d9e3f94f97b76ab2faf55ade87578f56aed19c5e45fa139d70e994366d1f";
+/// sha256 of `tofu_1.13.2_darwin_amd64.tar.gz` (same `SHA256SUMS`, verified 2026-10-22).
 pub const OPENTOFU_SHA256_DARWIN_AMD64: &str =
-    "a73720443ba38712d7d96dc1e857add02c15a790919c653ad07492e9952f8c27";
-/// sha256 of `tofu_1.13.1_darwin_arm64.tar.gz` (same `SHA256SUMS`, verified 2026-10-02).
+    "dc6e4eb1d3ed6550c2ef052596f933dbcd8c806957665ea83ae7537147cb3074";
+/// sha256 of `tofu_1.13.2_darwin_arm64.tar.gz` (same `SHA256SUMS`, verified 2026-10-22).
 pub const OPENTOFU_SHA256_DARWIN_ARM64: &str =
-    "be78f659f04ef06a9dbd9b3934d46af95d787a3aa38396d459dea395261816a9";
-/// Selected release-plz coordinator release (tag `release-plz-v0.3.173`).
-/// Source: `https://crates.io/api/v1/crates/release-plz`; published 2026-10-19, checked 2026-10-20.
-pub const RELEASE_PLZ_VERSION: &str = "0.3.173";
+    "0d1cdc85f38992055b48e7fb161304a2ddfe2e5ee0ff68ffec9d0349c8bd1b59";
+/// Selected release-plz coordinator release (tag `release-plz-v0.3.174`).
+/// Source: `https://crates.io/api/v1/crates/release-plz`; published 2026-10-21, checked 2026-10-22.
+pub const RELEASE_PLZ_VERSION: &str = "0.3.174";
 /// Qualified `crane` (`google/go-containerregistry` tag `v0.22.1`, published
 /// 2026-09-04): pushes OCI layouts and tags digests in the image publication jobs.
 /// Source: `https://api.github.com/repos/google/go-containerregistry/releases/latest`; checked 2026-10-20.
 /// Install: Mise registry name `crane` through the aqua backend, which checks
 /// the release `checksums.txt` before the binary is used.
 pub const CRANE_VERSION: &str = "0.22.1";
-/// Qualified Bun (`oven-sh/bun` tag `bun-v1.4.3`): the package manager and
+/// Qualified Bun (`oven-sh/bun` tag `bun-v1.4.4`): the package manager and
 /// script runner of Bun workspace jobs. A project declares its own exact
 /// version in `mise.toml` (hard decision 4); this pin applies only to
 /// callers that declare none.
-/// Source: `https://api.github.com/repos/oven-sh/bun/releases/latest`; checked 2026-10-20.
+/// Source: `https://api.github.com/repos/oven-sh/bun/releases/latest`; checked 2026-10-22.
 /// Install: Mise core `bun@<exact>`.
-pub const BUN_VERSION: &str = "1.4.3";
+pub const BUN_VERSION: &str = "1.4.4";
 /// Fixed Cosign signer helper (release tag `v3.1.4`), not installed by Mise.
 /// Source release assets and GitHub API SHA-256 digest were verified 2026-10-21.
 pub const COSIGN_VERSION: &str = "3.1.4";
@@ -159,12 +174,10 @@ pub struct ToolCatalog {
     mr_boxington: String,
     /// Pinned GitHub CLI version.
     gh: String,
-    /// Pinned actionlint version.
-    actionlint: String,
+    /// Pinned jactionlint version.
+    jactionlint: String,
     /// Pinned shellcheck version.
     shellcheck: String,
-    /// Pinned zizmor tool version.
-    zizmor: String,
     /// Pinned Nextest runner version.
     nextest: String,
     /// Pinned `OpenTofu` engine version.
@@ -197,9 +210,8 @@ impl ToolCatalog {
             rust: RUST_VERSION.to_owned(),
             mr_boxington: MR_BOXINGTON_VERSION.to_owned(),
             gh: GH_VERSION.to_owned(),
-            actionlint: ACTIONLINT_VERSION.to_owned(),
+            jactionlint: JACTIONLINT_VERSION.to_owned(),
             shellcheck: SHELLCHECK_VERSION.to_owned(),
-            zizmor: ZIZMOR_VERSION.to_owned(),
             nextest: NEXTEST_VERSION.to_owned(),
             opentofu: OPENTOFU_VERSION.to_owned(),
             release_plz: RELEASE_PLZ_VERSION.to_owned(),
@@ -218,17 +230,12 @@ impl ToolCatalog {
     ///
     /// Returns [`MiseError::InvalidToolVersion`] for the first version
     /// that is not exact `major.minor.patch`.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "catalog carries eight exact pins at once"
-    )]
     pub fn new(
         rust: &str,
         mr_boxington: &str,
         gh: &str,
-        actionlint: &str,
+        jactionlint: &str,
         shellcheck: &str,
-        zizmor: &str,
         nextest: &str,
         opentofu: &str,
     ) -> Result<Self, MiseError> {
@@ -236,9 +243,8 @@ impl ToolCatalog {
             (PinnedTool::Rust, rust),
             (PinnedTool::MrBoxington, mr_boxington),
             (PinnedTool::Gh, gh),
-            (PinnedTool::Actionlint, actionlint),
+            (PinnedTool::Jactionlint, jactionlint),
             (PinnedTool::Shellcheck, shellcheck),
-            (PinnedTool::Zizmor, zizmor),
             (PinnedTool::Nextest, nextest),
             (PinnedTool::Opentofu, opentofu),
         ] {
@@ -248,9 +254,8 @@ impl ToolCatalog {
             rust: rust.to_owned(),
             mr_boxington: mr_boxington.to_owned(),
             gh: gh.to_owned(),
-            actionlint: actionlint.to_owned(),
+            jactionlint: jactionlint.to_owned(),
             shellcheck: shellcheck.to_owned(),
-            zizmor: zizmor.to_owned(),
             nextest: nextest.to_owned(),
             opentofu: opentofu.to_owned(),
             release_plz: RELEASE_PLZ_VERSION.to_owned(),
@@ -270,9 +275,8 @@ impl ToolCatalog {
             PinnedTool::Rust => &self.rust,
             PinnedTool::MrBoxington => &self.mr_boxington,
             PinnedTool::Gh => &self.gh,
-            PinnedTool::Actionlint => &self.actionlint,
+            PinnedTool::Jactionlint => &self.jactionlint,
             PinnedTool::Shellcheck => &self.shellcheck,
-            PinnedTool::Zizmor => &self.zizmor,
             PinnedTool::Nextest => &self.nextest,
             PinnedTool::Opentofu => &self.opentofu,
             PinnedTool::ReleasePlz => &self.release_plz,

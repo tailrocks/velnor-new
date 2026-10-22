@@ -14,7 +14,7 @@ use velnor_actions_workflow_renderer::{
 
 pub(crate) const VERSION: &str = "0.1.0";
 pub(crate) const LABEL: &str = "ubuntu-26.04";
-pub(crate) const MISE_USES: &str = "jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde";
+pub(crate) const MISE_USES: &str = "jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550";
 pub(crate) const MISE_VERSION: &str = velnor_actions_mise::MISE_VERSION;
 pub(crate) const MISE_SHA256: &str =
     velnor_actions_workflow_renderer::setup::MISE_BINARY_SHA256_LINUX_X64;
@@ -75,6 +75,7 @@ pub(crate) fn mise() -> MiseSetup {
 
 pub(crate) fn fixture_ctx() -> RenderContext {
     RenderContext {
+        tool_pins: Vec::new(),
         generator_version: VERSION.to_owned(),
         report_helper_version: VERSION.to_owned(),
         runs_on: LABEL.to_owned(),
@@ -261,7 +262,6 @@ pub(crate) fn validator_commands() -> Vec<ValidatorCommand> {
     [
         (ValidatorKind::CargoDeny, "Run cargo-deny"),
         (ValidatorKind::CargoMachete, "Run cargo-machete"),
-        (ValidatorKind::Zizmor, "Run zizmor"),
     ]
     .iter()
     .map(|(validator, name)| ValidatorCommand {

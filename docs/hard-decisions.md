@@ -41,9 +41,9 @@ and overlaps the independent checks.
   dependency-seed family) so Cargo's target-directory lock never serializes test execution
   and doctests behind them. Tests and doctests reuse the built executables.
 - `workflow.crate_timeout_minutes` bounds the one crate job (decision 2).
-- The pinned actionlint does not parse the native step keys yet; the narrow,
-  documented bridge in `velnor-actions-actionlint` (`STEP_PARALLELISM_IGNORES`)
-  suppresses only the unknown `background` key and the body-less join step.
+- The pinned jactionlint parses and validates the native step keys (every
+  member and the body-less `wait-all` join) with no ignore pattern
+  (decision 10).
 
 - The dependency-seed job is not a crate job: it runs no checks and is not in
   Required, so this decision governs crate jobs only. Crate jobs restore
@@ -59,9 +59,9 @@ concurrency, or concurrent Cargo writers sharing one target directory.
 ## 2. Configurable crate-job timeout
 
 **Decision.** `[workflow] crate_timeout_minutes` sets the literal
-`timeout-minutes` of every crate job (each Rust crate job and each OpenTofu
-root job). The default is `5`; accepted values are `1..=360`. Zero or more than
-360 is rejected, never clamped. See
+`timeout-minutes` of every crate job; `plan_timeout_minutes` does the same for
+the planning job only. Both default to `5`, accept `1..=360`, and reject
+anything else, never clamping. See
 [job timeout limits](implemented/job-timeout-limits.md).
 
 ## 3. Pull requests test only what they affect
@@ -79,10 +79,10 @@ on their Dockerfile, context inputs and prebuilt crate (adopted per the split
 brief; owner may revisit). See [affected selection](implemented/affected-selection.md).
 Approved by the human owner on 2026-10-19, together with the decision 1
 amendment ("every crate job the plan schedules").
-On 2026-10-20, the human owner gave approval for the `complete = true` input rule.
-For unbounded reads, declared inputs alone can select the package.
-The owner did not select the alternative that runs every such package on every pull request.
-See the PR #192 review question.
+The `complete = true` input rule, which lets a package with an unbounded
+read be selected only by its declared inputs, was approved by the human owner
+on 2026-10-20 (PR #192 review question; the alternative, running every such
+package on every pull request, was declined).
 
 **Rationale.** In a monorepo most pull requests touch one or two crates, but
 every crate job paid runner start, checkout, tool setup, cache restore, and a
@@ -148,165 +148,159 @@ package whose dependents do not run.
 
 ## 4. Tool versions come from the project's Mise config
 
-**Decision.** Project configuration declares project tool versions. Generated
-workflows do not copy these versions. Velnor pins tools that the project does
-not declare. The root files `rust-toolchain.toml` and `rust-toolchain` also
-declare Rust versions. Mise and rustup read these files.
+**Decision.** Tool versions come from the project's `mise.toml` (and
+`mise.lock`). Generated workflows never copy a project-declared version;
+only tools absent from the project config are pinned by Velnor. A Rust
+toolchain file (`rust-toolchain.toml`, `rust-toolchain`) counts as a Rust
+declaration, because Mise (idiomatic version files) and rustup both read it.
 
 **Mechanism.**
 
-- Generation checks every catalog tool against every project source that
-  Mise reads. A source declares a tool when its `[tools]` data names that tool
-  under any backend spelling. Sources include `mise.toml`, `.mise.toml`,
-  `mise.<env>.toml`, `mise.local.toml`, their dot-prefixed forms,
-  `.config/mise.toml`, `.config/mise/config.toml`,
+- Generation classifies every catalog tool (Rust, MBX, Nextest, jactionlint,
+  shellcheck, OpenTofu, release-plz) as project-declared
+  when **any** project source names it under any backend spelling (for
+  example `"aqua:nextest-rs/nextest/cargo-nextest"` or `core:rust`). The
+  sources are every location Mise reads `[tools]` from at the project root:
+  `mise.toml`, `.mise.toml`, `mise.<env>.toml` and `mise.local.toml` (and
+  their dot-prefixed forms), `.config/mise.toml`, `.config/mise/config.toml`,
   `.config/mise/conf.d/*.toml`, `mise/config.toml`, `.mise/config.toml`, and
-  `.tool-versions`. Rust sources also include `rust-toolchain.toml` and
-  `rust-toolchain`. The shared `PROJECT_MISE_CONFIG_PATTERNS` list controls
-  generation, run-time resolution, and change selection.
-- Generated text uses `${VELNOR_TOOL_<NAME>}` for each declared version.
-  The `run:` text and task arguments use the shell form. The `with:`, `env:`,
-  and cache key values use `${{ env.VELNOR_TOOL_<NAME> }}`.
-- Generation stops and names the source when a declaration is unusable.
-  It stops for a loose version, `latest`, a range, a template, an array, a
-  target-triple channel, or a leading zero. It reports
-  `project_tool_version_not_exact`. It reports
-  `conflicting_project_tool_versions` when sources disagree. It reports
-  `malformed_project_tool_source` when a source does not parse. This includes
-  malformed `mise.toml` beside valid `rust-toolchain.toml`. It also stops for
-  a symlinked source. It reports `nested_rust_toolchain_not_supported` when
-  a Rust toolchain file below the root has another version. Rustup would use
-  that file for commands in its directory. The resolver reads root sources.
-  A Velnor pin never replaces a declaration that the generator cannot use.
-- Each job or composite action that uses a project version gets one **Resolve project tool versions** step.
-  The step starts after the `Setup Mise` and `Checkout` steps finish.
-  It starts before cache identity and restore.
-  A shared composite action runs this step first when its caller completed Mise setup. It reads each
-  source with `mise --no-config --no-env --no-hooks config get`. It reads
-  `.tool-versions` and plain-text `rust-toolchain` as text. It does not run
-  these files. The step rejects unparseable and symlinked sources. It requires
-  all declarations for a tool to use the same exact `X.Y.Z` version, without
-  leading zeros. It writes `VELNOR_TOOL_<NAME>=<version>` to `$GITHUB_ENV`.
-  It also sets `RUSTUP_TOOLCHAIN` when the job environment used the Rust pin.
-  The task helper sets the same variables in task arguments and the
-  environment after the manifest and plan bindings match. It stops when a
-  value is missing or loose.
-- Tools that the project does not declare keep the exact Velnor catalog pin or
-  a `.velnor/config.toml [tools]` override. Generation fails if that override
-  disagrees with a project declaration.
-- Cache identities use resolved versions for tools that the job installs.
-  The tools-cache `d` input includes `${{ env.VELNOR_TOOL_<NAME> }}` and
-  `${{ env.VELNOR_TOOL_<NAME>_LOCK }}` for each such tool.
-  The lock value is a SHA-256 digest of the tool's runner-platform rows.
-  These rows contain `checksum` and `url` values from `mise.lock` or `.mise.lock`.
-  A fixed text parser reads these rows. The value is `unlocked` when matching lock data is absent.
-  The key does not hash whole configuration files. A tool version change affects the key.
-  A comment, task, or unrelated tool change does not affect the key.
-  Cargo-source keys, MBX keys, and MBX action inputs use the resolved version.
-  Plan identities include declared versions and the MBX cache-format generation.
-  Generated records do not include those versions.
-- A pull request selects every crate job when a project source changes a
-  declared catalog version. Change selection parses each changed source at
-  base and head with the generator's reader. It compares declared versions,
-  not file contents. A task edit, Node pin, or comment in `mise.toml` alone
-  selects no crate job. A lock file (`mise.lock`, `.mise.lock`) always selects
-  every crate job. Any doubt selects every crate job. This includes a parse
-  error or a Git read error for either side.
-- A declared version change in `mise.toml` does not need regeneration. Adding
-  or removing a catalog tool does need regeneration because it changes which
-  commands use a project reference. An option change, such as
-  `mr_boxington = true`, also needs regeneration.
+  `.tool-versions`; for Rust also `rust-toolchain.toml` and `rust-toolchain`
+  (plain channel or TOML form). One list
+  (`PROJECT_MISE_CONFIG_PATTERNS`) drives generation, the run-time resolver,
+  and change selection. Generated text then carries
+  `${VELNOR_TOOL_<NAME>}` instead of the version: shell form in `run:` text
+  and task argv, `${{ env.VELNOR_TOOL_<NAME> }}` in `with:`, `env:`, and cache
+  keys.
+- Generation fails, naming the tool and the file, instead of guessing: a
+  declared version that is not an exact `X.Y.Z` (loose, `latest`, a range, a
+  template, an array, a target-triple channel, a leading zero:
+  `project_tool_version_not_exact`), two sources that disagree
+  (`conflicting_project_tool_versions`; every `rust-toolchain.toml` or `rust-toolchain`, root or nested, must also mirror every Mise config's rust entry in `components`, `targets` and `profile`, `rust_toolchain_mirror_mismatch`, adopted with the owner's standard layout 2026-10-22, owner may revisit), a source that does not parse
+  (`malformed_project_tool_source`, including a malformed `mise.toml` next to
+  a valid `rust-toolchain.toml`), a symlinked source, and a Rust toolchain
+  file below the root that declares anything but the root version
+  (`nested_rust_toolchain_not_supported`: rustup would honor it for commands
+  run in that directory while the resolver reads root sources only). A Velnor
+  pin never replaces a declaration the generator cannot use.
+- Every job that reads such a reference gets one generated **Resolve project
+  tool versions** step after both its Mise setup and source checkout,
+  immediately after the later prerequisite and ahead of tools-cache identity
+  and restore. A composite action resolves after its own Mise setup, or first
+  in a shared-lane composite whose callers provide Setup Mise and checked-out
+  source. It does not add a checkout. It reads every source above with
+  `mise --no-config --no-env --no-hooks config get` (`.tool-versions` and a
+  plain-text `rust-toolchain` are read as text, never executed), fails on an
+  unparseable or symlinked source, requires all declarations of a tool to
+  agree on one exact `X.Y.Z` (no leading zeros), and appends `VELNOR_TOOL_<NAME>=<version>` to
+  `$GITHUB_ENV` (plus `RUSTUP_TOOLCHAIN` where job env used to carry the
+  Rust pin). The generated task helper materializes the same variables in
+  task argv and env after the manifest and plan bindings match, and fails
+  closed on a missing or loose value.
+- Tools the project does not declare keep the exact Velnor catalog pin (or
+  a `.velnor/config.toml [tools]` override). A `.velnor/config.toml` pin
+  that disagrees with a project declaration fails generation.
+- Cache identities that bound a version now bind the resolved value: the
+  tools-cache `d` input appends, for exactly the declared tools the job
+  installs, `${{ env.VELNOR_TOOL_<NAME> }}` and `${{
+  env.VELNOR_TOOL_<NAME>_LOCK }}` (the SHA-256 of that tool's `mise.lock`/
+  `.mise.lock` `checksum`/`url` rows for the runner platform, read by a
+  fixed text parser, or `unlocked`), never `hashFiles` of whole files. The
+  resolved version already reflects every source above, so a bump in any of
+  them changes the key, while editing a task, a comment, or another tool
+  leaves the tools cache warm. Cargo-source and MBX keys and MBX action
+  inputs read the resolved `env` value. Plan identities, including the MBX
+  cache-format generation, bind the concrete declared versions while the
+  generated record (task digests, argv) stays version-free.
+- A pull request selects every crate job when a project tool source changes
+  a **declared catalog version**: change selection parses each changed
+  source at base and head with the generator's own reader and compares the
+  declared versions, not the files. Editing a task, a Node pin, or a comment
+  in `mise.toml` selects nothing on its own. A lock file (`mise.lock`,
+  `.mise.lock`) always selects everything, and any doubt (a source that does
+  not parse, git unable to read either side) selects everything.
+- Bumping a declared version in `mise.toml` therefore needs no regeneration.
+  Adding or removing a catalog tool from the project config still does (it
+  changes which commands carry a reference), as does an option change such
+  as `mr_boxington = true`.
 
-When both `mise.toml` and `rust-toolchain.toml` declare Rust, their versions and profiles must agree.
-Their component sets and target sets must also agree.
-Generation reports `rust_toolchain_mirror_mismatch` when these values differ.
-The owner adopted this rule with the standard layout on 2026-10-22 and may revisit it.
+**Rationale.** The project's own Mise config is what developers run locally;
+copying its versions into generated workflows made every bump a
+regeneration and let the two drift (a consumer's CI ran Nextest 0.9.148
+while its `mise.toml` declared 0.9.146). One source of truth removes that
+whole class of drift.
 
-**Rationale.** Developers use the project's Mise config on their computers.
-Copying its versions into generated workflows forced regeneration after each
-version change. It also caused version drift. For example, consumer CI ran
-Nextest 0.9.148 while `mise.toml` declared 0.9.146. One source prevents this
-drift.
+**Security.** CI keeps `--no-config --no-env --no-hooks` (and
+`MISE_NO_CONFIG=1`) on every install and exec. GitHub runners set `CI=true`,
+under which Mise auto-trusts repository config and evaluates templates such
+as `{{ exec(...) }}`; loading a fork's config would therefore run its code.
+`mise config get` reads stored TOML values without loading or expanding
+the config, so no template, hook, `[env]`, task, plugin, setting
+(`url_replacements`), or wrapper from the checkout is evaluated. A fork PR
+may change `mise.toml`: that tests its own toolchain, which is expected,
+and its only effect is a different exact version of the same tool through
+the same backend. The resolver accepts only `[0-9.]` values in exact
+`X.Y.Z` shape (and lock digests only as 64 hex characters or `unlocked`)
+before writing `$GITHUB_ENV`, so no value can inject another variable or
+line; symlinked sources and lock files are refused, and a value is never
+echoed raw into the log (control text such as `::error::` is replaced). Composite actions carry
+`# zizmor: ignore[github-env]` on that one validated write. The GitHub CLI
+runs with a token in every generated use (plan baseline lookup, `Required`
+report fetch, release publication) and Cosign signs releases, so both keep
+their qualified fixed pins even when the project declares them: repository
+configuration never selects a credential-bearing executable. A job without a
+checkout cannot read the project config; such a job installs no Rust, so a
+hoisted `RUSTUP_TOOLCHAIN` reference is dropped there and any other
+reference fails generation.
 
-**Security.** CI uses `--no-config --no-env --no-hooks` for every install and
-exec command. CI also sets `MISE_NO_CONFIG=1`. GitHub runners set `CI=true`.
-Mise then trusts repository config and evaluates templates such as
-`{{ exec(...) }}`. A fork config could therefore run code.
+**Trade-offs.** `mise.lock` checksums are not enforced in CI: with
+`--no-config` Mise does not consult the lock (as before this decision). The
+lock audit stays generation-time hygiene, and each installed tool's lock
+entries participate in the tools-cache identity. Project-declared catalog tools need an exact
+`X.Y.Z` pin; a loose or templated value is still referenced (never replaced
+by a Velnor pin) and the resolver fails the job with the project's value.
+A declared version bypasses Velnor's freshness qualification of its catalog
+pin.
 
-`mise config get` reads stored TOML values. It does not load or expand the
-config. It does not evaluate templates, hooks, `[env]`, tasks, plugins,
-settings such as `url_replacements`, or wrappers from the checkout. A fork
-pull request can change `mise.toml`. CI then tests the declared version of
-the same tool through the same backend.
-
-The resolver accepts only `[0-9.]` values in exact `X.Y.Z` form.
-It accepts lock digests only as 64 hexadecimal characters or `unlocked`.
-It checks each value before it writes to `$GITHUB_ENV`.
-This prevents a value from adding a variable or line.
-The resolver rejects symlinked source files and lock files.
-It does not write raw values to logs. It replaces control text, such as
-`::error::`, before it reports an error. Composite actions use
-`# zizmor: ignore[github-env]` only on the validated write.
-
-The GitHub CLI uses a token for baseline lookup, required-report fetch, and
-release publication. Cosign signs releases. Velnor keeps its qualified pins
-for both tools, even when the project declares them. Project config cannot
-select these credential-bearing executables.
-
-A job without checkout cannot read project config. It does not install Rust.
-The generator removes its hoisted `RUSTUP_TOOLCHAIN` reference from that job.
-Any other project version reference without checkout fails generation.
-
-**Trade-offs.** CI does not check `mise.lock` checksums. Mise does not read
-the lock with `--no-config`. The lock audit runs during generation.
-Lock entries for each installed tool affect the tools-cache identity.
-
-Project-declared catalog tools need an exact `X.Y.Z` version. The generated
-text keeps a loose or templated value as a project reference. The resolver
-then stops the job because the value is not exact. A project version skips
-Velnor's freshness check for the matching catalog pin.
-
-**Do not reintroduce these rules without owner approval.**
-
-- Do not copy a project-declared version into a generated file.
-- Do not load or trust project Mise config in a generated resolver step.
-- Do not let a Velnor pin override a project declaration.
+**Must not be reintroduced without owner approval:** copying a
+project-declared version into any generated file, loading the project's
+Mise config (or trusting it) in a generated step to resolve versions, or
+letting a Velnor pin override a project declaration.
 
 ## 6. One job per Bun workspace member with parallel script steps
 
 **Decision.** Each Bun workspace member owns exactly one generated CI job named
-`Bun / <package name>` (job id `bun-<slug>`, for example
-`Bun / @chainargos/ui`). A single-package root (no `workspaces`) is one member.
-The job prepares checkout, pinned tools and the dependency install once; the
-member's `package.json` scripts (`typecheck`, `lint`, `test`, `build` by
-default) then run as parallel steps (`background: true` members joined by one
-`wait-all`). The only accepted JavaScript lockfile is the text `bun.lock`.
+`Bun / <package name>` (job id `bun-<slug>`, for example `Bun / @chainargos/ui`). A
+single-package root (no `workspaces`) is one member. The job prepares checkout, pinned tools
+and the dependency install once; the member's `package.json` scripts (`typecheck`, `lint`,
+`test`, `build` by default) then run as parallel steps (`background: true` members joined by
+one `wait-all`). The only accepted JavaScript lockfile is the text `bun.lock`.
 Specification: [Bun contract](proposed/bun-contract.md).
 
-**Status.** Adopted per the split brief; owner may revisit. It extends decision
-1 to a new stack.
+**Status.** Adopted per the split brief; owner may revisit. It extends decision 1 to a new stack.
+Suites amendment: coordinator decision, 2026-10-22, under the owner's autonomy rule
+([record](proposed/bun-browser-suites.md#decision-record)); owner may revisit.
 
-**Rationale.** Decision 1's rationale holds for Bun: checkout, tool setup and
-`bun install` are paid once per job and the independent checks overlap. A
-workspace member is the unit whose scripts share one `node_modules` view and
-whose affected selection is exact (its directory plus its `workspace:`
-dependents), so a one-member change does not run the other members. Foreign
-lockfiles (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, binary
-`bun.lockb`) fail generation instead of adding a second package-manager
-adapter.
+**Rationale.** Decision 1's rationale holds for Bun: checkout, tool setup and `bun install`
+are paid once per job and the independent checks overlap. A workspace member is the unit
+whose scripts share one `node_modules` view and whose affected selection is exact (its
+directory plus its `workspace:` dependents), so a one-member change does not run the other
+members. Foreign lockfiles (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, binary
+`bun.lockb`) fail generation instead of adding a second package-manager adapter.
 
 **Invariants.**
 
-- Repository scripts never see a credential. The registry phase of
-  `bun install --ignore-scripts` is the only step that holds
-  `GITHUB_TOKEN` with `packages: read` (decision 7), and it reads a
+- Repository scripts never see a credential. The registry phase of `bun install --ignore-scripts`
+  is the only step that holds `GITHUB_TOKEN` with `packages: read` (decision 7), and it reads a
   Velnor-written `bunfig.toml`, never the repository's registry settings.
-- Generation fails on a repository `bunfig.toml` that sets a registry,
-  scope, token or certificate (`bunfig_registry_override`).
+- Generation fails on a repository `bunfig.toml` that sets a registry, scope, token or
+  certificate (`bunfig_registry_override`).
+- Bun suites are not member jobs: declared `suites` run the scripts they claim in their own
+  jobs (`bun-<slug>--<suite>`, optionally a Playwright shard matrix) beside the one member
+  job, as Rust suites sit beside crate jobs. No suite means byte-identical output.
 
-**Must not be reintroduced without owner approval:** a second package-manager
-adapter, one shared job for several members, scripts run before the install
-credential is gone, or a repository-controlled registry in the install phase.
+**Must not be reintroduced without owner approval:** a second package-manager adapter, one shared
+job for several members, scripts run before the install credential is gone, a repository-controlled
+registry in the install phase, or a split of a member's scripts across jobs other than `suites`.
 
 ## 7. Private dependency credentials
 
@@ -403,4 +397,4 @@ deleting a published release asset or moving a published tag.
 exception and manual stable version/tag authority are recorded in
 [release publication decisions](release-publication-decisions.md).
 
-**Gradle stack decisions (HD-4a adapter version grammars, HD-5 one job per Gradle project) and the release-asset Maven bundle choice** are recorded in [Gradle stack contract](proposed/gradle-contract.md#decisions); adopted per the split brief, owner may revisit. **Host deployment (HD-9)** stays operator-run, outside generated CI/CD: [host deployment decision](host-deployment-decision.md); adopted per the split brief, owner may revisit.
+**Gradle stack decisions (HD-4a adapter version grammars, HD-5 one job per Gradle project) and the release-asset Maven bundle choice** are recorded in [Gradle stack contract](proposed/gradle-contract.md#decisions); adopted per the split brief, owner may revisit. **Host deployment (HD-9)** stays operator-run, outside generated CI/CD: [host deployment decision](host-deployment-decision.md); adopted per the split brief, owner may revisit. **Workflow linter (hard decision 10)**: jactionlint replaces actionlint completely and is the only workflow linter, per the owner's instruction of 2026-10-22, and also retires the separate zizmor job: [jactionlint decision](jactionlint-decision.md).

@@ -92,12 +92,28 @@ fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
                 ("workflow_dispatch".to_owned(), Yaml::Map(Vec::new())),
             ]),
         ),
+        ("concurrency".to_owned(), workflow_concurrency()),
         (
             "permissions".to_owned(),
             permissions(&[("contents", "read")]),
         ),
         ("jobs".to_owned(), Yaml::Map(vec![build, attest, publish])),
     ]))
+}
+
+/// A newer push cancels an older push build of the same ref; a dispatch
+/// (the only publishing event) has its own group and is never cancelled.
+fn workflow_concurrency() -> Yaml {
+    Yaml::Map(vec![
+        (
+            "group".to_owned(),
+            Yaml::str("velnor-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}"),
+        ),
+        (
+            "cancel-in-progress".to_owned(),
+            Yaml::str("${{ github.event_name == 'push' }}"),
+        ),
+    ])
 }
 
 fn build_job(hosted: Yaml) -> (String, Yaml) {
@@ -129,13 +145,11 @@ fn build_job(hosted: Yaml) -> (String, Yaml) {
         ),
         (
             "outputs".to_owned(),
-            Yaml::Map(vec![
-                ("artifact_name".to_owned(), Yaml::str(ARTIFACT_NAME)),
-                (
-                    "artifact_id".to_owned(),
-                    Yaml::str("${{ steps.upload.outputs.artifact-id }}"),
-                ),
-            ]),
+            // Downstream jobs address the candidate by immutable artifact ID only.
+            Yaml::Map(vec![(
+                "artifact_id".to_owned(),
+                Yaml::str("${{ steps.upload.outputs.artifact-id }}"),
+            )]),
         ),
         ("steps".to_owned(), Yaml::Seq(steps)),
     ];

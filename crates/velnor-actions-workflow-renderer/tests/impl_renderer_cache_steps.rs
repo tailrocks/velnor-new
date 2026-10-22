@@ -155,3 +155,226 @@ fn cache_save_writes_task_artifacts_only() {
 
 #[path = "impl_renderer_cache_steps_runtime_tests.rs"]
 mod runtime_tests;
+
+fn assert_save_gate_and_seed(
+    rendered: &velnor_actions_workflow_renderer::render::RenderedWorkflow,
+    text: &str,
+) -> Result<(), velnor_actions_workflow_renderer::RenderError> {
+    use velnor_actions_workflow_renderer::RenderError;
+    let save_at = text
+        .find("- name: Save Mise tools")
+        .ok_or_else(|| RenderError::InvalidWorkflow("save step".to_owned()))?;
+    let save_step = text[save_at..]
+        .split("      - name:")
+        .next()
+        .ok_or_else(|| RenderError::InvalidWorkflow("save boundary".to_owned()))?;
+    for gate in [
+        "github.event_name == 'push'",
+        "github.ref_protected == true",
+        "steps.v2.outputs.enabled == 'true'",
+    ] {
+        if !save_step.contains(gate) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "save requires protected-push gate {gate}:\n{save_step}",
+            )));
+        }
+    }
+    let seed = rendered
+        .shared
+        .iter()
+        .find(|file| file.path == ".github/actions/velnor-tool-seed/action.yml")
+        .ok_or_else(|| RenderError::InvalidWorkflow("renderer emits seed action".to_owned()))?;
+    if !seed.bytes.contains("velnor-host-seed-v1") {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "seed provenance missing:\n{}",
+            seed.bytes
+        )));
+    }
+    if !text.contains("${{steps.v2.outputs.identity}}") {
+        return Err(RenderError::InvalidWorkflow(
+            "v2 identity output missing".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+#[test]
+fn strict_wires_runtime_qualified_tools_cache_after_setup_and_saves_once()
+-> Result<(), velnor_actions_workflow_renderer::RenderError> {
+    use velnor_actions_workflow_renderer::checkout_step;
+    let lint = job(
+        "jactionlint",
+        "Jactionlint",
+        Vec::new(),
+        vec![
+            checkout_step(&checkout_pin())?,
+            acquire_fixture()?,
+            scrubbed_shell_step(
+                "Run jactionlint",
+                mise_argv("jactionlint@2.3.0", "jactionlint", &["-color"]),
+            )?,
+        ],
+    );
+    let rendered = velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared(
+        &fixture_ir(vec![lint]),
+        velnor_actions_contract::WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+        &mise(),
+    )?;
+    let text = &rendered.yaml;
+    let names = step_names(text, "jactionlint");
+    assert_eq!(names.iter().filter(|s| *s == TOOLS_RESTORE_NAME).count(), 1);
+    assert_eq!(names.iter().filter(|s| *s == TOOLS_SAVE_NAME).count(), 1);
+    assert_eq!(
+        names.first().map(String::as_str),
+        Some("Record optional cache budget")
+    );
+    assert!(text.contains("id: velnor-cache-clock"));
+    assert_eq!(
+        names.iter().position(|s| s == "Setup Mise"),
+        Some(4),
+        "clock, checkout, verified helper, cache-tar adapters, setup, then runtime identity: {names:?}"
+    );
+    assert_eq!(
+        names.iter().position(|s| s == TOOLS_RESTORE_NAME),
+        Some(6),
+        "archive restore follows runtime identity: {names:?}"
+    );
+    assert!(!text.contains("name: Restore Velnor tool seed"), "{text}");
+    for need in [
+        "name: V2 identity",
+        "id: v2",
+        "outputs.enabled == 'true'",
+        "mise-tools-v2-",
+        "cache: \"false\"",
+        "cache_save: \"false\"",
+        "path:",
+        "${{ runner.temp }}/velnor/rustup",
+        "${{ runner.temp }}/velnor/cargo/.crates.toml",
+        "${{ runner.temp }}/velnor/cargo/.crates2.json",
+        "${{ runner.temp }}/velnor/cargo/bin",
+    ] {
+        assert!(
+            text.contains(need),
+            "V2 tools cache missing {need}:\n{text}"
+        );
+    }
+    assert!(
+        !text.contains("cache_key: mise-v1-"),
+        "legacy Mise cache key:\n{text}"
+    );
+    let setup = text
+        .split("      - name: Setup Mise")
+        .nth(1)
+        .unwrap_or_default();
+    let setup = setup.split("      - name:").next().unwrap_or_default();
+    assert!(
+        !setup.contains("cache_key:"),
+        "Mise does not own an archive key"
+    );
+    assert_save_gate_and_seed(&rendered, text)?;
+    Ok(())
+}
+
+#[test]
+fn seed_and_tools_prelude_require_the_configured_unconditional_checkout()
+-> Result<(), velnor_actions_workflow_renderer::RenderError> {
+    use velnor_actions_workflow_renderer::checkout_step;
+    let shell_checkout = scrubbed_shell_step("Checkout", vec!["true".to_owned()])?;
+    let run = || {
+        let job = job(
+            "jactionlint",
+            "Jactionlint",
+            Vec::new(),
+            vec![
+                shell_checkout.clone(),
+                scrubbed_shell_step(
+                    "Run jactionlint",
+                    mise_argv("jactionlint@2.3.0", "jactionlint", &[]),
+                )?,
+            ],
+        );
+        strict(&fixture_ir(vec![job]), &fixture_ctx())
+    };
+    let text = run()?;
+    assert!(!text.contains("name: V2 identity"), "{text}");
+    assert!(!text.contains(TOOLS_RESTORE_NAME), "{text}");
+    assert!(!text.contains("Restore Velnor tool seed"), "{text}");
+
+    let mut renamed = checkout_step(&checkout_pin())?;
+    renamed.name = "Source checkout".to_owned();
+    let real = job(
+        "jactionlint",
+        "Jactionlint",
+        Vec::new(),
+        vec![
+            renamed,
+            scrubbed_shell_step(
+                "Run jactionlint",
+                mise_argv("jactionlint@2.3.0", "jactionlint", &[]),
+            )?,
+        ],
+    );
+    let text = strict(&fixture_ir(vec![real]), &fixture_ctx())?;
+    assert!(
+        text.contains("name: V2 identity"),
+        "renamed typed checkout: {text}"
+    );
+    assert!(
+        text.contains("uses: ./.github/actions/velnor-tools-prelude-u26"),
+        "renamed typed checkout: {text}"
+    );
+
+    let mut conditional = checkout_step(&checkout_pin())?;
+    conditional.condition = Some("false".to_owned());
+    let conditional = job(
+        "jactionlint",
+        "Jactionlint",
+        Vec::new(),
+        vec![
+            conditional,
+            scrubbed_shell_step(
+                "Run jactionlint",
+                mise_argv("jactionlint@2.3.0", "jactionlint", &[]),
+            )?,
+        ],
+    );
+    let text = strict(&fixture_ir(vec![conditional]), &fixture_ctx())?;
+    assert!(!text.contains("name: V2 identity"), "{text}");
+    assert!(!text.contains("Restore Velnor tool seed"), "{text}");
+    Ok(())
+}
+
+#[test]
+fn strict_leaves_setup_less_jobs_without_tools_cache()
+-> Result<(), velnor_actions_workflow_renderer::RenderError> {
+    use velnor_actions_workflow_renderer::{checkout_step, merge_step, plan_step};
+    let plan = job(
+        "plan",
+        "Plan",
+        Vec::new(),
+        vec![
+            checkout_step(&checkout_pin())?,
+            acquire_fixture()?,
+            plan_step(),
+        ],
+    );
+    let mut final_job = job(
+        "required",
+        "Required verdict",
+        vec!["plan".to_owned()],
+        vec![acquire_fixture()?, merge_step()],
+    );
+    final_job.1.condition =
+        Some(velnor_actions_workflow_renderer::render::FINAL_CONDITION.to_owned());
+    let text = strict(&fixture_ir(vec![plan, final_job]), &fixture_ctx())?;
+    let names = step_names(&text, "required");
+    assert!(
+        !names
+            .iter()
+            .any(|s| s == TOOLS_RESTORE_NAME || s == TOOLS_SAVE_NAME),
+        "setup-less job must not cache: {names:?}"
+    );
+    Ok(())
+}

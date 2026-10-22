@@ -3,7 +3,7 @@
 //! Consumer policy merges config-selected verification jobs only;
 //! Velnor policy merges one typed job per repository validator plus
 //! optional candidate jobs (P05-6: no Policy umbrella). No
-//! toolchain-qualification job exists. The always-on `actionlint` job
+//! toolchain-qualification job exists. The always-on `jactionlint` job
 //! arrives via typed IR and is emitted for both policies; it is never
 //! support IR.
 
@@ -34,10 +34,10 @@ use crate::{
 };
 
 /// Always-on workflow-lint job ID, emitted for both policies.
-pub(crate) const LINT_JOB_ID: &str = "actionlint";
+pub(crate) const LINT_JOB_ID: &str = "jactionlint";
 
 /// Display name of the always-on workflow-lint job.
-pub(crate) const LINT_DISPLAY_NAME: &str = "Actionlint";
+pub(crate) const LINT_DISPLAY_NAME: &str = "Jactionlint";
 
 /// Protected release job ID (Velnor policy, candidate mode only).
 pub(crate) const RELEASE_JOB_ID: &str = "release";
@@ -125,10 +125,10 @@ pub(crate) fn merge_support_jobs(
     };
     let mut seen = BTreeSet::new();
     for validator in &workflow.validators {
-        if *validator == ValidatorKind::Actionlint {
+        if *validator == ValidatorKind::Jactionlint {
             return Err(RenderError::PolicyRejected {
                 policy: policy.to_owned(),
-                problem: "actionlint_not_support".to_owned(),
+                problem: "jactionlint_not_support".to_owned(),
             });
         }
         if !seen.insert(*validator) {
@@ -141,15 +141,14 @@ pub(crate) fn merge_support_jobs(
     for validator in &workflow.validators {
         let job = match validator {
             ValidatorKind::Alint => alint_job(ctx)?,
-            ValidatorKind::Actionlint => {
+            ValidatorKind::Jactionlint => {
                 return Err(RenderError::PolicyRejected {
                     policy: policy.to_owned(),
-                    problem: "actionlint_not_support".to_owned(),
+                    problem: "jactionlint_not_support".to_owned(),
                 });
             }
             ValidatorKind::CargoDeny
             | ValidatorKind::CargoMachete
-            | ValidatorKind::Zizmor
             | ValidatorKind::Markdownlint
             | ValidatorKind::StrictJson
             | ValidatorKind::FrontmatterId
@@ -273,13 +272,12 @@ pub(crate) fn validator_job(
     step.role = Some(match validator {
         ValidatorKind::CargoDeny => StepRole::CargoDeny,
         ValidatorKind::CargoMachete => StepRole::CargoMachete,
-        ValidatorKind::Zizmor => StepRole::Zizmor,
         ValidatorKind::Markdownlint => StepRole::Markdownlint,
         ValidatorKind::StrictJson => StepRole::StrictJson,
         ValidatorKind::FrontmatterId => StepRole::FrontmatterId,
         ValidatorKind::LinkCheck => StepRole::LinkCheck,
         ValidatorKind::NativeValidators => StepRole::NativeValidators,
-        ValidatorKind::Alint | ValidatorKind::Actionlint => {
+        ValidatorKind::Alint | ValidatorKind::Jactionlint => {
             return Err(RenderError::InvalidWorkflow(format!(
                 "validator_not_shell:{}",
                 validator.job_id()

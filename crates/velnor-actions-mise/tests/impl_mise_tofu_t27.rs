@@ -37,7 +37,7 @@ fn provider_cache_observation() -> RestoreObservation {
 /// Tofu ctor with the pinned spec for env-shape pins.
 fn tofu_command() -> Result<IsolatedCommand, String> {
     IsolatedCommand::tofu_exec(
-        &["opentofu@1.13.1".to_owned()],
+        &["opentofu@1.13.2".to_owned()],
         &[OsString::from("tofu"), OsString::from("version")],
         "/velnor/tofu-data",
         "/velnor/tofu-cli.hcl",

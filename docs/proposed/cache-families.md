@@ -45,6 +45,17 @@ output across trust scopes.
 - Neither family archives credentials: the registry phase writes its token into
   a Velnor-written config under `$RUNNER_TEMP/velnor/bun/`, which is not an
   archive path.
+- Matrix legs of a sharded Bun suite ([Bun browser suites](bun-browser-suites.md))
+  restore both families like any job, but only leg 1 may save them: the key step
+  of a leg job carries `VELNOR_FAMILY_WRITER: ${{ matrix.leg }}` and writes
+  `save=false` for every other value. Without it, N legs of one key would each
+  tar up to 512 MiB and race one reservation (`actions/cache/save` keeps the
+  first and warns for the rest). The save step and its condition are unchanged,
+  and a job outside a leg matrix keeps the key step byte for byte.
+- Neither family is keyed on `ImageVersion` (decision 6). The browser archives
+  are self-contained builds pinned by SHA-256 and system libraries come from the
+  image at run time, so a weekly image release would only churn identical bytes.
+  The `uname -sm` platform line and the lock-pin snapshot are the identity.
 
 ## dbt and Ansible families
 
@@ -114,27 +125,25 @@ that ceiling with a measurement.
 
 ## Stack family steps
 
-The Bun, dbt, and Ansible jobs compute their keys within the job, following
-`mbx-bundle`. One `Compute family cache keys` step determines trust from the event.
-Compatibility uses the family, schema, paths, platform, and job tool versions.
-The snapshot uses the job's lock files. An absent file contributes `absent`.
-
-Each family restores read-only before its producer. A size check and trusted-push
-save follow the producer immediately. The size check compares `tar | zstd | wc -c`
-with the ceiling. Without zstd, it uses `du` as an upper bound.
-A later failing check does not prevent the save attempt (decision 1).
-An oversized directory is refused as `over_ceiling`.
-
-Bun adds a `root` compatibility line, giving each root its own pruning unit.
-dbt copies the restored directory into the project's `dbt_packages` before
-`dbt deps`, then copies the installed result back to the family directory.
-The project controls the install path. `dbt deps` checks the lock on every run.
-Restored bytes do not replace that check.
-The Ansible job stores verified tarballs in the family directory.
-It downloads a tarball again if its SHA-256 does not match.
-
-The cache doctor requires the generated key expression, spec path, and exact save condition.
-It rejects restore keys on a save and rejects caller-supplied steps for these families.
+The Bun, dbt and Ansible jobs compute their keys in the job, like `mbx-bundle`
+(one `Compute family cache keys` step: trust from the event, compat from the
+family, schema, paths, platform and the job's tool versions, snapshot from the
+job's lock files; absent file counts as `absent`). Each family restores
+read-only before its producer; right after the producer a size admission
+(`tar | zstd | wc -c` against the ceiling, `du` without zstd) and a trusted-push
+save follow, so a later failing check never starves the cache (decision 1) and
+an oversize directory is refused as `over_ceiling`. Bun adds a `root` compat
+line so each Bun root is its own pruning unit; dbt copies the restored
+directory into the project's `dbt_packages` before `dbt deps` and back to the
+family directory after it (the install path is a project setting dbt owns, and
+`dbt deps` still runs against the lock every time, so the entry is a
+head start, never trusted content); the Ansible job keeps verified tarballs in
+the family directory and re-downloads any whose SHA-256 no longer matches.
+Each family's cache doctor accepts generated key expressions, spec paths,
+trusted-push conditions, and denies restore keys on saves or hand-written
+family steps. For Bun's matrix, it also requires the key step to default to the
+repository's default branch and permits `VELNOR_FAMILY_WRITER` to select only
+the designated leg as the writer.
 
 ## Remaining
 

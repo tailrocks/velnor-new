@@ -90,9 +90,9 @@ pub enum OrchestratorError {
         /// Machine-readable problem detail.
         problem: String,
     },
-    /// Actionlint config rendering failed.
-    #[error("actionlint: {problem}")]
-    Actionlint {
+    /// Workflow-lint config rendering or syntax qualification failed.
+    #[error("jactionlint: {problem}")]
+    WorkflowLint {
         /// Machine-readable problem detail.
         problem: String,
     },
@@ -127,7 +127,7 @@ pub enum OrchestratorError {
     /// Staged-tree validation failed before any write.
     #[error("validation: {tool}: {problem}")]
     Validation {
-        /// Validator that failed (`actionlint`, `shellcheck`, or `zizmor`).
+        /// Validator that failed (`jactionlint` or `shellcheck`).
         tool: String,
         /// Machine-readable problem detail.
         problem: String,
@@ -250,7 +250,7 @@ impl From<velnor_actions_workflow_renderer::RenderError> for OrchestratorError {
 
 impl From<velnor_actions_actionlint::ActionlintError> for OrchestratorError {
     fn from(error: velnor_actions_actionlint::ActionlintError) -> Self {
-        Self::Actionlint {
+        Self::WorkflowLint {
             problem: error.to_string(),
         }
     }
