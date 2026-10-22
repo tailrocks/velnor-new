@@ -199,6 +199,12 @@ pub enum QualifiedToolProbe {
         /// Exact expected first stdout line.
         expected: String,
     },
+    /// Fixed `shellcheck --version`; exact canonical four-line stdout banner.
+    #[serde(rename = "shellcheck_version")]
+    ShellCheckVersion {
+        /// Exact canonical `ShellCheck` banner for the declared release.
+        expected: String,
+    },
     /// Fixed `rustc -vV`; exact complete stdout (trailing newline excluded).
     RustcVerbose {
         /// Exact expected complete stdout.
@@ -277,6 +283,9 @@ pub fn validate_qualified_tool_recipes(
 #[cfg(test)]
 #[path = "qualified_tool_recipes_tests.rs"]
 mod recipe_tests;
+#[cfg(test)]
+#[path = "qualified_tool_shellcheck_tests.rs"]
+mod shellcheck_tests;
 #[cfg(test)]
 #[path = "qualified_tools_tests.rs"]
 mod tests;

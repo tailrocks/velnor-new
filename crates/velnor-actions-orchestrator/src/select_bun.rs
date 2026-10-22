@@ -16,6 +16,8 @@ use velnor_actions_contract::{
     JobDisposition, PlanJob, VelnorConfig, WorkflowEvent, selects_affected_work,
 };
 
+use velnor_actions_workflow_renderer::verification_jobs::BUN_ASSETS_SUFFIX;
+
 use super::ChangeEvidence;
 use crate::discover::Discovery;
 
@@ -40,6 +42,10 @@ pub(crate) fn dispositions(
         }
         _ => None,
     };
+    let has_release_assets = config
+        .private_sources
+        .as_ref()
+        .is_some_and(|sources| !sources.release_assets.is_empty());
     let mut jobs = Vec::new();
     for member in workspaces.iter().flat_map(|workspace| &workspace.members) {
         let disposition = if selected
@@ -60,14 +66,22 @@ pub(crate) fn dispositions(
         }
         // Every suite job, gating or not, carries its member's disposition,
         // so a `not_affected` member's suites are skipped and pass.
-        for suite in bun
+        let suites: Vec<&String> = bun
             .members
             .get(&member.name)
             .into_iter()
             .flat_map(|options| options.suites.keys())
-        {
+            .collect();
+        for suite in &suites {
             jobs.push(PlanJob {
                 job_id: suite_job_id(member, suite),
+                disposition,
+            });
+        }
+        // So does the assets job that fetches pinned release assets for them.
+        if !suites.is_empty() && has_release_assets {
+            jobs.push(PlanJob {
+                job_id: format!("{}{BUN_ASSETS_SUFFIX}", job_id(member)),
                 disposition,
             });
         }

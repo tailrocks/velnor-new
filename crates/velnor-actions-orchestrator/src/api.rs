@@ -1,5 +1,10 @@
 //! Public orchestrator API re-exports.
 
+pub use super::bun_assets_handoff::{
+    ASSET_ID_ENV as BUN_ASSETS_ID_ENV, ASSET_PINS_ENV as BUN_ASSETS_PINS_ENV, BUN_ASSETS_EXPORT_OP,
+    BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, run_bun_assets_export, run_bun_assets_import,
+    run_bun_assets_prepare,
+};
 pub use super::check_runtime::{EXECUTE_CHECK_OP, execute_check};
 pub use super::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 pub use super::config::bun_registry_install::{BUN_REGISTRY_INSTALL_OP, run_bun_registry_install};
@@ -100,9 +105,10 @@ pub use super::package_release_publish::release_policy_admission::{
     select_preview_source_from_env,
 };
 pub use super::package_release_publish::{
-    ADMIT_STABLE_TAG_ORIGIN_OP, PUBLISH_PACKAGE_RELEASE_OP, RECOVER_PACKAGE_RELEASE_OP,
-    ReleaseTapContinuationSelection, SELECT_RELEASE_TAP_CONTINUATION_OP,
-    SELECT_STABLE_RELEASE_SOURCE_OP, WRITE_STABLE_TAG_INTENT_OP, WRITE_STABLE_TAG_ORIGIN_OP,
+    ADMIT_RELEASE_POLICY_OP, ADMIT_STABLE_TAG_ORIGIN_OP, PUBLISH_PACKAGE_RELEASE_OP,
+    RECOVER_PACKAGE_RELEASE_OP, ReleaseTapContinuationSelection,
+    SELECT_RELEASE_TAP_CONTINUATION_OP, SELECT_STABLE_RELEASE_SOURCE_OP,
+    WRITE_STABLE_TAG_INTENT_OP, WRITE_STABLE_TAG_ORIGIN_OP, admit_release_policy_from_env,
     admit_stable_tag_origin_from_env, publish_package_release_from_env,
     recover_package_release_from_env, select_release_tap_continuation_from_env,
     select_stable_release_source_from_env, write_stable_tag_intent_from_env,

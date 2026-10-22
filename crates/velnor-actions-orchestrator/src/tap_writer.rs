@@ -1,9 +1,6 @@
 //! Credential-isolated writer for a validated Homebrew tap candidate.
 
-use std::{
-    env, fs,
-    path::{Path, PathBuf},
-};
+use std::{env, path::PathBuf};
 
 use velnor_actions_contract::{
     PackageReleasePlan, canonical_json_bytes,
@@ -37,13 +34,18 @@ use gitops::{
 use identity::{BotIdentity, verify_app_scope};
 pub use receipt::{TapPromotionOutcome, TapPromotionReceipt};
 use result::persist_result;
+#[path = "tap_writer_candidate.rs"]
+mod candidate;
 #[path = "tap_writer_helpers.rs"]
 mod helpers;
 #[path = "tap_writer_history.rs"]
 mod history;
+use candidate::{read_candidate_proof, read_regular_limited, validate_proof};
+#[cfg(test)]
+use helpers::is_sha256;
 use helpers::{
-    FormulaBase, branch_name, is_sha256, parse_decimal_id, read_formula_base, real_directory,
-    required_env, safe_app_slug, sha256, verify_repository_base,
+    FormulaBase, branch_name, parse_decimal_id, read_formula_base, real_directory, required_env,
+    safe_app_slug, sha256, verify_repository_base,
 };
 
 const CANDIDATE_LIMIT: u64 = 1024 * 1024;
@@ -336,78 +338,6 @@ fn runner_root() -> Result<PathBuf, OrchestratorError> {
         return Err(internal("tap_writer_runner_temp_invalid"));
     }
     Ok(path)
-}
-
-fn read_candidate_proof(root: &Path) -> Result<HomebrewTapPreparationProof, OrchestratorError> {
-    let dir = root.join(CANDIDATE_DIR);
-    let proof_path = dir.join("candidate.json");
-    let bytes = read_regular_limited(root, &proof_path, CANDIDATE_LIMIT)?;
-    let value = velnor_actions_contract::parse_strict_json(
-        std::str::from_utf8(&bytes).map_err(|_| internal("tap_candidate_proof_encoding"))?,
-    )
-    .map_err(|_| internal("tap_candidate_proof_json"))?;
-    let proof: HomebrewTapPreparationProof =
-        serde_json::from_value(value).map_err(|_| internal("tap_candidate_proof_schema"))?;
-    if canonical_json_bytes(&proof).map_err(|_| internal("tap_candidate_proof_encode"))? != bytes {
-        return Err(internal("tap_candidate_proof_noncanonical"));
-    }
-    Ok(proof)
-}
-
-fn validate_proof(
-    proof: &HomebrewTapPreparationProof,
-    policy: &HomebrewTapConfig,
-    plan: &PackageReleasePlan,
-    release: &VerifiedPackageRelease,
-) -> Result<(), OrchestratorError> {
-    if proof.schema != "velnor.homebrew-candidate.v3"
-        || proof.channel != plan.channel
-        || proof.candidate_formula != "formula.rb"
-        || proof.formula_path != crate::tap_prepare::formula_path(policy, plan.channel)?
-        || proof.tap_repository != policy.repository
-        || proof.source_repository != release.receipt.repository.slug
-        || proof.source_sha != release.receipt.source.commit_sha
-        || proof.version != release.receipt.version.value
-        || proof.receipt_digest != release.receipt_digest
-        || proof.plan_digest
-            != sha256(&canonical_json_bytes(plan).map_err(|_| internal("tap_plan_encode"))?)
-        || proof.tap_config_digest
-            != sha256(&canonical_json_bytes(policy).map_err(|_| internal("tap_policy_encode"))?)
-        || !is_sha256(&proof.old_formula_sha256)
-        || !is_sha256(&proof.new_formula_sha256)
-        || match proof.disposition {
-            super::TapPreparationDisposition::Changed => {
-                proof.old_formula_sha256 == proof.new_formula_sha256
-            }
-            super::TapPreparationDisposition::FormulaAlreadyCurrent => {
-                proof.old_formula_sha256 != proof.new_formula_sha256
-            }
-        }
-    {
-        return Err(internal("tap_candidate_proof_binding_mismatch"));
-    }
-    release
-        .validate(&proof.source_repository, plan)
-        .map_err(|_| internal("tap_candidate_release_invalid"))
-}
-
-fn read_regular_limited(
-    root: &Path,
-    path: &Path,
-    limit: u64,
-) -> Result<Vec<u8>, OrchestratorError> {
-    let relative = path
-        .strip_prefix(root)
-        .map_err(|_| internal("tap_writer_path_escape"))?;
-    let relative = relative
-        .to_str()
-        .ok_or_else(|| internal("tap_writer_path_encoding"))?;
-    crate::check_evidence::reject_link_components(root, relative)?;
-    let metadata = fs::symlink_metadata(path).map_err(|_| internal("tap_writer_file_missing"))?;
-    if !metadata.is_file() || metadata.len() == 0 || metadata.len() > limit {
-        return Err(internal("tap_writer_file_invalid"));
-    }
-    fs::read(path).map_err(|_| internal("tap_writer_file_read"))
 }
 
 #[cfg(test)]

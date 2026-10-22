@@ -52,8 +52,8 @@ version = "0.4.0"
         manifests,
         [
             "Cargo.toml".to_owned(),
-            "crates/jackin/Cargo.toml".to_owned(),
-            "crates/jackin-cli/Cargo.toml".to_owned()
+            "crates/jackin-cli/Cargo.toml".to_owned(),
+            "crates/jackin/Cargo.toml".to_owned()
         ]
     );
     let mut retained = manifests

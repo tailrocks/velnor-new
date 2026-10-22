@@ -214,8 +214,9 @@ installed identity.
 
 Each executable declares its exposed `name`, normalized prefix-relative `path`,
 SHA-256, and a closed `probe`. Supported probes are `version` (`--version`),
-`version_subcommand` (`version`), `rustc_verbose` (`rustc -vV`), and
-`cargo_nextest_version` (`cargo-nextest --version`). Rust's formatter component
+`version_subcommand` (`version`), `rustc_verbose` (`rustc -vV`),
+`cargo_nextest_version` (`cargo-nextest --version`), and `shellcheck_version`
+(`shellcheck --version`). Rust's formatter component
 also has the closed `rustfmt_version` probe with fixed `--version` arguments.
 It admits only Core Rust with the `rustfmt` component selected and the canonical
 `rustfmt`/`bin/rustfmt` or `cargo-fmt`/`bin/cargo-fmt` name/path pair. Its truthful
@@ -226,11 +227,25 @@ canonical `rustc`/`bin/rustc` declaration and its validated `rustc_verbose` full
 compiler hash/date. This relationship is checked at shared recipe admission and
 again through complete runtime declaration and receipt validation.
 
-Expected output is exact:
-the first stdout line for ordinary probes, or complete stdout without its
-trailing newline for `rustc_verbose` and `rustfmt_version`. Extra formatter
-output lines fail closed. Probe families are validated against
-their declared tool identity; arbitrary probe argv is unsupported.
+The dedicated `shellcheck_version` probe is limited to Aqua package
+`koalaman/shellcheck` and executable name `shellcheck`; it always runs
+`shellcheck --version`. Its expected value is the complete version-bound banner
+with no final newline:
+
+```toml
+probe = { kind = "shellcheck_version", expected = "ShellCheck - shell script analysis tool\nversion: 0.11.0\nlicense: GNU General Public License, version 3\nwebsite: https://www.shellcheck.net" }
+```
+
+Runtime accepts exactly that full stdout, with at most one optional final LF.
+It rejects a missing or changed line, CR, extra output, or another trailing
+blank line.
+
+Expected output is exact: the first stdout line for ordinary probes, or
+complete stdout without its trailing newline for `rustc_verbose` and
+`rustfmt_version`. Extra formatter output lines fail closed. The new ShellCheck
+family does not change those existing output rules. Probe families are
+validated against their declared tool identity; arbitrary probe argv is
+unsupported.
 
 The helper verifies the full installed tree, each executable's bytes, and its
 typed probe before exposing the tool to the task. Its execution receipt binds

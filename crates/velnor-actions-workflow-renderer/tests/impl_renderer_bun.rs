@@ -241,6 +241,7 @@ fn suite(steps: Vec<Step>) -> BunSuitePolicy {
         steps,
         matrix: None,
         report: None,
+        assets: None,
     }
 }
 
