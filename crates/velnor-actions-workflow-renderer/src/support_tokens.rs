@@ -43,7 +43,7 @@ pub(crate) fn check_token_hygiene(jobs: &BTreeMap<String, Job>) -> Result<(), Re
 /// The config-selected verification steps join the pinned offline
 /// analyzers: they execute no repository code and cold-install their
 /// tools, so they run ambient like deny, machete, zizmor, and
-/// actionlint (scrubbing broke `ubi:` installs with API 401s and
+/// jactionlint (scrubbing broke `ubi:` installs with API 401s and
 /// zizmor with empty-token aborts, CI run 36815180228).
 fn is_ambient_auth_role(role: Option<StepRole>) -> bool {
     matches!(
@@ -54,7 +54,7 @@ fn is_ambient_auth_role(role: Option<StepRole>) -> bool {
                 | StepRole::CargoSourcesFetch
                 | StepRole::CargoDeny
                 | StepRole::CargoMachete
-                | StepRole::Actionlint
+                | StepRole::Jactionlint
                 | StepRole::Zizmor
                 | StepRole::Markdownlint
                 | StepRole::StrictJson

@@ -231,7 +231,6 @@ fn policy_file_is_complete() -> Result<(), Box<dyn Error>> {
         "rust = \"1.99.1\"",
         "mr-boxington = \"1.26.0\"",
         "gh = \"2.102.1\"",
-        "actionlint = \"1.7.12\"",
         "jactionlint = \"2.3.0\"",
         "shellcheck = \"0.11.0\"",
         "zizmor = \"1.31.1\"",

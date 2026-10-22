@@ -1,13 +1,13 @@
-//! Lint-audit cases: manifest purity, bridge exactness, canonical refs,
-//! input schemas, and stable rejection codes.
+//! Lint-audit cases: manifest purity, canonical refs, input schemas, and
+//! stable rejection codes.
 use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_actionlint::actions::{
     ALINT_ACTION_SHA, ALINT_ACTION_VERSION, CHECKOUT_ACTION_SHA, CHECKOUT_ACTION_VERSION,
 };
 use velnor_actions_actionlint::{
-    ALINT_ACTION, ActionlintCapabilities, ActionlintConfigInput, ActionlintError, CHECKOUT_ACTION,
-    PinnedActionRef, RUNNER_LABEL_BRIDGE, StepSyntax, checkout_inputs_schema,
-    render_actionlint_yaml, validate_action_inputs,
+    ALINT_ACTION, ActionlintError, CHECKOUT_ACTION, JactionlintCapabilities,
+    JactionlintConfigInput, PinnedActionRef, StepSyntax, checkout_inputs_schema,
+    render_jactionlint_yaml, validate_action_inputs,
 };
 
 /// Dependencies that would let config rendering spawn or fetch.
@@ -60,10 +60,10 @@ fn manifest_declares_contract_only() {
 #[test]
 fn config_variable_blank_and_whitespace_rejected() {
     for name in ["", " ", "MY VAR", "MY-VAR", "MY.VAR", " TRAILING"] {
-        let input = ActionlintConfigInput::new("0.1.0").with_config_variable(name);
+        let input = JactionlintConfigInput::new("0.1.0").with_config_variable(name);
         assert!(
             matches!(
-                render_actionlint_yaml(&input),
+                render_jactionlint_yaml(&input),
                 Err(ActionlintError::InvalidConfigVariable { .. })
             ),
             "variable must be rejected: {name:?}"
@@ -87,122 +87,15 @@ fn config_rejection_codes_are_stable() {
             "invalid_workflow_path: workflows/x.yml",
         ),
         (
-            ActionlintError::ConsumerIgnoreForbidden {
-                rule: "shellcheck".to_owned(),
+            ActionlintError::InvalidRunnerLabel {
+                label: "Bad Label".to_owned(),
             },
-            "consumer_ignore_forbidden: shellcheck",
-        ),
-        (
-            ActionlintError::BroadIgnore {
-                path: ".github/workflows/**".to_owned(),
-            },
-            "broad_ignore: .github/workflows/**",
-        ),
-        (
-            ActionlintError::InvalidIgnore {
-                problem: "missing_justification:shellcheck:.github/workflows/v.yml".to_owned(),
-            },
-            "invalid_ignore: missing_justification:shellcheck:.github/workflows/v.yml",
+            "invalid_runner_label: Bad Label",
         ),
     ];
     for (error, expected) in cases {
         assert_eq!(error.to_string(), expected);
     }
-}
-
-#[test]
-fn bridge_block_carries_configured_label() {
-    for label in ["ubuntu-26.04", "ubuntu-24.04", "ubuntu-22.04"] {
-        let input = ActionlintConfigInput::new("0.1.0").with_runner_label(label);
-        let output = render_actionlint_yaml(&input).expect("renders");
-        assert!(
-            !output.yaml.contains("runs-on"),
-            "config must never carry job runner labels"
-        );
-        assert!(
-            output.yaml.contains(&format!("    - {label}\n")),
-            "bridge must emit the configured label {label}:\n{}",
-            output.yaml
-        );
-    }
-}
-
-#[test]
-fn bridge_block_carries_exact_compat_label() {
-    let input = ActionlintConfigInput::new("0.1.0").with_runner_label(RUNNER_LABEL_BRIDGE);
-    let output = render_actionlint_yaml(&input).expect("renders");
-    assert!(
-        !output.yaml.contains("runs-on"),
-        "config must never carry job runner labels"
-    );
-    let mut labels = Vec::new();
-    let mut in_labels = false;
-    for line in output.yaml.lines() {
-        if line == "self-hosted-runner:" {
-            in_labels = false;
-            continue;
-        }
-        if line == "  labels:" {
-            in_labels = true;
-            continue;
-        }
-        if in_labels {
-            if let Some(label) = line.strip_prefix("    - ") {
-                labels.push(label.to_owned());
-            } else {
-                break;
-            }
-        }
-    }
-    assert_eq!(labels, vec![RUNNER_LABEL_BRIDGE.to_owned()]);
-}
-
-#[test]
-fn bridge_label_shape_is_hosted_ubuntu() {
-    assert_eq!(RUNNER_LABEL_BRIDGE, "ubuntu-26.04");
-    let version = RUNNER_LABEL_BRIDGE
-        .strip_prefix("ubuntu-")
-        .expect("hosted ubuntu label");
-    let parts: Vec<&str> = version.split('.').collect();
-    assert_eq!(parts.len(), 2, "ubuntu-NN.04 shape");
-    assert!(
-        parts
-            .iter()
-            .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit())),
-        "numeric dotted version"
-    );
-}
-
-#[test]
-fn bridge_label_missing_or_unlisted_fails_closed() {
-    let missing = render_actionlint_yaml(&ActionlintConfigInput::new("0.1.0"));
-    assert!(
-        matches!(missing, Err(ActionlintError::InvalidRunnerLabel { .. })),
-        "unset label must fail, never emit a hardcoded distro"
-    );
-    for label in ["ubuntu-latest", "ubuntu-99.04", "self-hosted", ""] {
-        let input = ActionlintConfigInput::new("0.1.0").with_runner_label(label);
-        assert!(
-            matches!(
-                render_actionlint_yaml(&input),
-                Err(ActionlintError::InvalidRunnerLabel { .. })
-            ),
-            "unlisted label must fail: {label}"
-        );
-    }
-}
-
-#[test]
-fn output_reports_bridge_state() {
-    let input = ActionlintConfigInput::new("0.1.0").with_runner_label(RUNNER_LABEL_BRIDGE);
-    let default = render_actionlint_yaml(&input).expect("renders");
-    assert!(default.runner_bridge_emitted);
-    assert!(default.yaml.contains("self-hosted-runner:"));
-    let caps = ActionlintCapabilities::for_pinned().recognize_hosted_label_26_04();
-    let input = ActionlintConfigInput::new("0.1.0").with_capabilities(caps);
-    let recognized = render_actionlint_yaml(&input).expect("renders");
-    assert!(!recognized.runner_bridge_emitted);
-    assert!(!recognized.yaml.contains("self-hosted-runner:"));
 }
 
 #[test]
@@ -305,10 +198,19 @@ fn action_input_codes_are_stable() {
 
 #[test]
 fn capability_gate_codes_are_stable() {
-    let caps = ActionlintCapabilities::for_pinned();
-    assert_eq!(caps.check_step_syntax(StepSyntax::JobMatrix), Ok(()));
+    let caps = JactionlintCapabilities::for_pinned();
+    for syntax in [
+        StepSyntax::JobMatrix,
+        StepSyntax::NativeParallelism,
+        StepSyntax::CacheMode,
+    ] {
+        assert_eq!(caps.check_step_syntax(syntax), Ok(()), "{syntax:?}");
+    }
     assert_eq!(
-        caps.check_step_syntax(StepSyntax::NativeParallelism),
-        Ok(())
+        ActionlintError::UnsupportedSyntax {
+            syntax: "cache_mode"
+        }
+        .to_string(),
+        "unsupported_syntax: cache_mode"
     );
 }

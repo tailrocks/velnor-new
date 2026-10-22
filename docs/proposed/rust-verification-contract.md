@@ -28,7 +28,7 @@ runner. Generated workflow YAML does not invoke Rust commands outside Mise.
 ```text
 fmt-check          Formatting validation once for the selected source tree
 dependencies       Dependency policy and unused direct dependency checks
-actionlint         Generated workflow syntax validation
+jactionlint         Generated workflow syntax validation
 zizmor             Generated workflow security validation
 clippy <pkg>       Configured Clippy validation for one package
 test-build <pkg>   Build once for one package when selected runner needs an archive
@@ -49,7 +49,7 @@ as a substitute for a supported matrix; it is emitted only for an explicit
 combinations in an isolated checkout. Each product crate MUST be checked on
 MSRV in the toolchain-update qualification workflow using the Mise-managed
 tool version equal to workspace `rust-version`; it MUST use `--locked`. Action
-workflows MUST also pass `actionlint` and `zizmor`, use full commit-SHA pins,
+workflows MUST also pass `jactionlint` and `zizmor`, use full commit-SHA pins,
 least-privilege permissions, and avoid privileged execution of untrusted
 pull-request code.
 

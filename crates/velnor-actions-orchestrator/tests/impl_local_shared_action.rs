@@ -33,13 +33,13 @@ fn both_mode_generate_passes_actionlint_and_zizmor() -> TestResult {
     assert_eq!(
         report.validated_by,
         vec![
-            "actionlint@1.7.12".to_owned(),
+            "jactionlint@2.3.0".to_owned(),
             "shellcheck@0.11.0".to_owned(),
             "zizmor@1.31.1".to_owned(),
         ]
     );
     let ci = fs::read_to_string(preview.path().join(".github/workflows/ci.yml"))?;
-    let actionlint = fs::read_to_string(preview.path().join(".github/actionlint.yaml"))?;
+    let actionlint = fs::read_to_string(preview.path().join(".github/jactionlint.yaml"))?;
     assert!(ci.contains("uses: ./.github/actions/"), "{ci}");
     assert!(!ci.contains("uses: $"), "{ci}");
     assert!(ci.len() <= 500_000, "ci.yml is {} bytes", ci.len());
@@ -68,9 +68,9 @@ fn both_mode_generate_passes_actionlint_and_zizmor() -> TestResult {
         hosted
             .validated_by
             .iter()
-            .any(|spec| spec == "actionlint@1.7.12")
+            .any(|spec| spec == "jactionlint@2.3.0")
     );
-    let hosted_lint = fs::read_to_string(hosted_dir.path().join(".github/actionlint.yaml"))?;
+    let hosted_lint = fs::read_to_string(hosted_dir.path().join(".github/jactionlint.yaml"))?;
     let hosted_ci = fs::read_to_string(hosted_dir.path().join(".github/workflows/ci.yml"))?;
     assert!(!hosted_lint.contains("paths:"), "{hosted_lint}");
     assert!(!hosted_ci.contains("uses: $"), "{hosted_ci}");

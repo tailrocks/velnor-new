@@ -15,7 +15,7 @@
 //! | `not_affected` | failure / missing | fail                            |
 //! | `not_affected` | cancelled         | cancelled                       |
 //!
-//! Jobs the plan does not list (plan, actionlint, named checks, `OpenTofu`
+//! Jobs the plan does not list (plan, jactionlint, named checks, `OpenTofu`
 //! roots) keep the generic rule: skipped is never success. A missing,
 //! invalid, or failed plan never reaches this fold (`planning_failed`).
 //! A plan that skips any work on a full-run event (push, merge group,

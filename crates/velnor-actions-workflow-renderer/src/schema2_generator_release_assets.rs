@@ -333,15 +333,12 @@ pub(super) fn source_gate_job(
     hosted: Yaml,
     pins: &crate::schema2::ProductReleasePins,
 ) -> Result<(String, Yaml), crate::RenderError> {
-    let steps = vec![
+    let mut steps = vec![
         checkout_step(),
         workflow_steps::mise_step(pins.setup_for(ReleaseTarget::LinuxX86_64))?,
-        workflow_steps::command_step(
-            "Install pinned release gate tools",
-            &pins.install_gate_tools_argv,
-        )?,
-        workflow_steps::command_step("Run actionlint", &pins.actionlint_argv)?,
-        workflow_steps::command_step("Run zizmor", &pins.zizmor_argv)?,
+    ];
+    steps.extend(super::lint_gate_steps(pins)?);
+    steps.extend([
         ci_check_step(pins)?,
         workflow_steps::bash_step(
             "Check release freshness gate",
@@ -354,7 +351,7 @@ pub(super) fn source_gate_job(
             ),
             &pins.gh_argv,
         )?,
-    ];
+    ]);
     let mut fields = with_permissions(
         base(
             "Verify generator release source",

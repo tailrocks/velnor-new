@@ -329,5 +329,5 @@ overlap; cancellation with partial results; safe argv/env construction;
 deterministic complete `.github` generation with preview and stale-file
 cleanup; pinned release-plz command/config compatibility. Mocks and a
 disposable registry cover failure cases; no throwaway public names are
-reserved. Generated output passes actionlint and the existing
+reserved. Generated output passes jactionlint and the existing
 workflow-security checks.

@@ -71,6 +71,9 @@ pub struct UpgradesSpec {
     /// Exact Velnor-pinned tools `velnor-actions generate` executes
     /// (`name@version`), installed before each regeneration.
     pub generate_tools: Vec<String>,
+    /// One-line `sh` script that checks the installed jactionlint executable
+    /// against the catalog digest; it runs right after the install.
+    pub jactionlint_verify: String,
 }
 
 impl UpgradesSpec {
@@ -99,6 +102,12 @@ impl UpgradesSpec {
             || !self.generate_tools.iter().all(|spec| exact_tool(spec))
         {
             return Err(RenderError::BadCommand("bad_generate_tools".to_owned()));
+        }
+        if self.jactionlint_verify.trim().is_empty()
+            || self.jactionlint_verify.contains('\n')
+            || self.jactionlint_verify.contains("${{")
+        {
+            return Err(RenderError::BadCommand("bad_jactionlint_verify".to_owned()));
         }
         Ok(())
     }

@@ -264,13 +264,13 @@ fn unsafe_logical_id_fails_closed() {
 fn unpaired_jobs_stay_inline() {
     let mut jobs = BTreeMap::new();
     jobs.insert(
-        "actionlint".to_owned(),
-        lane_job("actionlint", HOSTED_RUNS, vec![echo_step(0, "one")]),
+        "jactionlint".to_owned(),
+        lane_job("jactionlint", HOSTED_RUNS, vec![echo_step(0, "one")]),
     );
     let shared = share_lanes(&jobs, &ctx()).expect("share");
     assert_eq!(shared.calls.len(), 0);
     assert_eq!(shared.files.len(), 0);
-    let kept = shared.jobs.get("actionlint").expect("actionlint");
+    let kept = shared.jobs.get("jactionlint").expect("jactionlint");
     assert_eq!(kept.steps.len(), 1);
 }
 

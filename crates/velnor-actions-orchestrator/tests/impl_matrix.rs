@@ -43,7 +43,7 @@ fn crate_yaml_shape_exact() -> TestResult {
         "    name: Rust / demo\n",
         "  required:",
         "  plan:",
-        "  actionlint:",
+        "  jactionlint:",
         "      - rust-demo\n",
         "        background: true",
         "        wait-all:",

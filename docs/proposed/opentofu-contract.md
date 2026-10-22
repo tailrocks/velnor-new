@@ -22,7 +22,7 @@ project, no custom-shell escape hatch, and no lost IaC verification:
    Required.
 5. Verified workflow on the consumer PR **and** the merged main commit.
 
-A green Plan/Actionlint/Required skeleton with no tofu obligations is a
+A green Plan/Jactionlint/Required skeleton with no tofu obligations is a
 failed migration. Initially `fmt` + validation-only `init` + `validate`
 only; no `plan`/`apply`/`destroy`/`import`/state/`tofu test`.
 
@@ -58,7 +58,7 @@ dispatch. BR-28 lands the tofu fixture corpus (10 dirs, 77 files, no code).
 
 Add **`crates/velnor-actions-tofu`** (Phase B): stack ID `tofu`, Mise tool
 `opentofu`, executable `tofu` — distinct concepts, no aliases. Dependency
-direction: orchestrator → {contract, rust, tofu, mise, actionlint,
+direction: orchestrator → {contract, rust, tofu, mise, jactionlint,
 renderer}; all adapters → contract only. Tofu owns domain semantics; Mise
 owns execution; renderer owns representation; orchestrator composes.
 
@@ -252,9 +252,9 @@ mirror; placeholder digest never proves the new tool (P03-8b).
 
 Ownership: `rust-quality-contract.md` owns the Rust quality rules; §§4.4–4.5
 state tofu adoption deltas by reference, never restating them.
-Per-role tools: pure-tofu plan = opentofu + actionlint/shellcheck/zizmor
+Per-role tools: pure-tofu plan = opentofu + jactionlint/shellcheck/zizmor
 (no Rust/MBX/Nextest/components/Cargo fetch); `tofu-<root>` jobs = opentofu
-only + provider-cache restore; actionlint/required/validators unchanged;
+only + provider-cache restore; jactionlint/required/validators unchanged;
 mixed = union; removal is a distinct behavior-change commit.
 Per-root filesystem paths use the fixed locator `b3-` plus 64 lowercase
 hexadecimal digits (67 bytes). It is the BLAKE3 digest of the domain-separated
@@ -311,7 +311,7 @@ tofu fmt once per scope, init once per root per attempt;
 `write-task-report-v1` → exact-name fetch → `merge-v1` unchanged; reuse
 disabled for tofu (`ReusedFromTaskCache` already fails closed); docs-only =
 explicit `covered`/no-obligation disposition, never `Executed`; `NoWork`
-never passes. No second verdict path. Validators: staged actionlint→
+never passes. No second verdict path. Validators: staged jactionlint→
 shellcheck→zizmor→shellcheck-`run:`-bodies; tofu steps as single-line
 scalars; no `setup-opentofu` (Mise only). Read-only `plan`/`generate`
 proven by before/after snapshots (no `.terraform`/lock/tool/source mutation,
@@ -335,7 +335,7 @@ Spec §10 matrix + local gates through pinned tooling (`scripts/verify-local.sh`
 offline subset; full: fmt, clippy, nextest, doctests, `alint
 validate-config` + `alint check --fail-on-warning`, `cargo deny check
 --locked`, `scripts/check-freshness.sh`, arch/size/schema tests,
-actionlint/shellcheck/zizmor, Gates 0–8, real-binary tofu tests).
+jactionlint/shellcheck/zizmor, Gates 0–8, real-binary tofu tests).
 Phase-A refactor gates: T04 golden capture (plans, IR/YAML, task/cache IDs,
 reports, fixture results over `minimal-cargo`, `nested`, `mbx-nextest`,
 `parity`, …) re-run byte-identical after EVERY ownership move.

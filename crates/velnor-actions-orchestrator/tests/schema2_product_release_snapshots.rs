@@ -162,7 +162,7 @@ fn assert_source_gate(parent: &str) -> Result<(), Box<dyn std::error::Error>> {
         "GITHUB_WORKFLOW_SHA",
         "actions/workflows/ci.yml/runs",
         "Required",
-        "actionlint",
+        "jactionlint",
         "zizmor",
     ] {
         assert!(gate.contains(required), "missing {required}: {gate}");

@@ -207,7 +207,7 @@ fn assert_ir_permissions(
     }
     assert_eq!(prep.workflow.ir.permissions.contents, PermissionLevel::Read);
     assert_eq!(prep.workflow.ir.permissions.actions, PermissionLevel::None);
-    for id in ["plan", "actionlint"] {
+    for id in ["plan", "jactionlint"] {
         let job = jobs.get(id).ok_or("missing checkout job")?;
         assert!(has_checkout(job), "{id} keeps the checkout action");
         assert_eq!(

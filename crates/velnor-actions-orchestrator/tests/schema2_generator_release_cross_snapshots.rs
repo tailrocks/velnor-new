@@ -1,6 +1,6 @@
 use super::action_snapshots::{Actions, action};
 use velnor_actions_mise::catalog::{
-    ACTIONLINT_VERSION, RUST_VERSION, SHELLCHECK_VERSION, ZIZMOR_VERSION,
+    JACTIONLINT_VERSION, RUST_VERSION, SHELLCHECK_VERSION, ZIZMOR_VERSION,
 };
 use velnor_actions_workflow_renderer::setup::{
     MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
@@ -115,7 +115,7 @@ pub(super) fn assert_portable_gh_watchdog(actions: &Actions) {
 
 /// Every qualify action installs the exact tools `generate` validates with.
 ///
-/// `validate_staged` fails closed when actionlint, shellcheck, or zizmor
+/// `validate_staged` fails closed when jactionlint, shellcheck, or zizmor
 /// are missing, and the Mise setup step never installs (`install: "false"`),
 /// so the composite action installs the pinned qualification tools itself
 /// before downloading the candidate.
@@ -123,11 +123,11 @@ pub(super) fn assert_qualify_install_tools(
     actions: &Actions,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let run = format!(
-        "mise --no-config --no-env --no-hooks install rust@{RUST_VERSION} actionlint@{ACTIONLINT_VERSION} shellcheck@{SHELLCHECK_VERSION} zizmor@{ZIZMOR_VERSION}"
+        "mise --no-config --no-env --no-hooks install rust@{RUST_VERSION} jactionlint@{JACTIONLINT_VERSION} shellcheck@{SHELLCHECK_VERSION} zizmor@{ZIZMOR_VERSION}"
     );
     // The Velnor repository declares Rust in `mise.toml` (hard decision 5).
     let project_run = format!(
-        r#"mise --no-config --no-env --no-hooks install 'rust@'\"${{VELNOR_TOOL_RUST}}\" actionlint@{ACTIONLINT_VERSION} shellcheck@{SHELLCHECK_VERSION} zizmor@{ZIZMOR_VERSION}"#
+        r#"mise --no-config --no-env --no-hooks install 'rust@'\"${{VELNOR_TOOL_RUST}}\" jactionlint@{JACTIONLINT_VERSION} shellcheck@{SHELLCHECK_VERSION} zizmor@{ZIZMOR_VERSION}"#
     );
     for name in [
         "generator-release-qualify-linux",
@@ -142,9 +142,12 @@ pub(super) fn assert_qualify_install_tools(
         let download = body
             .find("Download built asset archive")
             .ok_or("missing built asset archive download")?;
+        let verify = body
+            .find("Verify jactionlint")
+            .ok_or("missing jactionlint executable verification")?;
         assert!(
-            setup < install && install < download,
-            "{name}: install step must follow Mise setup and precede the download: {body}"
+            setup < install && install < verify && verify < download,
+            "{name}: install and verification must follow Mise setup and precede the download: {body}"
         );
         assert!(
             body.contains(&run) || body.contains(&project_run),

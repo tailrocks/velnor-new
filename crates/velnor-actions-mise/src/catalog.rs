@@ -82,9 +82,6 @@ pub const MR_BOXINGTON_VERSION: &str = "1.26.0";
 /// Qualified GitHub CLI (tag `v2.102.1`).
 /// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-10-21.
 pub const GH_VERSION: &str = "2.102.1";
-/// Qualified actionlint release (tag `v1.7.12`).
-/// Source: `https://api.github.com/repos/rhysd/actionlint/releases/latest`; checked 2026-09-28.
-pub const ACTIONLINT_VERSION: &str = "1.7.12";
 /// Qualified jactionlint release (`jdx/jactionlint` tag `v2.3.0`, stable,
 /// published 2026-10-21). Install: Mise registry name `jactionlint`
 /// (backend `github:jdx/jactionlint`), which checks the release-API digest
@@ -181,8 +178,6 @@ pub struct ToolCatalog {
     mr_boxington: String,
     /// Pinned GitHub CLI version.
     gh: String,
-    /// Pinned actionlint version.
-    actionlint: String,
     /// Pinned jactionlint version.
     jactionlint: String,
     /// Pinned shellcheck version.
@@ -221,7 +216,6 @@ impl ToolCatalog {
             rust: RUST_VERSION.to_owned(),
             mr_boxington: MR_BOXINGTON_VERSION.to_owned(),
             gh: GH_VERSION.to_owned(),
-            actionlint: ACTIONLINT_VERSION.to_owned(),
             jactionlint: JACTIONLINT_VERSION.to_owned(),
             shellcheck: SHELLCHECK_VERSION.to_owned(),
             zizmor: ZIZMOR_VERSION.to_owned(),
@@ -251,7 +245,7 @@ impl ToolCatalog {
         rust: &str,
         mr_boxington: &str,
         gh: &str,
-        actionlint: &str,
+        jactionlint: &str,
         shellcheck: &str,
         zizmor: &str,
         nextest: &str,
@@ -261,7 +255,7 @@ impl ToolCatalog {
             (PinnedTool::Rust, rust),
             (PinnedTool::MrBoxington, mr_boxington),
             (PinnedTool::Gh, gh),
-            (PinnedTool::Actionlint, actionlint),
+            (PinnedTool::Jactionlint, jactionlint),
             (PinnedTool::Shellcheck, shellcheck),
             (PinnedTool::Zizmor, zizmor),
             (PinnedTool::Nextest, nextest),
@@ -273,8 +267,7 @@ impl ToolCatalog {
             rust: rust.to_owned(),
             mr_boxington: mr_boxington.to_owned(),
             gh: gh.to_owned(),
-            actionlint: actionlint.to_owned(),
-            jactionlint: JACTIONLINT_VERSION.to_owned(),
+            jactionlint: jactionlint.to_owned(),
             shellcheck: shellcheck.to_owned(),
             zizmor: zizmor.to_owned(),
             nextest: nextest.to_owned(),
@@ -296,7 +289,6 @@ impl ToolCatalog {
             PinnedTool::Rust => &self.rust,
             PinnedTool::MrBoxington => &self.mr_boxington,
             PinnedTool::Gh => &self.gh,
-            PinnedTool::Actionlint => &self.actionlint,
             PinnedTool::Jactionlint => &self.jactionlint,
             PinnedTool::Shellcheck => &self.shellcheck,
             PinnedTool::Zizmor => &self.zizmor,

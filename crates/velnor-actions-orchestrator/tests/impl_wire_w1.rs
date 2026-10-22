@@ -3,16 +3,15 @@
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_actionlint::tools::{ActionlintToolchain, ShellcheckToolchain};
+use velnor_actions_actionlint::tools::{JactionlintToolchain, ShellcheckToolchain};
 use velnor_actions_actionlint::{
-    ActionlintCapabilities, PinnedActionRef, StepSyntax, checkout_inputs_schema,
-    render_actionlint_yaml, validate_action_inputs,
+    JactionlintCapabilities, JactionlintConfigInput, PinnedActionRef, StepSyntax,
+    checkout_inputs_schema, render_jactionlint_yaml, validate_action_inputs,
 };
-use velnor_actions_actionlint::{ActionlintConfigInput, RUNNER_LABEL_BRIDGE};
 use velnor_actions_contract::workflow::StepKind;
 use velnor_actions_mise::{CandidateBuild, PinnedTool, ToolCatalog};
-use velnor_actions_orchestrator::{DEFAULT_RUNNER_LABEL, prepare, render_staged_tree};
-use velnor_actions_workflow_renderer::render::{ACTIONLINT_PATH, WORKFLOW_PATH};
+use velnor_actions_orchestrator::{prepare, render_staged_tree};
+use velnor_actions_workflow_renderer::render::{JACTIONLINT_PATH, WORKFLOW_PATH};
 
 #[path = "impl_wire_w1_format_helpers.rs"]
 mod format_helpers;
@@ -21,7 +20,7 @@ use super::impl_common::{
     TestResult, config_with_branch, make_repo, make_virtual_repo, without_ambient_identity,
 };
 
-/// Staged workflow + actionlint bytes for one config.
+/// Staged workflow + jactionlint config bytes for one config.
 fn preview_both(config: &str) -> Result<(TempDir, String, String), Box<dyn std::error::Error>> {
     let repo = make_repo(config)?;
     let prep = prepare(repo.path())?;
@@ -30,11 +29,11 @@ fn preview_both(config: &str) -> Result<(TempDir, String, String), Box<dyn std::
         .get(WORKFLOW_PATH)
         .ok_or("missing workflow")?
         .to_owned();
-    let actionlint = tree
-        .get(ACTIONLINT_PATH)
-        .ok_or("missing actionlint")?
+    let lint_config = tree
+        .get(JACTIONLINT_PATH)
+        .ok_or("missing jactionlint config")?
         .to_owned();
-    Ok((repo, workflow, actionlint))
+    Ok((repo, workflow, lint_config))
 }
 
 /// Velnor-policy fixture: canonical origin, no lock (pre-seed shape).
@@ -106,69 +105,87 @@ fn w1_runs_on_hosted_labels_only() -> TestResult {
 }
 
 #[test]
-fn w1_runner_label_matches_actionlint_bridge() {
-    assert_eq!(DEFAULT_RUNNER_LABEL, RUNNER_LABEL_BRIDGE);
-}
-
-#[test]
-fn w1_actionlint_bridge_uses_configured_runner_label() -> TestResult {
+fn w1_lint_config_declares_no_github_hosted_label() -> TestResult {
     let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\nrunner_label = \"ubuntu-24.04\"\n";
-    let (_repo, yaml, actionlint) = preview_both(config)?;
+    let (_repo, yaml, lint_config) = preview_both(config)?;
     assert!(
         yaml.contains("runs-on: ubuntu-24.04"),
         "workflow must use the configured label"
     );
+    // jactionlint knows every hosted label natively; declaring one as
+    // self-hosted would make it treat GitHub's runners as self-hosted.
     assert!(
-        actionlint.contains("    - ubuntu-24.04\n"),
-        "bridge must emit the configured label, never a hardcoded distro:\n{actionlint}"
+        !lint_config.contains("self-hosted-runner"),
+        "no bridge label:\n{lint_config}"
     );
     assert!(
-        !actionlint.contains("ubuntu-26.04"),
-        "bridge must not leak the default distro:\n{actionlint}"
+        lint_config.contains("\nprofile: correctness\n"),
+        "{lint_config}"
+    );
+    assert!(
+        lint_config.contains("\ngenerated-files: report\n"),
+        "{lint_config}"
     );
     Ok(())
 }
 
 #[test]
-fn w1_lint_run_embeds_crate_tool_specs() -> TestResult {
-    let (_repo, yaml, _alint) = preview_both(config_with_branch())?;
-    let lint = window(&yaml, "  actionlint:", "  velnor-zzz:")?;
+fn w1_lint_run_embeds_crate_tool_specs_and_the_hk_file_set() -> TestResult {
+    let (_repo, yaml, _lint_config) = preview_both(config_with_branch())?;
+    let lint = window(&yaml, "  jactionlint:", "  plan:")?;
     for spec in [
-        ActionlintToolchain::pinned().mise_tool_spec(),
+        JactionlintToolchain::pinned().mise_tool_spec(),
         ShellcheckToolchain::pinned().mise_tool_spec(),
     ] {
         assert!(lint.contains(&spec), "lint misses {spec}:\n{lint}");
     }
-    assert!(lint.contains("actionlint -color"), "lint argv:\n{lint}");
+    assert!(lint.contains("name: Verify jactionlint"), "{lint}");
+    for find in [
+        r#"find .github/workflows -maxdepth 1 -type f -name \"*.y*ml\";"#,
+        r#"find .github/actions -type f -name \"action.y*ml\";"#,
+        r#"find .github -maxdepth 1 -type f -name \"dependabot.y*ml\";"#,
+    ] {
+        assert!(lint.contains(find), "lint argv misses {find}:\n{lint}");
+    }
+    assert!(
+        lint.contains("exec mise --no-config --no-env --no-hooks exec jactionlint@2.3.0 shellcheck@0.11.0 -- jactionlint --config-file .github/jactionlint.yaml --format github --strict-exit --no-online --shellcheck=shellcheck --pyflakes= --no-color \\\"${files[@]}\\\"'"),
+        "lint argv:\n{lint}"
+    );
+    assert!(
+        lint.contains("bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"),
+        "{lint}"
+    );
+    assert!(!lint.contains("JACTIONLINT_NO_HINTS"), "{lint}");
     Ok(())
 }
 
 #[test]
-fn w1_catalog_matches_actionlint_crate_pins() {
+fn w1_catalog_matches_adapter_crate_pins() {
     let catalog = ToolCatalog::pinned();
     assert_eq!(
-        catalog.tool_spec(PinnedTool::Actionlint),
-        ActionlintToolchain::pinned().mise_tool_spec()
+        catalog.tool_spec(PinnedTool::Jactionlint),
+        JactionlintToolchain::pinned().mise_tool_spec()
     );
     assert_eq!(
         catalog.tool_spec(PinnedTool::Shellcheck),
         ShellcheckToolchain::pinned().mise_tool_spec()
     );
     assert_eq!(
-        velnor_actions_mise::catalog::ACTIONLINT_VERSION,
-        velnor_actions_actionlint::capabilities::ACTIONLINT_VERSION
+        velnor_actions_mise::catalog::JACTIONLINT_VERSION,
+        velnor_actions_actionlint::capabilities::JACTIONLINT_VERSION
     );
 }
 
 #[test]
-fn w1_native_parallelism_bridged() {
-    let caps = ActionlintCapabilities::for_pinned();
-    assert!(caps.check_step_syntax(StepSyntax::JobMatrix).is_ok());
-    assert!(
-        caps.check_step_syntax(StepSyntax::NativeParallelism)
-            .is_ok()
-    );
-    assert!(caps.requires_step_parallelism_bridge());
+fn w1_native_parallelism_and_cache_mode_need_no_bridge() {
+    let caps = JactionlintCapabilities::for_pinned();
+    for syntax in [
+        StepSyntax::JobMatrix,
+        StepSyntax::NativeParallelism,
+        StepSyntax::CacheMode,
+    ] {
+        assert!(caps.check_step_syntax(syntax).is_ok(), "{syntax:?}");
+    }
 }
 
 #[test]
@@ -278,24 +295,17 @@ fn w1_plan_format_runs_fmt_check() -> TestResult {
 }
 
 #[test]
-fn w1_actionlint_vars_emit_exact_v1_set() -> TestResult {
-    let (_repo, _yaml, actionlint) = preview_both(config_with_branch())?;
+fn w1_lint_config_vars_emit_exact_v1_set() -> TestResult {
+    let (_repo, _yaml, lint_config) = preview_both(config_with_branch())?;
     assert!(
-        actionlint.contains("config-variables: []"),
-        "v1 empty set:\n{actionlint}"
+        lint_config.contains("config-variables: []"),
+        "v1 empty set:\n{lint_config}"
     );
-    assert!(
-        actionlint.contains("self-hosted-runner:"),
-        "bridge:\n{actionlint}"
-    );
-    let input = ActionlintConfigInput::new("0.1.0")
-        .with_workflow_path(WORKFLOW_PATH)
-        .with_runner_label(RUNNER_LABEL_BRIDGE)
-        .with_config_variables(["API_BASE"]);
-    let yaml = render_actionlint_yaml(&input)?.yaml;
+    let input = JactionlintConfigInput::new("0.1.0").with_config_variables(["API_BASE"]);
+    let yaml = render_jactionlint_yaml(&input)?;
     assert_eq!(
         yaml,
-        "# Generated by Velnor Actions 0.1.0; edit .velnor/config.toml and regenerate.\n\nconfig-variables:\n  - API_BASE\n\nself-hosted-runner:\n  labels:\n    - ubuntu-26.04\n"
+        "# Generated by Velnor Actions 0.1.0; edit .velnor/config.toml and regenerate.\n\nprofile: correctness\ngenerated-files: report\nconfig-variables:\n  - API_BASE\n"
     );
     Ok(())
 }

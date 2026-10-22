@@ -254,8 +254,8 @@ pub(super) fn identified_publish_step(id: &str, run: &str) -> Yaml {
     Yaml::Map(fields)
 }
 
-/// Local `./` action. actionlint 1.7.12 rejects `$/`, so the
-/// self-repository auto-fix cannot be applied. The ignore stays on this line.
+/// Local `./` action, reached after a checkout step. The zizmor
+/// `self-repository` ignore stays on this line.
 pub(super) fn local_action_step(name: &str, uses: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),

@@ -19,10 +19,11 @@ fn spec() -> UpgradesSpec {
         gh_version: "2.102.1".to_owned(),
         generator_version: "0.1.0".to_owned(),
         generate_tools: vec![
-            "actionlint@1.7.12".to_owned(),
+            "jactionlint@2.3.0".to_owned(),
             "shellcheck@0.11.0".to_owned(),
             "zizmor@1.31.1".to_owned(),
         ],
+        jactionlint_verify: "set -eu; echo verify-jactionlint".to_owned(),
     }
 }
 
@@ -114,7 +115,7 @@ fn prepare_holds_no_credential_and_runs_without_cooldown() {
         "bun update --latest --ignore-scripts",
         "bump-gradle-catalog.py",
         "velnor/bin/velnor-actions\\\" generate",
-        "VELNOR_GENERATE_TOOLS: actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.31.1",
+        "VELNOR_GENERATE_TOOLS: jactionlint@2.3.0 shellcheck@0.11.0 zizmor@1.31.1",
         "rust_channel_manifest_not_catalogued",
         "git diff --cached --no-renames",
     ] {
@@ -257,6 +258,32 @@ fn disabled_or_invalid_configs_do_not_render() {
         let mut bad_tools = spec();
         bad_tools.generate_tools = tools;
         assert!(render_upgrades_workflow(&bad_tools).is_err());
+    }
+}
+
+#[test]
+fn every_regeneration_verifies_jactionlint_before_running_generate() {
+    let file = render_upgrades_workflow(&spec()).expect("renders");
+    let yaml = file.bytes;
+    for (id, generate) in [
+        ("prepare", "Bump every pin"),
+        ("verify", "Regenerate .github/"),
+    ] {
+        let job = job_text(&yaml, id);
+        let install = job
+            .find("install jactionlint@2.3.0 shellcheck@0.11.0")
+            .unwrap_or_else(|| panic!("{id} installs the validators:\n{job}"));
+        let verify = job
+            .find("name: Verify jactionlint")
+            .unwrap_or_else(|| panic!("{id} verifies jactionlint:\n{job}"));
+        let run = job.find(generate).expect("regeneration step");
+        assert!(install < verify && verify < run, "{id} order:\n{job}");
+        assert!(job.contains("verify-jactionlint"), "{id}:\n{job}");
+    }
+    for script in ["", "a\nb", "echo ${{ x }}"] {
+        let mut bad = spec();
+        bad.jactionlint_verify = script.to_owned();
+        assert!(render_upgrades_workflow(&bad).is_err(), "{script:?}");
     }
 }
 

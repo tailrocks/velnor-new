@@ -1,5 +1,5 @@
 //! HD-7: a repository with `[private_sources]` generates a tree that passes
-//! the pinned actionlint validation, so every referenced `vars.*` is declared.
+//! the pinned jactionlint validation, so every referenced `vars.*` is declared.
 
 use std::fs;
 
@@ -11,7 +11,7 @@ const COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
 const SHA: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 #[test]
-fn private_sources_generate_passes_actionlint_and_declares_the_app_variable() -> TestResult {
+fn private_sources_generate_passes_jactionlint_and_declares_the_app_variable() -> TestResult {
     let config = format!(
         "{}[private_sources]\nowner = \"acme\"\napp_id_variable = \"VELNOR_DEPS_APP_ID\"\n\
 app_private_key_secret = \"VELNOR_DEPS_APP_PRIVATE_KEY\"\n\
@@ -40,8 +40,8 @@ extract_to = \"eth-sql\"\n"
     )?;
     let workflow = fs::read_to_string(preview.join(".github/workflows/ci.yml"))?;
     assert!(workflow.contains("vars.VELNOR_DEPS_APP_ID"), "{workflow}");
-    let actionlint = fs::read_to_string(preview.join(".github/actionlint.yaml"))?;
-    assert!(actionlint.contains("VELNOR_DEPS_APP_ID"), "{actionlint}");
+    let lint_config = fs::read_to_string(preview.join(".github/jactionlint.yaml"))?;
+    assert!(lint_config.contains("VELNOR_DEPS_APP_ID"), "{lint_config}");
     Ok(())
 }
 
