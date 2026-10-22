@@ -6,13 +6,11 @@
 //! and then Format, Clippy, Documentation, test execution and doctests run as
 //! concurrent GitHub steps joined by one `wait-all`. A failed check fails the
 //! job at that join; the always-on report upload still runs afterwards.
-//! Clippy and documentation compile in their own Cargo target lanes so the
-//! target-directory lock never serializes test execution behind them.
-//! Same-job data producers (the Nextest build) are sequential obligations
-//! strictly before the parallel group in the validated
-//! [`CrateJob`](velnor_actions_contract::CrateJob). Gate owners in other jobs
-//! become exact job dependencies. `OpenTofu` retains one job per root, its
-//! sequential obligations and its existing bounded lane staging.
+//! Clippy and documentation compile in their own Cargo target lanes, so the
+//! target lock never serializes tests behind them. Same-job data producers
+//! (the Nextest build) are sequential obligations strictly before the
+//! parallel group in the validated [`CrateJob`](velnor_actions_contract::CrateJob).
+//! Gate owners elsewhere become job dependencies; `OpenTofu` keeps one job per root.
 
 use std::collections::BTreeMap;
 
@@ -329,9 +327,8 @@ fn render_job(
         crate::matrix_step::prepare_install_opentofu(policy, suite, use_opentofu),
         needs_validators,
     )?);
-    if needs_validators {
-        steps.push(crate::workflow::verify_jactionlint_step(catalog)?);
-    }
+    let verify = needs_validators.then(|| crate::workflow::verify_jactionlint_step(catalog));
+    steps.extend(verify.transpose()?);
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
         steps.push(crate::workflow::verify_rust_manifest_step(catalog)?);
