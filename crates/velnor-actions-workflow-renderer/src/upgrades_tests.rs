@@ -18,6 +18,11 @@ fn spec() -> UpgradesSpec {
         },
         gh_version: "2.102.1".to_owned(),
         generator_version: "0.1.0".to_owned(),
+        generate_tools: vec![
+            "actionlint@1.7.12".to_owned(),
+            "shellcheck@0.11.0".to_owned(),
+            "zizmor@1.31.1".to_owned(),
+        ],
     }
 }
 
@@ -40,7 +45,7 @@ fn job_text<'a>(yaml: &'a str, id: &str) -> &'a str {
 }
 
 #[test]
-fn renders_daily_schedule_only_workflow_with_three_jobs() {
+fn renders_daily_schedule_only_workflow_with_four_jobs() {
     let file = render_upgrades_workflow(&spec()).expect("render");
     assert_eq!(file.path, ".github/workflows/upgrades.yml");
     let yaml = &file.bytes;
@@ -57,7 +62,7 @@ fn renders_daily_schedule_only_workflow_with_three_jobs() {
         "\"on\":\n  schedule:\n    - cron: 17 5 * * *\n  workflow_dispatch: {}",
         "schedule and manual runs only, never a pull-request check"
     );
-    for id in ["prepare", "publish", "freshness"] {
+    for id in ["prepare", "verify", "publish", "freshness"] {
         assert!(yaml.contains(&format!("\n  {id}:\n")), "{id}:\n{yaml}");
     }
     assert!(yaml.contains("cancel-in-progress: false"), "{yaml}");
@@ -72,8 +77,24 @@ fn prepare_holds_no_credential_and_runs_without_cooldown() {
         "{prepare}"
     );
     assert!(!prepare.contains("secrets."), "{prepare}");
-    assert!(!prepare.contains("token"), "{prepare}");
     assert!(!prepare.contains(": write"), "{prepare}");
+    // The only credential is the read-only `github.token` of the release
+    // step, which runs before any repository code and ends before the bump.
+    assert_eq!(
+        prepare.matches("GH_TOKEN: ${{ github.token }}").count(),
+        1,
+        "{prepare}"
+    );
+    assert!(!prepare.contains("steps.upgrade-token"), "{prepare}");
+    let release = prepare
+        .find("GH_TOKEN: ${{ github.token }}")
+        .expect("release step token");
+    let bump = prepare.find("name: Bump every pin").expect("bump step");
+    assert!(
+        prepare.find("name: Resolve and verify the latest Velnor release") < Some(release)
+            && release < bump,
+        "{prepare}"
+    );
     assert!(
         prepare.contains("persist-credentials: \"false\""),
         "{prepare}"
@@ -85,16 +106,17 @@ fn prepare_holds_no_credential_and_runs_without_cooldown() {
         "default branch only:\n{prepare}"
     );
     for scope in [
-        "releases/latest/download/release-manifest.json",
+        "upgrade_velnor_pinned_ahead",
         "mise upgrade --bump",
         "mise lock --platform linux-x64,linux-arm64,macos-arm64",
         "cargo upgrade --incompatible --pinned",
         "cargo update --manifest-path",
         "bun update --latest --ignore-scripts",
         "bump-gradle-catalog.py",
-        "bin/velnor-actions",
+        "velnor/bin/velnor-actions\\\" generate",
+        "VELNOR_GENERATE_TOOLS: actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.31.1",
         "rust_channel_manifest_not_catalogued",
-        "git diff --cached --binary",
+        "git diff --cached --no-renames",
     ] {
         assert!(prepare.contains(scope), "{scope}:\n{prepare}");
     }
@@ -105,11 +127,7 @@ fn prepare_holds_no_credential_and_runs_without_cooldown() {
 fn publish_mints_a_repository_scoped_write_token_and_never_force_pushes() {
     let yaml = render_upgrades_workflow(&spec()).expect("render").bytes;
     let publish = job_text(&yaml, "publish");
-    assert!(publish.contains("needs: prepare"), "{publish}");
-    assert!(
-        publish.contains("needs.prepare.outputs.changed == 'true'"),
-        "{publish}"
-    );
+    assert!(publish.contains("needs: verify"), "{publish}");
     assert!(
         publish.contains("client-id: ${{ vars.VELNOR_DEPS_APP_ID }}"),
         "{publish}"
@@ -127,7 +145,10 @@ fn publish_mints_a_repository_scoped_write_token_and_never_force_pushes() {
         publish.contains("permission-pull-requests: write"),
         "{publish}"
     );
-    assert!(publish.contains("permission-workflows: write"), "{publish}");
+    assert!(
+        publish.contains("permission-workflows: ${{ needs.verify.outputs.workflows }}"),
+        "workflows only when the verified tree changes one:\n{publish}"
+    );
     assert_eq!(publish.matches("permission-").count(), 3, "{publish}");
     assert!(publish.contains("skip-token-revoke: false"), "{publish}");
     assert!(
@@ -136,11 +157,59 @@ fn publish_mints_a_repository_scoped_write_token_and_never_force_pushes() {
     );
     assert!(publish.contains("git commit-tree"), "{publish}");
     assert!(publish.contains("upgrade_patch_path_rejected"), "{publish}");
+    // Every check runs in a step before the token exists, with no token.
+    let check = publish
+        .find("name: Check the patch is the verified upgrade")
+        .expect("check step");
+    let mint = publish
+        .find("name: Mint a short-lived token")
+        .expect("mint step");
+    let push = publish.find("name: Push the upgrade branch").expect("push");
+    assert!(check < mint && mint < push, "{publish}");
+    assert!(!publish[check..mint].contains("TOKEN"), "{publish}");
+    assert!(publish[check..mint].contains("upgrade_patch_unverified"));
+    assert!(publish[check..mint].contains("velnor_upgrade_check_patch_applies"));
+    assert!(!publish[push..].contains("git apply"), "{publish}");
     assert!(publish.contains("mise --no-config --no-env --no-hooks install gh@2.102.1"));
     assert!(
         publish.contains("permissions:\n      contents: read"),
         "{publish}"
     );
+}
+
+#[test]
+fn verify_regenerates_with_its_own_verified_velnor_and_holds_no_write() {
+    let yaml = render_upgrades_workflow(&spec()).expect("render").bytes;
+    let verify = job_text(&yaml, "verify");
+    assert!(verify.contains("needs: prepare"), "{verify}");
+    assert!(
+        verify.contains("needs.prepare.outputs.changed == 'true'"),
+        "{verify}"
+    );
+    assert!(
+        verify.contains("permissions:\n      contents: read\n    steps:"),
+        "{verify}"
+    );
+    assert!(!verify.contains("secrets."), "{verify}");
+    assert_eq!(
+        verify.matches("GH_TOKEN: ${{ github.token }}").count(),
+        1,
+        "{verify}"
+    );
+    assert!(!verify.contains("steps.upgrade-token"), "{verify}");
+    for needle in [
+        "gh attestation verify",
+        "product-release-generator.yml",
+        "upgrade_velnor_digest_mismatch",
+        "upgrade_velnor_manifest_unverified",
+        "upgrade_patch_github_mismatch",
+        "velnor_upgrade_check_patch_applies",
+        "tree: ${{ steps.verify.outputs.tree }}",
+        "workflows: ${{ steps.verify.outputs.workflows }}",
+    ] {
+        assert!(verify.contains(needle), "{needle}:\n{verify}");
+    }
+    assert!(!verify.contains("releases/latest"), "{verify}");
 }
 
 #[test]
@@ -178,6 +247,15 @@ fn disabled_or_invalid_configs_do_not_render() {
     let mut floating = spec();
     floating.gh_version = "latest".to_owned();
     assert!(render_upgrades_workflow(&floating).is_err());
+    for tools in [
+        vec![],
+        vec!["zizmor@latest".to_owned()],
+        vec!["zizmor@${{ x }}".to_owned()],
+    ] {
+        let mut bad_tools = spec();
+        bad_tools.generate_tools = tools;
+        assert!(render_upgrades_workflow(&bad_tools).is_err());
+    }
 }
 
 #[test]

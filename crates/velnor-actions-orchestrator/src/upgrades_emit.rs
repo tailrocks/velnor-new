@@ -40,6 +40,16 @@ pub(crate) fn upgrades_files(
             .version(PinnedTool::Gh)
             .to_owned(),
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
+        // `generate` fail-closed-execs these validators (the same set the
+        // plan job installs for `Check generated files`).
+        generate_tools: [
+            PinnedTool::Actionlint,
+            PinnedTool::Shellcheck,
+            PinnedTool::Zizmor,
+        ]
+        .into_iter()
+        .map(|tool| velnor_actions_mise::ToolCatalog::pinned().tool_spec(tool))
+        .collect(),
     };
     Ok(vec![render_upgrades_workflow(&spec)?])
 }

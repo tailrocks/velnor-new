@@ -189,8 +189,8 @@ pub(super) fn publish_script(
         )
         .replace("@GH_FUNCTION@", &gh_function)
         .replace(
-            "@ELIGIBILITY_SCRIPT@",
-            &eligibility::publisher_script(pins)?,
+            "@ELIGIBILITY_FUNCTION@",
+            &eligibility::publisher_definition(),
         )
         .replace("@PREPARE_SCRIPT@", &prepare_script(family, pins)?)
         .replace("@REPOSITORY@", eligibility::REPOSITORY)
