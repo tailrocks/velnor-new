@@ -275,9 +275,9 @@ hash-pinned lock. Decisions:
 - Adapter: lockfile policy, JSONC, workspace resolution, `bunfig`, tool
   agreement, reads and claims (`velnor-actions-bun` tests).
 - Renderer: job shape, permissions and role gates (`impl_renderer_bun.rs`).
-- Orchestrator: generated jobs, determinism, the member timeout chain,
-  project-policy and lockfile failures (`impl_bun.rs`) and plan
-  dispositions (`impl_bun_select.rs`).
+- Orchestrator: generated jobs, determinism, project-policy and lockfile
+  failures (`impl_bun.rs`), the member timeout chain (`impl_bun_timeout.rs`)
+  and plan dispositions (`impl_bun_select.rs`).
 - Playwright: lock grammar and selection (`playwright_lock_tests.rs`), lock
   resolution and install fixtures with real zip and tar.gz archives
   (`playwright_lock_tests.rs`, `playwright_install_tests.rs` in the
