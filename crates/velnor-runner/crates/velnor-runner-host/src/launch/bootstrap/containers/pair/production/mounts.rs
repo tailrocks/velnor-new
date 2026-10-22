@@ -27,8 +27,34 @@ pub(super) fn inspect_volume_mounts(
         .as_ref()
         .and_then(|host| host.tmpfs.as_ref())
         .ok_or(HostError::Ownership)?;
-    let mut expected_tmpfs_targets = expected_tmpfs.iter().collect::<Vec<_>>();
-    let mut actual_tmpfs_targets = actual
+    let expected_tmpfs_targets = verified_tmpfs_targets(expected_tmpfs, actual)?;
+    let (expected_volumes, actual_volumes) = verified_volume_mounts(expected, actual)?;
+    let mut bytes = Vec::new();
+    append(&mut bytes, role)?;
+    for (name, target, subpath, read_only) in expected_volumes {
+        append(&mut bytes, &name)?;
+        append(&mut bytes, &target)?;
+        append(&mut bytes, &subpath)?;
+        append(&mut bytes, if read_only { "ro" } else { "rw" })?;
+    }
+    for (name, target, read_only) in actual_volumes {
+        append(&mut bytes, &name)?;
+        append(&mut bytes, &target)?;
+        append(&mut bytes, if read_only { "ro" } else { "rw" })?;
+    }
+    for (target, options) in expected_tmpfs_targets {
+        append(&mut bytes, target)?;
+        append(&mut bytes, options)?;
+    }
+    Ok(lower_hex(&Sha256::digest(bytes)))
+}
+
+fn verified_tmpfs_targets<'a>(
+    expected: &'a std::collections::HashMap<String, String>,
+    actual: &[MountPoint],
+) -> Result<Vec<(&'a String, &'a String)>, HostError> {
+    let mut expected_targets = expected.iter().collect::<Vec<_>>();
+    let mut actual_targets = actual
         .iter()
         .filter(|mount| mount.typ.as_deref() == Some("tmpfs"))
         .map(|mount| {
@@ -38,25 +64,32 @@ pub(super) fn inspect_volume_mounts(
             mount.destination.clone().ok_or(HostError::Ownership)
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let other_types = actual
+    if actual
         .iter()
-        .any(|mount| !matches!(mount.typ.as_deref(), Some("volume" | "tmpfs")));
-    if other_types {
+        .any(|mount| !matches!(mount.typ.as_deref(), Some("volume" | "tmpfs")))
+    {
         return Err(HostError::Ownership);
     }
-    expected_tmpfs_targets.sort_by(|left, right| left.0.cmp(right.0));
-    actual_tmpfs_targets.sort();
-    if expected_tmpfs_targets
+    expected_targets.sort_by(|left, right| left.0.cmp(right.0));
+    actual_targets.sort();
+    if expected_targets
         .iter()
         .map(|(target, _)| target.as_str())
         .collect::<Vec<_>>()
-        != actual_tmpfs_targets
+        != actual_targets
             .iter()
             .map(String::as_str)
             .collect::<Vec<_>>()
     {
         return Err(HostError::Ownership);
     }
+    Ok(expected_targets)
+}
+
+fn verified_volume_mounts(
+    expected: &[Mount],
+    actual: &[MountPoint],
+) -> Result<(Vec<ExpectedVolume>, Vec<ActualVolume>), HostError> {
     let expected_volumes = expected
         .iter()
         .map(expected_volume)
@@ -81,24 +114,7 @@ pub(super) fn inspect_volume_mounts(
     {
         return Err(HostError::Ownership);
     }
-    let mut bytes = Vec::new();
-    append(&mut bytes, role)?;
-    for (name, target, subpath, read_only) in expected_volumes {
-        append(&mut bytes, &name)?;
-        append(&mut bytes, &target)?;
-        append(&mut bytes, &subpath)?;
-        append(&mut bytes, if read_only { "ro" } else { "rw" })?;
-    }
-    for (name, target, read_only) in actual_volumes {
-        append(&mut bytes, &name)?;
-        append(&mut bytes, &target)?;
-        append(&mut bytes, if read_only { "ro" } else { "rw" })?;
-    }
-    for (target, options) in expected_tmpfs_targets {
-        append(&mut bytes, target)?;
-        append(&mut bytes, options)?;
-    }
-    Ok(lower_hex(&Sha256::digest(bytes)))
+    Ok((expected_volumes, actual_volumes))
 }
 
 pub(super) fn create_handoff(

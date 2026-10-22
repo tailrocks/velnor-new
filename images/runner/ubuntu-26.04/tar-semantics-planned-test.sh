@@ -47,10 +47,11 @@ case_default_paths_stay_in_destination() {
   mkdir -p -- "$dest"
   make_unsafe_paths_archive
   "$tar_bin" -xf "$work/unsafe.tar" -C "$dest" > "$work/unsafe.log" 2>&1 || status=$?
-  [ "$status" -le 2 ]
+  [ "$status" -eq 2 ]
   [ ! -e "$work/escape.txt" ]
   [ ! -e "$work/absolute-target.txt" ]
-  grep -qx 'escape' "$dest/escape.txt"
+  [ ! -e "$dest/escape.txt" ]
+  grep -Fq "Member name contains '..'" "$work/unsafe.log"
   grep -qx 'absolute' "$dest/$abs_relative"
 }
 

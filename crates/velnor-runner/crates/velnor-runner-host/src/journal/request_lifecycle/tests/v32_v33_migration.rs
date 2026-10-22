@@ -68,7 +68,7 @@ async fn v33_preserves_charged_started_v32_attempt_and_reopen_is_idempotent()
     let before = read_charged_state(&path).await?;
     assert_eq!(before.reservation_state, "reserved");
     assert_eq!(before.acquire_state, "acquired");
-    assert!(!before.started_event_digest.is_empty());
+    assert_ne!(before.started_event_digest, "");
     assert_eq!(before.jit_state, "started");
 
     migrate_and_reopen(&path).await?;

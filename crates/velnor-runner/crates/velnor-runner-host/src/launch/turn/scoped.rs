@@ -244,7 +244,10 @@ pub(super) async fn poll_scoped_queue(
     let response = poll_path(link, session, &path, total_capacity, cursor);
     restore_base(link, saved)?;
     match response? {
-        PollPathResult::Response(polled) => Ok((polled, path, queue)),
+        PollPathResult::Response(polled) => {
+            crate::launch::trace::batch(&polled);
+            Ok((polled, path, queue))
+        }
         PollPathResult::RefreshRequired => {
             let refreshed = super::super::session::refresh_bound_connection_session(
                 link,
@@ -261,7 +264,10 @@ pub(super) async fn poll_scoped_queue(
             let response = poll_path(link, session, &path, total_capacity, cursor);
             restore_base(link, saved)?;
             match response? {
-                PollPathResult::Response(polled) => Ok((polled, path, queue)),
+                PollPathResult::Response(polled) => {
+                    crate::launch::trace::batch(&polled);
+                    Ok((polled, path, queue))
+                }
                 // A refreshed bearer that still receives 401 is a terminal
                 // refusal for this header attempt. Never replay the same GET.
                 PollPathResult::RefreshRequired => Err(EnsureError::Uncertain),

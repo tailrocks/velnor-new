@@ -17,31 +17,34 @@ pub(crate) enum CreateCommitStage {
     AbortUncertain,
     Interruption,
     ClaimInterrupted,
+    CreateUncertain,
 }
 
 impl CreateCommitStage {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Claim => "claim",
-            Self::Dispatch => "dispatch",
-            Self::Response => "response",
-            Self::HelperId => "helper-id",
-            Self::Created => "created",
-            Self::Started => "started",
-            Self::Result => "result",
-            Self::Removed => "removed",
-            Self::AbortRemoval => "abort-removal",
-            Self::Absent => "absent",
-            Self::AbortUncertain => "abort-uncertain",
-            Self::Interruption => "interruption",
-            Self::ClaimInterrupted => "claim-interrupted",
-        }
+    fn parse(stage: &str) -> Option<Self> {
+        Some(match stage {
+            "claim" => Self::Claim,
+            "dispatch" => Self::Dispatch,
+            "response" => Self::Response,
+            "helper-id" => Self::HelperId,
+            "created" => Self::Created,
+            "started" => Self::Started,
+            "result" => Self::Result,
+            "removed" => Self::Removed,
+            "abort-removal" => Self::AbortRemoval,
+            "absent" => Self::Absent,
+            "abort-uncertain" => Self::AbortUncertain,
+            "interruption" => Self::Interruption,
+            "claim-interrupted" => Self::ClaimInterrupted,
+            "create-uncertain" => Self::CreateUncertain,
+            _ => return None,
+        })
     }
 }
 
 struct Gate {
     reservation_id: i64,
-    stage: &'static str,
+    stage: CreateCommitStage,
     entered: oneshot::Sender<()>,
     release: oneshot::Receiver<()>,
 }
@@ -64,7 +67,7 @@ pub(crate) fn arm_create_commit_gate(
     }
     *guard = Some(Gate {
         reservation_id,
-        stage: stage.as_str(),
+        stage,
         entered: entered_tx,
         release: release_rx,
     });
@@ -72,6 +75,9 @@ pub(crate) fn arm_create_commit_gate(
 }
 
 pub(super) async fn pause_after_commit(reservation_id: i64, stage: &'static str) {
+    let Some(stage) = CreateCommitStage::parse(stage) else {
+        return;
+    };
     let gate = GATE.get().and_then(|slot| {
         let mut guard = slot.lock().ok()?;
         let matches = guard
@@ -85,5 +91,35 @@ pub(super) async fn pause_after_commit(reservation_id: i64, stage: &'static str)
     }
     match gate.release.await {
         Ok(()) | Err(_) => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CreateCommitStage;
+
+    #[test]
+    fn parser_covers_commit_hook_stages_and_rejects_unknown_names() {
+        let stages = [
+            ("claim", CreateCommitStage::Claim),
+            ("dispatch", CreateCommitStage::Dispatch),
+            ("response", CreateCommitStage::Response),
+            ("helper-id", CreateCommitStage::HelperId),
+            ("created", CreateCommitStage::Created),
+            ("started", CreateCommitStage::Started),
+            ("result", CreateCommitStage::Result),
+            ("removed", CreateCommitStage::Removed),
+            ("abort-removal", CreateCommitStage::AbortRemoval),
+            ("absent", CreateCommitStage::Absent),
+            ("abort-uncertain", CreateCommitStage::AbortUncertain),
+            ("interruption", CreateCommitStage::Interruption),
+            ("claim-interrupted", CreateCommitStage::ClaimInterrupted),
+            ("create-uncertain", CreateCommitStage::CreateUncertain),
+        ];
+
+        for (name, stage) in stages {
+            assert_eq!(CreateCommitStage::parse(name), Some(stage));
+        }
+        assert_eq!(CreateCommitStage::parse("unknown"), None);
     }
 }

@@ -140,13 +140,15 @@ impl ConnectionJournal {
     ) -> Result<(), HostError> {
         if !proof_matches(
             claim,
-            proof.reservation_id(),
-            proof.operation_id(),
-            proof.generation(),
-            proof.operation_key(),
-            proof.engine_id(),
-            proof.docker_root_digest(),
-            proof.helper_name(),
+            &StorageInitializerIdentity {
+                reservation_id: proof.reservation_id(),
+                operation_id: proof.operation_id(),
+                generation: proof.generation(),
+                operation_key: proof.operation_key(),
+                engine_id: proof.engine_id(),
+                docker_root_digest: proof.docker_root_digest(),
+                helper_name: proof.helper_name(),
+            },
         ) || proof.abort_claim_generation() != claim.abort_claim_generation
             || !valid_hex(proof.container_id(), 64)
             || claim
@@ -174,13 +176,15 @@ impl ConnectionJournal {
     ) -> Result<(), HostError> {
         if !proof_matches(
             claim,
-            proof.reservation_id(),
-            proof.operation_id(),
-            proof.generation(),
-            proof.operation_key(),
-            proof.engine_id(),
-            proof.docker_root_digest(),
-            proof.helper_name(),
+            &StorageInitializerIdentity {
+                reservation_id: proof.reservation_id(),
+                operation_id: proof.operation_id(),
+                generation: proof.generation(),
+                operation_key: proof.operation_key(),
+                engine_id: proof.engine_id(),
+                docker_root_digest: proof.docker_root_digest(),
+                helper_name: proof.helper_name(),
+            },
         ) || proof.abort_claim_generation() != claim.abort_claim_generation
         {
             return Err(HostError::Identity);

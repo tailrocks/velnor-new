@@ -45,7 +45,10 @@ async fn v35_migration_installs_fences_atomically_and_reopens() -> Result<(), Ho
 
     let migrated = Journal::open(&path).await?;
     let connection = migrated.connection().await?;
-    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 37);
+    assert_eq!(
+        scalar(&connection, "PRAGMA user_version").await?,
+        super::JOURNAL_VERSION
+    );
     super::post_jit_effect_fences::validate(&connection).await?;
     super::post_jit_retirement::validate_v37(&connection).await?;
     drop(connection);
@@ -53,7 +56,10 @@ async fn v35_migration_installs_fences_atomically_and_reopens() -> Result<(), Ho
 
     let reopened = Journal::open(&path).await?;
     let connection = reopened.connection().await?;
-    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 37);
+    assert_eq!(
+        scalar(&connection, "PRAGMA user_version").await?,
+        super::JOURNAL_VERSION
+    );
     super::post_jit_effect_fences::validate(&connection).await?;
     super::post_jit_retirement::validate_v37(&connection).await
 }

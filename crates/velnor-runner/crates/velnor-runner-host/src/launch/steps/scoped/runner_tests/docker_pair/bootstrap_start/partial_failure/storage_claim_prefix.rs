@@ -181,7 +181,7 @@ async fn inject_storage_failure(
                 "velnor.operation": operation_id,
                 "velnor.role": role.as_str(),
             });
-            CapturedRequest::inject_preexisting_owned_volume(&name, labels);
+            CapturedRequest::inject_preexisting_owned_volume(&name, &labels);
             Ok(Some(name))
         }
         FailurePoint::InspectStatus(status) => {

@@ -43,13 +43,16 @@ pub(crate) fn test_cleanup_observer_binding() -> CleanupObserverBinding {
         cgroup_paths: ["/workers/runner".to_owned(), "/workers/dind".to_owned()],
         volume_mountpoints: ["shared-run", "runner-home", "runner-work", "dind-data"]
             .into_iter()
-            .enumerate()
-            .map(|(index, role)| CleanupVolume {
-                role: role.to_owned(),
-                mountpoint: format!("/var/lib/docker/volumes/test-{index}/_data"),
-                mount_device: [0, index as u32 + 1],
-                statx_device: [0, index as u32 + 1],
-                inode: index as u64 + 1,
+            .zip(0_u32..)
+            .map(|(role, index)| {
+                let device_minor = index + 1;
+                CleanupVolume {
+                    role: role.to_owned(),
+                    mountpoint: format!("/var/lib/docker/volumes/test-{index}/_data"),
+                    mount_device: [0, device_minor],
+                    statx_device: [0, device_minor],
+                    inode: u64::from(device_minor),
+                }
             })
             .collect(),
         owned_tmpfs_devices: [

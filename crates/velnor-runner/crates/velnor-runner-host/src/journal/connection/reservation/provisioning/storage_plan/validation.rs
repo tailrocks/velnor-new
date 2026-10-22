@@ -161,11 +161,13 @@ fn validate_pool_row(row: &PoolRow, pool: &StoragePoolLimit) -> Result<(), HostE
                 && row.sample[2] == Some(0)
                 && row.sample[3] == Some(0)
         }
-        (StorageMedium::Disk, StorageInodePolicy::Unknown) => false,
+        (StorageMedium::Disk, StorageInodePolicy::Unknown)
+        | (StorageMedium::Tmpfs, StorageInodePolicy::DynamicBtrfs | StorageInodePolicy::Unknown) => {
+            false
+        }
         (StorageMedium::Tmpfs, StorageInodePolicy::Finite) => {
             row.digest.is_none() && row.sample.iter().all(Option::is_none)
         }
-        (StorageMedium::Tmpfs, _) => false,
     };
     if row.scope != expected_scope
         || row.medium != pool.medium()

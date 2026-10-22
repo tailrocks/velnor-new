@@ -312,12 +312,10 @@ fn tmpfs_capacity(source: &str) -> Result<(u64, u64), String> {
 
 fn fixture_tmpfs_device_minor(role: AttachmentRole) -> u32 {
     match role {
-        AttachmentRole::RunnerHome => 51,
-        AttachmentRole::SourceProofInbox => 51,
+        AttachmentRole::RunnerHome | AttachmentRole::SourceProofInbox => 51,
         AttachmentRole::RunnerWork => 52,
         AttachmentRole::RunnerTmp => 53,
         AttachmentRole::RunnerShm => 54,
-        AttachmentRole::SharedRun => 55,
         AttachmentRole::DindData => 56,
         AttachmentRole::DindTmp => 57,
         AttachmentRole::DindShm => 58,

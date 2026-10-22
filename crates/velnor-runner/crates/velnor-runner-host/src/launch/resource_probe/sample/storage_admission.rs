@@ -16,6 +16,7 @@ use super::Observation;
 const DOCKER_ROOT_TARGET: &str = "/velnor/docker-root";
 const BTRFS_SUPER_MAGIC: u64 = 0x9123_683e;
 const TMPFS_SUPER_MAGIC: u64 = 0x0102_1994;
+const HEX_DIGITS: &[u8; 16] = b"0123456789abcdef";
 
 impl Observation {
     /// Bind this fresh selected-guest sample to the exact immutable profile.
@@ -72,19 +73,20 @@ impl Observation {
             self.docker_root_digest.clone(),
         )
         .ok()?;
-        let filesystem_instance_digest = filesystem_instance_digest(
-            &self.engine_id,
-            &self.docker_root_digest,
-            record.guest_boot_id.as_bytes(),
-            record.docker_root_mount_source.as_bytes(),
-            record.docker_root_fs_type_name.as_bytes(),
-            record.docker_root_fs_type_magic,
-            record.docker_root_device_major,
-            record.docker_root_device_minor,
-            record.docker_root_statx_device_major,
-            record.docker_root_statx_device_minor,
-            record.docker_root_filesystem_id,
-        );
+        let filesystem_instance_digest =
+            filesystem_instance_digest(FilesystemInstanceDigestInput {
+                engine_id: &self.engine_id,
+                docker_root_digest: &self.docker_root_digest,
+                guest_boot_id: record.guest_boot_id.as_bytes(),
+                mount_source: record.docker_root_mount_source.as_bytes(),
+                filesystem_type_name: record.docker_root_fs_type_name.as_bytes(),
+                filesystem_type_magic: record.docker_root_fs_type_magic,
+                mount_device_major: record.docker_root_device_major,
+                mount_device_minor: record.docker_root_device_minor,
+                statx_device_major: record.docker_root_statx_device_major,
+                statx_device_minor: record.docker_root_statx_device_minor,
+                filesystem_id: record.docker_root_filesystem_id,
+            });
         let pool_observation = StoragePoolObservation::new_with_filesystem(
             pool.pool_id().to_owned(),
             filesystem_instance_digest,
@@ -121,34 +123,51 @@ pub(super) fn disk_pool_identity(observation: &Observation) -> Option<String> {
     {
         return None;
     }
-    Some(filesystem_instance_digest(
-        &observation.engine_id,
-        &observation.docker_root_digest,
-        record.guest_boot_id.as_bytes(),
-        record.docker_root_mount_source.as_bytes(),
-        record.docker_root_fs_type_name.as_bytes(),
-        record.docker_root_fs_type_magic,
-        record.docker_root_device_major,
-        record.docker_root_device_minor,
-        record.docker_root_statx_device_major,
-        record.docker_root_statx_device_minor,
-        record.docker_root_filesystem_id,
-    ))
+    Some(filesystem_instance_digest(FilesystemInstanceDigestInput {
+        engine_id: &observation.engine_id,
+        docker_root_digest: &observation.docker_root_digest,
+        guest_boot_id: record.guest_boot_id.as_bytes(),
+        mount_source: record.docker_root_mount_source.as_bytes(),
+        filesystem_type_name: record.docker_root_fs_type_name.as_bytes(),
+        filesystem_type_magic: record.docker_root_fs_type_magic,
+        mount_device_major: record.docker_root_device_major,
+        mount_device_minor: record.docker_root_device_minor,
+        statx_device_major: record.docker_root_statx_device_major,
+        statx_device_minor: record.docker_root_statx_device_minor,
+        filesystem_id: record.docker_root_filesystem_id,
+    }))
+}
+
+pub(in crate::launch) struct FilesystemInstanceDigestInput<'a> {
+    pub(in crate::launch) engine_id: &'a str,
+    pub(in crate::launch) docker_root_digest: &'a str,
+    pub(in crate::launch) guest_boot_id: &'a [u8],
+    pub(in crate::launch) mount_source: &'a [u8],
+    pub(in crate::launch) filesystem_type_name: &'a [u8],
+    pub(in crate::launch) filesystem_type_magic: u64,
+    pub(in crate::launch) mount_device_major: u32,
+    pub(in crate::launch) mount_device_minor: u32,
+    pub(in crate::launch) statx_device_major: u32,
+    pub(in crate::launch) statx_device_minor: u32,
+    pub(in crate::launch) filesystem_id: u64,
 }
 
 pub(in crate::launch) fn filesystem_instance_digest(
-    engine_id: &str,
-    docker_root_digest: &str,
-    guest_boot_id: &[u8],
-    mount_source: &[u8],
-    filesystem_type_name: &[u8],
-    filesystem_type_magic: u64,
-    mount_device_major: u32,
-    mount_device_minor: u32,
-    statx_device_major: u32,
-    statx_device_minor: u32,
-    filesystem_id: u64,
+    input: FilesystemInstanceDigestInput<'_>,
 ) -> String {
+    let FilesystemInstanceDigestInput {
+        engine_id,
+        docker_root_digest,
+        guest_boot_id,
+        mount_source,
+        filesystem_type_name,
+        filesystem_type_magic,
+        mount_device_major,
+        mount_device_minor,
+        statx_device_major,
+        statx_device_minor,
+        filesystem_id,
+    } = input;
     let mut hasher = Sha256::new();
     hasher.update(b"velnor-storage-filesystem-instance-v1\0");
     for field in [
@@ -168,10 +187,9 @@ pub(in crate::launch) fn filesystem_instance_digest(
     hasher.update(statx_device_minor.to_be_bytes());
     hasher.update(filesystem_id.to_be_bytes());
     let mut digest = String::with_capacity(64);
-    const HEX: &[u8; 16] = b"0123456789abcdef";
     for byte in hasher.finalize() {
-        digest.push(char::from(HEX[usize::from(byte >> 4)]));
-        digest.push(char::from(HEX[usize::from(byte & 0x0f)]));
+        digest.push(char::from(HEX_DIGITS[usize::from(byte >> 4)]));
+        digest.push(char::from(HEX_DIGITS[usize::from(byte & 0x0f)]));
     }
     digest
 }

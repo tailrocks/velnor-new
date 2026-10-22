@@ -153,8 +153,7 @@ impl ServerState {
                 .map_err(|error| format!("Exec {id} request: {error}"))?;
             let metadata_inodes = initializer.lock().await.metadata_inodes().await?;
             let is_channel_request = serde_json::from_slice::<Value>(&line)
-                .ok()
-                .is_some_and(|request| request["schema_version"] == 3);
+                .is_ok_and(|request| request["schema_version"] == 3);
             let (response, operation_id) = exec_fixture::exec_record(
                 &line,
                 &record.container_id,

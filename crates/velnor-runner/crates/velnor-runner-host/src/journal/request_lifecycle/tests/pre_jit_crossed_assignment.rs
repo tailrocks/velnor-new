@@ -49,7 +49,7 @@ async fn started_witness_does_not_block_cleanup_of_another_physical_lineage_inne
             .reservation(failure.assignment())
             .await
             .map_err(|error| error.to_string())?
-            .unwrap()
+            .ok_or("expected charged reservation")?
             .state,
         ReservationState::Released,
     );

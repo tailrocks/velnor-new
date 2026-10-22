@@ -25,19 +25,19 @@ pub(super) fn publication_output(line: &[u8]) -> Result<Vec<u8>, String> {
             payload_bytes,
         )?
     } else if let Some(directory) = request.get("expected_runner_job_facts") {
-        job_facts_publication_record(
+        job_facts_publication_record(JobFactsPublicationInput {
             directory,
-            &request["expected_runner_runtime_identity"],
+            runtime_identity: &request["expected_runner_runtime_identity"],
             operation_id,
             boot_id,
-            payload_sha256,
-            request["job_facts_sha256"].as_str().unwrap_or_default(),
+            digest: payload_sha256,
+            facts_digest: request["job_facts_sha256"].as_str().unwrap_or_default(),
             payload_bytes,
-            request["guest_image_sha256"].as_str().unwrap_or_default(),
-            request["publication_binding_sha256"]
+            guest_image_digest: request["guest_image_sha256"].as_str().unwrap_or_default(),
+            binding_digest: request["publication_binding_sha256"]
                 .as_str()
                 .unwrap_or_default(),
-            u64::try_from(
+            guest_image_bytes: u64::try_from(
                 request["guest_image_hex"]
                     .as_str()
                     .unwrap_or_default()
@@ -45,7 +45,7 @@ pub(super) fn publication_output(line: &[u8]) -> Result<Vec<u8>, String> {
                     / 2,
             )
             .map_err(|error| error.to_string())?,
-        )?
+        })?
     } else {
         return Err("The publisher request has no measured target directory.".to_owned());
     };
@@ -105,18 +105,33 @@ fn control_publication_record(
     Ok(record)
 }
 
-fn job_facts_publication_record(
-    directory: &Value,
-    runtime_identity: &Value,
-    operation_id: &str,
-    boot_id: &str,
-    digest: &str,
-    facts_digest: &str,
+#[derive(Clone, Copy)]
+struct JobFactsPublicationInput<'a> {
+    directory: &'a Value,
+    runtime_identity: &'a Value,
+    operation_id: &'a str,
+    boot_id: &'a str,
+    digest: &'a str,
+    facts_digest: &'a str,
     payload_bytes: u64,
-    guest_image_digest: &str,
-    binding_digest: &str,
+    guest_image_digest: &'a str,
+    binding_digest: &'a str,
     guest_image_bytes: u64,
-) -> Result<Value, String> {
+}
+
+fn job_facts_publication_record(input: JobFactsPublicationInput<'_>) -> Result<Value, String> {
+    let JobFactsPublicationInput {
+        directory,
+        runtime_identity,
+        operation_id,
+        boot_id,
+        digest,
+        facts_digest,
+        payload_bytes,
+        guest_image_digest,
+        binding_digest,
+        guest_image_bytes,
+    } = input;
     if directory["inode"].as_u64().unwrap_or_default() == 0 {
         return Err("Job-facts directory inode is absent".to_owned());
     }

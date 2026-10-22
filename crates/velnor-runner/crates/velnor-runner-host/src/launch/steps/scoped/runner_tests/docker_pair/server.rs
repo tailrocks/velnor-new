@@ -65,10 +65,6 @@ pub(super) struct PairDockerApi {
 }
 
 impl PairDockerApi {
-    pub(super) fn open(images: crate::launch::VerifiedWorkerImages) -> Result<Self, String> {
-        Self::open_with_optional_initializer(images, None, None, 1_u64 << 30)
-    }
-
     pub(super) fn open_with_initializer(
         images: crate::launch::VerifiedWorkerImages,
         initializer_image_id: String,
@@ -159,13 +155,15 @@ impl PairDockerApi {
         let task = tokio::spawn(async move {
             daemon::serve(
                 listener,
-                images,
-                initializer,
-                runner_create_status,
-                server_probe_available_bytes,
-                server_requests,
-                server_jit,
-                server_tamper_channel,
+                daemon::ServerConfig {
+                    images,
+                    initializer,
+                    runner_create_status,
+                    probe_available_bytes: server_probe_available_bytes,
+                    requests: server_requests,
+                    jit_input: server_jit,
+                    tamper_channel_response: server_tamper_channel,
+                },
                 stopped,
             )
             .await
@@ -271,10 +269,7 @@ impl PairDockerApi {
                 request.method == "POST"
                     && route(request) == "/containers/create"
                     && serde_json::from_slice::<serde_json::Value>(&request.body)
-                        .ok()
-                        .is_some_and(|body| {
-                            body["Labels"]["velnor.role"] == "execution-publication"
-                        })
+                        .is_ok_and(|body| body["Labels"]["velnor.role"] == "execution-publication")
             })
             .count();
         let snapshot = ActivitySnapshot {

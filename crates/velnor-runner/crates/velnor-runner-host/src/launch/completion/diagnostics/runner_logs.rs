@@ -20,8 +20,6 @@ pub(in crate::launch) use collect::{
     validate_exec_id,
 };
 
-pub(super) const LOG_PATH: &str = "/home/runner/_diag/.";
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum RunnerLogAvailability {
     None,

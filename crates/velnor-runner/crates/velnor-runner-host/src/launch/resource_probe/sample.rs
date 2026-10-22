@@ -10,7 +10,9 @@ mod witness;
 pub(crate) use guest_capacity::checked_guest_capacity;
 pub(in crate::launch) use production_profile::retained_tmpfs_bytes;
 pub(crate) use recovery::RecoveryObservation;
-pub(in crate::launch) use storage_admission::filesystem_instance_digest;
+pub(in crate::launch) use storage_admission::{
+    FilesystemInstanceDigestInput, filesystem_instance_digest,
+};
 pub(crate) use witness::StartObservationWitness;
 #[cfg(test)]
 mod storage_admission_tests;
@@ -329,13 +331,6 @@ impl StartPermit {
             self.observation.sample_generation_id.clone(),
             self.observation.observed_at,
         )
-    }
-
-    #[cfg(test)]
-    pub(crate) fn stale_observation_witness(&self) -> StartObservationWitness {
-        let mut witness = self.observation_witness();
-        witness.observed_at -= MAX_OBSERVATION_AGE + Duration::from_millis(1);
-        witness
     }
 
     pub(crate) const fn charge(&self) -> (u64, u64) {

@@ -79,7 +79,7 @@ async fn reconcile_transition_guards(
             .execute("DROP TRIGGER provisioning_state_transition", ())
             .await
             .map_err(|_| HostError::Journal)?;
-    } else if !(new_container && new_state) && !fresh {
+    } else if !(fresh || new_container && new_state) {
         return Err(HostError::Journal);
     }
 

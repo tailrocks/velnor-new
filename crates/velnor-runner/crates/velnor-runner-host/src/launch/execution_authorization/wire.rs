@@ -244,11 +244,6 @@ impl PersistedExecutionDecision {
     pub(crate) fn rest_job_id(&self) -> Option<&str> {
         self.rest_job_id.as_deref()
     }
-
-    pub(crate) fn deny_code(&self) -> Option<&str> {
-        self.deny_code.as_deref()
-    }
-
     pub(crate) fn valid(&self) -> bool {
         self.schema_version == 1
             && valid_digest(&self.challenge)

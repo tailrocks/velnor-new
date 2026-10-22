@@ -33,7 +33,7 @@ case_cache_parent_paths_and_sdk_compression() {
   local source="$work/home/runner/_work/repo/repo"
   local restore="$work/restore/home/runner/_work/repo/repo"
   local safe_restore="$work/safe-restore/home/runner/_work/repo/repo"
-  local long manifest archive gzip_archive status=0
+  local long manifest archive gzip_archive status=0 safe_status=0
   long=""
   for ((i = 0; i < 90; i++)); do long+="n"; done
   mkdir -p -- "$source" "$home/.cache/mbx/$long/sub" "$restore" "$safe_restore"
@@ -63,10 +63,12 @@ case_cache_parent_paths_and_sdk_compression() {
   grep -qx 'stay' "$restore/keep.txt"
   [ ! -e "$restore/.cache" ]
 
-  "$tar_bin" -xf "$archive" -C "$safe_restore" > "$work/default.log" 2>&1 || status=$?
-  [ "$status" -le 2 ]
-  grep -qx 'mbx-ok' "$safe_restore/.cache/mbx/marker"
+  "$tar_bin" -xf "$archive" -C "$safe_restore" > "$work/default.log" 2>&1 || safe_status=$?
+  [ "$safe_status" -eq 2 ]
+  [ ! -e "$safe_restore/.cache/mbx/marker" ]
   [ ! -e "$work/safe-restore/home/runner/.cache/mbx/marker" ]
+  grep -Fq "Member name contains '..'" "$work/default.log"
+  grep -qx 'stay' "$safe_restore/keep.txt"
 
   gzip_archive="$work/cache.tgz"
   (
@@ -149,7 +151,7 @@ case_absolute_name_requires_explicit_p() {
     > "$work/absolute-default.log" 2>&1 || status=$?
   [ "$status" -le 2 ]
   [ ! -e "$file" ]
-  [ "$(cat "$default_dest${file#/}")" = absolute-ok ]
+  [ "$(cat "$default_dest/${file#/}")" = absolute-ok ]
   "$tar_bin" -xf "$work/absolute.tar" -P -C "$restored"
   grep -qx 'absolute-ok' "$file"
 }

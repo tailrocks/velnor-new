@@ -1,6 +1,7 @@
 # Target platform: linux/amd64. ARM64 is not the baseline.
-# One dockerd per worker. Listens only on unix:///var/run/docker.sock.
-# Do not COPY or mount a host socket. No TCP listener. No prune.
+# One dockerd per worker. Its TCP API binds only to this job's loopback.
+# Keep the private Unix socket for official container actions. No host socket or port publish.
+# No prune.
 # This image does not set privileged. The controller supplies runtime privileges.
 FROM ubuntu:26.04@sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a
 

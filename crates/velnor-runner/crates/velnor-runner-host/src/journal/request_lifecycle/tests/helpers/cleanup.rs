@@ -43,6 +43,8 @@ async fn record_cleanup_observer_probe(
     scope: &ConnectionJournal,
     provisioned: &ProvisionedRunner,
 ) -> Result<(), HostError> {
+    use std::fmt::Write as _;
+
     use crate::journal::{ProbeSeed, ResourceProbePurpose};
     use sha2::{Digest, Sha256};
     use velnor_resource_probe::cleanup_observer_wire::CleanupObserverRequest;
@@ -66,11 +68,11 @@ async fn record_cleanup_observer_probe(
     digest.update(b"velnor-cleanup-observer-request-v1\0");
     digest.update(&request_json);
     digest.update(b"\n");
-    let request_sha256 = digest
-        .finalize()
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
+    let mut request_sha256 = String::with_capacity(64);
+    for byte in digest.finalize() {
+        write!(&mut request_sha256, "{byte:02x}")
+            .expect("writing to a String cannot fail");
+    }
     let seed = ProbeSeed {
         operation_id: operation_id.clone(),
         instance_id: journal.instance_id().await?,
@@ -215,14 +217,13 @@ pub(super) async fn record_runner_completion_for_cleanup(
     source: &velnor_runner_github::SourceMetadata,
     runner: &velnor_runner_github::RunnerReference,
 ) -> Result<i64, HostError> {
-    if let Some(job_id) = started_job_id {
-        if scope
+    if let Some(job_id) = started_job_id
+        && scope
             .record_job_started(request, job_id, source, runner, None)
             .await?
             != intent_id
-        {
-            return Err(HostError::Journal);
-        }
+    {
+        return Err(HostError::Journal);
     }
     if scope
         .record_job_completed(

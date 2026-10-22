@@ -23,11 +23,32 @@ use request_wait::{StartedRequestReadError, read_started_request};
 #[must_use]
 pub(crate) enum PendingScopedExecution {
     Jit(PendingJitBootstrap),
-    Channel(Box<ChannelReadyBootstrap>, HostError),
+    Channel(
+        Box<ChannelReadyBootstrap>,
+        #[cfg_attr(
+            not(test),
+            expect(
+                dead_code,
+                reason = "preserves the deferred channel failure until cleanup handles the live pair"
+            )
+        )]
+        HostError,
+    ),
     RequestTimeout(Box<RunnerReadyBootstrap>),
     Runner(
         Box<RunnerReadyBootstrap>,
+        #[expect(
+            dead_code,
+            reason = "retains the authorized source while terminal cleanup still owns the runner"
+        )]
         Option<Box<AuthorizedExecutionSource>>,
+        #[cfg_attr(
+            not(test),
+            expect(
+                dead_code,
+                reason = "preserves the deferred source-proof failure through terminal cleanup"
+            )
+        )]
         HostError,
     ),
 }

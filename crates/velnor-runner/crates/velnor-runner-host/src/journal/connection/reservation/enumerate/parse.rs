@@ -79,7 +79,7 @@ pub(super) fn parse_reservation(
     let assignment = parse_assignment(scope, set_id, &reservation.key);
     let runner = parse_runner(&intent, &jit, set_id);
     let expected_name = assignment.as_ref().map(physical_runner_name);
-    let known = reservation_identity_is_known(ReservationIdentityContext {
+    let known = reservation_identity_is_known(&ReservationIdentityContext {
         reservation: &reservation,
         intent: &intent,
         jit: &jit,
@@ -299,7 +299,9 @@ fn parse_assignment(
 fn physical_runner_name(identity: &AssignmentIdentity) -> String {
     match identity.key() {
         AssignmentKey::Remote { subject, .. } => format!("v{subject}"),
-        _ => String::new(),
+        AssignmentKey::AssignedRequest { .. } => String::new(),
+        #[cfg(test)]
+        AssignmentKey::PopulationMessage { .. } | AssignmentKey::Session { .. } => String::new(),
     }
 }
 

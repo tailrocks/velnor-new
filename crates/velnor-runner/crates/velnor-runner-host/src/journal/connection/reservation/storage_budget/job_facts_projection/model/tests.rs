@@ -1,5 +1,6 @@
 use super::{Document, linux_device_number};
 use sha2::{Digest, Sha256};
+use std::fmt::Write as _;
 
 const GOLDEN: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -24,10 +25,10 @@ fn production_document_encoding_matches_consumer_golden() {
         .file
         .verified_document_bytes(&guest_image.connection, &guest_image.images)
         .expect("verified guest image bytes");
-    let guest_image_sha256 = Sha256::digest(guest_image_bytes)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
+    let mut guest_image_sha256 = String::with_capacity(64);
+    for byte in Sha256::digest(guest_image_bytes) {
+        write!(&mut guest_image_sha256, "{byte:02x}").expect("writing to a String cannot fail");
+    }
     let mut value: serde_json::Value =
         serde_json::from_slice(GOLDEN).expect("golden document value");
     value["guest_image_sha256"] = serde_json::Value::String(guest_image_sha256);

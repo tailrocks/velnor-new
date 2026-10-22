@@ -156,10 +156,6 @@ impl DeferredAuthorizedOffers {
         }
         true
     }
-
-    pub(crate) fn is_empty(&self) -> bool {
-        self.offers.is_empty()
-    }
 }
 
 fn available_request_ids(polled: &Poll) -> Result<BTreeSet<i64>, EnsureError> {
