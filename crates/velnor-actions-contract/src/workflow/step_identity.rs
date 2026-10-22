@@ -31,22 +31,12 @@ pub const TOFU_PROVIDERS_KEY_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outpu
 pub const TOFU_PROVIDERS_PATH_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outputs.cache-path }}";
 /// Run MBX workspace cleanup only after the exact-version/store guard passed.
 pub const MBX_WORKSPACE_CLEAN_CONDITION: &str = "always() && steps.mbx-ready.outcome == 'success'";
-/// App installation token minted for private sources (HD-7).
-pub const PRIVATE_TOKEN_OUTPUT_EXPR: &str = "${{ steps.deps-token.outputs.token }}";
-/// Expression of the job token bound to the npm registry phase (HD-7).
-pub const PRIVATE_NPM_READ_EXPR: &str = "${{ github.token }}";
-/// Step env key carrying the App installation token (HD-7).
-pub const PRIVATE_FETCH_TOKEN_ENV: &str = "VELNOR_PRIVATE_FETCH_TOKEN";
-/// Step env key carrying the npm registry read token (HD-7).
-pub const PRIVATE_NPM_READ_TOKEN_ENV: &str = "VELNOR_NPM_READ_TOKEN";
-/// Internal operation of the Velnor-owned private fetch step (HD-7).
-pub const PRIVATE_FETCH_OPERATION: &str = "private-fetch-v1";
-/// Internal operation of the token revocation step (HD-7).
-pub const PRIVATE_REVOKE_OPERATION: &str = "private-revoke-v1";
-/// Internal operation of the Bun registry phase (HD-6, HD-7).
-pub const BUN_REGISTRY_INSTALL_OPERATION: &str = "bun-registry-install-v1";
-/// Pinned-action prefix of the private token mint step (HD-7).
-pub const PRIVATE_TOKEN_MINT_ACTION_PREFIX: &str = "actions/create-github-app-token@";
+pub use super::step_private::{
+    BUN_ASSETS_EXPORT_OPERATION, BUN_ASSETS_IMPORT_OPERATION, BUN_ASSETS_PREPARE_OPERATION,
+    BUN_REGISTRY_INSTALL_OPERATION, PRIVATE_FETCH_OPERATION, PRIVATE_FETCH_TOKEN_ENV,
+    PRIVATE_NPM_READ_EXPR, PRIVATE_NPM_READ_TOKEN_ENV, PRIVATE_REVOKE_OPERATION,
+    PRIVATE_TOKEN_MINT_ACTION_PREFIX, PRIVATE_TOKEN_OUTPUT_EXPR,
+};
 
 pub use super::step_id::StepId;
 /// Semantic step role used for workflow composition and validation.
@@ -175,6 +165,8 @@ pub enum StepRole {
     PrivateRevoke,
     /// Registry phase of `bun install`; the only step binding the job token.
     BunRegistryInstall,
+    /// Credential-free private asset archive handoff.
+    BunAssetsHandoff,
     /// Hash-verified Playwright browser install; holds no credential.
     PlaywrightInstall,
 }
@@ -227,6 +219,13 @@ impl StepRole {
             Self::PrivateFetch => internal_operation(kind, PRIVATE_FETCH_OPERATION),
             Self::PrivateRevoke => internal_operation(kind, PRIVATE_REVOKE_OPERATION),
             Self::BunRegistryInstall => internal_operation(kind, BUN_REGISTRY_INSTALL_OPERATION),
+            Self::BunAssetsHandoff => [
+                BUN_ASSETS_EXPORT_OPERATION,
+                BUN_ASSETS_PREPARE_OPERATION,
+                BUN_ASSETS_IMPORT_OPERATION,
+            ]
+            .into_iter()
+            .any(|operation| internal_operation(kind, operation)),
             Self::MbxCache => super::step_mbx_lifecycle::valid_mbx_cache(kind),
             Self::PlaywrightInstall => super::step_protocol::valid_playwright_install(kind),
             Self::PreparePinnedTools

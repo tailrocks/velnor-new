@@ -156,8 +156,8 @@ fn assets_job(
     let member_id = job_id(member);
     let mut steps: Vec<Step> = acquire.into_iter().cloned().collect();
     steps.extend(block.iter().cloned());
-    steps.extend(assets_tail(&member_id)?);
     let pins = private.map_or_else(Vec::new, PrivateWiring::release_asset_pins);
+    steps.extend(assets_tail(&member_id, &pins)?);
     Ok((
         BunAssetsPolicy {
             member: member.name.clone(),

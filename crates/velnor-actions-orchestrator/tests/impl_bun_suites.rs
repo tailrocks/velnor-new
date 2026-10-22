@@ -157,6 +157,23 @@ fn one_assets_job_fetches_release_assets_and_suites_hold_no_secret() -> TestResu
     )?;
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     let ci = required_file(&tree, ".github/workflows/ci.yml")?;
+    assert_asset_job(ci)?;
+    assert_suite_asset_handoff(ci)?;
+    let member = job_body(ci, "bun-chainargos-docs")?;
+    assert!(
+        member.contains("name: Fetch private sources"),
+        "member job keeps HD-7: {member}"
+    );
+    let required = job_body(ci, "required")?;
+    assert!(
+        required.contains("- bun-chainargos-docs--unit\n"),
+        "{required}"
+    );
+    assert!(!required.contains("--assets"), "{required}");
+    Ok(())
+}
+
+fn assert_asset_job(ci: &str) -> TestResult {
     let assets = job_body(ci, "bun-chainargos-docs--assets")?;
     assert!(
         assets.contains("name: Bun / chainargos-docs / assets"),
@@ -170,24 +187,25 @@ fn one_assets_job_fetches_release_assets_and_suites_hold_no_secret() -> TestResu
     let mint = position("name: Mint read-only token for private sources")?;
     let fetch = position("name: Fetch private sources")?;
     let revoke = position("name: Revoke private-source token")?;
-    let index = position("name: Index private assets")?;
+    let bundle = position("name: Bundle verified private assets")?;
     let upload = position("name: Upload private assets")?;
     assert!(
-        mint < fetch && fetch < revoke && revoke < index && index < upload,
+        mint < fetch && fetch < revoke && revoke < bundle && bundle < upload,
         "{assets}"
     );
     assert!(
-        assets.contains("name: velnor-pw-assets-bun-chainargos-docs"),
+        assets.contains("path: ${{ runner.temp }}/velnor/bun-assets/bun-chainargos-docs/velnor-pw-assets-bun-chainargos-docs.tar.gz"),
         "{assets}"
     );
-    assert!(
-        assets.contains("include-hidden-files: \"true\""),
-        "{assets}"
-    );
+    assert!(assets.contains("archive: \"false\""), "{assets}");
     assert!(
         !assets.contains("bun install"),
         "the assets job runs no repository code"
     );
+    Ok(())
+}
+
+fn assert_suite_asset_handoff(ci: &str) -> TestResult {
     let suite = job_body(ci, "bun-chainargos-docs--unit")?;
     assert!(
         suite.contains("- plan\n      - bun-chainargos-docs--assets\n"),
@@ -200,34 +218,40 @@ fn one_assets_job_fetches_release_assets_and_suites_hold_no_secret() -> TestResu
     ] {
         assert!(!suite.contains(secret), "{secret} in a suite job: {suite}");
     }
+    let prepare = suite
+        .find("name: Prepare private asset handoff")
+        .ok_or("prepare")?;
     let download = suite
         .find("name: Download private assets")
         .ok_or("download")?;
-    let verify = suite.find("name: Verify private assets").ok_or("verify")?;
+    let download_body = &suite[download..];
+    assert!(
+        download_body.contains("name: velnor-pw-assets-bun-chainargos-docs.tar.gz"),
+        "{download_body}"
+    );
+    assert!(
+        download_body.contains("digest-mismatch: error"),
+        "{download_body}"
+    );
+    let verify = suite
+        .find("name: Import and verify private assets")
+        .ok_or("verify")?;
     let install = suite.find("name: Install dependencies").ok_or("install")?;
-    assert!(download < verify && verify < install, "{suite}");
+    assert!(
+        prepare < download && download < verify && verify < install,
+        "{suite}"
+    );
     assert!(
         suite.contains(&format!(
-            "VELNOR_ASSET_PINS: \"ui-assets:{}\"",
+            "VELNOR_BUN_ASSET_PINS: \"ui-assets:{}\"",
             "0123456789abcdef".repeat(4)
         )) || suite.contains(&format!(
-            "VELNOR_ASSET_PINS: ui-assets:{}",
+            "VELNOR_BUN_ASSET_PINS: ui-assets:{}",
             "0123456789abcdef".repeat(4)
         )),
         "{suite}"
     );
-    assert!(suite.contains("private_asset_pin_missing"), "{suite}");
-    let member = job_body(ci, "bun-chainargos-docs")?;
-    assert!(
-        member.contains("name: Fetch private sources"),
-        "member job keeps HD-7: {member}"
-    );
-    let required = job_body(ci, "required")?;
-    assert!(
-        required.contains("- bun-chainargos-docs--unit\n"),
-        "{required}"
-    );
-    assert!(!required.contains("--assets"), "{required}");
+    assert!(suite.contains("bun-assets-import-v1"), "{suite}");
     Ok(())
 }
 

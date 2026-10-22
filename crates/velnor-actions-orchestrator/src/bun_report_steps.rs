@@ -95,9 +95,10 @@ pub(crate) fn report_steps(
     retention_days: u16,
 ) -> Result<Vec<Step>, OrchestratorError> {
     let mut steps = Vec::new();
-    if !input.scopes.is_empty() {
+    if !input.scopes.is_empty() || !input.handoff.is_empty() {
         steps.extend(input.acquire.cloned());
     }
+    steps.extend(input.handoff.iter().cloned());
     steps.push(prepare_step(input.catalog)?);
     steps.push(verify_step(input)?);
     let bun = stack_family_cache::bun_install(input.root)?;
