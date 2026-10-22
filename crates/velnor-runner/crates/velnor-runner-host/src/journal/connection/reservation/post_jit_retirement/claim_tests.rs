@@ -187,7 +187,7 @@ async fn event_disposition_binds_actual_request_to_claimed_runner() -> Result<()
         .current_physical_attempt(fixture.reservation_id)
         .await?
         .ok_or(HostError::Journal)?;
-    fixture
+    let retirement_claim = fixture
         .scope
         .claim_post_jit_retirement(fixture.reservation_id, 60)
         .await?
@@ -203,9 +203,16 @@ async fn event_disposition_binds_actual_request_to_claimed_runner() -> Result<()
     .await?
     .ok_or(HostError::Journal)?;
     assert_eq!(claimed.actual_request_id, ACTUAL_REQUEST);
+    assert_eq!(claimed.lineage_id, attempt.lineage_id);
+    assert_eq!(claimed.physical_generation, attempt.generation);
+    assert_eq!(claimed.reservation_id, attempt.reservation_id);
     assert_eq!(claimed.witness_request_id, attempt.witness_request_id);
     assert_ne!(claimed.actual_request_id, claimed.witness_request_id);
     assert_eq!(claimed.intent_id, attempt.intent_id);
+    assert_eq!(
+        claimed.claim_generation,
+        retirement_claim.claim_generation()
+    );
     assert!(matches!(
         claimed.status,
         super::disposition::EventRetirementStatus::Claimed
