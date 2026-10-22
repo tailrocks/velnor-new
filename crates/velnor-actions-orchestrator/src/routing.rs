@@ -145,6 +145,7 @@ fn workflow_request(
             rust_version: tool_catalog
                 .version(velnor_actions_mise::PinnedTool::Rust)
                 .to_owned(),
+            verify_rust_argv: crate::workflow::verify_rust_argv(tool_catalog),
         })
     } else {
         None

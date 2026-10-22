@@ -23,6 +23,7 @@ fn spec() -> UpgradesSpec {
             "shellcheck@0.11.0".to_owned(),
             "zizmor@1.31.1".to_owned(),
         ],
+        verify_rust_script: "v=\"${VELNOR_TOOL_RUST}\"; echo verify \"$v\"".to_owned(),
         jactionlint_verify: "set -eu; echo verify-jactionlint".to_owned(),
     }
 }
@@ -207,6 +208,8 @@ fn verify_regenerates_with_its_own_verified_velnor_and_holds_no_write() {
         "velnor_upgrade_check_patch_applies",
         "tree: ${{ steps.verify.outputs.tree }}",
         "workflows: ${{ steps.verify.outputs.workflows }}",
+        "VELNOR_VERIFY_RUST_SCRIPT:",
+        "sh -c \\\"$VELNOR_VERIFY_RUST_SCRIPT\\\"",
     ] {
         assert!(verify.contains(needle), "{needle}:\n{verify}");
     }

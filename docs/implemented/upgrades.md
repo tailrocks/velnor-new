@@ -83,10 +83,11 @@ default branch. One concurrency group, never cancelled.
    - **Regeneration**: `velnor-actions generate` with the verified Velnor
      rewrites `.github/` and every generated file, after installing what it
      executes: the Velnor-pinned validators (`VELNOR_GENERATE_TOOLS`), the
-     project Rust and every Cargo workspace's sources
-     (`upgrades_generate.sh`, outside the project configuration). If
-     regeneration fails after the Rust bump, for any reason (the newest Rust
-     is not yet in that Velnor's
+     project Rust (verified file by file against its pinned channel
+     manifest before use, [verified Rust installs](rust-channel-manifest.md))
+     and every Cargo workspace's sources (`upgrades_generate.sh`, outside the
+     project configuration). If regeneration fails after the Rust bump, for
+     any reason (the newest Rust is not yet in that Velnor's
      [channel-manifest catalog](rust-channel-manifest.md), or any other
      check), the Rust scope alone is rolled back and recorded with the first
      error line, and regeneration runs again, so the pull request stays green

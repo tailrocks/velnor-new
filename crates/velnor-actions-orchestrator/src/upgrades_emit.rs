@@ -50,6 +50,13 @@ pub(crate) fn upgrades_files(
         .into_iter()
         .map(|tool| velnor_actions_mise::ToolCatalog::pinned().tool_spec(tool))
         .collect(),
+        // The project Rust is resolved at run time, so the script reads it
+        // from `VELNOR_TOOL_RUST` like every other generated check.
+        verify_rust_script: crate::workflow::toolchain_script(
+            "${VELNOR_TOOL_RUST}",
+            crate::workflow::ToolchainPhase::Installed,
+            velnor_actions_mise::catalog::RUST_CHANNEL_MANIFESTS,
+        ),
         jactionlint_verify: crate::workflow::workflow_policy::jactionlint_verify_step::script(
             &velnor_actions_mise::ToolCatalog::pinned(),
         ),

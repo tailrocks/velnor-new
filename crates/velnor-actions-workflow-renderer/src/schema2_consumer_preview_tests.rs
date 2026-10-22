@@ -46,6 +46,11 @@ pub(super) fn fixture() -> ConsumerReleaseSpec {
             "install".to_owned(),
             "gh@2.102.1".to_owned(),
         ],
+        verify_rust_argv: vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            "echo verify-rust".to_owned(),
+        ],
         install_rust_argv: vec![
             "mise".to_owned(),
             "--no-config".to_owned(),

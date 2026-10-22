@@ -320,6 +320,10 @@ fn source_steps(spec: &ConsumerReleaseSpec, id: &str) -> Result<Vec<Yaml>, Rende
             "Install pinned Cargo metadata toolchain",
             &join_argv_for_run(&spec.install_rust_argv)?,
         ),
+        run_step(
+            crate::VERIFY_RUST_TOOLCHAIN_STEP,
+            &join_argv_for_run(&spec.verify_rust_argv)?,
+        ),
     ];
     for step in &spec.producer_source_prep {
         let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {

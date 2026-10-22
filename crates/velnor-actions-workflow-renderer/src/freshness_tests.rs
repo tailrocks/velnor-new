@@ -16,6 +16,11 @@ fn spec() -> FreshnessSpec {
             sha256: "2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75".to_owned(),
         },
         rust_version: "1.98.1".to_owned(),
+        verify_rust_argv: vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            "echo verify-rust".to_owned(),
+        ],
         generator_version: "0.1.0".to_owned(),
     }
 }
@@ -126,6 +131,11 @@ fn rejects_bad_spec_scalars() {
     for rust_version in ["", "latest", "1.98", "1.98.1; id", "1.98.1.2"] {
         let bad = FreshnessSpec {
             rust_version: rust_version.to_owned(),
+            verify_rust_argv: vec![
+                "sh".to_owned(),
+                "-c".to_owned(),
+                "echo verify-rust".to_owned(),
+            ],
             ..spec()
         };
         assert!(
