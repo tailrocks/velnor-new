@@ -97,7 +97,6 @@
     "testcontainers-scale-set",
     "verify-hosted",
     "verify-release-source",
-    "verify-scale-set",
-    "zizmor"
+    "verify-scale-set"
   ]
 }

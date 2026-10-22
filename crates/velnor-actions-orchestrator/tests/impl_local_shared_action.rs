@@ -1,4 +1,4 @@
-//! Local shared actions must pass pinned actionlint and zizmor.
+//! Local shared actions must pass pinned jactionlint.
 use std::fs;
 
 use velnor_actions_orchestrator::{
@@ -20,7 +20,7 @@ fn committed_repo() -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn both_mode_generate_passes_actionlint_and_zizmor() -> TestResult {
+fn both_mode_generate_passes_jactionlint() -> TestResult {
     let repo = committed_repo()?;
     let prep = prepare(repo.path())?;
     let preview = tempfile::TempDir::new()?;
@@ -35,7 +35,6 @@ fn both_mode_generate_passes_actionlint_and_zizmor() -> TestResult {
         vec![
             "jactionlint@2.3.0".to_owned(),
             "shellcheck@0.11.0".to_owned(),
-            "zizmor@1.31.1".to_owned(),
         ]
     );
     let ci = fs::read_to_string(preview.path().join(".github/workflows/ci.yml"))?;

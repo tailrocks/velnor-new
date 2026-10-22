@@ -11,7 +11,7 @@ use velnor_actions_mise::{
     MetadataDiscovery, MetadataQualification, MiseInstall, NextestArchive, NextestDriver,
     NextestList, NextestPartition, NextestRun, OPENTOFU_VERSION, PinnedTool, PinnedToolExec,
     PreparePinnedTools, RUST_VERSION, RouteDriver, SHELLCHECK_VERSION, TaskCacheMode, TestRunner,
-    ToolCatalog, ToolHomes, VerifyPreparedInputs, VerifySpec, VerifyToolchain, ZIZMOR_VERSION,
+    ToolCatalog, ToolHomes, VerifyPreparedInputs, VerifySpec, VerifyToolchain,
     is_allowed_mise_subcommand, qualified_task_run_argv,
 };
 
@@ -158,7 +158,6 @@ fn catalog_pins_ignore_project_selectors() -> Result<(), String> {
         GH_VERSION,
         JACTIONLINT_VERSION,
         SHELLCHECK_VERSION,
-        ZIZMOR_VERSION,
         NEXTEST_VERSION,
         OPENTOFU_VERSION,
     )

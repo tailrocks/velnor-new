@@ -42,14 +42,10 @@ pub(crate) fn upgrades_files(
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         // `generate` fail-closed-execs these validators (the same set the
         // plan job installs for `Check generated files`).
-        generate_tools: [
-            PinnedTool::Jactionlint,
-            PinnedTool::Shellcheck,
-            PinnedTool::Zizmor,
-        ]
-        .into_iter()
-        .map(|tool| velnor_actions_mise::ToolCatalog::pinned().tool_spec(tool))
-        .collect(),
+        generate_tools: [PinnedTool::Jactionlint, PinnedTool::Shellcheck]
+            .into_iter()
+            .map(|tool| velnor_actions_mise::ToolCatalog::pinned().tool_spec(tool))
+            .collect(),
         // The project Rust is resolved at run time, so the script reads it
         // from `VELNOR_TOOL_RUST` like every other generated check.
         verify_rust_script: crate::workflow::toolchain_script(

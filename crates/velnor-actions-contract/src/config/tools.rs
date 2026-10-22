@@ -13,7 +13,6 @@ pub const OVERRIDABLE_TOOLS: &[&str] = &[
     "opentofu",
     "rust",
     "shellcheck",
-    "zizmor",
 ];
 
 /// `[tools]` section: exact `major.minor.patch` version overrides.

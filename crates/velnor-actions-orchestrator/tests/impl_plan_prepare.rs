@@ -2,7 +2,7 @@
 //!
 //! Regression coverage for the CI failure where `Check generated files`
 //! ran `generate` before any `mise install`: the public `generate`
-//! fail-closed-execs pinned actionlint/shellcheck/zizmor, so the emitted
+//! fail-closed-execs pinned jactionlint/shellcheck, so the emitted
 //! plan job must install exact pins first.
 
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
@@ -126,7 +126,6 @@ fn consumer_plan_installs_validators_before_check_generated() -> TestResult {
         PinnedTool::Rust,
         PinnedTool::Jactionlint,
         PinnedTool::Shellcheck,
-        PinnedTool::Zizmor,
     ]
     .iter()
     .map(|tool| catalog.tool_spec(*tool))
@@ -224,11 +223,7 @@ fn non_rust_consumer_plan_omits_rust_bootstrap_in_generated_yaml() -> TestResult
             "tools-only plan must omit {key}: {steps:?}"
         );
     }
-    for tool in [
-        PinnedTool::Jactionlint,
-        PinnedTool::Shellcheck,
-        PinnedTool::Zizmor,
-    ] {
+    for tool in [PinnedTool::Jactionlint, PinnedTool::Shellcheck] {
         let spec = catalog.tool_spec(tool);
         assert!(
             prepare.contains(&spec),
