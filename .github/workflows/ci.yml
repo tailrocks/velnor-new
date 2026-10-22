@@ -121,7 +121,7 @@ jobs:
         id: velnor-optional-tools-save-budget
         if: success() && ((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         run: &r2 "set -eu\noutput=${GITHUB_OUTPUT-}\nemit() { [ -n \"$output\" ] && printf '%s\\n' \"$1\" 2>/dev/null >> \"$output\"; }\nrefuse() {\n  emit 'admitted=false' || :\n  printf '%s\\n' '::warning::cache_unavailable: optional save has no safe remaining job budget or output'\n}\nstarted=${VELNOR_CACHE_STARTED-}\ndeadline=${VELNOR_CACHE_DEADLINE-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nrequired=${VELNOR_CACHE_REQUIRED_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$started\" \"$deadline\" \"$now\" \"$seconds\" \"$required\"; do\n  case \"$value\" in ''|*[!0-9]*) refuse; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) refuse; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { refuse; exit 0; }\ndone\nif [ \"$now\" -lt \"$started\" ] || [ \"$deadline\" -lt \"$started\" ] ||\n   [ \"$((deadline - started))\" -ne \"$seconds\" ] ||\n   [ \"$((deadline - now))\" -lt \"$required\" ]; then\n  refuse\nelif ! emit 'admitted=true'; then\n  refuse\nfi\n"
-        env: &m6
+        env:
           VELNOR_CACHE_JOB_SECONDS: "300"
           VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
           VELNOR_CACHE_DEADLINE: ${{ steps.velnor-cache-clock.outputs.deadline }}
@@ -482,7 +482,7 @@ jobs:
   plan:
     name: Plan
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 15
     env:
       MBX_BUILD_SCRIPT_EXECUTION: "0"
       MBX_CACHE_EXPORT_GROUP: velnor
@@ -505,7 +505,11 @@ jobs:
       sources_key: ${{ steps.cache-keys.outputs.sources_key }}
       sources_restore_keys: ${{ steps.cache-keys.outputs.sources_restore_keys }}
     steps:
-      - *s2
+      - name: Record optional cache budget
+        id: velnor-cache-clock
+        run: *r1
+        env:
+          VELNOR_CACHE_JOB_SECONDS: "900"
       - *s8
       - *s3
       - name: Resolve project tool versions
@@ -604,7 +608,11 @@ jobs:
         id: velnor-optional-sources-save-budget
         if: always() && !cancelled() && steps.sources-fetch.outcome == 'success' && steps.cache-keys.outputs.sources_save == 'true' && steps.sources-restore.outputs.cache-hit != 'true' && !endsWith(steps.sources-restore.outputs.cache-matched-key, steps.cache-keys.outputs.sources_snapshot)
         run: *r2
-        env: *m6
+        env: &m27
+          VELNOR_CACHE_JOB_SECONDS: "900"
+          VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
+          VELNOR_CACHE_DEADLINE: ${{ steps.velnor-cache-clock.outputs.deadline }}
+          VELNOR_CACHE_REQUIRED_SECONDS: "90"
       - name: Save Cargo sources
         if: (always() && !cancelled() && steps.sources-fetch.outcome == 'success' && steps.cache-keys.outputs.sources_save == 'true' && steps.sources-restore.outputs.cache-hit != 'true' && !endsWith(steps.sources-restore.outputs.cache-matched-key, steps.cache-keys.outputs.sources_snapshot)) && steps.velnor-optional-sources-save-budget.outputs.admitted == 'true'
         id: velnor-optional-sources-save
@@ -617,7 +625,11 @@ jobs:
       - name: Report optional cache save failure
         if: always() && !cancelled() && steps.velnor-optional-sources-save.outcome == 'failure'
         run: *r3
-      - *s5
+      - name: Admit optional cache save
+        id: velnor-optional-tools-save-budget
+        if: success() && ((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
+        run: *r2
+        env: *m27
       - *s6
       - *s7
       - *s32
