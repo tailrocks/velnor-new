@@ -59,29 +59,7 @@ pub(crate) async fn session_scope(
         .bind_engine("test-engine")
         .await
         .map_err(|error| error.to_string())?;
-    let selector = ScaleSetSelector::try_new(
-        "integration",
-        &["velnor".to_owned(), "integration".to_owned()],
-    )
-    .map_err(|error| error.to_string())?;
-    let policy = SourcePolicy::try_new(
-        SourcePolicyMode::Repository,
-        Vec::new(),
-        Vec::new(),
-        vec![WorkflowEvent::Push],
-        Vec::new(),
-    )
-    .map_err(|error| error.to_string())?;
-    let binding = RepositoryConnection::try_new(
-        ConnectionId::parse("scoped-poll-test").map_err(|error| error.to_string())?,
-        101,
-        "owner/repository".to_owned(),
-        KeychainReference::parse("keychain:velnor/scoped-poll-test")
-            .map_err(|error| error.to_string())?,
-        selector,
-        policy,
-    )
-    .map_err(|error| error.to_string())?;
+    let binding = session_binding()?;
     let scope = journal
         .connection_scope(&binding)
         .await
@@ -122,6 +100,32 @@ pub(crate) async fn session_scope(
         .await
         .map_err(|error| error.to_string())?;
     Ok((scope, bound.intent_id(), bound.allocation().clone()))
+}
+
+fn session_binding() -> Result<RepositoryConnection, String> {
+    let selector = ScaleSetSelector::try_new(
+        "integration",
+        &["velnor".to_owned(), "integration".to_owned()],
+    )
+    .map_err(|error| error.to_string())?;
+    let policy = SourcePolicy::try_new(
+        SourcePolicyMode::Repository,
+        Vec::new(),
+        Vec::new(),
+        vec![WorkflowEvent::Push],
+        Vec::new(),
+    )
+    .map_err(|error| error.to_string())?;
+    RepositoryConnection::try_new(
+        ConnectionId::parse("scoped-poll-test").map_err(|error| error.to_string())?,
+        101,
+        "owner/repository".to_owned(),
+        KeychainReference::parse("keychain:velnor/scoped-poll-test")
+            .map_err(|error| error.to_string())?,
+        selector,
+        policy,
+    )
+    .map_err(|error| error.to_string())
 }
 
 pub(crate) async fn record_acquired_request(
