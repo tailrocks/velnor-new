@@ -38,8 +38,10 @@ pub struct ProductReleasePins {
     pub runner_build_argv: Vec<String>,
     /// Exact pinned MBX build argv for the static Linux resource probe.
     pub resource_probe_build_argv: Vec<String>,
-    /// Exact pinned actionlint argv.
-    pub actionlint_argv: Vec<String>,
+    /// Exact pinned jactionlint argv over the committed lint file set.
+    pub lint_argv: Vec<String>,
+    /// `sh -c` argv verifying the installed jactionlint executable digest.
+    pub verify_lint_argv: Vec<String>,
     /// Exact pinned zizmor argv.
     pub zizmor_argv: Vec<String>,
     /// Exact pinned GitHub CLI invocation prefix.

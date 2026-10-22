@@ -7,14 +7,14 @@ Detected stacks
   Workspace crates: 0
 
 Workflow to generate
-  .github/actionlint.yaml
+  .github/jactionlint.yaml
   .github/workflows/ci.yml
   Workflow: CI (consumer-v1)
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
-    - actionlint (7 steps)
-    - plan (13 steps)
+    - jactionlint (8 steps)
+    - plan (14 steps)
     - required (8 steps)
     - required-gate (1 steps)
     - no matrix entries (no-work workflow)
@@ -22,7 +22,7 @@ Workflow to generate
   Critical path: none (no obligations)
   Clippy memory groups: 0; barriers: 0
   Cache layers: Mise tools
-  Actionlint: 1.7.12 pinned
+  Jactionlint: 2.3.0 pinned, profile correctness
   Action pins: 5
     - actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -42,4 +42,4 @@ Recommendations
   mise.lock not found; Velnor will not create or refresh it
   mise.toml not found; Velnor will use its pinned tools
   rust-toolchain.toml not found; Velnor will not create it
-  tool_install_unverified:4 installs skip verification (no mise.lock): actionlint@1.7.12, gh@2.102.1, shellcheck@0.11.0, zizmor@1.31.1; install on the CI platform and commit the resulting lock
+  tool_install_unverified:3 installs skip verification (no mise.lock): gh@2.102.1, shellcheck@0.11.0, zizmor@1.31.1; install on the CI platform and commit the resulting lock

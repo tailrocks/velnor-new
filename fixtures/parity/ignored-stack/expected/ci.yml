@@ -37,8 +37,8 @@ concurrency:
   group: velnor-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  actionlint:
-    name: Actionlint
+  jactionlint:
+    name: Jactionlint
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     env:
@@ -66,7 +66,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 7bfdcef3e7974b7f1e5323b191b163c4e6d43c29fd0eeb8ce7eb86858490aff7
+          d: 1d3f477f98a5db904c415b9849fe1dfba6538259a6b977821ee1e965485325b9
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -76,9 +76,11 @@ jobs:
           mise-sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Prepare pinned tools
-        run: mise --no-config --no-env --no-hooks install actionlint@1.7.12 shellcheck@0.11.0
-      - name: Run actionlint
-        run: "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color -ignore '^unexpected key \"background\" for step to (run shell command|execute action)\\. ' -ignore '^step must run script with \"run\" section or run action with \"uses\" section$'"
+        run: mise --no-config --no-env --no-hooks install jactionlint@2.3.0 shellcheck@0.11.0
+      - name: Verify jactionlint
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; v=\"2.3.0\"; case \"${RUNNER_OS-}-${RUNNER_ARCH-}\" in Linux-X64) p=linux-x64;; Linux-ARM64) p=linux-arm64;; macOS-ARM64) p=macos-arm64;; macOS-X64) p=macos-x64;; *) p=unsupported;; esac; case \"$v/$p\" in 2.3.0/linux-arm64) want=7b6c395e8fb7c407d7b3358da1deab23434a75840dc76768ddb30119ce1041c0;; 2.3.0/linux-x64) want=3566633b33780130c5bea5342ad8c5505092e40094c7d6e25ee74e382899a5c7;; 2.3.0/macos-arm64) want=b6853a909613dc9381548b1d61d278e1c4b1ab8334212f67ea6efa46f1f5d34b;; 2.3.0/macos-x64) want=1aa284dc8b12ebd6bee858dcbbfb94c0b92e457cd7e4bdaee07ae2b9238dba45;; *) want=;; esac; if [ -z \"$want\" ]; then if [ \"$v\" = \"2.3.0\" ]; then printf \"%s\\n\" \"::error::jactionlint_executable_not_catalogued: jactionlint $v on $p has no executable digest in this Velnor catalog\" >&2; exit 1; fi; printf \"%s\\n\" \"::notice::jactionlint $v on $p has no Velnor executable digest; the Mise release digest and GitHub attestation checks still applied\"; exit 0; fi; d=\"$RUNNER_TEMP/velnor/jactionlint-verify\"; rm -rf \"$d\"; mkdir -p \"$d\"; mise --no-config --no-env --no-hooks which --tool \"jactionlint@$v\" jactionlint > \"$d/path\" || { printf \"%s\\n\" \"::error::jactionlint_not_installed: jactionlint@$v\" >&2; exit 1; }; IFS= read -r exe < \"$d/path\"; test -f \"$exe\" || { printf \"%s\\n\" \"::error::jactionlint_executable_missing: $exe\" >&2; exit 1; }; printf \"%s  %s\\n\" \"$want\" \"$exe\" > \"$d/executable.sha256\"; if command -v sha256sum >/dev/null 2>&1; then sha256sum -c \"$d/executable.sha256\" >/dev/null; else shasum -a 256 -c \"$d/executable.sha256\" >/dev/null; fi || { printf \"%s\\n\" \"::error::jactionlint_executable_digest_mismatch: $exe is not SHA-256 $want\" >&2; exit 1; }; printf \"%s\\n\" \"velnor: jactionlint $v ($p) executable SHA-256 $want verified\"'"
+      - name: Run jactionlint
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; files=(); while IFS= read -r file; do files+=(\"$file\"); done < <({ find .github/workflows -maxdepth 1 -type f -name \"*.y*ml\"; find .github/actions -type f -name \"action.y*ml\"; find .github -maxdepth 1 -type f -name \"dependabot.y*ml\"; } 2>/dev/null | LC_ALL=C sort); if [ \"${#files[@]}\" -eq 0 ]; then echo \"jactionlint: no workflow files matched\" >&2; exit 3; fi; exec mise --no-config --no-env --no-hooks exec jactionlint@2.3.0 shellcheck@0.11.0 -- jactionlint --config-file .github/jactionlint.yaml --format github --strict-exit --no-online --shellcheck=shellcheck --pyflakes= --no-color \"${files[@]}\"'"
       - name: Admit optional cache save
         id: velnor-optional-tools-save-budget
         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
@@ -143,7 +145,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: a1bf74370d3de4a5dca58c6e18b4d549bdb116f8d7fc73d1327254e78b63d95b
+          d: b053bc0e6c0530b95596bef87dde5ceaec054a3e6555522e9401066bced5a9da
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -161,7 +163,9 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install rust@1.99.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.31.1
+        run: mise --no-config --no-env --no-hooks install rust@1.99.1 jactionlint@2.3.0 shellcheck@0.11.0 zizmor@1.31.1
+      - name: Verify jactionlint
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; v=\"2.3.0\"; case \"${RUNNER_OS-}-${RUNNER_ARCH-}\" in Linux-X64) p=linux-x64;; Linux-ARM64) p=linux-arm64;; macOS-ARM64) p=macos-arm64;; macOS-X64) p=macos-x64;; *) p=unsupported;; esac; case \"$v/$p\" in 2.3.0/linux-arm64) want=7b6c395e8fb7c407d7b3358da1deab23434a75840dc76768ddb30119ce1041c0;; 2.3.0/linux-x64) want=3566633b33780130c5bea5342ad8c5505092e40094c7d6e25ee74e382899a5c7;; 2.3.0/macos-arm64) want=b6853a909613dc9381548b1d61d278e1c4b1ab8334212f67ea6efa46f1f5d34b;; 2.3.0/macos-x64) want=1aa284dc8b12ebd6bee858dcbbfb94c0b92e457cd7e4bdaee07ae2b9238dba45;; *) want=;; esac; if [ -z \"$want\" ]; then if [ \"$v\" = \"2.3.0\" ]; then printf \"%s\\n\" \"::error::jactionlint_executable_not_catalogued: jactionlint $v on $p has no executable digest in this Velnor catalog\" >&2; exit 1; fi; printf \"%s\\n\" \"::notice::jactionlint $v on $p has no Velnor executable digest; the Mise release digest and GitHub attestation checks still applied\"; exit 0; fi; d=\"$RUNNER_TEMP/velnor/jactionlint-verify\"; rm -rf \"$d\"; mkdir -p \"$d\"; mise --no-config --no-env --no-hooks which --tool \"jactionlint@$v\" jactionlint > \"$d/path\" || { printf \"%s\\n\" \"::error::jactionlint_not_installed: jactionlint@$v\" >&2; exit 1; }; IFS= read -r exe < \"$d/path\"; test -f \"$exe\" || { printf \"%s\\n\" \"::error::jactionlint_executable_missing: $exe\" >&2; exit 1; }; printf \"%s  %s\\n\" \"$want\" \"$exe\" > \"$d/executable.sha256\"; if command -v sha256sum >/dev/null 2>&1; then sha256sum -c \"$d/executable.sha256\" >/dev/null; else shasum -a 256 -c \"$d/executable.sha256\" >/dev/null; fi || { printf \"%s\\n\" \"::error::jactionlint_executable_digest_mismatch: $exe is not SHA-256 $want\" >&2; exit 1; }; printf \"%s\\n\" \"velnor: jactionlint $v ($p) executable SHA-256 $want verified\"'"
       - name: Verify Rust channel manifest
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -233,7 +237,7 @@ jobs:
       actions: read
     needs:
       - plan
-      - actionlint
+      - jactionlint
     if: ${{ !cancelled() }}
     steps:
       - name: Setup Mise
@@ -269,14 +273,14 @@ jobs:
         env:
           VELNOR_INTERNAL_OP: write-request-v1
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
-          VELNOR_NEEDS_EXPECTED: "[\"actionlint\",\"plan\"]"
+          VELNOR_NEEDS_EXPECTED: "[\"jactionlint\",\"plan\"]"
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
         run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.38'"
       - name: Merge reports
         env:
           VELNOR_INTERNAL_OP: merge-v1
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
-          VELNOR_NEEDS_EXPECTED: "[\"actionlint\",\"plan\"]"
+          VELNOR_NEEDS_EXPECTED: "[\"jactionlint\",\"plan\"]"
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
         run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.38'"
       - name: Publish final report

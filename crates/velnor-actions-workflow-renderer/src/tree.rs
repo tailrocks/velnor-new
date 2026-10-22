@@ -1,6 +1,6 @@
 //! Generated-tree assembly: marker-checked files in sorted path order.
 //!
-//! [`render_tree`] builds the exact base files (`actionlint.yaml`, `ci.yml`,
+//! [`render_tree`] builds the exact base files (`jactionlint.yaml`, `ci.yml`,
 //! `AGENTS.md`, and a `CLAUDE.md` regular-file pointer at `AGENTS.md`);
 //! [`render_tree_with_extra`] adds the validated release family. Rendering
 //! the workflow bytes stays in [`crate::render`]; this module assembles and
@@ -16,7 +16,7 @@ use velnor_actions_contract::{
 };
 
 use crate::agents_md;
-use crate::render::{ACTIONLINT_PATH, WORKFLOW_PATH};
+use crate::render::{JACTIONLINT_PATH, WORKFLOW_PATH};
 use crate::{RenderError, guard, marker, steps};
 
 /// One rendered file: repository-relative path plus bytes.
@@ -38,7 +38,7 @@ pub struct RenderedSymlink {
 }
 
 /// The generated files and symlinks, sorted by path: the base files
-/// (actionlint config, CI workflow, AGENTS.md, and the CLAUDE.md pointer file)
+/// (jactionlint config, CI workflow, AGENTS.md, and the CLAUDE.md pointer file)
 /// with release disabled, plus the release family when release rendering is
 /// enabled.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -95,17 +95,17 @@ impl RenderedTree {
 }
 
 /// Assemble the exact base tree from rendered workflow bytes plus the
-/// actionlint crate's bytes (passed through, marker-checked).
+/// workflow-lint adapter's bytes (passed through, marker-checked).
 ///
 /// # Errors
 ///
 /// Returns [`RenderError`] for marker, token, or path failures.
 pub fn render_tree(
     workflow_bytes: &str,
-    actionlint_bytes: &str,
+    lint_config_bytes: &str,
     version: &str,
 ) -> Result<RenderedTree, RenderError> {
-    render_tree_with_extra(workflow_bytes, actionlint_bytes, &[], version)
+    render_tree_with_extra(workflow_bytes, lint_config_bytes, &[], version)
 }
 
 /// Assemble the generated tree: base files plus validated extras.
@@ -119,13 +119,13 @@ pub fn render_tree(
 /// Returns [`RenderError`] for marker, token, path, or collision failures.
 pub fn render_tree_with_extra(
     workflow_bytes: &str,
-    actionlint_bytes: &str,
+    lint_config_bytes: &str,
     extra: &[RenderedFile],
     version: &str,
 ) -> Result<RenderedTree, RenderError> {
     render_tree_with_claude_mode(
         workflow_bytes,
-        actionlint_bytes,
+        lint_config_bytes,
         extra,
         version,
         ClaudeMdMode::Import,
@@ -139,24 +139,24 @@ pub fn render_tree_with_extra(
 /// Returns [`RenderError`] for marker, token, path, or collision failures.
 pub fn render_tree_with_claude_mode(
     workflow_bytes: &str,
-    actionlint_bytes: &str,
+    lint_config_bytes: &str,
     extra: &[RenderedFile],
     version: &str,
     claude_md: ClaudeMdMode,
 ) -> Result<RenderedTree, RenderError> {
     marker::check_first_line(workflow_bytes, version)?;
-    marker::check_first_line(actionlint_bytes, version)?;
+    marker::check_first_line(lint_config_bytes, version)?;
     steps::scan_for_private_subcommands(workflow_bytes)?;
-    steps::scan_for_private_subcommands(actionlint_bytes)?;
-    guard::validate_tree_path(ACTIONLINT_PATH)?;
+    steps::scan_for_private_subcommands(lint_config_bytes)?;
+    guard::validate_tree_path(JACTIONLINT_PATH)?;
     guard::validate_tree_path(WORKFLOW_PATH)?;
     guard::validate_tree_path(AGENTS_MD_PATH)?;
     guard::validate_tree_path(CLAUDE_MD_PATH)?;
 
     let mut files = vec![
         RenderedFile {
-            path: ACTIONLINT_PATH.to_owned(),
-            bytes: actionlint_bytes.to_owned(),
+            path: JACTIONLINT_PATH.to_owned(),
+            bytes: lint_config_bytes.to_owned(),
         },
         RenderedFile {
             path: WORKFLOW_PATH.to_owned(),
@@ -181,7 +181,7 @@ pub fn render_tree_with_claude_mode(
         marker::check_first_line(&file.bytes, version)?;
         steps::scan_for_private_subcommands(&file.bytes)?;
         guard::validate_tree_path(&file.path)?;
-        if file.path == ACTIONLINT_PATH
+        if file.path == JACTIONLINT_PATH
             || file.path == WORKFLOW_PATH
             || file.path == AGENTS_MD_PATH
             || file.path == CLAUDE_MD_PATH

@@ -45,7 +45,7 @@ impl WorkflowTask {
 #[must_use]
 pub fn is_valid_workflow_task_id(id: &str) -> bool {
     const RESERVED: [&str; 6] = [
-        "actionlint",
+        "jactionlint",
         "candidate",
         "plan",
         "required",

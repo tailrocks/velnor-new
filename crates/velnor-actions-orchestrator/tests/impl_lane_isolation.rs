@@ -39,7 +39,7 @@ use crate::impl_common::{TestResult, config_with_branch, make_repo};
 
 /// True for generated crate jobs (neither plan, lint, gate, nor publish).
 fn is_crate_job(id: &str) -> bool {
-    id != PLAN_JOB_ID && id != "actionlint" && id != FINAL_JOB_ID && id != "required-gate"
+    id != PLAN_JOB_ID && id != "jactionlint" && id != FINAL_JOB_ID && id != "required-gate"
 }
 
 #[test]

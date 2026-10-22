@@ -11,18 +11,18 @@ Detected stacks
     evidence mise.toml:5 mr_boxington = true [durable]
 
 Workflow to generate
-  .github/actionlint.yaml
+  .github/jactionlint.yaml
   .github/workflows/ci.yml
   Workflow: CI (consumer-v1)
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
-    - actionlint (7 steps)
     - dependency-seed (23 steps)
-    - plan (13 steps)
+    - jactionlint (8 steps)
+    - plan (14 steps)
     - required (8 steps)
     - required-gate (1 steps)
-    - rust-app (25 steps)
+    - rust-app (26 steps)
     - 1 Rust crate job
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
@@ -39,7 +39,7 @@ Workflow to generate
   Critical path: stack/rust/crates/app/build/default -> stack/rust/crates/app/nextest/default (2 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, MBX compilation objects
-  Actionlint: 1.7.12 pinned
+  Jactionlint: 2.3.0 pinned, profile correctness
   Action pins: 7
     - actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -61,4 +61,4 @@ Recommendations
   mise.lock not found; Velnor will not create or refresh it
   mise.toml is read-only input; Velnor never modifies it
   rust-toolchain.toml not found; Velnor will not create it
-  tool_install_unverified:5 installs skip verification (no mise.lock): actionlint@1.7.12, gh@2.102.1, nextest@0.9.149, shellcheck@0.11.0, zizmor@1.31.1; install on the CI platform and commit the resulting lock
+  tool_install_unverified:4 installs skip verification (no mise.lock): gh@2.102.1, nextest@0.9.149, shellcheck@0.11.0, zizmor@1.31.1; install on the CI platform and commit the resulting lock

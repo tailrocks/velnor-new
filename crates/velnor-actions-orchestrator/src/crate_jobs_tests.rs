@@ -316,7 +316,7 @@ fn velnor_policy_trims_trio_except_validator_spawning_suites() {
     use velnor_actions_mise::PinnedTool;
     let catalog = ToolCatalog::pinned();
     let trio = [
-        catalog.tool_spec(PinnedTool::Actionlint),
+        catalog.tool_spec(PinnedTool::Jactionlint),
         catalog.tool_spec(PinnedTool::Shellcheck),
         catalog.tool_spec(PinnedTool::Zizmor),
     ];

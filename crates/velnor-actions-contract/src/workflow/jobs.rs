@@ -88,8 +88,8 @@ pub enum ValidatorKind {
     CargoDeny,
     /// Unused-dependency scan.
     CargoMachete,
-    /// Workflow-file lint.
-    Actionlint,
+    /// Workflow, composite action and Dependabot lint (jactionlint).
+    Jactionlint,
     /// Workflow security audit.
     Zizmor,
     /// Markdown lint over repository docs.
@@ -112,7 +112,7 @@ impl ValidatorKind {
             Self::Alint => "alint",
             Self::CargoDeny => "cargo-deny",
             Self::CargoMachete => "cargo-machete",
-            Self::Actionlint => "actionlint",
+            Self::Jactionlint => "jactionlint",
             Self::Zizmor => "zizmor",
             Self::Markdownlint => "markdownlint",
             Self::StrictJson => "strict-json",
@@ -129,7 +129,7 @@ impl ValidatorKind {
             Self::Alint => "Alint",
             Self::CargoDeny => "Cargo Deny",
             Self::CargoMachete => "Cargo Machete",
-            Self::Actionlint => "Actionlint",
+            Self::Jactionlint => "Jactionlint",
             Self::Zizmor => "Zizmor",
             Self::Markdownlint => "Markdownlint",
             Self::StrictJson => "Strict JSON",
@@ -146,7 +146,7 @@ impl ValidatorKind {
             Self::Alint,
             Self::CargoDeny,
             Self::CargoMachete,
-            Self::Actionlint,
+            Self::Jactionlint,
             Self::Zizmor,
             Self::Markdownlint,
             Self::StrictJson,
@@ -158,7 +158,7 @@ impl ValidatorKind {
 
     /// Velnor-repository validators emitted as support jobs.
     ///
-    /// Actionlint is always-on base IR on both policies, never support.
+    /// Jactionlint is always-on base IR on both policies, never support.
     #[must_use]
     pub fn repository_validators() -> [Self; 4] {
         [

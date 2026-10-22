@@ -11,6 +11,7 @@ use velnor_actions_contract::{GithubConfig, UnmanagedPolicy};
 
 use super::preserve::{
     generated_marked_dco, generated_marked_script, generated_shared_action, generator_owned,
+    retired_marked_lint_config,
 };
 use crate::OrchestratorError;
 
@@ -97,7 +98,8 @@ fn walk(
         && (generator_owned(relative, preserve_workflows)
             || generated_shared_action(relative, &source, &metadata)?
             || generated_marked_script(relative, &source, &metadata)?
-            || generated_marked_dco(relative, &source, &metadata)?)
+            || generated_marked_dco(relative, &source, &metadata)?
+            || retired_marked_lint_config(relative, &source, &metadata)?)
     {
         return Ok(false);
     }

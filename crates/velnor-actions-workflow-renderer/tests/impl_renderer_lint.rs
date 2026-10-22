@@ -13,8 +13,8 @@ use super::impl_renderer_fixtures::mise_argv;
 
 const VERSION: &str = "0.1.0";
 const LABEL: &str = "ubuntu-26.04";
-const LINT_ID: &str = "actionlint";
-const LINT_DISPLAY: &str = "Actionlint";
+const LINT_ID: &str = "jactionlint";
+const LINT_DISPLAY: &str = "Jactionlint";
 
 fn checkout_pin() -> String {
     format!("actions/checkout@{:040x}", 0)
@@ -54,18 +54,18 @@ fn lint_job() -> Result<Job, RenderError> {
         steps: vec![
             checkout_step(&checkout_pin())?,
             shell_step(
-                "Run actionlint",
+                "Run jactionlint",
                 vec![
                     "mise".to_owned(),
                     "--no-config".to_owned(),
                     "--no-env".to_owned(),
                     "--no-hooks".to_owned(),
                     "exec".to_owned(),
-                    "actionlint@1.7.12".to_owned(),
+                    "jactionlint@2.3.0".to_owned(),
                     "shellcheck@0.11.0".to_owned(),
                     "--".to_owned(),
-                    "actionlint".to_owned(),
-                    "-color".to_owned(),
+                    "jactionlint".to_owned(),
+                    "--strict-exit".to_owned(),
                 ],
                 BTreeMap::new(),
             )?,
@@ -245,13 +245,13 @@ fn consumer_emits_lint_from_typed_ir() -> Result<(), RenderError> {
         None,
         &fixture_ctx(),
     )?;
-    assert!(text.contains("actionlint:"), "job:\n{text}");
+    assert!(text.contains("  jactionlint:"), "job:\n{text}");
     assert!(text.contains(LINT_DISPLAY), "display:\n{text}");
     assert!(
-        text.contains("actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color"),
+        text.contains("jactionlint@2.3.0 shellcheck@0.11.0 -- jactionlint --strict-exit"),
         "run:\n{text}"
     );
-    assert!(text.contains("- actionlint"), "final needs lint:\n{text}");
+    assert!(text.contains("- jactionlint"), "final needs lint:\n{text}");
     Ok(())
 }
 
@@ -264,9 +264,9 @@ fn velnor_emits_lint_from_typed_ir() -> Result<(), RenderError> {
         Some(&support),
         &fixture_ctx(),
     )?;
-    assert!(text.contains("actionlint:"), "job:\n{text}");
+    assert!(text.contains("  jactionlint:"), "job:\n{text}");
     assert!(text.contains(LINT_DISPLAY), "display:\n{text}");
-    assert!(text.contains("- actionlint"), "final needs lint:\n{text}");
+    assert!(text.contains("- jactionlint"), "final needs lint:\n{text}");
     Ok(())
 }
 

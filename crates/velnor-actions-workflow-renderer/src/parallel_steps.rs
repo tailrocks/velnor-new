@@ -9,9 +9,9 @@
 //! background steps, so composite rendering rejects parallel members.
 //!
 //! The emitted shape is the `background`/`wait-all` spelling rather than the
-//! `parallel:` group sugar because the pinned actionlint still validates each
-//! member's keys, expressions and scripts in that spelling; see
-//! [`velnor_actions_actionlint::STEP_PARALLELISM_IGNORES`].
+//! `parallel:` group sugar; the pinned jactionlint parses and validates that
+//! spelling natively (every member's keys, expressions and scripts, plus the
+//! `background-step-not-waited` join check), with no ignore pattern.
 
 use velnor_actions_contract::Step;
 

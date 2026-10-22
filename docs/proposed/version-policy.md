@@ -60,7 +60,7 @@ requirement exists.
 The compiled-in catalog MUST identify each tool called by generated workflows
 with its exact stable version, canonical upstream source, supported platforms,
 and artifact digest when available. It includes Rust, MBX, Nextest, `gh`,
-cargo-deny, cargo-machete, actionlint, zizmor, and every other generated-task
+cargo-deny, cargo-machete, jactionlint, zizmor, and every other generated-task
 tool. Generated workflows embed these exact values and pass them as explicit
 Mise tool arguments; they never read a consumer version-policy file or resolve
 `latest` independently. Velnor's `.velnor/version-policy.toml` MUST mirror
@@ -72,7 +72,7 @@ compiled-in Mise release record in generated workflow output.
 |---|---|---|
 | Rust compiler and components | Compiled-in generator catalog; embedded in generated workflows and run through Mise | Latest stable Rust and matching current components |
 | Mise bootstrap | `.mise-version` and compiled-in Mise release record | Latest qualified stable Mise release; exact artifact digest |
-| MBX, Nextest, `gh`, and policy/CI tools | Compiled-in generator catalog; embedded in generated workflows and run through Mise | Latest stable releases; includes cargo-deny, cargo-machete, actionlint, ShellCheck, and zizmor |
+| MBX, Nextest, `gh`, and policy/CI tools | Compiled-in generator catalog; embedded in generated workflows and run through Mise | Latest stable releases; includes cargo-deny, cargo-machete, jactionlint, ShellCheck, and zizmor |
 | Direct and transitive Rust crates | Workspace manifests, `Cargo.lock` | Newest stable graph; major updates included; all changed versions pass the full locked gate |
 | Velnor workflow bootstrap | Consumer output embeds the exact generating release version, immutable target asset URL, and binary SHA-256; Velnor dogfood validates an optional `.velnor/generator.lock`; when absent, it builds and verifies a same-source pre-seed helper | Latest qualified stable Velnor release for each supported target |
 | GitHub Actions | Compiled-in Velnor action registry; optional exact overrides in `.velnor/config.toml` | Default record is the latest reviewed stable release; workflow uses immutable full commit SHA |
@@ -138,11 +138,11 @@ exact-path `actions/cache` layer in every Rust mode. All references come from th
 `asamarts/alint` pin is emitted only by the separate Velnor
 repository-policy job.
 `taiki-e/install-action`, `actions/setup-*`, branch refs, unapproved tag refs,
-and floating action refs are forbidden. `actionlint` v1.7.12 and
-ShellCheck v0.11.0 are the verified stable tool defaults on 2026-09-28. Both
-are installed through Mise. `taiki-e/install-action` and other tool-installer
-actions are forbidden. V1 emits no Python run steps, so it does not install
-Pyflakes.
+and floating action refs are forbidden. jactionlint v2.3.0 and ShellCheck
+v0.11.0 are the verified stable tool defaults. Both are installed through
+Mise. `taiki-e/install-action` and other tool-installer actions are
+forbidden. V1 emits no Python run steps, so it does not install Pyflakes, and
+every jactionlint run passes `--pyflakes=` so no other `PATH` binary runs.
 
 jactionlint v2.3.0 (`jdx/jactionlint`, published 2026-10-21) is the catalog
 pin for the workflow, composite action and Dependabot linter (checked

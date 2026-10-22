@@ -1,4 +1,6 @@
-//! Bridge only configured scale-set selectors and canonical generated hosted labels.
+//! Runner labels for the jactionlint config: configured scale-set selector
+//! labels, then the canonical hosted labels generated jobs use (the renderer
+//! drops the ones the pinned linter already knows).
 use std::collections::BTreeSet;
 use velnor_actions_contract::{ReleaseTarget, ScaleSetSelector, VelnorConfig, WorkflowIr};
 

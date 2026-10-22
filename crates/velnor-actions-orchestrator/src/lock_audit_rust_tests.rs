@@ -124,3 +124,67 @@ fn verified_uncatalogued_rust_blocks_once() {
         .collect();
     assert_eq!(hits.len(), 1, "{:?}", outcome.blocking);
 }
+
+/// One plan job installing jactionlint, with or without `Verify jactionlint`.
+fn jactionlint_ir(spec: &str, verified: bool) -> WorkflowIr {
+    let mut workflow = ir(false);
+    let job = workflow.jobs.get_mut("plan").expect("plan job");
+    job.steps = vec![step(
+        PREPARE_PINNED_TOOLS_STEP,
+        Some(StepRole::PreparePinnedTools),
+        &["mise", "--no-config", "install", spec],
+    )];
+    if verified {
+        job.steps.push(step(
+            crate::workflow::VERIFY_JACTIONLINT_STEP,
+            None,
+            &["sh", "-c", "true"],
+        ));
+    }
+    workflow
+}
+
+#[test]
+fn a_verified_catalogued_jactionlint_needs_no_lock_row() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let spec = format!("jactionlint@{}", velnor_actions_mise::JACTIONLINT_VERSION);
+    let verified = audit_prepare_installs_with_catalog(
+        dir.path(),
+        &jactionlint_ir(&spec, true),
+        "ubuntu-26.04",
+        &[],
+        &ToolCatalog::pinned(),
+    );
+    assert!(verified.blocking.is_empty(), "{:?}", verified.blocking);
+    assert_eq!(verified.recommendation, None);
+    let unverified = audit_prepare_installs_with_catalog(
+        dir.path(),
+        &jactionlint_ir(&spec, false),
+        "ubuntu-26.04",
+        &[],
+        &ToolCatalog::pinned(),
+    );
+    let summary = unverified
+        .recommendation
+        .expect("gap without the verify step");
+    assert!(summary.contains(&spec), "{summary}");
+}
+
+#[test]
+fn a_verified_uncatalogued_jactionlint_still_needs_its_lock_row() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let catalog = ToolCatalog::pinned()
+        .with_project_tool(PinnedTool::Jactionlint, "9.9.9")
+        .expect("exact");
+    let outcome = audit_prepare_installs_with_catalog(
+        dir.path(),
+        &jactionlint_ir("jactionlint@9.9.9", true),
+        "ubuntu-26.04",
+        &[],
+        &catalog,
+    );
+    let summary = outcome
+        .recommendation
+        .expect("gap for an uncatalogued version");
+    assert!(summary.contains("jactionlint@9.9.9"), "{summary}");
+}

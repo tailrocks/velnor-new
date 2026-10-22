@@ -10,6 +10,10 @@ use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::utf8::{strings_of, strings_of_env};
 
+/// `Verify jactionlint` (pinned executable digest after install).
+#[path = "jactionlint_verify_step.rs"]
+pub(crate) mod jactionlint_verify_step;
+
 /// `Verify Rust channel manifest` (pinned `core:rust` integrity).
 #[path = "rust_manifest_step.rs"]
 pub(crate) mod rust_manifest_step;

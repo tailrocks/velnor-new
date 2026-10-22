@@ -39,7 +39,10 @@ mod unix {
         // The combined argv stages under $RUNNER_TEMP; hermetic scratch keeps
         // it off the ambient filesystem (and off a read-only /).
         let runner_temp = log.parent().unwrap_or(log).join("runner-temp");
+        // The lint script lists the workflow file set relative to the
+        // checkout, so run from a scratch checkout holding one workflow.
         Ok(command
+            .current_dir(log.parent().unwrap_or(log))
             .args(&argv[1..])
             .env("PATH", path)
             .env("RUNNER_TEMP", runner_temp)
@@ -64,6 +67,8 @@ mod unix {
         fs::set_permissions(&stub, mode)?;
         let log = root.join("installed-tools");
         fs::write(&log, "")?;
+        fs::create_dir_all(root.join(".github/workflows"))?;
+        fs::write(root.join(".github/workflows/ci.yml"), "on: push\n")?;
         Ok((bin, log))
     }
 
@@ -104,10 +109,10 @@ mod unix {
                 let repo = velnor_workspace()?;
                 let prep = prepare(repo.path())?;
                 let root = tempfile::tempdir()?;
-                let lint = prep.workflow.ir.jobs.get("actionlint").ok_or("lint job")?;
+                let lint = prep.workflow.ir.jobs.get("jactionlint").ok_or("lint job")?;
                 verify_cold_pair(
                     &shell_argv(&lint.steps, "Prepare pinned tools")?,
-                    &shell_argv(&lint.steps, "Run actionlint")?,
+                    &shell_argv(&lint.steps, "Run jactionlint")?,
                     root.path(),
                 )?;
                 for command in &prep.workflow.context.validator_commands {

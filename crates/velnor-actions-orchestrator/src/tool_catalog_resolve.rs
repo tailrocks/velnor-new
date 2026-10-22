@@ -22,8 +22,8 @@ use std::path::Path;
 
 use velnor_actions_contract::VelnorConfig;
 use velnor_actions_mise::catalog::{
-    ACTIONLINT_VERSION, GH_VERSION, JACTIONLINT_VERSION, MR_BOXINGTON_VERSION, NEXTEST_VERSION,
-    OPENTOFU_VERSION, RUST_VERSION, SHELLCHECK_VERSION, ZIZMOR_VERSION,
+    GH_VERSION, JACTIONLINT_VERSION, MR_BOXINGTON_VERSION, NEXTEST_VERSION, OPENTOFU_VERSION,
+    RUST_VERSION, SHELLCHECK_VERSION, ZIZMOR_VERSION,
 };
 use velnor_actions_mise::{
     DOT_MISE_TOML_FILE, MISE_TOML_FILE, PinnedTool, ToolCatalog, validate_exact_version,
@@ -118,7 +118,6 @@ pub(crate) fn resolve_tool_catalog(
         config_tc,
     };
     let pin = |tool, field, default| pins.version(tool, field, default);
-    let jactionlint = pin(PinnedTool::Jactionlint, "jactionlint", JACTIONLINT_VERSION)?;
     let catalog = ToolCatalog::new(
         &pin(PinnedTool::Rust, "rust", RUST_VERSION)?,
         &pin(
@@ -127,13 +126,12 @@ pub(crate) fn resolve_tool_catalog(
             MR_BOXINGTON_VERSION,
         )?,
         &pin(PinnedTool::Gh, "gh", GH_VERSION)?,
-        &pin(PinnedTool::Actionlint, "actionlint", ACTIONLINT_VERSION)?,
+        &pin(PinnedTool::Jactionlint, "jactionlint", JACTIONLINT_VERSION)?,
         &pin(PinnedTool::Shellcheck, "shellcheck", SHELLCHECK_VERSION)?,
         &pin(PinnedTool::Zizmor, "zizmor", ZIZMOR_VERSION)?,
         &pin(PinnedTool::Nextest, "cargo-nextest", NEXTEST_VERSION)?,
         &pin(PinnedTool::Opentofu, "opentofu", OPENTOFU_VERSION)?,
     )
-    .and_then(|catalog| catalog.with_version(PinnedTool::Jactionlint, &jactionlint))
     .map_err(|err| contract(&err))?;
     apply_declarations(
         catalog

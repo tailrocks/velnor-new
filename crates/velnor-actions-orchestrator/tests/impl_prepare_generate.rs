@@ -149,7 +149,7 @@ fn atomic_replace_failure_preserves_old_tree() -> TestResult {
         !github.join("workflows/old.yml").exists(),
         "old tree replaced"
     );
-    assert!(github.join("actionlint.yaml").exists(), "new tree present");
+    assert!(github.join("jactionlint.yaml").exists(), "new tree present");
 
     // A read-only root blocks staging: the previous tree stays byte-identical.
     let repo = make_repo(config_with_branch())?;
@@ -171,7 +171,10 @@ fn atomic_replace_failure_preserves_old_tree() -> TestResult {
     assert!(matches!(err, OrchestratorError::Io { .. }), "got {err}");
     drop(guard);
     assert_eq!(fs::read(github.join("workflows/old.yml"))?, b"old: true\n");
-    assert!(!github.join("actionlint.yaml").exists(), "no partial write");
+    assert!(
+        !github.join("jactionlint.yaml").exists(),
+        "no partial write"
+    );
     Ok(())
 }
 
@@ -193,21 +196,21 @@ fn generated_workflow_has_always_on_lint_job() -> TestResult {
             },
         )?;
         let text = fs::read_to_string(preview_root.join(".github/workflows/ci.yml"))?;
-        assert!(text.contains("actionlint:"), "lint job:\n{text}");
-        assert!(text.contains("Actionlint"), "display name:\n{text}");
+        assert!(text.contains("  jactionlint:"), "lint job:\n{text}");
+        assert!(text.contains("name: Jactionlint"), "display name:\n{text}");
         assert!(
             text.contains(
-                "mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color"
+                "exec mise --no-config --no-env --no-hooks exec jactionlint@2.3.0 shellcheck@0.11.0 -- jactionlint --config-file .github/jactionlint.yaml --format github --strict-exit"
             ),
-            "pinned actionlint run:\n{text}"
+            "pinned jactionlint run:\n{text}"
         );
         let (_, tail) = text
             .split_once("required:")
             .ok_or_else(|| std::io::Error::other("missing final job"))?;
-        assert!(tail.contains("- actionlint"), "final needs lint:\n{text}");
+        assert!(tail.contains("- jactionlint"), "final needs lint:\n{text}");
         // Lint sorts first; its block ends at the plan job without `needs:`.
         let start = text
-            .find("  actionlint:")
+            .find("  jactionlint:")
             .ok_or_else(|| std::io::Error::other("missing lint job"))?;
         let end = text[start..]
             .find("  plan:")

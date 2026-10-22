@@ -8,8 +8,8 @@ use velnor_actions_contract::{
     VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_workflow_renderer::{
-    ACTIONLINT_PATH, AGENTS_MD_PATH, ALINT_USES, CANDIDATE_JOB_ID, CLAUDE_MD_PATH,
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, FORBIDDEN_TOKENS, INTERNAL_OP_ENV, REQUEST_FILE_ENV,
+    AGENTS_MD_PATH, ALINT_USES, CANDIDATE_JOB_ID, CLAUDE_MD_PATH, CONCURRENCY_CANCEL,
+    CONCURRENCY_GROUP, FORBIDDEN_TOKENS, INTERNAL_OP_ENV, JACTIONLINT_PATH, REQUEST_FILE_ENV,
     RenderContext, RenderError, ValidatorCommand, WORKFLOW_PATH, checkout_step, plan_step,
     render_tree, render_workflow_ir, with_marker,
 };
@@ -144,7 +144,7 @@ fn consumer_tree_has_exactly_four_sorted_paths() -> Result<(), RenderError> {
     assert_eq!(tree.symlinks.len(), 0);
     assert_eq!(tree.files[0].path, AGENTS_MD_PATH);
     assert_eq!(tree.files[1].path, CLAUDE_MD_PATH);
-    assert_eq!(tree.files[2].path, ACTIONLINT_PATH);
+    assert_eq!(tree.files[2].path, JACTIONLINT_PATH);
     assert_eq!(tree.files[3].path, WORKFLOW_PATH);
     assert_eq!(tree.files[1].bytes, "@AGENTS.md\n");
     assert_eq!(tree.get(WORKFLOW_PATH), Some(workflow.as_str()));

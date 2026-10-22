@@ -128,6 +128,8 @@ pub(super) fn prepare_job(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
             checkout(spec)?,
             setup(spec)?,
             install_gh(spec),
+            install_generate_tools(spec),
+            verify_jactionlint(spec),
             velnor_release(spec),
             bump,
             upload,
@@ -172,6 +174,8 @@ pub(super) fn verify_job(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
             checkout(spec)?,
             setup(spec)?,
             install_gh(spec),
+            install_generate_tools(spec),
+            verify_jactionlint(spec),
             download(),
             velnor_release(spec),
             verify,
@@ -345,6 +349,33 @@ fn install_gh(spec: &UpgradesSpec) -> Yaml {
                 spec.gh_version
             )),
         ),
+    ])
+}
+
+/// Install the validators `generate` executes, so the next step can check the
+/// jactionlint executable before anything runs it. The later prerequisite
+/// install in the regeneration script is then a no-op.
+fn install_generate_tools(spec: &UpgradesSpec) -> Yaml {
+    Yaml::Map(vec![
+        (
+            "name".to_owned(),
+            Yaml::str("Install the pinned generate validators"),
+        ),
+        (
+            "run".to_owned(),
+            Yaml::str(format!(
+                "mise --no-config --no-env --no-hooks install {}",
+                spec.generate_tools.join(" ")
+            )),
+        ),
+    ])
+}
+
+fn verify_jactionlint(spec: &UpgradesSpec) -> Yaml {
+    Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str("Verify jactionlint")),
+        ("shell".to_owned(), Yaml::str("sh")),
+        ("run".to_owned(), Yaml::str(spec.jactionlint_verify.clone())),
     ])
 }
 

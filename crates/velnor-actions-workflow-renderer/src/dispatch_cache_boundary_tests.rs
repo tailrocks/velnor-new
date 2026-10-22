@@ -49,7 +49,7 @@ fn cache_access_stays_disabled_until_a_plan_admits_its_directive() {
             job(&[], cache_step("actions/cache/restore@sha", "sources")),
         ),
         (
-            "actionlint".to_owned(),
+            "jactionlint".to_owned(),
             job(&[], cache_step("jdx/mise-action@sha", "tools")),
         ),
         (
@@ -67,10 +67,10 @@ fn cache_access_stays_disabled_until_a_plan_admits_its_directive() {
             .expect("pre-plan cache condition");
         assert_eq!(condition, DISPATCH_DENY);
     }
-    let StepKind::Action { with, .. } = &jobs["actionlint"].steps[0].kind else {
+    let StepKind::Action { with, .. } = &jobs["jactionlint"].steps[0].kind else {
         panic!("mise setup remains an action");
     };
-    assert!(jobs["actionlint"].steps[0].condition.is_none());
+    assert!(jobs["jactionlint"].steps[0].condition.is_none());
     assert_eq!(
         with.get("cache").map(String::as_str),
         Some("false"),

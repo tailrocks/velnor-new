@@ -47,7 +47,7 @@ fn validator_results_must_match_inventory_exactly() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     let reports = passing_reports(&plan)?;
     let matrix = serde_json::to_value(&plan.matrix)?;
-    let inventory = json!(["plan", "actionlint"]);
+    let inventory = json!(["plan", "jactionlint"]);
     let plan_value = serde_json::to_value(&plan)?;
     let run = |jobs: serde_json::Value| {
         let mut request = merge_request(
@@ -67,7 +67,7 @@ fn validator_results_must_match_inventory_exactly() -> TestResult {
         report
             .required_job_results
             .iter()
-            .any(|job| job.job_id == "actionlint" && job.conclusion == JobConclusion::Missing),
+            .any(|job| job.job_id == "jactionlint" && job.conclusion == JobConclusion::Missing),
         "{:?}",
         report.required_job_results
     );
@@ -75,7 +75,7 @@ fn validator_results_must_match_inventory_exactly() -> TestResult {
     // An unexpected validator fails as a corrupt evidence set.
     let extra = json!([
         {"job_id": "plan", "conclusion": "success"},
-        {"job_id": "actionlint", "conclusion": "success"},
+        {"job_id": "jactionlint", "conclusion": "success"},
         {"job_id": "velnor-stray", "conclusion": "success"},
     ]);
     let report = run(extra)?;
@@ -90,14 +90,14 @@ fn validator_results_must_match_inventory_exactly() -> TestResult {
     let dupe = json!([
         {"job_id": "plan", "conclusion": "success"},
         {"job_id": "plan", "conclusion": "success"},
-        {"job_id": "actionlint", "conclusion": "success"},
+        {"job_id": "jactionlint", "conclusion": "success"},
     ]);
     assert_eq!(run(dupe)?.status, FinalStatus::PlanningFailed);
 
     // Exact coverage passes.
     let full = json!([
         {"job_id": "plan", "conclusion": "success"},
-        {"job_id": "actionlint", "conclusion": "success"},
+        {"job_id": "jactionlint", "conclusion": "success"},
     ]);
     assert_eq!(run(full)?.status, FinalStatus::Passed);
     Ok(())
@@ -108,13 +108,13 @@ fn validator_states_fold_per_validator() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     let reports = passing_reports(&plan)?;
     let matrix = serde_json::to_value(&plan.matrix)?;
-    for failing in ["plan", "actionlint"] {
+    for failing in ["plan", "jactionlint"] {
         for (conclusion, status) in [
             ("failure", FinalStatus::Failed),
             ("cancelled", FinalStatus::Cancelled),
             ("skipped", FinalStatus::NotRun),
         ] {
-            let jobs: Vec<serde_json::Value> = ["plan", "actionlint"]
+            let jobs: Vec<serde_json::Value> = ["plan", "jactionlint"]
                 .iter()
                 .map(|id| {
                     let result = if *id == failing {
@@ -132,7 +132,7 @@ fn validator_states_fold_per_validator() -> TestResult {
                 &serde_json::to_value(&reports)?,
                 &serde_json::Value::Array(jobs),
             );
-            request["required_job_ids"] = json!(["plan", "actionlint"]);
+            request["required_job_ids"] = json!(["plan", "jactionlint"]);
             assert_eq!(status_of(&request)?, status, "{failing}={conclusion}");
         }
     }

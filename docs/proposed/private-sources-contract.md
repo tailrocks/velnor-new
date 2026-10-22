@@ -271,7 +271,7 @@ running later in the same job can edit the tree and the marker alike, so treat
 it as a consistency check against the lock, not a trust anchor.
 
 Every `vars.*` the generator emits for private sources is declared:
-`config-variables` in the generated `actionlint.yaml` lists
+`config-variables` in the generated `jactionlint.yaml` lists
 `private_sources.app_id_variable` next to the review and tap variables.
 
 ## Credential boundary

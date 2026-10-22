@@ -9,7 +9,7 @@ use super::impl_renderer_p08_elect::keyed_job;
 
 #[test]
 fn tools_cache_election_ignores_save_presentation_name() -> Result<(), RenderError> {
-    let mut jobs = BTreeMap::from([("plan".to_owned(), keyed_job("actionlint@1.7.12")?)]);
+    let mut jobs = BTreeMap::from([("plan".to_owned(), keyed_job("jactionlint@2.3.0")?)]);
     elect_cache_writers(&mut jobs)?;
     let save = jobs
         .get_mut("plan")

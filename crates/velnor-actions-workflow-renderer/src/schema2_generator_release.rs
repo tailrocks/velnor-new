@@ -133,14 +133,25 @@ pub(super) fn bash_step(name: &str, run: &str) -> Yaml {
 }
 
 pub(super) fn release_gate_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, RenderError> {
+    let mut steps = lint_gate_steps(pins)?;
+    steps.push(workflow_steps::bash_step(
+        "Check release freshness",
+        "bash scripts/check-freshness.sh",
+    ));
+    Ok(steps)
+}
+
+/// Install the gate tools, verify the jactionlint executable, then lint the
+/// committed tree with jactionlint and zizmor: one sequence for every gate.
+pub(super) fn lint_gate_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, RenderError> {
     Ok(vec![
         workflow_steps::command_step(
             "Install pinned release gate tools",
             &pins.install_gate_tools_argv,
         )?,
-        workflow_steps::command_step("Run actionlint", &pins.actionlint_argv)?,
+        workflow_steps::command_step("Verify jactionlint", &pins.verify_lint_argv)?,
+        workflow_steps::command_step("Run jactionlint", &pins.lint_argv)?,
         workflow_steps::command_step("Run zizmor", &pins.zizmor_argv)?,
-        workflow_steps::bash_step("Check release freshness", "bash scripts/check-freshness.sh"),
     ])
 }
 

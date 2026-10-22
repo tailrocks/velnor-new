@@ -13,8 +13,8 @@ pub enum TaskTemplate {
     FmtCheck,
     /// Repository-wide dependency policy checks.
     Dependencies,
-    /// Generated workflow syntax validation.
-    Actionlint,
+    /// Generated workflow, composite action and Dependabot validation.
+    Jactionlint,
     /// Generated workflow security validation.
     Zizmor,
     /// Configured Clippy validation for one package.
@@ -36,7 +36,7 @@ impl TaskTemplate {
     pub const ALL: [Self; 10] = [
         Self::FmtCheck,
         Self::Dependencies,
-        Self::Actionlint,
+        Self::Jactionlint,
         Self::Zizmor,
         Self::Clippy,
         Self::TestBuild,
@@ -52,7 +52,7 @@ impl TaskTemplate {
         match self {
             Self::FmtCheck => "fmt-check",
             Self::Dependencies => "dependencies",
-            Self::Actionlint => "actionlint",
+            Self::Jactionlint => "jactionlint",
             Self::Zizmor => "zizmor",
             Self::Clippy => "clippy",
             Self::TestBuild => "test-build",

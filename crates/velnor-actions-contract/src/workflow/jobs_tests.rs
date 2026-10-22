@@ -72,7 +72,7 @@ fn verify_names_resolve_exactly() {
     for kind in ValidatorKind::consumer_verify() {
         assert_eq!(ValidatorKind::from_verify_name(kind.job_id()), Some(kind));
     }
-    for name in ["cargo-deny", "cargo-machete", "actionlint", "plan", ""] {
+    for name in ["cargo-deny", "cargo-machete", "jactionlint", "plan", ""] {
         assert_eq!(ValidatorKind::from_verify_name(name), None, "{name}");
     }
 }

@@ -18,7 +18,7 @@ fn payload(runs_on: &str) -> Result<super::super::ToolsCachePayload, RenderError
         runs_on,
         target: "x86_64-unknown-linux-gnu",
         mise_setup: &setup,
-        tool_specs: &["rust@1.98.1".to_owned(), "actionlint@1.7.12".to_owned()],
+        tool_specs: &["rust@1.98.1".to_owned(), "jactionlint@2.3.0".to_owned()],
         rustup_toolchain: Some("1.98.1"),
         rustup_components: &[],
     })

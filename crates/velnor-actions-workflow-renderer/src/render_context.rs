@@ -20,8 +20,8 @@ pub use crate::setup::MiseSetup;
 /// ([`velnor_actions_contract::RequiredCheckMigration`]) and the
 /// emitted tree share one source of truth, never retyped mirrors.
 pub const WORKFLOW_PATH: &str = CI_WORKFLOW_PATH;
-/// Generated actionlint config path inside the repository.
-pub const ACTIONLINT_PATH: &str = ".github/actionlint.yaml";
+/// Generated jactionlint config path inside the repository.
+pub const JACTIONLINT_PATH: &str = velnor_actions_actionlint::JACTIONLINT_CONFIG_PATH;
 /// Exact pull-request event types.
 pub const EXPECTED_PR_TYPES: &[&str] = &[
     "opened",
@@ -148,8 +148,10 @@ impl RenderContext {
         guard::validate_request_dir(&self.request_dir)?;
         steps::checkout_step(&self.checkout_uses).map(|_| ())?;
         for command in &self.validator_commands {
-            if command.validator == ValidatorKind::Actionlint {
-                return Err(RenderError::BadCommand("actionlint_not_support".to_owned()));
+            if command.validator == ValidatorKind::Jactionlint {
+                return Err(RenderError::BadCommand(
+                    "jactionlint_not_support".to_owned(),
+                ));
             }
             if command.name.trim().is_empty() {
                 return Err(RenderError::BadCommand("empty_validator_name".to_owned()));

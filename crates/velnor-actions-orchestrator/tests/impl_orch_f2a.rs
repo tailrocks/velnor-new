@@ -152,6 +152,10 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
             // cache_keys.rs: the fixed Plan `Compute cache keys` script
             // (generator-owned digest commands over validated roots).
             "cache_keys.rs".to_owned(),
+            // jactionlint_verify_step.rs: the fixed `Verify jactionlint`
+            // script; its only inputs are catalog digests and the validated
+            // run-time jactionlint version.
+            "jactionlint_verify_step.rs".to_owned(),
             "matrix_step_reports.rs".to_owned(),
             // publish_steps.rs: `sh -c` wrappers around the fixed publication
             // scripts in the renderer (tag parsing, bundle packing, upload);
