@@ -179,8 +179,7 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # targets = ["aarch64-apple-darwin"]
 # archive = "tar.gz"
 # [stacks.rust.binary_release.preview]
-# enabled = false                 # Enable only after qualification and existing release admission.
-# release_id = 0                  # Replace with the actual existing mutable preview release ID.
+# enabled = false                 # Enable only after qualification of immutable per-source previews.
 # [stacks.rust.binary_release.stable]
 # enabled = false                 # Requires matching manual git-tag release-plz version policy.
 

@@ -79,11 +79,14 @@ impl GitHubApi {
             receipt.channel.workflow_path(),
             receipt.channel.workflow_name(),
         )?;
+        if retained {
+            // A retained signed receipt is bound to its original attempt. A later
+            // rerun changes the aggregate run endpoint, but does not revoke that
+            // completed attempt; authenticate the exact attempt endpoint instead.
+            return self.verify_release_run(receipt, true);
+        }
         let run: WorkflowRunResponse =
             self.get_json(&self.route(&format!("actions/runs/{}", receipt.workflow.run_id)))?;
-        if retained {
-            return Self::verify_release_run_response(receipt, true, &run, &workflow);
-        }
         let identity = CurrentRun {
             id: receipt.workflow.run_id,
             attempt: receipt.workflow.run_attempt,

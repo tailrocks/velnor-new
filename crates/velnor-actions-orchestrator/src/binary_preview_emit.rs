@@ -24,8 +24,8 @@ use velnor_actions_rust::resolve_release_products;
 use velnor_actions_workflow_renderer::{
     RenderedFile,
     schema2::{
-        ConsumerReleaseSpec, ConsumerReleaseTapSpec, ConsumerRollingPreviewSpec,
-        render_consumer_preview, render_release_tap_reconcile,
+        ConsumerReleaseSpec, ConsumerReleaseTapSpec, render_consumer_preview,
+        render_release_tap_reconcile,
     },
 };
 
@@ -107,10 +107,6 @@ pub(crate) fn specification(
         gh_argv: strings_of(exec.argv(&native_catalog)).map_err(|error| internal(&error))?,
         homebrew_tap: tap_spec(prep)?.filter(|tap| tap.policy.destination(channel).is_some()),
         stable: None,
-        preview: (channel == PackageReleaseChannel::Preview).then(|| ConsumerRollingPreviewSpec {
-            release_id: release.preview.release_id,
-            bootstrap_snapshot_sha256: release.preview.bootstrap_snapshot_sha256.clone(),
-        }),
     };
     Ok(spec)
 }

@@ -68,7 +68,7 @@ fn validate_version(receipt: &PackageReleaseReceipt) -> Result<(), ContractError
                 || !hex_string(sha7, 7)
                 || !receipt.source.commit_sha.starts_with(sha7)
                 || version.value != format!("{}-preview.{count}+{sha7}", version.base)
-                || receipt.tag != "preview"
+                || receipt.tag != format!("preview-{}", receipt.source.commit_sha)
             {
                 return Err(invalid("version_does_not_match_preview_policy"));
             }

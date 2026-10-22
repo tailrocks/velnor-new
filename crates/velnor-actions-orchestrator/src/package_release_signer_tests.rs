@@ -89,7 +89,7 @@ fn version_identity_uses_full_commit_count_and_preview_tag() {
         release_version(&preview, &facts).expect("preview identity"),
         (
             "1.2.3-preview.7+a12e73a".to_owned(),
-            "preview".to_owned(),
+            "preview-a12e73afd75b944a872e8295d61a15f93f5789a2".to_owned(),
             Some(7),
             Some("a12e73a".to_owned()),
         )

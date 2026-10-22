@@ -90,16 +90,6 @@ fn channel_bindings(
     op: &str,
     context: TapInvocationContext,
 ) -> Result<(), RenderError> {
-    if let Some(preview) = &spec.preview {
-        push(
-            env,
-            "VELNOR_PREVIEW_RELEASE_ID",
-            preview.release_id.to_string(),
-        );
-        if let Some(snapshot) = &preview.bootstrap_snapshot_sha256 {
-            push(env, "VELNOR_PREVIEW_BOOTSTRAP_SNAPSHOT_SHA256", snapshot);
-        }
-    }
     if spec.policy.channel == PackageReleaseChannel::Stable {
         push(env, "VELNOR_STABLE_OPERATION", "${{ inputs.operation }}");
         let stable = spec

@@ -36,15 +36,6 @@ pub use tap::ConsumerReleaseTapSpec;
 mod admission;
 use admission::{aggregate_admission, finish_policy_job, policy_admission};
 
-/// Fixed existing mutable release authority, never inferred from a receipt URL.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConsumerRollingPreviewSpec {
-    /// Positive existing mutable release database ID.
-    pub release_id: u64,
-    /// Exact legacy inventory authorization for the first committed generation.
-    pub bootstrap_snapshot_sha256: Option<String>,
-}
-
 /// Generation-time, inventory-only authority for a native preview workflow.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsumerReleaseSpec {
@@ -82,8 +73,6 @@ pub struct ConsumerReleaseSpec {
     pub homebrew_tap: Option<ConsumerReleaseTapSpec>,
     /// Closed manual tag coordination, present only for the stable channel.
     pub stable: Option<super::consumer_binary_release::ConsumerStableReleaseSpec>,
-    /// Explicit fixed rolling target authority, absent for permanent stable.
-    pub preview: Option<ConsumerRollingPreviewSpec>,
 }
 
 /// Render the independently enabled native preview workflow.
@@ -104,24 +93,9 @@ pub fn render_consumer_preview(spec: &ConsumerReleaseSpec) -> Result<RenderedFil
             "preview_spec_invalid".to_owned(),
         ));
     }
-    let preview = spec
-        .preview
-        .as_ref()
-        .ok_or_else(|| RenderError::InvalidWorkflow("rolling_policy_missing".to_owned()))?;
-    if spec.stable.is_some()
-        || preview.release_id == 0
-        || preview
-            .bootstrap_snapshot_sha256
-            .as_ref()
-            .is_some_and(|value| {
-                value.len() != 64
-                    || !value
-                        .bytes()
-                        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-            })
-    {
+    if spec.stable.is_some() {
         return Err(RenderError::InvalidWorkflow(
-            "rolling_policy_invalid".to_owned(),
+            "preview_policy_invalid".to_owned(),
         ));
     }
     let gate = consumer_script(
@@ -159,7 +133,9 @@ pub fn render_consumer_preview(spec: &ConsumerReleaseSpec) -> Result<RenderedFil
             Yaml::Map(vec![
                 (
                     "group".to_owned(),
-                    Yaml::str("native-preview-${{ github.repository }}"),
+                    Yaml::str(
+                        "native-preview-${{ github.repository }}-${{ github.event.workflow_run.head_sha || inputs.original_run_id }}",
+                    ),
                 ),
                 ("cancel-in-progress".to_owned(), Yaml::Bool(false)),
             ]),

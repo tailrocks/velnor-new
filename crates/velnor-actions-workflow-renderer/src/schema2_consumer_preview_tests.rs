@@ -28,10 +28,6 @@ pub(super) fn fixture() -> ConsumerReleaseSpec {
     ConsumerReleaseSpec {
         checkout_lfs: false,
         stable: None,
-        preview: Some(ConsumerRollingPreviewSpec {
-            release_id: 123,
-            bootstrap_snapshot_sha256: None,
-        }),
         generator_version: "0.1.12".to_owned(),
         policy: policy_fixture(),
         producer_runner: VerificationRunner::Macos26Arm64,
@@ -151,6 +147,10 @@ fn preview_has_isolated_privileges_and_exact_inventory_attestation() {
     assert!(triggers.contains("- CI"));
     assert!(triggers.contains("- completed"));
     assert!(!triggers.contains("  push:"));
+    assert!(yaml.contains(
+        "native-preview-${{ github.repository }}-${{ github.event.workflow_run.head_sha || inputs.original_run_id }}"
+    ));
+    assert!(yaml.contains("cancel-in-progress: false"));
     let eligibility = job(yaml, "preview-eligibility", Some("preview-payload-000"));
     assert!(eligibility.contains("ref: ${{ github.sha }}"));
     assert_eq!(eligibility.matches("actions/checkout").count(), 1);

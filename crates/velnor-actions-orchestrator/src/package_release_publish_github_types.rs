@@ -25,6 +25,7 @@ pub(crate) struct GitObject {
 }
 #[derive(Deserialize)]
 pub(crate) struct GitTagResponse {
+    pub sha: String,
     pub tag: String,
     pub message: String,
     pub object: GitObject,

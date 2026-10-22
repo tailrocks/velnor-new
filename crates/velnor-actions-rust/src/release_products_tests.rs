@@ -10,7 +10,6 @@ fn preview(products: Vec<RustBinaryReleaseProduct>) -> RustBinaryReleaseConfig {
         version_package: "jackin".to_owned(),
         preview: velnor_actions_contract::config::RustBinaryPreviewConfig {
             enabled: true,
-            release_id: 328_385_904,
             ..velnor_actions_contract::config::RustBinaryPreviewConfig::default()
         },
         version_env: "JACKIN_VERSION_OVERRIDE".to_owned(),

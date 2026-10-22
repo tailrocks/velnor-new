@@ -17,8 +17,6 @@ mod fields;
 mod metadata_download;
 #[path = "package_release_read_transport.rs"]
 mod read_transport;
-#[path = "package_release_rolling_api.rs"]
-mod rolling_api;
 #[path = "package_release_publish_github_types.rs"]
 mod types;
 #[path = "package_release_publish_upload.rs"]
@@ -31,6 +29,8 @@ mod preview_reads;
 pub(super) use preview_reads::ReleaseArtifactApi;
 #[path = "package_release_publish_github_immutable_status.rs"]
 mod immutable_status;
+#[path = "package_release_publish_lookup.rs"]
+mod lookup;
 #[path = "package_release_publish_preflight.rs"]
 mod preflight;
 #[cfg(test)]
@@ -160,27 +160,6 @@ impl GitHubApi {
         )
     }
 
-    pub(super) fn release_list(
-        &self,
-        tag: &str,
-    ) -> Result<Vec<ReleaseResponse>, OrchestratorError> {
-        let mut found = Vec::new();
-        for page in 1..=20 {
-            let route = format!("{}?per_page=100&page={page}", self.route("releases"));
-            let page_items: Vec<ReleaseResponse> = self.get_json(&route)?;
-            let count = page_items.len();
-            found.extend(
-                page_items
-                    .into_iter()
-                    .filter(|release| release.tag_name == tag),
-            );
-            if count < 100 {
-                return Ok(found);
-            }
-        }
-        Err(internal("package_publish_release_pages_exceeded"))
-    }
-
     pub(super) fn workflow_artifacts(
         &self,
         run_id: u64,
@@ -226,13 +205,26 @@ impl GitHubApi {
             return Ok(None);
         };
         match reference.object.object_type.as_str() {
-            "commit" => Ok(Some(TagObservation {
-                source_sha: reference.object.sha,
-                message: None,
-            })),
+            "commit" => {
+                if !is_lowercase_git_sha(&reference.object.sha) {
+                    return Err(internal("package_publish_tag_object_invalid"));
+                }
+                Ok(Some(TagObservation {
+                    source_sha: reference.object.sha,
+                    message: None,
+                }))
+            }
             "tag" => {
+                if !is_lowercase_git_sha(&reference.object.sha) {
+                    return Err(internal("package_publish_tag_object_invalid"));
+                }
                 let annotated: GitTagResponse =
                     self.get_json(&self.route(&format!("git/tags/{}", reference.object.sha)))?;
+                if annotated.sha != reference.object.sha
+                    || !is_lowercase_git_sha(&annotated.object.sha)
+                {
+                    return Err(internal("package_publish_tag_object_invalid"));
+                }
                 Ok(Some(annotated_tag_observation(tag, annotated)?))
             }
             _ => Err(internal("package_publish_tag_object_invalid")),
@@ -296,14 +288,7 @@ impl GitHubApi {
         if self.fixture.is_some() {
             return Err(internal("unexpected_fixture_transport_request"));
         }
-        let mut args = vec![OsString::from("api")];
-        args.extend([
-            OsString::from("-H"),
-            OsString::from(format!("Accept: {accept}")),
-            OsString::from("-H"),
-            OsString::from(format!("X-GitHub-Api-Version: {API_VERSION}")),
-        ]);
-        args.extend(request_args);
+        let args = gh_api_arguments(request_args, accept);
         let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args)
             .map_err(|_| internal("package_publish_gh_unavailable"))?;
         let result = exec
@@ -317,6 +302,31 @@ impl GitHubApi {
     }
 }
 
+fn graphql_arguments(query: &str, fields: &[(&str, String)]) -> Vec<OsString> {
+    let mut args = vec![
+        OsString::from("graphql"),
+        OsString::from("--raw-field"),
+        OsString::from(format!("query={query}")),
+    ];
+    for (key, value) in fields {
+        args.push(OsString::from("--field"));
+        args.push(OsString::from(format!("{key}={value}")));
+    }
+    args
+}
+
+fn gh_api_arguments(request_args: Vec<OsString>, accept: &str) -> Vec<OsString> {
+    let mut args = vec![OsString::from("api")];
+    args.extend([
+        OsString::from("-H"),
+        OsString::from(format!("Accept: {accept}")),
+        OsString::from("-H"),
+        OsString::from(format!("X-GitHub-Api-Version: {API_VERSION}")),
+    ]);
+    args.extend(request_args);
+    args
+}
+
 pub(super) fn verify_tap_update_environment(
     repository: &str,
     branch: &str,
@@ -328,13 +338,24 @@ fn annotated_tag_observation(
     expected_tag: &str,
     annotated: GitTagResponse,
 ) -> Result<TagObservation, OrchestratorError> {
-    if annotated.tag != expected_tag || annotated.object.object_type != "commit" {
+    if annotated.tag != expected_tag
+        || annotated.object.object_type != "commit"
+        || !is_lowercase_git_sha(&annotated.sha)
+        || !is_lowercase_git_sha(&annotated.object.sha)
+    {
         return Err(internal("package_publish_tag_target_invalid"));
     }
     Ok(TagObservation {
         source_sha: annotated.object.sha,
         message: Some(annotated.message),
     })
+}
+
+pub(super) fn is_lowercase_git_sha(value: &str) -> bool {
+    value.len() == 40
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
 }
 
 pub(super) fn sha256(bytes: &[u8]) -> String {
@@ -364,20 +385,6 @@ fn push_hex_byte(output: &mut String, byte: u8, uppercase: bool) {
     let hex = if uppercase { UPPER } else { LOWER };
     output.push(char::from(hex[usize::from(byte >> 4)]));
     output.push(char::from(hex[usize::from(byte & 0x0f)]));
-}
-
-pub(super) fn unique_release<'a>(
-    releases: &'a [ReleaseResponse],
-    tag: &str,
-) -> Result<&'a ReleaseResponse, OrchestratorError> {
-    let mut found = releases.iter().filter(|release| release.tag_name == tag);
-    let first = found
-        .next()
-        .ok_or_else(|| internal("package_publish_draft_missing"))?;
-    if found.next().is_some() {
-        return Err(internal("package_publish_duplicate_release_tag"));
-    }
-    Ok(first)
 }
 
 #[cfg(test)]

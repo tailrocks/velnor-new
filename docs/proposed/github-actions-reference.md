@@ -390,11 +390,11 @@ only the selected workspace's mutable target, never every directory named target
 The native Rust regression tests also bind these patterns to the rendered cache
 keys and unchanged generation, job, toolchain and restore-prefix boundaries.
 
-
 See [credential-free preview progress encoding](../implemented/native-preview-progress.md)
 for the bounded diagnostic output protocol and its runner-source references.
 
 See [native release asset upload](../implemented/native-release-upload.md) for
 the qualified upload-host, authentication and binary-input source contract.
 
-See [optional dependency-seed failure isolation](../implemented/optional-dependency-seed.md).
+See [optional dependency-seed failure isolation](../implemented/optional-dependency-seed.md)
+and [immutable preview API qualification](../implemented/immutable-preview-api-qualification.md).

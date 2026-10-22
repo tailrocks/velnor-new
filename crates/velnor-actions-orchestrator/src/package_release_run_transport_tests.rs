@@ -276,8 +276,6 @@ fn historical_signed_attempt_remains_valid_while_new_mutation_rejects_rerun() {
     let mut original = producing_run();
     original["status"] = json!("completed");
     original["conclusion"] = json!("failure");
-    let mut rerun = producing_run();
-    rerun["run_attempt"] = json!(4);
     let (api, fixture) = GitHubApi::with_fixture(
         "example/app",
         vec![
@@ -286,16 +284,21 @@ fn historical_signed_attempt_remains_valid_while_new_mutation_rejects_rerun() {
                 producing_metadata(),
             ),
             (route("actions/runs/22/attempts/3"), original.clone()),
-            (route("actions/runs/22"), rerun),
+            // Even though the aggregate run is now on attempt 4, retained
+            // validation must keep authenticating the signed attempt 3.
             (route("actions/runs/22/attempts/3"), original),
+            (route("actions/runs/22/attempts/3"), {
+                let mut attempt = producing_run();
+                attempt["status"] = json!("completed");
+                attempt["conclusion"] = json!("failure");
+                attempt
+            }),
         ],
     );
     api.verify_release_run(&release_receipt(), true)
         .expect("historical signed attempt");
-    assert!(
-        api.verify_current_release_run(&release_receipt(), true)
-            .is_err()
-    );
+    api.verify_current_release_run(&release_receipt(), true)
+        .expect("retained attempt remains valid after a newer rerun");
     api.verify_release_run(&release_receipt(), true)
         .expect("historical publication still valid");
     fixture.assert_drained();

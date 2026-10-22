@@ -34,9 +34,6 @@ use super::{
 pub(super) mod promotion_context;
 use promotion_context::{Invocation, Purpose};
 
-#[path = "package_release_rolling_original.rs"]
-pub(super) mod rolling_original;
-
 const POLICY_FILE: &str = "package-release-policy.json";
 const INPUT_DIR: &str = "release-recovery-input";
 const MAX_PLAN_BYTES: u64 = 1024 * 1024;

@@ -8,9 +8,8 @@ use velnor_actions_contract::{
 use velnor_actions_workflow_renderer::{
     HelperProvenance, MiseSetup, provision_acquire_step,
     schema2::{
-        ConsumerReleaseSpec, ConsumerReleaseTapSpec, ConsumerRollingPreviewSpec,
-        ConsumerStableReleaseSpec, render_consumer_binary_release, render_consumer_preview,
-        render_release_tap_reconcile,
+        ConsumerReleaseSpec, ConsumerReleaseTapSpec, ConsumerStableReleaseSpec,
+        render_consumer_binary_release, render_consumer_preview, render_release_tap_reconcile,
     },
 };
 
@@ -80,12 +79,6 @@ fn fixture(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {
                 "release-plz".to_owned(),
             ],
         }),
-        preview: (channel == PackageReleaseChannel::Preview).then_some(
-            ConsumerRollingPreviewSpec {
-                release_id: 123,
-                bootstrap_snapshot_sha256: None,
-            },
-        ),
     }
 }
 

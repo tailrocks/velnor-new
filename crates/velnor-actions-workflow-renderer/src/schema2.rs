@@ -33,8 +33,8 @@ use runner_spec::RunnerSpec;
 #[path = "schema2_consumer_preview.rs"]
 mod consumer_preview;
 pub use consumer_preview::{
-    ConsumerReleaseSpec, ConsumerReleaseTapSpec, ConsumerRollingPreviewSpec,
-    render_consumer_preview, render_release_tap_reconcile,
+    ConsumerReleaseSpec, ConsumerReleaseTapSpec, render_consumer_preview,
+    render_release_tap_reconcile,
 };
 #[path = "schema2_consumer_binary_release.rs"]
 mod consumer_binary_release;

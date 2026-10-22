@@ -1,6 +1,34 @@
 use super::*;
 
 #[test]
+fn graphql_is_sent_through_gh_api_with_standard_headers_and_fields() {
+    let query = "query($owner:String!){repository(owner:$owner){id}}";
+    let args = gh_api_arguments(
+        graphql_arguments(query, &[("owner", "jackin-project".to_owned())]),
+        "application/vnd.github+json",
+    );
+    let args = args
+        .iter()
+        .map(|arg| arg.to_str().expect("UTF-8 fixture arg"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        args,
+        [
+            "api",
+            "-H",
+            "Accept: application/vnd.github+json",
+            "-H",
+            "X-GitHub-Api-Version: 2026-03-10",
+            "graphql",
+            "--raw-field",
+            format!("query={query}").as_str(),
+            "--field",
+            "owner=jackin-project",
+        ]
+    );
+}
+
+#[test]
 fn api_path_segments_encode_version_delimiters_and_spaces() {
     assert_eq!(
         encode_segment("v1.2.3-preview.7+abcdef0"),
@@ -61,7 +89,7 @@ fn immutable_status_ignores_owner_metadata_but_requires_enabled_true() {
 #[test]
 fn annotated_tag_response_exposes_identity_message_and_commit_target() {
     let tag: GitTagResponse = serde_json::from_str(
-        r#"{"tag":"v1.2.3-preview.7+abcdef0","message":"signed recovery envelope","object":{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","type":"commit"}}"#,
+        r#"{"sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","tag":"v1.2.3-preview.7+abcdef0","message":"signed recovery envelope","object":{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","type":"commit"}}"#,
     )
     .expect("annotated tag response");
     assert_eq!(tag.tag, "v1.2.3-preview.7+abcdef0");
@@ -77,8 +105,86 @@ fn annotated_tag_response_exposes_identity_message_and_commit_target() {
 #[test]
 fn annotated_tag_internal_name_must_match_its_ref() {
     let tag: GitTagResponse = serde_json::from_str(
-        r#"{"tag":"v1.2.3-preview.8+abcdef0","message":"signed recovery envelope","object":{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","type":"commit"}}"#,
+        r#"{"sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","tag":"v1.2.3-preview.8+abcdef0","message":"signed recovery envelope","object":{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","type":"commit"}}"#,
     )
     .expect("annotated tag response");
     assert!(annotated_tag_observation("v1.2.3-preview.7+abcdef0", tag).is_err());
+}
+
+#[test]
+fn release_by_tag_reads_one_exact_tag_and_accepts_only_documented_not_found() {
+    use serde_json::json;
+
+    let (api, calls) = GitHubApi::with_fixture(
+        "example/app",
+        vec![
+            (
+                format!(
+                    "graphql:owner=example&name=app&tagName=preview-{}",
+                    "a".repeat(40)
+                ),
+                json!({"data":{"repository":{"release":{"databaseId":9,"isDraft":false}}}}),
+            ),
+            (
+                "repos/example/app/releases/9".into(),
+                json!({
+                    "id": 9,
+                    "tag_name": format!("preview-{}", "a".repeat(40)),
+                    "draft": false,
+                    "prerelease": true,
+                    "immutable": true,
+                    "assets": []
+                }),
+            ),
+        ],
+    );
+    let found = api
+        .release_by_tag(&format!("preview-{}", "a".repeat(40)))
+        .expect("exact release lookup")
+        .expect("published release");
+    assert_eq!(found.id, 9);
+    calls.assert_drained();
+    assert_eq!(calls.observed().len(), 2);
+
+    let (api, calls) = GitHubApi::with_fixture(
+        "example/app",
+        vec![(
+            "graphql:owner=example&name=app&tagName=preview-missing".into(),
+            json!({"data":{"repository":{"release":null}}}),
+        )],
+    );
+    assert!(
+        api.release_by_tag("preview-missing")
+            .expect("documented 404 is absence")
+            .is_none()
+    );
+    calls.assert_drained();
+}
+
+#[test]
+fn release_by_tag_rejects_a_response_for_another_tag() {
+    use serde_json::json;
+
+    let (api, calls) = GitHubApi::with_fixture(
+        "example/app",
+        vec![
+            (
+                "graphql:owner=example&name=app&tagName=preview-requested".into(),
+                json!({"data":{"repository":{"release":{"databaseId":9,"isDraft":false}}}}),
+            ),
+            (
+                "repos/example/app/releases/9".into(),
+                json!({
+                    "id": 9,
+                    "tag_name": "preview-other",
+                    "draft": false,
+                    "prerelease": true,
+                    "immutable": true,
+                    "assets": []
+                }),
+            ),
+        ],
+    );
+    assert!(api.release_by_tag("preview-requested").is_err());
+    calls.assert_drained();
 }

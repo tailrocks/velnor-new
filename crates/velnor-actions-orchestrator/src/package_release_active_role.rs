@@ -64,7 +64,7 @@ pub(in crate::package_release_publish) fn continuation_job_name(
         (
             "tap-selection",
             match channel {
-                PackageReleaseChannel::Preview => "Select the current committed rolling preview",
+                PackageReleaseChannel::Preview => "Select the current committed immutable preview",
                 PackageReleaseChannel::Stable => {
                     "Select the authenticated permanent stable release"
                 }

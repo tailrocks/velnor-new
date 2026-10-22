@@ -18,9 +18,7 @@ fn preview_config(stable: bool) -> String {
             )
     }
     .replace("default_branch = \"testmain\"", "default_branch = \"main\"");
-    format!(
-        "{stable_config}\n[stacks.rust.binary_release.preview]\nenabled = true\nrelease_id = 123\n"
-    )
+    format!("{stable_config}\n[stacks.rust.binary_release.preview]\nenabled = true\n")
 }
 
 fn tap_enabled_config(stable: bool) -> String {
