@@ -2963,15 +2963,6 @@ scripts/hosted_phase_measurement/tests/test_mbx_summary.py:generic-api-key:25
 # Reason: MatrixKey parse test constant m-0123456789abcdef (check_id! macro), not a credential
 crates/velnor-actions-contract/src/ids/artifact.rs:generic-api-key:201
 
-# Reason: generated task manifests and parity plan fixtures contain typed deterministic matrix identifiers, not credentials.
-# 7 findings; rules: generic-api-key; files: .github and generated fixture manifests/plan-v1.json (7)
-.github/velnor/task-execution-manifest-v1.json:generic-api-key:2
-docs/proposed/opentofu-goldens/cases/dogfood/preview/.github/velnor/task-execution-manifest-v1.json:generic-api-key:2
-docs/proposed/opentofu-goldens/cases/mbx-nextest/preview/.github/velnor/task-execution-manifest-v1.json:generic-api-key:2
-docs/proposed/opentofu-goldens/cases/minimal-cargo/preview/.github/velnor/task-execution-manifest-v1.json:generic-api-key:2
-docs/proposed/opentofu-goldens/cases/nested/preview/.github/velnor/task-execution-manifest-v1.json:generic-api-key:2
-fixtures/parity/minimal-cargo/expected/plan-v1.json:generic-api-key:1
-fixtures/parity/multi-crate/expected/plan-v1.json:generic-api-key:1
 # Reason: contract and report tests use typed deterministic matrix identifier fixtures in validation cases, not credentials.
 # 4 findings; rules: generic-api-key; files: contract qualification and orchestrator report tests (4)
 crates/velnor-actions-contract/src/workflow/qualification.rs:generic-api-key:332

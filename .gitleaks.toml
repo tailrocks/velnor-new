@@ -1,3 +1,16 @@
-# gitleaks and betterleaks configuration (betterleaks reads .gitleaks.toml when no .betterleaks.toml exists): upstream default rules only.
+# Gitleaks and BetterLeaks config; BetterLeaks reads this when no .betterleaks.toml exists.
+# Uses upstream defaults plus the exact field/path-scoped matrix exception below.
 [extend]
 useDefault = true
+
+[[allowlists]]
+description = "Typed lowercase matrix identifiers in generated manifests and plan fixtures"
+condition = "AND"
+targetRules = ["generic-api-key"]
+paths = [
+  '''^\.github/velnor/task-execution-manifest-v1\.json$''',
+  '''^docs/proposed/opentofu-goldens/cases/(?:dogfood|mbx-nextest|minimal-cargo|nested)/preview/\.github/velnor/task-execution-manifest-v1\.json$''',
+  '''^fixtures/parity/(?:minimal-cargo|multi-crate)/expected/plan-v1\.json$''',
+]
+regexTarget = "match"
+regexes = ['''^"?matrix_key"?\s*:\s*"m-[0-9a-f]{16}"?$''']
