@@ -73,5 +73,9 @@ node_checksum_signature_url = "https://nodejs.org/dist/v26.12.0/SHASUMS256.txt.s
 node_checksum_signing_key_fingerprint = "C82FA3AE1CBEDC6BE46B9360C43CEC45C17AB93C"
 node_source_tag_signature = "PASS: GitHub signed tag; PASS: checksum manifest signature against the official Node.js release key."
 
+gnu_tar_source_package_version = "1.35+dfsg-4ubuntu0.4"
+gnu_tar_source_lock_sha256 = "110b375dcff4a8824a913fa55118773d39d017535d2a08aaae4d856bf5c906db"
+gnu_tar_binary_sha256 = "035ec786cea68c6da6065e8c8d78e9b08aed5bbd168dee4e52da4a56417ba4c6"
+
 bollard = "=0.21.1"
 turso = "=0.8.3"

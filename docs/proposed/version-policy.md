@@ -78,7 +78,7 @@ compiled-in Mise release record in generated workflow output.
 | GitHub Actions | Compiled-in Velnor action registry; optional exact overrides in `.velnor/config.toml` | Default record is the latest reviewed stable release; workflow uses immutable full commit SHA |
 | Alint GitHub Action | Compiled-in Velnor action registry; emitted as a full-SHA pin like every other action | `v0.19.0` (`f39a25a7e061bb8738a87372561d8b9a6a29ca87`) is the current reviewed default as of 2026-10-19. No tag exception exists; changing the pin requires a reviewed Velnor version-policy update |
 | GitHub-hosted OS image | Generated `runs-on` label and recorded runner metadata | Latest stable supported Ubuntu image family after host qualification; exact versioned label is the pin. GitHub may update its image contents in place, so record `ImageOS` and `ImageVersion` as runtime evidence and cache identity, not as immutable pins |
-| Runner runtime inputs | `.velnor/runner.lock` | Latest qualified Docker Desktop/Engine, official runner, base-image digest, GitHub API version, protocol revision, and runner dependencies including Turso |
+| Runner runtime inputs | `.velnor/runner.lock` | Latest qualified Docker Desktop/Engine, official runner, base-image digest, GitHub API version, protocol revision, runner dependencies including Turso, and GNU tar source package + binary pins |
 
 Consumer workflows MUST be self-contained: all tool pins, action pins, runner
 labels, and the bootstrap binary identity are embedded in generated output.
@@ -293,12 +293,21 @@ those files for a maintainer to apply.
 For the Scale Set runner (`crates/velnor-runner`), `.velnor/runner.lock` MUST be reviewed and
 must bind image repository and digest, base distribution, official runner
 version and archive SHA-256, architecture, Docker Desktop/Engine versions, API
-version, GitHub REST API version, and native protocol source revision. Runner
-auto-update behavior is part of the qualified identity and refresh process.
+version, GitHub REST API version, native protocol source revision, and GNU tar
+runtime source package version, source-lock JSON SHA-256, and binary SHA-256.
+The runner image contract checks the source-lock package/version and exact
+bytes against those pins, and checks both Dockerfile checksum commands against
+the pinned binary digest. Runner auto-update behavior is part of the qualified
+identity and refresh process.
 The exact `turso` crate version is declared through workspace dependencies and
 locked in `Cargo.lock`; each version update reruns journal migration,
 transaction, locking, durability, and crash-recovery qualification. Turso
 Cloud sync and remote access remain disabled for the local journal.
+
+GNU tar is a runner image input, not a tool in the compiled Mise catalog. Its
+Ubuntu security source package is recorded in the source lock and is not
+covered by an automated upstream freshness probe. Do not claim it is the
+latest package without a dated source check.
 
 No claim of “latest” is valid unless the inventory says what was checked, where
 it was checked, and when. A green build using stale pins is a freshness failure
