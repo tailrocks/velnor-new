@@ -148,7 +148,7 @@ when unsharded; one `onProject` event per project that ran) and fails with:
 | `playwright_blob_missing` | no blob: the consumer config lacks the blob reporter under CI |
 | `playwright_blob_version:<v>` | an unknown blob schema (fail closed) |
 | `playwright_blob_shard_mismatch:<want>:<got>` | the shard never reached Playwright (compound script, or a wrapper that drops argv) |
-| `playwright_blob_project_mismatch:<want>:<got>` | a foreign project ran, or none did |
+| `playwright_blob_project_mismatch:<want>:<got>` | a foreign project ran, or no project event appeared in an unsharded leg |
 
 *(refinement)* The design names an internal operation
 (`playwright-blob-verify-v1`) over the hardened archive reader. The check is
@@ -198,6 +198,15 @@ Matrix legs restore the `bun-install` and `playwright-browsers` families
 read-only; only leg 1 may save them (`VELNOR_FAMILY_WRITER`, proposed). No leg
 ever holds the App secret (see the private-asset rule above).
 
+Playwright blob metadata does not record `--project`. For a non-empty
+project-selected leg, Velnor requires an `onProject` event for the requested
+project, follows its dependency and teardown names, and rejects emitted
+projects outside that closure. Referenced projects can be absent from the
+events with `--no-deps` or when Playwright removes empty suites. An empty shard
+therefore proves its exact shard metadata only; it cannot prove which project
+selector was passed when there are no project events. An empty unsharded blob
+fails verification because it provides no project evidence.
+
 ## Verification
 
 - Contract: suite tables, every suite code, timeout bounds and defaults
@@ -216,9 +225,10 @@ ever holds the App secret (see the private-asset rule above).
   parsing and `strategy` emission (`matrix_bun_tests.rs`), generated legs,
   flags only where they apply, env-only matrix values and refusals
   (`impl_bun_playwright.rs`).
-- Blobs and report: leg verify, blob and results uploads, the report job, its
-  gate and the shadow refusal (`impl_bun_report.rs`); report and retention
-  bounds (`config/bun_tests.rs`); the artifact-action allowance and the report
-  policy (`impl_renderer_bun.rs`).
+- Blobs and report: leg verify, project dependency/teardown closure, empty-shard
+  evidence, blob and results uploads, the report job, its gate and the shadow
+  refusal (`impl_bun_report.rs`); report and retention bounds
+  (`config/bun_tests.rs`); the artifact-action allowance and the report policy
+  (`impl_renderer_bun.rs`).
 - Goldens: `fixtures/bun-workspace` (no suite) stays byte-identical;
   `fixtures/bun-workspace-suites` is the opt-in golden (`impl_bun_golden.rs`).
