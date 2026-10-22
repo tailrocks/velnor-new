@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use super::{NOT_CATALOGUED_CODE, ToolchainPhase, toolchain_script};
+use super::{NOT_CATALOGUED_CODE, ToolchainPhase};
 
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 
@@ -182,22 +182,7 @@ impl Fixture {
     }
 
     fn run_with(&self, phase: ToolchainPhase, digest: &str, version: &str) -> TestResult<Output> {
-        let script = toolchain_script(version, phase, &[(VERSION, digest, "2026-01-01")]);
-        let inherited = std::env::var_os("PATH").ok_or("PATH is unavailable")?;
-        let mut paths = vec![self.root.join("bin")];
-        paths.extend(std::env::split_paths(&inherited));
-        Ok(Command::new("sh")
-            .arg("-c")
-            .arg(&script)
-            .env_clear()
-            .env("PATH", std::env::join_paths(paths)?)
-            .env("HOME", &self.root)
-            .env("RUNNER_TEMP", self.root.join("runner-temp"))
-            .env("RUSTUP_HOME", self.root.join("rustup"))
-            .env("CARGO_HOME", self.root.join("cargo"))
-            .env("FIXTURE_DIST", self.root.join("dist"))
-            .env("FIXTURE_LOG", self.root.join("curl.log"))
-            .output()?)
+        self.run_after(&[], phase, digest, version)
     }
 
     fn run(&self, phase: ToolchainPhase) -> TestResult<Output> {
@@ -397,3 +382,6 @@ fn both_phases_share_one_download_per_component_in_a_job() -> TestResult {
     );
     Ok(())
 }
+
+#[path = "rust_toolchain_script_path_tests.rs"]
+mod path;

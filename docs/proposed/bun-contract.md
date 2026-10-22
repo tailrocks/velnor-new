@@ -257,6 +257,12 @@ hash-pinned lock. Decisions:
   after the install on a trusted push, with size admission
   ([cache decision 8](cache-decisions.md)).
 
+## Suites and Playwright sharding
+
+Declared suites (separate jobs for groups of a member's scripts, optionally a
+Playwright project and shard matrix) are specified in
+[Bun browser suites](bun-browser-suites.md).
+
 ## Remaining work
 
 - Members of an npm publication that depend on private npm scopes (the
