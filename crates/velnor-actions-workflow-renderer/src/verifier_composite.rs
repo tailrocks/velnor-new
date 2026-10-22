@@ -234,10 +234,11 @@ mod tests {
     use velnor_actions_contract::workflow::{RUST_VERIFIER_USES, Step, StepKind, StepRole};
 
     use super::{
-        VERIFY_JACTIONLINT_USES, render_verifier_composite, verifier_shell_argv,
-        verifier_shell_step,
+        VERIFY_JACTIONLINT_USES, render_verifier_composite, verifier_composite_document,
+        verifier_shell_argv, verifier_shell_step,
     };
     use crate::VERIFY_SHELL;
+    use crate::yaml::Yaml;
 
     fn rust_step(uses: &str) -> Step {
         let restored = uses == RUST_VERIFIER_USES[0];
@@ -269,14 +270,32 @@ mod tests {
         step
     }
 
+    fn mapping<'a>(node: &'a Yaml) -> &'a [(String, Yaml)] {
+        let Yaml::Map(entries) = node else {
+            panic!("expected YAML mapping, got {node:?}");
+        };
+        entries
+    }
+
+    fn field<'a>(node: &'a Yaml, key: &str) -> &'a Yaml {
+        mapping(node)
+            .iter()
+            .find_map(|(candidate, value)| (candidate == key).then_some(value))
+            .unwrap_or_else(|| panic!("missing YAML field {key:?} in {node:?}"))
+    }
+
+    fn scalar(node: &Yaml) -> &str {
+        let Yaml::Str(value) = node else {
+            panic!("expected YAML string, got {node:?}");
+        };
+        value
+    }
+
     #[test]
     fn verifier_composite_keeps_scrubbed_shell_body_homes_and_trusted_shell() {
-        let file = render_verifier_composite(
-            RUST_VERIFIER_USES[0],
-            &rust_step(RUST_VERIFIER_USES[0]),
-            "0.1.40",
-        )
-        .expect("fixed composite");
+        let step = rust_step(RUST_VERIFIER_USES[0]);
+        let file = render_verifier_composite(RUST_VERIFIER_USES[0], &step, "0.1.40")
+            .expect("fixed composite");
         assert_eq!(
             file.path,
             ".github/actions/velnor-verify-restored-rust/action.yml"
@@ -286,20 +305,69 @@ mod tests {
         assert!(file.bytes.contains("${{ runner.temp }}/velnor/rustup"));
         assert!(file.bytes.contains("CARGO_HOME:"));
         assert!(file.bytes.contains("${{ runner.temp }}/velnor/cargo"));
-        let verifier = file
-            .bytes
-            .find("name: Verify restored Rust toolchain")
-            .expect("verifier step");
-        assert!(!file.bytes.contains("Resolve project tool versions"));
-        assert!(file.bytes[..verifier].contains("VELNOR_TOOL_RUST"));
-        assert!(file.bytes.contains(&format!("PATH={}", crate::VERIFY_PATH)));
-        assert!(file.bytes.contains("GITHUB_TOKEN: \"\""));
+        let document =
+            verifier_composite_document("Velnor restored Rust verifier", "VELNOR_TOOL_RUST", &step)
+                .expect("structured verifier composite");
+        let runs = field(&document, "runs");
+        assert_eq!(scalar(field(runs, "using")), "composite");
+        let Yaml::Seq(steps) = field(runs, "steps") else {
+            panic!("composite steps must be a sequence");
+        };
+        assert_eq!(
+            steps.len(),
+            1,
+            "there is no resolver or extra executable step"
+        );
+        let verifier = &steps[0];
+        assert_eq!(
+            scalar(field(verifier, "name")),
+            "Verify restored Rust toolchain"
+        );
+        assert_eq!(scalar(field(verifier, "shell")), VERIFY_SHELL);
+        assert!(mapping(verifier).iter().all(|(key, _)| key != "uses"));
+        let env = mapping(field(verifier, "env"));
+        let mut expected_env = crate::toolchain_env::STEP_CREDENTIAL_DENYLIST
+            .into_iter()
+            .chain(crate::toolchain_env::STEP_ENDPOINT_DENYLIST)
+            .map(|key| (key.to_owned(), String::new()))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        expected_env.insert(
+            "RUSTUP_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/rustup".to_owned(),
+        );
+        expected_env.insert(
+            "CARGO_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/cargo".to_owned(),
+        );
+        assert_eq!(
+            env.len(),
+            expected_env.len(),
+            "no duplicate or extra env keys"
+        );
+        for (key, expected) in expected_env {
+            let values = env
+                .iter()
+                .filter_map(|(actual_key, value)| (actual_key == &key).then_some(value))
+                .collect::<Vec<_>>();
+            assert_eq!(values.len(), 1, "exactly one {key} binding");
+            assert_eq!(scalar(values[0]), expected, "exact {key} value");
+        }
+        let run = scalar(field(verifier, "run"));
+        assert!(
+            run.contains(&format!("PATH={}", crate::VERIFY_PATH)),
+            "{run}"
+        );
+        assert_eq!(run.matches("${VELNOR_TOOL_RUST}").count(), 1, "{run}");
+        assert!(
+            run.contains(r#"set -eu; echo verified; echo rust@'"${VELNOR_TOOL_RUST}"'"#),
+            "canonical payload and caller binding remain in the verifier step: {run}"
+        );
+        assert!(!run.contains("Resolve project tool versions"));
         let prelude = format!(
             "unset {};",
             crate::toolchain_env::CREDENTIAL_UNSET_VARS.join(" ")
         );
-        assert!(file.bytes.contains(&prelude));
-        assert!(file.bytes.contains("set -eu; echo verified"));
+        assert!(run.contains(&prelude));
     }
 
     #[test]
