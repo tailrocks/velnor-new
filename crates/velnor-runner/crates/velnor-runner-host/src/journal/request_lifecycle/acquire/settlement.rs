@@ -5,6 +5,16 @@ use crate::journal::source_authorization::AssignedAcquireResult;
 
 use super::{acquire_result_matches, digest, request_id, response_record, validate_scope_identity};
 
+struct AcquireResultUpdate<'a> {
+    connection_id: &'a str,
+    binding_digest: &'a str,
+    identity: &'a AssignmentIdentity,
+    request_id: i64,
+    state: &'static str,
+    response_json: &'a str,
+    response_digest: &'a str,
+}
+
 impl ConnectionJournal {
     /// Record a definite no-acquire result and release only its unused reservation.
     pub(crate) async fn record_request_acquire_and_settle_unused(
@@ -23,20 +33,18 @@ impl ConnectionJournal {
         let response_digest = digest(response_json.as_bytes());
         let connection_id = self.connection_id().as_str().to_owned();
         let binding_digest = self.binding_digest().to_owned();
+        let update = AcquireResultUpdate {
+            connection_id: &connection_id,
+            binding_digest: &binding_digest,
+            identity,
+            request_id,
+            state,
+            response_json: &response_json,
+            response_digest: &response_digest,
+        };
         in_transaction(self.journal_ref(), async |connection| {
             validate_scope_identity(self, connection, identity).await?;
-            if !record_result(
-                connection,
-                &connection_id,
-                &binding_digest,
-                identity,
-                request_id,
-                state,
-                &response_json,
-                &response_digest,
-            )
-            .await?
-            {
+            if !record_result(connection, &update).await? {
                 return Ok(false);
             }
             let Some((reservation_id, intent_id)) = unused_reservation(
@@ -66,25 +74,19 @@ impl ConnectionJournal {
 
 async fn record_result(
     connection: &turso::Connection,
-    connection_id: &str,
-    binding_digest: &str,
-    identity: &AssignmentIdentity,
-    request_id: i64,
-    state: &'static str,
-    response_json: &str,
-    response_digest: &str,
+    update: &AcquireResultUpdate<'_>,
 ) -> Result<bool, HostError> {
     let changed = connection
         .execute(
             "UPDATE connection_request_authorizations SET acquire_state = ?1, acquire_response_json = ?2, acquire_response_digest = ?3 WHERE connection_id = ?4 AND scale_set_id = ?5 AND request_id = ?6 AND binding_digest = ?7 AND acquire_state = 'requested' AND acquire_response_json IS NULL AND acquire_response_digest IS NULL",
             (
-                state,
-                response_json,
-                response_digest,
-                connection_id,
-                identity.scale_set_id(),
-                request_id,
-                binding_digest,
+                update.state,
+                update.response_json,
+                update.response_digest,
+                update.connection_id,
+                update.identity.scale_set_id(),
+                update.request_id,
+                update.binding_digest,
             ),
         )
         .await
@@ -94,11 +96,11 @@ async fn record_result(
     }
     if acquire_result_matches(
         connection,
-        connection_id,
-        identity.scale_set_id(),
-        request_id,
-        state,
-        response_digest,
+        update.connection_id,
+        update.identity.scale_set_id(),
+        update.request_id,
+        update.state,
+        update.response_digest,
     )
     .await?
     {
