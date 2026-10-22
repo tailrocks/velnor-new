@@ -77,6 +77,40 @@ fn mise_quiet_defaults_on_and_follows_explicit_values() -> Result<(), Box<dyn Er
 }
 
 #[test]
+fn verification_branch_parses_and_is_validated_against_default_branch() -> Result<(), Box<dyn Error>>
+{
+    let config = parse_config(
+        "schema = 1\n[workflow]\ndefault_branch = \"trunk\"\nverification_branch = \"sea/integration\"\n",
+    )?;
+    assert_eq!(config.workflow.default_branch.as_deref(), Some("trunk"));
+    assert_eq!(
+        config.workflow.verification_branch.as_deref(),
+        Some("sea/integration")
+    );
+
+    let invalid = parse_config(
+        "schema = 1\n[workflow]\ndefault_branch = \"trunk\"\nverification_branch = \"trunk\"\n",
+    )
+    .expect_err("verification branch must differ from the configured default");
+    assert!(invalid.to_string().contains("workflow.verification_branch"));
+    Ok(())
+}
+
+#[test]
+fn dependency_seed_timeout_materializes_independently() -> Result<(), Box<dyn Error>> {
+    let default = parse_config("schema = 1\n[workflow]\ncrate_timeout_minutes = 10\n")?;
+    assert_eq!(default.workflow.crate_timeout_minutes, 10);
+    assert_eq!(default.workflow.dependency_seed_timeout_minutes, 30);
+
+    let explicit = parse_config(
+        "schema = 1\n[workflow]\ncrate_timeout_minutes = 10\ndependency_seed_timeout_minutes = 45\n",
+    )?;
+    assert_eq!(explicit.workflow.crate_timeout_minutes, 10);
+    assert_eq!(explicit.workflow.dependency_seed_timeout_minutes, 45);
+    Ok(())
+}
+
+#[test]
 fn mise_quiet_rejects_non_boolean_with_structured_config_error() {
     for wire in ["\"yes\"", "1"] {
         let err = toml::from_str::<PartialConfig>(&mise_quiet_source(Some(wire)))

@@ -40,7 +40,7 @@ jobs:
   dependency-seed:
     name: Dependency seed
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 30
     continue-on-error: true
     env:
       CARGO_CACHE_AUTO_CLEAN_FREQUENCY: never
@@ -62,7 +62,7 @@ jobs:
         id: velnor-cache-clock
         run: "set -eu\nunavailable() { printf '%s\\n' '::warning::cache_unavailable: invalid first-step clock or output'; }\noutput=${GITHUB_OUTPUT-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$now\" \"$seconds\"; do\n  case \"$value\" in ''|*[!0-9]*) unavailable; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) unavailable; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { unavailable; exit 0; }\ndone\nif [ -z \"$output\" ] || ! printf 'started=%s\\ndeadline=%s\\njob_seconds=%s\\n' \"$now\" \"$((now + seconds))\" \"$seconds\" 2>/dev/null >> \"$output\"; then\n  unavailable\nfi\n"
         env:
-          VELNOR_CACHE_JOB_SECONDS: "300"
+          VELNOR_CACHE_JOB_SECONDS: "1800"
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -228,7 +228,7 @@ jobs:
         if: always() && !cancelled() && steps.mbx-bundle-export.outputs.exported == 'true'
         run: "set -eu\noutput=${GITHUB_OUTPUT-}\nemit() { [ -n \"$output\" ] && printf '%s\\n' \"$1\" 2>/dev/null >> \"$output\"; }\nrefuse() {\n  emit 'admitted=false' || :\n  printf '%s\\n' '::warning::cache_unavailable: optional save has no safe remaining job budget or output'\n}\nstarted=${VELNOR_CACHE_STARTED-}\ndeadline=${VELNOR_CACHE_DEADLINE-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nrequired=${VELNOR_CACHE_REQUIRED_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$started\" \"$deadline\" \"$now\" \"$seconds\" \"$required\"; do\n  case \"$value\" in ''|*[!0-9]*) refuse; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) refuse; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { refuse; exit 0; }\ndone\nif [ \"$now\" -lt \"$started\" ] || [ \"$deadline\" -lt \"$started\" ] ||\n   [ \"$((deadline - started))\" -ne \"$seconds\" ] ||\n   [ \"$((deadline - now))\" -lt \"$required\" ]; then\n  refuse\nelif ! emit 'admitted=true'; then\n  refuse\nfi\n"
         env:
-          VELNOR_CACHE_JOB_SECONDS: "300"
+          VELNOR_CACHE_JOB_SECONDS: "1800"
           VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
           VELNOR_CACHE_DEADLINE: ${{ steps.velnor-cache-clock.outputs.deadline }}
           VELNOR_CACHE_REQUIRED_SECONDS: "210"

@@ -223,6 +223,9 @@ fn build_workflow_jobs(
         crate_job_inputs,
         qualification_jobs_enabled,
         prepared.private.as_ref(),
+        velnor_actions_contract::JobTimeout::new(
+            input.config.workflow.dependency_seed_timeout_minutes,
+        )?,
     )?;
     let qualification = if qualification_jobs_enabled {
         crate::crate_jobs::build_qualification_for_workflow(

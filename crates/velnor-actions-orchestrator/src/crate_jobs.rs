@@ -23,6 +23,12 @@ use crate::crate_job_ids::{
 use crate::discover::Discovery;
 use crate::internal::internal;
 
+#[path = "crate_jobs_inputs.rs"]
+mod inputs;
+pub(crate) use inputs::CrateJobInputs;
+#[cfg(test)]
+pub(crate) use inputs::build_crate_jobs_with;
+
 #[path = "dependency_seed.rs"]
 pub(crate) mod dependency_seed;
 
@@ -75,8 +81,9 @@ pub(crate) fn build_for_workflow(
     input: CrateJobInputs<'_>,
     qualification: bool,
     private: Option<&PrivateWiring>,
+    seed_timeout: JobTimeout,
 ) -> Result<CrateBuild, OrchestratorError> {
-    build_crate_jobs_inner(input, qualification, private)
+    build_crate_jobs_inner(input, qualification, private, seed_timeout)
 }
 
 /// Make one `ToFu` Qualification executor for each matrix entry that has tasks.
@@ -137,25 +144,6 @@ pub(crate) fn workflow_job_inputs<'a>(
     })
 }
 
-/// All authority and rendering inputs for one crate-job build.
-#[derive(Clone, Copy)]
-pub(crate) struct CrateJobInputs<'a> {
-    pub(crate) label: &'a str,
-    pub(crate) policy: WorkflowPolicy,
-    pub(crate) discovery: &'a Discovery,
-    pub(crate) catalog: &'a ToolCatalog,
-    pub(crate) fetch_roots: &'a [String],
-    pub(crate) acquire: Option<&'a Step>,
-    pub(crate) max_parallel_jobs: u32,
-    /// Literal timeout for each emitted crate job.
-    pub(crate) timeout: JobTimeout,
-    pub(crate) helper_version: &'a str,
-    /// Initialize missing independent check targets from the completed build.
-    pub(crate) seed_parallel_targets: bool,
-    /// Per-package Rust options keyed by Cargo package name.
-    pub(crate) crates: &'a BTreeMap<String, RustCrateConfig>,
-}
-
 /// Build one ordered IR job per runnable crate from discovery proposals.
 ///
 /// One job owns every runnable Rust package task.
@@ -170,7 +158,16 @@ pub(crate) struct CrateJobInputs<'a> {
 /// Returns contract, render-context, or tool-request errors.
 #[cfg(test)]
 pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, OrchestratorError> {
-    build_crate_jobs_inner(input, false, None)
+    build_crate_jobs_with(input, None)
+}
+
+#[cfg(test)]
+fn build_crate_jobs_with_seed_timeout(
+    input: CrateJobInputs<'_>,
+    private: Option<&PrivateWiring>,
+    seed_timeout: JobTimeout,
+) -> Result<CrateBuild, OrchestratorError> {
+    build_crate_jobs_inner(input, false, private, seed_timeout)
 }
 
 /// Make one `ToFu` Qualification job for each matrix entry that has tasks.
@@ -231,6 +228,7 @@ fn build_crate_jobs_inner(
     input: CrateJobInputs<'_>,
     qualification: bool,
     private: Option<&PrivateWiring>,
+    seed_timeout: JobTimeout,
 ) -> Result<CrateBuild, OrchestratorError> {
     let grouped = group_runnable(&input.discovery.proposals)?;
     let owners = JobOwners::from_grouped(&input.discovery.proposals, &grouped);
@@ -271,7 +269,7 @@ fn build_crate_jobs_inner(
     stage::stage_tofu_root_jobs(&mut jobs, &tofu_ids, input.max_parallel_jobs);
     disambiguate_rust_job_names(&mut jobs, &manifests)?;
     jobs.sort_by(|left, right| left.0.cmp(&right.0));
-    let seeds = dependency_seed::seed_jobs(&input, &workspaces, private)?;
+    let seeds = dependency_seed::seed_jobs(&input, &workspaces, private, seed_timeout)?;
     for (id, _) in &seeds {
         drivers.insert(id.clone(), RenderDriver::Mbx);
     }

@@ -22,6 +22,8 @@ use super::impl_common::{TestResult, config_with_branch, fixture_manifest_json, 
 
 #[path = "impl_cache_warm_components.rs"]
 mod components_tests;
+#[path = "impl_cache_warm_seed_timeout.rs"]
+mod seed_timeout_tests;
 
 /// Two-crate workspace repo; `lock` selects the lockfile body.
 fn make_workspace(lock: &str, mbx: bool) -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {

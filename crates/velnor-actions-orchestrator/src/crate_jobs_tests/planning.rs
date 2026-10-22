@@ -118,7 +118,16 @@ fn rust_qualification_reuses_one_job_for_all_configurations_and_tasks() {
         crates: &std::collections::BTreeMap::new(),
     };
     let normal = build_crate_jobs(input).expect("normal grouped jobs");
-    let qualified = build_crate_jobs_inner(input, true, None).expect("shared qualification jobs");
+    let qualified = build_crate_jobs_inner(
+        input,
+        true,
+        None,
+        velnor_actions_contract::JobTimeout::new(
+            velnor_actions_contract::config::default_dependency_seed_timeout_minutes(),
+        )
+        .expect("valid default dependency seed timeout"),
+    )
+    .expect("shared qualification jobs");
     let qualification = build_qualification_crate_jobs(CrateJobInputs {
         label: "ubuntu-26.04",
         policy: WorkflowPolicy::ConsumerV1,

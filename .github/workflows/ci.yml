@@ -266,7 +266,7 @@ jobs:
  dependency-seed:
   name: Dependency seed
   runs-on: ubuntu-26.04
-  timeout-minutes: 8
+  timeout-minutes: 30
   continue-on-error: true
   env: &m14
    MBX_BUILD_SCRIPT_EXECUTION: "0"
@@ -284,7 +284,7 @@ jobs:
     id: velnor-cache-clock
     run: *r3
     env:
-     VELNOR_CACHE_JOB_SECONDS: "480"
+     VELNOR_CACHE_JOB_SECONDS: "1800"
    - *s1
    - *s2
    - *s3
@@ -426,7 +426,7 @@ jobs:
     if: always() && !cancelled() && steps.mbx-bundle-export.outputs.exported == 'true'
     run: *r4
     env:
-     VELNOR_CACHE_JOB_SECONDS: "480"
+     VELNOR_CACHE_JOB_SECONDS: "1800"
      VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
      VELNOR_CACHE_DEADLINE: ${{ steps.velnor-cache-clock.outputs.deadline }}
      VELNOR_CACHE_REQUIRED_SECONDS: "210"
@@ -452,7 +452,7 @@ jobs:
  dependency-seed-6372617465732f76656c6e6f722d72756e6e6572:
   name: Dependency seed / crates/velnor-runner
   runs-on: ubuntu-26.04
-  timeout-minutes: 8
+  timeout-minutes: 30
   continue-on-error: true
   env: *m14
   needs:
@@ -838,7 +838,12 @@ jobs:
    - plan
   if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-actionlint,')"
   steps:
-   - *s15
+   - &s42
+    name: Record optional cache budget
+    id: velnor-cache-clock
+    run: *r3
+    env:
+     VELNOR_CACHE_JOB_SECONDS: "480"
    - *s1
    - *s2
    - *s3
@@ -858,7 +863,7 @@ jobs:
     id: qualification-cache-prepare-8b81434ea9ac3cbe
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-prepare-rust-velnor-actions-actionlint # zizmor: ignore[self-repository]
-    with: &m31
+    with: &m32
      qualification_campaign: ${{ needs.plan.outputs.qualification_campaign }}
    - *s23
    - *s24
@@ -905,7 +910,7 @@ jobs:
     id: qualification-cache-before-save-mbx_objects-8b81434ea9ac3cbe
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-actionlint # zizmor: ignore[self-repository]
-    with: &m32
+    with: &m33
      prepare_outputs: ${{ toJSON(steps.qualification-cache-prepare-8b81434ea9ac3cbe.outputs) }}
      qualification_campaign: ${{ needs.plan.outputs.qualification_campaign }}
    -
@@ -913,7 +918,7 @@ jobs:
     id: qualification-cache-save-mbx_objects-8b81434ea9ac3cbe-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-8b81434ea9ac3cbe.outputs.cache_mbx_objects_active == 'true' && steps.qualification-cache-before-save-mbx_objects-8b81434ea9ac3cbe.outputs.cache_mbx_objects_save_requested == 'true' && steps.qualification-cache-prepare-8b81434ea9ac3cbe.outputs.cache_mbx_objects_save_key != ''
     run: *r4
-    env: &m33
+    env: &m34
      VELNOR_CACHE_JOB_SECONDS: "480"
      VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
      VELNOR_CACHE_DEADLINE: ${{ steps.velnor-cache-clock.outputs.deadline }}
@@ -947,13 +952,13 @@ jobs:
     id: qualification-cache-before-save-cargo_sources-8b81434ea9ac3cbe
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-actionlint # zizmor: ignore[self-repository]
-    with: *m32
+    with: *m33
    -
     name: Admit optional cache save
     id: qualification-cache-save-cargo_sources-8b81434ea9ac3cbe-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-8b81434ea9ac3cbe.outputs.cache_cargo_sources_active == 'true' && steps.qualification-cache-before-save-cargo_sources-8b81434ea9ac3cbe.outputs.cache_cargo_sources_save_requested == 'true' && steps.qualification-cache-prepare-8b81434ea9ac3cbe.outputs.cache_cargo_sources_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache cargo_sources
     id: qualification-cache-save-cargo_sources-8b81434ea9ac3cbe
@@ -983,13 +988,13 @@ jobs:
     id: qualification-cache-before-save-mise_tools-8b81434ea9ac3cbe
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-actionlint # zizmor: ignore[self-repository]
-    with: *m32
+    with: *m33
    -
     name: Admit optional cache save
     id: qualification-cache-save-mise_tools-8b81434ea9ac3cbe-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-8b81434ea9ac3cbe.outputs.cache_mise_tools_active == 'true' && steps.qualification-cache-before-save-mise_tools-8b81434ea9ac3cbe.outputs.cache_mise_tools_save_requested == 'true' && steps.qualification-cache-prepare-8b81434ea9ac3cbe.outputs.cache_mise_tools_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mise_tools
     id: qualification-cache-save-mise_tools-8b81434ea9ac3cbe
@@ -1019,13 +1024,13 @@ jobs:
     id: qualification-cache-before-save-tofu_providers-8b81434ea9ac3cbe
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-actionlint # zizmor: ignore[self-repository]
-    with: *m32
+    with: *m33
    -
     name: Admit optional cache save
     id: qualification-cache-save-tofu_providers-8b81434ea9ac3cbe-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-8b81434ea9ac3cbe.outputs.cache_tofu_providers_active == 'true' && steps.qualification-cache-before-save-tofu_providers-8b81434ea9ac3cbe.outputs.cache_tofu_providers_save_requested == 'true' && steps.qualification-cache-prepare-8b81434ea9ac3cbe.outputs.cache_tofu_providers_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache tofu_providers
     id: qualification-cache-save-tofu_providers-8b81434ea9ac3cbe
@@ -1055,13 +1060,13 @@ jobs:
     id: qualification-cache-before-save-task_result-8b81434ea9ac3cbe
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-actionlint # zizmor: ignore[self-repository]
-    with: *m32
+    with: *m33
    -
     name: Admit optional cache save
     id: qualification-cache-save-task_result-8b81434ea9ac3cbe-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-8b81434ea9ac3cbe.outputs.cache_task_result_active == 'true' && steps.qualification-cache-before-save-task_result-8b81434ea9ac3cbe.outputs.cache_task_result_save_requested == 'true' && steps.qualification-cache-prepare-8b81434ea9ac3cbe.outputs.cache_task_result_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache task_result
     id: qualification-cache-save-task_result-8b81434ea9ac3cbe
@@ -1112,12 +1117,12 @@ jobs:
      overwrite: "true"
      path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
      retention-days: "30"
-   - &s42
+   - &s43
     name: Admit optional cache save
     id: velnor-optional-tools-save-budget
     if: success() && ((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
     run: *r4
-    env: *m33
+    env: *m34
    - *s10
    - *s11
    - *s35
@@ -1130,7 +1135,7 @@ jobs:
    - plan
   if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-ansible,')"
   steps:
-   - *s15
+   - *s42
    - *s1
    - *s2
    - *s3
@@ -1150,7 +1155,7 @@ jobs:
     id: qualification-cache-prepare-59551b316a4866a6
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-prepare-rust-velnor-actions-ansible # zizmor: ignore[self-repository]
-    with: *m31
+    with: *m32
    - *s23
    - *s24
    - *s25
@@ -1196,7 +1201,7 @@ jobs:
     id: qualification-cache-before-save-mbx_objects-59551b316a4866a6
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-ansible # zizmor: ignore[self-repository]
-    with: &m34
+    with: &m35
      prepare_outputs: ${{ toJSON(steps.qualification-cache-prepare-59551b316a4866a6.outputs) }}
      qualification_campaign: ${{ needs.plan.outputs.qualification_campaign }}
    -
@@ -1204,7 +1209,7 @@ jobs:
     id: qualification-cache-save-mbx_objects-59551b316a4866a6-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-59551b316a4866a6.outputs.cache_mbx_objects_active == 'true' && steps.qualification-cache-before-save-mbx_objects-59551b316a4866a6.outputs.cache_mbx_objects_save_requested == 'true' && steps.qualification-cache-prepare-59551b316a4866a6.outputs.cache_mbx_objects_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mbx_objects
     id: qualification-cache-save-mbx_objects-59551b316a4866a6
@@ -1234,13 +1239,13 @@ jobs:
     id: qualification-cache-before-save-cargo_sources-59551b316a4866a6
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-ansible # zizmor: ignore[self-repository]
-    with: *m34
+    with: *m35
    -
     name: Admit optional cache save
     id: qualification-cache-save-cargo_sources-59551b316a4866a6-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-59551b316a4866a6.outputs.cache_cargo_sources_active == 'true' && steps.qualification-cache-before-save-cargo_sources-59551b316a4866a6.outputs.cache_cargo_sources_save_requested == 'true' && steps.qualification-cache-prepare-59551b316a4866a6.outputs.cache_cargo_sources_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache cargo_sources
     id: qualification-cache-save-cargo_sources-59551b316a4866a6
@@ -1270,13 +1275,13 @@ jobs:
     id: qualification-cache-before-save-mise_tools-59551b316a4866a6
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-ansible # zizmor: ignore[self-repository]
-    with: *m34
+    with: *m35
    -
     name: Admit optional cache save
     id: qualification-cache-save-mise_tools-59551b316a4866a6-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-59551b316a4866a6.outputs.cache_mise_tools_active == 'true' && steps.qualification-cache-before-save-mise_tools-59551b316a4866a6.outputs.cache_mise_tools_save_requested == 'true' && steps.qualification-cache-prepare-59551b316a4866a6.outputs.cache_mise_tools_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mise_tools
     id: qualification-cache-save-mise_tools-59551b316a4866a6
@@ -1306,13 +1311,13 @@ jobs:
     id: qualification-cache-before-save-tofu_providers-59551b316a4866a6
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-ansible # zizmor: ignore[self-repository]
-    with: *m34
+    with: *m35
    -
     name: Admit optional cache save
     id: qualification-cache-save-tofu_providers-59551b316a4866a6-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-59551b316a4866a6.outputs.cache_tofu_providers_active == 'true' && steps.qualification-cache-before-save-tofu_providers-59551b316a4866a6.outputs.cache_tofu_providers_save_requested == 'true' && steps.qualification-cache-prepare-59551b316a4866a6.outputs.cache_tofu_providers_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache tofu_providers
     id: qualification-cache-save-tofu_providers-59551b316a4866a6
@@ -1342,13 +1347,13 @@ jobs:
     id: qualification-cache-before-save-task_result-59551b316a4866a6
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-ansible # zizmor: ignore[self-repository]
-    with: *m34
+    with: *m35
    -
     name: Admit optional cache save
     id: qualification-cache-save-task_result-59551b316a4866a6-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-59551b316a4866a6.outputs.cache_task_result_active == 'true' && steps.qualification-cache-before-save-task_result-59551b316a4866a6.outputs.cache_task_result_save_requested == 'true' && steps.qualification-cache-prepare-59551b316a4866a6.outputs.cache_task_result_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache task_result
     id: qualification-cache-save-task_result-59551b316a4866a6
@@ -1409,7 +1414,7 @@ jobs:
    - plan
   if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-bun,')"
   steps:
-   - *s15
+   - *s42
    - *s1
    - *s2
    - *s3
@@ -1429,7 +1434,7 @@ jobs:
     id: qualification-cache-prepare-f81189a683b72451
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-prepare-rust-velnor-actions-bun # zizmor: ignore[self-repository]
-    with: *m31
+    with: *m32
    - *s23
    - *s24
    - *s25
@@ -1475,7 +1480,7 @@ jobs:
     id: qualification-cache-before-save-mbx_objects-f81189a683b72451
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-bun # zizmor: ignore[self-repository]
-    with: &m35
+    with: &m36
      prepare_outputs: ${{ toJSON(steps.qualification-cache-prepare-f81189a683b72451.outputs) }}
      qualification_campaign: ${{ needs.plan.outputs.qualification_campaign }}
    -
@@ -1483,7 +1488,7 @@ jobs:
     id: qualification-cache-save-mbx_objects-f81189a683b72451-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-f81189a683b72451.outputs.cache_mbx_objects_active == 'true' && steps.qualification-cache-before-save-mbx_objects-f81189a683b72451.outputs.cache_mbx_objects_save_requested == 'true' && steps.qualification-cache-prepare-f81189a683b72451.outputs.cache_mbx_objects_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mbx_objects
     id: qualification-cache-save-mbx_objects-f81189a683b72451
@@ -1513,13 +1518,13 @@ jobs:
     id: qualification-cache-before-save-cargo_sources-f81189a683b72451
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-bun # zizmor: ignore[self-repository]
-    with: *m35
+    with: *m36
    -
     name: Admit optional cache save
     id: qualification-cache-save-cargo_sources-f81189a683b72451-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-f81189a683b72451.outputs.cache_cargo_sources_active == 'true' && steps.qualification-cache-before-save-cargo_sources-f81189a683b72451.outputs.cache_cargo_sources_save_requested == 'true' && steps.qualification-cache-prepare-f81189a683b72451.outputs.cache_cargo_sources_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache cargo_sources
     id: qualification-cache-save-cargo_sources-f81189a683b72451
@@ -1549,13 +1554,13 @@ jobs:
     id: qualification-cache-before-save-mise_tools-f81189a683b72451
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-bun # zizmor: ignore[self-repository]
-    with: *m35
+    with: *m36
    -
     name: Admit optional cache save
     id: qualification-cache-save-mise_tools-f81189a683b72451-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-f81189a683b72451.outputs.cache_mise_tools_active == 'true' && steps.qualification-cache-before-save-mise_tools-f81189a683b72451.outputs.cache_mise_tools_save_requested == 'true' && steps.qualification-cache-prepare-f81189a683b72451.outputs.cache_mise_tools_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mise_tools
     id: qualification-cache-save-mise_tools-f81189a683b72451
@@ -1585,13 +1590,13 @@ jobs:
     id: qualification-cache-before-save-tofu_providers-f81189a683b72451
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-bun # zizmor: ignore[self-repository]
-    with: *m35
+    with: *m36
    -
     name: Admit optional cache save
     id: qualification-cache-save-tofu_providers-f81189a683b72451-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-f81189a683b72451.outputs.cache_tofu_providers_active == 'true' && steps.qualification-cache-before-save-tofu_providers-f81189a683b72451.outputs.cache_tofu_providers_save_requested == 'true' && steps.qualification-cache-prepare-f81189a683b72451.outputs.cache_tofu_providers_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache tofu_providers
     id: qualification-cache-save-tofu_providers-f81189a683b72451
@@ -1621,13 +1626,13 @@ jobs:
     id: qualification-cache-before-save-task_result-f81189a683b72451
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-bun # zizmor: ignore[self-repository]
-    with: *m35
+    with: *m36
    -
     name: Admit optional cache save
     id: qualification-cache-save-task_result-f81189a683b72451-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-f81189a683b72451.outputs.cache_task_result_active == 'true' && steps.qualification-cache-before-save-task_result-f81189a683b72451.outputs.cache_task_result_save_requested == 'true' && steps.qualification-cache-prepare-f81189a683b72451.outputs.cache_task_result_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache task_result
     id: qualification-cache-save-task_result-f81189a683b72451
@@ -1688,17 +1693,17 @@ jobs:
    - plan
   if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-cli,')"
   steps:
-   - *s15
+   - *s42
    - *s1
    - *s2
    - *s3
    - *s4
    - *s6
    - *s7
-   - &s43
+   - &s44
     name: Resolve project tool versions
     run: "set -eu\n: \"${GITHUB_ENV:?missing GITHUB_ENV}\"\n: \"${RUNNER_TEMP:?missing RUNNER_TEMP}\"\nvelnor_dir=\"$RUNNER_TEMP/velnor-project-tool\"\nvelnor_db=\"$velnor_dir/declared\"\nvelnor_tab=$(printf '\\t')\nvelnor_safe() { printf '%s' \"$1\" | cut -c1-64 | tr -c 'A-Za-z0-9._/@+-' '?'; }\nvelnor_fail() { printf 'velnor: %s\\n' \"$1\" >&2; exit 1; }\nvelnor_mise() { mise --no-config --no-env --no-hooks \"$@\"; }\nrm -rf \"$velnor_dir\"\nmkdir -p \"$velnor_dir\"\n: > \"$velnor_db\"\nvelnor_regular() {\n  if [ -L \"$1\" ] || [ ! -f \"$1\" ]; then velnor_fail \"$1 must be a regular file\"; fi\n}\nvelnor_toml() {\n  cp -- \"$1\" \"$velnor_dir/src.toml\"\n  velnor_mise config get -f \"$velnor_dir/src.toml\" > /dev/null 2>&1 || velnor_fail \"$1 is not valid TOML\"\n}\nvelnor_tools() {\n  velnor_toml \"$1\"\n  if velnor_mise config get -f \"$velnor_dir/src.toml\" tools > \"$velnor_dir/tools\" 2>/dev/null; then\n    awk -v file=\"$1\" '\nfunction unq(s) {\n  if (s ~ /^\"[^\"\\\\]*\"$/ || s ~ /^\\047[^\\047]*\\047$/) { return substr(s, 2, length(s) - 2) }\n  return s\n}\nBEGIN { OFS = \"\\t\"; cur = \"\"; multi = \"\" }\n{\n  line = $0\n  if (multi != \"\") { if (index(line, multi) > 0) { multi = \"\" } next }\n  if (line ~ /^[ \\t]*(#|$)/) { next }\n  if (line ~ /^[ \\t]*\\[/) {\n    hdr = line\n    sub(/^[ \\t]*\\[+[ \\t]*/, \"\", hdr)\n    sub(/[ \\t]*\\]+[ \\t]*$/, \"\", hdr)\n    cur = unq(hdr)\n    if (cur == \"\") { cur = \"?\" }\n    next\n  }\n  eq = index(line, \" = \")\n  if (eq == 0) { next }\n  k = unq(substr(line, 1, eq - 1))\n  v = substr(line, eq + 3)\n  if (v ~ /^\"\"\"/ || v ~ /^\\047\\047\\047/) {\n    d = substr(v, 1, 3)\n    if (index(substr(v, 4), d) == 0) { multi = d }\n    v = d\n  } else {\n    v = unq(v)\n  }\n  if (cur == \"\") { print file, k, v } else if (k == \"version\") { print file, cur, v }\n}' \"$velnor_dir/tools\" >> \"$velnor_db\"\n  fi\n}\nvelnor_tool_versions() {\n  awk -v file=\"$1\" '\nBEGIN { OFS = \"\\t\" }\n{\n  sub(/[ \\t]*#.*$/, \"\")\n  if ($0 ~ /^[ \\t]*$/) { next }\n  line = $0\n  sub(/^[ \\t]+/, \"\", line)\n  k = line\n  sub(/[ \\t].*$/, \"\", k)\n  v = line\n  if (v == k) { v = \"\" } else { sub(/^[^ \\t]+[ \\t]+/, \"\", v); sub(/[ \\t]+$/, \"\", v) }\n  print file, k, v\n}' \"$1\" >> \"$velnor_db\"\n}\nvelnor_toolchain() {\n  if grep -q '^[[:space:]]*\\[' \"$1\"; then\n    velnor_toml \"$1\"\n    if velnor_mise config get -f \"$velnor_dir/src.toml\" toolchain.channel > \"$velnor_dir/channel\" 2>/dev/null; then\n      awk -v file=\"$1\" 'BEGIN { OFS = \"\\t\" } NR == 1 { v = $0; next } { v = v \" \" $0 } END { print file, \"rust\", v }' \"$velnor_dir/channel\" >> \"$velnor_db\"\n    fi\n  else\n    printf '%s\\t%s\\t%s\\n' \"$1\" rust \"$(tr -d ' \\t\\r\\n' < \"$1\")\" >> \"$velnor_db\"\n  fi\n}\nvelnor_exact() {\n  case \"$2\" in\n    ''|*[!0-9.]*|.*|*.|*..*|*.*.*.*|0[0-9]*|*.0[0-9]*) velnor_fail \"$1 must declare one exact X.Y.Z version, not '$(velnor_safe \"$2\")'\" ;;\n    *.*.*) ;;\n    *) velnor_fail \"$1 must declare one exact X.Y.Z version, not '$(velnor_safe \"$2\")'\" ;;\n  esac\n}\nvelnor_tool() {\n  name=$1\n  shift\n  resolved=\n  origin=\n  while IFS=\"$velnor_tab\" read -r file key value; do\n    matched=0\n    for want in \"$@\"; do\n      if [ \"$key\" = \"$want\" ]; then matched=1; fi\n    done\n    if [ \"$matched\" = 0 ]; then continue; fi\n    velnor_exact \"$file $key\" \"$value\"\n    if [ -n \"$resolved\" ] && [ \"$resolved\" != \"$value\" ]; then\n      velnor_fail \"$name: $file $key declares $value, $origin declares $resolved\"\n    fi\n    if [ -z \"$resolved\" ]; then origin=\"$file $key\"; fi\n    resolved=$value\n  done < \"$velnor_db\"\n  [ -n \"$resolved\" ] || velnor_fail \"$name: the project config no longer declares this tool; regenerate the workflow\"\n  printf '%s=%s\\n' \"$name\" \"$resolved\" >> \"$GITHUB_ENV\"\n  if [ \"$name\" = VELNOR_TOOL_RUST ] && [ \"${velnor_export_rustup-0}\" = 1 ]; then\n    printf 'RUSTUP_TOOLCHAIN=%s\\n' \"$resolved\" >> \"$GITHUB_ENV\"\n  fi\n  printf 'velnor: %s=%s\\n' \"$name\" \"$resolved\"\n}\n# shellcheck disable=SC2016 # awk program text: awk, not the shell, expands it\nvelnor_lock_awk='BEGIN { q = \"\\\"\"; e1 = \"[[tools.\" key \"]]\"; e2 = \"[[tools.\" q key q \"]]\"; e3 = \"[tools.\" key \"]\"; e4 = \"[tools.\" q key q \"]\"; s1 = \"[tools.\" key \".\"; s2 = \"[tools.\" q key q \".\"; p1 = s1 q \"platforms.\" platform q \"]\"; p2 = s2 q \"platforms.\" platform q \"]\"; p3 = s1 \"platforms.\" platform \"]\"; p4 = s2 \"platforms.\" platform \"]\"; want = \"version = \" q version q; inline = q \"platforms.\" platform q \" = {\"; state = 0 }\n{ line = $0; sub(/^[ \\t]+/, \"\", line); sub(/[ \\t\\r]+$/, \"\", line) }\nline == \"\" || substr(line, 1, 1) == \"#\" { next }\nsubstr(line, 1, 1) == \"[\" {\n  matched = state == 2 || state == 3 || state == 4; other = state == 1 || state == 5\n  if (line == e1 || line == e2 || line == e3 || line == e4) state = 1\n  else if (line == p1 || line == p2 || line == p3 || line == p4) state = matched ? 3 : (other ? 5 : 0)\n  else if (index(line, s1) == 1 || index(line, s2) == 1) state = matched ? 4 : (other ? 5 : 0)\n  else state = 0\n  next\n}\nstate == 1 && line == want { state = 2; next }\nstate == 3 && (index(line, \"checksum = \") == 1 || index(line, \"url = \") == 1) { print lock \" \" key \" \" line; next }\nstate == 2 && index(line, inline) == 1 {\n  if (match(line, /checksum = \"[^\"]*\"/)) print lock \" \" key \" \" substr(line, RSTART, RLENGTH)\n  if (match(line, /[{ ,]url = \"[^\"]*\"/)) print lock \" \" key \" \" substr(line, RSTART + 1, RLENGTH - 1)\n}'\nvelnor_lock() {\n  name=$1\n  shift\n  case \"${RUNNER_OS-}:${RUNNER_ARCH-}\" in\n    Linux:X64) platform=linux-x64 ;;\n    Linux:ARM64) platform=linux-arm64 ;;\n    macOS:X64) platform=macos-x64 ;;\n    macOS:ARM64) platform=macos-arm64 ;;\n    Windows:X64) platform=windows-x64 ;;\n    Windows:ARM64) platform=windows-arm64 ;;\n    *) velnor_fail \"$name: unsupported runner platform '${RUNNER_OS-}:${RUNNER_ARCH-}'\" ;;\n  esac\n  : > \"$velnor_dir/lock\"\n  for lock in $velnor_locks; do\n    if [ ! -e \"$lock\" ] && [ ! -L \"$lock\" ]; then continue; fi\n    velnor_regular \"$lock\"\n    for key in \"$@\"; do\n      awk -v lock=\"$lock\" -v key=\"$key\" -v version=\"$resolved\" -v platform=\"$platform\" \"$velnor_lock_awk\" \"$lock\" >> \"$velnor_dir/lock\" || velnor_fail \"$lock could not be read\"\n    done\n  done\n  lock_digest=unlocked\n  if [ -s \"$velnor_dir/lock\" ]; then\n    if command -v sha256sum >/dev/null 2>&1; then\n      lock_digest=$(sha256sum < \"$velnor_dir/lock\") || velnor_fail \"$name: lock digest failed\"\n    else\n      lock_digest=$(shasum -a 256 < \"$velnor_dir/lock\") || velnor_fail \"$name: lock digest failed\"\n    fi\n    lock_digest=${lock_digest%% *}\n    case \"$lock_digest\" in\n      *[!0-9a-f]*) velnor_fail \"$name: lock digest is not hexadecimal\" ;;\n    esac\n    [ \"${#lock_digest}\" -eq 64 ] || velnor_fail \"$name: lock digest is not SHA-256\"\n  fi\n  printf '%s=%s\\n' \"$name\" \"$lock_digest\" >> \"$GITHUB_ENV\"\n  printf 'velnor: %s=%s\\n' \"$name\" \"$lock_digest\"\n}\nvelnor_locks='mise.lock .mise.lock'\nfor velnor_file in mise.toml .mise.toml mise.*.toml .mise.*.toml .config/mise.toml .config/mise.*.toml .config/mise/config.toml .config/mise/config.*.toml .config/mise/conf.d/*.toml mise/config.toml mise/config.*.toml .mise/config.toml .mise/config.*.toml; do\n  if [ ! -e \"$velnor_file\" ] && [ ! -L \"$velnor_file\" ]; then continue; fi\n  velnor_regular \"$velnor_file\"\n  velnor_tools \"$velnor_file\"\ndone\nif [ -e .tool-versions ] || [ -L .tool-versions ]; then\n  velnor_regular .tool-versions\n  velnor_tool_versions .tool-versions\nfi\nif [ -e rust-toolchain.toml ] || [ -L rust-toolchain.toml ]; then\n  velnor_regular rust-toolchain.toml\n  velnor_toolchain rust-toolchain.toml\nfi\nif [ -e rust-toolchain ] || [ -L rust-toolchain ]; then\n  velnor_regular rust-toolchain\n  velnor_toolchain rust-toolchain\nfi\nvelnor_tool VELNOR_TOOL_JACTIONLINT 'jactionlint' 'github:jdx/jactionlint' 'packslip:github.com/jdx/jactionlint'\nvelnor_lock VELNOR_TOOL_JACTIONLINT_LOCK 'jactionlint' 'github:jdx/jactionlint' 'packslip:github.com/jdx/jactionlint'\nvelnor_tool VELNOR_TOOL_MR_BOXINGTON 'mr-boxington' 'mbx' 'github:jdx/mr-boxington' 'packslip:github.com/jdx/mr-boxington'\nvelnor_lock VELNOR_TOOL_MR_BOXINGTON_LOCK 'mr-boxington' 'mbx' 'github:jdx/mr-boxington' 'packslip:github.com/jdx/mr-boxington'\nvelnor_tool VELNOR_TOOL_NEXTEST 'aqua:nextest-rs/nextest/cargo-nextest' 'cargo-nextest' 'cargo:cargo-nextest' 'github:nextest-rs/nextest' 'ubi:nextest-rs/nextest'\nvelnor_lock VELNOR_TOOL_NEXTEST_LOCK 'aqua:nextest-rs/nextest/cargo-nextest' 'cargo-nextest' 'cargo:cargo-nextest' 'github:nextest-rs/nextest' 'ubi:nextest-rs/nextest'\nvelnor_tool VELNOR_TOOL_RUST 'rust' 'core:rust'\nvelnor_lock VELNOR_TOOL_RUST_LOCK 'rust' 'core:rust'\nvelnor_tool VELNOR_TOOL_SHELLCHECK 'shellcheck' 'aqua:koalaman/shellcheck'\nvelnor_lock VELNOR_TOOL_SHELLCHECK_LOCK 'shellcheck' 'aqua:koalaman/shellcheck'\nrm -rf \"$velnor_dir\"\n" # zizmor: ignore[github-env]
-   - &s44
+   - &s45
     name: V2 identity
     id: v2
     if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
@@ -1708,7 +1713,7 @@ jobs:
    - *s18
    - *s13
    - *s19
-   - &s45
+   - &s46
     name: Prepare pinned tools
     env: *m18
     run: "mise --no-config --no-env --no-hooks install 'rust@'\"${VELNOR_TOOL_RUST}\" 'mr-boxington@'\"${VELNOR_TOOL_MR_BOXINGTON}\" 'jactionlint@'\"${VELNOR_TOOL_JACTIONLINT}\" 'shellcheck@'\"${VELNOR_TOOL_SHELLCHECK}\" 'aqua:nextest-rs/nextest/cargo-nextest@'\"${VELNOR_TOOL_NEXTEST}\""
@@ -1720,7 +1725,7 @@ jobs:
     id: qualification-cache-prepare-44a4a23ad1a7acb0
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-prepare-rust-velnor-actions-cli # zizmor: ignore[self-repository]
-    with: *m31
+    with: *m32
    - *s23
    - *s24
    - *s25
@@ -1762,7 +1767,7 @@ jobs:
     id: qualification-cache-before-save-mbx_objects-44a4a23ad1a7acb0
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-cli # zizmor: ignore[self-repository]
-    with: &m37
+    with: &m38
      prepare_outputs: ${{ toJSON(steps.qualification-cache-prepare-44a4a23ad1a7acb0.outputs) }}
      qualification_campaign: ${{ needs.plan.outputs.qualification_campaign }}
    -
@@ -1770,7 +1775,7 @@ jobs:
     id: qualification-cache-save-mbx_objects-44a4a23ad1a7acb0-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-44a4a23ad1a7acb0.outputs.cache_mbx_objects_active == 'true' && steps.qualification-cache-before-save-mbx_objects-44a4a23ad1a7acb0.outputs.cache_mbx_objects_save_requested == 'true' && steps.qualification-cache-prepare-44a4a23ad1a7acb0.outputs.cache_mbx_objects_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mbx_objects
     id: qualification-cache-save-mbx_objects-44a4a23ad1a7acb0
@@ -1800,13 +1805,13 @@ jobs:
     id: qualification-cache-before-save-cargo_sources-44a4a23ad1a7acb0
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-cli # zizmor: ignore[self-repository]
-    with: *m37
+    with: *m38
    -
     name: Admit optional cache save
     id: qualification-cache-save-cargo_sources-44a4a23ad1a7acb0-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-44a4a23ad1a7acb0.outputs.cache_cargo_sources_active == 'true' && steps.qualification-cache-before-save-cargo_sources-44a4a23ad1a7acb0.outputs.cache_cargo_sources_save_requested == 'true' && steps.qualification-cache-prepare-44a4a23ad1a7acb0.outputs.cache_cargo_sources_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache cargo_sources
     id: qualification-cache-save-cargo_sources-44a4a23ad1a7acb0
@@ -1836,13 +1841,13 @@ jobs:
     id: qualification-cache-before-save-mise_tools-44a4a23ad1a7acb0
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-cli # zizmor: ignore[self-repository]
-    with: *m37
+    with: *m38
    -
     name: Admit optional cache save
     id: qualification-cache-save-mise_tools-44a4a23ad1a7acb0-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-44a4a23ad1a7acb0.outputs.cache_mise_tools_active == 'true' && steps.qualification-cache-before-save-mise_tools-44a4a23ad1a7acb0.outputs.cache_mise_tools_save_requested == 'true' && steps.qualification-cache-prepare-44a4a23ad1a7acb0.outputs.cache_mise_tools_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mise_tools
     id: qualification-cache-save-mise_tools-44a4a23ad1a7acb0
@@ -1872,13 +1877,13 @@ jobs:
     id: qualification-cache-before-save-tofu_providers-44a4a23ad1a7acb0
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-cli # zizmor: ignore[self-repository]
-    with: *m37
+    with: *m38
    -
     name: Admit optional cache save
     id: qualification-cache-save-tofu_providers-44a4a23ad1a7acb0-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-44a4a23ad1a7acb0.outputs.cache_tofu_providers_active == 'true' && steps.qualification-cache-before-save-tofu_providers-44a4a23ad1a7acb0.outputs.cache_tofu_providers_save_requested == 'true' && steps.qualification-cache-prepare-44a4a23ad1a7acb0.outputs.cache_tofu_providers_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache tofu_providers
     id: qualification-cache-save-tofu_providers-44a4a23ad1a7acb0
@@ -1908,13 +1913,13 @@ jobs:
     id: qualification-cache-before-save-task_result-44a4a23ad1a7acb0
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-cli # zizmor: ignore[self-repository]
-    with: *m37
+    with: *m38
    -
     name: Admit optional cache save
     id: qualification-cache-save-task_result-44a4a23ad1a7acb0-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-44a4a23ad1a7acb0.outputs.cache_task_result_active == 'true' && steps.qualification-cache-before-save-task_result-44a4a23ad1a7acb0.outputs.cache_task_result_save_requested == 'true' && steps.qualification-cache-prepare-44a4a23ad1a7acb0.outputs.cache_task_result_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache task_result
     id: qualification-cache-save-task_result-44a4a23ad1a7acb0
@@ -1965,7 +1970,7 @@ jobs:
      overwrite: "true"
      path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
      retention-days: "30"
-   - *s42
+   - *s43
    - *s10
    - *s11
    - *s35
@@ -1978,7 +1983,7 @@ jobs:
    - plan
   if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-contract,')"
   steps:
-   - *s15
+   - *s42
    - *s1
    - *s2
    - *s3
@@ -1998,7 +2003,7 @@ jobs:
     id: qualification-cache-prepare-ff9b22c5e37dcf51
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-prepare-rust-velnor-actions-contract # zizmor: ignore[self-repository]
-    with: *m31
+    with: *m32
    - *s23
    - *s24
    - *s25
@@ -2044,7 +2049,7 @@ jobs:
     id: qualification-cache-before-save-mbx_objects-ff9b22c5e37dcf51
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-contract # zizmor: ignore[self-repository]
-    with: &m38
+    with: &m39
      prepare_outputs: ${{ toJSON(steps.qualification-cache-prepare-ff9b22c5e37dcf51.outputs) }}
      qualification_campaign: ${{ needs.plan.outputs.qualification_campaign }}
    -
@@ -2052,7 +2057,7 @@ jobs:
     id: qualification-cache-save-mbx_objects-ff9b22c5e37dcf51-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-ff9b22c5e37dcf51.outputs.cache_mbx_objects_active == 'true' && steps.qualification-cache-before-save-mbx_objects-ff9b22c5e37dcf51.outputs.cache_mbx_objects_save_requested == 'true' && steps.qualification-cache-prepare-ff9b22c5e37dcf51.outputs.cache_mbx_objects_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mbx_objects
     id: qualification-cache-save-mbx_objects-ff9b22c5e37dcf51
@@ -2082,13 +2087,13 @@ jobs:
     id: qualification-cache-before-save-cargo_sources-ff9b22c5e37dcf51
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-contract # zizmor: ignore[self-repository]
-    with: *m38
+    with: *m39
    -
     name: Admit optional cache save
     id: qualification-cache-save-cargo_sources-ff9b22c5e37dcf51-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-ff9b22c5e37dcf51.outputs.cache_cargo_sources_active == 'true' && steps.qualification-cache-before-save-cargo_sources-ff9b22c5e37dcf51.outputs.cache_cargo_sources_save_requested == 'true' && steps.qualification-cache-prepare-ff9b22c5e37dcf51.outputs.cache_cargo_sources_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache cargo_sources
     id: qualification-cache-save-cargo_sources-ff9b22c5e37dcf51
@@ -2118,13 +2123,13 @@ jobs:
     id: qualification-cache-before-save-mise_tools-ff9b22c5e37dcf51
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-contract # zizmor: ignore[self-repository]
-    with: *m38
+    with: *m39
    -
     name: Admit optional cache save
     id: qualification-cache-save-mise_tools-ff9b22c5e37dcf51-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-ff9b22c5e37dcf51.outputs.cache_mise_tools_active == 'true' && steps.qualification-cache-before-save-mise_tools-ff9b22c5e37dcf51.outputs.cache_mise_tools_save_requested == 'true' && steps.qualification-cache-prepare-ff9b22c5e37dcf51.outputs.cache_mise_tools_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mise_tools
     id: qualification-cache-save-mise_tools-ff9b22c5e37dcf51
@@ -2154,13 +2159,13 @@ jobs:
     id: qualification-cache-before-save-tofu_providers-ff9b22c5e37dcf51
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-contract # zizmor: ignore[self-repository]
-    with: *m38
+    with: *m39
    -
     name: Admit optional cache save
     id: qualification-cache-save-tofu_providers-ff9b22c5e37dcf51-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-ff9b22c5e37dcf51.outputs.cache_tofu_providers_active == 'true' && steps.qualification-cache-before-save-tofu_providers-ff9b22c5e37dcf51.outputs.cache_tofu_providers_save_requested == 'true' && steps.qualification-cache-prepare-ff9b22c5e37dcf51.outputs.cache_tofu_providers_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache tofu_providers
     id: qualification-cache-save-tofu_providers-ff9b22c5e37dcf51
@@ -2190,13 +2195,13 @@ jobs:
     id: qualification-cache-before-save-task_result-ff9b22c5e37dcf51
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-contract # zizmor: ignore[self-repository]
-    with: *m38
+    with: *m39
    -
     name: Admit optional cache save
     id: qualification-cache-save-task_result-ff9b22c5e37dcf51-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-ff9b22c5e37dcf51.outputs.cache_task_result_active == 'true' && steps.qualification-cache-before-save-task_result-ff9b22c5e37dcf51.outputs.cache_task_result_save_requested == 'true' && steps.qualification-cache-prepare-ff9b22c5e37dcf51.outputs.cache_task_result_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache task_result
     id: qualification-cache-save-task_result-ff9b22c5e37dcf51
@@ -2257,7 +2262,7 @@ jobs:
    - plan
   if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-dbt,')"
   steps:
-   - *s15
+   - *s42
    - *s1
    - *s2
    - *s3
@@ -2277,7 +2282,7 @@ jobs:
     id: qualification-cache-prepare-6156092d66c685f2
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-prepare-rust-velnor-actions-dbt # zizmor: ignore[self-repository]
-    with: *m31
+    with: *m32
    - *s23
    - *s24
    - *s25
@@ -2323,7 +2328,7 @@ jobs:
     id: qualification-cache-before-save-mbx_objects-6156092d66c685f2
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-dbt # zizmor: ignore[self-repository]
-    with: &m39
+    with: &m40
      prepare_outputs: ${{ toJSON(steps.qualification-cache-prepare-6156092d66c685f2.outputs) }}
      qualification_campaign: ${{ needs.plan.outputs.qualification_campaign }}
    -
@@ -2331,7 +2336,7 @@ jobs:
     id: qualification-cache-save-mbx_objects-6156092d66c685f2-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-6156092d66c685f2.outputs.cache_mbx_objects_active == 'true' && steps.qualification-cache-before-save-mbx_objects-6156092d66c685f2.outputs.cache_mbx_objects_save_requested == 'true' && steps.qualification-cache-prepare-6156092d66c685f2.outputs.cache_mbx_objects_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mbx_objects
     id: qualification-cache-save-mbx_objects-6156092d66c685f2
@@ -2361,13 +2366,13 @@ jobs:
     id: qualification-cache-before-save-cargo_sources-6156092d66c685f2
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-dbt # zizmor: ignore[self-repository]
-    with: *m39
+    with: *m40
    -
     name: Admit optional cache save
     id: qualification-cache-save-cargo_sources-6156092d66c685f2-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-6156092d66c685f2.outputs.cache_cargo_sources_active == 'true' && steps.qualification-cache-before-save-cargo_sources-6156092d66c685f2.outputs.cache_cargo_sources_save_requested == 'true' && steps.qualification-cache-prepare-6156092d66c685f2.outputs.cache_cargo_sources_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache cargo_sources
     id: qualification-cache-save-cargo_sources-6156092d66c685f2
@@ -2397,13 +2402,13 @@ jobs:
     id: qualification-cache-before-save-mise_tools-6156092d66c685f2
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-dbt # zizmor: ignore[self-repository]
-    with: *m39
+    with: *m40
    -
     name: Admit optional cache save
     id: qualification-cache-save-mise_tools-6156092d66c685f2-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-6156092d66c685f2.outputs.cache_mise_tools_active == 'true' && steps.qualification-cache-before-save-mise_tools-6156092d66c685f2.outputs.cache_mise_tools_save_requested == 'true' && steps.qualification-cache-prepare-6156092d66c685f2.outputs.cache_mise_tools_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mise_tools
     id: qualification-cache-save-mise_tools-6156092d66c685f2
@@ -2433,13 +2438,13 @@ jobs:
     id: qualification-cache-before-save-tofu_providers-6156092d66c685f2
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-dbt # zizmor: ignore[self-repository]
-    with: *m39
+    with: *m40
    -
     name: Admit optional cache save
     id: qualification-cache-save-tofu_providers-6156092d66c685f2-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-6156092d66c685f2.outputs.cache_tofu_providers_active == 'true' && steps.qualification-cache-before-save-tofu_providers-6156092d66c685f2.outputs.cache_tofu_providers_save_requested == 'true' && steps.qualification-cache-prepare-6156092d66c685f2.outputs.cache_tofu_providers_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache tofu_providers
     id: qualification-cache-save-tofu_providers-6156092d66c685f2
@@ -2469,13 +2474,13 @@ jobs:
     id: qualification-cache-before-save-task_result-6156092d66c685f2
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-dbt # zizmor: ignore[self-repository]
-    with: *m39
+    with: *m40
    -
     name: Admit optional cache save
     id: qualification-cache-save-task_result-6156092d66c685f2-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-6156092d66c685f2.outputs.cache_task_result_active == 'true' && steps.qualification-cache-before-save-task_result-6156092d66c685f2.outputs.cache_task_result_save_requested == 'true' && steps.qualification-cache-prepare-6156092d66c685f2.outputs.cache_task_result_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache task_result
     id: qualification-cache-save-task_result-6156092d66c685f2
@@ -2536,7 +2541,7 @@ jobs:
    - plan
   if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-freshness,')"
   steps:
-   - *s15
+   - *s42
    - *s1
    - *s2
    - *s3
@@ -2556,7 +2561,7 @@ jobs:
     id: qualification-cache-prepare-619fe82dfa03f1e2
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-prepare-rust-velnor-actions-freshness # zizmor: ignore[self-repository]
-    with: *m31
+    with: *m32
    - *s23
    - *s24
    - *s25
@@ -2602,7 +2607,7 @@ jobs:
     id: qualification-cache-before-save-mbx_objects-619fe82dfa03f1e2
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-freshness # zizmor: ignore[self-repository]
-    with: &m40
+    with: &m41
      prepare_outputs: ${{ toJSON(steps.qualification-cache-prepare-619fe82dfa03f1e2.outputs) }}
      qualification_campaign: ${{ needs.plan.outputs.qualification_campaign }}
    -
@@ -2610,7 +2615,7 @@ jobs:
     id: qualification-cache-save-mbx_objects-619fe82dfa03f1e2-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-619fe82dfa03f1e2.outputs.cache_mbx_objects_active == 'true' && steps.qualification-cache-before-save-mbx_objects-619fe82dfa03f1e2.outputs.cache_mbx_objects_save_requested == 'true' && steps.qualification-cache-prepare-619fe82dfa03f1e2.outputs.cache_mbx_objects_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mbx_objects
     id: qualification-cache-save-mbx_objects-619fe82dfa03f1e2
@@ -2640,13 +2645,13 @@ jobs:
     id: qualification-cache-before-save-cargo_sources-619fe82dfa03f1e2
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-freshness # zizmor: ignore[self-repository]
-    with: *m40
+    with: *m41
    -
     name: Admit optional cache save
     id: qualification-cache-save-cargo_sources-619fe82dfa03f1e2-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-619fe82dfa03f1e2.outputs.cache_cargo_sources_active == 'true' && steps.qualification-cache-before-save-cargo_sources-619fe82dfa03f1e2.outputs.cache_cargo_sources_save_requested == 'true' && steps.qualification-cache-prepare-619fe82dfa03f1e2.outputs.cache_cargo_sources_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache cargo_sources
     id: qualification-cache-save-cargo_sources-619fe82dfa03f1e2
@@ -2676,13 +2681,13 @@ jobs:
     id: qualification-cache-before-save-mise_tools-619fe82dfa03f1e2
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-freshness # zizmor: ignore[self-repository]
-    with: *m40
+    with: *m41
    -
     name: Admit optional cache save
     id: qualification-cache-save-mise_tools-619fe82dfa03f1e2-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-619fe82dfa03f1e2.outputs.cache_mise_tools_active == 'true' && steps.qualification-cache-before-save-mise_tools-619fe82dfa03f1e2.outputs.cache_mise_tools_save_requested == 'true' && steps.qualification-cache-prepare-619fe82dfa03f1e2.outputs.cache_mise_tools_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mise_tools
     id: qualification-cache-save-mise_tools-619fe82dfa03f1e2
@@ -2712,13 +2717,13 @@ jobs:
     id: qualification-cache-before-save-tofu_providers-619fe82dfa03f1e2
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-freshness # zizmor: ignore[self-repository]
-    with: *m40
+    with: *m41
    -
     name: Admit optional cache save
     id: qualification-cache-save-tofu_providers-619fe82dfa03f1e2-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-619fe82dfa03f1e2.outputs.cache_tofu_providers_active == 'true' && steps.qualification-cache-before-save-tofu_providers-619fe82dfa03f1e2.outputs.cache_tofu_providers_save_requested == 'true' && steps.qualification-cache-prepare-619fe82dfa03f1e2.outputs.cache_tofu_providers_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache tofu_providers
     id: qualification-cache-save-tofu_providers-619fe82dfa03f1e2
@@ -2748,13 +2753,13 @@ jobs:
     id: qualification-cache-before-save-task_result-619fe82dfa03f1e2
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-freshness # zizmor: ignore[self-repository]
-    with: *m40
+    with: *m41
    -
     name: Admit optional cache save
     id: qualification-cache-save-task_result-619fe82dfa03f1e2-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-619fe82dfa03f1e2.outputs.cache_task_result_active == 'true' && steps.qualification-cache-before-save-task_result-619fe82dfa03f1e2.outputs.cache_task_result_save_requested == 'true' && steps.qualification-cache-prepare-619fe82dfa03f1e2.outputs.cache_task_result_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache task_result
     id: qualification-cache-save-task_result-619fe82dfa03f1e2
@@ -2815,7 +2820,7 @@ jobs:
    - plan
   if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-gradle,')"
   steps:
-   - *s15
+   - *s42
    - *s1
    - *s2
    - *s3
@@ -2835,7 +2840,7 @@ jobs:
     id: qualification-cache-prepare-cb024743d2f662f4
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-prepare-rust-velnor-actions-gradle # zizmor: ignore[self-repository]
-    with: *m31
+    with: *m32
    - *s23
    - *s24
    - *s25
@@ -2881,7 +2886,7 @@ jobs:
     id: qualification-cache-before-save-mbx_objects-cb024743d2f662f4
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-gradle # zizmor: ignore[self-repository]
-    with: &m41
+    with: &m42
      prepare_outputs: ${{ toJSON(steps.qualification-cache-prepare-cb024743d2f662f4.outputs) }}
      qualification_campaign: ${{ needs.plan.outputs.qualification_campaign }}
    -
@@ -2889,7 +2894,7 @@ jobs:
     id: qualification-cache-save-mbx_objects-cb024743d2f662f4-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-cb024743d2f662f4.outputs.cache_mbx_objects_active == 'true' && steps.qualification-cache-before-save-mbx_objects-cb024743d2f662f4.outputs.cache_mbx_objects_save_requested == 'true' && steps.qualification-cache-prepare-cb024743d2f662f4.outputs.cache_mbx_objects_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mbx_objects
     id: qualification-cache-save-mbx_objects-cb024743d2f662f4
@@ -2919,13 +2924,13 @@ jobs:
     id: qualification-cache-before-save-cargo_sources-cb024743d2f662f4
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-gradle # zizmor: ignore[self-repository]
-    with: *m41
+    with: *m42
    -
     name: Admit optional cache save
     id: qualification-cache-save-cargo_sources-cb024743d2f662f4-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-cb024743d2f662f4.outputs.cache_cargo_sources_active == 'true' && steps.qualification-cache-before-save-cargo_sources-cb024743d2f662f4.outputs.cache_cargo_sources_save_requested == 'true' && steps.qualification-cache-prepare-cb024743d2f662f4.outputs.cache_cargo_sources_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache cargo_sources
     id: qualification-cache-save-cargo_sources-cb024743d2f662f4
@@ -2955,13 +2960,13 @@ jobs:
     id: qualification-cache-before-save-mise_tools-cb024743d2f662f4
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-gradle # zizmor: ignore[self-repository]
-    with: *m41
+    with: *m42
    -
     name: Admit optional cache save
     id: qualification-cache-save-mise_tools-cb024743d2f662f4-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-cb024743d2f662f4.outputs.cache_mise_tools_active == 'true' && steps.qualification-cache-before-save-mise_tools-cb024743d2f662f4.outputs.cache_mise_tools_save_requested == 'true' && steps.qualification-cache-prepare-cb024743d2f662f4.outputs.cache_mise_tools_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mise_tools
     id: qualification-cache-save-mise_tools-cb024743d2f662f4
@@ -2991,13 +2996,13 @@ jobs:
     id: qualification-cache-before-save-tofu_providers-cb024743d2f662f4
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-gradle # zizmor: ignore[self-repository]
-    with: *m41
+    with: *m42
    -
     name: Admit optional cache save
     id: qualification-cache-save-tofu_providers-cb024743d2f662f4-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-cb024743d2f662f4.outputs.cache_tofu_providers_active == 'true' && steps.qualification-cache-before-save-tofu_providers-cb024743d2f662f4.outputs.cache_tofu_providers_save_requested == 'true' && steps.qualification-cache-prepare-cb024743d2f662f4.outputs.cache_tofu_providers_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache tofu_providers
     id: qualification-cache-save-tofu_providers-cb024743d2f662f4
@@ -3027,13 +3032,13 @@ jobs:
     id: qualification-cache-before-save-task_result-cb024743d2f662f4
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-gradle # zizmor: ignore[self-repository]
-    with: *m41
+    with: *m42
    -
     name: Admit optional cache save
     id: qualification-cache-save-task_result-cb024743d2f662f4-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-cb024743d2f662f4.outputs.cache_task_result_active == 'true' && steps.qualification-cache-before-save-task_result-cb024743d2f662f4.outputs.cache_task_result_save_requested == 'true' && steps.qualification-cache-prepare-cb024743d2f662f4.outputs.cache_task_result_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache task_result
     id: qualification-cache-save-task_result-cb024743d2f662f4
@@ -3094,7 +3099,7 @@ jobs:
    - plan
   if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-mise,')"
   steps:
-   - *s15
+   - *s42
    - *s1
    - *s2
    - *s3
@@ -3123,7 +3128,7 @@ jobs:
     id: qualification-cache-prepare-d00a5775a05ceed6
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-prepare-rust-velnor-actions-mise # zizmor: ignore[self-repository]
-    with: *m31
+    with: *m32
    - *s23
    - *s24
    - *s25
@@ -3169,7 +3174,7 @@ jobs:
     id: qualification-cache-before-save-mbx_objects-d00a5775a05ceed6
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-mise # zizmor: ignore[self-repository]
-    with: &m42
+    with: &m43
      prepare_outputs: ${{ toJSON(steps.qualification-cache-prepare-d00a5775a05ceed6.outputs) }}
      qualification_campaign: ${{ needs.plan.outputs.qualification_campaign }}
    -
@@ -3177,7 +3182,7 @@ jobs:
     id: qualification-cache-save-mbx_objects-d00a5775a05ceed6-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-d00a5775a05ceed6.outputs.cache_mbx_objects_active == 'true' && steps.qualification-cache-before-save-mbx_objects-d00a5775a05ceed6.outputs.cache_mbx_objects_save_requested == 'true' && steps.qualification-cache-prepare-d00a5775a05ceed6.outputs.cache_mbx_objects_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mbx_objects
     id: qualification-cache-save-mbx_objects-d00a5775a05ceed6
@@ -3207,13 +3212,13 @@ jobs:
     id: qualification-cache-before-save-cargo_sources-d00a5775a05ceed6
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-mise # zizmor: ignore[self-repository]
-    with: *m42
+    with: *m43
    -
     name: Admit optional cache save
     id: qualification-cache-save-cargo_sources-d00a5775a05ceed6-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-d00a5775a05ceed6.outputs.cache_cargo_sources_active == 'true' && steps.qualification-cache-before-save-cargo_sources-d00a5775a05ceed6.outputs.cache_cargo_sources_save_requested == 'true' && steps.qualification-cache-prepare-d00a5775a05ceed6.outputs.cache_cargo_sources_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache cargo_sources
     id: qualification-cache-save-cargo_sources-d00a5775a05ceed6
@@ -3243,13 +3248,13 @@ jobs:
     id: qualification-cache-before-save-mise_tools-d00a5775a05ceed6
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-mise # zizmor: ignore[self-repository]
-    with: *m42
+    with: *m43
    -
     name: Admit optional cache save
     id: qualification-cache-save-mise_tools-d00a5775a05ceed6-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-d00a5775a05ceed6.outputs.cache_mise_tools_active == 'true' && steps.qualification-cache-before-save-mise_tools-d00a5775a05ceed6.outputs.cache_mise_tools_save_requested == 'true' && steps.qualification-cache-prepare-d00a5775a05ceed6.outputs.cache_mise_tools_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mise_tools
     id: qualification-cache-save-mise_tools-d00a5775a05ceed6
@@ -3279,13 +3284,13 @@ jobs:
     id: qualification-cache-before-save-tofu_providers-d00a5775a05ceed6
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-mise # zizmor: ignore[self-repository]
-    with: *m42
+    with: *m43
    -
     name: Admit optional cache save
     id: qualification-cache-save-tofu_providers-d00a5775a05ceed6-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-d00a5775a05ceed6.outputs.cache_tofu_providers_active == 'true' && steps.qualification-cache-before-save-tofu_providers-d00a5775a05ceed6.outputs.cache_tofu_providers_save_requested == 'true' && steps.qualification-cache-prepare-d00a5775a05ceed6.outputs.cache_tofu_providers_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache tofu_providers
     id: qualification-cache-save-tofu_providers-d00a5775a05ceed6
@@ -3315,13 +3320,13 @@ jobs:
     id: qualification-cache-before-save-task_result-d00a5775a05ceed6
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-mise # zizmor: ignore[self-repository]
-    with: *m42
+    with: *m43
    -
     name: Admit optional cache save
     id: qualification-cache-save-task_result-d00a5775a05ceed6-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-d00a5775a05ceed6.outputs.cache_task_result_active == 'true' && steps.qualification-cache-before-save-task_result-d00a5775a05ceed6.outputs.cache_task_result_save_requested == 'true' && steps.qualification-cache-prepare-d00a5775a05ceed6.outputs.cache_task_result_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache task_result
     id: qualification-cache-save-task_result-d00a5775a05ceed6
@@ -3372,7 +3377,7 @@ jobs:
      overwrite: "true"
      path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
      retention-days: "30"
-   - *s42
+   - *s43
    - *s10
    - *s11
    - *s35
@@ -3385,19 +3390,19 @@ jobs:
    - plan
   if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-orchestrator,')"
   steps:
-   - *s15
+   - *s42
    - *s1
    - *s2
    - *s3
    - *s4
    - *s6
    - *s7
-   - *s43
    - *s44
+   - *s45
    - *s18
    - *s13
    - *s19
-   - *s45
+   - *s46
    - *s41
    - *s21
    - *s22
@@ -3406,7 +3411,7 @@ jobs:
     id: qualification-cache-prepare-5a30db0d2bd17afb
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-prepare-rust-velnor-actions-orchestrator # zizmor: ignore[self-repository]
-    with: *m31
+    with: *m32
    - *s23
    - *s24
    - *s25
@@ -3453,7 +3458,7 @@ jobs:
     id: qualification-cache-before-save-mbx_objects-5a30db0d2bd17afb
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-orchestrator # zizmor: ignore[self-repository]
-    with: &m43
+    with: &m44
      prepare_outputs: ${{ toJSON(steps.qualification-cache-prepare-5a30db0d2bd17afb.outputs) }}
      qualification_campaign: ${{ needs.plan.outputs.qualification_campaign }}
    -
@@ -3461,7 +3466,7 @@ jobs:
     id: qualification-cache-save-mbx_objects-5a30db0d2bd17afb-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-5a30db0d2bd17afb.outputs.cache_mbx_objects_active == 'true' && steps.qualification-cache-before-save-mbx_objects-5a30db0d2bd17afb.outputs.cache_mbx_objects_save_requested == 'true' && steps.qualification-cache-prepare-5a30db0d2bd17afb.outputs.cache_mbx_objects_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mbx_objects
     id: qualification-cache-save-mbx_objects-5a30db0d2bd17afb
@@ -3491,13 +3496,13 @@ jobs:
     id: qualification-cache-before-save-cargo_sources-5a30db0d2bd17afb
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-orchestrator # zizmor: ignore[self-repository]
-    with: *m43
+    with: *m44
    -
     name: Admit optional cache save
     id: qualification-cache-save-cargo_sources-5a30db0d2bd17afb-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-5a30db0d2bd17afb.outputs.cache_cargo_sources_active == 'true' && steps.qualification-cache-before-save-cargo_sources-5a30db0d2bd17afb.outputs.cache_cargo_sources_save_requested == 'true' && steps.qualification-cache-prepare-5a30db0d2bd17afb.outputs.cache_cargo_sources_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache cargo_sources
     id: qualification-cache-save-cargo_sources-5a30db0d2bd17afb
@@ -3527,13 +3532,13 @@ jobs:
     id: qualification-cache-before-save-mise_tools-5a30db0d2bd17afb
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-orchestrator # zizmor: ignore[self-repository]
-    with: *m43
+    with: *m44
    -
     name: Admit optional cache save
     id: qualification-cache-save-mise_tools-5a30db0d2bd17afb-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-5a30db0d2bd17afb.outputs.cache_mise_tools_active == 'true' && steps.qualification-cache-before-save-mise_tools-5a30db0d2bd17afb.outputs.cache_mise_tools_save_requested == 'true' && steps.qualification-cache-prepare-5a30db0d2bd17afb.outputs.cache_mise_tools_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mise_tools
     id: qualification-cache-save-mise_tools-5a30db0d2bd17afb
@@ -3563,13 +3568,13 @@ jobs:
     id: qualification-cache-before-save-tofu_providers-5a30db0d2bd17afb
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-orchestrator # zizmor: ignore[self-repository]
-    with: *m43
+    with: *m44
    -
     name: Admit optional cache save
     id: qualification-cache-save-tofu_providers-5a30db0d2bd17afb-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-5a30db0d2bd17afb.outputs.cache_tofu_providers_active == 'true' && steps.qualification-cache-before-save-tofu_providers-5a30db0d2bd17afb.outputs.cache_tofu_providers_save_requested == 'true' && steps.qualification-cache-prepare-5a30db0d2bd17afb.outputs.cache_tofu_providers_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache tofu_providers
     id: qualification-cache-save-tofu_providers-5a30db0d2bd17afb
@@ -3599,13 +3604,13 @@ jobs:
     id: qualification-cache-before-save-task_result-5a30db0d2bd17afb
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-orchestrator # zizmor: ignore[self-repository]
-    with: *m43
+    with: *m44
    -
     name: Admit optional cache save
     id: qualification-cache-save-task_result-5a30db0d2bd17afb-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-5a30db0d2bd17afb.outputs.cache_task_result_active == 'true' && steps.qualification-cache-before-save-task_result-5a30db0d2bd17afb.outputs.cache_task_result_save_requested == 'true' && steps.qualification-cache-prepare-5a30db0d2bd17afb.outputs.cache_task_result_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache task_result
     id: qualification-cache-save-task_result-5a30db0d2bd17afb
@@ -3666,7 +3671,7 @@ jobs:
    - plan
   if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-rust,')"
   steps:
-   - *s15
+   - *s42
    - *s1
    - *s2
    - *s3
@@ -3686,7 +3691,7 @@ jobs:
     id: qualification-cache-prepare-444d7a383d6b448c
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-prepare-rust-velnor-actions-rust # zizmor: ignore[self-repository]
-    with: *m31
+    with: *m32
    - *s23
    - *s24
    - *s25
@@ -3732,7 +3737,7 @@ jobs:
     id: qualification-cache-before-save-mbx_objects-444d7a383d6b448c
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-rust # zizmor: ignore[self-repository]
-    with: &m44
+    with: &m45
      prepare_outputs: ${{ toJSON(steps.qualification-cache-prepare-444d7a383d6b448c.outputs) }}
      qualification_campaign: ${{ needs.plan.outputs.qualification_campaign }}
    -
@@ -3740,7 +3745,7 @@ jobs:
     id: qualification-cache-save-mbx_objects-444d7a383d6b448c-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-444d7a383d6b448c.outputs.cache_mbx_objects_active == 'true' && steps.qualification-cache-before-save-mbx_objects-444d7a383d6b448c.outputs.cache_mbx_objects_save_requested == 'true' && steps.qualification-cache-prepare-444d7a383d6b448c.outputs.cache_mbx_objects_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mbx_objects
     id: qualification-cache-save-mbx_objects-444d7a383d6b448c
@@ -3770,13 +3775,13 @@ jobs:
     id: qualification-cache-before-save-cargo_sources-444d7a383d6b448c
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-rust # zizmor: ignore[self-repository]
-    with: *m44
+    with: *m45
    -
     name: Admit optional cache save
     id: qualification-cache-save-cargo_sources-444d7a383d6b448c-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-444d7a383d6b448c.outputs.cache_cargo_sources_active == 'true' && steps.qualification-cache-before-save-cargo_sources-444d7a383d6b448c.outputs.cache_cargo_sources_save_requested == 'true' && steps.qualification-cache-prepare-444d7a383d6b448c.outputs.cache_cargo_sources_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache cargo_sources
     id: qualification-cache-save-cargo_sources-444d7a383d6b448c
@@ -3806,13 +3811,13 @@ jobs:
     id: qualification-cache-before-save-mise_tools-444d7a383d6b448c
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-rust # zizmor: ignore[self-repository]
-    with: *m44
+    with: *m45
    -
     name: Admit optional cache save
     id: qualification-cache-save-mise_tools-444d7a383d6b448c-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-444d7a383d6b448c.outputs.cache_mise_tools_active == 'true' && steps.qualification-cache-before-save-mise_tools-444d7a383d6b448c.outputs.cache_mise_tools_save_requested == 'true' && steps.qualification-cache-prepare-444d7a383d6b448c.outputs.cache_mise_tools_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mise_tools
     id: qualification-cache-save-mise_tools-444d7a383d6b448c
@@ -3842,13 +3847,13 @@ jobs:
     id: qualification-cache-before-save-tofu_providers-444d7a383d6b448c
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-rust # zizmor: ignore[self-repository]
-    with: *m44
+    with: *m45
    -
     name: Admit optional cache save
     id: qualification-cache-save-tofu_providers-444d7a383d6b448c-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-444d7a383d6b448c.outputs.cache_tofu_providers_active == 'true' && steps.qualification-cache-before-save-tofu_providers-444d7a383d6b448c.outputs.cache_tofu_providers_save_requested == 'true' && steps.qualification-cache-prepare-444d7a383d6b448c.outputs.cache_tofu_providers_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache tofu_providers
     id: qualification-cache-save-tofu_providers-444d7a383d6b448c
@@ -3878,13 +3883,13 @@ jobs:
     id: qualification-cache-before-save-task_result-444d7a383d6b448c
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-rust # zizmor: ignore[self-repository]
-    with: *m44
+    with: *m45
    -
     name: Admit optional cache save
     id: qualification-cache-save-task_result-444d7a383d6b448c-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-444d7a383d6b448c.outputs.cache_task_result_active == 'true' && steps.qualification-cache-before-save-task_result-444d7a383d6b448c.outputs.cache_task_result_save_requested == 'true' && steps.qualification-cache-prepare-444d7a383d6b448c.outputs.cache_task_result_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache task_result
     id: qualification-cache-save-task_result-444d7a383d6b448c
@@ -3945,7 +3950,7 @@ jobs:
    - plan
   if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-tofu,')"
   steps:
-   - *s15
+   - *s42
    - *s1
    - *s2
    - *s3
@@ -3965,7 +3970,7 @@ jobs:
     id: qualification-cache-prepare-d2fc8590350b218a
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-prepare-rust-velnor-actions-tofu # zizmor: ignore[self-repository]
-    with: *m31
+    with: *m32
    - *s23
    - *s24
    - *s25
@@ -4011,7 +4016,7 @@ jobs:
     id: qualification-cache-before-save-mbx_objects-d2fc8590350b218a
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-tofu # zizmor: ignore[self-repository]
-    with: &m45
+    with: &m46
      prepare_outputs: ${{ toJSON(steps.qualification-cache-prepare-d2fc8590350b218a.outputs) }}
      qualification_campaign: ${{ needs.plan.outputs.qualification_campaign }}
    -
@@ -4019,7 +4024,7 @@ jobs:
     id: qualification-cache-save-mbx_objects-d2fc8590350b218a-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-d2fc8590350b218a.outputs.cache_mbx_objects_active == 'true' && steps.qualification-cache-before-save-mbx_objects-d2fc8590350b218a.outputs.cache_mbx_objects_save_requested == 'true' && steps.qualification-cache-prepare-d2fc8590350b218a.outputs.cache_mbx_objects_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mbx_objects
     id: qualification-cache-save-mbx_objects-d2fc8590350b218a
@@ -4049,13 +4054,13 @@ jobs:
     id: qualification-cache-before-save-cargo_sources-d2fc8590350b218a
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-tofu # zizmor: ignore[self-repository]
-    with: *m45
+    with: *m46
    -
     name: Admit optional cache save
     id: qualification-cache-save-cargo_sources-d2fc8590350b218a-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-d2fc8590350b218a.outputs.cache_cargo_sources_active == 'true' && steps.qualification-cache-before-save-cargo_sources-d2fc8590350b218a.outputs.cache_cargo_sources_save_requested == 'true' && steps.qualification-cache-prepare-d2fc8590350b218a.outputs.cache_cargo_sources_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache cargo_sources
     id: qualification-cache-save-cargo_sources-d2fc8590350b218a
@@ -4085,13 +4090,13 @@ jobs:
     id: qualification-cache-before-save-mise_tools-d2fc8590350b218a
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-tofu # zizmor: ignore[self-repository]
-    with: *m45
+    with: *m46
    -
     name: Admit optional cache save
     id: qualification-cache-save-mise_tools-d2fc8590350b218a-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-d2fc8590350b218a.outputs.cache_mise_tools_active == 'true' && steps.qualification-cache-before-save-mise_tools-d2fc8590350b218a.outputs.cache_mise_tools_save_requested == 'true' && steps.qualification-cache-prepare-d2fc8590350b218a.outputs.cache_mise_tools_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mise_tools
     id: qualification-cache-save-mise_tools-d2fc8590350b218a
@@ -4121,13 +4126,13 @@ jobs:
     id: qualification-cache-before-save-tofu_providers-d2fc8590350b218a
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-tofu # zizmor: ignore[self-repository]
-    with: *m45
+    with: *m46
    -
     name: Admit optional cache save
     id: qualification-cache-save-tofu_providers-d2fc8590350b218a-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-d2fc8590350b218a.outputs.cache_tofu_providers_active == 'true' && steps.qualification-cache-before-save-tofu_providers-d2fc8590350b218a.outputs.cache_tofu_providers_save_requested == 'true' && steps.qualification-cache-prepare-d2fc8590350b218a.outputs.cache_tofu_providers_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache tofu_providers
     id: qualification-cache-save-tofu_providers-d2fc8590350b218a
@@ -4157,13 +4162,13 @@ jobs:
     id: qualification-cache-before-save-task_result-d2fc8590350b218a
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-tofu # zizmor: ignore[self-repository]
-    with: *m45
+    with: *m46
    -
     name: Admit optional cache save
     id: qualification-cache-save-task_result-d2fc8590350b218a-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-d2fc8590350b218a.outputs.cache_task_result_active == 'true' && steps.qualification-cache-before-save-task_result-d2fc8590350b218a.outputs.cache_task_result_save_requested == 'true' && steps.qualification-cache-prepare-d2fc8590350b218a.outputs.cache_task_result_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache task_result
     id: qualification-cache-save-task_result-d2fc8590350b218a
@@ -4224,7 +4229,7 @@ jobs:
    - plan
   if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-actions-workflow-renderer,')"
   steps:
-   - *s15
+   - *s42
    - *s1
    - *s2
    - *s3
@@ -4244,7 +4249,7 @@ jobs:
     id: qualification-cache-prepare-5f9e7b119a675b15
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-prepare-rust-velnor-actions-workflow-renderer # zizmor: ignore[self-repository]
-    with: *m31
+    with: *m32
    - *s23
    - *s24
    - *s25
@@ -4290,7 +4295,7 @@ jobs:
     id: qualification-cache-before-save-mbx_objects-5f9e7b119a675b15
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-actions-workflow-renderer # zizmor: ignore[self-repository]
-    with: &m46
+    with: &m47
      prepare_outputs: ${{ toJSON(steps.qualification-cache-prepare-5f9e7b119a675b15.outputs) }}
      qualification_campaign: ${{ needs.plan.outputs.qualification_campaign }}
    -
@@ -4298,7 +4303,7 @@ jobs:
     id: qualification-cache-save-mbx_objects-5f9e7b119a675b15-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-5f9e7b119a675b15.outputs.cache_mbx_objects_active == 'true' && steps.qualification-cache-before-save-mbx_objects-5f9e7b119a675b15.outputs.cache_mbx_objects_save_requested == 'true' && steps.qualification-cache-prepare-5f9e7b119a675b15.outputs.cache_mbx_objects_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mbx_objects
     id: qualification-cache-save-mbx_objects-5f9e7b119a675b15
@@ -4328,13 +4333,13 @@ jobs:
     id: qualification-cache-before-save-cargo_sources-5f9e7b119a675b15
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-actions-workflow-renderer # zizmor: ignore[self-repository]
-    with: *m46
+    with: *m47
    -
     name: Admit optional cache save
     id: qualification-cache-save-cargo_sources-5f9e7b119a675b15-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-5f9e7b119a675b15.outputs.cache_cargo_sources_active == 'true' && steps.qualification-cache-before-save-cargo_sources-5f9e7b119a675b15.outputs.cache_cargo_sources_save_requested == 'true' && steps.qualification-cache-prepare-5f9e7b119a675b15.outputs.cache_cargo_sources_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache cargo_sources
     id: qualification-cache-save-cargo_sources-5f9e7b119a675b15
@@ -4364,13 +4369,13 @@ jobs:
     id: qualification-cache-before-save-mise_tools-5f9e7b119a675b15
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-actions-workflow-renderer # zizmor: ignore[self-repository]
-    with: *m46
+    with: *m47
    -
     name: Admit optional cache save
     id: qualification-cache-save-mise_tools-5f9e7b119a675b15-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-5f9e7b119a675b15.outputs.cache_mise_tools_active == 'true' && steps.qualification-cache-before-save-mise_tools-5f9e7b119a675b15.outputs.cache_mise_tools_save_requested == 'true' && steps.qualification-cache-prepare-5f9e7b119a675b15.outputs.cache_mise_tools_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mise_tools
     id: qualification-cache-save-mise_tools-5f9e7b119a675b15
@@ -4400,13 +4405,13 @@ jobs:
     id: qualification-cache-before-save-tofu_providers-5f9e7b119a675b15
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-actions-workflow-renderer # zizmor: ignore[self-repository]
-    with: *m46
+    with: *m47
    -
     name: Admit optional cache save
     id: qualification-cache-save-tofu_providers-5f9e7b119a675b15-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-5f9e7b119a675b15.outputs.cache_tofu_providers_active == 'true' && steps.qualification-cache-before-save-tofu_providers-5f9e7b119a675b15.outputs.cache_tofu_providers_save_requested == 'true' && steps.qualification-cache-prepare-5f9e7b119a675b15.outputs.cache_tofu_providers_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache tofu_providers
     id: qualification-cache-save-tofu_providers-5f9e7b119a675b15
@@ -4436,13 +4441,13 @@ jobs:
     id: qualification-cache-before-save-task_result-5f9e7b119a675b15
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-task_result-rust-velnor-actions-workflow-renderer # zizmor: ignore[self-repository]
-    with: *m46
+    with: *m47
    -
     name: Admit optional cache save
     id: qualification-cache-save-task_result-5f9e7b119a675b15-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-5f9e7b119a675b15.outputs.cache_task_result_active == 'true' && steps.qualification-cache-before-save-task_result-5f9e7b119a675b15.outputs.cache_task_result_save_requested == 'true' && steps.qualification-cache-prepare-5f9e7b119a675b15.outputs.cache_task_result_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache task_result
     id: qualification-cache-save-task_result-5f9e7b119a675b15
@@ -4503,7 +4508,7 @@ jobs:
    - plan
   if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-archive-guard,')"
   steps:
-   - *s15
+   - *s42
    - *s1
    - *s2
    - *s3
@@ -4523,7 +4528,7 @@ jobs:
     id: qualification-cache-prepare-4b8713f5acc1c10c
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-prepare-rust-velnor-archive-guard # zizmor: ignore[self-repository]
-    with: *m31
+    with: *m32
    - *s23
    - *s24
    - *s25
@@ -4569,7 +4574,7 @@ jobs:
     id: qualification-cache-before-save-mbx_objects-4b8713f5acc1c10c
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-archive-guard # zizmor: ignore[self-repository]
-    with: &m47
+    with: &m48
      prepare_outputs: ${{ toJSON(steps.qualification-cache-prepare-4b8713f5acc1c10c.outputs) }}
      qualification_campaign: ${{ needs.plan.outputs.qualification_campaign }}
    -
@@ -4577,7 +4582,7 @@ jobs:
     id: qualification-cache-save-mbx_objects-4b8713f5acc1c10c-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-4b8713f5acc1c10c.outputs.cache_mbx_objects_active == 'true' && steps.qualification-cache-before-save-mbx_objects-4b8713f5acc1c10c.outputs.cache_mbx_objects_save_requested == 'true' && steps.qualification-cache-prepare-4b8713f5acc1c10c.outputs.cache_mbx_objects_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mbx_objects
     id: qualification-cache-save-mbx_objects-4b8713f5acc1c10c
@@ -4607,13 +4612,13 @@ jobs:
     id: qualification-cache-before-save-cargo_sources-4b8713f5acc1c10c
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-archive-guard # zizmor: ignore[self-repository]
-    with: *m47
+    with: *m48
    -
     name: Admit optional cache save
     id: qualification-cache-save-cargo_sources-4b8713f5acc1c10c-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-4b8713f5acc1c10c.outputs.cache_cargo_sources_active == 'true' && steps.qualification-cache-before-save-cargo_sources-4b8713f5acc1c10c.outputs.cache_cargo_sources_save_requested == 'true' && steps.qualification-cache-prepare-4b8713f5acc1c10c.outputs.cache_cargo_sources_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache cargo_sources
     id: qualification-cache-save-cargo_sources-4b8713f5acc1c10c
@@ -4643,13 +4648,13 @@ jobs:
     id: qualification-cache-before-save-mise_tools-4b8713f5acc1c10c
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-archive-guard # zizmor: ignore[self-repository]
-    with: *m47
+    with: *m48
    -
     name: Admit optional cache save
     id: qualification-cache-save-mise_tools-4b8713f5acc1c10c-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-4b8713f5acc1c10c.outputs.cache_mise_tools_active == 'true' && steps.qualification-cache-before-save-mise_tools-4b8713f5acc1c10c.outputs.cache_mise_tools_save_requested == 'true' && steps.qualification-cache-prepare-4b8713f5acc1c10c.outputs.cache_mise_tools_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mise_tools
     id: qualification-cache-save-mise_tools-4b8713f5acc1c10c
@@ -4679,13 +4684,13 @@ jobs:
     id: qualification-cache-before-save-tofu_providers-4b8713f5acc1c10c
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-archive-guard # zizmor: ignore[self-repository]
-    with: *m47
+    with: *m48
    -
     name: Admit optional cache save
     id: qualification-cache-save-tofu_providers-4b8713f5acc1c10c-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-4b8713f5acc1c10c.outputs.cache_tofu_providers_active == 'true' && steps.qualification-cache-before-save-tofu_providers-4b8713f5acc1c10c.outputs.cache_tofu_providers_save_requested == 'true' && steps.qualification-cache-prepare-4b8713f5acc1c10c.outputs.cache_tofu_providers_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache tofu_providers
     id: qualification-cache-save-tofu_providers-4b8713f5acc1c10c
@@ -4715,13 +4720,13 @@ jobs:
     id: qualification-cache-before-save-task_result-4b8713f5acc1c10c
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-task_result-rust-velnor-archive-guard # zizmor: ignore[self-repository]
-    with: *m47
+    with: *m48
    -
     name: Admit optional cache save
     id: qualification-cache-save-task_result-4b8713f5acc1c10c-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-4b8713f5acc1c10c.outputs.cache_task_result_active == 'true' && steps.qualification-cache-before-save-task_result-4b8713f5acc1c10c.outputs.cache_task_result_save_requested == 'true' && steps.qualification-cache-prepare-4b8713f5acc1c10c.outputs.cache_task_result_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache task_result
     id: qualification-cache-save-task_result-4b8713f5acc1c10c
@@ -4782,7 +4787,7 @@ jobs:
    - plan
   if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-resource-probe,')"
   steps:
-   - *s15
+   - *s42
    - *s1
    - *s2
    - *s3
@@ -4802,7 +4807,7 @@ jobs:
     id: qualification-cache-prepare-ee21ace0475c499e
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-prepare-rust-velnor-resource-probe # zizmor: ignore[self-repository]
-    with: *m31
+    with: *m32
    - *s23
    - *s24
    - *s36
@@ -4848,7 +4853,7 @@ jobs:
     id: qualification-cache-before-save-mbx_objects-ee21ace0475c499e
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-resource-probe # zizmor: ignore[self-repository]
-    with: &m48
+    with: &m49
      prepare_outputs: ${{ toJSON(steps.qualification-cache-prepare-ee21ace0475c499e.outputs) }}
      qualification_campaign: ${{ needs.plan.outputs.qualification_campaign }}
    -
@@ -4856,7 +4861,7 @@ jobs:
     id: qualification-cache-save-mbx_objects-ee21ace0475c499e-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-ee21ace0475c499e.outputs.cache_mbx_objects_active == 'true' && steps.qualification-cache-before-save-mbx_objects-ee21ace0475c499e.outputs.cache_mbx_objects_save_requested == 'true' && steps.qualification-cache-prepare-ee21ace0475c499e.outputs.cache_mbx_objects_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mbx_objects
     id: qualification-cache-save-mbx_objects-ee21ace0475c499e
@@ -4886,13 +4891,13 @@ jobs:
     id: qualification-cache-before-save-cargo_sources-ee21ace0475c499e
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-resource-probe # zizmor: ignore[self-repository]
-    with: *m48
+    with: *m49
    -
     name: Admit optional cache save
     id: qualification-cache-save-cargo_sources-ee21ace0475c499e-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-ee21ace0475c499e.outputs.cache_cargo_sources_active == 'true' && steps.qualification-cache-before-save-cargo_sources-ee21ace0475c499e.outputs.cache_cargo_sources_save_requested == 'true' && steps.qualification-cache-prepare-ee21ace0475c499e.outputs.cache_cargo_sources_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache cargo_sources
     id: qualification-cache-save-cargo_sources-ee21ace0475c499e
@@ -4922,13 +4927,13 @@ jobs:
     id: qualification-cache-before-save-mise_tools-ee21ace0475c499e
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-resource-probe # zizmor: ignore[self-repository]
-    with: *m48
+    with: *m49
    -
     name: Admit optional cache save
     id: qualification-cache-save-mise_tools-ee21ace0475c499e-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-ee21ace0475c499e.outputs.cache_mise_tools_active == 'true' && steps.qualification-cache-before-save-mise_tools-ee21ace0475c499e.outputs.cache_mise_tools_save_requested == 'true' && steps.qualification-cache-prepare-ee21ace0475c499e.outputs.cache_mise_tools_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mise_tools
     id: qualification-cache-save-mise_tools-ee21ace0475c499e
@@ -4958,13 +4963,13 @@ jobs:
     id: qualification-cache-before-save-tofu_providers-ee21ace0475c499e
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-resource-probe # zizmor: ignore[self-repository]
-    with: *m48
+    with: *m49
    -
     name: Admit optional cache save
     id: qualification-cache-save-tofu_providers-ee21ace0475c499e-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-ee21ace0475c499e.outputs.cache_tofu_providers_active == 'true' && steps.qualification-cache-before-save-tofu_providers-ee21ace0475c499e.outputs.cache_tofu_providers_save_requested == 'true' && steps.qualification-cache-prepare-ee21ace0475c499e.outputs.cache_tofu_providers_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache tofu_providers
     id: qualification-cache-save-tofu_providers-ee21ace0475c499e
@@ -4994,13 +4999,13 @@ jobs:
     id: qualification-cache-before-save-task_result-ee21ace0475c499e
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-task_result-rust-velnor-resource-probe # zizmor: ignore[self-repository]
-    with: *m48
+    with: *m49
    -
     name: Admit optional cache save
     id: qualification-cache-save-task_result-ee21ace0475c499e-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-ee21ace0475c499e.outputs.cache_task_result_active == 'true' && steps.qualification-cache-before-save-task_result-ee21ace0475c499e.outputs.cache_task_result_save_requested == 'true' && steps.qualification-cache-prepare-ee21ace0475c499e.outputs.cache_task_result_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache task_result
     id: qualification-cache-save-task_result-ee21ace0475c499e
@@ -5061,7 +5066,7 @@ jobs:
    - plan
   if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-runner-attestation,')"
   steps:
-   - *s15
+   - *s42
    - *s1
    - *s2
    - *s3
@@ -5081,7 +5086,7 @@ jobs:
     id: qualification-cache-prepare-7ce1336b2c2bb4fc
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-prepare-rust-velnor-runner-attestation # zizmor: ignore[self-repository]
-    with: *m31
+    with: *m32
    - *s23
    - *s24
    - *s36
@@ -5122,7 +5127,7 @@ jobs:
     id: qualification-cache-before-save-mbx_objects-7ce1336b2c2bb4fc
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-runner-attestation # zizmor: ignore[self-repository]
-    with: &m49
+    with: &m50
      prepare_outputs: ${{ toJSON(steps.qualification-cache-prepare-7ce1336b2c2bb4fc.outputs) }}
      qualification_campaign: ${{ needs.plan.outputs.qualification_campaign }}
    -
@@ -5130,7 +5135,7 @@ jobs:
     id: qualification-cache-save-mbx_objects-7ce1336b2c2bb4fc-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-7ce1336b2c2bb4fc.outputs.cache_mbx_objects_active == 'true' && steps.qualification-cache-before-save-mbx_objects-7ce1336b2c2bb4fc.outputs.cache_mbx_objects_save_requested == 'true' && steps.qualification-cache-prepare-7ce1336b2c2bb4fc.outputs.cache_mbx_objects_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mbx_objects
     id: qualification-cache-save-mbx_objects-7ce1336b2c2bb4fc
@@ -5160,13 +5165,13 @@ jobs:
     id: qualification-cache-before-save-cargo_sources-7ce1336b2c2bb4fc
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-runner-attestation # zizmor: ignore[self-repository]
-    with: *m49
+    with: *m50
    -
     name: Admit optional cache save
     id: qualification-cache-save-cargo_sources-7ce1336b2c2bb4fc-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-7ce1336b2c2bb4fc.outputs.cache_cargo_sources_active == 'true' && steps.qualification-cache-before-save-cargo_sources-7ce1336b2c2bb4fc.outputs.cache_cargo_sources_save_requested == 'true' && steps.qualification-cache-prepare-7ce1336b2c2bb4fc.outputs.cache_cargo_sources_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache cargo_sources
     id: qualification-cache-save-cargo_sources-7ce1336b2c2bb4fc
@@ -5196,13 +5201,13 @@ jobs:
     id: qualification-cache-before-save-mise_tools-7ce1336b2c2bb4fc
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-runner-attestation # zizmor: ignore[self-repository]
-    with: *m49
+    with: *m50
    -
     name: Admit optional cache save
     id: qualification-cache-save-mise_tools-7ce1336b2c2bb4fc-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-7ce1336b2c2bb4fc.outputs.cache_mise_tools_active == 'true' && steps.qualification-cache-before-save-mise_tools-7ce1336b2c2bb4fc.outputs.cache_mise_tools_save_requested == 'true' && steps.qualification-cache-prepare-7ce1336b2c2bb4fc.outputs.cache_mise_tools_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mise_tools
     id: qualification-cache-save-mise_tools-7ce1336b2c2bb4fc
@@ -5232,13 +5237,13 @@ jobs:
     id: qualification-cache-before-save-tofu_providers-7ce1336b2c2bb4fc
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-runner-attestation # zizmor: ignore[self-repository]
-    with: *m49
+    with: *m50
    -
     name: Admit optional cache save
     id: qualification-cache-save-tofu_providers-7ce1336b2c2bb4fc-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-7ce1336b2c2bb4fc.outputs.cache_tofu_providers_active == 'true' && steps.qualification-cache-before-save-tofu_providers-7ce1336b2c2bb4fc.outputs.cache_tofu_providers_save_requested == 'true' && steps.qualification-cache-prepare-7ce1336b2c2bb4fc.outputs.cache_tofu_providers_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache tofu_providers
     id: qualification-cache-save-tofu_providers-7ce1336b2c2bb4fc
@@ -5268,13 +5273,13 @@ jobs:
     id: qualification-cache-before-save-task_result-7ce1336b2c2bb4fc
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-task_result-rust-velnor-runner-attestation # zizmor: ignore[self-repository]
-    with: *m49
+    with: *m50
    -
     name: Admit optional cache save
     id: qualification-cache-save-task_result-7ce1336b2c2bb4fc-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-7ce1336b2c2bb4fc.outputs.cache_task_result_active == 'true' && steps.qualification-cache-before-save-task_result-7ce1336b2c2bb4fc.outputs.cache_task_result_save_requested == 'true' && steps.qualification-cache-prepare-7ce1336b2c2bb4fc.outputs.cache_task_result_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache task_result
     id: qualification-cache-save-task_result-7ce1336b2c2bb4fc
@@ -5335,7 +5340,7 @@ jobs:
    - plan
   if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-runner-cli,')"
   steps:
-   - *s15
+   - *s42
    - *s1
    - *s2
    - *s3
@@ -5355,7 +5360,7 @@ jobs:
     id: qualification-cache-prepare-24cac170a5e9f13e
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-prepare-rust-velnor-runner-cli # zizmor: ignore[self-repository]
-    with: *m31
+    with: *m32
    - *s23
    - *s24
    - *s36
@@ -5401,7 +5406,7 @@ jobs:
     id: qualification-cache-before-save-mbx_objects-24cac170a5e9f13e
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-runner-cli # zizmor: ignore[self-repository]
-    with: &m50
+    with: &m51
      prepare_outputs: ${{ toJSON(steps.qualification-cache-prepare-24cac170a5e9f13e.outputs) }}
      qualification_campaign: ${{ needs.plan.outputs.qualification_campaign }}
    -
@@ -5409,7 +5414,7 @@ jobs:
     id: qualification-cache-save-mbx_objects-24cac170a5e9f13e-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-24cac170a5e9f13e.outputs.cache_mbx_objects_active == 'true' && steps.qualification-cache-before-save-mbx_objects-24cac170a5e9f13e.outputs.cache_mbx_objects_save_requested == 'true' && steps.qualification-cache-prepare-24cac170a5e9f13e.outputs.cache_mbx_objects_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mbx_objects
     id: qualification-cache-save-mbx_objects-24cac170a5e9f13e
@@ -5439,13 +5444,13 @@ jobs:
     id: qualification-cache-before-save-cargo_sources-24cac170a5e9f13e
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-runner-cli # zizmor: ignore[self-repository]
-    with: *m50
+    with: *m51
    -
     name: Admit optional cache save
     id: qualification-cache-save-cargo_sources-24cac170a5e9f13e-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-24cac170a5e9f13e.outputs.cache_cargo_sources_active == 'true' && steps.qualification-cache-before-save-cargo_sources-24cac170a5e9f13e.outputs.cache_cargo_sources_save_requested == 'true' && steps.qualification-cache-prepare-24cac170a5e9f13e.outputs.cache_cargo_sources_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache cargo_sources
     id: qualification-cache-save-cargo_sources-24cac170a5e9f13e
@@ -5475,13 +5480,13 @@ jobs:
     id: qualification-cache-before-save-mise_tools-24cac170a5e9f13e
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-runner-cli # zizmor: ignore[self-repository]
-    with: *m50
+    with: *m51
    -
     name: Admit optional cache save
     id: qualification-cache-save-mise_tools-24cac170a5e9f13e-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-24cac170a5e9f13e.outputs.cache_mise_tools_active == 'true' && steps.qualification-cache-before-save-mise_tools-24cac170a5e9f13e.outputs.cache_mise_tools_save_requested == 'true' && steps.qualification-cache-prepare-24cac170a5e9f13e.outputs.cache_mise_tools_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mise_tools
     id: qualification-cache-save-mise_tools-24cac170a5e9f13e
@@ -5511,13 +5516,13 @@ jobs:
     id: qualification-cache-before-save-tofu_providers-24cac170a5e9f13e
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-runner-cli # zizmor: ignore[self-repository]
-    with: *m50
+    with: *m51
    -
     name: Admit optional cache save
     id: qualification-cache-save-tofu_providers-24cac170a5e9f13e-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-24cac170a5e9f13e.outputs.cache_tofu_providers_active == 'true' && steps.qualification-cache-before-save-tofu_providers-24cac170a5e9f13e.outputs.cache_tofu_providers_save_requested == 'true' && steps.qualification-cache-prepare-24cac170a5e9f13e.outputs.cache_tofu_providers_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache tofu_providers
     id: qualification-cache-save-tofu_providers-24cac170a5e9f13e
@@ -5547,13 +5552,13 @@ jobs:
     id: qualification-cache-before-save-task_result-24cac170a5e9f13e
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-task_result-rust-velnor-runner-cli # zizmor: ignore[self-repository]
-    with: *m50
+    with: *m51
    -
     name: Admit optional cache save
     id: qualification-cache-save-task_result-24cac170a5e9f13e-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-24cac170a5e9f13e.outputs.cache_task_result_active == 'true' && steps.qualification-cache-before-save-task_result-24cac170a5e9f13e.outputs.cache_task_result_save_requested == 'true' && steps.qualification-cache-prepare-24cac170a5e9f13e.outputs.cache_task_result_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache task_result
     id: qualification-cache-save-task_result-24cac170a5e9f13e
@@ -5614,7 +5619,7 @@ jobs:
    - plan
   if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-runner-core,')"
   steps:
-   - *s15
+   - *s42
    - *s1
    - *s2
    - *s3
@@ -5634,7 +5639,7 @@ jobs:
     id: qualification-cache-prepare-9cd91a53edce0a4b
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-prepare-rust-velnor-runner-core # zizmor: ignore[self-repository]
-    with: *m31
+    with: *m32
    - *s23
    - *s24
    - *s36
@@ -5680,7 +5685,7 @@ jobs:
     id: qualification-cache-before-save-mbx_objects-9cd91a53edce0a4b
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-runner-core # zizmor: ignore[self-repository]
-    with: &m51
+    with: &m52
      prepare_outputs: ${{ toJSON(steps.qualification-cache-prepare-9cd91a53edce0a4b.outputs) }}
      qualification_campaign: ${{ needs.plan.outputs.qualification_campaign }}
    -
@@ -5688,7 +5693,7 @@ jobs:
     id: qualification-cache-save-mbx_objects-9cd91a53edce0a4b-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-9cd91a53edce0a4b.outputs.cache_mbx_objects_active == 'true' && steps.qualification-cache-before-save-mbx_objects-9cd91a53edce0a4b.outputs.cache_mbx_objects_save_requested == 'true' && steps.qualification-cache-prepare-9cd91a53edce0a4b.outputs.cache_mbx_objects_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mbx_objects
     id: qualification-cache-save-mbx_objects-9cd91a53edce0a4b
@@ -5718,13 +5723,13 @@ jobs:
     id: qualification-cache-before-save-cargo_sources-9cd91a53edce0a4b
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-runner-core # zizmor: ignore[self-repository]
-    with: *m51
+    with: *m52
    -
     name: Admit optional cache save
     id: qualification-cache-save-cargo_sources-9cd91a53edce0a4b-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-9cd91a53edce0a4b.outputs.cache_cargo_sources_active == 'true' && steps.qualification-cache-before-save-cargo_sources-9cd91a53edce0a4b.outputs.cache_cargo_sources_save_requested == 'true' && steps.qualification-cache-prepare-9cd91a53edce0a4b.outputs.cache_cargo_sources_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache cargo_sources
     id: qualification-cache-save-cargo_sources-9cd91a53edce0a4b
@@ -5754,13 +5759,13 @@ jobs:
     id: qualification-cache-before-save-mise_tools-9cd91a53edce0a4b
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-runner-core # zizmor: ignore[self-repository]
-    with: *m51
+    with: *m52
    -
     name: Admit optional cache save
     id: qualification-cache-save-mise_tools-9cd91a53edce0a4b-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-9cd91a53edce0a4b.outputs.cache_mise_tools_active == 'true' && steps.qualification-cache-before-save-mise_tools-9cd91a53edce0a4b.outputs.cache_mise_tools_save_requested == 'true' && steps.qualification-cache-prepare-9cd91a53edce0a4b.outputs.cache_mise_tools_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mise_tools
     id: qualification-cache-save-mise_tools-9cd91a53edce0a4b
@@ -5790,13 +5795,13 @@ jobs:
     id: qualification-cache-before-save-tofu_providers-9cd91a53edce0a4b
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-runner-core # zizmor: ignore[self-repository]
-    with: *m51
+    with: *m52
    -
     name: Admit optional cache save
     id: qualification-cache-save-tofu_providers-9cd91a53edce0a4b-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-9cd91a53edce0a4b.outputs.cache_tofu_providers_active == 'true' && steps.qualification-cache-before-save-tofu_providers-9cd91a53edce0a4b.outputs.cache_tofu_providers_save_requested == 'true' && steps.qualification-cache-prepare-9cd91a53edce0a4b.outputs.cache_tofu_providers_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache tofu_providers
     id: qualification-cache-save-tofu_providers-9cd91a53edce0a4b
@@ -5826,13 +5831,13 @@ jobs:
     id: qualification-cache-before-save-task_result-9cd91a53edce0a4b
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-task_result-rust-velnor-runner-core # zizmor: ignore[self-repository]
-    with: *m51
+    with: *m52
    -
     name: Admit optional cache save
     id: qualification-cache-save-task_result-9cd91a53edce0a4b-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-9cd91a53edce0a4b.outputs.cache_task_result_active == 'true' && steps.qualification-cache-before-save-task_result-9cd91a53edce0a4b.outputs.cache_task_result_save_requested == 'true' && steps.qualification-cache-prepare-9cd91a53edce0a4b.outputs.cache_task_result_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache task_result
     id: qualification-cache-save-task_result-9cd91a53edce0a4b
@@ -5893,7 +5898,7 @@ jobs:
    - plan
   if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-runner-github,')"
   steps:
-   - *s15
+   - *s42
    - *s1
    - *s2
    - *s3
@@ -5913,7 +5918,7 @@ jobs:
     id: qualification-cache-prepare-24b2fa9908b3a924
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-prepare-rust-velnor-runner-github # zizmor: ignore[self-repository]
-    with: *m31
+    with: *m32
    - *s23
    - *s24
    - *s36
@@ -5959,7 +5964,7 @@ jobs:
     id: qualification-cache-before-save-mbx_objects-24b2fa9908b3a924
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-runner-github # zizmor: ignore[self-repository]
-    with: &m52
+    with: &m53
      prepare_outputs: ${{ toJSON(steps.qualification-cache-prepare-24b2fa9908b3a924.outputs) }}
      qualification_campaign: ${{ needs.plan.outputs.qualification_campaign }}
    -
@@ -5967,7 +5972,7 @@ jobs:
     id: qualification-cache-save-mbx_objects-24b2fa9908b3a924-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-24b2fa9908b3a924.outputs.cache_mbx_objects_active == 'true' && steps.qualification-cache-before-save-mbx_objects-24b2fa9908b3a924.outputs.cache_mbx_objects_save_requested == 'true' && steps.qualification-cache-prepare-24b2fa9908b3a924.outputs.cache_mbx_objects_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mbx_objects
     id: qualification-cache-save-mbx_objects-24b2fa9908b3a924
@@ -5997,13 +6002,13 @@ jobs:
     id: qualification-cache-before-save-cargo_sources-24b2fa9908b3a924
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-runner-github # zizmor: ignore[self-repository]
-    with: *m52
+    with: *m53
    -
     name: Admit optional cache save
     id: qualification-cache-save-cargo_sources-24b2fa9908b3a924-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-24b2fa9908b3a924.outputs.cache_cargo_sources_active == 'true' && steps.qualification-cache-before-save-cargo_sources-24b2fa9908b3a924.outputs.cache_cargo_sources_save_requested == 'true' && steps.qualification-cache-prepare-24b2fa9908b3a924.outputs.cache_cargo_sources_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache cargo_sources
     id: qualification-cache-save-cargo_sources-24b2fa9908b3a924
@@ -6033,13 +6038,13 @@ jobs:
     id: qualification-cache-before-save-mise_tools-24b2fa9908b3a924
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-runner-github # zizmor: ignore[self-repository]
-    with: *m52
+    with: *m53
    -
     name: Admit optional cache save
     id: qualification-cache-save-mise_tools-24b2fa9908b3a924-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-24b2fa9908b3a924.outputs.cache_mise_tools_active == 'true' && steps.qualification-cache-before-save-mise_tools-24b2fa9908b3a924.outputs.cache_mise_tools_save_requested == 'true' && steps.qualification-cache-prepare-24b2fa9908b3a924.outputs.cache_mise_tools_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mise_tools
     id: qualification-cache-save-mise_tools-24b2fa9908b3a924
@@ -6069,13 +6074,13 @@ jobs:
     id: qualification-cache-before-save-tofu_providers-24b2fa9908b3a924
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-runner-github # zizmor: ignore[self-repository]
-    with: *m52
+    with: *m53
    -
     name: Admit optional cache save
     id: qualification-cache-save-tofu_providers-24b2fa9908b3a924-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-24b2fa9908b3a924.outputs.cache_tofu_providers_active == 'true' && steps.qualification-cache-before-save-tofu_providers-24b2fa9908b3a924.outputs.cache_tofu_providers_save_requested == 'true' && steps.qualification-cache-prepare-24b2fa9908b3a924.outputs.cache_tofu_providers_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache tofu_providers
     id: qualification-cache-save-tofu_providers-24b2fa9908b3a924
@@ -6105,13 +6110,13 @@ jobs:
     id: qualification-cache-before-save-task_result-24b2fa9908b3a924
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-task_result-rust-velnor-runner-github # zizmor: ignore[self-repository]
-    with: *m52
+    with: *m53
    -
     name: Admit optional cache save
     id: qualification-cache-save-task_result-24b2fa9908b3a924-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-24b2fa9908b3a924.outputs.cache_task_result_active == 'true' && steps.qualification-cache-before-save-task_result-24b2fa9908b3a924.outputs.cache_task_result_save_requested == 'true' && steps.qualification-cache-prepare-24b2fa9908b3a924.outputs.cache_task_result_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache task_result
     id: qualification-cache-save-task_result-24b2fa9908b3a924
@@ -6172,7 +6177,7 @@ jobs:
    - plan
   if: "!contains(needs.plan.outputs.not_affected_jobs, ',rust-velnor-runner-host,')"
   steps:
-   - *s15
+   - *s42
    - *s1
    - *s2
    - *s3
@@ -6192,7 +6197,7 @@ jobs:
     id: qualification-cache-prepare-2415615f4b20c8fa
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-prepare-rust-velnor-runner-host # zizmor: ignore[self-repository]
-    with: *m31
+    with: *m32
    - *s23
    - *s24
    - *s36
@@ -6238,7 +6243,7 @@ jobs:
     id: qualification-cache-before-save-mbx_objects-2415615f4b20c8fa
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mbx_objects-rust-velnor-runner-host # zizmor: ignore[self-repository]
-    with: &m53
+    with: &m54
      prepare_outputs: ${{ toJSON(steps.qualification-cache-prepare-2415615f4b20c8fa.outputs) }}
      qualification_campaign: ${{ needs.plan.outputs.qualification_campaign }}
    -
@@ -6246,7 +6251,7 @@ jobs:
     id: qualification-cache-save-mbx_objects-2415615f4b20c8fa-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-2415615f4b20c8fa.outputs.cache_mbx_objects_active == 'true' && steps.qualification-cache-before-save-mbx_objects-2415615f4b20c8fa.outputs.cache_mbx_objects_save_requested == 'true' && steps.qualification-cache-prepare-2415615f4b20c8fa.outputs.cache_mbx_objects_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mbx_objects
     id: qualification-cache-save-mbx_objects-2415615f4b20c8fa
@@ -6276,13 +6281,13 @@ jobs:
     id: qualification-cache-before-save-cargo_sources-2415615f4b20c8fa
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-cargo_sources-rust-velnor-runner-host # zizmor: ignore[self-repository]
-    with: *m53
+    with: *m54
    -
     name: Admit optional cache save
     id: qualification-cache-save-cargo_sources-2415615f4b20c8fa-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-2415615f4b20c8fa.outputs.cache_cargo_sources_active == 'true' && steps.qualification-cache-before-save-cargo_sources-2415615f4b20c8fa.outputs.cache_cargo_sources_save_requested == 'true' && steps.qualification-cache-prepare-2415615f4b20c8fa.outputs.cache_cargo_sources_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache cargo_sources
     id: qualification-cache-save-cargo_sources-2415615f4b20c8fa
@@ -6312,13 +6317,13 @@ jobs:
     id: qualification-cache-before-save-mise_tools-2415615f4b20c8fa
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-mise_tools-rust-velnor-runner-host # zizmor: ignore[self-repository]
-    with: *m53
+    with: *m54
    -
     name: Admit optional cache save
     id: qualification-cache-save-mise_tools-2415615f4b20c8fa-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-2415615f4b20c8fa.outputs.cache_mise_tools_active == 'true' && steps.qualification-cache-before-save-mise_tools-2415615f4b20c8fa.outputs.cache_mise_tools_save_requested == 'true' && steps.qualification-cache-prepare-2415615f4b20c8fa.outputs.cache_mise_tools_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache mise_tools
     id: qualification-cache-save-mise_tools-2415615f4b20c8fa
@@ -6348,13 +6353,13 @@ jobs:
     id: qualification-cache-before-save-tofu_providers-2415615f4b20c8fa
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-tofu_providers-rust-velnor-runner-host # zizmor: ignore[self-repository]
-    with: *m53
+    with: *m54
    -
     name: Admit optional cache save
     id: qualification-cache-save-tofu_providers-2415615f4b20c8fa-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-2415615f4b20c8fa.outputs.cache_tofu_providers_active == 'true' && steps.qualification-cache-before-save-tofu_providers-2415615f4b20c8fa.outputs.cache_tofu_providers_save_requested == 'true' && steps.qualification-cache-prepare-2415615f4b20c8fa.outputs.cache_tofu_providers_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache tofu_providers
     id: qualification-cache-save-tofu_providers-2415615f4b20c8fa
@@ -6384,13 +6389,13 @@ jobs:
     id: qualification-cache-before-save-task_result-2415615f4b20c8fa
     if: needs.plan.outputs.qualification_campaign != ''
     uses: ./.github/actions/qualification-cache-before-save-task_result-rust-velnor-runner-host # zizmor: ignore[self-repository]
-    with: *m53
+    with: *m54
    -
     name: Admit optional cache save
     id: qualification-cache-save-task_result-2415615f4b20c8fa-budget
     if: needs.plan.outputs.qualification_campaign != '' && steps.qualification-cache-prepare-2415615f4b20c8fa.outputs.cache_task_result_active == 'true' && steps.qualification-cache-before-save-task_result-2415615f4b20c8fa.outputs.cache_task_result_save_requested == 'true' && steps.qualification-cache-prepare-2415615f4b20c8fa.outputs.cache_task_result_save_key != ''
     run: *r4
-    env: *m33
+    env: *m34
    -
     name: Save qualification cache task_result
     id: qualification-cache-save-task_result-2415615f4b20c8fa

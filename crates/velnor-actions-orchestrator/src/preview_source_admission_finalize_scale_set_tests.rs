@@ -58,7 +58,10 @@ fn scale_set_finalization_rejects_non_linux_source_before_outputs() {
             .env("GITHUB_REF", "refs/heads/main")
             .env("GITHUB_WORKFLOW_REF", workflow_ref())
             .env("GITHUB_EVENT_NAME", "workflow_run")
-            .env("VELNOR_RELEASE_POLICY", String::from_utf8(policy).unwrap())
+            .env(
+                "VELNOR_RELEASE_POLICY",
+                String::from_utf8(policy).expect("canonical policy JSON is UTF-8"),
+            )
             .env(
                 "VELNOR_REQUEST_FILE",
                 velnor.join("preview-source-seed-policy.json"),
@@ -73,7 +76,7 @@ fn scale_set_finalization_rejects_non_linux_source_before_outputs() {
             .env_remove("GITHUB_RUN_ATTEMPT")
             .output()
             .expect("run production finalization path in child process");
-        assert_success(result);
+        assert_success(&result);
         assert_eq!(
             fs::read(&output_path).expect("output remains readable"),
             b"existing output\n",
@@ -217,7 +220,7 @@ fn git_output<const N: usize>(root: &std::path::Path, args: [&str; N]) -> Output
     output
 }
 
-fn assert_success(output: Output) {
+fn assert_success(output: &Output) {
     assert!(
         output.status.success(),
         "child finalization probe failed: {}\n{}",

@@ -12,6 +12,24 @@ pub const fn default_plan_timeout_minutes() -> u16 {
     crate::workflow::timeout::JobTimeout::DEFAULT_MINUTES
 }
 
+/// Default dependency-seed timeout for whole-workspace compilation lanes.
+#[must_use]
+pub const fn default_dependency_seed_timeout_minutes() -> u16 {
+    30
+}
+
+/// Validate the independently bounded workspace dependency-seed timeout.
+pub(super) fn validate_dependency_seed_timeout(
+    minutes: u16,
+    file: &str,
+) -> Result<(), crate::errors::ContractError> {
+    crate::workflow::timeout::JobTimeout::check_config(
+        u32::from(minutes),
+        file,
+        "workflow.dependency_seed_timeout_minutes",
+    )
+}
+
 /// Serialization predicate keeping the default crate timeout out of emitted config.
 #[expect(
     clippy::trivially_copy_pass_by_ref,
@@ -28,4 +46,13 @@ pub(super) fn is_default_crate_timeout(value: &u16) -> bool {
 )]
 pub(super) fn is_default_plan_timeout(value: &u16) -> bool {
     *value == default_plan_timeout_minutes()
+}
+
+/// Serialization predicate keeping the default seed timeout out of emitted config.
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if requires fn(&u16) -> bool"
+)]
+pub(super) fn is_default_dependency_seed_timeout(value: &u16) -> bool {
+    *value == default_dependency_seed_timeout_minutes()
 }

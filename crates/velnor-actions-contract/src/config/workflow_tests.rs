@@ -19,6 +19,7 @@ fn named(name: &str) -> WorkflowConfig {
         max_parallel_jobs: 2,
         plan_timeout_minutes: 5,
         crate_timeout_minutes: 5,
+        dependency_seed_timeout_minutes: 30,
         pull_request_cache_policy: PullRequestCachePolicy::default(),
         runner_label: None,
         tasks: Vec::new(),
@@ -399,6 +400,8 @@ fn verify_jobs_reject_unknown_and_duplicates() {
 
 #[path = "workflow_crate_timeout_tests.rs"]
 mod crate_timeout;
+#[path = "workflow_dependency_seed_timeout_tests.rs"]
+mod dependency_seed_timeout;
 
 #[path = "workflow_mise_task_suite_tests.rs"]
 mod mise_task_suite_tests;

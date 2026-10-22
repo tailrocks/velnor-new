@@ -29,6 +29,7 @@ pub(crate) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> Vel
             max_parallel_jobs: 2,
             plan_timeout_minutes: 5,
             crate_timeout_minutes: 5,
+            dependency_seed_timeout_minutes: 30,
             pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
             tasks: Vec::new(),

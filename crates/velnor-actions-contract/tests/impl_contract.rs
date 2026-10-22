@@ -35,6 +35,7 @@ fn config_validation_reports_key_paths() {
             max_parallel_jobs: 2,
             plan_timeout_minutes: 5,
             crate_timeout_minutes: 5,
+            dependency_seed_timeout_minutes: 30,
             pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
             tasks: Vec::new(),
@@ -116,15 +117,14 @@ fn config_validation_reports_key_paths() {
     assert!(bad.validate("cfg").is_err());
 }
 
-#[test]
-fn runner_label_uses_exact_catalog_match() {
+fn runner_label_config() -> velnor_actions_contract::VelnorConfig {
     use velnor_actions_contract::config::ActionsConfig;
-    use velnor_actions_contract::config::{LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG};
     use velnor_actions_contract::{
-        ContractError, DiscoveryConfig, PullRequestCachePolicy, ResourcesConfig, StacksConfig,
-        TestShardingConfig, VelnorConfig,
+        DiscoveryConfig, PullRequestCachePolicy, ResourcesConfig, StacksConfig, TestShardingConfig,
+        VelnorConfig,
     };
-    let base = || VelnorConfig {
+
+    VelnorConfig {
         checks: Vec::new(),
         qualified_tools: Vec::new(),
         distribution: velnor_actions_contract::config::DistributionConfig::default(),
@@ -145,6 +145,7 @@ fn runner_label_uses_exact_catalog_match() {
             max_parallel_jobs: 2,
             plan_timeout_minutes: 5,
             crate_timeout_minutes: 5,
+            dependency_seed_timeout_minutes: 30,
             pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
             tasks: Vec::new(),
@@ -172,10 +173,17 @@ fn runner_label_uses_exact_catalog_match() {
         github: velnor_actions_contract::GithubConfig::default(),
         dco: None,
         execution: None,
-    };
+    }
+}
+
+#[test]
+fn runner_label_uses_exact_catalog_match() {
+    use velnor_actions_contract::ContractError;
+    use velnor_actions_contract::config::{LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG};
+
     assert!(RUNNER_LABEL_CATALOG.contains(&LATEST_RUNNER_LABEL));
     for label in RUNNER_LABEL_CATALOG {
-        let mut config = base();
+        let mut config = runner_label_config();
         config.workflow.runner_label = Some(label.to_owned());
         assert_eq!(config.validate("cfg"), Ok(()), "label {label}");
     }
@@ -187,7 +195,7 @@ fn runner_label_uses_exact_catalog_match() {
         "",
         " ubuntu-24.04",
     ] {
-        let mut config = base();
+        let mut config = runner_label_config();
         config.workflow.runner_label = Some(label.to_owned());
         let Err(ContractError::Config {
             key_path, problem, ..
