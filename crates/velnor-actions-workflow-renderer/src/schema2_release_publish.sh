@@ -2,7 +2,13 @@ set -euo pipefail
 
 readonly release_confirmation_deadline=$((SECONDS + @RELEASE_BUDGET_SECONDS@))
 
-@ELIGIBILITY_SCRIPT@
+@GH_FUNCTION@
+@CONFIRMATION_GH_FUNCTION@
+family_gh() { gh "$@"; }
+
+@ELIGIBILITY_FUNCTION@
+
+release_eligibility
 
 readonly release_repository='@REPOSITORY@'
 readonly release_workflow_path='@WORKFLOW_PATH@'
@@ -32,10 +38,6 @@ family_fail() {
 [[ "$release_ci_run_id" =~ ^[0-9]+$ ]] || family_fail 'initial CI run ID is malformed'
 [[ "$release_ci_attempt" =~ ^[0-9]+$ ]] || family_fail 'initial CI attempt is malformed'
 [[ -n "$GH_TOKEN" ]] || family_fail 'GitHub token is missing'
-
-@GH_FUNCTION@
-@CONFIRMATION_GH_FUNCTION@
-family_gh() { gh "$@"; }
 
 check_eligibility_identity() {
   local output actual_source actual_authority actual_run actual_attempt
