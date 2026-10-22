@@ -4,11 +4,16 @@
 //! scale or assigned replay so the listener can read the next message. Fail only
 //! an unstarted row. A row that already has a container keeps that container.
 
+#[cfg(test)]
 use velnor_runner_github::Poll;
 
+#[cfg(test)]
 use crate::error::HostError;
+#[cfg(test)]
 use crate::journal::IntentState;
+#[cfg(test)]
 use crate::journal::{Journal, Outcome};
+#[cfg(test)]
 use crate::scale_set::EnsureError;
 
 /// Fail an unstarted `m{message_id}` row. Return true only when every match has no container id.
@@ -18,6 +23,7 @@ use crate::scale_set::EnsureError;
 /// # Errors
 ///
 /// Returns [`EnsureError`] when the journal read or the state write fails.
+#[cfg(test)]
 pub(crate) async fn fail_unstarted(journal: &Journal, polled: &Poll) -> Result<bool, EnsureError> {
     let Poll::Batch(batch) = polled else {
         return Ok(false);
@@ -49,6 +55,7 @@ pub(crate) async fn fail_unstarted(journal: &Journal, polled: &Poll) -> Result<b
     Ok(true)
 }
 
+#[cfg(test)]
 fn map_journal(error: HostError) -> EnsureError {
     match error {
         HostError::Endpoint => EnsureError::Endpoint,

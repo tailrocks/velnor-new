@@ -42,6 +42,7 @@ pub(super) struct SanitizedArchive {
     pub(super) availability: RunnerLogAvailability,
 }
 
+#[cfg(test)]
 pub(super) fn sanitize_archive(bytes: &[u8]) -> Result<Vec<u8>, HostError> {
     sanitize_archive_with_availability(bytes).map(|archive| archive.bytes)
 }
