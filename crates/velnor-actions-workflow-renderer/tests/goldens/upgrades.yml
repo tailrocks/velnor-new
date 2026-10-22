@@ -56,8 +56,20 @@ jobs:
       - name: Install the pinned generate validators
         run: mise --no-config --no-env --no-hooks install jactionlint@2.3.0 shellcheck@0.11.0
       - name: Verify jactionlint
-        shell: sh
-        run: set -eu; echo verify-jactionlint
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+        run: /bin/sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; PATH=/usr/bin:/bin:/usr/sbin:/sbin; export PATH; set -eu; echo verify-jactionlint'
       - name: Resolve and verify the latest Velnor release
         shell: bash
         env:
@@ -132,8 +144,20 @@ jobs:
       - name: Install the pinned generate validators
         run: mise --no-config --no-env --no-hooks install jactionlint@2.3.0 shellcheck@0.11.0
       - name: Verify jactionlint
-        shell: sh
-        run: set -eu; echo verify-jactionlint
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+        run: /bin/sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; PATH=/usr/bin:/bin:/usr/sbin:/sbin; export PATH; set -eu; echo verify-jactionlint'
       - name: Download the upgrade patch
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:

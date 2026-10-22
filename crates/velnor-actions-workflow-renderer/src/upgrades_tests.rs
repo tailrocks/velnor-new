@@ -23,7 +23,9 @@ fn spec() -> UpgradesSpec {
             "shellcheck@0.11.0".to_owned(),
         ],
         verify_rust_script: "v=\"${VELNOR_TOOL_RUST}\"; echo verify \"$v\"".to_owned(),
-        jactionlint_verify: "set -eu; echo verify-jactionlint".to_owned(),
+        jactionlint_verify: crate::toolchain_env::with_credential_unset_script(
+            "set -eu; echo verify-jactionlint",
+        ),
     }
 }
 
@@ -287,6 +289,48 @@ fn every_regeneration_verifies_jactionlint_before_running_generate() {
         bad.jactionlint_verify = script.to_owned();
         assert!(render_upgrades_workflow(&bad).is_err(), "{script:?}");
     }
+}
+
+#[test]
+fn upgrade_jactionlint_verifiers_use_the_canonical_typed_shell_step() {
+    let spec = spec();
+    let file = render_upgrades_workflow(&spec).expect("render");
+    let step = crate::verifier_composite::verifier_shell_step(
+        "Verify jactionlint",
+        vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            spec.jactionlint_verify.clone(),
+        ],
+        std::collections::BTreeMap::new(),
+    )
+    .expect("canonical typed verifier");
+    let yaml =
+        crate::document_steps::verifier_shell_step_to_yaml(&step).expect("canonical YAML verifier");
+    let expected = indent_workflow_step(&crate::yaml::render_yaml(&yaml));
+
+    for id in ["prepare", "verify"] {
+        assert!(
+            job_text(&file.bytes, id).contains(&expected),
+            "{id} must emit the exact typed, credential-scrubbed verifier step:\n{}",
+            job_text(&file.bytes, id)
+        );
+    }
+    assert!(expected.contains("shell: /bin/bash --noprofile --norc -e -o pipefail {0}"));
+    assert!(expected.contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
+    assert!(expected.contains("echo verify-jactionlint"));
+}
+
+fn indent_workflow_step(yaml: &str) -> String {
+    let mut lines = yaml.lines();
+    let first = lines.next().expect("step has a first line");
+    let mut output = format!("      - {first}");
+    for line in lines {
+        output.push('\n');
+        output.push_str("        ");
+        output.push_str(line);
+    }
+    output
 }
 
 #[test]

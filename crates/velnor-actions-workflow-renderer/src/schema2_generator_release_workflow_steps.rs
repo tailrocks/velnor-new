@@ -19,8 +19,11 @@ pub(super) fn command_step(name: &str, argv: &[String]) -> Result<Yaml, RenderEr
         "Verify jactionlint" => None,
         _ => return Ok(bash_step(name, &join_argv_for_run(argv)?)),
     };
-    let step =
-        crate::verifier_composite::verifier_shell_step(name, argv.to_vec(), Default::default())?;
+    let step = crate::verifier_composite::verifier_shell_step(
+        name,
+        argv.to_vec(),
+        std::collections::BTreeMap::default(),
+    )?;
     debug_assert_eq!(step.role, verifier_role);
     crate::document_steps::verifier_shell_step_to_yaml(&step)
 }
