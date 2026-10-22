@@ -19,6 +19,14 @@ mod security_snapshots;
 
 use action_snapshots::{Actions, action_text};
 
+pub(super) fn assert_release_workflow_verifier(
+    workflow: &str,
+    step_name: &str,
+    globally_scoped_key: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    security_snapshots::assert_release_workflow_verifier(workflow, step_name, globally_scoped_key)
+}
+
 pub(super) const PRODUCT_RELEASE: &str = include_str!("snapshots/product-release.yml");
 const IMAGE_RELEASE: &str = include_str!("snapshots/product-release-images.yml");
 const BINARY_RELEASE: &str = include_str!("snapshots/product-release-binary.yml");
