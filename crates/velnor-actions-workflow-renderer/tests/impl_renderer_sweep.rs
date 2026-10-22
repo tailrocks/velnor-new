@@ -124,7 +124,6 @@ fn final_gate_needs_plan_lint_and_support() -> Result<(), RenderError> {
         "alint",
         "cargo-deny",
         "cargo-machete",
-        "zizmor",
         "candidate",
     ] {
         assert!(window.contains(need), "missing need {need}:\n{window}");
@@ -182,7 +181,7 @@ fn default_permissions_block_omits_ungranted_actions() -> Result<(), RenderError
 }
 
 #[test]
-fn validators_render_deny_machete_zizmor_in_order() -> Result<(), RenderError> {
+fn validators_render_deny_then_machete() -> Result<(), RenderError> {
     let mut ctx = fixture_ctx();
     ctx.validator_commands = validator_commands();
     let support =
@@ -193,12 +192,8 @@ fn validators_render_deny_machete_zizmor_in_order() -> Result<(), RenderError> {
         Some(&support),
         &ctx,
     )?;
-    let order = [
-        "Checkout",
-        "Run cargo-deny",
-        "Run cargo-machete",
-        "Run zizmor",
-    ];
+    assert!(!text.contains("zizmor:"), "zizmor is retired:\n{text}");
+    let order = ["Checkout", "Run cargo-deny", "Run cargo-machete"];
     let mut at = 0;
     for name in order {
         let found = text[at..]

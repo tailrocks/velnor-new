@@ -50,7 +50,7 @@ fn release_gate_linters_run_without_ambient_tokens() -> Result<(), Box<dyn Error
     ])?;
     let all = all_text(&product);
     let mut gates = 0;
-    for name in ["name: Run jactionlint", "name: Run zizmor"] {
+    for name in ["name: Run jactionlint"] {
         for step in all.split(name).skip(1) {
             let run = step
                 .lines()
@@ -67,7 +67,7 @@ fn release_gate_linters_run_without_ambient_tokens() -> Result<(), Box<dyn Error
         }
     }
     assert!(
-        gates >= 4,
+        gates >= 2,
         "expected release-gate lint steps, found {gates}"
     );
     Ok(())

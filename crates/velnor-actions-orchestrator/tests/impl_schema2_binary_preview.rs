@@ -191,44 +191,9 @@ executor = "hosted"
         report
             .validated_by
             .iter()
-            .any(|tool| tool.starts_with("zizmor@"))
+            .any(|tool| tool.starts_with("jactionlint@"))
     );
     assert!(preview.contains("zizmor: ignore[github-env]"));
-    Ok(())
-}
-
-#[test]
-fn unrelated_privileged_environment_write_still_fails_real_zizmor() -> TestResult {
-    let dir = tempfile::tempdir()?;
-    let workflow = dir.path().join("unsafe.yml");
-    std::fs::write(
-        &workflow,
-        "name: Unsafe environment write\n\"on\": pull_request_target\npermissions: {}\njobs:\n  unsafe:\n    runs-on: ubuntu-26.04\n    steps:\n      - run: echo \"$UNTRUSTED\" >> \"$GITHUB_ENV\"\n",
-    )?;
-    let output = velnor_actions_mise::PinnedToolExec::new(
-        vec![velnor_actions_mise::PinnedTool::Zizmor],
-        std::ffi::OsStr::new("zizmor"),
-        [
-            "--offline",
-            "--no-progress",
-            "--color",
-            "never",
-            "unsafe.yml",
-        ]
-        .into_iter()
-        .map(Into::into)
-        .collect(),
-    )?
-    .command(&velnor_actions_mise::ToolCatalog::pinned())?
-    .with_cwd(dir.path().to_path_buf())
-    .run_bounded(128 * 1024, std::time::Duration::from_secs(30))?;
-    let diagnostics = format!(
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(!output.success, "{diagnostics}");
-    assert!(diagnostics.contains("github-env"), "{diagnostics}");
     Ok(())
 }
 
@@ -349,7 +314,6 @@ fn privileged_preview_gh_pin_cannot_come_from_consumer_catalog() -> TestResult {
         "2.0.0",
         pinned.version(PinnedTool::Jactionlint),
         pinned.version(PinnedTool::Shellcheck),
-        pinned.version(PinnedTool::Zizmor),
         pinned.version(PinnedTool::Nextest),
         pinned.version(PinnedTool::Opentofu),
     )?;
@@ -396,3 +360,5 @@ fn native_binary_generation_rejects_noncanonical_ci_names_before_discovery() -> 
 
 #[path = "impl_schema2_binary_lfs.rs"]
 mod lfs;
+#[path = "impl_schema2_binary_preview_lint.rs"]
+mod lint;

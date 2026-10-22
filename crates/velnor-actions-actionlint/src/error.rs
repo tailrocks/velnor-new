@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 use velnor_actions_contract::ContractError;
 
 /// Errors for jactionlint config rendering, capability gates, pinned action
-/// refs, overrides, action inputs, and lint-tool pins.
+/// refs, overrides, and action inputs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ActionlintError {
@@ -17,11 +17,6 @@ pub enum ActionlintError {
     InvalidConfigVariable {
         /// Rejected variable name.
         name: String,
-    },
-    /// A declared workflow path is not a narrow `.github/workflows` file.
-    InvalidWorkflowPath {
-        /// Rejected path.
-        path: String,
     },
     /// A `uses:` value names an action outside the pinned allowlist.
     UnknownAction {
@@ -75,13 +70,6 @@ pub enum ActionlintError {
         /// Rejected label (empty when unset).
         label: String,
     },
-    /// A lint-tool version is not the required exact pin.
-    InvalidToolVersion {
-        /// Tool identifier.
-        tool: &'static str,
-        /// Rejected version string.
-        version: String,
-    },
 }
 
 impl Display for ActionlintError {
@@ -92,9 +80,6 @@ impl Display for ActionlintError {
             }
             Self::InvalidConfigVariable { name } => {
                 write!(f, "invalid_config_variable: {name}")
-            }
-            Self::InvalidWorkflowPath { path } => {
-                write!(f, "invalid_workflow_path: {path}")
             }
             Self::UnknownAction { uses } => write!(f, "unknown_action: {uses}"),
             Self::InvalidPin { uses, problem } => {
@@ -116,9 +101,6 @@ impl Display for ActionlintError {
             } => write!(f, "invalid_action_input: {action}: {input}: {problem}"),
             Self::UnsupportedSyntax { syntax } => write!(f, "unsupported_syntax: {syntax}"),
             Self::InvalidRunnerLabel { label } => write!(f, "invalid_runner_label: {label}"),
-            Self::InvalidToolVersion { tool, version } => {
-                write!(f, "invalid_tool_version: {tool}: {version}")
-            }
         }
     }
 }

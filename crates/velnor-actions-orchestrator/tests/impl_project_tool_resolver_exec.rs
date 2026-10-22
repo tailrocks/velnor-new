@@ -132,14 +132,14 @@ fn every_backend_spelling_and_table_form_resolves() -> TestResult {
     passes(
         &[(
             "mise.toml",
-            "[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = { version = \"0.9.148\", os = [\"linux\"] }\n\"packslip:github.com/jdx/mr-boxington\" = \"1.25.0\"\n\n[tools.zizmor]\nversion = \"1.31.1\"\npostinstall = \"echo\"\n",
+            "[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = { version = \"0.9.148\", os = [\"linux\"] }\n\"packslip:github.com/jdx/mr-boxington\" = \"1.25.0\"\n\n[tools.shellcheck]\nversion = \"0.11.0\"\npostinstall = \"echo\"\n",
         )],
         &[
             "VELNOR_TOOL_MR_BOXINGTON",
             "VELNOR_TOOL_NEXTEST",
-            "VELNOR_TOOL_ZIZMOR",
+            "VELNOR_TOOL_SHELLCHECK",
         ],
-        "VELNOR_TOOL_MR_BOXINGTON=1.25.0\nVELNOR_TOOL_NEXTEST=0.9.148\nVELNOR_TOOL_ZIZMOR=1.31.1\n",
+        "VELNOR_TOOL_MR_BOXINGTON=1.25.0\nVELNOR_TOOL_NEXTEST=0.9.148\nVELNOR_TOOL_SHELLCHECK=0.11.0\n",
     )?;
     passes(
         &[("mise.toml", "[tools]\n\"core:rust\" = \"1.99.1\"\n")],
@@ -209,7 +209,7 @@ fn multiline_array_and_non_string_values_fail_without_injecting() -> TestResult 
     passes(
         &[(
             "mise.toml",
-            "[tools]\nzizmor = \"\"\"\nrust = \"9.9.9\"\n\"\"\"\nrust = \"1.99.1\"\n",
+            "[tools]\nshellcheck = \"\"\"\nrust = \"9.9.9\"\n\"\"\"\nrust = \"1.99.1\"\n",
         )],
         &[RUST],
         "VELNOR_TOOL_RUST=1.99.1\n",

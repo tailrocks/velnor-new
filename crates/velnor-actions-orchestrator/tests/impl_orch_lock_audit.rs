@@ -9,11 +9,10 @@ use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 use crate::impl_common::{TestResult, config_with_branch, make_repo, plan_for};
 
 /// Consumer fixture install set: plan + crate + required Prepare tools.
-const PINS: [(&str, &str); 5] = [
+const PINS: [(&str, &str); 4] = [
     ("rust", "1.99.1"),
     ("jactionlint", "2.3.0"),
     ("shellcheck", "0.11.0"),
-    ("zizmor", "1.31.1"),
     ("gh", "2.102.1"),
 ];
 
@@ -38,7 +37,6 @@ fn full_lock() -> String {
             "rust" => (&[], 0x00),
             "jactionlint" => (&["linux-x64", "macos-arm64"], 0x0a),
             "shellcheck" => (&["linux-x64", "macos-arm64"], 0x0b),
-            "zizmor" => (&["linux-x64", "macos-arm64"], 0x0c),
             _ => (&["linux-x64", "macos-arm64"], 0x0d),
         };
         lock.push_str(&entry(tool, pin, platforms, seed));
@@ -87,7 +85,7 @@ fn missing_lock_advises_and_generates() -> TestResult {
         !summary.contains("jactionlint@"),
         "jactionlint is verified by its catalog executable digest, not mise.lock: {summary}"
     );
-    for tool in ["shellcheck@0.11.0", "zizmor@1.31.1", "gh@2.102.1"] {
+    for tool in ["shellcheck@0.11.0", "gh@2.102.1"] {
         assert!(summary.contains(tool), "{summary}");
     }
     let plan = preview_generate(&repo)?;

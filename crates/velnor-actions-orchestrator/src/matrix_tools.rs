@@ -258,11 +258,7 @@ pub(crate) fn prepare_crate_tools_step(
     let mut tools = task_driver_tools(use_rust, use_opentofu);
     tools.extend((use_rust && catalog.rust_mr_boxington()).then_some(PinnedTool::MrBoxington));
     if needs_validators {
-        tools.extend([
-            PinnedTool::Jactionlint,
-            PinnedTool::Shellcheck,
-            PinnedTool::Zizmor,
-        ]);
+        tools.extend([PinnedTool::Jactionlint, PinnedTool::Shellcheck]);
     }
     tools.extend(use_nextest.then_some(PinnedTool::Nextest));
     let prepare = PreparePinnedTools::new(tools, ToolHomes::runner_temp()).map_err(|err| {

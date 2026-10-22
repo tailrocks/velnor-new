@@ -11,13 +11,6 @@ use crate::{ActionlintError, is_known_hosted_label};
 use std::collections::BTreeSet;
 use velnor_actions_contract::config::WorkflowLintProfile;
 
-pub use crate::zizmor::{
-    ZizmorConfigInput, ZizmorConfigOutput, ZizmorWorkflowText, render_zizmor_yaml,
-};
-
-/// Directory prefix every declared workflow path must use.
-const WORKFLOWS_PREFIX: &str = ".github/workflows/";
-
 /// Typed input for jactionlint config generation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JactionlintConfigInput {
@@ -134,7 +127,7 @@ fn check_label(label: &str) -> Result<(), ActionlintError> {
 }
 
 /// Reject empty versions and header-injection characters.
-pub(crate) fn check_generator_version(version: &str) -> Result<(), ActionlintError> {
+fn check_generator_version(version: &str) -> Result<(), ActionlintError> {
     if version.is_empty() {
         return Err(ActionlintError::InvalidGeneratorVersion {
             problem: "empty_version".to_owned(),
@@ -173,26 +166,6 @@ fn is_valid_variable(name: &str) -> bool {
         return false;
     }
     !name.starts_with("GITHUB_")
-}
-
-/// Workflow paths are narrow: one file under `.github/workflows/`.
-#[expect(
-    clippy::case_sensitive_file_extension_comparisons,
-    reason = "generated workflow files use lowercase extensions only"
-)]
-pub(crate) fn is_valid_workflow_path(path: &str) -> bool {
-    let Some(rest) = path.strip_prefix(WORKFLOWS_PREFIX) else {
-        return false;
-    };
-    if rest.is_empty() || rest.contains("..") || rest.starts_with('/') {
-        return false;
-    }
-    if !rest.ends_with(".yml") && !rest.ends_with(".yaml") {
-        return false;
-    }
-    !rest
-        .chars()
-        .any(|c| c.is_whitespace() || matches!(c, '*' | '?' | '[' | ']' | '{' | '}' | '!' | '\\'))
 }
 
 /// Render the fixed template bytes.

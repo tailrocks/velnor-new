@@ -90,7 +90,6 @@ fn pure_tofu_plan_drops_all_rust_setup() {
         [
             catalog.tool_spec(PinnedTool::Jactionlint),
             catalog.tool_spec(PinnedTool::Shellcheck),
-            catalog.tool_spec(PinnedTool::Zizmor),
             catalog.tool_spec(PinnedTool::Opentofu),
         ]
         .as_slice(),
