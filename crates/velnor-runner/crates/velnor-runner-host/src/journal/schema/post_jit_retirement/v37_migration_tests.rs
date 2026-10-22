@@ -1,13 +1,12 @@
 use crate::error::HostError;
 use crate::journal::{Journal, request_lifecycle::tests::native_started_intake_fixture};
-use std::collections::VecDeque;
 use velnor_runner_github::{Exchange, Transport, TransportFail, ensure_runner_absent};
 
 #[path = "v37_migration_tests/progressed.rs"]
 mod progressed;
 
 #[tokio::test]
-async fn v36_live_claim_survives_v37_migration_and_reopen() -> Result<(), HostError> {
+async fn v36_live_claim_survives_current_migration_and_reopen() -> Result<(), HostError> {
     let fixture = native_started_intake_fixture().await?;
     let connection = fixture.journal.connection().await?;
     downgrade_retirement_guard_to_v36(&connection).await?;
@@ -25,15 +24,15 @@ async fn v36_live_claim_survives_v37_migration_and_reopen() -> Result<(), HostEr
         fixture;
     let migrated = Journal::open(&path).await?;
     let connection = migrated.connection().await?;
-    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 37);
+    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 38);
     assert_eq!(claim_rows(&connection, reservation_id).await?, before);
-    super::validate_v37(&connection).await?;
+    super::super::validate_persisted_schema_v38(&connection).await?;
     drop(connection);
     drop(migrated);
 
     let reopened = Journal::open(&path).await?;
     let connection = reopened.connection().await?;
-    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 37);
+    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 38);
     assert_eq!(claim_rows(&connection, reservation_id).await?, before);
     Ok(())
 }

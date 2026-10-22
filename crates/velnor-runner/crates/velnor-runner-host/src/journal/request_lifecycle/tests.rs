@@ -32,6 +32,7 @@ pub(crate) mod post_jit_retirement;
 mod pre_jit_crossed_assignment;
 mod profile_lifecycle;
 mod request_link;
+mod reservation_enumeration;
 mod review_counterexamples;
 mod review_migration;
 mod scope_exclusivity;

@@ -56,6 +56,11 @@ pub use error::{HostError, PreparationCause};
 pub use host_controller::run_host_blocking;
 pub use https::HttpsTransport;
 pub use ipc::{MAX_FRAME, SOCKET_DIR_MODE, decode_frame, encode_frame};
+pub use journal::pr_source_transition::{
+    EffectClaim, PrSourceTransitionJournal, TransitionEffect, TransitionError, TransitionPlan,
+    TransitionPlanInput, TransitionRecovery, TransitionResponseDisposition, TransitionSnapshot,
+    TransitionStage, UncertaintyReason,
+};
 pub use journal::{IntentState, Journal, Outcome};
 pub use keychain::{import_secret, load_secret, read_secret};
 pub use launch_blocking::ListenFault;
