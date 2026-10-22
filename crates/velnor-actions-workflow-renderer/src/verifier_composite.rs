@@ -4,6 +4,8 @@
 //! renders it with the same credential scrub/unset validation as an ordinary
 //! step and the fixed trusted interpreter used while cached bytes are on PATH.
 
+use std::collections::BTreeMap;
+
 use velnor_actions_contract::workflow::{RUST_VERIFIER_USES, Step, StepKind, StepRole};
 
 use crate::tree::RenderedFile;
@@ -11,6 +13,56 @@ use crate::{RenderError, marker, steps, yaml::render_yaml};
 
 /// Fixed local action reference for Velnor's executable digest check.
 pub const VERIFY_JACTIONLINT_USES: &str = "./.github/actions/velnor-verify-jactionlint";
+
+/// Build one canonical verifier shell step from its standalone scrubbed script.
+///
+/// The public script helpers also serve the upgrades workflow directly, where
+/// no shell-step constructor adds credential removal. Here the renderer
+/// verifies and removes that exact leading prelude before delegating to
+/// `shell_step`, which adds it once and owns the credential overlay.
+///
+/// # Errors
+///
+/// Returns [`RenderError`] when the identity, argv shape, or prelude is not
+/// canonical.
+pub fn verifier_shell_step(
+    name: &str,
+    mut argv: Vec<String>,
+    env: BTreeMap<String, String>,
+) -> Result<Step, RenderError> {
+    let role = match name {
+        "Verify restored Rust toolchain" | crate::VERIFY_RUST_TOOLCHAIN_STEP => {
+            Some(StepRole::VerifyRustManifest)
+        }
+        "Verify jactionlint" => None,
+        _ => {
+            return Err(RenderError::InvalidWorkflow(
+                "noncanonical_verifier_identity".to_owned(),
+            ));
+        }
+    };
+    if argv.len() != 3 || argv[0] != "sh" || argv[1] != "-c" {
+        return Err(RenderError::InvalidWorkflow(
+            "verifier_composite_requires_canonical_sh_script".to_owned(),
+        ));
+    }
+    let prelude = crate::toolchain_env::credential_unset_prelude();
+    let prefix = format!("{prelude} ");
+    let Some(script) = argv[2].strip_prefix(&prefix) else {
+        return Err(RenderError::InvalidWorkflow(
+            "verifier_shell_script_missing_credential_prelude".to_owned(),
+        ));
+    };
+    if script.trim_start().starts_with(&prelude) {
+        return Err(RenderError::InvalidWorkflow(
+            "verifier_shell_script_duplicate_credential_prelude".to_owned(),
+        ));
+    }
+    argv[2] = script.to_owned();
+    let mut step = crate::steps::shell_step(name, argv, env)?;
+    step.role = role;
+    Ok(step)
+}
 
 /// Render one of the three canonical verification composites.
 ///
@@ -28,29 +80,33 @@ pub fn render_verifier_composite(
     step: &Step,
     version: &str,
 ) -> Result<RenderedFile, RenderError> {
-    let (action_name, step_name, expected_role) = if uses == RUST_VERIFIER_USES[0] {
-        (
-            "Velnor restored Rust verifier",
-            "Verify restored Rust toolchain",
-            Some(StepRole::VerifyRustManifest),
-        )
-    } else if uses == RUST_VERIFIER_USES[1] {
-        (
-            "Velnor Rust channel verifier",
-            crate::VERIFY_RUST_TOOLCHAIN_STEP,
-            Some(StepRole::VerifyRustManifest),
-        )
-    } else if uses == VERIFY_JACTIONLINT_USES {
-        (
-            "Velnor jactionlint executable verifier",
-            "Verify jactionlint",
-            None,
-        )
-    } else {
-        return Err(RenderError::BadActionRef(format!(
-            "unregistered_verifier:{uses}"
-        )));
-    };
+    let (action_name, step_name, expected_role, expected_reference) =
+        if uses == RUST_VERIFIER_USES[0] {
+            (
+                "Velnor restored Rust verifier",
+                "Verify restored Rust toolchain",
+                Some(StepRole::VerifyRustManifest),
+                "VELNOR_TOOL_RUST",
+            )
+        } else if uses == RUST_VERIFIER_USES[1] {
+            (
+                "Velnor Rust channel verifier",
+                crate::VERIFY_RUST_TOOLCHAIN_STEP,
+                Some(StepRole::VerifyRustManifest),
+                "VELNOR_TOOL_RUST",
+            )
+        } else if uses == VERIFY_JACTIONLINT_USES {
+            (
+                "Velnor jactionlint executable verifier",
+                "Verify jactionlint",
+                None,
+                "VELNOR_TOOL_JACTIONLINT",
+            )
+        } else {
+            return Err(RenderError::BadActionRef(format!(
+                "unregistered_verifier:{uses}"
+            )));
+        };
     if step.name != step_name
         || step.role != expected_role
         || step.parallel
@@ -63,9 +119,7 @@ pub fn render_verifier_composite(
         )));
     }
 
-    let shell = crate::document_steps::verifier_shell_step_to_yaml(step)?;
-    let mut body = crate::composite::composite_yaml(action_name, vec![shell])?;
-    crate::project_tool_resolver::bind_workflow(&mut body)?;
+    let body = verifier_composite_document(action_name, expected_reference, step)?;
     let bytes = marker::with_marker(version, &render_yaml(&body))?;
     steps::scan_for_private_subcommands(&bytes)?;
     let logical = uses
@@ -76,13 +130,113 @@ pub fn render_verifier_composite(
     Ok(RenderedFile { path, bytes })
 }
 
+fn verifier_composite_document(
+    action_name: &str,
+    expected_reference: &str,
+    step: &Step,
+) -> Result<crate::yaml::Yaml, RenderError> {
+    let shell = crate::document_steps::verifier_shell_step_to_yaml(step)?;
+    let mut body = crate::composite::composite_yaml(action_name, vec![shell])?;
+    crate::project_tool_resolver::bind_verifier_composite(&mut body, expected_reference)?;
+    Ok(body)
+}
+
+/// Build the exact trusted argv used by inline verifier steps and verifier
+/// composites. The payload supplied by the canonical shell step stays intact;
+/// only its interpreter, pre-payload PATH, and credential boundary are fixed.
+///
+/// # Errors
+///
+/// Returns [`RenderError::InvalidWorkflow`] when the step identity, shell
+/// shape, credential overlay, or unset prelude is not canonical.
+pub fn verifier_shell_argv(step: &Step) -> Result<Vec<String>, RenderError> {
+    let expected_role = match step.name.as_str() {
+        "Verify restored Rust toolchain" | crate::VERIFY_RUST_TOOLCHAIN_STEP => {
+            Some(StepRole::VerifyRustManifest)
+        }
+        "Verify jactionlint" => None,
+        _ => {
+            return Err(RenderError::InvalidWorkflow(
+                "noncanonical_verifier_identity".to_owned(),
+            ));
+        }
+    };
+    if step.parallel || step.id.is_some() || step.condition.is_some() || step.role != expected_role
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "noncanonical_verifier_identity".to_owned(),
+        ));
+    }
+    let StepKind::Shell { run, env } = &step.kind else {
+        return Err(RenderError::InvalidWorkflow(
+            "verifier_composite_requires_shell_step".to_owned(),
+        ));
+    };
+    if run.len() != 3 || run[0] != "sh" || run[1] != "-c" {
+        return Err(RenderError::InvalidWorkflow(
+            "verifier_composite_requires_canonical_sh_script".to_owned(),
+        ));
+    }
+    if crate::toolchain_env::CREDENTIAL_UNSET_VARS
+        .iter()
+        .any(|key| env.get(*key).map(String::as_str) != Some(""))
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "verifier_composite_missing_credential_overlay".to_owned(),
+        ));
+    }
+    if [
+        "HOME",
+        "MISE_DATA_DIR",
+        "XDG_DATA_HOME",
+        "PATH",
+        "BASH_ENV",
+        "ENV",
+    ]
+    .iter()
+    .any(|key| env.contains_key(*key))
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "verifier_composite_overrides_trusted_environment".to_owned(),
+        ));
+    }
+    let unset = crate::toolchain_env::credential_unset_prelude();
+    if !run[2].starts_with(&format!("{unset} ")) {
+        return Err(RenderError::InvalidWorkflow(
+            "verifier_composite_missing_credential_unset".to_owned(),
+        ));
+    }
+    // The caller may already have restored unverified tool bytes onto PATH.
+    // Use absolute system shells, and replace PATH before the canonical
+    // script can resolve any helper. The original script bytes remain intact.
+    let Some(script) = run[2].strip_prefix(&format!("{unset} ")) else {
+        return Err(RenderError::InvalidWorkflow(
+            "verifier_composite_missing_credential_unset".to_owned(),
+        ));
+    };
+    if script.trim_start().starts_with(&unset) {
+        return Err(RenderError::InvalidWorkflow(
+            "verifier_composite_duplicate_credential_unset".to_owned(),
+        ));
+    }
+    let guarded_script = format!(
+        "{unset} PATH={}; export PATH; {}",
+        crate::VERIFY_PATH,
+        script.trim_start()
+    );
+    Ok(vec!["/bin/sh".to_owned(), "-c".to_owned(), guarded_script])
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
 
-    use velnor_actions_contract::workflow::{RUST_VERIFIER_USES, Step, StepRole};
+    use velnor_actions_contract::workflow::{RUST_VERIFIER_USES, Step, StepKind, StepRole};
 
-    use super::{VERIFY_JACTIONLINT_USES, render_verifier_composite};
+    use super::{
+        VERIFY_JACTIONLINT_USES, render_verifier_composite, verifier_shell_argv,
+        verifier_shell_step,
+    };
     use crate::VERIFY_SHELL;
 
     fn rust_step(uses: &str) -> Step {
@@ -132,16 +286,13 @@ mod tests {
         assert!(file.bytes.contains("${{ runner.temp }}/velnor/rustup"));
         assert!(file.bytes.contains("CARGO_HOME:"));
         assert!(file.bytes.contains("${{ runner.temp }}/velnor/cargo"));
-        let resolver = file
-            .bytes
-            .find("name: Resolve project tool versions")
-            .unwrap_or_else(|| panic!("composite lacks its project resolver:\n{}", file.bytes));
         let verifier = file
             .bytes
             .find("name: Verify restored Rust toolchain")
             .expect("verifier step");
-        assert!(resolver < verifier, "{0}", file.bytes);
-        assert!(file.bytes.contains("velnor_tool VELNOR_TOOL_RUST '"));
+        assert!(!file.bytes.contains("Resolve project tool versions"));
+        assert!(file.bytes[..verifier].contains("VELNOR_TOOL_RUST"));
+        assert!(file.bytes.contains(&format!("PATH={}", crate::VERIFY_PATH)));
         assert!(file.bytes.contains("GITHUB_TOKEN: \"\""));
         let prelude = format!(
             "unset {};",
@@ -178,16 +329,9 @@ mod tests {
         );
         assert!(file.bytes.contains(&prelude));
         assert!(file.bytes.contains("digest-verified"));
-        let resolver = file
-            .bytes
-            .find("name: Resolve project tool versions")
-            .unwrap_or_else(|| panic!("composite lacks its project resolver:\n{}", file.bytes));
-        let verifier = file
-            .bytes
-            .find("name: Verify jactionlint")
-            .expect("verifier step");
-        assert!(resolver < verifier, "{0}", file.bytes);
-        assert!(file.bytes.contains("velnor_tool VELNOR_TOOL_JACTIONLINT '"));
+        assert!(!file.bytes.contains("Resolve project tool versions"));
+        assert!(file.bytes.contains(&format!("PATH={}", crate::VERIFY_PATH)));
+        assert!(file.bytes.contains("VELNOR_TOOL_JACTIONLINT"));
     }
 
     #[test]
@@ -211,5 +355,155 @@ mod tests {
         let mut changed_role = canonical;
         changed_role.role = None;
         assert!(render_verifier_composite(RUST_VERIFIER_USES[1], &changed_role, "0.1.40").is_err());
+    }
+
+    #[test]
+    fn shared_verifier_argv_fails_closed_on_forged_step_shapes() {
+        let canonical = rust_step(RUST_VERIFIER_USES[1]);
+        assert!(verifier_shell_argv(&canonical).is_ok());
+
+        let mut missing_scrub = canonical.clone();
+        if let StepKind::Shell { env, .. } = &mut missing_scrub.kind {
+            env.remove("GITHUB_TOKEN");
+        }
+        assert!(verifier_shell_argv(&missing_scrub).is_err());
+
+        let mut changed_identity = canonical.clone();
+        changed_identity.name = "Verify something else".to_owned();
+        assert!(verifier_shell_argv(&changed_identity).is_err());
+
+        let mut untrusted_path = canonical;
+        if let StepKind::Shell { env, .. } = &mut untrusted_path.kind {
+            env.insert("PATH".to_owned(), "/tmp/poison".to_owned());
+        }
+        assert!(verifier_shell_argv(&untrusted_path).is_err());
+    }
+
+    #[test]
+    fn canonical_verifier_step_requires_one_full_credential_prelude() {
+        let prelude = crate::toolchain_env::credential_unset_prelude();
+        let canonical = verifier_shell_step(
+            "Verify jactionlint",
+            vec![
+                "sh".to_owned(),
+                "-c".to_owned(),
+                format!("{prelude} set -eu; echo digest-verified"),
+            ],
+            BTreeMap::new(),
+        )
+        .expect("complete canonical prelude");
+        let StepKind::Shell { run, env } = &canonical.kind else {
+            panic!("canonical verifier shell");
+        };
+        assert_eq!(run[2].matches(&prelude).count(), 1, "{}", run[2]);
+        assert_eq!(env.get("GITHUB_TOKEN").map(String::as_str), Some(""));
+
+        let argv = verifier_shell_argv(&canonical).expect("trusted fixed-shell argv");
+        assert_eq!(argv[2].matches(&prelude).count(), 1, "{}", argv[2]);
+        let path = argv[2].find("PATH=").expect("trusted PATH assignment");
+        let payload = argv[2].find("set -eu").expect("canonical payload");
+        assert!(path < payload, "{}", argv[2]);
+
+        for script in ["set -eu".to_owned(), format!("{prelude} {prelude} set -eu")] {
+            assert!(
+                verifier_shell_step(
+                    "Verify jactionlint",
+                    vec!["sh".to_owned(), "-c".to_owned(), script],
+                    BTreeMap::new(),
+                )
+                .is_err(),
+                "partial or duplicate prelude must fail closed"
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn every_verifier_identity_replaces_poisoned_path_before_helpers_run() {
+        use std::{
+            fs,
+            os::unix::fs::PermissionsExt,
+            process::Command,
+            time::{SystemTime, UNIX_EPOCH},
+        };
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock after epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "velnor-verifier-path-{}-{nonce}",
+            std::process::id()
+        ));
+        let poison = root.join("poison");
+        fs::create_dir_all(&poison).expect("poison directory");
+        let log = root.join("poison.log");
+        let (digest_tool, digest_args) = if std::path::Path::new("/usr/bin/sha256sum").exists() {
+            ("sha256sum", "")
+        } else {
+            ("shasum", "-a 256")
+        };
+        for helper in ["mkdir", "awk", digest_tool] {
+            let path = poison.join(helper);
+            fs::write(
+                &path,
+                format!(
+                    "#!/bin/sh\nprintf '%s\\n' '{}' >> '{}'\nexit 97\n",
+                    helper,
+                    log.display()
+                ),
+            )
+            .expect("write poison helper");
+            let mut permissions = fs::metadata(&path).expect("helper metadata").permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(&path, permissions).expect("executable helper");
+        }
+
+        let unset = crate::toolchain_env::credential_unset_prelude();
+        let script = format!(
+            "set -eu; test -z \"${{GITHUB_TOKEN-}}\"; test -z \"${{ACTIONS_RUNTIME_TOKEN-}}\"; mkdir -p \"$VERIFIER_TEST_DIR/out\"; printf 'ok\\n' | awk '{{ print }}' > \"$VERIFIER_TEST_DIR/out/awk\"; printf 'ok\\n' | {digest_tool} {digest_args} > \"$VERIFIER_TEST_DIR/out/digest\""
+        );
+        for (name, role) in [
+            (
+                "Verify restored Rust toolchain",
+                Some(StepRole::VerifyRustManifest),
+            ),
+            (
+                crate::VERIFY_RUST_TOOLCHAIN_STEP,
+                Some(StepRole::VerifyRustManifest),
+            ),
+            ("Verify jactionlint", None),
+        ] {
+            let step = verifier_shell_step(
+                name,
+                vec![
+                    "sh".to_owned(),
+                    "-c".to_owned(),
+                    format!("{unset} {script}"),
+                ],
+                BTreeMap::new(),
+            )
+            .expect("canonical verifier shell");
+            assert_eq!(step.role, role);
+            let argv = verifier_shell_argv(&step).expect("trusted argv");
+            let output = Command::new(&argv[0])
+                .args(&argv[1..])
+                .env("PATH", &poison)
+                .env("VERIFIER_TEST_DIR", &root)
+                .env("GITHUB_TOKEN", "ambient-token")
+                .env("ACTIONS_RUNTIME_TOKEN", "ambient-runtime-token")
+                .output()
+                .expect("run trusted verifier argv");
+            assert!(
+                output.status.success(),
+                "{name}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(root.join("out/awk").is_file());
+            assert!(root.join("out/digest").is_file());
+            assert!(!log.exists(), "{name} resolved a poisoned helper");
+            fs::remove_dir_all(root.join("out")).expect("clear previous output");
+        }
+        fs::remove_dir_all(root).expect("remove test tree");
     }
 }

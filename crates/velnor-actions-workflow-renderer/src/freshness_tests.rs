@@ -19,7 +19,7 @@ fn spec() -> FreshnessSpec {
         verify_rust_argv: vec![
             "sh".to_owned(),
             "-c".to_owned(),
-            "echo verify-rust".to_owned(),
+            crate::toolchain_env::with_credential_unset_script("echo verify-rust"),
         ],
         generator_version: "0.1.0".to_owned(),
     }
@@ -134,7 +134,7 @@ fn rejects_bad_spec_scalars() {
             verify_rust_argv: vec![
                 "sh".to_owned(),
                 "-c".to_owned(),
-                "echo verify-rust".to_owned(),
+                crate::toolchain_env::with_credential_unset_script("echo verify-rust"),
             ],
             ..spec()
         };

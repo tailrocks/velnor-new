@@ -266,7 +266,13 @@ pub(crate) fn non_internal_step_to_yaml(
         StepKind::Action { uses, with, env } => {
             action_step_to_yaml(job_id, step, uses, with, env, job_env, Some(runs_on))
         }
-        StepKind::Shell { run, env } => shell_step_to_yaml(step, run, env, job_env, false, None),
+        StepKind::Shell { run, env } => {
+            if is_verifier_shell_name(&step.name) {
+                verifier_shell_step_to_yaml(step)
+            } else {
+                shell_step_to_yaml(step, run, env, job_env, false, None)
+            }
+        }
         StepKind::Internal { .. } | StepKind::TaskExecution { .. } => Err(
             RenderError::InvalidWorkflow("internal_op_rejected".to_owned()),
         ),
@@ -312,7 +318,11 @@ pub(crate) fn step_to_yaml(
             step_context.runs_on,
         ),
         StepKind::Shell { run, env } => {
-            shell_step_to_yaml(step, run, env, step_context.job_env, composite, None)
+            if is_verifier_shell_name(&step.name) {
+                verifier_shell_step_to_yaml(step)
+            } else {
+                shell_step_to_yaml(step, run, env, step_context.job_env, composite, None)
+            }
         }
         StepKind::Internal { .. } => {
             internal_step_to_yaml(job_id, step, ctx, needs_envs, composite, step_context)
@@ -326,18 +336,26 @@ pub(crate) fn step_to_yaml(
 /// Render a canonical shell step for a verifier composite with a fixed,
 /// trusted interpreter rather than resolving `bash` through restored PATH.
 pub(crate) fn verifier_shell_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
-    let StepKind::Shell { run, env } = &step.kind else {
+    let StepKind::Shell { env, .. } = &step.kind else {
         return Err(RenderError::InvalidWorkflow(
             "verifier_composite_requires_shell_step".to_owned(),
         ));
     };
+    let guarded_run = crate::verifier_composite::verifier_shell_argv(step)?;
     shell_step_to_yaml(
         step,
-        run,
+        &guarded_run,
         env,
         &BTreeMap::new(),
         true,
         Some(crate::VERIFY_SHELL),
+    )
+}
+
+fn is_verifier_shell_name(name: &str) -> bool {
+    matches!(
+        name,
+        "Verify restored Rust toolchain" | crate::VERIFY_RUST_TOOLCHAIN_STEP | "Verify jactionlint"
     )
 }
 

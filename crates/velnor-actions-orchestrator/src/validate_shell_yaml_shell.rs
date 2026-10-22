@@ -6,6 +6,7 @@ use super::ShellDialect;
 pub(super) fn parse_shell(value: &str) -> Result<ShellDialect, OrchestratorError> {
     let shell = unquote_run_scalar(value)?;
     match shell.as_str() {
+        value if value == velnor_actions_workflow_renderer::VERIFY_SHELL => Ok(ShellDialect::Bash),
         "bash" | "bash -e {0}" => Ok(ShellDialect::Bash),
         "sh" | "sh -e {0}" => Ok(ShellDialect::Sh),
         _ => Err(shellcheck_fail("shell_form_unsupported")),

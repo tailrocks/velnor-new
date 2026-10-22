@@ -118,7 +118,9 @@ fn direct_freshness_renderer_rejects_an_oversized_workflow() {
         verify_rust_argv: vec![
             "sh".to_owned(),
             "-c".to_owned(),
-            "echo verify-rust".to_owned(),
+            velnor_actions_workflow_renderer::toolchain_env::with_credential_unset_script(
+                "echo verify-rust",
+            ),
         ],
         generator_version: VERSION.to_owned(),
     };
@@ -152,7 +154,9 @@ fn direct_schema2_renderer_rejects_an_oversized_workflow() -> Result<(), RenderE
             verify_rust_argv: vec![
                 "sh".to_owned(),
                 "-c".to_owned(),
-                "echo verify-rust".to_owned(),
+                velnor_actions_workflow_renderer::toolchain_env::with_credential_unset_script(
+                    "echo verify-rust",
+                ),
             ],
         }),
         mise_pin_qualification: Some(MisePinQualificationPins {
