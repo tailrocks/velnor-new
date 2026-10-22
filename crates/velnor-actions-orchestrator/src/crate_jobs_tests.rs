@@ -318,7 +318,6 @@ fn velnor_policy_trims_trio_except_validator_spawning_suites() {
     let trio = [
         catalog.tool_spec(PinnedTool::Jactionlint),
         catalog.tool_spec(PinnedTool::Shellcheck),
-        catalog.tool_spec(PinnedTool::Zizmor),
     ];
     let found = build_crate_jobs(CrateJobInputs {
         label: "ubuntu-26.04",

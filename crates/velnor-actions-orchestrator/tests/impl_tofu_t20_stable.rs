@@ -36,7 +36,6 @@ fn tofu_generate_is_fixed_point_and_validated() -> TestResult {
         vec![
             "jactionlint@2.3.0".to_owned(),
             "shellcheck@0.11.0".to_owned(),
-            "zizmor@1.31.1".to_owned(),
         ],
         "tofu steps pass the staged validators: {:?}",
         report.validated_by

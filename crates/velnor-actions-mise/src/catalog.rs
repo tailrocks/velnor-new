@@ -99,10 +99,6 @@ pub const JACTIONLINT_VERSION: &str = "2.3.0";
 /// Qualified shellcheck release (tag `v0.11.0`).
 /// Source: `https://api.github.com/repos/koalaman/shellcheck/releases/latest`; checked 2026-09-28.
 pub const SHELLCHECK_VERSION: &str = "0.11.0";
-/// Qualified zizmor tool release (`zizmorcore/zizmor` tag `v1.31.1`, stable).
-/// Its official macOS ARM64 binary passed version and repository audit checks
-/// 2026-10-17. Source: `https://api.github.com/repos/zizmorcore/zizmor/releases/tags/v1.31.1`.
-pub const ZIZMOR_VERSION: &str = "1.31.1";
 /// Qualified cargo-nextest release (`nextest-rs/nextest` tag
 /// `cargo-nextest-0.9.149`, published 2026-10-20).
 /// Source: `https://crates.io/api/v1/crates/cargo-nextest`; checked 2026-10-21.
@@ -182,8 +178,6 @@ pub struct ToolCatalog {
     jactionlint: String,
     /// Pinned shellcheck version.
     shellcheck: String,
-    /// Pinned zizmor tool version.
-    zizmor: String,
     /// Pinned Nextest runner version.
     nextest: String,
     /// Pinned `OpenTofu` engine version.
@@ -218,7 +212,6 @@ impl ToolCatalog {
             gh: GH_VERSION.to_owned(),
             jactionlint: JACTIONLINT_VERSION.to_owned(),
             shellcheck: SHELLCHECK_VERSION.to_owned(),
-            zizmor: ZIZMOR_VERSION.to_owned(),
             nextest: NEXTEST_VERSION.to_owned(),
             opentofu: OPENTOFU_VERSION.to_owned(),
             release_plz: RELEASE_PLZ_VERSION.to_owned(),
@@ -237,17 +230,12 @@ impl ToolCatalog {
     ///
     /// Returns [`MiseError::InvalidToolVersion`] for the first version
     /// that is not exact `major.minor.patch`.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "catalog carries eight exact pins at once"
-    )]
     pub fn new(
         rust: &str,
         mr_boxington: &str,
         gh: &str,
         jactionlint: &str,
         shellcheck: &str,
-        zizmor: &str,
         nextest: &str,
         opentofu: &str,
     ) -> Result<Self, MiseError> {
@@ -257,7 +245,6 @@ impl ToolCatalog {
             (PinnedTool::Gh, gh),
             (PinnedTool::Jactionlint, jactionlint),
             (PinnedTool::Shellcheck, shellcheck),
-            (PinnedTool::Zizmor, zizmor),
             (PinnedTool::Nextest, nextest),
             (PinnedTool::Opentofu, opentofu),
         ] {
@@ -269,7 +256,6 @@ impl ToolCatalog {
             gh: gh.to_owned(),
             jactionlint: jactionlint.to_owned(),
             shellcheck: shellcheck.to_owned(),
-            zizmor: zizmor.to_owned(),
             nextest: nextest.to_owned(),
             opentofu: opentofu.to_owned(),
             release_plz: RELEASE_PLZ_VERSION.to_owned(),
@@ -291,7 +277,6 @@ impl ToolCatalog {
             PinnedTool::Gh => &self.gh,
             PinnedTool::Jactionlint => &self.jactionlint,
             PinnedTool::Shellcheck => &self.shellcheck,
-            PinnedTool::Zizmor => &self.zizmor,
             PinnedTool::Nextest => &self.nextest,
             PinnedTool::Opentofu => &self.opentofu,
             PinnedTool::ReleasePlz => &self.release_plz,

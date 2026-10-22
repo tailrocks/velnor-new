@@ -31,7 +31,6 @@ pub(crate) const EXPECTED_TOOLS: &[(&str, &str)] = &[
     ("gh", "GH_VERSION"),
     ("jactionlint", "JACTIONLINT_VERSION"),
     ("shellcheck", "SHELLCHECK_VERSION"),
-    ("zizmor", "ZIZMOR_VERSION"),
     ("nextest", "NEXTEST_VERSION"),
     ("opentofu", "OPENTOFU_VERSION"),
     ("release-plz", "RELEASE_PLZ_VERSION"),

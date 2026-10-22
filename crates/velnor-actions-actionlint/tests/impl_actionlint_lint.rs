@@ -81,12 +81,6 @@ fn config_rejection_codes_are_stable() {
             "invalid_config_variable: 9LIVES",
         ),
         (
-            ActionlintError::InvalidWorkflowPath {
-                path: "workflows/x.yml".to_owned(),
-            },
-            "invalid_workflow_path: workflows/x.yml",
-        ),
-        (
             ActionlintError::InvalidRunnerLabel {
                 label: "Bad Label".to_owned(),
             },

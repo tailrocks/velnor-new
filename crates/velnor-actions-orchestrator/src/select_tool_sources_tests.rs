@@ -103,8 +103,8 @@ fn every_backend_spelling_and_table_form_counts_as_a_declaration() {
             format!("[tools]\n{key} = \"0.9.1\"\n"),
         ),
         (
-            "[tools]\nzizmor = \"1.31.1\"\n".to_owned(),
-            "[tools]\nzizmor = [\"1.31.1\"]\n".to_owned(),
+            "[tools]\nshellcheck = \"0.11.0\"\n".to_owned(),
+            "[tools]\nshellcheck = [\"0.11.0\"]\n".to_owned(),
         ),
     ] {
         let (out, _) = verdict(

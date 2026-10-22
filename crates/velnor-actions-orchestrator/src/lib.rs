@@ -125,7 +125,6 @@ mod toolfindings;
 mod utf8;
 mod validate;
 mod validate_shell;
-mod validate_zizmor;
 mod validators;
 mod vectors;
 mod verification_tasks;
