@@ -126,14 +126,24 @@ async fn actual_started_request_can_differ_from_the_acquire_witness() -> Result<
         initialized.intent_id
     );
 
+    assert_actual_request_owns_population(&scope, &initialized, WITNESS, ACTUAL, SET_ID).await
+}
+
+async fn assert_actual_request_owns_population(
+    scope: &crate::journal::ConnectionJournal,
+    initialized: &super::helpers::JobFactsReaderFixture,
+    witness: i64,
+    actual: i64,
+    set_id: i64,
+) -> Result<(), HostError> {
     let reservations = scope.physical_runner_reservations().await?;
     let row = reservations
         .iter()
         .find(|row| row.reservation_id == initialized.reservation_id)
         .ok_or(HostError::Journal)?;
-    assert_eq!(row.witness_request_id, Some(WITNESS));
-    assert_eq!(row.started_request_id, Some(ACTUAL));
-    assert_eq!(row.runner_request_id, Some(ACTUAL));
+    assert_eq!(row.witness_request_id, Some(witness));
+    assert_eq!(row.started_request_id, Some(actual));
+    assert_eq!(row.runner_request_id, Some(actual));
     assert_eq!(row.acquired_request, Some(initialized.assignment.clone()));
     assert!(matches!(
         row.ownership,
@@ -144,7 +154,7 @@ async fn actual_started_request_can_differ_from_the_acquire_witness() -> Result<
     let plan = plan_assigned_population_with_successors(
         1,
         scope.connection_id(),
-        SET_ID,
+        set_id,
         &reservations,
         &acquired,
         &[],
