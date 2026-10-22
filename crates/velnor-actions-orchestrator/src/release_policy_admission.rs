@@ -1,7 +1,7 @@
 //! Source-free version data admission for a static native release policy.
 
 use super::{
-    github::{GitHubApi, GitRefResponse, sha256},
+    github::{GitHubApi, sha256},
     run_identity::{CurrentRun, RunSource, release_job_name},
 };
 use crate::{OrchestratorError, internal::internal};
@@ -21,9 +21,39 @@ pub(super) mod metadata;
 #[path = "package_release_source_files.rs"]
 mod source_files;
 use metadata::read as read_regular;
+#[path = "release_policy_admission_acquire.rs"]
+mod acquire;
+#[path = "preview_source_admission.rs"]
+mod source;
+#[path = "preview_source_policy_projection.rs"]
+mod source_policy_projection;
+#[path = "release_policy_admission_source_validation.rs"]
+mod source_validation;
+pub use source::{
+    FINALIZE_PREVIEW_SOURCE_OP, finalize_preview_source_from_env, select_preview_source_from_env,
+};
+pub(in crate::package_release_publish) use source_policy_projection::read_preview_policy_at_source;
+pub(crate) use source_validation::validate_admitted_source_checkout;
+#[cfg(test)]
+use source_validation::{
+    admission_covers_required_paths, admission_paths, admitted_preview_version_matches,
+};
 
-/// Authenticate exact-source policy data before a preview producer checkout.
-pub const ADMIT_RELEASE_POLICY_OP: &str = "admit-release-policy-v1";
+/// Select and retain the complete source-bound preview admission.
+pub const SELECT_PREVIEW_SOURCE_OP: &str = "select-preview-source-v1";
+/// Acquire and authenticate the exact admission artifact before source checkout.
+pub const ACQUIRE_PREVIEW_SOURCE_OP: &str = "acquire-preview-source-v1";
+const MAX_ADMISSION_BYTES: usize = 16 * 1024 * 1024;
+
+struct SourceAdmissionBinding {
+    run_id: u64,
+    attempt: u32,
+    artifact_id: u64,
+    artifact_digest: String,
+    inner_digest: String,
+    repository_id: u64,
+    authority: String,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -32,58 +62,24 @@ struct Admission {
     policy_sha256: String,
     plan_sha256: String,
     context: ReleaseProductionContext,
+    source_files: Vec<source_files::SourceFileEntry>,
+    producer: velnor_actions_contract::config::RustBinaryReleaseProducer,
+    task_config: String,
+    task_inputs: Vec<String>,
+    tool_specs: Vec<String>,
+    qualified_tools: Vec<velnor_actions_contract::config::QualifiedTool>,
+    qualification_digest: String,
 }
 
-/// Admit a preview source and pin its resolved version data without write authority.
+/// Acquire the exact source admission artifact for this current workflow attempt.
 /// # Errors
-/// Rejects stale or invalid workflow/CI, source, policy, files and local paths.
-pub fn admit_release_policy_from_env() -> Result<(), OrchestratorError> {
+/// Rejects any artifact, digest, source, context, policy, or plan substitution.
+pub fn acquire_preview_source_from_env() -> Result<(), OrchestratorError> {
     let deadline = CheckDeadline::after(Duration::from_secs(300))
         .map_err(|_| internal("release_policy_deadline"))?;
     deadline
-        .scope(|| admit(deadline))
+        .scope(|| acquire::acquire_source(deadline))
         .map_err(|_| internal("release_policy_deadline"))?
-}
-
-fn admit(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
-    let (policy, plan) = resolve_policy_from_env(&required("GITHUB_SHA")?)?;
-    if policy.channel != PackageReleaseChannel::Preview {
-        return Err(internal("release_policy_requires_preview_admission"));
-    }
-    let context = crate::preview_producer::release_workflow_context(&plan, deadline)?;
-    authenticate(&plan, &context)?;
-    let temp = runner_root()?;
-    let policy_bytes = policy
-        .canonical_bytes()
-        .map_err(|_| internal("release_policy_encoding"))?;
-    if required("VELNOR_REQUEST_FILE")?
-        != temp.join("package-release-policy.json").to_string_lossy()
-        || read_regular(&temp.join("package-release-policy.json"))? != policy_bytes
-    {
-        return Err(internal("release_policy_request_substitution"));
-    }
-    let plan_bytes = plan
-        .canonical_bytes()
-        .map_err(|_| internal("release_plan_encoding"))?;
-    let admission = Admission {
-        schema: "velnor.release-policy-admission.v1".to_owned(),
-        policy_sha256: sha256(&policy_bytes),
-        plan_sha256: sha256(&plan_bytes),
-        context,
-    };
-    let bytes = canonical_json_bytes(&admission)
-        .map_err(|_| internal("release_policy_admission_encoding"))?;
-    crate::exclusive_write::write_exclusive(
-        &temp.join("package-release-plan.json"),
-        &plan_bytes,
-        "release_plan",
-    )?;
-    crate::exclusive_write::write_exclusive(
-        &temp.join("release-policy-admission.json"),
-        &bytes,
-        "release_policy_admission",
-    )?;
-    append_output(&format!("admission_digest={}\n", sha256(&bytes)))
 }
 
 /// Load the digest-pinned pre-checkout policy/plan without network or credentials.
@@ -101,13 +97,15 @@ pub(crate) fn admitted_policy_plan(
             if temp != runner_root()? {
                 return Err(internal("release_policy_admission_path"));
             }
-            let bytes = read_regular(&temp.join("release-policy-admission.json"))?;
+            let bytes = read_source_admission(&temp.join("release-policy-admission.json"))?;
             if sha256(&bytes) != required("VELNOR_RELEASE_POLICY_ADMISSION_DIGEST")? {
                 return Err(internal("release_policy_admission_digest"));
             }
-            let value =
-                velnor_actions_contract::strict_json::parse_strict_json_bytes(&bytes, 1024 * 1024)
-                    .map_err(|_| internal("release_policy_admission_json"))?;
+            let value = velnor_actions_contract::strict_json::parse_strict_json_bytes(
+                &bytes,
+                MAX_ADMISSION_BYTES,
+            )
+            .map_err(|_| internal("release_policy_admission_json"))?;
             let admission: Admission = serde_json::from_value(value)
                 .map_err(|_| internal("release_policy_admission_schema"))?;
             let plan_bytes = read_regular(&temp.join("package-release-plan.json"))?;
@@ -119,7 +117,7 @@ pub(crate) fn admitted_policy_plan(
             if canonical_json_bytes(&admission)
                 .map_err(|_| internal("release_policy_admission_encoding"))?
                 != bytes
-                || admission.schema != "velnor.release-policy-admission.v1"
+                || admission.schema != "velnor.preview-source-admission.v1"
                 || admission.policy_sha256
                     != sha256(
                         &policy
@@ -137,6 +135,49 @@ pub(crate) fn admitted_policy_plan(
         .map_err(|_| internal("release_policy_deadline"))?
 }
 
+/// Return the context bound to the canonical, digest-pinned source admission.
+/// Consumers compare this value with their immutable GitHub environment before
+/// using policy or payload data.
+pub(crate) fn admitted_context(
+    temp: &Path,
+    deadline: CheckDeadline,
+) -> Result<ReleaseProductionContext, OrchestratorError> {
+    let (_, plan) = admitted_policy_plan(temp, deadline)?;
+    let bytes = read_source_admission(&temp.join("release-policy-admission.json"))?;
+    let value =
+        velnor_actions_contract::strict_json::parse_strict_json_bytes(&bytes, MAX_ADMISSION_BYTES)
+            .map_err(|_| internal("release_policy_admission_json"))?;
+    let admission: Admission =
+        serde_json::from_value(value).map_err(|_| internal("release_policy_admission_schema"))?;
+    if admission.context.source_sha != required("VELNOR_RELEASE_SOURCE_SHA")?
+        || admission.context.workflow_authority_sha
+            != required("VELNOR_RELEASE_WORKFLOW_AUTHORITY_SHA")?
+        || admission.context.run_id != positive_u64("GITHUB_RUN_ID")?
+        || u64::from(admission.context.run_attempt) != positive_u64("GITHUB_RUN_ATTEMPT")?
+        || admission.context.workflow_authority_sha != required("GITHUB_SHA")?
+        || admission.context.workflow_authority_sha != required("GITHUB_WORKFLOW_SHA")?
+        || admission.context.source_ref != format!("refs/heads/{}", plan.default_branch)
+    {
+        return Err(internal("release_policy_admission_context_environment"));
+    }
+    Ok(admission.context)
+}
+
+/// Recheck the immutable source closure and producer declaration before any
+/// source checkout is used to produce a payload.
+fn positive_u64(name: &str) -> Result<u64, OrchestratorError> {
+    let value = required(name)?;
+    let parsed = value
+        .parse::<u64>()
+        .ok()
+        .filter(|number| *number > 0)
+        .ok_or_else(|| internal("release_policy_admission_context_environment"))?;
+    if parsed.to_string() != value {
+        return Err(internal("release_policy_admission_context_environment"));
+    }
+    Ok(parsed)
+}
+
 fn authenticate(
     plan: &PackageReleasePlan,
     context: &ReleaseProductionContext,
@@ -145,9 +186,15 @@ fn authenticate(
     api.verify_repository_identity(context.repository_id)?;
     let workflow =
         api.admitted_workflow(plan.channel.workflow_path(), plan.channel.workflow_name())?;
-    let source = RunSource {
+    api.verify_preview_main_ancestry(
+        context.repository_id,
+        &plan.default_branch,
+        &context.source_sha,
+        &context.workflow_authority_sha,
+    )?;
+    let authority = RunSource {
         repository_id: context.repository_id,
-        sha: &context.source_sha,
+        sha: &context.workflow_authority_sha,
         branch: &plan.default_branch,
     };
     let job = release_job_name(plan, &required("GITHUB_JOB")?)?;
@@ -155,20 +202,18 @@ fn authenticate(
         &CurrentRun {
             id: context.run_id,
             attempt: context.run_attempt,
-            source,
+            source: authority,
             workflow: &workflow,
-            event: plan.channel.event().as_str(),
+            event: &required("GITHUB_EVENT_NAME")?,
         },
         &job,
     )?;
-    let head: GitRefResponse = api.get_json(&api.route(&format!(
-        "git/ref/heads/{}",
-        super::github::encode_segment(&plan.default_branch)
-    )))?;
-    if head.object.object_type != "commit" || head.object.sha != context.source_sha {
-        return Err(internal("release_policy_stale_source"));
-    }
-    api.verify_ci_identity(context.ci_run_id, context.ci_run_attempt, source, true)
+    let ci_source = RunSource {
+        repository_id: context.repository_id,
+        sha: &context.source_sha,
+        branch: &plan.default_branch,
+    };
+    api.verify_ci_identity(context.ci_run_id, context.ci_run_attempt, ci_source, true)
 }
 
 fn required(name: &str) -> Result<String, OrchestratorError> {
@@ -198,6 +243,47 @@ fn append_output(value: &str) -> Result<(), OrchestratorError> {
         .write_all(value.as_bytes())
         .map_err(|_| internal("release_policy_output"))
 }
+
+fn validate_admission(
+    admission: &Admission,
+    policy: &PackageReleasePolicy,
+    plan: &PackageReleasePlan,
+    bytes: &[u8],
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    let policy_bytes = policy
+        .canonical_bytes()
+        .map_err(|_| internal("release_policy_encoding"))?;
+    let plan_bytes = plan
+        .canonical_bytes()
+        .map_err(|_| internal("release_plan_encoding"))?;
+    if canonical_json_bytes(admission).map_err(|_| internal("release_policy_admission_encoding"))?
+        != bytes
+        || admission.schema != "velnor.preview-source-admission.v1"
+        || admission.policy_sha256 != sha256(&policy_bytes)
+        || admission.plan_sha256 != sha256(&plan_bytes)
+        || admission.context != crate::preview_producer::release_workflow_context(plan, deadline)?
+    {
+        return Err(internal("release_policy_admission_substitution"));
+    }
+    Ok(())
+}
+
+fn lower_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn read_source_admission(path: &Path) -> Result<Vec<u8>, OrchestratorError> {
+    crate::retrieve_reports::staged_reads::read_staged_bytes(path, MAX_ADMISSION_BYTES as u64)
+        .map_err(|_| internal("release_policy_admission_read"))
+}
+
+#[cfg(test)]
+#[path = "release_policy_admission_tests.rs"]
+mod tests;
 
 /// Resolve exact-source manifest data; callers authenticate source/workflow/CI.
 pub(crate) fn resolve_policy_from_env(

@@ -4,14 +4,15 @@
 use crate::{OrchestratorError, internal::internal};
 use velnor_actions_contract::{is_valid_branch_name, vcs::is_safe_github_repository};
 
-/// Require the signed release commit to remain the source default-branch head.
+/// Determine whether the signed preview is still the authenticated protected main tip.
 /// # Errors
-/// Rejects invalid identities, reused credentials, API failures, or superseded commits.
+/// Rejects invalid identities, reused credentials, and API/protection failures.
 pub(crate) fn verify_preview_source_is_current(
     repository: &str,
     branch: &str,
+    repository_id: u64,
     expected_sha: &str,
-) -> Result<(), OrchestratorError> {
+) -> Result<bool, OrchestratorError> {
     if !is_safe_github_repository(repository)
         || !is_valid_branch_name(branch)
         || branch != "main"
@@ -34,7 +35,17 @@ pub(crate) fn verify_preview_source_is_current(
     {
         return Err(internal("tap_source_read_token_reused"));
     }
-    crate::package_release_publish::verify_current_source(repository, branch, expected_sha)
+    let tip =
+        crate::package_release_publish::verify_preview_main_tip(repository, repository_id, branch)?;
+    if !is_current_preview_tip(expected_sha, &tip) {
+        return Ok(false);
+    }
+    crate::package_release_publish::verify_current_source(repository, branch, expected_sha)?;
+    Ok(true)
+}
+
+fn is_current_preview_tip(source_sha: &str, protected_tip: &str) -> bool {
+    valid_sha(source_sha) && valid_sha(protected_tip) && source_sha == protected_tip
 }
 
 fn valid_sha(value: &str) -> bool {
@@ -42,4 +53,17 @@ fn valid_sha(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
+
+#[cfg(test)]
+#[test]
+fn historical_preview_stays_valid_but_is_not_current_for_tap_promotion() {
+    let source = "a".repeat(40);
+    let authority = "b".repeat(40);
+    let tip = "c".repeat(40);
+    assert!(valid_sha(&source));
+    assert!(valid_sha(&authority));
+    assert!(!is_current_preview_tip(&source, &tip));
+    assert!(is_current_preview_tip(&source, &source));
+    assert!(!is_current_preview_tip(&"A".repeat(40), &tip));
 }

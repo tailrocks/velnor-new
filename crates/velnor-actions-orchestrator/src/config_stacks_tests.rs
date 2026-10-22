@@ -138,7 +138,6 @@ targets = ["aarch64-apple-darwin"]
 archive = "tar.gz"
 [stacks.rust.binary_release.preview]
 enabled = true
-release_id = 1
 {}"#,
         toml::to_string(&tool).expect("qualified loader fixture")
     )

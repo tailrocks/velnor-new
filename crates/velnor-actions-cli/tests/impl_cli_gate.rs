@@ -144,6 +144,36 @@ fn unknown_op_matches_bare() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn retired_release_policy_operation_matches_bare_cli() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("gate-release-policy-v1")?;
+    let root = tmp.join("velnor");
+    let request = stage_request(&root, "package-release-policy.json", "{}")?;
+    let bare = spawn_isolated(&[], &[], &tmp)?;
+    let retired = spawn_isolated(
+        &[],
+        &[
+            ("VELNOR_INTERNAL_OP", "admit-release-policy-v1"),
+            ("VELNOR_REQUEST_FILE", request.to_str().unwrap_or("/")),
+            ("RUNNER_TEMP", tmp.to_str().unwrap_or("/")),
+        ],
+        &tmp,
+    )?;
+    assert_eq!(code(&retired), 2);
+    assert_identical(&bare, &retired);
+    assert_eq!(std::fs::read_to_string(&request)?, "{}");
+    for output in [
+        "plan-v1-response.json",
+        "package-release-plan.json",
+        "release-policy-admission.json",
+        "preview-source-admission.json",
+    ] {
+        assert!(!root.join(output).exists(), "unexpected output {output}");
+    }
+    cleanup(&tmp);
+    Ok(())
+}
+
+#[test]
 fn missing_gate_pieces_match_bare() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("gate-missing")?;
     let dir = tmp.join("request");

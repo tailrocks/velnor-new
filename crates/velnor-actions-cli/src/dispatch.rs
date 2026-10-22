@@ -19,22 +19,22 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
-    ACQUIRE_RELEASE_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP, ADMIT_RELEASE_AGGREGATE_OP,
-    ADMIT_RELEASE_POLICY_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_ASSETS_EXPORT_OP,
+    ACQUIRE_PREVIEW_SOURCE_OP, ACQUIRE_RELEASE_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP,
+    ADMIT_RELEASE_AGGREGATE_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_ASSETS_EXPORT_OP,
     BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, BUN_REGISTRY_INSTALL_OP,
     CAPTURE_REVIEW_COMPLETION_OP, DYNAMIC_MATRIX_OUTPUT_MODE, EMIT_REVIEW_COMPLETION_OP,
-    EXECUTE_CHECK_OP, EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, GRADLE_RUN_OP,
-    MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP,
-    PLAYWRIGHT_INSTALL_OP, PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP,
-    PRIVATE_REVOKE_OP, PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP,
-    REPORT_OP, REQUEST_FILE_ENV, SELECT_RELEASE_TAP_CONTINUATION_OP,
-    SELECT_STABLE_RELEASE_SOURCE_OP, SIGN_PACKAGE_RELEASE_OP, TASK_EXECUTION_RESOLVER_OP,
-    WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, WRITE_STABLE_TAG_INTENT_OP,
-    WRITE_STABLE_TAG_ORIGIN_OP, execute_check, merge_internal, merge_passed, plan_internal,
-    plan_outputs, publish_final_report, publish_plan_files, resolve_task_execution,
-    response_path_for, retrieve_reports, run_bun_registry_install, run_gradle_run,
-    run_playwright_install, run_private_fetch, run_private_revoke, write_preseed_manifest,
-    write_request, write_task_report,
+    EXECUTE_CHECK_OP, EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, FINALIZE_PREVIEW_SOURCE_OP,
+    GRADLE_RUN_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OrchestratorError,
+    PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PLAYWRIGHT_INSTALL_OP, PREPARE_HOMEBREW_TAP_OP,
+    PRESEED_MANIFEST_OP, PRIVATE_FETCH_OP, PRIVATE_REVOKE_OP, PUBLISH_PACKAGE_RELEASE_OP,
+    PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP, REPORT_OP, REQUEST_FILE_ENV,
+    SELECT_PREVIEW_SOURCE_OP, SELECT_RELEASE_TAP_CONTINUATION_OP, SELECT_STABLE_RELEASE_SOURCE_OP,
+    SIGN_PACKAGE_RELEASE_OP, TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP,
+    WRITE_REQUEST_OP, WRITE_STABLE_TAG_INTENT_OP, WRITE_STABLE_TAG_ORIGIN_OP, execute_check,
+    merge_internal, merge_passed, plan_internal, plan_outputs, publish_final_report,
+    publish_plan_files, resolve_task_execution, response_path_for, retrieve_reports,
+    run_bun_registry_install, run_gradle_run, run_playwright_install, run_private_fetch,
+    run_private_revoke, write_preseed_manifest, write_request, write_task_report,
 };
 
 #[path = "dispatch/bun_assets.rs"]
@@ -133,13 +133,20 @@ fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
             return package_release::gate_producer_request(&path)
                 .map(|path| InternalRequest { op, path });
         }
+        InternalOp::PreviewSourceSelection | InternalOp::PreviewSourceFinalization => {
+            return package_release::gate_preview_source_seed_request(&path)
+                .map(|path| InternalRequest { op, path });
+        }
+        InternalOp::PreviewSourceAcquisition => {
+            return package_release::gate_preview_source_acquisition(&path)
+                .map(|path| InternalRequest { op, path });
+        }
         InternalOp::ResolveQualification => {
             if !crate::dispatch_qualification::request_is_eligible(&path) {
                 return None;
             }
         }
         InternalOp::StableSourceSelection
-        | InternalOp::ReleasePolicyAdmission
         | InternalOp::StableTagIntent
         | InternalOp::StableTagOrigin
         | InternalOp::StableTagAdmission
@@ -188,7 +195,6 @@ fn request_can_be_materialized(path: &Path) -> bool {
         && env::var_os(GITHUB_EVENT_PATH_ENV).is_some_and(|value| !value.is_empty())
 }
 
-/// Run one validated private operation.
 /// Exit code of a unit-returning private operation.
 fn unit_exit(result: Result<(), OrchestratorError>) -> ExitCode {
     match result {
@@ -197,18 +203,25 @@ fn unit_exit(result: Result<(), OrchestratorError>) -> ExitCode {
     }
 }
 
+/// Run one validated private operation.
 fn run_internal(request: &InternalRequest) -> ExitCode {
     if let Some(code) = bun_assets::run(request.op) {
         return code;
     }
     match request.op {
+        InternalOp::PreviewSourceSelection => {
+            preview_production::native(velnor_actions_orchestrator::select_preview_source_from_env())
+        }
+        InternalOp::PreviewSourceFinalization => preview_production::native(
+            velnor_actions_orchestrator::finalize_preview_source_from_env(),
+        ),
+        InternalOp::PreviewSourceAcquisition => preview_production::native(
+            velnor_actions_orchestrator::acquire_preview_source_from_env(),
+        ),
         InternalOp::ExecuteCheck => unit_exit(execute_check().map(|_| ())),
         InternalOp::StableSourceSelection => preview_production::native(
             velnor_actions_orchestrator::select_stable_release_source_from_env(),
         ),
-        InternalOp::ReleasePolicyAdmission => {
-            preview_production::native(velnor_actions_orchestrator::admit_release_policy_from_env())
-        }
         InternalOp::StableTagIntent => preview_production::native(
             velnor_actions_orchestrator::write_stable_tag_intent_from_env(),
         ),
@@ -227,38 +240,17 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::WriteRequest => unit_exit(write_request().map(|_| ())),
         InternalOp::Plan => run_plan_internal(&request.path),
         InternalOp::Merge => run_merge_internal(&request.path),
-        InternalOp::Fetch => match retrieve_reports() {
-            Ok(_) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
-        InternalOp::Report => match write_task_report() {
-            Ok(_) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
+        InternalOp::Fetch => unit_exit(retrieve_reports().map(|_| ())),
+        InternalOp::Report => unit_exit(write_task_report().map(|_| ())),
         InternalOp::GradleRun => unit_exit(run_gradle_run()),
-        InternalOp::BunRegistryInstall => match run_bun_registry_install() {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
+        InternalOp::BunRegistryInstall => unit_exit(run_bun_registry_install()),
+        InternalOp::PlaywrightInstall => unit_exit(run_playwright_install()),
+        InternalOp::PrivateFetch => unit_exit(run_private_fetch()),
+        InternalOp::PrivateRevoke => unit_exit(run_private_revoke()),
+        InternalOp::PreseedManifest => unit_exit(write_preseed_manifest()),
         InternalOp::BunAssetsExport
         | InternalOp::BunAssetsPrepare
         | InternalOp::BunAssetsImport => ExitCode::FAILURE,
-        InternalOp::PlaywrightInstall => match run_playwright_install() {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
-        InternalOp::PrivateFetch => match run_private_fetch() {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
-        InternalOp::PrivateRevoke => match run_private_revoke() {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
-        InternalOp::PreseedManifest => match write_preseed_manifest() {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
         InternalOp::RepoPolicy => crate::dispatch_repo_policy::run(&request.path),
         InternalOp::ResolveQualification => crate::dispatch_qualification::run(&request.path),
         InternalOp::ResolveTaskExecution => match resolve_task_execution() {

@@ -19,7 +19,7 @@ fn preview_release() -> VerifiedPackageRelease {
     receipt.version.source_sha7 = Some(NEXT_SHA[..7].to_owned());
     receipt.version.commit_count = Some(10);
     receipt.version.value = format!("{}-preview.10+{}", receipt.version.base, &NEXT_SHA[..7]);
-    receipt.tag = "preview".to_owned();
+    receipt.tag = format!("preview-{NEXT_SHA}");
     receipt.validate().expect("well-formed receipt");
     let receipt_digest = receipt.canonical_digest().expect("digest");
     VerifiedPackageRelease {
@@ -57,9 +57,13 @@ fn stable_release() -> VerifiedPackageRelease {
 
 fn base_formula(release: &VerifiedPackageRelease) -> Vec<u8> {
     let (class, version, tag) = if release.receipt.channel == PackageReleaseChannel::Stable {
-        ("Jackin", "1.2.2", "v1.2.2")
+        ("Jackin", "1.2.2", "v1.2.2".to_owned())
     } else {
-        ("JackinPreview", "1.2.3-preview.9+abcdef0", "preview")
+        (
+            "JackinPreview",
+            "1.2.3-preview.9+abcdef0",
+            format!("preview-{SOURCE_SHA}"),
+        )
     };
     let mut formula =
         format!("# source-sha: {SOURCE_SHA}\nclass {class} < Formula\n  version \"{version}\"\n");
@@ -88,7 +92,7 @@ fn base_formula(release: &VerifiedPackageRelease) -> Vec<u8> {
 fn base_formula_subset(release: &VerifiedPackageRelease) -> Vec<u8> {
     let archive = release.receipt.products[0].payloads[0].name.as_str();
     format!(
-        "# source-sha: {SOURCE_SHA}\nclass ExamplePreview < Formula\n  version \"1.2.3-preview.9+abcdef0\"\n    url \"https://github.com/jackin-project/jackin/releases/download/preview/{archive}\"\n    sha256 \"{}\"\nend\n",
+        "# source-sha: {SOURCE_SHA}\nclass ExamplePreview < Formula\n  version \"1.2.3-preview.9+abcdef0\"\n    url \"https://github.com/jackin-project/jackin/releases/download/preview-{SOURCE_SHA}/{archive}\"\n    sha256 \"{}\"\nend\n",
         "a".repeat(64)
     )
     .into_bytes()
@@ -183,6 +187,18 @@ fn accepts_formula_defined_payload_subset_of_a_larger_receipt_inventory() {
 }
 
 #[test]
+fn preview_base_url_must_bind_to_the_recorded_full_source_sha() {
+    let release = preview_release();
+    let base = String::from_utf8(base_formula(&release)).expect("ascii");
+    for prior_tag in ["preview".to_owned(), format!("preview-{}", "c".repeat(40))] {
+        let mutated = base
+            .replace(&format!("preview-{SOURCE_SHA}"), &prior_tag)
+            .into_bytes();
+        assert!(rewrite_formula(&mutated, "jackin-project/jackin", &release).is_err());
+    }
+}
+
+#[test]
 fn rejects_ruby_injection_even_when_release_literals_are_correct() {
     let release = preview_release();
     let policy = support::jackin_preview();
@@ -246,7 +262,6 @@ fn rejects_downgrades_and_equal_count_identity_conflicts() {
     let conflicting = String::from_utf8(conflicting)
         .expect("ascii")
         .replace("1.2.3-preview.9+abcdef0", "1.2.3-preview.10+abcdef0")
-        .replace("v1.2.3-preview.9+abcdef0", "v1.2.3-preview.10+abcdef0")
         .into_bytes();
     assert!(rewrite_formula(&conflicting, "jackin-project/jackin", &release).is_err());
 }
@@ -261,7 +276,7 @@ fn rejects_same_source_version_with_conflicting_archive_digest() {
     let text = text
         .replace(&old, &replacement)
         .replace("1.2.3-preview.9+abcdef0", &release.receipt.version.value)
-        .replace("v1.2.3-preview.9+abcdef0", &release.receipt.tag)
+        .replace(&format!("preview-{SOURCE_SHA}"), &release.receipt.tag)
         .replace(
             &format!("# source-sha: {}", release.receipt.source.commit_sha),
             &replacement,

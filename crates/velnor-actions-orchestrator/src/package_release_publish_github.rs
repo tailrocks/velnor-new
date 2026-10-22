@@ -6,7 +6,6 @@ use std::{
     time::Duration,
 };
 
-use sha2::{Digest, Sha256};
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 
 use crate::{OrchestratorError, internal::internal};
@@ -17,8 +16,12 @@ mod fields;
 mod metadata_download;
 #[path = "package_release_read_transport.rs"]
 mod read_transport;
-#[path = "package_release_rolling_api.rs"]
-mod rolling_api;
+#[path = "package_release_publish_github_utils.rs"]
+mod utils;
+pub(super) use utils::{
+    API_VERSION, annotated_tag_observation, encode_segment, gh_api_arguments, graphql_arguments,
+    is_lowercase_git_sha, sha256, verify_tap_update_environment,
+};
 #[path = "package_release_publish_github_types.rs"]
 mod types;
 #[path = "package_release_publish_upload.rs"]
@@ -29,8 +32,12 @@ mod preview_download;
 #[path = "preview_artifact_transport_api.rs"]
 mod preview_reads;
 pub(super) use preview_reads::ReleaseArtifactApi;
+#[path = "package_release_publish_ancestry.rs"]
+mod ancestry;
 #[path = "package_release_publish_github_immutable_status.rs"]
 mod immutable_status;
+#[path = "package_release_publish_lookup.rs"]
+mod lookup;
 #[path = "package_release_publish_preflight.rs"]
 mod preflight;
 #[cfg(test)]
@@ -40,7 +47,6 @@ use immutable_status::immutable_status_token;
 #[path = "package_release_publish_github_fixture.rs"]
 mod fixture;
 
-const API_VERSION: &str = "2026-03-10";
 const JSON_LIMIT: usize = 1024 * 1024;
 const ASSET_LIMIT: usize = 1024 * 1024 * 1024;
 const ARTIFACT_LIMIT: usize = 1024 * 1024 * 1024;
@@ -67,6 +73,10 @@ impl GitHubApi {
 
     pub(super) fn route(&self, suffix: &str) -> String {
         format!("repos/{}/{suffix}", self.repository)
+    }
+
+    pub(super) fn repository_name(&self) -> &str {
+        &self.repository
     }
 
     pub(super) fn post_fields(
@@ -160,27 +170,6 @@ impl GitHubApi {
         )
     }
 
-    pub(super) fn release_list(
-        &self,
-        tag: &str,
-    ) -> Result<Vec<ReleaseResponse>, OrchestratorError> {
-        let mut found = Vec::new();
-        for page in 1..=20 {
-            let route = format!("{}?per_page=100&page={page}", self.route("releases"));
-            let page_items: Vec<ReleaseResponse> = self.get_json(&route)?;
-            let count = page_items.len();
-            found.extend(
-                page_items
-                    .into_iter()
-                    .filter(|release| release.tag_name == tag),
-            );
-            if count < 100 {
-                return Ok(found);
-            }
-        }
-        Err(internal("package_publish_release_pages_exceeded"))
-    }
-
     pub(super) fn workflow_artifacts(
         &self,
         run_id: u64,
@@ -226,13 +215,26 @@ impl GitHubApi {
             return Ok(None);
         };
         match reference.object.object_type.as_str() {
-            "commit" => Ok(Some(TagObservation {
-                source_sha: reference.object.sha,
-                message: None,
-            })),
+            "commit" => {
+                if !is_lowercase_git_sha(&reference.object.sha) {
+                    return Err(internal("package_publish_tag_object_invalid"));
+                }
+                Ok(Some(TagObservation {
+                    source_sha: reference.object.sha,
+                    message: None,
+                }))
+            }
             "tag" => {
+                if !is_lowercase_git_sha(&reference.object.sha) {
+                    return Err(internal("package_publish_tag_object_invalid"));
+                }
                 let annotated: GitTagResponse =
                     self.get_json(&self.route(&format!("git/tags/{}", reference.object.sha)))?;
+                if annotated.sha != reference.object.sha
+                    || !is_lowercase_git_sha(&annotated.object.sha)
+                {
+                    return Err(internal("package_publish_tag_object_invalid"));
+                }
                 Ok(Some(annotated_tag_observation(tag, annotated)?))
             }
             _ => Err(internal("package_publish_tag_object_invalid")),
@@ -270,6 +272,33 @@ impl GitHubApi {
         self.verify_immutable_status()
     }
 
+    /// Authenticate the protected main lineage for an immutable preview source.
+    /// Returns the fresh protected main tip after proving source → workflow → tip.
+    pub(crate) fn verify_preview_main_ancestry(
+        &self,
+        repository_id: u64,
+        branch: &str,
+        source_sha: &str,
+        workflow_authority_sha: &str,
+    ) -> Result<String, OrchestratorError> {
+        ancestry::verify_preview_main_ancestry(
+            self,
+            repository_id,
+            branch,
+            source_sha,
+            workflow_authority_sha,
+        )
+    }
+
+    /// Authenticate the protected main tip for downstream source-current decisions.
+    pub(crate) fn verify_preview_main_tip(
+        &self,
+        repository_id: u64,
+        branch: &str,
+    ) -> Result<String, OrchestratorError> {
+        ancestry::verify_preview_main_tip(self, repository_id, branch)
+    }
+
     pub(super) fn verify_release_channel_environment(
         &self,
         channel: velnor_actions_contract::package_release::PackageReleaseChannel,
@@ -296,14 +325,7 @@ impl GitHubApi {
         if self.fixture.is_some() {
             return Err(internal("unexpected_fixture_transport_request"));
         }
-        let mut args = vec![OsString::from("api")];
-        args.extend([
-            OsString::from("-H"),
-            OsString::from(format!("Accept: {accept}")),
-            OsString::from("-H"),
-            OsString::from(format!("X-GitHub-Api-Version: {API_VERSION}")),
-        ]);
-        args.extend(request_args);
+        let args = gh_api_arguments(request_args, accept);
         let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args)
             .map_err(|_| internal("package_publish_gh_unavailable"))?;
         let result = exec
@@ -315,69 +337,6 @@ impl GitHubApi {
         }
         Ok(result.stdout)
     }
-}
-
-pub(super) fn verify_tap_update_environment(
-    repository: &str,
-    branch: &str,
-) -> Result<(), OrchestratorError> {
-    preflight::tap_update_environment(repository, branch)
-}
-
-fn annotated_tag_observation(
-    expected_tag: &str,
-    annotated: GitTagResponse,
-) -> Result<TagObservation, OrchestratorError> {
-    if annotated.tag != expected_tag || annotated.object.object_type != "commit" {
-        return Err(internal("package_publish_tag_target_invalid"));
-    }
-    Ok(TagObservation {
-        source_sha: annotated.object.sha,
-        message: Some(annotated.message),
-    })
-}
-
-pub(super) fn sha256(bytes: &[u8]) -> String {
-    let mut out = String::with_capacity(64);
-    for byte in Sha256::digest(bytes) {
-        push_hex_byte(&mut out, byte, false);
-    }
-    out
-}
-
-pub(super) fn encode_segment(value: &str) -> String {
-    let mut out = String::new();
-    for byte in value.bytes() {
-        if byte.is_ascii_alphanumeric() || b"-._~".contains(&byte) {
-            out.push(char::from(byte));
-        } else {
-            out.push('%');
-            push_hex_byte(&mut out, byte, true);
-        }
-    }
-    out
-}
-
-fn push_hex_byte(output: &mut String, byte: u8, uppercase: bool) {
-    const LOWER: &[u8; 16] = b"0123456789abcdef";
-    const UPPER: &[u8; 16] = b"0123456789ABCDEF";
-    let hex = if uppercase { UPPER } else { LOWER };
-    output.push(char::from(hex[usize::from(byte >> 4)]));
-    output.push(char::from(hex[usize::from(byte & 0x0f)]));
-}
-
-pub(super) fn unique_release<'a>(
-    releases: &'a [ReleaseResponse],
-    tag: &str,
-) -> Result<&'a ReleaseResponse, OrchestratorError> {
-    let mut found = releases.iter().filter(|release| release.tag_name == tag);
-    let first = found
-        .next()
-        .ok_or_else(|| internal("package_publish_draft_missing"))?;
-    if found.next().is_some() {
-        return Err(internal("package_publish_duplicate_release_tag"));
-    }
-    Ok(first)
 }
 
 #[cfg(test)]

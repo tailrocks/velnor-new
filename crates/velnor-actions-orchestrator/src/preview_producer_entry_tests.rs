@@ -4,7 +4,8 @@ use std::fs;
 const PROOF_NAME: &str = handoff::AGGREGATE_MANIFEST;
 
 use velnor_actions_contract::{
-    PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlanProduct,
+    CargoVersionPolicy, PACKAGE_RELEASE_PLAN_SCHEMA_V1, PACKAGE_RELEASE_POLICY_SCHEMA_V1,
+    PackageReleasePlanProduct, PackageReleasePolicy,
     package_release::{PackageReleaseChannel, PackageReleasePayloadFormat},
 };
 
@@ -33,6 +34,25 @@ fn preview_producer_accepts_only_actual_workflow_run_event() {
     for event in ["push", "pull_request", "workflow_run ", ""] {
         assert!(!is_release_event(event), "accepted {event}");
     }
+}
+
+#[test]
+fn admitted_preview_policy_requires_source_config_to_enable_preview() {
+    let config = crate::config::load_config_from_text("schema = 1\n[stacks.rust]\n")
+        .expect("valid config with default-disabled release channels");
+    let policy = PackageReleasePolicy {
+        schema: PACKAGE_RELEASE_POLICY_SCHEMA_V1.to_owned(),
+        channel: PackageReleaseChannel::Preview,
+        repository: "owner/repo".to_owned(),
+        default_branch: "main".to_owned(),
+        version: CargoVersionPolicy {
+            version_package: "cli".to_owned(),
+            bindings: Vec::new(),
+        },
+        products: Vec::new(),
+        companions: Vec::new(),
+    };
+    assert!(admitted_preview_config(&config, &policy, &plan()).is_err());
 }
 
 #[test]
