@@ -272,8 +272,8 @@ pub(crate) fn read_actions_permissions() -> Permissions {
 /// Plan-job install set per role: Rust, validators, Nextest, and `OpenTofu`.
 ///
 /// Validators join the driver set because `Check generated files` runs the public
-/// `generate`, whose staged validation fail-closed-execs pinned jactionlint, shellcheck,
-/// and zizmor; installing only the driver toolchain leaves that step red. Order
+/// `generate`, whose staged validation fail-closed-execs pinned jactionlint and
+/// shellcheck; installing only the driver toolchain leaves that step red. Order
 /// follows `PinnedTool::ALL`. Pure-tofu plans carry opentofu plus the validators
 /// with no Rust; mixed plans carry the union. The native MBX action owns MBX
 /// installation for both ordinary and pre-seed plans; its preceding
@@ -281,11 +281,7 @@ pub(crate) fn read_actions_permissions() -> Permissions {
 fn plan_tools(needs: PlanJobToolNeeds) -> Vec<PinnedTool> {
     let mut tools = Vec::new();
     tools.extend(needs.rust.has_compiler().then_some(PinnedTool::Rust));
-    tools.extend([
-        PinnedTool::Jactionlint,
-        PinnedTool::Shellcheck,
-        PinnedTool::Zizmor,
-    ]);
+    tools.extend([PinnedTool::Jactionlint, PinnedTool::Shellcheck]);
     tools.extend(needs.nextest.then_some(PinnedTool::Nextest));
     tools.extend(needs.opentofu.then_some(PinnedTool::Opentofu));
     tools.extend(needs.gh.then_some(PinnedTool::Gh));

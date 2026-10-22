@@ -192,7 +192,7 @@ fn coverage_matrix_names_every_state() -> Result<(), String> {
     let subjects = [
         subject(PinnedTool::Jactionlint, &catalog)?,
         subject(PinnedTool::Rust, &catalog)?,
-        subject(PinnedTool::Zizmor, &catalog)?,
+        subject(PinnedTool::Shellcheck, &catalog)?,
     ];
     let verdicts = audit_install_coverage(&lock, &subjects, "linux-x64");
     assert_eq!(verdicts[0], InstallCoverage::Verified);

@@ -1,10 +1,9 @@
 //! Pinned lint-tool versions and the jactionlint argument vectors.
 //!
-//! jactionlint and `ShellCheck` versions are pinned constants; Zizmor's pin
-//! is explicit caller input validated for exactness. Types only: Mise
-//! executes tools; this crate never spawns processes.
+//! jactionlint and `ShellCheck` versions are pinned constants. Types only:
+//! Mise executes tools; this crate never spawns processes.
 
-use crate::{ActionlintError, JACTIONLINT_VERSION};
+use crate::JACTIONLINT_VERSION;
 
 /// Pinned `ShellCheck` release (tag `v0.11.0`; mirrors the mise catalog pin).
 /// Source: `https://api.github.com/repos/koalaman/shellcheck/releases/latest`; checked 2026-09-28.
@@ -157,47 +156,6 @@ impl Default for ShellcheckToolchain {
     }
 }
 
-/// Zizmor toolchain identity with an explicit exact pin.
-///
-/// No default: the spec pins no Zizmor version, so callers must supply
-/// the reviewed exact release; anything else fails validation.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ZizmorToolchain {
-    /// Exact reviewed Zizmor release (`X.Y.Z`, no prefix).
-    version: String,
-}
-
-impl ZizmorToolchain {
-    /// Build a Zizmor toolchain from an explicit exact version.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ActionlintError::InvalidToolVersion`] unless the version
-    /// is exact `X.Y.Z` numeric with no prefix or prerelease.
-    pub fn new(version: impl Into<String>) -> Result<Self, ActionlintError> {
-        let version = version.into();
-        if !is_exact_version(&version) {
-            return Err(ActionlintError::InvalidToolVersion {
-                tool: "zizmor",
-                version,
-            });
-        }
-        Ok(Self { version })
-    }
-
-    /// Exact pinned version string.
-    #[must_use]
-    pub fn version(&self) -> &str {
-        &self.version
-    }
-
-    /// Mise tool spec (`zizmor@<exact>`).
-    #[must_use]
-    pub fn mise_tool_spec(&self) -> String {
-        format!("zizmor@{}", self.version)
-    }
-}
-
 /// Minimal typed config for the workflow-lint tool set.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowLintTools {
@@ -205,41 +163,24 @@ pub struct WorkflowLintTools {
     pub jactionlint: JactionlintToolchain,
     /// Pinned `ShellCheck` toolchain.
     pub shellcheck: ShellcheckToolchain,
-    /// Explicitly pinned Zizmor toolchain.
-    pub zizmor: ZizmorToolchain,
 }
 
 impl WorkflowLintTools {
-    /// Build the lint-tool set from an explicit Zizmor version.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ActionlintError::InvalidToolVersion`] for a non-exact
-    /// Zizmor version.
-    pub fn new(zizmor_version: impl Into<String>) -> Result<Self, ActionlintError> {
-        Ok(Self {
+    /// The pinned lint-tool set.
+    #[must_use]
+    pub fn pinned() -> Self {
+        Self {
             jactionlint: JactionlintToolchain::pinned(),
             shellcheck: ShellcheckToolchain::pinned(),
-            zizmor: ZizmorToolchain::new(zizmor_version)?,
-        })
+        }
     }
 
-    /// Mise tool specs in fixed order: jactionlint, shellcheck, zizmor.
+    /// Mise tool specs in fixed order: jactionlint, shellcheck.
     #[must_use]
     pub fn mise_tool_specs(&self) -> Vec<String> {
         vec![
             self.jactionlint.mise_tool_spec(),
             self.shellcheck.mise_tool_spec(),
-            self.zizmor.mise_tool_spec(),
         ]
     }
-}
-
-/// Exact versions: `X.Y.Z` numeric, no `v` prefix, no prerelease.
-fn is_exact_version(version: &str) -> bool {
-    let parts: Vec<&str> = version.split('.').collect();
-    parts.len() == 3
-        && parts
-            .iter()
-            .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()))
 }

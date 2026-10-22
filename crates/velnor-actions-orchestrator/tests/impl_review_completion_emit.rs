@@ -108,7 +108,7 @@ fn completion_only_schema2_generation_validates_declared_variables() -> TestResu
             output_dir: Some(destination.clone()),
         },
     )?;
-    assert_eq!(report.validated_by.len(), 3);
+    assert_eq!(report.validated_by.len(), 2);
     let lint_config = fs::read_to_string(destination.join(".github/jactionlint.yaml"))?;
     assert!(
         lint_config.contains("\nconfig-variables:\n  - COMPLETION_APP_ID\n  - REVIEWER_APP_ID\n"),

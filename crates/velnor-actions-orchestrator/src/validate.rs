@@ -11,7 +11,6 @@ use velnor_actions_workflow_renderer::render::RenderedTree;
 use crate::OrchestratorError;
 use crate::generate::write_tree;
 use crate::validate_shell::{run_shellcheck_bodies, run_shellcheck_probe};
-use crate::validate_zizmor::{run_zizmor, write_zizmor_config};
 
 /// Velnor-repository-only bootstrap lock (never read for consumers).
 const GENERATOR_LOCK_REL: &str = ".velnor/generator.lock";
@@ -52,13 +51,10 @@ pub(crate) fn validate_staged(tree: &RenderedTree) -> Result<Vec<String>, Orches
         &staged_lint_files(tree, &workflows),
     )?;
     run_shellcheck_probe(&catalog, staging.path())?;
-    write_zizmor_config(staging.path(), tree)?;
-    run_zizmor(&catalog, staging.path())?;
     run_shellcheck_bodies(&catalog, staging.path(), &workflows)?;
     let mut validated = vec![
         catalog.tool_spec(PinnedTool::Jactionlint),
         catalog.tool_spec(PinnedTool::Shellcheck),
-        catalog.tool_spec(PinnedTool::Zizmor),
     ];
     validated.sort();
     Ok(validated)

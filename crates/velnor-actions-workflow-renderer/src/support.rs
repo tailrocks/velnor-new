@@ -149,7 +149,6 @@ pub(crate) fn merge_support_jobs(
             }
             ValidatorKind::CargoDeny
             | ValidatorKind::CargoMachete
-            | ValidatorKind::Zizmor
             | ValidatorKind::Markdownlint
             | ValidatorKind::StrictJson
             | ValidatorKind::FrontmatterId
@@ -273,7 +272,6 @@ pub(crate) fn validator_job(
     step.role = Some(match validator {
         ValidatorKind::CargoDeny => StepRole::CargoDeny,
         ValidatorKind::CargoMachete => StepRole::CargoMachete,
-        ValidatorKind::Zizmor => StepRole::Zizmor,
         ValidatorKind::Markdownlint => StepRole::Markdownlint,
         ValidatorKind::StrictJson => StepRole::StrictJson,
         ValidatorKind::FrontmatterId => StepRole::FrontmatterId,

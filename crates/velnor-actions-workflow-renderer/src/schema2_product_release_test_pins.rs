@@ -11,7 +11,6 @@ use velnor_actions_mise::{
 
 use crate::schema2::ProductReleasePins;
 use crate::setup::MiseSetup;
-use crate::toolchain_env::with_env_unset_argv;
 
 struct BuildArgv {
     product: Vec<String>,
@@ -41,7 +40,6 @@ pub(super) fn test_pins() -> ProductReleasePins {
                 PinnedTool::Gh,
                 PinnedTool::Jactionlint,
                 PinnedTool::Shellcheck,
-                PinnedTool::Zizmor,
             ],
             &catalog,
         ),
@@ -51,7 +49,6 @@ pub(super) fn test_pins() -> ProductReleasePins {
                 PinnedTool::Rust,
                 PinnedTool::Jactionlint,
                 PinnedTool::Shellcheck,
-                PinnedTool::Zizmor,
             ],
             &catalog,
         ),
@@ -86,17 +83,6 @@ pub(super) fn test_pins() -> ProductReleasePins {
             "-c".to_owned(),
             "echo verify jactionlint".to_owned(),
         ],
-        zizmor_argv: with_env_unset_argv(&exec_argv(
-            &[PinnedTool::Zizmor],
-            "zizmor",
-            &[
-                "--no-online-audits",
-                "--config",
-                ".zizmor.yml",
-                ".github/workflows",
-            ],
-            &catalog,
-        )),
         gh_argv: exec_argv(&[PinnedTool::Gh], "gh", &[], &catalog),
         rust_version: catalog.version(PinnedTool::Rust).to_owned(),
         verify_rust_argv: ["sh", "-c", "echo verify-rust"].map(str::to_owned).to_vec(),

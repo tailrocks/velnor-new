@@ -15,8 +15,6 @@ pub enum TaskTemplate {
     Dependencies,
     /// Generated workflow, composite action and Dependabot validation.
     Jactionlint,
-    /// Generated workflow security validation.
-    Zizmor,
     /// Configured Clippy validation for one package.
     Clippy,
     /// Single build for one package when the runner needs an archive.
@@ -33,11 +31,10 @@ pub enum TaskTemplate {
 
 impl TaskTemplate {
     /// Every template in stable order.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 9] = [
         Self::FmtCheck,
         Self::Dependencies,
         Self::Jactionlint,
-        Self::Zizmor,
         Self::Clippy,
         Self::TestBuild,
         Self::Test,
@@ -53,7 +50,6 @@ impl TaskTemplate {
             Self::FmtCheck => "fmt-check",
             Self::Dependencies => "dependencies",
             Self::Jactionlint => "jactionlint",
-            Self::Zizmor => "zizmor",
             Self::Clippy => "clippy",
             Self::TestBuild => "test-build",
             Self::Test => "test",

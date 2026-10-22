@@ -208,7 +208,7 @@ fn c8_crate_jobs_install_validators_for_test_spawns() -> TestResult {
                 return Err("prepare must be a shell".into());
             };
             let text = run.join(" ");
-            for tool in ["actionlint@", "shellcheck@", "zizmor@"] {
+            for tool in ["jactionlint@", "shellcheck@"] {
                 assert!(
                     text.contains(tool),
                     "{id} prepare must install {tool} for test-spawned generate: {text}"

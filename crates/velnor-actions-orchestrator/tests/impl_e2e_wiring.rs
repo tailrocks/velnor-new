@@ -323,7 +323,6 @@ fn emitted_yaml_wires_helpers_velnor_policy() -> TestResult {
         for (id, want) in [
             ("cargo-deny", "Run cargo-deny"),
             ("cargo-machete", "Run cargo-machete"),
-            ("zizmor", "Run zizmor"),
         ] {
             let job = jobs.iter().find(|job| job.id == id);
             let job = job.unwrap_or_else(|| panic!("missing {id} job"));
@@ -332,6 +331,10 @@ fn emitted_yaml_wires_helpers_velnor_policy() -> TestResult {
                 "{id} misses {want}"
             );
         }
+        assert!(
+            jobs.iter().all(|job| job.id != "zizmor"),
+            "zizmor is retired (hard decision 10)"
+        );
         Ok(())
     })
 }

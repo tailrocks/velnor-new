@@ -80,6 +80,10 @@ annotations, no extra token scope; SARIF upload would need
 | Staged validation before `generate` writes | Every staged workflow and composite action |
 | Candidate qualification (Linux, macOS, macOS Intel) | Through the staged validation of the qualified `generate` |
 
+There is no separate zizmor job: jactionlint carries its audits, and honours
+the `# zizmor: ignore[<audit>]` annotations Velnor emits
+([coverage evidence](../jactionlint-decision.md#zizmor-is-retired)).
+
 ## Supply chain
 
 - The Mise catalog pins jactionlint (`jactionlint@<exact>`, backend
