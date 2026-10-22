@@ -263,7 +263,7 @@ impl Sandbox {
             .env("VELNOR_GH_VERSION", "2.102.1")
             .env(
                 "VELNOR_GENERATE_TOOLS",
-                "actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.31.1",
+                "jactionlint@2.3.0 shellcheck@0.11.0 zizmor@1.31.1",
             );
         for (key, value) in env {
             command.env(key, value);

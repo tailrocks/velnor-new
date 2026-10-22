@@ -18,8 +18,11 @@
   `.github/` reaches the branch only as a verified regeneration, see
   [Trust boundary](#trust-boundary)), `upgrades::tests` (including
   the byte-exact golden `crates/velnor-actions-workflow-renderer/tests/goldens/upgrades.yml`),
-  `impl_upgrades`. The golden passes actionlint 1.7.12 with shellcheck 0.11.0
-  and zizmor 1.31.1 with no findings.
+  `impl_upgrades`. The golden passes jactionlint 2.3.0 at `profile: default`
+  with ShellCheck 0.11.0 with no findings. The prepare and verify jobs
+  install the validators `generate` runs, then check the jactionlint
+  executable against the catalog digest (`Verify jactionlint`) before any
+  regeneration.
 - Deviations: the App token also asks for `workflows: write`, only on runs
   whose verified tree changes `.github/workflows/` (see
   [Credentials](#credentials)).
