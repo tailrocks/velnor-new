@@ -1,16 +1,11 @@
 set -euo pipefail
-: "${GH_TOKEN:?}" "${VELNOR_UPGRADE_DIR:?}" "${VELNOR_UPGRADE_BRANCH:?}" "${VELNOR_DEFAULT_BRANCH:?}" "${GITHUB_REPOSITORY:?}"
+: "${GH_TOKEN:?}" "${VELNOR_UPGRADE_DIR:?}" "${VELNOR_UPGRADE_BRANCH:?}" "${VELNOR_DEFAULT_BRANCH:?}" "${GITHUB_REPOSITORY:?}" "${VELNOR_VERIFIED_TREE:?}"
 dir=$VELNOR_UPGRADE_DIR
 velnor_gh() { mise --no-config --no-env --no-hooks exec "gh@${VELNOR_GH_VERSION:?}" -- gh "$@"; }
-patch=$dir/upgrade.patch
-test -s "$patch"
-# The patch came from a job that ran repository code: the filter checks its
-# text and the index it produces in a scratch index before the worktree or
-# the real index sees a byte, then checks the real index again.
-velnor_upgrade_check_patch_applies "$patch" "$dir/check.index" || exit 1
-git -c core.hooksPath=/dev/null apply --index "$patch"
-velnor_upgrade_check_index strict || exit 1
+# The previous step, which held no token, left the index at exactly the tree
+# the verify job accepted; nothing else is ever committed.
 tree=$(git write-tree)
+[ "$tree" = "$VELNOR_VERIFIED_TREE" ] || { echo "::error::upgrade_patch_unverified: the index is not the verified tree"; exit 1; }
 base=$(git rev-parse HEAD)
 velnor_gh auth setup-git --hostname github.com
 parents=(-p "$base")

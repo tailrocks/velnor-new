@@ -2,7 +2,7 @@
 
 use velnor_actions_contract::{JobTimeout, StepRole};
 
-use super::scripts::{GATE, prepare_script, publish_script};
+use super::scripts::{GATE, PUBLISH, RELEASE, prepare_script, publish_check_script, verify_script};
 use super::{
     CARGO_EDIT_VERSION, CATALOG_BUMPER, ON_DEFAULT_BRANCH, UPGRADES_ARTIFACT, UPGRADES_BRANCH,
     UpgradesSpec, WORK_DIR,
@@ -36,26 +36,61 @@ fn job(
     Ok(Yaml::Map(fields))
 }
 
-pub(super) fn prepare_job(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
-    let bump = Yaml::Map(vec![
-        (
-            "name".to_owned(),
-            Yaml::str("Bump every pin to the latest stable release"),
-        ),
-        ("id".to_owned(), Yaml::str("bump")),
+/// One `run:` step under bash.
+fn bash_step(name: &str, id: Option<&str>, step_env: &[(&str, &str)], run: String) -> Yaml {
+    let mut fields = vec![("name".to_owned(), Yaml::str(name))];
+    if let Some(id) = id {
+        fields.push(("id".to_owned(), Yaml::str(id)));
+    }
+    fields.extend([
         ("shell".to_owned(), Yaml::str("bash")),
-        (
-            "env".to_owned(),
-            env(&[
-                ("MISE_MINIMUM_RELEASE_AGE", "0s"),
-                ("MISE_YES", "1"),
-                ("VELNOR_UPGRADE_DIR", WORK_DIR),
-                ("VELNOR_CARGO_EDIT_VERSION", CARGO_EDIT_VERSION),
-                ("VELNOR_CATALOG_BUMPER_SOURCE", CATALOG_BUMPER),
-            ]),
-        ),
-        ("run".to_owned(), Yaml::str(prepare_script())),
+        ("env".to_owned(), env(step_env)),
+        ("run".to_owned(), Yaml::str(run)),
     ]);
+    Yaml::Map(fields)
+}
+
+/// Resolve and verify the newest stable Velnor before any repository code
+/// runs; the read-only `github.token` lives only in this step.
+fn velnor_release(spec: &UpgradesSpec) -> Yaml {
+    bash_step(
+        "Resolve and verify the latest Velnor release",
+        None,
+        &[
+            ("GH_TOKEN", "${{ github.token }}"),
+            ("VELNOR_UPGRADE_DIR", WORK_DIR),
+            ("VELNOR_GH_VERSION", &spec.gh_version),
+        ],
+        RELEASE.to_owned(),
+    )
+}
+
+fn download() -> Yaml {
+    Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str("Download the upgrade patch")),
+        ("uses".to_owned(), Yaml::str(DOWNLOAD_ARTIFACT_USES)),
+        (
+            "with".to_owned(),
+            env(&[("name", UPGRADES_ARTIFACT), ("path", WORK_DIR)]),
+        ),
+    ])
+}
+
+pub(super) fn prepare_job(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
+    let tools = spec.generate_tools.join(" ");
+    let bump = bash_step(
+        "Bump every pin to the latest stable release",
+        Some("bump"),
+        &[
+            ("MISE_MINIMUM_RELEASE_AGE", "0s"),
+            ("MISE_YES", "1"),
+            ("VELNOR_UPGRADE_DIR", WORK_DIR),
+            ("VELNOR_CARGO_EDIT_VERSION", CARGO_EDIT_VERSION),
+            ("VELNOR_CATALOG_BUMPER_SOURCE", CATALOG_BUMPER),
+            ("VELNOR_GENERATE_TOOLS", &tools),
+        ],
+        prepare_script(),
+    );
     let upload = Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Upload the upgrade patch")),
         (
@@ -85,49 +120,47 @@ pub(super) fn prepare_job(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
             ),
         ],
         &[("contents", "read")],
-        vec![checkout(spec)?, setup(spec)?, bump, upload],
+        vec![
+            checkout(spec)?,
+            setup(spec)?,
+            install_gh(spec),
+            velnor_release(spec),
+            bump,
+            upload,
+        ],
     )
 }
 
-pub(super) fn publish_job(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
-    let download = Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Download the upgrade patch")),
-        ("uses".to_owned(), Yaml::str(DOWNLOAD_ARTIFACT_USES)),
-        (
-            "with".to_owned(),
-            env(&[("name", UPGRADES_ARTIFACT), ("path", WORK_DIR)]),
-        ),
-    ]);
-    let push = Yaml::Map(vec![
-        (
-            "name".to_owned(),
-            Yaml::str("Push the upgrade branch and open or update its pull request"),
-        ),
-        ("shell".to_owned(), Yaml::str("bash")),
-        (
-            "env".to_owned(),
-            env(&[
-                ("GH_TOKEN", "${{ steps.upgrade-token.outputs.token }}"),
-                ("VELNOR_UPGRADE_DIR", WORK_DIR),
-                ("VELNOR_UPGRADE_BRANCH", UPGRADES_BRANCH),
-                (
-                    "VELNOR_DEFAULT_BRANCH",
-                    "${{ github.event.repository.default_branch }}",
-                ),
-                ("VELNOR_GH_VERSION", &spec.gh_version),
-            ]),
-        ),
-        ("run".to_owned(), Yaml::str(publish_script())),
-    ]);
+/// Regenerate `.github/` from the default branch with the verified Velnor and
+/// accept the patch only when prepare's `.github/` is exactly that.
+pub(super) fn verify_job(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
+    let tools = spec.generate_tools.join(" ");
+    let verify = bash_step(
+        "Regenerate .github/ and compare it with the patch",
+        Some("verify"),
+        &[
+            ("VELNOR_UPGRADE_DIR", WORK_DIR),
+            ("VELNOR_GENERATE_TOOLS", &tools),
+        ],
+        verify_script(),
+    );
     job(
-        "Open or update the upgrade pull request",
+        "Verify the upgrade patch",
         spec,
-        10,
+        30,
         vec![
             ("needs".to_owned(), Yaml::str("prepare")),
             (
                 "if".to_owned(),
                 Yaml::str("needs.prepare.outputs.changed == 'true'"),
+            ),
+            (
+                "outputs".to_owned(),
+                env(&[
+                    ("tree", "${{ steps.verify.outputs.tree }}"),
+                    ("patch_sha256", "${{ steps.verify.outputs.patch_sha256 }}"),
+                    ("workflows", "${{ steps.verify.outputs.workflows }}"),
+                ]),
             ),
         ],
         &[("contents", "read")],
@@ -135,14 +168,65 @@ pub(super) fn publish_job(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
             checkout(spec)?,
             setup(spec)?,
             install_gh(spec),
-            download,
+            download(),
+            velnor_release(spec),
+            verify,
+        ],
+    )
+}
+
+pub(super) fn publish_job(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
+    let verified = [
+        ("VELNOR_UPGRADE_DIR", WORK_DIR),
+        ("VELNOR_VERIFIED_TREE", "${{ needs.verify.outputs.tree }}"),
+        (
+            "VELNOR_VERIFIED_PATCH_SHA256",
+            "${{ needs.verify.outputs.patch_sha256 }}",
+        ),
+    ];
+    let check = bash_step(
+        "Check the patch is the verified upgrade",
+        None,
+        &verified,
+        publish_check_script(),
+    );
+    let mut push_env = vec![("GH_TOKEN", "${{ steps.upgrade-token.outputs.token }}")];
+    push_env.extend(verified);
+    push_env.extend([
+        ("VELNOR_UPGRADE_BRANCH", UPGRADES_BRANCH),
+        (
+            "VELNOR_DEFAULT_BRANCH",
+            "${{ github.event.repository.default_branch }}",
+        ),
+        ("VELNOR_GH_VERSION", &spec.gh_version),
+    ]);
+    let push = bash_step(
+        "Push the upgrade branch and open or update its pull request",
+        None,
+        &push_env,
+        PUBLISH.to_owned(),
+    );
+    job(
+        "Open or update the upgrade pull request",
+        spec,
+        10,
+        vec![("needs".to_owned(), Yaml::str("verify"))],
+        &[("contents", "read")],
+        vec![
+            checkout(spec)?,
+            setup(spec)?,
+            install_gh(spec),
+            download(),
+            check,
             mint(spec),
             push,
         ],
     )
 }
 
-/// App token for this repository only: contents, pull requests, workflows.
+/// App token for this repository only, minted after every check passed:
+/// contents and pull requests, plus workflows only when the verified tree
+/// changes `.github/workflows/` (an empty input requests nothing).
 fn mint(spec: &UpgradesSpec) -> Yaml {
     Yaml::Map(vec![
         (
@@ -175,9 +259,10 @@ fn mint(spec: &UpgradesSpec) -> Yaml {
                 ),
                 ("permission-contents".to_owned(), Yaml::str("write")),
                 ("permission-pull-requests".to_owned(), Yaml::str("write")),
-                // GitHub rejects an App push that changes `.github/workflows/`
-                // without it; regenerating `.github/` is the job's purpose.
-                ("permission-workflows".to_owned(), Yaml::str("write")),
+                (
+                    "permission-workflows".to_owned(),
+                    Yaml::str("${{ needs.verify.outputs.workflows }}"),
+                ),
                 ("skip-token-revoke".to_owned(), Yaml::Bool(false)),
             ]),
         ),
