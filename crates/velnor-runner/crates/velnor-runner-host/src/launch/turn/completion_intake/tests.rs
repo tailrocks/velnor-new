@@ -89,7 +89,7 @@ async fn late_lifecycle_ack_failure_replays_after_journal_reopen_inner() -> Resu
         return Err(HostError::Journal);
     }
     let NativeStartedIntakeFixture {
-        _scratch,
+        _scratch: scratch,
         journal,
         scope,
         ..
@@ -127,7 +127,7 @@ async fn late_lifecycle_ack_failure_replays_after_journal_reopen_inner() -> Resu
     {
         return Err(HostError::Journal);
     }
-    let _keep_scratch_until_reopen_checks_finish = _scratch;
+    let _keep_scratch_until_reopen_checks_finish = scratch;
     Ok(())
 }
 

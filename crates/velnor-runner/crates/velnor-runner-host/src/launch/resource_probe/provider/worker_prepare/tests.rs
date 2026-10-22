@@ -43,7 +43,7 @@ fn verified_runner_and_dind_proofs_bind_to_one_engine_and_source() -> Result<(),
 }
 
 #[test]
-fn verified_proofs_reject_wrong_engine_source_or_image_role() -> Result<(), HostError> {
+fn verified_proofs_reject_wrong_engine_source_or_image_role() {
     let selected = selected_daemon("selected-engine", "aarch64");
     let expected = selected_context(&selected);
     let (runner, dind) = fixture_proofs(&selected, SOURCE_SHA);
@@ -82,7 +82,6 @@ fn verified_proofs_reject_wrong_engine_source_or_image_role() -> Result<(), Host
         ),
         Err(HostError::Identity)
     ));
-    Ok(())
 }
 
 #[test]

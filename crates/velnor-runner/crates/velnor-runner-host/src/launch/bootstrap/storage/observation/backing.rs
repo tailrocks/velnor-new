@@ -127,7 +127,7 @@ fn validate_root_backing<'a>(
         return Err(HostError::Identity);
     }
     let backing_digest = crate::launch::resource_probe::filesystem_instance_digest(
-        crate::launch::resource_probe::FilesystemInstanceDigestInput {
+        &crate::launch::resource_probe::FilesystemInstanceDigestInput {
             engine_id: context.engine.engine_id(),
             docker_root_digest: context.engine.docker_root_digest(),
             guest_boot_id: context.witness.storage_mount().guest_boot_id().as_bytes(),

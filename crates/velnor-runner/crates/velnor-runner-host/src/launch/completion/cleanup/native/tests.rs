@@ -282,7 +282,7 @@ async fn assert_retry_settlement_is_idempotent(
             .record_completion_runner_absent_at(launch.intent.id, retry_claim.generation, now + 1,)
             .await?
     );
-    let second = run_native_cleanup(&fixture, &launch, retry_claim).await?;
+    let second = run_native_cleanup(fixture, launch, retry_claim).await?;
     assert!(second.is_ok(), "Native cleanup retry failed: {second:?}.");
     assert_eq!(
         fixture

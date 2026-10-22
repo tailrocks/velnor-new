@@ -13,7 +13,7 @@ pub(super) async fn route(
         return create_runner_log_exec(path, &request.body, &mut state);
     }
     if path.contains("/exec/") && path.ends_with("/json") && request.method == "GET" {
-        return inspect_runner_log_exec(path, &state);
+        return Ok(inspect_runner_log_exec(path, &state));
     }
     if path.ends_with("/info") {
         return Ok(info_json(&state.identity));
@@ -203,7 +203,7 @@ pub(super) async fn start_runner_log_exec(
         return Ok(Some(message()));
     }
     exec.started = true;
-    exec.exit_code = Some(if failed_exec { 1 } else { 0 });
+    exec.exit_code = Some(i64::from(failed_exec));
     let archive = if empty_logs {
         empty_root_archive()?
     } else {
@@ -231,7 +231,7 @@ fn empty_root_archive() -> Result<Vec<u8>, HostError> {
     builder.into_inner().map_err(|_| HostError::Journal)
 }
 
-fn inspect_runner_log_exec(path: &str, state: &ServerState) -> Result<(u16, Vec<u8>), HostError> {
+fn inspect_runner_log_exec(path: &str, state: &ServerState) -> (u16, Vec<u8>) {
     let id = path
         .split("/exec/")
         .nth(1)
@@ -240,7 +240,7 @@ fn inspect_runner_log_exec(path: &str, state: &ServerState) -> Result<(u16, Vec<
         .next()
         .unwrap_or_default();
     let Some(exec) = state.exec_state.as_ref().filter(|exec| exec.id == id) else {
-        return Ok((404, message()));
+        return (404, message());
     };
     let body = serde_json::json!({
         "ID": exec.id,
@@ -248,7 +248,7 @@ fn inspect_runner_log_exec(path: &str, state: &ServerState) -> Result<(u16, Vec<
         "Running": exec.started && exec.exit_code.is_none(),
         "ExitCode": exec.exit_code
     });
-    Ok((200, body.to_string().into_bytes()))
+    (200, body.to_string().into_bytes())
 }
 
 fn create_probe(

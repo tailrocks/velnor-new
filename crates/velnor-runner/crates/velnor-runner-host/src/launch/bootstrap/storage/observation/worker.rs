@@ -93,7 +93,7 @@ fn measure_attachment(
         .ok_or(HostError::Ownership)?;
     validate_attachment(attachment, contract.read_only, contract.volume_subpath)?;
     let filesystem_instance_digest = crate::launch::resource_probe::filesystem_instance_digest(
-        crate::launch::resource_probe::FilesystemInstanceDigestInput {
+        &crate::launch::resource_probe::FilesystemInstanceDigestInput {
             engine_id: engine.engine_id(),
             docker_root_digest: engine.docker_root_digest(),
             guest_boot_id: observation.guest_boot_id.as_bytes(),
@@ -227,7 +227,7 @@ pub(super) fn probe_attachment(
         return Err(HostError::Identity);
     }
     let digest = crate::launch::resource_probe::filesystem_instance_digest(
-        crate::launch::resource_probe::FilesystemInstanceDigestInput {
+        &crate::launch::resource_probe::FilesystemInstanceDigestInput {
             engine_id: engine.engine_id(),
             docker_root_digest: engine.docker_root_digest(),
             guest_boot_id: observation.guest_boot_id.as_bytes(),

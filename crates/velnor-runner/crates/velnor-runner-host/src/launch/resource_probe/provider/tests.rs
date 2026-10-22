@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use bollard::Docker;
@@ -59,10 +59,10 @@ fn prepared_release_cache_binds_source_helper_and_state_directory() {
         ..base.clone()
     };
 
-    let cache = HashMap::from([(base.clone(), ())]);
-    assert!(cache.contains_key(&base));
-    assert!(!cache.contains_key(&changed_helper));
-    assert!(!cache.contains_key(&changed_state));
+    let cache = HashSet::from([base.clone()]);
+    assert!(cache.contains(&base));
+    assert!(!cache.contains(&changed_helper));
+    assert!(!cache.contains(&changed_state));
 }
 
 #[test]

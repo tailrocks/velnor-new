@@ -74,7 +74,7 @@ impl Observation {
         )
         .ok()?;
         let filesystem_instance_digest =
-            filesystem_instance_digest(FilesystemInstanceDigestInput {
+            filesystem_instance_digest(&FilesystemInstanceDigestInput {
                 engine_id: &self.engine_id,
                 docker_root_digest: &self.docker_root_digest,
                 guest_boot_id: record.guest_boot_id.as_bytes(),
@@ -123,7 +123,7 @@ pub(super) fn disk_pool_identity(observation: &Observation) -> Option<String> {
     {
         return None;
     }
-    Some(filesystem_instance_digest(FilesystemInstanceDigestInput {
+    Some(filesystem_instance_digest(&FilesystemInstanceDigestInput {
         engine_id: &observation.engine_id,
         docker_root_digest: &observation.docker_root_digest,
         guest_boot_id: record.guest_boot_id.as_bytes(),
@@ -153,39 +153,26 @@ pub(in crate::launch) struct FilesystemInstanceDigestInput<'a> {
 }
 
 pub(in crate::launch) fn filesystem_instance_digest(
-    input: FilesystemInstanceDigestInput<'_>,
+    input: &FilesystemInstanceDigestInput<'_>,
 ) -> String {
-    let FilesystemInstanceDigestInput {
-        engine_id,
-        docker_root_digest,
-        guest_boot_id,
-        mount_source,
-        filesystem_type_name,
-        filesystem_type_magic,
-        mount_device_major,
-        mount_device_minor,
-        statx_device_major,
-        statx_device_minor,
-        filesystem_id,
-    } = input;
     let mut hasher = Sha256::new();
     hasher.update(b"velnor-storage-filesystem-instance-v1\0");
     for field in [
-        engine_id.as_bytes(),
-        docker_root_digest.as_bytes(),
-        guest_boot_id,
-        mount_source,
-        filesystem_type_name,
+        input.engine_id.as_bytes(),
+        input.docker_root_digest.as_bytes(),
+        input.guest_boot_id,
+        input.mount_source,
+        input.filesystem_type_name,
     ] {
         hasher.update((field.len() as u64).to_be_bytes());
         hasher.update(field);
     }
-    hasher.update(filesystem_type_magic.to_be_bytes());
-    hasher.update(mount_device_major.to_be_bytes());
-    hasher.update(mount_device_minor.to_be_bytes());
-    hasher.update(statx_device_major.to_be_bytes());
-    hasher.update(statx_device_minor.to_be_bytes());
-    hasher.update(filesystem_id.to_be_bytes());
+    hasher.update(input.filesystem_type_magic.to_be_bytes());
+    hasher.update(input.mount_device_major.to_be_bytes());
+    hasher.update(input.mount_device_minor.to_be_bytes());
+    hasher.update(input.statx_device_major.to_be_bytes());
+    hasher.update(input.statx_device_minor.to_be_bytes());
+    hasher.update(input.filesystem_id.to_be_bytes());
     let mut digest = String::with_capacity(64);
     for byte in hasher.finalize() {
         digest.push(char::from(HEX_DIGITS[usize::from(byte >> 4)]));
