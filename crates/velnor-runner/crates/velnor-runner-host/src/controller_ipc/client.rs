@@ -9,11 +9,12 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use super::server::{read_drain_token, valid_token};
-use super::wire::{DoctorProbeReply, Request, Response, SOCKET_NAME, Target};
+use super::wire::{Request, Response, SOCKET_NAME, Target};
 use crate::config::{ConnectionId, HostConfig, RepositoryConnection};
 use crate::error::HostError;
 use crate::ipc::{MAX_FRAME, encode_frame};
 
+mod doctor_result;
 mod readiness;
 
 pub use readiness::controller_readiness_status;
@@ -37,12 +38,13 @@ pub fn run_doctor_probe(state: &Path, timeout: Duration) -> Result<serde_json::V
         .flat_map(|byte| [HEX[usize::from(byte >> 4)], HEX[usize::from(byte & 0x0f)]])
         .map(char::from)
         .collect::<String>();
-    let start = doctor_call(
+    let start_response = doctor_call(
         state,
         &Request::DoctorProbeStart {
             nonce: nonce.clone(),
         },
     )?;
+    let start = start_response.doctor_probe.ok_or(HostError::Journal)?;
     if start.state == "busy" {
         return Err(HostError::Journal);
     }
@@ -50,20 +52,18 @@ pub fn run_doctor_probe(state: &Path, timeout: Duration) -> Result<serde_json::V
         .checked_add(timeout.min(DOCTOR_TIMEOUT_MAX))
         .ok_or(HostError::Identity)?;
     loop {
-        let reply = doctor_call(
+        let response = doctor_call(
             state,
             &Request::DoctorProbeStatus {
                 nonce: nonce.clone(),
             },
         )?;
+        let readiness = response.readiness;
+        let reply = response.doctor_probe.ok_or(HostError::Journal)?;
         match reply.state.as_str() {
             "completed" => {
-                if let Some(report) = reply.report {
-                    return Ok(serde_json::json!({
-                        "request_id": reply.request_id,
-                        "state": reply.state,
-                        "report": report,
-                    }));
+                if let Some(result) = doctor_result::completed_result(reply, readiness) {
+                    return Ok(result);
                 }
             }
             "queued" | "running" => {}
@@ -76,13 +76,12 @@ pub fn run_doctor_probe(state: &Path, timeout: Duration) -> Result<serde_json::V
     }
 }
 
-fn doctor_call(state: &Path, request: &Request) -> Result<DoctorProbeReply, HostError> {
+fn doctor_call(state: &Path, request: &Request) -> Result<Response, HostError> {
     if !valid_request(request) {
         return Err(HostError::Frame);
     }
     let path = state.join(SOCKET_NAME);
-    let response = call_socket_response(&path, request)?;
-    response.doctor_probe.ok_or(HostError::Journal)
+    call_socket_response(&path, request)
 }
 
 /// Wait until the host journal is empty while a matching global drain token stays active.

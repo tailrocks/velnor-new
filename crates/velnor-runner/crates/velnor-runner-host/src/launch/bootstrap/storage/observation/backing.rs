@@ -127,17 +127,19 @@ fn validate_root_backing<'a>(
         return Err(HostError::Identity);
     }
     let backing_digest = crate::launch::resource_probe::filesystem_instance_digest(
-        context.engine.engine_id(),
-        context.engine.docker_root_digest(),
-        context.witness.storage_mount().guest_boot_id().as_bytes(),
-        upper.mount_source.as_bytes(),
-        upper.mount_filesystem_type.as_bytes(),
-        upper.filesystem_type_magic,
-        upper.mount_device_major,
-        upper.mount_device_minor,
-        upper.statx_device_major,
-        upper.statx_device_minor,
-        upper.filesystem_id,
+        crate::launch::resource_probe::FilesystemInstanceDigestInput {
+            engine_id: context.engine.engine_id(),
+            docker_root_digest: context.engine.docker_root_digest(),
+            guest_boot_id: context.witness.storage_mount().guest_boot_id().as_bytes(),
+            mount_source: upper.mount_source.as_bytes(),
+            filesystem_type_name: upper.mount_filesystem_type.as_bytes(),
+            filesystem_type_magic: upper.filesystem_type_magic,
+            mount_device_major: upper.mount_device_major,
+            mount_device_minor: upper.mount_device_minor,
+            statx_device_major: upper.statx_device_major,
+            statx_device_minor: upper.statx_device_minor,
+            filesystem_id: upper.filesystem_id,
+        },
     );
     Ok(ValidatedBacking {
         logical,

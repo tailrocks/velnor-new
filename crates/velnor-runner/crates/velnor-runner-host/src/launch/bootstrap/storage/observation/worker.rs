@@ -93,17 +93,19 @@ fn measure_attachment(
         .ok_or(HostError::Ownership)?;
     validate_attachment(attachment, contract.read_only, contract.volume_subpath)?;
     let filesystem_instance_digest = crate::launch::resource_probe::filesystem_instance_digest(
-        engine.engine_id(),
-        engine.docker_root_digest(),
-        observation.guest_boot_id.as_bytes(),
-        attachment.mount_source.as_bytes(),
-        attachment.filesystem_type_name.as_bytes(),
-        attachment.filesystem_type_magic,
-        attachment.mount_device_major,
-        attachment.mount_device_minor,
-        attachment.statx_device_major,
-        attachment.statx_device_minor,
-        attachment.filesystem_id,
+        crate::launch::resource_probe::FilesystemInstanceDigestInput {
+            engine_id: engine.engine_id(),
+            docker_root_digest: engine.docker_root_digest(),
+            guest_boot_id: observation.guest_boot_id.as_bytes(),
+            mount_source: attachment.mount_source.as_bytes(),
+            filesystem_type_name: attachment.filesystem_type_name.as_bytes(),
+            filesystem_type_magic: attachment.filesystem_type_magic,
+            mount_device_major: attachment.mount_device_major,
+            mount_device_minor: attachment.mount_device_minor,
+            statx_device_major: attachment.statx_device_major,
+            statx_device_minor: attachment.statx_device_minor,
+            filesystem_id: attachment.filesystem_id,
+        },
     );
     let binding = ObservedStorageAttachment {
         role,
@@ -225,17 +227,19 @@ pub(super) fn probe_attachment(
         return Err(HostError::Identity);
     }
     let digest = crate::launch::resource_probe::filesystem_instance_digest(
-        engine.engine_id(),
-        engine.docker_root_digest(),
-        observation.guest_boot_id.as_bytes(),
-        mount.mount_source.as_bytes(),
-        mount.filesystem_type_name.as_bytes(),
-        mount.filesystem_type_magic,
-        mount.mount_device_major,
-        mount.mount_device_minor,
-        mount.statx_device_major,
-        mount.statx_device_minor,
-        mount.filesystem_id,
+        crate::launch::resource_probe::FilesystemInstanceDigestInput {
+            engine_id: engine.engine_id(),
+            docker_root_digest: engine.docker_root_digest(),
+            guest_boot_id: observation.guest_boot_id.as_bytes(),
+            mount_source: mount.mount_source.as_bytes(),
+            filesystem_type_name: mount.filesystem_type_name.as_bytes(),
+            filesystem_type_magic: mount.filesystem_type_magic,
+            mount_device_major: mount.mount_device_major,
+            mount_device_minor: mount.mount_device_minor,
+            statx_device_major: mount.statx_device_major,
+            statx_device_minor: mount.statx_device_minor,
+            filesystem_id: mount.filesystem_id,
+        },
     );
     let binding = ObservedStorageAttachment {
         role: StorageRole::EngineMetadata,

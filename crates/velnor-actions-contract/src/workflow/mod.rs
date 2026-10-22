@@ -33,6 +33,7 @@ pub mod services;
 pub mod step;
 mod step_id;
 mod step_payloads;
+mod step_private;
 pub use step_id::GRADLE_RUN_OPERATION;
 pub mod step_identity;
 mod step_mbx_lifecycle;
@@ -134,6 +135,7 @@ pub use step_id::{
     qualification_cache_layer_prepare_input_names,
 };
 pub use step_identity::{
+    BUN_ASSETS_EXPORT_OPERATION, BUN_ASSETS_IMPORT_OPERATION, BUN_ASSETS_PREPARE_OPERATION,
     BUN_REGISTRY_INSTALL_OPERATION, MBX_WORKSPACE_CLEAN_CONDITION, PRIVATE_FETCH_OPERATION,
     PRIVATE_FETCH_TOKEN_ENV, PRIVATE_NPM_READ_EXPR, PRIVATE_NPM_READ_TOKEN_ENV,
     PRIVATE_REVOKE_OPERATION, PRIVATE_TOKEN_MINT_ACTION_PREFIX, PRIVATE_TOKEN_OUTPUT_EXPR,

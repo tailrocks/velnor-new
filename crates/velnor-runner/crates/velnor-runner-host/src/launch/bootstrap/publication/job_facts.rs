@@ -314,17 +314,19 @@ fn validate_directory_identity(
         return Err(crate::error::HostError::Identity);
     }
     let measured = crate::launch::resource_probe::filesystem_instance_digest(
-        claim.engine_id(),
-        claim.docker_root_digest(),
-        record.guest_boot_id.as_bytes(),
-        observed.mount_source.as_bytes(),
-        observed.filesystem_type_name.as_bytes(),
-        observed.filesystem_type_magic,
-        observed.mount_device_major,
-        observed.mount_device_minor,
-        observed.statx_device_major,
-        observed.statx_device_minor,
-        observed.filesystem_id,
+        crate::launch::resource_probe::FilesystemInstanceDigestInput {
+            engine_id: claim.engine_id(),
+            docker_root_digest: claim.docker_root_digest(),
+            guest_boot_id: record.guest_boot_id.as_bytes(),
+            mount_source: observed.mount_source.as_bytes(),
+            filesystem_type_name: observed.filesystem_type_name.as_bytes(),
+            filesystem_type_magic: observed.filesystem_type_magic,
+            mount_device_major: observed.mount_device_major,
+            mount_device_minor: observed.mount_device_minor,
+            statx_device_major: observed.statx_device_major,
+            statx_device_minor: observed.statx_device_minor,
+            filesystem_id: observed.filesystem_id,
+        },
     );
     if measured != channel.job_facts().filesystem_instance_digest() {
         return Err(crate::error::HostError::Identity);

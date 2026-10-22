@@ -145,6 +145,12 @@ the `Fetch Cargo sources` step of
   renderer rejects a Bun job whose block is partial, reordered, repeated or
   preceded by any step other than the helper staging
   (`bun_job_private_block`, `bun_job_private_block_late`).
+- the one assets job of a Bun member that declares suites
+  (`bun-<slug>--assets`), for the same `release-assets` repositories. Suite
+  jobs and Playwright legs never hold the block: they download the tree this
+  job verified as a same-run artifact and re-check it file by file and
+  against the lock's archive digests in `verified.json`
+  ([Bun browser suites](bun-browser-suites.md)).
 
 The Plan job gets the block only when the repository has Cargo roots; a
 Bun-only repository has no Cargo source fetch to precede and its release

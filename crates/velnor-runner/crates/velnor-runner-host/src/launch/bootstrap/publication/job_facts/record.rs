@@ -10,17 +10,19 @@ impl JobFactsPublication {
         file: &velnor_resource_probe::job_facts_wire::JobFactsPublicationFile,
     ) -> Result<Self, crate::error::HostError> {
         let filesystem_instance_digest = crate::launch::resource_probe::filesystem_instance_digest(
-            claim.engine_id(),
-            claim.docker_root_digest(),
-            guest_boot_id.as_bytes(),
-            directory.mount_source.as_bytes(),
-            directory.filesystem_type_name.as_bytes(),
-            directory.filesystem_type_magic,
-            directory.mount_device_major,
-            directory.mount_device_minor,
-            directory.statx_device_major,
-            directory.statx_device_minor,
-            directory.filesystem_id,
+            crate::launch::resource_probe::FilesystemInstanceDigestInput {
+                engine_id: claim.engine_id(),
+                docker_root_digest: claim.docker_root_digest(),
+                guest_boot_id: guest_boot_id.as_bytes(),
+                mount_source: directory.mount_source.as_bytes(),
+                filesystem_type_name: directory.filesystem_type_name.as_bytes(),
+                filesystem_type_magic: directory.filesystem_type_magic,
+                mount_device_major: directory.mount_device_major,
+                mount_device_minor: directory.mount_device_minor,
+                statx_device_major: directory.statx_device_major,
+                statx_device_minor: directory.statx_device_minor,
+                filesystem_id: directory.filesystem_id,
+            },
         );
         let value = Self {
             reservation_id: claim.reservation_id(),

@@ -10,9 +10,11 @@ use velnor_actions_contract::config::{BunBrowser, BunSuiteConfig, BunSuiteReport
 use velnor_actions_contract::{JobTimeout, Step, VelnorConfig};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::verification_jobs::{
-    BunLegMatrix, BunMemberPolicy, BunReportPolicy, BunSuitePolicy, playwright_install_step,
+    BUN_ASSETS_SUFFIX, BunAssetsPolicy, BunLegMatrix, BunMemberPolicy, BunReportPolicy,
+    BunSuitePolicy, playwright_install_step,
 };
 
+use super::bun_assets_steps::{assets_tail, suite_handoff};
 use super::bun_report_steps::report_steps;
 use super::bun_steps::{LegArgs, MemberInputs, member_steps};
 use crate::OrchestratorError;
@@ -28,6 +30,8 @@ pub(crate) struct BunPolicies {
     pub(crate) members: Vec<BunMemberPolicy>,
     /// Suite jobs, sorted by job id.
     pub(crate) suites: Vec<BunSuitePolicy>,
+    /// One assets job per member whose suites need pinned release assets.
+    pub(crate) assets: Vec<BunAssetsPolicy>,
 }
 
 /// Policies for every member and suite. `catalog` is the emission
@@ -70,7 +74,6 @@ pub(crate) fn policies(
         };
         for member in &workspace.members {
             let member_config = bun.members.get(&member.name);
-            let browsers = member_config.map_or(&[][..], |member| member.browsers.as_slice());
             let member_timeout = resolve_timeout(
                 member_config.and_then(|member| member.timeout_minutes),
                 stack_timeout.minutes(),
@@ -83,34 +86,87 @@ pub(crate) fn policies(
                 scopes: &scopes,
                 acquire,
                 block: &block,
+                handoff: &[],
                 lock: playwright_lock.as_ref(),
             };
-            let suites = member_config.map(|member| &member.suites);
-            if suites.is_some_and(|suites| !suites.is_empty()) && !block.is_empty() {
-                return Err(failure(&format!(
-                    "bun_suite_private_assets_unsupported:{}",
-                    member.name
-                )));
-            }
-            if let Some(scripts) =
-                member_job_scripts(member, bun).map_err(|err| failure(err.code()))?
-            {
-                let playwright = playwright_step(workspace, member, browsers, ctx.lock)?;
-                out.members.push(policy(
-                    member,
-                    &ctx.inputs(&scripts, playwright.as_ref(), None),
-                    member_timeout,
-                )?);
-            }
-            for (suite_id, suite) in suites.into_iter().flatten() {
-                out.suites
-                    .push(suite_policy(&ctx, suite_id, suite, member_timeout)?);
-            }
+            push_member(&mut out, &ctx, bun, member_timeout, private)?;
         }
     }
     out.members.sort_by(|left, right| left.id.cmp(&right.id));
     out.suites.sort_by(|left, right| left.id.cmp(&right.id));
+    out.assets.sort_by(|left, right| left.id.cmp(&right.id));
     Ok(out)
+}
+
+/// The member's job (unless its suites claim every script), its suite jobs
+/// and, when they need pinned release assets, its assets job.
+fn push_member(
+    out: &mut BunPolicies,
+    ctx: &MemberCtx<'_>,
+    bun: &velnor_actions_contract::config::BunStackConfig,
+    member_timeout: JobTimeout,
+    private: Option<&PrivateWiring>,
+) -> Result<(), OrchestratorError> {
+    let member = ctx.member;
+    let workspace = ctx.workspace;
+    let member_config = bun.members.get(&member.name);
+    let browsers = member_config.map_or(&[][..], |member| member.browsers.as_slice());
+    let block = ctx.block;
+    let acquire = ctx.acquire;
+    if let Some(scripts) = member_job_scripts(member, bun).map_err(|err| failure(err.code()))? {
+        let playwright = playwright_step(workspace, member, browsers, ctx.lock)?;
+        out.members.push(policy(
+            member,
+            &ctx.inputs(&scripts, playwright.as_ref(), None),
+            member_timeout,
+        )?);
+    }
+    let suites = member_config.map(|member| &member.suites);
+    let handoff = if suites.is_some_and(|suites| !suites.is_empty()) && !block.is_empty() {
+        let (policy, steps) = assets_job(member, acquire, block, private, member_timeout)?;
+        out.assets.push(policy);
+        Some(steps)
+    } else {
+        None
+    };
+    let suite_ctx = MemberCtx {
+        block: &[],
+        handoff: handoff.as_deref().unwrap_or_default(),
+        ..*ctx
+    };
+    for (suite_id, suite) in suites.into_iter().flatten() {
+        let mut policy = suite_policy(&suite_ctx, suite_id, suite, member_timeout)?;
+        policy.assets = handoff
+            .as_ref()
+            .map(|_| format!("{}{BUN_ASSETS_SUFFIX}", job_id(member)));
+        out.suites.push(policy);
+    }
+    Ok(())
+}
+
+/// The member's assets job and the hand-off its suites run instead of the
+/// App-token block: suites never copy the secret (HD-7).
+fn assets_job(
+    member: &Member,
+    acquire: Option<&Step>,
+    block: &[Step],
+    private: Option<&PrivateWiring>,
+    timeout: JobTimeout,
+) -> Result<(BunAssetsPolicy, Vec<Step>), OrchestratorError> {
+    let member_id = job_id(member);
+    let mut steps: Vec<Step> = acquire.into_iter().cloned().collect();
+    steps.extend(block.iter().cloned());
+    let pins = private.map_or_else(Vec::new, PrivateWiring::release_asset_pins);
+    steps.extend(assets_tail(&member_id, &pins)?);
+    Ok((
+        BunAssetsPolicy {
+            member: member.name.clone(),
+            id: format!("{member_id}{BUN_ASSETS_SUFFIX}"),
+            timeout,
+            steps,
+        },
+        suite_handoff(&member_id, &pins)?,
+    ))
 }
 
 /// Everything one member's jobs share.
@@ -122,6 +178,7 @@ struct MemberCtx<'a> {
     scopes: &'a [String],
     acquire: Option<&'a Step>,
     block: &'a [Step],
+    handoff: &'a [Step],
     lock: Option<&'a PlaywrightLock>,
 }
 
@@ -141,6 +198,7 @@ impl<'a> MemberCtx<'a> {
             scopes: self.scopes,
             acquire: self.acquire,
             private: self.block,
+            handoff: self.handoff,
             playwright,
             leg,
         }
@@ -196,6 +254,7 @@ fn suite_policy(
         steps,
         matrix,
         report,
+        assets: None,
     })
 }
 

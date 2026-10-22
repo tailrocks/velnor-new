@@ -62,6 +62,9 @@ fn internal_env(
         || op == velnor_actions_contract::PRIVATE_REVOKE_OPERATION
         || op == velnor_actions_contract::GRADLE_RUN_OPERATION
         || op == velnor_actions_contract::BUN_REGISTRY_INSTALL_OPERATION
+        || op == velnor_actions_contract::BUN_ASSETS_EXPORT_OPERATION
+        || op == velnor_actions_contract::BUN_ASSETS_PREPARE_OPERATION
+        || op == velnor_actions_contract::BUN_ASSETS_IMPORT_OPERATION
         || op == velnor_actions_contract::config::playwright_lock::PLAYWRIGHT_INSTALL_OPERATION
     {
         commands::validate_env(step_env)?;

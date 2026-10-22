@@ -10,7 +10,9 @@ mod witness;
 pub(crate) use guest_capacity::checked_guest_capacity;
 pub(in crate::launch) use production_profile::retained_tmpfs_bytes;
 pub(crate) use recovery::RecoveryObservation;
-pub(in crate::launch) use storage_admission::filesystem_instance_digest;
+pub(in crate::launch) use storage_admission::{
+    FilesystemInstanceDigestInput, filesystem_instance_digest,
+};
 pub(crate) use witness::StartObservationWitness;
 #[cfg(test)]
 mod storage_admission_tests;
@@ -175,7 +177,16 @@ impl Observation {
                 "cpu_millicores": self.effective_cpu_millicores,
                 "memory_total_bytes": self.memory_total_bytes,
                 "memory_available_bytes": self.record.memory_available_bytes,
+                "memory_psi_some_avg10_bps": self.record.memory_psi_some_avg10_bps,
                 "docker_root_free_bytes": self.record.docker_root_free_bytes,
+                "docker_root_total_bytes": self.record.docker_root_total_bytes,
+                "docker_root_available_bytes": self.record.docker_root_available_bytes,
+                "docker_root_inode_total": self.record.docker_root_inode_total,
+                "docker_root_inode_free": self.record.docker_root_inode_free,
+                "docker_root_inode_available": self.record.docker_root_inode_available,
+                "docker_root_inode_policy": self.record.docker_root_inode_policy,
+                "docker_root_fs_type_name": &self.record.docker_root_fs_type_name,
+                "docker_root_filesystem_id": self.record.docker_root_filesystem_id,
                 "load_milli": self.record.load_milli,
             })
         })

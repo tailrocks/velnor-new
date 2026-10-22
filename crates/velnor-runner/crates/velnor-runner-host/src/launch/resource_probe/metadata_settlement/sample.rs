@@ -154,19 +154,20 @@ pub(super) fn settlement_sample_for_identity(
         engine_id.to_owned(),
         docker_root_digest.to_owned(),
     )?;
-    let filesystem_instance_digest = super::super::filesystem_instance_digest(
-        engine_id,
-        docker_root_digest,
-        record.guest_boot_id.as_bytes(),
-        record.docker_root_mount_source.as_bytes(),
-        record.docker_root_fs_type_name.as_bytes(),
-        record.docker_root_fs_type_magic,
-        record.docker_root_device_major,
-        record.docker_root_device_minor,
-        record.docker_root_statx_device_major,
-        record.docker_root_statx_device_minor,
-        record.docker_root_filesystem_id,
-    );
+    let filesystem_instance_digest =
+        super::super::filesystem_instance_digest(super::super::FilesystemInstanceDigestInput {
+            engine_id,
+            docker_root_digest,
+            guest_boot_id: record.guest_boot_id.as_bytes(),
+            mount_source: record.docker_root_mount_source.as_bytes(),
+            filesystem_type_name: record.docker_root_fs_type_name.as_bytes(),
+            filesystem_type_magic: record.docker_root_fs_type_magic,
+            mount_device_major: record.docker_root_device_major,
+            mount_device_minor: record.docker_root_device_minor,
+            statx_device_major: record.docker_root_statx_device_major,
+            statx_device_minor: record.docker_root_statx_device_minor,
+            filesystem_id: record.docker_root_filesystem_id,
+        });
     let pool_observation = StoragePoolObservation::new_with_filesystem(
         pool.pool_id().to_owned(),
         filesystem_instance_digest,
