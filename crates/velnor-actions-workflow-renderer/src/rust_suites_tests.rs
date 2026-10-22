@@ -41,6 +41,16 @@ fn sample_spec(suites: Vec<RustSuiteConfig>) -> RustSuitesRenderSpec {
         mbx_action: None,
         pull_request_cache_policy: PullRequestCachePolicy::ReadOnly,
         export_rustup_toolchain: true,
+        verify_restored_rust_argv: vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            "echo restored".to_owned(),
+        ],
+        verify_rust_argv: vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            "echo verify-rust".to_owned(),
+        ],
     }
 }
 

@@ -54,6 +54,8 @@ pub struct FreshnessSpec {
     pub mise_setup: MiseSetup,
     /// Exact Rust toolchain installed and used by the freshness script.
     pub rust_version: String,
+    /// `sh -c` argv verifying the installed toolchain file by file.
+    pub verify_rust_argv: Vec<String>,
     /// Exact generator version for the marker.
     pub generator_version: String,
 }
@@ -112,6 +114,11 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
         ],
         BTreeMap::new(),
     )?;
+    let verify_rust = shell_step(
+        crate::VERIFY_RUST_TOOLCHAIN_STEP,
+        spec.verify_rust_argv.clone(),
+        BTreeMap::new(),
+    )?;
     let probe = shell_step(
         "Check upstream freshness",
         vec![
@@ -128,7 +135,13 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
         ],
         BTreeMap::new(),
     )?;
-    let document = freshness_document(spec, &checkout, &setup_mise, &install_rust, &probe)?;
+    let document = freshness_document(
+        spec,
+        &checkout,
+        &setup_mise,
+        &[install_rust, verify_rust],
+        &probe,
+    )?;
     let text = crate::render::fallback::render_checked_workflow(
         FRESHNESS_WORKFLOW_PATH,
         &document,
@@ -146,16 +159,14 @@ fn freshness_document(
     spec: &FreshnessSpec,
     checkout: &Step,
     setup_mise: &Step,
-    install_rust: &Step,
+    install_rust: &[Step],
     probe: &Step,
 ) -> Result<Yaml, RenderError> {
+    let mut sequence = vec![checkout.clone(), setup_mise.clone()];
+    sequence.extend(install_rust.iter().cloned());
+    sequence.push(probe.clone());
     velnor_actions_contract::workflow::step_identity::validate_step_sequence(
-        &[
-            checkout.clone(),
-            setup_mise.clone(),
-            install_rust.clone(),
-            probe.clone(),
-        ],
+        &sequence,
         FRESHNESS_JOB_ID,
     )
     .map_err(RenderError::Contract)?;
@@ -175,12 +186,12 @@ fn freshness_document(
         ("permissions".to_owned(), read_only_permissions()),
         (
             "steps".to_owned(),
-            Yaml::Seq(vec![
-                crate::steps_plain::plain_step_to_yaml(checkout)?,
-                crate::steps_plain::plain_step_to_yaml(setup_mise)?,
-                crate::steps_plain::plain_step_to_yaml(install_rust)?,
-                crate::steps_plain::plain_step_to_yaml(probe)?,
-            ]),
+            Yaml::Seq(
+                sequence
+                    .iter()
+                    .map(crate::steps_plain::plain_step_to_yaml)
+                    .collect::<Result<_, _>>()?,
+            ),
         ),
     ]);
     Ok(Yaml::Map(vec![

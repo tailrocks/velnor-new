@@ -64,14 +64,20 @@ pub(super) fn jobs(
     }
     validate_exact_version(&request.mbx_version, "mbx")?;
     validate_exact_version(&request.rust_version, "rust")?;
+    let verify_rust = crate::commands::join_argv_for_run(&request.verify_rust_argv)?;
 
     Ok(vec![
-        job(request, hosted, true),
-        job(request, hosted, false),
+        job(request, hosted, true, &verify_rust),
+        job(request, hosted, false, &verify_rust),
     ])
 }
 
-fn job(request: &MbxQualificationPins, hosted: &RunnerSpec, writer: bool) -> (String, Yaml) {
+fn job(
+    request: &MbxQualificationPins,
+    hosted: &RunnerSpec,
+    writer: bool,
+    verify_rust: &str,
+) -> (String, Yaml) {
     let (id, title, mode) = if writer {
         (
             "mbx-cache-write-hosted",
@@ -105,6 +111,14 @@ fn job(request: &MbxQualificationPins, hosted: &RunnerSpec, writer: bool) -> (St
         checkout_step(),
         mise_setup_step(request),
         mise_install_step(request),
+        Yaml::Map(vec![
+            (
+                "name".to_owned(),
+                Yaml::str(crate::VERIFY_RUST_TOOLCHAIN_STEP),
+            ),
+            ("run".to_owned(), Yaml::str(verify_rust)),
+        ]),
+        expose_rust_step(request),
         mbx_action_step(request, writer),
         verify_action_step(request, writer),
     ];
@@ -154,8 +168,24 @@ fn mise_install_step(request: &MbxQualificationPins) -> Yaml {
         ),
         (
             "run".to_owned(),
+            Yaml::str(format!("mise install rust@{rust}")),
+        ),
+    ])
+}
+
+/// Runs only after the verification: `rustc` is the first toolchain binary
+/// the job executes.
+fn expose_rust_step(request: &MbxQualificationPins) -> Yaml {
+    let rust = &request.rust_version;
+    Yaml::Map(vec![
+        (
+            "name".to_owned(),
+            Yaml::str("Put the verified Rust toolchain on PATH"),
+        ),
+        (
+            "run".to_owned(),
             Yaml::str(format!(
-                "mise install rust@{rust} && printf '%s/bin\\n' \"$(mise exec rust@{rust} -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
+                "printf '%s/bin\\n' \"$(mise exec rust@{rust} -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
             )),
         ),
     ])

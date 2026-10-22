@@ -102,6 +102,10 @@ pub struct RenderContext {
     /// failed `generate` on ambient homes after plan fetch moved to
     /// owned homes).
     pub plan_consumer_env: BTreeMap<String, String>,
+    /// Catalog-pinned release archives (`<install dir> <version> <platform>
+    /// <url> <sha256>`) the tools-cache restore re-verifies restored Mise
+    /// installs against when `mise.lock` has no entry for them.
+    pub tool_pins: Vec<String>,
 }
 
 /// One fixed validator-job shell step: kind plus display name plus argv.

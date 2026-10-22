@@ -121,6 +121,8 @@ pub struct MbxQualificationPins {
     pub mbx_version: String,
     /// Exact Rust toolchain version used by the qualification lane.
     pub rust_version: String,
+    /// `sh -c` argv verifying the installed toolchain file by file.
+    pub verify_rust_argv: Vec<String>,
 }
 
 /// Exact Mise release pins for the hosted Linux and macOS x64 qualification.

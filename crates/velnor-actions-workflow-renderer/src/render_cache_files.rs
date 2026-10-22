@@ -8,6 +8,7 @@ pub(crate) fn with_runtime_identity_files(
     mut files: Vec<RenderedFile>,
     jobs: &BTreeMap<String, Job>,
     version: &str,
+    tool_pins: &[String],
 ) -> Result<Vec<RenderedFile>, RenderError> {
     let lanes: BTreeSet<String> = jobs
         .values()
@@ -24,7 +25,9 @@ pub(crate) fn with_runtime_identity_files(
     }
     if !lanes.is_empty() {
         files.push(cache_p08::runtime_identity_script_file(version)?);
-        files.push(crate::cache_steps::tools_restore_action_file(version)?);
+        files.push(crate::cache_steps::tools_restore_action_file(
+            version, tool_pins,
+        )?);
         files.push(crate::tool_seed::action_file(version)?);
     }
     Ok(files)
