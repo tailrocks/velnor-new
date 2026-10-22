@@ -61,7 +61,7 @@ jobs:
           persist-credentials: "false"
           ref: ${{ inputs.source_sha }}
       - name: Setup Mise
-        uses: jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde
+        uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550
         with:
           version: 2026.10.17
           sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
@@ -71,7 +71,7 @@ jobs:
           cache_save: "false"
       - name: Install pinned release gate tools
         shell: bash
-        run: mise --no-config --no-env --no-hooks install gh@2.102.1 jactionlint@2.3.0 shellcheck@0.11.0
+        run: mise --no-config --no-env --no-hooks install gh@2.103.0 jactionlint@2.3.0 shellcheck@0.11.0
       - name: Verify jactionlint
         shell: bash
         run: "sh -c 'set -eu; v=\"2.3.0\"; case \"${RUNNER_OS-}-${RUNNER_ARCH-}\" in Linux-X64) p=linux-x64;; Linux-ARM64) p=linux-arm64;; macOS-ARM64) p=macos-arm64;; macOS-X64) p=macos-x64;; *) p=unsupported;; esac; case \"$v/$p\" in 2.3.0/linux-arm64) want=7b6c395e8fb7c407d7b3358da1deab23434a75840dc76768ddb30119ce1041c0;; 2.3.0/linux-x64) want=3566633b33780130c5bea5342ad8c5505092e40094c7d6e25ee74e382899a5c7;; 2.3.0/macos-arm64) want=b6853a909613dc9381548b1d61d278e1c4b1ab8334212f67ea6efa46f1f5d34b;; 2.3.0/macos-x64) want=1aa284dc8b12ebd6bee858dcbbfb94c0b92e457cd7e4bdaee07ae2b9238dba45;; *) want=;; esac; if [ -z \"$want\" ]; then if [ \"$v\" = \"2.3.0\" ]; then printf \"%s\\n\" \"::error::jactionlint_executable_not_catalogued: jactionlint $v on $p has no executable digest in this Velnor catalog\" >&2; exit 1; fi; printf \"%s\\n\" \"::notice::jactionlint $v on $p has no Velnor executable digest; the Mise release digest and GitHub attestation checks still applied\"; exit 0; fi; d=\"$RUNNER_TEMP/velnor/jactionlint-verify\"; rm -rf \"$d\"; mkdir -p \"$d\"; mise --no-config --no-env --no-hooks which --tool \"jactionlint@$v\" jactionlint > \"$d/path\" || { printf \"%s\\n\" \"::error::jactionlint_not_installed: jactionlint@$v\" >&2; exit 1; }; IFS= read -r exe < \"$d/path\"; test -f \"$exe\" || { printf \"%s\\n\" \"::error::jactionlint_executable_missing: $exe\" >&2; exit 1; }; printf \"%s  %s\\n\" \"$want\" \"$exe\" > \"$d/executable.sha256\"; if command -v sha256sum >/dev/null 2>&1; then sha256sum -c \"$d/executable.sha256\" >/dev/null; else shasum -a 256 -c \"$d/executable.sha256\" >/dev/null; fi || { printf \"%s\\n\" \"::error::jactionlint_executable_digest_mismatch: $exe is not SHA-256 $want\" >&2; exit 1; }; printf \"%s\\n\" \"velnor: jactionlint $v ($p) executable SHA-256 $want verified\"'"
@@ -82,7 +82,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
-        run: "gh() {\n  (\n    mise --no-config --no-env --no-hooks exec gh@2.102.1 -- gh \"$@\" & _velnor_gh_pid=$!\n    ( sleep 60; kill -TERM \"$_velnor_gh_pid\" 2>/dev/null; sleep 5; kill -KILL \"$_velnor_gh_pid\" 2>/dev/null ) </dev/null >/dev/null 2>&1 & _velnor_gh_watch=$!\n    _velnor_gh_status=0\n    wait \"$_velnor_gh_pid\" || _velnor_gh_status=$?\n    kill -KILL \"$_velnor_gh_watch\" 2>/dev/null || true\n    wait \"$_velnor_gh_watch\" 2>/dev/null || true\n    exit \"$_velnor_gh_status\"\n  ) </dev/null\n}\nexport -f gh\nset -eu\ntest \"$GITHUB_REPOSITORY\" = 'tailrocks/velnor-new'\ntest \"$GITHUB_REF\" = 'refs/heads/main'\ntest \"$GITHUB_EVENT_NAME\" = 'workflow_dispatch'\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nruns=\"$(gh api --paginate --slurp \"repos/tailrocks/velnor-new/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&branch=main&event=push&per_page=100\")\"\nrun=\"$(printf '%s\\n' \"$runs\" | jq -ce --arg sha \"$GITHUB_SHA\" --arg repo 'tailrocks/velnor-new' '[.[] | (.workflow_runs // [])[] | select(.path == \".github/workflows/ci.yml\" and .head_sha == $sha and .head_branch == \"main\" and .head_repository.full_name == $repo and .event == \"push\")] | sort_by([.run_number, .id]) | last // error(\"no exact-source main CI run\")')\"\ntest \"$(printf '%s\\n' \"$run\" | jq -r .status)\" = completed\ntest \"$(printf '%s\\n' \"$run\" | jq -r .conclusion)\" = success\nrun_id=\"$(printf '%s\\n' \"$run\" | jq -r .id)\"\nattempt=\"$(printf '%s\\n' \"$run\" | jq -r .run_attempt)\"\njobs=\"$(gh api --paginate --slurp \"repos/tailrocks/velnor-new/actions/runs/$run_id/attempts/$attempt/jobs?per_page=100\")\"\nprintf '%s\\n' \"$jobs\" | jq -e --arg sha \"$GITHUB_SHA\" '[.[] | (.jobs // [])[] | select(.name == \"Required\")] | length == 1 and .[0].head_sha == $sha and .[0].head_branch == \"main\" and .[0].status == \"completed\" and .[0].conclusion == \"success\"' >/dev/null\ntest \"$(gh api repos/tailrocks/velnor-new/commits/main --jq .sha)\" = \"$GITHUB_SHA\""
+        run: "gh() {\n  (\n    mise --no-config --no-env --no-hooks exec gh@2.103.0 -- gh \"$@\" & _velnor_gh_pid=$!\n    ( sleep 60; kill -TERM \"$_velnor_gh_pid\" 2>/dev/null; sleep 5; kill -KILL \"$_velnor_gh_pid\" 2>/dev/null ) </dev/null >/dev/null 2>&1 & _velnor_gh_watch=$!\n    _velnor_gh_status=0\n    wait \"$_velnor_gh_pid\" || _velnor_gh_status=$?\n    kill -KILL \"$_velnor_gh_watch\" 2>/dev/null || true\n    wait \"$_velnor_gh_watch\" 2>/dev/null || true\n    exit \"$_velnor_gh_status\"\n  ) </dev/null\n}\nexport -f gh\nset -eu\ntest \"$GITHUB_REPOSITORY\" = 'tailrocks/velnor-new'\ntest \"$GITHUB_REF\" = 'refs/heads/main'\ntest \"$GITHUB_EVENT_NAME\" = 'workflow_dispatch'\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nruns=\"$(gh api --paginate --slurp \"repos/tailrocks/velnor-new/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&branch=main&event=push&per_page=100\")\"\nrun=\"$(printf '%s\\n' \"$runs\" | jq -ce --arg sha \"$GITHUB_SHA\" --arg repo 'tailrocks/velnor-new' '[.[] | (.workflow_runs // [])[] | select(.path == \".github/workflows/ci.yml\" and .head_sha == $sha and .head_branch == \"main\" and .head_repository.full_name == $repo and .event == \"push\")] | sort_by([.run_number, .id]) | last // error(\"no exact-source main CI run\")')\"\ntest \"$(printf '%s\\n' \"$run\" | jq -r .status)\" = completed\ntest \"$(printf '%s\\n' \"$run\" | jq -r .conclusion)\" = success\nrun_id=\"$(printf '%s\\n' \"$run\" | jq -r .id)\"\nattempt=\"$(printf '%s\\n' \"$run\" | jq -r .run_attempt)\"\njobs=\"$(gh api --paginate --slurp \"repos/tailrocks/velnor-new/actions/runs/$run_id/attempts/$attempt/jobs?per_page=100\")\"\nprintf '%s\\n' \"$jobs\" | jq -e --arg sha \"$GITHUB_SHA\" '[.[] | (.jobs // [])[] | select(.name == \"Required\")] | length == 1 and .[0].head_sha == $sha and .[0].head_branch == \"main\" and .[0].status == \"completed\" and .[0].conclusion == \"success\"' >/dev/null\ntest \"$(gh api repos/tailrocks/velnor-new/commits/main --jq .sha)\" = \"$GITHUB_SHA\""
       - name: Check release freshness gate
         shell: bash
         run: bash scripts/check-freshness.sh
@@ -90,7 +90,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
-        run: "gh() {\n  (\n    mise --no-config --no-env --no-hooks exec gh@2.102.1 -- gh \"$@\" & _velnor_gh_pid=$!\n    ( sleep 60; kill -TERM \"$_velnor_gh_pid\" 2>/dev/null; sleep 5; kill -KILL \"$_velnor_gh_pid\" 2>/dev/null ) </dev/null >/dev/null 2>&1 & _velnor_gh_watch=$!\n    _velnor_gh_status=0\n    wait \"$_velnor_gh_pid\" || _velnor_gh_status=$?\n    kill -KILL \"$_velnor_gh_watch\" 2>/dev/null || true\n    wait \"$_velnor_gh_watch\" 2>/dev/null || true\n    exit \"$_velnor_gh_status\"\n  ) </dev/null\n}\nexport -f gh\nset -eu\ntest \"$GITHUB_REF\" = \"refs/heads/main\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(gh api repos/tailrocks/velnor-new/commits/main --jq .sha)\" = \"$GITHUB_SHA\""
+        run: "gh() {\n  (\n    mise --no-config --no-env --no-hooks exec gh@2.103.0 -- gh \"$@\" & _velnor_gh_pid=$!\n    ( sleep 60; kill -TERM \"$_velnor_gh_pid\" 2>/dev/null; sleep 5; kill -KILL \"$_velnor_gh_pid\" 2>/dev/null ) </dev/null >/dev/null 2>&1 & _velnor_gh_watch=$!\n    _velnor_gh_status=0\n    wait \"$_velnor_gh_pid\" || _velnor_gh_status=$?\n    kill -KILL \"$_velnor_gh_watch\" 2>/dev/null || true\n    wait \"$_velnor_gh_watch\" 2>/dev/null || true\n    exit \"$_velnor_gh_status\"\n  ) </dev/null\n}\nexport -f gh\nset -eu\ntest \"$GITHUB_REF\" = \"refs/heads/main\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(gh api repos/tailrocks/velnor-new/commits/main --jq .sha)\" = \"$GITHUB_SHA\""
   build-linux:
     runs-on: ubuntu-26.04
     timeout-minutes: 10
@@ -346,7 +346,7 @@ jobs:
           persist-credentials: "false"
           ref: ${{ inputs.source_sha }}
       - name: Setup Mise
-        uses: jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde
+        uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550
         with:
           version: 2026.10.17
           sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
