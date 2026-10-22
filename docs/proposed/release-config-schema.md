@@ -118,4 +118,3 @@ Rules (`RustReleaseConfig::validate`, then generation):
 - Any `git` source on the repository owner's own GitHub organization must be
   pinned with `tag` (`private_git_dependency_unpinned`); a branch moves and a
   bare revision hides the release.
-

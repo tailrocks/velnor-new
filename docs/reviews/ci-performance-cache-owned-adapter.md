@@ -89,7 +89,6 @@ actual metadata containers before export; a `._` filename prefix is not format
 proof and must not discard ordinary source work. Both native policy changes are
 owned separately and remain publication gates.
 
-
 ## Defensive integration checkpoint (2026-10-03)
 
 Active transport is now fixed Node 24 in-process `zstd-without-long` on both
@@ -117,7 +116,6 @@ qualified interpreter bridge; no separate JavaScript predicate is authorized.
 No source commit, publication, hosted service qualification, or warmed-cache
 qualification is claimed by this checkpoint.
 
-
 The fixed active codec also passed three local source-owned create/decode/quarantine
 roundtrips on macOS Node 24.20.0 and native arm64 Linux Node 24.21.0. They preserve
 content, executable mode, symlink target, and space/newline filenames while leaving
@@ -126,7 +124,6 @@ original payload roots untouched. Proof program: candidate
 `<PRIVATE_TMP>` and
 `<PRIVATE_TMP>`. These local rounds do not establish
 hosted cache service publication, receipt authorship, or cold/warm qualification.
-
 
 Active metadata probes now include nonzero physical flags: macOS `hidden` and
 Linux `nodump`. Both source fixtures retain their payload entries while raw
@@ -141,7 +138,6 @@ are converted only in the creation manifest to workspace-relative transport
 names; original ordered SDK inputs remain unchanged for cache-version hashing.
 Exact typed SDK restore errors now propagate to the action classifier. Final
 shared-predicate integration and source/bundle review still block publication.
-
 
 ## Audit repair and transport semantics
 
@@ -163,7 +159,6 @@ transport diagnostic JSON cannot supply that witness or recover lexical targets.
 
 No immutable cache-action commit, published pin, private projection capability,
 or qualified hosted runtime profile exists. Shared metadata policy remains strict.
-
 
 ## Frozen build checkpoint
 
@@ -193,14 +188,12 @@ No cache-action source commit or public pin exists yet. Hosted Foundation profil
 remain empty, projection capability remains unavailable, and native metadata policy
 stays strict. No cold/warm cache service qualification is claimed.
 
-
 The active fixed zstd codec also roundtrips a complete private two-path hardlink
 group through the actual owned SDK creator and quarantine restore on both hosts.
 It preserves bytes/0755 and produces independent nlink-one files; the original
 group stays unchanged. Receipts: `<PRIVATE_TMP>` and
 `<PRIVATE_TMP>`. The proof script lives outside the
 frozen action source and makes no hosted qualification claim.
-
 
 ## Raw symlink traversal correction
 

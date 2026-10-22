@@ -15,7 +15,7 @@ afe43409fd95e6e7c92880653b359f24d32179f9687c7bea908f163b48a88c7a  ./.github/acti
 7122949ab0e49cffa2f750be371bbb9cc44d86a18a032d7436d689a6d0904edd  ./.github/actions/generator-release-qualify-macos/action.yml
 dc05fc800fd7072edd8f67069f3a010d23b09ad474cf4951a67aab12d5779674  ./.github/actions/u26/action.yml
 ccb712d8e36b8d02ec865437e4bc5faaaff4a2a2e3fff562bf7d442babf9e518  ./.github/actions/velnor-tool-seed/action.yml
-c3fcfa86ac8081f180db2ecf4ab6fbce73e543cd622023ddc32a6cad4391bcf9  ./.github/actions/velnor-tools-cache-restore/action.yml
+fb9c409dbe6d068592f04b81aa104982f3dc63c33fa0f3d93655c6eed69d1c8e  ./.github/actions/velnor-tools-cache-restore/action.yml
 ad0b1f1bca9c5a10be17b7570ec3cc55e315ad8b137a685b035def3ff05e278e  ./.github/actions/velnor-tools-prelude-u26/action.yml
 c826d6b104dabdf2eb3c9e8bf6fa90dbd2a3eac69c4fdc958c52ca0d46aaf0f2  ./.github/dco.yml
 f6833d0134d44ac3cef9011e1b0a3f61b83ad440a8f12216c04871c7e5e75655  ./.github/jactionlint.yaml
@@ -23,7 +23,7 @@ efecb8d39952401d4dade9601a608d1746e8609ea0c64a70258c0d1ab4f5ab02  ./.github/scri
 5e017708b3768509b90a65b2274e5a092c4a9535ece6c50a26122b8df0dd6eee  ./.github/velnor/task-execution-manifest-v1.json
 f1fbe4f57e7c36c87b4f9ba15576f03c43ad49b9b27133da125ff3bb0e89f3db  ./.github/workflows/cache-cleanup.yml
 7f6739486a03c9ccd9fc742bbbb162bc1cc3e456f947beb31458cd61da369c99  ./.github/workflows/cache-prune.yml
-ebadff216f8b2dd17a2a52dcbd5931127f4c3b84c11b6e38e8a5cadcd1de73fe  ./.github/workflows/ci.yml
+edccc91d0dc8ebf2f1a81fe6dddd82cbde5af282f87833f137d0a03db5531dc4  ./.github/workflows/ci.yml
 2606f8cf2759070d31585ec5d8bf49cc67cd734c7a00c36cf662adb2a83e186e  ./.github/workflows/freshness.yml
 8f72a99c6d73f15d1ff3ca325552d73d6e69126ec2679e3e29e8241a5c92ed50  ./.github/workflows/job-image-candidate.yml
 90ce364f4c4ac662a989d023e3e78b564d09f320f5cf25d71f289fad66d72871  ./.github/workflows/product-release-binary.yml

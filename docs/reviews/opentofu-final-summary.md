@@ -107,6 +107,7 @@ Fn counts are `#[test]`-fn greps from the ledger.
 ## 3. Producer + consumer run IDs and results
 
 Producer (`tailrocks/velnor-new`):
+
 - 36998679726: CI, event push, headSha == 95c1d6f (exact T31 source),
   conclusion success, 16/16 jobs (Actionlint, Machete, Alint, Zizmor,
   Deny, Plan, 8× Rust crates, Required, Publish baseline).
@@ -126,6 +127,7 @@ Producer (`tailrocks/velnor-new`):
   red→green then success; #8 push run 36916298152 in-progress at check.
 
 Consumer (`tailrocks/github-terraform`):
+
 - 37002672312: CI on exact PR #37 head 3abf81e, conclusion failure.
   Actionlint SUCCESS, DCO SUCCESS, Plan FAILURE, Required FAILURE,
   `OpenToFu — .` SKIPPED (`needs: [plan]`), Publish baseline SKIPPED.
@@ -187,6 +189,7 @@ generate 1/10/100: 271/357/1598 (T24), 213/361/2009 (T25). Plan fails
 closed past 40 roots on the 320 KiB matrix budget (pinned, C3).
 
 Budget verdicts (kept open, never redefined):
+
 - 10 s warm plan: PARTIAL — local analysis PASSED with 30× headroom
   (warm med 280 ms); hosted tofu CI now EXISTS (push run
   37011009875) with OpenToFu-job wall ≈ 11 s (13:08:37–48,
@@ -216,8 +219,8 @@ a00bbff (re-cut pins only; generator otherwise byte-identical):
 O1 replaced-inputs drive preview; O2 unchanged consumer file; O3
 CLOSED (native fmt/init-readonly/validate lanes, live-green on
 main); O4 no state file; O5 triggers + drift check + full-SHA pins;
-O6 Required needs + exact-set merge; O7 CLOSED (mise opentofu@1.13.1
-+ lock-keyed restore + push-gated save — baseline artifact live on
+O6 Required needs + exact-set merge; O7 CLOSED (mise opentofu@1.13.1 -
+lock-keyed restore + push-gated save — baseline artifact live on
 main); O8a drift check ✓ (silent on main) / O8b actionlint ✓ / O8c
 trust still DROPPED; O9 still absent (same justification); O10
 still DROPPED WITHOUT justification — no `schedule:` trigger in
@@ -276,6 +279,7 @@ consumer PRs #34/#31 noted, not touched.
 ## 7. Every remaining limitation (nothing waived)
 
 UNRUN / UNMET / OPEN:
+
 1. T35 CLOSED (was BLOCKED): MERGE-GO issued, PR #37 squash-merged
    to a00bbff, push run 37011009875 success on exact SHA. No
    remaining merge item.
@@ -299,23 +303,29 @@ UNRUN / UNMET / OPEN:
    (registry network; opt-in via `VELNOR_LIVE_TOFU=1`).
 
 ACCEPTED-WITH-EVIDENCE (complete, not open):
+
 6. T04 reviewer still "pending independent Phase-A review"
    (ledger-stated); T01–T03/T05–T07 coordinator-accepted without
    dedicated verify threads.
+
 7. No verify-t30..t33 threads exist: T30–T33 rely on impl-thread
    evidence + coordinator independent re-runs. T34/T35 DO have
    dedicated threads now (verify-t34c PASS, merge-t35 PASS); the
    older "verify-t34"/"verify-t35" ledger labels referred to
    coordinator re-runs (corrected in the lane).
+
 8. T10 nextest 2215/2216 (sole p12_live live-API 403, base-identical,
    accepted by impl + verify); dispo c4/c5 same single env-403
    (accepted, clean c6–c9).
+
 9. B3 residual (no live-path post-restore verification; downgrade
    complete), B8 deferred warn (V1 accepts recorded-but-unpinned),
    B12/C4/B10/B14/B15/B17/A9 acceptances — all recorded in the ledger.
+
 10. O10 flag stands (no schedule trigger); O8c trust still dropped;
     O9 dropped-justified; consumer mise lock 1.12.5 vs catalog 1.13.1
     drift flag stands.
+
 11. Historical T31 scratch pair (single-host `c8759f3e…`, zeros
     linux fixture, unpublished `16394c54…` manifest in a sibling
     worktree path) is SUPERSEDED for CI acquisition by published
@@ -323,26 +333,33 @@ ACCEPTED-WITH-EVIDENCE (complete, not open):
     as T31/T32 historical evidence only. Seed6 `517c1d6` no longer
     the consumer pin (v0.1.0 digest pins live on main); seed9
     `09b443e` staleness recorded at T01, unresolved by design.
+
 12. Measurement commits `f57e0b4`/`c2a77b7` DANGLING (doc-only-delta
     proof commands in the perf docs); qual-input long material lives
     in `/tmp` (`/tmp/velnor-phaseb-research-tmp/q1-parser-prequal.md`,
     `q2-t08-checklist.md`, `q4-digest.md`, ws1–ws7 reports) — ephemeral
     paths, contents quoted in reports/ledger.
+
 13. merge2 FAIL recorded (alint 5 errors on recaptured previews +
     message inaccuracy); superseded by in-lane fixed content, not waived.
+
 14. Doc staleness (T08-era, evidence-only, flagged by T26, untouched):
     `requirements-evidence.md:24` seven_members (+:34 tree_policy fn),
     `.alint.yml:15` seven manifests.
+
 15. Toolchain skews: local alint 0.17.0 vs CI 0.16.1 (verdicts transfer;
     findings are config-rule based); `AGENTS.md` deny `--locked` order
     stale for cargo-deny 0.20.2 (plain `cargo deny check` used
     throughout); some verifies used nextest runner 0.9.143 (pinned
     0.9.146 unavailable offline) with identical counts.
+
 16. Goldens: dogfood `Repository:` worktree-path line is a standing
     artifact (5/5 only in the canonical checkout; 4/5 + 1-line diff
     elsewhere); CI does not run the golden check.
+
 17. Freshness: 3 temporary holds expire 2026-10-15 (verified at T28;
     re-check at any later identity or exception-expiry fails).
+
 18. Consumer main protected by ruleset `protect-main` ONLY (squash-only,
     linear, thread-resolution, 0 approvals, NO required checks);
     classic protection 404. DCO observed-only (external).
@@ -376,8 +393,8 @@ ACCEPTED-WITH-EVIDENCE (complete, not open):
   §§1–2 + coordinator log reads (d369a83 gates + run 37009657819).
 - §7: T35 (1), T31 §8 + T34 §5 + release inspection (2), perf docs
   §3/§4 + merge-t35 §3 (3), ledger §4 + T32 (4), T27/T28 (5), ledger
-  + thread listing (6–7), T10/dispo (8), ledger §§3–4 (9), T32/T33
-  + merged-main contents (10), T31 + T01 + §2 (11), perf docs +
+  - thread listing (6–7), T10/dispo (8), ledger §§3–4 (9), T32/T33
+  - merged-main contents (10), T31 + T01 + §2 (11), perf docs +
   research1 (12), verify-merge2 + §1b (13), impl-t26 (14),
   T32/verify-t28/verify-t10 (15), verify-merge2/impl-fixtofu-alint
   (16), verify-t28 (17), T34 §7/T35 §2 + ruleset id 24300477 (18).
