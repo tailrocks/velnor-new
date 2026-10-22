@@ -258,17 +258,26 @@ fn api_json_or_not_found(
             .map(Some)
             .map_err(|_| internal("package_publish_settings_response_invalid"));
     }
-    if github_api_not_found(&output.stderr, &output.stdout) {
+    if classic_protection_absent(&output.stderr, &output.stdout) {
         return Ok(None);
     }
     Err(internal("package_publish_settings_read_failed"))
 }
 
-fn github_api_not_found(stderr: &[u8], stdout: &[u8]) -> bool {
+/// Recognize the exact GitHub answers for a branch without classic protection.
+///
+/// A caller with Administration read on a branch protected only by rulesets receives
+/// `404 {"message":"Branch not protected"}`; the generic `404 {"message":"Not Found"}` is
+/// also accepted. Both mean "no classic source": the effective rules read is still required
+/// and must supply every control on its own. Any other status or message fails closed.
+fn classic_protection_absent(stderr: &[u8], stdout: &[u8]) -> bool {
     stderr.windows(10).any(|window| window == b"(HTTP 404)")
         && serde_json::from_slice::<Value>(stdout).is_ok_and(|value| {
             value.get("status").and_then(Value::as_str) == Some("404")
-                && value.get("message").and_then(Value::as_str) == Some("Not Found")
+                && matches!(
+                    value.get("message").and_then(Value::as_str),
+                    Some("Not Found" | "Branch not protected")
+                )
         })
 }
 

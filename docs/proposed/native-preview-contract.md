@@ -281,6 +281,17 @@ not trigger automatic permission expansion or credential fallback. No writer
 bypass, admin write, copied credential or producer-cache authority is introduced
 by channel support.
 
+Main protection is the union of the effective `rules/branches/main` read and the
+classic `branches/main/protection` read. A branch protected only by rulesets has
+no classic source: with Administration read, GitHub answers the classic route
+with `404 {"message":"Branch not protected"}` (the generic `404 Not Found` is
+treated the same). Only those exact 404 answers mean "no classic source", and the
+rules read must then supply every required control on its own. Every other
+status or message, including 401 and 403, fails closed with
+`package_publish_settings_read_failed`. The `preview-publish` and `tap-update`
+environments must have no protection rule other than the single `branch_policy`
+rule GitHub reports for their custom deployment branch policy.
+
 ## Native Homebrew destinations and continuation
 
 `HomebrewTapConfig` retains one repository, updater and shared W/O/C/R policy.
