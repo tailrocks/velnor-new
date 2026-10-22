@@ -1,7 +1,6 @@
 {
   "version": 1,
   "recipes": [
-    "actionlint",
     "alint",
     "artifacts-hosted",
     "artifacts-scale-set",
@@ -41,6 +40,7 @@
     "expect-fail-hosted",
     "expect-fail-scale-set",
     "freshness",
+    "jactionlint",
     "js-hosted",
     "js-pin-hosted",
     "js-pin-scale-set",

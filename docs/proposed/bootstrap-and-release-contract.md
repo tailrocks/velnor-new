@@ -15,7 +15,7 @@ NOT depend on Velnor-only files.
 The generator release contains a compiled-in catalog of exact versions for
 Mise, Rust/components, MBX, Nextest, GitHub CLI, CI tools, GitHub Actions, and
 supported runner labels. The orchestrator passes typed catalog records to the
-Mise, Actionlint, and workflow adapters. Generated consumer YAML embeds every
+Mise, Jactionlint, and workflow adapters. Generated consumer YAML embeds every
 selected exact version, immutable action SHA, and runner label. It never
 resolves `latest` at workflow runtime.
 

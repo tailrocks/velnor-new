@@ -124,7 +124,7 @@ fn consumer_plan_installs_validators_before_check_generated() -> TestResult {
     let catalog = ToolCatalog::pinned();
     let specs = [
         PinnedTool::Rust,
-        PinnedTool::Actionlint,
+        PinnedTool::Jactionlint,
         PinnedTool::Shellcheck,
         PinnedTool::Zizmor,
     ]
@@ -225,7 +225,7 @@ fn non_rust_consumer_plan_omits_rust_bootstrap_in_generated_yaml() -> TestResult
         );
     }
     for tool in [
-        PinnedTool::Actionlint,
+        PinnedTool::Jactionlint,
         PinnedTool::Shellcheck,
         PinnedTool::Zizmor,
     ] {

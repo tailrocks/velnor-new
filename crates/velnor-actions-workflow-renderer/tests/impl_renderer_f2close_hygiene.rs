@@ -49,7 +49,7 @@ fn cache_layers_restore_independently() -> Result<(), RenderError> {
         &[],
         &[velnor_actions_workflow_renderer::steps::TASK_ARTIFACTS_DIR.to_owned()],
     )?;
-    let specs = ["actionlint@1.7.12".to_owned()];
+    let specs = ["jactionlint@2.3.0".to_owned()];
     let payload = ToolsCachePayload::new(ToolsCacheInputs {
         runs_on: LABEL,
         target: "x86_64-unknown-linux-gnu",

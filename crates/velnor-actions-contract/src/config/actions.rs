@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 /// `asamarts/alint` pin is emittable but not consumer-overridable
 /// (version-policy §2, GitHub Action defaults). The shape rules below
 /// follow `overrides.rs` by convention (the contract cannot depend on
-/// actionlint, which owns the approved `(sha, version)` catalog check).
+/// the action-pin adapter, which owns the approved `(sha, version)` catalog check).
 pub const OVERRIDABLE_ACTIONS: [&str; 7] = [
     "jdx/mise-action",
     "actions/checkout",
@@ -44,7 +44,7 @@ impl ActionsConfig {
     /// Validate override keys (allowlist) and pin shapes.
     ///
     /// Catalog membership (approved `(sha, version)` pairs) is enforced by
-    /// actionlint at generation time; the contract rejects unknown keys
+    /// the action-pin adapter at generation time; the contract rejects unknown keys
     /// and malformed pins here.
     /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {

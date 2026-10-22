@@ -292,7 +292,7 @@ compiled catalog default; malformed toolchain files, non-exact channels (such as
 `rust-toolchain`, and `.velnor/config.toml` fail closed (`invalid_rust_toolchain`,
 `conflicting_rust_toolchain`, or `conflicting_rust_toolchain_files`). `[tools]` validates
 tool names against the overridable catalog allowlist (`rust`, `mr-boxington`, `gh`,
-`actionlint`, `shellcheck`, `zizmor`, `cargo-nextest` / `nextest`, and `opentofu`),
+`jactionlint`, `shellcheck`, `zizmor`, `cargo-nextest` / `nextest`, and `opentofu`),
 requires exact `X.Y.Z` semver format (`invalid_tool_version`), and rejects specifying
 both `nextest` and `cargo-nextest` simultaneously (`duplicate_nextest_tool_override`). Exec steps MUST NOT
 load or modify consumer `mise.toml`, `mise.lock`, or environment files;
@@ -366,7 +366,7 @@ artifacts = [{ name = "tier-capture-{shard}", paths = ["target/snapshots/actual"
 
 Each `[[stacks.rust.suites]]` entry validates fail-closed before rendering:
 
-- `id`: unique lowercase identifier (`[a-z0-9-]+`, no leading/trailing `-`); reserved IDs (`plan`, `required`, `required-gate`, `actionlint`, `rust`) are rejected.
+- `id`: unique lowercase identifier (`[a-z0-9-]+`, no leading/trailing `-`); reserved IDs (`plan`, `required`, `required-gate`, `jactionlint`, `rust`) are rejected.
 - `profile`: Nextest profile name (`[a-zA-Z0-9_-]+`); any profile other than `"default"` MUST exist as `[profile.<name>]` in the workspace's `.config/nextest.toml`.
 - `run_ignored`: optional `"default" | "only" | "all"` (alias `"ignored-only"` for `"only"`), passing `--run-ignored only` or `--run-ignored all` when non-default; `[stacks.rust] run_ignored` sets the workspace-level default for standard crate tasks.
 - `partitions`: `1..=64` (default `1`), rendered as a GitHub Actions `strategy.matrix.shard` (`[1..=N]`, `fail-fast: false`) with `VELNOR_SUITE_SHARD: ${{ matrix.shard }}` in step `env` and `--partition "hash:$VELNOR_SUITE_SHARD/<N>"` passed to `nextest run`, independent of `resources.test_process_budget`.

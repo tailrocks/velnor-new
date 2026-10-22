@@ -11,8 +11,6 @@ pub enum PinnedTool {
     MrBoxington,
     /// GitHub CLI (`gh`).
     Gh,
-    /// Workflow linter (`actionlint`).
-    Actionlint,
     /// Workflow, composite action and Dependabot linter (`jactionlint`).
     Jactionlint,
     /// Shell linter (`shellcheck`).
@@ -33,11 +31,10 @@ pub enum PinnedTool {
 
 impl PinnedTool {
     /// Every catalog tool in stable order.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 11] = [
         Self::Rust,
         Self::MrBoxington,
         Self::Gh,
-        Self::Actionlint,
         Self::Jactionlint,
         Self::Shellcheck,
         Self::Zizmor,
@@ -55,7 +52,6 @@ impl PinnedTool {
             Self::Rust => "rust",
             Self::MrBoxington => "mr-boxington",
             Self::Gh => "gh",
-            Self::Actionlint => "actionlint",
             Self::Jactionlint => "jactionlint",
             Self::Shellcheck => "shellcheck",
             Self::Zizmor => "zizmor",

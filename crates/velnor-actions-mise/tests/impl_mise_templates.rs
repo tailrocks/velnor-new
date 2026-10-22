@@ -9,7 +9,7 @@ fn template_names_are_stable() {
         [
             "fmt-check",
             "dependencies",
-            "actionlint",
+            "jactionlint",
             "zizmor",
             "clippy",
             "test-build",

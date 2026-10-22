@@ -69,8 +69,8 @@ pub enum StepRole {
     CargoDeny,
     /// Authenticated cargo-machete analyzer bootstrap.
     CargoMachete,
-    /// Authenticated actionlint analyzer bootstrap.
-    Actionlint,
+    /// Workflow lint analyzer (jactionlint).
+    Jactionlint,
     /// Authenticated zizmor analyzer bootstrap.
     Zizmor,
     /// Authenticated markdownlint analyzer bootstrap.
@@ -245,7 +245,7 @@ impl StepRole {
             | Self::VerifyRustManifest
             | Self::CargoDeny
             | Self::CargoMachete
-            | Self::Actionlint
+            | Self::Jactionlint
             | Self::Zizmor
             | Self::Markdownlint
             | Self::StrictJson

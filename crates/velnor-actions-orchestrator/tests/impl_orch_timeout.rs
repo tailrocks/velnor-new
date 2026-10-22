@@ -64,7 +64,7 @@ fn generated_ci_bounds_every_job_per_kind() -> TestResult {
         ("plan", "5"),
         ("required", "5"),
         ("required-gate", "5"),
-        ("actionlint", "5"),
+        ("jactionlint", "5"),
         ("rust-demo", "5"),
     ] {
         assert_eq!(
@@ -84,7 +84,7 @@ fn configured_crate_timeout_reaches_every_crate_job_only() -> TestResult {
     for (id, want) in [
         ("plan", "5"),
         ("required", "5"),
-        ("actionlint", "5"),
+        ("jactionlint", "5"),
         ("rust-demo", "45"),
     ] {
         assert_eq!(

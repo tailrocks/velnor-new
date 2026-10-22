@@ -300,7 +300,7 @@ artifact work must not add host modules or claim those controls are complete.
   Rust/Mise target commands, builds only for linux/amd64, creates the manifest
   from actual image/archive metadata, and includes exactly the five named
   assets in checksum, attestation, prepare, and publish paths.
-- The generated workflow passes supported generation, actionlint, shellcheck,
+- The generated workflow passes supported generation, jactionlint, shellcheck,
   security scanning, snapshots, and repository gates. No generated workflow or
   snapshot is edited by hand.
 - A separate host-side review confirms the protocol and isolation contract

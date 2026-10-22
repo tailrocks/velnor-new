@@ -5,7 +5,6 @@ use std::collections::BTreeMap;
 
 /// Tools accepting per-project version overrides (`[tools]` keys).
 pub const OVERRIDABLE_TOOLS: &[&str] = &[
-    "actionlint",
     "cargo-nextest",
     "gh",
     "jactionlint",

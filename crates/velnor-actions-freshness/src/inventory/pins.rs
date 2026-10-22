@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use crate::context::FreshnessContext;
 
-use super::{ACTIONS, CATALOG, CONFIG, EXPECTED_ACTIONS, EXPECTED_TOOLS};
+use super::{ACTIONS, CATALOG, EXPECTED_ACTIONS, EXPECTED_TOOLS, RUNNER_DEFAULT};
 
 #[path = "pins_mirrors.rs"]
 mod mirrors;
@@ -211,10 +211,10 @@ fn check_runner_pins(ctx: &mut FreshnessContext) {
         .get("default")
         .and_then(Value::as_str)
         .map(str::to_owned);
-    let value = ctx.rust_const(CONFIG, "RUNNER_LABEL_BRIDGE");
+    let value = ctx.rust_const(RUNNER_DEFAULT, "LATEST_RUNNER_LABEL");
     compare_pin(
         ctx,
-        "runner default (config.rs::RUNNER_LABEL_BRIDGE)",
+        "runner default (workflow.rs::LATEST_RUNNER_LABEL)",
         value.as_deref(),
         default.as_deref(),
     );

@@ -23,7 +23,7 @@ fn enabled_upgrades_emit_the_workflow_and_list_it_in_the_plan() -> TestResult {
         "{yaml}"
     );
     let actionlint = tree
-        .get(".github/actionlint.yaml")
+        .get(".github/jactionlint.yaml")
         .ok_or("actionlint config")?;
     assert!(actionlint.contains("VELNOR_DEPS_APP_ID"), "{actionlint}");
     let ci = tree.get(".github/workflows/ci.yml").ok_or("ci")?;
