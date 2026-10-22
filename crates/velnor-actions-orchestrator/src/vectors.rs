@@ -102,12 +102,17 @@ pub(crate) fn task_argv(
             });
         }
     }
-    let driver = RouteDriver::from_compile_driver(&task.identity.compile_driver);
-    let mut tools = driver.map_or(vec![PinnedTool::Rust], RouteDriver::probe_tools);
+    let driver =
+        RouteDriver::from_compile_driver(&task.identity.compile_driver).ok_or_else(|| {
+            OrchestratorError::Contract {
+                problem: format!("unknown_compile_driver:{}", task.identity.compile_driver),
+            }
+        })?;
+    let mut tools = driver.probe_tools();
     if tool_needs(&task.identity.compile_driver, &task.identity.test_runner).nextest {
         tools.push(PinnedTool::Nextest);
     }
-    let program = OsString::from(driver.map_or("cargo", RouteDriver::program));
+    let program = OsString::from(driver.program());
     let exec = PinnedToolExec::new(tools, &program, task.payload.clone()).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),
