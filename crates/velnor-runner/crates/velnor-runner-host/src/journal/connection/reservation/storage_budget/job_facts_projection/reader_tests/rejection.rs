@@ -11,7 +11,12 @@ async fn bound_journal_snapshot_rejects_foreign_scope_and_missing_role() {
         .expect("foreign scope");
     assert!(matches!(
         foreign_scope
-            .job_facts_snapshot(&fixture.claim, &fixture.ready.ready, &fixture.channel)
+            .job_facts_snapshot(
+                &fixture.claim,
+                &fixture.ready.ready,
+                &fixture.channel,
+                &"a".repeat(64)
+            )
             .await,
         Err(HostError::Identity)
     ));
@@ -61,7 +66,12 @@ async fn bound_journal_snapshot_rejects_foreign_scope_and_missing_role() {
     assert!(
         fixture
             .scope
-            .job_facts_snapshot(&fixture.claim, &fixture.ready.ready, &fixture.channel)
+            .job_facts_snapshot(
+                &fixture.claim,
+                &fixture.ready.ready,
+                &fixture.channel,
+                &"a".repeat(64)
+            )
             .await
             .is_err()
     );
@@ -74,21 +84,36 @@ async fn bound_journal_snapshot_rejects_foreign_ready_and_channel() {
     assert!(
         fixture
             .scope
-            .job_facts_snapshot(&fixture.claim, &other.ready.ready, &fixture.channel)
+            .job_facts_snapshot(
+                &fixture.claim,
+                &other.ready.ready,
+                &fixture.channel,
+                &"a".repeat(64)
+            )
             .await
             .is_err()
     );
     assert!(
         fixture
             .scope
-            .job_facts_snapshot(&fixture.claim, &fixture.ready.ready, &other.channel)
+            .job_facts_snapshot(
+                &fixture.claim,
+                &fixture.ready.ready,
+                &other.channel,
+                &"a".repeat(64)
+            )
             .await
             .is_err()
     );
     assert!(
         fixture
             .scope
-            .job_facts_snapshot(&other.claim, &fixture.ready.ready, &fixture.channel)
+            .job_facts_snapshot(
+                &other.claim,
+                &fixture.ready.ready,
+                &fixture.channel,
+                &"a".repeat(64)
+            )
             .await
             .is_err()
     );
@@ -130,7 +155,12 @@ async fn bound_journal_snapshot_rejects_changed_profile_sample_and_pair() {
     assert!(
         fixture
             .scope
-            .job_facts_snapshot(&fixture.claim, &fixture.ready.ready, &fixture.channel)
+            .job_facts_snapshot(
+                &fixture.claim,
+                &fixture.ready.ready,
+                &fixture.channel,
+                &"a".repeat(64)
+            )
             .await
             .is_ok()
     );
@@ -157,7 +187,12 @@ async fn bound_journal_snapshot_rejects_changed_role_charge() {
     assert!(
         fixture
             .scope
-            .job_facts_snapshot(&fixture.claim, &fixture.ready.ready, &fixture.channel)
+            .job_facts_snapshot(
+                &fixture.claim,
+                &fixture.ready.ready,
+                &fixture.channel,
+                &"a".repeat(64)
+            )
             .await
             .is_ok()
     );
@@ -172,7 +207,12 @@ async fn bound_journal_snapshot_rejects_changed_jit_and_publication_phase() {
     assert!(
         fixture
             .scope
-            .job_facts_snapshot(&fixture.claim, &fixture.ready.ready, &fixture.channel)
+            .job_facts_snapshot(
+                &fixture.claim,
+                &fixture.ready.ready,
+                &fixture.channel,
+                &"a".repeat(64)
+            )
             .await
             .is_err()
     );
@@ -180,7 +220,12 @@ async fn bound_journal_snapshot_rejects_changed_jit_and_publication_phase() {
     assert!(
         fixture
             .scope
-            .job_facts_snapshot(&fixture.claim, &fixture.ready.ready, &fixture.channel)
+            .job_facts_snapshot(
+                &fixture.claim,
+                &fixture.ready.ready,
+                &fixture.channel,
+                &"a".repeat(64)
+            )
             .await
             .is_ok()
     );
@@ -202,7 +247,12 @@ async fn bound_journal_snapshot_rejects_changed_jit_and_publication_phase() {
     assert!(
         fixture
             .scope
-            .job_facts_snapshot(&fixture.claim, &fixture.ready.ready, &fixture.channel)
+            .job_facts_snapshot(
+                &fixture.claim,
+                &fixture.ready.ready,
+                &fixture.channel,
+                &"a".repeat(64)
+            )
             .await
             .is_err()
     );
@@ -247,7 +297,12 @@ async fn assert_text_witness_immutable(
     assert!(
         fixture
             .scope
-            .job_facts_snapshot(&fixture.claim, &fixture.ready.ready, &fixture.channel)
+            .job_facts_snapshot(
+                &fixture.claim,
+                &fixture.ready.ready,
+                &fixture.channel,
+                &"a".repeat(64)
+            )
             .await
             .is_ok()
     );

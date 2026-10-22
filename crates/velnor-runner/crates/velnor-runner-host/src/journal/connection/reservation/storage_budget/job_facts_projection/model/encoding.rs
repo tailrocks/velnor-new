@@ -43,6 +43,7 @@ fn projection_digest(document: &Document) -> Result<String, HostError> {
         sample: &'a Sample,
         instance_binding: &'a InstanceBinding,
         instance_binding_digest: &'a str,
+        guest_image_sha256: &'a str,
         cache: &'a Cache,
         job_facts_mount: &'a JobFactsMount,
     }
@@ -57,6 +58,7 @@ fn projection_digest(document: &Document) -> Result<String, HostError> {
         sample: &document.sample,
         instance_binding: &document.instance_binding,
         instance_binding_digest: &document.instance_binding_digest,
+        guest_image_sha256: &document.guest_image_sha256,
         cache: &document.cache,
         job_facts_mount: &document.job_facts_mount,
     })

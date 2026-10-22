@@ -4,12 +4,18 @@ use super::super::storage_admission_types::JobFactsMountV1;
 
 #[path = "storage_admission_mount/mountinfo.rs"]
 mod mountinfo;
-use mountinfo::{read_mountinfo, validate_mountinfo, validate_work_mountinfo};
+use mountinfo::{
+    read_mountinfo, validate_mountinfo, validate_read_only_mountinfo, validate_work_mountinfo,
+};
 
 const JOB_FACTS_DIRECTORY: &str = "/opt/velnor/job-facts";
 const JOB_FACTS_FILE: &str = "storage-cache-admission.json";
+const RUNTIME_IDENTITY_DIRECTORY: &str = "/.velnor-runtime-identity";
+const RUNTIME_IDENTITY_COMPONENT: &str = ".velnor-runtime-identity";
+const GUEST_IMAGE_FILE: &str = "guest-image.json";
 const MOUNTINFO_PATH: &str = "/proc/self/mountinfo";
 const MAX_MOUNTINFO_BYTES: usize = 1024 * 1024;
+const MAX_GUEST_IMAGE_BYTES: usize = 16 * 1024;
 const ROOT_UID: u32 = 0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,7 +40,7 @@ impl MountObservation {
 
 /// This function reads no more than the byte limit.
 /// It returns the mount identity that it observes.
-pub(super) fn read_projection() -> Result<(Vec<u8>, MountObservation), &'static str> {
+pub(super) fn read_projection() -> Result<(Vec<u8>, MountObservation, Vec<u8>), &'static str> {
     #[cfg(target_os = "linux")]
     {
         read_linux_projection()
@@ -46,12 +52,160 @@ pub(super) fn read_projection() -> Result<(Vec<u8>, MountObservation), &'static 
 }
 
 #[cfg(target_os = "linux")]
-fn read_linux_projection() -> Result<(Vec<u8>, MountObservation), &'static str> {
+fn read_linux_projection() -> Result<(Vec<u8>, MountObservation, Vec<u8>), &'static str> {
     let directory = open_job_facts_directory()?;
     let observation = observe_job_facts_mount(&directory)?;
     validate_current_mountinfo(observation)?;
     let bytes = read_projection_file(&directory)?;
-    Ok((bytes, observation))
+    let guest_image_bytes = read_guest_image_from_mounted_directory()?;
+    Ok((bytes, observation, guest_image_bytes))
+}
+
+#[cfg(target_os = "linux")]
+fn read_guest_image_from_mounted_directory() -> Result<Vec<u8>, &'static str> {
+    use rustix::fs::{AtFlags, FileType, Mode, OFlags, StatxFlags, open, openat, statat, statx};
+
+    let root = open(
+        "/",
+        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
+        Mode::empty(),
+    )
+    .map_err(|_| "cache_storage_runtime_identity_open_failed")?;
+    let root_stat =
+        rustix::fs::fstat(&root).map_err(|_| "cache_storage_runtime_identity_stat_failed")?;
+    if FileType::from_raw_mode(root_stat.st_mode) != FileType::Directory
+        || root_stat.st_uid != ROOT_UID
+        || root_stat.st_mode & 0o022 != 0
+    {
+        return Err("cache_storage_runtime_identity_parent_invalid");
+    }
+    let directory = openat(
+        &root,
+        RUNTIME_IDENTITY_COMPONENT,
+        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
+        Mode::empty(),
+    )
+    .map_err(|_| "cache_storage_runtime_identity_mount_invalid")?;
+    let before =
+        rustix::fs::fstat(&directory).map_err(|_| "cache_storage_runtime_identity_stat_failed")?;
+    let observation = observe_job_facts_mount(&directory)?;
+    validate_current_read_only_mountinfo(observation)?;
+    let bytes = read_guest_image_file(&directory)?;
+    let after =
+        rustix::fs::fstat(&directory).map_err(|_| "cache_storage_runtime_identity_stat_failed")?;
+    let current = statat(&root, RUNTIME_IDENTITY_COMPONENT, AtFlags::SYMLINK_NOFOLLOW)
+        .map_err(|_| "cache_storage_runtime_identity_mount_changed")?;
+    let current_x = statx(
+        &root,
+        RUNTIME_IDENTITY_COMPONENT,
+        AtFlags::SYMLINK_NOFOLLOW,
+        StatxFlags::BASIC_STATS | StatxFlags::MNT_ID,
+    )
+    .map_err(|_| "cache_storage_runtime_identity_stat_failed")?;
+    if !same_directory(&before, &after)
+        || !same_directory(&before, &current)
+        || current_x.stx_mnt_id != observation.mount_id
+        || current_x.stx_ino != observation.directory_inode
+        || current_x.stx_dev_major != observation.device_major
+        || current_x.stx_dev_minor != observation.device_minor
+    {
+        return Err("cache_storage_runtime_identity_mount_changed");
+    }
+    validate_current_read_only_mountinfo(observation)?;
+    Ok(bytes)
+}
+
+#[cfg(target_os = "linux")]
+fn read_guest_image_file(directory: &rustix::fd::OwnedFd) -> Result<Vec<u8>, &'static str> {
+    use rustix::fs::{AtFlags, FileType, Mode, OFlags, openat, statat};
+    use std::fs::File;
+    use std::io::Read;
+    use std::os::fd::AsFd;
+
+    let descriptor = openat(
+        directory,
+        GUEST_IMAGE_FILE,
+        OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
+        Mode::empty(),
+    )
+    .map_err(|_| "cache_storage_guest_image_open_failed")?;
+    let before =
+        rustix::fs::fstat(&descriptor).map_err(|_| "cache_storage_guest_image_stat_failed")?;
+    if FileType::from_raw_mode(before.st_mode) != FileType::RegularFile
+        || before.st_uid != ROOT_UID
+        || before.st_mode & 0o7777 != 0o444
+        || before.st_nlink != 1
+        || before.st_size <= 0
+        || u64::try_from(before.st_size).unwrap_or(u64::MAX) > MAX_GUEST_IMAGE_BYTES as u64
+    {
+        return Err("cache_storage_guest_image_file_invalid");
+    }
+    let file = File::from(descriptor);
+    let mut bytes = Vec::with_capacity(
+        usize::try_from(before.st_size)
+            .unwrap_or_default()
+            .min(MAX_GUEST_IMAGE_BYTES),
+    );
+    (&file)
+        .take(u64::try_from(MAX_GUEST_IMAGE_BYTES + 1).unwrap_or(u64::MAX))
+        .read_to_end(&mut bytes)
+        .map_err(|_| "cache_storage_guest_image_read_failed")?;
+    let after =
+        rustix::fs::fstat(file.as_fd()).map_err(|_| "cache_storage_guest_image_stat_failed")?;
+    let current = statat(directory, GUEST_IMAGE_FILE, AtFlags::SYMLINK_NOFOLLOW)
+        .map_err(|_| "cache_storage_guest_image_changed")?;
+    if bytes.is_empty()
+        || bytes.len() > MAX_GUEST_IMAGE_BYTES
+        || !same_file(&before, &after)
+        || !same_file(&after, &current)
+    {
+        return Err("cache_storage_guest_image_changed");
+    }
+    Ok(bytes)
+}
+
+fn same_directory(left: &rustix::fs::Stat, right: &rustix::fs::Stat) -> bool {
+    left.st_dev == right.st_dev && left.st_ino == right.st_ino && left.st_mode == right.st_mode
+}
+
+fn same_file(left: &rustix::fs::Stat, right: &rustix::fs::Stat) -> bool {
+    left.st_dev == right.st_dev
+        && left.st_ino == right.st_ino
+        && left.st_mode == right.st_mode
+        && left.st_nlink == right.st_nlink
+        && left.st_size == right.st_size
+        && left.st_mtime == right.st_mtime
+}
+
+fn validate_current_read_only_mountinfo(observation: MountObservation) -> Result<(), &'static str> {
+    let mountinfo = read_mountinfo()?;
+    validate_read_only_mountinfo(
+        &mountinfo,
+        RUNTIME_IDENTITY_DIRECTORY,
+        observation.mount_id,
+        observation.device_major,
+        observation.device_minor,
+    )
+}
+
+pub(super) fn verify_guest_image_digest(bytes: &[u8], expected: &str) -> Result<(), &'static str> {
+    use sha2::{Digest as _, Sha256};
+
+    if lower_hex(&Sha256::digest(bytes)) == expected {
+        Ok(())
+    } else {
+        Err("cache_storage_guest_image_identity_mismatch")
+    }
+}
+
+fn lower_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        output.push(char::from(HEX[usize::from(byte >> 4)]));
+        output.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    output
 }
 
 #[cfg(target_os = "linux")]
@@ -228,7 +382,10 @@ fn read_projection_file(directory: &rustix::fd::OwnedFd) -> Result<Vec<u8>, &'st
 
 #[cfg(test)]
 mod tests {
-    use super::{MountObservation, validate_mountinfo, validate_work_mountinfo};
+    use super::{
+        GUEST_IMAGE_FILE, MountObservation, read_guest_image_file, validate_mountinfo,
+        validate_read_only_mountinfo, validate_work_mountinfo, verify_guest_image_digest,
+    };
     use crate::qualification_cache_payload::storage_admission_types::JobFactsMountV1;
 
     fn observation() -> MountObservation {
@@ -239,6 +396,16 @@ mod tests {
             directory_device: 55,
             directory_inode: 77,
         }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn sha256_hex(bytes: &[u8]) -> String {
+        use sha2::{Digest as _, Sha256};
+
+        Sha256::digest(bytes)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
     }
 
     fn line(mount_id: u64, options: &str, target: &str) -> String {
@@ -366,6 +533,76 @@ mod tests {
         assert_eq!(
             validate_work_mountinfo(mountinfo, "/__w", 87, 0, 55),
             Ok(())
+        );
+    }
+
+    #[test]
+    fn runtime_identity_requires_one_exact_read_only_mount() {
+        let target = "/.velnor-runtime-identity";
+        assert_eq!(
+            validate_read_only_mountinfo(&line(91, "ro,nosuid,nodev", target), target, 91, 0, 55,),
+            Ok(())
+        );
+        assert_eq!(
+            validate_read_only_mountinfo(&line(91, "rw,nosuid,nodev", target), target, 91, 0, 55,),
+            Err("cache_storage_mount_not_read_only_bind")
+        );
+        assert_eq!(
+            validate_read_only_mountinfo(
+                &line(91, "ro,nosuid,nodev", "/.velnor-runtime-identity/child"),
+                target,
+                91,
+                0,
+                55,
+            ),
+            Err("cache_storage_mount_missing")
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn guest_image_digest_checks_bytes_read_through_the_held_directory() {
+        use std::{fs, os::unix::fs::PermissionsExt};
+
+        use rustix::fs::{Mode, OFlags, open};
+
+        const CURRENT: &[u8] = br#"{"schema":"velnor.guest-image/v1","source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","guest_platform":"linux/amd64","scale_set":{"name":"runner","labels":["velnor"]},"images":{"runner":{"archive_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","archive_index_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","manifest_digest":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","config_digest":"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"},"dind":{"archive_sha256":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","archive_index_digest":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","manifest_digest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","config_digest":"sha256:2222222222222222222222222222222222222222222222222222222222222222"}}}"#;
+        const SWAPPED: &[u8] = br#"{"schema":"velnor.guest-image/v1","source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","guest_platform":"linux/amd64","scale_set":{"name":"runner","labels":["velnor"]},"images":{"runner":{},"dind":{}}}"#;
+
+        let root = tempfile::tempdir().expect("temporary root");
+        let mounted = root.path().join("runtime-identity");
+        let moved = root.path().join("held-runtime-identity");
+        fs::create_dir(&mounted).expect("runtime directory");
+        let image_path = mounted.join(GUEST_IMAGE_FILE);
+        fs::write(&image_path, CURRENT).expect("current image document");
+        fs::set_permissions(&image_path, fs::Permissions::from_mode(0o444))
+            .expect("read-only image file");
+        fs::set_permissions(&mounted, fs::Permissions::from_mode(0o555))
+            .expect("read-only runtime directory");
+        let directory = open(
+            &mounted,
+            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+            Mode::empty(),
+        )
+        .expect("hold runtime directory descriptor");
+
+        fs::rename(&mounted, &moved).expect("move held directory path");
+        fs::create_dir(&mounted).expect("install swapped directory at original path");
+        let swapped_path = mounted.join(GUEST_IMAGE_FILE);
+        fs::write(&swapped_path, SWAPPED).expect("swapped image document");
+        fs::set_permissions(&swapped_path, fs::Permissions::from_mode(0o444))
+            .expect("read-only swapped image file");
+        fs::set_permissions(&mounted, fs::Permissions::from_mode(0o555))
+            .expect("read-only swapped directory");
+
+        let bytes = read_guest_image_file(&directory).expect("read through held directory");
+        assert_eq!(bytes, CURRENT);
+        let expected = sha256_hex(CURRENT);
+        assert_eq!(verify_guest_image_digest(&bytes, &expected), Ok(()));
+        let stale = sha256_hex(SWAPPED);
+        assert_eq!(
+            verify_guest_image_digest(&bytes, &stale),
+            Err("cache_storage_guest_image_identity_mismatch")
         );
     }
 }
