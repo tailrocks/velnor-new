@@ -1,7 +1,7 @@
 # Cache redesign decisions
 
 Status: adopted by the human owner for the CI cache redesign (seven decisions,
-recorded 2026-10-20; decisions 8 and 9 adopted per the split brief, owner may revisit). Each decision below states what main implements now and
+recorded 2026-10-20; decisions 8 and 9 adopted per the split brief, decision 10 per the 2026-10-22 security review, owner may revisit). Each decision below states what main implements now and
 what the follow-up PRs deliver. This page is the decision record that
 [`cache-contract.md`](cache-contract.md) section 2 and
 [`hard-decisions.md`](../hard-decisions.md) decision 1 cite. A change to any
@@ -27,6 +27,7 @@ Successful and failed jobs are both covered: see decision 1 and the cases table.
 | 7 | **Reword hard decision 1.** Lanes live in the dependency-seed family and the MBX bundle, not in a target-mode payload. The seed job is not a crate job: it runs no checks, is excluded from Required, and the one-job-per-crate rule governs crate jobs only. | Wording updated with this record. | None. |
 | 8 | **Bun families.** `bun-install` (Bun package cache, keyed by `bun.lock`) and `playwright-browsers` (hash-pinned browser install, `trusted` writers only) join the typed families, each with a size ceiling and retained-entry count under the budget rule. `node_modules` is never cached. | **Implemented.** Specs, ceilings, pins and the budget test, plus in-job keys, restore, size admission and save steps in the Bun member jobs, checked by the cache doctor ([cache families](cache-families.md)); pruned by decision 4. | None. |
 | 9 | **dbt and Ansible families.** `dbt-packages` (per project, keyed by `package-lock.yml`), `python-venv` (uv wheel cache, keyed by the hash-pinned requirements file) and `ansible-collections` (verified tarballs, keyed by the declared set) join the typed families with ceilings under the budget rule; `trusted` writers only; every restored byte is re-verified against a committed hash or lock. | **Implemented.** Specs, ceilings, pins and the budget test, plus in-job keys, restore, size admission and save steps in the dbt and Ansible jobs, checked by the cache doctor ([cache families](cache-families.md)); pruned by decision 4. | None. |
+| 10 | **Re-verify every restored Mise install.** A tools-cache entry can be written by any default-branch job that runs code, so no restored executable is trusted as restored: Rust is checked file by file against its pinned channel manifest (`Verify restored Rust toolchain`), and every other install is checked against the release archive its `mise.lock` entry (or the Velnor catalog) pins for the runner platform. A mismatch, an install with no pin, an escaping symlink or an executable in Mise bookkeeping is discarded and reinstalled by `Prepare pinned tools`; plugins and shims are never restored. | **Implemented** in the generated `velnor-tools-cache-restore` composite (`Re-verify restored Mise installs`, [tools cache V2](tools-cache-v2.md#re-verification-after-restore)). Adopted per the coordinator's 2026-10-22 decision; owner may revisit. | Installs with neither a lock entry nor a catalog pin are reinstalled on every run; commit `mise.lock` entries to keep them cached. |
 
 ## Cases the design covers
 

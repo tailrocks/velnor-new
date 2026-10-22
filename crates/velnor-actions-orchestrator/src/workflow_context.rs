@@ -19,6 +19,9 @@ use crate::vectors::{
 
 use super::{CHECKOUT_USES, REQUEST_DIR};
 
+#[path = "tool_cache_pins.rs"]
+mod tool_cache_pins;
+
 /// Inputs used to derive renderer context from the workflow build.
 pub(super) struct RenderContextInputs<'a> {
     pub(super) config: &'a VelnorConfig,
@@ -46,6 +49,7 @@ pub(super) fn render_context(
     let candidate = candidate_spec_for(&input)?;
     let scale_set_selector = scale_set_selector(input.config, None)?;
     Ok(RenderContext {
+        tool_pins: tool_cache_pins::catalog_tool_pins(input.catalog),
         generator_version: input.generator_version.to_owned(),
         report_helper_version: input.report_helper_version.to_owned(),
         runs_on: input.label.to_owned(),

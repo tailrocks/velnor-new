@@ -44,6 +44,7 @@ pub(crate) fn emit_shared(
         shared.files.clone(),
         jobs,
         &ctx.generator_version,
+        &ctx.tool_pins,
     )?;
     if crate::tool_seed::any_job_has_seed(jobs)? {
         return Err(RenderError::InvalidWorkflow(

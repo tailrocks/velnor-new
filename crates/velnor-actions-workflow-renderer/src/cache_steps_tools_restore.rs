@@ -148,7 +148,44 @@ fn admission_step() -> Yaml {
     ])
 }
 
-fn action_body() -> Result<Yaml, RenderError> {
+/// Re-verify every restored Mise install against its pinned archive; a
+/// mismatch is discarded so `Prepare pinned tools` reinstalls it.
+const INSTALLS_VERIFY_SCRIPT: &str = include_str!("cache_steps_tools_installs_verify.sh");
+
+/// Display name of the composite's install re-verification step.
+pub(crate) const INSTALLS_VERIFY_NAME: &str = "Re-verify restored Mise installs";
+
+fn installs_verify_step(tool_pins: &[String]) -> Result<Yaml, RenderError> {
+    for pin in tool_pins {
+        let fields: Vec<&str> = pin.split(' ').collect();
+        let ok = fields.len() == 5
+            && fields.iter().all(|field| {
+                !field.is_empty()
+                    && field
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || b"._-:/@+".contains(&b))
+            })
+            && fields[3].starts_with("https://")
+            && fields[4].len() == 64;
+        if !ok {
+            return Err(RenderError::InvalidWorkflow(format!("bad_tool_pin:{pin}")));
+        }
+    }
+    Ok(Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str(INSTALLS_VERIFY_NAME)),
+        ("shell".to_owned(), Yaml::str("bash")),
+        (
+            "env".to_owned(),
+            Yaml::Map(vec![(
+                "VELNOR_TOOL_PINS".to_owned(),
+                Yaml::str(tool_pins.join("\n")),
+            )]),
+        ),
+        ("run".to_owned(), Yaml::str(INSTALLS_VERIFY_SCRIPT)),
+    ]))
+}
+
+fn action_body(tool_pins: &[String]) -> Result<Yaml, RenderError> {
     Ok(Yaml::Map(vec![
         (
             "name".to_owned(),
@@ -216,7 +253,11 @@ fn action_body() -> Result<Yaml, RenderError> {
                 ("using".to_owned(), Yaml::str("composite")),
                 (
                     "steps".to_owned(),
-                    Yaml::Seq(vec![restore_step()?, admission_step()]),
+                    Yaml::Seq(vec![
+                        restore_step()?,
+                        admission_step(),
+                        installs_verify_step(tool_pins)?,
+                    ]),
                 ),
             ]),
         ),
@@ -225,8 +266,11 @@ fn action_body() -> Result<Yaml, RenderError> {
 
 /// Build the pinned restore action with its renderer-owned archive paths.
 /// # Errors
-pub(crate) fn action_file(version: &str) -> Result<RenderedFile, RenderError> {
-    let body = action_body()?;
+pub(crate) fn action_file(
+    version: &str,
+    tool_pins: &[String],
+) -> Result<RenderedFile, RenderError> {
+    let body = action_body(tool_pins)?;
     let bytes = marker::with_marker(version, &crate::yaml::render_yaml(&body))?;
     steps::scan_for_private_subcommands(&bytes)?;
     let action_directory = super::TOOLS_RESTORE_USES
@@ -285,3 +329,7 @@ pub(crate) fn assert_rendered_admission_parses(bytes: &str) {
 #[cfg(test)]
 #[path = "cache_steps_tools_restore_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "cache_steps_tools_installs_verify_tests.rs"]
+mod installs_verify_tests;

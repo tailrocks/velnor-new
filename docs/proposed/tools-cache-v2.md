@@ -28,6 +28,26 @@ rustup) and verifies the restored toolchain file by file against the component t
 channel manifest, failing the job on any difference. See
 [verified Rust installs](../implemented/rust-channel-manifest.md).
 
+## Re-verification after restore
+
+The restore composite's last step, `Re-verify restored Mise installs`
+(`cache_steps_tools_installs_verify.sh`), runs after the admission step on
+every hit or seed:
+
+- `plugins/` and `shims/` are deleted (code no pin covers; Mise rebuilds them);
+- for each `installs/<tool>/<version>` except Rust, it looks up the archive URL
+  and SHA-256 for the runner platform in the workspace `mise.lock`, or else in
+  the Velnor catalog pins the generator embeds (`VELNOR_TOOL_PINS`: jactionlint,
+  OpenTofu), downloads the archive over HTTPS, checks its SHA-256, extracts it,
+  and requires every file of the install to be byte-identical to a file of the
+  archive. Mise's own `.mise-*` bookkeeping (the packslip statement, shell
+  completions) is data and may hold no executable file; every symlink must stay
+  inside the install;
+- an install that fails any of this, or has no pin, is deleted with a
+  `velnor: discarding restored <tool>@<version>: <reason>` line, so
+  `Prepare pinned tools` reinstalls it (checked against `mise.lock` again);
+- version aliases must name a sibling version.
+
 The generator derives the static digest from exact Mise action and binary pins, selected tool versions, Rust
 toolchain and components, target, runner lane, and the owned paths. A tool the project's Mise config declares
 ([hard decision 5](../hard-decisions.md)) enters the static digest only as its `${VELNOR_TOOL_<NAME>}`
