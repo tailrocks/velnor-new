@@ -15,7 +15,14 @@ local fixtureTrees = List("fixtures/**", "docs/proposed/opentofu-goldens/**")
 steps {
   ["mise"] = Builtins.mise
   ["gitleaks"] = Builtins.gitleaks
-  ["cargo_fmt"] = (Builtins.cargo_fmt) { exclude = fixtureTrees }
+  // `--all`: both workspace roots (root and crates/velnor-runner) are virtual manifests, where a plain
+  // `cargo fmt --manifest-path` fails with "Failed to find targets".
+  ["cargo_fmt"] = (Builtins.cargo_fmt) {
+    exclude = fixtureTrees
+    check { command = "cargo fmt --all --check --manifest-path {{workspace_indicator}}" }
+    check_list_files { command = "cargo fmt --all --check --manifest-path {{workspace_indicator}} -- --files-with-diff" }
+    fix { command = "cargo fmt --all --manifest-path {{workspace_indicator}}" }
+  }
   ["cargo_check"] = (Builtins.cargo_check) { exclude = fixtureTrees }
   ["cargo_clippy"] = (Builtins.cargo_clippy) { exclude = fixtureTrees }
   // Both deny.toml files (root and crates/velnor-runner) stay; each governs its own workspace.
