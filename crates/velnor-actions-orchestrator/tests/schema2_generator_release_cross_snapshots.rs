@@ -125,9 +125,10 @@ pub(super) fn assert_qualify_install_tools(
     let run = format!(
         "mise --no-config --no-env --no-hooks install rust@{RUST_VERSION} jactionlint@{JACTIONLINT_VERSION} shellcheck@{SHELLCHECK_VERSION} zizmor@{ZIZMOR_VERSION}"
     );
-    // The Velnor repository declares Rust in `mise.toml` (hard decision 5).
+    // The Velnor repository declares Rust, jactionlint and ShellCheck in
+    // `mise.toml` (hard decisions 4 and 5).
     let project_run = format!(
-        r#"mise --no-config --no-env --no-hooks install 'rust@'\"${{VELNOR_TOOL_RUST}}\" jactionlint@{JACTIONLINT_VERSION} shellcheck@{SHELLCHECK_VERSION} zizmor@{ZIZMOR_VERSION}"#
+        r#"mise --no-config --no-env --no-hooks install 'rust@'\"${{VELNOR_TOOL_RUST}}\" 'jactionlint@'\"${{VELNOR_TOOL_JACTIONLINT}}\" 'shellcheck@'\"${{VELNOR_TOOL_SHELLCHECK}}\" zizmor@{ZIZMOR_VERSION}"#
     );
     for name in [
         "generator-release-qualify-linux",

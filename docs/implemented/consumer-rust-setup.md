@@ -62,8 +62,19 @@ targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
   `mise.lock` records no options), and the file must repeat them.
 - Generation enforces the mirror: when both declare Rust, a different
   `channel`/`version`, `components`, `targets` or `profile` fails with
-  `rust_toolchain_mirror_mismatch:<key>:rust-toolchain.toml=[...],mise.toml=[...]`.
+  `rust_toolchain_mirror_mismatch:<key>:<toolchain file>=[...],<mise file>=[...]`.
   Set `profile` in both or in neither; `minimal` skips rust-docs.
+  - The Mise side is every config Mise reads (`mise.toml`, `.mise.toml`,
+    `mise.<env>.toml`, `.config/mise.toml`, `.config/mise/config.toml`,
+    `.config/mise/conf.d/*.toml`, `mise/config.toml`, `.mise/config.toml`
+    and their `.<env>` forms), each `[tools] rust` entry on its own.
+  - The toolchain side is every `rust-toolchain.toml` and legacy
+    `rust-toolchain`, at the root or nested (every file the upgrade job
+    rewrites). A legacy plain `rust-toolchain` names only a channel, so it
+    mirrors only an entry without components, targets or profile; use
+    `rust-toolchain.toml` otherwise.
+  - `components` and `targets` may be arrays or Mise's comma-separated
+    string (`"clippy,rustfmt"`); order and duplicates do not matter.
 - `idiomatic_version_file_enable_tools = ["rust"]` is a no-op while
   `mise.toml` pins Rust; it is part of the standard as a fallback.
 - `mr_boxington = true` and the `[wrappers.cargo]` entry both route every

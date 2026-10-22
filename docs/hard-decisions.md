@@ -59,9 +59,9 @@ concurrency, or concurrent Cargo writers sharing one target directory.
 ## 2. Configurable crate-job timeout
 
 **Decision.** `[workflow] crate_timeout_minutes` sets the literal
-`timeout-minutes` of every crate job (each Rust crate job and each OpenTofu
-root job). The default is `5`; accepted values are `1..=360`. Zero or more than
-360 is rejected, never clamped. See
+`timeout-minutes` of every crate job; `plan_timeout_minutes` does the same for
+the planning job only. Both default to `5`, accept `1..=360`, and reject
+anything else, never clamping. See
 [job timeout limits](implemented/job-timeout-limits.md).
 
 ## 3. Pull requests test only what they affect
@@ -175,7 +175,7 @@ declaration, because Mise (idiomatic version files) and rustup both read it.
   declared version that is not an exact `X.Y.Z` (loose, `latest`, a range, a
   template, an array, a target-triple channel, a leading zero:
   `project_tool_version_not_exact`), two sources that disagree
-  (`conflicting_project_tool_versions`; a `rust-toolchain.toml` must also mirror the `mise.toml` rust entry's `components`, `targets` and `profile`, `rust_toolchain_mirror_mismatch`, adopted with the owner's standard layout 2026-10-22, owner may revisit), a source that does not parse
+  (`conflicting_project_tool_versions`; every `rust-toolchain.toml` or `rust-toolchain`, root or nested, must also mirror every Mise config's rust entry in `components`, `targets` and `profile`, `rust_toolchain_mirror_mismatch`, adopted with the owner's standard layout 2026-10-22, owner may revisit), a source that does not parse
   (`malformed_project_tool_source`, including a malformed `mise.toml` next to
   a valid `rust-toolchain.toml`), a symlinked source, and a Rust toolchain
   file below the root that declares anything but the root version

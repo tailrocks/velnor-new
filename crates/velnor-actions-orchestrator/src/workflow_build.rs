@@ -175,6 +175,11 @@ fn build_workflow_plan(
         input.discovery,
         prepared.private.as_ref(),
     )?;
+    plan.timeout_minutes =
+        velnor_actions_contract::JobTimeout::new(input.config.workflow.plan_timeout_minutes)
+            .map_err(|err| OrchestratorError::Contract {
+                problem: err.to_string(),
+            })?;
     if let Some(format) = prepared.format.take() {
         insert_format_step(&mut plan, format);
     }

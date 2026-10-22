@@ -30,14 +30,14 @@ Detected stacks
     evidence .config/nextest.toml:4 [profile.ci] [durable]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
     evidence mise.toml:10 rust = { version = "1.99.1", profile = "minimal", components = ["clippy", "rustfmt"], targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"], mr_bo [durable]
-    evidence mise.toml:26 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:22 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
   Profile crates/velnor-runner: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile crates/velnor-runner: ci (crates/velnor-runner/.config/nextest.toml)
     evidence .config/nextest.toml:4 [profile.ci] [durable]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
     evidence crates/velnor-runner/.config/nextest.toml:3 [profile.ci] [durable]
     evidence mise.toml:10 rust = { version = "1.99.1", profile = "minimal", components = ["clippy", "rustfmt"], targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"], mr_bo [durable]
-    evidence mise.toml:26 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:22 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
 
 Workflow to generate
   .github/jactionlint.yaml
@@ -52,30 +52,30 @@ Workflow to generate
     - cargo-deny (6 steps)
     - cargo-machete (7 steps)
     - check-maintenance-helpers (8 steps)
-    - dependency-seed (22 steps)
-    - dependency-seed-crates-velnor-runner (22 steps)
+    - dependency-seed (23 steps)
+    - dependency-seed-crates-velnor-runner (23 steps)
     - jactionlint (8 steps)
-    - plan (27 steps)
+    - plan (28 steps)
     - required (10 steps)
     - required-gate (1 steps)
-    - rust-velnor-actions-actionlint (28 steps)
-    - rust-velnor-actions-ansible (27 steps)
-    - rust-velnor-actions-bun (27 steps)
-    - rust-velnor-actions-cli (29 steps)
-    - rust-velnor-actions-contract (27 steps)
-    - rust-velnor-actions-dbt (27 steps)
-    - rust-velnor-actions-gradle (27 steps)
-    - rust-velnor-actions-mise (28 steps)
-    - rust-velnor-actions-orchestrator (29 steps)
-    - rust-velnor-actions-rust (27 steps)
-    - rust-velnor-actions-tofu (27 steps)
-    - rust-velnor-actions-workflow-renderer (27 steps)
-    - rust-velnor-resource-probe (27 steps)
-    - rust-velnor-runner-attestation (26 steps)
-    - rust-velnor-runner-cli (27 steps)
-    - rust-velnor-runner-core (27 steps)
-    - rust-velnor-runner-github (27 steps)
-    - rust-velnor-runner-host (27 steps)
+    - rust-velnor-actions-actionlint (29 steps)
+    - rust-velnor-actions-ansible (28 steps)
+    - rust-velnor-actions-bun (28 steps)
+    - rust-velnor-actions-cli (30 steps)
+    - rust-velnor-actions-contract (28 steps)
+    - rust-velnor-actions-dbt (28 steps)
+    - rust-velnor-actions-gradle (28 steps)
+    - rust-velnor-actions-mise (29 steps)
+    - rust-velnor-actions-orchestrator (30 steps)
+    - rust-velnor-actions-rust (28 steps)
+    - rust-velnor-actions-tofu (28 steps)
+    - rust-velnor-actions-workflow-renderer (28 steps)
+    - rust-velnor-resource-probe (28 steps)
+    - rust-velnor-runner-attestation (27 steps)
+    - rust-velnor-runner-cli (28 steps)
+    - rust-velnor-runner-core (28 steps)
+    - rust-velnor-runner-github (28 steps)
+    - rust-velnor-runner-host (28 steps)
     - zizmor (7 steps)
     - 18 Rust crate jobs
       Timeout: 8 minutes per crate job
@@ -210,7 +210,7 @@ Workflow to generate
   Critical path: stack/rust/crates/velnor-actions-actionlint/build/default -> stack/rust/crates/velnor-actions-actionlint/nextest/default (2 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
-  Jactionlint: 2.3.0 pinned, profile default
+  Jactionlint: 2.3.0 pinned, profile correctness
   Action pins: 8
     - actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -236,4 +236,4 @@ Recommendations
   mise.toml is read-only input; Velnor never modifies it
   rust-toolchain.toml is read-only input; Velnor never modifies it
   shadowed_nextest_config: .config/nextest.toml shadowed by crates/velnor-runner/.config/nextest.toml; profile selected from crates/velnor-runner/.config/nextest.toml
-  tool_install_unverified:5 installs skip verification: cargo-deny@0.20.2(no_entry), cargo-machete@0.9.2(no_entry), gh@2.102.1(no_entry), opentofu@1.13.1(no_entry), zizmor@1.31.1(no_entry); install on the CI platform and commit the lock to verify them
+  tool_install_unverified:6 installs skip verification: cargo-deny@0.20.2(no_entry), cargo-machete@0.9.2(no_entry), gh@2.102.1(no_entry), opentofu@1.13.1(no_entry), shellcheck@0.11.0(no_entry), zizmor@1.31.1(no_entry); install on the CI platform and commit the lock to verify them
