@@ -108,8 +108,10 @@ pub(crate) fn resolve_tool_catalog(
         resolve_wrapped_mr_boxington_pin(repo_mise.as_ref(), config.tools.get("mr-boxington"))?;
     }
     let declared = project_declarations(&sources)?;
-    rust_mirror::check_toolchain_mirror(root)?;
+    // A nested channel that differs from the root keeps its own code; the
+    // mirror then compares every toolchain file key by key.
     reject_divergent_nested_toolchains(root, declared.get(&PinnedTool::Rust))?;
+    rust_mirror::check_toolchain_mirror(root)?;
     let pins = PinInputs {
         declared: &declared,
         config,
