@@ -95,6 +95,10 @@ pub(super) async fn cleanup(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the four fields independently record whether remote, storage, network, and local cleanup remain unproven"
+)]
 struct CleanupPhases {
     remote: bool,
     storage: bool,
@@ -112,6 +116,10 @@ impl CleanupPhases {
         )
     }
 
+    #[expect(
+        clippy::fn_params_excessive_bools,
+        reason = "resume maps each persisted proof independently to the cleanup phase that remains unproven"
+    )]
     fn from_proofs(remote: bool, storage: bool, network: bool, local: bool) -> Self {
         Self {
             remote: !remote,
