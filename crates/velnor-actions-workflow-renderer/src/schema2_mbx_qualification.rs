@@ -67,7 +67,7 @@ pub(super) fn jobs(
     let verify_rust_step = crate::verifier_composite::verifier_shell_step(
         crate::VERIFY_RUST_TOOLCHAIN_STEP,
         request.verify_rust_argv.clone(),
-        Default::default(),
+        std::collections::BTreeMap::default(),
     )?;
     let verify_rust = crate::document_steps::verifier_shell_step_to_yaml(&verify_rust_step)?;
 

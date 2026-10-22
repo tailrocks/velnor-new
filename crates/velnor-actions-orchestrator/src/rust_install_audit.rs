@@ -375,35 +375,87 @@ fn step_text(
 ) -> StepText {
     let head = block[0].trim_start().trim_start_matches("- ").trim();
     if let Some(alias) = head.strip_prefix('*') {
-        return anchors.get(alias).map_or_else(
-            || StepText {
-                name: format!("*{alias}"),
-                text: String::new(),
-                fields: Vec::new(),
-                top_fields: Vec::new(),
-                env_fields: Vec::new(),
-                unexpected_nested: true,
-                run_scalar: None,
-            },
-            |step| StepText {
-                name: step.name.clone(),
-                text: step.text.clone(),
-                fields: step.fields.clone(),
-                top_fields: step.top_fields.clone(),
-                env_fields: step.env_fields.clone(),
-                unexpected_nested: step.unexpected_nested,
-                run_scalar: step.run_scalar.clone(),
-            },
+        return anchors
+            .get(alias)
+            .map_or_else(|| missing_anchor(alias), clone_step);
+    }
+    let fields = step_fields(block);
+    let StepTopFields {
+        top_fields,
+        env_fields,
+        unexpected_nested,
+    } = step_top_fields(block);
+    let name = step_name(block);
+    let run_scalar = step_run_scalar(block, run_anchors);
+    let mut text = block.join("\n");
+    if let Some(run_scalar) = &run_scalar {
+        text.push('\n');
+        text.push_str(run_scalar);
+    }
+    let step = StepText {
+        name,
+        text,
+        fields,
+        top_fields,
+        env_fields,
+        unexpected_nested,
+        run_scalar,
+    };
+    if let Some(anchor) = head.strip_prefix('&') {
+        anchors.insert(
+            anchor
+                .split_whitespace()
+                .next()
+                .unwrap_or(anchor)
+                .to_owned(),
+            step.clone(),
         );
     }
-    let fields: Vec<(String, String)> = block
+    step
+}
+
+fn missing_anchor(alias: &str) -> StepText {
+    StepText {
+        name: format!("*{alias}"),
+        text: String::new(),
+        fields: Vec::new(),
+        top_fields: Vec::new(),
+        env_fields: Vec::new(),
+        unexpected_nested: true,
+        run_scalar: None,
+    }
+}
+
+fn clone_step(step: &StepText) -> StepText {
+    StepText {
+        name: step.name.clone(),
+        text: step.text.clone(),
+        fields: step.fields.clone(),
+        top_fields: step.top_fields.clone(),
+        env_fields: step.env_fields.clone(),
+        unexpected_nested: step.unexpected_nested,
+        run_scalar: step.run_scalar.clone(),
+    }
+}
+
+fn step_fields(block: &[&str]) -> Vec<(String, String)> {
+    block
         .iter()
         .filter_map(|line| {
             let trimmed = line.trim_start().trim_start_matches("- ").trim();
             let (key, value) = trimmed.split_once(": ")?;
             Some((key.to_owned(), value.to_owned()))
         })
-        .collect();
+        .collect()
+}
+
+struct StepTopFields {
+    top_fields: Vec<(String, String)>,
+    env_fields: Vec<(String, String)>,
+    unexpected_nested: bool,
+}
+
+fn step_top_fields(block: &[&str]) -> StepTopFields {
     let item_indent = indent(block[0]);
     let mut top_fields = Vec::new();
     let mut env_fields = Vec::new();
@@ -430,7 +482,15 @@ fn step_text(
             unexpected_nested = true;
         }
     }
-    let name = block
+    StepTopFields {
+        top_fields,
+        env_fields,
+        unexpected_nested,
+    }
+}
+
+fn step_name(block: &[&str]) -> String {
+    block
         .iter()
         .find_map(|line| {
             let trimmed = line.trim_start().trim_start_matches("- ");
@@ -439,8 +499,11 @@ fn step_text(
         .unwrap_or("")
         .trim()
         .trim_matches('"')
-        .to_owned();
-    let run_scalar = block.iter().find_map(|line| {
+        .to_owned()
+}
+
+fn step_run_scalar(block: &[&str], run_anchors: &mut BTreeMap<String, String>) -> Option<String> {
+    block.iter().find_map(|line| {
         let trimmed = line.trim_start().trim_start_matches("- ").trim();
         let raw = trimmed.strip_prefix("run: ")?;
         if let Some(anchor) = raw.strip_prefix('&') {
@@ -452,32 +515,7 @@ fn step_text(
         } else {
             Some(raw.to_owned())
         }
-    });
-    let mut text = block.join("\n");
-    if let Some(run_scalar) = &run_scalar {
-        text.push('\n');
-        text.push_str(run_scalar);
-    }
-    let step = StepText {
-        name,
-        text,
-        fields,
-        top_fields,
-        env_fields,
-        unexpected_nested,
-        run_scalar,
-    };
-    if let Some(anchor) = head.strip_prefix('&') {
-        anchors.insert(
-            anchor
-                .split_whitespace()
-                .next()
-                .unwrap_or(anchor)
-                .to_owned(),
-            step.clone(),
-        );
-    }
-    step
+    })
 }
 
 impl StepText {

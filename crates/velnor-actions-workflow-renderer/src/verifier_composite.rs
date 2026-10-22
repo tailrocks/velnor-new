@@ -48,17 +48,19 @@ pub fn verifier_shell_step(
     }
     let prelude = crate::toolchain_env::credential_unset_prelude();
     let prefix = format!("{prelude} ");
-    let Some(script) = argv[2].strip_prefix(&prefix) else {
-        return Err(RenderError::InvalidWorkflow(
-            "verifier_shell_script_missing_credential_prelude".to_owned(),
-        ));
-    };
-    if script.trim_start().starts_with(&prelude) {
-        return Err(RenderError::InvalidWorkflow(
-            "verifier_shell_script_duplicate_credential_prelude".to_owned(),
-        ));
+    {
+        let Some(script) = argv[2].strip_prefix(&prefix) else {
+            return Err(RenderError::InvalidWorkflow(
+                "verifier_shell_script_missing_credential_prelude".to_owned(),
+            ));
+        };
+        if script.trim_start().starts_with(&prelude) {
+            return Err(RenderError::InvalidWorkflow(
+                "verifier_shell_script_duplicate_credential_prelude".to_owned(),
+            ));
+        }
     }
-    argv[2] = script.to_owned();
+    argv[2].drain(..prefix.len());
     let mut step = crate::steps::shell_step(name, argv, env)?;
     step.role = role;
     Ok(step)
@@ -270,7 +272,7 @@ mod tests {
         step
     }
 
-    fn mapping<'a>(node: &'a Yaml) -> &'a [(String, Yaml)] {
+    fn mapping(node: &Yaml) -> &[(String, Yaml)] {
         let Yaml::Map(entries) = node else {
             panic!("expected YAML mapping, got {node:?}");
         };
@@ -486,12 +488,124 @@ mod tests {
     }
 
     #[cfg(unix)]
+    fn make_executable(path: &std::path::Path, body: &str) {
+        use std::{fs, os::unix::fs::PermissionsExt};
+
+        fs::write(path, body).expect("write executable test helper");
+        let mut permissions = fs::metadata(path).expect("helper metadata").permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(path, permissions).expect("executable test helper");
+    }
+
+    #[cfg(unix)]
+    fn shell_quote(value: &str) -> String {
+        format!("'{}'", value.replace('\'', "'\\''"))
+    }
+
+    #[cfg(unix)]
+    fn poisoned_helper_dir(root: &std::path::Path) -> (std::path::PathBuf, std::path::PathBuf) {
+        use std::fs;
+
+        let poison = root.join("poison");
+        fs::create_dir_all(&poison).expect("poison directory");
+        let log = root.join("poison.log");
+        let digest = if std::path::Path::new("/usr/bin/sha256sum").exists() {
+            "sha256sum"
+        } else {
+            "shasum"
+        };
+        for helper in ["awk", "mkdir", digest] {
+            make_executable(
+                &poison.join(helper),
+                &format!(
+                    "#!/bin/sh\nprintf '%s\\n' '{}' >> {}\nexit 97\n",
+                    helper,
+                    shell_quote(&log.display().to_string())
+                ),
+            );
+        }
+        (poison, log)
+    }
+
+    #[cfg(unix)]
+    fn verifier_body(reference: &str, digest: &str) -> String {
+        let credential_checks = crate::toolchain_env::CREDENTIAL_UNSET_VARS
+            .iter()
+            .map(|name| format!("test -z \"${{{name}-}}\""))
+            .collect::<Vec<_>>()
+            .join("; ");
+        let digest_args = if digest == "shasum" { "-a 256" } else { "" };
+        format!(
+            "set -eu; {credential_checks}; mkdir -p \"$VERIFIER_TEST_OUT\"; printf 'ok\\n' | awk '{{ print }}' > \"$VERIFIER_TEST_OUT/awk\"; printf 'ok\\n' | {digest} {digest_args} > \"$VERIFIER_TEST_OUT/digest\"; printf '%s\\n' \"${{{reference}-}}\" > \"$VERIFIER_TEST_OUT/reference\""
+        )
+    }
+
+    #[cfg(unix)]
+    fn execute_emitted_verifier(
+        root: &std::path::Path,
+        poison: &std::path::Path,
+        name: &str,
+        role: Option<StepRole>,
+        uses: &str,
+        reference: &str,
+        body: &str,
+    ) {
+        use std::{fs, process::Command};
+
+        let unset = crate::toolchain_env::credential_unset_prelude();
+        let step = verifier_shell_step(
+            name,
+            vec!["sh".to_owned(), "-c".to_owned(), format!("{unset} {body}")],
+            BTreeMap::new(),
+        )
+        .expect("canonical verifier shell");
+        assert_eq!(step.role, role);
+        let file = render_verifier_composite(uses, &step, "0.1.40")
+            .expect("canonical emitted verifier action");
+        let action_name = "Velnor test verifier";
+        let document = verifier_composite_document(action_name, reference, &step)
+            .expect("structured emitted action");
+        let runs = field(&document, "runs");
+        let Yaml::Seq(steps) = field(runs, "steps") else {
+            panic!("composite steps must be a sequence");
+        };
+        let run = scalar(field(&steps[0], "run"));
+        assert!(
+            file.bytes
+                .contains("shell: /bin/bash --noprofile --norc -e -o pipefail {0}")
+        );
+        assert!(file.bytes.contains("PATH=/usr/bin:/bin:/usr/sbin:/sbin"));
+        assert!(file.bytes.contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
+        let script_path = root.join(format!("{}.sh", name.replace(' ', "-")));
+        fs::write(&script_path, run).expect("write emitted run body");
+        let output_dir = root.join(format!("{}-out", name.replace(' ', "-")));
+        let output = Command::new("/bin/bash")
+            .args(["--noprofile", "--norc", "-e", "-o", "pipefail"])
+            .arg(script_path)
+            .env("PATH", poison)
+            .env("VERIFIER_TEST_OUT", &output_dir)
+            .envs(
+                crate::toolchain_env::CREDENTIAL_UNSET_VARS
+                    .iter()
+                    .map(|key| (*key, "ambient-secret")),
+            )
+            .output()
+            .expect("run emitted verifier action script");
+        assert!(
+            output.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(output_dir.join("awk").is_file());
+        assert!(output_dir.join("digest").is_file());
+        assert!(output_dir.join("reference").is_file());
+    }
+
+    #[cfg(unix)]
     #[test]
-    fn every_verifier_identity_replaces_poisoned_path_before_helpers_run() {
+    fn emitted_verifiers_replace_poisoned_path_and_remove_all_credentials() {
         use std::{
             fs,
-            os::unix::fs::PermissionsExt,
-            process::Command,
             time::{SystemTime, UNIX_EPOCH},
         };
 
@@ -500,78 +614,47 @@ mod tests {
             .expect("clock after epoch")
             .as_nanos();
         let root = std::env::temp_dir().join(format!(
-            "velnor-verifier-path-{}-{nonce}",
+            "velnor-verifier-run-{}-{nonce}",
             std::process::id()
         ));
-        let poison = root.join("poison");
-        fs::create_dir_all(&poison).expect("poison directory");
-        let log = root.join("poison.log");
-        let (digest_tool, digest_args) = if std::path::Path::new("/usr/bin/sha256sum").exists() {
-            ("sha256sum", "")
+        fs::create_dir_all(&root).expect("temporary test root");
+        let (poison, log) = poisoned_helper_dir(&root);
+        let digest = if std::path::Path::new("/usr/bin/sha256sum").exists() {
+            "sha256sum"
         } else {
-            ("shasum", "-a 256")
+            "shasum"
         };
-        for helper in ["mkdir", "awk", digest_tool] {
-            let path = poison.join(helper);
-            fs::write(
-                &path,
-                format!(
-                    "#!/bin/sh\nprintf '%s\\n' '{}' >> '{}'\nexit 97\n",
-                    helper,
-                    log.display()
-                ),
-            )
-            .expect("write poison helper");
-            let mut permissions = fs::metadata(&path).expect("helper metadata").permissions();
-            permissions.set_mode(0o755);
-            fs::set_permissions(&path, permissions).expect("executable helper");
-        }
-
-        let unset = crate::toolchain_env::credential_unset_prelude();
-        let script = format!(
-            "set -eu; test -z \"${{GITHUB_TOKEN-}}\"; test -z \"${{ACTIONS_RUNTIME_TOKEN-}}\"; mkdir -p \"$VERIFIER_TEST_DIR/out\"; printf 'ok\\n' | awk '{{ print }}' > \"$VERIFIER_TEST_DIR/out/awk\"; printf 'ok\\n' | {digest_tool} {digest_args} > \"$VERIFIER_TEST_DIR/out/digest\""
-        );
-        for (name, role) in [
+        for (name, role, uses, reference) in [
             (
                 "Verify restored Rust toolchain",
                 Some(StepRole::VerifyRustManifest),
+                RUST_VERIFIER_USES[0],
+                "VELNOR_TOOL_RUST",
             ),
             (
                 crate::VERIFY_RUST_TOOLCHAIN_STEP,
                 Some(StepRole::VerifyRustManifest),
+                RUST_VERIFIER_USES[1],
+                "VELNOR_TOOL_RUST",
             ),
-            ("Verify jactionlint", None),
+            (
+                "Verify jactionlint",
+                None,
+                VERIFY_JACTIONLINT_USES,
+                "VELNOR_TOOL_JACTIONLINT",
+            ),
         ] {
-            let step = verifier_shell_step(
+            execute_emitted_verifier(
+                &root,
+                &poison,
                 name,
-                vec![
-                    "sh".to_owned(),
-                    "-c".to_owned(),
-                    format!("{unset} {script}"),
-                ],
-                BTreeMap::new(),
-            )
-            .expect("canonical verifier shell");
-            assert_eq!(step.role, role);
-            let argv = verifier_shell_argv(&step).expect("trusted argv");
-            let output = Command::new(&argv[0])
-                .args(&argv[1..])
-                .env("PATH", &poison)
-                .env("VERIFIER_TEST_DIR", &root)
-                .env("GITHUB_TOKEN", "ambient-token")
-                .env("ACTIONS_RUNTIME_TOKEN", "ambient-runtime-token")
-                .output()
-                .expect("run trusted verifier argv");
-            assert!(
-                output.status.success(),
-                "{name}: {}",
-                String::from_utf8_lossy(&output.stderr)
+                role,
+                uses,
+                reference,
+                &verifier_body(reference, digest),
             );
-            assert!(root.join("out/awk").is_file());
-            assert!(root.join("out/digest").is_file());
-            assert!(!log.exists(), "{name} resolved a poisoned helper");
-            fs::remove_dir_all(root.join("out")).expect("clear previous output");
         }
+        assert!(!log.exists(), "a helper resolved through poisoned PATH");
         fs::remove_dir_all(root).expect("remove test tree");
     }
 }

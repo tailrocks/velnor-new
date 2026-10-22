@@ -68,6 +68,20 @@ pub(crate) struct VerifierActionSet {
     pub(crate) inline_jactionlint_templates: Vec<InlineVerifierTemplate>,
 }
 
+struct VerifierSteps {
+    restored_rust: Step,
+    installed_rust: Step,
+    jactionlint: Step,
+    default_home_rust: Step,
+    producer_home_rust: Step,
+    inline_jactionlint: Step,
+}
+
+struct InlineVerifierTemplates {
+    rust: BTreeMap<&'static str, Vec<InlineVerifierTemplate>>,
+    jactionlint: Vec<InlineVerifierTemplate>,
+}
+
 impl VerifierActionSet {
     /// Build action definitions from the same canonical scrubbed shell steps
     /// that the pre-extraction workflow used.
@@ -79,103 +93,32 @@ impl VerifierActionSet {
         catalog: &ToolCatalog,
         generator_version: &str,
     ) -> Result<Self, OrchestratorError> {
-        let restored_step =
-            crate::workflow::workflow_policy::rust_manifest_step::verifier_shell_step(
-                catalog,
-                crate::workflow::ToolchainPhase::Restored,
-            )?;
-        let installed_step =
-            crate::workflow::workflow_policy::rust_manifest_step::verifier_shell_step(
-                catalog,
-                crate::workflow::ToolchainPhase::Installed,
-            )?;
-        let jactionlint_step =
-            crate::workflow::workflow_policy::jactionlint_verify_step::verifier_shell_step(
-                catalog,
-            )?;
-        let default_home_step =
-            velnor_actions_workflow_renderer::verifier_composite::verifier_shell_step(
-                crate::workflow::VERIFY_RUST_MANIFEST_STEP,
-                crate::workflow::verify_rust_argv(catalog),
-                BTreeMap::new(),
-            )?;
-        let producer_env = producer_cargo_env(catalog)?;
-        let producer_home_step =
-            velnor_actions_workflow_renderer::verifier_composite::verifier_shell_step(
-                crate::workflow::VERIFY_RUST_MANIFEST_STEP,
-                crate::workflow::verify_rust_argv(catalog),
-                producer_env,
-            )?;
-        let jactionlint_inline_step =
-            velnor_actions_workflow_renderer::verifier_composite::verifier_shell_step(
-                crate::workflow::VERIFY_JACTIONLINT_STEP,
-                crate::workflow::jactionlint_verify_argv(catalog),
-                BTreeMap::new(),
-            )?;
-        let mut inline_rust_templates = BTreeMap::new();
-        let mut producer_home_template =
-            InlineVerifierTemplate::wrapped(&producer_home_step, &["RUSTUP_HOME", "CARGO_HOME"])?;
-        // The workflow renderer binds project tool references in step env to
-        // `${{ env.* }}` after constructing the canonical Step. The audit
-        // template models that final emitted YAML mapping at the same
-        // boundary; keep the Step input itself in shell form for normal
-        // validation and source-preparation reuse.
-        for value in producer_home_template.env.values_mut() {
-            *value = velnor_actions_contract::config::project_tool_refs::
-                project_tool_refs_to_expressions(value);
-        }
-        inline_rust_templates.insert(
-            crate::workflow::VERIFY_RESTORED_RUST_STEP,
-            vec![InlineVerifierTemplate::wrapped(
-                &restored_step,
-                &["RUSTUP_HOME", "CARGO_HOME"],
-            )?],
-        );
-        inline_rust_templates.insert(
-            crate::workflow::VERIFY_RUST_MANIFEST_STEP,
-            vec![
-                InlineVerifierTemplate::wrapped(&installed_step, &["RUSTUP_HOME", "CARGO_HOME"])?,
-                InlineVerifierTemplate::wrapped(&default_home_step, &[])?,
-                producer_home_template,
-            ],
-        );
-        let inline_jactionlint_templates = vec![
-            InlineVerifierTemplate::wrapped(&jactionlint_step, &[])?,
-            InlineVerifierTemplate::wrapped(&jactionlint_inline_step, &[])?,
-        ];
+        let steps = verifier_steps(catalog)?;
+        let inline_templates = inline_templates(&steps)?;
         Ok(Self {
-            restored_rust: VerifierAction {
-                uses: RUST_VERIFIER_USES[0],
-                name: crate::workflow::VERIFY_RESTORED_RUST_STEP,
-                role: Some(StepRole::VerifyRustManifest),
-                file: velnor_actions_workflow_renderer::verifier_composite::render_verifier_composite(
-                    RUST_VERIFIER_USES[0],
-                    &restored_step,
-                    generator_version,
-                )?,
-            },
-            installed_rust: VerifierAction {
-                uses: RUST_VERIFIER_USES[1],
-                name: crate::workflow::VERIFY_RUST_MANIFEST_STEP,
-                role: Some(StepRole::VerifyRustManifest),
-                file: velnor_actions_workflow_renderer::verifier_composite::render_verifier_composite(
-                    RUST_VERIFIER_USES[1],
-                    &installed_step,
-                    generator_version,
-                )?,
-            },
-            jactionlint: VerifierAction {
-                uses: velnor_actions_workflow_renderer::verifier_composite::VERIFY_JACTIONLINT_USES,
-                name: crate::workflow::VERIFY_JACTIONLINT_STEP,
-                role: None,
-                file: velnor_actions_workflow_renderer::verifier_composite::render_verifier_composite(
-                    velnor_actions_workflow_renderer::verifier_composite::VERIFY_JACTIONLINT_USES,
-                    &jactionlint_step,
-                    generator_version,
-                )?,
-            },
-            inline_rust_templates,
-            inline_jactionlint_templates,
+            restored_rust: verifier_action(
+                RUST_VERIFIER_USES[0],
+                crate::workflow::VERIFY_RESTORED_RUST_STEP,
+                Some(StepRole::VerifyRustManifest),
+                &steps.restored_rust,
+                generator_version,
+            )?,
+            installed_rust: verifier_action(
+                RUST_VERIFIER_USES[1],
+                crate::workflow::VERIFY_RUST_MANIFEST_STEP,
+                Some(StepRole::VerifyRustManifest),
+                &steps.installed_rust,
+                generator_version,
+            )?,
+            jactionlint: verifier_action(
+                velnor_actions_workflow_renderer::verifier_composite::VERIFY_JACTIONLINT_USES,
+                crate::workflow::VERIFY_JACTIONLINT_STEP,
+                None,
+                &steps.jactionlint,
+                generator_version,
+            )?,
+            inline_rust_templates: inline_templates.rust,
+            inline_jactionlint_templates: inline_templates.jactionlint,
         })
     }
 
@@ -205,6 +148,103 @@ impl VerifierActionSet {
                     if uses == action.uses && with.is_empty() && env.is_empty()
             )
     }
+}
+
+fn verifier_steps(catalog: &ToolCatalog) -> Result<VerifierSteps, OrchestratorError> {
+    let restored_rust = crate::workflow::workflow_policy::rust_manifest_step::verifier_shell_step(
+        catalog,
+        crate::workflow::ToolchainPhase::Restored,
+    )?;
+    let installed_rust = crate::workflow::workflow_policy::rust_manifest_step::verifier_shell_step(
+        catalog,
+        crate::workflow::ToolchainPhase::Installed,
+    )?;
+    let jactionlint =
+        crate::workflow::workflow_policy::jactionlint_verify_step::verifier_shell_step(catalog)?;
+    let default_home_rust =
+        velnor_actions_workflow_renderer::verifier_composite::verifier_shell_step(
+            crate::workflow::VERIFY_RUST_MANIFEST_STEP,
+            crate::workflow::verify_rust_argv(catalog),
+            BTreeMap::new(),
+        )?;
+    let producer_home_rust =
+        velnor_actions_workflow_renderer::verifier_composite::verifier_shell_step(
+            crate::workflow::VERIFY_RUST_MANIFEST_STEP,
+            crate::workflow::verify_rust_argv(catalog),
+            producer_cargo_env(catalog)?,
+        )?;
+    let inline_jactionlint =
+        velnor_actions_workflow_renderer::verifier_composite::verifier_shell_step(
+            crate::workflow::VERIFY_JACTIONLINT_STEP,
+            crate::workflow::jactionlint_verify_argv(catalog),
+            BTreeMap::new(),
+        )?;
+    Ok(VerifierSteps {
+        restored_rust,
+        installed_rust,
+        jactionlint,
+        default_home_rust,
+        producer_home_rust,
+        inline_jactionlint,
+    })
+}
+
+fn inline_templates(steps: &VerifierSteps) -> Result<InlineVerifierTemplates, OrchestratorError> {
+    let mut producer_home_template =
+        InlineVerifierTemplate::wrapped(&steps.producer_home_rust, &["RUSTUP_HOME", "CARGO_HOME"])?;
+    // The workflow renderer binds project tool references in step env to
+    // `${{ env.* }}` after constructing the canonical Step. The audit
+    // template models that final emitted YAML mapping at the same boundary;
+    // keep the Step input itself in shell form for normal validation and
+    // source-preparation reuse.
+    for value in producer_home_template.env.values_mut() {
+        *value =
+            velnor_actions_contract::config::project_tool_refs::project_tool_refs_to_expressions(
+                value,
+            );
+    }
+    let mut inline_rust_templates = BTreeMap::new();
+    inline_rust_templates.insert(
+        crate::workflow::VERIFY_RESTORED_RUST_STEP,
+        vec![InlineVerifierTemplate::wrapped(
+            &steps.restored_rust,
+            &["RUSTUP_HOME", "CARGO_HOME"],
+        )?],
+    );
+    inline_rust_templates.insert(
+        crate::workflow::VERIFY_RUST_MANIFEST_STEP,
+        vec![
+            InlineVerifierTemplate::wrapped(&steps.installed_rust, &["RUSTUP_HOME", "CARGO_HOME"])?,
+            InlineVerifierTemplate::wrapped(&steps.default_home_rust, &[])?,
+            producer_home_template,
+        ],
+    );
+    let inline_jactionlint_templates = vec![
+        InlineVerifierTemplate::wrapped(&steps.jactionlint, &[])?,
+        InlineVerifierTemplate::wrapped(&steps.inline_jactionlint, &[])?,
+    ];
+    Ok(InlineVerifierTemplates {
+        rust: inline_rust_templates,
+        jactionlint: inline_jactionlint_templates,
+    })
+}
+
+fn verifier_action(
+    uses: &'static str,
+    name: &'static str,
+    role: Option<StepRole>,
+    step: &Step,
+    version: &str,
+) -> Result<VerifierAction, OrchestratorError> {
+    let file = velnor_actions_workflow_renderer::verifier_composite::render_verifier_composite(
+        uses, step, version,
+    )?;
+    Ok(VerifierAction {
+        uses,
+        name,
+        role,
+        file,
+    })
 }
 
 fn run_scalar(step: &Step) -> Result<String, OrchestratorError> {

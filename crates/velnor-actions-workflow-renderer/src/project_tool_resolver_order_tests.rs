@@ -172,38 +172,63 @@ fn verifier_composite_binding_preserves_static_pins_and_only_rewrites_its_own_re
     );
 }
 
-#[test]
-fn verifier_resolver_is_exact_and_rejects_tampered_or_overridden_trust_inputs() {
-    let checkout = step(&[("uses", "actions/checkout@0123")]);
-    let setup = step(&[("uses", SETUP)]);
-    let verifier = step(&[
-        ("name", "Verify Rust channel manifest"),
-        ("run", "echo rust@${VELNOR_TOOL_RUST}"),
-    ]);
-    let mut doc = workflow(
+fn rust_verifier_workflow() -> Yaml {
+    workflow(
         Vec::new(),
-        vec![checkout.clone(), setup.clone(), verifier.clone()],
-    );
-    bind_workflow(&mut doc).expect("canonical resolver");
-    let Yaml::Map(root) = &mut doc else {
+        vec![
+            step(&[("uses", "actions/checkout@0123")]),
+            step(&[("uses", SETUP)]),
+            step(&[
+                ("name", "Verify Rust channel manifest"),
+                ("run", "echo rust@${VELNOR_TOOL_RUST}"),
+            ]),
+        ],
+    )
+}
+
+fn rust_verifier_workflow_steps() -> Vec<Yaml> {
+    let Yaml::Map(fields) = rust_verifier_workflow() else {
         panic!("workflow map")
     };
-    let jobs = root
+    let (_, Yaml::Map(jobs)) = fields
+        .into_iter()
+        .find(|(key, _)| key == "jobs")
+        .expect("jobs")
+    else {
+        panic!("jobs map")
+    };
+    let Yaml::Map(job) = jobs.into_iter().next().expect("one job").1 else {
+        panic!("job map")
+    };
+    let (_, Yaml::Seq(steps)) = job
+        .into_iter()
+        .find(|(key, _)| key == "steps")
+        .expect("steps")
+    else {
+        panic!("steps sequence")
+    };
+    steps
+}
+
+fn resolver_step_fields_mut(document: &mut Yaml) -> &mut Vec<(String, Yaml)> {
+    let Yaml::Map(root) = document else {
+        panic!("workflow map")
+    };
+    let (_, jobs) = root
         .iter_mut()
         .find(|(key, _)| key == "jobs")
         .expect("jobs");
-    let Yaml::Map(jobs) = &mut jobs.1 else {
+    let Yaml::Map(jobs) = jobs else {
         panic!("jobs map")
     };
-    let job = &mut jobs[0].1;
-    let Yaml::Map(job) = job else {
+    let Yaml::Map(job) = &mut jobs[0].1 else {
         panic!("job map")
     };
-    let steps = job
+    let (_, steps) = job
         .iter_mut()
         .find(|(key, _)| key == "steps")
         .expect("steps");
-    let Yaml::Seq(steps) = &mut steps.1 else {
+    let Yaml::Seq(steps) = steps else {
         panic!("steps sequence")
     };
     let resolver = steps
@@ -222,39 +247,44 @@ fn verifier_resolver_is_exact_and_rejects_tampered_or_overridden_trust_inputs() 
         panic!("resolver map")
     };
     fields
+}
+
+#[test]
+fn verifier_resolver_rejects_tampered_shell() {
+    let mut document = rust_verifier_workflow();
+    bind_workflow(&mut document).expect("canonical resolver");
+    let fields = resolver_step_fields_mut(&mut document);
+    fields
         .iter_mut()
         .find(|(key, _)| key == "shell")
         .expect("shell")
         .1 = Yaml::str("bash");
-    let error = bind_workflow(&mut doc).expect_err("tampered resolver must fail closed");
+    let error = bind_workflow(&mut document).expect_err("tampered resolver must fail closed");
     assert!(
         error.to_string().contains("resolver_step_tampered"),
         "{error}"
     );
+}
 
-    let mut overridden = workflow(
+#[test]
+fn verifier_jobs_reject_a_home_override() {
+    let mut document = workflow(
         vec![("HOME".to_owned(), Yaml::str("/tmp/attacker-home"))],
-        vec![checkout, setup, verifier],
+        rust_verifier_workflow_steps(),
     );
-    let error = bind_workflow(&mut overridden).expect_err("job HOME must be fixed");
+    let error = bind_workflow(&mut document).expect_err("job HOME must be fixed");
     assert!(
         error
             .to_string()
             .contains("verifier_trusted_environment_override"),
         "{error}"
     );
-    let mut overridden = workflow(
-        Vec::new(),
-        vec![
-            step(&[("uses", "actions/checkout@0123")]),
-            step(&[("uses", SETUP)]),
-            step(&[
-                ("name", "Verify Rust channel manifest"),
-                ("run", "echo rust@${VELNOR_TOOL_RUST}"),
-            ]),
-        ],
-    );
-    let Yaml::Map(fields) = &mut overridden else {
+}
+
+#[test]
+fn verifier_jobs_reject_a_path_override() {
+    let mut document = workflow(Vec::new(), rust_verifier_workflow_steps());
+    let Yaml::Map(fields) = &mut document else {
         panic!("workflow map")
     };
     fields.insert(
@@ -264,7 +294,7 @@ fn verifier_resolver_is_exact_and_rejects_tampered_or_overridden_trust_inputs() 
             Yaml::Map(vec![("PATH".to_owned(), Yaml::str("/tmp/attacker-bin"))]),
         ),
     );
-    let error = bind_workflow(&mut overridden).expect_err("workflow PATH must be fixed");
+    let error = bind_workflow(&mut document).expect_err("workflow PATH must be fixed");
     assert!(
         error
             .to_string()

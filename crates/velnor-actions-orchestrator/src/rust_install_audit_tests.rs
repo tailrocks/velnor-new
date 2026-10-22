@@ -246,12 +246,42 @@ fn existing_inline_release_verifiers_remain_exactly_audited() {
     );
 }
 
+fn producer_home_template() -> crate::verifier_actions::InlineVerifierTemplate {
+    verifiers().inline_rust_templates["Verify Rust channel manifest"]
+        .last()
+        .expect("canonical producer-home Rust verifier")
+        .clone()
+}
+
+fn source_prep_workflow(
+    template: &crate::verifier_actions::InlineVerifierTemplate,
+    env_reversed: bool,
+) -> String {
+    let step = if env_reversed {
+        inline_step_with_env(
+            "Verify Rust channel manifest",
+            template,
+            template.env.iter().rev(),
+        )
+    } else {
+        inline_step("Verify Rust channel manifest", template)
+    };
+    format!(
+        "jobs:\n  producer:\n    steps:\n      - name: Install pinned Rust\n        run: mise install rust@1.99.1\n{step}"
+    )
+}
+
+fn assert_source_prep_rejected(workflow: &str, reason: &str) {
+    let found = problem(&files(".github/workflows/binary-release.yml", workflow));
+    assert!(
+        found.contains("noncanonical verifier call or body"),
+        "{reason} must fail closed: {found}"
+    );
+}
+
 #[test]
 fn standalone_source_prep_verifier_accepts_only_its_shared_exact_job_environment() {
-    let actions = verifiers();
-    let template = actions.inline_rust_templates["Verify Rust channel manifest"]
-        .last()
-        .expect("canonical producer-home Rust verifier");
+    let template = producer_home_template();
     assert_eq!(template.env["MISE_AUTO_INSTALL"], "false");
     assert_eq!(template.env["MISE_NO_CONFIG"], "1");
     assert_eq!(template.env["CARGO_HOME"], template.env["MISE_CARGO_HOME"]);
@@ -261,29 +291,23 @@ fn standalone_source_prep_verifier_accepts_only_its_shared_exact_job_environment
     );
     assert_eq!(template.env["RUSTUP_TOOLCHAIN"], "1.99.1");
 
-    let canonical = format!(
-        "jobs:\n  producer:\n    steps:\n      - name: Install pinned Rust\n        run: mise install rust@1.99.1\n{}",
-        inline_step("Verify Rust channel manifest", template),
-    );
+    let canonical = source_prep_workflow(&template, false);
     assert_eq!(
         problem(&files(".github/workflows/binary-release.yml", &canonical)),
         ""
     );
-
-    let reordered = format!(
-        "jobs:\n  producer:\n    steps:\n      - name: Install pinned Rust\n        run: mise install rust@1.99.1\n{}",
-        inline_step_with_env(
-            "Verify Rust channel manifest",
-            template,
-            template.env.iter().rev(),
-        ),
-    );
+    let reordered = source_prep_workflow(&template, true);
     assert_eq!(
         problem(&files(".github/workflows/binary-release.yml", &reordered)),
         "",
         "environment declaration order does not change the exact mapping"
     );
+}
 
+#[test]
+fn standalone_source_prep_verifier_rejects_changed_configuration_and_home() {
+    let template = producer_home_template();
+    let canonical = source_prep_workflow(&template, false);
     let changed_flag = canonical.replace(
         &format!(
             "          MISE_NO_CONFIG: {}",
@@ -292,14 +316,7 @@ fn standalone_source_prep_verifier_accepts_only_its_shared_exact_job_environment
         "          MISE_NO_CONFIG: \"0\"",
     );
     assert_ne!(changed_flag, canonical);
-    assert!(
-        problem(&files(
-            ".github/workflows/binary-release.yml",
-            &changed_flag
-        ))
-        .contains("noncanonical verifier call or body"),
-        "changed project-config isolation must fail closed"
-    );
+    assert_source_prep_rejected(&changed_flag, "changed project-config isolation");
 
     let changed_home = canonical.replace(
         &format!(
@@ -309,51 +326,31 @@ fn standalone_source_prep_verifier_accepts_only_its_shared_exact_job_environment
         "          RUSTUP_HOME: /tmp/untrusted-rustup",
     );
     assert_ne!(changed_home, canonical);
-    assert!(
-        problem(&files(
-            ".github/workflows/binary-release.yml",
-            &changed_home
-        ))
-        .contains("noncanonical verifier call or body"),
-        "changed producer home must fail closed"
-    );
+    assert_source_prep_rejected(&changed_home, "changed producer home");
+}
 
+#[test]
+fn standalone_source_prep_verifier_rejects_missing_duplicate_and_extra_environment() {
+    let template = producer_home_template();
+    let canonical = source_prep_workflow(&template, false);
     let no_config = format!(
         "          MISE_NO_CONFIG: {}\n",
         velnor_actions_workflow_renderer::yaml::quote_scalar(&template.env["MISE_NO_CONFIG"])
     );
     let missing_entry = canonical.replace(&no_config, "");
     assert_ne!(missing_entry, canonical);
-    assert!(
-        problem(&files(
-            ".github/workflows/binary-release.yml",
-            &missing_entry
-        ))
-        .contains("noncanonical verifier call or body"),
-        "missing project-config isolation must fail closed"
-    );
+    assert_source_prep_rejected(&missing_entry, "missing project-config isolation");
 
     let duplicate_entry = canonical.replace(&no_config, &format!("{no_config}{no_config}"));
     assert_ne!(duplicate_entry, canonical);
-    assert!(
-        problem(&files(
-            ".github/workflows/binary-release.yml",
-            &duplicate_entry
-        ))
-        .contains("noncanonical verifier call or body"),
-        "duplicate environment keys must fail closed"
-    );
+    assert_source_prep_rejected(&duplicate_entry, "duplicate environment keys");
 
     let extra_entry = canonical.replace(
         "        env:\n",
         "        env:\n          UNEXPECTED: \"1\"\n",
     );
     assert_ne!(extra_entry, canonical);
-    assert!(
-        problem(&files(".github/workflows/binary-release.yml", &extra_entry))
-            .contains("noncanonical verifier call or body"),
-        "additional caller environment must fail closed"
-    );
+    assert_source_prep_rejected(&extra_entry, "additional caller environment");
 }
 
 #[test]
@@ -390,7 +387,9 @@ fn inline_verifiers_reject_skips_and_noncanonical_shell_or_environment() {
                 &format!(
                     "        shell: {}",
                     velnor_actions_workflow_renderer::yaml::quote_scalar(
-                        jactionlint_template.shell.unwrap()
+                        jactionlint_template
+                            .shell
+                            .expect("canonical jactionlint shell")
                     )
                 ),
                 "        shell: sh",
