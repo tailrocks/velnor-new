@@ -204,14 +204,16 @@ fn complete_metadata_union_exceeding_total_byte_bound_downloads_nothing() {
         .collect::<Vec<_>>();
     request.stage = ReleaseProductionStage::Assemble { inputs };
     request.validate().expect("complete eight-pair request");
-    request.stage = ReleaseProductionStage::Assemble { inputs: Vec::new() };
-    let ReleaseProductionStage::Assemble { inputs } = &request.stage else {
-        unreachable!()
-    };
-    for (artifact, reference) in records.iter().zip(inputs) {
-        validate_selected(artifact, reference, &request)
-            .expect("each individual leaf is within its own bound");
+    {
+        let ReleaseProductionStage::Assemble { inputs } = &request.stage else {
+            unreachable!()
+        };
+        for (artifact, reference) in records.iter().zip(inputs) {
+            validate_selected(artifact, reference, &request)
+                .expect("each individual leaf is within its own bound");
+        }
     }
+    request.stage = ReleaseProductionStage::Assemble { inputs: Vec::new() };
     let api = Fake::new(records);
     configure_jobs(&api, &request);
     let error = acquire_fixture(&api, &request, deadline()).expect_err("complete union bound");
