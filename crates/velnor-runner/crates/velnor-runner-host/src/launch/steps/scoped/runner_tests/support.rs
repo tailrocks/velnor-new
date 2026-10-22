@@ -98,6 +98,33 @@ impl Fixture {
     }
 }
 
+pub(super) async fn configure_provisioning_profile(
+    fixture: &Fixture,
+) -> Result<crate::journal::StorageProfile, String> {
+    fixture
+        .journal
+        .configure_capacity_with_operational_limits(
+            CapacityLimits {
+                jobs: 1,
+                cpu_millicores: 4_000,
+                memory_bytes: 32 * 1024 * 1024 * 1024,
+            },
+            OperationalCapacityLimits {
+                cpu_millicores: 1_000,
+                memory_bytes: 268_435_456,
+            },
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    let profile = crate::journal::fixture_provisioning_profile();
+    fixture
+        .journal
+        .configure_storage_profile(profile.clone())
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(profile)
+}
+
 async fn configure_fixture_journal(journal: &Journal, engine_id: &str) -> Result<(), String> {
     journal
         .configure_storage_profile(crate::journal::fixture_profile())
