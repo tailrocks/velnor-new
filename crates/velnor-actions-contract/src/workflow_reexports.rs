@@ -1,4 +1,5 @@
 //! Crate-root re-exports for the workflow contract surface.
+pub use crate::config::{MiseTaskSuite, MiseTaskSuiteEvent};
 pub use crate::workflow::qualification_cache_lineage::*;
 pub use crate::workflow::{
     ALLOWED_WORKFLOW_EVENTS, BUN_REGISTRY_INSTALL_OPERATION, CACHE_MODE_PUSH_WRITE_EXPR,

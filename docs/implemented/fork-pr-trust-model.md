@@ -21,10 +21,10 @@ A PR that edits `.velnor/config.toml` and regenerates consistently stays
 green by construction. It can narrow features, add named Mise checks or
 `workflow.tasks` that execute repository-owned task bodies in isolated jobs,
 pick a permitted runner label, and shrink the `needs` inventory—as long as
-the emitted tree is internally consistent. Verification jobs have only a
-read-only contents token, no persisted checkout credentials, no cache or
-artifact writes, and no downstream task outputs; task code still needs review
-as PR-controlled code. The freshness gate
+the emitted tree is internally consistent. `workflow.task_suites` adds
+standalone push/schedule companion workflows that do not join `Required`; they
+also execute repository-controlled task code without a task credential. The
+freshness gate
 (`closure.rs:184-202`: regenerate into scratch, `diff -r` against
 committed `.github`) catches hand edits that disagree with generator
 output, never a consistent regen. The `needs` exact-inventory cross-check

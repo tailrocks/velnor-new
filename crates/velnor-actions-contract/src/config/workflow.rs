@@ -76,6 +76,9 @@ pub struct WorkflowConfig {
     /// Sorted, unique typed task graph shared by verification and build variants.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tasks: Vec<WorkflowTask>,
+    /// Optional standalone compile-capable Mise task suites.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub task_suites: Vec<super::MiseTaskSuite>,
     /// Optional protected post-merge `OpenTofu` apply workflow.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tofu_apply: Option<TofuApplyConfig>,
@@ -233,6 +236,7 @@ impl WorkflowConfig {
             ));
         }
         self.validate_tasks(file)?;
+        task_suites_validate::validate(self, file)?;
         if let Some(completion) = &self.review_completion {
             completion.validate(file)?;
         }
@@ -339,7 +343,7 @@ impl VerifyConfig {
             }
             let mut paths = std::collections::BTreeSet::new();
             for path in files {
-                if !valid_json_path(path) || !paths.insert(path) {
+                if !workflow_validation_helpers::valid_json_path(path) || !paths.insert(path) {
                     return Err(ContractError::config(
                         file,
                         "workflow.verify.strict_json_files",
@@ -349,7 +353,7 @@ impl VerifyConfig {
             }
         }
         for arg in &self.lychee_args {
-            if !valid_lychee_arg(arg) {
+            if !workflow_validation_helpers::valid_lychee_arg(arg) {
                 return Err(ContractError::config(
                     file,
                     "workflow.verify.lychee_args",
@@ -368,31 +372,12 @@ impl VerifyConfig {
     }
 }
 
-fn valid_json_path(value: &str) -> bool {
-    !value.is_empty()
-        && std::path::Path::new(value)
-            .extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
-        && !value.starts_with('/')
-        && value.split('/').all(|part| {
-            !part.is_empty()
-                && part != "."
-                && part != ".."
-                && part
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
-        })
-}
-
-fn valid_lychee_arg(value: &str) -> bool {
-    !value.is_empty()
-        && value != "--"
-        && !value.contains("${{")
-        && !value.contains(['$', '`'])
-        && !value.chars().any(char::is_control)
-        && !value.split_whitespace().any(|word| word == "mise")
-}
-
 #[cfg(test)]
 #[path = "workflow_tests.rs"]
 mod tests;
+
+#[path = "workflow_task_suites_validate.rs"]
+mod task_suites_validate;
+
+#[path = "workflow_validation_helpers.rs"]
+mod workflow_validation_helpers;

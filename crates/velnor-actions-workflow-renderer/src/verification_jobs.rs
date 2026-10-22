@@ -3,8 +3,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    HOSTED_SUFFIX, Job, JobTimeout, PermissionLevel, Permissions, RunsOn, SCALE_SUFFIX, Step,
-    VerificationRunner, VerificationTask, WORKFLOW_TASK_JOB_PREFIX,
+    HOSTED_SUFFIX, Job, JobTimeout, MiseTaskSource, PermissionLevel, Permissions, RunsOn,
+    SCALE_SUFFIX, Step, VerificationRunner, VerificationTask, WORKFLOW_TASK_JOB_PREFIX,
 };
 
 use crate::{MiseSetup, RenderError};
@@ -27,6 +27,10 @@ pub(crate) mod bun_registry_step;
 pub(crate) mod bun_suite_jobs;
 #[path = "image_build_jobs.rs"]
 pub(crate) mod image_build_jobs;
+#[path = "mise_task_bootstrap.rs"]
+pub(crate) mod mise_task_bootstrap;
+#[path = "mise_task_suites.rs"]
+pub(crate) mod mise_task_suites;
 #[path = "native_image_jobs.rs"]
 pub(crate) mod native_image_jobs;
 #[path = "playwright_install_step.rs"]
@@ -57,6 +61,9 @@ pub use bun_suite_jobs::{
 };
 pub use image_build_jobs::{
     BUILDKIT_IMAGE, ImageBuildPolicy, artifact_name, artifact_path, build_image_build_job,
+};
+pub use mise_task_suites::{
+    MiseTaskSuitePolicy, MiseTaskSuitesRenderSpec, render_mise_task_suites,
 };
 pub use native_image_jobs::{NativeImageTaskPolicy, build_native_image_job};
 pub use playwright_install_step::{
@@ -89,6 +96,38 @@ pub struct VerificationTaskPolicy {
     pub mise_lock_sha256: Option<String>,
     /// SHA-256 of the source Rust toolchain file, if present.
     pub rust_toolchain_sha256: Option<String>,
+}
+
+/// Shared, validated task inputs consumed by the locked Mise bootstrap.
+#[derive(Debug, Clone)]
+pub(crate) struct MiseTaskBootstrapPolicy {
+    pub(crate) id: String,
+    pub(crate) mise_task: String,
+    pub(crate) source: MiseTaskSource,
+    pub(crate) runner: VerificationRunner,
+    pub(crate) selected_tools: Vec<build_task_jobs::BuildTaskTool>,
+    pub(crate) mise_config_sha256: Option<String>,
+    pub(crate) mise_lock_sha256: Option<String>,
+    pub(crate) rust_toolchain_sha256: Option<String>,
+    pub(crate) root_prefix: &'static str,
+    pub(crate) run_step_name: &'static str,
+}
+
+impl MiseTaskBootstrapPolicy {
+    fn from_verification(policy: &VerificationTaskPolicy) -> Self {
+        Self {
+            id: policy.task.id.clone(),
+            mise_task: policy.task.mise_task.clone(),
+            source: policy.task.source.clone(),
+            runner: policy.task.runner,
+            selected_tools: policy.selected_tools.clone(),
+            mise_config_sha256: policy.mise_config_sha256.clone(),
+            mise_lock_sha256: policy.mise_lock_sha256.clone(),
+            rust_toolchain_sha256: policy.rust_toolchain_sha256.clone(),
+            root_prefix: "verification",
+            run_step_name: RUN_VERIFICATION_TASK_NAME,
+        }
+    }
 }
 
 /// Step installing only the declared task's locked prebuilt tool closure.
