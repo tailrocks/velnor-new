@@ -27,6 +27,8 @@ mod preview_download;
 #[path = "preview_artifact_transport_api.rs"]
 mod preview_reads;
 pub(super) use preview_reads::ReleaseArtifactApi;
+#[path = "package_release_publish_ancestry.rs"]
+mod ancestry;
 #[path = "package_release_publish_github_immutable_status.rs"]
 mod immutable_status;
 #[path = "package_release_publish_lookup.rs"]
@@ -260,6 +262,33 @@ impl GitHubApi {
     pub(super) fn verify_repository(&self, expected_id: u64) -> Result<(), OrchestratorError> {
         preflight::verify_repository_identity(self, expected_id)?;
         self.verify_immutable_status()
+    }
+
+    /// Authenticate the protected main lineage for an immutable preview source.
+    /// Returns the fresh protected main tip after proving source → workflow → tip.
+    pub(crate) fn verify_preview_main_ancestry(
+        &self,
+        repository_id: u64,
+        branch: &str,
+        source_sha: &str,
+        workflow_authority_sha: &str,
+    ) -> Result<String, OrchestratorError> {
+        ancestry::verify_preview_main_ancestry(
+            self,
+            repository_id,
+            branch,
+            source_sha,
+            workflow_authority_sha,
+        )
+    }
+
+    /// Authenticate the protected main tip for downstream source-current decisions.
+    pub(crate) fn verify_preview_main_tip(
+        &self,
+        repository_id: u64,
+        branch: &str,
+    ) -> Result<String, OrchestratorError> {
+        ancestry::verify_preview_main_tip(self, repository_id, branch)
     }
 
     pub(super) fn verify_release_channel_environment(

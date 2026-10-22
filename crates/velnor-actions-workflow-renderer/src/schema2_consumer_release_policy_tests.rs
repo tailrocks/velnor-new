@@ -56,13 +56,17 @@ fn both_channels_bound_native_work_inside_larger_producer_jobs() {
             } else {
                 "stable"
             };
-            let mut producers: std::collections::BTreeSet<_> = spec
-                .policy
-                .payload_pairs()
-                .expect("pairs")
-                .iter()
-                .map(|pair| spec.policy.payload_job_id(pair).expect("job ID"))
-                .collect();
+            let mut producers: std::collections::BTreeSet<_> =
+                if channel == PackageReleaseChannel::Preview {
+                    ["preview-payload".to_owned()].into_iter().collect()
+                } else {
+                    spec.policy
+                        .payload_pairs()
+                        .expect("pairs")
+                        .iter()
+                        .map(|pair| spec.policy.payload_job_id(pair).expect("job ID"))
+                        .collect()
+                };
             producers.insert(format!("{prefix}-assemble"));
             let rendered = if channel == PackageReleaseChannel::Preview {
                 render_consumer_preview(&spec)
@@ -70,7 +74,16 @@ fn both_channels_bound_native_work_inside_larger_producer_jobs() {
                 crate::schema2::render_consumer_binary_release(&spec)
             }
             .expect("bounded native production");
-            assert_job_envelopes(&rendered.bytes, &producers, minutes);
+            if channel == PackageReleaseChannel::Preview {
+                assert!(
+                    rendered
+                        .bytes
+                        .contains("timeout-minutes: ${{ matrix.timeout_minutes }}")
+                );
+                assert!(rendered.bytes.contains("timeout-minutes: ${{ needs.preview-eligibility.outputs.producer_timeout_minutes }}"));
+            } else {
+                assert_job_envelopes(&rendered.bytes, &producers, minutes);
+            }
         }
     }
     let mut spec = with_tap();

@@ -46,6 +46,8 @@ pub enum TapMergeOutcome {
     Merged,
     /// A previous merge was independently authenticated without another write.
     AlreadyPromoted,
+    /// An authenticated newer protected source tip superseded this preview.
+    SkippedStaleSource,
 }
 
 /// Reauthenticate candidate and PR, await exact-head gates, then squash with SHA precondition.
@@ -57,8 +59,24 @@ pub fn merge_homebrew_tap_from_env() -> Result<TapMergeOutcome, OrchestratorErro
 
 fn merge_once() -> Result<TapMergeOutcome, OrchestratorError> {
     let candidate = candidate::load_candidate()?;
+    if candidate.plan.channel
+        == velnor_actions_contract::package_release::PackageReleaseChannel::Preview
+        && !crate::tap_source_freshness::verify_preview_source_is_current(
+            &candidate.plan.repository,
+            &candidate.plan.default_branch,
+            candidate.release.receipt.repository.id,
+            &candidate.release.receipt.source.commit_sha,
+        )?
+    {
+        return Ok(TapMergeOutcome::SkippedStaleSource);
+    }
     let (api, authority, observer) = authenticate_merge(&candidate)?;
-    if candidate.selection().merged.is_some() {
+    if candidate
+        .selection()
+        .ok_or_else(|| internal("tap_merge_skipped_promotion_invalid"))?
+        .merged
+        .is_some()
+    {
         completed::verify_already_promoted(&candidate, &authority, &api, &observer)?;
         return Ok(TapMergeOutcome::AlreadyPromoted);
     }
@@ -81,12 +99,14 @@ fn merge_once() -> Result<TapMergeOutcome, OrchestratorError> {
             }
             if candidate.plan.channel
                 == velnor_actions_contract::package_release::PackageReleaseChannel::Preview
-            {
-                crate::tap_source_freshness::verify_preview_source_is_current(
+                && !crate::tap_source_freshness::verify_preview_source_is_current(
                     &candidate.plan.repository,
                     &candidate.plan.default_branch,
+                    candidate.release.receipt.repository.id,
                     &candidate.release.receipt.source.commit_sha,
-                )?;
+                )?
+            {
+                return Err(internal("tap_merge_source_superseded_during_operation"));
             }
             Ok(())
         },
@@ -130,7 +150,10 @@ fn merge_validated_head(
 ) -> Result<(), OrchestratorError> {
     let merged: serde_json::Value = api.merge(
         &candidate.policy.repository,
-        candidate.selection().pull_request,
+        candidate
+            .selection()
+            .ok_or_else(|| internal("tap_merge_selection_missing"))?
+            .pull_request,
         &observed.current_head_sha,
     )?;
     if merged["merged"].as_bool() != Some(true)

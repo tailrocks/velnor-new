@@ -1,14 +1,36 @@
 //! Literal payload jobs and complete-union assembly without signing authority.
 
 use super::{
-    BTreeMap, ConsumerReleaseSpec, JobTimeout, RenderError, Yaml, acquire, base, finish,
-    join_argv_for_run, non_internal_step_to_yaml, operation, permissions, run_step, setup, steps,
+    BTreeMap, ConsumerReleaseSpec, JobTimeout, PackageReleaseChannel, RenderError, Yaml, acquire,
+    base, finish, join_argv_for_run, non_internal_step_to_yaml, operation, permissions, run_step,
+    setup, steps,
 };
 use velnor_actions_contract::preview_production::ReleasePayloadPair;
 
 pub(in crate::schema2) fn jobs(
     spec: &ConsumerReleaseSpec,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
+    if spec.policy.channel == PackageReleaseChannel::Preview {
+        return Ok(vec![
+            producer(
+                spec,
+                "preview-payload",
+                None,
+                &["preview-eligibility".to_owned()],
+                true,
+            )?,
+            producer(
+                spec,
+                "preview-assemble",
+                None,
+                &[
+                    "preview-eligibility".to_owned(),
+                    "preview-payload".to_owned(),
+                ],
+                false,
+            )?,
+        ]);
+    }
     let pairs = spec
         .policy
         .payload_pairs()
@@ -27,6 +49,7 @@ pub(in crate::schema2) fn jobs(
             &id,
             Some(pair),
             &[context.selection().to_owned()],
+            false,
         )?);
     }
     jobs.push(producer(
@@ -34,6 +57,7 @@ pub(in crate::schema2) fn jobs(
         &format!("{}-assemble", context.prefix()),
         None,
         &dependencies,
+        false,
     )?);
     Ok(jobs)
 }
@@ -43,22 +67,45 @@ fn producer(
     id: &str,
     pair: Option<&ReleasePayloadPair>,
     dependencies: &[String],
+    preview_matrix: bool,
 ) -> Result<(String, Yaml), RenderError> {
     // Assembly is an authenticated service jobs API witness and keeps its closed
     // name. Payload display names describe the pair without changing machine IDs.
-    let name = pair.map_or_else(
-        || id.to_owned(),
-        |pair| format!("Build {} / {}", pair.product_id, pair.target),
-    );
-    let mut fields = base(
-        &name,
-        Yaml::str(spec.producer_runner.runs_on()),
+    let name = if preview_matrix {
+        "Build ${{ matrix.product_id }} / ${{ matrix.target }}".to_owned()
+    } else {
+        pair.map_or_else(
+            || id.to_owned(),
+            |pair| format!("Build {} / {}", pair.product_id, pair.target),
+        )
+    };
+    let runs_on = if preview_matrix {
+        "${{ matrix.runner }}"
+    } else if spec.policy.channel == PackageReleaseChannel::Preview {
+        "${{ needs.preview-eligibility.outputs.producer_runner }}"
+    } else {
+        spec.producer_runner.runs_on()
+    };
+    let job_timeout = if spec.policy.channel == PackageReleaseChannel::Preview {
+        JobTimeout::DEFAULT
+    } else {
         JobTimeout::new(
             spec.producer_timeout_minutes
                 + velnor_actions_contract::config::RustBinaryReleaseProducer::JOB_HEADROOM_MINUTES,
         )
-        .map_err(RenderError::Contract)?,
-    );
+        .map_err(RenderError::Contract)?
+    };
+    let mut fields = base(&name, Yaml::str(runs_on), job_timeout);
+    if spec.policy.channel == PackageReleaseChannel::Preview {
+        let timeout = if preview_matrix {
+            "${{ matrix.timeout_minutes }}"
+        } else {
+            "${{ needs.preview-eligibility.outputs.producer_timeout_minutes }}"
+        };
+        if let Some((_, value)) = fields.iter_mut().find(|(key, _)| key == "timeout-minutes") {
+            *value = Yaml::str(timeout);
+        }
+    }
     fields.push((
         "if".to_owned(),
         Yaml::str(super::TapInvocationContext::for_channel(spec.policy.channel).production_if()),
@@ -67,6 +114,18 @@ fn producer(
         "needs".to_owned(),
         Yaml::Seq(dependencies.iter().map(Yaml::str).collect()),
     ));
+    if preview_matrix {
+        fields.push((
+            "strategy".to_owned(),
+            Yaml::Map(vec![
+                ("fail-fast".to_owned(), Yaml::Bool(false)),
+                (
+                    "matrix".to_owned(),
+                    Yaml::str("${{ fromJSON(needs.preview-eligibility.outputs.payload_matrix) }}"),
+                ),
+            ]),
+        ));
+    }
     let access = vec![("actions", "read"), ("contents", "read")];
     fields.push(("permissions".to_owned(), permissions(&access)));
     fields.push((
@@ -79,7 +138,7 @@ fn producer(
             ),
         ]),
     ));
-    let mut steps = acquisition_steps(spec, id, pair.is_none())?;
+    let mut steps = acquisition_steps(spec, id, pair.is_none() && !preview_matrix)?;
     steps.extend(source_steps(spec, id)?);
     let (mut operation, public_plan) =
         production_operation(spec, "execute-release-producer-v1", false)?;
@@ -87,9 +146,9 @@ fn producer(
     // at job scope lets existing workflow mapping sharing represent it once,
     // without changing the literal stage/pair or per-operation source bindings.
     fields.push(("env".to_owned(), public_plan));
-    bind_stage(&mut operation, spec, pair)?;
+    bind_stage(&mut operation, spec, pair, preview_matrix)?;
     steps.push(operation);
-    steps.push(upload(pair));
+    steps.push(upload(pair, preview_matrix));
     for step in &mut steps {
         super::steps::with_producer_homes(step, &spec.producer_cargo_env)?;
     }
@@ -100,13 +159,22 @@ fn bind_stage(
     operation: &mut Yaml,
     spec: &ConsumerReleaseSpec,
     pair: Option<&ReleasePayloadPair>,
+    preview_matrix: bool,
 ) -> Result<(), RenderError> {
-    let env = if let Some(pair) = pair {
+    let env = if preview_matrix {
+        vec![
+            ("VELNOR_RELEASE_STAGE", "payload"),
+            ("VELNOR_RELEASE_PRODUCT_ID", "${{ matrix.product_id }}"),
+            ("VELNOR_RELEASE_TARGET", "${{ matrix.target }}"),
+        ]
+    } else if let Some(pair) = pair {
         vec![
             ("VELNOR_RELEASE_STAGE", "payload"),
             ("VELNOR_RELEASE_PRODUCT_ID", pair.product_id.as_str()),
             ("VELNOR_RELEASE_TARGET", pair.target.as_str()),
         ]
+    } else if spec.policy.channel == PackageReleaseChannel::Preview {
+        vec![("VELNOR_RELEASE_STAGE", "assemble")]
     } else {
         vec![
             ("VELNOR_RELEASE_STAGE", "assemble"),
@@ -136,7 +204,7 @@ fn bind_stage(
             )],
         )?;
     }
-    if pair.is_none() {
+    if pair.is_none() && spec.policy.channel == PackageReleaseChannel::Stable {
         operation_env(
             operation,
             &[(
@@ -153,6 +221,19 @@ fn acquisition_steps(
     id: &str,
     needed: bool,
 ) -> Result<Vec<Yaml>, RenderError> {
+    if spec.policy.channel == PackageReleaseChannel::Preview {
+        let mut result = preview_producer_acquisition_steps(spec, id)?;
+        let (mut admission, _) = production_operation(spec, "acquire-preview-source-v1", true)?;
+        set_id(&mut admission, "policy-admission");
+        result.push(admission);
+        if needed {
+            let (mut admission, _) = production_operation(spec, "acquire-release-leaves-v1", true)?;
+            set_id(&mut admission, "acquire");
+            operation_env(&mut admission, &[("VELNOR_RELEASE_STAGE", "assemble")])?;
+            result.push(admission);
+        }
+        return Ok(result);
+    }
     let stable = spec.policy.channel
         == velnor_actions_contract::package_release::PackageReleaseChannel::Stable;
     let mut result = vec![
@@ -168,7 +249,7 @@ fn acquisition_steps(
         set_id(&mut origin, "origin-admission");
         result.push(origin);
     } else {
-        let (mut admission, _) = production_operation(spec, "admit-release-policy-v1", true)?;
+        let (mut admission, _) = production_operation(spec, "acquire-preview-source-v1", true)?;
         set_id(&mut admission, "policy-admission");
         result.push(admission);
     }
@@ -177,14 +258,94 @@ fn acquisition_steps(
         set_id(&mut admission, "acquire");
         operation_env(
             &mut admission,
-            &[
-                ("VELNOR_RELEASE_STAGE", "assemble"),
-                ("VELNOR_RELEASE_NEEDS_JSON", "${{ toJSON(needs) }}"),
-            ],
+            if spec.policy.channel == PackageReleaseChannel::Preview {
+                &[("VELNOR_RELEASE_STAGE", "assemble")]
+            } else {
+                &[
+                    ("VELNOR_RELEASE_STAGE", "assemble"),
+                    ("VELNOR_RELEASE_NEEDS_JSON", "${{ toJSON(needs) }}"),
+                ]
+            },
         )?;
         result.push(admission);
     }
     Ok(result)
+}
+
+fn preview_producer_acquisition_steps(
+    spec: &ConsumerReleaseSpec,
+    id: &str,
+) -> Result<Vec<Yaml>, RenderError> {
+    let expected = velnor_actions_contract::targets::ReleaseTarget::ALL;
+    let acquires = &spec.producer_acquire_by_target;
+    let setups = &spec.producer_setup_by_target;
+    if acquires.len() != expected.len()
+        || expected.iter().any(|target| !acquires.contains_key(target))
+        || setups.len() != expected.len()
+        || expected.iter().any(|target| !setups.contains_key(target))
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "preview_producer_host_pins_incomplete".to_owned(),
+        ));
+    }
+    let mut result = vec![run_step(
+        "Reject unsupported Velnor SDK host",
+        r#"case "${RUNNER_OS-}/${RUNNER_ARCH-}" in Linux/X64|macOS/ARM64|macOS/X64) ;; *) echo 'unsupported native SDK host' >&2; exit 1 ;; esac"#,
+    )];
+    for target in expected {
+        let target_setup = setups.get(&target).ok_or_else(|| {
+            RenderError::InvalidWorkflow("preview_producer_setup_target_missing".to_owned())
+        })?;
+        target_setup.validate()?;
+        let mut step = setup(target_setup);
+        if let Yaml::Map(fields) = &mut step {
+            if let Some((_, value)) = fields.iter_mut().find(|(key, _)| key == "name") {
+                *value = Yaml::str(format!("Set up Velnor-owned Mise for {}", target.triple()));
+            }
+            fields.push(("if".to_owned(), Yaml::str(target_host_if(target))));
+        }
+        result.push(step);
+    }
+    result.push(run_step(
+        "Install pinned GitHub CLI",
+        &join_argv_for_run(&spec.install_gh_argv)?,
+    ));
+    for target in expected {
+        let asset = acquires.get(&target).ok_or_else(|| {
+            RenderError::InvalidWorkflow("preview_producer_acquire_target_missing".to_owned())
+        })?;
+        let runner = match target {
+            velnor_actions_contract::targets::ReleaseTarget::LinuxX86_64 => "ubuntu-26.04",
+            velnor_actions_contract::targets::ReleaseTarget::MacosArm64 => "macos-26",
+            velnor_actions_contract::targets::ReleaseTarget::MacosX86_64 => "macos-26-intel",
+        };
+        let mut step = acquire(asset, id, runner)?;
+        if let Yaml::Map(fields) = &mut step {
+            let acquire_id = format!("acquire-{}", target.triple());
+            if let Some((_, value)) = fields.iter_mut().find(|(key, _)| key == "id") {
+                *value = Yaml::str(acquire_id);
+            } else {
+                fields.insert(1, ("id".to_owned(), Yaml::str(acquire_id)));
+            }
+            fields.push(("if".to_owned(), Yaml::str(target_host_if(target))));
+        }
+        result.push(step);
+    }
+    Ok(result)
+}
+
+fn target_host_if(target: velnor_actions_contract::targets::ReleaseTarget) -> &'static str {
+    match target {
+        velnor_actions_contract::targets::ReleaseTarget::LinuxX86_64 => {
+            "${{ runner.os == 'Linux' && runner.arch == 'X64' }}"
+        }
+        velnor_actions_contract::targets::ReleaseTarget::MacosArm64 => {
+            "${{ runner.os == 'macOS' && runner.arch == 'ARM64' }}"
+        }
+        velnor_actions_contract::targets::ReleaseTarget::MacosX86_64 => {
+            "${{ runner.os == 'macOS' && runner.arch == 'X64' }}"
+        }
+    }
 }
 fn set_id(step: &mut Yaml, id: &str) {
     if let Yaml::Map(fields) = step
@@ -264,17 +425,23 @@ pub(in crate::schema2) fn operation_env(
     Ok(())
 }
 
-pub(in crate::schema2) fn upload(pair: Option<&ReleasePayloadPair>) -> Yaml {
+pub(in crate::schema2) fn upload(pair: Option<&ReleasePayloadPair>, preview_matrix: bool) -> Yaml {
     let prefix = "${{ github.run_id }}-a${{ github.run_attempt }}";
-    let name = pair.map_or_else(
-        || format!("velnor-release-aggregate-r{prefix}"),
-        |pair| {
-            format!(
-                "velnor-release-payload-r{prefix}-{}-{}",
-                pair.product_id, pair.target
-            )
-        },
-    );
+    let name = if preview_matrix {
+        format!(
+            "velnor-release-payload-r{prefix}-${{{{ matrix.product_id }}}}-${{{{ matrix.target }}}}"
+        )
+    } else {
+        pair.map_or_else(
+            || format!("velnor-release-aggregate-r{prefix}"),
+            |pair| {
+                format!(
+                    "velnor-release-payload-r{prefix}-{}-{}",
+                    pair.product_id, pair.target
+                )
+            },
+        )
+    };
     Yaml::Map(vec![
         (
             "name".to_owned(),

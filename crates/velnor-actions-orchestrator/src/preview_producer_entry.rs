@@ -74,8 +74,12 @@ pub fn execute_release_producer() -> Result<(), OrchestratorError> {
                     .scope(|| {
                         let (policy, plan) =
                             crate::release_policy_admission::admitted_policy_plan(&temp, deadline)?;
-                        let prep = prepare_with_config(&workspace, config)?;
-                        let preview = source_preview(&prep, &temp, &plan, deadline)?;
+                        let preflight =
+                            preflight_preview_source(&workspace, &temp, &config, &plan, deadline);
+                        let prep = prepare_after_source_preflight(preflight, || {
+                            prepare_with_config(&workspace, config)
+                        })?;
+                        let preview = source_preview(&prep, &policy, &plan)?;
                         let request = context::derive(&prep.root, &policy, plan, deadline)?;
                         execution::execute(&prep, &temp, &preview, &request, deadline, guard)
                     })
@@ -99,9 +103,8 @@ fn producer_deadline(started: Instant, minutes: u16) -> Result<CheckDeadline, Or
 
 fn source_preview(
     prep: &crate::GenerationPreparation,
-    temp: &Path,
+    policy: &velnor_actions_contract::PackageReleasePolicy,
     plan: &PackageReleasePlan,
-    deadline: CheckDeadline,
 ) -> Result<RustBinaryReleaseConfig, OrchestratorError> {
     let release = prep
         .config
@@ -112,12 +115,45 @@ fn source_preview(
         .ok_or_else(|| internal("preview_config_missing"))?;
     release.validate(".velnor/config.toml")?;
     let expected = crate::binary_preview_emit::release_policy(prep, release, plan.channel)?;
-    let (admitted, resolved) =
-        crate::release_policy_admission::admitted_policy_plan(temp, deadline)?;
-    if !release.channel_enabled(plan.channel) || admitted != expected || resolved != *plan {
+    if !release.channel_enabled(plan.channel) || policy != &expected {
         return Err(internal("preview_plan_config_mismatch"));
     }
     Ok(release.clone())
+}
+
+fn preflight_preview_source(
+    workspace: &Path,
+    temp: &Path,
+    config: &velnor_actions_contract::config::VelnorConfig,
+    plan: &PackageReleasePlan,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    if plan.channel != velnor_actions_contract::package_release::PackageReleaseChannel::Preview {
+        return Ok(());
+    }
+    let release = config
+        .stacks
+        .rust
+        .as_ref()
+        .map(|rust| &rust.binary_release)
+        .ok_or_else(|| internal("preview_config_missing"))?;
+    release.validate(".velnor/config.toml")?;
+    context::derive_context(workspace, plan, deadline)?;
+    crate::release_policy_admission::validate_admitted_source_checkout(
+        temp,
+        workspace,
+        release,
+        &config.qualified_tools,
+        deadline,
+    )
+}
+
+fn prepare_after_source_preflight<T>(
+    preflight: Result<(), OrchestratorError>,
+    prepare: impl FnOnce() -> Result<T, OrchestratorError>,
+) -> Result<T, OrchestratorError> {
+    preflight?;
+    prepare()
 }
 
 fn workflow_context() -> Result<(PathBuf, PathBuf), OrchestratorError> {

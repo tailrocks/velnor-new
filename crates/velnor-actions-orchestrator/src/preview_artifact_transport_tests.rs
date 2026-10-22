@@ -50,6 +50,15 @@ impl ArtifactReadApi for Fake {
             .pop_front()
             .ok_or_else(|| internal("unexpected_page"))
     }
+    fn jobs(&self, run: u64, _: u32) -> Result<Vec<JobRecord>, OrchestratorError> {
+        Ok(vec![JobRecord {
+            run_id: run,
+            name: "Build app / aarch64-apple-darwin".to_owned(),
+            head_sha: Some("b".repeat(40)),
+            status: Some("completed".to_owned()),
+            conclusion: Some("success".to_owned()),
+        }])
+    }
     fn download(
         &self,
         id: u64,
@@ -120,6 +129,81 @@ fn exact_id_digest_size_and_current_attempt_admit_only_service_archive_bytes() {
     assert_eq!(sha256(&admitted[0].bytes), admitted[0].reference.sha256);
     assert_eq!(*api.downloads.borrow(), [303]);
     assert_eq!(api.authentications.get(), 2);
+}
+
+#[test]
+fn preview_assembly_discovers_complete_union_without_needs_inputs() {
+    let mut request = request();
+    let ReleaseProductionStage::Assemble { inputs } = &mut request.stage else {
+        unreachable!()
+    };
+    inputs.clear();
+    let api = Fake::new(vec![record()]);
+    let admitted = acquire_fixture(&api, &request, deadline()).expect("API-discovered union");
+    assert_eq!(admitted.len(), 1);
+    assert_eq!(admitted[0].reference.artifact_id, 303);
+    assert_eq!(admitted[0].reference.pair.product_id, "app");
+}
+
+#[test]
+fn preview_union_rejects_incomplete_foreign_duplicate_and_unexpected_entries() {
+    let request = request();
+    let expected_job = JobRecord {
+        run_id: request.context.run_id,
+        name: "Build app / aarch64-apple-darwin".into(),
+        head_sha: Some(request.context.workflow_authority_sha.clone()),
+        status: Some("completed".into()),
+        conclusion: Some("success".into()),
+    };
+    let artifact = record();
+    let valid = BTreeMap::from([(artifact.id, artifact.clone())]);
+    assert_eq!(
+        discover_preview_inputs(&request, &valid, std::slice::from_ref(&expected_job))
+            .expect("complete source-bound union")[0]
+            .artifact_id,
+        artifact.id
+    );
+    assert!(
+        discover_preview_inputs(
+            &request,
+            &BTreeMap::new(),
+            std::slice::from_ref(&expected_job)
+        )
+        .is_err()
+    );
+    let mut duplicate = artifact.clone();
+    duplicate.id += 1;
+    let duplicate_inventory =
+        BTreeMap::from([(artifact.id, artifact.clone()), (duplicate.id, duplicate)]);
+    assert!(
+        discover_preview_inputs(
+            &request,
+            &duplicate_inventory,
+            std::slice::from_ref(&expected_job)
+        )
+        .is_err()
+    );
+    let mut extra = artifact;
+    extra.id += 1;
+    extra.name = format!(
+        "velnor-release-payload-r{}-a{}-unexpected",
+        request.context.run_id, request.context.run_attempt
+    );
+    assert!(
+        discover_preview_inputs(
+            &request,
+            &BTreeMap::from([(303, record()), (extra.id, extra)]),
+            std::slice::from_ref(&expected_job)
+        )
+        .is_err()
+    );
+    let mut foreign = expected_job.clone();
+    foreign.run_id += 1;
+    assert!(discover_preview_inputs(&request, &valid, &[foreign]).is_err());
+    let mut wrong_authority = expected_job.clone();
+    wrong_authority.head_sha = Some(request.context.source_sha.clone());
+    assert!(discover_preview_inputs(&request, &valid, &[wrong_authority]).is_err());
+    assert!(discover_preview_inputs(&request, &valid, &[]).is_err());
 }
 
 #[test]

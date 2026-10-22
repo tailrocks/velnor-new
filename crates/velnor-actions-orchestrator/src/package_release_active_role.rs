@@ -15,6 +15,21 @@ pub(in crate::package_release_publish) fn release_job_name(
         PackageReleaseChannel::Preview => "preview",
         PackageReleaseChannel::Stable => "stable",
     };
+    if plan.channel == PackageReleaseChannel::Preview && job == "preview-payload" {
+        let product_id = std::env::var("VELNOR_RELEASE_PRODUCT_ID")
+            .map_err(|_| internal("package_active_role_unknown"))?;
+        let target = std::env::var("VELNOR_RELEASE_TARGET")
+            .map_err(|_| internal("package_active_role_unknown"))?;
+        let pair = expected_release_payload_pairs(plan)
+            .map_err(|_| internal("package_active_role_plan"))?
+            .into_iter()
+            .find(|pair| pair.product_id == product_id && pair.target == target)
+            .ok_or_else(|| internal("package_active_role_unknown"))?;
+        return Ok(format!("Build {} / {}", pair.product_id, pair.target));
+    }
+    if plan.channel == PackageReleaseChannel::Preview && job == "preview-eligibility" {
+        return Ok("Select authenticated main source for preview".to_owned());
+    }
     for (suffix, name) in [
         ("assemble", plan.channel.assemble_job_id()),
         ("signer", plan.channel.signer_job_id()),
@@ -106,7 +121,7 @@ impl super::super::github::GitHubApi {
                 "GITHUB_RUN_ATTEMPT",
                 receipt.workflow.run_attempt.to_string(),
             ),
-            ("GITHUB_SHA", receipt.source.commit_sha.clone()),
+            ("GITHUB_SHA", receipt.workflow.authority_sha.clone()),
             ("GITHUB_REF", receipt.source.source_ref.clone()),
             (
                 "GITHUB_WORKFLOW_SHA",
@@ -137,7 +152,7 @@ impl super::super::github::GitHubApi {
                 attempt: receipt.workflow.run_attempt,
                 source: super::RunSource {
                     repository_id: receipt.repository.id,
-                    sha: &receipt.source.commit_sha,
+                    sha: &receipt.workflow.authority_sha,
                     branch: &plan.default_branch,
                 },
                 workflow: &workflow,

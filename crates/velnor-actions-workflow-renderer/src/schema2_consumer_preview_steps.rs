@@ -126,6 +126,8 @@ pub(in crate::schema2) fn operation(
         "sign-package-release-v1"
             | "prepare-homebrew-tap-v1"
             | "execute-release-producer-v1"
+            | "finalize-preview-source-v1"
+            | "acquire-preview-source-v1"
             | "acquire-release-leaves-v1"
             | "admit-release-aggregate-v1"
             | "publish-package-release-v1"

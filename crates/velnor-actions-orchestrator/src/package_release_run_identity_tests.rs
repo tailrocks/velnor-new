@@ -99,6 +99,19 @@ fn latest_source_ci_selects_newest_attempt_without_rewriting_original_identity()
         .expect("latest pending run");
     assert_eq!(selected.id, Some(23));
     assert!(!ci_run_is_success(&selected, 23, 3, source(), &workflow()));
+
+    let mut failed = run_json();
+    failed["id"] = json!(24);
+    failed["run_number"] = json!(14);
+    failed["conclusion"] = json!("failure");
+    let selected = latest_ci_run(
+        vec![parse(run_json()), parse(failed)],
+        &workflow(),
+        source(),
+    )
+    .expect("latest failed run");
+    assert_eq!(selected.id, Some(24));
+    assert!(!ci_run_is_success(&selected, 24, 3, source(), &workflow()));
 }
 
 #[test]
@@ -178,6 +191,54 @@ fn native_ci_requires_unique_successful_required_job_for_exact_source() {
     }
 }
 
+fn jobs_page(total_count: usize, ids: impl IntoIterator<Item = u64>) -> WorkflowJobsPage {
+    WorkflowJobsPage {
+        total_count,
+        jobs: ids
+            .into_iter()
+            .map(|id| IdentifiedWorkflowJob {
+                id,
+                run_id: 22,
+                name: format!("Build {id}"),
+                head_sha: Some(source().sha.to_owned()),
+                status: Some("completed".to_owned()),
+                conclusion: Some("success".to_owned()),
+            })
+            .collect(),
+    }
+}
+
+#[test]
+fn workflow_job_inventory_requires_stable_complete_pagination_and_unique_ids() {
+    let mut complete = WorkflowJobsAccumulator::default();
+    assert!(
+        !complete
+            .admit_page(jobs_page(128, 1..=100))
+            .expect("first page")
+    );
+    assert!(
+        complete
+            .admit_page(jobs_page(128, 101..=128))
+            .expect("final page")
+    );
+    assert_eq!(complete.into_list().jobs.len(), 128);
+
+    let mut changed_total = WorkflowJobsAccumulator::default();
+    assert!(
+        !changed_total
+            .admit_page(jobs_page(128, 1..=100))
+            .expect("first page")
+    );
+    assert!(changed_total.admit_page(jobs_page(129, 101..=128)).is_err());
+
+    let mut short = WorkflowJobsAccumulator::default();
+    assert!(short.admit_page(jobs_page(128, 1..=99)).is_err());
+    let mut duplicate = WorkflowJobsAccumulator::default();
+    assert!(duplicate.admit_page(jobs_page(2, [17, 17])).is_err());
+    let mut zero = WorkflowJobsAccumulator::default();
+    assert!(zero.admit_page(jobs_page(1, [0])).is_err());
+}
+
 #[test]
 fn producing_workflow_run_is_separate_from_upstream_push_ci() {
     let metadata = WorkflowMetadata {
@@ -213,6 +274,56 @@ fn producing_workflow_run_is_separate_from_upstream_push_ci() {
     let mut foreign = parse(run_json());
     foreign.head_repository = Some(RunRepository { id: 10 });
     assert!(!ci_run_is_success(&foreign, 22, 3, source(), &workflow()));
+}
+
+#[test]
+fn preview_source_a_and_workflow_authority_b_remain_distinct_identities() {
+    let metadata = WorkflowMetadata {
+        state: "active".to_owned(),
+        id: 8,
+        name: "Rust binary preview".to_owned(),
+        path: ".github/workflows/binary-preview.yml".to_owned(),
+    };
+    let mut producer = run_json();
+    producer["workflow_id"] = json!(8);
+    producer["name"] = json!(metadata.name);
+    producer["path"] = json!(metadata.path);
+    producer["event"] = json!("workflow_run");
+    producer["head_sha"] = json!("b".repeat(40));
+    let authority = RunSource {
+        sha: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        ..source()
+    };
+    assert!(run_matches(
+        &parse(producer.clone()),
+        &metadata,
+        22,
+        3,
+        authority,
+        "workflow_run"
+    ));
+    assert!(!run_matches(
+        &parse(producer),
+        &metadata,
+        22,
+        3,
+        source(),
+        "workflow_run"
+    ));
+    assert!(ci_run_is_success(
+        &parse(run_json()),
+        22,
+        3,
+        source(),
+        &workflow()
+    ));
+    assert!(!ci_run_is_success(
+        &parse(run_json()),
+        22,
+        3,
+        authority,
+        &workflow()
+    ));
 }
 
 #[test]

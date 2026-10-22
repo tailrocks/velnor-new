@@ -12,6 +12,7 @@ use std::collections::BTreeSet;
 #[path = "package_release_publish_stable.rs"]
 pub(super) mod stable;
 use velnor_actions_contract::{
+    CI_WORKFLOW_PATH, WORKFLOW_DISPLAY_NAME,
     package_release::PackageReleaseChannel,
     publication_retry::{PublicationIdentity, PublicationState},
 };
@@ -129,25 +130,31 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
             self.original_closure.verify()?;
             return Ok(true);
         }
-        let source = RunSource {
+        verify_preview_source_ci(self)?;
+        let retained = matches!(
+            &self.original_verification,
+            OriginalVerification::RetainedRun { .. }
+        );
+        let coordinator_sha = if retained {
+            super::recovery::promotion_context::Invocation::from_env()?.source_sha
+        } else {
+            self.receipt.workflow.authority_sha.clone()
+        };
+        let ci_source_sha = if retained {
+            coordinator_sha.clone()
+        } else {
+            self.receipt.source.commit_sha.clone()
+        };
+        let current_source = RunSource {
             repository_id: self.receipt.repository.id,
-            sha: &self.receipt.source.commit_sha,
+            sha: &ci_source_sha,
             branch: &self.receipt.source.default_branch,
         };
-        self.api.verify_ci_identity(
-            self.receipt.source.ci_run_id,
-            self.receipt.source.ci_run_attempt,
-            source,
-            false,
-        )?;
         self.api
-            .verify_ci_identity(self.current_ci.0, self.current_ci.1, source, true)?;
-        let protected_source = self.api.verify_release_channel_environment(
-            self.receipt.channel,
-            &self.receipt.source.default_branch,
-        )?;
+            .verify_ci_identity(self.current_ci.0, self.current_ci.1, current_source, true)?;
+        verify_preview_lineage(self, &coordinator_sha)?;
         self.original_closure.verify()?;
-        Ok(protected_source.as_deref() == Some(self.receipt.source.commit_sha.as_str()))
+        Ok(true)
     }
 
     fn create_tag(&mut self) -> Result<(), OrchestratorError> {
@@ -259,4 +266,53 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
         }
         Ok(())
     }
+}
+
+fn verify_preview_source_ci(publisher: &GitHubPackagePublisher) -> Result<(), OrchestratorError> {
+    let source = RunSource {
+        repository_id: publisher.receipt.repository.id,
+        sha: &publisher.receipt.source.commit_sha,
+        branch: &publisher.receipt.source.default_branch,
+    };
+    publisher.api.verify_ci_identity(
+        publisher.receipt.source.ci_run_id,
+        publisher.receipt.source.ci_run_attempt,
+        source,
+        false,
+    )?;
+    // Preserve signed CI identity while independently requiring successful latest A CI.
+    let workflow = publisher
+        .api
+        .admitted_workflow(CI_WORKFLOW_PATH, WORKFLOW_DISPLAY_NAME)?;
+    let latest = publisher.api.latest_source_ci(&workflow, source)?;
+    let id = latest
+        .id
+        .filter(|id| *id > 0)
+        .ok_or_else(|| internal("package_ci_latest_attempt_mismatch"))?;
+    let attempt = latest
+        .run_attempt
+        .filter(|attempt| *attempt > 0)
+        .ok_or_else(|| internal("package_ci_latest_attempt_mismatch"))?;
+    publisher.api.verify_ci_identity(id, attempt, source, true)
+}
+
+fn verify_preview_lineage(
+    publisher: &GitHubPackagePublisher,
+    coordinator_sha: &str,
+) -> Result<(), OrchestratorError> {
+    publisher.api.verify_preview_main_ancestry(
+        publisher.receipt.repository.id,
+        &publisher.receipt.source.default_branch,
+        &publisher.receipt.source.commit_sha,
+        &publisher.receipt.workflow.authority_sha,
+    )?;
+    if coordinator_sha != publisher.receipt.workflow.authority_sha {
+        publisher.api.verify_preview_main_ancestry(
+            publisher.receipt.repository.id,
+            &publisher.receipt.source.default_branch,
+            &publisher.receipt.source.commit_sha,
+            coordinator_sha,
+        )?;
+    }
+    Ok(())
 }

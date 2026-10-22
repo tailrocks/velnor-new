@@ -7,7 +7,7 @@ pub(super) fn policy_admission(spec: &ConsumerReleaseSpec) -> Result<Yaml, Rende
     let mut step = operation(
         spec,
         match spec.policy.channel {
-            PackageReleaseChannel::Preview => "admit-release-policy-v1",
+            PackageReleaseChannel::Preview => "acquire-preview-source-v1",
             PackageReleaseChannel::Stable => "admit-stable-tag-origin-v1",
         },
         true,

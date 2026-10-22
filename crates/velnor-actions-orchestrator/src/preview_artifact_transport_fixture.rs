@@ -36,7 +36,7 @@ pub(in crate::package_release_publish) fn request() -> ReleaseProductionRequest 
             head_repository_id: 101,
             source_sha: "a".repeat(40),
             source_ref: "refs/heads/main".into(),
-            workflow_authority_sha: "a".repeat(40),
+            workflow_authority_sha: "b".repeat(40),
             run_id: 202,
             run_attempt: 2,
             ci_run_id: 201,
@@ -73,7 +73,7 @@ pub(in crate::package_release_publish) fn record() -> ArtifactRecord {
             id: 202,
             repository_id: 101,
             head_repository_id: 101,
-            head_sha: "a".repeat(40),
+            head_sha: "b".repeat(40),
             head_branch: "main".into(),
         }),
     }

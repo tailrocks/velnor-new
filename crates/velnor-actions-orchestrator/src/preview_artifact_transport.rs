@@ -1,9 +1,10 @@
 //! Current-attempt, ID-addressed acquisition of unsigned native preview leaves.
 //!
-//! The artifact API has no attempt field. Literal current-attempt upload outputs,
-//! canonical pair/run/attempt names and reauthenticated run identity jointly bind
-//! these bytes; timestamps never serve as attempt evidence. ZIP admission follows
-//! in a separate owner, and these bytes alone are not an admitted payload.
+//! The artifact API has no attempt field. Preview assembly derives the complete
+//! pair union from the authenticated current-attempt job inventory and exact
+//! deterministic artifact names; stable assembly retains literal upload outputs.
+//! Timestamps never serve as attempt evidence. ZIP admission follows separately,
+//! and acquired bytes alone are not an admitted payload.
 
 use super::artifact_zip::{ZipProfile, leaf_union_compressed_bound};
 use super::github::ReleaseArtifactApi;
@@ -33,9 +34,9 @@ pub(crate) struct AdmittedReleaseArtifact {
     pub archive: SealedArchive,
 }
 
-/// Acquire exactly the literal assembly references under one cumulative budget.
-/// The caller must first admit the request against its trusted source plan and
-/// authenticated job context; this function independently reauthenticates GitHub.
+/// Acquire exactly the admitted assembly union under one cumulative budget.
+/// Stable uses literal references; preview derives them from GitHub's current
+/// attempt artifact and successful job inventories. This reauthenticates GitHub.
 pub(crate) fn acquire_release_artifacts(
     request: &ReleaseProductionRequest,
     directory: &Path,
@@ -100,6 +101,7 @@ pub(super) trait ArtifactReadApi {
         consumer: ReleaseConsumer,
     ) -> Result<(), OrchestratorError>;
     fn page(&self, run: u64, page: usize) -> Result<ArtifactPage, OrchestratorError>;
+    fn jobs(&self, run: u64, attempt: u32) -> Result<Vec<JobRecord>, OrchestratorError>;
     fn download(
         &self,
         id: u64,
@@ -109,6 +111,15 @@ pub(super) trait ArtifactReadApi {
     ) -> Result<(), OrchestratorError>;
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct JobRecord {
+    pub run_id: u64,
+    pub name: String,
+    pub head_sha: Option<String>,
+    pub status: Option<String>,
+    pub conclusion: Option<String>,
+}
+
 fn acquire(
     api: &impl ArtifactReadApi,
     request: &ReleaseProductionRequest,
@@ -116,15 +127,37 @@ fn acquire(
     deadline: CheckDeadline,
     consume: &mut impl FnMut(AdmittedReleaseArtifact) -> Result<(), OrchestratorError>,
 ) -> Result<(), OrchestratorError> {
-    request
-        .validate()
-        .map_err(|_| internal("preview_artifact_request"))?;
+    let preview = request.plan.channel
+        == velnor_actions_contract::package_release::PackageReleaseChannel::Preview;
+    if !preview {
+        request
+            .validate()
+            .map_err(|_| internal("preview_artifact_request"))?;
+    }
     let ReleaseProductionStage::Assemble { inputs } = &request.stage else {
         return Err(internal("preview_artifact_assembly_required"));
     };
     checkpoint(deadline)?;
     api.authenticate(&request.plan, &request.context, ReleaseConsumer::Assembler)?;
     let inventory = inventory(api, request.context.run_id, deadline)?;
+    let discovered;
+    let inputs = if request.plan.channel
+        == velnor_actions_contract::package_release::PackageReleaseChannel::Preview
+    {
+        let jobs = api.jobs(request.context.run_id, request.context.run_attempt)?;
+        discovered = discover_preview_inputs(request, &inventory, &jobs)?;
+        let mut completed = request.clone();
+        let ReleaseProductionStage::Assemble { inputs } = &mut completed.stage else {
+            return Err(internal("preview_artifact_assembly_required"));
+        };
+        inputs.clone_from(&discovered);
+        completed
+            .validate()
+            .map_err(|_| internal("preview_artifact_request"))?;
+        discovered.as_slice()
+    } else {
+        inputs.as_slice()
+    };
     let mut total = 0_u64;
     for reference in inputs {
         checkpoint(deadline)?;
@@ -162,6 +195,78 @@ fn acquire(
     api.authenticate(&request.plan, &request.context, ReleaseConsumer::Assembler)?;
     checkpoint(deadline)?;
     Ok(())
+}
+
+fn discover_preview_inputs(
+    request: &ReleaseProductionRequest,
+    inventory: &BTreeMap<u64, ArtifactRecord>,
+    jobs: &[JobRecord],
+) -> Result<Vec<PayloadArtifactRef>, OrchestratorError> {
+    let expected_pairs =
+        velnor_actions_contract::preview_production::expected_release_payload_pairs(&request.plan)
+            .map_err(|_| internal("preview_artifact_plan"))?;
+    let mut expected_jobs = BTreeSet::new();
+    let mut inputs = Vec::with_capacity(expected_pairs.len());
+    let mut ids = BTreeSet::new();
+    for pair in &expected_pairs {
+        let job = format!("Build {} / {}", pair.product_id, pair.target);
+        expected_jobs.insert(job.clone());
+        let name = release_payload_artifact_name(&request.plan, pair, &request.context)
+            .map_err(|_| internal("preview_artifact_name"))?;
+        let matches = inventory
+            .values()
+            .filter(|artifact| artifact.name == name)
+            .collect::<Vec<_>>();
+        let [artifact] = matches.as_slice() else {
+            return Err(internal("preview_artifact_payload_inventory"));
+        };
+        let digest = artifact
+            .digest
+            .as_deref()
+            .and_then(|digest| digest.strip_prefix("sha256:"))
+            .ok_or_else(|| internal("preview_artifact_payload_digest"))?;
+        if artifact.id == 0 || !ids.insert(artifact.id) || !lower_sha256(digest) {
+            return Err(internal("preview_artifact_payload_identity"));
+        }
+        inputs.push(PayloadArtifactRef {
+            pair: pair.clone(),
+            artifact_id: artifact.id,
+            sha256: digest.to_owned(),
+        });
+    }
+    let namespace = format!(
+        "velnor-release-payload-r{}-a{}-",
+        request.context.run_id, request.context.run_attempt
+    );
+    if inventory
+        .values()
+        .any(|artifact| artifact.name.starts_with(&namespace) && !ids.contains(&artifact.id))
+    {
+        return Err(internal("preview_artifact_unexpected_payload"));
+    }
+    let mut observed_jobs = BTreeSet::new();
+    for job in jobs.iter().filter(|job| job.name.starts_with("Build ")) {
+        if job.run_id != request.context.run_id
+            || job.head_sha.as_deref() != Some(request.context.workflow_authority_sha.as_str())
+            || job.status.as_deref() != Some("completed")
+            || job.conclusion.as_deref() != Some("success")
+            || !expected_jobs.contains(&job.name)
+            || !observed_jobs.insert(job.name.clone())
+        {
+            return Err(internal("preview_artifact_payload_job_inventory"));
+        }
+    }
+    if observed_jobs != expected_jobs {
+        return Err(internal("preview_artifact_payload_job_inventory"));
+    }
+    Ok(inputs)
+}
+
+fn lower_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn inventory(
@@ -235,7 +340,7 @@ fn validate_metadata(
         run.id == context.run_id
             && run.repository_id == context.repository_id
             && run.head_repository_id == context.head_repository_id
-            && run.head_sha == context.source_sha
+            && run.head_sha == context.workflow_authority_sha
             && run.head_branch == plan.default_branch
     });
     if artifact.id != artifact_id

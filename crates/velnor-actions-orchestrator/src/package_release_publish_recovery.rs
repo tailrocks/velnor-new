@@ -36,8 +36,25 @@ use promotion_context::{Invocation, Purpose};
 
 const POLICY_FILE: &str = "package-release-policy.json";
 const INPUT_DIR: &str = "release-recovery-input";
+const SOURCE_SELECTION_INPUT_DIR: &str = "preview-recovery-selection-input";
+const FINALIZATION_INPUT_DIR: &str = "preview-recovery-finalization-input";
 const MAX_PLAN_BYTES: u64 = 1024 * 1024;
 const MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::package_release_publish) enum PreviewRecoveryVerificationStage {
+    SourceSelection,
+    Finalization,
+}
+
+impl PreviewRecoveryVerificationStage {
+    fn input_directory(self, root: &Path) -> PathBuf {
+        match self {
+            Self::SourceSelection => root.join(SOURCE_SELECTION_INPUT_DIR),
+            Self::Finalization => root.join(FINALIZATION_INPUT_DIR),
+        }
+    }
+}
 
 pub(super) fn recover() -> Result<super::PackagePublicationOutcome, OrchestratorError> {
     let (signed, mode) = verified_original(Purpose::PublicationRecovery)?;
@@ -58,6 +75,91 @@ pub(crate) fn verify_original_for_promotion()
     })
 }
 
+/// Authenticate the retained native preview receipt before selecting source A
+/// for a manual recovery coordinator. The seed contributes repository custody
+/// only; the policy and plan are read from the exact receipt source.
+pub(in crate::package_release_publish) fn verify_preview_original_for_source_selection(
+    seed: &PackageReleasePolicy,
+    stage: PreviewRecoveryVerificationStage,
+) -> Result<VerifiedAttestedSignedPackage, OrchestratorError> {
+    if seed.channel != PackageReleaseChannel::Preview
+        || seed.default_branch != "main"
+        || !velnor_actions_contract::vcs::is_safe_github_repository(&seed.repository)
+    {
+        return Err(internal("package_recovery_source_seed_invalid"));
+    }
+    let root = runner_root()?;
+    let original_run_id = positive_env("VELNOR_RELEASE_ORIGINAL_RUN_ID")?;
+    let original_attempt = positive_env_u32("VELNOR_RELEASE_ORIGINAL_RUN_ATTEMPT")?;
+    let repository_id = positive_env("GITHUB_REPOSITORY_ID")?;
+    let api = GitHubApi::new(seed.repository.clone());
+    api.verify_repository(repository_id)?;
+
+    let (authority_sha, zip_bytes) =
+        original_archive(&api, seed, original_run_id, original_attempt, repository_id)?;
+    let source_sha = archive::preview_source_sha(&zip_bytes)?;
+    let (source_policy, plan) = super::release_policy_admission::read_preview_policy_at_source(
+        &api,
+        &source_sha,
+        &seed.repository,
+        &seed.default_branch,
+    )?;
+    if source_policy.channel != PackageReleaseChannel::Preview
+        || source_policy.repository != seed.repository
+        || source_policy.default_branch != seed.default_branch
+    {
+        return Err(internal("package_recovery_source_policy_mismatch"));
+    }
+
+    let input = stage.input_directory(&root);
+    create_fresh_directory(&input)?;
+    let receipt = archive::extract_signed_assets(&zip_bytes, &input, &plan)?;
+    if !receipt_matches_original(
+        receipt.workflow.run_id,
+        receipt.workflow.run_attempt,
+        &receipt.source.commit_sha,
+        (PackageReleaseChannel::Preview, receipt.version.commit_count),
+        original_run_id,
+        original_attempt,
+        &source_sha,
+    ) || receipt.workflow.authority_sha != authority_sha
+    {
+        return Err(internal("package_recovery_receipt_run_mismatch"));
+    }
+    let identity = original_signing_identity(
+        &api,
+        &plan,
+        &receipt,
+        original_run_id,
+        original_attempt,
+        repository_id,
+    )?;
+
+    // Preserve the original receipt's CI identity, but independently require
+    // the latest exact-A CI attempt to be successful before admitting A.
+    let ci_source = RunSource {
+        repository_id,
+        sha: &source_sha,
+        branch: &seed.default_branch,
+    };
+    let ci_workflow = api.admitted_workflow(
+        velnor_actions_contract::CI_WORKFLOW_PATH,
+        velnor_actions_contract::WORKFLOW_DISPLAY_NAME,
+    )?;
+    let latest_ci = api.latest_source_ci(&ci_workflow, ci_source)?;
+    let latest_id = latest_ci
+        .id
+        .filter(|id| *id > 0)
+        .ok_or_else(|| internal("package_ci_latest_attempt_mismatch"))?;
+    let latest_attempt = latest_ci
+        .run_attempt
+        .filter(|attempt| *attempt > 0)
+        .ok_or_else(|| internal("package_ci_latest_attempt_mismatch"))?;
+    api.verify_ci_identity(latest_id, latest_attempt, ci_source, true)?;
+
+    verify_attested_signed_package(&input, &plan, &identity)
+}
+
 fn verified_original(
     purpose: Purpose,
 ) -> Result<(VerifiedAttestedSignedPackage, OriginalVerification), OrchestratorError> {
@@ -69,13 +171,17 @@ fn verified_original(
     let api = GitHubApi::new(policy.repository.clone());
     api.verify_repository(repository_id)?;
 
-    let (artifact_source_sha, zip_bytes) = original_archive(
+    let (artifact_workflow_sha, zip_bytes) = original_archive(
         &api,
         &policy,
         original_run_id,
         original_attempt,
         repository_id,
     )?;
+    let artifact_source_sha = match policy.channel {
+        PackageReleaseChannel::Preview => archive::preview_source_sha(&zip_bytes)?,
+        PackageReleaseChannel::Stable => artifact_workflow_sha.clone(),
+    };
     let plan =
         super::release_policy_admission::resolve_policy_at_source(&policy, &artifact_source_sha)?;
     validate_recovery_context(&plan, purpose)?;
@@ -91,7 +197,9 @@ fn verified_original(
         original_run_id,
         original_attempt,
         &artifact_source_sha,
-    ) {
+    ) || (plan.channel == PackageReleaseChannel::Preview
+        && receipt.workflow.authority_sha != artifact_workflow_sha)
+    {
         return Err(internal("package_recovery_receipt_run_mismatch"));
     }
     let identity = original_signing_identity(
@@ -231,7 +339,7 @@ fn original_signing_identity(
     if !source_run_matches(
         &workflow_run,
         plan,
-        source.commit_sha.as_str(),
+        receipt.workflow.authority_sha.as_str(),
         run_id,
         attempt,
         repository_id,
@@ -244,9 +352,20 @@ fn original_signing_identity(
     require_successful_job(
         &jobs,
         run_id,
-        &source.commit_sha,
+        &receipt.workflow.authority_sha,
         plan.channel.signer_job_id(),
     )?;
+    if workflow_run.head_sha.as_deref() != Some(receipt.workflow.authority_sha.as_str()) {
+        return Err(internal("package_recovery_workflow_sha_mismatch"));
+    }
+    if plan.channel == PackageReleaseChannel::Preview {
+        api.verify_preview_main_ancestry(
+            repository_id,
+            &plan.default_branch,
+            &source.commit_sha,
+            &receipt.workflow.authority_sha,
+        )?;
+    }
     api.verify_ci_identity(
         source.ci_run_id,
         source.ci_run_attempt,
@@ -272,14 +391,14 @@ fn original_signing_identity(
             plan.channel.workflow_path(),
             source_ref
         ),
-        workflow_sha: workflow_run.head_sha.unwrap_or_default(),
+        workflow_sha: receipt.workflow.authority_sha.clone(),
         run_id,
         run_attempt: attempt,
         ci_run_id: source.ci_run_id,
         ci_run_attempt: source.ci_run_attempt,
         commit_count: receipt.version.commit_count,
     };
-    if identity.workflow_sha != source.commit_sha {
+    if plan.channel == PackageReleaseChannel::Stable && identity.workflow_sha != source.commit_sha {
         return Err(internal("package_recovery_workflow_sha_mismatch"));
     }
     Ok(identity)

@@ -25,10 +25,10 @@ fn six_pairs_preserve_complete_product_bins_and_full_plan() {
     );
     assert_eq!(request.plan.products[0].bins.len(), 3);
     assert_eq!(request.plan.channel.assemble_job_id(), "preview-assemble");
-    for (index, pair) in pairs.into_iter().enumerate() {
+    for pair in pairs {
         assert_eq!(
             release_payload_job_id(&request.plan, &pair).expect("fixed job"),
-            format!("preview-payload-{index:03}")
+            "preview-payload"
         );
         let mut leaf = request.clone();
         leaf.stage = ReleaseProductionStage::Payload { pair };
@@ -103,7 +103,9 @@ fn context_rejects_forks_refs_authority_versions_and_nonpositive_identities() {
         |context: &mut ReleaseProductionContext| {
             context.source_ref = "refs/pull/1/merge".to_owned();
         },
-        |context: &mut ReleaseProductionContext| context.workflow_authority_sha = "b".repeat(40),
+        |context: &mut ReleaseProductionContext| context.workflow_authority_sha = "B".repeat(40),
+        |context: &mut ReleaseProductionContext| context.workflow_authority_sha = "b".repeat(39),
+        |context: &mut ReleaseProductionContext| context.workflow_authority_sha = "g".repeat(40),
         |context: &mut ReleaseProductionContext| context.run_id = 0,
         |context: &mut ReleaseProductionContext| context.run_attempt = 0,
         |context: &mut ReleaseProductionContext| context.ci_run_id = 0,
@@ -117,6 +119,56 @@ fn context_rejects_forks_refs_authority_versions_and_nonpositive_identities() {
         assert!(validate_release_production_context(&candidate.plan, &candidate.context).is_err());
         assert!(release_aggregate_artifact_name(&candidate.plan, &candidate.context).is_err());
     }
+}
+
+#[test]
+fn preview_context_keeps_eligible_source_when_workflow_authority_advances() {
+    let mut candidate = request();
+    let source_sha = candidate.context.source_sha.clone();
+    let source_version = candidate.context.version.clone();
+    candidate.context.workflow_authority_sha = "b".repeat(40);
+
+    candidate
+        .validate()
+        .expect("distinct full source and authority SHAs");
+    assert_eq!(candidate.context.source_sha, source_sha);
+    assert_eq!(candidate.context.version, source_version);
+    assert_eq!(candidate.context.version, "0.6.4-preview.1306+aaaaaaa");
+    assert!(
+        candidate
+            .validate_against(
+                &support::policy(&candidate.plan),
+                &candidate.plan,
+                &candidate.context
+            )
+            .is_ok()
+    );
+
+    let mut unauthenticated = candidate.context.clone();
+    unauthenticated.workflow_authority_sha = "c".repeat(40);
+    assert!(
+        candidate
+            .validate_against(
+                &support::policy(&candidate.plan),
+                &candidate.plan,
+                &unauthenticated
+            )
+            .is_err()
+    );
+}
+
+#[test]
+fn stable_context_still_requires_workflow_authority_to_match_source() {
+    let mut candidate = request();
+    candidate.plan.channel = crate::package_release::PackageReleaseChannel::Stable;
+    candidate.context.commit_count = 0;
+    candidate.context.version = candidate.plan.base_version.clone();
+    candidate.context.workflow_authority_sha = candidate.context.source_sha.clone();
+    validate_release_production_context(&candidate.plan, &candidate.context)
+        .expect("stable source and authority remain identical");
+
+    candidate.context.workflow_authority_sha = "b".repeat(40);
+    assert!(validate_release_production_context(&candidate.plan, &candidate.context).is_err());
 }
 
 #[test]
@@ -346,9 +398,8 @@ fn pair_expansion_has_its_own_bounded_preview_inventory() {
         .iter()
         .map(|pair| release_payload_job_id(&plan, pair).expect("bounded job"))
         .collect::<std::collections::BTreeSet<_>>();
-    assert_eq!(ids.len(), 128);
-    assert_eq!(ids.first().expect("first"), "preview-payload-000");
-    assert_eq!(ids.last().expect("last"), "preview-payload-127");
+    assert_eq!(ids.len(), 1);
+    assert_eq!(ids.first().expect("one preview job"), "preview-payload");
     let mut extra = template;
     extra.id = "product-32".to_owned();
     extra.targets.truncate(1);

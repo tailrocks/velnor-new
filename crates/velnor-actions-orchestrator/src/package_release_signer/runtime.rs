@@ -62,10 +62,10 @@ fn identity_for_repository(
     repository_id: u64,
 ) -> Result<PackageReleaseSigningIdentity, OrchestratorError> {
     let repository = required_env("GITHUB_REPOSITORY")?;
-    let source_sha = required_env("GITHUB_SHA")?;
+    let event_sha = required_env("GITHUB_SHA")?;
     let source_ref = required_env("GITHUB_REF")?;
     let workflow_ref = required_env("GITHUB_WORKFLOW_REF")?;
-    let workflow_sha = required_env("GITHUB_WORKFLOW_SHA")?;
+    let github_workflow_sha = required_env("GITHUB_WORKFLOW_SHA")?;
     let event = signing_event(plan, &required_env("GITHUB_EVENT_NAME")?)?;
     let run_id = positive_u64("GITHUB_RUN_ID")?;
     let run_attempt = positive_u32("GITHUB_RUN_ATTEMPT")?;
@@ -75,6 +75,20 @@ fn identity_for_repository(
         PackageReleaseChannel::Preview => Some(positive_u64("VELNOR_RELEASE_COMMIT_COUNT")?),
         PackageReleaseChannel::Stable => None,
     };
+    let (source_sha, workflow_sha) = preview_signing_authorities(
+        plan,
+        &PreviewSigningAuthorityFacts {
+            repository_id,
+            source_ref: &source_ref,
+            event_sha: &event_sha,
+            github_workflow_sha: &github_workflow_sha,
+            run_id,
+            run_attempt,
+            ci_run_id,
+            ci_run_attempt,
+            commit_count,
+        },
+    )?;
     let identity = PackageReleaseSigningIdentity {
         repository,
         repository_id,
@@ -93,6 +107,74 @@ fn identity_for_repository(
     };
     validate_identity(plan, &identity)?;
     Ok(identity)
+}
+
+struct PreviewSigningAuthorityFacts<'a> {
+    repository_id: u64,
+    source_ref: &'a str,
+    event_sha: &'a str,
+    github_workflow_sha: &'a str,
+    run_id: u64,
+    run_attempt: u32,
+    ci_run_id: u64,
+    ci_run_attempt: u32,
+    commit_count: Option<u64>,
+}
+
+fn preview_signing_authorities(
+    plan: &PackageReleasePlan,
+    facts: &PreviewSigningAuthorityFacts<'_>,
+) -> Result<(String, String), OrchestratorError> {
+    if plan.channel == PackageReleaseChannel::Preview
+        && matches!(
+            env::var("VELNOR_INTERNAL_OP").ok().as_deref(),
+            Some("sign-package-release-v1" | "publish-package-release-v1")
+        )
+    {
+        let source_sha = required_env("VELNOR_RELEASE_SOURCE_SHA")?;
+        let workflow_authority_sha = required_env("VELNOR_RELEASE_WORKFLOW_AUTHORITY_SHA")?;
+        let temp = PathBuf::from(required_env("RUNNER_TEMP")?).join("velnor");
+        if !temp.is_absolute() {
+            return Err(internal("package_signer_runner_temp_invalid"));
+        }
+        let deadline = velnor_actions_mise::CheckDeadline::after(Duration::from_secs(300))
+            .map_err(|_| internal("package_signer_deadline"))?;
+        let admitted = crate::package_release_publish::release_policy_admission::admitted_context(
+            &temp, deadline,
+        )?;
+        let expected_version = velnor_actions_contract::preview_identity::PreviewIdentity::derive(
+            &plan.base_version,
+            &source_sha,
+            facts
+                .commit_count
+                .ok_or_else(|| internal("package_signer_commit_count_missing"))?,
+        )
+        .map_err(|_| internal("package_signer_preview_version_invalid"))?;
+        if !is_full_sha(&source_sha)
+            || !is_full_sha(facts.event_sha)
+            || !is_full_sha(facts.github_workflow_sha)
+            || facts.event_sha != workflow_authority_sha
+            || facts.github_workflow_sha != workflow_authority_sha
+            || admitted.repository_id != facts.repository_id
+            || admitted.head_repository_id != facts.repository_id
+            || admitted.source_sha != source_sha
+            || admitted.workflow_authority_sha != workflow_authority_sha
+            || admitted.source_ref != facts.source_ref
+            || admitted.run_id != facts.run_id
+            || admitted.run_attempt != facts.run_attempt
+            || admitted.ci_run_id != facts.ci_run_id
+            || admitted.ci_run_attempt != facts.ci_run_attempt
+            || Some(admitted.commit_count) != facts.commit_count
+            || admitted.version != expected_version.version
+        {
+            return Err(internal("package_signer_authority_mismatch"));
+        }
+        return Ok((source_sha, workflow_authority_sha));
+    }
+    Ok((
+        facts.event_sha.to_owned(),
+        facts.github_workflow_sha.to_owned(),
+    ))
 }
 
 pub(super) fn require_stable_context(
@@ -140,7 +222,8 @@ pub(super) fn validate_identity(
     if identity.repository != plan.repository
         || identity.repository_id == 0
         || !is_full_sha(&identity.source_sha)
-        || identity.workflow_sha != identity.source_sha
+        || (plan.channel == PackageReleaseChannel::Stable
+            && identity.workflow_sha != identity.source_sha)
         || identity.source_ref != format!("refs/heads/{}", plan.default_branch)
         || identity.workflow_path != plan.channel.workflow_path()
         || identity.workflow_ref != workflow_ref

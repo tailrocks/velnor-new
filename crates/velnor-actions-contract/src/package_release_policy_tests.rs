@@ -51,6 +51,35 @@ fn policy_has_no_version_value_and_plan_resolution_preserves_inventory() {
     changed.products[0].bins[0] = "other".to_owned();
     assert!(policy.validate_plan(&changed).is_err());
 }
+
+#[test]
+fn payload_job_ids_share_preview_identity_and_keep_stable_ordinals() {
+    let mut preview = fixture();
+    preview.products[0]
+        .targets
+        .push("x86_64-apple-darwin".to_owned());
+    let pairs = preview.payload_pairs().expect("two valid pairs");
+    assert_eq!(pairs.len(), 2);
+    for pair in &pairs {
+        assert_eq!(
+            preview.payload_job_id(pair).expect("preview job"),
+            "preview-payload"
+        );
+    }
+    let mut unknown = pairs[0].clone();
+    unknown.target = "unknown-target".to_owned();
+    assert!(preview.payload_job_id(&unknown).is_err());
+
+    let mut stable = preview;
+    stable.channel = PackageReleaseChannel::Stable;
+    for (index, pair) in pairs.iter().enumerate() {
+        assert_eq!(
+            stable.payload_job_id(pair).expect("stable job"),
+            format!("stable-payload-{index:03}")
+        );
+    }
+}
+
 #[test]
 fn policy_rejects_incomplete_or_escaping_manifest_ownership() {
     let mut policy = fixture();

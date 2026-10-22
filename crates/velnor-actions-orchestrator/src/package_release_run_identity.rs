@@ -1,10 +1,12 @@
 //! Independent native reauthentication of producing workflow and upstream CI.
 
 use super::github::{
-    GitHubApi, WorkflowJobList, WorkflowMetadata, WorkflowRunList, WorkflowRunResponse,
-    encode_segment,
+    GitHubApi, WorkflowJob, WorkflowJobList, WorkflowMetadata, WorkflowRunList,
+    WorkflowRunResponse, encode_segment,
 };
 use crate::{OrchestratorError, internal::internal};
+use serde::Deserialize;
+use std::collections::BTreeSet;
 use velnor_actions_contract::{
     CI_WORKFLOW_PATH, REQUIRED_DISPLAY_NAME, WORKFLOW_DISPLAY_NAME,
     package_release::PackageReleaseReceipt,
@@ -19,6 +21,73 @@ pub(super) use active_job::CurrentRun;
 mod active_role;
 pub(super) use active_role::{continuation_job_name, release_job_name};
 pub(super) use cache::RunIdentityCache;
+
+const WORKFLOW_JOBS_PAGE_SIZE: usize = 100;
+const MAX_WORKFLOW_JOB_PAGES: usize = 20;
+const MAX_WORKFLOW_JOBS: usize = WORKFLOW_JOBS_PAGE_SIZE * MAX_WORKFLOW_JOB_PAGES;
+
+#[derive(Deserialize)]
+struct WorkflowJobsPage {
+    total_count: usize,
+    jobs: Vec<IdentifiedWorkflowJob>,
+}
+
+#[derive(Deserialize)]
+struct IdentifiedWorkflowJob {
+    id: u64,
+    run_id: u64,
+    name: String,
+    head_sha: Option<String>,
+    status: Option<String>,
+    conclusion: Option<String>,
+}
+
+#[derive(Default)]
+struct WorkflowJobsAccumulator {
+    total_count: Option<usize>,
+    ids: BTreeSet<u64>,
+    jobs: Vec<WorkflowJob>,
+}
+
+impl WorkflowJobsAccumulator {
+    fn admit_page(&mut self, page: WorkflowJobsPage) -> Result<bool, OrchestratorError> {
+        let page_len = page.jobs.len();
+        if page.jobs.len() > WORKFLOW_JOBS_PAGE_SIZE
+            || page.total_count > MAX_WORKFLOW_JOBS
+            || self
+                .total_count
+                .is_some_and(|total| total != page.total_count)
+        {
+            return Err(internal("package_ci_job_inventory_count"));
+        }
+        self.total_count = Some(page.total_count);
+        for job in page.jobs {
+            if job.id == 0 || !self.ids.insert(job.id) {
+                return Err(internal("package_ci_job_inventory_identity"));
+            }
+            self.jobs.push(WorkflowJob {
+                run_id: job.run_id,
+                name: job.name,
+                head_sha: job.head_sha,
+                status: job.status,
+                conclusion: job.conclusion,
+            });
+        }
+        let total = page.total_count;
+        if self.jobs.len() > total {
+            return Err(internal("package_ci_job_inventory_count"));
+        }
+        let complete = self.jobs.len() == total;
+        if !complete && page_len < WORKFLOW_JOBS_PAGE_SIZE {
+            return Err(internal("package_ci_job_inventory_truncated"));
+        }
+        Ok(complete)
+    }
+
+    fn into_list(self) -> WorkflowJobList {
+        WorkflowJobList { jobs: self.jobs }
+    }
+}
 
 #[derive(Clone, Copy)]
 pub(super) struct RunSource<'a> {
@@ -92,7 +161,7 @@ impl GitHubApi {
             attempt: receipt.workflow.run_attempt,
             source: RunSource {
                 repository_id: receipt.repository.id,
-                sha: &receipt.source.commit_sha,
+                sha: &receipt.workflow.authority_sha,
                 branch: &receipt.source.default_branch,
             },
             workflow: &workflow,
@@ -121,7 +190,7 @@ impl GitHubApi {
     ) -> Result<(), OrchestratorError> {
         let source = RunSource {
             repository_id: receipt.repository.id,
-            sha: &receipt.source.commit_sha,
+            sha: &receipt.workflow.authority_sha,
             branch: &receipt.source.default_branch,
         };
         if !run_matches(
@@ -200,15 +269,13 @@ impl GitHubApi {
         id: u64,
         attempt: u32,
     ) -> Result<WorkflowJobList, OrchestratorError> {
-        let mut jobs = Vec::new();
-        for page in 1..=20 {
-            let list: WorkflowJobList = self.get_json(&self.route(&format!(
-                "actions/runs/{id}/attempts/{attempt}/jobs?per_page=100&page={page}"
+        let mut jobs = WorkflowJobsAccumulator::default();
+        for page in 1..=MAX_WORKFLOW_JOB_PAGES {
+            let response: WorkflowJobsPage = self.get_json(&self.route(&format!(
+                "actions/runs/{id}/attempts/{attempt}/jobs?per_page={WORKFLOW_JOBS_PAGE_SIZE}&page={page}"
             )))?;
-            let count = list.jobs.len();
-            jobs.extend(list.jobs);
-            if count < 100 {
-                return Ok(WorkflowJobList { jobs });
+            if jobs.admit_page(response)? {
+                return Ok(jobs.into_list());
             }
         }
         Err(internal("package_ci_job_pages_exceeded"))
