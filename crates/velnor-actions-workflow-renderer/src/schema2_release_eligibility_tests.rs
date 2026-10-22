@@ -86,7 +86,7 @@ set -eu
 [ "$1" = "--no-env" ] && shift
 [ "$1" = "--no-hooks" ] && shift
 [ "$1" = "exec" ] && shift
-[ "$1" = "gh@2.102.1" ] && shift
+[ "$1" = "gh@2.103.0" ] && shift
 [ "$1" = "--" ] && shift
 [ "$1" = "gh" ] && shift
 exec gh "$@"
@@ -322,7 +322,7 @@ fn job_renders_a_read_only_source_gate() {
     let rendered = crate::yaml::render_yaml(&crate::yaml::Yaml::Map(vec![(name, value)]));
     assert!(rendered.contains("actions: read"));
     assert!(rendered.contains("contents: read"));
-    assert!(rendered.contains("gh@2.102.1"));
+    assert!(rendered.contains("gh@2.103.0"));
     assert!(rendered.contains("workflow_authority_sha"));
 }
 

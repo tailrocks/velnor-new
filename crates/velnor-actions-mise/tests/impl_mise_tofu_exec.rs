@@ -30,7 +30,7 @@ fn fmt_payload() -> Vec<OsString> {
 
 fn tofu_command() -> Result<IsolatedCommand, String> {
     IsolatedCommand::tofu_exec(
-        &["opentofu@1.13.1".to_owned()],
+        &["opentofu@1.13.2".to_owned()],
         &fmt_payload(),
         "/velnor/tofu-data",
         "/velnor/tofu-cli.hcl",
@@ -60,7 +60,7 @@ fn tofu_exec_wraps_pinned_opentofu_payload() -> Result<(), String> {
     )
     .map_err(|err| err.to_string())?;
     let specs = catalog.tool_specs(exec.tools());
-    assert_eq!(specs, ["opentofu@1.13.1".to_owned()]);
+    assert_eq!(specs, ["opentofu@1.13.2".to_owned()]);
     let command = IsolatedCommand::tofu_exec(
         &specs,
         &exec.payload(),
@@ -82,7 +82,7 @@ fn tofu_exec_wraps_pinned_opentofu_payload() -> Result<(), String> {
             "--no-env",
             "--no-hooks",
             "exec",
-            "opentofu@1.13.1",
+            "opentofu@1.13.2",
             "--",
             "tofu",
             "-chdir",
@@ -135,7 +135,7 @@ fn tofu_exec_bakes_exact_isolation_env() -> Result<(), String> {
 
 #[test]
 fn tofu_exec_rejects_empty_inputs() {
-    let specs = ["opentofu@1.13.1".to_owned()];
+    let specs = ["opentofu@1.13.2".to_owned()];
     assert!(matches!(
         IsolatedCommand::tofu_exec(&specs, &[], "/data", "/cli.hcl", "/cache"),
         Err(MiseError::EmptyCommand { .. })
