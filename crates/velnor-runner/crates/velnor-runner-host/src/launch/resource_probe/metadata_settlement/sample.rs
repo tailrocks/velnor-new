@@ -155,7 +155,7 @@ pub(super) fn settlement_sample_for_identity(
         docker_root_digest.to_owned(),
     )?;
     let filesystem_instance_digest =
-        super::super::filesystem_instance_digest(super::super::FilesystemInstanceDigestInput {
+        super::super::filesystem_instance_digest(&super::super::FilesystemInstanceDigestInput {
             engine_id,
             docker_root_digest,
             guest_boot_id: record.guest_boot_id.as_bytes(),

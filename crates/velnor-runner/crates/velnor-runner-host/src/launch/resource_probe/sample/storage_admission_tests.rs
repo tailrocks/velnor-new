@@ -115,7 +115,9 @@ fn admission_rejects_wrong_engine_root_and_stale_samples() {
     );
 
     let mut stale = permit();
-    stale.observation.observed_at = Instant::now() - Duration::from_secs(31);
+    stale.observation.observed_at = Instant::now()
+        .checked_sub(Duration::from_secs(31))
+        .expect("the monotonic clock has enough elapsed time for the stale fixture");
     assert!(
         stale
             .storage_provisioning_admission(&profile, ENGINE_ID, &root)

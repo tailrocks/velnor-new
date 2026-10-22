@@ -121,9 +121,8 @@ async fn failed_ack_settles_known_get_and_retains_durable_offer() -> Result<(), 
             message_id: case.message_id
         }
     );
-    let retained = match outcome.admission {
-        Some(PositiveAdmission::Deferred(offer)) => offer,
-        _ => return Err("durable authorized offer was lost from the outcome".to_owned()),
+    let Some(PositiveAdmission::Deferred(retained)) = outcome.admission else {
+        return Err("durable authorized offer was lost from the outcome".to_owned());
     };
     assert_eq!(retained.offer().request_id(), case.request_id);
     assert_eq!(retained.offer().message_id(), case.message_id);

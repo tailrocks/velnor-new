@@ -10,7 +10,7 @@ impl JobFactsPublication {
         file: &velnor_resource_probe::job_facts_wire::JobFactsPublicationFile,
     ) -> Result<Self, crate::error::HostError> {
         let filesystem_instance_digest = crate::launch::resource_probe::filesystem_instance_digest(
-            crate::launch::resource_probe::FilesystemInstanceDigestInput {
+            &crate::launch::resource_probe::FilesystemInstanceDigestInput {
                 engine_id: claim.engine_id(),
                 docker_root_digest: claim.docker_root_digest(),
                 guest_boot_id: guest_boot_id.as_bytes(),

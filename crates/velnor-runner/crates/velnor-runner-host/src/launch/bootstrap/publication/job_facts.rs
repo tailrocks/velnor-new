@@ -314,7 +314,7 @@ fn validate_directory_identity(
         return Err(crate::error::HostError::Identity);
     }
     let measured = crate::launch::resource_probe::filesystem_instance_digest(
-        crate::launch::resource_probe::FilesystemInstanceDigestInput {
+        &crate::launch::resource_probe::FilesystemInstanceDigestInput {
             engine_id: claim.engine_id(),
             docker_root_digest: claim.docker_root_digest(),
             guest_boot_id: record.guest_boot_id.as_bytes(),
