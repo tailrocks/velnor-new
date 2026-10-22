@@ -11,7 +11,8 @@
   every plan, crate and dependency-seed job that installs Rust
   (`rust_manifest_step.rs`); and the lock-audit change that treats such an
   install as verified.
-- Acceptance evidence: `rust_toolchain_script::tests` (the script executed
+- Acceptance evidence: `rust_install_audit::tests` (the all-workflow
+  coverage audit), `rust_toolchain_script::tests` (the script executed
   against a fixture release: a replaced `rustc`, an extra, missing or
   symlinked file, an unlisted component, a substituted tarball, a wrong
   manifest digest and a poisoned cache each fail),
@@ -95,6 +96,50 @@ Checked locally against a real rustup install (1.99.1, default profile with
 `rust-docs`, aarch64-apple-darwin) with the rendered `ci.yml` steps: the
 restored-phase run verified it in 73 s (all tarballs downloaded), the
 installed-phase run in 23 s (sums reused), and replacing `bin/rustc` fails.
+
+## Coverage: every job that installs Rust
+
+The same script, in its installed phase on the runner's default rustup home
+(`${RUSTUP_HOME:-$HOME/.rustup}`), runs as `Verify Rust channel manifest`
+directly after the Rust install in every other generated job:
+
+| File | Job or action |
+|---|---|
+| `product-release-binary.yml` | `build-binary` (the macOS `velnor-host` build) |
+| `product-release-images.yml` | the resource-probe image build, after the musl target |
+| `.github/actions/generator-release-build-*` | the `velnor-actions` release builds, after the Intel target on the cross leg |
+| `.github/actions/generator-release-qualify-*` | release qualification |
+| `qualification.yml` | `mbx-cache-write-hosted`, `mbx-cache-read-hosted` (the toolchain is put on `PATH` only after the check) |
+| `freshness.yml` | `freshness` |
+| `binary-release.yml`, `binary-preview.yml` | every payload producer, after `Install pinned Cargo metadata toolchain` and before `Fetch Cargo sources` |
+| `upgrades.yml` | `prepare` and `verify`, inside the regeneration prerequisites: right after the fresh `rust@<pin>` install and before `cargo fetch` (`VELNOR_VERIFY_RUST_SCRIPT`) |
+
+Two more job kinds run on the owned homes with the tools cache, so they also
+get `Verify restored Rust toolchain` before their install:
+
+| File | Job |
+|---|---|
+| `ci.yml` | every `image-*` job that builds a Cargo binary into an image |
+| `suites.yml` and the suite jobs in `ci.yml` | every declared Rust test suite job (build, run, sharded) |
+
+The default-home jobs resolve the rustup home as `RUSTUP_HOME`, then
+`MISE_RUSTUP_HOME`, then `$HOME/.rustup`, which is where Mise installs it.
+
+`ProductReleasePins`, `MbxQualificationPins` and `FreshnessSpec` carry the
+argv (`verify_rust_argv`), built by the orchestrator from the catalog.
+
+Generation enforces the coverage (`rust_install_audit.rs`): after rendering,
+it reads every generated `.github/**/*.yml` (workflows and composite actions,
+`ci.yml` step anchors resolved) and fails with
+`rust_install_unverified:<file>:<step>:<why>` when a run of steps that
+installs or changes Rust (`install rust@`, `rustup toolchain install`,
+`rustup component add`, `rustup target add`, `rustup-init`) is not followed
+by the verification before a step runs Rust, Cargo or MBX, or already runs
+`rustc`, Cargo or MBX itself. A step may verify its own install only by
+calling `$VELNOR_VERIFY_RUST_SCRIPT` after every install and before every use
+in its text (the `upgrades.yml` scripts). Removing
+the step from the resource-probe build makes `generate` fail with
+`rust_install_unverified:.github/workflows/product-release-images.yml:Install pinned Rust for the resource probe:no verification directly follows the install`.
 
 ## The other cached tools
 

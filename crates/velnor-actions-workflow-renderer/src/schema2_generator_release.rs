@@ -128,6 +128,10 @@ pub(super) fn command_step(name: &str, argv: &[String]) -> Result<Yaml, RenderEr
     workflow_steps::command_step(name, argv)
 }
 
+pub(super) fn verify_rust_step(pins: &ProductReleasePins) -> Result<Yaml, RenderError> {
+    workflow_steps::verify_rust_step(pins)
+}
+
 pub(super) fn bash_step(name: &str, run: &str) -> Yaml {
     workflow_steps::bash_step(name, run)
 }

@@ -99,6 +99,7 @@ pub(crate) fn specification(
         )?,
         install_rust_argv: strings_of(rust_install.argv(&emission))
             .map_err(|error| internal(&error))?,
+        verify_rust_argv: crate::workflow::verify_rust_argv(&emission),
         producer_source_prep,
         producer_cargo_env,
         install_gh_argv: strings_of(install.argv(&native_catalog))

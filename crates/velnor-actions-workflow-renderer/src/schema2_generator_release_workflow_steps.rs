@@ -15,6 +15,11 @@ pub(super) fn command_step(name: &str, argv: &[String]) -> Result<Yaml, RenderEr
     Ok(bash_step(name, &join_argv_for_run(argv)?))
 }
 
+/// The file-by-file Rust toolchain check, run right after every Rust install.
+pub(super) fn verify_rust_step(pins: &super::ProductReleasePins) -> Result<Yaml, RenderError> {
+    command_step(crate::VERIFY_RUST_TOOLCHAIN_STEP, &pins.verify_rust_argv)
+}
+
 pub(super) fn mise_install_step(name: &str, argv: &[String]) -> Result<Yaml, RenderError> {
     let command = join_argv_for_run(argv)?;
     let run = format!("set -eu\n: \"${{GITHUB_TOKEN:?missing workflow token}}\"\n{command}");

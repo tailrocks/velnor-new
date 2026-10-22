@@ -57,7 +57,45 @@ pub(super) fn producer_mark_steps(spec: &RustSuitesRenderSpec) -> Result<Vec<Ste
     }
 }
 
-pub(super) fn install_suite_tools_step(spec: &RustSuitesRenderSpec) -> Result<Step, RenderError> {
+/// Owned rustup and Cargo homes the toolchain checks read.
+fn verify_env() -> BTreeMap<String, String> {
+    BTreeMap::from([
+        (
+            "RUSTUP_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/rustup".to_owned(),
+        ),
+        (
+            "CARGO_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/cargo".to_owned(),
+        ),
+    ])
+}
+
+/// Right after the tools cache restore: no restored Rust byte runs unchecked.
+pub(super) fn restored_rust_step(spec: &RustSuitesRenderSpec) -> Result<Step, RenderError> {
+    let mut step = steps::shell_step(
+        "Verify restored Rust toolchain",
+        spec.verify_restored_rust_argv.clone(),
+        verify_env(),
+    )?;
+    step.role = Some(velnor_actions_contract::StepRole::VerifyRustManifest);
+    Ok(step)
+}
+
+/// The suite install and, directly after it, the toolchain verification.
+pub(super) fn install_suite_tools_steps(
+    spec: &RustSuitesRenderSpec,
+) -> Result<Vec<Step>, RenderError> {
+    let mut verify = steps::shell_step(
+        crate::VERIFY_RUST_TOOLCHAIN_STEP,
+        spec.verify_rust_argv.clone(),
+        verify_env(),
+    )?;
+    verify.role = Some(velnor_actions_contract::StepRole::VerifyRustManifest);
+    Ok(vec![install_suite_tools_step(spec)?, verify])
+}
+
+fn install_suite_tools_step(spec: &RustSuitesRenderSpec) -> Result<Step, RenderError> {
     steps::shell_step(
         "Install suite tools",
         vec![
@@ -217,4 +255,48 @@ fn build_run_script(
     } else {
         Ok(base)
     }
+}
+
+pub(super) fn append_suite_artifact_uploads(
+    job_steps: &mut Vec<Step>,
+    suite: &RustSuiteConfig,
+    sharded: bool,
+) -> Result<(), RenderError> {
+    let name = &suite.id;
+    let id_prefix = format!("{name}-");
+    for artifact in &suite.artifacts {
+        let resolved_label = artifact
+            .name
+            .replace("{shard}", if sharded { "${{ matrix.shard }}" } else { "1" })
+            .replace(
+                "{partition}",
+                if sharded { "${{ matrix.shard }}" } else { "1" },
+            );
+        let has_id_prefix = resolved_label == *name || resolved_label.starts_with(&id_prefix);
+        let needs_shard_suffix = sharded && !resolved_label.contains("${{ matrix.shard }}");
+        let artifact_name = match (has_id_prefix, needs_shard_suffix) {
+            (true, true) => format!(
+                "velnor-suite-{}-{resolved_label}-s${{{{ matrix.shard }}}}",
+                steps::RUN_KEY_EXPR
+            ),
+            (true, false) => format!("velnor-suite-{}-{resolved_label}", steps::RUN_KEY_EXPR),
+            (false, true) => format!(
+                "velnor-suite-{}-{name}-s${{{{ matrix.shard }}}}-{resolved_label}",
+                steps::RUN_KEY_EXPR
+            ),
+            (false, false) => format!(
+                "velnor-suite-{}-{name}-{resolved_label}",
+                steps::RUN_KEY_EXPR
+            ),
+        };
+        let path = artifact.paths.join("\n");
+        job_steps.push(steps::upload_suite_artifact_step(
+            &format!("Upload suite artifact ({})", artifact.name),
+            &artifact_name,
+            &path,
+            u32::from(artifact.retention_days),
+            artifact.when,
+        )?);
+    }
+    Ok(())
 }

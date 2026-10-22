@@ -48,6 +48,7 @@ pub(crate) fn freshness_files(
         checkout_uses: CHECKOUT_USES.to_owned(),
         mise_setup,
         rust_version: emission.version(PinnedTool::Rust).to_owned(),
+        verify_rust_argv: crate::workflow::verify_rust_argv(&emission),
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
     };
     Ok(vec![render_freshness_workflow(&spec)?])
