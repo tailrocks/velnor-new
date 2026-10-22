@@ -1,0 +1,5 @@
+{"method":"onBlobReportMetadata","params":{"version":2,"userAgent":"Playwright Test v1.64.1","name":"blob-report","shard":{"current":1,"total":2},"pathSeparator":"/"}}
+{"method":"onProject","params":{"project":{"name":"setup","dependencies":["seed"],"teardown":"cleanup","testDir":"/workspace/tests","outputDir":"/workspace/test-results","metadata":{}}}}
+{"method":"onProject","params":{"project":{"name":"seed","dependencies":[],"testDir":"/workspace/tests","outputDir":"/workspace/test-results","metadata":{}}}}
+{"method":"onProject","params":{"project":{"name":"cleanup","dependencies":["cleanup-seed"],"testDir":"/workspace/tests","outputDir":"/workspace/test-results","metadata":{}}}}
+{"method":"onProject","params":{"project":{"name":"cleanup-seed","dependencies":[],"testDir":"/workspace/tests","outputDir":"/workspace/test-results","metadata":{}}}}

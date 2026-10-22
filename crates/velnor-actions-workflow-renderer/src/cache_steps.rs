@@ -18,8 +18,8 @@ mod mbx_gate;
 #[path = "cache_steps_mbx_preflight.rs"]
 mod mbx_preflight;
 pub use family::{
-    FAMILY_KEYS_NAME, FamilyCachePlan, FamilySnapshot, family_keys_step, family_restore_step,
-    family_save_step, family_size_step,
+    FAMILY_KEYS_NAME, FamilyCachePlan, FamilySnapshot, family_keys_step,
+    family_keys_step_single_writer, family_restore_step, family_save_step, family_size_step,
 };
 pub use mbx_bundle::{
     MBX_BUNDLE_EXPORT_NAME, MBX_BUNDLE_IMPORT_NAME, MBX_BUNDLE_KEY_NAME, MBX_BUNDLE_RESTORE_NAME,
