@@ -27,11 +27,9 @@ fn member_timeouts(config: &str) -> Result<(String, String), Box<dyn std::error:
 
 #[test]
 fn member_timeout_overrides_the_stack_and_crate_bounds_for_that_member_only() -> TestResult {
-    let crate_default = format!(
-        "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\ncrate_timeout_minutes = 12\n\
-[stacks.bun]\nroots = [\"frontend\"]\n"
-    );
-    assert_eq!(member_timeouts(&crate_default)?, ("12".into(), "12".into()));
+    let crate_default = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n\
+crate_timeout_minutes = 12\n[stacks.bun]\nroots = [\"frontend\"]\n";
+    assert_eq!(member_timeouts(crate_default)?, ("12".into(), "12".into()));
     let stack = bun_config("timeout_minutes = 30\n");
     assert_eq!(member_timeouts(&stack)?, ("30".into(), "30".into()));
     let member = bun_config(
