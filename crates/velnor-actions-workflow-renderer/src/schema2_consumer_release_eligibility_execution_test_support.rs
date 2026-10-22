@@ -31,6 +31,7 @@ fn execute_channel(
         .env("PATH", format!("{}:{path}", fixture.bin.display()))
         .env("VELNOR_TEST_FIXTURES", &fixture.directory)
         .env("VELNOR_TEST_CALLS", &fixture.calls)
+        .env("VELNOR_TEST_SLEEPS", fixture.directory.join("sleeps"))
         .env("VELNOR_TEST_REPOSITORY", REPOSITORY)
         .env("GITHUB_REPOSITORY_ID", "100")
         .env(
@@ -51,6 +52,7 @@ fn execute_channel(
         stderr: String::from_utf8(command_output.stderr)?,
         output: fs::read_to_string(&fixture.output)?,
         calls: fs::read_to_string(&fixture.calls)?,
+        sleeps: fs::read_to_string(fixture.directory.join("sleeps"))?,
     })
 }
 
