@@ -297,10 +297,29 @@ adapter.
   Velnor-written `bunfig.toml`, never the repository's registry settings.
 - Generation fails on a repository `bunfig.toml` that sets a registry,
   scope, token or certificate (`bunfig_registry_override`).
+- Bun suites are not member jobs. A member may declare suites
+  (`[stacks.bun.members."<name>".suites.<id>]`): each is a separate job
+  `bun-<slug>--<id>` (`Bun / <name> / <id>`) that runs the scripts it claims
+  as parallel steps, optionally as a static Playwright project and shard
+  matrix with a non-gating report-merge job. Claimed scripts leave the member
+  job; the member job is omitted only when suites claim every script it would
+  run. Suites sit beside the member job the way Rust suites and the
+  dependency-seed job sit beside crate jobs (decision 1). A repository that
+  declares no suite generates byte-identical output. Specification:
+  [Bun contract](proposed/bun-contract.md#suites).
+
+**Amendment (2026-10-22).** The "Bun suites" invariant above was adopted by the
+coordinator decision of 2026-10-22 under the owner's autonomy rule ("never
+ask; decide and continue"), recorded in the Velnor sharding design
+(`velnor-sharding-design.md`, "Coordinator decision"): the change is additive,
+its default is unchanged, and the owner's instruction that browser suites run
+in CI requires it. The owner may revisit it.
 
 **Must not be reintroduced without owner approval:** a second package-manager
 adapter, one shared job for several members, scripts run before the install
-credential is gone, or a repository-controlled registry in the install phase.
+credential is gone, a repository-controlled registry in the install phase, or
+any split of a member's scripts across jobs other than through declared
+`suites`.
 
 ## 7. Private dependency credentials
 
