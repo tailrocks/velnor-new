@@ -15,8 +15,8 @@
 //! check: a mismatch is never retried. An API or parse error fails at once,
 //! and a listing that stays empty fails closed after the last attempt.
 
-/// Seconds to wait before each repeated listing: six listings within 90 seconds.
-pub(super) const RETRY_DELAYS_SECONDS: [u16; 5] = [3, 6, 12, 24, 45];
+/// The retry delays total 90 seconds of backoff, excluding API request time.
+pub(crate) const RETRY_DELAYS_SECONDS: [u16; 5] = [3, 6, 12, 24, 45];
 
 /// jq program that succeeds only when no page of a slurped listing carries a run.
 pub(super) const EMPTY_LISTING_JQ: &str = "[.[] | (.workflow_runs // [])[]] | length == 0";

@@ -346,3 +346,7 @@ fn push_is_immutable_per_commit_and_verifies_the_registry_digest() -> TestResult
     assert!(text.contains("push "), "{text}");
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "publish_image_download_tests.rs"]
+mod download_tests;
