@@ -48,7 +48,10 @@ async fn v36_progressed_claim_survives_startup_and_expired_takeover_inner() -> R
     let path = fixture.database_path.clone();
     let migrated = Box::pin(Journal::open(&path)).await?;
     let connection = migrated.connection().await?;
-    assert_eq!(scalar(&connection, "PRAGMA user_version").await?, 37);
+    assert_eq!(
+        scalar(&connection, "PRAGMA user_version").await?,
+        super::super::super::JOURNAL_VERSION
+    );
     assert_phase3_is_charged(&migrated, reservation_id, 1, &snapshot).await?;
     drop(connection);
     drop(migrated);
