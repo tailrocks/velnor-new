@@ -10,8 +10,8 @@ use velnor_actions_contract::config::AnsibleCollection;
 use velnor_actions_contract::workflow::cache_family::CacheFamily;
 use velnor_actions_contract::workflow::cache_family_steps::root_locator;
 use velnor_actions_workflow_renderer::steps::{
-    FamilyCachePlan, FamilySnapshot, family_keys_step, family_restore_step, family_save_step,
-    family_size_step,
+    FamilyCachePlan, FamilySnapshot, family_keys_step, family_keys_step_single_writer,
+    family_restore_step, family_save_step, family_size_step,
 };
 
 use crate::OrchestratorError;
@@ -98,7 +98,25 @@ pub(crate) fn ansible_collections(collections: &[AnsibleCollection]) -> FamilyCa
 ///
 /// Returns render errors for an unsafe plan.
 pub(crate) fn prelude(plans: &[FamilyCachePlan]) -> Result<Vec<Step>, OrchestratorError> {
-    let mut steps = vec![family_keys_step(plans)?];
+    prelude_for(plans, false)
+}
+
+/// [`prelude`] for a job that is a matrix: `single_writer` lets only leg 1
+/// save, so the legs of one key never race N uploads of the same archive.
+///
+/// # Errors
+///
+/// Returns render errors for an unsafe plan.
+pub(crate) fn prelude_for(
+    plans: &[FamilyCachePlan],
+    single_writer: bool,
+) -> Result<Vec<Step>, OrchestratorError> {
+    let keys = if single_writer {
+        family_keys_step_single_writer(plans)?
+    } else {
+        family_keys_step(plans)?
+    };
+    let mut steps = vec![keys];
     for plan in plans {
         steps.push(family_restore_step(plan)?);
     }

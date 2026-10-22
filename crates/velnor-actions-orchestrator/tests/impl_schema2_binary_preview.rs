@@ -71,20 +71,29 @@ fn preview_generates_independently_with_sorted_static_inventory() -> TestResult 
         assert!(preview.contains("sign-package-release-v1"));
         assert!(preview.contains("publish-package-release-v1"));
         assert!(preview.contains("preview-publish"));
-        let fetch = preview
-            .find("Fetch Cargo sources")
-            .ok_or("P08 source preparation missing")?;
-        let dispatch = preview
-            .find("execute-release-producer-v1")
-            .ok_or("producer missing")?;
-        assert!(fetch < dispatch);
-        assert!(preview.contains("metadata --locked --offline"));
-        assert!(preview.contains("cargo fetch --locked"));
-        assert!(preview.contains("CARGO_HOME: ${{ runner.temp }}/velnor/cargo"));
-        assert!(preview.contains("RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup"));
+        assert!(preview.contains("ref: ${{ steps.source-select.outputs.source_sha }}"));
+        assert!(preview.contains("finalize-preview-source-v1"));
+        assert!(!preview.contains("Fetch Cargo sources"));
+        assert!(!preview.contains("metadata --locked --offline"));
+        assert!(!preview.contains("cargo fetch --locked"));
+        assert!(!preview.contains("CARGO_HOME: ${{ runner.temp }}/velnor/cargo"));
+        assert!(!preview.contains("RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup"));
         assert!(preview.contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
         assert!(preview.contains("CARGO_REGISTRY_TOKEN"));
-        assert!(preview.contains("NODE_AUTH_TOKEN NPM_TOKEN;"));
+        let executor = preview
+            .find("VELNOR_INTERNAL_OP: execute-release-producer-v1")
+            .ok_or("preview executor missing")?;
+        let step_start = preview[..executor]
+            .rfind("      - name: ")
+            .ok_or("preview executor step missing")?;
+        let step_end = preview[executor..]
+            .find("\n      - name: ")
+            .map_or(preview.len(), |offset| executor + offset);
+        let executor_step = &preview[step_start..step_end];
+        assert!(!executor_step.contains("NODE_AUTH_TOKEN:"));
+        assert!(!executor_step.contains("NPM_TOKEN:"));
+        assert!(!executor_step.contains("${{ github.token }}"));
+        assert!(!executor_step.contains("${{ secrets."));
         assert_eq!(
             tree.get(".github/workflows/binary-release.yml").is_some(),
             stable
@@ -160,8 +169,10 @@ executor = "hosted"
     let preview = tree
         .get(".github/workflows/binary-preview.yml")
         .ok_or("preview missing")?;
-    assert!(preview.contains("runs-on: xcode-27"));
-    assert!(preview.contains("Resolve project tool versions"));
+    assert!(preview.contains("runs-on: ${{ matrix.runner }}"));
+    assert!(preview.contains("payload_matrix"));
+    assert!(!preview.contains("Resolve project tool versions"));
+    assert!(!preview.contains("RUSTUP_TOOLCHAIN:"));
     let ci = tree.get(".github/workflows/ci.yml").ok_or("CI missing")?;
     assert!(ci.contains("check-native:"));
     assert!(ci.contains("runs-on: macos-26"));
@@ -191,7 +202,9 @@ executor = "hosted"
             .iter()
             .any(|tool| tool.starts_with("jactionlint@"))
     );
-    assert!(preview.contains("zizmor: ignore[github-env]"));
+    assert!(ci.contains("Resolve project tool versions"));
+    assert!(ci.contains("zizmor: ignore[github-env]"));
+    assert!(!preview.contains("zizmor: ignore[github-env]"));
     Ok(())
 }
 

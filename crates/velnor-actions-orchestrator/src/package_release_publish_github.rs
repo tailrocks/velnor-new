@@ -6,7 +6,6 @@ use std::{
     time::Duration,
 };
 
-use sha2::{Digest, Sha256};
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 
 use crate::{OrchestratorError, internal::internal};
@@ -17,6 +16,12 @@ mod fields;
 mod metadata_download;
 #[path = "package_release_read_transport.rs"]
 mod read_transport;
+#[path = "package_release_publish_github_utils.rs"]
+mod utils;
+pub(super) use utils::{
+    API_VERSION, annotated_tag_observation, encode_segment, gh_api_arguments, graphql_arguments,
+    is_lowercase_git_sha, sha256, verify_tap_update_environment,
+};
 #[path = "package_release_publish_github_types.rs"]
 mod types;
 #[path = "package_release_publish_upload.rs"]
@@ -27,6 +32,8 @@ mod preview_download;
 #[path = "preview_artifact_transport_api.rs"]
 mod preview_reads;
 pub(super) use preview_reads::ReleaseArtifactApi;
+#[path = "package_release_publish_ancestry.rs"]
+mod ancestry;
 #[path = "package_release_publish_github_immutable_status.rs"]
 mod immutable_status;
 #[path = "package_release_publish_lookup.rs"]
@@ -40,7 +47,6 @@ use immutable_status::immutable_status_token;
 #[path = "package_release_publish_github_fixture.rs"]
 mod fixture;
 
-const API_VERSION: &str = "2026-03-10";
 const JSON_LIMIT: usize = 1024 * 1024;
 const ASSET_LIMIT: usize = 1024 * 1024 * 1024;
 const ARTIFACT_LIMIT: usize = 1024 * 1024 * 1024;
@@ -262,6 +268,33 @@ impl GitHubApi {
         self.verify_immutable_status()
     }
 
+    /// Authenticate the protected main lineage for an immutable preview source.
+    /// Returns the fresh protected main tip after proving source → workflow → tip.
+    pub(crate) fn verify_preview_main_ancestry(
+        &self,
+        repository_id: u64,
+        branch: &str,
+        source_sha: &str,
+        workflow_authority_sha: &str,
+    ) -> Result<String, OrchestratorError> {
+        ancestry::verify_preview_main_ancestry(
+            self,
+            repository_id,
+            branch,
+            source_sha,
+            workflow_authority_sha,
+        )
+    }
+
+    /// Authenticate the protected main tip for downstream source-current decisions.
+    pub(crate) fn verify_preview_main_tip(
+        &self,
+        repository_id: u64,
+        branch: &str,
+    ) -> Result<String, OrchestratorError> {
+        ancestry::verify_preview_main_tip(self, repository_id, branch)
+    }
+
     pub(super) fn verify_release_channel_environment(
         &self,
         channel: velnor_actions_contract::package_release::PackageReleaseChannel,
@@ -300,91 +333,6 @@ impl GitHubApi {
         }
         Ok(result.stdout)
     }
-}
-
-fn graphql_arguments(query: &str, fields: &[(&str, String)]) -> Vec<OsString> {
-    let mut args = vec![
-        OsString::from("graphql"),
-        OsString::from("--raw-field"),
-        OsString::from(format!("query={query}")),
-    ];
-    for (key, value) in fields {
-        args.push(OsString::from("--field"));
-        args.push(OsString::from(format!("{key}={value}")));
-    }
-    args
-}
-
-fn gh_api_arguments(request_args: Vec<OsString>, accept: &str) -> Vec<OsString> {
-    let mut args = vec![OsString::from("api")];
-    args.extend([
-        OsString::from("-H"),
-        OsString::from(format!("Accept: {accept}")),
-        OsString::from("-H"),
-        OsString::from(format!("X-GitHub-Api-Version: {API_VERSION}")),
-    ]);
-    args.extend(request_args);
-    args
-}
-
-pub(super) fn verify_tap_update_environment(
-    repository: &str,
-    branch: &str,
-) -> Result<(), OrchestratorError> {
-    preflight::tap_update_environment(repository, branch)
-}
-
-fn annotated_tag_observation(
-    expected_tag: &str,
-    annotated: GitTagResponse,
-) -> Result<TagObservation, OrchestratorError> {
-    if annotated.tag != expected_tag
-        || annotated.object.object_type != "commit"
-        || !is_lowercase_git_sha(&annotated.sha)
-        || !is_lowercase_git_sha(&annotated.object.sha)
-    {
-        return Err(internal("package_publish_tag_target_invalid"));
-    }
-    Ok(TagObservation {
-        source_sha: annotated.object.sha,
-        message: Some(annotated.message),
-    })
-}
-
-pub(super) fn is_lowercase_git_sha(value: &str) -> bool {
-    value.len() == 40
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
-}
-
-pub(super) fn sha256(bytes: &[u8]) -> String {
-    let mut out = String::with_capacity(64);
-    for byte in Sha256::digest(bytes) {
-        push_hex_byte(&mut out, byte, false);
-    }
-    out
-}
-
-pub(super) fn encode_segment(value: &str) -> String {
-    let mut out = String::new();
-    for byte in value.bytes() {
-        if byte.is_ascii_alphanumeric() || b"-._~".contains(&byte) {
-            out.push(char::from(byte));
-        } else {
-            out.push('%');
-            push_hex_byte(&mut out, byte, true);
-        }
-    }
-    out
-}
-
-fn push_hex_byte(output: &mut String, byte: u8, uppercase: bool) {
-    const LOWER: &[u8; 16] = b"0123456789abcdef";
-    const UPPER: &[u8; 16] = b"0123456789ABCDEF";
-    let hex = if uppercase { UPPER } else { LOWER };
-    output.push(char::from(hex[usize::from(byte >> 4)]));
-    output.push(char::from(hex[usize::from(byte & 0x0f)]));
 }
 
 #[cfg(test)]

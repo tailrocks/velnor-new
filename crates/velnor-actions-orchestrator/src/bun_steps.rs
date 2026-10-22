@@ -99,7 +99,10 @@ pub(crate) fn member_steps(input: &MemberInputs<'_>) -> Result<Vec<Step>, Orches
         .playwright
         .map(|_| stack_family_cache::playwright_browsers());
     plans.extend(browsers.clone());
-    steps.extend(stack_family_cache::prelude(&plans)?);
+    steps.extend(stack_family_cache::prelude_for(
+        &plans,
+        input.leg.is_some(),
+    )?);
     if input.scopes.is_empty() {
         steps.push(install_step(input)?);
     } else {

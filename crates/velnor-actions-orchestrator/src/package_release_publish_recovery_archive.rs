@@ -53,6 +53,36 @@ pub(super) fn extract_signed_assets(
     Ok(receipt)
 }
 
+pub(super) fn preview_source_sha(archive_bytes: &[u8]) -> Result<String, OrchestratorError> {
+    let bytes =
+        artifact_zip::read_manifest_in_scope(archive_bytes, "release.json", MAX_RECEIPT_BYTES)?;
+    let receipt = parse_receipt_unbound(&bytes)?;
+    if receipt.channel != velnor_actions_contract::package_release::PackageReleaseChannel::Preview {
+        return Err(internal("package_recovery_channel_mismatch"));
+    }
+    Ok(receipt.source.commit_sha)
+}
+
+fn parse_receipt_unbound(bytes: &[u8]) -> Result<PackageReleaseReceipt, OrchestratorError> {
+    let value: Value = parse_strict_json(
+        std::str::from_utf8(bytes).map_err(|_| internal("package_recovery_receipt_utf8"))?,
+    )
+    .map_err(|_| internal("package_recovery_receipt_json"))?;
+    let receipt: PackageReleaseReceipt =
+        serde_json::from_value(value).map_err(|_| internal("package_recovery_receipt_shape"))?;
+    receipt
+        .validate()
+        .map_err(|_| internal("package_recovery_receipt_invalid"))?;
+    if receipt
+        .canonical_bytes()
+        .map_err(|_| internal("package_recovery_receipt_encode"))?
+        != bytes
+    {
+        return Err(internal("package_recovery_receipt_not_canonical"));
+    }
+    Ok(receipt)
+}
+
 fn parse_receipt(
     bytes: &[u8],
     plan: &PackageReleasePlan,

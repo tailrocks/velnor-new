@@ -57,7 +57,24 @@ fn exact_channel_source_workflow_identity_is_required() {
     assert!(validate_identity(&preview, &facts).is_err());
     facts = identity(&preview);
     facts.workflow_sha = "b".repeat(40);
-    assert!(validate_identity(&preview, &facts).is_err());
+    assert!(validate_identity(&preview, &facts).is_ok());
+    let stable = plan(PackageReleaseChannel::Stable);
+    let mut stable_facts = identity(&stable);
+    stable_facts.workflow_sha = "b".repeat(40);
+    assert!(validate_identity(&stable, &stable_facts).is_err());
+}
+
+#[test]
+fn preview_receipt_source_and_workflow_authority_can_be_distinct() {
+    let preview = plan(PackageReleaseChannel::Preview);
+    let mut facts = identity(&preview);
+    facts.workflow_sha = "b".repeat(40);
+    let (version, tag, count, sha7) = release_version(&preview, &facts).expect("source version");
+    let receipt = receipt::make_receipt(&preview, &facts, &version, &tag, count, sha7, Vec::new());
+    assert_eq!(receipt.source.commit_sha, facts.source_sha);
+    assert_eq!(receipt.workflow.authority_sha, facts.workflow_sha);
+    assert_eq!(receipt.tag, format!("preview-{}", facts.source_sha));
+    assert!(receipt::require_expected_identity(&receipt, &preview, &facts).is_ok());
 }
 
 #[test]

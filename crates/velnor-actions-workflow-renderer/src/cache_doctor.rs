@@ -14,6 +14,8 @@
 //!   exact static-digest-plus-resolved-versions shape and never hashes a
 //!   repository file.
 //! - Keys fit GitHub's 512-byte cap.
+//! - A family key step reads only the default-branch ref, plus the leg ordinal
+//!   in a Bun leg matrix (only leg 1 saves).
 
 use std::collections::BTreeMap;
 
@@ -67,6 +69,7 @@ pub(crate) fn check(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
     for (id, job) in jobs {
         for step in &job.steps {
             check_tools_identity(id, step)?;
+            stack::check_family_keys_env(id, job, step).map_err(|problem| doctor(id, &problem))?;
             let Some((key, path, save)) = classify(id, step)? else {
                 continue;
             };

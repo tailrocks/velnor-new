@@ -11,14 +11,38 @@ fn run(ci: bool) -> Value {
         "run_number":5, "workflow_id":if ci {7} else {8},
         "name":if ci {"CI"} else {channel.workflow_name()},
         "path":if ci {".github/workflows/ci.yml"} else {channel.workflow_path()},
-        "head_sha":"a".repeat(40), "head_branch":"main", "event":if ci {"push"} else {"workflow_run"},
+        "head_sha":if ci {"a".repeat(40)} else {"b".repeat(40)}, "head_branch":"main", "event":if ci {"push"} else {"workflow_run"},
         "status":if ci {"completed"} else {"in_progress"},
         "conclusion":if ci {json!("success")} else {Value::Null},
         "repository":{"id":101}, "head_repository":{"id":101}})
 }
 fn consumer_job() -> Value {
-    json!({"id":404,"run_id":202,"name":"preview-assemble","head_sha":"a".repeat(40),
+    json!({"id":404,"run_id":202,"name":"preview-assemble","head_sha":"b".repeat(40),
         "status":"in_progress","conclusion":null,"started_at":"2026-10-20T20:54:22Z"})
+}
+fn authenticate_for_test(
+    read: &ReleaseArtifactApi,
+    plan: &PackageReleasePlan,
+    context: &ReleaseProductionContext,
+    consumer: ReleaseConsumer,
+) -> Result<(), OrchestratorError> {
+    read.authenticate_with_event_and_ancestry(
+        plan,
+        context,
+        consumer,
+        "workflow_run",
+        |_, repository_id, branch, source, authority| {
+            if repository_id == context.repository_id
+                && branch == plan.default_branch
+                && source == context.source_sha
+                && authority == context.workflow_authority_sha
+            {
+                Ok(())
+            } else {
+                Err(internal("fixture_preview_ancestry_arguments"))
+            }
+        },
+    )
 }
 fn responses() -> Vec<(String, Value)> {
     let channel = PackageReleaseChannel::Preview;
@@ -44,11 +68,6 @@ fn responses() -> Vec<(String, Value)> {
             json!({"total_count":1,"jobs":[consumer_job()]}),
         ),
         (
-            route("git/ref/heads/main"),
-            json!({"ref":"refs/heads/main",
-            "object":{"type":"commit","sha":"a".repeat(40)}}),
-        ),
-        (
             route("actions/workflows/ci.yml"),
             json!({"id":7,"name":"CI",
             "path":".github/workflows/ci.yml","state":"active"}),
@@ -56,7 +75,8 @@ fn responses() -> Vec<(String, Value)> {
         (route("actions/runs/201/attempts/1"), run(true)),
         (
             route("actions/runs/201/attempts/1/jobs?per_page=100&page=1"),
-            json!({"jobs":[{
+            json!({"total_count":1,"jobs":[{
+            "id":501,
             "run_id":201,"name":"Required","head_sha":"a".repeat(40),
             "status":"completed","conclusion":"success"}]}),
         ),
@@ -78,14 +98,15 @@ fn read_capability_authenticates_current_and_exact_attempt_workflow_source_and_c
         api,
         repository: "example/app".into(),
     };
-    read.authenticate(
+    authenticate_for_test(
+        &read,
         &request().plan,
         &request().context,
         ReleaseConsumer::Assembler,
     )
     .expect("complete remote authentication");
     fixture.assert_drained();
-    assert_eq!(fixture.observed().len(), 11);
+    assert_eq!(fixture.observed().len(), 10);
 }
 
 #[test]
@@ -102,16 +123,15 @@ fn stale_attempt_wrong_source_fork_workflow_or_repository_fail_before_artifact_i
         (3, "id", json!(203)),
         (3, "workflow_id", json!(9)),
         (3, "event", json!("workflow_dispatch")),
-        (3, "head_sha", json!("b".repeat(40))),
+        (3, "head_sha", json!("c".repeat(40))),
         (3, "repository", json!({"id":102})),
         (3, "head_repository", json!({"id":102})),
         (3, "status", json!("completed")),
         (3, "conclusion", json!("failure")),
         (3, "head_branch", json!("other")),
-        (5, "object", json!({"type":"commit","sha":"b".repeat(40)})),
-        (6, "name", json!("Other CI")),
-        (7, "conclusion", json!("failure")),
-        (10, "run_attempt", json!(2)),
+        (5, "name", json!("Other CI")),
+        (6, "conclusion", json!("failure")),
+        (9, "run_attempt", json!(2)),
     ] {
         let mut responses = responses();
         responses[index].1[key] = value;
@@ -121,10 +141,11 @@ fn stale_attempt_wrong_source_fork_workflow_or_repository_fail_before_artifact_i
             repository: "example/app".into(),
         };
         assert!(
-            read.authenticate(
+            authenticate_for_test(
+                &read,
                 &request().plan,
                 &request().context,
-                ReleaseConsumer::Assembler
+                ReleaseConsumer::Assembler,
             )
             .is_err(),
             "accepted field {index}/{key}"
@@ -176,11 +197,12 @@ fn queued_run_is_admitted_only_with_exact_unique_executing_assembler() {
     valid[2].1["status"] = json!("queued");
     valid[3].1["status"] = json!("queued");
     let (api, fixture) = GitHubApi::with_fixture("example/app", valid);
-    ReleaseArtifactApi {
+    let read = ReleaseArtifactApi {
         api,
         repository: "example/app".into(),
-    }
-    .authenticate(
+    };
+    authenticate_for_test(
+        &read,
         &request().plan,
         &request().context,
         ReleaseConsumer::Assembler,
@@ -191,7 +213,7 @@ fn queued_run_is_admitted_only_with_exact_unique_executing_assembler() {
         ("status", json!("queued")),
         ("name", json!("unrelated")),
         ("run_id", json!(203)),
-        ("head_sha", json!("b".repeat(40))),
+        ("head_sha", json!("c".repeat(40))),
         ("conclusion", json!("failure")),
         ("id", json!(0)),
     ] {
@@ -199,15 +221,16 @@ fn queued_run_is_admitted_only_with_exact_unique_executing_assembler() {
         queued[3].1["status"] = json!("queued");
         queued[4].1["jobs"][0][field] = value;
         let (api, _) = GitHubApi::with_fixture("example/app", queued);
+        let read = ReleaseArtifactApi {
+            api,
+            repository: "example/app".into(),
+        };
         assert!(
-            ReleaseArtifactApi {
-                api,
-                repository: "example/app".into()
-            }
-            .authenticate(
+            authenticate_for_test(
+                &read,
                 &request().plan,
                 &request().context,
-                ReleaseConsumer::Assembler
+                ReleaseConsumer::Assembler,
             )
             .is_err(),
             "accepted consumer {field}"
@@ -217,15 +240,16 @@ fn queued_run_is_admitted_only_with_exact_unique_executing_assembler() {
         let mut duplicate = responses();
         duplicate[4].1 = json!({"total_count":jobs.len(),"jobs":jobs});
         let (api, _) = GitHubApi::with_fixture("example/app", duplicate);
+        let read = ReleaseArtifactApi {
+            api,
+            repository: "example/app".into(),
+        };
         assert!(
-            ReleaseArtifactApi {
-                api,
-                repository: "example/app".into()
-            }
-            .authenticate(
+            authenticate_for_test(
+                &read,
                 &request().plan,
                 &request().context,
-                ReleaseConsumer::Assembler
+                ReleaseConsumer::Assembler,
             )
             .is_err()
         );
@@ -290,22 +314,32 @@ fn assembler_job_inventory_requires_complete_stable_pages_and_unique_ids() {
 fn source_free_signer_requires_its_own_active_job_not_the_assembler() {
     let request = request();
     let (api, _) = GitHubApi::with_fixture("example/app", responses());
+    let read = ReleaseArtifactApi {
+        api,
+        repository: "example/app".into(),
+    };
     assert!(
-        ReleaseArtifactApi {
-            api,
-            repository: "example/app".into()
-        }
-        .authenticate(&request.plan, &request.context, ReleaseConsumer::Signer)
+        authenticate_for_test(
+            &read,
+            &request.plan,
+            &request.context,
+            ReleaseConsumer::Signer,
+        )
         .is_err()
     );
     let mut signer = responses();
     signer[4].1["jobs"][0]["name"] = serde_json::json!("preview-signer");
     let (api, fixture) = GitHubApi::with_fixture("example/app", signer);
-    ReleaseArtifactApi {
+    let read = ReleaseArtifactApi {
         api,
         repository: "example/app".into(),
-    }
-    .authenticate(&request.plan, &request.context, ReleaseConsumer::Signer)
+    };
+    authenticate_for_test(
+        &read,
+        &request.plan,
+        &request.context,
+        ReleaseConsumer::Signer,
+    )
     .expect("exact native signer");
     fixture.assert_drained();
 }
@@ -324,7 +358,7 @@ fn active_consumer(api: &GitHubApi) -> Result<(), OrchestratorError> {
             attempt: request.context.run_attempt,
             source: RunSource {
                 repository_id: request.context.repository_id,
-                sha: &request.context.source_sha,
+                sha: &request.context.workflow_authority_sha,
                 branch: &request.plan.default_branch,
             },
             workflow: &workflow,

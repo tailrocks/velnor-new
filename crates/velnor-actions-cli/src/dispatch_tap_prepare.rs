@@ -246,6 +246,9 @@ fn writer_outputs(receipt: &TapPromotionReceipt) -> String {
         } => format!(
             "promotion_state=already_promoted\npr_number={pull_request}\nhead_sha={head_sha}\nbase_sha={base_sha}\ncandidate_proof_digest={candidate_proof_digest}\nmerge_sha={merge_sha}\nmerged_at={merged_at}\n"
         ),
+        TapPromotionOutcome::SkippedStaleSource { source_sha } => {
+            format!("promotion_state=skipped_stale_source\nsource_sha={source_sha}\n")
+        }
     }
 }
 

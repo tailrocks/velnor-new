@@ -3,7 +3,7 @@ use super::*;
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
     CargoVersionBinding, CargoVersionPolicy, PACKAGE_RELEASE_POLICY_SCHEMA_V1,
-    PackageReleasePolicy, VerificationRunner,
+    PackageReleasePolicy, VerificationRunner, targets::ReleaseTarget,
 };
 use velnor_actions_workflow_renderer::{
     HelperProvenance, MiseSetup, provision_acquire_step,
@@ -30,7 +30,9 @@ fn fixture(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {
         producer_timeout_minutes: 20,
         linux_acquire: acquire.clone(),
         producer_acquire: acquire.clone(),
+        producer_acquire_by_target: producer_acquires(channel, "0.1.30"),
         producer_setup: setup.clone(),
+        producer_setup_by_target: producer_setups(channel, &setup),
         linux_setup: setup.clone(),
         install_gh_argv: vec![
             "mise".to_owned(),
@@ -79,6 +81,57 @@ fn fixture(channel: PackageReleaseChannel) -> ConsumerReleaseSpec {
                 "release-plz".to_owned(),
             ],
         }),
+    }
+}
+
+fn producer_acquires(
+    channel: PackageReleaseChannel,
+    version: &str,
+) -> BTreeMap<ReleaseTarget, velnor_actions_contract::Step> {
+    if channel != PackageReleaseChannel::Preview {
+        return BTreeMap::new();
+    }
+    ReleaseTarget::ALL
+        .into_iter()
+        .map(|target| {
+            let asset = format!("velnor-actions-{version}-{}", target.triple());
+            let checksum = match target {
+                ReleaseTarget::LinuxX86_64 => "sha256sum -c -",
+                ReleaseTarget::MacosArm64 | ReleaseTarget::MacosX86_64 => "shasum -a 256 -c -",
+            };
+            let step = provision_acquire_step(
+                &HelperProvenance::ReleaseAsset {
+                    url: format!(
+                        "https://github.com/tailrocks/velnor-new/releases/download/v{version}/{asset}"
+                    ),
+                    sha256: "c".repeat(64),
+                    commit: "b".repeat(40),
+                },
+                vec![
+                    "sh".to_owned(),
+                    "-c".to_owned(),
+                    format!(
+                        r#"curl -fsSL "$VELNOR_ASSET_URL" -o "$RUNNER_TEMP/velnor/bin/velnor-actions-{version}" && printf '%s  %s\n' "$VELNOR_ASSET_SHA256" "$RUNNER_TEMP/velnor/bin/velnor-actions-{version}" | {checksum}"#
+                    ),
+                ],
+            )
+            .expect("target-specific typed acquisition");
+            (target, step)
+        })
+        .collect()
+}
+
+fn producer_setups(
+    channel: PackageReleaseChannel,
+    setup: &MiseSetup,
+) -> BTreeMap<ReleaseTarget, MiseSetup> {
+    if channel == PackageReleaseChannel::Preview {
+        ReleaseTarget::ALL
+            .into_iter()
+            .map(|target| (target, setup.clone()))
+            .collect()
+    } else {
+        BTreeMap::new()
     }
 }
 
@@ -167,7 +220,27 @@ fn actual_rendered_channel_and_tap_jobs_match_shared_runtime_role_mapping() {
         .expect("actual native release rendering");
         let mut mapped = 0;
         for (id, name) in job_names(&release.bytes) {
-            if id == "preview-eligibility" || id == "stable-prepare" {
+            if id == "stable-prepare" {
+                continue;
+            }
+            if channel == PackageReleaseChannel::Preview && id == "preview-payload" {
+                // This one matrix owner has runtime-bound product/target role
+                // names; native role admission resolves each pair from env.
+                assert_eq!(
+                    name,
+                    "Build ${{ matrix.product_id }} / ${{ matrix.target }}"
+                );
+                assert!(
+                    release
+                        .bytes
+                        .contains("VELNOR_RELEASE_PRODUCT_ID: ${{ matrix.product_id }}")
+                );
+                assert!(
+                    release
+                        .bytes
+                        .contains("VELNOR_RELEASE_TARGET: ${{ matrix.target }}")
+                );
+                mapped += 1;
                 continue;
             }
             assert_eq!(
@@ -178,6 +251,18 @@ fn actual_rendered_channel_and_tap_jobs_match_shared_runtime_role_mapping() {
             mapped += 1;
         }
         assert!(mapped >= 8);
+        match channel {
+            PackageReleaseChannel::Preview => {
+                assert!(!release.bytes.contains("preview-payload-000:"));
+            }
+            PackageReleaseChannel::Stable => {
+                assert!(!release.bytes.contains("  preview-payload:\n"));
+                for pair in expected_release_payload_pairs(&plan).expect("stable pairs") {
+                    let id = release_payload_job_id(&plan, &pair).expect("stable literal role");
+                    assert!(release.bytes.contains(&format!("  {id}:\n")));
+                }
+            }
+        }
         let tap =
             render_release_tap_reconcile(&spec).expect("actual native continuation rendering");
         let names = job_names(&tap.bytes);

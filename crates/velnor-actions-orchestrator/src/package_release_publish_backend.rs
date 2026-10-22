@@ -12,6 +12,7 @@ use std::collections::BTreeSet;
 #[path = "package_release_publish_stable.rs"]
 pub(super) mod stable;
 use velnor_actions_contract::{
+    CI_WORKFLOW_PATH, WORKFLOW_DISPLAY_NAME,
     package_release::PackageReleaseChannel,
     publication_retry::{PublicationIdentity, PublicationState},
 };
@@ -129,25 +130,25 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
             self.original_closure.verify()?;
             return Ok(true);
         }
-        let source = RunSource {
-            repository_id: self.receipt.repository.id,
-            sha: &self.receipt.source.commit_sha,
-            branch: &self.receipt.source.default_branch,
+        verify_preview_source_ci(&self.api, self.receipt.repository.id, &self.receipt.source)?;
+        let retained = matches!(
+            &self.original_verification,
+            OriginalVerification::RetainedRun { .. }
+        );
+        let coordinator_sha = if retained {
+            super::recovery::promotion_context::Invocation::from_env()?.source_sha
+        } else {
+            self.receipt.workflow.authority_sha.clone()
         };
-        self.api.verify_ci_identity(
-            self.receipt.source.ci_run_id,
-            self.receipt.source.ci_run_attempt,
-            source,
-            false,
+        verify_current_preview_ci(
+            &self.api,
+            self.receipt.repository.id,
+            &self.receipt.source,
+            self.current_ci,
         )?;
-        self.api
-            .verify_ci_identity(self.current_ci.0, self.current_ci.1, source, true)?;
-        let protected_source = self.api.verify_release_channel_environment(
-            self.receipt.channel,
-            &self.receipt.source.default_branch,
-        )?;
+        verify_preview_lineage(self, &coordinator_sha)?;
         self.original_closure.verify()?;
-        Ok(protected_source.as_deref() == Some(self.receipt.source.commit_sha.as_str()))
+        Ok(true)
     }
 
     fn create_tag(&mut self) -> Result<(), OrchestratorError> {
@@ -259,4 +260,84 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
         }
         Ok(())
     }
+}
+
+fn preview_ci_source(
+    repository_id: u64,
+    source: &velnor_actions_contract::package_release::PackageReleaseSource,
+) -> RunSource<'_> {
+    RunSource {
+        repository_id,
+        sha: &source.commit_sha,
+        branch: &source.default_branch,
+    }
+}
+
+fn verify_current_preview_ci(
+    api: &super::github::GitHubApi,
+    repository_id: u64,
+    source_record: &velnor_actions_contract::package_release::PackageReleaseSource,
+    current_ci: (u64, u32),
+) -> Result<(), OrchestratorError> {
+    api.verify_ci_identity(
+        current_ci.0,
+        current_ci.1,
+        preview_ci_source(repository_id, source_record),
+        true,
+    )
+}
+
+#[cfg(test)]
+#[path = "package_release_publish_backend_tests.rs"]
+mod tests;
+
+fn verify_preview_source_ci(
+    api: &super::github::GitHubApi,
+    repository_id: u64,
+    source_record: &velnor_actions_contract::package_release::PackageReleaseSource,
+) -> Result<(), OrchestratorError> {
+    let source = RunSource {
+        repository_id,
+        sha: &source_record.commit_sha,
+        branch: &source_record.default_branch,
+    };
+    api.verify_ci_identity(
+        source_record.ci_run_id,
+        source_record.ci_run_attempt,
+        source,
+        false,
+    )?;
+    // Preserve signed CI identity while independently requiring successful latest A CI.
+    let workflow = api.admitted_workflow(CI_WORKFLOW_PATH, WORKFLOW_DISPLAY_NAME)?;
+    let latest = api.latest_source_ci(&workflow, source)?;
+    let id = latest
+        .id
+        .filter(|id| *id > 0)
+        .ok_or_else(|| internal("package_ci_latest_attempt_mismatch"))?;
+    let attempt = latest
+        .run_attempt
+        .filter(|attempt| *attempt > 0)
+        .ok_or_else(|| internal("package_ci_latest_attempt_mismatch"))?;
+    api.verify_ci_identity(id, attempt, source, true)
+}
+
+fn verify_preview_lineage(
+    publisher: &GitHubPackagePublisher,
+    coordinator_sha: &str,
+) -> Result<(), OrchestratorError> {
+    publisher.api.verify_preview_main_ancestry(
+        publisher.receipt.repository.id,
+        &publisher.receipt.source.default_branch,
+        &publisher.receipt.source.commit_sha,
+        &publisher.receipt.workflow.authority_sha,
+    )?;
+    if coordinator_sha != publisher.receipt.workflow.authority_sha {
+        publisher.api.verify_preview_main_ancestry(
+            publisher.receipt.repository.id,
+            &publisher.receipt.source.default_branch,
+            &publisher.receipt.source.commit_sha,
+            coordinator_sha,
+        )?;
+    }
+    Ok(())
 }

@@ -1,5 +1,6 @@
+use super::checks::validate_artifact;
 use super::*;
-use crate::package_release_publish::github::{RunRepository, WorkflowJob};
+use crate::package_release_publish::github::{RunRepository, WorkflowArtifact, WorkflowJob};
 use velnor_actions_contract::{
     PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlan, package_release::PackageReleaseChannel,
 };
@@ -114,6 +115,21 @@ fn recovery_artifact_must_belong_to_exact_repo_sha_and_default_branch() {
 }
 
 #[test]
+fn source_selection_and_finalization_use_distinct_fixed_staging_directories() {
+    let runner_root = tempfile::tempdir().expect("runner temp root");
+    let selection =
+        PreviewRecoveryVerificationStage::SourceSelection.input_directory(runner_root.path());
+    let finalization =
+        PreviewRecoveryVerificationStage::Finalization.input_directory(runner_root.path());
+
+    assert_ne!(selection, finalization);
+    create_fresh_directory(&selection).expect("source selection stage directory");
+    create_fresh_directory(&finalization).expect("finalization stage directory");
+    assert!(selection.is_dir());
+    assert!(finalization.is_dir());
+}
+
+#[test]
 fn recovery_binds_receipt_to_original_artifact_not_current_dispatch_head_or_count() {
     let original_sha = "a".repeat(40);
     let current_dispatch_sha = "b".repeat(40);
@@ -172,12 +188,14 @@ fn recovery_binds_receipt_to_original_artifact_not_current_dispatch_head_or_coun
 #[test]
 fn recovery_original_run_must_match_exact_workflow_source_and_attempt() {
     let plan = preview_plan();
-    let sha = "a".repeat(40);
+    let source_sha = "a".repeat(40);
+    let authority_sha = "b".repeat(40);
+    assert_ne!(source_sha, authority_sha);
     let run = WorkflowRunResponse {
         id: Some(42),
         run_attempt: Some(2),
         path: Some(".github/workflows/binary-preview.yml".to_owned()),
-        head_sha: Some(sha.clone()),
+        head_sha: Some(authority_sha.clone()),
         head_branch: Some("main".to_owned()),
         event: Some("workflow_run".to_owned()),
         name: Some("Rust binary preview".to_owned()),
@@ -194,21 +212,72 @@ fn recovery_original_run_must_match_exact_workflow_source_and_attempt() {
         path: plan.channel.workflow_path().to_owned(),
         name: plan.channel.workflow_name().to_owned(),
     };
-    assert!(source_run_matches(&run, &plan, &sha, 42, 2, 9, &workflow));
-    assert!(!source_run_matches(&run, &plan, &sha, 42, 1, 9, &workflow));
-    assert!(!source_run_matches(&run, &plan, &sha, 42, 2, 10, &workflow));
-
-    let mut wrong_path = run;
-    wrong_path.path = Some(".github/workflows/binary-release.yml".to_owned());
-    assert!(!source_run_matches(
-        &wrong_path,
+    assert!(source_run_matches(
+        &run,
         &plan,
-        &sha,
+        &authority_sha,
         42,
         2,
         9,
         &workflow
     ));
+    assert!(receipt_matches_original(
+        42,
+        2,
+        &source_sha,
+        (PackageReleaseChannel::Preview, Some(17)),
+        42,
+        2,
+        &source_sha,
+    ));
+    assert!(!source_run_matches(
+        &run,
+        &plan,
+        &source_sha,
+        42,
+        2,
+        9,
+        &workflow
+    ));
+    assert!(!source_run_matches(
+        &run,
+        &plan,
+        &authority_sha,
+        42,
+        1,
+        9,
+        &workflow
+    ));
+    assert!(!source_run_matches(
+        &run,
+        &plan,
+        &authority_sha,
+        42,
+        2,
+        10,
+        &workflow
+    ));
+}
+
+#[test]
+fn recovery_rejects_original_workflow_path_mismatch() {
+    let plan = preview_plan();
+    let sha = "b".repeat(40);
+    let run: WorkflowRunResponse = serde_json::from_value(serde_json::json!({
+        "id":42,"run_attempt":2,"run_number":12,"workflow_id":7,
+        "path":".github/workflows/binary-release.yml","name":"Rust binary preview",
+        "head_sha":sha,"head_branch":"main","event":"workflow_run",
+        "status":"completed","conclusion":"failure",
+        "repository":{"id":9},"head_repository":{"id":9}
+    }))
+    .expect("run fixture");
+    let workflow = WorkflowMetadata {
+        state: "active".to_owned(),
+        id: 7,
+        path: plan.channel.workflow_path().to_owned(),
+        name: plan.channel.workflow_name().to_owned(),
+    };
+    assert!(!source_run_matches(&run, &plan, &sha, 42, 2, 9, &workflow));
 }
 
 #[test]

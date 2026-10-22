@@ -71,7 +71,7 @@ fn continuation_success_reauthenticates_required_and_latest_attempt() {
     responses.extend([
         (route("actions/runs/22/attempts/3"), run()),
         (route("actions/runs/22/attempts/3/jobs?per_page=100&page=1"),
-         json!({"jobs":[{"run_id":22,"name":"Required","head_sha":SHA,"status":"completed","conclusion":"success"}]})),
+         json!({"total_count":1,"jobs":[{"id":81,"run_id":22,"name":"Required","head_sha":SHA,"status":"completed","conclusion":"success"}]})),
         (list_route(), json!({"workflow_runs":[run()]})),
         (route("actions/runs/22"), run())]);
     let (api, fixture) = GitHubApi::with_fixture("example/app", responses);
@@ -152,7 +152,7 @@ fn continuation_newer_attempt_invalidates_success_before_candidate_selection() {
     responses.extend([
         (route("actions/runs/22/attempts/3"), run()),
         (route("actions/runs/22/attempts/3/jobs?per_page=100&page=1"),
-         json!({"jobs":[{"run_id":22,"name":"Required","head_sha":SHA,"status":"completed","conclusion":"success"}]})),
+         json!({"total_count":1,"jobs":[{"id":81,"run_id":22,"name":"Required","head_sha":SHA,"status":"completed","conclusion":"success"}]})),
         (list_route(), json!({"workflow_runs":[run()]})),
         (route("actions/runs/22"), newer)]);
     let (api, fixture) = GitHubApi::with_fixture("example/app", responses);

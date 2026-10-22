@@ -20,6 +20,12 @@ mod active_role;
 pub(super) use active_role::{continuation_job_name, release_job_name};
 pub(super) use cache::RunIdentityCache;
 
+#[path = "package_release_run_jobs.rs"]
+mod jobs;
+use jobs::{
+    MAX_WORKFLOW_JOB_PAGES, WORKFLOW_JOBS_PAGE_SIZE, WorkflowJobsAccumulator, WorkflowJobsPage,
+};
+
 #[derive(Clone, Copy)]
 pub(super) struct RunSource<'a> {
     pub repository_id: u64,
@@ -92,7 +98,7 @@ impl GitHubApi {
             attempt: receipt.workflow.run_attempt,
             source: RunSource {
                 repository_id: receipt.repository.id,
-                sha: &receipt.source.commit_sha,
+                sha: &receipt.workflow.authority_sha,
                 branch: &receipt.source.default_branch,
             },
             workflow: &workflow,
@@ -121,7 +127,7 @@ impl GitHubApi {
     ) -> Result<(), OrchestratorError> {
         let source = RunSource {
             repository_id: receipt.repository.id,
-            sha: &receipt.source.commit_sha,
+            sha: &receipt.workflow.authority_sha,
             branch: &receipt.source.default_branch,
         };
         if !run_matches(
@@ -200,15 +206,13 @@ impl GitHubApi {
         id: u64,
         attempt: u32,
     ) -> Result<WorkflowJobList, OrchestratorError> {
-        let mut jobs = Vec::new();
-        for page in 1..=20 {
-            let list: WorkflowJobList = self.get_json(&self.route(&format!(
-                "actions/runs/{id}/attempts/{attempt}/jobs?per_page=100&page={page}"
+        let mut jobs = WorkflowJobsAccumulator::default();
+        for page in 1..=MAX_WORKFLOW_JOB_PAGES {
+            let response: WorkflowJobsPage = self.get_json(&self.route(&format!(
+                "actions/runs/{id}/attempts/{attempt}/jobs?per_page={WORKFLOW_JOBS_PAGE_SIZE}&page={page}"
             )))?;
-            let count = list.jobs.len();
-            jobs.extend(list.jobs);
-            if count < 100 {
-                return Ok(WorkflowJobList { jobs });
+            if jobs.admit_page(response)? {
+                return Ok(jobs.into_list());
             }
         }
         Err(internal("package_ci_job_pages_exceeded"))

@@ -332,14 +332,14 @@ and [writes the webhook payload](https://github.com/actions/runner/blob/9abfe11d
 The service's event selection and privilege semantics are documented contracts,
 not behavior proven by this runner implementation.
 
-Before producer execution, the eligibility job independently authenticates the
-canonical CI workflow and completed successful same-repository push run/attempt,
-Required job, and latest source head. The upstream head must equal the actual
-source SHA, workflow authority SHA, and live main tip. A completion for older,
-foreign, PR, failed, or superseded evidence cannot authorize preview. No CI
-artifact is consumed to select source. Signer and publisher retain isolated
-permissions and independent revalidation. Receipt, certificate and SLSA claims
-bind the true producing `workflow_run`; authenticated source CI remains `push`.
+Before producer execution, eligibility authenticates the canonical CI workflow,
+successful same-repository push run/attempt, Required job and latest exact-A CI.
+Source A may precede workflow authority B and protected main tip H only when
+`A <= B <= H` is independently proven. Foreign, PR, failed or superseded CI
+cannot authorize preview. No CI artifact selects A. Signer and publisher retain
+isolated permissions and independent revalidation. Receipts bind source A;
+certificates and standard SLSA workflow claims bind B's producing `workflow_run`.
+See [provider A/B evidence](../implemented/immutable-preview-api-qualification.md#workflow-run-source-and-authority-observation).
 
 The payload shape was checked against original `octokit/webhooks` commit
 `aa80c24a3f55354465b8b1438d33dd5602956d0d`: the

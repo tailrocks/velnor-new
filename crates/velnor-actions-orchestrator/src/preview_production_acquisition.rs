@@ -59,7 +59,7 @@ pub fn acquire_release_leaves() -> Result<String, OrchestratorError> {
             let admitted = aggregate::acquire(&temp, &request, deadline)?;
             let record = Admission {
                 schema: SCHEMA.to_owned(),
-                request,
+                request: admitted.request,
                 leaves: admitted.manifests,
                 inputs: admitted.inputs,
             };
@@ -123,12 +123,28 @@ fn parse(
     let record: Admission =
         serde_json::from_value(value).map_err(|_| internal("preview_admission_shape"))?;
     if record.schema != SCHEMA
-        || record.request != *request
+        || !caller_request_matches(&record, request)
+        || record.request.validate().is_err()
         || canonical_json_bytes(&record).map_err(|_| internal("preview_admission_encode"))? != bytes
     {
         return Err(internal("preview_admission_request"));
     }
     Ok(record)
+}
+
+fn caller_request_matches(record: &Admission, request: &ReleaseProductionRequest) -> bool {
+    if record.request.plan.channel
+        == velnor_actions_contract::package_release::PackageReleaseChannel::Preview
+    {
+        let ReleaseProductionStage::Assemble { .. } = &record.request.stage else {
+            return false;
+        };
+        let mut caller = record.request.clone();
+        caller.stage = ReleaseProductionStage::Assemble { inputs: Vec::new() };
+        caller == *request
+    } else {
+        record.request == *request
+    }
 }
 
 fn restore(
@@ -184,6 +200,7 @@ fn restore(
         )?);
     }
     let admitted = AdmittedLeaves {
+        request: record.request,
         manifests: record.leaves,
         inputs: record.inputs,
         pinned,
