@@ -7,7 +7,7 @@ use crate::worker::{WorkerIdentityNames, WorkerVolumeRole, test_resource_budget}
 
 use crate::worker::ResourceBudgetConfig;
 
-use super::{TMPFS_ROLES, create_and_initialize, initialization_limits};
+use super::{TMPFS_ROLES, initialization_limits};
 
 #[path = "tests/prefix.rs"]
 mod prefix;

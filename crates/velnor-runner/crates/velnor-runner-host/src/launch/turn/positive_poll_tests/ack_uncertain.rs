@@ -79,7 +79,7 @@ async fn authorized_offer(
     expected_result: crate::journal::SourceAuthorizationResult,
 ) -> Result<crate::launch::DeferredAuthorizedOffer, String> {
     use crate::config::SourcePolicyMode;
-    use crate::journal::{AssignmentKey, SourceAuthorizationResult};
+    use crate::journal::AssignmentKey;
     use crate::launch::turn::scoped_poll_tests::support::authorized_source;
     use crate::launch::{DeferredAuthorizedOffer, steps::source::test_receipt};
 
