@@ -66,6 +66,13 @@ pub(crate) fn validate_bun_steps(id: &str, steps: &[Step]) -> Result<(), RenderE
         } else if seen_parallel {
             closed = true;
         }
+        if matches!(&step.kind, StepKind::Shell { env, .. }
+            if env.contains_key(crate::matrix::bun::BUN_LEGS_ENV)
+                || env.contains_key(crate::matrix::bun::BUN_MAX_PARALLEL_ENV))
+        {
+            // Only the renderer writes the leg marker, from a typed matrix.
+            return Err(invalid("bun_matrix_marker_preset"));
+        }
         if matches!(step.kind, StepKind::Action { .. })
             && step.role != Some(StepRole::PrivateTokenMint)
             && !crate::verification_jobs::stack_jobs::is_family_cache_role(step.role)

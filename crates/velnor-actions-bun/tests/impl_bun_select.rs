@@ -14,6 +14,7 @@ fn member(name: &str, root: &str, key: &str, deps: &[&str]) -> Member {
             format!("{root}/{key}")
         },
         scripts: BTreeSet::new(),
+        commands: BTreeMap::new(),
         depends_on: deps.iter().map(|dep| (*dep).to_owned()).collect(),
         playwright: None,
     }

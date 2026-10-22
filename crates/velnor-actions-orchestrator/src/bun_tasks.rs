@@ -2,16 +2,18 @@
 
 use std::path::Path;
 
-use velnor_actions_bun::{Member, check_package_manager, job_id, member_job_scripts, suite_job_id};
+use velnor_actions_bun::{
+    Member, check_package_manager, check_shard_script, job_id, member_job_scripts, suite_job_id,
+};
 use velnor_actions_contract::config::playwright_lock::{PlaywrightLock, pin_list};
 use velnor_actions_contract::config::{BunBrowser, BunSuiteConfig};
 use velnor_actions_contract::{JobTimeout, Step, VelnorConfig};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::verification_jobs::{
-    BunMemberPolicy, BunSuitePolicy, playwright_install_step,
+    BunLegMatrix, BunMemberPolicy, BunSuitePolicy, playwright_install_step,
 };
 
-use super::bun_steps::{MemberInputs, member_steps};
+use super::bun_steps::{LegArgs, MemberInputs, member_steps};
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
 use crate::config::private_wiring::PrivateWiring;
@@ -95,7 +97,7 @@ pub(crate) fn policies(
                 let playwright = playwright_step(workspace, member, browsers, ctx.lock)?;
                 out.members.push(policy(
                     member,
-                    &ctx.inputs(&scripts, playwright.as_ref()),
+                    &ctx.inputs(&scripts, playwright.as_ref(), None),
                     member_timeout,
                 )?);
             }
@@ -123,7 +125,12 @@ struct MemberCtx<'a> {
 }
 
 impl<'a> MemberCtx<'a> {
-    fn inputs(&self, scripts: &'a [String], playwright: Option<&'a Step>) -> MemberInputs<'a> {
+    fn inputs(
+        &self,
+        scripts: &'a [String],
+        playwright: Option<&'a Step>,
+        leg: Option<&'a LegArgs>,
+    ) -> MemberInputs<'a> {
         MemberInputs {
             catalog: self.catalog,
             root: &self.workspace.root,
@@ -134,11 +141,12 @@ impl<'a> MemberCtx<'a> {
             acquire: self.acquire,
             private: self.block,
             playwright,
+            leg,
         }
     }
 }
 
-/// One declared suite's job.
+/// One declared suite's job, with its leg matrix when it shards Playwright.
 fn suite_policy(
     ctx: &MemberCtx<'_>,
     suite_id: &str,
@@ -147,14 +155,31 @@ fn suite_policy(
 ) -> Result<BunSuitePolicy, OrchestratorError> {
     let member = ctx.member;
     let playwright = playwright_step(ctx.workspace, member, &suite.browsers, ctx.lock)?;
-    let steps = member_steps(&ctx.inputs(&suite.scripts, playwright.as_ref()))?;
+    let id = suite_job_id(member, suite_id);
+    let timeout = resolve_timeout(suite.timeout_minutes, member_timeout.minutes())?;
+    let mut matrix = None;
+    let mut leg = None;
+    if let Some(table) = &suite.playwright {
+        for script in &suite.scripts {
+            check_shard_script(member, script).map_err(|err| failure(err.code()))?;
+        }
+        let legs = BunLegMatrix::new(&table.projects, table.shards, table.max_parallel);
+        leg = Some(LegArgs {
+            projects: legs.has_projects(),
+            sharded: legs.is_sharded(),
+            fail_on_flaky: table.fail_on_flaky,
+        });
+        matrix = Some(legs);
+    }
+    let steps = member_steps(&ctx.inputs(&suite.scripts, playwright.as_ref(), leg.as_ref()))?;
     Ok(BunSuitePolicy {
         member: member.name.clone(),
         suite: suite_id.to_owned(),
-        id: suite_job_id(member, suite_id),
-        timeout: resolve_timeout(suite.timeout_minutes, member_timeout.minutes())?,
+        id,
+        timeout,
         required: suite.required,
         steps,
+        matrix,
     })
 }
 

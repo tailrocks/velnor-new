@@ -6,7 +6,6 @@
 //! `package.json` script names, never command text.
 
 use super::tofu::Utf8RepoRelDir;
-use super::workflow_flags::{default_true, is_true};
 use crate::errors::ContractError;
 use crate::workflow::timeout::JobTimeout;
 use serde::{Deserialize, Serialize};
@@ -57,39 +56,6 @@ pub struct BunMemberConfig {
     /// jobs beside the member job (hard decision 6 amendment).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub suites: BTreeMap<String, BunSuiteConfig>,
-}
-
-/// Suite ids Velnor reserves for the jobs it derives from a suite.
-pub const RESERVED_BUN_SUITE_IDS: [&str; 2] = ["assets", "report"];
-
-/// One declared suite (`[stacks.bun.members."<name>".suites.<id>]`).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct BunSuiteConfig {
-    /// Member scripts this suite runs as parallel steps; they leave the member job.
-    pub scripts: Vec<String>,
-    /// Playwright browsers this suite's job installs.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub browsers: Vec<BunBrowser>,
-    /// Timeout of this suite's job (each leg when sharded), `1..=360`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub timeout_minutes: Option<u32>,
-    /// Whether the suite job joins Required (default `true`).
-    #[serde(default = "default_true", skip_serializing_if = "is_true")]
-    pub required: bool,
-}
-
-/// True for a suite id: `[a-z][a-z0-9-]{0,31}` without a trailing `-` or `--`.
-#[must_use]
-pub fn is_valid_suite_id(id: &str) -> bool {
-    !id.is_empty()
-        && id.len() <= 32
-        && id.bytes().next().is_some_and(|b| b.is_ascii_lowercase())
-        && id
-            .bytes()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
-        && !id.ends_with('-')
-        && !id.contains("--")
 }
 
 /// Closed set of Playwright browsers Velnor provisions.
@@ -196,7 +162,7 @@ impl BunStackConfig {
             if let Some(minutes) = member.timeout_minutes {
                 JobTimeout::check_config(minutes, file, "stacks.bun.members.timeout_minutes")?;
             }
-            validate_suites(&member.suites, file)?;
+            suites::validate_suites(&member.suites, file)?;
         }
         self.validate_inputs(file)
     }
@@ -292,52 +258,6 @@ fn validate_scripts(scripts: &[String], key: &str, file: &str) -> Result<(), Con
     Ok(())
 }
 
-fn validate_suites(
-    suites: &BTreeMap<String, BunSuiteConfig>,
-    file: &str,
-) -> Result<(), ContractError> {
-    const KEY: &str = "stacks.bun.members.suites";
-    let mut claimed = BTreeSet::new();
-    for (id, suite) in suites {
-        if !is_valid_suite_id(id) {
-            return Err(ContractError::config(
-                file,
-                KEY,
-                format!("bad_suite_id:{id}"),
-            ));
-        }
-        if RESERVED_BUN_SUITE_IDS.contains(&id.as_str()) {
-            return Err(ContractError::config(
-                file,
-                KEY,
-                format!("reserved_suite_id:{id}"),
-            ));
-        }
-        if suite.scripts.is_empty() {
-            return Err(ContractError::config(
-                file,
-                KEY,
-                format!("empty_suite_scripts:{id}"),
-            ));
-        }
-        validate_scripts(&suite.scripts, "stacks.bun.members.suites.scripts", file)?;
-        for script in &suite.scripts {
-            if !claimed.insert(script.as_str()) {
-                return Err(ContractError::config(
-                    file,
-                    KEY,
-                    format!("suite_script_claimed_twice:{script}"),
-                ));
-            }
-        }
-        validate_browsers(&suite.browsers, file)?;
-        if let Some(minutes) = suite.timeout_minutes {
-            JobTimeout::check_config(minutes, file, "stacks.bun.members.suites.timeout_minutes")?;
-        }
-    }
-    Ok(())
-}
-
 fn validate_browsers(browsers: &[BunBrowser], file: &str) -> Result<(), ContractError> {
     let mut sorted = browsers.to_vec();
     sorted.sort_unstable();
@@ -351,6 +271,10 @@ fn validate_browsers(browsers: &[BunBrowser], file: &str) -> Result<(), Contract
     }
     Ok(())
 }
+
+#[path = "bun_suites.rs"]
+mod suites;
+pub use suites::*;
 
 #[cfg(test)]
 #[path = "bun_tests.rs"]
