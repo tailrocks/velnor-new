@@ -144,12 +144,12 @@ fn unknown_op_matches_bare() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn legacy_release_policy_admission_uses_its_private_file_gate_and_route()
--> Result<(), Box<dyn Error>> {
+fn retired_release_policy_operation_matches_bare_cli() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("gate-release-policy-v1")?;
     let root = tmp.join("velnor");
     let request = stage_request(&root, "package-release-policy.json", "{}")?;
-    let output = spawn_isolated(
+    let bare = spawn_isolated(&[], &[], &tmp)?;
+    let retired = spawn_isolated(
         &[],
         &[
             ("VELNOR_INTERNAL_OP", "admit-release-policy-v1"),
@@ -158,11 +158,17 @@ fn legacy_release_policy_admission_uses_its_private_file_gate_and_route()
         ],
         &tmp,
     )?;
-    assert_eq!(code(&output), 1);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("internal request failed"));
-    assert!(stderr.contains("release_policy_environment"));
-    assert_eq!(output.stdout.as_slice(), b"");
+    assert_eq!(code(&retired), 2);
+    assert_identical(&bare, &retired);
+    assert_eq!(std::fs::read_to_string(&request)?, "{}");
+    for output in [
+        "plan-v1-response.json",
+        "package-release-plan.json",
+        "release-policy-admission.json",
+        "preview-source-admission.json",
+    ] {
+        assert!(!root.join(output).exists(), "unexpected output {output}");
+    }
     cleanup(&tmp);
     Ok(())
 }

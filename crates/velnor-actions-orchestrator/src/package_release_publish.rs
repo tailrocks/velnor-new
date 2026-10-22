@@ -19,10 +19,6 @@ use crate::{
 #[path = "release_policy_admission.rs"]
 pub(crate) mod release_policy_admission;
 
-#[path = "release_policy_v1_admission.rs"]
-mod release_policy_v1_admission;
-pub use release_policy_v1_admission::{ADMIT_RELEASE_POLICY_OP, admit_release_policy_from_env};
-
 #[path = "stable_tag_origin.rs"]
 pub(crate) mod stable_tag_origin;
 pub use stable_tag_origin::{
