@@ -90,9 +90,9 @@ async fn audit_connection(
                 if row.reservation.state != ReservationState::Reserved
                     || row.intent_state != Some(IntentState::Pending)
                     || row.completion_cleanup_pending
-                    || row.worker_cleanup_proven
-                    || row.remote_cleanup_proven
-                    || row.local_cleanup_proven
+                    || row.worker_cleanup_proven()
+                    || row.remote_cleanup_proven()
+                    || row.local_cleanup_proven()
                 {
                     return Err(HostError::Ownership);
                 }

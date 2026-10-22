@@ -28,7 +28,7 @@ pub(super) fn physical_is_uncertain(reservation: &PhysicalRunnerReservation) -> 
 
 pub(super) fn physical_covers_population(reservation: &PhysicalRunnerReservation) -> bool {
     reservation.reservation.state != ReservationState::Released
-        && !reservation.intent_cleanup_proven
+        && !reservation.intent_cleanup_proven()
         && !matches!(
             reservation.jit_state,
             PhysicalRunnerJitState::Completed | PhysicalRunnerJitState::Cleaned
