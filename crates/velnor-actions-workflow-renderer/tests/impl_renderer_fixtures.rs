@@ -75,6 +75,7 @@ pub(crate) fn mise() -> MiseSetup {
 
 pub(crate) fn fixture_ctx() -> RenderContext {
     RenderContext {
+        tool_pins: Vec::new(),
         generator_version: VERSION.to_owned(),
         report_helper_version: VERSION.to_owned(),
         runs_on: LABEL.to_owned(),
