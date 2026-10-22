@@ -25,7 +25,7 @@ fn workflow(job_env: Vec<(String, Yaml)>, steps: Vec<Yaml>) -> Yaml {
     ])
 }
 
-const SETUP: &str = "jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde";
+const SETUP: &str = "jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550";
 
 #[test]
 fn inserts_resolver_after_setup_and_rewrites_non_run_values() {

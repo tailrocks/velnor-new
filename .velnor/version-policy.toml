@@ -21,14 +21,14 @@ max_exception_days = 14
 mise = "2026.10.17"
 rust = "1.99.1"
 mr-boxington = "1.26.0"
-gh = "2.102.1"
+gh = "2.103.0"
 jactionlint = "2.3.0"
 shellcheck = "0.11.0"
 nextest = "0.9.149"
-opentofu = "1.13.1"
-release-plz = "0.3.173"
+opentofu = "1.13.2"
+release-plz = "0.3.174"
 crane = "0.22.1"
-bun = "1.4.3"
+bun = "1.4.4"
 cosign = "3.1.4"
 
 [github_runner_images.linux_x64]
@@ -37,9 +37,9 @@ supported = ["ubuntu-26.04", "ubuntu-24.04", "ubuntu-22.04"]
 
 [[actions]]
 name = "jdx/mise-action"
-version = "v5.2.1"
-sha = "fc42bcc7ddbf51124c30f95a877a0c5168a3bfde"
-reviewed = "2026-10-20"
+version = "v5.2.2"
+sha = "8418fedb1110381a0d3ba51a7a415d7c1b884550"
+reviewed = "2026-10-22"
 
 [[actions]]
 name = "actions/checkout"
@@ -79,9 +79,9 @@ reviewed = "2026-10-18"
 
 [[actions]]
 name = "asamarts/alint"
-version = "v0.19.0"
-sha = "f39a25a7e061bb8738a87372561d8b9a6a29ca87"
-reviewed = "2026-10-19"
+version = "v0.20.0"
+sha = "10d1c0a2bafd0bd316dbad9fe63ea5e1e3761c71"
+reviewed = "2026-10-22"
 
 [[actions]]
 name = "aws-actions/configure-aws-credentials"

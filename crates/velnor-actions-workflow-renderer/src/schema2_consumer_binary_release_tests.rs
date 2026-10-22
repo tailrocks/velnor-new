@@ -19,7 +19,7 @@ pub(super) fn stable() -> ConsumerReleaseSpec {
             "--no-hooks".to_owned(),
             "exec".to_owned(),
             "rust@1.99.1".to_owned(),
-            "release-plz@0.3.173".to_owned(),
+            "release-plz@0.3.174".to_owned(),
             "--".to_owned(),
             "release-plz".to_owned(),
         ],
