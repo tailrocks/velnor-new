@@ -51,6 +51,9 @@ pub(crate) struct MemberInputs<'a> {
     /// Mint, fetch and revoke steps for pinned private release assets (HD-7);
     /// empty when the member consumes none. They run before every other step.
     pub(crate) private: &'a [Step],
+    /// Download and check of the assets job's verified `.velnor/deps` tree,
+    /// in place of `private` for a suite job (never both).
+    pub(crate) handoff: &'a [Step],
     /// Hash-verified Playwright browser install, when the member declares browsers.
     pub(crate) playwright: Option<&'a Step>,
     /// Matrix leg arguments, when the job is a sharded Playwright suite.
@@ -84,13 +87,16 @@ pub(crate) const PW_BLOB_DIR: &str = "velnor/pw-blob";
 
 /// Every step after checkout, in execution order.
 pub(crate) fn member_steps(input: &MemberInputs<'_>) -> Result<Vec<Step>, OrchestratorError> {
-    let staged =
-        !input.scopes.is_empty() || !input.private.is_empty() || input.playwright.is_some();
+    let staged = !input.scopes.is_empty()
+        || !input.private.is_empty()
+        || !input.handoff.is_empty()
+        || input.playwright.is_some();
     let mut steps = Vec::new();
     if staged {
         steps.extend(input.acquire.cloned());
     }
     steps.extend(input.private.iter().cloned());
+    steps.extend(input.handoff.iter().cloned());
     steps.push(prepare_step(input.catalog)?);
     steps.push(verify_step(input)?);
     let bun = stack_family_cache::bun_install(input.root)?;

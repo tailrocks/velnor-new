@@ -151,17 +151,107 @@ fn suite_configuration_errors_stop_generation() -> TestResult {
 }
 
 #[test]
-fn suites_are_refused_while_the_repository_pins_private_release_assets() -> TestResult {
+fn one_assets_job_fetches_release_assets_and_suites_hold_no_secret() -> TestResult {
     let repo = release_asset_repo(
         "[stacks.bun.members.\"chainargos-docs\".suites.unit]\nscripts = [\"test\"]\n",
     )?;
-    let error = prepare(repo.path()).expect_err("no secret in suite jobs");
+    let tree = render_staged_tree(&prepare(repo.path())?)?;
+    let ci = required_file(&tree, ".github/workflows/ci.yml")?;
+    assert_asset_job(ci)?;
+    assert_suite_asset_handoff(ci)?;
+    let member = job_body(ci, "bun-chainargos-docs")?;
     assert!(
-        error
-            .to_string()
-            .contains("bun_suite_private_assets_unsupported:chainargos-docs"),
-        "{error}"
+        member.contains("name: Fetch private sources"),
+        "member job keeps HD-7: {member}"
     );
+    let required = job_body(ci, "required")?;
+    assert!(
+        required.contains("- bun-chainargos-docs--unit\n"),
+        "{required}"
+    );
+    assert!(!required.contains("--assets"), "{required}");
+    Ok(())
+}
+
+fn assert_asset_job(ci: &str) -> TestResult {
+    let assets = job_body(ci, "bun-chainargos-docs--assets")?;
+    assert!(
+        assets.contains("name: Bun / chainargos-docs / assets"),
+        "{assets}"
+    );
+    let position = |needle: &str| {
+        assets
+            .find(needle)
+            .ok_or(format!("missing {needle}: {assets}"))
+    };
+    let mint = position("name: Mint read-only token for private sources")?;
+    let fetch = position("name: Fetch private sources")?;
+    let revoke = position("name: Revoke private-source token")?;
+    let bundle = position("name: Bundle verified private assets")?;
+    let upload = position("name: Upload private assets")?;
+    assert!(
+        mint < fetch && fetch < revoke && revoke < bundle && bundle < upload,
+        "{assets}"
+    );
+    assert!(
+        assets.contains("path: ${{ runner.temp }}/velnor/bun-assets/bun-chainargos-docs/velnor-pw-assets-bun-chainargos-docs.tar.gz"),
+        "{assets}"
+    );
+    assert!(assets.contains("archive: \"false\""), "{assets}");
+    assert!(
+        !assets.contains("bun install"),
+        "the assets job runs no repository code"
+    );
+    Ok(())
+}
+
+fn assert_suite_asset_handoff(ci: &str) -> TestResult {
+    let suite = job_body(ci, "bun-chainargos-docs--unit")?;
+    assert!(
+        suite.contains("- plan\n      - bun-chainargos-docs--assets\n"),
+        "{suite}"
+    );
+    for secret in [
+        "deps-token",
+        "VELNOR_DEPS_APP_PRIVATE_KEY",
+        "Mint read-only token",
+    ] {
+        assert!(!suite.contains(secret), "{secret} in a suite job: {suite}");
+    }
+    let prepare = suite
+        .find("name: Prepare private asset handoff")
+        .ok_or("prepare")?;
+    let download = suite
+        .find("name: Download private assets")
+        .ok_or("download")?;
+    let download_body = &suite[download..];
+    assert!(
+        download_body.contains("name: velnor-pw-assets-bun-chainargos-docs.tar.gz"),
+        "{download_body}"
+    );
+    assert!(
+        download_body.contains("digest-mismatch: error"),
+        "{download_body}"
+    );
+    let verify = suite
+        .find("name: Import and verify private assets")
+        .ok_or("verify")?;
+    let install = suite.find("name: Install dependencies").ok_or("install")?;
+    assert!(
+        prepare < download && download < verify && verify < install,
+        "{suite}"
+    );
+    assert!(
+        suite.contains(&format!(
+            "VELNOR_BUN_ASSET_PINS: \"ui-assets:{}\"",
+            "0123456789abcdef".repeat(4)
+        )) || suite.contains(&format!(
+            "VELNOR_BUN_ASSET_PINS: ui-assets:{}",
+            "0123456789abcdef".repeat(4)
+        )),
+        "{suite}"
+    );
+    assert!(suite.contains("bun-assets-import-v1"), "{suite}");
     Ok(())
 }
 

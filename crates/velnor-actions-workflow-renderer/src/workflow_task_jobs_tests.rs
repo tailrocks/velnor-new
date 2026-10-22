@@ -168,6 +168,7 @@ fn jobs_for(policies: &[WorkflowTaskPolicy]) -> BTreeMap<String, Job> {
             WorkflowTaskPolicy::Image(_)
             | WorkflowTaskPolicy::Bun(_)
             | WorkflowTaskPolicy::BunSuite(_)
+            | WorkflowTaskPolicy::BunAssets(_)
             | WorkflowTaskPolicy::Stack(_) => {
                 unreachable!("not part of this fixture")
             }

@@ -20,7 +20,8 @@ use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
     ACQUIRE_RELEASE_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP, ADMIT_RELEASE_AGGREGATE_OP,
-    ADMIT_RELEASE_POLICY_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_REGISTRY_INSTALL_OP,
+    ADMIT_RELEASE_POLICY_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_ASSETS_EXPORT_OP,
+    BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, BUN_REGISTRY_INSTALL_OP,
     CAPTURE_REVIEW_COMPLETION_OP, DYNAMIC_MATRIX_OUTPUT_MODE, EMIT_REVIEW_COMPLETION_OP,
     EXECUTE_CHECK_OP, EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, GRADLE_RUN_OP,
     MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP,
@@ -36,6 +37,8 @@ use velnor_actions_orchestrator::{
     write_request, write_task_report,
 };
 
+#[path = "dispatch/bun_assets.rs"]
+mod bun_assets;
 #[path = "dispatch/fileless.rs"]
 mod fileless;
 #[path = "dispatch_preview_production.rs"]
@@ -164,6 +167,9 @@ fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
         InternalOp::Fetch
         | InternalOp::Report
         | InternalOp::BunRegistryInstall
+        | InternalOp::BunAssetsExport
+        | InternalOp::BunAssetsPrepare
+        | InternalOp::BunAssetsImport
         | InternalOp::GradleRun
         | InternalOp::PlaywrightInstall
         | InternalOp::PrivateFetch
@@ -192,11 +198,11 @@ fn unit_exit(result: Result<(), OrchestratorError>) -> ExitCode {
 }
 
 fn run_internal(request: &InternalRequest) -> ExitCode {
+    if let Some(code) = bun_assets::run(request.op) {
+        return code;
+    }
     match request.op {
-        InternalOp::ExecuteCheck => match execute_check() {
-            Ok(_) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
+        InternalOp::ExecuteCheck => unit_exit(execute_check().map(|_| ())),
         InternalOp::StableSourceSelection => preview_production::native(
             velnor_actions_orchestrator::select_stable_release_source_from_env(),
         ),
@@ -218,10 +224,7 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::CaptureReviewCompletion => review_completion::capture(),
         InternalOp::EmitReviewCompletion => review_completion::emit(),
         InternalOp::AdmitReleaseAggregate => preview_production::admit(),
-        InternalOp::WriteRequest => match write_request() {
-            Ok(_) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
+        InternalOp::WriteRequest => unit_exit(write_request().map(|_| ())),
         InternalOp::Plan => run_plan_internal(&request.path),
         InternalOp::Merge => run_merge_internal(&request.path),
         InternalOp::Fetch => match retrieve_reports() {
@@ -237,6 +240,9 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
         },
+        InternalOp::BunAssetsExport
+        | InternalOp::BunAssetsPrepare
+        | InternalOp::BunAssetsImport => ExitCode::FAILURE,
         InternalOp::PlaywrightInstall => match run_playwright_install() {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
