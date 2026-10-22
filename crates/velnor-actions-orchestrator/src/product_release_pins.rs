@@ -91,6 +91,7 @@ pub(crate) fn resolve(
         verify_lint_argv: crate::workflow::jactionlint_verify_argv(&catalog),
         gh_argv: exec_argv(&[PinnedTool::Gh], "gh", &[], &catalog)?,
         rust_version: catalog.version(PinnedTool::Rust).to_owned(),
+        verify_rust_argv: crate::workflow::verify_rust_argv(&catalog),
         mr_boxington_version: catalog.version(PinnedTool::MrBoxington).to_owned(),
     })
 }

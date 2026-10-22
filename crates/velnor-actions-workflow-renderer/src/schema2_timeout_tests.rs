@@ -19,6 +19,11 @@ fn every_schema2_family_renders_only_bounded_executable_jobs() {
             candidate_action_uses: format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
             mbx_version: "1.26.0".to_owned(),
             rust_version: "1.99.1".to_owned(),
+            verify_rust_argv: vec![
+                "sh".to_owned(),
+                "-c".to_owned(),
+                "echo verify-rust".to_owned(),
+            ],
         }),
         mise_pin_qualification: Some(MisePinQualificationPins {
             linux_x86_64_setup: pins.linux_x86_64_setup.clone(),

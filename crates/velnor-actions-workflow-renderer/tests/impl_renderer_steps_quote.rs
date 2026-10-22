@@ -187,6 +187,7 @@ const EMIT_LABEL: &str = "ubuntu-26.04";
 
 fn emit_ctx() -> RenderContext {
     RenderContext {
+        tool_pins: Vec::new(),
         generator_version: EMIT_VERSION.to_owned(),
         report_helper_version: EMIT_VERSION.to_owned(),
         runs_on: EMIT_LABEL.to_owned(),

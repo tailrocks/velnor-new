@@ -17,6 +17,7 @@ const LOGICAL_JOBS: usize = 21;
 
 pub(super) fn ctx() -> RenderContext {
     RenderContext {
+        tool_pins: Vec::new(),
         generator_version: "0.1.0".to_owned(),
         report_helper_version: "0.1.0".to_owned(),
         runs_on: HOSTED_RUNS.to_owned(),

@@ -34,7 +34,8 @@ mod rust_toolchain_script;
 pub(crate) use rust_toolchain_script::{NOT_CATALOGUED_CODE, ToolchainPhase, toolchain_script};
 
 /// Contract-fixed display name of the installed-toolchain verification step.
-pub(crate) const VERIFY_RUST_MANIFEST_STEP: &str = "Verify Rust channel manifest";
+pub(crate) const VERIFY_RUST_MANIFEST_STEP: &str =
+    velnor_actions_workflow_renderer::VERIFY_RUST_TOOLCHAIN_STEP;
 
 /// Display name of the verification that runs right after the cache restore.
 pub(crate) const VERIFY_RESTORED_RUST_STEP: &str = "Verify restored Rust toolchain";
@@ -63,6 +64,35 @@ fn owned_home_step(
     // admits only cache roles).
     step.role = Some(StepRole::VerifyRustManifest);
     Ok(step)
+}
+
+/// `sh -c` argv of one phase of the check for a renderer-built job on the
+/// owned homes (the step sets `RUSTUP_HOME` and `CARGO_HOME`).
+pub(crate) fn verify_rust_owned_argv(catalog: &ToolCatalog, phase: ToolchainPhase) -> Vec<String> {
+    vec![
+        "sh".to_owned(),
+        "-c".to_owned(),
+        toolchain_script(
+            catalog.version(PinnedTool::Rust),
+            phase,
+            RUST_CHANNEL_MANIFESTS,
+        ),
+    ]
+}
+
+/// `sh -c` argv of the installed-toolchain check for jobs on the runner's
+/// default rustup home (release, qualification and freshness jobs), which
+/// install Rust without the owned homes or the tools cache.
+pub(crate) fn verify_rust_argv(catalog: &ToolCatalog) -> Vec<String> {
+    vec![
+        "sh".to_owned(),
+        "-c".to_owned(),
+        toolchain_script(
+            catalog.version(PinnedTool::Rust),
+            ToolchainPhase::Installed,
+            RUST_CHANNEL_MANIFESTS,
+        ),
+    ]
 }
 
 /// Typed, credential-scrubbed verification of the job's installed Rust.

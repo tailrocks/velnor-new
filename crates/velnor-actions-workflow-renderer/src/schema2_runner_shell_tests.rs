@@ -28,6 +28,11 @@ fn request() -> Schema2WorkflowRequest {
             ),
             mbx_version: "1.0.0".to_owned(),
             rust_version: "1.98.1".to_owned(),
+            verify_rust_argv: vec![
+                "sh".to_owned(),
+                "-c".to_owned(),
+                "echo verify-rust".to_owned(),
+            ],
         }),
         mise_pin_qualification: Some(MisePinQualificationPins {
             linux_x86_64_setup: MiseSetup {

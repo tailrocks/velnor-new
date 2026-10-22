@@ -52,6 +52,7 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
     )
     .expect("typed task job");
     let context = RenderContext {
+        tool_pins: Vec::new(),
         generator_version: "0.1.0".to_owned(),
         report_helper_version: "0.1.0".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
