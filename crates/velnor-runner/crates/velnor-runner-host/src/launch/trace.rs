@@ -90,8 +90,7 @@ fn safe_kind_name(name: &str) -> String {
         input_bytes += character_bytes;
 
         let escaped_bytes = if trace_control(character) {
-            let value = u32::from(character);
-            let hex_digits = value.bit_width().div_ceil(4).max(1);
+            let hex_digits = u32::from(character).bit_width().div_ceil(4).max(1);
             4 + hex_digits as usize
         } else {
             character_bytes
@@ -102,7 +101,7 @@ fn safe_kind_name(name: &str) -> String {
         }
 
         if trace_control(character) {
-            safe.push_str(&format!("\\u{{{:x}}}", u32::from(character)));
+            push_trace_escape(&mut safe, u32::from(character));
         } else {
             safe.push(character);
         }
@@ -115,6 +114,17 @@ fn safe_kind_name(name: &str) -> String {
         safe.push_str("...");
     }
     safe
+}
+
+fn push_trace_escape(output: &mut String, value: u32) {
+    output.push_str("\\u{");
+    let digits = b"0123456789abcdef";
+    let hex_digits = value.bit_width().div_ceil(4).max(1);
+    for shift in (0..hex_digits).rev() {
+        let digit = ((value >> (shift * 4)) & 0xf) as usize;
+        output.push(char::from(digits[digit]));
+    }
+    output.push('}');
 }
 
 fn trace_control(character: char) -> bool {
@@ -150,10 +160,11 @@ mod tests {
 
     #[test]
     fn hostile_unsupported_names_are_escaped_and_bounded() {
-        let hostile = format!("new\n\u{1b}[31m\u{009b}31m\u{202e}{}", "x".repeat(1024));
+        let hostile = format!("new\n\u{1b}[31m\u{009b}31m\u{202e}\0{}", "x".repeat(1024));
         let formatted = kind_name(&InnerKind::Unsupported(hostile));
 
         assert!(formatted.starts_with("other:new\\u{a}\\u{1b}[31m\\u{9b}31m\\u{202e}"));
+        assert!(formatted.contains("\\u{0}"));
         assert!(formatted.ends_with("..."));
         assert!(formatted.len() <= "other:".len() + MAX_KIND_NAME_OUTPUT_BYTES);
         assert!(formatted.chars().all(|character| !trace_control(character)));
