@@ -15,7 +15,9 @@ pub(crate) use observations::StorageMemoryObservation;
 pub(crate) use job_facts_projection::{
     BoundJobFactsSnapshot, JobFactsReadContext, read_job_facts_snapshot,
 };
-pub(crate) use observations::{StoragePoolObservation, StorageSampleIdentity};
+pub(crate) use observations::{
+    StoragePoolObservation, StoragePoolObservationInput, StorageSampleIdentity,
+};
 #[cfg(test)]
 pub(crate) use plan::{StorageReservationPlan, StorageRoleCharge};
 pub(crate) use profile::StoragePoolLimit;

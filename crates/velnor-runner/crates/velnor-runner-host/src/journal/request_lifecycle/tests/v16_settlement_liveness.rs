@@ -9,7 +9,8 @@ use super::review_counterexamples::ready;
 use crate::error::HostError;
 use crate::journal::{
     Journal, MetadataSettlementResult, ReservationState, StorageAdmissionSample,
-    StorageFilesystemKind, StorageMedium, StoragePoolObservation, StorageSampleIdentity,
+    StorageFilesystemKind, StorageMedium, StoragePoolObservation, StoragePoolObservationInput,
+    StorageSampleIdentity,
 };
 
 #[path = "v16_settlement_liveness/v16_fixture.rs"]
@@ -173,15 +174,15 @@ fn settlement_sample_with_pool(
         claim.engine_id().to_owned(),
         claim.docker_root_digest().to_owned(),
     )?;
-    let pool = StoragePoolObservation::new_with_filesystem(
+    let pool = StoragePoolObservation::new_with_filesystem(StoragePoolObservationInput {
         pool_id,
         filesystem_instance_digest,
-        StorageMedium::Disk,
-        StorageFilesystemKind::Btrfs,
-        64_u64 << 30,
-        60_u64 << 30,
-        0,
-        0,
-    )?;
+        medium: StorageMedium::Disk,
+        filesystem_kind: StorageFilesystemKind::Btrfs,
+        total_bytes: 64_u64 << 30,
+        available_bytes: 60_u64 << 30,
+        total_inodes: 0,
+        available_inodes: 0,
+    })?;
     StorageAdmissionSample::new(identity, observed_at, vec![pool], None)
 }

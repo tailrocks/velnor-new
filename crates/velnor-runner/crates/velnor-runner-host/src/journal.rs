@@ -74,10 +74,10 @@ pub(crate) use connection::{
     StorageCleanupObserverWitness, StorageFilesystemKind, StorageInitializationClaim,
     StorageInodePolicy, StorageMedium, StorageMetadataSettlementClaim, StorageNetworkCreateClaim,
     StorageNetworkRemovalClaim, StorageObjectCreateClaim, StorageObserver, StoragePoolLimit,
-    StoragePoolObservation, StorageProfile, StorageProvisioningAdmission,
-    StorageProvisioningMemoryObservation, StorageProvisioningPlan, StorageProvisioningRole,
-    StorageRole, StorageRoleLimit, StorageSampleIdentity, VerifiedMetadataInitialization,
-    VerifiedMetadataInitializationHandoff,
+    StoragePoolObservation, StoragePoolObservationInput, StorageProfile,
+    StorageProvisioningAdmission, StorageProvisioningMemoryObservation, StorageProvisioningPlan,
+    StorageProvisioningRole, StorageRole, StorageRoleLimit, StorageSampleIdentity,
+    VerifiedMetadataInitialization, VerifiedMetadataInitializationHandoff,
 };
 #[cfg(test)]
 pub(crate) use connection::{CreateCommitStage, arm_create_commit_gate};
