@@ -43,7 +43,11 @@ pub(crate) fn script(catalog: &ToolCatalog) -> String {
         .collect::<String>();
     let fail = "printf \"%s\\n\" \"::error::";
     [
+        velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude()
+            .trim_end_matches(';')
+            .to_owned(),
         "set -eu".to_owned(),
+        format!("PATH={}; export PATH", velnor_actions_workflow_renderer::VERIFY_PATH),
         format!("v=\"{version}\""),
         "case \"${RUNNER_OS-}-${RUNNER_ARCH-}\" in Linux-X64) p=linux-x64;; Linux-ARM64) p=linux-arm64;; macOS-ARM64) p=macos-arm64;; macOS-X64) p=macos-x64;; *) p=unsupported;; esac".to_owned(),
         format!("case \"$v/$p\" in {cases}*) want=;; esac"),
@@ -51,10 +55,13 @@ pub(crate) fn script(catalog: &ToolCatalog) -> String {
             "if [ -z \"$want\" ]; then if [ \"$v\" = \"{JACTIONLINT_VERSION}\" ]; then {fail}{NOT_CATALOGUED_CODE}: jactionlint $v on $p has no executable digest in this Velnor catalog\" >&2; exit 1; fi; printf \"%s\\n\" \"::notice::jactionlint $v on $p has no Velnor executable digest; the Mise release digest and GitHub attestation checks still applied\"; exit 0; fi"
         ),
         "d=\"$RUNNER_TEMP/velnor/jactionlint-verify\"".to_owned(),
+        "mise_dir=\"${HOME:?missing HOME}/.local/share/mise\"".to_owned(),
+        "mise_bin=\"$mise_dir/bin/mise\"".to_owned(),
+        format!("[ -f \"$mise_bin\" ] && [ -x \"$mise_bin\" ] && [ ! -L \"$mise_bin\" ] || {{ {fail}trusted_mise_missing: $mise_bin\" >&2; exit 1; }}"),
         "rm -rf \"$d\"".to_owned(),
         "mkdir -p \"$d\"".to_owned(),
         format!(
-            "mise --no-config --no-env --no-hooks which --tool \"jactionlint@$v\" jactionlint > \"$d/path\" || {{ {fail}jactionlint_not_installed: jactionlint@$v\" >&2; exit 1; }}"
+            "MISE_DATA_DIR=\"$mise_dir\" \"$mise_bin\" --no-config --no-env --no-hooks which --tool \"jactionlint@$v\" jactionlint > \"$d/path\" || {{ {fail}jactionlint_not_installed: jactionlint@$v\" >&2; exit 1; }}"
         ),
         "IFS= read -r exe < \"$d/path\"".to_owned(),
         format!("test -f \"$exe\" || {{ {fail}jactionlint_executable_missing: $exe\" >&2; exit 1; }}"),
@@ -87,11 +94,13 @@ pub(crate) fn verify_jactionlint_step(_catalog: &ToolCatalog) -> Step {
 
 /// Canonical credential-scrubbed shell body for the generated composite.
 pub(crate) fn verifier_shell_step(catalog: &ToolCatalog) -> Result<Step, OrchestratorError> {
-    Ok(velnor_actions_workflow_renderer::steps::shell_step(
-        VERIFY_JACTIONLINT_STEP,
-        argv(catalog),
-        BTreeMap::new(),
-    )?)
+    Ok(
+        velnor_actions_workflow_renderer::verifier_composite::verifier_shell_step(
+            VERIFY_JACTIONLINT_STEP,
+            argv(catalog),
+            BTreeMap::new(),
+        )?,
+    )
 }
 
 #[cfg(test)]

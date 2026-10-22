@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 
 #[cfg(test)]
 use velnor_actions_mise::ToolCatalog;
-use velnor_actions_workflow_renderer::render::RenderedFile;
+use velnor_actions_workflow_renderer::{render::RenderedFile, yaml::quote_scalar};
 
 use crate::OrchestratorError;
 use crate::verifier_actions::{VerifierAction, VerifierActionSet};
@@ -55,6 +55,9 @@ struct StepText {
     name: String,
     text: String,
     fields: Vec<(String, String)>,
+    top_fields: Vec<(String, String)>,
+    env_fields: Vec<(String, String)>,
+    unexpected_nested: bool,
     run_scalar: Option<String>,
 }
 
@@ -163,16 +166,51 @@ fn is_verifier_step_valid(step: &StepText, verifiers: &VerifierActionSet) -> boo
     {
         return canonical_action_call(step, action);
     }
-    if verifiers
-        .inline_rust_run_scalars
-        .contains_key(step.name.as_str())
-    {
-        return verifiers.is_canonical_inline_rust_step(&step.name, step.run_scalar.as_deref());
+    if let Some(templates) = verifiers.inline_rust_templates.get(step.name.as_str()) {
+        let matches = templates
+            .iter()
+            .any(|template| canonical_inline_shape(step, step.name.as_str(), template));
+        return matches;
     }
     if step.name == verifiers.jactionlint.name {
-        return verifiers.is_canonical_inline_jactionlint_step(step.run_scalar.as_deref());
+        return verifiers
+            .inline_jactionlint_templates
+            .iter()
+            .any(|template| canonical_inline_shape(step, verifiers.jactionlint.name, template));
     }
     true
+}
+
+fn canonical_inline_shape(
+    step: &StepText,
+    name: &str,
+    template: &crate::verifier_actions::InlineVerifierTemplate,
+) -> bool {
+    if step.unexpected_nested
+        || template
+            .required_env
+            .iter()
+            .any(|key| !template.env.contains_key(*key))
+    {
+        return false;
+    }
+    let Some(shell) = template.shell else {
+        return false;
+    };
+    let expected_top = vec![
+        ("name".to_owned(), quote_scalar(name)),
+        ("env".to_owned(), String::new()),
+        ("shell".to_owned(), quote_scalar(shell)),
+        ("run".to_owned(), template.run_scalar.clone()),
+    ];
+    let mut actual_env = step.env_fields.clone();
+    actual_env.sort_unstable();
+    let expected_env = template
+        .env
+        .iter()
+        .map(|(key, value)| (key.clone(), quote_scalar(value)))
+        .collect::<Vec<_>>();
+    step.top_fields == expected_top && actual_env == expected_env
 }
 
 fn canonical_action_call(step: &StepText, action: &VerifierAction) -> bool {
@@ -263,7 +301,14 @@ fn is_rust_verifier(step: &StepText, verifiers: &VerifierActionSet) -> bool {
     if step.uses_value() == Some(verifiers.installed_rust.uses) {
         return canonical_action_call(step, &verifiers.installed_rust);
     }
-    verifiers.is_canonical_inline_rust_step(&step.name, step.run_scalar.as_deref())
+    verifiers
+        .inline_rust_templates
+        .get(step.name.as_str())
+        .is_some_and(|templates| {
+            templates
+                .iter()
+                .any(|template| canonical_inline_shape(step, &step.name, template))
+        })
 }
 
 fn indent(line: &str) -> usize {
@@ -335,12 +380,18 @@ fn step_text(
                 name: format!("*{alias}"),
                 text: String::new(),
                 fields: Vec::new(),
+                top_fields: Vec::new(),
+                env_fields: Vec::new(),
+                unexpected_nested: true,
                 run_scalar: None,
             },
             |step| StepText {
                 name: step.name.clone(),
                 text: step.text.clone(),
                 fields: step.fields.clone(),
+                top_fields: step.top_fields.clone(),
+                env_fields: step.env_fields.clone(),
+                unexpected_nested: step.unexpected_nested,
                 run_scalar: step.run_scalar.clone(),
             },
         );
@@ -353,6 +404,32 @@ fn step_text(
             Some((key.to_owned(), value.to_owned()))
         })
         .collect();
+    let item_indent = indent(block[0]);
+    let mut top_fields = Vec::new();
+    let mut env_fields = Vec::new();
+    let mut in_env = false;
+    let mut unexpected_nested = false;
+    for (index, line) in block.iter().enumerate() {
+        let trimmed = line.trim_start().trim_start_matches("- ").trim();
+        let field = trimmed
+            .split_once(": ")
+            .or_else(|| trimmed.strip_suffix(':').map(|key| (key, "")));
+        let Some((key, value)) = field else {
+            if index > 0 && !line.trim().is_empty() {
+                unexpected_nested = true;
+            }
+            continue;
+        };
+        let line_indent = indent(line);
+        if index == 0 || line_indent == item_indent + 2 {
+            top_fields.push((key.to_owned(), value.to_owned()));
+            in_env = key == "env" && value.is_empty();
+        } else if in_env && line_indent == item_indent + 4 {
+            env_fields.push((key.to_owned(), value.to_owned()));
+        } else {
+            unexpected_nested = true;
+        }
+    }
     let name = block
         .iter()
         .find_map(|line| {
@@ -385,6 +462,9 @@ fn step_text(
         name,
         text,
         fields,
+        top_fields,
+        env_fields,
+        unexpected_nested,
         run_scalar,
     };
     if let Some(anchor) = head.strip_prefix('&') {

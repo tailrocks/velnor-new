@@ -45,6 +45,9 @@ pub(crate) fn toolchain_script(
         .map(|(known, digest, _)| [*known, ") want=", *digest, ";; "].concat())
         .collect::<String>();
     let mut lines = vec![
+        velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude()
+            .trim_end_matches(';')
+            .to_owned(),
         "set -eu".to_owned(),
         // Setup Mise put the restored `bin/` and `shims/` on PATH ahead of
         // the system directories: no helper may come from them.

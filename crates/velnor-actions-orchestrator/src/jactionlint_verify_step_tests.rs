@@ -31,7 +31,7 @@ fn hex(bytes: &[u8]) -> String {
 
 /// A temp root with `bin/mise` printing the fake executable's path.
 fn fake_runner(root: &Path) -> Result<(), Box<dyn Error>> {
-    let bin = root.join("bin");
+    let bin = root.join(".local/share/mise/bin");
     fs::create_dir_all(&bin)?;
     let exe = root.join("jactionlint");
     fs::write(&exe, FAKE_BYTES)?;
@@ -39,7 +39,7 @@ fn fake_runner(root: &Path) -> Result<(), Box<dyn Error>> {
     fs::write(
         &mise,
         format!(
-            "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$*\" >> \"{log}\"\nprintf '%s\\n' \"{exe}\"\n",
+            "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$*|${{GITHUB_TOKEN-unset}}|${{GH_TOKEN-unset}}|${{ACTIONS_RUNTIME_TOKEN-unset}}|${{MISE_DATA_DIR-unset}}\" >> \"{log}\"\nprintf '%s\\n' \"{exe}\"\n",
             log = root.join("mise.log").display(),
             exe = exe.display()
         ),
@@ -50,12 +50,52 @@ fn fake_runner(root: &Path) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn poison_path(root: &Path) -> Result<std::path::PathBuf, Box<dyn Error>> {
+    let poison = root.join("poison");
+    fs::create_dir_all(&poison)?;
+    for helper in [
+        "awk",
+        "cat",
+        "cmp",
+        "cp",
+        "cut",
+        "diff",
+        "find",
+        "grep",
+        "mkdir",
+        "rm",
+        "sha256sum",
+        "shasum",
+        "sort",
+        "tar",
+        "tr",
+    ] {
+        let helper_path = poison.join(helper);
+        fs::write(
+            &helper_path,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' '{}' >> '{}'\nexit 97\n",
+                helper,
+                root.join("poison.log").display()
+            ),
+        )?;
+        let mut permissions = fs::metadata(&helper_path)?.permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&helper_path, permissions)?;
+    }
+    Ok(poison)
+}
+
 fn run(root: &Path, script: &str, os: &str, arch: &str) -> Result<Output, Box<dyn Error>> {
-    let path = format!("{}:{}", root.join("bin").display(), std::env::var("PATH")?);
-    Ok(Command::new("sh")
+    let poison = poison_path(root)?;
+    Ok(Command::new("/bin/sh")
         .arg("-c")
         .arg(script)
-        .env("PATH", path)
+        .env("PATH", poison)
+        .env("HOME", root)
+        .env("GITHUB_TOKEN", "ambient-token")
+        .env("GH_TOKEN", "ambient-gh-token")
+        .env("ACTIONS_RUNTIME_TOKEN", "ambient-runtime-token")
         .env("RUNNER_TEMP", root)
         .env("RUNNER_OS", os)
         .env("RUNNER_ARCH", arch)
@@ -95,8 +135,13 @@ fn a_matching_executable_passes_for_every_runner_platform() -> Result<(), Box<dy
         assert_eq!(
             log.trim(),
             format!(
-                "--no-config --no-env --no-hooks which --tool jactionlint@{JACTIONLINT_VERSION} jactionlint"
+                "--no-config --no-env --no-hooks which --tool jactionlint@{JACTIONLINT_VERSION} jactionlint|unset|unset|unset|{}/.local/share/mise",
+                root.path().display()
             )
+        );
+        assert!(
+            !root.path().join("poison.log").exists(),
+            "poisoned PATH helper ran"
         );
     }
     Ok(())
@@ -141,15 +186,15 @@ fn a_project_version_without_a_digest_keeps_mise_verification() -> Result<(), Bo
     assert!(text.contains("v=\"${VELNOR_TOOL_JACTIONLINT}\""), "{text}");
     let root = tempfile::tempdir()?;
     fake_runner(root.path())?;
-    let path = format!(
-        "{}:{}",
-        root.path().join("bin").display(),
-        std::env::var("PATH")?
-    );
-    let output = Command::new("sh")
+    let path = poison_path(root.path())?;
+    let output = Command::new("/bin/sh")
         .arg("-c")
         .arg(&text)
         .env("PATH", path)
+        .env("HOME", root.path())
+        .env("GITHUB_TOKEN", "ambient-token")
+        .env("GH_TOKEN", "ambient-gh-token")
+        .env("ACTIONS_RUNTIME_TOKEN", "ambient-runtime-token")
         .env("RUNNER_TEMP", root.path())
         .env("RUNNER_OS", "Linux")
         .env("RUNNER_ARCH", "X64")

@@ -44,12 +44,12 @@ fn sample_spec(suites: Vec<RustSuiteConfig>) -> RustSuitesRenderSpec {
         verify_restored_rust_argv: vec![
             "sh".to_owned(),
             "-c".to_owned(),
-            "echo restored".to_owned(),
+            crate::toolchain_env::with_credential_unset_script("echo restored"),
         ],
         verify_rust_argv: vec![
             "sh".to_owned(),
             "-c".to_owned(),
-            "echo verify-rust".to_owned(),
+            crate::toolchain_env::with_credential_unset_script("echo verify-rust"),
         ],
     }
 }

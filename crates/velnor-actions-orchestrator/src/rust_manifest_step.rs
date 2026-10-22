@@ -55,15 +55,15 @@ fn owned_home_step(
         phase,
         RUST_CHANNEL_MANIFESTS,
     );
-    let mut step = velnor_actions_workflow_renderer::steps::shell_step(
-        name,
-        vec!["sh".to_owned(), "-c".to_owned(), script],
-        env,
-    )?;
     // Both phases are the same cache-safe check (the dependency-seed job
     // admits only cache roles).
-    step.role = Some(StepRole::VerifyRustManifest);
-    Ok(step)
+    Ok(
+        velnor_actions_workflow_renderer::verifier_composite::verifier_shell_step(
+            name,
+            vec!["sh".to_owned(), "-c".to_owned(), script],
+            env,
+        )?,
+    )
 }
 
 /// Canonical scrubbed Rust verifier body used to render one fixed composite.

@@ -49,9 +49,17 @@ pub fn quote_project_tool_run_refs(text: &str) -> Result<String, RenderError> {
 /// version without preceding Mise and checkout steps, an earlier step reads
 /// one, or workflow/job env carries one outside `RUSTUP_TOOLCHAIN`.
 pub(crate) fn bind_workflow(document: &mut Yaml) -> Result<(), RenderError> {
+    let has_verifier = contains_verifier_step(document);
     let Yaml::Map(entries) = document else {
         return Ok(());
     };
+    if has_verifier
+        && entries
+            .iter()
+            .any(|(key, value)| key == "env" && has_trusted_environment_override(value))
+    {
+        return Err(invalid("workflow:verifier_trusted_environment_override"));
+    }
     for (key, value) in entries.iter_mut() {
         if key == "jobs" {
             let Yaml::Map(jobs) = value else {
@@ -74,6 +82,14 @@ pub(crate) fn bind_workflow(document: &mut Yaml) -> Result<(), RenderError> {
 }
 
 fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
+    let has_verifier = contains_verifier_step(job);
+    // A verifier action's variable use is represented by the caller's
+    // canonical pinned-tool preparation step. Do not infer a project binding
+    // from the local action path alone: pinned/private workflows may use the
+    // same verifier action without any project-declared version reference.
+    // When the caller does carry a dynamic reference, the ordinary resolver
+    // contract below still requires checkout and the canonical Setup Mise
+    // prerequisite before the preparation and verifier steps.
     let referenced = names(job);
     if referenced.is_empty() {
         return Ok(());
@@ -85,7 +101,14 @@ fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
     for (key, value) in fields.iter_mut() {
         match key.as_str() {
             "steps" => {}
-            "env" => export_rustup = take_job_rustup(id, value)?,
+            "env" => {
+                export_rustup = take_job_rustup(id, value)?;
+                if has_verifier && has_trusted_environment_override(value) {
+                    return Err(invalid(&format!(
+                        "{id}:verifier_trusted_environment_override"
+                    )));
+                }
+            }
             _ if !names(value).is_empty() => return Err(invalid(&format!("{id}:{key}"))),
             _ => {}
         }
@@ -118,22 +141,84 @@ fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
         return Err(invalid(&format!("{id}:no_mise_setup")));
     };
     let prerequisites = setup.max(checkout);
+    let verifier_positions = steps
+        .iter()
+        .enumerate()
+        .filter_map(|(index, step)| verifier_action_ref(step).map(|_| index))
+        .collect::<Vec<_>>();
+    let insertion = prerequisites + 1;
+    if verifier_positions
+        .iter()
+        .any(|position| *position < insertion)
+    {
+        return Err(invalid(&format!("{id}:verifier_before_project_resolver")));
+    }
     export_rustup |= hoist_early_rustup(id, &mut steps[..=prerequisites])?;
-    let already_bound = resolver_at(id, steps, prerequisites + 1)?;
+    let resolver = resolver_step(&referenced, export_rustup, has_verifier)?;
+    let already_bound = resolver_at(id, steps, insertion, &resolver)?;
+    if already_bound
+        && let Some(resolver) = steps.iter().position(is_resolver_step)
+        && verifier_positions
+            .iter()
+            .any(|position| *position < resolver)
+    {
+        return Err(invalid(&format!("{id}:verifier_before_project_resolver")));
+    }
     for step in steps.iter_mut() {
         rewrite_mappings(step, false)?;
     }
     if already_bound {
         return Ok(());
     }
-    steps.insert(
-        prerequisites + 1,
-        Yaml::Map(vec![
-            ("name".to_owned(), Yaml::str(PROJECT_TOOLS_STEP_NAME)),
-            ("run".to_owned(), resolver_run(&referenced, export_rustup)),
-        ]),
-    );
+    steps.insert(insertion, resolver);
     Ok(())
+}
+
+/// Bind project-tool references used inside the three fixed verifier actions
+/// in the caller job. Composite actions must not run a project resolver before
+/// the trusted verifier shell: a cache restore may already have modified PATH.
+pub(crate) fn bind_verifier_composite(
+    document: &mut Yaml,
+    expected_reference: &str,
+) -> Result<(), RenderError> {
+    let expected = BTreeSet::from([expected_reference.to_owned()]);
+    let found = names(document);
+    // A project-declared verifier version has exactly one reference and is
+    // rewritten to the caller's env binding. A pinned catalog has no project
+    // references at all; its exact literal body is checked by the orchestrator
+    // audit. Any partial or unrelated reference remains invalid.
+    if found.is_empty() {
+        return Ok(());
+    }
+    if found != expected {
+        return Err(invalid("verifier_composite_tool_binding"));
+    }
+    rewrite_mappings(document, false)
+}
+
+fn verifier_action_ref(step: &Yaml) -> Option<&'static str> {
+    let (Yaml::Map(fields)
+    | Yaml::AnchoredMap {
+        entries: fields, ..
+    }) = step
+    else {
+        return None;
+    };
+    fields
+        .iter()
+        .find_map(|(key, value)| (key == "uses").then(|| scalar(value)))
+        .flatten()
+        .and_then(verifier_action_ref_name)
+}
+
+fn verifier_action_ref_name(uses: &str) -> Option<&'static str> {
+    if velnor_actions_contract::workflow::RUST_VERIFIER_USES.contains(&uses) {
+        Some("VELNOR_TOOL_RUST")
+    } else if uses == crate::verifier_composite::VERIFY_JACTIONLINT_USES {
+        Some("VELNOR_TOOL_JACTIONLINT")
+    } else {
+        None
+    }
 }
 
 fn hoist_early_rustup(id: &str, steps: &mut [Yaml]) -> Result<bool, RenderError> {
@@ -163,7 +248,12 @@ fn hoist_early_rustup(id: &str, steps: &mut [Yaml]) -> Result<bool, RenderError>
     Ok(export_rustup)
 }
 
-fn resolver_at(id: &str, steps: &[Yaml], insertion: usize) -> Result<bool, RenderError> {
+fn resolver_at(
+    id: &str,
+    steps: &[Yaml],
+    insertion: usize,
+    expected: &Yaml,
+) -> Result<bool, RenderError> {
     let positions = steps
         .iter()
         .enumerate()
@@ -175,6 +265,9 @@ fn resolver_at(id: &str, steps: &[Yaml], insertion: usize) -> Result<bool, Rende
     }
     if positions != [insertion] {
         return Err(invalid(&format!("{id}:resolver_prerequisite_order")));
+    }
+    if steps.get(insertion) != Some(expected) {
+        return Err(invalid(&format!("{id}:resolver_step_tampered")));
     }
     Ok(true)
 }
@@ -214,22 +307,106 @@ fn bind_composite_steps(steps: &mut Vec<Yaml>) -> Result<(), RenderError> {
         Yaml::Map(vec![
             ("name".to_owned(), Yaml::str(PROJECT_TOOLS_STEP_NAME)),
             ("shell".to_owned(), Yaml::str("bash")),
-            ("run".to_owned(), resolver_run(&referenced, false)),
+            (
+                "run".to_owned(),
+                resolver_run(project_tool_resolver_script(&referenced, false)),
+            ),
         ]),
     );
     Ok(())
 }
 
 /// Job and composite resolvers share the same narrowly validated write.
-fn resolver_run(referenced: &BTreeSet<String>, export_rustup: bool) -> Yaml {
+fn resolver_step(
+    referenced: &BTreeSet<String>,
+    export_rustup: bool,
+    trusted_verifier: bool,
+) -> Result<Yaml, RenderError> {
+    let mut fields = vec![("name".to_owned(), Yaml::str(PROJECT_TOOLS_STEP_NAME))];
+    if trusted_verifier {
+        let env = crate::toolchain_env::credential_scrub();
+        fields.push((
+            "env".to_owned(),
+            super::document_steps::string_map_yaml(&env),
+        ));
+        fields.push(("shell".to_owned(), Yaml::str(crate::VERIFY_SHELL)));
+        let script = trusted_resolver_script(referenced, export_rustup)?;
+        fields.push(("run".to_owned(), resolver_run(script)));
+    } else {
+        fields.push((
+            "run".to_owned(),
+            resolver_run(project_tool_resolver_script(referenced, export_rustup)),
+        ));
+    }
+    Ok(Yaml::Map(fields))
+}
+
+fn trusted_resolver_script(
+    referenced: &BTreeSet<String>,
+    export_rustup: bool,
+) -> Result<String, RenderError> {
+    const ORIGINAL: &str = r#"velnor_mise() { mise --no-config --no-env --no-hooks "$@"; }"#;
+    const TRUSTED: &str = r#"velnor_mise() { mise_bin="${HOME:?missing HOME}/.local/share/mise/bin/mise"; [ -f "$mise_bin" ] && [ -x "$mise_bin" ] && [ ! -L "$mise_bin" ] || velnor_fail "trusted Mise executable missing: $mise_bin"; MISE_DATA_DIR="${HOME:?missing HOME}/.local/share/mise" "$mise_bin" --no-config --no-env --no-hooks "$@"; }"#;
+    let mut script = project_tool_resolver_script(referenced, export_rustup);
+    if script.matches(ORIGINAL).count() != 1 {
+        return Err(invalid("verifier_resolver_mise_binding_shape"));
+    }
+    script = script.replace(ORIGINAL, TRUSTED);
+    Ok(format!(
+        "{} PATH={}; export PATH; {script}",
+        crate::toolchain_env::credential_unset_prelude(),
+        crate::VERIFY_PATH
+    ))
+}
+
+fn resolver_run(script: String) -> Yaml {
     // jactionlint's `github-env` audit (which honours zizmor annotations)
     // checks every composite and privileged job `GITHUB_ENV` write; this one
     // appends only digits-and-dots values and lock digests (64 hex
     // characters or `unlocked`) the script validated.
-    Yaml::annotated(
-        project_tool_resolver_script(referenced, export_rustup),
-        "zizmor: ignore[github-env]",
-    )
+    Yaml::annotated(script, "zizmor: ignore[github-env]")
+}
+
+fn contains_verifier_step(node: &Yaml) -> bool {
+    match node {
+        Yaml::Seq(items) => items.iter().any(contains_verifier_step),
+        Yaml::Map(fields)
+        | Yaml::AnchoredMap {
+            entries: fields, ..
+        } => {
+            let is_verifier = fields.iter().any(|(key, value)| {
+                key == "name"
+                    && scalar(value).is_some_and(|name| {
+                        matches!(
+                            name,
+                            "Verify restored Rust toolchain"
+                                | crate::VERIFY_RUST_TOOLCHAIN_STEP
+                                | "Verify jactionlint"
+                        )
+                    })
+            }) || fields.iter().any(|(key, value)| {
+                key == "uses"
+                    && scalar(value).is_some_and(|uses| verifier_action_ref_name(uses).is_some())
+            });
+            is_verifier
+                || fields
+                    .iter()
+                    .any(|(_, value)| contains_verifier_step(value))
+        }
+        _ => false,
+    }
+}
+
+fn has_trusted_environment_override(node: &Yaml) -> bool {
+    let Yaml::Map(fields) = node else {
+        return false;
+    };
+    fields.iter().any(|(key, _)| {
+        matches!(
+            key.as_str(),
+            "HOME" | "MISE_DATA_DIR" | "XDG_DATA_HOME" | "PATH" | "BASH_ENV" | "ENV"
+        )
+    })
 }
 
 /// Whether `step` is the generated resolver step.
