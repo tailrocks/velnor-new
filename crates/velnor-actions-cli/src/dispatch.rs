@@ -20,8 +20,8 @@ use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
     ACQUIRE_PREVIEW_SOURCE_OP, ACQUIRE_RELEASE_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP,
-    ADMIT_RELEASE_AGGREGATE_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_ASSETS_EXPORT_OP,
-    BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, BUN_REGISTRY_INSTALL_OP,
+    ADMIT_RELEASE_AGGREGATE_OP, ADMIT_RELEASE_POLICY_OP, ADMIT_STABLE_TAG_ORIGIN_OP,
+    BUN_ASSETS_EXPORT_OP, BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, BUN_REGISTRY_INSTALL_OP,
     CAPTURE_REVIEW_COMPLETION_OP, DYNAMIC_MATRIX_OUTPUT_MODE, EMIT_REVIEW_COMPLETION_OP,
     EXECUTE_CHECK_OP, EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, FINALIZE_PREVIEW_SOURCE_OP,
     GRADLE_RUN_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OrchestratorError,
@@ -147,6 +147,7 @@ fn gate_file_request(op: InternalOp, path: PathBuf) -> Option<InternalRequest> {
             }
         }
         InternalOp::StableSourceSelection
+        | InternalOp::ReleasePolicyAdmission
         | InternalOp::StableTagIntent
         | InternalOp::StableTagOrigin
         | InternalOp::StableTagAdmission
@@ -222,6 +223,9 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::StableSourceSelection => preview_production::native(
             velnor_actions_orchestrator::select_stable_release_source_from_env(),
         ),
+        InternalOp::ReleasePolicyAdmission => {
+            preview_production::native(velnor_actions_orchestrator::admit_release_policy_from_env())
+        }
         InternalOp::StableTagIntent => preview_production::native(
             velnor_actions_orchestrator::write_stable_tag_intent_from_env(),
         ),

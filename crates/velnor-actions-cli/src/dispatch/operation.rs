@@ -1,8 +1,8 @@
 //! Closed private operation identities; no public dispatch aliases.
 use super::{
     ACQUIRE_PREVIEW_SOURCE_OP, ACQUIRE_RELEASE_LEAVES_OP, ADMIT_HOMEBREW_TAP_OP,
-    ADMIT_RELEASE_AGGREGATE_OP, ADMIT_STABLE_TAG_ORIGIN_OP, BUN_ASSETS_EXPORT_OP,
-    BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, BUN_REGISTRY_INSTALL_OP,
+    ADMIT_RELEASE_AGGREGATE_OP, ADMIT_RELEASE_POLICY_OP, ADMIT_STABLE_TAG_ORIGIN_OP,
+    BUN_ASSETS_EXPORT_OP, BUN_ASSETS_IMPORT_OP, BUN_ASSETS_PREPARE_OP, BUN_REGISTRY_INSTALL_OP,
     CAPTURE_REVIEW_COMPLETION_OP, EMIT_REVIEW_COMPLETION_OP, EXECUTE_CHECK_OP,
     EXECUTE_RELEASE_PRODUCER_OP, FETCH_OP, FINALIZE_PREVIEW_SOURCE_OP, GRADLE_RUN_OP,
     MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OP_ENV, PLAN_OP, PLAYWRIGHT_INSTALL_OP,
@@ -32,6 +32,8 @@ pub(super) enum InternalOp {
     AcquireReleaseLeaves,
     /// Source-free authentication of the complete native preview union.
     AdmitReleaseAggregate,
+    /// Resolve and admit the source-free v1 release policy before checkout.
+    ReleasePolicyAdmission,
     /// Authenticate source A and current workflow authority B before checkout.
     PreviewSourceSelection,
     /// Verify source A checkout and write its immutable admission record.
@@ -95,7 +97,13 @@ pub(super) enum InternalOp {
 }
 
 pub(super) fn from_env() -> Option<InternalOp> {
-    Some(match env::var(OP_ENV).as_deref() {
+    let tag = env::var(OP_ENV);
+    if let Ok(value) = tag.as_deref()
+        && let Some(op) = legacy_release_policy_operation(value)
+    {
+        return Some(op);
+    }
+    Some(match tag.as_deref() {
         Ok(tag) if tag == SELECT_RELEASE_TAP_CONTINUATION_OP => InternalOp::TapContinuation,
         Ok(tag) if tag == CAPTURE_REVIEW_COMPLETION_OP => InternalOp::CaptureReviewCompletion,
         Ok(tag) if tag == EMIT_REVIEW_COMPLETION_OP => InternalOp::EmitReviewCompletion,
@@ -138,4 +146,26 @@ pub(super) fn from_env() -> Option<InternalOp> {
         Ok(tag) if tag == MERGE_HOMEBREW_TAP_PR_OP => InternalOp::TapMerge,
         _ => return None,
     })
+}
+
+fn legacy_release_policy_operation(tag: &str) -> Option<InternalOp> {
+    (tag == ADMIT_RELEASE_POLICY_OP).then_some(InternalOp::ReleasePolicyAdmission)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{InternalOp, legacy_release_policy_operation};
+    use crate::dispatch::ADMIT_RELEASE_POLICY_OP;
+
+    #[test]
+    fn legacy_release_policy_tag_keeps_its_private_route() {
+        assert_eq!(
+            legacy_release_policy_operation(ADMIT_RELEASE_POLICY_OP),
+            Some(InternalOp::ReleasePolicyAdmission)
+        );
+        assert_eq!(
+            legacy_release_policy_operation("not-a-private-operation"),
+            None
+        );
+    }
 }
