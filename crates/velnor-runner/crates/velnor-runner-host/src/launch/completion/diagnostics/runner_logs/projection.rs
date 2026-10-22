@@ -83,11 +83,9 @@ struct ArchiveState {
     entries: usize,
     unrecognized_lines: u64,
     omitted_events: u64,
+    seen_directories: Vec<ArchiveDirectory>,
     saw_runner: bool,
     saw_worker: bool,
-    saw_root: bool,
-    saw_pages: bool,
-    saw_blocks: bool,
     auxiliary_files: Vec<Vec<u8>>,
 }
 
@@ -111,12 +109,11 @@ impl ArchiveState {
         if size != 0 {
             return Err(HostError::Ownership);
         }
-        match directory_kind(path)? {
-            ArchiveDirectory::Root if !self.saw_root => self.saw_root = true,
-            ArchiveDirectory::Pages if !self.saw_pages => self.saw_pages = true,
-            ArchiveDirectory::Blocks if !self.saw_blocks => self.saw_blocks = true,
-            _ => return Err(HostError::Ownership),
+        let directory = directory_kind(path)?;
+        if self.seen_directories.contains(&directory) {
+            return Err(HostError::Ownership);
         }
+        self.seen_directories.push(directory);
         Ok(())
     }
 
@@ -168,7 +165,7 @@ impl ArchiveState {
     }
 
     fn finish(self) -> Result<SanitizedArchive, HostError> {
-        if self.seen.is_empty() && !self.saw_root {
+        if self.seen.is_empty() && !self.seen_directories.contains(&ArchiveDirectory::Root) {
             return Err(HostError::Ownership);
         }
         let availability = match (self.saw_runner, self.saw_worker) {
