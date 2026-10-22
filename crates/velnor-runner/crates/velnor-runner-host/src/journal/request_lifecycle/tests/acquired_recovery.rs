@@ -100,7 +100,7 @@ async fn claim_acquired_reservation(
             },
             permit,
             admission,
-            &request,
+            request,
         )
         .await?;
     let RequestPhysicalReservationResult::AcquireClaimed {
