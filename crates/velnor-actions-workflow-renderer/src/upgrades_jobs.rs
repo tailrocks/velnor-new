@@ -88,6 +88,7 @@ pub(super) fn prepare_job(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
             ("VELNOR_CARGO_EDIT_VERSION", CARGO_EDIT_VERSION),
             ("VELNOR_CATALOG_BUMPER_SOURCE", CATALOG_BUMPER),
             ("VELNOR_GENERATE_TOOLS", &tools),
+            ("VELNOR_VERIFY_RUST_SCRIPT", &spec.verify_rust_script),
         ],
         prepare_script(),
     );
@@ -141,6 +142,7 @@ pub(super) fn verify_job(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
         &[
             ("VELNOR_UPGRADE_DIR", WORK_DIR),
             ("VELNOR_GENERATE_TOOLS", &tools),
+            ("VELNOR_VERIFY_RUST_SCRIPT", &spec.verify_rust_script),
         ],
         verify_script(),
     );

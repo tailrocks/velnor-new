@@ -17,9 +17,11 @@ use velnor_actions_workflow_renderer::render::RenderedFile;
 use crate::OrchestratorError;
 
 /// Text that installs or changes a Rust toolchain.
-const INSTALLS: [&str; 7] = [
+const INSTALLS: [&str; 9] = [
     " install 'rust@",
     " install rust@",
+    " install \"rust@",
+    " install \\\"rust@",
     "rustup toolchain install",
     "rustup component add",
     "rustup target add",
@@ -40,6 +42,10 @@ const USES: [&str; 6] = [
 /// Inside an install step: it already runs what it installs (`rustup`
 /// itself, for components and targets, is allowed).
 const RUNS: [&str; 4] = ["-- rustc", "-- cargo", "-- mbx", "rustc --print"];
+
+/// A shell step that installs Rust and verifies it inside the same script
+/// (`upgrades.yml`) calls this between the install and any use.
+const SELF_VERIFY: &str = "$VELNOR_VERIFY_RUST_SCRIPT";
 
 /// One step: its name and full text.
 struct StepText {
@@ -80,6 +86,10 @@ fn check_steps(path: &str, steps: &[StepText]) -> Result<(), OrchestratorError> 
             index += 1;
             continue;
         }
+        if self_verified(&steps[index]) {
+            index += 1;
+            continue;
+        }
         let start = index;
         // The install run, then steps that never touch Rust (artifact
         // downloads, the Velnor helper), then the verification.
@@ -108,6 +118,25 @@ fn check_steps(path: &str, steps: &[StepText]) -> Result<(), OrchestratorError> 
         index += 1;
     }
     Ok(())
+}
+
+/// The step verifies its own install: the check runs after every install in
+/// its text and before every use of Rust, Cargo or MBX.
+fn self_verified(step: &StepText) -> bool {
+    let Some(check) = step.text.find(SELF_VERIFY) else {
+        return false;
+    };
+    let last_install = INSTALLS
+        .iter()
+        .filter_map(|needle| step.text.rfind(needle))
+        .max()
+        .unwrap_or(0);
+    let first_use = USES
+        .iter()
+        .filter_map(|needle| step.text.find(needle))
+        .min()
+        .unwrap_or(usize::MAX);
+    last_install < check && check < first_use
 }
 
 fn installs_rust(step: &StepText) -> bool {

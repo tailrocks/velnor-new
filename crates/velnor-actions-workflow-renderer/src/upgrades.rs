@@ -69,6 +69,10 @@ pub struct UpgradesSpec {
     /// Exact Velnor-pinned tools `velnor-actions generate` executes
     /// (`name@version`), installed before each regeneration.
     pub generate_tools: Vec<String>,
+    /// POSIX script verifying the Rust toolchain installed for `generate`
+    /// file by file against its pinned channel manifest (it reads the
+    /// version from `VELNOR_TOOL_RUST`).
+    pub verify_rust_script: String,
 }
 
 impl UpgradesSpec {
@@ -97,6 +101,9 @@ impl UpgradesSpec {
             || !self.generate_tools.iter().all(|spec| exact_tool(spec))
         {
             return Err(RenderError::BadCommand("bad_generate_tools".to_owned()));
+        }
+        if !self.verify_rust_script.contains("${VELNOR_TOOL_RUST}") {
+            return Err(RenderError::BadCommand("bad_verify_rust_script".to_owned()));
         }
         Ok(())
     }

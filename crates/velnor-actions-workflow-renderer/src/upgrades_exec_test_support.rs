@@ -262,6 +262,10 @@ impl Sandbox {
             .env("VELNOR_UPGRADE_DIR", &self.work)
             .env("VELNOR_GH_VERSION", "2.102.1")
             .env(
+                "VELNOR_VERIFY_RUST_SCRIPT",
+                "printf 'verify-rust %s\\n' \"${VELNOR_TOOL_RUST}\" >> \"$SANDBOX_LOG\"",
+            )
+            .env(
                 "VELNOR_GENERATE_TOOLS",
                 "actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.31.1",
             );

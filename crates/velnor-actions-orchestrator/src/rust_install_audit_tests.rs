@@ -105,3 +105,26 @@ fn files_outside_github_yaml_are_ignored() {
     assert_eq!(problem(&file("docs/example.yml", &text)), "");
     assert_eq!(problem(&file(".github/README.md", &text)), "");
 }
+
+#[test]
+fn a_step_that_verifies_its_own_install_before_any_use_passes() {
+    let verified = "jobs:
+  verify:
+    steps:
+      - name: Regenerate
+        run: \"mise --no-config --no-env --no-hooks install \\\"rust@$rust\\\" || return 1\\nVELNOR_TOOL_RUST=$rust sh -c \\\"$VELNOR_VERIFY_RUST_SCRIPT\\\"\\nmise exec \\\"rust@$rust\\\" -- cargo fetch\"
+";
+    assert_eq!(
+        problem(&file(".github/workflows/upgrades.yml", verified)),
+        ""
+    );
+    let late = verified.replace(
+        "VELNOR_TOOL_RUST=$rust sh -c \\\"$VELNOR_VERIFY_RUST_SCRIPT\\\"\\nmise exec \\\"rust@$rust\\\" -- cargo fetch",
+        "mise exec \\\"rust@$rust\\\" -- cargo fetch\\nVELNOR_TOOL_RUST=$rust sh -c \\\"$VELNOR_VERIFY_RUST_SCRIPT\\\"",
+    );
+    let found = problem(&file(".github/workflows/upgrades.yml", &late));
+    assert!(
+        found.contains("rust_install_unverified:.github/workflows/upgrades.yml:verify:Regenerate:"),
+        "{found}"
+    );
+}

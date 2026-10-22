@@ -80,6 +80,8 @@ fn verified_velnor_bump_is_published_with_the_workflows_permission() -> TestResu
         calls.contains(&format!("--source-digest {RELEASE_COMMIT}")),
         "{calls}"
     );
+    // The fresh Rust `generate` needs is verified before it runs.
+    assert!(calls.contains("verify-rust 1.98.1"), "{calls}");
     Ok(())
 }
 
