@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::future::Future;
 use std::time::Instant;
 
@@ -65,6 +66,8 @@ pub(super) fn verify_observed_spec(
         || host.memory != expected_host.memory
         || host.memory_swap != expected_host.memory_swap
         || host.network_mode != expected_host.network_mode
+        || !has_no_published_ports(host)
+        || !security_matches(host, expected_host)
         || host.tmpfs != expected_host.tmpfs
         || host.mounts != expected_host.mounts
         || host.log_config != expected_host.log_config
@@ -72,6 +75,63 @@ pub(super) fn verify_observed_spec(
         return Err(HostError::Ownership);
     }
     Ok(())
+}
+
+fn has_no_published_ports(host: &bollard::models::HostConfig) -> bool {
+    host.publish_all_ports != Some(true)
+        && host
+            .port_bindings
+            .as_ref()
+            .is_none_or(std::collections::HashMap::is_empty)
+}
+
+fn security_matches(
+    actual: &bollard::models::HostConfig,
+    expected: &bollard::models::HostConfig,
+) -> bool {
+    canonical_capability_set(actual.cap_drop.as_deref())
+        .zip(canonical_capability_set(expected.cap_drop.as_deref()))
+        .is_some_and(|(actual, expected)| actual == expected)
+        && canonical_capability_set(actual.cap_add.as_deref())
+            .zip(canonical_capability_set(expected.cap_add.as_deref()))
+            .is_some_and(|(actual, expected)| actual == expected)
+        && canonical_seccomp(actual.security_opt.as_deref())
+            .zip(canonical_seccomp(expected.security_opt.as_deref()))
+            .is_some_and(|(actual, expected)| actual == expected)
+}
+
+#[derive(PartialEq)]
+enum CanonicalSeccomp {
+    Absent,
+    Profile(serde_json::Value),
+}
+
+fn canonical_capability_set(values: Option<&[String]>) -> Option<BTreeSet<String>> {
+    let mut normalized = BTreeSet::new();
+    for value in values.into_iter().flatten() {
+        let value = value.strip_prefix("CAP_").unwrap_or(value);
+        if value.is_empty() || !normalized.insert(value.to_owned()) {
+            return None;
+        }
+    }
+    Some(normalized)
+}
+
+fn canonical_seccomp(values: Option<&[String]>) -> Option<CanonicalSeccomp> {
+    let values = values.unwrap_or_default();
+    match values {
+        [] => Some(CanonicalSeccomp::Absent),
+        [value] => {
+            let (kind, profile) = value.split_once('=')?;
+            if kind != "seccomp" {
+                return None;
+            }
+            serde_json::from_str(profile)
+                .ok()
+                .map(CanonicalSeccomp::Profile)
+        }
+        _ => None,
+    }
 }
 
 fn effective_config_matches(

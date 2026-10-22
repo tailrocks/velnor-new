@@ -65,9 +65,10 @@ tests use the pinned Linux `actions/cache` save and restore commands for gzip.
 The tests use the same action's save, list, and restore commands for zstd
 without long mode.
 Other tests include GNU tar zstd long mode, PAX paths, and long manifests. GNU
-tar uses its documented path rules. Without `-P`, GNU tar removes leading
-absolute and parent path parts. GNU tar blocks extraction through archive and
-pre-existing symlinks. With `-P`, GNU tar keeps absolute and parent paths.
+tar uses its documented path rules. Without `-P`, GNU tar rejects member names
+with parent path components and strips a leading slash from absolute names.
+GNU tar blocks extraction through archive and pre-existing symlinks. With `-P`,
+GNU tar keeps absolute and parent paths.
 Use `-P` only with trusted archives. This image does not use the old Velnor list of accepted cache paths or rules
 that remove partial files after an error. GNU tar does not take
 an archive snapshot. It can leave extracted files after an error.
@@ -86,12 +87,20 @@ That is progressive-distribution evidence, not evidence that `2.338.0` is
 rejected. Scale-set registration and a live job with this release are still
 required before qualification.
 
-The image is not privileged and has no Docker socket, host home directory, Keychain,
-SSH agent, or controller config. UID `1000` (`runner`), group `docker` GID `999`.
-In-container passwordless sudo is for job steps only. The entrypoint also
-removes `/.dockerenv` before the listener so Testcontainers reaches published
-ports as `localhost`, matching a GitHub-hosted VM. Certificate verification
-is unchanged. The image does not override Cargo's job count. Workflows may set
+The image is not privileged and has no host Docker socket, host home directory,
+Keychain, SSH agent, or controller config. UID `1000` (`runner`), group
+`docker` GID `999`. In-container passwordless sudo is for job steps only.
+The Runner keeps its container root read-only, receives the same 14 ordinary
+capabilities Docker grants by default, and uses a pinned seccomp profile that
+blocks mount and namespace changes. Job writes go to its private Home and Work
+volumes, `/run` socket volume, and charged `/tmp` and `/dev/shm` tmpfs mounts.
+The controller sets `DOCKER_HOST=tcp://127.0.0.1:2375` and joins this Runner
+to its paired DinD container's network namespace. The DinD daemon listens only
+on that namespace's loopback and the private Unix socket. No host port is
+published. `/.dockerenv` remains present; Testcontainers uses the fixed
+`DOCKER_HOST`, verifies HTTPS certificates normally, and receives the returned
+published port on `localhost`. Container actions continue to use the private
+Unix socket mounted at `/var/run/docker.sock`. The image does not override Cargo's job count. Workflows may set
 `CARGO_BUILD_JOBS` or pass Cargo's `-j` option according to their own resource
 budget; the runner does not infer compile parallelism from host `nproc`.
 

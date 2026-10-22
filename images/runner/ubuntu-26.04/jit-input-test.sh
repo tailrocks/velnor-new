@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 unset ACTIONS_RUNNER_INPUT_JITCONFIG || true
+expected_docker_host='tcp://127.0.0.1:2375'
+export DOCKER_HOST="$expected_docker_host"
+export DOCKER_CONTEXT='runner-context-must-be-ignored'
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+# Keep executable test fixtures on the writable Work volume when TMPDIR points there.
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/velnor-jit-input.XXXXXX")"
-trap 'rm -rf "$fixture"' EXIT
-mkdir -p "$fixture/bin" "$fixture/root/bin" "$fixture/root/_work" "$fixture/tmp" "$fixture/input"
+jit_tmp="$(mktemp -d "/tmp/velnor-jit-input-temp.XXXXXX")"
+trap 'rm -rf "$fixture" "$jit_tmp"' EXIT
+mkdir -p "$fixture/bin" "$fixture/root/bin" "$fixture/root/_work" "$fixture/input"
 linux_max_arg_strlen=131072
 jit_env_name='ACTIONS_RUNNER_INPUT_JITCONFIG'
 max_payload_bytes=$((linux_max_arg_strlen - ${#jit_env_name} - 2))
@@ -16,11 +21,10 @@ fi
 
 # Redirect image-only paths in a private copy; the tested entrypoint is otherwise unchanged.
 sed \
+  -e "s|/tmp/velnor-jit|$jit_tmp/velnor-jit|" \
   -e "s|root=\"/home/runner\"|root=\"$fixture/root\"|" \
   -e "s|/usr/local/libexec/velnor/runner-home.py|$fixture/runner-home.py|" \
-  -e "s|/tmp/velnor-jit|$fixture/tmp/velnor-jit|" \
   -e "s|/usr/local/bin/wait-docker-sock|$fixture/bin/wait-docker-sock|" \
-  -e "s|/usr/local/bin/clear-dockerenv|$fixture/bin/clear-dockerenv|" \
   "$script_dir/entrypoint.sh" > "$fixture/entrypoint.sh"
 chmod 0755 "$fixture/entrypoint.sh"
 : > "$fixture/runner-home.py"
@@ -40,16 +44,11 @@ cat > "$fixture/bin/wait-docker-sock" <<'EOF'
 #!/usr/bin/env bash
 exit 0
 EOF
-cat > "$fixture/bin/clear-dockerenv" <<'EOF'
-#!/usr/bin/env bash
-exit 0
-EOF
 cat > "$fixture/velnor-wait-docker-api" <<'EOF'
 #!/usr/bin/env bash
-[[ "$#" -eq 1 && "$1" == "unix:///var/run/docker.sock" ]]
+[[ "$#" -eq 1 && "$1" == "tcp://127.0.0.1:2375" ]]
 EOF
-chmod 0755 "$fixture/bin/wait-docker-sock" "$fixture/bin/clear-dockerenv" \
-  "$fixture/velnor-wait-docker-api"
+chmod 0755 "$fixture/bin/wait-docker-sock" "$fixture/velnor-wait-docker-api"
 
 # macOS and Linux use different `dd`/`stat` options. These fixture commands
 # provide only the exact interface used by entrypoint.sh.
@@ -82,6 +81,8 @@ cat > "$fixture/root/bin/Runner.Listener" <<'EOF'
 set -euo pipefail
 [[ "$#" -eq 1 && "$1" == run ]] || exit 81
 [[ -f "$HOME_INIT_MARKER" ]] || exit 88
+[[ "${DOCKER_HOST:-}" == "tcp://127.0.0.1:2375" ]] || exit 89
+[[ -z "${DOCKER_CONTEXT:-}" ]] || exit 90
 env_name='ACTIONS_RUNNER_INPUT_JITCONFIG'
 env_entry_bytes=$((${#env_name} + 1 + ${#ACTIONS_RUNNER_INPUT_JITCONFIG} + 1))
 [[ "$env_entry_bytes" -le 131072 ]] || exit 86
@@ -115,16 +116,23 @@ fail() {
 }
 
 assert_clean_outputs() {
-  local payload_file="$1" path
-  for path in "$fixture/stdout" "$fixture/stderr" "$fixture/root" "$fixture/tmp"; do
-    if grep -R -F -q -f "$payload_file" "$path" 2>/dev/null; then
-      fail "input appeared in output or persistent fixture files"
+  local payload_file="$1" path payload_bytes output_bytes persistent_files
+  payload_bytes="$(wc -c < "$payload_file")"
+  for path in "$fixture/stdout" "$fixture/stderr"; do
+    if [[ -s "$path" ]]; then
+      output_bytes="$(wc -c < "$path")"
+      if (( output_bytes >= payload_bytes )) && grep -F -q -f "$payload_file" "$path"; then
+        fail "input appeared in process output"
+      fi
     fi
   done
-  [[ -z "$(find "$fixture/tmp" -name 'velnor-jit.*' -print -quit)" ]] \
+  [[ -z "$(find "$jit_tmp" -name 'velnor-jit.*' -print -quit)" ]] \
     || fail "temporary JIT file remained after entrypoint exit"
   [[ -z "$(find "$fixture/root/_work" -mindepth 1 -print -quit)" ]] \
     || fail "JIT data was written to the work volume"
+  persistent_files="$(find "$fixture/root" -type f -print | wc -l)"
+  [[ "$persistent_files" -eq 1 && -f "$fixture/root/bin/Runner.Listener" ]] \
+    || fail "JIT input was persisted in the Runner Home fixture"
 }
 
 run_success() {
@@ -133,7 +141,7 @@ run_success() {
   status=0
   if [[ "$mode" == fd3 ]]; then
     PATH="$fixture/bin:$PATH" \
-      FIXTURE_TMP="$fixture/tmp" RUNNER_ROOT="$fixture/root" \
+      FIXTURE_TMP="$jit_tmp" RUNNER_ROOT="$fixture/root" \
       HOME_INIT_SCRIPT="$fixture/runner-home.py" HOME_INIT_MARKER="$fixture/home-initialized" \
       LISTENER_MARKER="$fixture/listener-ran" EXPECTED_CANARY="$expected" \
       "$BASH" "$fixture/entrypoint.sh" \
@@ -141,7 +149,7 @@ run_success() {
       > "$fixture/stdout" 2> "$fixture/stderr" || status=$?
   elif [[ "$mode" == length ]]; then
     PATH="$fixture/bin:$PATH" \
-      FIXTURE_TMP="$fixture/tmp" RUNNER_ROOT="$fixture/root" \
+      FIXTURE_TMP="$jit_tmp" RUNNER_ROOT="$fixture/root" \
       HOME_INIT_SCRIPT="$fixture/runner-home.py" HOME_INIT_MARKER="$fixture/home-initialized" \
       LISTENER_MARKER="$fixture/listener-ran" EXPECTED_LENGTH="$expected" \
       EXPECTED_ENV_ENTRY_BYTES="$entry_bytes" \
@@ -149,7 +157,7 @@ run_success() {
       > "$fixture/stdout" 2> "$fixture/stderr" || status=$?
   else
     PATH="$fixture/bin:$PATH" \
-      FIXTURE_TMP="$fixture/tmp" RUNNER_ROOT="$fixture/root" \
+      FIXTURE_TMP="$jit_tmp" RUNNER_ROOT="$fixture/root" \
       HOME_INIT_SCRIPT="$fixture/runner-home.py" HOME_INIT_MARKER="$fixture/home-initialized" \
       LISTENER_MARKER="$fixture/listener-ran" EXPECTED_CANARY="$expected" \
       "$BASH" "$fixture/entrypoint.sh" < "$payload_file" \
@@ -166,7 +174,7 @@ run_rejection() {
   rm -f "$fixture/listener-ran" "$fixture/home-initialized" "$fixture/stdout" "$fixture/stderr"
   status=0
   PATH="$fixture/bin:$PATH" \
-    FIXTURE_TMP="$fixture/tmp" RUNNER_ROOT="$fixture/root" \
+    FIXTURE_TMP="$jit_tmp" RUNNER_ROOT="$fixture/root" \
     HOME_INIT_SCRIPT="$fixture/runner-home.py" HOME_INIT_MARKER="$fixture/home-initialized" \
     LISTENER_MARKER="$fixture/listener-ran" \
     "$BASH" "$fixture/entrypoint.sh" < "$payload_file" \
@@ -183,12 +191,40 @@ run_success "$fixture/input/max" length "$max_payload_bytes" "$linux_max_arg_str
 run_rejection "$fixture/input/empty" 2
 run_rejection "$fixture/input/oversize" 2
 
+run_transport_rejection() {
+  local mode="$1" status=0
+  rm -f "$fixture/listener-ran" "$fixture/home-initialized" "$fixture/stdout" "$fixture/stderr"
+  if [[ "$mode" == missing ]]; then
+    env -u DOCKER_HOST PATH="$fixture/bin:$PATH" \
+      FIXTURE_TMP="$jit_tmp" RUNNER_ROOT="$fixture/root" \
+      HOME_INIT_SCRIPT="$fixture/runner-home.py" HOME_INIT_MARKER="$fixture/home-initialized" \
+      LISTENER_MARKER="$fixture/listener-ran" \
+      "$BASH" "$fixture/entrypoint.sh" < "$fixture/input/canary" \
+      > "$fixture/stdout" 2> "$fixture/stderr" || status=$?
+  else
+    DOCKER_HOST='tcp://0.0.0.0:2375' PATH="$fixture/bin:$PATH" \
+      FIXTURE_TMP="$jit_tmp" RUNNER_ROOT="$fixture/root" \
+      HOME_INIT_SCRIPT="$fixture/runner-home.py" HOME_INIT_MARKER="$fixture/home-initialized" \
+      LISTENER_MARKER="$fixture/listener-ran" \
+      "$BASH" "$fixture/entrypoint.sh" < "$fixture/input/canary" \
+      > "$fixture/stdout" 2> "$fixture/stderr" || status=$?
+  fi
+  [[ "$status" -eq 2 && ! -e "$fixture/listener-ran" ]] \
+    || fail "${mode} or non-loopback Docker endpoint was not rejected"
+  [[ ! -e "$fixture/home-initialized" ]] \
+    || fail "invalid Docker endpoint was accepted past Runner Home initialization"
+  assert_clean_outputs "$fixture/input/canary"
+}
+
+run_transport_rejection missing
+run_transport_rejection wildcard
+
 # JIT supplied through Docker Config.Env is outside the controller's private
 # pipe contract and must fail closed before Runner.Listener starts.
 rm -f "$fixture/listener-ran" "$fixture/home-initialized" "$fixture/stdout" "$fixture/stderr"
 status=0
 PATH="$fixture/bin:$PATH" \
-  FIXTURE_TMP="$fixture/tmp" RUNNER_ROOT="$fixture/root" \
+  FIXTURE_TMP="$jit_tmp" RUNNER_ROOT="$fixture/root" \
   HOME_INIT_SCRIPT="$fixture/runner-home.py" HOME_INIT_MARKER="$fixture/home-initialized" \
   LISTENER_MARKER="$fixture/listener-ran" \
   ACTIONS_RUNNER_INPUT_JITCONFIG="$canary" \

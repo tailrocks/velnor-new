@@ -8,4 +8,5 @@ fi
 
 . /usr/local/libexec/velnor/cgroup-v2-delegation.sh
 velnor_enable_cgroup_v2
-exec /usr/local/bin/dockerd --host=unix:///var/run/docker.sock
+exec /usr/local/bin/dockerd --host=unix:///var/run/docker.sock \
+	--host=tcp://127.0.0.1:2375 --tls=false

@@ -9,6 +9,24 @@ use bollard::models::{
 };
 use bollard::query_parameters::CreateContainerOptions;
 
+const RUNNER_DOCKER_HOST_ENV: &str = "DOCKER_HOST=tcp://127.0.0.1:2375";
+const RUNNER_CAPABILITIES: [&str; 14] = [
+    "CHOWN",
+    "DAC_OVERRIDE",
+    "FOWNER",
+    "FSETID",
+    "KILL",
+    "SETGID",
+    "SETUID",
+    "SETPCAP",
+    "NET_BIND_SERVICE",
+    "NET_RAW",
+    "SYS_CHROOT",
+    "MKNOD",
+    "AUDIT_WRITE",
+    "SETFCAP",
+];
+
 fn storage_volume(names: &WorkerIdentityNames, role: StorageRole) -> Result<String, HostError> {
     let volume_role = match role {
         StorageRole::SharedRun => WorkerVolumeRole::Socket,
@@ -187,6 +205,7 @@ pub(in crate::launch::bootstrap::containers) fn create_body(
         || plan.engine_id().is_empty()
         || plan.docker_root_digest().len() != 64
         || context.connection_id.is_empty()
+        || !network_mode_matches(role, &network_mode, context.names)?
     {
         return Err(HostError::Identity);
     }
@@ -195,6 +214,8 @@ pub(in crate::launch::bootstrap::containers) fn create_body(
     let open_stdin = role == BootstrapContainerRole::Runner;
     let config = ContainerCreateBody {
         image: Some(image),
+        env: (role == BootstrapContainerRole::Runner)
+            .then(|| vec![RUNNER_DOCKER_HOST_ENV.to_owned()]),
         attach_stdin: Some(open_stdin),
         attach_stdout: Some(false),
         attach_stderr: Some(false),
@@ -212,6 +233,28 @@ pub(in crate::launch::bootstrap::containers) fn create_body(
         },
         config,
     })
+}
+
+fn network_mode_matches(
+    role: BootstrapContainerRole,
+    network_mode: &str,
+    names: &WorkerIdentityNames,
+) -> Result<bool, HostError> {
+    match role {
+        BootstrapContainerRole::Runner => {
+            let Some(dind_id) = network_mode.strip_prefix("container:") else {
+                return Ok(false);
+            };
+            Ok(dind_id.len() == 64
+                && dind_id
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)))
+        }
+        BootstrapContainerRole::Dind => {
+            let runner_name = names.remote_runner_name()?;
+            Ok(network_mode == format!("velnor-{runner_name}-private"))
+        }
+    }
 }
 
 fn container_labels(
@@ -262,6 +305,12 @@ fn host_config(
         network_mode: Some(network_mode),
         readonly_rootfs: Some(true),
         privileged: Some(privileged),
+        publish_all_ports: Some(false),
+        cap_drop: (role == BootstrapContainerRole::Runner).then(|| vec!["ALL".to_owned()]),
+        cap_add: (role == BootstrapContainerRole::Runner)
+            .then(|| RUNNER_CAPABILITIES.map(str::to_owned).to_vec()),
+        security_opt: (role == BootstrapContainerRole::Runner)
+            .then(|| vec![crate::worker::seccomp::runner_security_opt()]),
         nano_cpus: Some(limits.nano_cpus),
         memory: Some(limits.memory_bytes),
         memory_swap: Some(limits.memory_bytes),

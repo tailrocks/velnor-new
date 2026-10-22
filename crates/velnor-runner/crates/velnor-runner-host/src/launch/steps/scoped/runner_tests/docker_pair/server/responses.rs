@@ -231,6 +231,34 @@ fn merged_config(image: &Value, request: &Value) -> Value {
                     labels.extend(overrides.clone());
                 }
                 merged.insert(key.clone(), Value::Object(labels));
+            } else if key == "Env" {
+                let mut environment = merged
+                    .get(key)
+                    .and_then(Value::as_array)
+                    .cloned()
+                    .unwrap_or_default();
+                if let Some(overrides) = value.as_array() {
+                    for entry in overrides {
+                        let Some(entry) = entry.as_str() else {
+                            continue;
+                        };
+                        let Some((name, _)) = entry.split_once('=') else {
+                            continue;
+                        };
+                        if let Some(existing) = environment.iter_mut().find(|existing| {
+                            existing.as_str().is_some_and(|existing| {
+                                existing
+                                    .split_once('=')
+                                    .is_some_and(|(existing_name, _)| existing_name == name)
+                            })
+                        }) {
+                            *existing = Value::String(entry.to_owned());
+                        } else {
+                            environment.push(Value::String(entry.to_owned()));
+                        }
+                    }
+                }
+                merged.insert(key.clone(), Value::Array(environment));
             } else {
                 merged.insert(key.clone(), value.clone());
             }
