@@ -24,19 +24,14 @@ pub(crate) fn fixture_profile() -> StorageProfile {
 
 pub(crate) fn fixture_provisioning_profile() -> StorageProfile {
     let disk_pool = "1".repeat(64);
-    let mut pools = vec![
-        StoragePoolLimit::new_with_inode_policy(
-            disk_pool.clone(),
-            StorageMedium::Disk,
-            StorageInodePolicy::DynamicBtrfs,
-            16 * 1024 * 1024 * 1024,
-            0,
-            2 * 1024 * 1024 * 1024,
-            0,
-        )
-        .expect("disk pool"),
-    ];
-    let tmpfs = [
+    let tmpfs = fixture_provisioning_tmpfs_limits();
+    let pools = fixture_provisioning_pools(&disk_pool, &tmpfs);
+    let roles = fixture_provisioning_roles(&disk_pool, &tmpfs);
+    StorageProfile::new("b".repeat(32), pools, roles).expect("provisioning profile")
+}
+
+fn fixture_provisioning_tmpfs_limits() -> [(StorageRole, u64, u64); 8] {
+    [
         (StorageRole::RunnerHome, 2_u64 << 30, 131_072),
         (StorageRole::RunnerWork, 4_u64 << 30, 262_144),
         (StorageRole::RunnerTmp, 1_u64 << 30, 65_536),
@@ -45,6 +40,24 @@ pub(crate) fn fixture_provisioning_profile() -> StorageProfile {
         (StorageRole::DindData, 2_u64 << 30, 131_072),
         (StorageRole::DindTmp, 1_u64 << 30, 65_536),
         (StorageRole::DindShm, 16_u64 << 20, 1_024),
+    ]
+}
+
+fn fixture_provisioning_pools(
+    disk_pool: &str,
+    tmpfs: &[(StorageRole, u64, u64); 8],
+) -> Vec<StoragePoolLimit> {
+    let mut pools = vec![
+        StoragePoolLimit::new_with_inode_policy(
+            disk_pool.to_owned(),
+            StorageMedium::Disk,
+            StorageInodePolicy::DynamicBtrfs,
+            16 * 1024 * 1024 * 1024,
+            0,
+            2 * 1024 * 1024 * 1024,
+            0,
+        )
+        .expect("disk pool"),
     ];
     for (index, (_, max_bytes, max_inodes)) in tmpfs.iter().enumerate() {
         pools.push(
@@ -59,7 +72,13 @@ pub(crate) fn fixture_provisioning_profile() -> StorageProfile {
             .expect("tmpfs pool"),
         );
     }
+    pools
+}
 
+fn fixture_provisioning_roles(
+    disk_pool: &str,
+    tmpfs: &[(StorageRole, u64, u64); 8],
+) -> Vec<StorageRoleLimit> {
     let mut roles = Vec::with_capacity(StorageRole::ALL.len());
     for role in [
         StorageRole::RunnerRoot,
@@ -74,7 +93,7 @@ pub(crate) fn fixture_provisioning_profile() -> StorageProfile {
         roles.push(
             StorageRoleLimit::new(
                 role,
-                disk_pool.clone(),
+                disk_pool.to_owned(),
                 StorageMedium::Disk,
                 bytes,
                 10_000,
@@ -119,7 +138,7 @@ pub(crate) fn fixture_provisioning_profile() -> StorageProfile {
         )
         .expect("staging cache alias"),
     );
-    StorageProfile::new("b".repeat(32), pools, roles).expect("provisioning profile")
+    roles
 }
 
 pub(crate) fn fixture_storage_provisioning_admission(
