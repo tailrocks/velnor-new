@@ -159,7 +159,9 @@ impl GitHubApi {
         let key = cache::CompletedAttempt::new(id, attempt, source, &workflow);
         if !self.run_identity_cache.borrow().contains(&key) {
             let run = self.workflow_run(id, attempt)?;
-            if !ci_run_is_success(&run, id, attempt, source, &workflow) {
+            if !run_repository_names_match(&run, self.repository_name())
+                || !ci_run_is_success(&run, id, attempt, source, &workflow)
+            {
                 return Err(internal("package_ci_run_identity_mismatch"));
             }
             require_required_job(&self.complete_workflow_jobs(id, attempt)?, id, source.sha)?;
@@ -175,7 +177,9 @@ impl GitHubApi {
             }
             let current: WorkflowRunResponse =
                 self.get_json(&self.route(&format!("actions/runs/{id}")))?;
-            if !ci_run_is_success(&current, id, attempt, source, &workflow) {
+            if !run_repository_names_match(&current, self.repository_name())
+                || !ci_run_is_success(&current, id, attempt, source, &workflow)
+            {
                 return Err(internal("package_ci_latest_attempt_mismatch"));
             }
         }
@@ -195,7 +199,11 @@ impl GitHubApi {
             let count = list.workflow_runs.len();
             runs.extend(list.workflow_runs);
             if count < 100 {
-                return latest_ci_run(runs, workflow, source);
+                let latest = latest_ci_run(runs, workflow, source)?;
+                if !run_repository_names_match(&latest, self.repository_name()) {
+                    return Err(internal("package_ci_run_identity_mismatch"));
+                }
+                return Ok(latest);
             }
         }
         Err(internal("package_ci_run_pages_exceeded"))
@@ -217,6 +225,18 @@ impl GitHubApi {
         }
         Err(internal("package_ci_job_pages_exceeded"))
     }
+}
+
+fn run_repository_names_match(run: &WorkflowRunResponse, repository: &str) -> bool {
+    [run.repository.as_ref(), run.head_repository.as_ref()]
+        .into_iter()
+        .flatten()
+        .all(|run_repository| {
+            run_repository
+                .full_name
+                .as_deref()
+                .is_none_or(|full_name| full_name == repository)
+        })
 }
 
 pub(super) fn run_matches(

@@ -75,6 +75,10 @@ impl GitHubApi {
         format!("repos/{}/{suffix}", self.repository)
     }
 
+    pub(super) fn repository_name(&self) -> &str {
+        &self.repository
+    }
+
     pub(super) fn post_fields(
         &self,
         route: &str,

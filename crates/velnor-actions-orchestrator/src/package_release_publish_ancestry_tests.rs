@@ -91,13 +91,14 @@ fn one_commit_comparison_checks_the_exact_head_parent() {
 }
 
 #[test]
-fn authenticated_ancestry_accepts_source_and_authority_at_unchanged_protected_tip() {
+fn authenticated_ancestry_accepts_source_and_authority_while_main_advances_descendant() {
     let source = "a".repeat(40);
     let authority = "b".repeat(40);
+    let protected_tip = "c".repeat(40);
     let routes = vec![
         (
             "repos/owner/repo".to_owned(),
-            json!({"id":42,"full_name":"owner/repo"}),
+            json!({"id":42,"full_name":"owner/repo","default_branch":"main"}),
         ),
         (
             format!("repos/owner/repo/commits/{source}"),
@@ -108,8 +109,8 @@ fn authenticated_ancestry_accepts_source_and_authority_at_unchanged_protected_ti
             json!({"sha":authority}),
         ),
         (
-            format!("repos/owner/repo/commits/{authority}"),
-            json!({"sha":authority}),
+            format!("repos/owner/repo/commits/{protected_tip}"),
+            json!({"sha":protected_tip}),
         ),
         (
             format!("repos/owner/repo/compare/{source}...{authority}?per_page=1&page=2"),
@@ -122,14 +123,25 @@ fn authenticated_ancestry_accepts_source_and_authority_at_unchanged_protected_ti
             format!("repos/owner/repo/git/commits/{authority}"),
             json!({"sha":authority,"parents":[{"sha":source}]}),
         ),
+        (
+            format!("repos/owner/repo/compare/{authority}...{protected_tip}?per_page=1&page=2"),
+            json!({
+                "base_commit":{"sha":authority},"merge_base_commit":{"sha":authority},
+                "status":"ahead","ahead_by":1,"total_commits":1
+            }),
+        ),
+        (
+            format!("repos/owner/repo/git/commits/{protected_tip}"),
+            json!({"sha":protected_tip,"parents":[{"sha":authority}]}),
+        ),
     ];
     let (api, fixture) = GitHubApi::with_fixture("owner/repo", routes);
-    let mut snapshots = [authority.clone(), authority.clone()].into_iter();
+    let mut snapshots = [protected_tip.clone(), protected_tip.clone()].into_iter();
     let tip = verify_preview_main_ancestry_with(&api, 42, "main", &source, &authority, || {
         Ok(snapshots.next().expect("two protected-tip snapshots"))
     })
-    .expect("source and workflow authority are under the captured protected tip");
-    assert_eq!(tip, authority);
+    .expect("a newer protected descendant keeps the source eligible");
+    assert_eq!(tip, protected_tip);
     fixture.assert_drained();
 }
 
@@ -140,7 +152,7 @@ fn authenticated_ancestry_rejects_a_main_ref_change_during_the_proof() {
     let routes = vec![
         (
             "repos/owner/repo".to_owned(),
-            json!({"id":42,"full_name":"owner/repo"}),
+            json!({"id":42,"full_name":"owner/repo","default_branch":"main"}),
         ),
         (
             format!("repos/owner/repo/commits/{source}"),
@@ -181,7 +193,7 @@ fn authenticated_ancestry_rejects_a_main_ref_change_during_the_proof() {
 fn protected_tip_ref_change_is_an_error_after_authenticated_repository_read() {
     let routes = vec![(
         "repos/owner/repo".to_owned(),
-        json!({"id":42,"full_name":"owner/repo"}),
+        json!({"id":42,"full_name":"owner/repo","default_branch":"main"}),
     )];
     let (api, fixture) = GitHubApi::with_fixture("owner/repo", routes);
     let mut tips = ["a".repeat(40), "b".repeat(40)].into_iter();
@@ -196,12 +208,32 @@ fn protected_tip_ref_change_is_an_error_after_authenticated_repository_read() {
 fn repository_authentication_failure_is_not_reclassified_as_a_stale_skip() {
     let routes = vec![(
         "repos/owner/repo".to_owned(),
-        json!({"id":43,"full_name":"owner/repo"}),
+        json!({"id":43,"full_name":"owner/repo","default_branch":"main"}),
     )];
     let (api, fixture) = GitHubApi::with_fixture("owner/repo", routes);
     let result = verify_preview_main_tip_with(&api, 42, "main", || {
         panic!("unauthenticated repository must not read main")
     });
     assert!(result.is_err());
+    fixture.assert_drained();
+}
+
+#[test]
+fn preview_ancestry_rejects_a_live_default_branch_mismatch_before_reading_main() {
+    let routes = vec![(
+        "repos/owner/repo".to_owned(),
+        json!({"id":42,"full_name":"owner/repo","default_branch":"stable"}),
+    )];
+    let (api, fixture) = GitHubApi::with_fixture("owner/repo", routes);
+    let mut main_read = false;
+    let result = verify_preview_main_tip_with(&api, 42, "main", || {
+        main_read = true;
+        Ok("a".repeat(40))
+    });
+    assert!(result.is_err(), "a changed default branch must fail closed");
+    assert!(
+        !main_read,
+        "protected main is not trusted after a branch mismatch"
+    );
     fixture.assert_drained();
 }

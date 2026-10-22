@@ -387,3 +387,9 @@ fn terminal_publication_reads_keep_queued_original_distinct_from_active_tap_role
 
 #[path = "package_release_direct_caller_tests.rs"]
 mod direct_caller;
+
+#[path = "package_release_run_identity_transport_tests.rs"]
+mod identity_transport_tests;
+
+#[path = "package_release_run_inventory_transport_tests.rs"]
+mod inventory_transport_tests;

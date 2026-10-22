@@ -29,7 +29,7 @@ where
     if repository_id == 0 || branch != "main" {
         return Err(internal("package_publish_preview_tip_input_invalid"));
     }
-    api.verify_repository_identity(repository_id)?;
+    api.verify_preview_repository_identity(repository_id, branch)?;
     let tip = capture_protected_tip()?;
     if !is_lowercase_git_sha(&tip) {
         return Err(internal("package_publish_main_source_invalid"));
@@ -77,7 +77,7 @@ where
         return Err(internal("package_publish_preview_ancestry_input_invalid"));
     }
 
-    api.verify_repository_identity(repository_id)?;
+    api.verify_preview_repository_identity(repository_id, branch)?;
     let captured_tip = capture_protected_tip()?;
     if !is_lowercase_git_sha(&captured_tip) {
         return Err(internal("package_publish_main_source_invalid"));

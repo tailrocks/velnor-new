@@ -23,7 +23,7 @@ pub(super) fn run_json() -> Value {
     json!({"id":22,"run_attempt":3,"run_number":12,"workflow_id":7,"name":"CI",
         "path":".github/workflows/ci.yml","head_sha":source().sha,"head_branch":"main",
         "event":"push","status":"completed","conclusion":"success",
-        "repository":{"id":9},"head_repository":{"id":9}})
+        "repository":{"id":9,"full_name":"example/app"},"head_repository":{"id":9,"full_name":"example/app"}})
 }
 
 fn parse(value: Value) -> WorkflowRunResponse {
@@ -259,7 +259,10 @@ fn producing_workflow_run_is_separate_from_upstream_push_ci() {
         ));
     }
     let mut foreign = parse(run_json());
-    foreign.head_repository = Some(RunRepository { id: 10 });
+    foreign.head_repository = Some(RunRepository {
+        id: 10,
+        full_name: Some("attacker/fork".to_owned()),
+    });
     assert!(!ci_run_is_success(&foreign, 22, 3, source(), &workflow()));
 }
 
