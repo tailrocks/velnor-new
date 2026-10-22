@@ -12,6 +12,10 @@ mr-boxington = "1.26.0"
 hk = "2.8.0"
 cargo-binstall = "1.26.0"
 "aqua:nextest-rs/nextest/cargo-nextest" = "0.9.149"
+# Workflow linting (hard decision 10): CI reads these versions at run time,
+# and hk's check-only jactionlint step runs the same binaries locally.
+jactionlint = "2.3.0"
+shellcheck = "0.11.0"
 
 [settings]
 cargo.binstall = true
