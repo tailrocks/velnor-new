@@ -244,11 +244,13 @@ fn render_merged(
     let suite_matrices = (
         matrix::suites::suite_matrices_of(jobs)?,
         matrix::suites::suite_allow_failure_jobs_of(jobs),
+        matrix::bun::bun_matrices_of(jobs)?,
     );
     let jobs = if matrix.is_some()
         || !caps.is_empty()
         || !suite_matrices.0.is_empty()
         || !suite_matrices.1.is_empty()
+        || !suite_matrices.2.is_empty()
     {
         matrix::scrub_matrix_marker(jobs)
     } else {

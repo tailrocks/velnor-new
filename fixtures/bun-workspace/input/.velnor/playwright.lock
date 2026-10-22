@@ -1,0 +1,29 @@
+schema = 1
+platform = "ubuntu26.04-x64"
+
+[[archives]]
+version = "1.64.1"
+core_integrity = "sha512-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+browsers = ["chromium"]
+directory = "chromium-1248"
+url = "https://cdn.playwright.dev/builds/chromium-1248.zip"
+sha256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+bytes = 1000
+
+[[archives]]
+version = "1.64.1"
+core_integrity = "sha512-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+browsers = ["chromium"]
+directory = "chromium_headless_shell-1248"
+url = "https://cdn.playwright.dev/builds/chromium_headless_shell-1248.zip"
+sha256 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+bytes = 1000
+
+[[archives]]
+version = "1.64.1"
+core_integrity = "sha512-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+browsers = ["chromium"]
+directory = "ffmpeg-1013"
+url = "https://cdn.playwright.dev/builds/ffmpeg-1013.zip"
+sha256 = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+bytes = 1000

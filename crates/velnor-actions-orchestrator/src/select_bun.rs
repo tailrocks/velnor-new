@@ -9,7 +9,9 @@
 
 use std::collections::BTreeSet;
 
-use velnor_actions_bun::{affected_members, forced_members, job_id};
+use velnor_actions_bun::{
+    affected_members, forced_members, job_id, member_job_scripts, suite_job_id,
+};
 use velnor_actions_contract::{
     JobDisposition, PlanJob, VelnorConfig, WorkflowEvent, selects_affected_work,
 };
@@ -17,7 +19,7 @@ use velnor_actions_contract::{
 use super::ChangeEvidence;
 use crate::discover::Discovery;
 
-/// Plan dispositions for every Bun member job, in member-name order.
+/// Plan dispositions for every Bun member and suite job, in member-name order.
 pub(crate) fn dispositions(
     config: &VelnorConfig,
     discovery: &Discovery,
@@ -38,19 +40,37 @@ pub(crate) fn dispositions(
         }
         _ => None,
     };
-    workspaces
-        .iter()
-        .flat_map(|workspace| &workspace.members)
-        .map(|member| PlanJob {
-            job_id: job_id(member),
-            disposition: if selected
-                .as_ref()
-                .is_none_or(|selected| selected.contains(&member.name))
-            {
-                JobDisposition::Run
-            } else {
-                JobDisposition::NotAffected
-            },
-        })
-        .collect()
+    let mut jobs = Vec::new();
+    for member in workspaces.iter().flat_map(|workspace| &workspace.members) {
+        let disposition = if selected
+            .as_ref()
+            .is_none_or(|selected| selected.contains(&member.name))
+        {
+            JobDisposition::Run
+        } else {
+            JobDisposition::NotAffected
+        };
+        // Generation already proved the configuration; a member job omitted
+        // because its suites claim every script has no disposition.
+        if !matches!(member_job_scripts(member, bun), Ok(None)) {
+            jobs.push(PlanJob {
+                job_id: job_id(member),
+                disposition,
+            });
+        }
+        // Every suite job, gating or not, carries its member's disposition,
+        // so a `not_affected` member's suites are skipped and pass.
+        for suite in bun
+            .members
+            .get(&member.name)
+            .into_iter()
+            .flat_map(|options| options.suites.keys())
+        {
+            jobs.push(PlanJob {
+                job_id: suite_job_id(member, suite),
+                disposition,
+            });
+        }
+    }
+    jobs
 }

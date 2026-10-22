@@ -1,0 +1,9 @@
+{
+  "lockfileVersion": 2,
+  "workspaces": {
+    "": {"name": "bun-fixture"},
+    "apps/web": {"name": "@fixture/web", "dependencies": {"@fixture/ui": "workspace:*"}, "devDependencies": {"@playwright/test": "1.64.1"}},
+    "packages/ui": {"name": "@fixture/ui"},
+  },
+  "packages": {"@playwright/test": ["@playwright/test@1.64.1", "", {}, "sha512-x"], "playwright-core": ["playwright-core@1.64.1", "", {}, "sha512-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="]},
+}
