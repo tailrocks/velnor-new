@@ -16,7 +16,7 @@ use crate::impl_common::{
 const OIDC_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\nregistry = \"crates-io\"\npackages = [\"demo\"]\n";
 
 /// Full generated tree with release enabled, in sorted path order.
-const RELEASE_FAMILY: [&str; 15] = [
+const RELEASE_FAMILY: [&str; 18] = [
     ".github/AGENTS.md",
     ".github/CLAUDE.md",
     ".github/actions/declared-task-0/action.yml",
@@ -24,6 +24,9 @@ const RELEASE_FAMILY: [&str; 15] = [
     ".github/actions/velnor-tool-seed/action.yml",
     ".github/actions/velnor-tools-cache-restore/action.yml",
     ".github/actions/velnor-tools-prelude-u26/action.yml",
+    ".github/actions/velnor-verify-jactionlint/action.yml",
+    ".github/actions/velnor-verify-restored-rust/action.yml",
+    ".github/actions/velnor-verify-rust-manifest/action.yml",
     ".github/jactionlint.yaml",
     ".github/release-plz-bootstrap.toml",
     ".github/release-plz.toml",
@@ -110,6 +113,9 @@ fn release_disabled_emits_base_tree_only() -> TestResult {
                 ".github/actions/velnor-tool-seed/action.yml",
                 ".github/actions/velnor-tools-cache-restore/action.yml",
                 ".github/actions/velnor-tools-prelude-u26/action.yml",
+                ".github/actions/velnor-verify-jactionlint/action.yml",
+                ".github/actions/velnor-verify-restored-rust/action.yml",
+                ".github/actions/velnor-verify-rust-manifest/action.yml",
                 ".github/jactionlint.yaml",
                 ".github/scripts/velnor-tools-cache-identity.sh",
                 ".github/velnor/task-execution-manifest-v1.json",

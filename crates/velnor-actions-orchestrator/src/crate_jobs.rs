@@ -301,7 +301,7 @@ fn render_job(
         crate::matrix_step::suite_for_package(&model.package_name);
     let needs_validators = crate::matrix_step::crate_needs_generate_validators(policy, suite);
     if use_rust {
-        steps.push(crate::workflow::verify_restored_rust_step(catalog)?);
+        steps.push(crate::workflow::verify_restored_rust_step(catalog));
     }
     steps.push(crate::matrix_step::prepare_crate_tools_step(
         catalog,
@@ -311,10 +311,10 @@ fn render_job(
         needs_validators,
     )?);
     let verify = needs_validators.then(|| crate::workflow::verify_jactionlint_step(catalog));
-    steps.extend(verify.transpose()?);
+    steps.extend(verify);
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
-        steps.push(crate::workflow::verify_rust_manifest_step(catalog)?);
+        steps.push(crate::workflow::verify_rust_manifest_step(catalog));
     }
     steps.extend(crate::source_cache::restore_step_for_crate(
         fetch_roots,

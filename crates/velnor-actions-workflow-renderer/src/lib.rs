@@ -55,6 +55,7 @@ mod preseed_closure;
 pub mod private_source_steps;
 /// Project tool-version resolver binding (hard decision 5).
 mod project_tool_resolver;
+pub use project_tool_resolver::quote_project_tool_run_refs;
 pub mod publish_render;
 pub mod publish_roles;
 pub mod publish_scripts;

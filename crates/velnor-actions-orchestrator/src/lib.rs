@@ -129,6 +129,7 @@ mod validate_shell;
 mod validators;
 mod vectors;
 mod verification_tasks;
+mod verifier_actions;
 mod verify;
 mod workflow;
 mod workflow_jobs;

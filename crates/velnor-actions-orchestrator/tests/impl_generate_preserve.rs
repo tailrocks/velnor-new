@@ -215,6 +215,9 @@ fn assert_hosted_outputs(files: &[String], declared_action: &str, manifest: &str
                 ".github/actions/u26/action.yml",
                 ".github/actions/velnor-tools-cache-restore/action.yml",
                 ".github/actions/velnor-tools-prelude-u26/action.yml",
+                ".github/actions/velnor-verify-jactionlint/action.yml",
+                ".github/actions/velnor-verify-restored-rust/action.yml",
+                ".github/actions/velnor-verify-rust-manifest/action.yml",
             ]
             .contains(&path.as_str())
                 || !path.starts_with(".github/actions/")
