@@ -91,6 +91,25 @@ pub fn read_playwright_lock(root: &Path) -> Result<Option<PlaywrightLock>, Orche
     Ok(Some(lock))
 }
 
+/// Every browser a member's jobs install: its own `browsers` and those of
+/// each of its suites (a suite job installs only its own; the lock pins all).
+pub(crate) fn member_browsers(
+    config: Option<&velnor_actions_contract::config::BunMemberConfig>,
+) -> BTreeSet<BunBrowser> {
+    config
+        .into_iter()
+        .flat_map(|member| {
+            member.browsers.iter().chain(
+                member
+                    .suites
+                    .values()
+                    .flat_map(|suite| suite.browsers.iter()),
+            )
+        })
+        .copied()
+        .collect()
+}
+
 /// What the configured members need: one request per `playwright-core` version.
 ///
 /// # Errors
@@ -98,20 +117,13 @@ pub fn read_playwright_lock(root: &Path) -> Result<Option<PlaywrightLock>, Orche
 /// Playwright, and `bun_playwright_core_mismatch:<member>` when the lock's
 /// `playwright-core` is not the member's Playwright version.
 pub(crate) fn core_requests(
-    config: &velnor_actions_contract::VelnorConfig,
+    bun: &velnor_actions_contract::config::BunStackConfig,
     inventory: &crate::workflow_task_jobs::bun_inventory::BunInventory,
 ) -> Result<Vec<CoreRequest>, OrchestratorError> {
-    let Some(bun) = &config.stacks.bun else {
-        return Ok(Vec::new());
-    };
     let mut requests: BTreeMap<String, CoreRequest> = BTreeMap::new();
     for root in &inventory.roots {
         for member in &root.workspace.members {
-            let browsers = bun
-                .members
-                .get(&member.name)
-                .map(|config| config.browsers.as_slice())
-                .unwrap_or_default();
+            let browsers = member_browsers(bun.members.get(&member.name));
             if browsers.is_empty() {
                 continue;
             }
@@ -142,7 +154,7 @@ pub(crate) fn core_requests(
             if request.integrity != core.integrity {
                 return Err(failure("bun_playwright_core_mismatch"));
             }
-            request.browsers.extend(browsers.iter().copied());
+            request.browsers.extend(browsers);
         }
     }
     Ok(requests.into_values().collect())
