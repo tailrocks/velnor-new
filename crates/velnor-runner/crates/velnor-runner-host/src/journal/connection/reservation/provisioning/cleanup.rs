@@ -18,8 +18,6 @@ pub(in crate::journal) use terminal::validate_retirement_digest;
 #[path = "cleanup/witness.rs"]
 mod witness;
 pub(crate) use identity::StorageCleanupIdentity;
-#[cfg(test)]
-pub(crate) use identity::{StorageCleanupCgroup, StorageCleanupMount};
 pub(crate) use witness::StorageCleanupObserverWitness;
 
 pub(super) async fn post_jit_retirement_claim_exists(

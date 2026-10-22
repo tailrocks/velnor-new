@@ -89,9 +89,9 @@ async fn v30_path_migration_keeps_old_inode_unknown_and_rejects_new_unknown()
         .ok_or(HostError::Journal)?
         .get::<String>(0)
         .map_err(|_| HostError::Journal)?;
-    assert!(
-        crate::journal::schema::sql_normalization::normalize(&schema)
-            == crate::journal::schema::sql_normalization::normalize(&attachment_paths_with_inode())
+    assert_eq!(
+        crate::journal::schema::sql_normalization::normalize(&schema),
+        crate::journal::schema::sql_normalization::normalize(&attachment_paths_with_inode())
     );
     Ok(())
 }

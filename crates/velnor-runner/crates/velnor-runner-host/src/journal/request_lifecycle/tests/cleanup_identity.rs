@@ -77,7 +77,7 @@ async fn cleanup_identity_requires_a_bound_held_reservation_and_reads_exact_owne
         provisioned.instance_binding_digest
     );
     assert_eq!(identity.private_volume(), format!("w{}", provisioned.nonce));
-    assert!(!identity.guest_boot_id().is_empty());
+    assert_ne!(identity.guest_boot_id(), "");
     let connection = journal.connection().await?;
     connection
         .execute("DROP TRIGGER bound_storage_path_no_update", ())

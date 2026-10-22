@@ -214,7 +214,7 @@ fn rejects_nonlocal_or_extended_tag_and_repo_digest_spellings() -> Result<(), Ho
     for repo_digest in [
         format!("ghcr.io/library/{name}@{digest}"),
         format!("docker.io/other/{name}@{digest}"),
-        format!("{name}@{}0", digest),
+        format!("{name}@{digest}0"),
     ] {
         let mut observation = containerd_observation(&request);
         if let ImageImportObservation::Containerd { repo_digests, .. } = &mut observation {
