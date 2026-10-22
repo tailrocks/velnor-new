@@ -176,6 +176,7 @@ fn runtime_identity_requires_one_exact_read_only_mount() {
 #[cfg(target_os = "linux")]
 fn invalid_guest_image_metadata_cases(
     valid: GuestImageFileMetadata,
+    max_size_bytes: i64,
 ) -> [(&'static str, GuestImageFileMetadata); 9] {
     [
         (
@@ -237,7 +238,7 @@ fn invalid_guest_image_metadata_cases(
         (
             "oversized file",
             GuestImageFileMetadata {
-                size_bytes: MAX_GUEST_IMAGE_BYTES as i64 + 1,
+                size_bytes: max_size_bytes + 1,
                 ..valid
             },
         ),
@@ -247,6 +248,8 @@ fn invalid_guest_image_metadata_cases(
 #[cfg(target_os = "linux")]
 #[test]
 fn guest_image_metadata_requires_root_read_only_regular_single_bounded_file() {
+    let max_size_bytes =
+        i64::try_from(MAX_GUEST_IMAGE_BYTES).expect("guest image size cap fits in i64");
     let valid = GuestImageFileMetadata {
         is_regular_file: true,
         owner_uid: ROOT_UID,
@@ -257,14 +260,14 @@ fn guest_image_metadata_requires_root_read_only_regular_single_bounded_file() {
     assert_eq!(valid.validate(), Ok(()));
     assert_eq!(
         GuestImageFileMetadata {
-            size_bytes: MAX_GUEST_IMAGE_BYTES as i64,
+            size_bytes: max_size_bytes,
             ..valid
         }
         .validate(),
         Ok(())
     );
 
-    let invalid = invalid_guest_image_metadata_cases(valid);
+    let invalid = invalid_guest_image_metadata_cases(valid, max_size_bytes);
     for (case, metadata) in invalid {
         assert_eq!(
             metadata.validate(),
