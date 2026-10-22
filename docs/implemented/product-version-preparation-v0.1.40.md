@@ -3,14 +3,16 @@
 This prepares the v0.1.40 product release from main
 `9a0b9d2f87b34d2f61c6b755cc4275a333566b2e` (#341). The immutable v0.1.39
 release was published from `ffe36ad62c30668753df5298e2c3d1afb7f6f6ec` before
-#341 merged, so it does not include the native immutable Preview migration.
+PR #341 merged, so it does not include the native immutable Preview migration.
 The existing v0.1.39 release and tag remain unchanged.
 
 v0.1.40 includes the immutable per-source Preview protocol: separate payload
 source and workflow authority, bounded source/task/tool admission, complete
 artifact acquisition, signed recovery, and current-main-only Homebrew
 promotion. It also includes the native empty-only CI inventory retry added
-with that migration. Stable publication retains its existing source equality
+with that migration. Dependency seeding now has an independent bounded
+workflow budget so its three serial workspace-wide lanes do not share the
+crate-job timeout. Stable publication retains its existing source equality
 contract. The retired policy admission route is removed completely.
 
 The root workspace version and exact internal path requirements advance from
