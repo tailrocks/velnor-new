@@ -34,6 +34,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
             pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
             tasks: Vec::new(),
+            task_suites: Vec::new(),
             tofu_apply: None,
             review_completion: None,
             verify: velnor_actions_contract::VerifyConfig::default(),
@@ -66,6 +67,33 @@ pub(crate) fn valid_config() -> VelnorConfig {
         dco: None,
         execution: None,
     }
+}
+
+#[test]
+fn workflow_task_suite_slug_cannot_collide_with_rust_suite() {
+    let mut config = valid_config();
+    let mut rust = RustStackConfig::default_config();
+    let mut rust_suite = velnor_actions_contract::RustSuiteConfig::new("smoke", "default");
+    rust_suite.workflow = Some("evidence".to_owned());
+    rust_suite.triggers = vec![velnor_actions_contract::RustSuiteTrigger::Push];
+    rust.suites = vec![rust_suite];
+    config.stacks.rust = Some(rust);
+    config.workflow.task_suites = vec![velnor_actions_contract::MiseTaskSuite {
+        id: "evidence".to_owned(),
+        mise_task: "collect-evidence".to_owned(),
+        source: velnor_actions_contract::MiseTaskSource::default(),
+        runner: velnor_actions_contract::VerificationRunner::LinuxX64,
+        timeout_minutes: 5,
+        workflow: "evidence".to_owned(),
+        events: vec![velnor_actions_contract::MiseTaskSuiteEvent::Push],
+        schedule: Vec::new(),
+        artifacts: Vec::new(),
+    }];
+    assert!(config.validate("config.toml").is_err_and(|error| {
+        error
+            .to_string()
+            .contains("workflow_slug_shared_across_suite_types")
+    }));
 }
 
 /// Valid plan shared by remediation cases.

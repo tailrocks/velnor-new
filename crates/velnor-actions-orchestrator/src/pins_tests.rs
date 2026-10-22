@@ -30,6 +30,7 @@ pub(crate) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> Vel
             pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
             tasks: Vec::new(),
+            task_suites: Vec::new(),
             tofu_apply: None,
             review_completion: None,
             verify: VerifyConfig::default(),
