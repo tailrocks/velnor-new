@@ -1,5 +1,13 @@
 use super::{charge_fits_pool, checked_required_charge};
 use crate::error::HostError;
+use crate::journal::request_lifecycle::tests::helpers::{Scratch, binding, created_scope};
+use crate::journal::{
+    AssignmentKey, CapacityLimits, ConnectionJournal, Journal, ReservationRequest,
+    ReservationResult, StorageAdmissionSample, StorageFilesystemKind, StorageInodePolicy,
+    StorageMedium, StoragePoolObservation, StorageProfile, StorageSampleIdentity,
+    fixture_provisioning_profile,
+};
+use crate::launch::StartPermit;
 
 #[path = "admission_tests/aggregate_guest_capacity.rs"]
 mod aggregate_guest_capacity;
@@ -28,17 +36,6 @@ fn aggregate_charge_overflow_fails_closed() {
 #[tokio::test]
 async fn finite_inode_pool_cap_rejects_second_reservation_with_free_inodes() -> Result<(), HostError>
 {
-    use crate::journal::request_lifecycle::tests::helpers::{Scratch, binding, created_scope};
-    use crate::journal::{
-        AssignmentKey, CapacityLimits, Journal, ReservationRequest, ReservationResult,
-        StorageAdmissionSample, StorageFilesystemKind, StorageInodePolicy, StorageMedium,
-        StoragePoolObservation, StorageProfile, StorageSampleIdentity,
-        fixture_provisioning_profile,
-    };
-    use crate::launch::StartPermit;
-
-    const ENGINE_ID: &str = "11111111-1111-4111-8111-111111111111";
-    const JOB_MEMORY: u64 = 8_589_934_592;
     let scratch = Scratch::new()?;
     let journal = Journal::open(&scratch.file()).await?;
     journal
@@ -82,62 +79,72 @@ async fn finite_inode_pool_cap_rejects_second_reservation_with_free_inodes() -> 
 
     let mut outcomes = Vec::new();
     for nonce in ['e', 'f'] {
-        let sample_id = nonce.to_string().repeat(32);
-        let assignment = scope
-            .assignment_identity(AssignmentKey::Remote {
-                kind: "runner".to_owned(),
-                subject: sample_id.clone(),
-            })
-            .await?;
-        let permit = StartPermit::test_fixture_with_engine_id(&sample_id, ENGINE_ID);
-        let sample_generation_id = permit.sample_generation_id().to_owned();
-        let docker_root_digest = permit.docker_root_digest().to_owned();
-        let sample = StorageAdmissionSample::new(
-            StorageSampleIdentity::new(
-                sample_generation_id.clone(),
-                profile.generation_id().to_owned(),
-                profile.profile_digest().to_owned(),
-                ENGINE_ID.to_owned(),
-                docker_root_digest.clone(),
-            )?,
-            std::time::Instant::now(),
-            vec![StoragePoolObservation::new_with_filesystem(
-                disk_id.clone(),
-                "a".repeat(64),
-                StorageMedium::Disk,
-                StorageFilesystemKind::Other,
-                64_u64 << 30,
-                60_u64 << 30,
-                1_000_000,
-                1_000_000,
-            )?],
-            None,
-        )?;
-        let admission = super::StorageProvisioningAdmission::new(
-            sample,
-            super::super::super::storage_budget::StorageProvisioningMemoryObservation::new(
-                64_u64 << 30,
-                32_u64 << 30,
-            )?,
-        );
-        outcomes.push(
-            scope
-                .try_reserve_with_provisioning(
-                    ReservationRequest {
-                        assignment: &assignment,
-                        engine_id: ENGINE_ID,
-                        docker_root_digest: &docker_root_digest,
-                        cpu_millicores: 2_000,
-                        memory_bytes: JOB_MEMORY,
-                        sample_generation_id: &sample_generation_id,
-                    },
-                    permit,
-                    admission,
-                )
-                .await?,
-        );
+        outcomes
+            .push(reserve_with_finite_inode_observation(&scope, &disk_id, &profile, nonce).await?);
     }
     assert!(matches!(outcomes[0], ReservationResult::Reserved { .. }));
     assert_eq!(outcomes[1], ReservationResult::AtCapacity);
     Ok(())
+}
+
+async fn reserve_with_finite_inode_observation(
+    scope: &ConnectionJournal,
+    disk_id: &str,
+    profile: &StorageProfile,
+    nonce: char,
+) -> Result<ReservationResult, HostError> {
+    const ENGINE_ID: &str = "11111111-1111-4111-8111-111111111111";
+    const JOB_MEMORY: u64 = 8_589_934_592;
+    let sample_id = nonce.to_string().repeat(32);
+    let assignment = scope
+        .assignment_identity(AssignmentKey::Remote {
+            kind: "runner".to_owned(),
+            subject: sample_id.clone(),
+        })
+        .await?;
+    let permit = StartPermit::test_fixture_with_engine_id(&sample_id, ENGINE_ID);
+    let sample_generation_id = permit.sample_generation_id().to_owned();
+    let docker_root_digest = permit.docker_root_digest().to_owned();
+    let sample = StorageAdmissionSample::new(
+        StorageSampleIdentity::new(
+            sample_generation_id.clone(),
+            profile.generation_id().to_owned(),
+            profile.profile_digest().to_owned(),
+            ENGINE_ID.to_owned(),
+            docker_root_digest.clone(),
+        )?,
+        std::time::Instant::now(),
+        vec![StoragePoolObservation::new_with_filesystem(
+            disk_id.to_owned(),
+            "a".repeat(64),
+            StorageMedium::Disk,
+            StorageFilesystemKind::Other,
+            64_u64 << 30,
+            60_u64 << 30,
+            1_000_000,
+            1_000_000,
+        )?],
+        None,
+    )?;
+    let admission = super::StorageProvisioningAdmission::new(
+        sample,
+        super::super::super::storage_budget::StorageProvisioningMemoryObservation::new(
+            64_u64 << 30,
+            32_u64 << 30,
+        )?,
+    );
+    scope
+        .try_reserve_with_provisioning(
+            ReservationRequest {
+                assignment: &assignment,
+                engine_id: ENGINE_ID,
+                docker_root_digest: &docker_root_digest,
+                cpu_millicores: 2_000,
+                memory_bytes: JOB_MEMORY,
+                sample_generation_id: &sample_generation_id,
+            },
+            permit,
+            admission,
+        )
+        .await
 }
