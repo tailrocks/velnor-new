@@ -1,8 +1,8 @@
 set -euo pipefail
 : "${VELNOR_UPGRADE_DIR:?}" "${GITHUB_OUTPUT:?}"
 dir=$VELNOR_UPGRADE_DIR
-rm -rf "$dir"
-mkdir -p "$dir/out" "$dir/bin"
+rm -rf "$dir/out"
+mkdir -p "$dir/out"
 printf '%s\n' "$VELNOR_CATALOG_BUMPER_SOURCE" > "$dir/bump-gradle-catalog.py"
 summary=$dir/out/summary.md
 failures=$dir/failures.md
@@ -10,35 +10,24 @@ failures=$dir/failures.md
 : > "$failures"
 changed() { printf -- '- %s\n' "$1" >> "$dir/changes.md"; printf 'velnor: %s\n' "$1"; }
 failed() { printf -- '- %s\n' "$1" >> "$failures"; printf '::warning::%s\n' "$1"; }
-fetch() { curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error --location --retry 3 --output "$1" "$2"; }
-sha256_check() {
-  if command -v sha256sum >/dev/null 2>&1; then sha256sum -c "$1" >/dev/null; else shasum -a 256 -c "$1" >/dev/null; fi
-}
 newer() { [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n 1)" = "$2" ]; }
 
-# 1. Velnor itself: the latest published release manifest (no floating
-# endpoint at generation time; this job is the bump).
+# 1. Velnor itself: the newest stable release, verified (digest and build
+# provenance) by the previous step before any repository code ran. The patch
+# may select only that release, and verify regenerates with it.
 manifest=.velnor/release-manifest.json
-fetch "$dir/release-manifest.json" https://github.com/tailrocks/velnor-new/releases/latest/download/release-manifest.json
-jq -e '.schema == 1 and .repository == "tailrocks/velnor-new" and (.version | test("^[0-9]+[.][0-9]+[.][0-9]+$")) and (.commit | test("^[0-9a-f]{40}$"))' "$dir/release-manifest.json" >/dev/null \
-  || { echo "::error::upgrade_velnor_manifest_invalid: the latest tailrocks/velnor-new release manifest failed validation"; exit 1; }
+verified=$dir/velnor/release-manifest.json
 current_velnor=$(jq -r .version "$manifest")
-latest_velnor=$(jq -r .version "$dir/release-manifest.json")
-if newer "$current_velnor" "$latest_velnor"; then
-  cp "$dir/release-manifest.json" "$manifest"
+latest_velnor=$(jq -r .version "$verified")
+if newer "$latest_velnor" "$current_velnor"; then
+  echo "::error::upgrade_velnor_pinned_ahead: $manifest pins velnor-actions $current_velnor, newer than the latest stable release $latest_velnor"
+  exit 1
+fi
+if ! cmp -s "$verified" "$manifest"; then
+  cp "$verified" "$manifest"
   changed "velnor-actions $current_velnor -> $latest_velnor"
 fi
-version=$(jq -r .version "$manifest")
-asset=$(jq -r '.targets[] | select(.target == "x86_64-unknown-linux-gnu") | .artifact' "$manifest")
-digest=$(jq -r '.targets[] | select(.target == "x86_64-unknown-linux-gnu") | .sha256' "$manifest")
-case "$asset" in
-  "https://github.com/tailrocks/velnor-new/releases/download/v$version/velnor-actions-$version-x86_64-unknown-linux-gnu") ;;
-  *) echo "::error::upgrade_velnor_asset_untrusted: $asset"; exit 1 ;;
-esac
-fetch "$dir/bin/velnor-actions" "$asset"
-printf '%s  %s\n' "$digest" "$dir/bin/velnor-actions" > "$dir/velnor.sha256"
-sha256_check "$dir/velnor.sha256" || { echo "::error::upgrade_velnor_digest_mismatch: $asset"; exit 1; }
-chmod 755 "$dir/bin/velnor-actions"
+version=$latest_velnor
 
 # 2. Mise tools other than Rust, then Rust (kept separate so a Rust release
 # the new Velnor catalog does not know yet can be rolled back alone).
@@ -133,7 +122,7 @@ for catalog in $(git ls-files -- 'gradle/libs.versions.toml' '*/gradle/libs.vers
 done
 
 # 6. Regenerate .github/ (and every generated file) with the selected Velnor.
-generate() { "$dir/bin/velnor-actions" generate > "$dir/generate.log" 2>&1; }
+generate() { velnor_generate_prerequisites > "$dir/generate.log" 2>&1 && "$dir/velnor/bin/velnor-actions" generate >> "$dir/generate.log" 2>&1; }
 if ! generate; then
   if grep -q 'rust_channel_manifest_not_catalogued' "$dir/generate.log" && [ -d "$dir/pre-rust" ]; then
     for file in $rust_files; do cp "$dir/pre-rust/$file" "$file"; done
