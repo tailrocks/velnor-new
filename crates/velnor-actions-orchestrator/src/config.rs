@@ -224,6 +224,9 @@ struct PartialWorkflow {
     /// One tagged task inventory for all explicit workflow work.
     #[serde(default)]
     tasks: Vec<WorkflowTask>,
+    /// Standalone compile-capable Mise task suites.
+    #[serde(default)]
+    task_suites: Vec<velnor_actions_contract::MiseTaskSuite>,
     /// Optional protected post-merge `OpenTofu` apply declaration.
     tofu_apply: Option<velnor_actions_contract::TofuApplyConfig>,
     /// Optional closed review completion emitter.
@@ -333,6 +336,7 @@ impl PartialWorkflow {
             pull_request_cache_policy: self.pull_request_cache_policy,
             runner_label: self.runner_label,
             tasks: self.tasks,
+            task_suites: self.task_suites,
             tofu_apply: self.tofu_apply,
             review_completion: self.review_completion,
             verify: self.verify,

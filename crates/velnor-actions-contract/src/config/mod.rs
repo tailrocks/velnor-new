@@ -23,6 +23,7 @@ mod image_jobs;
 mod image_task;
 mod images;
 mod mise;
+mod mise_task_suites;
 pub mod playwright_lock;
 mod preview_policy;
 mod private_sources;
@@ -47,6 +48,7 @@ mod stacks;
 mod task_source;
 mod tofu;
 mod tofu_apply;
+mod toolchain_consistency;
 mod tools;
 mod upgrades;
 mod verification;
@@ -108,6 +110,7 @@ pub use mise::{
     CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind,
     MiseCheck, is_valid_check_system_build, is_valid_check_system_version, is_valid_mise_task_name,
 };
+pub use mise_task_suites::{MiseTaskSuite, MiseTaskSuiteEvent};
 pub use private_sources::{
     DEPS_LOCK_PATH, PrivateAssetSource, PrivateGitTreeSource, PrivateSourcesConfig,
     is_valid_asset_name, is_valid_extract_to, is_valid_github_owner, is_valid_github_repo_name,
@@ -272,6 +275,11 @@ impl VelnorConfig {
                 ));
             }
         }
+        mise_task_suites::validate_rust_suite_slug_collisions(
+            suites,
+            &self.workflow.task_suites,
+            file,
+        )?;
         self.check_binary_release_authority(file)?;
         if let Some(apply) = &self.workflow.tofu_apply {
             let roots = self.stacks.tofu.as_ref().ok_or_else(|| {
@@ -306,26 +314,6 @@ impl VelnorConfig {
         self.check_checks(file)?;
         validate_images(&self.images, file)?;
         self.check_shard_budgets(file)?;
-        Ok(())
-    }
-
-    fn check_toolchain_consistency(&self, file: &str) -> Result<(), ContractError> {
-        if let (Some(stack_tc), Some(tools_tc)) = (
-            self.stacks
-                .rust
-                .as_ref()
-                .and_then(|r| r.toolchain.as_deref()),
-            self.tools.get("rust"),
-        ) && stack_tc != tools_tc
-        {
-            return Err(ContractError::config(
-                file,
-                "stacks.rust.toolchain",
-                format!(
-                    "conflicting_rust_toolchain:stacks.rust.toolchain={stack_tc},tools.rust={tools_tc}"
-                ),
-            ));
-        }
         Ok(())
     }
 
