@@ -210,6 +210,19 @@ fn task_payload_program_follows_route_driver() {
 }
 
 #[test]
+fn task_argv_rejects_unknown_compile_driver() {
+    let catalog = ToolCatalog::pinned();
+    let mut task = group_with_driver(CompileDriver::Cargo);
+    task.identity.compile_driver = "unknown-driver".to_owned();
+
+    assert!(matches!(
+        task_argv(&task, &catalog),
+        Err(OrchestratorError::Contract { problem })
+            if problem == "unknown_compile_driver:unknown-driver"
+    ));
+}
+
+#[test]
 fn task_runner_tools_follow_test_runner() {
     let catalog = ToolCatalog::pinned();
     let nextest = catalog.tool_spec(PinnedTool::Nextest);
