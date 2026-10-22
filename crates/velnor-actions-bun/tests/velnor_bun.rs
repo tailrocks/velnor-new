@@ -7,6 +7,8 @@ mod impl_bun_jsonc;
 mod impl_bun_lockfile;
 #[path = "impl_bun_misc.rs"]
 mod impl_bun_misc;
+#[path = "impl_bun_playwright_script.rs"]
+mod impl_bun_playwright_script;
 #[path = "impl_bun_reads.rs"]
 mod impl_bun_reads;
 #[path = "impl_bun_select.rs"]

@@ -52,6 +52,10 @@ pub struct BunMemberConfig {
     /// `stacks.bun.timeout_minutes`, then `workflow.crate_timeout_minutes`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timeout_minutes: Option<u32>,
+    /// Declared suites keyed by suite id: script groups that run in their own
+    /// jobs beside the member job (hard decision 6 amendment).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub suites: BTreeMap<String, BunSuiteConfig>,
 }
 
 /// Closed set of Playwright browsers Velnor provisions.
@@ -158,6 +162,7 @@ impl BunStackConfig {
             if let Some(minutes) = member.timeout_minutes {
                 JobTimeout::check_config(minutes, file, "stacks.bun.members.timeout_minutes")?;
             }
+            suites::validate_suites(&member.suites, file)?;
         }
         self.validate_inputs(file)
     }
@@ -266,6 +271,10 @@ fn validate_browsers(browsers: &[BunBrowser], file: &str) -> Result<(), Contract
     }
     Ok(())
 }
+
+#[path = "bun_suites.rs"]
+mod suites;
+pub use suites::*;
 
 #[cfg(test)]
 #[path = "bun_tests.rs"]

@@ -1,0 +1,1 @@
+{"name":"@fixture/ui","scripts":{"lint":"oxlint","test":"vitest run"}}

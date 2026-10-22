@@ -1,4 +1,4 @@
-use super::{BunStackConfig, is_valid_member_name, is_valid_script_name};
+use super::{BunStackConfig, is_valid_member_name, is_valid_script_name, is_valid_suite_id};
 use serde_json::{Value, json};
 
 fn parse(wire: Value) -> BunStackConfig {
@@ -128,4 +128,242 @@ fn member_timeout_is_bounded_and_omitted_at_default() {
         None
     );
     assert_eq!(serde_json::to_value(&config).expect("serialize"), wire);
+}
+
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "json! literals read best passed by value"
+)]
+fn suites(suites: Value) -> Value {
+    json!({ "roots": ["."], "members": { "ui": { "suites": suites } } })
+}
+
+#[test]
+fn suites_validate_round_trip_and_omit_defaults() {
+    let wire = suites(json!({
+        "unit": { "scripts": ["test"] },
+        "browser": { "scripts": ["test:browser"], "browsers": ["chromium", "webkit"], "timeout_minutes": 25 },
+        "smoke": { "scripts": ["smoke"], "required": false }
+    }));
+    let config = parse(wire.clone());
+    config.validate("config.toml").expect("valid");
+    let member = config.members.get("ui").expect("member");
+    assert!(member.suites.get("unit").expect("unit").required);
+    assert!(!member.suites.get("smoke").expect("smoke").required);
+    assert_eq!(serde_json::to_value(&config).expect("serialize"), wire);
+    let explicit = parse(suites(
+        json!({ "unit": { "scripts": ["test"], "required": true } }),
+    ));
+    assert_eq!(
+        serde_json::to_value(&explicit).expect("serialize"),
+        suites(json!({ "unit": { "scripts": ["test"] } }))
+    );
+}
+
+#[test]
+fn suite_tables_are_strict() {
+    for wire in [
+        suites(json!({ "unit": { "scripts": ["test"], "run": "bun test" } })),
+        suites(json!({ "unit": { "scripts": ["test"], "env": { "A": "b" } } })),
+        suites(json!({ "unit": { "browsers": ["chromium"] } })),
+        suites(json!({ "unit": { "scripts": ["test"], "browsers": ["opera"] } })),
+    ] {
+        assert!(serde_json::from_value::<BunStackConfig>(wire).is_err());
+    }
+}
+
+#[test]
+fn every_suite_code_is_reported() {
+    let cases = [
+        (
+            json!({ "Unit": { "scripts": ["test"] } }),
+            "bad_suite_id:Unit",
+        ),
+        (
+            json!({ "1unit": { "scripts": ["test"] } }),
+            "bad_suite_id:1unit",
+        ),
+        (
+            json!({ "unit-": { "scripts": ["test"] } }),
+            "bad_suite_id:unit-",
+        ),
+        (
+            json!({ "a--b": { "scripts": ["test"] } }),
+            "bad_suite_id:a--b",
+        ),
+        (
+            json!({ "report": { "scripts": ["test"] } }),
+            "reserved_suite_id:report",
+        ),
+        (
+            json!({ "assets": { "scripts": ["test"] } }),
+            "reserved_suite_id:assets",
+        ),
+        (
+            json!({ "unit": { "scripts": [] } }),
+            "empty_suite_scripts:unit",
+        ),
+        (
+            json!({ "unit": { "scripts": ["a b"] } }),
+            "bad_script_name:a b",
+        ),
+        (
+            json!({ "unit": { "scripts": ["test", "test"] } }),
+            "duplicate_script:test",
+        ),
+        (
+            json!({ "a": { "scripts": ["test"] }, "b": { "scripts": ["lint", "test"] } }),
+            "suite_script_claimed_twice:test",
+        ),
+        (
+            json!({ "unit": { "scripts": ["test"], "browsers": ["webkit", "chromium"] } }),
+            "must_be_sorted_and_unique",
+        ),
+        (
+            json!({ "unit": { "scripts": ["test"], "timeout_minutes": 0 } }),
+            "bad_timeout:0:expected_1..=360",
+        ),
+        (
+            json!({ "unit": { "scripts": ["test"], "timeout_minutes": 361 } }),
+            "bad_timeout:361:expected_1..=360",
+        ),
+    ];
+    for (table, code) in cases {
+        let got = problem(suites(table));
+        assert!(got.contains(code), "{code}: {got}");
+    }
+}
+
+#[test]
+fn suite_id_grammar() {
+    for id in ["unit", "browser", "browser-dev", "e2e2", &"a".repeat(32)] {
+        assert!(is_valid_suite_id(id), "{id}");
+    }
+    for id in [
+        "",
+        "-a",
+        "a-",
+        "a--b",
+        "A",
+        "a_b",
+        "a.b",
+        "1a",
+        &"a".repeat(33),
+    ] {
+        assert!(!is_valid_suite_id(id), "{id:?}");
+    }
+}
+
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "json! literals read best passed by value"
+)]
+fn playwright_suite(playwright: Value) -> Value {
+    suites(json!({
+        "browser": { "scripts": ["test:browser"], "browsers": ["chromium", "webkit"], "playwright": playwright }
+    }))
+}
+
+#[test]
+fn playwright_tables_validate_round_trip_and_omit_defaults() {
+    let wire = playwright_suite(json!({
+        "projects": ["chromium-desktop", "webkit-desktop"],
+        "shards": 4,
+        "max_parallel": 8,
+        "fail_on_flaky": true
+    }));
+    let config = parse(wire.clone());
+    config.validate("config.toml").expect("valid");
+    assert_eq!(serde_json::to_value(&config).expect("serialize"), wire);
+    let bare = playwright_suite(json!({}));
+    let config = parse(bare.clone());
+    config.validate("config.toml").expect("valid");
+    let playwright = config.members["ui"].suites["browser"]
+        .playwright
+        .clone()
+        .expect("playwright");
+    assert_eq!(playwright.shards, 1);
+    assert_eq!(playwright.legs(), 1);
+    assert_eq!(serde_json::to_value(&config).expect("serialize"), bare);
+    let explicit = parse(playwright_suite(
+        json!({ "shards": 1, "fail_on_flaky": false }),
+    ));
+    assert_eq!(serde_json::to_value(&explicit).expect("serialize"), bare);
+}
+
+#[test]
+fn playwright_tables_are_strict() {
+    for table in [
+        json!({ "argv": ["--grep", "x"] }),
+        json!({ "reporter": "html" }),
+        json!({ "shards": "4" }),
+    ] {
+        assert!(serde_json::from_value::<BunStackConfig>(playwright_suite(table)).is_err());
+    }
+}
+
+#[test]
+fn every_playwright_code_is_reported() {
+    let two_scripts = suites(json!({
+        "browser": { "scripts": ["a", "b"], "browsers": ["chromium"], "playwright": {} }
+    }));
+    assert!(problem(two_scripts).contains("playwright_suite_one_script:browser"));
+    let no_browsers = suites(json!({ "browser": { "scripts": ["a"], "playwright": {} } }));
+    assert!(problem(no_browsers).contains("playwright_suite_without_browsers:browser"));
+    let cases = [
+        (json!({ "shards": 0 }), "bad_shards:0:expected_1..=64"),
+        (json!({ "shards": 65 }), "bad_shards:65:expected_1..=64"),
+        (json!({ "projects": ["a b"] }), "bad_project_name:a b"),
+        (json!({ "projects": ["'x'"] }), "bad_project_name:'x'"),
+        (json!({ "projects": ["${{x}}"] }), "bad_project_name:${{x}}"),
+        (json!({ "projects": ["-x"] }), "bad_project_name:-x"),
+        (
+            json!({ "projects": ["b", "a"] }),
+            "projects_must_be_sorted_and_unique",
+        ),
+        (
+            json!({ "projects": ["a", "a"] }),
+            "projects_must_be_sorted_and_unique",
+        ),
+        (
+            json!({ "projects": ["a", "b"], "shards": 33 }),
+            "too_many_legs:66:expected_..=64",
+        ),
+        (json!({ "max_parallel": 0 }), "bad_max_parallel"),
+        (
+            json!({ "shards": 2, "max_parallel": 3 }),
+            "bad_max_parallel",
+        ),
+    ];
+    for (table, code) in cases {
+        let got = problem(playwright_suite(table));
+        assert!(got.contains(code), "{code}: {got}");
+    }
+}
+
+#[test]
+fn leg_count_is_bounded_at_sixty_four() {
+    let at = playwright_suite(json!({ "projects": ["a", "b"], "shards": 32, "max_parallel": 64 }));
+    parse(at).validate("config.toml").expect("64 legs");
+    let over = playwright_suite(json!({ "projects": ["a", "b", "c", "d", "e"], "shards": 13 }));
+    assert!(problem(over).contains("too_many_legs:65:expected_..=64"));
+}
+
+#[test]
+fn project_name_grammar() {
+    for name in ["chromium", "webkit-desktop", "Mobile.Safari", "a:b_c", "1x"] {
+        assert!(super::is_valid_project_name(name), "{name}");
+    }
+    for name in [
+        "",
+        "-x",
+        "a b",
+        "a\"b",
+        "a'b",
+        "a$b",
+        "a/b",
+        &"a".repeat(65),
+    ] {
+        assert!(!super::is_valid_project_name(name), "{name:?}");
+    }
 }

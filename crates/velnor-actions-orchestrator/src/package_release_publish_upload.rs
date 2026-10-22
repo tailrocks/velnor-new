@@ -1,7 +1,7 @@
 //! Closed release-upload host and literal binary request arguments.
 //!
 //! GitHub's upload endpoint is uploads.github.com, not the REST API host.
-//! Pinned gh 2.102.1 uses absolute URLs unchanged and normalizes this GitHub
+//! Pinned gh 2.103.0 uses absolute URLs unchanged and normalizes this GitHub
 //! subdomain to github.com for `GH_TOKEN` selection; no remote URL is accepted.
 
 use super::{GitHubApi, OrchestratorError, internal};

@@ -230,12 +230,14 @@ fn policy_file_is_complete() -> Result<(), Box<dyn Error>> {
         "mise = \"2026.10.17\"",
         "rust = \"1.99.1\"",
         "mr-boxington = \"1.26.0\"",
-        "gh = \"2.102.1\"",
+        "gh = \"2.103.0\"",
         "jactionlint = \"2.3.0\"",
         "shellcheck = \"0.11.0\"",
         "nextest = \"0.9.149\"",
+        "opentofu = \"1.13.2\"",
+        "release-plz = \"0.3.174\"",
         "crane = \"0.22.1\"",
-        "bun = \"1.4.3\"",
+        "bun = \"1.4.4\"",
         "cosign = \"3.1.4\"",
     ] {
         assert!(policy.contains(marker), "policy misses {marker}");

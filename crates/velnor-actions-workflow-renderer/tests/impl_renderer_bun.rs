@@ -9,8 +9,10 @@ use velnor_actions_workflow_renderer::private_source_steps::{
     PrivateSourcesSpec, private_source_steps,
 };
 use velnor_actions_workflow_renderer::verification_jobs::{
-    BUN_ROOT_ENV, BUN_RUNNER, BUN_SCOPES_ENV, BunMemberPolicy, PLAYWRIGHT_PINS_ENV,
-    PLAYWRIGHT_ROOT_ENV, PLAYWRIGHT_VERSION_ENV, build_bun_member_job, bun_registry_step,
+    BUN_ROOT_ENV, BUN_RUNNER, BUN_SCOPES_ENV, BunLegMatrix, BunMemberPolicy, BunReportPolicy,
+    BunSuitePolicy, PLAYWRIGHT_PINS_ENV, PLAYWRIGHT_ROOT_ENV, PLAYWRIGHT_VERSION_ENV,
+    build_bun_member_job, build_bun_report_job, build_bun_suite_job, bun_blob_upload_step,
+    bun_blobs_download_step, bun_registry_step, bun_report_upload_step, bun_results_upload_step,
     playwright_install_step,
 };
 use velnor_actions_workflow_renderer::{RenderError, shell_step};
@@ -226,5 +228,148 @@ fn the_playwright_install_is_single_validated_and_ahead_of_the_scripts() -> Resu
         assert!(playwright_install_step("frontend", version, pins).is_err());
     }
     assert!(playwright_install_step("../x", "1.64.1", &pins).is_err());
+    Ok(())
+}
+
+fn suite(steps: Vec<Step>) -> BunSuitePolicy {
+    BunSuitePolicy {
+        member: "@chainargos/ui".to_owned(),
+        suite: "unit".to_owned(),
+        id: "bun-chainargos-ui--unit".to_owned(),
+        timeout: JobTimeout::DEFAULT,
+        required: true,
+        steps,
+        matrix: None,
+        report: None,
+    }
+}
+
+#[test]
+fn a_suite_job_has_the_member_shape_and_its_own_name_and_gate() -> Result<(), RenderError> {
+    let steps = vec![step("Install", false)?, step("Test", true)?];
+    let member = build_bun_member_job(&policy(steps.clone()), CHECKOUT)?;
+    let job = build_bun_suite_job(&suite(steps), CHECKOUT)?;
+    assert_eq!(job.display_name, "Bun / @chainargos/ui / unit");
+    assert_eq!(job.runs_on, BUN_RUNNER);
+    assert_eq!(job.needs, ["plan"]);
+    assert_eq!(job.permissions, member.permissions);
+    assert_eq!(job.steps, member.steps);
+    assert!(
+        job.condition
+            .expect("gate")
+            .contains(",bun-chainargos-ui--unit,")
+    );
+    Ok(())
+}
+
+#[test]
+fn suite_policies_share_the_member_invariants_and_their_id_shape() -> Result<(), RenderError> {
+    let reject = |policy: BunSuitePolicy, code: &str| {
+        let error = build_bun_suite_job(&policy, CHECKOUT).expect_err(code);
+        assert!(error.to_string().contains(code), "{code}: {error}");
+    };
+    reject(suite(Vec::new()), "bun_job_steps_empty");
+    reject(
+        suite(vec![
+            step("A", true)?,
+            step("Install", false)?,
+            step("B", true)?,
+        ]),
+        "bun_parallel_group_split",
+    );
+    for id in [
+        "bun-chainargos-ui",
+        "bun-chainargos-ui--other",
+        "bun-a--b--unit",
+    ] {
+        let mut wrong = suite(vec![step("Test", false)?]);
+        wrong.id = id.to_owned();
+        reject(wrong, "bun_suite_job_id");
+    }
+    let mut prefix = suite(vec![step("Test", false)?]);
+    prefix.id = "ui--unit".to_owned();
+    reject(prefix, "bun_job_id");
+    let mut registry = suite(vec![step("Install", false)?]);
+    registry.steps.extend([
+        bun_registry_step(".", &["@chainargos".to_owned()], &BTreeMap::new())?,
+        bun_registry_step(".", &["@chainargos".to_owned()], &BTreeMap::new())?,
+    ]);
+    reject(registry, "bun_registry_phase_repeated");
+    Ok(())
+}
+
+#[test]
+fn a_suite_with_the_registry_phase_reads_packages() -> Result<(), RenderError> {
+    let job = build_bun_suite_job(
+        &suite(vec![
+            bun_registry_step(".", &["@chainargos".to_owned()], &BTreeMap::new())?,
+            step("Test", true)?,
+        ]),
+        CHECKOUT,
+    )?;
+    let permissions = job.permissions.expect("permissions");
+    assert_eq!(permissions.packages, PermissionLevel::Read);
+    assert_eq!(permissions.id_token, PermissionLevel::None);
+    Ok(())
+}
+
+#[test]
+fn only_generated_velnor_pw_artifact_actions_enter_a_bun_job() -> Result<(), RenderError> {
+    let leg = [step("Install", false)?, step("Test", true)?];
+    let mut ok = suite(leg.to_vec());
+    ok.steps
+        .push(bun_blob_upload_step("bun-chainargos-ui--unit")?);
+    ok.steps.push(bun_results_upload_step(
+        "bun-chainargos-ui--unit",
+        "packages/ui",
+        7,
+    )?);
+    build_bun_suite_job(&ok, CHECKOUT)?;
+    let mut foreign = suite(leg.to_vec());
+    let mut other = bun_blob_upload_step("bun-chainargos-ui--unit")?;
+    if let StepKind::Action { with, .. } = &mut other.kind {
+        with.insert("name".to_owned(), "something-else".to_owned());
+    }
+    foreign.steps.push(other);
+    let error = build_bun_suite_job(&foreign, CHECKOUT).expect_err("foreign artifact");
+    assert!(error.to_string().contains("bun_job_action_step"), "{error}");
+    Ok(())
+}
+
+#[test]
+fn a_report_job_is_non_gating_and_needs_its_legs() -> Result<(), RenderError> {
+    let mut policy = suite(vec![step("Install", false)?, step("Test", true)?]);
+    policy.matrix = Some(BunLegMatrix::new(&[], 2, None));
+    policy.report = Some(BunReportPolicy {
+        timeout: JobTimeout::DEFAULT,
+        steps: vec![
+            step("Install", false)?,
+            bun_blobs_download_step(&policy.id)?,
+            step("Merge Playwright reports", false)?,
+            bun_report_upload_step(&policy.id, 14)?,
+        ],
+    });
+    assert_eq!(
+        policy.job_ids(),
+        ["bun-chainargos-ui--unit", "bun-chainargos-ui--unit--report"]
+    );
+    let job = build_bun_report_job(&policy, CHECKOUT)?;
+    assert_eq!(job.display_name, "Bun / @chainargos/ui / unit / report");
+    assert_eq!(job.needs, ["plan", "bun-chainargos-ui--unit"]);
+    assert_eq!(
+        job.condition.as_deref(),
+        Some("!cancelled() && needs.bun-chainargos-ui--unit.result != 'skipped'")
+    );
+    assert_eq!(
+        job.permissions.expect("permissions").packages,
+        PermissionLevel::None
+    );
+    let mut lonely = suite(vec![step("Test", true)?]);
+    lonely.report = policy.report.clone();
+    let error = build_bun_suite_job(&lonely, CHECKOUT).expect_err("report without legs");
+    assert!(
+        error.to_string().contains("bun_report_without_matrix"),
+        "{error}"
+    );
     Ok(())
 }

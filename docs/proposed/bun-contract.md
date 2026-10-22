@@ -134,7 +134,10 @@ steps like every pinned-tool job. Steps:
    `Lint`, `Test`, `Build`; any other script is `Script <name>`.
 
 Every Bun invocation runs under `mise exec` with the isolation environment and
-`BUN_INSTALL_CACHE_DIR=$RUNNER_TEMP/velnor/bun-cache`.
+`BUN_INSTALL_CACHE_DIR=$RUNNER_TEMP/velnor/bun-cache`, the path of the
+`bun-install` [cache family](cache-families.md) (one entry per root, keyed by
+`bun.lock`): restored before the install, saved after it on a trusted push.
+`node_modules` is never cached; every job rebuilds it from that cache.
 
 ### Registry phase (`bun_registry_install`)
 
@@ -254,8 +257,16 @@ hash-pinned lock. Decisions:
   another build. Only `ubuntu-26.04` x86-64 is supported
   (`unsupported_platform` in the lock).
 - The install lands in `$RUNNER_TEMP/velnor/ms-playwright`, the path of the
-  `playwright-browsers` [cache family](cache-families.md) (trusted writers only;
-  its restore and save steps are not generated yet).
+  `playwright-browsers` [cache family](cache-families.md) (trusted writers
+  only). The member job restores it read-only before the install and saves it
+  after the install on a trusted push, with size admission
+  ([cache decision 8](cache-decisions.md)).
+
+## Suites and Playwright sharding
+
+Declared suites (separate jobs for groups of a member's scripts, optionally a
+Playwright project and shard matrix) are specified in
+[Bun browser suites](bun-browser-suites.md).
 
 ## Suites and Playwright sharding
 
@@ -265,8 +276,6 @@ Playwright project and shard matrix) are specified in
 
 ## Remaining work
 
-- `bun-install` and `playwright-browsers` cache families (design 3.4): the Bun
-  package cache and the browsers are currently cold in every job.
 - Members of an npm publication that depend on private npm scopes (the
   unprivileged build holds no registry credential).
 - Live qualification against the private fixture repositories: the lifecycle phase
@@ -278,7 +287,14 @@ Playwright project and shard matrix) are specified in
   timeout (`config/bun_tests.rs`).
 - Adapter: lockfile policy, JSONC, workspace resolution, `bunfig`, tool
   agreement, reads and claims (`velnor-actions-bun` tests).
-- Renderer: job shape, permissions and role gates (`impl_renderer_bun.rs`).
+- Renderer: job shape, permissions and role gates for member and suite jobs
+  (`impl_renderer_bun.rs`).
+- Suites: see [Bun browser suites](bun-browser-suites.md#verification).
+- Golden: `fixtures/bun-workspace` (two members, Chromium on one) must
+  generate a byte-identical `ci.yml` (`impl_bun_golden.rs`); it proves that
+  repositories which declare no suite are unchanged by later Bun features.
+  `fixtures/bun-workspace-suites` (a sanitized platform configuration) is the
+  opt-in golden. Regenerate deliberately with `VELNOR_UPDATE_GOLDENS=1`.
 - Orchestrator: generated jobs, determinism, project-policy and lockfile
   failures (`impl_bun.rs`), the member timeout chain (`impl_bun_timeout.rs`)
   and plan dispositions (`impl_bun_select.rs`).

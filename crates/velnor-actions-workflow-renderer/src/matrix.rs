@@ -26,6 +26,9 @@ use qualification::QUALIFICATION_OUTPUTS;
 #[path = "matrix_suites.rs"]
 pub(crate) mod suites;
 
+#[path = "matrix_bun.rs"]
+pub(crate) mod bun;
+
 /// Matrix marker: producer job backing `needs.<job>.outputs.<output>`.
 pub const MATRIX_NEEDS_JOB_ENV: &str = "VELNOR_MATRIX_NEEDS_JOB";
 /// Matrix marker: producer output name consumed via `fromJSON`.
@@ -175,6 +178,8 @@ pub(crate) fn scrub_matrix_marker(jobs: &BTreeMap<String, Job>) -> BTreeMap<Stri
                     suites::SUITE_MAX_PARALLEL_ENV,
                     suites::SUITE_FAIL_FAST_ENV,
                     suites::SUITE_ALLOW_FAILURE_ENV,
+                    bun::BUN_LEGS_ENV,
+                    bun::BUN_MAX_PARALLEL_ENV,
                 ] {
                     env.remove(key);
                 }
