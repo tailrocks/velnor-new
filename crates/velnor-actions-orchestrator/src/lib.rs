@@ -52,7 +52,6 @@ mod matrix_step;
 mod mbx_preflight;
 mod merge;
 mod merge_request;
-mod mise_task_suites_emit;
 mod native_image_tasks;
 mod native_mise_tasks;
 mod native_mise_version;

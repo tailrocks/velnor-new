@@ -7,6 +7,9 @@ use std::path::{Path, PathBuf};
 #[path = "rust_install_audit.rs"]
 mod rust_install_audit;
 
+#[path = "mise_task_suites_emit.rs"]
+mod mise_task_suites_emit;
+
 use velnor_actions_actionlint::render_jactionlint_yaml;
 use velnor_actions_contract::{ExecutionMode, expand_workflow};
 use velnor_actions_workflow_renderer::guard::{self, SafeTreePath};
@@ -199,7 +202,7 @@ fn render_all(
         version,
     )?);
     extra.extend(crate::rust_suites_emit::suite_workflow_files(prep)?);
-    extra.extend(crate::mise_task_suites_emit::suite_workflow_files(prep)?);
+    extra.extend(mise_task_suites_emit::suite_workflow_files(prep)?);
     if let Some(dco) = &prep.config.dco {
         extra.push(velnor_actions_workflow_renderer::dco::render_dco_yml(
             dco, version,
