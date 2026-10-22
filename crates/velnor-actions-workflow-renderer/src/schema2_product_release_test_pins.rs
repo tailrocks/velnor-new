@@ -81,7 +81,7 @@ pub(super) fn test_pins() -> ProductReleasePins {
         verify_lint_argv: vec![
             "sh".to_owned(),
             "-c".to_owned(),
-            "echo verify jactionlint".to_owned(),
+            crate::toolchain_env::with_credential_unset_script("echo verify jactionlint"),
         ],
         gh_argv: exec_argv(&[PinnedTool::Gh], "gh", &[], &catalog),
         rust_version: catalog.version(PinnedTool::Rust).to_owned(),
