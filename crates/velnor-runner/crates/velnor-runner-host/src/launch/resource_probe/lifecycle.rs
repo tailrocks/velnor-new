@@ -9,7 +9,7 @@ use crate::journal::{
 };
 
 use super::projection::{DockerRoot, ProbeProjection};
-use super::provider::ImageProvider;
+use super::provider::{ImageProvider, VerifiedCandidate};
 use super::sample::Observation;
 
 #[path = "lifecycle/support.rs"]
@@ -214,15 +214,11 @@ async fn collect_for_request_with_recovery<P: ImageProvider>(
         active,
     )
     .await?;
-    let Some(candidate) = provider
-        .verified_candidate(docker, journal, &engine_id, &before)
-        .await?
+    let Some((candidate, daemon_architecture)) =
+        candidate_for_current_daemon(docker, journal, provider, &engine_id, &before).await?
     else {
         return Ok(None);
     };
-    let daemon_architecture = super::provider::daemon_architecture(&before)
-        .ok_or(HostError::Identity)?
-        .to_owned();
     // Release preparation may take minutes. Start the fresh-sample budget only
     // after the verified image has been rebound to the selected daemon.
     let deadline = Deadline::new();
@@ -283,4 +279,23 @@ async fn recover_active_probe(
         .await?;
     }
     Ok(())
+}
+
+async fn candidate_for_current_daemon<P: ImageProvider>(
+    docker: &Docker,
+    journal: &Journal,
+    provider: &P,
+    engine_id: &str,
+    before: &SystemInfo,
+) -> Result<Option<(VerifiedCandidate, String)>, HostError> {
+    let Some(candidate) = provider
+        .verified_candidate(docker, journal, engine_id, before)
+        .await?
+    else {
+        return Ok(None);
+    };
+    let daemon_architecture = super::provider::daemon_architecture(before)
+        .ok_or(HostError::Identity)?
+        .to_owned();
+    Ok(Some((candidate, daemon_architecture)))
 }
