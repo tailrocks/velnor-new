@@ -23,7 +23,7 @@ efecb8d39952401d4dade9601a608d1746e8609ea0c64a70258c0d1ab4f5ab02  ./.github/scri
 5e017708b3768509b90a65b2274e5a092c4a9535ece6c50a26122b8df0dd6eee  ./.github/velnor/task-execution-manifest-v1.json
 f1fbe4f57e7c36c87b4f9ba15576f03c43ad49b9b27133da125ff3bb0e89f3db  ./.github/workflows/cache-cleanup.yml
 7f6739486a03c9ccd9fc742bbbb162bc1cc3e456f947beb31458cd61da369c99  ./.github/workflows/cache-prune.yml
-593b0ad87c76ec7491e766c1b83c1db801973555659b0b1c3c535dbe5939d31d  ./.github/workflows/ci.yml
+ebadff216f8b2dd17a2a52dcbd5931127f4c3b84c11b6e38e8a5cadcd1de73fe  ./.github/workflows/ci.yml
 2606f8cf2759070d31585ec5d8bf49cc67cd734c7a00c36cf662adb2a83e186e  ./.github/workflows/freshness.yml
 8f72a99c6d73f15d1ff3ca325552d73d6e69126ec2679e3e29e8241a5c92ed50  ./.github/workflows/job-image-candidate.yml
 90ce364f4c4ac662a989d023e3e78b564d09f320f5cf25d71f289fad66d72871  ./.github/workflows/product-release-binary.yml

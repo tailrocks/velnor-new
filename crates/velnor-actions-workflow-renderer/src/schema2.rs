@@ -38,6 +38,7 @@ pub use consumer_preview::{
 };
 #[path = "schema2_ci_run_lookup.rs"]
 mod ci_run_lookup;
+pub(super) use ci_run_lookup::RETRY_DELAYS_SECONDS;
 #[path = "schema2_consumer_binary_release.rs"]
 mod consumer_binary_release;
 #[path = "schema2_features.rs"]
