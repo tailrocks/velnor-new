@@ -253,3 +253,117 @@ fn suite_id_grammar() {
         assert!(!is_valid_suite_id(id), "{id:?}");
     }
 }
+
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "json! literals read best passed by value"
+)]
+fn playwright_suite(playwright: Value) -> Value {
+    suites(json!({
+        "browser": { "scripts": ["test:browser"], "browsers": ["chromium", "webkit"], "playwright": playwright }
+    }))
+}
+
+#[test]
+fn playwright_tables_validate_round_trip_and_omit_defaults() {
+    let wire = playwright_suite(json!({
+        "projects": ["chromium-desktop", "webkit-desktop"],
+        "shards": 4,
+        "max_parallel": 8,
+        "fail_on_flaky": true
+    }));
+    let config = parse(wire.clone());
+    config.validate("config.toml").expect("valid");
+    assert_eq!(serde_json::to_value(&config).expect("serialize"), wire);
+    let bare = playwright_suite(json!({}));
+    let config = parse(bare.clone());
+    config.validate("config.toml").expect("valid");
+    let playwright = config.members["ui"].suites["browser"]
+        .playwright
+        .clone()
+        .expect("playwright");
+    assert_eq!(playwright.shards, 1);
+    assert_eq!(playwright.legs(), 1);
+    assert_eq!(serde_json::to_value(&config).expect("serialize"), bare);
+    let explicit = parse(playwright_suite(
+        json!({ "shards": 1, "fail_on_flaky": false }),
+    ));
+    assert_eq!(serde_json::to_value(&explicit).expect("serialize"), bare);
+}
+
+#[test]
+fn playwright_tables_are_strict() {
+    for table in [
+        json!({ "argv": ["--grep", "x"] }),
+        json!({ "reporter": "html" }),
+        json!({ "shards": "4" }),
+    ] {
+        assert!(serde_json::from_value::<BunStackConfig>(playwright_suite(table)).is_err());
+    }
+}
+
+#[test]
+fn every_playwright_code_is_reported() {
+    let two_scripts = suites(json!({
+        "browser": { "scripts": ["a", "b"], "browsers": ["chromium"], "playwright": {} }
+    }));
+    assert!(problem(two_scripts).contains("playwright_suite_one_script:browser"));
+    let no_browsers = suites(json!({ "browser": { "scripts": ["a"], "playwright": {} } }));
+    assert!(problem(no_browsers).contains("playwright_suite_without_browsers:browser"));
+    let cases = [
+        (json!({ "shards": 0 }), "bad_shards:0:expected_1..=64"),
+        (json!({ "shards": 65 }), "bad_shards:65:expected_1..=64"),
+        (json!({ "projects": ["a b"] }), "bad_project_name:a b"),
+        (json!({ "projects": ["'x'"] }), "bad_project_name:'x'"),
+        (json!({ "projects": ["${{x}}"] }), "bad_project_name:${{x}}"),
+        (json!({ "projects": ["-x"] }), "bad_project_name:-x"),
+        (
+            json!({ "projects": ["b", "a"] }),
+            "projects_must_be_sorted_and_unique",
+        ),
+        (
+            json!({ "projects": ["a", "a"] }),
+            "projects_must_be_sorted_and_unique",
+        ),
+        (
+            json!({ "projects": ["a", "b"], "shards": 33 }),
+            "too_many_legs:66:expected_..=64",
+        ),
+        (json!({ "max_parallel": 0 }), "bad_max_parallel"),
+        (
+            json!({ "shards": 2, "max_parallel": 3 }),
+            "bad_max_parallel",
+        ),
+    ];
+    for (table, code) in cases {
+        let got = problem(playwright_suite(table));
+        assert!(got.contains(code), "{code}: {got}");
+    }
+}
+
+#[test]
+fn leg_count_is_bounded_at_sixty_four() {
+    let at = playwright_suite(json!({ "projects": ["a", "b"], "shards": 32, "max_parallel": 64 }));
+    parse(at).validate("config.toml").expect("64 legs");
+    let over = playwright_suite(json!({ "projects": ["a", "b", "c", "d", "e"], "shards": 13 }));
+    assert!(problem(over).contains("too_many_legs:65:expected_..=64"));
+}
+
+#[test]
+fn project_name_grammar() {
+    for name in ["chromium", "webkit-desktop", "Mobile.Safari", "a:b_c", "1x"] {
+        assert!(super::is_valid_project_name(name), "{name}");
+    }
+    for name in [
+        "",
+        "-x",
+        "a b",
+        "a\"b",
+        "a'b",
+        "a$b",
+        "a/b",
+        &"a".repeat(65),
+    ] {
+        assert!(!super::is_valid_project_name(name), "{name:?}");
+    }
+}

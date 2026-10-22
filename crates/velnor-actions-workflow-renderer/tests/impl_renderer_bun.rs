@@ -237,6 +237,7 @@ fn suite(steps: Vec<Step>) -> BunSuitePolicy {
         timeout: JobTimeout::DEFAULT,
         required: true,
         steps,
+        matrix: None,
     }
 }
 

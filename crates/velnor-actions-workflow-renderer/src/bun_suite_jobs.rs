@@ -9,7 +9,10 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, JobTimeout, Step};
+use velnor_actions_contract::{Job, JobTimeout, Step, StepKind};
+
+use crate::matrix::bun::{BUN_LEGS_ENV, BUN_MAX_PARALLEL_ENV};
+pub use crate::matrix::bun::{BunLeg, BunLegMatrix};
 
 use crate::verification_jobs::bun_member_jobs::{
     BUN_RUNNER, bun_permissions, same_bun_job, validate_bun_steps,
@@ -34,6 +37,9 @@ pub struct BunSuitePolicy {
     pub required: bool,
     /// Steps after checkout, built by the orchestrator in execution order.
     pub steps: Vec<Step>,
+    /// Playwright legs, when the suite is sharded; the job then runs once
+    /// per leg and its one script step is the Playwright run.
+    pub matrix: Option<BunLegMatrix>,
 }
 
 impl BunSuitePolicy {
@@ -50,7 +56,29 @@ impl BunSuitePolicy {
         {
             return Err(invalid("bun_suite_job_id"));
         }
-        validate_bun_steps(&self.id, &self.steps)
+        validate_bun_steps(&self.id, &self.steps)?;
+        if let Some(matrix) = &self.matrix {
+            matrix.validate()?;
+            if self.steps.iter().filter(|step| step.parallel).count() != 1 {
+                return Err(invalid("bun_suite_matrix_one_script"));
+            }
+        }
+        Ok(())
+    }
+
+    /// Steps with the leg marker on the one script step of a sharded suite.
+    fn marked_steps(&self) -> Vec<Step> {
+        let mut steps = self.steps.clone();
+        if let Some(matrix) = &self.matrix
+            && let Some(step) = steps.iter_mut().find(|step| step.parallel)
+            && let StepKind::Shell { env, .. } = &mut step.kind
+        {
+            env.insert(BUN_LEGS_ENV.to_owned(), matrix.marker());
+            if let Some(cap) = matrix.max_parallel {
+                env.insert(BUN_MAX_PARALLEL_ENV.to_owned(), cap.to_string());
+            }
+        }
+        steps
     }
 }
 
@@ -65,7 +93,7 @@ pub fn build_bun_suite_job(
 ) -> Result<Job, RenderError> {
     policy.validate()?;
     let mut all = vec![steps::checkout_step(checkout_uses)?];
-    all.extend(policy.steps.iter().cloned());
+    all.extend(policy.marked_steps());
     Ok(Job {
         services: Vec::new(),
         display_name: format!("Bun / {} / {}", policy.member, policy.suite),

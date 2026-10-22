@@ -15,8 +15,11 @@ pub struct PackageJson {
     pub version: Option<String>,
     /// `private` is `true`.
     pub private: bool,
-    /// `scripts` names (command text is never read).
+    /// `scripts` names.
     pub scripts: BTreeSet<String>,
+    /// `scripts` command text, read only by the Playwright shard
+    /// admissibility check ([`crate::playwright_script`]); never executed.
+    pub commands: BTreeMap<String, String>,
     /// Workspace member patterns (`workspaces` array or `workspaces.packages`).
     pub workspaces: Vec<String>,
     /// `packageManager`.
@@ -69,6 +72,13 @@ pub fn parse_package_json(text: &str) -> Result<PackageJson, BunError> {
             .and_then(Value::as_object)
             .map(|scripts| scripts.keys().cloned().collect())
             .unwrap_or_default(),
+        commands: object
+            .get("scripts")
+            .and_then(Value::as_object)
+            .into_iter()
+            .flatten()
+            .filter_map(|(name, text)| text.as_str().map(|text| (name.clone(), text.to_owned())))
+            .collect(),
         workspaces: patterns
             .iter()
             .filter_map(|item| item.as_str().map(str::to_owned))
