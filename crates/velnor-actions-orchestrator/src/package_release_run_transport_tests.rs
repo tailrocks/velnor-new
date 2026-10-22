@@ -18,7 +18,7 @@ fn required_with_id(id: u64) -> Value {
 }
 fn list_route() -> String {
     route(&format!(
-        "actions/workflows/7/runs?head_sha={}&branch=main&event=push&per_page=100&page=1",
+        "actions/workflows/7/runs?head_sha={}&per_page=100&page=1",
         source().sha
     ))
 }

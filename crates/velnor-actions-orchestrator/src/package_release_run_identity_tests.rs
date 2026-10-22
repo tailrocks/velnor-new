@@ -81,7 +81,8 @@ fn latest_source_ci_selects_newest_attempt_without_rewriting_original_identity()
     let original = parse(run_json());
     let mut latest = run_json();
     latest["run_attempt"] = json!(4);
-    let selected = latest_ci_run(vec![parse(latest)], &workflow(), source()).expect("latest run");
+    let selected = latest_ci_run(vec![parse(latest)], &workflow(), source(), "example/app")
+        .expect("latest run");
     assert!(ci_run_is_success(&original, 22, 3, source(), &workflow()));
     assert!(!ci_run_is_success(&selected, 22, 3, source(), &workflow()));
     assert!(ci_run_is_success(&selected, 22, 4, source(), &workflow()));
@@ -95,8 +96,13 @@ fn latest_source_ci_selects_newest_attempt_without_rewriting_original_identity()
     pending["run_number"] = json!(13);
     pending["status"] = json!("in_progress");
     pending["conclusion"] = Value::Null;
-    let selected = latest_ci_run(vec![original, parse(pending)], &workflow(), source())
-        .expect("latest pending run");
+    let selected = latest_ci_run(
+        vec![original, parse(pending)],
+        &workflow(),
+        source(),
+        "example/app",
+    )
+    .expect("latest pending run");
     assert_eq!(selected.id, Some(23));
     assert!(!ci_run_is_success(&selected, 23, 3, source(), &workflow()));
 
@@ -108,6 +114,7 @@ fn latest_source_ci_selects_newest_attempt_without_rewriting_original_identity()
         vec![parse(run_json()), parse(failed)],
         &workflow(),
         source(),
+        "example/app",
     )
     .expect("latest failed run");
     assert_eq!(selected.id, Some(24));
@@ -116,14 +123,15 @@ fn latest_source_ci_selects_newest_attempt_without_rewriting_original_identity()
 
 #[test]
 fn latest_source_ci_rejects_missing_ambiguous_and_foreign_inventory() {
-    assert!(latest_ci_run(vec![], &workflow(), source()).is_err());
+    assert!(latest_ci_run(vec![], &workflow(), source(), "example/app").is_err());
     let mut duplicate = run_json();
     duplicate["id"] = json!(23);
     assert!(
         latest_ci_run(
             vec![parse(run_json()), parse(duplicate)],
             &workflow(),
-            source()
+            source(),
+            "example/app"
         )
         .is_err()
     );
@@ -137,7 +145,7 @@ fn latest_source_ci_rejects_missing_ambiguous_and_foreign_inventory() {
         let mut value = run_json();
         value[field] = replacement;
         assert!(
-            latest_ci_run(vec![parse(value)], &workflow(), source()).is_err(),
+            latest_ci_run(vec![parse(value)], &workflow(), source(), "example/app").is_err(),
             "accepted {field}"
         );
     }

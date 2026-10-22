@@ -54,7 +54,7 @@ fn retained_recovery_authenticates_original_ci1_and_latest_ci2_against_a_not_b_o
         ),
         (
             route(&format!(
-                "actions/workflows/7/runs?head_sha={source_a}&branch=main&event=push&per_page=100&page=1"
+                "actions/workflows/7/runs?head_sha={source_a}&per_page=100&page=1"
             )),
             json!({"workflow_runs":[run(latest_ci2.0, u64::from(latest_ci2.1), &source_a)]}),
         ),
@@ -68,7 +68,7 @@ fn retained_recovery_authenticates_original_ci1_and_latest_ci2_against_a_not_b_o
         ),
         (
             route(&format!(
-                "actions/workflows/7/runs?head_sha={source_a}&branch=main&event=push&per_page=100&page=1"
+                "actions/workflows/7/runs?head_sha={source_a}&per_page=100&page=1"
             )),
             json!({"workflow_runs":[run(latest_ci2.0, u64::from(latest_ci2.1), &source_a)]}),
         ),
@@ -122,7 +122,7 @@ fn retained_current_ci2_admission_uses_source_a_when_authority_b_and_coordinator
         ),
         (
             route(&format!(
-                "actions/workflows/7/runs?head_sha={source_a}&branch=main&event=push&per_page=100&page=1"
+                "actions/workflows/7/runs?head_sha={source_a}&per_page=100&page=1"
             )),
             json!({"workflow_runs":[run(latest_ci2.0, u64::from(latest_ci2.1), &source_a)]}),
         ),

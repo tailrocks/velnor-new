@@ -6,7 +6,7 @@ fn jobs_page(jobs: &serde_json::Value, total_count: usize) -> serde_json::Value 
 
 fn list_route_page(page: usize) -> String {
     route(&format!(
-        "actions/workflows/7/runs?head_sha={}&branch=main&event=push&per_page=100&page={page}",
+        "actions/workflows/7/runs?head_sha={}&per_page=100&page={page}",
         source().sha
     ))
 }

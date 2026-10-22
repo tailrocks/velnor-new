@@ -23,14 +23,13 @@ fn run() -> Value {
 }
 fn list_route() -> String {
     route(&format!(
-        "actions/workflows/7/runs?head_sha={SHA}&branch=main&event=push&per_page=100&page=1"
+        "actions/workflows/7/runs?head_sha={SHA}&per_page=100&page=1"
     ))
 }
 fn discovery(value: &Value) -> Vec<(String, Value)> {
     vec![
         (route("actions/workflows/ci.yml"), metadata()),
         (list_route(), json!({"workflow_runs":[value.clone()]})),
-        (list_route(), json!({"workflow_runs":[value]})),
     ]
 }
 #[test]
@@ -52,15 +51,12 @@ fn continuation_pending_or_failed_latest_ci_never_admits_historical_success() {
 }
 #[test]
 fn continuation_missing_ci_is_pending_without_release_or_mutation_reads() {
-    let (api, fixture) = GitHubApi::with_fixture(
-        "example/app",
-        vec![
-            (route("actions/workflows/ci.yml"), metadata()),
-            (list_route(), json!({"workflow_runs":[]})),
-        ],
-    );
+    let mut responses = vec![(route("actions/workflows/ci.yml"), metadata())];
+    responses.extend((0..6).map(|_| (list_route(), json!({"workflow_runs":[]}))));
+    let (api, fixture) = GitHubApi::with_fixture("example/app", responses);
     assert_eq!(
-        latest_ci(&api, source()).expect("admitted read-only API result"),
+        super::latest_ci_with_sleep(&api, source(), |_| Ok(()))
+            .expect("admitted read-only API result"),
         None
     );
     fixture.assert_drained();
@@ -80,7 +76,7 @@ fn continuation_success_reauthenticates_required_and_latest_attempt() {
         Some((22, 3))
     );
     fixture.assert_drained();
-    assert_eq!(fixture.observed().len(), 7);
+    assert_eq!(fixture.observed().len(), 6);
 }
 #[test]
 fn continuation_main_ref_must_be_exact_commit_identity() {

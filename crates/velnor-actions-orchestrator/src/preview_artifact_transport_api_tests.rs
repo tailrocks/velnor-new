@@ -82,7 +82,7 @@ fn responses() -> Vec<(String, Value)> {
         ),
         (
             route(&format!(
-                "actions/workflows/7/runs?head_sha={}&branch=main&event=push&per_page=100&page=1",
+                "actions/workflows/7/runs?head_sha={}&per_page=100&page=1",
                 "a".repeat(40)
             )),
             json!({"workflow_runs":[run(true)]}),
