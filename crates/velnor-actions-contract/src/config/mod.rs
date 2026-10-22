@@ -74,8 +74,9 @@ pub use build_task::{
 };
 pub use bun::{
     BUN_JOB_PREFIX, BunBrowser, BunInputRule, BunMemberConfig, BunStackConfig, BunSuiteConfig,
-    DEFAULT_BUN_SCRIPTS, MAX_BUN_TIMEOUT_MINUTES, RESERVED_BUN_SUITE_IDS, is_valid_member_name,
-    is_valid_script_name, is_valid_suite_id,
+    BunSuitePlaywright, DEFAULT_BUN_SCRIPTS, MAX_BUN_SUITE_LEGS, MAX_BUN_TIMEOUT_MINUTES,
+    RESERVED_BUN_SUITE_IDS, is_valid_member_name, is_valid_project_name, is_valid_script_name,
+    is_valid_suite_id,
 };
 pub use check_receipt_budget::*;
 pub use dbt::{DBT_JOB_PREFIX, DbtCheck, DbtService, DbtStackConfig};

@@ -329,6 +329,26 @@ jobs:
     needs:
       - plan
     if: "!contains(needs.plan.outputs.not_affected_jobs, ',bun-fixture-web--browser,')"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - leg: 1
+            project: chromium-desktop
+            shard: 1
+            total: 2
+          - leg: 2
+            project: chromium-desktop
+            shard: 2
+            total: 2
+          - leg: 3
+            project: chromium-mobile
+            shard: 1
+            total: 2
+          - leg: 4
+            project: chromium-mobile
+            shard: 2
+            total: 2
     steps:
       - name: Record optional cache budget
         id: velnor-cache-clock
@@ -477,10 +497,13 @@ jobs:
           MISE_NO_CONFIG: "1"
           MISE_NO_ENV: "1"
           MISE_NO_HOOKS: "1"
+          PLAYWRIGHT_BLOB_OUTPUT_FILE: ${{ runner.temp }}/velnor/pw-blob/leg-${{ matrix.leg }}.zip
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/velnor/ms-playwright
           PLAYWRIGHT_HOST_PLATFORM_OVERRIDE: ubuntu26.04-x64
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; cd -P -- \"$GITHUB_WORKSPACE\"; '\\''mise'\\'' '\\''--no-config'\\'' '\\''--no-env'\\'' '\\''--no-hooks'\\'' '\\''exec'\\'' \"bun@'\"${VELNOR_TOOL_BUN}\"'\" '\\''--'\\'' '\\''bun'\\'' '\\''run'\\'' '\\''--cwd=apps/web'\\'' '\\''test:browser'\\'''"
+          VELNOR_PW_PROJECT: ${{ matrix.project }}
+          VELNOR_PW_SHARD: ${{ matrix.shard }}/${{ matrix.total }}
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; cd -P -- \"$GITHUB_WORKSPACE\"; '\\''mise'\\'' '\\''--no-config'\\'' '\\''--no-env'\\'' '\\''--no-hooks'\\'' '\\''exec'\\'' \"bun@'\"${VELNOR_TOOL_BUN}\"'\" '\\''--'\\'' '\\''bun'\\'' '\\''run'\\'' '\\''--cwd=apps/web'\\'' '\\''test:browser'\\'' \"--project=$VELNOR_PW_PROJECT\" \"--shard=$VELNOR_PW_SHARD\"'"
       - name: Wait for parallel checks
         wait-all:
   bun-fixture-web--unit:

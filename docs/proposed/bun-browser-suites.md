@@ -1,8 +1,9 @@
 # Bun browser suites (hard decision 6 amendment)
 
-Status: suites, their jobs, timeouts and Required membership are implemented;
-"Playwright sharding" is proposed, and generation rejects the `playwright` key
-as unknown until it lands. Hard decision:
+Status: suites, their jobs, timeouts and Required membership, and the
+Playwright leg matrix are implemented. Leg blob verification, artifacts, the
+merged report and the single cache writer are proposed; until they land the
+corresponding keys are rejected as unknown. Hard decision:
 [decision 6](../hard-decisions.md#6-one-job-per-bun-workspace-member-with-parallel-script-steps).
 Base contract: [Bun contract](bun-contract.md).
 
@@ -91,7 +92,7 @@ Validation codes (`stacks.bun.members.suites`): `bad_suite_id:<id>`
 `report_requires_shards_or_projects:<id>`, `bad_retention_days:<n>`.
 Generation adds `bun_script_missing` for a suite script the member lacks.
 
-## Playwright sharding (proposed)
+## Playwright sharding
 
 A suite with a `[playwright]` table runs as a static
 `strategy.matrix.include` of legs, sorted by `(project, shard)`, with
@@ -109,7 +110,29 @@ text and fails with:
 | `bun_shard_script_not_playwright:<script>` | no `playwright test` token pair |
 | `bun_shard_script_sets_shard:<script>` | `--shard` or `--project` in the text |
 | `bun_shard_script_updates_snapshots:<script>` | `--update-snapshots` or `-u` |
-| `bun_shard_script_name_shadow` | the member has a script named `playwright` |
+| `bun_shard_script_name_shadow:<member>` | the member has a script named `playwright` |
+
+The leg list is the canonical product of `projects` (one unnamed group when
+empty) and `1..=shards`, numbered from 1; the renderer re-derives it from the
+marker it scrubs and refuses any other list (`bun_matrix_*`). Each leg is one
+job of the matrix, so `timeout_minutes` bounds every leg. GitHub reports the
+aggregate result under the one suite job id, which is what Required needs.
+The tools cache never elects a matrix job as its writer.
+
+```yaml
+    strategy:
+      fail-fast: false
+      max-parallel: 3              # only when configured
+      matrix:
+        include:
+          - leg: 1
+            project: chromium-desktop
+            shard: 1
+            total: 2
+```
+
+### Blobs, artifacts and the merged report (proposed)
+
 
 Each leg writes its blob to
 `PLAYWRIGHT_BLOB_OUTPUT_FILE=$RUNNER_TEMP/velnor/pw-blob/leg-<n>.zip`.
@@ -130,7 +153,8 @@ Required) downloads every leg blob and runs `playwright merge-reports
 | Merged report | `velnor-pw-report-<job-id>` | report job | `report_retention_days` |
 
 Matrix legs restore the `bun-install` and `playwright-browsers` families
-read-only; only leg 1 may save them (`VELNOR_FAMILY_WRITER`). No leg ever holds the App secret (see the private-asset rule above).
+read-only; only leg 1 may save them (`VELNOR_FAMILY_WRITER`, proposed). No leg
+ever holds the App secret (see the private-asset rule above).
 
 ## Verification
 
@@ -145,5 +169,10 @@ read-only; only leg 1 may save them (`VELNOR_FAMILY_WRITER`). No leg ever holds 
   (`impl_bun_suites.rs`), suite dispositions (`impl_bun_select.rs`), the
   suite-only browser install (`impl_bun_playwright.rs`) and the Required folds
   of a suite job id (`required_dispositions_tests.rs`).
+- Playwright matrix: leg grammar and bounds (`config/bun_tests.rs`), script
+  admissibility (`impl_bun_playwright_script.rs`), leg derivation, marker
+  parsing and `strategy` emission (`matrix_bun_tests.rs`), generated legs,
+  flags only where they apply, env-only matrix values and refusals
+  (`impl_bun_playwright.rs`).
 - Goldens: `fixtures/bun-workspace` (no suite) stays byte-identical;
   `fixtures/bun-workspace-suites` is the opt-in golden (`impl_bun_golden.rs`).

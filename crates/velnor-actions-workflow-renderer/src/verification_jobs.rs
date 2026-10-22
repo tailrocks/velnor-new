@@ -45,7 +45,9 @@ pub use bun_member_jobs::{BUN_RUNNER, BunMemberPolicy, build_bun_member_job};
 pub use bun_registry_step::{
     BUN_REGISTRY_STEP_NAME, BUN_ROOT_ENV, BUN_SCOPES_ENV, bun_registry_step,
 };
-pub use bun_suite_jobs::{BUN_SUITE_SEPARATOR, BunSuitePolicy, build_bun_suite_job};
+pub use bun_suite_jobs::{
+    BUN_SUITE_SEPARATOR, BunLeg, BunLegMatrix, BunSuitePolicy, build_bun_suite_job,
+};
 pub use image_build_jobs::{
     BUILDKIT_IMAGE, ImageBuildPolicy, artifact_name, artifact_path, build_image_build_job,
 };
