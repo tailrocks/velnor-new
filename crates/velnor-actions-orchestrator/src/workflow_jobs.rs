@@ -94,6 +94,9 @@ pub(crate) fn plan_job(
     tofu_roots: &[String],
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![checkout_history_action()?];
+    if needs.rust.has_compiler() {
+        steps.push(crate::workflow::verify_restored_rust_step(catalog)?);
+    }
     let prepare = prepare_pinned_tools_step(catalog, plan_tools(needs), needs.rust.has_compiler())?;
     steps.push(prepare);
     if needs.rust.has_components() {

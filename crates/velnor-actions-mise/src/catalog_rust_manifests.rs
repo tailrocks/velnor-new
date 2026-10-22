@@ -1,14 +1,15 @@
 //! Rust channel-manifest digests: what makes a `core:rust` install verifiable.
 //!
 //! Mise's `core:rust` backend installs through rustup and records no
-//! checksum in `mise.lock`. rustup verifies every component it downloads
-//! against the SHA-256 in the channel manifest it fetched, so pinning the
-//! manifest's own SHA-256 here, per Rust version, closes the chain: the
-//! generated `Verify Rust channel manifest` step fetches
+//! checksum in `mise.lock`, and rustup's per-component check says nothing
+//! about a toolchain restored from a cache. Pinning the manifest's own
+//! SHA-256 here, per Rust version, gives the generated toolchain check its
+//! anchor: it fetches
 //! `https://static.rust-lang.org/dist/channel-rust-<version>.toml`, checks it
-//! against [`RUST_CHANNEL_MANIFESTS`], and requires every hash in the
-//! installed toolchain's `lib/rustlib/multirust-channel-manifest.toml` to
-//! appear in that verified manifest.
+//! against [`RUST_CHANNEL_MANIFESTS`], downloads the component tarballs the
+//! installed toolchain lists, checks each against the SHA-256 that manifest
+//! pins, and compares every installed file with the tarball bytes
+//! (`velnor-actions-orchestrator`, `rust_toolchain_script.rs`).
 //!
 //! Every row was read from static.rust-lang.org on 2026-10-22: the manifest
 //! bytes were hashed locally and compared with the published
