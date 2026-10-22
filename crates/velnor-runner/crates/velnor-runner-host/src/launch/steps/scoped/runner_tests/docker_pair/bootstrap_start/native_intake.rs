@@ -1,4 +1,4 @@
-//! Save the poll messages before the scoped AcquireJobs call.
+//! Save the poll messages before the scoped `AcquireJobs` call.
 
 use super::*;
 

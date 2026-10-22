@@ -117,11 +117,9 @@ fn initializer_create_id(creates: &[(usize, &CapturedRequest)]) -> Result<String
     let matches = creates
         .iter()
         .filter(|(_, request)| {
-            serde_json::from_slice::<Value>(&request.body)
-                .ok()
-                .is_some_and(|config| {
-                    config["Labels"]["velnor.role"].as_str() == Some("storage-initializer")
-                })
+            serde_json::from_slice::<Value>(&request.body).is_ok_and(|config| {
+                config["Labels"]["velnor.role"].as_str() == Some("storage-initializer")
+            })
         })
         .collect::<Vec<_>>();
     if matches.len() != 1 {
@@ -229,7 +227,7 @@ fn assert_dind_metadata_mounts(config: &Value) {
         let source = mount["Source"]
             .as_str()
             .expect("The volume source must be present.");
-        assert!(!source.is_empty());
+        assert_ne!(source, "");
         if let Some(expected_source) = metadata_volume {
             assert_eq!(source, expected_source);
         } else {

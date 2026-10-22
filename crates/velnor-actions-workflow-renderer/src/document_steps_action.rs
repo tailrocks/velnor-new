@@ -126,7 +126,7 @@ fn validate_action_step(
         } else if composite {
             crate::expressions::check_composite_with_value(key, value)?;
         } else {
-            crate::expressions::check_with_value(key, value)?;
+            crate::expressions::check_with_action_value(uses, key, value)?;
         }
         steps::scan_for_private_subcommands(key)?;
         steps::scan_for_private_subcommands(value)?;

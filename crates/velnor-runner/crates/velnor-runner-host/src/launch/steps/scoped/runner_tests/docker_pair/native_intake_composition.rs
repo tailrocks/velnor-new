@@ -51,6 +51,10 @@ async fn acquired_request_reaches_measured_storage_bound_inner() -> Result<(), S
     Box::pin(continue_native_composition(setup, None)).await
 }
 
+#[expect(
+    dead_code,
+    reason = "Retains the native quarantine, backlog, reopen, and replay test entry point."
+)]
 pub(crate) fn run_native_quarantine_composition(
     polled: Poll,
     backlog_rows: usize,
@@ -132,18 +136,11 @@ async fn continue_native_composition(
         .map_err(|error| format!("Started/reopen replay: {error}"))?;
     if let Some((polled, backlog_rows)) = quarantined {
         verify_quarantined_inbox(&setup.fixture, polled, backlog_rows).await?;
-        if let Some(poll_session) = setup.poll_session.take() {
-            let reopened = setup.fixture.reopen().await?;
-            bootstrap_start::replay_owned_terminal_offer(
-                reopened,
-                poll_session,
-                request_id,
-                actual_started_request_id(),
-            )
-            .await?;
-        } else {
-            return Err("The mixed-poll replay session is absent.".to_owned());
-        }
+        let poll_session = setup
+            .poll_session
+            .take()
+            .ok_or_else(|| "The mixed-poll replay session is absent.".to_owned())?;
+        replay_quarantined_fixture(setup.fixture, poll_session, request_id).await?;
     }
     let after_replay = setup.api.activity_snapshot()?;
     assert_eq!(before_started, after_replay);
@@ -171,6 +168,21 @@ async fn continue_native_composition(
         &evidence.jit_input,
     )?;
     Ok(())
+}
+
+async fn replay_quarantined_fixture(
+    fixture: Fixture,
+    poll_session: bootstrap_start::PollSession,
+    request_id: i64,
+) -> Result<(), String> {
+    let reopened = fixture.reopen().await?;
+    bootstrap_start::replay_owned_terminal_offer(
+        reopened,
+        poll_session,
+        request_id,
+        actual_started_request_id(),
+    )
+    .await
 }
 
 async fn bind_acquired<P: crate::launch::resource_probe::ImageProvider>(
@@ -216,7 +228,7 @@ async fn jit_and_deliver<P: crate::launch::resource_probe::ImageProvider>(
     request_id: i64,
     provider: &P,
 ) -> Result<crate::launch::scoped_runtime::RunnerReadyBootstrap, String> {
-    let channel = create_and_measure_channel(setup, bound).await?;
+    let channel = Box::pin(create_and_measure_channel(setup, bound)).await?;
     let setup_ref = setup;
     let bound_intent_id = channel.bound().prepared().acquired().intent_id();
     let binding_digest = channel

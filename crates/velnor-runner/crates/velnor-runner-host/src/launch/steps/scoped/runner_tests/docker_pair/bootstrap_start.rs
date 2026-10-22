@@ -11,7 +11,7 @@ mod identity_boundary;
 #[path = "bootstrap_start/native_intake.rs"]
 mod native_intake;
 pub(super) use native_intake::{
-    NATIVE_COMPOSITION_JOB_ID, open_composition_with_poll, replay_owned_terminal_offer,
+    NATIVE_COMPOSITION_JOB_ID, PollSession, open_composition_with_poll, replay_owned_terminal_offer,
 };
 #[path = "bootstrap_start/partial_failure.rs"]
 mod partial_failure;
@@ -132,7 +132,7 @@ async fn production_bootstrap_starts_private_pair_and_keeps_jit_withheld_inner()
         "{:?}",
         captured.server_error
     );
-    assert!(captured.jit_input.is_empty());
+    assert_eq!(captured.jit_input, [] as [u8; 0]);
     assert_no_storage_observation(&captured.requests)?;
     verify_pair_requests(&captured.requests, &network_name, budget, false)?;
     assert_verified_preflight_before_mutations(&captured.requests, &images)?;
@@ -304,12 +304,12 @@ pub(super) struct CompositionSetup {
     pub(super) images: crate::launch::VerifiedWorkerImages,
     pub(super) guest_image: crate::worker::guest_image::test_support::TestGuestImage,
     pub(super) poll_session: Option<native_intake::PollSession>,
-    _state: BootstrapAdmissionState,
+    state: BootstrapAdmissionState,
 }
 
 impl CompositionSetup {
     pub(super) fn admission_state_path(&self) -> &Path {
-        &self._state.path
+        &self.state.path
     }
 }
 

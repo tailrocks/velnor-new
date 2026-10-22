@@ -235,7 +235,7 @@ async fn authorization_binding_rejects_changed_policy_before_source_lookup() -> 
         ),
         Err(SourceBlock::SourceMismatch)
     );
-    assert!(transport.paths.is_empty());
+    assert_eq!(transport.paths, [] as [String; 0]);
     Ok(())
 }
 

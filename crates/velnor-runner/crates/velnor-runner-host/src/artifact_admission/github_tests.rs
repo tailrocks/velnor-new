@@ -365,7 +365,7 @@ async fn local_response(
     let server = tokio::spawn(async move {
         let (mut stream, _) = listener.accept().await.map_err(|_| HostError::Identity)?;
         let mut request = [0_u8; 1024];
-        let _ = stream.read(&mut request).await;
+        let _request_read = stream.read(&mut request).await;
         let declared_size = declared_size.unwrap_or(body.len() as u64);
         let header = format!(
             "HTTP/1.1 200 OK\r\nContent-Length: {declared_size}\r\nConnection: close\r\n\r\n"
