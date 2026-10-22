@@ -106,8 +106,8 @@ fn response_value(
             }
         ],
         "root_backings": [
-            root_backing("runner", &request.runner_container_id, "12345678-1234-1234-1234-123456789abc", &runner_init, &runner_helper),
-            root_backing("dind", &request.dind_container_id, "12345678-1234-1234-1234-123456789abc", &dind_init, &dind_helper)
+            root_backing("runner", &request.runner_container_id, "12345678-1234-1234-1234-123456789abc", runner_init, runner_helper),
+            root_backing("dind", &request.dind_container_id, "12345678-1234-1234-1234-123456789abc", dind_init, dind_helper)
         ]
     })
 }
