@@ -331,6 +331,18 @@ pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError
     check_with_value_scoped(key, value, false)
 }
 
+/// Permit the immutable event SHA only for the checkout action's `ref` input.
+pub(crate) fn check_with_action_value(
+    uses: &str,
+    key: &str,
+    value: &str,
+) -> Result<(), RenderError> {
+    if uses.starts_with("actions/checkout@") && key == "ref" && value == "${{ github.sha }}" {
+        return Ok(());
+    }
+    check_with_value(key, value)
+}
+
 pub(crate) fn check_composite_with_value(key: &str, value: &str) -> Result<(), RenderError> {
     check_with_value_scoped(key, value, true)
 }

@@ -22,6 +22,9 @@ pub(super) fn collect(
     {
         hosted.insert(release.producer.runner.runs_on());
     }
+    for suite in &config.workflow.task_suites {
+        hosted.insert(suite.runner.runs_on());
+    }
     for label in hosted {
         if (ReleaseTarget::for_runner_label(label).is_some()
             || velnor_actions_contract::config::is_hosted_catalog(label))

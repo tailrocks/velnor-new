@@ -60,37 +60,46 @@ pub(crate) fn policies(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-struct ResolvedVerificationTools {
-    selected_tools: Vec<BuildTaskTool>,
-    mise_config_sha256: Option<String>,
-    mise_lock_sha256: Option<String>,
-    rust_toolchain_sha256: Option<String>,
+pub(crate) struct ResolvedMiseTaskTools {
+    pub(crate) selected_tools: Vec<BuildTaskTool>,
+    pub(crate) mise_config_sha256: Option<String>,
+    pub(crate) mise_lock_sha256: Option<String>,
+    pub(crate) rust_toolchain_sha256: Option<String>,
 }
 
 fn resolve_verification_tools(
     checks: &[ToolInputCheck],
     task: &velnor_actions_contract::VerificationTask,
-) -> Result<ResolvedVerificationTools, OrchestratorError> {
-    let mise_config_path = &task.source.mise_config;
-    let mise_lock_path = task.source.mise_lock_path();
-    let rust_toolchain_path = task.source.rust_toolchain_path();
+) -> Result<ResolvedMiseTaskTools, OrchestratorError> {
+    resolve_mise_task_tools(checks, &task.source, &task.mise_task, task.runner)
+}
+
+pub(crate) fn resolve_mise_task_tools(
+    checks: &[ToolInputCheck],
+    source: &velnor_actions_contract::MiseTaskSource,
+    mise_task: &str,
+    runner: VerificationRunner,
+) -> Result<ResolvedMiseTaskTools, OrchestratorError> {
+    let mise_config_path = &source.mise_config;
+    let mise_lock_path = source.mise_lock_path();
+    let rust_toolchain_path = source.rust_toolchain_path();
     let mise = optional_source(checks, mise_config_path)?;
     let lock = optional_source(checks, &mise_lock_path)?;
     let rust = optional_source(checks, &rust_toolchain_path)?;
     let mise = mise.ok_or_else(|| failure("verification_mise_config_missing"))?;
-    let mut result = ResolvedVerificationTools {
+    let mut result = ResolvedMiseTaskTools {
         mise_config_sha256: Some(mise.sha256.clone()),
         mise_lock_sha256: lock.map(|input| input.sha256.clone()),
         rust_toolchain_sha256: rust.map(|input| input.sha256.clone()),
-        ..ResolvedVerificationTools::default()
+        ..ResolvedMiseTaskTools::default()
     };
     let NativeToolSource::MiseConfig(mise_config) = &mise.source else {
         return Err(failure("verification_mise_config"));
     };
     validate_config_shape(mise_config)?;
     validate_settings(mise_config)?;
-    let requested = crate::native_mise_tasks::selected_task_tools(mise_config, &task.mise_task)
-        .map_err(failure)?;
+    let requested =
+        crate::native_mise_tasks::selected_task_tools(mise_config, mise_task).map_err(failure)?;
     if requested.is_empty() {
         if let Some(lock) = lock {
             let NativeToolSource::MiseLock(lock) = &lock.source else {
@@ -109,7 +118,7 @@ fn resolve_verification_tools(
         return Err(failure("verification_rust_must_use_idiomatic_file"));
     }
     let rust_values = rust_tool_values(checks, rust, &requested, &rust_toolchain_path)?;
-    let (mise_os, lock_platform) = platform(task.runner);
+    let (mise_os, lock_platform) = platform(runner);
     for (key, requested_version) in requested {
         let requested_specifier = requested_version.clone();
         let (version, config_options, os) = requested_tool_version(

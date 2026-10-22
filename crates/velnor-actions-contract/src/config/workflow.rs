@@ -82,6 +82,9 @@ pub struct WorkflowConfig {
     /// Sorted, unique typed task graph shared by verification and build variants.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tasks: Vec<WorkflowTask>,
+    /// Optional standalone compile-capable Mise task suites.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub task_suites: Vec<super::MiseTaskSuite>,
     /// Optional protected post-merge `OpenTofu` apply workflow.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tofu_apply: Option<TofuApplyConfig>,
@@ -251,6 +254,7 @@ impl WorkflowConfig {
             ));
         }
         self.validate_tasks(file)?;
+        task_suites_validate::validate(self, file)?;
         if let Some(completion) = &self.review_completion {
             completion.validate(file)?;
         }
@@ -316,3 +320,9 @@ impl WorkflowConfig {
 #[cfg(test)]
 #[path = "workflow_tests.rs"]
 mod tests;
+
+#[path = "workflow_task_suites_validate.rs"]
+mod task_suites_validate;
+
+#[path = "workflow_validation_helpers.rs"]
+mod workflow_validation_helpers;

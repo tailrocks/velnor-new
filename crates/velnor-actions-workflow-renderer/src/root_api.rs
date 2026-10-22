@@ -75,8 +75,9 @@ pub use crate::tofu_apply::{
 };
 pub use crate::tree::{render_tree, render_tree_with_claude_mode, render_tree_with_extra};
 pub use crate::verification_jobs::{
-    INSTALL_VERIFICATION_TOOLS_NAME, RUN_VERIFICATION_TASK_NAME, VerificationTaskPolicy,
-    build_verification_task_job,
+    INSTALL_VERIFICATION_TOOLS_NAME, MiseTaskSuitePolicy, MiseTaskSuitesRenderSpec,
+    RUN_VERIFICATION_TASK_NAME, VerificationTaskPolicy, build_verification_task_job,
+    render_mise_task_suites,
 };
 pub use crate::workflow_routing::{
     AuthorityCall, AuthorityConcurrency, AuthorityJob, AuthorityPermissions, AuthorityTrigger,

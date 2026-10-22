@@ -7,6 +7,9 @@ use std::path::{Path, PathBuf};
 #[path = "rust_install_audit.rs"]
 mod rust_install_audit;
 
+#[path = "mise_task_suites_emit.rs"]
+mod mise_task_suites_emit;
+
 use velnor_actions_contract::ExecutionMode;
 use velnor_actions_workflow_renderer::guard::{self, SafeTreePath};
 use velnor_actions_workflow_renderer::render::RenderedTree;
