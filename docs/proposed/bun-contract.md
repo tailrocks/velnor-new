@@ -210,8 +210,27 @@ directory.
 own browser build for the Playwright version `bun.lock` resolves, from a
 hash-pinned lock. Decisions:
 
-- Never `playwright install --with-deps` and never repository-resolved code with
-  `sudo`; system dependencies come from the hosted image.
+- Never `playwright install --with-deps` and never repository-resolved code
+  (`node_modules`) with `sudo`. The `ubuntu-26.04` hosted image carries
+  Chromium's system libraries but not WebKit's or Firefox's
+  (tailrocks/velnor-new#352). A job whose browsers include `webkit` or
+  `firefox` carries `VELNOR_PLAYWRIGHT_SYSTEM_DEPS=<sorted browsers>` on its
+  install step; before the archives, the operation downloads the
+  `playwright-core` tarball of the locked version from the npm registry,
+  verifies it against the lock's `core_integrity` (itself checked equal to
+  `bun.lock`'s), extracts it through the hardened archive reader and runs its
+  own `install-deps <browsers>` under the Velnor-pinned Bun with
+  `PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu26.04-x64`. The package list is
+  Playwright's `nativeDeps` table for that platform inside the verified
+  tarball; Playwright elevates through the hosted runner's passwordless `sudo`
+  for `apt-get update` and `apt-get install -y --no-install-recommends` only.
+  Package versions are the Ubuntu archive's, a host-provided system
+  dependency ([version policy](version-policy.md) section 4). A browser not
+  pinned by the step's archives fails
+  (`playwright_system_deps_unpinned:<browser>`), a tampered tarball never runs
+  (`playwright_core_integrity_mismatch`), and Chromium-only jobs are unchanged.
+  Coordinator decision, 2026-10-23, under the owner's autonomy rule (the
+  issue's option 1 through Playwright's own mechanism); owner may revisit.
 - `velnor-actions playwright lock` (operator-run, like `deps lock`) writes
   `.velnor/playwright.lock` for the union of each member's `browsers` and the
   `browsers` of every suite it declares (a suites-only member is locked too). For each Playwright version it downloads the

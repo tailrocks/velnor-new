@@ -88,7 +88,11 @@ pub(crate) fn parse_dry_run(output: &str) -> Result<Vec<(String, String)>, Orche
     Ok(found)
 }
 
-fn verify_integrity(path: &Path, expected: &str) -> Result<(), OrchestratorError> {
+/// Check a downloaded `playwright-core` tarball against its `bun.lock` integrity.
+///
+/// # Errors
+/// `playwright_core_integrity_mismatch`, or an unreadable file.
+pub(crate) fn verify_integrity(path: &Path, expected: &str) -> Result<(), OrchestratorError> {
     let bytes = fs::read(path)
         .map_err(|err| OrchestratorError::io(path.display().to_string(), err.to_string()))?;
     let actual = format!("sha512-{}", STANDARD.encode(Sha512::digest(&bytes)));
