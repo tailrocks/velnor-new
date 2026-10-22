@@ -260,7 +260,7 @@ impl Sandbox {
             .env("GIT_COMMITTER_NAME", "Test")
             .env("GIT_COMMITTER_EMAIL", "test@example.com")
             .env("VELNOR_UPGRADE_DIR", &self.work)
-            .env("VELNOR_GH_VERSION", "2.102.1")
+            .env("VELNOR_GH_VERSION", "2.103.0")
             .env(
                 "VELNOR_VERIFY_RUST_SCRIPT",
                 super::exec_fakes::VERIFY_RUST_STUB,

@@ -1,7 +1,7 @@
 //! T27 real-binary tofu runs (§10 items 2/3/6) via `tofu_exec`.
 //!
 //! Every run resolves `tofu` through the product
-//! `IsolatedCommand::tofu_exec` ctor with the catalog `opentofu@1.13.1`
+//! `IsolatedCommand::tofu_exec` ctor with the catalog `opentofu@1.13.2`
 //! spec — never `mise install`, never ambient `tofu`. The ctor bakes
 //! `MISE_AUTO_INSTALL=false` + `MISE_EXEC_AUTO_INSTALL=false`, so a
 //! missing tool fails as a preparation error instead of downloading;
@@ -25,7 +25,7 @@ use velnor_actions_tofu::{TofuTaskKind, tofu_payload_argv};
 /// Opt-in env var for the network-dependent live test.
 const LIVE_ENV: &str = "VELNOR_LIVE_TOFU";
 /// Pinned tofu release every real run asserts.
-const PINNED_TOFU: &str = "1.13.1";
+const PINNED_TOFU: &str = "1.13.2";
 
 /// Provider-free fixture: no providers, backends, or modules.
 const CLEAN_MAIN_TF: &str =
@@ -70,7 +70,7 @@ fn stage(test: &str) -> Result<Stage, String> {
 /// Catalog-derived opentofu spec; asserts the exact pin.
 fn opentofu_specs() -> Vec<String> {
     let specs = ToolCatalog::pinned().tool_specs(&[PinnedTool::Opentofu]);
-    assert_eq!(specs, ["opentofu@1.13.1".to_owned()], "catalog pin");
+    assert_eq!(specs, ["opentofu@1.13.2".to_owned()], "catalog pin");
     specs
 }
 
@@ -115,11 +115,11 @@ fn run(command: &IsolatedCommand, secs: u64) -> Result<ProcessOutput, String> {
         .map_err(|err| err.to_string())
 }
 
-/// (6) The catalog pin is exactly `1.13.1` (premise of every run).
+/// (6) The catalog pin is exactly `1.13.2` (premise of every run).
 #[test]
-fn catalog_pin_is_opentofu_1_13_1() {
+fn catalog_pin_is_opentofu_1_13_2() {
     assert_eq!(OPENTOFU_VERSION, PINNED_TOFU);
-    assert_eq!(opentofu_specs(), ["opentofu@1.13.1".to_owned()]);
+    assert_eq!(opentofu_specs(), ["opentofu@1.13.2".to_owned()]);
 }
 
 /// (6) `tofu version` reports the pinned release. Hermetic: local-only.
@@ -131,7 +131,7 @@ fn real_tofu_version_reports_pinned_release() -> Result<(), String> {
     assert_eq!(output.code, Some(0));
     let stdout = output.stdout_text("mise").map_err(|err| err.to_string())?;
     assert!(
-        stdout.contains("OpenTofu v1.13.1"),
+        stdout.contains("OpenTofu v1.13.2"),
         "pinned release, got {stdout}"
     );
     Ok(())

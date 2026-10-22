@@ -77,23 +77,24 @@ pub const AWS_CREDENTIALS_ACTION_VERSION: &str = "v6.3.0";
 pub const AWS_CREDENTIALS_ACTION_SHA: &str = "e1253824e5c10ff9df46874f81ed3ec929e19cfd";
 
 /// Selected `asamarts/alint` release; candidate binary passed local checks
-/// 2026-10-19. Full hosted qualification remains part of the reviewed update.
-/// Source: `https://api.github.com/repos/asamarts/alint/releases/tags/v0.19.0`.
-pub const ALINT_ACTION_VERSION: &str = "v0.19.0";
+/// 2026-10-22. Full hosted qualification remains part of the reviewed update.
+/// Source: `https://api.github.com/repos/asamarts/alint/releases/tags/v0.20.0`.
+pub const ALINT_ACTION_VERSION: &str = "v0.20.0";
 /// Full commit SHA for [`ALINT_ACTION_VERSION`] from its immutable tag ref.
-pub const ALINT_ACTION_SHA: &str = "f39a25a7e061bb8738a87372561d8b9a6a29ca87";
+pub const ALINT_ACTION_SHA: &str = "10d1c0a2bafd0bd316dbad9fe63ea5e1e3761c71";
 
 /// Selected `jdx/mise-action` candidate; the updated action is checked by CI.
 ///
-/// v5.2.1 retains every input Velnor uses. It rejects a missing signed
-/// packslip for Mise releases from 2026.9.3 onward. Existing cache key changes
-/// have no effect because Velnor disables the cache, and monorepo behavior activates
-/// only for Mise configs declaring `monorepo.config_roots`; ours do not.
+/// v5.2.2 retains every input Velnor uses and hashes `conf.d/*.toml` config
+/// fragments in the cache key. Velnor disables the cache, so this change does
+/// not affect generated jobs. The action rejects a missing signed packslip
+/// for Mise releases from 2026.9.3 onward. Monorepo behavior activates only
+/// for Mise configs declaring `monorepo.config_roots`; ours do not.
 /// Explicit version and SHA inputs remain supported. Source:
-/// `https://api.github.com/repos/jdx/mise-action/releases/tags/v5.2.1`.
-pub const MISE_ACTION_VERSION: &str = "v5.2.1";
+/// `https://api.github.com/repos/jdx/mise-action/releases/tags/v5.2.2`.
+pub const MISE_ACTION_VERSION: &str = "v5.2.2";
 /// Full commit SHA for [`MISE_ACTION_VERSION`] from its immutable tag ref.
-pub const MISE_ACTION_SHA: &str = "fc42bcc7ddbf51124c30f95a877a0c5168a3bfde";
+pub const MISE_ACTION_SHA: &str = "8418fedb1110381a0d3ba51a7a415d7c1b884550";
 /// Qualified `actions/checkout` release.
 /// Source: `https://api.github.com/repos/actions/checkout/releases/latest`; checked 2026-09-28.
 pub const CHECKOUT_ACTION_VERSION: &str = "v7.0.1";
