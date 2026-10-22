@@ -119,5 +119,6 @@ pub(super) async fn refresh_bound_connection_session_with<T: Transport + ?Sized>
         .record_session_refreshed(claim, proof)
         .await
         .map_err(map_journal)?;
+    crate::launch::trace::session(&session);
     Ok(session)
 }

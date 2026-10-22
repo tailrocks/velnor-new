@@ -67,6 +67,13 @@ pub(crate) struct PositivePollOutcome<A = PositiveAdmission> {
     /// Admission result. This retains an acquired token across ACK uncertainty.
     pub(crate) admission: Option<A>,
     /// Queue acknowledgement status.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "retains ACK uncertainty asserted by adverse replay tests while production uses cursor disposition and settlement"
+        )
+    )]
     pub(crate) acknowledgement: Acknowledgement,
     /// Durable poll-attempt settlement status.
     pub(crate) settlement: Settlement,

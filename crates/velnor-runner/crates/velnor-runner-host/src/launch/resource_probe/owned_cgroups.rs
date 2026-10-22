@@ -157,6 +157,10 @@ pub(crate) struct VerifiedOwnedCgroups {
     engine_id: String,
     docker_root_digest: String,
     observation: OwnedCgroupObservation,
+    #[expect(
+        dead_code,
+        reason = "retains the probe host PID as cross-namespace ownership evidence"
+    )]
     probe_host_pid: u32,
     cleanup: super::execute::ProbeCleanupEvidence,
 }
@@ -193,6 +197,10 @@ impl VerifiedOwnedCgroups {
         &self.observation
     }
 
+    #[expect(
+        dead_code,
+        reason = "exposes the retained probe host PID for ownership verification"
+    )]
     pub(crate) const fn probe_host_pid(&self) -> u32 {
         self.probe_host_pid
     }
