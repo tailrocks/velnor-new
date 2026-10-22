@@ -339,4 +339,4 @@ mod record;
 #[path = "tests.rs"]
 mod tests;
 #[cfg(test)]
-pub(crate) use tests::test_job_facts_publication;
+pub(crate) use tests::{JobFactsPublicationFixtureInput, test_job_facts_publication};

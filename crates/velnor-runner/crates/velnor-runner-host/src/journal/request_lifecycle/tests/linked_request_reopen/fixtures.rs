@@ -49,19 +49,7 @@ pub(super) async fn prepare_linked_lifecycle(
     let scratch = Scratch::new()?;
     let path = scratch.file();
     let journal = Journal::open(&path).await?;
-    journal
-        .configure_capacity_with_operational_limits(
-            CapacityLimits {
-                jobs: 1,
-                cpu_millicores: 2_000,
-                memory_bytes: 25_769_803_776,
-            },
-            crate::journal::OperationalCapacityLimits {
-                cpu_millicores: 1_000,
-                memory_bytes: 128 * 1024 * 1024,
-            },
-        )
-        .await?;
+    configure_linked_lifecycle_capacity(&journal).await?;
     let repository = binding("essential", 101)?;
     let scope = created_scope(&journal, &repository, 501).await?;
     let witness = authorize(&scope, witness_request_id).await?;
@@ -128,6 +116,22 @@ pub(super) async fn prepare_linked_lifecycle(
         source,
         job_id,
     })
+}
+
+async fn configure_linked_lifecycle_capacity(journal: &Journal) -> Result<(), HostError> {
+    journal
+        .configure_capacity_with_operational_limits(
+            CapacityLimits {
+                jobs: 1,
+                cpu_millicores: 2_000,
+                memory_bytes: 25_769_803_776,
+            },
+            crate::journal::OperationalCapacityLimits {
+                cpu_millicores: 1_000,
+                memory_bytes: 128 * 1024 * 1024,
+            },
+        )
+        .await
 }
 
 pub(super) async fn reopen(fixture: LinkedLifecycle) -> Result<LinkedLifecycle, HostError> {

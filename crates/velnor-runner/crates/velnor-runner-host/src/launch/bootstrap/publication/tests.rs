@@ -1,32 +1,60 @@
 use super::*;
+use crate::launch::bootstrap::test_fixtures::{
+    valid_container_id, valid_digest, valid_engine_id, valid_generation,
+};
+
+#[cfg(test)]
+pub(crate) struct JobFactsPublicationFixtureInput {
+    pub(crate) reservation_id: i64,
+    pub(crate) operation_id: i64,
+    pub(crate) engine_id: String,
+    pub(crate) docker_root_digest: String,
+    pub(crate) sample_generation_id: String,
+    pub(crate) profile_generation_id: String,
+    pub(crate) profile_digest: String,
+    pub(crate) runner_container_id: String,
+    pub(crate) dind_container_id: String,
+    pub(crate) runner: RunnerReference,
+    pub(crate) instance_binding_digest: String,
+    pub(crate) path: String,
+    pub(crate) projection_digest: String,
+    pub(crate) mount_id: u64,
+    pub(crate) device: (u32, u32),
+    pub(crate) statx_device: (u32, u32),
+    pub(crate) fs_type_magic: u64,
+    pub(crate) directory_identity: (u32, u32, u64),
+    pub(crate) filesystem_id: u64,
+    pub(crate) filesystem_instance_digest: String,
+    pub(crate) read_only: bool,
+}
 
 #[cfg(test)]
 pub(crate) fn test_job_facts_publication(
-    reservation_id: i64,
-    operation_id: i64,
-    engine_id: String,
-    docker_root_digest: String,
-    sample_generation_id: String,
-    profile_generation_id: String,
-    profile_digest: String,
-    runner_container_id: String,
-    dind_container_id: String,
-    runner: RunnerReference,
-    instance_binding_digest: String,
-    path: String,
-    projection_digest: String,
-    mount_id: u64,
-    device: (u32, u32),
-    statx_device: (u32, u32),
-    fs_type_magic: u64,
-    directory_identity: (u32, u32, u64),
-    filesystem_id: u64,
-    filesystem_instance_digest: String,
-    read_only: bool,
+    input: JobFactsPublicationFixtureInput,
 ) -> Result<JobFactsPublication, crate::error::HostError> {
-    use crate::launch::bootstrap::test_fixtures::{
-        valid_container_id, valid_digest, valid_engine_id, valid_generation,
-    };
+    let JobFactsPublicationFixtureInput {
+        reservation_id,
+        operation_id,
+        engine_id,
+        docker_root_digest,
+        sample_generation_id,
+        profile_generation_id,
+        profile_digest,
+        runner_container_id,
+        dind_container_id,
+        runner,
+        instance_binding_digest,
+        path,
+        projection_digest,
+        mount_id,
+        device,
+        statx_device,
+        fs_type_magic,
+        directory_identity,
+        filesystem_id,
+        filesystem_instance_digest,
+        read_only,
+    } = input;
 
     if reservation_id <= 0
         || operation_id <= 0

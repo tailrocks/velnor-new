@@ -2,7 +2,10 @@ use crate::error::HostError;
 use crate::journal::{
     StorageFilesystemKind, StorageInodePolicy, StorageMedium, StorageObserver, StorageRole,
 };
-use crate::launch::bootstrap::{test_observed_storage_attachment, test_observed_storage_role};
+use crate::launch::bootstrap::{
+    ObservedStorageAttachment, ObservedStorageRole, test_observed_storage_attachment,
+    test_observed_storage_role,
+};
 
 use super::validate_engine_metadata_views;
 
@@ -10,14 +13,18 @@ const PROBE_DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 const VOLUME_DIGEST: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const BTRFS: u64 = 0x9123_683e;
 
-fn fixture() -> Result<
-    (
-        Vec<crate::launch::bootstrap::ObservedStorageRole>,
-        Vec<crate::launch::bootstrap::ObservedStorageAttachment>,
-    ),
-    HostError,
-> {
-    let role = test_observed_storage_role(
+type AttachmentRow = (
+    StorageObserver,
+    Option<String>,
+    &'static str,
+    &'static str,
+    u64,
+    u64,
+    &'static str,
+);
+
+fn fixture_role() -> Result<ObservedStorageRole, HostError> {
+    test_observed_storage_role(
         StorageRole::EngineMetadata,
         "c".repeat(64),
         PROBE_DIGEST.to_owned(),
@@ -28,8 +35,11 @@ fn fixture() -> Result<
         StorageInodePolicy::DynamicBtrfs,
         (1 << 20, 1, 0),
         (0, 0),
-    )?;
-    let rows = [
+    )
+}
+
+fn fixture_attachments() -> Result<Vec<ObservedStorageAttachment>, HostError> {
+    let rows: [AttachmentRow; 6] = [
         (
             StorageObserver::Probe,
             None,
@@ -85,46 +95,49 @@ fn fixture() -> Result<
             VOLUME_DIGEST,
         ),
     ];
-    let attachments = rows
-        .into_iter()
-        .map(
-            |(observer, container, target, mount_root, mount_id, inode, digest)| {
-                let contract = StorageRole::EngineMetadata
-                    .attachments()
-                    .iter()
-                    .find(|item| item.observer == observer && item.target == target)
-                    .ok_or(HostError::Journal)?;
-                test_observed_storage_attachment(
-                    StorageRole::EngineMetadata,
-                    observer,
-                    container,
-                    target.to_owned(),
-                    contract.source_target.map(str::to_owned),
-                    mount_root.to_owned(),
-                    contract.read_only,
-                    mount_id,
-                    inode,
-                    if observer == StorageObserver::Probe {
-                        (0, 41)
-                    } else {
-                        (0, 48)
-                    },
-                    if observer == StorageObserver::Probe {
-                        (0, 41)
-                    } else {
-                        (0, 48)
-                    },
-                    BTRFS,
-                    if observer == StorageObserver::Probe {
-                        17
-                    } else {
-                        18
-                    },
-                    digest.to_owned(),
-                )
-            },
-        )
-        .collect::<Result<Vec<_>, _>>()?;
+    rows.into_iter().map(fixture_attachment).collect()
+}
+
+fn fixture_attachment(row: AttachmentRow) -> Result<ObservedStorageAttachment, HostError> {
+    let (observer, container, target, mount_root, mount_id, inode, digest) = row;
+    let contract = StorageRole::EngineMetadata
+        .attachments()
+        .iter()
+        .find(|item| item.observer == observer && item.target == target)
+        .ok_or(HostError::Journal)?;
+    test_observed_storage_attachment(
+        StorageRole::EngineMetadata,
+        observer,
+        container,
+        target.to_owned(),
+        contract.source_target.map(str::to_owned),
+        mount_root.to_owned(),
+        contract.read_only,
+        mount_id,
+        inode,
+        if observer == StorageObserver::Probe {
+            (0, 41)
+        } else {
+            (0, 48)
+        },
+        if observer == StorageObserver::Probe {
+            (0, 41)
+        } else {
+            (0, 48)
+        },
+        BTRFS,
+        if observer == StorageObserver::Probe {
+            17
+        } else {
+            18
+        },
+        digest.to_owned(),
+    )
+}
+
+fn fixture() -> Result<(Vec<ObservedStorageRole>, Vec<ObservedStorageAttachment>), HostError> {
+    let role = fixture_role()?;
+    let attachments = fixture_attachments()?;
     Ok((vec![role], attachments))
 }
 
