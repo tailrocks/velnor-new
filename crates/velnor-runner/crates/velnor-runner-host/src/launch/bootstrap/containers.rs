@@ -295,6 +295,10 @@ pub(crate) fn test_created_storage_object(
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the test constructor keeps each bootstrap identity and container fact explicit for receipt validation"
+)]
 pub(crate) fn test_created_bootstrap_container(
     reservation_id: i64,
     operation_id: i64,
@@ -333,6 +337,10 @@ pub(crate) fn test_created_bootstrap_container(
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the test constructor keeps the journal identity and both startup-gate facts explicit for receipt validation"
+)]
 pub(crate) fn test_bootstrap_start_receipt(
     reservation_id: i64,
     operation_id: i64,
