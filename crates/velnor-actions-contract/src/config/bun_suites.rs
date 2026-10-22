@@ -58,6 +58,74 @@ pub struct BunSuitePlaywright {
     /// Append `--fail-on-flaky-tests`: a test that passes only on retry fails its leg.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub fail_on_flaky: bool,
+    /// `merge`: a non-gating report job merges every leg blob into one HTML
+    /// and JSON report artifact.
+    #[serde(default, skip_serializing_if = "BunSuiteReport::is_none")]
+    pub report: BunSuiteReport,
+    /// Retention of the merged report artifact, `1..=90` days (default 14).
+    #[serde(
+        default = "default_report_retention",
+        skip_serializing_if = "is_default_report_retention"
+    )]
+    pub report_retention_days: u16,
+    /// Retention of a failed leg's `test-results` artifact, `1..=90` days (default 7).
+    #[serde(
+        default = "default_results_retention",
+        skip_serializing_if = "is_default_results_retention"
+    )]
+    pub results_retention_days: u16,
+}
+
+/// Whether a sharded suite gets a merged report job.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BunSuiteReport {
+    /// No report job (default); each leg still uploads its blob.
+    #[default]
+    None,
+    /// One `bun-<slug>--<suite>--report` job merges the leg blobs.
+    Merge,
+}
+
+impl BunSuiteReport {
+    #[expect(
+        clippy::trivially_copy_pass_by_ref,
+        reason = "serde skip_serializing_if requires fn(&Self) -> bool"
+    )]
+    const fn is_none(&self) -> bool {
+        matches!(self, Self::None)
+    }
+}
+
+/// Default retention of the merged report, in days.
+pub const DEFAULT_REPORT_RETENTION_DAYS: u16 = 14;
+/// Default retention of a failed leg's results, in days.
+pub const DEFAULT_RESULTS_RETENTION_DAYS: u16 = 7;
+/// Largest artifact retention Velnor emits, in days.
+pub const MAX_BUN_RETENTION_DAYS: u16 = 90;
+
+const fn default_report_retention() -> u16 {
+    DEFAULT_REPORT_RETENTION_DAYS
+}
+
+const fn default_results_retention() -> u16 {
+    DEFAULT_RESULTS_RETENTION_DAYS
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if requires fn(&u16) -> bool"
+)]
+const fn is_default_report_retention(days: &u16) -> bool {
+    *days == DEFAULT_REPORT_RETENTION_DAYS
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if requires fn(&u16) -> bool"
+)]
+const fn is_default_results_retention(days: &u16) -> bool {
+    *days == DEFAULT_RESULTS_RETENTION_DAYS
 }
 
 const fn one_shard() -> u16 {
@@ -202,5 +270,22 @@ fn validate_playwright(
     {
         return fail("bad_max_parallel".to_owned());
     }
+    if playwright.report == BunSuiteReport::Merge && legs < 2 {
+        return fail(format!("report_requires_shards_or_projects:{id}"));
+    }
+    for days in [
+        playwright.report_retention_days,
+        playwright.results_retention_days,
+    ] {
+        if !(1..=MAX_BUN_RETENTION_DAYS).contains(&days) {
+            return fail(format!(
+                "bad_retention_days:{days}:expected_1..={MAX_BUN_RETENTION_DAYS}"
+            ));
+        }
+    }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "bun_suites_tests.rs"]
+mod tests;

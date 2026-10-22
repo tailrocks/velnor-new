@@ -506,6 +506,176 @@ jobs:
         run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; cd -P -- \"$GITHUB_WORKSPACE\"; '\\''mise'\\'' '\\''--no-config'\\'' '\\''--no-env'\\'' '\\''--no-hooks'\\'' '\\''exec'\\'' \"bun@'\"${VELNOR_TOOL_BUN}\"'\" '\\''--'\\'' '\\''bun'\\'' '\\''run'\\'' '\\''--cwd=apps/web'\\'' '\\''test:browser'\\'' \"--project=$VELNOR_PW_PROJECT\" \"--shard=$VELNOR_PW_SHARD\"'"
       - name: Wait for parallel checks
         wait-all:
+      - name: Verify Playwright blob
+        if: "!cancelled()"
+        env:
+          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/velnor/bun-cache
+          MISE_AUTO_INSTALL: "false"
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          VELNOR_PW_LEG: ${{ matrix.leg }}
+          VELNOR_PW_PROJECT: ${{ matrix.project }}
+          VELNOR_PW_SHARD: ${{ matrix.shard }}/${{ matrix.total }}
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; f=\"$RUNNER_TEMP/velnor/pw-blob/leg-$VELNOR_PW_LEG.zip\"; if [ ! -f \"$f\" ] || [ -L \"$f\" ]; then echo '\\''velnor: playwright_blob_missing: add the blob reporter to the Playwright config under CI'\\'' >&2; exit 1; fi; unzip -p \"$f\" report.jsonl | { grep -E '\\''^[{]\"method\":\"(onBlobReportMetadata|onProject)\"'\\'' || true; } | '\\''mise'\\'' '\\''--no-config'\\'' '\\''--no-env'\\'' '\\''--no-hooks'\\'' '\\''exec'\\'' \"bun@'\"${VELNOR_TOOL_BUN}\"'\" '\\''--'\\'' '\\''bun'\\'' '\\''-e'\\'' '\\''const t=await Bun.stdin.text();const e=t.split(\"\\n\").filter(l=>l.length>0).map(l=>JSON.parse(l));const f=c=>{console.error(\"velnor: \"+c);process.exit(1)};const m=e[0];if(!m||m.method!==\"onBlobReportMetadata\")f(\"playwright_blob_missing:no_metadata\");if(m.params.version!==2)f(\"playwright_blob_version:\"+m.params.version);const s=m.params.shard;const got=s?s.current+\"/\"+s.total:\"\";const want=process.env.VELNOR_PW_SHARD||\"\";if(got!==want)f(\"playwright_blob_shard_mismatch:\"+want+\":\"+got);const p=process.env.VELNOR_PW_PROJECT||\"\";const r=e.filter(x=>x.method===\"onProject\").map(x=>x.params.project);const n=[...new Set(r.map(x=>x.name))].sort();if(r.length!==n.length)f(\"playwright_blob_project_mismatch:\"+p+\":\"+n.join(\",\"));if(n.length===0&&want===\"\")f(\"playwright_blob_project_mismatch:\"+p+\":empty_unsharded_blob\");if(p!==\"\"&&n.length>0){const by=new Map(r.map(x=>[x.name,x]));const a=new Set([p]);if(!by.has(p))f(\"playwright_blob_project_mismatch:\"+p+\":\"+n.join(\",\"));for(const k of a){const x=by.get(k);if(!x)continue;const d=x.dependencies||[];if(!Array.isArray(d))f(\"playwright_blob_project_mismatch:\"+p+\":bad_dependencies\");for(const v of d){if(typeof v!==\"string\")f(\"playwright_blob_project_mismatch:\"+p+\":bad_dependencies\");a.add(v);}if(x.teardown!==undefined){if(typeof x.teardown!==\"string\")f(\"playwright_blob_project_mismatch:\"+p+\":bad_teardown\");a.add(x.teardown);}}if(n.some(x=>!a.has(x)))f(\"playwright_blob_project_mismatch:\"+p+\":\"+n.join(\",\"));}console.log(\"velnor: blob verified shard=\"+(got||\"none\")+\" projects=\"+(n.join(\",\")||\"none\"));'\\'''"
+      - name: Upload Playwright blob
+        if: "!cancelled()"
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          if-no-files-found: error
+          name: velnor-pw-blob-bun-fixture-web--browser-leg-${{ matrix.leg }}
+          overwrite: "true"
+          path: ${{ runner.temp }}/velnor/pw-blob/leg-${{ matrix.leg }}.zip
+          retention-days: "1"
+      - name: Upload Playwright results
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          if-no-files-found: warn
+          name: velnor-pw-results-bun-fixture-web--browser-leg-${{ matrix.leg }}
+          overwrite: "true"
+          path: apps/web/test-results
+          retention-days: "7"
+  bun-fixture-web--browser--report:
+    name: Bun / @fixture/web / browser / report
+    runs-on: ubuntu-26.04
+    timeout-minutes: 25
+    env:
+      VELNOR_RUN_KEY_ATTEMPT: ${{ needs.plan.outputs.plan_attempt || github.run_attempt }}
+    permissions:
+      contents: read
+    needs:
+      - plan
+      - bun-fixture-web--browser
+    if: "!cancelled() && needs.bun-fixture-web--browser.result != 'skipped'"
+    continue-on-error: true
+    steps:
+      - name: Record optional cache budget
+        id: velnor-cache-clock
+        run: "set -eu\nunavailable() { printf '%s\\n' '::warning::cache_unavailable: invalid first-step clock or output'; }\noutput=${GITHUB_OUTPUT-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$now\" \"$seconds\"; do\n  case \"$value\" in ''|*[!0-9]*) unavailable; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) unavailable; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { unavailable; exit 0; }\ndone\nif [ -z \"$output\" ] || ! printf 'started=%s\\ndeadline=%s\\n' \"$now\" \"$((now + seconds))\" 2>/dev/null >> \"$output\"; then\n  unavailable\nfi\n"
+        env:
+          VELNOR_CACHE_JOB_SECONDS: "1500"
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Setup Mise
+        uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550
+        with:
+          cache: "false"
+          cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          version: 2026.10.17
+      - name: Resolve project tool versions
+        run: "set -eu\n: \"${GITHUB_ENV:?missing GITHUB_ENV}\"\n: \"${RUNNER_TEMP:?missing RUNNER_TEMP}\"\nvelnor_dir=\"$RUNNER_TEMP/velnor-project-tool\"\nvelnor_db=\"$velnor_dir/declared\"\nvelnor_tab=$(printf '\\t')\nvelnor_safe() { printf '%s' \"$1\" | cut -c1-64 | tr -c 'A-Za-z0-9._/@+-' '?'; }\nvelnor_fail() { printf 'velnor: %s\\n' \"$1\" >&2; exit 1; }\nvelnor_mise() { mise --no-config --no-env --no-hooks \"$@\"; }\nrm -rf \"$velnor_dir\"\nmkdir -p \"$velnor_dir\"\n: > \"$velnor_db\"\nvelnor_regular() {\n  if [ -L \"$1\" ] || [ ! -f \"$1\" ]; then velnor_fail \"$1 must be a regular file\"; fi\n}\nvelnor_toml() {\n  cp -- \"$1\" \"$velnor_dir/src.toml\"\n  velnor_mise config get -f \"$velnor_dir/src.toml\" > /dev/null 2>&1 || velnor_fail \"$1 is not valid TOML\"\n}\nvelnor_tools() {\n  velnor_toml \"$1\"\n  if velnor_mise config get -f \"$velnor_dir/src.toml\" tools > \"$velnor_dir/tools\" 2>/dev/null; then\n    awk -v file=\"$1\" '\nfunction unq(s) {\n  if (s ~ /^\"[^\"\\\\]*\"$/ || s ~ /^\\047[^\\047]*\\047$/) { return substr(s, 2, length(s) - 2) }\n  return s\n}\nBEGIN { OFS = \"\\t\"; cur = \"\"; multi = \"\" }\n{\n  line = $0\n  if (multi != \"\") { if (index(line, multi) > 0) { multi = \"\" } next }\n  if (line ~ /^[ \\t]*(#|$)/) { next }\n  if (line ~ /^[ \\t]*\\[/) {\n    hdr = line\n    sub(/^[ \\t]*\\[+[ \\t]*/, \"\", hdr)\n    sub(/[ \\t]*\\]+[ \\t]*$/, \"\", hdr)\n    cur = unq(hdr)\n    if (cur == \"\") { cur = \"?\" }\n    next\n  }\n  eq = index(line, \" = \")\n  if (eq == 0) { next }\n  k = unq(substr(line, 1, eq - 1))\n  v = substr(line, eq + 3)\n  if (v ~ /^\"\"\"/ || v ~ /^\\047\\047\\047/) {\n    d = substr(v, 1, 3)\n    if (index(substr(v, 4), d) == 0) { multi = d }\n    v = d\n  } else {\n    v = unq(v)\n  }\n  if (cur == \"\") { print file, k, v } else if (k == \"version\") { print file, cur, v }\n}' \"$velnor_dir/tools\" >> \"$velnor_db\"\n  fi\n}\nvelnor_tool_versions() {\n  awk -v file=\"$1\" '\nBEGIN { OFS = \"\\t\" }\n{\n  sub(/[ \\t]*#.*$/, \"\")\n  if ($0 ~ /^[ \\t]*$/) { next }\n  line = $0\n  sub(/^[ \\t]+/, \"\", line)\n  k = line\n  sub(/[ \\t].*$/, \"\", k)\n  v = line\n  if (v == k) { v = \"\" } else { sub(/^[^ \\t]+[ \\t]+/, \"\", v); sub(/[ \\t]+$/, \"\", v) }\n  print file, k, v\n}' \"$1\" >> \"$velnor_db\"\n}\nvelnor_toolchain() {\n  if grep -q '^[[:space:]]*\\[' \"$1\"; then\n    velnor_toml \"$1\"\n    if velnor_mise config get -f \"$velnor_dir/src.toml\" toolchain.channel > \"$velnor_dir/channel\" 2>/dev/null; then\n      awk -v file=\"$1\" 'BEGIN { OFS = \"\\t\" } NR == 1 { v = $0; next } { v = v \" \" $0 } END { print file, \"rust\", v }' \"$velnor_dir/channel\" >> \"$velnor_db\"\n    fi\n  else\n    printf '%s\\t%s\\t%s\\n' \"$1\" rust \"$(tr -d ' \\t\\r\\n' < \"$1\")\" >> \"$velnor_db\"\n  fi\n}\nvelnor_exact() {\n  case \"$2\" in\n    ''|*[!0-9.]*|.*|*.|*..*|*.*.*.*|0[0-9]*|*.0[0-9]*) velnor_fail \"$1 must declare one exact X.Y.Z version, not '$(velnor_safe \"$2\")'\" ;;\n    *.*.*) ;;\n    *) velnor_fail \"$1 must declare one exact X.Y.Z version, not '$(velnor_safe \"$2\")'\" ;;\n  esac\n}\nvelnor_tool() {\n  name=$1\n  shift\n  resolved=\n  origin=\n  while IFS=\"$velnor_tab\" read -r file key value; do\n    matched=0\n    for want in \"$@\"; do\n      if [ \"$key\" = \"$want\" ]; then matched=1; fi\n    done\n    if [ \"$matched\" = 0 ]; then continue; fi\n    velnor_exact \"$file $key\" \"$value\"\n    if [ -n \"$resolved\" ] && [ \"$resolved\" != \"$value\" ]; then\n      velnor_fail \"$name: $file $key declares $value, $origin declares $resolved\"\n    fi\n    if [ -z \"$resolved\" ]; then origin=\"$file $key\"; fi\n    resolved=$value\n  done < \"$velnor_db\"\n  [ -n \"$resolved\" ] || velnor_fail \"$name: the project config no longer declares this tool; regenerate the workflow\"\n  printf '%s=%s\\n' \"$name\" \"$resolved\" >> \"$GITHUB_ENV\"\n  if [ \"$name\" = VELNOR_TOOL_RUST ] && [ \"${velnor_export_rustup-0}\" = 1 ]; then\n    printf 'RUSTUP_TOOLCHAIN=%s\\n' \"$resolved\" >> \"$GITHUB_ENV\"\n  fi\n  printf 'velnor: %s=%s\\n' \"$name\" \"$resolved\"\n}\n# shellcheck disable=SC2016 # awk program text: awk, not the shell, expands it\nvelnor_lock_awk='BEGIN { q = \"\\\"\"; e1 = \"[[tools.\" key \"]]\"; e2 = \"[[tools.\" q key q \"]]\"; e3 = \"[tools.\" key \"]\"; e4 = \"[tools.\" q key q \"]\"; s1 = \"[tools.\" key \".\"; s2 = \"[tools.\" q key q \".\"; p1 = s1 q \"platforms.\" platform q \"]\"; p2 = s2 q \"platforms.\" platform q \"]\"; p3 = s1 \"platforms.\" platform \"]\"; p4 = s2 \"platforms.\" platform \"]\"; want = \"version = \" q version q; inline = q \"platforms.\" platform q \" = {\"; state = 0 }\n{ line = $0; sub(/^[ \\t]+/, \"\", line); sub(/[ \\t\\r]+$/, \"\", line) }\nline == \"\" || substr(line, 1, 1) == \"#\" { next }\nsubstr(line, 1, 1) == \"[\" {\n  matched = state == 2 || state == 3 || state == 4; other = state == 1 || state == 5\n  if (line == e1 || line == e2 || line == e3 || line == e4) state = 1\n  else if (line == p1 || line == p2 || line == p3 || line == p4) state = matched ? 3 : (other ? 5 : 0)\n  else if (index(line, s1) == 1 || index(line, s2) == 1) state = matched ? 4 : (other ? 5 : 0)\n  else state = 0\n  next\n}\nstate == 1 && line == want { state = 2; next }\nstate == 3 && (index(line, \"checksum = \") == 1 || index(line, \"url = \") == 1) { print lock \" \" key \" \" line; next }\nstate == 2 && index(line, inline) == 1 {\n  if (match(line, /checksum = \"[^\"]*\"/)) print lock \" \" key \" \" substr(line, RSTART, RLENGTH)\n  if (match(line, /[{ ,]url = \"[^\"]*\"/)) print lock \" \" key \" \" substr(line, RSTART + 1, RLENGTH - 1)\n}'\nvelnor_lock() {\n  name=$1\n  shift\n  case \"${RUNNER_OS-}:${RUNNER_ARCH-}\" in\n    Linux:X64) platform=linux-x64 ;;\n    Linux:ARM64) platform=linux-arm64 ;;\n    macOS:X64) platform=macos-x64 ;;\n    macOS:ARM64) platform=macos-arm64 ;;\n    Windows:X64) platform=windows-x64 ;;\n    Windows:ARM64) platform=windows-arm64 ;;\n    *) velnor_fail \"$name: unsupported runner platform '${RUNNER_OS-}:${RUNNER_ARCH-}'\" ;;\n  esac\n  : > \"$velnor_dir/lock\"\n  for lock in $velnor_locks; do\n    if [ ! -e \"$lock\" ] && [ ! -L \"$lock\" ]; then continue; fi\n    velnor_regular \"$lock\"\n    for key in \"$@\"; do\n      awk -v lock=\"$lock\" -v key=\"$key\" -v version=\"$resolved\" -v platform=\"$platform\" \"$velnor_lock_awk\" \"$lock\" >> \"$velnor_dir/lock\" || velnor_fail \"$lock could not be read\"\n    done\n  done\n  lock_digest=unlocked\n  if [ -s \"$velnor_dir/lock\" ]; then\n    if command -v sha256sum >/dev/null 2>&1; then\n      lock_digest=$(sha256sum < \"$velnor_dir/lock\") || velnor_fail \"$name: lock digest failed\"\n    else\n      lock_digest=$(shasum -a 256 < \"$velnor_dir/lock\") || velnor_fail \"$name: lock digest failed\"\n    fi\n    lock_digest=${lock_digest%% *}\n    case \"$lock_digest\" in\n      *[!0-9a-f]*) velnor_fail \"$name: lock digest is not hexadecimal\" ;;\n    esac\n    [ \"${#lock_digest}\" -eq 64 ] || velnor_fail \"$name: lock digest is not SHA-256\"\n  fi\n  printf '%s=%s\\n' \"$name\" \"$lock_digest\" >> \"$GITHUB_ENV\"\n  printf 'velnor: %s=%s\\n' \"$name\" \"$lock_digest\"\n}\nvelnor_locks='mise.lock .mise.lock'\nfor velnor_file in mise.toml .mise.toml mise.*.toml .mise.*.toml .config/mise.toml .config/mise.*.toml .config/mise/config.toml .config/mise/config.*.toml .config/mise/conf.d/*.toml mise/config.toml mise/config.*.toml .mise/config.toml .mise/config.*.toml; do\n  if [ ! -e \"$velnor_file\" ] && [ ! -L \"$velnor_file\" ]; then continue; fi\n  velnor_regular \"$velnor_file\"\n  velnor_tools \"$velnor_file\"\ndone\nif [ -e .tool-versions ] || [ -L .tool-versions ]; then\n  velnor_regular .tool-versions\n  velnor_tool_versions .tool-versions\nfi\nvelnor_tool VELNOR_TOOL_BUN 'bun' 'core:bun'\nvelnor_lock VELNOR_TOOL_BUN_LOCK 'bun' 'core:bun'\nrm -rf \"$velnor_dir\"\n" # zizmor: ignore[github-env]
+      - name: V2 identity
+        id: v2
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
+        with:
+          d: 6693558aef57f8228183e7094807c3198f660220c1f323fdd5b0e3999faa76f7-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}
+      - name: Restore Mise tools
+        id: tools-restore
+        if: steps.v2.outputs.enabled == 'true'
+        uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
+        with:
+          key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          mise-sha256: fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a
+          seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
+      - name: Prepare pinned tools
+        env:
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+        run: "mise --no-config --no-env --no-hooks install 'bun@'\"${VELNOR_TOOL_BUN}\""
+      - name: Verify Bun workspace
+        env:
+          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/velnor/bun-cache
+          MISE_AUTO_INSTALL: "false"
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; cd -P -- \"$GITHUB_WORKSPACE\"; cd -- '\\''.'\\''; test -f bun.lock; test ! -L bun.lock; for f in package-lock.json npm-shrinkwrap.json yarn.lock pnpm-lock.yaml bun.lockb; do test ! -e \"$f\"; done; pm='\\'''\\''; while IFS= read -r line; do case \"$line\" in *'\\''\"packageManager\"'\\''*) pm=\"$line\" ;; esac; done < package.json; case \"$pm\" in '\\'''\\''|*\"\\\"bun@'\"${VELNOR_TOOL_BUN}\"'\\\"\"*|*\"\\\"bun@'\"${VELNOR_TOOL_BUN}\"'+\"*) ;; *) echo '\\''velnor: packageManager disagrees with the Mise-declared Bun'\\'' >&2; exit 1 ;; esac'"
+      - name: Compute family cache keys
+        id: family-keys
+        env:
+          VELNOR_DEFAULT_REF: ${{ format('refs/heads/{0}', github.event.repository.default_branch) }}
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/family-keys\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; uname -s > \"$d/platform\"; uname -m >> \"$d/platform\"; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; fi; save=false; [ \"$trust\" != trusted ] || save=true; printf '\\''%s\\n'\\'' '\\''family=bun-install'\\'' '\\''schema=1'\\'' \"$RUNNER_TEMP/velnor/bun-cache\" \"bun=${VELNOR_TOOL_BUN:-}\" \"root=root\" > \"$d/bun_install-compat\"; cat \"$d/platform\" >> \"$d/bun_install-compat\"; s256 \"$d/bun_install-compat\"; compat=\"s256-$h\"; : > \"$d/bun_install-snap\"; f=\"$GITHUB_WORKSPACE/bun.lock\"; if [ -f \"$f\" ] && [ ! -L \"$f\" ]; then s256 \"$f\"; else h=absent; fi; printf '\\''%s\\t%s\\n'\\'' '\\''bun.lock'\\'' \"$h\" >> \"$d/bun_install-snap\"; s256 \"$d/bun_install-snap\"; snap=\"s256-$h\"; trusted=\"velnor-v1-bun-install-trusted-$compat-\"; key=\"$trusted$snap\"; [ \"${#key}\" -le 512 ] || { printf '\\''cache key exceeds the GitHub cap: %s\\n'\\'' \"$key\" >&2; exit 1; }; printf '\\''%s\\n'\\'' \"bun_install_key=$key\" \"bun_install_restore_keys=$trusted\" >> \"$GITHUB_OUTPUT\"; printf '\\''%s\\n'\\'' \"save=$save\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore bun-install cache
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{steps.family-keys.outputs.bun_install_key}}
+          path: ${{ runner.temp }}/velnor/bun-cache
+          restore-keys: ${{steps.family-keys.outputs.bun_install_restore_keys}}
+      - name: Install dependencies
+        env:
+          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/velnor/bun-cache
+          MISE_AUTO_INSTALL: "false"
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; cd -P -- \"$GITHUB_WORKSPACE\"; d=\"$RUNNER_TEMP/velnor/bun\"; mkdir -p \"$d\"; cfg=\"$d/bunfig.toml\"; printf '\\''%s\\n'\\'' '\\''[install]'\\'' > \"$cfg\"; '\\''mise'\\'' '\\''--no-config'\\'' '\\''--no-env'\\'' '\\''--no-hooks'\\'' '\\''exec'\\'' \"bun@'\"${VELNOR_TOOL_BUN}\"'\" '\\''--'\\'' '\\''bun'\\'' '\\''install'\\'' '\\''--frozen-lockfile'\\'' '\\''--cwd=.'\\'' \"--config=$cfg\"'"
+      - name: Check bun-install cache size
+        id: family-size-bun-install
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; dir=\"$RUNNER_TEMP/velnor/bun-cache\"; out=${GITHUB_OUTPUT-}; refuse() { if [ -n \"$out\" ]; then printf '\\''%s\\n'\\'' '\\''admitted=false'\\'' >> \"$out\"; fi; printf '\\''%s\\n'\\'' \"::warning::$1: bun-install cache not saved\"; exit 0; }; if [ ! -d \"$dir\" ] || [ -L \"$dir\" ]; then refuse missing_directory; fi; mkdir -p \"$RUNNER_TEMP/velnor\"; size=\"$RUNNER_TEMP/velnor/family-size\"; if command -v zstd >/dev/null 2>&1; then tar -C \"${dir%/*}\" -cf - \"${dir##*/}\" | zstd -T0 -q | wc -c > \"$size\"; limit=268435456; else du -sk \"$dir\" > \"$size\"; limit=262144; fi; n=; rest=; read -r n rest < \"$size\" || [ -n \"$n\" ]; case \"$n\" in '\\'''\\''|*[!0-9]*) refuse size_unreadable ;; esac; if [ \"$n\" -gt \"$limit\" ]; then refuse over_ceiling; fi; if [ -n \"$out\" ]; then printf '\\''%s\\n'\\'' '\\''admitted=true'\\'' >> \"$out\"; fi'"
+      - name: Admit optional cache save
+        id: velnor-optional-family-bun_install-save-budget
+        if: success() && steps.family-keys.outputs.save == 'true' && steps.family-size-bun-install.outputs.admitted == 'true'
+        run: "set -eu\noutput=${GITHUB_OUTPUT-}\nemit() { [ -n \"$output\" ] && printf '%s\\n' \"$1\" 2>/dev/null >> \"$output\"; }\nrefuse() {\n  emit 'admitted=false' || :\n  printf '%s\\n' '::warning::cache_unavailable: optional save has no safe remaining job budget or output'\n}\nstarted=${VELNOR_CACHE_STARTED-}\ndeadline=${VELNOR_CACHE_DEADLINE-}\nseconds=${VELNOR_CACHE_JOB_SECONDS-}\nrequired=${VELNOR_CACHE_REQUIRED_SECONDS-}\nnow=$(date +%s) || now=\nfor value in \"$started\" \"$deadline\" \"$now\" \"$seconds\" \"$required\"; do\n  case \"$value\" in ''|*[!0-9]*) refuse; exit 0 ;; esac\n  case \"$value\" in 0|[1-9]*) ;; *) refuse; exit 0 ;; esac\n  [ \"${#value}\" -le 10 ] || { refuse; exit 0; }\ndone\nif [ \"$now\" -lt \"$started\" ] || [ \"$deadline\" -lt \"$started\" ] ||\n   [ \"$((deadline - started))\" -ne \"$seconds\" ] ||\n   [ \"$((deadline - now))\" -lt \"$required\" ]; then\n  refuse\nelif ! emit 'admitted=true'; then\n  refuse\nfi\n"
+        env:
+          VELNOR_CACHE_JOB_SECONDS: "1500"
+          VELNOR_CACHE_STARTED: ${{ steps.velnor-cache-clock.outputs.started }}
+          VELNOR_CACHE_DEADLINE: ${{ steps.velnor-cache-clock.outputs.deadline }}
+          VELNOR_CACHE_REQUIRED_SECONDS: "90"
+      - name: Save bun-install cache
+        if: (success() && steps.family-keys.outputs.save == 'true' && steps.family-size-bun-install.outputs.admitted == 'true') && steps.velnor-optional-family-bun_install-save-budget.outputs.admitted == 'true'
+        id: velnor-optional-family-bun_install-save
+        timeout-minutes: 1
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{steps.family-keys.outputs.bun_install_key}}
+          path: ${{ runner.temp }}/velnor/bun-cache
+      - name: Report optional cache save failure
+        if: always() && !cancelled() && steps.velnor-optional-family-bun_install-save.outcome == 'failure'
+        run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
+      - name: Download Playwright blobs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          merge-multiple: "true"
+          path: ${{ runner.temp }}/velnor/pw-blobs
+          pattern: velnor-pw-blob-bun-fixture-web--browser-leg-*
+      - name: Merge Playwright reports
+        env:
+          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/velnor/bun-cache
+          MISE_AUTO_INSTALL: "false"
+          MISE_EXEC_AUTO_INSTALL: "false"
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          PLAYWRIGHT_HTML_OPEN: never
+          PLAYWRIGHT_HTML_OUTPUT_DIR: ${{ runner.temp }}/velnor/pw-report/html
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ runner.temp }}/velnor/pw-report/report.json
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; cd -P -- \"$GITHUB_WORKSPACE\"; '\\''mise'\\'' '\\''--no-config'\\'' '\\''--no-env'\\'' '\\''--no-hooks'\\'' '\\''exec'\\'' \"bun@'\"${VELNOR_TOOL_BUN}\"'\" '\\''--'\\'' '\\''bun'\\'' '\\''run'\\'' '\\''--cwd=apps/web'\\'' '\\''playwright'\\'' '\\''merge-reports'\\'' '\\''--reporter=html,json'\\'' \"$RUNNER_TEMP/velnor/pw-blobs\"'"
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          if-no-files-found: error
+          name: velnor-pw-report-bun-fixture-web--browser
+          overwrite: "true"
+          path: ${{ runner.temp }}/velnor/pw-report
+          retention-days: "14"
   bun-fixture-web--unit:
     name: Bun / @fixture/web / unit
     runs-on: ubuntu-26.04

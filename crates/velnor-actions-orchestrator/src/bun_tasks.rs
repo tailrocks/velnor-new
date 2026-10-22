@@ -6,13 +6,14 @@ use velnor_actions_bun::{
     Member, check_package_manager, check_shard_script, job_id, member_job_scripts, suite_job_id,
 };
 use velnor_actions_contract::config::playwright_lock::{PlaywrightLock, pin_list};
-use velnor_actions_contract::config::{BunBrowser, BunSuiteConfig};
+use velnor_actions_contract::config::{BunBrowser, BunSuiteConfig, BunSuiteReport};
 use velnor_actions_contract::{JobTimeout, Step, VelnorConfig};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::verification_jobs::{
-    BunLegMatrix, BunMemberPolicy, BunSuitePolicy, playwright_install_step,
+    BunLegMatrix, BunMemberPolicy, BunReportPolicy, BunSuitePolicy, playwright_install_step,
 };
 
+use super::bun_report_steps::report_steps;
 use super::bun_steps::{LegArgs, MemberInputs, member_steps};
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
@@ -146,7 +147,8 @@ impl<'a> MemberCtx<'a> {
     }
 }
 
-/// One declared suite's job, with its leg matrix when it shards Playwright.
+/// One declared suite's job, with its leg matrix and report job when it
+/// shards Playwright.
 fn suite_policy(
     ctx: &MemberCtx<'_>,
     suite_id: &str,
@@ -159,6 +161,7 @@ fn suite_policy(
     let timeout = resolve_timeout(suite.timeout_minutes, member_timeout.minutes())?;
     let mut matrix = None;
     let mut leg = None;
+    let mut report = None;
     if let Some(table) = &suite.playwright {
         for script in &suite.scripts {
             check_shard_script(member, script).map_err(|err| failure(err.code()))?;
@@ -168,8 +171,20 @@ fn suite_policy(
             projects: legs.has_projects(),
             sharded: legs.is_sharded(),
             fail_on_flaky: table.fail_on_flaky,
+            job_id: id.clone(),
+            results_retention_days: table.results_retention_days,
         });
         matrix = Some(legs);
+        if table.report == BunSuiteReport::Merge {
+            report = Some(BunReportPolicy {
+                timeout,
+                steps: report_steps(
+                    &ctx.inputs(&suite.scripts, None, None),
+                    &id,
+                    table.report_retention_days,
+                )?,
+            });
+        }
     }
     let steps = member_steps(&ctx.inputs(&suite.scripts, playwright.as_ref(), leg.as_ref()))?;
     Ok(BunSuitePolicy {
@@ -180,6 +195,7 @@ fn suite_policy(
         required: suite.required,
         steps,
         matrix,
+        report,
     })
 }
 

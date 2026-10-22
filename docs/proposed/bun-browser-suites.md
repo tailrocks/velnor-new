@@ -1,9 +1,10 @@
 # Bun browser suites (hard decision 6 amendment)
 
-Status: suites, their jobs, timeouts and Required membership, and the
-Playwright leg matrix are implemented. Leg blob verification, artifacts, the
-merged report and the single cache writer are proposed; until they land the
-corresponding keys are rejected as unknown. Hard decision:
+Status: implemented: suites, their jobs, timeouts and Required membership,
+the Playwright leg matrix, leg blob verification and artifacts, the merged
+report job. Proposed: the single cache writer for legs and the one-job
+release-asset fetch for suites (until then suites refuse pinned release
+assets). Hard decision:
 [decision 6](../hard-decisions.md#6-one-job-per-bun-workspace-member-with-parallel-script-steps).
 Base contract: [Bun contract](bun-contract.md).
 
@@ -131,30 +132,80 @@ The tools cache never elects a matrix job as its writer.
             total: 2
 ```
 
-### Blobs, artifacts and the merged report (proposed)
-
+### Blobs, artifacts and the merged report
 
 Each leg writes its blob to
 `PLAYWRIGHT_BLOB_OUTPUT_FILE=$RUNNER_TEMP/velnor/pw-blob/leg-<n>.zip`.
-Velnor never appends `--reporter`, `--update-snapshots`, `--retries` or
-`--fully-parallel`. The internal operation `playwright-blob-verify-v1` reads
-the blob's metadata and fails with `playwright_blob_missing`,
-`playwright_blob_shard_mismatch:<want>:<got>` or
-`playwright_blob_project_mismatch`, so a wrapper that drops arguments is
-caught at run time. With `report = "merge"`, a non-gating
-`bun-<slug>--<suite>--report` job (`continue-on-error: true`, never in
-Required) downloads every leg blob and runs `playwright merge-reports
---reporter=html,json`.
+Velnor never appends `--reporter` (it would replace the repository's
+reporters), `--update-snapshots`, `--retries` or `--fully-parallel`. After the
+script, `Verify Playwright blob` (`!cancelled()`) reads the zip's
+`report.jsonl` metadata (Playwright 1.64.1 `reporters/blob.ts`: first line
+`onBlobReportMetadata` with `version: 2` and `shard: {current, total}`, absent
+when unsharded; one `onProject` event per project that ran) and fails with:
 
-| Artifact | Name | When | Retention |
-|---|---|---|---|
-| Leg blob | `velnor-pw-blob-<job-id>-leg-<n>` | `!cancelled()` | 1 day |
-| Leg failure results | `velnor-pw-results-<job-id>-leg-<n>` (`<member>/test-results`) | `failure()` | `results_retention_days` |
-| Merged report | `velnor-pw-report-<job-id>` | report job | `report_retention_days` |
+| Code | Meaning |
+|---|---|
+| `playwright_blob_missing` | no blob: the consumer config lacks the blob reporter under CI |
+| `playwright_blob_version:<v>` | an unknown blob schema (fail closed) |
+| `playwright_blob_shard_mismatch:<want>:<got>` | the shard never reached Playwright (compound script, or a wrapper that drops argv) |
+| `playwright_blob_project_mismatch:<want>:<got>` | a foreign project ran, or no project event appeared in an unsharded leg |
+
+*(refinement)* The design names an internal operation
+(`playwright-blob-verify-v1`) over the hardened archive reader. The check is
+instead a fixed program the pinned Bun runs over `unzip -p <blob>
+report.jsonl` (filtered to the metadata and project events): it extracts
+nothing, holds no credential, and needs no new step role while hard decision
+10's lint lane rewrites the step-role table. The blob comes from the same job
+and trust scope. Adopted per the coordinator decision; owner may revisit.
+
+| Artifact | Name | When | Retention | Missing files |
+|---|---|---|---|---|
+| Leg blob | `velnor-pw-blob-<job-id>-leg-<n>` | `!cancelled()` | 1 day | `error` |
+| Leg failure results | `velnor-pw-results-<job-id>-leg-<n>` (`<member>/test-results`) | `failure()` | `results_retention_days` (7) | `warn` |
+| Merged report | `velnor-pw-report-<job-id>` (`html/`, `report.json`) | report job | `report_retention_days` (14) | `error` |
+
+Every upload sets `overwrite: true`, so "Re-run failed jobs" replaces the
+earlier attempt's artifact of a re-run leg. The Bun job validator admits only
+these pinned upload and download actions (a `velnor-pw-` name or pattern, no
+role), and the job reconstruction compares every input.
+
+With `report = "merge"` (only with two or more legs), the job
+`bun-<slug>--<suite>--report` (`Bun / <name> / <suite> / report`) needs the
+plan and the suite job, runs `if: !cancelled() && needs.<suite>.result !=
+'skipped'` with `continue-on-error: true`, installs the workspace (no
+browsers), downloads every leg blob (`merge-multiple`) and runs
+`bun run --cwd=<member> playwright merge-reports --reporter=html,json` with
+`PLAYWRIGHT_HTML_OUTPUT_DIR` and `PLAYWRIGHT_JSON_OUTPUT_FILE` under
+`$RUNNER_TEMP/velnor/pw-report`. It is never in Required: the legs' own
+conclusions are the verdict, and a broken merge must neither mask nor fake it.
+
+## Consumer obligations
+
+- The Playwright config adds the blob reporter under CI, for example
+  `reporter: process.env.CI ? [['dot'], ['blob']] : 'html'`.
+- `fullyParallel: true` is recommended: it shards tests, not files, so legs
+  balance.
+- Keep the default `outputDir` (`test-results`), which the failure upload reads.
+- The sharded script is one command (`playwright test ...`, `bunx playwright
+  test`, or a wrapper that forwards its arguments); no `--shard`, `--project`
+  or `--update-snapshots` in it. CI never writes goldens.
+- Declare `projects` when any project sets `default: false` (Playwright 1.64):
+  shards over "all projects" silently skip such projects.
+- Size `shards` as `ceil(serial test minutes / target leg minutes)` with the
+  leg target at most `timeout_minutes` minus 2-4 minutes of setup.
 
 Matrix legs restore the `bun-install` and `playwright-browsers` families
 read-only; only leg 1 may save them (`VELNOR_FAMILY_WRITER`, proposed). No leg
 ever holds the App secret (see the private-asset rule above).
+
+Playwright blob metadata does not record `--project`. For a non-empty
+project-selected leg, Velnor requires an `onProject` event for the requested
+project, follows its dependency and teardown names, and rejects emitted
+projects outside that closure. Referenced projects can be absent from the
+events with `--no-deps` or when Playwright removes empty suites. An empty shard
+therefore proves its exact shard metadata only; it cannot prove which project
+selector was passed when there are no project events. An empty unsharded blob
+fails verification because it provides no project evidence.
 
 ## Verification
 
@@ -174,5 +225,10 @@ ever holds the App secret (see the private-asset rule above).
   parsing and `strategy` emission (`matrix_bun_tests.rs`), generated legs,
   flags only where they apply, env-only matrix values and refusals
   (`impl_bun_playwright.rs`).
+- Blobs and report: leg verify, project dependency/teardown closure, empty-shard
+  evidence, blob and results uploads, the report job, its gate and the shadow
+  refusal (`impl_bun_report.rs`); report and retention bounds
+  (`config/bun_tests.rs`); the artifact-action allowance and the report policy
+  (`impl_renderer_bun.rs`).
 - Goldens: `fixtures/bun-workspace` (no suite) stays byte-identical;
   `fixtures/bun-workspace-suites` is the opt-in golden (`impl_bun_golden.rs`).
