@@ -51,14 +51,7 @@ pub(in crate::journal::request_lifecycle::tests::linked_request_reopen) async fn
         settle_storage_metadata(scope, &fixture.provisioned, '7').await,
         Err(HostError::Journal)
     ));
-    assert_eq!(
-        scope
-            .reservation(&fixture.physical)
-            .await?
-            .map(|reservation| reservation.state),
-        Some(crate::journal::ReservationState::Reserved)
-    );
-    assert!(!scope.intent(fixture.intent_id).await?.cleanup_proven);
+    assert_failed_settlement_stays_reserved(fixture).await?;
 
     record_owned_network_cleanup(scope, fixture.reservation_id).await?;
     install_release_rejection(scope, fixture.reservation_id).await?;
@@ -66,15 +59,7 @@ pub(in crate::journal::request_lifecycle::tests::linked_request_reopen) async fn
         settle_storage_metadata(scope, &fixture.provisioned, '9').await,
         Err(HostError::Journal)
     ));
-    assert_eq!(
-        scope
-            .reservation(&fixture.physical)
-            .await?
-            .map(|reservation| reservation.state),
-        Some(crate::journal::ReservationState::Reserved)
-    );
-    assert!(!scope.intent(fixture.intent_id).await?.cleanup_proven);
-
+    assert_failed_settlement_stays_reserved(fixture).await?;
     remove_release_rejection(scope).await?;
     crate::journal::connection::storage::read_transaction(scope.journal_ref(), async |connection| {
         let changed = connection
@@ -102,6 +87,27 @@ pub(in crate::journal::request_lifecycle::tests::linked_request_reopen) async fn
         Some(crate::journal::ReservationState::Released)
     );
     assert!(scope.intent(fixture.intent_id).await?.cleanup_proven);
+    Ok(())
+}
+
+async fn assert_failed_settlement_stays_reserved(
+    fixture: &LinkedLifecycle,
+) -> Result<(), HostError> {
+    assert_eq!(
+        fixture
+            .scope
+            .reservation(&fixture.physical)
+            .await?
+            .map(|reservation| reservation.state),
+        Some(crate::journal::ReservationState::Reserved)
+    );
+    assert!(
+        !fixture
+            .scope
+            .intent(fixture.intent_id)
+            .await?
+            .cleanup_proven
+    );
     Ok(())
 }
 

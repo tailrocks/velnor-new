@@ -4,14 +4,18 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use super::super::{ATTACHMENT_PATHS, TABLE, TRIGGERS};
 use super::{PATHS, attachment_paths_with_inode, upgrade_v31};
 
-#[tokio::test]
-async fn v30_path_migration_keeps_old_inode_unknown_and_rejects_new_unknown()
--> Result<(), HostError> {
+fn v31_test_path(prefix: &str) -> Result<std::path::PathBuf, HostError> {
     let serial = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|_| HostError::Journal)?
         .as_nanos();
-    let path = std::env::temp_dir().join(format!("velnor-v31-{}-{serial}.db", std::process::id()));
+    Ok(std::env::temp_dir().join(format!("{prefix}-{}-{serial}.db", std::process::id())))
+}
+
+#[tokio::test]
+async fn v30_path_migration_keeps_old_inode_unknown_and_rejects_new_unknown()
+-> Result<(), HostError> {
+    let path = v31_test_path("velnor-v31")?;
     let database = turso::Builder::new_local(path.to_str().ok_or(HostError::Journal)?)
         .build()
         .await
@@ -89,23 +93,20 @@ async fn v30_path_migration_keeps_old_inode_unknown_and_rejects_new_unknown()
         .ok_or(HostError::Journal)?
         .get::<String>(0)
         .map_err(|_| HostError::Journal)?;
+    assert_inode_path_schema(&schema);
+    Ok(())
+}
+
+fn assert_inode_path_schema(schema: &str) {
     assert_eq!(
-        crate::journal::schema::sql_normalization::normalize(&schema),
+        crate::journal::schema::sql_normalization::normalize(schema),
         crate::journal::schema::sql_normalization::normalize(&attachment_paths_with_inode())
     );
-    Ok(())
 }
 
 #[tokio::test]
 async fn v30_path_migration_rejects_a_drifted_root_guard() -> Result<(), HostError> {
-    let serial = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| HostError::Journal)?
-        .as_nanos();
-    let path = std::env::temp_dir().join(format!(
-        "velnor-v31-guard-{}-{serial}.db",
-        std::process::id()
-    ));
+    let path = v31_test_path("velnor-v31-guard")?;
     let database = turso::Builder::new_local(path.to_str().ok_or(HostError::Journal)?)
         .build()
         .await
