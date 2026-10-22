@@ -2,7 +2,7 @@ use std::fs;
 use std::os::fd::OwnedFd;
 use std::os::unix::fs::PermissionsExt;
 use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -40,7 +40,7 @@ fn write(scope: &OwnedFd, name: &str, bytes: &[u8]) -> Result<(), HostError> {
         bytes,
         started,
         started + Duration::from_secs(10),
-        &Default::default(),
+        &AtomicBool::default(),
     )
 }
 
