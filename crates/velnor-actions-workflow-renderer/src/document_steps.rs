@@ -139,7 +139,7 @@ fn action_step_to_yaml(
     }
     for (key, value) in with {
         crate::expressions::check_with_key(key)?;
-        crate::expressions::check_with_value(key, value)?;
+        crate::expressions::check_with_action_value(uses, key, value)?;
         steps::scan_for_private_subcommands(key)?;
         steps::scan_for_private_subcommands(value)?;
     }
