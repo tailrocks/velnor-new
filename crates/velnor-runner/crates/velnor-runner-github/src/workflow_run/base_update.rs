@@ -32,6 +32,7 @@ pub struct PullRequestBaseUpdateRequest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PullRequestBaseUpdateReceipt {
     request: PullRequestBaseUpdateRequest,
+    base_repository_id: i64,
     target_base_sha: String,
 }
 
@@ -46,6 +47,12 @@ impl PullRequestBaseUpdateReceipt {
     #[must_use]
     pub fn target_base_sha(&self) -> &str {
         &self.target_base_sha
+    }
+
+    /// Base repository ID verified in the returned pull request.
+    #[must_use]
+    pub const fn base_repository_id(&self) -> i64 {
+        self.base_repository_id
     }
 }
 
@@ -189,6 +196,7 @@ fn decode_receipt(
     }
     Ok(PullRequestBaseUpdateReceipt {
         request,
+        base_repository_id,
         target_base_sha: pull.base.sha,
     })
 }
