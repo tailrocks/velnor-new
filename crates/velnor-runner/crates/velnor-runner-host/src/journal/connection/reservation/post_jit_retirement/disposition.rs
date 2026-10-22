@@ -40,7 +40,7 @@ pub(super) async fn for_event(
     let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
         return Ok(None);
     };
-    let disposition = parse_disposition(row, actual_request_id)?;
+    let disposition = parse_disposition(&row, actual_request_id)?;
     if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
         return Err(HostError::Identity);
     }
@@ -48,7 +48,7 @@ pub(super) async fn for_event(
 }
 
 fn parse_disposition(
-    row: turso::Row,
+    row: &turso::Row,
     actual_request_id: i64,
 ) -> Result<EventRetirementDisposition, HostError> {
     let source_json: Option<String> = row.get(7).map_err(|_| HostError::Journal)?;
