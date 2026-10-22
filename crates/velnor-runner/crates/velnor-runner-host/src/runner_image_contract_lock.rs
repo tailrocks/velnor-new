@@ -1,3 +1,7 @@
+use std::fmt::Write as _;
+
+use sha2::{Digest, Sha256};
+
 use super::{
     DIND_DOCKERFILE, DIND_README, GNU_TAR_BUILD_SCRIPT, GNU_TAR_SOURCE_LOCK, RESOURCE_PROBE_BUILD,
     RUNNER_DOCKERFILE, RUNNER_README, dind_create,
@@ -60,6 +64,57 @@ pub(super) fn assert_runtime_component_lock(lock: &toml::Value) {
         "d9f88af72ad34f7ddf8e67289829f1698f54b6254f7d4f54b7453117ff1a3d2c"
     );
     assert_eq!(lock_str(lock, "turso"), "=0.8.3");
+    assert_gnu_tar_runtime_lock(lock);
+}
+
+fn assert_gnu_tar_runtime_lock(lock: &toml::Value) {
+    let package_version = lock_str(lock, "gnu_tar_source_package_version");
+    assert_eq!(package_version, "1.35+dfsg-4ubuntu0.4");
+    assert_eq!(
+        lock_str(lock, "gnu_tar_source_lock_sha256"),
+        "110b375dcff4a8824a913fa55118773d39d017535d2a08aaae4d856bf5c906db"
+    );
+    let source_lock_sha256 = sha256_hex(GNU_TAR_SOURCE_LOCK.as_bytes());
+    assert_eq!(
+        lock_str(lock, "gnu_tar_source_lock_sha256"),
+        source_lock_sha256
+    );
+
+    let tar_lock: serde_json::Value =
+        serde_json::from_str(GNU_TAR_SOURCE_LOCK).expect("GNU tar source lock is valid JSON");
+    assert_eq!(tar_lock["package"], "tar");
+    assert_eq!(tar_lock["version"], package_version);
+
+    let binary_sha256 = lock_str(lock, "gnu_tar_binary_sha256");
+    assert_eq!(
+        binary_sha256,
+        "035ec786cea68c6da6065e8c8d78e9b08aed5bbd168dee4e52da4a56417ba4c6"
+    );
+    assert_eq!(tar_lock["runtime"]["tar_sha256"], binary_sha256);
+
+    for expected_line in [
+        format!(
+            "RUN echo '{binary_sha256}  /usr/bin/tar' | sha256sum -c - {}",
+            char::from(92_u8)
+        ),
+        format!("&& echo '{binary_sha256}  /usr/bin/tar' | sha256sum -c -"),
+    ] {
+        assert!(
+            RUNNER_DOCKERFILE
+                .lines()
+                .any(|line| line.trim() == expected_line),
+            "GNU tar checksum command does not match runner.lock: {expected_line}"
+        );
+    }
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    let mut encoded = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        write!(&mut encoded, "{byte:02x}").expect("writing to String cannot fail");
+    }
+    encoded
 }
 
 pub(super) fn assert_pinned_base_image(lock: &toml::Value) {
