@@ -216,8 +216,8 @@ Workflow to generate
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
     - actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
     - actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-    - asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87
-    - jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde
+    - asamarts/alint@10d1c0a2bafd0bd316dbad9fe63ea5e1e3761c71
+    - jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550
     - jdx/mr-boxington-action@47ce49b32025d93a7a2f4570815afaa2b7092240
   Ineligible: stack/rust/crates/velnor-actions-cli/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/doctest/default has no test targets; no test command emitted
@@ -235,4 +235,4 @@ Recommendations
   mise.toml is read-only input; Velnor never modifies it
   rust-toolchain.toml is read-only input; Velnor never modifies it
   shadowed_nextest_config: .config/nextest.toml shadowed by crates/velnor-runner/.config/nextest.toml; profile selected from crates/velnor-runner/.config/nextest.toml
-  tool_install_unverified:4 installs skip verification: cargo-deny@0.20.2(no_entry), cargo-machete@0.9.2(no_entry), gh@2.102.1(no_entry), opentofu@1.13.1(no_entry); install on the CI platform and commit the lock to verify them
+  tool_install_unverified:4 installs skip verification: cargo-deny@0.20.2(no_entry), cargo-machete@0.9.2(no_entry), gh@2.103.0(no_entry), opentofu@1.13.2(no_entry); install on the CI platform and commit the lock to verify them
