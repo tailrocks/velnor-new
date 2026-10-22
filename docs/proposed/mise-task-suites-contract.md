@@ -86,12 +86,20 @@ the generated workflow.
 
 ## 4. Artifacts
 
-An optional `artifacts` list declares literal artifact names, repository-local
-paths, upload condition (`failure`, `always`, or `success`), and retention
-from 1 to 90 days (default 14). Shard or partition name templates are not
-accepted. A generated artifact name includes the suite ID, declared artifact
-name, `github.run_id`, and `github.run_attempt`; reruns therefore have
-distinct artifact identities. Missing declared files fail the upload step.
+An optional `artifacts` list declares literal artifact names, upload
+conditions (`failure`, `always`, or `success`), and retention from 1 to 90 days
+(default 14). Each artifact declaration MUST contain exactly one
+repository-relative file, directory, or wildcard path pattern. That pattern
+MUST match at least one uploadable file whenever its upload condition is
+active. To require several paths, declare a separate artifact for each path
+with a distinct literal name. The renderer emits a separate upload step for
+each declaration, so a missing path fails even when another declared path has
+files. Shard or partition name templates are not accepted.
+
+A generated artifact name includes an unambiguous length-prefixed encoding of
+the suite ID and declared artifact name, plus `github.run_id` and
+`github.run_attempt`. Distinct suite/artifact pairs therefore have distinct
+artifact identities, and reruns keep distinct identities too.
 Retention for an evidence window MUST include enough time for that window and
 its predecessor/scheduling margin.
 

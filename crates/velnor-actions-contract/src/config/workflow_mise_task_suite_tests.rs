@@ -72,6 +72,29 @@ fn task_suites_accept_only_explicit_push_and_schedule_events() {
 }
 
 #[test]
+fn task_suite_artifact_requires_one_path_pattern_per_declaration() {
+    let mut task = suite("evidence", vec![MiseTaskSuiteEvent::Push]);
+    task.artifacts = vec![RustSuiteArtifact {
+        name: "evidence".to_owned(),
+        paths: vec![
+            "target/evidence/manifest.json".to_owned(),
+            "target/evidence/push-event.json".to_owned(),
+        ],
+        when: RustSuiteArtifactWhen::Success,
+        retention_days: 45,
+    }];
+
+    let error = task
+        .validate("config.toml", "workflow.task_suites[0]")
+        .expect_err("multiple patterns could hide one missing output");
+    assert!(
+        error
+            .to_string()
+            .contains("task_suite_artifact_requires_one_path_pattern")
+    );
+}
+
+#[test]
 fn task_suite_inventory_is_sorted_unique_and_generator_owned() {
     let mut config = named("CI");
     config.task_suites = vec![suite("alpha", vec![MiseTaskSuiteEvent::Push])];

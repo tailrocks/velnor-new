@@ -260,25 +260,21 @@ fn artifact_step(
     policy: &MiseTaskSuitePolicy,
     artifact: &RustSuiteArtifact,
 ) -> Result<Yaml, RenderError> {
-    let artifact_name = format!(
-        "velnor-mise-task-{}-{}-${{{{ github.run_id }}}}-attempt-${{{{ github.run_attempt }}}}",
-        policy.suite.id, artifact.name
-    );
-    let paths = artifact.paths.join("\n");
-    if paths.lines().any(str::is_empty) {
+    let Some(path) = artifact.paths.first() else {
         return Err(RenderError::InvalidWorkflow(
             "task_suite_artifact_path".to_owned(),
         ));
-    }
-    for path in paths.lines() {
-        crate::artifact_paths::check_artifact_path(path)?;
-    }
+    };
+    crate::artifact_paths::check_artifact_path(path)?;
     let mut step = steps::action_step(
         "Upload task suite artifact",
         steps::UPLOAD_ARTIFACT_USES,
         BTreeMap::from([
-            ("name".to_owned(), artifact_name),
-            ("path".to_owned(), paths),
+            (
+                "name".to_owned(),
+                task_suite_artifact_name(&policy.suite.id, &artifact.name),
+            ),
+            ("path".to_owned(), path.clone()),
             ("if-no-files-found".to_owned(), "error".to_owned()),
             (
                 "retention-days".to_owned(),
@@ -288,6 +284,14 @@ fn artifact_step(
     )?;
     step.condition = Some(artifact.when.github_condition().to_owned());
     job_step_to_yaml(policy, &step)
+}
+
+fn task_suite_artifact_name(suite_id: &str, artifact_name: &str) -> String {
+    format!(
+        "velnor-mise-task-suite-{}-{suite_id}-artifact-{}-{artifact_name}-${{{{ github.run_id }}}}-attempt-${{{{ github.run_attempt }}}}",
+        suite_id.len(),
+        artifact_name.len(),
+    )
 }
 
 #[cfg(test)]

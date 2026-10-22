@@ -113,7 +113,7 @@ fn push_attempt_artifact_is_required_and_attempt_qualified() -> TestResult {
         let yaml = rendered[0].bytes.clone();
         assert!(!yaml.contains("concurrency:"));
         assert!(yaml.contains(
-            "velnor-mise-task-push-head-ledger-${{ github.run_id }}-attempt-${{ github.run_attempt }}"
+            "velnor-mise-task-suite-9-push-head-artifact-6-ledger-${{ github.run_id }}-attempt-${{ github.run_attempt }}"
         ));
         assert!(yaml.contains("if-no-files-found: error"));
         assert!(
@@ -122,6 +122,68 @@ fn push_attempt_artifact_is_required_and_attempt_qualified() -> TestResult {
         );
         assert!(yaml.contains("if: success()"));
     }
+    Ok(())
+}
+
+#[test]
+fn each_artifact_path_has_an_independent_fail_closed_upload() -> TestResult {
+    let mut push = policy("push-head", vec![MiseTaskSuiteEvent::Push], Vec::new());
+    push.suite.artifacts = vec![
+        RustSuiteArtifact {
+            name: "manifest".to_owned(),
+            paths: vec!["target/evidence/manifest.json".to_owned()],
+            when: RustSuiteArtifactWhen::Success,
+            retention_days: 45,
+        },
+        RustSuiteArtifact {
+            name: "push-event".to_owned(),
+            paths: vec!["target/evidence/push-event.json".to_owned()],
+            when: RustSuiteArtifactWhen::Success,
+            retention_days: 45,
+        },
+    ];
+
+    let rendered = render_mise_task_suites(&spec(vec![push]))?;
+    let yaml = &rendered[0].bytes;
+    assert_eq!(yaml.matches(crate::steps::UPLOAD_ARTIFACT_USES).count(), 2);
+    assert_eq!(yaml.matches("if-no-files-found: error").count(), 2);
+    assert!(yaml.contains("path: target/evidence/manifest.json"));
+    assert!(yaml.contains("path: target/evidence/push-event.json"));
+    assert!(
+        yaml.contains("artifact-8-manifest-${{ github.run_id }}-attempt-${{ github.run_attempt }}")
+    );
+    assert!(
+        yaml.contains(
+            "artifact-10-push-event-${{ github.run_id }}-attempt-${{ github.run_attempt }}"
+        )
+    );
+    Ok(())
+}
+
+#[test]
+fn artifact_identity_separates_hyphenated_suite_and_artifact_ids() -> TestResult {
+    let mut suite_a = policy("a", vec![MiseTaskSuiteEvent::Push], Vec::new());
+    suite_a.suite.artifacts.push(RustSuiteArtifact {
+        name: "b-c".to_owned(),
+        paths: vec!["target/evidence/first.json".to_owned()],
+        when: RustSuiteArtifactWhen::Success,
+        retention_days: 45,
+    });
+    let mut suite_ab = policy("a-b", vec![MiseTaskSuiteEvent::Push], Vec::new());
+    suite_ab.suite.artifacts.push(RustSuiteArtifact {
+        name: "c".to_owned(),
+        paths: vec!["target/evidence/second.json".to_owned()],
+        when: RustSuiteArtifactWhen::Success,
+        retention_days: 45,
+    });
+
+    let rendered = render_mise_task_suites(&spec(vec![suite_a, suite_ab]))?;
+    let yaml = &rendered[0].bytes;
+    let first = "velnor-mise-task-suite-1-a-artifact-3-b-c-${{ github.run_id }}-attempt-${{ github.run_attempt }}";
+    let second = "velnor-mise-task-suite-3-a-b-artifact-1-c-${{ github.run_id }}-attempt-${{ github.run_attempt }}";
+    assert_ne!(first, second);
+    assert!(yaml.contains(first), "{yaml}");
+    assert!(yaml.contains(second), "{yaml}");
     Ok(())
 }
 

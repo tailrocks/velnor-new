@@ -22,7 +22,7 @@ fn assert_push_workflow(workflow: &str) {
     assert!(workflow.contains("NEXTEST_TEST_THREADS"), "{workflow}");
     assert!(!workflow.contains("concurrency:"));
     assert!(workflow.contains(
-        "velnor-mise-task-push-head-ledger-${{ github.run_id }}-attempt-${{ github.run_attempt }}"
+        "velnor-mise-task-suite-9-push-head-artifact-6-ledger-${{ github.run_id }}-attempt-${{ github.run_attempt }}"
     ));
     assert!(workflow.contains("if-no-files-found: error"));
     assert!(!workflow.contains("workflow_dispatch:"));
@@ -43,7 +43,7 @@ fn assert_scheduled_workflow(workflow: &str) {
     assert!(workflow.contains("persist-credentials"), "{workflow}");
     assert!(!workflow.contains("concurrency:"));
     assert!(workflow.contains(
-        "velnor-mise-task-schedule-snapshot-snapshot-${{ github.run_id }}-attempt-${{ github.run_attempt }}"
+        "velnor-mise-task-suite-17-schedule-snapshot-artifact-8-snapshot-${{ github.run_id }}-attempt-${{ github.run_attempt }}"
     ));
     assert!(workflow.contains("if-no-files-found: error"));
 }

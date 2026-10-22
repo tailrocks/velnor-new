@@ -24,7 +24,7 @@ fn cfg_err(file: &str, key: impl Into<String>, problem: impl Into<String>) -> Co
     ContractError::config(file, key, problem)
 }
 
-/// Validate a task-suite artifact using the shared suite path and retention policy.
+/// Validate a task-suite artifact with one path pattern and shared retention bounds.
 /// Task suites have no shards, so artifact-name templates are not permitted.
 pub(crate) fn validate_task_suite_artifact(
     artifact: &RustSuiteArtifact,
@@ -38,7 +38,15 @@ pub(crate) fn validate_task_suite_artifact(
             format!("task_suite_artifact_name_must_be_literal:{}", artifact.name),
         ));
     }
-    rules::validate_suite_artifact(artifact, file, prefix)
+    rules::validate_suite_artifact(artifact, file, prefix)?;
+    if artifact.paths.len() > 1 {
+        return Err(cfg_err(
+            file,
+            format!("{prefix}.paths"),
+            "task_suite_artifact_requires_one_path_pattern",
+        ));
+    }
+    Ok(())
 }
 
 /// Validate all declared Rust suites (`stacks.rust.suites`).

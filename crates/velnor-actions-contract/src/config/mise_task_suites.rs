@@ -76,7 +76,8 @@ pub struct MiseTaskSuite {
     /// Cron expressions required when `events` contains `schedule`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub schedule: Vec<String>,
-    /// Declared evidence artifacts. Names are fixed per attempt by the renderer.
+    /// Declared evidence artifacts. Each name has one required path pattern.
+    /// Renderer names encode the suite and artifact identity per attempt.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub artifacts: Vec<RustSuiteArtifact>,
 }
