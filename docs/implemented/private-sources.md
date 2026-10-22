@@ -19,22 +19,24 @@ with fixtures and qualification tests, not against live private repositories.
 | Step roles, mint shape and credential-binding gates, block constructor | contract `step_identity.rs`, renderer `private_source_steps.rs`, `support_private_tokens.rs` | `tests/impl_renderer_private_sources.rs`, `impl_private_sources_parity.rs` |
 | `private-fetch-v1`, `private-revoke-v1` | orchestrator `private_fetch*.rs`, `private_revoke.rs`, CLI gates | `private_fetch_*tests.rs`, `private_revoke_tests.rs`, `impl_cli_private.rs` |
 | Generated placement in the Plan job and Rust crate jobs | orchestrator `private_wiring.rs` | `private_wiring_tests.rs`, `private_wiring_workflow_tests.rs` |
-| Placement in MBX `Dependency seed` jobs. Stage the Velnor helper after checkout and before token creation, fetch, and revocation. Without this step, v0.1.37 failed with `internal_without_acquire:dependency-seed`. | orchestrator `dependency_seed.rs` | `impl_private_sources_generate.rs` (`mbx_seed_job_with_private_sources_stages_the_helper_before_the_fetch`, golden step order) |
+| Placement in MBX `Dependency seed` jobs (Velnor helper staged right after checkout, before the mint, fetch and revoke; without it v0.1.37 failed with `internal_without_acquire:dependency-seed`) | orchestrator `dependency_seed.rs` | `impl_private_sources_generate.rs` (`mbx_seed_job_with_private_sources_stages_the_helper_before_the_fetch`, golden step order) |
 | Placement in `cargo_bin` image build jobs (helper staging, mint, fetch, revoke before the Cargo source fetch and the BuildKit build) | orchestrator `image_prebuilt.rs` | `image_prebuilt_tests.rs` |
 
 ## Decisions
 
-- Bundles use `<workspace>/.velnor/deps/<id>/` in local runs and CI. Both
-  environments use the same `.cargo/config.toml`. Bundles contain no
-  credentials. The workflow revokes the token before repository code runs.
-  `prepare_deps_root` rejects unsafe parent paths and removes existing
-  dependency entries without following symbolic links.
-  `private_fetch_attack_tests.rs` checks these cases. The owner adopted this
-  location through the split brief and can review it again.
-- The generated `actionlint.yaml` declares `private_sources.app_id_variable`.
-  `declared_config_variables` supplies this name.
-  `tests/impl_private_sources_generate.rs` checks generation with the pinned
-  actionlint.
+- Bundle location (adopted per the split brief; owner may revisit). Bundles are
+  extracted to `<workspace>/.velnor/deps/<id>/`, not `$RUNNER_TEMP`, so the local
+  fetch layout and the CI layout match and one `.cargo/config.toml` serves both.
+  No security reason requires keeping bundles outside the workspace: they carry
+  no credential and the token is already revoked when repository code runs. The
+  hostile-checkout cases (a planted `.velnor/deps` symlink or content) are
+  neutralized by `prepare_deps_root`: it rejects unsafe parent paths and removes
+  existing entries without following symlinks. These cases are tested in
+  `private_fetch_attack_tests.rs`.
+
+- The generated `actionlint.yaml` declares `private_sources.app_id_variable`
+  (`declared_config_variables`); `tests/impl_private_sources_generate.rs`
+  generates a `[private_sources]` repository through the pinned actionlint.
 
 - Cargo git sources land in the owned Cargo home. The fetch runs the
   project-declared Rust, not the Velnor pin, and refuses to start when that

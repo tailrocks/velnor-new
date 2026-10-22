@@ -2936,3 +2936,36 @@ c410ffc92c523f67a8c5d355ee4d9cc7ca8527eb:docs/implemented/evidence/freshness-202
 # Reason: run_key test values identify CI runs; contract derives them from numeric run ID and attempt
 # 1 finding(s); rules: generic-api-key; files: crates/services/velnor-actions-orchestrator-internal/tests/impl_artifact_export.rs (1)
 598d0cafc041855cfa2fdd256671e288a636e7de:crates/services/velnor-actions-orchestrator-internal/tests/impl_artifact_export.rs:generic-api-key:55
+
+# Working-tree fingerprints (file:rule:line) for the hk `gitleaks` builtin, which runs `gitleaks dir` on the checkout.
+# Reviewed 2026-10-23: each repeats a history finding already listed above with its reason (same file, rule, line),
+# except the MatrixKey test constant noted below. None is a credential.
+.velnor/runner.lock:generic-api-key:73
+crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_tests.rs:generic-api-key:28
+crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_tests.rs:generic-api-key:79
+crates/velnor-actions-mise/tests/impl_mise_env_policy.rs:generic-api-key:295
+crates/velnor-actions-orchestrator/src/merge_request_tests.rs:generic-api-key:288
+crates/velnor-runner/crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem:private-key:1
+docs/implemented/evidence/freshness-2026-10-20/qualification/mise-crypto-admission.json:generic-api-key:176
+docs/implemented/freshness-evidence-2026-10-08.md:generic-api-key:73
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:114
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:16
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:19
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:27
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:30
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:38
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:41
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:69
+docs/reviews/uv-0.12.23-qualification-evidence.json:generic-api-key:11
+scripts/download-owned-tool-candidate.py:generic-api-key:62
+scripts/hosted_phase_measurement/tests/fixtures/mbx-summary-exact-joined-v1.jsonl:generic-api-key:1
+scripts/hosted_phase_measurement/tests/test_mbx_summary.py:generic-api-key:25
+# Reason: MatrixKey parse test constant m-0123456789abcdef (check_id! macro), not a credential
+crates/velnor-actions-contract/src/ids/artifact.rs:generic-api-key:201
+
+# Reason: contract and report tests use typed deterministic matrix identifier fixtures in validation cases, not credentials.
+# 4 findings; rules: generic-api-key; files: contract qualification and orchestrator report tests (4)
+crates/velnor-actions-contract/src/workflow/qualification.rs:generic-api-key:332
+crates/velnor-actions-contract/src/workflow/qualification.rs:generic-api-key:374
+crates/velnor-actions-orchestrator/src/retrieve_reports_tests.rs:generic-api-key:13
+crates/velnor-actions-orchestrator/src/retrieve_reports_tests.rs:generic-api-key:161

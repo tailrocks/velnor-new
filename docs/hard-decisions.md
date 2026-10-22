@@ -44,7 +44,6 @@ and overlaps the independent checks.
 - The pinned jactionlint parses and validates the native step keys (every
   member and the body-less `wait-all` join) with no ignore pattern
   (decision 10).
-
 - The dependency-seed job is not a crate job: it runs no checks and is not in
   Required, so this decision governs crate jobs only. Crate jobs restore
   compiled caches read-only. See the
@@ -341,6 +340,7 @@ repository-wide credential for dependency fetch (classic PAT, deploy keys),
 a credential binding in any step other than the fetch step, a fetch that
 runs build scripts or repository hooks while the token is live, or
 `pull_request_target` to obtain secrets.
+
 ## 8. Publication only from the default branch or a release tag
 
 **Decision.** Container images (and later packages) are published only from a

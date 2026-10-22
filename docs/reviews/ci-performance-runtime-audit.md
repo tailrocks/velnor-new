@@ -147,10 +147,14 @@ Cold/warm/third fresh-runner experiments, changed-input and negative tests T01�
 ## Independent relevant source and PR audit
 
 Independent source review verifies complete immutable binary diffs for PRs
-#1–#5 and #7–#12, all 12 before/after source archives and all 1,721 archived
+
+## 1–#5 and #7–#12, all 12 before/after source archives and all 1,721 archived
+
 file identities against Git blobs and trees. Numbered item #6 is an ordinary
 issue, positively verified by the retained primary API response. Large PR
-#1/#10 API limits are bypassed through exact local Git objects, without
+
+## 1/#10 API limits are bypassed through exact local Git objects, without
+
 substituting floating heads. PR #12 uses the explicit W0-to-6209 boundary.
 
 The semantic supplement reads 101 exact complete files: 47 product source,
@@ -186,7 +190,7 @@ backend/output proof and replay qualification remain open. G14 actual base
 inventory and G17 include/native/generated-input cases remain unqualified;
 source edge union and `.rs` discovery do not establish those inventories.
 
-## Finite generator W0 evidence closure
+### Finite generator W0 evidence closure
 
 **Closed with explicit unavailable observations** for the frozen generator
 source/runtime audit. All requested relevant source, executed logs and

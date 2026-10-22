@@ -1,11 +1,11 @@
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/dogfood.diff
 1cc103f316d7707bb7ead8d7a203934bbf0f1251b615eb6056deb22c90d6144f  ./dogfood/dogfood.verdict
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./dogfood/generate.exit
-6d4d0ff8d4ac325c1c5789a409086d27a44df7badcec7e134a2dff660c6d38f6  ./dogfood/generate.stderr.txt
+8d1cc03aa3e1f9a15c0409df4851ddfdcd7ef2023e8bac5f1e700a9e8c3fc9ff  ./dogfood/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./dogfood/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/plan.stderr.txt
-2b8275e07e06a5696679a0716009b41af2930484cd4b4ca02e839bfb12f80797  ./dogfood/plan.txt
+fc812d953451d7615f79188b504ee841b0d89bcfbaa3b56f9b2a8024ee3cb78e  ./dogfood/plan.txt
 c699788a2be7593019e70be9c5f11ef8835b5d3acf36649a91642ef45c2193bc  ./dogfood/preview/.github/AGENTS.md
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./dogfood/preview/.github/CLAUDE.md
 952c78c7e8f944dc89ae7733a76f912e2c6b7f7e6013bb2bad00ae85e5ceed3a  ./dogfood/preview/.github/PULL_REQUEST_TEMPLATE.md
@@ -244,7 +244,7 @@ add49400e13eeb7c1936f266a404eb14441d4b874de3cf55be77b5f03b5d1a1b  ./dogfood/prev
 6a154792dca4159d854b541397adf5d476f353bb81083d4b2dc2b48fdbc608e4  ./dogfood/preview/.github/actions/u26/action.yml
 09febd0989b928552e8fe3bfc2873b876f81e65a6d1589cc9acc2e5799b8e2f7  ./dogfood/preview/.github/actions/velnor-cache-tar-launchers/action.yml
 cfd6b35ce8069882e461ad99bb7c7b266611139248b6b6aa6a1c678ae0a36fb3  ./dogfood/preview/.github/actions/velnor-tool-seed/action.yml
-8756fb6fea35ee008f83be5cc8e757d5221a598d21fd756228dde3c0ecde0112  ./dogfood/preview/.github/actions/velnor-tools-cache-restore/action.yml
+ce6e9886075791d52225ca78ba74c9646bc574654b69fa32d86077c41c3aa77b  ./dogfood/preview/.github/actions/velnor-tools-cache-restore/action.yml
 666b8740c9a1ca38381e055371e13640b591eaadb03d908985efee312950ec00  ./dogfood/preview/.github/actions/velnor-tools-prelude-u26/action.yml
 c826d6b104dabdf2eb3c9e8bf6fa90dbd2a3eac69c4fdc958c52ca0d46aaf0f2  ./dogfood/preview/.github/dco.yml
 f6833d0134d44ac3cef9011e1b0a3f61b83ad440a8f12216c04871c7e5e75655  ./dogfood/preview/.github/jactionlint.yaml
@@ -253,7 +253,7 @@ efecb8d39952401d4dade9601a608d1746e8609ea0c64a70258c0d1ab4f5ab02  ./dogfood/prev
 b6c39e49f804bffb740dc81535f1db196606b8c5463446610625f4a6be4c8770  ./dogfood/preview/.github/velnor/task-execution-manifest-v1.json
 b942b00d69f38159cf89df91f9f69f1f33a20055f40c4da11c6a013bb2d899f9  ./dogfood/preview/.github/workflows/cache-cleanup.yml
 bf5077d39eaa2fb87f9400eee384d821dbf26d32a589e1a97e981ff24c380d6b  ./dogfood/preview/.github/workflows/cache-prune.yml
-1fe82038ba45a800b7e7ef06809ac9be002e130f9f5142398fa094285c39b97e  ./dogfood/preview/.github/workflows/ci.yml
+f1bbdfbb336cbc334bd738cda67ef0bcb136a90a00ea24c02182b4ae58722e23  ./dogfood/preview/.github/workflows/ci.yml
 2606f8cf2759070d31585ec5d8bf49cc67cd734c7a00c36cf662adb2a83e186e  ./dogfood/preview/.github/workflows/freshness.yml
 8f72a99c6d73f15d1ff3ca325552d73d6e69126ec2679e3e29e8241a5c92ed50  ./dogfood/preview/.github/workflows/job-image-candidate.yml
 a9fb040030543d819514c5d987e21126374c8170195173448ee5dc59e1745700  ./dogfood/preview/.github/workflows/product-release-binary.yml
@@ -261,7 +261,7 @@ a9fb040030543d819514c5d987e21126374c8170195173448ee5dc59e1745700  ./dogfood/prev
 ed0a420774a9dad78207b13f5679096b08ff41d2051b5ccd4cdb2508dc5b2ec8  ./dogfood/preview/.github/workflows/product-release-images.yml
 273bf09e941ec5146073d33bf25ccebb19517de9f8884dd50fe84f0170774390  ./dogfood/preview/.github/workflows/product-release.yml
 ea4afe0910d3688760f13970bbcebc518f057d302f6b7891a02602f1062474bd  ./dogfood/preview/.github/workflows/qualification.yml
-bc152d5034aa8b5a7f3831556fc7466d461f6ef673d879a3e38a2a81b5b03c3b  ./dogfood/tree.sha256
+3a1ad4fe6cb255badeb1a55856bd521d2cb45a6c750a656e6db5c8adc5c0cc77  ./dogfood/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./empty-suite/generate.exit
 2ebe36aa26bafc22f880748be35c30d6c7690366546f01d5855dd6069898df8b  ./empty-suite/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./empty-suite/generate.stdout.txt

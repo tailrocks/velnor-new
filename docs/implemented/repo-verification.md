@@ -1,79 +1,120 @@
 # Repository Verification Procedures
 
+## Overview
+
+All changes must pass the full repository verification suite from the repo root before commit and PR merge.
+
+> [!IMPORTANT]
+> **Test Runner Enforcement**: Always run tests with `cargo nextest`; never use `cargo test`.
+> Nextest executes tests in isolated worker processes with parallel scheduling and structured telemetry.
+
+---
+
 ## Git hooks
 
-Install the declared tools with `mise install`.
-Enable the Git hooks with `mise x -- hk install --global --mise`.
-Use one global installation on Git 2.54 or later.
-The configuration uses hk 2.7.0.
-The Rust steps use the nearest Cargo manifest for each changed file.
-The formatter uses `--all` for each selected Cargo manifest.
-The formatter includes the packages that the root Cargo manifest lists.
-`crates/velnor-runner` uses its own Cargo manifest.
-The steps exclude test fixtures and generated golden files.
-### Check Git state after hook fixes
+Install the declared tools with `mise install`, then enable the repository hooks
+with `mise x -- hk install --global --mise`. Use one global installation on Git
+2.54 or later. The repository configuration pins hk 2.8.0 and runs the root and
+nested runner workspaces while excluding test fixtures, generated OpenTofu
+goldens, and build output. The pre-commit hook scans staged changes; pre-push
+runs the history scanner; `hk run security-audit` runs the full-history scans.
 
 The Cargo formatter and Clippy fix commands run through
-`scripts/hk-fix-write-guard.sh`.
-The script runs each command with its selected Cargo manifest and arguments.
-It checks the Git index and file state before and after each command.
-It checks tracked files and untracked files that Git does not ignore.
-If this state changes after a successful command, the script returns a failure.
-This check includes files outside hk's selected input set.
+`scripts/hk-fix-write-guard.sh`. It checks the index and file state before and
+after each command, including tracked files and nonignored untracked files
+outside hk's selected input set. Existing staged, unstaged, and untracked
+changes may remain when a command does not change their content or index
+entries. The guard prints no file content or diff, does not stage changes, and
+returns the Cargo command's failure status.
 
-Existing staged, unstaged, and untracked changes can remain if the command does not change their content or index entries.
-The state check does not print file content or a diff.
-It does not add changes to the Git index.
-If a Cargo command fails, the script returns the same exit status.
-Keep the full verification procedure below.
+---
 
-## Full verification
+## The Verification Suite
 
-Run `bash scripts/verify-local.sh` from the repository root.
-The script reads exact tool versions from `.velnor/version-policy.toml`.
-It loads no project Mise configuration.
-The script does a check of the root and nested runner workspaces.
+Run all six root-workspace checks sequentially from the workspace root. The
+nested runner is a separate Cargo workspace and needs its own formatting,
+lint, test, and dependency checks; root `cargo --workspace` and root formatting
+do not include it.
 
-The script resolves Rust components with the selected `rustup` toolchain.
-It puts that toolchain's `bin` directory first in `PATH`.
-It compares paths and versions for `rustc`, Cargo, Clippy, and rustfmt.
-It resolves Nextest with `mise --no-config which`.
-The script resolves the pinned `cargo-nextest` executable with Mise.
-For the Nextest stages, it gives MBX a private Cargo dispatcher through `CARGO`.
-The dispatcher runs the pinned executable for Cargo's `nextest` command.
-It sends all other Cargo commands to the selected Rust toolchain's Cargo executable.
-Cargo can search `CARGO_HOME/bin` before `PATH` for external commands.
-The dispatcher selects the pinned Nextest executable directly.
-The script keeps the caller's normal `CARGO_HOME`, configuration, and credentials.
-MBX and Nextest send metadata and build commands through the dispatcher.
-The local Mise executable's version is reported; a policy mismatch warns and
-continues. The script compares Rust component paths and versions.
-It also compares the MBX version, Cargo and MBX Clippy versions, the Nextest executable path and version, and the cargo-deny version.
+If the workspace `target` is a symlink into an MBX-managed cache, direct Cargo
+commands do not hold an MBX cache lease. Use a separately owned absolute
+`CARGO_TARGET_DIR` for the entire verification run so automatic cache collection
+cannot remove active test binaries. After Nextest builds the CLI, set
+`VELNOR_ACTIONS_BIN="$CARGO_TARGET_DIR/debug/velnor-actions"` for the freshness
+script. Preserve the managed symlink and global cache settings. Bounded build/test
+parallelism is permitted; it must not omit any required test or gate.
 
-Nextest runs ordinary unit and integration tests.
-Nextest does not run doctests.
-MBX `test --doc` runs library doctests in a separate stage.
-Crates without library targets have no doctest stage.
-
-The script runs formatting and strict Clippy checks in both workspaces.
-It runs Nextest suites and doctests in both workspaces.
-It builds documentation for each crate in the root workspace.
-It runs cargo-deny 0.20.2 against the root and nested runner workspaces.
-Each dependency audit uses its workspace manifest and deny policy.
-It runs freshness, repository policy, generated-tree, and fixture checks.
-Set `CARGO_TARGET_DIR` to keep build output outside the repository.
-
-Use an absolute `CARGO_TARGET_DIR` outside the repository for all verification commands.
-Keep an existing MBX target symlink unchanged.
-Direct Cargo commands do not hold an MBX cache lease.
-Automatic cache removal can remove their active test binaries.
-Set `VELNOR_ACTIONS_BIN` to `$CARGO_TARGET_DIR/debug/velnor-actions` after the CLI build.
-Use that path for the freshness script.
-Keep every necessary test and gate when you limit parallel work.
-
-Run the repository structure checks after the local verification script:
+`bash scripts/verify-local.sh` is the single local entrypoint for these checks.
+It reads pinned versions from `.velnor/version-policy.toml` without loading
+project Mise configuration, verifies the selected Rust component paths and
+versions, and checks the MBX, Clippy, Nextest, and cargo-deny tools. It uses a
+private Cargo dispatcher for Nextest so MBX metadata/build calls use the
+selected toolchain while `cargo nextest` invokes the pinned Nextest executable;
+it preserves the caller's `CARGO_HOME`, configuration, and credentials.
+Nextest covers ordinary unit and integration tests, while MBX runs library
+doctests separately. The script also builds crate documentation and runs the
+freshness, repository-policy, generated-tree, and fixture checks.
 
 ```bash
-alint validate-config
-alint check --fail-on-warning
+cargo fmt --all -- --check
+cargo clippy --locked --workspace --all-targets -- -D warnings
+cargo nextest run --locked --workspace
+alint validate-config && alint check --fail-on-warning
+cargo deny check
+bash scripts/check-freshness.sh
+```
+
+---
+
+## Command Reference & Usage Details
+
+### 1. Code Formatting: `cargo fmt --all -- --check`
+
+- **Purpose**: Validates Rust formatting in the root Cargo workspace. The nested runner workspace is excluded and must also pass `cargo fmt --manifest-path crates/velnor-runner/Cargo.toml --all -- --check`.
+- **Why It Matters**: Enforces zero format variance and uniform code aesthetics without manual style debates.
+- **Remediation**: Run `cargo fmt --all` for root files and `cargo fmt --manifest-path crates/velnor-runner/Cargo.toml --all` for runner files.
+
+### 2. Static Analysis & Lints: `cargo clippy --locked --workspace --all-targets -- -D warnings`
+
+- **Purpose**: Runs the Clippy linter across all targets (libraries, binaries, integration tests, examples, benchmarks) with warnings treated as hard errors.
+- **Why It Matters**: Enforces proof invariants: `unsafe_code = "forbid"`, no `unwrap()`/`panic!` in production code, pedantic correctness checks, and API hygiene.
+- **Flags**:
+  - `--locked`: Guarantees reproducible builds against `Cargo.lock`.
+  - `--all-targets`: Ensures tests and benchmarks meet the same lint standards as product crates.
+  - `-D warnings`: Prevents warning accumulation.
+
+### 3. Test Suite Execution: `cargo nextest run --locked --workspace`
+
+- **Purpose**: Runs all unit, integration, and property tests across all workspace crates.
+- **Strict Prohibition**: **Never use `cargo test`**. `cargo test` is forbidden because it lacks process isolation, nextest profile management, and retry handling.
+- **Focused Execution**:
+  - Run specific package: `cargo nextest run --locked -p <package_name>`
+  - Run specific test: `cargo nextest run --locked -p <package_name> -E 'test(<test_filter>)'`
+
+### 4. Repository Structure & Agent Instructions: `alint validate-config && alint check --fail-on-warning`
+
+- **Purpose**: Validates repository structural rules, agent instruction budgets, licenses, and configuration integrity.
+- **Why It Matters**: Enforces that `AGENTS.md` remains lean (<= 100 physical lines, <= 16 KiB), links are verified, and repository policies are preserved.
+
+### 5. Dependency Audit & Compliance: `cargo deny check`
+
+- **Purpose**: Checks crate dependencies against security advisories, approved licenses, duplicate versions, and source registries.
+- **Why It Matters**: Prevents unapproved licenses, yanked dependencies, duplicate conflicting dependencies, and vulnerable crates from entering the dependency graph.
+
+### 6. Toolchain & Pin Freshness: `bash scripts/check-freshness.sh`
+
+- **Purpose**: Verifies that toolchain pins, GitHub Actions versions, and external dependencies adhere to `.velnor/version-policy.toml` and `.velnor/freshness-inventory.json`.
+- **Why It Matters**: Prevents unrecorded drift from upstream tooling and validates active pin exceptions.
+
+---
+
+## Nested Runner Workspace (`crates/velnor-runner`)
+
+The runner controller and supervisor live in the nested virtual workspace `crates/velnor-runner`, which has its own `Cargo.toml`, `Cargo.lock`, and `deny.toml`. To verify the runner workspace (always using `cargo nextest`):
+
+```bash
+cargo fmt --manifest-path crates/velnor-runner/Cargo.toml --all -- --check
+cargo clippy --manifest-path crates/velnor-runner/Cargo.toml --locked --all-targets -- -D warnings
+cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked
+cargo deny --manifest-path crates/velnor-runner/Cargo.toml check
 ```

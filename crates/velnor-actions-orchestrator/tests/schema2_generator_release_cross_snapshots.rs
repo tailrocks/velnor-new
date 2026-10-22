@@ -23,8 +23,8 @@ pub(super) fn assert_intel_cross_build(
     let mbx_lock = mise_lock
         .split("[[tools.mr-boxington]]")
         .nth(1)
-        .and_then(|entry| entry.split("[[tools.rust]]").next())
-        .ok_or("Mise lock must contain the MBX entry before the Rust entry")?;
+        .and_then(|entry| entry.split("\n[[tools.").next())
+        .ok_or("Mise lock must contain the MBX entry")?;
     assert!(mbx_lock.contains("[tools.mr-boxington.\"platforms.macos-arm64\"]"));
     assert!(
         !mbx_lock.contains("platforms.macos-x64"),

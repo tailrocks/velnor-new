@@ -311,3 +311,6 @@ fn exhausted_parent_deadline_clips_retry_wait_and_prevents_another_read() {
     assert_eq!(reads.get(), 1);
     assert!(start.elapsed() < Duration::from_secs(1));
 }
+
+#[path = "package_release_run_retry_adapter_tests.rs"]
+mod adapter_tests;

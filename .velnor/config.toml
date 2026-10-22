@@ -7,6 +7,7 @@ default_branch = "main"
 generator_validation = "bootstrap"
 max_parallel_jobs = 2
 crate_timeout_minutes = 8
+plan_timeout_minutes = 15
 pull_request_cache_policy = "same-repository-scoped"
 
 [workflow.lint]

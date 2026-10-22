@@ -24,20 +24,30 @@ cat >"$fixture/fakebin/cargo" <<'CARGO'
 set -euo pipefail
 case "${FIX_MODE:-noop}" in
   selected)
-    printf 'pub fn selected() -> u8 { 4 }\n' >src/lib.rs
+    if [[ "$1" == "fmt" && " $* " != *" --check "* ]] || [[ " $* " == *" --fix "* ]]; then
+      printf 'pub fn selected() -> u8 { 4 }\n' >src/lib.rs
+    fi
     ;;
   unselected)
-    printf 'pub fn worker() -> u8 { 2 }\n' >src/worker.rs
+    if [[ "$1" == "fmt" && " $* " != *" --check "* ]] || [[ " $* " == *" --fix "* ]]; then
+      printf 'pub fn worker() -> u8 { 2 }\n' >src/worker.rs
+    fi
     ;;
   untracked_mode)
-    chmod 700 docs/untracked-mode.txt
+    if [[ "$1" == "fmt" && " $* " != *" --check "* ]] || [[ " $* " == *" --fix "* ]]; then
+      chmod 700 docs/untracked-mode.txt
+    fi
     ;;
   dash_symlink)
-    unlink ./-n
-    ln -s new-target ./-n
+    if [[ "$1" == "fmt" && " $* " != *" --check "* ]] || [[ " $* " == *" --fix "* ]]; then
+      unlink ./-n
+      ln -s new-target ./-n
+    fi
     ;;
   lockfile)
-    printf 'version = 3\n' >Cargo.lock
+    if [[ "$1" == "fmt" && " $* " != *" --check "* ]] || [[ " $* " == *" --fix "* ]]; then
+      printf 'version = 3\n' >Cargo.lock
+    fi
     ;;
   failure)
     exit 23
@@ -67,11 +77,16 @@ run_hook() {
   local step=$2
   FIX_MODE="$mode" "$hk_bin" --cd "$fixture" run pre-commit --staged --step "$step" --no-progress
 }
+run_fix() {
+  local mode=$1
+  local step=$2
+  FIX_MODE="$mode" "$hk_bin" --cd "$fixture" fix --staged --step "$step" --no-stage --no-progress
+}
 expect_guard_failure() {
   local mode=$1
   local step=$2
   local output="$tmp_root/$mode-$step.log"
-  if run_hook "$mode" "$step" >"$output" 2>&1; then
+  if run_fix "$mode" "$step" >"$output" 2>&1; then
     printf '%s\n' "$step changed files, but hk did not report a failure." >&2
     exit 1
   fi
@@ -108,6 +123,11 @@ stage_partial_selected() {
 }
 stage_partial_selected
 staged_before=$(index_hash)
+status_before=$(status_hash)
+run_hook selected cargo_clippy >/dev/null
+[[ "$(index_hash)" == "$staged_before" ]]
+[[ "$(status_hash)" == "$status_before" ]]
+
 expect_guard_failure selected cargo_clippy
 [[ "$(index_hash)" == "$staged_before" ]]
 [[ "$(git -C "$fixture" show :src/lib.rs)" == 'pub fn selected() -> u8 { 2 }' ]]
@@ -236,6 +256,34 @@ set -e
 [[ $failure_status -eq 29 ]]
 if [[ -e "$command_marker" ]]; then
   printf '%s\n' 'The command ran after the Git state check failed.' >&2
+  exit 1
+fi
+
+git_after_failure_bin="$tmp_root/git-after-failure-bin"
+mkdir -p "$git_after_failure_bin"
+cat >"$git_after_failure_bin/git" <<'GIT'
+#!/usr/bin/env bash
+if [[ "$1" == rev-parse && "$2" == --show-toplevel ]]; then
+  exec "$REAL_GIT" "$@"
+fi
+if [[ -n "${FAIL_GIT_AFTER_MARKER:-}" && -e "$FAIL_GIT_AFTER_MARKER" ]]; then
+  exit 31
+fi
+exec "$REAL_GIT" "$@"
+GIT
+chmod +x "$git_after_failure_bin/git"
+command_marker="$tmp_root/git-after-failure-command-ran"
+set +e
+(cd "$fixture" && PATH="$git_after_failure_bin:$PATH" REAL_GIT="$real_git" FAIL_GIT_AFTER_MARKER="$command_marker" \
+  bash "$guard_script" bash -c 'touch "$1"' _ "$command_marker") >/dev/null 2>&1
+failure_status=$?
+set -e
+if [[ $failure_status -ne 70 ]]; then
+  printf '%s\n' 'The script did not return exit status 70 after the post-command Git check failed.' >&2
+  exit 1
+fi
+if [[ ! -e "$command_marker" ]]; then
+  printf '%s\n' 'The command did not run before the post-command Git check failed.' >&2
   exit 1
 fi
 

@@ -362,3 +362,6 @@ fn decoy_entry_under_alias_key_does_not_verify() -> Result<(), String> {
 
 #[path = "impl_mise_lockfile_latest.rs"]
 mod latest;
+
+#[path = "impl_mise_lockfile_platform_coverage.rs"]
+mod platform_coverage;

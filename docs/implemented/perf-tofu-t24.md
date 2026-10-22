@@ -108,7 +108,7 @@ the tofu `perf: op=prepare/generate` lines use `roots=`.
 - Same obligation set across the fixed-shape matrix: PASSED
   (`1f4af9af486002c4` in all 25 samples).
 - Matrix sample counts (≥3 cold, ≥5 warm): PASSED (5 cold + 5 warm
-  + 5 each for docs/root/module/lock/mixed/fork, all local).
+  - 5 each for docs/root/module/lock/mixed/fork, all local).
 - 120 s warm path / 10 s warm plan budgets: text only (T25
   measures; no budget PASSED verdict is claimed here).
 - CI-hosted walls, queue, cache transfer, provider

@@ -6,7 +6,6 @@
 
 Velnor Actions V1 provides a stack-generic workflow generator (`crates/velnor-actions-*`). The Runner Scale Set implementation is delivered in nested `crates/velnor-runner` under `docs/proposed/macos-scaleset-runner.md`. The self-hosted runner roadmap documented below is historical. All V1 entry gates have passed and dogfooding is active.
 
-
 V2/V3 versions follow the [Velnor version policy](../proposed/version-policy.md).
 `.velnor/runner.lock` has been created, pinned, and committed in the repository root.
 
@@ -372,6 +371,7 @@ Use Mise for all tool installation and MBX for compiler caching. Do not invoke d
 Qualification MUST run the same commit and task set under official mode and native mode, comparing both with expected outcomes. A matching infrastructure failure in both modes is still a failure. Missing or skipped qualification is not success. Failure injection is required at every external side-effect boundary.
 
 ## 11. Delivery sequence
+
 1. **Contract freeze:** record the qualified V1 profile schema, generated task IDs, labels, tool identities, and cache identities. Add compatibility fixtures.
 2. **V2 official mode:** implement preflight, JIT registration, one container, diagnostics, authoritative result handling, cancellation, and owned cleanup.
 3. **V2 recovery:** add the journal, reconciliation, pending result delivery, and fixed slots. Pass all V2 gates.

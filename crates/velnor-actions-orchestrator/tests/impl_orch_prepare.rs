@@ -121,7 +121,7 @@ fn preparation_and_runtime_share_named_check_identity() -> TestResult {
 fn rust_qualification_jobs_keep_the_private_fetch_authority() -> TestResult {
     let jobs = std::fs::read_to_string(orch_src().join("crate_jobs.rs"))?;
     let jobs = jobs.split_whitespace().collect::<Vec<_>>().join(" ");
-    assert!(jobs.contains("build_crate_jobs_inner(input, qualification, private)"));
+    assert!(jobs.contains("build_crate_jobs_inner(input, qualification, private, seed_timeout)"));
     assert!(jobs.contains("qualification && !is_tofu, private,"));
     assert!(jobs.contains("if use_rust && let Some(private) = private"));
     assert!(jobs.contains("private.insert_into_job(&mut job, &roots)?"));

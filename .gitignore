@@ -3,3 +3,6 @@
 .DS_Store
 __pycache__/
 .cache/
+
+# rumdl (hk builtin) cache
+.rumdl_cache/

@@ -4,7 +4,6 @@ This directory records implementation that has landed and passed its required
 acceptance checks. It is not a proposal or a list of work in progress.
 
 - [macOS Scale Set ledger](macos-scaleset/checklist.md) — G0–G8 for the Scale Set controller. Status lives in that directory, not in the V1 gate records below.
-
 - [Private sources](private-sources.md) — GitHub App token minted, used and revoked before any repository-controlled step (hard decision 7).
 - [Host jq versions and Mise discovery limits](host-jq-range.md) — task scripts accept any jq 1.8 patch and limit Mise discovery above the task root.
 - [Affected selection](affected-selection.md) — pull requests run only the crate jobs their change can affect (hard decision 4).

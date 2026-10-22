@@ -1,7 +1,18 @@
-amends "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Config.pkl"
-import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Builtins.pkl"
+// Owner hk standard (mise + mbx + hk): the identical base, plus the builtins this repository's stacks need (Rust with
+// a nested runner workspace, Markdown, OpenTofu, GitHub Actions). Top-level `steps` feed the `check`, `fix` and
+// `pre-commit` hooks; `pre-push` and `security-audit` are custom hooks. Install with `hk install --mise`; run
+// `hk run security-audit` manually or on a schedule.
+amends "package://github.com/jdx/hk/releases/download/v2.8.0/hk@2.8.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.8.0/hk@2.8.0#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.8.0/hk@2.8.0#/Config.pkl"
 
-exclude = List(
+jobs = 2
+fail_fast = false
+
+// Fixtures and generated output are not source: `fixtures/` and nested crate
+// fixtures may be intentionally invalid, while `build/` and OpenTofu goldens
+// are generated trees.
+local fixtureTrees = List(
   "fixtures/**",
   "crates/**/tests/fixtures/**",
   "docs/proposed/opentofu-goldens/**",
@@ -9,21 +20,67 @@ exclude = List(
 )
 
 steps {
+  ["mise"] = Builtins.mise
+  ["gitleaks"] = Builtins.gitleaks
+  // `--all`: both workspace roots (root and crates/velnor-runner) are virtual manifests, where a plain
+  // `cargo fmt --manifest-path` fails with "Failed to find targets".
   ["cargo_fmt"] = (Builtins.cargo_fmt) {
-    check = "cargo fmt --check --manifest-path {{workspace_indicator}} --all"
-    check_list_files = "cargo fmt --check --manifest-path {{workspace_indicator}} --all -- --files-with-diff"
-    fix = "bash scripts/hk-fix-write-guard.sh cargo fmt --manifest-path {{workspace_indicator}} --all"
+    exclude = fixtureTrees
+    check { command = "cargo fmt --all --check --manifest-path {{workspace_indicator}}" }
+    check_list_files { command = "cargo fmt --all --check --manifest-path {{workspace_indicator}} -- --files-with-diff" }
+    fix = new Config.CommandSpec {
+      command = "bash scripts/hk-fix-write-guard.sh cargo fmt --all --manifest-path {{workspace_indicator}}"
+      effect = "write"
+    }
   }
+  ["cargo_check"] = (Builtins.cargo_check) { exclude = fixtureTrees }
   ["cargo_clippy"] = (Builtins.cargo_clippy) {
-    fix = "bash scripts/hk-fix-write-guard.sh cargo clippy --manifest-path {{workspace_indicator}} --fix --allow-dirty --allow-staged --quiet"
+    exclude = fixtureTrees
+    fix = new Config.CommandSpec {
+      command = "bash scripts/hk-fix-write-guard.sh cargo clippy --manifest-path {{workspace_indicator}} --fix --allow-dirty --allow-staged --quiet"
+      effect = "write"
+    }
+  }
+  // Both deny.toml files (root and crates/velnor-runner) stay; each governs its own workspace.
+  ["cargo_deny"] = (Builtins.cargo_deny) { exclude = fixtureTrees }
+  ["rust-toolchain-mirror"] {
+    glob = List("mise.toml", "rust-toolchain.toml")
+    check = "sh scripts/check-rust-toolchain-mirror.sh"
+  }
+  ["rumdl"] = (Builtins.rumdl) { exclude = fixtureTrees }
+  ["tofu"] = (Builtins.tofu) {
+    exclude = List("fixtures/**", "crates/**/tests/fixtures/**", "docs/**", "build/**")
+  }
+  // Native jactionlint (hard decision 10, docs/proposed/workflow-lint-contract.md "Local runs"): check-only, because
+  // .github/ is generated; the same flags as CI, reading the generated .github/jactionlint.yaml.
+  ["jactionlint"] = (Builtins.jactionlint) {
+    fix = null
+    check_diff = null
+    check = "jactionlint --format gcc --strict-exit --no-online --shellcheck=shellcheck --pyflakes= {{files}}"
   }
 }
 
 hooks {
   ["pre-commit"] {
-    fix = true
-    stash = "none"
+    fix = false
     stage = false
-    fail_on_fix = true
+    stash = "none"
+    steps {
+      ["kingfisher-staged"] { check = "kingfisher scan . --staged --no-validate --redact --no-update-check --baseline-file .kingfisher-baseline.yml" }
+    }
+  }
+  ["pre-push"] {
+    steps {
+      ["betterleaks-history"] { check = "betterleaks git . --redact" }
+    }
+  }
+  // Full history, all findings redacted. .kingfisher-baseline.yml holds reviewed placeholder/test-fixture findings with
+  // written reasons; betterleaks and gitleaks read .betterleaksignore / .gitleaksignore.
+  ["security-audit"] {
+    steps {
+      ["kingfisher-history"] { check = "kingfisher scan . --git-history full --confidence low --no-validate --redact --no-update-check --baseline-file .kingfisher-baseline.yml" }
+      ["betterleaks-history"] { check = "betterleaks git . --redact" }
+      ["gitleaks-history"] { check = "gitleaks git . --redact --no-banner" }
+    }
   }
 }

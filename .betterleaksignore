@@ -2766,3 +2766,20 @@ c410ffc92c523f67a8c5d355ee4d9cc7ca8527eb:docs/implemented/evidence/freshness-202
 # Reason: run_key test values identify CI runs; contract derives them from numeric run ID and attempt
 # 1 finding(s); rules: generic-api-key; files: crates/services/velnor-actions-orchestrator-internal/tests/impl_artifact_export.rs (1)
 598d0cafc041855cfa2fdd256671e288a636e7de:crates/services/velnor-actions-orchestrator-internal/tests/impl_artifact_export.rs:generic-api-key:55
+
+# Reason: generated matrix_key values derive from BLAKE3 of validated IDs; these are exact historical findings only.
+# 14 finding(s); rule: generic-api-key; scope: commit-bound fingerprints below, with no path-wide suppression.
+1b473746dd56c50ff009437b2fc1bdc349e6ad25:.github/velnor/task-execution-manifest-v1.json:generic-api-key:2
+1b473746dd56c50ff009437b2fc1bdc349e6ad25:docs/proposed/opentofu-goldens/cases/dogfood/preview/.github/velnor/task-execution-manifest-v1.json:generic-api-key:2
+1b473746dd56c50ff009437b2fc1bdc349e6ad25:docs/proposed/opentofu-goldens/cases/mbx-nextest/preview/.github/velnor/task-execution-manifest-v1.json:generic-api-key:2
+1b473746dd56c50ff009437b2fc1bdc349e6ad25:docs/proposed/opentofu-goldens/cases/minimal-cargo/preview/.github/velnor/task-execution-manifest-v1.json:generic-api-key:2
+1b473746dd56c50ff009437b2fc1bdc349e6ad25:docs/proposed/opentofu-goldens/cases/nested/preview/.github/velnor/task-execution-manifest-v1.json:generic-api-key:2
+1b473746dd56c50ff009437b2fc1bdc349e6ad25:fixtures/parity/minimal-cargo/expected/plan-v1.json:generic-api-key:1
+1b473746dd56c50ff009437b2fc1bdc349e6ad25:fixtures/parity/multi-crate/expected/plan-v1.json:generic-api-key:1
+79f14e15c1c2f0177890e3959bd94595986afcd6:.github/velnor/task-execution-manifest-v1.json:generic-api-key:2
+79f14e15c1c2f0177890e3959bd94595986afcd6:docs/proposed/opentofu-goldens/cases/dogfood/preview/.github/velnor/task-execution-manifest-v1.json:generic-api-key:2
+79f14e15c1c2f0177890e3959bd94595986afcd6:docs/proposed/opentofu-goldens/cases/mbx-nextest/preview/.github/velnor/task-execution-manifest-v1.json:generic-api-key:2
+79f14e15c1c2f0177890e3959bd94595986afcd6:docs/proposed/opentofu-goldens/cases/minimal-cargo/preview/.github/velnor/task-execution-manifest-v1.json:generic-api-key:2
+79f14e15c1c2f0177890e3959bd94595986afcd6:docs/proposed/opentofu-goldens/cases/nested/preview/.github/velnor/task-execution-manifest-v1.json:generic-api-key:2
+79f14e15c1c2f0177890e3959bd94595986afcd6:fixtures/parity/minimal-cargo/expected/plan-v1.json:generic-api-key:1
+79f14e15c1c2f0177890e3959bd94595986afcd6:fixtures/parity/multi-crate/expected/plan-v1.json:generic-api-key:1
