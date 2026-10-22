@@ -18,6 +18,12 @@ const MAX_MOUNTINFO_BYTES: usize = 1024 * 1024;
 const MAX_GUEST_IMAGE_BYTES: usize = 16 * 1024;
 const ROOT_UID: u32 = 0;
 
+#[cfg(target_os = "linux")]
+#[path = "storage_admission_mount/guest_image_metadata.rs"]
+mod guest_image_metadata;
+#[cfg(target_os = "linux")]
+use guest_image_metadata::GuestImageFileMetadata;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct MountObservation {
     mount_id: u64,
@@ -117,10 +123,7 @@ fn read_guest_image_from_mounted_directory() -> Result<Vec<u8>, &'static str> {
 
 #[cfg(target_os = "linux")]
 fn read_guest_image_file(directory: &rustix::fd::OwnedFd) -> Result<Vec<u8>, &'static str> {
-    use rustix::fs::{AtFlags, FileType, Mode, OFlags, openat, statat};
-    use std::fs::File;
-    use std::io::Read;
-    use std::os::fd::AsFd;
+    use rustix::fs::{Mode, OFlags, openat};
 
     let descriptor = openat(
         directory,
@@ -131,15 +134,22 @@ fn read_guest_image_file(directory: &rustix::fd::OwnedFd) -> Result<Vec<u8>, &'s
     .map_err(|_| "cache_storage_guest_image_open_failed")?;
     let before =
         rustix::fs::fstat(&descriptor).map_err(|_| "cache_storage_guest_image_stat_failed")?;
-    if FileType::from_raw_mode(before.st_mode) != FileType::RegularFile
-        || before.st_uid != ROOT_UID
-        || before.st_mode & 0o7777 != 0o444
-        || before.st_nlink != 1
-        || before.st_size <= 0
-        || u64::try_from(before.st_size).unwrap_or(u64::MAX) > MAX_GUEST_IMAGE_BYTES as u64
-    {
-        return Err("cache_storage_guest_image_file_invalid");
-    }
+    GuestImageFileMetadata::from_stat(&before).validate()?;
+
+    read_guest_image_bytes_from_descriptor(directory, descriptor, &before)
+}
+
+#[cfg(target_os = "linux")]
+fn read_guest_image_bytes_from_descriptor(
+    directory: &rustix::fd::OwnedFd,
+    descriptor: rustix::fd::OwnedFd,
+    before: &rustix::fs::Stat,
+) -> Result<Vec<u8>, &'static str> {
+    use rustix::fs::{AtFlags, statat};
+    use std::fs::File;
+    use std::io::Read;
+    use std::os::fd::AsFd;
+
     let file = File::from(descriptor);
     let mut bytes = Vec::with_capacity(
         usize::try_from(before.st_size)
@@ -156,7 +166,7 @@ fn read_guest_image_file(directory: &rustix::fd::OwnedFd) -> Result<Vec<u8>, &'s
         .map_err(|_| "cache_storage_guest_image_changed")?;
     if bytes.is_empty()
         || bytes.len() > MAX_GUEST_IMAGE_BYTES
-        || !same_file(&before, &after)
+        || !same_file(before, &after)
         || !same_file(&after, &current)
     {
         return Err("cache_storage_guest_image_changed");

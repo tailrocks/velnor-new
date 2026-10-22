@@ -1,5 +1,6 @@
 use super::{
-    GUEST_IMAGE_FILE, MountObservation, read_guest_image_file, validate_mountinfo,
+    GUEST_IMAGE_FILE, GuestImageFileMetadata, MAX_GUEST_IMAGE_BYTES, MountObservation, ROOT_UID,
+    read_guest_image_bytes_from_descriptor, read_guest_image_file, validate_mountinfo,
     validate_read_only_mountinfo, validate_work_mountinfo, verify_guest_image_digest,
 };
 use crate::qualification_cache_payload::storage_admission_types::JobFactsMountV1;
@@ -173,11 +174,115 @@ fn runtime_identity_requires_one_exact_read_only_mount() {
 }
 
 #[cfg(target_os = "linux")]
+fn invalid_guest_image_metadata_cases(
+    valid: GuestImageFileMetadata,
+) -> [(&'static str, GuestImageFileMetadata); 9] {
+    [
+        (
+            "non-root owner",
+            GuestImageFileMetadata {
+                owner_uid: ROOT_UID + 1,
+                ..valid
+            },
+        ),
+        (
+            "non-regular file",
+            GuestImageFileMetadata {
+                is_regular_file: false,
+                ..valid
+            },
+        ),
+        (
+            "unexpected read-only mode",
+            GuestImageFileMetadata {
+                mode: 0o400,
+                ..valid
+            },
+        ),
+        (
+            "writable mode",
+            GuestImageFileMetadata {
+                mode: 0o644,
+                ..valid
+            },
+        ),
+        (
+            "additional mode bits",
+            GuestImageFileMetadata {
+                mode: 0o1444,
+                ..valid
+            },
+        ),
+        (
+            "no single link",
+            GuestImageFileMetadata {
+                has_single_link: false,
+                ..valid
+            },
+        ),
+        (
+            "empty file",
+            GuestImageFileMetadata {
+                size_bytes: 0,
+                ..valid
+            },
+        ),
+        (
+            "negative size",
+            GuestImageFileMetadata {
+                size_bytes: -1,
+                ..valid
+            },
+        ),
+        (
+            "oversized file",
+            GuestImageFileMetadata {
+                size_bytes: MAX_GUEST_IMAGE_BYTES as i64 + 1,
+                ..valid
+            },
+        ),
+    ]
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn guest_image_metadata_requires_root_read_only_regular_single_bounded_file() {
+    let valid = GuestImageFileMetadata {
+        is_regular_file: true,
+        owner_uid: ROOT_UID,
+        mode: 0o444,
+        has_single_link: true,
+        size_bytes: 1,
+    };
+    assert_eq!(valid.validate(), Ok(()));
+    assert_eq!(
+        GuestImageFileMetadata {
+            size_bytes: MAX_GUEST_IMAGE_BYTES as i64,
+            ..valid
+        }
+        .validate(),
+        Ok(())
+    );
+
+    let invalid = invalid_guest_image_metadata_cases(valid);
+    for (case, metadata) in invalid {
+        assert_eq!(
+            metadata.validate(),
+            Err("cache_storage_guest_image_file_invalid"),
+            "metadata should reject {case}"
+        );
+    }
+}
+
+#[cfg(target_os = "linux")]
 #[test]
 fn guest_image_digest_checks_bytes_read_through_the_held_directory() {
-    use std::{fs, os::unix::fs::PermissionsExt};
+    use std::{
+        fs,
+        os::unix::fs::{MetadataExt, PermissionsExt},
+    };
 
-    use rustix::fs::{Mode, OFlags, open};
+    use rustix::fs::{Mode, OFlags, open, openat};
 
     const CURRENT: &[u8] = br#"{"schema":"velnor.guest-image/v1","source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","guest_platform":"linux/amd64","scale_set":{"name":"runner","labels":["velnor"]},"images":{"runner":{"archive_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","archive_index_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","manifest_digest":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","config_digest":"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"},"dind":{"archive_sha256":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","archive_index_digest":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","manifest_digest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","config_digest":"sha256:2222222222222222222222222222222222222222222222222222222222222222"}}}"#;
     const SWAPPED: &[u8] = br#"{"schema":"velnor.guest-image/v1","source_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","guest_platform":"linux/amd64","scale_set":{"name":"runner","labels":["velnor"]},"images":{"runner":{},"dind":{}}}"#;
@@ -208,7 +313,30 @@ fn guest_image_digest_checks_bytes_read_through_the_held_directory() {
     fs::set_permissions(&mounted, fs::Permissions::from_mode(0o555))
         .expect("read-only swapped directory");
 
-    let bytes = read_guest_image_file(&directory).expect("read through held directory");
+    let held_image_path = moved.join(GUEST_IMAGE_FILE);
+    let owner_uid = fs::metadata(&held_image_path)
+        .expect("held image metadata")
+        .uid();
+    let production_read = read_guest_image_file(&directory);
+    if owner_uid == ROOT_UID {
+        assert_eq!(production_read.as_deref(), Ok(CURRENT));
+    } else {
+        assert_eq!(
+            production_read,
+            Err("cache_storage_guest_image_file_invalid")
+        );
+    }
+
+    let descriptor = openat(
+        &directory,
+        GUEST_IMAGE_FILE,
+        OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
+        Mode::empty(),
+    )
+    .expect("open held image file");
+    let before = rustix::fs::fstat(&descriptor).expect("held image metadata");
+    let bytes = read_guest_image_bytes_from_descriptor(&directory, descriptor, &before)
+        .expect("read through held directory");
     assert_eq!(bytes, CURRENT);
     let expected = sha256_hex(CURRENT);
     assert_eq!(verify_guest_image_digest(&bytes, &expected), Ok(()));
