@@ -38,14 +38,10 @@ When designing workflows in the Velnor V1 generator or implementing runner infra
   - OS-specific tool locations for Ubuntu Linux and macOS runner images.
 
 The official [`xcode-27` runner image inventory](https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md)
-identifies an ARM64 macOS 27.0.1 host and lists Xcode 27.1 build `27A9275`
-at `/Applications/Xcode_27.1_Release_Candidate.app`. Velnor represents this
-host as the typed `xcode-27-arm64` runner (`runs-on: xcode-27`) and binds
-consumer qualification to the exact Xcode version/build through `system_tools`.
-The image's default Xcode is 27.0, so a task needing Xcode 27.1 pins
-`version = "27.1"`, `build = "27A9275"`, `sdk_version = "27.0"`, and
-`developer_dir = "/Applications/Xcode_27.1_Release_Candidate.app/Contents/Developer"`.
-Velnor probes and runs the named task with that `DEVELOPER_DIR` and never changes
+identifies an ARM64 macOS 27.0.1 host and lists Xcode 27.1 build `27A9275` at `/Applications/Xcode_27.1_Release_Candidate.app`. Velnor represents this
+host as the typed `xcode-27-arm64` runner (`runs-on: xcode-27`) and binds consumer qualification to the exact Xcode version/build through `system_tools`.
+The image's default Xcode is 27.0, so a task needing Xcode 27.1 pins `version = "27.1"`, `build = "27A9275"`, `sdk_version = "27.0"`, and
+`developer_dir = "/Applications/Xcode_27.1_Release_Candidate.app/Contents/Developer"`. Velnor probes and runs the named task with that `DEVELOPER_DIR` and never changes
 the host's `xcode-select` setting.
 
 ---
@@ -70,14 +66,10 @@ their use-site job and step context. The [official announcement](https://github.
 records workflow anchor/alias support.
 
 Velnor uses a narrower grammar only when a workflow exceeds its unchanged
-500,000-byte transport limit: exact job `env`, step `env`/`with`, whole step
-mapping, and existing `run` scalar reuse. It never moves execution, credentials,
-permissions, dependencies, caches or outputs into a different scope. Definitions
-precede uses in one globally unique document namespace. Staged shell validation
-normalizes only those emitted forms before its existing ancestry, effective-shell
-and ShellCheck checks. Input is bounded to 500,000 bytes, nesting to 32 levels,
-and normalization work to 262,144 nodes and 16 MiB; merge keys, tags on shared
-nodes, forward/cyclic references and other alias scopes fail closed.
+500,000-byte transport limit: exact job `env`, step `env`/`with`, whole step mapping, and existing `run` scalar reuse. It never moves execution, credentials,
+permissions, dependencies, caches or outputs into a different scope. Definitions precede uses in one globally unique document namespace. Staged shell validation
+normalizes only those emitted forms before its existing ancestry, effective-shell and ShellCheck checks. Input is bounded to 500,000 bytes, nesting to 32 levels,
+and normalization work to 262,144 nodes and 16 MiB; merge keys, tags on shared nodes, forward/cyclic references and other alias scopes fail closed.
 
 This Velnor admission does **not** extend to local action manifests. The original
 runner's [legacy `YamlObjectReader.EvaluateCurrent`](https://github.com/actions/runner/blob/main/src/Sdk/DTPipelines/Pipelines/ObjectTemplating/YamlObjectReader.cs)
