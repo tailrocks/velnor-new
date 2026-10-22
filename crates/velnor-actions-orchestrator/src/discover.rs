@@ -242,7 +242,7 @@ fn discover_inner(
 }
 
 fn task_tool_paths(config: &VelnorConfig) -> Vec<String> {
-    config
+    let mut paths = config
         .workflow
         .tasks
         .iter()
@@ -258,9 +258,13 @@ fn task_tool_paths(config: &VelnorConfig) -> Vec<String> {
                 source.rust_toolchain_path(),
             ]
         })
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect()
+        .collect::<BTreeSet<_>>();
+    for suite in &config.workflow.task_suites {
+        paths.insert(suite.source.mise_config.clone());
+        paths.insert(suite.source.mise_lock_path());
+        paths.insert(suite.source.rust_toolchain_path());
+    }
+    paths.into_iter().collect()
 }
 
 /// Sorted local dependency display names for one package.

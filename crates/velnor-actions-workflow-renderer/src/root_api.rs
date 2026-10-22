@@ -72,5 +72,8 @@ pub use crate::verification_jobs::{
     INSTALL_VERIFICATION_TOOLS_NAME, RUN_VERIFICATION_TASK_NAME, VerificationTaskPolicy,
     build_verification_task_job,
 };
+pub use crate::verification_jobs::{
+    MiseTaskSuitePolicy, MiseTaskSuitesRenderSpec, render_mise_task_suites,
+};
 pub use crate::workflow_size::MAX_WORKFLOW_BYTES;
 pub use crate::yaml::{Yaml, quote_scalar, render_yaml};
