@@ -1,9 +1,11 @@
 //! Backend evidence for normal `OpenTofu` provider-cache restores.
 
 use super::super::NormalTofuProvidersCachePayloadRequest;
+use super::super::ValidatedTofuRuntime;
 use super::context::{GitHubRunContext, read_github_run_context};
 use crate::cache_action_stage::{CacheActionCompression, StageContext, StageReceiptClaim};
 use crate::qualification_cache_payload::CacheActionObservation;
+use crate::qualification_cache_payload::roots::CacheRootSet;
 use velnor_actions_contract::workflow::{
     QualificationCacheBackendEntry, QualificationCacheBackendObservation,
 };
@@ -27,6 +29,7 @@ pub struct NormalTofuProvidersCacheBackendEvidence {
     cache: Option<QualificationCacheBackendEntry>,
     compression: Option<CacheActionCompression>,
     stage_claim: Option<StageReceiptClaim>,
+    payload_state_digest: Option<String>,
 }
 
 impl NormalTofuProvidersCacheBackendEvidence {
@@ -137,12 +140,19 @@ impl NormalTofuProvidersCacheBackendEvidence {
     pub fn stage_claim(&self) -> Option<&StageReceiptClaim> {
         self.stage_claim.as_ref()
     }
+
+    /// Gives the validated manifest state digest when a cache hit payload passed preflight.
+    #[must_use]
+    pub fn payload_state_digest(&self) -> Option<&str> {
+        self.payload_state_digest.as_deref()
+    }
 }
 
-/// Check the action output and exact cache entry before reading archive bytes.
+/// Check the action output and exact cache entry, then preflight a cache-hit payload.
 ///
-/// This gives backend evidence only. It does not verify restored payload bytes
-/// or authorize their import.
+/// The returned evidence includes the useful-state digest only after the
+/// bounded transport, manifest, inventory, and member digests all validate.
+/// This does not install provider bytes into the live cache root.
 ///
 /// # Errors
 ///
@@ -163,15 +173,59 @@ pub fn observe_normal_tofu_providers_cache_backend(
         &run.git_ref,
     )
     .map_err(|_| "normal_tofu_cache_backend_unavailable")?;
-    validate_restore_observation(
+    let mut evidence = validate_restore_observation(
         request,
         action,
         stage_claim,
         compression,
         run,
-        runtime,
+        runtime.clone(),
         observed,
+    )?;
+    if let Some(claim) = evidence.stage_claim.as_ref() {
+        evidence.payload_state_digest = Some(validate_cache_hit_payload(request, &runtime, claim)?);
+    }
+    Ok(evidence)
+}
+
+fn validate_cache_hit_payload(
+    request: &NormalTofuProvidersCachePayloadRequest<'_>,
+    runtime: &ValidatedTofuRuntime,
+    claim: &StageReceiptClaim,
+) -> Result<String, &'static str> {
+    let context = StageContext::normal_tofu_providers(
+        request.runner_temp,
+        request.workspace,
+        request.cache_key,
     )
+    .map_err(|_| "normal_tofu_stage_context_invalid")?;
+    let mut reader = crate::cache_action_stage::open_stage(&context, claim)
+        .map_err(|_| "normal_tofu_cache_stage_invalid")?;
+    let roots = CacheRootSet {
+        owner_id: "normal-tofu-providers".to_owned(),
+        layer: velnor_actions_contract::QualificationCacheLayer::TofuProviders,
+        roots: vec![super::super::super::roots::CacheRootObservation {
+            id: super::super::super::roots::CacheRootId::TofuPlugins,
+            path: runtime.cache_path.clone(),
+        }],
+    };
+    let transport = super::super::super::transfer::transport_tar_read::preflight(
+        &mut reader,
+        request.operation_limit_bytes,
+        &roots,
+        |text| {
+            super::super::super::manifest::PayloadManifest::parse_for_normal_tofu_restore(
+                text,
+                request.cache_key,
+                runtime,
+                &roots,
+            )
+        },
+    )?;
+    reader
+        .revalidate()
+        .map_err(|_| "normal_tofu_cache_stage_invalid")?;
+    Ok(transport.state_digest)
 }
 
 pub(super) fn validate_restore_observation(
@@ -252,6 +306,7 @@ fn validate_cache_miss(
                 cache: None,
                 compression: None,
                 stage_claim: None,
+                payload_state_digest: None,
             })
         }
         QualificationCacheBackendObservation::Found(_) => {
@@ -315,6 +370,7 @@ fn validate_cache_hit(
         cache: Some(cache),
         compression: Some(compression),
         stage_claim: Some(stage_claim),
+        payload_state_digest: None,
     })
 }
 
@@ -335,3 +391,7 @@ pub(super) fn max_cache_archive_bytes(raw_limit: u64) -> Result<u64, &'static st
         .and_then(|compressed| compressed.checked_add(CACHE_ACTION_COMPRESS_HEADROOM_BYTES))
         .ok_or("normal_tofu_cache_archive_limit_invalid")
 }
+
+#[cfg(test)]
+#[path = "tests/normal_tofu_restore_transport_tests.rs"]
+mod transport_tests;

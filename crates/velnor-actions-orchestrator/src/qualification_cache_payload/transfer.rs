@@ -25,6 +25,8 @@ pub(super) mod stage;
 pub(super) use dirs::same_version;
 #[path = "transfer_transport_envelope.rs"]
 pub(super) mod transport_envelope;
+#[path = "transfer_transport_tar_read.rs"]
+pub(super) mod transport_tar_read;
 #[path = "transfer_transport_tar_write.rs"]
 pub(super) mod transport_tar_write;
 pub(crate) use engine::{snapshot_roots, useful_state_digest};
