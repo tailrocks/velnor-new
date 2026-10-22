@@ -9,6 +9,7 @@ use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::INSTALLS_VERIFY_SCRIPT;
+use crate::VERIFY_PATH;
 
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 
@@ -130,12 +131,26 @@ impl Fixture {
     }
 
     fn run(&self, pins: &str) -> TestResult<Output> {
+        self.run_after(&[], pins)
+    }
+
+    /// Run with `ahead` on the inherited `PATH` before the fake `curl`, the
+    /// way Setup Mise leaves the restored Mise `shims/` and `bin/`. Only the
+    /// fake `curl` joins the script's own trusted `PATH`.
+    fn run_after(&self, ahead: &[PathBuf], pins: &str) -> TestResult<Output> {
         let inherited = std::env::var_os("PATH").ok_or("PATH is unavailable")?;
-        let mut paths = vec![self.root.join("bin")];
+        let mut paths = ahead.to_vec();
+        paths.push(self.root.join("bin"));
         paths.extend(std::env::split_paths(&inherited));
-        Ok(Command::new("bash")
+        let trusted = format!("PATH={VERIFY_PATH}\n");
+        let script = INSTALLS_VERIFY_SCRIPT.replacen(
+            &trusted,
+            &format!("PATH={}:{VERIFY_PATH}\n", self.root.join("bin").display()),
+            1,
+        );
+        Ok(Command::new("/bin/bash")
             .arg("-c")
-            .arg(INSTALLS_VERIFY_SCRIPT)
+            .arg(script)
             .env_clear()
             .env("PATH", std::env::join_paths(paths)?)
             .env("HOME", self.root.join("home"))
@@ -282,5 +297,97 @@ fn an_alias_that_leaves_its_tool_is_removed() -> TestResult {
     assert!(output.status.success(), "{}", text(&output));
     assert!(!fixture.tools().join(TOOL).join("latest").exists());
     assert!(fixture.tools().join(TOOL).join("1.2").is_symlink());
+    Ok(())
+}
+
+/// Write helpers that record they ran into `marker`, then fake success.
+fn plant(dir: &Path, names: &[&str], marker: &Path) -> TestResult {
+    for name in names {
+        let body = format!(
+            "#!/bin/sh\nprintf '%s\\n' {name} >> '{}'\nexit 0\n",
+            marker.display()
+        );
+        write(&dir.join(name), &body, 0o755)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn a_planted_helper_on_the_restored_mise_path_never_runs() -> TestResult {
+    // The review's reproduction: the restored `bin/` and `shims/` sit on
+    // PATH ahead of `/usr/bin`, so a cached `bin/sha256sum` ran inside the
+    // very check meant to gate it.
+    let fixture = Fixture::new("planted-helper")?;
+    let mise = fixture.root.join("home/.local/share/mise");
+    let marker = fixture.root.join("planted.log");
+    let helpers = [
+        "sha256sum",
+        "shasum",
+        "curl",
+        "tar",
+        "find",
+        "awk",
+        "cut",
+        "sort",
+        "comm",
+    ];
+    plant(&mise.join("bin"), &helpers, &marker)?;
+    plant(&mise.join("shims"), &helpers, &marker)?;
+    let output = fixture.run_after(&[mise.join("shims"), mise.join("bin")], "")?;
+    let log = text(&output);
+    let ran = fs::read_to_string(&marker).unwrap_or_default();
+    assert!(ran.is_empty(), "a planted helper ran: {ran}\n{log}");
+    assert!(output.status.success(), "{log}");
+    assert!(
+        log.contains(&format!("restored {TOOL}@{VERSION} matches")),
+        "{log}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_hidden_version_directory_behind_an_alias_is_discarded() -> TestResult {
+    // The review's reproduction: `installs/<tool>/.hidden/` (bytes from no
+    // archive) plus `<pinned version> -> ./.hidden` passed, because the glob
+    // skipped the dot directory and the alias branch kept any `./*` target.
+    let fixture = Fixture::new("hidden")?;
+    let tool = fixture.tools().join(TOOL);
+    fs::remove_dir_all(fixture.install())?;
+    write(&tool.join(".hidden/tool"), "#!/bin/sh\necho pwned\n", 0o755)?;
+    symlink("./.hidden", fixture.install())?;
+    let hidden_tool = fixture.tools().join(".hidden-tool/1.0.0");
+    write(&hidden_tool.join("tool"), "#!/bin/sh\n", 0o755)?;
+    let output = fixture.run("")?;
+    let log = text(&output);
+    assert!(output.status.success(), "{log}");
+    assert!(!tool.join(".hidden").exists(), "{log}");
+    assert!(fs::symlink_metadata(fixture.install()).is_err(), "{log}");
+    assert!(fs::symlink_metadata(tool.join("1.2")).is_err(), "{log}");
+    assert!(!hidden_tool.exists(), "{log}");
+    Ok(())
+}
+
+#[test]
+fn only_aliases_of_a_verified_sibling_and_inert_bookkeeping_are_kept() -> TestResult {
+    let fixture = Fixture::new("aliases")?;
+    let tool = fixture.tools().join(TOOL);
+    let backend = tool.join(".mise.backend.toml");
+    write(&backend, "backend = \"aqua:example/tool\"\n", 0o644)?;
+    write(&tool.join(".run"), "#!/bin/sh\n", 0o755)?;
+    symlink("./1.2", tool.join("chain"))?;
+    symlink("1.2.3", tool.join("bare"))?;
+    symlink("./1.2.3/tool", tool.join("into"))?;
+    let output = fixture.run("")?;
+    let log = text(&output);
+    assert!(output.status.success(), "{log}");
+    assert!(backend.is_file(), "{log}");
+    assert!(tool.join("1.2").is_symlink(), "{log}");
+    assert!(tool.join("bare").is_symlink(), "{log}");
+    for gone in [".run", "chain", "into"] {
+        assert!(
+            fs::symlink_metadata(tool.join(gone)).is_err(),
+            "{gone}: {log}"
+        );
+    }
     Ok(())
 }

@@ -46,7 +46,39 @@ every hit or seed:
 - an install that fails any of this, or has no pin, is deleted with a
   `velnor: discarding restored <tool>@<version>: <reason>` line, so
   `Prepare pinned tools` reinstalls it (checked against `mise.lock` again);
-- version aliases must name a sibling version.
+- every entry is visited, dot-named ones included (`find -mindepth 1
+  -maxdepth 1`, never a glob, which skips them): a dot-named tool or version
+  directory is verified like any other, so without a pin it is discarded;
+- a version alias (`1.26 -> ./1.26.0`) is kept only when its target is a bare
+  sibling name that is a real version directory verified in the same pass; a
+  path, a chain of aliases, a dangling link or a link to a discarded directory
+  is removed. Mise's per-tool `.mise.backend.toml` stays only as a plain,
+  non-executable file; any other file is removed.
+
+### The checks run hermetically
+
+Setup Mise runs before the restore and adds `~/.local/share/mise/bin` and
+`~/.local/share/mise/shims` to `PATH` with `core.addPath`; both persist to
+every later step, and the cache restores both directories. A cached
+`bin/sha256sum`, `curl` or `tar` would therefore run inside the very check
+meant to gate it, and a cached `bin/bash` would even be the step's shell,
+because the runner resolves a bare `shell: bash` through that `PATH`
+(`WhichUtil.Which`, `addPath` entries first) but runs a fully qualified
+shell path as given. So:
+
+- the admission and re-verification steps use the shell
+  `/bin/bash --noprofile --norc -e -o pipefail {0}` (`VERIFY_SHELL`);
+- each of them, and the Rust toolchain check
+  ([Rust channel manifest](../implemented/rust-channel-manifest.md)), assigns
+  `PATH=/usr/bin:/bin:/usr/sbin:/sbin` (`VERIFY_PATH`, root-owned system
+  directories a cache restore cannot write) before running anything;
+- the admission's `verify_mise` refuses a `bin/` holding anything besides the
+  binary (checked against its pinned SHA-256) and Setup Mise's plain,
+  non-executable `mise-version` record. A planted `bin/<helper>` fails the job.
+
+After the composite, `shims/` is gone and `bin/` holds only the verified
+binary, so later steps that resolve bare names through `PATH` see no restored
+code.
 
 The generator derives the static digest from exact Mise action and binary pins, selected tool versions, Rust
 toolchain and components, target, runner lane, and the owned paths. A tool the project's Mise config declares
