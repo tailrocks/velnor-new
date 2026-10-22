@@ -192,20 +192,27 @@ fn spec_context<'a>(
 async fn runner_and_dind_specs_use_separate_privilege_and_finite_limits() -> Result<(), HostError> {
     let fixture = fixture("pair-spec").await?;
     assert!(fixture.reservation_id > 0);
+    let names = WorkerIdentityNames::from_nonce(NONCE)?;
+    let dind_id = "d".repeat(64);
     let runner = create(
         &fixture,
         BootstrapContainerRole::Runner,
-        "container:dind-id",
+        &format!("container:{dind_id}"),
     )?;
     let dind = create(
         &fixture,
         BootstrapContainerRole::Dind,
-        "velnor-private-test",
+        &format!("velnor-{}-private", names.remote_runner_name()?),
     )?;
-    assert_pair_config(&runner, &dind)
+    assert_pair_config(&runner, &dind, &dind_id, &names)
 }
 
-fn assert_pair_config(runner: &PairCreate, dind: &PairCreate) -> Result<(), HostError> {
+fn assert_pair_config(
+    runner: &PairCreate,
+    dind: &PairCreate,
+    dind_id: &str,
+    names: &WorkerIdentityNames,
+) -> Result<(), HostError> {
     let runner_host = runner
         .config
         .host_config
@@ -216,33 +223,122 @@ fn assert_pair_config(runner: &PairCreate, dind: &PairCreate) -> Result<(), Host
         .host_config
         .as_ref()
         .ok_or(HostError::Identity)?;
-
     assert_eq!(runner.options.platform, "linux/amd64");
     assert_eq!(dind.options.platform, "linux/amd64");
+    assert_pair_ports(runner_host, dind_host, dind_id, names)?;
+    assert_runner_security(runner_host);
+    assert_dind_security_is_unmodified(dind_host);
+    assert_pair_limits(runner_host, dind_host);
+    assert_pair_process_settings(runner, dind);
+    assert_pair_logs(runner_host, dind_host)?;
+    assert_pair_tmpfs(runner_host, dind_host);
+    Ok(())
+}
+
+fn assert_pair_ports(
+    runner_host: &bollard::models::HostConfig,
+    dind_host: &bollard::models::HostConfig,
+    dind_id: &str,
+    names: &WorkerIdentityNames,
+) -> Result<(), HostError> {
     assert_eq!(runner_host.privileged, Some(false));
     assert_eq!(dind_host.privileged, Some(true));
     assert_eq!(runner_host.readonly_rootfs, Some(true));
     assert_eq!(dind_host.readonly_rootfs, Some(true));
-    assert_eq!(runner_host.pids_limit, Some(1_024));
-    assert_eq!(dind_host.pids_limit, Some(2_048));
+    assert_eq!(runner_host.publish_all_ports, Some(false));
+    assert_eq!(dind_host.publish_all_ports, Some(false));
+    assert!(
+        runner_host
+            .port_bindings
+            .as_ref()
+            .is_none_or(std::collections::HashMap::is_empty)
+    );
+    assert!(
+        dind_host
+            .port_bindings
+            .as_ref()
+            .is_none_or(std::collections::HashMap::is_empty)
+    );
+    let runner_network = format!("container:{dind_id}");
+    let dind_network = format!("velnor-{}-private", names.remote_runner_name()?);
     assert_eq!(
         runner_host.network_mode.as_deref(),
-        Some("container:dind-id")
+        Some(runner_network.as_str())
     );
     assert_eq!(
         dind_host.network_mode.as_deref(),
-        Some("velnor-private-test")
+        Some(dind_network.as_str())
     );
+    Ok(())
+}
+
+fn assert_runner_security(runner_host: &bollard::models::HostConfig) {
+    assert_eq!(runner_host.cap_drop, Some(vec!["ALL".to_owned()]));
+    assert_eq!(
+        runner_host.cap_add,
+        Some(
+            [
+                "CHOWN",
+                "DAC_OVERRIDE",
+                "FOWNER",
+                "FSETID",
+                "KILL",
+                "SETGID",
+                "SETUID",
+                "SETPCAP",
+                "NET_BIND_SERVICE",
+                "NET_RAW",
+                "SYS_CHROOT",
+                "MKNOD",
+                "AUDIT_WRITE",
+                "SETFCAP",
+            ]
+            .map(str::to_owned)
+            .to_vec()
+        )
+    );
+    assert_eq!(
+        runner_host.security_opt,
+        Some(vec![crate::worker::seccomp::runner_security_opt()])
+    );
+}
+
+fn assert_dind_security_is_unmodified(dind_host: &bollard::models::HostConfig) {
+    assert!(dind_host.cap_drop.as_ref().is_none_or(Vec::is_empty));
+    assert!(dind_host.cap_add.as_ref().is_none_or(Vec::is_empty));
+    assert!(dind_host.security_opt.as_ref().is_none_or(Vec::is_empty));
+}
+
+fn assert_pair_limits(
+    runner_host: &bollard::models::HostConfig,
+    dind_host: &bollard::models::HostConfig,
+) {
+    assert_eq!(runner_host.pids_limit, Some(1_024));
+    assert_eq!(dind_host.pids_limit, Some(2_048));
     assert_eq!(runner_host.memory, Some(2_147_483_648));
     assert_eq!(dind_host.memory, Some(6_442_450_944));
     assert_eq!(runner_host.memory_swap, runner_host.memory);
     assert_eq!(dind_host.memory_swap, dind_host.memory);
+}
+
+fn assert_pair_process_settings(runner: &PairCreate, dind: &PairCreate) {
     assert_eq!(runner.config.open_stdin, Some(true));
     assert_eq!(runner.config.stdin_once, Some(true));
     assert_eq!(runner.config.tty, Some(false));
     assert_eq!(dind.config.open_stdin, Some(false));
     assert_eq!(dind.config.stdin_once, Some(false));
     assert_eq!(dind.config.tty, Some(false));
+    assert_eq!(
+        runner.config.env.as_deref(),
+        Some(["DOCKER_HOST=tcp://127.0.0.1:2375".to_owned()].as_slice())
+    );
+    assert!(dind.config.env.as_ref().is_none_or(Vec::is_empty));
+}
+
+fn assert_pair_logs(
+    runner_host: &bollard::models::HostConfig,
+    dind_host: &bollard::models::HostConfig,
+) -> Result<(), HostError> {
     for host in [runner_host, dind_host] {
         let log = host.log_config.as_ref().ok_or(HostError::Identity)?;
         assert_eq!(log.typ.as_deref(), Some("json-file"));
@@ -261,6 +357,13 @@ fn assert_pair_config(runner: &PairCreate, dind: &PairCreate) -> Result<(), Host
             Some("3")
         );
     }
+    Ok(())
+}
+
+fn assert_pair_tmpfs(
+    runner_host: &bollard::models::HostConfig,
+    dind_host: &bollard::models::HostConfig,
+) {
     assert!(runner_host.tmpfs.as_ref().is_some_and(|mounts| {
         mounts
             .get("/tmp")
@@ -277,5 +380,20 @@ fn assert_pair_config(runner: &PairCreate, dind: &PairCreate) -> Result<(), Host
                 .get("/dev/shm")
                 .is_some_and(|value| value.contains("nr_inodes="))
     }));
+}
+
+#[tokio::test]
+async fn pair_specs_reject_public_or_unpaired_network_modes() -> Result<(), HostError> {
+    let fixture = fixture("pair-network-mode").await?;
+    assert!(create(&fixture, BootstrapContainerRole::Runner, "host").is_err());
+    assert!(
+        create(
+            &fixture,
+            BootstrapContainerRole::Runner,
+            "container:dind-id"
+        )
+        .is_err()
+    );
+    assert!(create(&fixture, BootstrapContainerRole::Dind, "bridge").is_err());
     Ok(())
 }

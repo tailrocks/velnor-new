@@ -146,14 +146,16 @@ COPY --from=job_start_hook job-start-hook /velnor/job-start-hook
 COPY --from=job_started_hook job-started-hook.sh /usr/local/bin/velnor-job-start-hook
 COPY wait-docker-sock.sh /usr/local/bin/wait-docker-sock
 COPY wait-docker-api.sh /usr/local/bin/velnor-wait-docker-api
-COPY clear-dockerenv.sh /usr/local/bin/clear-dockerenv
+COPY wait-docker-api.sh wait-docker-api-test.sh /tmp/
 RUN chown root:root /velnor/job-start-hook /usr/local/bin/velnor-job-start-hook \
     && chmod 0555 /velnor/job-start-hook /usr/local/bin/velnor-job-start-hook \
     && test "$(stat -c %a /velnor/job-start-hook)" = 555 \
     && test "$(stat -c %a /usr/local/bin/velnor-job-start-hook)" = 555 \
     && test -x /velnor/job-start-hook \
     && test -x /usr/local/bin/velnor-job-start-hook \
-    && chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/wait-docker-sock /usr/local/bin/velnor-wait-docker-api /usr/local/bin/clear-dockerenv \
+    && chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/wait-docker-sock /usr/local/bin/velnor-wait-docker-api /tmp/wait-docker-api.sh /tmp/wait-docker-api-test.sh \
+    && /tmp/wait-docker-api-test.sh \
+    && rm -f /tmp/wait-docker-api.sh /tmp/wait-docker-api-test.sh \
     && apt-get update \
     && apt-get install -y --no-install-recommends build-essential clang cmake git-lfs jq libclang-dev libssl-dev netcat-openbsd perl pkg-config protobuf-compiler python3 zstd \
     && cc --version \
@@ -179,7 +181,7 @@ RUN chmod 0555 /velnor/resource-probe /velnor/storage-init \
 
 COPY tar-semantics-test.sh tar-semantics-planned-test.sh tar-absolute-test.sh tar-absolute-test-extended.sh /tmp/velnor-gnu-tar-tests/
 RUN chmod 0755 /tmp/velnor-gnu-tar-tests/*.sh \
-    && for test_file in /tmp/velnor-gnu-tar-tests/*.sh; do "$test_file"; done \
+    && for test_file in /tmp/velnor-gnu-tar-tests/*.sh; do "$test_file" || exit; done \
     && rm -rf /tmp/velnor-gnu-tar-tests
 
 COPY runner-home.py runner-home-test.py /tmp/velnor-runner-home-tests/
