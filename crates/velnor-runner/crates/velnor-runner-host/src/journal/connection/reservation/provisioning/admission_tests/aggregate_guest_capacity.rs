@@ -3,9 +3,9 @@ use crate::journal::request_lifecycle::tests::helpers::{Scratch, binding, create
 use crate::journal::{
     AssignmentKey, CapacityLimits, Journal, OperationalCapacityLimits, ReservationRequest,
     ReservationResult, StorageAdmissionSample, StorageFilesystemKind, StorageMedium,
-    StoragePoolObservation, StorageProfile, StorageProvisioningAdmission,
-    StorageProvisioningMemoryObservation, StorageSampleIdentity, fixture_profile,
-    fixture_provisioning_profile,
+    StoragePoolObservation, StoragePoolObservationInput, StorageProfile,
+    StorageProvisioningAdmission, StorageProvisioningMemoryObservation, StorageSampleIdentity,
+    fixture_profile, fixture_provisioning_profile,
 };
 use crate::launch::StartPermit;
 
@@ -38,14 +38,16 @@ fn admission(
         )?,
         std::time::Instant::now(),
         vec![StoragePoolObservation::new_with_filesystem(
-            disk.pool_id().to_owned(),
-            "a".repeat(64),
-            StorageMedium::Disk,
-            StorageFilesystemKind::Btrfs,
-            64 * GIB,
-            60 * GIB,
-            0,
-            0,
+            StoragePoolObservationInput {
+                pool_id: disk.pool_id().to_owned(),
+                filesystem_instance_digest: "a".repeat(64),
+                medium: StorageMedium::Disk,
+                filesystem_kind: StorageFilesystemKind::Btrfs,
+                total_bytes: 64 * GIB,
+                available_bytes: 60 * GIB,
+                total_inodes: 0,
+                available_inodes: 0,
+            },
         )?],
         None,
     )?;

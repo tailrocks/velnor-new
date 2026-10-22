@@ -4,8 +4,8 @@ use crate::journal::request_lifecycle::tests::helpers::{Scratch, binding, create
 use crate::journal::{
     AssignmentKey, CapacityLimits, ConnectionJournal, Journal, ReservationRequest,
     ReservationResult, StorageAdmissionSample, StorageFilesystemKind, StorageInodePolicy,
-    StorageMedium, StoragePoolObservation, StorageProfile, StorageSampleIdentity,
-    fixture_provisioning_profile,
+    StorageMedium, StoragePoolObservation, StoragePoolObservationInput, StorageProfile,
+    StorageSampleIdentity, fixture_provisioning_profile,
 };
 use crate::launch::StartPermit;
 
@@ -115,14 +115,16 @@ async fn reserve_with_finite_inode_observation(
         )?,
         std::time::Instant::now(),
         vec![StoragePoolObservation::new_with_filesystem(
-            disk_id.to_owned(),
-            "a".repeat(64),
-            StorageMedium::Disk,
-            StorageFilesystemKind::Other,
-            64_u64 << 30,
-            60_u64 << 30,
-            1_000_000,
-            1_000_000,
+            StoragePoolObservationInput {
+                pool_id: disk_id.to_owned(),
+                filesystem_instance_digest: "a".repeat(64),
+                medium: StorageMedium::Disk,
+                filesystem_kind: StorageFilesystemKind::Other,
+                total_bytes: 64_u64 << 30,
+                available_bytes: 60_u64 << 30,
+                total_inodes: 1_000_000,
+                available_inodes: 1_000_000,
+            },
         )?],
         None,
     )?;

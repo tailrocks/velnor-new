@@ -2,8 +2,9 @@ use std::time::Instant;
 
 use super::storage_budget::{
     StorageAdmissionSample, StorageFilesystemKind, StorageInodePolicy, StorageMedium,
-    StoragePoolLimit, StoragePoolObservation, StorageProfile, StorageReservationPlan, StorageRole,
-    StorageRoleCharge, StorageRoleLimit, StorageSampleIdentity,
+    StoragePoolLimit, StoragePoolObservation, StoragePoolObservationInput, StorageProfile,
+    StorageReservationPlan, StorageRole, StorageRoleCharge, StorageRoleLimit,
+    StorageSampleIdentity,
 };
 
 fn sample_inputs() -> (
@@ -131,16 +132,16 @@ fn dynamic_btrfs_inode_policy_requires_btrfs_and_keeps_byte_budget() {
         .expect("identity"),
         Instant::now(),
         vec![
-            StoragePoolObservation::new_with_filesystem(
-                "c".repeat(64),
-                "d".repeat(64),
-                StorageMedium::Disk,
-                StorageFilesystemKind::Btrfs,
-                32_768,
-                32_768,
-                0,
-                0,
-            )
+            StoragePoolObservation::new_with_filesystem(StoragePoolObservationInput {
+                pool_id: "c".repeat(64),
+                filesystem_instance_digest: "d".repeat(64),
+                medium: StorageMedium::Disk,
+                filesystem_kind: StorageFilesystemKind::Btrfs,
+                total_bytes: 32_768,
+                available_bytes: 32_768,
+                total_inodes: 0,
+                available_inodes: 0,
+            })
             .expect("btrfs sample"),
         ],
         None,
