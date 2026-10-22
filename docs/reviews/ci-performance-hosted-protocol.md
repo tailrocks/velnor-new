@@ -36,7 +36,7 @@ rtk proxy /usr/bin/python3 scripts/analyze-ci-performance.py \
 ```
 
 The analysis environment requires exact PyYAML 6.0.3. Install
-[the hashed requirements](../../scripts/ci-performance-analysis-requirements.txt)
+the hashed requirements
 in an isolated environment using `pip install --require-hashes --only-binary=:all:`;
 the analyzer rejects another version. See
 [dependency source evidence](ci-performance-analysis-dependencies.md).

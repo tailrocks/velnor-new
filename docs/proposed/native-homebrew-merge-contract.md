@@ -6,7 +6,7 @@ Release production, receipt, retry, and credential-custody requirements remain
 in that parent contract; this boundary does not authorize publication or merge
 by itself.
 
-### Exact-head merge admission
+## Exact-head merge admission
 
 The native merge gate consumes authenticated required-check and feedback
 observations. The configured completion App must be distinct from the writer

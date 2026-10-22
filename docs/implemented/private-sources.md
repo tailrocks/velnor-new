@@ -31,6 +31,7 @@ with fixtures and qualification tests, not against live private repositories.
   no credential and the token is already revoked when repository code runs. The
   hostile-checkout cases (a planted `.velnor/deps` symlink or content) are
   neutralized by `prepare_deps_root` and tested in `private_fetch_attack_tests.rs`.
+
 - The generated `actionlint.yaml` declares `private_sources.app_id_variable`
   (`declared_config_variables`); `tests/impl_private_sources_generate.rs`
   generates a `[private_sources]` repository through the pinned actionlint.

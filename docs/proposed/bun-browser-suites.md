@@ -29,7 +29,6 @@ scripts nor suites.
 
 ## Suites
 
-
 A member keeps exactly one member job. A *suite* is a named group of one or
 more of the member's scripts that runs in its own job beside the member job,
 the way Rust suites and the dependency-seed job sit beside crate jobs.

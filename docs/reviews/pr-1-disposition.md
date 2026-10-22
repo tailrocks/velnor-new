@@ -88,7 +88,7 @@ original review history.
   for landed files; P06 warned to split + fix clippy before handoff.
 - Size split (`abb5866`, pushed): command.rs 440->312 (+command_env,
   command_output), merge.rs 429 split (+merge_checks), impl_merge 552
-  + impl_select 485 split by topic (+impl_merge_plan, +impl_select_base).
+  - impl_select 485 split by topic (+impl_merge_plan, +impl_select_base).
   Behavior-preserving; mise allowlist updated. Standalone: mise 174,
   orch 75+6+316, size_limits_hold green, clippy -D clean, fmt clean.
 - P10 (`d8a26a6`, pushed): origin identity via `git config --get

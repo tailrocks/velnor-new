@@ -2462,3 +2462,29 @@ d2b4a050261b685279c502009f55a3e260b72ff9:docs/.vitepress/config.ts:generic-api-k
 # Reason: CI cache key name, not a credential
 # 1 finding(s); rules: generic-api-key; files: .github/workflows/ci.yml (1)
 7d18362ac65719284edeee531004a338f4f92d1b:.github/workflows/ci.yml:generic-api-key:181
+
+# Working-tree fingerprints (file:rule:line) for the hk `gitleaks` builtin, which runs `gitleaks dir` on the checkout.
+# Reviewed 2026-10-23: each repeats a history finding already listed above with its reason (same file, rule, line),
+# except the MatrixKey test constant noted below. None is a credential.
+.velnor/runner.lock:generic-api-key:73
+crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_tests.rs:generic-api-key:28
+crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_tests.rs:generic-api-key:79
+crates/velnor-actions-mise/tests/impl_mise_env_policy.rs:generic-api-key:295
+crates/velnor-actions-orchestrator/src/merge_request_tests.rs:generic-api-key:288
+crates/velnor-runner/crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem:private-key:1
+docs/implemented/evidence/freshness-2026-10-20/qualification/mise-crypto-admission.json:generic-api-key:176
+docs/implemented/freshness-evidence-2026-10-08.md:generic-api-key:73
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:114
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:16
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:19
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:27
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:30
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:38
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:41
+docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:69
+docs/reviews/uv-0.12.23-qualification-evidence.json:generic-api-key:11
+scripts/download-owned-tool-candidate.py:generic-api-key:62
+scripts/hosted_phase_measurement/tests/fixtures/mbx-summary-exact-joined-v1.jsonl:generic-api-key:1
+scripts/hosted_phase_measurement/tests/test_mbx_summary.py:generic-api-key:25
+# Reason: MatrixKey parse test constant m-0123456789abcdef (check_id! macro), not a credential
+crates/velnor-actions-contract/src/ids/artifact.rs:generic-api-key:201
