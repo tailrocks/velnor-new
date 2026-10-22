@@ -3,7 +3,8 @@ use crate::journal::connection::ConnectionJournal;
 use crate::journal::connection::storage::in_transaction;
 use crate::journal::{
     AssignmentKey, Journal, ReservationRequest, ReservationResult, StorageFilesystemKind,
-    StorageInodePolicy, StorageMedium, StorageRole, fixture_storage_provisioning_admission,
+    StorageInodePolicy, StorageMedium, StorageObjectCreateClaim, StoragePoolLimit, StorageProfile,
+    StorageRole, StorageRoleLimit, fixture_storage_provisioning_admission,
 };
 use crate::launch::StartPermit;
 
@@ -78,20 +79,7 @@ async fn volume_claim_exposes_only_role_charge_matching_immutable_profile() -> R
         .await?
         .ok_or(HostError::Journal)?;
     let pool = profile.pool_limit(role_limit.pool_id())?;
-    assert_eq!(claim.profile_generation_id(), profile.generation_id());
-    assert_eq!(claim.profile_digest(), profile.profile_digest());
-    assert_eq!(claim.sample_generation_id(), sample_generation_id);
-    assert_eq!(claim.pool_id(), role_limit.pool_id());
-    assert_eq!(claim.medium(), StorageMedium::Tmpfs);
-    assert_eq!(claim.filesystem_kind(), StorageFilesystemKind::Tmpfs);
-    assert_eq!(claim.inode_policy(), StorageInodePolicy::Finite);
-    assert_eq!(claim.charge_bytes(), role_limit.max_bytes());
-    assert_eq!(claim.charge_inodes(), role_limit.max_inodes());
-    assert_eq!(
-        claim.retained_memory_bytes(),
-        role_limit.retained_memory_bytes()
-    );
-    assert_eq!(pool.inode_policy(), StorageInodePolicy::Finite);
+    assert_claim_matches_role_limit(&claim, &profile, role_limit, pool, &sample_generation_id);
 
     let invalid_digest = if profile.profile_digest() == "f".repeat(64) {
         "e".repeat(64)
@@ -106,6 +94,29 @@ async fn volume_claim_exposes_only_role_charge_matching_immutable_profile() -> R
         Err(HostError::Journal)
     ));
     Ok(())
+}
+
+fn assert_claim_matches_role_limit(
+    claim: &StorageObjectCreateClaim,
+    profile: &StorageProfile,
+    role_limit: &StorageRoleLimit,
+    pool: &StoragePoolLimit,
+    sample_generation_id: &str,
+) {
+    assert_eq!(claim.profile_generation_id(), profile.generation_id());
+    assert_eq!(claim.profile_digest(), profile.profile_digest());
+    assert_eq!(claim.sample_generation_id(), sample_generation_id);
+    assert_eq!(claim.pool_id(), role_limit.pool_id());
+    assert_eq!(claim.medium(), StorageMedium::Tmpfs);
+    assert_eq!(claim.filesystem_kind(), StorageFilesystemKind::Tmpfs);
+    assert_eq!(claim.inode_policy(), StorageInodePolicy::Finite);
+    assert_eq!(claim.charge_bytes(), role_limit.max_bytes());
+    assert_eq!(claim.charge_inodes(), role_limit.max_inodes());
+    assert_eq!(
+        claim.retained_memory_bytes(),
+        role_limit.retained_memory_bytes()
+    );
+    assert_eq!(pool.inode_policy(), StorageInodePolicy::Finite);
 }
 
 #[tokio::test]
