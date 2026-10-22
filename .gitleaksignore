@@ -2895,3 +2895,44 @@ f549983f997e747ed697da14507886de14c8df53:docs/proposed/opentofu-goldens/cases/ne
 8c3251e627bbcfc0a57b0a4c243258a638c29c22:fixtures/parity/multi-crate/expected/ci.yml:generic-api-key:529
 8c3251e627bbcfc0a57b0a4c243258a638c29c22:fixtures/parity/multi-crate/expected/ci.yml:generic-api-key:587
 8c3251e627bbcfc0a57b0a4c243258a638c29c22:fixtures/parity/multi-crate/expected/ci.yml:generic-api-key:772
+
+# Reason: cache keys are test selectors, checked against the expected backend entry and ID
+# 2 finding(s); rules: generic-api-key; files: crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_tests.rs (2)
+074ca41e0c79d0d89028d5ece29df6fdad6084fc:crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_tests.rs:generic-api-key:28
+074ca41e0c79d0d89028d5ece29df6fdad6084fc:crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_tests.rs:generic-api-key:79
+
+# Reason: matrix_key test values are deterministic matrix IDs, not credentials
+# 1 finding(s); rules: generic-api-key; files: crates/velnor-actions-orchestrator/src/matrix_step_tests.rs (1)
+494af593b7a2956eb26b2aac57a8031cd0a946cd:crates/velnor-actions-orchestrator/src/matrix_step_tests.rs:generic-api-key:294
+
+# Reason: matrix_key test values are deterministic matrix IDs, not credentials
+# 1 finding(s); rules: generic-api-key; files: crates/velnor-actions-orchestrator/src/matrix_step_tofu_tests.rs (1)
+d36e81a08ea22179289cd65fa0532826af65242f:crates/velnor-actions-orchestrator/src/matrix_step_tofu_tests.rs:generic-api-key:64
+
+# Reason: test measurement fixture stores response/log SHA-256 digests, not credentials
+# 1 finding(s); rules: generic-api-key; files: scripts/hosted_phase_measurement/tests/fixtures/mbx-summary-exact-joined-v1.jsonl (1)
+974c8ceba88db63883f29e425c7a80dbc53cf36d:scripts/hosted_phase_measurement/tests/fixtures/mbx-summary-exact-joined-v1.jsonl:generic-api-key:1
+
+# Reason: test measurement fixture stores response/log SHA-256 digests, not credentials
+# 1 finding(s); rules: generic-api-key; files: scripts/hosted_phase_measurement/tests/test_mbx_summary.py (1)
+974c8ceba88db63883f29e425c7a80dbc53cf36d:scripts/hosted_phase_measurement/tests/test_mbx_summary.py:generic-api-key:25
+
+# Reason: SHA-256 of public API response evidence; digest is not API credential material
+# 1 finding(s); rules: generic-api-key; files: docs/reviews/uv-0.12.23-qualification-evidence.json (1)
+237aa26a748b54596a56fae19289ea2de131d528:docs/reviews/uv-0.12.23-qualification-evidence.json:generic-api-key:11
+
+# Reason: public signing-key fingerprints record key identity; no private signing material
+# 1 finding(s); rules: generic-api-key; files: .velnor/runner.lock (1)
+906b9c86796175f823fdf28090b166749868b4b2:.velnor/runner.lock:generic-api-key:73
+
+# Reason: public signing-key fingerprints record key identity; no private signing material
+# 1 finding(s); rules: generic-api-key; files: docs/implemented/evidence/freshness-2026-10-20/qualification/mise-crypto-admission.json (1)
+c410ffc92c523f67a8c5d355ee4d9cc7ca8527eb:docs/implemented/evidence/freshness-2026-10-20/qualification/mise-crypto-admission.json:generic-api-key:176
+
+# Reason: run_key test values identify CI runs; contract derives them from numeric run ID and attempt
+# 1 finding(s); rules: generic-api-key; files: crates/core/velnor-actions-contract-workflow/src/workflow/artifact_build/tests.rs (1)
+598d0cafc041855cfa2fdd256671e288a636e7de:crates/core/velnor-actions-contract-workflow/src/workflow/artifact_build/tests.rs:generic-api-key:54
+
+# Reason: run_key test values identify CI runs; contract derives them from numeric run ID and attempt
+# 1 finding(s); rules: generic-api-key; files: crates/services/velnor-actions-orchestrator-internal/tests/impl_artifact_export.rs (1)
+598d0cafc041855cfa2fdd256671e288a636e7de:crates/services/velnor-actions-orchestrator-internal/tests/impl_artifact_export.rs:generic-api-key:55
