@@ -76,6 +76,7 @@ fn plan_tools_saves(
                     .filter(|id| {
                         jobs.get(*id).is_some_and(|job| {
                             !crate::matrix::suites::has_suite_matrix(job)
+                                && !crate::matrix::bun::has_bun_matrix(job)
                                 && !job.is_dependency_seed()
                         })
                     })

@@ -23,6 +23,8 @@ pub struct Member {
     pub dir: String,
     /// Script names in the member's `package.json`.
     pub scripts: BTreeSet<String>,
+    /// Script command text by name; read only by [`crate::playwright_script`].
+    pub commands: BTreeMap<String, String>,
     /// Names of the members this one depends on through `workspace:`.
     pub depends_on: BTreeSet<String>,
     /// Resolved `@playwright/test` (or `playwright`) version when the member depends on it.
@@ -203,6 +205,7 @@ fn member_of(root: &str, key: &str, text: &str, lock: &BunLock) -> Result<Member
         key: key.to_owned(),
         dir: under_root(root, key),
         scripts: package.scripts,
+        commands: package.commands,
         depends_on: BTreeSet::new(),
         playwright,
     })
