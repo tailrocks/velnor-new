@@ -59,7 +59,9 @@ impl AssignmentIdentity {
     pub(crate) fn request_id(&self) -> Option<i64> {
         match &self.key {
             AssignmentKey::AssignedRequest { request_id } => Some(*request_id),
-            _ => None,
+            AssignmentKey::Remote { .. } => None,
+            #[cfg(test)]
+            AssignmentKey::PopulationMessage { .. } | AssignmentKey::Session { .. } => None,
         }
     }
 

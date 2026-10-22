@@ -58,7 +58,6 @@ impl RunnerJitClaim {
     }
 
     /// Give the acquired request selected for the JIT audit record.
-    #[must_use]
     pub(crate) fn witness_request(&self) -> Result<AssignmentIdentity, HostError> {
         AssignmentIdentity::new(
             &self.connection_id,

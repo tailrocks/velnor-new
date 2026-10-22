@@ -45,16 +45,7 @@ async fn v36_progressed_claim_survives_startup_and_expired_takeover_inner() -> R
     Box::pin(fixture.scope.record_retirement_storage_phase(&claim)).await?;
     assert_phase3_is_charged(&fixture.journal, reservation_id, 1, &snapshot).await?;
 
-    let path = fixture.database_path.clone();
-    let migrated = Box::pin(Journal::open(&path)).await?;
-    let connection = migrated.connection().await?;
-    assert_eq!(
-        scalar(&connection, "PRAGMA user_version").await?,
-        super::super::super::JOURNAL_VERSION
-    );
-    assert_phase3_is_charged(&migrated, reservation_id, 1, &snapshot).await?;
-    drop(connection);
-    drop(migrated);
+    assert_migrated_claim(&fixture.database_path, reservation_id, &snapshot).await?;
 
     Box::pin(
         crate::journal::connection::reservation::post_jit_retirement::test_support::recover_fixture(
@@ -72,7 +63,8 @@ async fn v36_progressed_claim_survives_startup_and_expired_takeover_inner() -> R
             .saturating_sub(now)
             .saturating_add(1)
             .max(0);
-        tokio::time::sleep(std::time::Duration::from_secs(remaining as u64)).await;
+        let remaining = u64::try_from(remaining).map_err(|_| HostError::Journal)?;
+        tokio::time::sleep(std::time::Duration::from_secs(remaining)).await;
         candidates = Box::pin(fixture.scope.recoverable_post_jit_retirements()).await?;
     }
     assert_eq!(candidates.len(), 1);
@@ -92,6 +84,23 @@ async fn v36_progressed_claim_survives_startup_and_expired_takeover_inner() -> R
             .await?
             .is_empty()
     );
+    Ok(())
+}
+
+async fn assert_migrated_claim(
+    path: &std::path::Path,
+    reservation_id: i64,
+    snapshot: &str,
+) -> Result<(), HostError> {
+    let migrated = Box::pin(Journal::open(path)).await?;
+    let connection = migrated.connection().await?;
+    assert_eq!(
+        scalar(&connection, "PRAGMA user_version").await?,
+        super::super::super::JOURNAL_VERSION
+    );
+    assert_phase3_is_charged(&migrated, reservation_id, 1, snapshot).await?;
+    drop(connection);
+    drop(migrated);
     Ok(())
 }
 
