@@ -5,6 +5,7 @@ mod impl_bun;
 mod impl_bun_golden;
 mod impl_bun_playwright;
 mod impl_bun_select;
+mod impl_bun_suites;
 mod impl_bun_timeout;
 mod impl_cache_fixtures;
 mod impl_cache_sources_exact;
