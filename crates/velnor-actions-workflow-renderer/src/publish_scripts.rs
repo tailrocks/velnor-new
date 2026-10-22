@@ -156,14 +156,24 @@ pub fn upload_script(gh: &str, id: &str) -> String {
 }
 
 /// Upload `file` and its `.sha256` from the bundle directory as immutable
-/// assets: an existing asset fails the job (`gh release upload` without `--clobber`).
+/// assets. Any release that already holds a target asset fails the job,
+/// regardless of whether its bytes match.
 #[must_use]
 pub fn upload_assets_script(gh: &str, file: &str) -> String {
     let files = format!("\"$RUNNER_TEMP/bundle/{file}\" \"$RUNNER_TEMP/bundle/{file}.sha256\"");
     format!(
-        "set -eu; {gh}; ver=${{GITHUB_REF_NAME##*-v}}; \
-         if gh release view \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" > /dev/null 2>&1; \
-         then gh release upload \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" {files}; \
+        "set -eu; {gh}; ver=${{GITHUB_REF_NAME##*-v}}; b=\"$RUNNER_TEMP/bundle\"; \
+         t=\"$RUNNER_TEMP/published\"; \
+         if gh release view \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" > /dev/null 2>&1; then \
+         rm -rf -- \"$t\"; mkdir -p -- \"$t\"; \
+         gh release view \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" \
+         --json assets --jq '.assets[].name' > \"$t/names\"; \
+         for f in \"{file}\" \"{file}.sha256\"; do \
+         if grep -Fxq -- \"$f\" \"$t/names\"; then \
+         printf 'velnor: %s already published, refusing to replace it\\n' \"$f\" >&2; \
+         exit 1; fi; done; \
+         for f in \"{file}\" \"{file}.sha256\"; do \
+         gh release upload \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" \"$b/$f\"; done; \
          else gh release create \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" --verify-tag \
          --title \"$GITHUB_REF_NAME\" --notes 'Release asset bundle' {files}; fi"
     )

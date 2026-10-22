@@ -33,6 +33,8 @@ pub(crate) struct MavenPlan<'a> {
     pub(crate) gradle: velnor_actions_contract::Step,
     /// Build bound: the Gradle stack's own timeout, never the five-minute release default.
     pub(crate) timeout: JobTimeout,
+    /// Local service containers of the project(s) the bundle builds (the CI database).
+    pub(crate) services: Vec<velnor_actions_contract::ServiceContainer>,
 }
 
 /// Artifact name shared by upload and download.
@@ -87,6 +89,7 @@ pub(super) fn build_job(
     );
     job.condition = Some(format!("needs.{AUTHORITY_JOB}.outputs.artifact == '{id}'"));
     job.timeout_minutes = plan.timeout;
+    job.services.clone_from(&plan.services);
     Ok(job)
 }
 
@@ -96,14 +99,24 @@ pub(super) fn attest_job(
     entry: &PublishMaven,
 ) -> Result<PublishJobSpec, OrchestratorError> {
     let id = entry.id.as_str();
-    let attest = action_step(
-        "Attest Maven bundle provenance",
-        ATTEST_BUILD_PROVENANCE_USES,
-        BTreeMap::from([(
-            "subject-path".to_owned(),
-            "${{ runner.temp }}/bundle/*.zip".to_owned(),
-        )]),
-    )?;
+    let attest = if entry.attest {
+        action_step(
+            "Attest Maven bundle provenance",
+            ATTEST_BUILD_PROVENANCE_USES,
+            BTreeMap::from([(
+                "subject-path".to_owned(),
+                "${{ runner.temp }}/bundle/*.zip".to_owned(),
+            )]),
+        )?
+    } else {
+        // The configured reason passed text validation. Show it when attestation is disabled.
+        let reason = entry.attest_reason.as_deref().unwrap_or_default();
+        script_step(
+            "Provenance attestation disabled by config",
+            script::attest_disabled_script(reason),
+            false,
+        )?
+    };
     let steps = vec![
         download_step(id)?,
         plain(script_step(

@@ -132,6 +132,7 @@ fn seed_job(
         false,
     )?);
     steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
+    steps.push(crate::workflow::verify_rust_manifest_step(catalog)?);
     steps.extend(crate::source_cache::restore_step_for_crate(
         input.fetch_roots,
         true,
@@ -144,7 +145,16 @@ fn seed_job(
     )?);
     let roots = vec![workspace.root.clone()];
     if let Some(private) = private {
-        steps.extend(private.steps_for_roots(&roots)?);
+        let private_steps = private.steps_for_roots(&roots)?;
+        if !private_steps.is_empty() {
+            // Private fetch and token revocation use the Velnor helper.
+            // Stage the helper after checkout, as crate jobs do. Verify its digest.
+            let acquire = input.acquire.ok_or_else(|| OrchestratorError::Contract {
+                problem: "private_sources_seed_without_acquire".to_owned(),
+            })?;
+            steps.insert(1, acquire.clone());
+        }
+        steps.extend(private_steps);
     }
     steps.extend(crate::source_prep::fetch_steps_for_crate_with_all_features(
         catalog, &roots, false,

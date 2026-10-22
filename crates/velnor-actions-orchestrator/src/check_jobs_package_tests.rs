@@ -6,14 +6,11 @@ use std::error::Error;
 fn maintenance_packages_use_one_rust_job_each() -> Result<(), Box<dyn Error>> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let preparation = crate::prepare(&root)?;
-    assert!(
-        !preparation
-            .config
-            .checks
-            .iter()
-            .any(|check| check.id == "maintenance-helpers"),
-        "package tests must use their Rust jobs"
-    );
+    let [check] = preparation.config.checks.as_slice() else {
+        return Err("The maintenance helper check must be configured.".into());
+    };
+    assert_eq!(check.id, "maintenance-helpers");
+    assert_eq!(check.task, "test-maintenance-helpers");
 
     for package in ["velnor-actions-freshness", "velnor-archive-guard"] {
         let job_id = format!("rust-{package}");

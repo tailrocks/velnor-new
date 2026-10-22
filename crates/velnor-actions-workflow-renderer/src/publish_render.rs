@@ -207,6 +207,7 @@ fn job_to_yaml(job: &PublishJobSpec, staged: Option<&str>) -> Result<Yaml, Rende
     for step in &job.steps {
         rendered.push(step_to_yaml(step, staged)?);
     }
+    crate::document_services::push_services(&mut entries, &job.services);
     entries.push(("steps".to_owned(), Yaml::Seq(rendered)));
     Ok(Yaml::Map(entries))
 }

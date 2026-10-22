@@ -22,6 +22,7 @@ fn job(role: PublishRole, needs: &[&str]) -> PublishJobSpec {
         environment: (role == PublishRole::ArtifactPublish).then(|| "release".to_owned()),
         outputs: BTreeMap::new(),
         permissions: PublishPermissions::expected(role),
+        services: Vec::new(),
         steps: vec![PublishStep {
             id: None,
             step: Step {

@@ -252,6 +252,7 @@ fn release_wired_into_stack_validation_with_key_paths() {
             target: "host".to_owned(),
         }],
         toolchain: None,
+        toolchain_source: None,
         compile_driver: None,
         test_runner: None,
         run_ignored: None,

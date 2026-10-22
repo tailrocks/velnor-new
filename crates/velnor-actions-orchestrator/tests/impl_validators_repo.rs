@@ -149,7 +149,9 @@ fn repo_config_sample_parses_through_prepare() -> TestResult {
         let repo = make_sample_repo(&sample, &mise)?;
         let prep = prepare(repo.path())?;
         assert_eq!(prep.config.schema, 2);
-        assert_eq!(prep.config.checks, Vec::new());
+        assert_eq!(prep.config.checks.len(), 1);
+        assert_eq!(prep.config.checks[0].id, "maintenance-helpers");
+        assert_eq!(prep.config.checks[0].task, "test-maintenance-helpers");
         let rust = prep
             .config
             .stacks

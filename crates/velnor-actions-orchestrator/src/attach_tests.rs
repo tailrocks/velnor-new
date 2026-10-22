@@ -85,6 +85,7 @@ fn lock_acquire_inserts_digest_verified_stage() {
             "Prepare pinned tools",
             "Acquire Velnor",
             "Prepare Rust components",
+            "Verify Rust channel manifest",
             "Write request",
             "Plan"
         ]
@@ -217,6 +218,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
             "Checkout",
             "Prepare pinned tools",
             "Prepare Rust components",
+            "Verify Rust channel manifest",
             MBX_PREFLIGHT_NAME,
             MBX_RESTORE_NAME,
             MBX_VERSION_CHECK_NAME,

@@ -69,6 +69,9 @@ pub(super) fn render_all(
     extra.extend(crate::binary_release_emit::files(prep, &routing)?);
     extra.extend(crate::binary_preview_emit::files(prep, &routing)?);
     extra.extend(crate::freshness_emit::freshness_files(prep, &routing)?);
+    extra.extend(crate::freshness_emit::upgrades::upgrades_files(
+        prep, &routing,
+    )?);
     extra.extend(crate::owned_tool_publication::files_with_routing(
         prep, &routing,
     )?);

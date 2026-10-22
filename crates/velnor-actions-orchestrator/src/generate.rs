@@ -22,8 +22,6 @@ pub(crate) mod guards;
 #[path = "generate_preserve.rs"]
 mod preserve;
 
-#[path = "generate_render.rs"]
-mod render;
 #[path = "generate_runner_labels.rs"]
 mod runner_labels;
 
@@ -38,6 +36,9 @@ pub(crate) mod unmanaged;
 /// Stage and publish fresh preview output transactionally.
 #[path = "generate_preview.rs"]
 mod preview;
+
+#[path = "generate_render.rs"]
+mod render;
 
 /// Own the private persistent spare used only for in-place generation.
 #[path = "generate_stage_root.rs"]
@@ -151,6 +152,7 @@ pub fn render_staged_tree_with(
     check_tree_paths(&tree)?;
     Ok(tree)
 }
+
 /// Validate every rendered path lexically plus symlink-prefix probing.
 fn check_tree_paths(tree: &RenderedTree) -> Result<Vec<SafeTreePath>, OrchestratorError> {
     let mut safe = Vec::with_capacity(tree.files.len() + tree.symlinks.len());

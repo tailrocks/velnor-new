@@ -48,3 +48,13 @@ pub fn verify_script(id: &str) -> String {
 pub fn upload_script(gh: &str, id: &str) -> String {
     upload_assets_script(gh, &zip_name(id))
 }
+
+/// Print a workflow warning with the configured reason when `attest = false`.
+/// Text validation rejects quotes, `$`, and backticks in `reason`.
+#[must_use]
+pub fn attest_disabled_script(reason: &str) -> String {
+    format!(
+        "set -eu; printf '::warning title=Provenance attestation disabled::%s\\n' \
+         'publish.maven attest=false: {reason}'"
+    )
+}

@@ -44,6 +44,7 @@ and overlaps the independent checks.
 - The pinned actionlint does not parse the native step keys yet; the narrow,
   documented bridge in `velnor-actions-actionlint` (`STEP_PARALLELISM_IGNORES`)
   suppresses only the unknown `background` key and the body-less join step.
+
 - The dependency-seed job is not a crate job: it runs no checks and is not in
   Required, so this decision governs crate jobs only. Crate jobs restore
   compiled caches read-only. See the
@@ -215,6 +216,11 @@ declare Rust versions. Mise and rustup read these files.
   or removing a catalog tool does need regeneration because it changes which
   commands use a project reference. An option change, such as
   `mr_boxington = true`, also needs regeneration.
+
+When both `mise.toml` and `rust-toolchain.toml` declare Rust, their versions and profiles must agree.
+Their component sets and target sets must also agree.
+Generation reports `rust_toolchain_mirror_mismatch` when these values differ.
+The owner adopted this rule with the standard layout on 2026-10-22 and may revisit it.
 
 **Rationale.** Developers use the project's Mise config on their computers.
 Copying its versions into generated workflows forced regeneration after each

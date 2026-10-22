@@ -18,9 +18,10 @@ fn config_validation_reports_key_paths() {
         checks: Vec::new(),
         qualified_tools: Vec::new(),
         distribution: velnor_actions_contract::config::DistributionConfig::default(),
-        job_authority: Vec::new(),
         private_sources: None,
+        upgrades: None,
         images: Vec::new(),
+        job_authority: Vec::new(),
         publish: velnor_actions_contract::config::PublishConfig::default(),
         schema: 1,
         workflow: WorkflowConfig {
@@ -53,18 +54,19 @@ fn config_validation_reports_key_paths() {
         stacks: StacksConfig {
             ignore: vec![],
             rust: Some(RustStackConfig {
+                clippy_all_features: false,
                 configurations: vec![RustConfiguration {
+                    all_features: false,
                     name: "default".to_owned(),
                     features: vec!["default".to_owned()],
-                    all_features: false,
                     target: "host".to_owned(),
                 }],
                 toolchain: None,
+                toolchain_source: None,
                 compile_driver: None,
                 test_runner: None,
                 run_ignored: None,
                 seed_parallel_targets: false,
-                clippy_all_features: false,
                 release: RustReleaseConfig::default(),
                 binary_release: RustBinaryReleaseConfig::default(),
                 suites: Vec::new(),
@@ -112,19 +114,65 @@ fn config_validation_reports_key_paths() {
 }
 
 #[test]
-fn runner_label_accepts_only_catalog_entries() {
+fn runner_label_uses_exact_catalog_match() {
+    use velnor_actions_contract::config::ActionsConfig;
     use velnor_actions_contract::config::{LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG};
+    use velnor_actions_contract::{
+        ContractError, DiscoveryConfig, PullRequestCachePolicy, ResourcesConfig, StacksConfig,
+        TestShardingConfig, VelnorConfig,
+    };
+    let base = || VelnorConfig {
+        checks: Vec::new(),
+        qualified_tools: Vec::new(),
+        distribution: velnor_actions_contract::config::DistributionConfig::default(),
+        private_sources: None,
+        upgrades: None,
+        images: Vec::new(),
+        job_authority: Vec::new(),
+        publish: velnor_actions_contract::config::PublishConfig::default(),
+        schema: 1,
+        workflow: velnor_actions_contract::WorkflowConfig {
+            name: "CI".to_owned(),
+            policy: velnor_actions_contract::WorkflowPolicy::ConsumerV1,
+            default_branch: None,
+            verification_branch: None,
+            generator_validation: velnor_actions_contract::GeneratorValidation::Bootstrap,
+            mise_quiet: true,
+            checkout_lfs: false,
+            max_parallel_jobs: 2,
+            crate_timeout_minutes: 5,
+            pull_request_cache_policy: PullRequestCachePolicy::default(),
+            runner_label: None,
+            tasks: Vec::new(),
+            tofu_apply: None,
+            review_completion: None,
+            verify: velnor_actions_contract::VerifyConfig::default(),
+            dispatch: velnor_actions_contract::WorkflowDispatchConfig::default(),
+            preserve_workflows: Vec::new(),
+        },
+        resources: ResourcesConfig {
+            compiler_process_budget: 2,
+            test_process_budget: 2,
+        },
+        test_sharding: TestShardingConfig {
+            default_shards: 1,
+            by_manifest: BTreeMap::new(),
+        },
+        stacks: StacksConfig::default(),
+        discovery: DiscoveryConfig { exclude: vec![] },
+        actions: ActionsConfig::default(),
+        tools: velnor_actions_contract::ToolsConfig::default(),
+        agents: velnor_actions_contract::AgentsConfig::default(),
+        github: velnor_actions_contract::GithubConfig::default(),
+        dco: None,
+        execution: None,
+    };
     assert!(RUNNER_LABEL_CATALOG.contains(&LATEST_RUNNER_LABEL));
     for label in RUNNER_LABEL_CATALOG {
-        let mut config = crate::impl_remed_contract::valid_config();
+        let mut config = base();
         config.workflow.runner_label = Some(label.to_owned());
         assert_eq!(config.validate("cfg"), Ok(()), "label {label}");
     }
-}
-
-#[test]
-fn runner_label_rejects_non_catalog_values() {
-    use velnor_actions_contract::ContractError;
     for label in [
         "ubuntu-latest",
         "ubuntu-24.04-latest",
@@ -133,7 +181,7 @@ fn runner_label_rejects_non_catalog_values() {
         "",
         " ubuntu-24.04",
     ] {
-        let mut config = crate::impl_remed_contract::valid_config();
+        let mut config = base();
         config.workflow.runner_label = Some(label.to_owned());
         let Err(ContractError::Config {
             key_path, problem, ..
@@ -152,9 +200,9 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
     let mut config = crate::impl_remed_contract::valid_config();
     config.stacks.rust = Some(RustStackConfig {
         configurations: vec![RustConfiguration {
+            all_features: false,
             name: "Default".to_owned(),
             features: vec![],
-            all_features: false,
             target: "host".to_owned(),
         }],
         ..RustStackConfig::default_config()
