@@ -193,7 +193,7 @@ pub(super) fn manifest_digest_check_script() -> String {
 }
 
 /// Assemble release verification and creation in one parent shell.
-pub(super) fn publish_script(pins: &ProductReleasePins) -> Result<String, RenderError> {
+pub(super) fn publish_script(pins: &ProductReleasePins) -> String {
     publish::publish_script(pins)
 }
 

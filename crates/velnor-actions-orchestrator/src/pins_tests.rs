@@ -25,6 +25,7 @@ pub(crate) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> Vel
             mise_quiet: true,
             checkout_lfs: false,
             max_parallel_jobs: 2,
+            plan_timeout_minutes: 5,
             crate_timeout_minutes: 5,
             pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,

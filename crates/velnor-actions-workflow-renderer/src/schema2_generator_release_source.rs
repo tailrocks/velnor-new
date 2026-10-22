@@ -13,6 +13,10 @@ pub(super) fn qualification_step() -> Yaml {
 }
 
 /// Fetch this public repository at the exact run commit without an action post hook.
+///
+/// Each Git command names `git` and its subcommand on one line, so workflow
+/// linters that look for a checkout before a local action (jactionlint
+/// `local-action-checkout`) see this step as the checkout it is.
 pub(super) const QUALIFICATION_SOURCE_PREPARE: &str = r#"set -eu
 python3 - "$GITHUB_WORKSPACE" "$GITHUB_REPOSITORY" "$GITHUB_SHA" <<'PY'
 import os
@@ -41,28 +45,22 @@ environment.update(
     GIT_TERMINAL_PROMPT="0",
 )
 
-def run_git(*arguments, timeout):
+def run(command, timeout):
     subprocess.run(
-        ["git", *arguments],
+        command,
         cwd=workspace,
         env=environment,
         check=True,
         timeout=timeout,
     )
 
-run_git("init", "--quiet", timeout=10)
-run_git(
-    "-c",
-    "credential.helper=",
-    "fetch",
-    "--quiet",
-    "--depth=1",
-    "--no-tags",
-    f"https://github.com/{repository}.git",
-    commit,
+run(["git", "init", "--quiet"], timeout=10)
+run(
+    ["git", "-c", "credential.helper=", "fetch", "--quiet", "--depth=1", "--no-tags",
+     f"https://github.com/{repository}.git", commit],
     timeout=60,
 )
-run_git("checkout", "--quiet", "--detach", "FETCH_HEAD", timeout=10)
+run(["git", "checkout", "--quiet", "--detach", "FETCH_HEAD"], timeout=10)
 head = subprocess.run(
     ["git", "rev-parse", "HEAD"],
     cwd=workspace,
