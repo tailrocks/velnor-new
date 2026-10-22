@@ -1,6 +1,6 @@
 use super::*;
 use crate::launch::resource_probe::inspect;
-use crate::launch::resource_probe::sample::Observation;
+use crate::launch::resource_probe::sample::{Observation, ObservationTestInput};
 use crate::worker::ResourceBudgetConfig;
 use bollard::models::ContainerInspectResponse;
 use serde_json::json;
@@ -32,32 +32,32 @@ fn ancestor_cpu_and_inspected_pid_gate_start_permit() -> Result<(), String> {
     let mut mismatched = fixture_record();
     mismatched.memory_available_bytes = 64 * GIB;
     assert!(
-        Observation::test_new(
-            mismatched,
-            18,
-            4321,
-            64 * GIB,
-            "selected-engine".to_owned(),
-            "a".repeat(64),
-            "b".repeat(32),
-            Instant::now(),
-        )
+        Observation::test_new(ObservationTestInput {
+            record: mismatched,
+            cpus: 18,
+            inspected_host_pid: 4321,
+            memory_total_bytes: 64 * GIB,
+            engine_id: "selected-engine".to_owned(),
+            docker_root_digest: "a".repeat(64),
+            sample_generation_id: "b".repeat(32),
+            observed_at: Instant::now(),
+        })
         .is_none()
     );
 
     let mut namespace_mismatch = fixture_record();
     namespace_mismatch.probe_namespace_pid = 4321;
     assert!(
-        Observation::test_new(
-            namespace_mismatch,
-            18,
-            1234,
-            64 * GIB,
-            "selected-engine".to_owned(),
-            "a".repeat(64),
-            "b".repeat(32),
-            Instant::now(),
-        )
+        Observation::test_new(ObservationTestInput {
+            record: namespace_mismatch,
+            cpus: 18,
+            inspected_host_pid: 1234,
+            memory_total_bytes: 64 * GIB,
+            engine_id: "selected-engine".to_owned(),
+            docker_root_digest: "a".repeat(64),
+            sample_generation_id: "b".repeat(32),
+            observed_at: Instant::now(),
+        })
         .is_none()
     );
 
@@ -95,16 +95,16 @@ fn inspected_pid_requires_a_running_container_and_positive_state_pid() -> Result
 }
 
 fn observation(record: ProbeRecord, ncpu: u32, inspected_pid: u32) -> Result<Observation, String> {
-    Observation::test_new(
+    Observation::test_new(ObservationTestInput {
         record,
-        ncpu,
-        inspected_pid,
-        64 * GIB,
-        "selected-engine".to_owned(),
-        "a".repeat(64),
-        "b".repeat(32),
-        Instant::now(),
-    )
+        cpus: ncpu,
+        inspected_host_pid: inspected_pid,
+        memory_total_bytes: 64 * GIB,
+        engine_id: "selected-engine".to_owned(),
+        docker_root_digest: "a".repeat(64),
+        sample_generation_id: "b".repeat(32),
+        observed_at: Instant::now(),
+    })
     .ok_or_else(|| "The correct record and matching PID must give an observation.".to_owned())
 }
 

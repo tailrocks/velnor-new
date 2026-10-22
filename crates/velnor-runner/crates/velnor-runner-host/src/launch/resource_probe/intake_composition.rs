@@ -43,6 +43,10 @@ impl IntakeCompositionProvider {
 }
 
 impl ImageProvider for IntakeCompositionProvider {
+    #[expect(
+        clippy::unused_async_trait_impl,
+        reason = "ImageProvider requires an async method; this test provider only clones its stored candidate."
+    )]
     async fn verified_candidate(
         &self,
         _docker: &Docker,

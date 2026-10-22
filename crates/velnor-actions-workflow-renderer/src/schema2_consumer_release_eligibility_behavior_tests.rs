@@ -125,6 +125,7 @@ fn rejects_ci_runs_with_wrong_source_event_or_branch_without_polling() -> Result
             1,
             "an ineligible CI response must fail immediately"
         );
+        assert_eq!(result.sleeps, "", "a mismatch is never retried");
         assert!(!result.calls.contains("/attempts/"));
     }
     Ok(())
@@ -147,7 +148,26 @@ fn rejects_missing_pending_and_failed_latest_runs() -> Result<(), Box<dyn Error>
             .lines()
             .filter(|line| line.ends_with("actions/workflows/ci.yml/runs"))
             .count(),
-        1
+        6,
+        "an empty listing is listed again, six times in all, then fails closed"
+    );
+    assert_eq!(result.sleeps, "3\n6\n12\n24\n45\n");
+    assert!(result.stderr.contains("stayed empty after 6 attempts"));
+    assert!(!result.calls.contains("/attempts/"));
+
+    let mut recovering = Scenario::valid();
+    recovering.second_runs = Some(pages(&[vec![]]));
+    let result = execute(&recovering)?;
+    assert!(result.success, "{}", result.stderr);
+    assert_eq!(result.sleeps, "3\n");
+    assert_eq!(
+        result
+            .calls
+            .lines()
+            .filter(|line| line.ends_with("actions/workflows/ci.yml/runs"))
+            .count(),
+        3,
+        "an empty recheck listing is retried once and then sees the same run"
     );
 
     let mut pending = Scenario::valid();

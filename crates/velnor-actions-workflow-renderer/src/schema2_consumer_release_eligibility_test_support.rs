@@ -100,7 +100,17 @@ pub(super) struct Execution {
     pub(super) stderr: String,
     pub(super) output: String,
     pub(super) calls: String,
+    pub(super) sleeps: String,
 }
+
+/// Records the empty-listing backoff delays instead of waiting; every other
+/// `sleep` (the `gh` watchdog's 60 and 5 seconds) runs for real.
+const SLEEP_STUB: &str = r#"#!/bin/sh
+case "$1" in
+  3|6|12|24|45) printf '%s\n' "$1" >> "$VELNOR_TEST_SLEEPS"; exit 0 ;;
+esac
+exec /bin/sleep "$@"
+"#;
 
 struct Fixture {
     directory: PathBuf,
@@ -289,6 +299,8 @@ fn write_fixtures(
     fs::write(&fixture.calls, "")?;
     fs::write(&fixture.output, "")?;
     execution::write_completion_fixtures(fixture, scenario, source_sha)?;
+    fs::write(fixture.directory.join("sleeps"), "")?;
+    write_executable(&fixture.bin.join("sleep"), SLEEP_STUB)?;
     write_executable(&fixture.bin.join("gh"), GH_STUB)
 }
 

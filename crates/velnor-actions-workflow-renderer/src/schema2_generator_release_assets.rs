@@ -373,6 +373,7 @@ fn ci_check_step(pins: &crate::schema2::ProductReleasePins) -> Result<Yaml, crat
 }
 
 pub(super) fn ci_check_script() -> String {
+    let listing_function = super::super::ci_run_lookup::bash_function();
     format!(
         r#"set -eu
 test "$GITHUB_REPOSITORY" = '{REPOSITORY}'
@@ -380,7 +381,8 @@ test "$GITHUB_REF" = 'refs/heads/main'
 test "$GITHUB_EVENT_NAME" = 'workflow_dispatch'
 test "$GITHUB_WORKFLOW_SHA" = "$GITHUB_SHA"
 test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-runs="$(gh api --paginate --slurp "repos/{REPOSITORY}/actions/workflows/{CI_WORKFLOW}/runs?head_sha=$GITHUB_SHA&branch=main&event=push&per_page=100")"
+{listing_function}
+runs="$(list_exact_source_ci_runs 'verify release source' gh api --paginate --slurp "repos/{REPOSITORY}/actions/workflows/{CI_WORKFLOW}/runs?head_sha=$GITHUB_SHA&per_page=100")"
 run="$(printf '%s\n' "$runs" | jq -ce --arg sha "$GITHUB_SHA" --arg repo '{REPOSITORY}' '[.[] | (.workflow_runs // [])[] | select(.path == ".github/workflows/{CI_WORKFLOW}" and .head_sha == $sha and .head_branch == "main" and .head_repository.full_name == $repo and .event == "push")] | sort_by([.run_number, .id]) | last // error("no exact-source main CI run")')"
 test "$(printf '%s\n' "$run" | jq -r .status)" = completed
 test "$(printf '%s\n' "$run" | jq -r .conclusion)" = success

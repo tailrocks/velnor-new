@@ -171,19 +171,13 @@ async fn event_disposition_binds_actual_request_to_claimed_runner() -> Result<()
     )
     .await?;
     super::test_support::recover_fixture(&fixture).await?;
-    let before_claim = crate::journal::connection::storage::read_transaction(
-        fixture.scope.journal_ref(),
-        async |connection| {
-            crate::journal::connection::reservation::post_jit_retirement::disposition_for_event_in_transaction(
-                connection,
-                &fixture.scope,
-                fixture.channel.scale_set_id(),
-                ACTUAL_REQUEST,
-                fixture.runner.id,
-                &fixture.runner.name,
-            )
-            .await
-        },
+    let before_claim = disposition_for_event(
+        &fixture.scope,
+        &fixture.scope,
+        fixture.channel.scale_set_id(),
+        ACTUAL_REQUEST,
+        fixture.runner.id,
+        &fixture.runner.name,
     )
     .await?;
     assert!(before_claim.is_none());
@@ -198,19 +192,13 @@ async fn event_disposition_binds_actual_request_to_claimed_runner() -> Result<()
         .claim_post_jit_retirement(fixture.reservation_id, 60)
         .await?
         .ok_or(HostError::Journal)?;
-    let claimed = crate::journal::connection::storage::read_transaction(
-        fixture.scope.journal_ref(),
-        async |connection| {
-            crate::journal::connection::reservation::post_jit_retirement::disposition_for_event_in_transaction(
-                connection,
-                &fixture.scope,
-                fixture.channel.scale_set_id(),
-                ACTUAL_REQUEST,
-                fixture.runner.id,
-                &fixture.runner.name,
-            )
-            .await
-        },
+    let claimed = disposition_for_event(
+        &fixture.scope,
+        &fixture.scope,
+        fixture.channel.scale_set_id(),
+        ACTUAL_REQUEST,
+        fixture.runner.id,
+        &fixture.runner.name,
     )
     .await?
     .ok_or(HostError::Journal)?;
@@ -223,36 +211,44 @@ async fn event_disposition_binds_actual_request_to_claimed_runner() -> Result<()
         super::disposition::EventRetirementStatus::Claimed
     ));
 
-    let wrong_runner = crate::journal::connection::storage::read_transaction(
-        fixture.scope.journal_ref(),
-        async |connection| {
-            crate::journal::connection::reservation::post_jit_retirement::disposition_for_event_in_transaction(
-                connection,
-                &fixture.scope,
-                fixture.channel.scale_set_id(),
-                ACTUAL_REQUEST,
-                fixture.runner.id + 1,
-                &fixture.runner.name,
-            )
-            .await
-        },
+    assert_foreign_dispositions_are_absent(
+        &fixture.journal,
+        &fixture.scope,
+        fixture.channel.scale_set_id(),
+        ACTUAL_REQUEST,
+        fixture.runner.id,
+        &fixture.runner.name,
+    )
+    .await?;
+    Ok(())
+}
+
+async fn assert_foreign_dispositions_are_absent(
+    journal: &crate::journal::Journal,
+    scope: &crate::journal::ConnectionJournal,
+    scale_set_id: i64,
+    actual_request_id: i64,
+    runner_id: i64,
+    runner_name: &str,
+) -> Result<(), HostError> {
+    let wrong_runner = disposition_for_event(
+        scope,
+        scope,
+        scale_set_id,
+        actual_request_id,
+        runner_id + 1,
+        runner_name,
     )
     .await?;
     assert!(wrong_runner.is_none());
 
-    let wrong_set = crate::journal::connection::storage::read_transaction(
-        fixture.scope.journal_ref(),
-        async |connection| {
-            crate::journal::connection::reservation::post_jit_retirement::disposition_for_event_in_transaction(
-                connection,
-                &fixture.scope,
-                fixture.channel.scale_set_id() + 1,
-                ACTUAL_REQUEST,
-                fixture.runner.id,
-                &fixture.runner.name,
-            )
-            .await
-        },
+    let wrong_set = disposition_for_event(
+        scope,
+        scope,
+        scale_set_id + 1,
+        actual_request_id,
+        runner_id,
+        runner_name,
     )
     .await?;
     assert!(wrong_set.is_none());
@@ -263,26 +259,45 @@ async fn event_disposition_binds_actual_request_to_claimed_runner() -> Result<()
     )
     .map_err(|_| HostError::Identity)?;
     let other_scope = crate::journal::request_lifecycle::tests::helpers::created_scope(
-        &fixture.journal,
+        journal,
         &other_binding,
-        fixture.channel.scale_set_id(),
+        scale_set_id,
     )
     .await?;
-    let wrong_binding = crate::journal::connection::storage::read_transaction(
-        fixture.scope.journal_ref(),
-        async |connection| {
-            crate::journal::connection::reservation::post_jit_retirement::disposition_for_event_in_transaction(
-                connection,
-                &other_scope,
-                fixture.channel.scale_set_id(),
-                ACTUAL_REQUEST,
-                fixture.runner.id,
-                &fixture.runner.name,
-            )
-            .await
-        },
+    let wrong_binding = disposition_for_event(
+        scope,
+        &other_scope,
+        scale_set_id,
+        actual_request_id,
+        runner_id,
+        runner_name,
     )
     .await?;
     assert!(wrong_binding.is_none());
     Ok(())
+}
+
+async fn disposition_for_event(
+    journal_scope: &crate::journal::ConnectionJournal,
+    event_scope: &crate::journal::ConnectionJournal,
+    scale_set_id: i64,
+    actual_request_id: i64,
+    runner_id: i64,
+    runner_name: &str,
+) -> Result<Option<super::EventRetirementDisposition>, HostError> {
+    crate::journal::connection::storage::read_transaction(
+        journal_scope.journal_ref(),
+        async |connection| {
+            crate::journal::connection::reservation::post_jit_retirement::disposition_for_event_in_transaction(
+                connection,
+                event_scope,
+                scale_set_id,
+                actual_request_id,
+                runner_id,
+                runner_name,
+            )
+            .await
+        },
+    )
+    .await
 }

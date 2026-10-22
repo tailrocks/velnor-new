@@ -248,30 +248,7 @@ async fn accepts_only_exact_bare_or_docker_hub_local_image_names() -> Result<(),
         ),
     ];
     for (tag, repo_digest) in accepted {
-        let mut inspection: Value =
-            serde_json::from_str(&image_inspect(&images, "velnor-runner", identity, false))
-                .map_err(|error| error.to_string())?;
-        inspection["RepoTags"] = json!([tag]);
-        inspection["RepoDigests"] = json!([repo_digest]);
-        let docker = DockerStub::open(vec![
-            http(200, &engine_info("selected-engine", DOCKER_ROOT, "aarch64")),
-            http(
-                200,
-                &serde_json::to_string(&inspection).map_err(|error| error.to_string())?,
-            ),
-            http(
-                200,
-                &image_inspect(&images, "velnor-dind", images.dind(), false),
-            ),
-            http(200, &engine_info("selected-engine", DOCKER_ROOT, "aarch64")),
-        ])?;
-
-        let result = verify_worker_images_for_engine(&docker.docker, &expected, &images).await;
-        let requests = docker.finish().await?;
-
-        assert_eq!(result, Ok(()));
-        assert_eq!(requests.len(), 4);
-        assert!(requests[1].contains("/images/"));
+        assert_image_name_case(&images, &expected, identity, tag, repo_digest, true).await?;
     }
 
     let invalid_tags = [
@@ -295,26 +272,54 @@ async fn accepts_only_exact_bare_or_docker_hub_local_image_names() -> Result<(),
                 .map(|repo_digest| (reference.clone(), repo_digest)),
         )
     {
-        let mut inspection: Value =
-            serde_json::from_str(&image_inspect(&images, "velnor-runner", identity, false))
-                .map_err(|error| error.to_string())?;
-        inspection["RepoTags"] = json!([tag]);
-        inspection["RepoDigests"] = json!([repo_digest]);
-        let docker = DockerStub::open(vec![
-            http(200, &engine_info("selected-engine", DOCKER_ROOT, "aarch64")),
-            http(
-                200,
-                &serde_json::to_string(&inspection).map_err(|error| error.to_string())?,
-            ),
-        ])?;
+        assert_image_name_case(&images, &expected, identity, tag, repo_digest, false).await?;
+    }
+    Ok(())
+}
 
-        let result = verify_worker_images_for_engine(&docker.docker, &expected, &images).await;
-        let requests = docker.finish().await?;
+async fn assert_image_name_case(
+    images: &VerifiedWorkerImages,
+    expected: &SelectedEngineContext,
+    identity: &VerifiedImageIdentity,
+    tag: String,
+    repo_digest: String,
+    accepted: bool,
+) -> Result<(), String> {
+    let mut inspection: Value =
+        serde_json::from_str(&image_inspect(images, "velnor-runner", identity, false))
+            .map_err(|error| error.to_string())?;
+    inspection["RepoTags"] = json!([tag]);
+    inspection["RepoDigests"] = json!([repo_digest]);
+    let mut responses = vec![
+        http(200, &engine_info("selected-engine", DOCKER_ROOT, "aarch64")),
+        http(
+            200,
+            &serde_json::to_string(&inspection).map_err(|error| error.to_string())?,
+        ),
+    ];
+    if accepted {
+        responses.push(http(
+            200,
+            &image_inspect(images, "velnor-dind", images.dind(), false),
+        ));
+        responses.push(http(
+            200,
+            &engine_info("selected-engine", DOCKER_ROOT, "aarch64"),
+        ));
+    }
+    let docker = DockerStub::open(responses)?;
 
+    let result = verify_worker_images_for_engine(&docker.docker, expected, images).await;
+    let requests = docker.finish().await?;
+
+    if accepted {
+        assert_eq!(result, Ok(()));
+        assert_eq!(requests.len(), 4);
+    } else {
         assert!(result.is_err());
         assert_eq!(requests.len(), 2);
-        assert!(requests[1].contains("/images/"));
     }
+    assert!(requests[1].contains("/images/"));
     Ok(())
 }
 

@@ -277,7 +277,7 @@ fn authoritative_read_failure_main_read() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn authoritative_read_failure_ci_read() -> Result<(), Box<dyn Error>> {
-    assert_authoritative_read_failure("absent", "ci-read", "CI run response is invalid")
+    assert_authoritative_read_failure("absent", "ci-read", "CI run lookup failed")
 }
 
 #[test]

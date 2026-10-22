@@ -21,11 +21,11 @@ use super::{
 
 #[tokio::test]
 async fn no_effect_ack_loss_reopens_and_replays_before_admission() -> Result<(), String> {
-    let case = prepare_case(
+    let case = Box::pin(prepare_case(
         "ack-replay",
         exchange(200, r#"{"count":0,"value":[]}"#),
         RequestAcquireState::NoEffect,
-    )
+    ))
     .await?;
     let first = finish_ack(
         &case.fixture,
@@ -97,11 +97,11 @@ async fn no_effect_ack_loss_reopens_and_replays_before_admission() -> Result<(),
 
 #[tokio::test]
 async fn rejected_acquire_keeps_the_queue_message_unacknowledged() -> Result<(), String> {
-    let case = prepare_case(
+    let case = Box::pin(prepare_case(
         "rejected-replay",
         exchange(403, "{}"),
         RequestAcquireState::Rejected,
-    )
+    ))
     .await?;
     let first = finish_ack(
         &case.fixture,

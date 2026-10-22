@@ -33,6 +33,15 @@ fn network() -> NetworkInspect {
     }
 }
 
+fn assert_network_rejected(
+    inspect: &NetworkInspect,
+    expected_name: &str,
+    expected_id: &str,
+    expected_labels: &BTreeMap<String, String>,
+) {
+    assert!(validate_network(inspect, expected_name, expected_id, expected_labels).is_err());
+}
+
 #[test]
 fn network_name_and_id_are_strict() {
     assert!(valid_network_name(
@@ -56,14 +65,11 @@ fn inspect_accepts_only_the_exact_empty_egress_network() {
 
     let mut internal = network();
     internal.internal = Some(true);
-    assert!(
-        validate_network(
-            &internal,
-            "velnor-v0123456789abcdef0123456789abcdef-private",
-            &"a".repeat(64),
-            &labels(),
-        )
-        .is_err()
+    assert_network_rejected(
+        &internal,
+        "velnor-v0123456789abcdef0123456789abcdef-private",
+        &"a".repeat(64),
+        &labels(),
     );
 
     let mut occupied = network();
@@ -71,83 +77,62 @@ fn inspect_accepts_only_the_exact_empty_egress_network() {
         "foreign".to_owned(),
         EndpointResource::default(),
     )]));
-    assert!(
-        validate_network(
-            &occupied,
-            "velnor-v0123456789abcdef0123456789abcdef-private",
-            &"a".repeat(64),
-            &labels(),
-        )
-        .is_err()
+    assert_network_rejected(
+        &occupied,
+        "velnor-v0123456789abcdef0123456789abcdef-private",
+        &"a".repeat(64),
+        &labels(),
     );
 
     let mut attachable = network();
     attachable.attachable = Some(true);
-    assert!(
-        validate_network(
-            &attachable,
-            "velnor-v0123456789abcdef0123456789abcdef-private",
-            &"a".repeat(64),
-            &labels(),
-        )
-        .is_err()
+    assert_network_rejected(
+        &attachable,
+        "velnor-v0123456789abcdef0123456789abcdef-private",
+        &"a".repeat(64),
+        &labels(),
     );
 
     let mut ingress = network();
     ingress.ingress = Some(true);
-    assert!(
-        validate_network(
-            &ingress,
-            "velnor-v0123456789abcdef0123456789abcdef-private",
-            &"a".repeat(64),
-            &labels(),
-        )
-        .is_err()
+    assert_network_rejected(
+        &ingress,
+        "velnor-v0123456789abcdef0123456789abcdef-private",
+        &"a".repeat(64),
+        &labels(),
     );
 
     let mut ipv6 = network();
     ipv6.enable_ipv6 = Some(true);
-    assert!(
-        validate_network(
-            &ipv6,
-            "velnor-v0123456789abcdef0123456789abcdef-private",
-            &"a".repeat(64),
-            &labels(),
-        )
-        .is_err()
+    assert_network_rejected(
+        &ipv6,
+        "velnor-v0123456789abcdef0123456789abcdef-private",
+        &"a".repeat(64),
+        &labels(),
     );
 
     let mut wrong_driver = network();
     wrong_driver.driver = Some("macvlan".to_owned());
-    assert!(
-        validate_network(
-            &wrong_driver,
-            "velnor-v0123456789abcdef0123456789abcdef-private",
-            &"a".repeat(64),
-            &labels(),
-        )
-        .is_err()
+    assert_network_rejected(
+        &wrong_driver,
+        "velnor-v0123456789abcdef0123456789abcdef-private",
+        &"a".repeat(64),
+        &labels(),
     );
 
-    assert!(
-        validate_network(
-            &network(),
-            "velnor-v0123456789abcdef0123456789abcdef-private",
-            &"b".repeat(64),
-            &labels(),
-        )
-        .is_err()
+    assert_network_rejected(
+        &network(),
+        "velnor-v0123456789abcdef0123456789abcdef-private",
+        &"b".repeat(64),
+        &labels(),
     );
 
     let mut foreign_labels = labels();
     foreign_labels.insert("io.velnor.connection-id".to_owned(), "other".to_owned());
-    assert!(
-        validate_network(
-            &network(),
-            "velnor-v0123456789abcdef0123456789abcdef-private",
-            &"a".repeat(64),
-            &foreign_labels,
-        )
-        .is_err()
+    assert_network_rejected(
+        &network(),
+        "velnor-v0123456789abcdef0123456789abcdef-private",
+        &"a".repeat(64),
+        &foreign_labels,
     );
 }
