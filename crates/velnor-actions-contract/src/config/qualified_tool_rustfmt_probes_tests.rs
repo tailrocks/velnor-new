@@ -131,6 +131,7 @@ fn formatter_declarations_reject_every_alternate_probe_even_with_parent_version(
             ) {
                 super::super::probes::validate_recipe_probe(
                     &invalid.version,
+                    &invalid.backend,
                     CheckPlatform::MacosArm64,
                     executable,
                     "test",
