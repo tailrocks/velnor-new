@@ -125,23 +125,27 @@ async fn mark_uncertain(
     }).await
 }
 
-fn proof_matches(
-    claim: &StorageInitializationClaim,
+struct StorageInitializerIdentity<'a> {
     reservation_id: i64,
     operation_id: i64,
     generation: i64,
-    operation_key: &str,
-    engine_id: &str,
-    docker_root_digest: &str,
-    helper_name: &str,
+    operation_key: &'a str,
+    engine_id: &'a str,
+    docker_root_digest: &'a str,
+    helper_name: &'a str,
+}
+
+fn proof_matches(
+    claim: &StorageInitializationClaim,
+    proof: &StorageInitializerIdentity<'_>,
 ) -> bool {
-    reservation_id == claim.reservation_id
-        && operation_id == claim.operation_id
-        && generation == claim.generation
-        && operation_key == claim.operation_key
-        && engine_id == claim.engine_id
-        && docker_root_digest == claim.docker_root_digest
-        && helper_name == claim.helper_name
+    proof.reservation_id == claim.reservation_id
+        && proof.operation_id == claim.operation_id
+        && proof.generation == claim.generation
+        && proof.operation_key == claim.operation_key
+        && proof.engine_id == claim.engine_id
+        && proof.docker_root_digest == claim.docker_root_digest
+        && proof.helper_name == claim.helper_name
 }
 
 pub(super) async fn ready_for_job_create(
