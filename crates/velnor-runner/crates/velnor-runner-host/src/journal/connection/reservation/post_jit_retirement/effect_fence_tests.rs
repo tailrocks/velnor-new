@@ -209,10 +209,74 @@ async fn listener_delivery_claim_prevents_retirement_claim() -> Result<(), HostE
 #[tokio::test]
 async fn startup_recovery_exposes_otherwise_eligible_retirement() -> Result<(), HostError> {
     let fixture = native_started_intake_fixture().await?;
-    super::test_support::recover_fixture(&fixture).await?;
-    let candidates = fixture.scope.recoverable_post_jit_retirements().await?;
+    let attempt_before = fixture
+        .scope
+        .current_physical_attempt(fixture.reservation_id)
+        .await?
+        .ok_or(HostError::Journal)?;
+    let reservation_before = fixture
+        .scope
+        .reservation(&fixture.reservation_assignment)
+        .await?
+        .ok_or(HostError::Journal)?;
+    let occupied_before = fixture.journal.occupied_reservation_count().await?;
+
+    let reopened = super::test_support::reopen_and_recover_fixture(&fixture).await?;
+    let binding =
+        crate::journal::request_lifecycle::tests::helpers::binding("native-started-intake", 101)
+            .map_err(|_| HostError::Identity)?;
+    let scope = reopened.existing_connection_scope(&binding).await?;
+    let attempt_after = scope
+        .current_physical_attempt(fixture.reservation_id)
+        .await?
+        .ok_or(HostError::Journal)?;
+    let reservation_after = scope
+        .reservation(&fixture.reservation_assignment)
+        .await?
+        .ok_or(HostError::Journal)?;
+    let candidates = scope.recoverable_post_jit_retirements().await?;
+
     assert_eq!(candidates.len(), 1);
     assert_eq!(candidates[0].reservation_id(), fixture.reservation_id);
+    assert_eq!(candidates[0].generation(), attempt_before.generation);
+    assert_eq!(candidates[0].intent_id(), attempt_before.intent_id);
+    assert_eq!(attempt_after, attempt_before);
+    assert_eq!(
+        reservation_after.reservation_id,
+        reservation_before.reservation_id
+    );
+    assert_eq!(
+        reservation_after.cpu_millicores,
+        reservation_before.cpu_millicores
+    );
+    assert_eq!(
+        reservation_after.memory_bytes,
+        reservation_before.memory_bytes
+    );
+    assert_eq!(
+        reopened.occupied_reservation_count().await?,
+        occupied_before
+    );
+
+    let mut rows = reopened
+        .connection()
+        .await?
+        .query(
+            "SELECT reservation.local_cleanup_proven,reservation.remote_cleanup_proven,(SELECT COUNT(*) FROM physical_attempt_post_jit_retirement_claims claim WHERE claim.reservation_id=reservation.id),(SELECT COUNT(*) FROM physical_attempt_post_jit_retirement_remote_absence remote WHERE remote.reservation_id=reservation.id) FROM capacity_reservations reservation WHERE reservation.id=?1",
+            [fixture.reservation_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let row = rows
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?;
+    assert_eq!(row.get::<i64>(0).map_err(|_| HostError::Journal)?, 0);
+    assert_eq!(row.get::<i64>(1).map_err(|_| HostError::Journal)?, 0);
+    assert_eq!(row.get::<i64>(2).map_err(|_| HostError::Journal)?, 0);
+    assert_eq!(row.get::<i64>(3).map_err(|_| HostError::Journal)?, 0);
+    assert!(rows.next().await.map_err(|_| HostError::Journal)?.is_none());
     Ok(())
 }
 

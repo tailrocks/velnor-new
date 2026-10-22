@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
-use super::{Observation, StartPermit, valid_generation_id};
+use super::{Observation, ObservationTestInput, StartPermit, valid_generation_id};
 
 impl StartPermit {
     pub(in crate::launch::resource_probe) fn test_is_valid_at(&self, now: Instant) -> bool {
@@ -101,16 +101,16 @@ fn fixture_with_guest_capacity(
         ancestor.cpuset_cpus_count = cpus;
     }
     record.cpu_ancestor_limits[0].cpu_quota_micros = Some(root_quota_micros);
-    let observation = Observation::test_new(
+    let observation = Observation::test_new(ObservationTestInput {
         record,
         cpus,
-        1234,
+        inspected_host_pid: 1234,
         memory_total_bytes,
-        engine_id.to_owned(),
+        engine_id: engine_id.to_owned(),
         docker_root_digest,
-        generation.to_owned(),
-        Instant::now(),
-    )
+        sample_generation_id: generation.to_owned(),
+        observed_at: Instant::now(),
+    })
     .expect("The observation in the test fixture does not match the probe record.");
     StartPermit {
         observation,

@@ -96,6 +96,7 @@ async fn prepare_native_started_fixture(
 > {
     let initialized =
         initialize_native_started_request(scope, request_id, filesystem_instance_digest).await?;
+    validate_initialized_reader_fixture(scope, &initialized).await?;
     let runner = velnor_runner_github::RunnerReference {
         id: 701,
         name: helpers::runner_name('a'),
@@ -115,6 +116,48 @@ async fn prepare_native_started_fixture(
     helpers::finish_listener_delivery_after_challenge(scope, &initialized.provisioned, &runner)
         .await?;
     Ok((initialized, runner, channel))
+}
+
+async fn validate_initialized_reader_fixture(
+    scope: &crate::journal::ConnectionJournal,
+    initialized: &helpers::JobFactsReaderFixture,
+) -> Result<(), crate::error::HostError> {
+    let reservation = scope
+        .reservation(&initialized.reservation_assignment)
+        .await?
+        .ok_or(crate::error::HostError::Journal)?;
+    let claim = &initialized.claim;
+    let handoff = &initialized.handoff;
+    let observed = &initialized.observed;
+    let ready = &initialized.ready;
+    if reservation.reservation_id != initialized.reservation_id
+        || reservation.initial_sample_generation_id.as_deref()
+            != Some(initialized.sample_generation_id.as_str())
+        || claim.connection_id() != scope.connection_id().as_str()
+        || claim.reservation_id() != reservation.reservation_id
+        || claim.operation_id() != initialized.intent_id
+        || handoff.connection_id() != scope.connection_id().as_str()
+        || handoff.reservation_id() != claim.reservation_id()
+        || handoff.operation_id() != claim.operation_id()
+        || handoff.generation() != claim.generation()
+        || handoff.engine_id() != claim.engine_id()
+        || handoff.docker_root_digest() != claim.docker_root_digest()
+        || claim.metadata_volume_name() != Some(handoff.metadata_volume_name())
+        || claim.metadata_volume_id() != Some(handoff.metadata_volume_id())
+        || ready.connection_id() != scope.connection_id().as_str()
+        || ready.reservation_id() != reservation.reservation_id
+        || ready.operation_id() != initialized.intent_id
+        || ready.layout_version() != claim.layout_version()
+        || ready.layout_digest() != handoff.layout_digest()
+        || observed.layout_digest() != handoff.layout_digest()
+        || observed.ready_digest() != handoff.ready_digest()
+        || ready.job_facts() != observed.job_facts()
+        || ready.metadata_root() != observed.metadata()
+        || ready.runtime_identity() != observed.runtime_identity()
+    {
+        return Err(crate::error::HostError::Identity);
+    }
+    Ok(())
 }
 
 async fn initialize_native_started_request(

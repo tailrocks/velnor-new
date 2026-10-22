@@ -15,8 +15,6 @@ mod settlement_schema;
 #[path = "pre_jit_cleanup_tests/version_downgrade.rs"]
 mod version_downgrade;
 
-use version_downgrade::{remove_v33_physical_attempt_schema, restore_v31_observer_guard};
-
 impl Scratch {
     fn new() -> Self {
         static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -132,58 +130,6 @@ async fn version_thirty_one_empty_fixture_upgrade_installs_only_the_typed_create
     if count != 0 {
         return Err("The upgrade must not invent create receipts.".to_owned());
     }
-    Ok(())
-}
-
-async fn remove_v32_pre_jit_schema(connection: &turso::Connection) -> Result<(), String> {
-    restore_v31_observer_guard(connection).await?;
-    super::super::storage_network::restore_v32_transition_for_test(connection)
-        .await
-        .map_err(|_| "Could not restore the version 32 network guard.")?;
-    remove_v33_physical_attempt_schema(connection).await?;
-    for trigger in [
-        "pre_jit_create_spec_insert_guard",
-        "pre_jit_create_spec_no_update",
-        "pre_jit_create_spec_no_delete",
-    ] {
-        connection
-            .execute(&format!("DROP TRIGGER {trigger}"), ())
-            .await
-            .map_err(|_| "The test create-spec trigger could not be removed.")?;
-    }
-    connection
-        .execute("DROP TABLE capacity_reservation_pre_jit_create_specs", ())
-        .await
-        .map_err(|_| "The test create-spec table could not be removed.")?;
-    for trigger in [
-        "pre_jit_cleanup_claim_insert_guard",
-        "pre_jit_cleanup_claim_update_guard",
-        "pre_jit_cleanup_claim_no_delete",
-        "pre_jit_cleanup_progress_insert_guard",
-        "pre_jit_cleanup_progress_update_guard",
-        "pre_jit_cleanup_progress_no_delete",
-    ] {
-        connection
-            .execute(&format!("DROP TRIGGER {trigger}"), ())
-            .await
-            .map_err(|_| "The test trigger could not be removed.")?;
-    }
-    connection
-        .execute(
-            "DROP TABLE capacity_reservation_pre_jit_cleanup_progress",
-            (),
-        )
-        .await
-        .map_err(|_| "The test progress table could not be removed.")?;
-    connection
-        .execute("DROP TABLE capacity_reservation_pre_jit_cleanup_claims", ())
-        .await
-        .map_err(|_| "The test claim table could not be removed.")?;
-    connection
-        .execute("PRAGMA user_version = 31", ())
-        .await
-        .map_err(|_| "The prior schema version could not be set.")?;
-
     Ok(())
 }
 

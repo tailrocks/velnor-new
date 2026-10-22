@@ -60,28 +60,7 @@ async fn scoped_acquire_returns_durable_single_use_continuation_and_rejects_repl
     let outcome = crate::launch::steps::acquire_scoped(&mut lane, &drive, &poll, permit, &expected)
         .await
         .map_err(|error| error.to_string())?;
-    let ScopedProvisioningOutcome::Acquired(token) = outcome else {
-        return Err("the acquired request did not return its continuation".to_owned());
-    };
-    assert_eq!(token.request().request_id(), Some(REQUEST_ID));
-    assert!(token.reservation_id() > 0);
-    assert!(token.intent_id() > 0);
-    assert_eq!(token.sample_generation_id().len(), 32);
-    assert_eq!(token.resource_budget().runner().nano_cpus, 1_000_000_000);
-    assert_eq!(token.charge(), (2_000, 8_589_934_592));
-    let physical_name = token.runner_name();
-    let nonce = physical_name
-        .strip_prefix('v')
-        .ok_or_else(|| "runner name lacks its version prefix".to_owned())?;
-    if !lower_hex(nonce, 32) {
-        return Err("runner name does not contain a stable 128-bit nonce".to_owned());
-    }
-    assert!(matches!(
-        token.physical_assignment().key(),
-        AssignmentKey::Remote { subject, .. } if subject == nonce
-    ));
-    assert_eq!(lane.methods, [Method::Post]);
-    assert!(lane.paths[0].ends_with("/acquirejobs"));
+    assert_acquired_continuation(&outcome, &lane)?;
     assert_eq!(
         fixture
             .scope
@@ -117,6 +96,35 @@ async fn scoped_acquire_returns_durable_single_use_continuation_and_rejects_repl
             .map_err(|error| error.to_string())?,
         1
     );
+    Ok(())
+}
+
+fn assert_acquired_continuation(
+    outcome: &ScopedProvisioningOutcome,
+    lane: &FakeLane,
+) -> Result<(), String> {
+    let ScopedProvisioningOutcome::Acquired(token) = outcome else {
+        return Err("the acquired request did not return its continuation".to_owned());
+    };
+    assert_eq!(token.request().request_id(), Some(REQUEST_ID));
+    assert!(token.reservation_id() > 0);
+    assert!(token.intent_id() > 0);
+    assert_eq!(token.sample_generation_id().len(), 32);
+    assert_eq!(token.resource_budget().runner().nano_cpus, 1_000_000_000);
+    assert_eq!(token.charge(), (2_000, 8_589_934_592));
+    let physical_name = token.runner_name();
+    let nonce = physical_name
+        .strip_prefix('v')
+        .ok_or_else(|| "runner name lacks its version prefix".to_owned())?;
+    if !lower_hex(nonce, 32) {
+        return Err("runner name does not contain a stable 128-bit nonce".to_owned());
+    }
+    assert!(matches!(
+        token.physical_assignment().key(),
+        AssignmentKey::Remote { subject, .. } if subject == nonce
+    ));
+    assert_eq!(lane.methods, [Method::Post]);
+    assert!(lane.paths[0].ends_with("/acquirejobs"));
     Ok(())
 }
 

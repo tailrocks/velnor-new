@@ -48,43 +48,7 @@ pub(super) async fn acquired_candidate_fixture() -> Result<AcquiredCandidateFixt
         scope.record_source_authorization(&request, &source).await?,
         SourceAuthorizationResult::Recorded
     );
-
-    let physical = scope
-        .assignment_identity(AssignmentKey::Remote {
-            kind: "runner".to_owned(),
-            subject: "a".repeat(32),
-        })
-        .await?;
-    let generation = "a".repeat(32);
-    let permit = StartPermit::test_fixture_with_engine_id(&generation, ENGINE_ID);
-    let root_digest = permit.docker_root_digest().to_owned();
-    let admission = fixture_storage_provisioning_admission(&permit)?;
-    let result = scope
-        .try_reserve_and_claim_request_acquire(
-            ReservationRequest {
-                assignment: &physical,
-                engine_id: ENGINE_ID,
-                docker_root_digest: &root_digest,
-                cpu_millicores: 2_000,
-                memory_bytes: JOB_MEMORY,
-                sample_generation_id: &generation,
-            },
-            permit,
-            admission,
-            &request,
-        )
-        .await?;
-    let RequestPhysicalReservationResult::AcquireClaimed {
-        reservation_id,
-        intent_id,
-    } = result
-    else {
-        return Err(HostError::Journal);
-    };
-    assert!(reservation_id > 0 && intent_id > 0);
-    scope
-        .record_request_acquire(&request, AssignedAcquireResult::Returned(vec![REQUEST_ID]))
-        .await?;
+    let reservation_id = claim_acquired_reservation(&scope, &request, REQUEST_ID).await?;
 
     let policy = config
         .validated_job_authority_policy(scope.connection_id())?
@@ -107,6 +71,50 @@ pub(super) async fn acquired_candidate_fixture() -> Result<AcquiredCandidateFixt
         binding,
         candidate,
     })
+}
+
+async fn claim_acquired_reservation(
+    scope: &crate::journal::ConnectionJournal,
+    request: &crate::journal::AssignmentIdentity,
+    request_id: i64,
+) -> Result<i64, HostError> {
+    let physical = scope
+        .assignment_identity(AssignmentKey::Remote {
+            kind: "runner".to_owned(),
+            subject: "a".repeat(32),
+        })
+        .await?;
+    let generation = "a".repeat(32);
+    let permit = StartPermit::test_fixture_with_engine_id(&generation, ENGINE_ID);
+    let root_digest = permit.docker_root_digest().to_owned();
+    let admission = fixture_storage_provisioning_admission(&permit)?;
+    let result = scope
+        .try_reserve_and_claim_request_acquire(
+            ReservationRequest {
+                assignment: &physical,
+                engine_id: ENGINE_ID,
+                docker_root_digest: &root_digest,
+                cpu_millicores: 2_000,
+                memory_bytes: JOB_MEMORY,
+                sample_generation_id: &generation,
+            },
+            permit,
+            admission,
+            request,
+        )
+        .await?;
+    let RequestPhysicalReservationResult::AcquireClaimed {
+        reservation_id,
+        intent_id,
+    } = result
+    else {
+        return Err(HostError::Journal);
+    };
+    assert!(reservation_id > 0 && intent_id > 0);
+    scope
+        .record_request_acquire(request, AssignedAcquireResult::Returned(vec![request_id]))
+        .await?;
+    Ok(reservation_id)
 }
 
 #[tokio::test]
