@@ -164,6 +164,66 @@ class PublisherTests(unittest.TestCase):
             with self.assertRaisesRegex(publish.PublishError, "No canonical"):
                 publish._check_ci(identity)
 
+    @staticmethod
+    def _ci_run(source: str) -> dict:
+        return {
+            "path": ".github/workflows/ci.yml", "event": "push", "head_branch": "main",
+            "head_sha": source, "head_repository": {"full_name": publish.REPOSITORY},
+            "run_number": 3, "run_attempt": 2, "id": 7,
+            "status": "completed", "conclusion": "success",
+        }
+
+    def test_ci_listing_queries_head_sha_only(self):
+        source = "a" * 40
+        with mock.patch.object(publish, "_api", return_value={"workflow_runs": [self._ci_run(source)]}) as api:
+            self.assertEqual(publish._check_ci(source, sleep=self.fail), {"run_id": 7, "run_attempt": 2})
+        path = api.call_args.args[0]
+        self.assertIn(f"/actions/workflows/ci.yml/runs?head_sha={source}&", path)
+        self.assertNotIn("branch=", path)
+        self.assertNotIn("event=", path)
+
+    def test_empty_ci_listing_is_retried_until_a_run_appears(self):
+        source = "a" * 40
+        responses = iter([{"workflow_runs": []}, {"workflow_runs": []}, {"workflow_runs": [self._ci_run(source)]}])
+        waits = []
+        with mock.patch.object(publish, "_api", side_effect=lambda _path: next(responses)) as api:
+            self.assertEqual(publish._check_ci(source, sleep=waits.append), {"run_id": 7, "run_attempt": 2})
+        self.assertEqual(api.call_count, 3)
+        self.assertEqual(waits, [3, 6])
+
+    def test_ci_listing_that_stays_empty_fails_closed(self):
+        waits = []
+        with mock.patch.object(publish, "_api", return_value={"workflow_runs": []}) as api:
+            with self.assertRaisesRegex(publish.PublishError, "No canonical"):
+                publish._check_ci("a" * 40, sleep=waits.append)
+        self.assertEqual(api.call_count, 6)
+        self.assertEqual(waits, [3, 6, 12, 24, 45])
+
+    def test_mismatched_ci_listing_is_not_retried(self):
+        source = "a" * 40
+        mismatches = (
+            {"event": "workflow_dispatch"}, {"head_branch": "feature"}, {"head_sha": "b" * 40},
+            {"path": ".github/workflows/other.yml"}, {"head_repository": {"full_name": "attacker/velnor-new"}},
+        )
+        for change in mismatches:
+            waits = []
+            with self.subTest(change=change), mock.patch.object(
+                    publish, "_api", return_value={"workflow_runs": [{**self._ci_run(source), **change}]}) as api:
+                with self.assertRaisesRegex(publish.PublishError, "No canonical"):
+                    publish._check_ci(source, sleep=waits.append)
+                self.assertEqual(api.call_count, 1)
+                self.assertEqual(waits, [])
+
+    def test_ci_listing_api_or_format_error_is_not_retried(self):
+        for side_effect in (publish.PublishError("GitHub CLI request failed."), [{"workflow_runs": None}], [[]]):
+            waits = []
+            with self.subTest(side_effect=side_effect), mock.patch.object(
+                    publish, "_api", side_effect=side_effect) as api:
+                with self.assertRaises(publish.PublishError):
+                    publish._check_ci("a" * 40, sleep=waits.append)
+                self.assertEqual(api.call_count, 1)
+                self.assertEqual(waits, [])
+
     def test_attestation_failure_is_generic_and_does_not_print_token(self):
         secret = identity_env()["GH_TOKEN"]
         with mock.patch.object(publish, "_gh", side_effect=publish.PublishError("verification failed")):

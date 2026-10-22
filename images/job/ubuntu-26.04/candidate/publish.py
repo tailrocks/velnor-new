@@ -14,6 +14,7 @@ import re
 import subprocess
 import tarfile
 import tempfile
+import time
 import tomllib
 from typing import Any, BinaryIO
 from urllib.parse import parse_qsl, unquote, urlencode, urljoin, urlsplit, urlunsplit
@@ -32,6 +33,10 @@ MAX_RESULT_BYTES = 64 * 1024
 MAX_UPLOAD_BYTES = candidate.MAX_BLOB_BYTES
 CHUNK_BYTES = 1024 * 1024
 TIMEOUT_SECONDS = 30
+# GitHub intermittently answers an exact head_sha workflow-run listing with no
+# runs. Only an empty listing is retried; any run, API error or malformed
+# response is final, and a listing that stays empty fails closed.
+CI_EMPTY_LISTING_RETRY_SECONDS = (3, 6, 12, 24, 45)
 
 
 class PublishError(ValueError):
@@ -208,13 +213,23 @@ def _check_artifact(identity: dict[str, Any]) -> None:
         _fail("Candidate artifact ID, expiry, or workflow run is incorrect.")
 
 
-def _check_ci(source: str) -> dict[str, Any]:
-    response = _api(
-        f"repos/{REPOSITORY}/actions/workflows/ci.yml/runs?head_sha={source}&branch=main&event=push&per_page=100"
-    )
-    if not isinstance(response, dict) or not isinstance(response.get("workflow_runs"), list):
-        _fail("Canonical CI run response has an incorrect format.")
-    runs = [run for run in response["workflow_runs"] if isinstance(run, dict)
+def _list_ci_runs(source: str, sleep: Any = time.sleep) -> list[Any]:
+    # head_sha only: the branch and event filters make GitHub return an empty
+    # listing more often. _check_ci keeps every identity check.
+    path = f"repos/{REPOSITORY}/actions/workflows/ci.yml/runs?head_sha={source}&per_page=100"
+    delays = iter(CI_EMPTY_LISTING_RETRY_SECONDS)
+    while True:
+        response = _api(path)
+        if not isinstance(response, dict) or not isinstance(response.get("workflow_runs"), list):
+            _fail("Canonical CI run response has an incorrect format.")
+        delay = next(delays, None)
+        if response["workflow_runs"] or delay is None:
+            return response["workflow_runs"]
+        sleep(delay)
+
+
+def _check_ci(source: str, sleep: Any = time.sleep) -> dict[str, Any]:
+    runs = [run for run in _list_ci_runs(source, sleep) if isinstance(run, dict)
             and run.get("path") == ".github/workflows/ci.yml"
             and run.get("event") == "push" and run.get("head_branch") == "main"
             and run.get("head_sha") == source
