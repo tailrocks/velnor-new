@@ -1,3 +1,24 @@
-# gitleaks and betterleaks configuration (betterleaks reads .gitleaks.toml when no .betterleaks.toml exists): upstream default rules only.
+# gitleaks and betterleaks configuration (betterleaks reads .gitleaks.toml when no .betterleaks.toml exists): upstream
+# default rules, plus one allowlist scoped as narrowly as the generated data allows. Every other reviewed finding stays an
+# exact fingerprint in .gitleaksignore / .betterleaksignore (#344).
 [extend]
 useDefault = true
+
+# Reason: a velnor `matrix_key` is a deterministic generated job-matrix id, `m-` followed by 16 hex digits
+# (velnor-actions-contract `MatrixKey`); it cannot be a credential. Every regeneration rewrites these ids in the generated
+# task manifest, its OpenTofu golden copies and the parity plan fixtures, so exact per-commit fingerprints would need new
+# entries after each regeneration. All three conditions must hold (AND): the generic-api-key rule, a `matrix_key`
+# key/value of exactly that shape (gitleaks reports the match from `matrix_key`, betterleaks from `key`), and one of the
+# files that carry these generated ids. Any other secret shape in those files, and any matrix key elsewhere, is still
+# reported.
+[[allowlists]]
+description = "velnor generated matrix_key ids in generated manifests, goldens and parity plan fixtures"
+condition = "AND"
+targetRules = ["generic-api-key"]
+regexTarget = "match"
+regexes = ['''(matrix_)?key"?\s*[:=]\s*"m-[0-9a-f]{16}"''']
+paths = [
+  '''^\.github/velnor/task-execution-manifest-v1\.json$''',
+  '''^docs/proposed/opentofu-goldens/cases/[^/]+/preview/\.github/velnor/task-execution-manifest-v1\.json$''',
+  '''^fixtures/parity/[^/]+/expected/plan-v1\.json$''',
+]
