@@ -1,7 +1,6 @@
 //! Release candidate builds, target assets, and qualification.
 
-use velnor_actions_contract::JobTimeout;
-use velnor_actions_contract::ReleaseTarget;
+use velnor_actions_contract::{JobTimeout, ReleaseTarget};
 
 use super::super::features::{base, finish};
 use super::archive;
@@ -156,10 +155,7 @@ pub(super) fn build_steps(
             &pins.install_intel_target_argv,
         )?);
     }
-    steps.push(workflow_steps::command_step(
-        crate::VERIFY_RUST_TOOLCHAIN_STEP,
-        &pins.verify_rust_argv,
-    )?);
+    steps.push(workflow_steps::verify_rust_step(pins)?);
     steps.extend([
         workflow_steps::bash_step("Build velnor-actions with MBX", &build),
         workflow_steps::bash_step(verify_name, verify),

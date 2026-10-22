@@ -48,7 +48,7 @@ pub(crate) fn toolchain_script(
         format!(
             "case \"$v\" in {cases}*) fail \"{NOT_CATALOGUED_CODE}: Rust $v has no channel-manifest digest in this Velnor catalog; upgrade velnor-actions or pin a catalogued Rust\";; esac"
         ),
-        "rh=\"${RUSTUP_HOME:-$HOME/.rustup}\"".to_owned(),
+        "rh=\"${RUSTUP_HOME:-${MISE_RUSTUP_HOME:-$HOME/.rustup}}\"".to_owned(),
         "r=\"$RUNNER_TEMP/velnor/rust-verified\"".to_owned(),
         "d=\"$RUNNER_TEMP/velnor/rust-manifest\"".to_owned(),
         "rm -rf \"$d\"".to_owned(),

@@ -154,10 +154,7 @@ pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Y
                 vec![
                     generator_release::mise_setup_step(pins, ReleaseTarget::MacosArm64)?,
                     run_step("Install pinned Rust and MBX", &install),
-                    run_step(
-                        crate::VERIFY_RUST_TOOLCHAIN_STEP,
-                        &join_argv_for_run(&pins.verify_rust_argv)?,
-                    ),
+                    generator_release::verify_rust_step(pins)?,
                     run_step("Build velnor-host with MBX", &build),
                     run_step("Verify Mach-O architecture", BINARY_VERIFY),
                     run_step("Checksum built bytes", BINARY_SUM),

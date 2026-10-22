@@ -31,7 +31,7 @@ pub(super) fn job(
             "Install pinned qualification tools",
             &pins.install_qualify_tools_argv,
         )?,
-        workflow_steps::command_step(crate::VERIFY_RUST_TOOLCHAIN_STEP, &pins.verify_rust_argv)?,
+        workflow_steps::verify_rust_step(pins)?,
     ];
     action_steps.extend(assets::download_build_steps(
         job.product,

@@ -111,6 +111,18 @@ directly after the Rust install in every other generated job:
 | `.github/actions/generator-release-qualify-*` | release qualification |
 | `qualification.yml` | `mbx-cache-write-hosted`, `mbx-cache-read-hosted` (the toolchain is put on `PATH` only after the check) |
 | `freshness.yml` | `freshness` |
+| `binary-release.yml`, `binary-preview.yml` | every payload producer, after `Install pinned Cargo metadata toolchain` and before `Fetch Cargo sources` |
+
+Two more job kinds run on the owned homes with the tools cache, so they also
+get `Verify restored Rust toolchain` before their install:
+
+| File | Job |
+|---|---|
+| `ci.yml` | every `image-*` job that builds a Cargo binary into an image |
+| `suites.yml` and the suite jobs in `ci.yml` | every declared Rust test suite job (build, run, sharded) |
+
+The default-home jobs resolve the rustup home as `RUSTUP_HOME`, then
+`MISE_RUSTUP_HOME`, then `$HOME/.rustup`, which is where Mise installs it.
 
 `ProductReleasePins`, `MbxQualificationPins` and `FreshnessSpec` carry the
 argv (`verify_rust_argv`), built by the orchestrator from the catalog.

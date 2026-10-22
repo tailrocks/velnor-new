@@ -21,8 +21,8 @@ mod suite_steps;
 #[path = "rust_suites_tests.rs"]
 mod tests;
 use suite_steps::{
-    compile_driver_steps, install_suite_tools_steps, nextest_archive_step, nextest_run_step,
-    restored_rust_step,
+    append_suite_artifact_uploads, compile_driver_steps, install_suite_tools_steps,
+    nextest_archive_step, nextest_run_step, restored_rust_step,
 };
 
 /// Specification for rendering declared Rust test suite jobs and workflows.
@@ -348,50 +348,6 @@ fn build_sharded_inline_job(
         Vec::new(),
         job_steps,
     ))
-}
-
-fn append_suite_artifact_uploads(
-    job_steps: &mut Vec<Step>,
-    suite: &RustSuiteConfig,
-    sharded: bool,
-) -> Result<(), RenderError> {
-    let name = &suite.id;
-    let id_prefix = format!("{name}-");
-    for artifact in &suite.artifacts {
-        let resolved_label = artifact
-            .name
-            .replace("{shard}", if sharded { "${{ matrix.shard }}" } else { "1" })
-            .replace(
-                "{partition}",
-                if sharded { "${{ matrix.shard }}" } else { "1" },
-            );
-        let has_id_prefix = resolved_label == *name || resolved_label.starts_with(&id_prefix);
-        let needs_shard_suffix = sharded && !resolved_label.contains("${{ matrix.shard }}");
-        let artifact_name = match (has_id_prefix, needs_shard_suffix) {
-            (true, true) => format!(
-                "velnor-suite-{}-{resolved_label}-s${{{{ matrix.shard }}}}",
-                steps::RUN_KEY_EXPR
-            ),
-            (true, false) => format!("velnor-suite-{}-{resolved_label}", steps::RUN_KEY_EXPR),
-            (false, true) => format!(
-                "velnor-suite-{}-{name}-s${{{{ matrix.shard }}}}-{resolved_label}",
-                steps::RUN_KEY_EXPR
-            ),
-            (false, false) => format!(
-                "velnor-suite-{}-{name}-{resolved_label}",
-                steps::RUN_KEY_EXPR
-            ),
-        };
-        let path = artifact.paths.join("\n");
-        job_steps.push(steps::upload_suite_artifact_step(
-            &format!("Upload suite artifact ({})", artifact.name),
-            &artifact_name,
-            &path,
-            u32::from(artifact.retention_days),
-            artifact.when,
-        )?);
-    }
-    Ok(())
 }
 
 fn suite_job_record(

@@ -4,6 +4,9 @@
 
 use std::path::{Path, PathBuf};
 
+#[path = "rust_install_audit.rs"]
+mod rust_install_audit;
+
 use velnor_actions_actionlint::render_actionlint_yaml;
 use velnor_actions_contract::{ExecutionMode, expand_workflow};
 use velnor_actions_workflow_renderer::guard::{self, SafeTreePath};
@@ -203,8 +206,8 @@ fn render_all(
         )?);
     }
     extra.extend(rendered.shared);
-    crate::rust_install_audit::audit(&extra)?;
-    crate::rust_install_audit::audit(&[velnor_actions_workflow_renderer::render::RenderedFile {
+    rust_install_audit::audit(&extra)?;
+    rust_install_audit::audit(&[velnor_actions_workflow_renderer::render::RenderedFile {
         path: velnor_actions_workflow_renderer::render::WORKFLOW_PATH.to_owned(),
         bytes: workflow.clone(),
     }])?;
