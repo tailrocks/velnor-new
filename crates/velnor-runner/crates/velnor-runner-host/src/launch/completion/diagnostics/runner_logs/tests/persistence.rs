@@ -8,7 +8,7 @@ use crate::launch::completion::diagnostics::stage::OperationKey;
 use crate::launch::completion::diagnostics::{DiagnosticsRoot, scope_component};
 use sha2::{Digest, Sha256};
 
-use super::super::{LOG_PATH, RunnerLogStageRequest};
+use super::super::RunnerLogStageRequest;
 use super::common::valid_archive;
 
 #[test]
@@ -240,6 +240,5 @@ fn request_rejects_an_operation_key_from_another_connection() -> Result<(), Stri
     }
     drop(root);
     fs::remove_dir_all(state).map_err(|error| error.to_string())?;
-    let _ = LOG_PATH;
     Ok(())
 }

@@ -34,13 +34,6 @@ pub(in crate::launch::resource_probe::provider) enum WorkerImage {
 }
 
 impl WorkerImage {
-    pub(in crate::launch::resource_probe::provider) fn archive_name(self) -> &'static str {
-        match self {
-            Self::Runner => "velnor-runner-linux-amd64.tar",
-            Self::Dind => "velnor-dind-linux-amd64.tar",
-        }
-    }
-
     pub(in crate::launch::resource_probe::provider) fn image_name(self) -> &'static str {
         match self {
             Self::Runner => "velnor-runner",

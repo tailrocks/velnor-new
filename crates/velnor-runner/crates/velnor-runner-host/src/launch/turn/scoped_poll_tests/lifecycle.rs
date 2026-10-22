@@ -87,7 +87,7 @@ async fn started_only_event_is_stored_before_ack_and_replay_is_idempotent() -> R
             session_id: "session-scoped-poll",
             allocation: &allocation,
             polled: &polled,
-            attempt: attempt,
+            attempt,
             handled: async { Ok((decision, true)) },
             cursor: 0,
         })
@@ -207,7 +207,7 @@ async fn empty_poll_is_delete_candidate_but_has_no_event_ack() -> Result<(), Str
             session_id: "session-scoped-poll",
             allocation: &allocation,
             polled: &Poll::Empty,
-            attempt: attempt,
+            attempt,
             handled: async {
                 Ok((
                     IntakeDecision {

@@ -1,4 +1,7 @@
-use super::{effective_config_matches, merge_environment, merge_labels};
+use super::{
+    effective_config_matches, has_no_published_ports, merge_environment, merge_labels,
+    security_matches,
+};
 use std::collections::{BTreeMap, HashMap};
 
 #[test]
@@ -132,4 +135,162 @@ fn inspect_accepts_verified_image_defaults_and_rejects_unexpected_config() {
         .expect("labels")
         .insert("io.velnor.injected".to_owned(), "true".to_owned());
     assert!(!effective_config_matches(&extra_label, &image, &request).expect("valid labels"));
+}
+
+fn runner_capability_names() -> Vec<String> {
+    [
+        "CHOWN",
+        "DAC_OVERRIDE",
+        "FOWNER",
+        "FSETID",
+        "KILL",
+        "SETGID",
+        "SETUID",
+        "SETPCAP",
+        "NET_BIND_SERVICE",
+        "NET_RAW",
+        "SYS_CHROOT",
+        "MKNOD",
+        "AUDIT_WRITE",
+        "SETFCAP",
+    ]
+    .map(str::to_owned)
+    .to_vec()
+}
+
+fn expected_runner_security() -> bollard::models::HostConfig {
+    bollard::models::HostConfig {
+        cap_drop: Some(vec!["ALL".to_owned()]),
+        cap_add: Some(runner_capability_names()),
+        security_opt: Some(vec![crate::worker::seccomp::runner_security_opt()]),
+        ..Default::default()
+    }
+}
+
+fn compact_runner_profile() -> String {
+    let profile = crate::worker::seccomp::runner_security_opt();
+    let json = serde_json::from_str::<serde_json::Value>(
+        profile.strip_prefix("seccomp=").expect("seccomp prefix"),
+    )
+    .expect("pinned profile JSON");
+    let compact_profile = format!(
+        "seccomp={}",
+        serde_json::to_string(&json).expect("compact profile JSON")
+    );
+    compact_profile
+}
+
+fn observed_runner_security() -> bollard::models::HostConfig {
+    let cap_add = runner_capability_names()
+        .into_iter()
+        .rev()
+        .map(|value| format!("CAP_{value}"))
+        .collect();
+    bollard::models::HostConfig {
+        cap_drop: Some(vec!["CAP_ALL".to_owned()]),
+        cap_add: Some(cap_add),
+        security_opt: Some(vec![compact_runner_profile()]),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn observed_runner_capabilities_are_exact_sets_with_docker_prefix_normalization() {
+    assert!(security_matches(
+        &observed_runner_security(),
+        &expected_runner_security()
+    ));
+}
+
+#[test]
+fn observed_runner_rejects_duplicate_extra_and_missing_capabilities() {
+    let expected = expected_runner_security();
+    let observed = observed_runner_security();
+    let duplicate_cap = bollard::models::HostConfig {
+        cap_add: Some({
+            let mut caps = observed.cap_add.clone().expect("observed capabilities");
+            caps.push("SETFCAP".to_owned());
+            caps
+        }),
+        ..observed.clone()
+    };
+    assert!(!security_matches(&duplicate_cap, &expected));
+
+    let extra_cap = bollard::models::HostConfig {
+        cap_add: Some({
+            let mut caps = runner_capability_names();
+            caps.push("SYS_ADMIN".to_owned());
+            caps
+        }),
+        ..observed.clone()
+    };
+    assert!(!security_matches(&extra_cap, &expected));
+
+    let missing_cap = bollard::models::HostConfig {
+        cap_add: Some(
+            runner_capability_names()
+                .into_iter()
+                .filter(|capability| capability != "NET_RAW")
+                .collect(),
+        ),
+        ..observed.clone()
+    };
+    assert!(!security_matches(&missing_cap, &expected));
+}
+
+#[test]
+fn observed_runner_rejects_seccomp_drift_and_additional_security_options() {
+    let expected = expected_runner_security();
+    let observed = observed_runner_security();
+    let unconfined = bollard::models::HostConfig {
+        security_opt: Some(vec!["seccomp=unconfined".to_owned()]),
+        ..observed.clone()
+    };
+    assert!(!security_matches(&unconfined, &expected));
+
+    let extra_security = bollard::models::HostConfig {
+        security_opt: Some(vec![
+            compact_runner_profile(),
+            "no-new-privileges".to_owned(),
+        ]),
+        ..observed
+    };
+    assert!(!security_matches(&extra_security, &expected));
+}
+
+#[test]
+fn privileged_dind_has_no_runner_capability_or_seccomp_overrides() {
+    let expected = bollard::models::HostConfig::default();
+    let observed = bollard::models::HostConfig {
+        cap_add: Some(Vec::new()),
+        cap_drop: Some(Vec::new()),
+        security_opt: Some(Vec::new()),
+        ..Default::default()
+    };
+    assert!(security_matches(&observed, &expected));
+
+    let runner_profile = bollard::models::HostConfig {
+        security_opt: Some(vec![crate::worker::seccomp::runner_security_opt()]),
+        ..Default::default()
+    };
+    assert!(!security_matches(&runner_profile, &expected));
+}
+
+#[test]
+fn observed_pair_must_not_publish_host_ports() {
+    assert!(has_no_published_ports(
+        &bollard::models::HostConfig::default()
+    ));
+    assert!(has_no_published_ports(&bollard::models::HostConfig {
+        publish_all_ports: Some(false),
+        ..Default::default()
+    }));
+    assert!(!has_no_published_ports(&bollard::models::HostConfig {
+        publish_all_ports: Some(true),
+        ..Default::default()
+    }));
+    assert!(!has_no_published_ports(&bollard::models::HostConfig {
+        port_bindings: Some(HashMap::from([("2375/tcp".to_owned(), None)])),
+        ..Default::default()
+    }));
 }

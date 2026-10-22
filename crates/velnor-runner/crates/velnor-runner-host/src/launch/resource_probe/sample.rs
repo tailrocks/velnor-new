@@ -322,13 +322,6 @@ impl StartPermit {
         )
     }
 
-    #[cfg(test)]
-    pub(crate) fn stale_observation_witness(&self) -> StartObservationWitness {
-        let mut witness = self.observation_witness();
-        witness.observed_at -= MAX_OBSERVATION_AGE + Duration::from_millis(1);
-        witness
-    }
-
     pub(crate) const fn charge(&self) -> (u64, u64) {
         (self.cpu_millicores, self.memory_bytes)
     }

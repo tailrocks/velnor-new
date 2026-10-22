@@ -1,22 +1,6 @@
-use super::{ExecutionChannelDirectory, PublicationRecoveryProjection};
+use super::PublicationRecoveryProjection;
 
 impl PublicationRecoveryProjection {
-    pub(in crate::launch::resource_probe::publication) fn operation_id(&self) -> &str {
-        &self.operation_id
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn instance_id(&self) -> &str {
-        &self.instance_id
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn engine_id(&self) -> &str {
-        &self.engine_id
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn docker_root_digest(&self) -> &str {
-        &self.docker_root_digest
-    }
-
     pub(in crate::launch::resource_probe::publication) fn projection_digest(&self) -> &str {
         &self.projection_digest
     }
@@ -33,16 +17,6 @@ impl PublicationRecoveryProjection {
         &self,
     ) -> &str {
         &self.metadata_volume_mountpoint
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn expected_payload_sha256(&self) -> &str {
-        &self.expected_payload_sha256
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn runner_directory(
-        &self,
-    ) -> &ExecutionChannelDirectory {
-        &self.runner_directory
     }
 
     pub(in crate::launch::resource_probe::publication) fn matches_record(
@@ -74,22 +48,6 @@ impl PublicationRecoveryProjection {
 
     pub(in crate::launch::resource_probe::publication) fn operation_name(&self) -> &str {
         &self.operation_name
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn runtime_image_id(&self) -> &str {
-        &self.runtime_image_id
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn source_revision(&self) -> &str {
-        &self.source_revision
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn image_binding_digest(&self) -> &str {
-        &self.image_binding_digest
-    }
-
-    pub(in crate::launch::resource_probe::publication) fn guest_boot_id(&self) -> &str {
-        &self.guest_boot_id
     }
 
     pub(in crate::launch::resource_probe::publication) fn metadata_operation_id(&self) -> String {

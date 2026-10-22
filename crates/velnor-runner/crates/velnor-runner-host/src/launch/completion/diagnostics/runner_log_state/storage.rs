@@ -112,13 +112,7 @@ fn allowed_transition(current: &CaptureState, next: &CaptureState) -> bool {
                 && current.projection_bytes == next.projection_bytes
                 && current.has_trace == next.has_trace
         }
-        (CapturePhase::Terminal, CapturePhase::Prepared) => {
-            current.attempt.checked_add(1) == Some(next.attempt)
-                && next.exec_id.is_none()
-                && next.create_requests == 0
-                && next.start_requests == 0
-        }
-        (CapturePhase::ProjectionPending, CapturePhase::Prepared) => {
+        (CapturePhase::Terminal | CapturePhase::ProjectionPending, CapturePhase::Prepared) => {
             current.attempt.checked_add(1) == Some(next.attempt)
                 && next.exec_id.is_none()
                 && next.create_requests == 0
@@ -145,11 +139,12 @@ fn write_or_recover_temp(
             validate_file(&file, STATE_BYTES)?;
             let mut file = File::from(file);
             let mut staged = Vec::new();
-            let mut reader = (&mut file).take((STATE_BYTES + 1) as u64);
-            reader
-                .read_to_end(&mut staged)
-                .map_err(|_| HostError::Path)?;
-            drop(reader);
+            {
+                let mut reader = (&mut file).take((STATE_BYTES + 1) as u64);
+                reader
+                    .read_to_end(&mut staged)
+                    .map_err(|_| HostError::Path)?;
+            }
             if staged != bytes {
                 return Err(HostError::Ownership);
             }

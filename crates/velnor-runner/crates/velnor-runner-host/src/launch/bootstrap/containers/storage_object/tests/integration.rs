@@ -80,11 +80,12 @@ async fn unrelated_fresh_sample_cannot_create_object_for_original_reservation() 
     let fixture = physical_fixture("typed-volume-recovery-sample").await?;
     let recovery_permit = StartPermit::test_fixture_with_engine_id(&"b".repeat(32), ENGINE_ID);
     let observation = recovery_permit.observation_witness();
-    assert_ne!(observation.sample_generation_id(), &"a".repeat(32));
+    let sample_generation_id = recovery_permit.sample_generation_id();
+    assert_ne!(sample_generation_id, &"a".repeat(32));
     assert!(observation.is_fresh_for(
         ENGINE_ID,
         fixture.selected.docker_root_digest(),
-        observation.sample_generation_id(),
+        sample_generation_id,
     ));
 
     let mut responses = Vec::new();

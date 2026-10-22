@@ -112,6 +112,10 @@ pub(crate) struct VerifiedImageIdentity {
 }
 
 impl VerifiedImageIdentity {
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "transfers ownership of the verified image proof into its checked receipt"
+    )]
     fn from_proof(proof: VerifiedWorkerImageIdentityProof) -> Result<Self, HostError> {
         let image_index_digest = proof.image_index_digest().to_owned();
         let runtime_id = proof.runtime_id().to_owned();

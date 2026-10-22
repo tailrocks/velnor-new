@@ -41,7 +41,6 @@ pub(in crate::launch) struct VerifiedCleanupObserverRecord {
     operation_id: String,
     engine_id: String,
     docker_root_digest: String,
-    binding_sha256: String,
     record: CleanupObserverRecord,
 }
 
@@ -60,10 +59,6 @@ impl VerifiedCleanupObserverRecord {
 
     pub(in crate::launch) fn docker_root_digest(&self) -> &str {
         &self.docker_root_digest
-    }
-
-    pub(in crate::launch) fn binding_sha256(&self) -> &str {
-        &self.binding_sha256
     }
 
     pub(in crate::launch) fn record(&self) -> &CleanupObserverRecord {
@@ -118,7 +113,6 @@ struct PreparedObservation {
     reservation_id: i64,
     projection: super::projection::ProbeProjection,
     request_json: String,
-    binding_sha256: String,
     engine_id: String,
     root: super::projection::DockerRoot,
     daemon_architecture: String,
@@ -238,7 +232,7 @@ async fn prepare_request(
     let request = velnor_resource_probe::cleanup_observer_wire::CleanupObserverRequest {
         schema_version: 1,
         operation_id: operation_id.clone(),
-        binding_sha256: binding_sha256.clone(),
+        binding_sha256,
         binding: binding.clone(),
     };
     velnor_resource_probe::cleanup_observer_wire::validate_request(&request)
@@ -283,7 +277,6 @@ async fn prepare_request(
         reservation_id,
         projection,
         request_json,
-        binding_sha256,
         engine_id,
         root,
         daemon_architecture,
@@ -324,7 +317,6 @@ async fn execute_and_verify(
         operation_id: prepared.projection.operation_id,
         engine_id: prepared.engine_id,
         docker_root_digest: prepared.root.digest().to_owned(),
-        binding_sha256: prepared.binding_sha256,
         record,
     })
 }

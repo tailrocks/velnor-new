@@ -29,6 +29,7 @@ mod mounts;
 mod projection;
 mod projection_types;
 mod resource_budget;
+pub(crate) mod seccomp;
 pub(crate) mod storage_initialization;
 #[cfg(all(test, unix))]
 mod volumes_tests;
