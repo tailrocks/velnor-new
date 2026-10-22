@@ -94,6 +94,11 @@ mod tool_seed_test_support;
 pub mod toolchain_env;
 pub mod tree;
 pub mod upgrades;
+
+/// Display name of the step that verifies an installed Rust toolchain file
+/// by file against its pinned channel manifest; every generated job that
+/// installs Rust runs it before the toolchain is used.
+pub const VERIFY_RUST_TOOLCHAIN_STEP: &str = "Verify Rust channel manifest";
 pub mod verification_jobs;
 mod workflow_policy;
 mod workflow_size;

@@ -39,8 +39,8 @@ pub(crate) use workflow_policy::jactionlint_verify_step::{
 };
 pub(crate) use workflow_policy::prepare_rust_components_step;
 pub(crate) use workflow_policy::rust_manifest_step::{
-    NOT_CATALOGUED_CODE, VERIFY_RUST_MANIFEST_STEP, verify_restored_rust_step,
-    verify_rust_manifest_step,
+    NOT_CATALOGUED_CODE, ToolchainPhase, VERIFY_RUST_MANIFEST_STEP, toolchain_script,
+    verify_restored_rust_step, verify_rust_argv, verify_rust_manifest_step, verify_rust_owned_argv,
 };
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;

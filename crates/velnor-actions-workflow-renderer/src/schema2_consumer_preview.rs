@@ -70,6 +70,8 @@ pub struct ConsumerReleaseSpec {
     pub install_gh_argv: Vec<String>,
     /// Exact pinned metadata compiler installation argv, before source discovery.
     pub install_rust_argv: Vec<String>,
+    /// `sh -c` argv verifying that install file by file, before any use.
+    pub verify_rust_argv: Vec<String>,
     /// Explicit P08 probe/fetch steps for every lockful workspace runtime discovers.
     pub producer_source_prep: Vec<Step>,
     /// Shared owned homes for installation, source preparation, and offline metadata.
