@@ -1,4 +1,6 @@
-use super::{ASSETS, LINUX, MACOS_ARM64, MACOS_X86_64, ProductAsset, VERSION, build_steps};
+use super::{
+    ASSETS, LINUX, MACOS_ARM64, MACOS_X86_64, ProductAsset, VERSION, build_steps, ci_check_script,
+};
 
 use crate::yaml::Yaml;
 
@@ -219,5 +221,7 @@ fn write_executable(path: &Path, contents: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+#[path = "schema2_generator_release_assets_ci_check_tests.rs"]
+mod ci_check_tests;
 #[path = "schema2_generator_release_assets_sidecar_tests.rs"]
 mod sidecar_tests;

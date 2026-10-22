@@ -18,6 +18,25 @@ fn consumer_gate_binds_repository_branch_and_workflow_authority() {
 }
 
 #[test]
+fn consumer_gate_lists_runs_by_head_sha_and_checks_identity_in_jq() {
+    let script =
+        consumer_script(&support::context(), &["gh".to_owned()], false).expect("valid context");
+    assert!(script.contains("list_exact_source_ci_runs() {"));
+    assert!(script.contains("-f \"head_sha=$source_sha\" -F per_page=100)"));
+    assert!(!script.contains("-f \"branch=$default_branch\""));
+    assert!(!script.contains("-f event=push"));
+    for check in [
+        ".path == $workflow_path",
+        ".event == \"push\"",
+        ".head_branch == $default_branch",
+        ".head_sha == $source_sha",
+        ".head_repository.full_name == $repository",
+    ] {
+        assert!(script.contains(check), "{check}");
+    }
+}
+
+#[test]
 fn consumer_gate_rejects_unsafe_identity_and_derives_channel_authority() {
     for repository in ["example", "example/repo;scan", "example/repo/extra"] {
         let mut invalid = support::context();
