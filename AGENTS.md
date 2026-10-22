@@ -17,7 +17,7 @@
   - Stop only when a change is proven impossible with available tools or model. When uncertain, inspect, test, and measure first.
   - Before fixing a bug, identify why the architecture permitted it and whether relatives hide nearby. Prefer structural fixes removing enabling conditions; symptom patches must name deferred root causes.
   - Delegate first: use subagents for parallel research, implementation, review, and verification. Resolve ambiguity autonomously from evidence and docs.
-  - Local disk use: Use the same `CARGO_TARGET_DIR` for all local checks. Run local builds in sequence. Set `CARGO_INCREMENTAL=0`, `CARGO_PROFILE_DEV_DEBUG=0`, and `CARGO_PROFILE_TEST_DEBUG=0` for local checks. Copy only the files that an isolated edit requires. Remove temporary files that the task owns after the task is complete. Keep source changes and test records.
+  - Local disk use: Check free space before each Rust task and after a Git worktree change. Use `mise exec -- cargo ...`. Let MBX assign a separate target directory to each worktree. Share the MBX cache, not target directories. Never set a global `CARGO_TARGET_DIR` or Cargo `build.target-dir`. Keep automatic garbage collection active. Remove only unused task-owned build data. Preserve source changes and test records.
 - Commits and review integrity:
   - Commit meaningful, verified changes frequently with the configured authorized Git identity; push regularly. Prefer one working branch.
   - Before every PR merge, read all reviews, comments, replies, and unresolved or outdated threads. Verify findings with independent subagents against code, tests, docs, and recorded decisions.
