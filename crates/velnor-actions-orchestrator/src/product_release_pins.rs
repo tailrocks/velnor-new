@@ -86,7 +86,9 @@ pub(crate) fn resolve(
             &catalog,
         )?,
         resource_probe_build_argv: resource_probe_build_argv(&catalog)?,
-        actionlint_argv: exec_argv(
+        // The release gates lint with the same token scrub as the CI lint
+        // job and the zizmor gate: the linter needs no credential.
+        actionlint_argv: with_env_unset_argv(&exec_argv(
             &[PinnedTool::Actionlint, PinnedTool::Shellcheck],
             "actionlint",
             &velnor_actions_actionlint::workflow_lint_args()
@@ -94,7 +96,7 @@ pub(crate) fn resolve(
                 .map(String::as_str)
                 .collect::<Vec<_>>(),
             &catalog,
-        )?,
+        )?),
         // Scrubbed like the validator vector: an empty-string GH_TOKEN
         // makes zizmor abort, while an absent one is clean offline.
         zizmor_argv: with_env_unset_argv(&exec_argv(

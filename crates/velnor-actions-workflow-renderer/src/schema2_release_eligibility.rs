@@ -104,42 +104,34 @@ pub fn job(runs_on: Yaml, pins: &ProductReleasePins) -> Result<(String, Yaml), R
 
 /// Bash gate run before build and again inside each publisher.
 pub(super) fn script(pins: &ProductReleasePins) -> Result<String, RenderError> {
-    render_script(false, pins)
-}
-
-/// Eligibility check embedded in a publisher; succeeds without ending that step.
-pub(super) fn publisher_script(pins: &ProductReleasePins) -> Result<String, RenderError> {
-    render_script(true, pins)
-}
-
-fn render_script(
-    continue_on_success: bool,
-    pins: &ProductReleasePins,
-) -> Result<String, RenderError> {
     let gh_function = generator_release::gh_function(pins)?;
-    Ok(ELIGIBILITY_SCRIPT
-        .replace("@GH_FUNCTION@", &gh_function)
+    Ok(format!(
+        "set -euo pipefail\n\n{gh_function}\n\n{}\n\nrelease_eligibility\nexit 0\n",
+        render_function()
+    ))
+}
+
+/// The `release_eligibility` function for a publisher step to call.
+///
+/// A publisher defines the pinned `gh` function once at the top of its own
+/// script, so this definition carries no `gh` function, no shell options
+/// and no call: redefining `gh` mid-script is what `ShellCheck` reports as
+/// SC2218, and it is never needed.
+pub(super) fn publisher_definition() -> String {
+    render_function()
+}
+
+fn render_function() -> String {
+    ELIGIBILITY_FUNCTION
         .replace("@REPOSITORY@", REPOSITORY)
         .replace("@WORKFLOW_PATH@", WORKFLOW_PATH)
         .replace("@CI_WORKFLOW_PATH@", CI_WORKFLOW_PATH)
         .replace("@CI_WORKFLOW_API_ID@", CI_WORKFLOW_API_ID)
         .replace("@LATEST_RUN_JQ@", LATEST_RUN_JQ)
         .replace("@REQUIRED_JOB_JQ@", REQUIRED_JOB_JQ)
-        .replace(
-            "@CALL@",
-            if continue_on_success {
-                "release_eligibility"
-            } else {
-                "release_eligibility\nexit 0"
-            },
-        ))
 }
 
-const ELIGIBILITY_SCRIPT: &str = r#"set -euo pipefail
-
-@GH_FUNCTION@
-
-release_eligibility() {
+const ELIGIBILITY_FUNCTION: &str = r#"release_eligibility() {
 local -r repository='@REPOSITORY@'
 local -r ci_workflow_path='@CI_WORKFLOW_PATH@'
 local -r source_sha="${GITHUB_SHA-}"
@@ -255,10 +247,7 @@ assert_current_tip
   printf 'ci_run_id=%s\n' "$run_id"
   printf 'ci_attempt=%s\n' "$run_attempt"
 } >> "$GITHUB_OUTPUT"
-}
-
-@CALL@
-"#;
+}"#;
 
 fn checkout_step() -> Yaml {
     Yaml::Map(vec![
