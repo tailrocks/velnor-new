@@ -11,7 +11,7 @@ acceptance checks. It is not a proposal or a list of work in progress.
 - [Daily upgrades](upgrades.md) — opt-in `upgrades.yml`: one upgrade pull request per repository to the latest stable Rust, tools, dependencies and Velnor, plus a non-required freshness gate.
 - [Verified Rust installs](rust-channel-manifest.md) — the channel-manifest SHA-256 pinned per Rust release closes `core:rust`'s `no_checksums` gap.
 - [Consumer Rust setup](consumer-rust-setup.md) — `mise.toml` as the only Rust source, `mr_boxington = true` selecting MBX and its bundles, profiles, and MBX GC on developer machines.
-- [Bun browser suites qualification](bun-browser-suites-qualification.md) — declared Bun suites, the Playwright shard matrix, leg blob verification, the merged report and the single cache writer checked against Bun 1.4.3, Playwright 1.64.1 and the pinned artifact and cache actions (Q1-Q5 pass; Q6 and Q7 after the release); PRs #329-#337.
+- [Bun browser suites qualification](bun-browser-suites-qualification.md) — Q1-Q4 are unbound historical fixture observations; Q5 is fixture timing only; Q6-Q7 and #337 end-to-end qualification remain pending.
 
 ## Implementation records (Velnor Actions V1, Gates 0–8)
 
