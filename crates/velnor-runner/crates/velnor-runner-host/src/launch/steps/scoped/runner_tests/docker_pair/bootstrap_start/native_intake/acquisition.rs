@@ -146,9 +146,9 @@ async fn acquire_through_positive_poll(
                 crate::launch::steps::acquire_scoped(&mut lane, drive, poll, permit, engine)
                     .await?;
             match acquired {
-                crate::launch::steps::ScopedProvisioningOutcome::Acquired(acquired) => {
-                    Ok(crate::launch::PositiveAdmission::Acquired(acquired))
-                }
+                crate::launch::steps::ScopedProvisioningOutcome::Acquired(acquired) => Ok(
+                    crate::launch::PositiveAdmission::Acquired(Box::new(acquired)),
+                ),
                 crate::launch::steps::ScopedProvisioningOutcome::NoStart
                 | crate::launch::steps::ScopedProvisioningOutcome::KnownNoAcquire(_) => {
                     Ok(crate::launch::PositiveAdmission::NoAcquire)
@@ -194,7 +194,7 @@ fn acquired_request_from_positive_poll(
     }
     match outcome.admission {
         Some(crate::launch::PositiveAdmission::Acquired(acquired)) => Ok(
-            crate::launch::steps::ScopedProvisioningOutcome::Acquired(acquired),
+            crate::launch::steps::ScopedProvisioningOutcome::Acquired(*acquired),
         ),
         _ => Err("The positive poll did not retain its acquired reservation.".to_owned()),
     }
