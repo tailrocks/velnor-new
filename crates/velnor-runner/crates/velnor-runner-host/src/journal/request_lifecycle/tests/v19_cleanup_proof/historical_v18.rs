@@ -1,4 +1,6 @@
+use crate::config::RepositoryConnection;
 use crate::error::HostError;
+use crate::journal::{AssignmentIdentity, ConnectionJournal};
 use crate::journal::{Journal, ReservationState, StorageRole};
 use crate::launch::bootstrap::test_verified_storage_cleanup;
 use crate::worker::{WorkerIdentityNames, WorkerVolumeRole};
@@ -22,9 +24,22 @@ async fn migrated_v18_cleanup_uses_four_owned_volumes_and_keeps_metadata_held_un
         })
         .await?;
     let identity = read_v18_cleanup_identity(&migrated).await?;
+    assert_legacy_cleanup_keeps_reservation_held(&migrated, &scope, &physical, &identity).await?;
+    drop(scope);
+    drop(migrated);
+    assert_reopened_v18_cleanup_remains_unproven(&path, &binding, &physical, &identity).await?;
+    Ok(())
+}
+
+async fn assert_legacy_cleanup_keeps_reservation_held(
+    migrated: &Journal,
+    scope: &ConnectionJournal,
+    physical: &AssignmentIdentity,
+    identity: &V18CleanupIdentity,
+) -> Result<(), HostError> {
     let reservation_id = identity.reservation_id;
     assert_eq!(
-        scope.reservation(&physical).await?.map(|row| row.state),
+        scope.reservation(physical).await?.map(|row| row.state),
         Some(ReservationState::Reserved)
     );
     assert_eq!(
@@ -70,7 +85,7 @@ async fn migrated_v18_cleanup_uses_four_owned_volumes_and_keeps_metadata_held_un
     let cleanup_result = scope.record_storage_cleanup(legacy_proof).await;
     assert!(matches!(cleanup_result, Err(HostError::Journal)));
     assert_eq!(
-        scope.reservation(&physical).await?.map(|row| row.state),
+        scope.reservation(physical).await?.map(|row| row.state),
         Some(ReservationState::Reserved),
         "The v18 record has no cleanup observer witness. The storage reservation stays reserved."
     );
@@ -95,18 +110,25 @@ async fn migrated_v18_cleanup_uses_four_owned_volumes_and_keeps_metadata_held_un
         "The failed transaction must not record cleanup proof."
     );
     assert_eq!(
-        scope.reservation(&physical).await?.map(|row| row.state),
+        scope.reservation(physical).await?.map(|row| row.state),
         Some(ReservationState::Reserved),
         "The storage reservation remains reserved."
     );
-    drop(scope);
-    drop(migrated);
+    Ok(())
+}
 
-    let reopened = Journal::open(&path).await?;
-    let reopened_scope = reopened.connection_scope(&binding).await?;
+async fn assert_reopened_v18_cleanup_remains_unproven(
+    path: &std::path::Path,
+    binding: &RepositoryConnection,
+    physical: &AssignmentIdentity,
+    identity: &V18CleanupIdentity,
+) -> Result<(), HostError> {
+    let reopened = Journal::open(path).await?;
+    let reopened_scope = reopened.connection_scope(binding).await?;
+    let reservation_id = identity.reservation_id;
     assert_eq!(
         reopened_scope
-            .reservation(&physical)
+            .reservation(physical)
             .await?
             .map(|row| row.state),
         Some(ReservationState::Reserved)
