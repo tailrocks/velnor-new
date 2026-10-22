@@ -77,6 +77,20 @@ fn mise_quiet_defaults_on_and_follows_explicit_values() -> Result<(), Box<dyn Er
 }
 
 #[test]
+fn dependency_seed_timeout_materializes_independently() -> Result<(), Box<dyn Error>> {
+    let default = parse_config("schema = 1\n[workflow]\ncrate_timeout_minutes = 10\n")?;
+    assert_eq!(default.workflow.crate_timeout_minutes, 10);
+    assert_eq!(default.workflow.dependency_seed_timeout_minutes, 30);
+
+    let explicit = parse_config(
+        "schema = 1\n[workflow]\ncrate_timeout_minutes = 10\ndependency_seed_timeout_minutes = 45\n",
+    )?;
+    assert_eq!(explicit.workflow.crate_timeout_minutes, 10);
+    assert_eq!(explicit.workflow.dependency_seed_timeout_minutes, 45);
+    Ok(())
+}
+
+#[test]
 fn mise_quiet_rejects_non_boolean_with_structured_config_error() {
     for wire in ["\"yes\"", "1"] {
         let err = toml::from_str::<PartialConfig>(&mise_quiet_source(Some(wire)))
