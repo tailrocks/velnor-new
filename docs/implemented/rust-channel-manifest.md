@@ -112,6 +112,7 @@ directly after the Rust install in every other generated job:
 | `qualification.yml` | `mbx-cache-write-hosted`, `mbx-cache-read-hosted` (the toolchain is put on `PATH` only after the check) |
 | `freshness.yml` | `freshness` |
 | `binary-release.yml`, `binary-preview.yml` | every payload producer, after `Install pinned Cargo metadata toolchain` and before `Fetch Cargo sources` |
+| `upgrades.yml` | `prepare` and `verify`, inside the regeneration prerequisites: right after the fresh `rust@<pin>` install and before `cargo fetch` (`VELNOR_VERIFY_RUST_SCRIPT`) |
 
 Two more job kinds run on the owned homes with the tools cache, so they also
 get `Verify restored Rust toolchain` before their install:
@@ -133,7 +134,10 @@ it reads every generated `.github/**/*.yml` (workflows and composite actions,
 `rust_install_unverified:<file>:<step>:<why>` when a run of steps that
 installs or changes Rust (`install rust@`, `rustup toolchain install`,
 `rustup component add`, `rustup target add`, `rustup-init`) is not followed
-directly by the verification, or already runs `rustc`, Cargo or MBX. Removing
+by the verification before a step runs Rust, Cargo or MBX, or already runs
+`rustc`, Cargo or MBX itself. A step may verify its own install only by
+calling `$VELNOR_VERIFY_RUST_SCRIPT` after every install and before every use
+in its text (the `upgrades.yml` scripts). Removing
 the step from the resource-probe build makes `generate` fail with
 `rust_install_unverified:.github/workflows/product-release-images.yml:Install pinned Rust for the resource probe:no verification directly follows the install`.
 
