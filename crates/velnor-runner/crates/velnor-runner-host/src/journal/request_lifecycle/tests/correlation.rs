@@ -1,5 +1,5 @@
 use super::helpers::{
-    Scratch, binding, created_scope, event_source, provision_acquired_request_with_initialization,
+    Scratch, binding, created_scope, provision_acquired_request_with_initialization,
     provision_physical_intent, receipt, record_acquired, runner_name,
 };
 use crate::error::HostError;
@@ -353,7 +353,7 @@ async fn clear_legacy_metadata_anchor(
         String::with_capacity(64),
         |mut output, byte| {
             use std::fmt::Write as _;
-            let _ = write!(output, "{byte:02x}");
+            write!(output, "{byte:02x}").expect("writing to a String cannot fail");
             output
         },
     );

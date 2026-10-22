@@ -17,7 +17,7 @@ fn payload_with_source(
     scale_set_image_source_sha: Option<&str>,
 ) -> Result<super::super::ToolsCachePayload, RenderError> {
     let setup = crate::setup::MiseSetup {
-        uses: "jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde".to_owned(),
+        uses: "jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550".to_owned(),
         version: "2026.10.4".to_owned(),
         sha256: "a".repeat(64),
     };

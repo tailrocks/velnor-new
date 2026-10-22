@@ -14,6 +14,11 @@ pub const FAMILY_KEYS_ID: &str = "family-keys";
 pub const FAMILY_SAVE_OUTPUT: &str = "save";
 /// Size-step output: `true` when the directory is within the family ceiling.
 pub const FAMILY_ADMITTED_OUTPUT: &str = "admitted";
+/// Env of the key step in a matrix job: the leg ordinal. Only leg `1` may save,
+/// so N legs of one key never race N archive uploads.
+pub const FAMILY_WRITER_ENV: &str = "VELNOR_FAMILY_WRITER";
+/// The only value [`FAMILY_WRITER_ENV`] takes.
+pub const FAMILY_WRITER_EXPR: &str = "${{ matrix.leg }}";
 
 /// Families whose restore, size and save steps the generator emits.
 pub const STACK_FAMILIES: [CacheFamily; 5] = [

@@ -160,7 +160,7 @@ fn tofu_ambient_families_strip_for_every_policy() -> Result<(), String> {
 #[test]
 fn tofu_exec_baked_env_survives_hostile_parent() -> Result<(), String> {
     let command = IsolatedCommand::tofu_exec(
-        &["opentofu@1.13.1".to_owned()],
+        &["opentofu@1.13.2".to_owned()],
         &[OsString::from("tofu"), OsString::from("version")],
         "/velnor/data",
         "/velnor/cli.hcl",

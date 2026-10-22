@@ -1,0 +1,29 @@
+schema = 1
+
+[workflow]
+name = "CI"
+default_branch = "main"
+
+[stacks.bun]
+roots = ["."]
+timeout_minutes = 30
+
+# Sanitized from ChainArgos/platform: `ci` stays in the member job, vitest
+# and the Playwright suite get their own jobs.
+[stacks.bun.members."@fixture/web"]
+scripts = ["typecheck", "lint", "test", "test:browser"]
+timeout_minutes = 20
+
+[stacks.bun.members."@fixture/web".suites.unit]
+scripts = ["test"]
+timeout_minutes = 25
+
+[stacks.bun.members."@fixture/web".suites.browser]
+scripts = ["test:browser"]
+browsers = ["chromium"]
+timeout_minutes = 25
+
+[stacks.bun.members."@fixture/web".suites.browser.playwright]
+projects = ["chromium-desktop", "chromium-mobile"]
+shards = 2
+report = "merge"

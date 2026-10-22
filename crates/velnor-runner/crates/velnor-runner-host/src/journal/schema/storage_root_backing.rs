@@ -107,6 +107,7 @@ pub(super) async fn validate(connection: &turso::Connection) -> Result<(), HostE
     validate_schema(connection, &attachment_paths, true).await
 }
 
+#[cfg(test)]
 pub(super) async fn validate_v30(connection: &turso::Connection) -> Result<(), HostError> {
     validate_schema(connection, ATTACHMENT_PATHS, false).await
 }

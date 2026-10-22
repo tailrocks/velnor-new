@@ -11,8 +11,10 @@ pub(crate) enum AssignmentKey {
     /// One acquired GitHub request. Replays use the stable `RequestId`.
     AssignedRequest { request_id: i64 },
     /// One message that reports assigned population without a `RequestId`.
+    #[cfg(test)]
     PopulationMessage { message_id: i64 },
     /// One Scale Set session identity.
+    #[cfg(test)]
     Session { name: String },
     /// One other remote intent with an explicit kind and subject.
     Remote { kind: String, subject: String },
@@ -57,7 +59,9 @@ impl AssignmentIdentity {
     pub(crate) fn request_id(&self) -> Option<i64> {
         match &self.key {
             AssignmentKey::AssignedRequest { request_id } => Some(*request_id),
-            _ => None,
+            AssignmentKey::Remote { .. } => None,
+            #[cfg(test)]
+            AssignmentKey::PopulationMessage { .. } | AssignmentKey::Session { .. } => None,
         }
     }
 
@@ -67,9 +71,11 @@ impl AssignmentIdentity {
             AssignmentKey::AssignedRequest { request_id } => {
                 format!("{prefix}request|{request_id}")
             }
+            #[cfg(test)]
             AssignmentKey::PopulationMessage { message_id } => {
                 format!("{prefix}message|{message_id}")
             }
+            #[cfg(test)]
             AssignmentKey::Session { name } => format!("{prefix}session|{name}"),
             AssignmentKey::Remote { kind, subject } => {
                 format!(
@@ -96,7 +102,9 @@ impl ConnectionJournal {
 fn valid_key(key: &AssignmentKey) -> bool {
     match key {
         AssignmentKey::AssignedRequest { request_id } => *request_id > 0,
+        #[cfg(test)]
         AssignmentKey::PopulationMessage { message_id } => *message_id >= 0,
+        #[cfg(test)]
         AssignmentKey::Session { name } => valid_text(name, 128),
         AssignmentKey::Remote { kind, subject } => {
             valid_text(kind, 128) && valid_text(subject, 1024)

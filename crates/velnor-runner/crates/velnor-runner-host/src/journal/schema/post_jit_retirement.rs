@@ -26,6 +26,7 @@ const INSERT_GUARDS: [&str; 4] = [
     guards::REMOTE_ABSENCE_INSERT_GUARD,
     guards::RETIREMENT_INSERT_GUARD,
 ];
+#[cfg(test)]
 pub(super) const CLAIM_INSERT_GUARD_V36: &str = guards::CLAIM_INSERT_GUARD;
 
 const IMMUTABLE_GUARDS: [&str; 8] = [

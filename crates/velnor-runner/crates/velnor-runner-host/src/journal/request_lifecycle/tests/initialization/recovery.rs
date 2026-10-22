@@ -62,7 +62,7 @@ async fn uncertain_initializer_recovery_requires_exact_absence_and_stays_charged
         .await?;
     assert!(claim_abort(&scope, reservation_id).await?.is_none());
 
-    let state = Box::pin(read_transaction(scope.journal_ref(), async |connection| {
+    let reservation_state = Box::pin(read_transaction(scope.journal_ref(), async |connection| {
         let mut rows = connection
             .query(
                 "SELECT state FROM capacity_reservations WHERE id = ?1",
@@ -78,7 +78,7 @@ async fn uncertain_initializer_recovery_requires_exact_absence_and_stays_charged
             .map_err(|_| HostError::Journal)
     }))
     .await?;
-    assert_eq!(state, "uncertain");
+    assert_eq!(reservation_state, "uncertain");
     Ok(())
 }
 

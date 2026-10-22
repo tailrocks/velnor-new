@@ -2,6 +2,7 @@ use super::{IntentSnapshot, ReservationRow, RunnerJitSnapshot};
 use super::{jit_is_consistent, phase_matches_jit, request_ids_are_consistent};
 use crate::journal::connection::ConnectionJournal;
 
+#[derive(Clone, Copy)]
 pub(super) struct ReservationIdentityContext<'a> {
     pub(super) reservation: &'a ReservationRow,
     pub(super) intent: &'a IntentSnapshot,
@@ -15,7 +16,7 @@ pub(super) struct ReservationIdentityContext<'a> {
     pub(super) request_link_is_consistent: bool,
 }
 
-pub(super) fn reservation_identity_is_known(context: ReservationIdentityContext<'_>) -> bool {
+pub(super) fn reservation_identity_is_known(context: &ReservationIdentityContext<'_>) -> bool {
     let ReservationIdentityContext {
         reservation,
         intent,
@@ -27,7 +28,7 @@ pub(super) fn reservation_identity_is_known(context: ReservationIdentityContext<
         expected_name,
         runner_found,
         request_link_is_consistent,
-    } = context;
+    } = *context;
     intent.row_id == Some(reservation.intent_id)
         && intent.kind.as_deref() == Some("launch")
         && intent.key.as_deref() == Some(reservation.key.as_str())

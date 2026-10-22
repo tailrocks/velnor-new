@@ -82,19 +82,12 @@ pub(crate) use connection::{
 #[cfg(test)]
 pub(crate) use connection::{CreateCommitStage, arm_create_commit_gate};
 #[cfg(test)]
-pub(crate) use connection::{
-    ReservationResult, StorageAdmission, StorageCleanupCgroup, StorageCleanupMount,
-};
+pub(crate) use connection::{ReservationResult, StorageAdmission};
 #[cfg(test)]
 pub(crate) use connection::{
     SessionRefreshState, fixture_admission, fixture_profile, fixture_provisioning_profile,
     fixture_storage_provisioning_admission, fixture_storage_provisioning_admission_for_profile,
-    fixture_storage_provisioning_admission_with_filesystem_digest,
 };
-#[cfg(test)]
-pub(crate) use connection::{StorageReservationPlan, StorageRoleCharge};
-#[cfg(test)]
-pub(crate) use doctor_probe::DoctorProbeRequestRecord;
 pub(crate) use doctor_probe::{
     DoctorProbeOutcome, DoctorProbePrepareResult, DoctorProbeStartResult, DoctorProbeState,
     DoctorProbeTicket,

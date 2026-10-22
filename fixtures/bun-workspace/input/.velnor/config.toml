@@ -1,0 +1,11 @@
+schema = 1
+
+[workflow]
+name = "CI"
+default_branch = "main"
+
+[stacks.bun]
+roots = ["."]
+
+[stacks.bun.members."@fixture/web"]
+browsers = ["chromium"]

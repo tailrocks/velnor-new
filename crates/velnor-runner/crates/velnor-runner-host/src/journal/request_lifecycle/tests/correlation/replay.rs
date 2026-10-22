@@ -1,7 +1,6 @@
 use super::super::helpers::{
     Scratch, binding, created_scope, event_source, finish_initialized_listener_delivery,
-    provision_acquired_request_with_initialization, provision_physical_intent, receipt,
-    record_acquired, runner_name,
+    provision_acquired_request_with_initialization, receipt, record_acquired, runner_name,
 };
 use crate::error::HostError;
 use crate::journal::{AssignmentKey, CapacityLimits, Journal, ReservationState};

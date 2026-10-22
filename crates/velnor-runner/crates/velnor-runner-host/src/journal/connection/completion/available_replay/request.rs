@@ -214,7 +214,7 @@ async fn completed_request_is_terminal(
     context: &ReplayContext<'_>,
     record: &TerminalRequest,
 ) -> Result<bool, HostError> {
-    if !completed_state_is_valid(record) || !completion_record_matches(context, record)? {
+    if !completed_state_is_valid(record) || !completion_record_matches(context, record) {
         return Ok(false);
     }
     if !completed_runner_matches(connection, context, record).await? {
@@ -251,17 +251,14 @@ fn completed_state_is_valid(record: &TerminalRequest) -> bool {
     }
 }
 
-fn completion_record_matches(
-    context: &ReplayContext<'_>,
-    record: &TerminalRequest,
-) -> Result<bool, HostError> {
+fn completion_record_matches(context: &ReplayContext<'_>, record: &TerminalRequest) -> bool {
     let (Some(message_id), Some(digest)) = (
         record.completed_message_id,
         record.completed_digest.as_deref(),
     ) else {
-        return Ok(false);
+        return false;
     };
-    Ok(valid_optional_job_id(record.completed_job_id.as_deref())
+    valid_optional_job_id(record.completed_job_id.as_deref())
         && valid_optional_text(record.completed_result.as_deref(), 128)
         && event_digest(
             digest,
@@ -276,7 +273,7 @@ fn completion_record_matches(
                 },
             ),
         )
-        .is_ok())
+        .is_ok()
 }
 
 async fn completed_runner_matches(

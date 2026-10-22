@@ -149,6 +149,11 @@ fn both_mode_splits_verification_and_keeps_release_hosted() -> TestResult {
                 .iter()
                 .any(|suffix| file.path.contains(suffix))
     }));
+    assert!(
+        tree.files
+            .iter()
+            .all(|file| { !file.path.starts_with(".github/actions/rust-demo") })
+    );
     let shared = required_file(&tree, ".github/actions/declared-task-0/action.yml")?;
     assert!(shared.contains("shell: bash"), "{shared}");
     assert!(shared.contains("using: composite"), "{shared}");
@@ -170,6 +175,7 @@ fn dispatch_mode_overrides_configured_mode() -> TestResult {
     let hosted_ci = required_file(&hosted, ".github/workflows/ci.yml")?;
     let forced_ci = required_file(&forced, ".github/workflows/ci.yml")?;
     assert!(job_ids(hosted_ci).contains(&"rust-demo"));
+    assert!(!job_ids(hosted_ci).contains(&"rust-demo__hosted"));
     assert!(!hosted_ci.contains("rust-demo-lint"));
     assert!(!hosted_ci.contains("rust-demo-tests"));
     assert!(!hosted_ci.contains("rust-demo-docs"));

@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.38
+Velnor Actions plan 0.1.39
 Repository: <repo>
 
 Detected stacks
@@ -55,7 +55,7 @@ Workflow to generate
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
     - actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
     - actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-    - jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde
+    - jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550
     - jdx/mr-boxington-action@47ce49b32025d93a7a2f4570815afaa2b7092240
   Ineligible: stack/rust/crates/tool/doctest/default has no test targets; no test command emitted
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
@@ -71,4 +71,4 @@ Recommendations
   mise.lock not found; Velnor will not create or refresh it
   mise.toml not found; Velnor will use its pinned tools
   rust-toolchain.toml not found; Velnor will not create it
-  tool_install_unverified:3 installs skip verification (no mise.lock): gh@2.102.1, nextest@0.9.149, shellcheck@0.11.0; install on the CI platform and commit the resulting lock
+  tool_install_unverified:3 installs skip verification (no mise.lock): gh@2.103.0, nextest@0.9.149, shellcheck@0.11.0; install on the CI platform and commit the resulting lock

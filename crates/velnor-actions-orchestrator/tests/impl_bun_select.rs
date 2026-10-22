@@ -22,7 +22,14 @@ complete = true
 
 /// Rust fixture plus the Bun workspace, committed as the base.
 fn bun_fixture() -> Result<(tempfile::TempDir, String), Box<dyn std::error::Error>> {
-    let (dir, _) = fixture(BUN, false)?;
+    bun_fixture_with("")
+}
+
+/// [`bun_fixture`] with extra `[stacks.bun]` configuration appended.
+fn bun_fixture_with(
+    extra: &str,
+) -> Result<(tempfile::TempDir, String), Box<dyn std::error::Error>> {
+    let (dir, _) = fixture(&format!("{BUN}{extra}"), false)?;
     let root = dir.path();
     put(root, "mise.toml", MISE)?;
     put(root, "frontend/package.json", ROOT_PACKAGE)?;
@@ -123,6 +130,90 @@ fn a_push_runs_every_member() -> TestResult {
     assert_eq!(
         runs(&plan),
         BTreeSet::from(["bun-chainargos-docs", "bun-chainargos-ui"])
+    );
+    Ok(())
+}
+
+const SUITES: &str = "
+[stacks.bun.members.\"chainargos-docs\".suites.unit]
+scripts = [\"test\"]
+
+[stacks.bun.members.\"@chainargos/ui\".suites.smoke]
+scripts = [\"test\"]
+required = false
+";
+
+fn bun_jobs(plan: &Plan) -> Vec<(&str, JobDisposition)> {
+    plan.jobs
+        .iter()
+        .filter(|job| job.job_id.starts_with("bun-"))
+        .map(|job| (job.job_id.as_str(), job.disposition))
+        .collect()
+}
+
+fn pr_with(
+    extra: &str,
+    edit: impl FnOnce(&Path) -> TestResult,
+) -> Result<Plan, Box<dyn std::error::Error>> {
+    let (dir, base) = bun_fixture_with(extra)?;
+    edit(dir.path())?;
+    let head = commit(dir.path(), "change")?;
+    Ok(plan_pr(dir.path(), Some(&base), &head)?.0)
+}
+
+#[test]
+fn suite_jobs_carry_their_member_disposition_and_omitted_member_jobs_have_none() -> TestResult {
+    use JobDisposition::{NotAffected, Run};
+    let plan = pr_with(SUITES, |root| {
+        put(root, "apps/a2/src/lib.rs", "pub fn g() {}\n")
+    })?;
+    assert_eq!(
+        bun_jobs(&plan),
+        [
+            ("bun-chainargos-docs--unit", NotAffected),
+            ("bun-chainargos-ui--smoke", NotAffected),
+        ]
+    );
+    let plan = pr_with(SUITES, |root| {
+        put(root, "frontend/docs/src/a.ts", "export const a = 2;\n")
+    })?;
+    assert_eq!(
+        bun_jobs(&plan),
+        [
+            ("bun-chainargos-docs--unit", Run),
+            ("bun-chainargos-ui--smoke", NotAffected),
+        ]
+    );
+    let plan = pr_with(SUITES, |root| {
+        put(
+            root,
+            "frontend/packages/ui/src/b.ts",
+            "export const b = 2;\n",
+        )
+    })?;
+    assert_eq!(
+        bun_jobs(&plan),
+        [
+            ("bun-chainargos-docs--unit", Run),
+            ("bun-chainargos-ui--smoke", Run),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn a_push_runs_every_suite() -> TestResult {
+    let (dir, base) = bun_fixture_with(SUITES)?;
+    put(
+        dir.path(),
+        "frontend/docs/src/a.ts",
+        "export const a = 3;\n",
+    )?;
+    let head = commit(dir.path(), "change")?;
+    let (plan, _) = plan_push(dir.path(), Some(&base), &head)?;
+    assert_eq!(
+        runs(&plan),
+        BTreeSet::from(["bun-chainargos-docs--unit", "bun-chainargos-ui--smoke"])
     );
     Ok(())
 }

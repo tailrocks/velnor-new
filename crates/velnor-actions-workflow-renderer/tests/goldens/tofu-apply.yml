@@ -61,7 +61,7 @@ jobs:
           NPM_TOKEN: ""
         run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; guard_dir=\"${{ runner.temp }}/velnor-tofu-guard\"; mkdir -p -- \"$guard_dir\"; git rev-parse --verify HEAD >\"$guard_dir/checked-out\"; printf '\\''%s\\n'\\'' \"$GITHUB_SHA\" >\"$guard_dir/requested\"; git ls-remote --exit-code --refs origin '\\''refs/heads/main'\\'' | cut -f1 >\"$guard_dir/remote\"; cmp -s -- \"$guard_dir/checked-out\" \"$guard_dir/requested\" && cmp -s -- \"$guard_dir/checked-out\" \"$guard_dir/remote\"'"
       - name: Setup Mise
-        uses: jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde
+        uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550
         with:
           cache: "false"
           cache_save: "false"
@@ -108,7 +108,7 @@ jobs:
           MISE_GITHUB_TOKEN: ""
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
-        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks install --yes opentofu@1.13.1
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks install --yes opentofu@1.13.2
       - name: Initialize locked S3 state backend
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -129,7 +129,7 @@ jobs:
           NPM_TOKEN: ""
           VELNOR_TOFU_LOG_FILE: ${{ runner.temp }}/velnor-tofu-apply.log
           VELNOR_TOFU_PLAN_FILE: ${{ runner.temp }}/velnor-tofu-apply.tfplan
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; umask 077; if mise --no-config --no-env --no-hooks exec opentofu@1.13.1 -- tofu init -input=false -lockfile=readonly -no-color -backend-config=bucket=example-tofu-state -backend-config=key=chainargos/control-plane.tfstate -backend-config=region=us-east-1 -backend-config=encrypt=true -backend-config=use_lockfile=true > \"$VELNOR_TOFU_LOG_FILE\" 2>&1; then tofu_status=0; else tofu_status=$?; fi; test \"$tofu_status\" -eq 0'"
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; umask 077; if mise --no-config --no-env --no-hooks exec opentofu@1.13.2 -- tofu init -input=false -lockfile=readonly -no-color -backend-config=bucket=example-tofu-state -backend-config=key=chainargos/control-plane.tfstate -backend-config=region=us-east-1 -backend-config=encrypt=true -backend-config=use_lockfile=true > \"$VELNOR_TOFU_LOG_FILE\" 2>&1; then tofu_status=0; else tofu_status=$?; fi; test \"$tofu_status\" -eq 0'"
       - name: Require configured S3 remote backend
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -182,7 +182,7 @@ jobs:
           TF_VAR_github_tokens: "{\"chainargos\":\"${{ secrets.GH_TOKEN_CHAINARGOS }}\",\"tailrocks\":\"${{ secrets.GH_TOKEN_TAILROCKS }}\"}"
           VELNOR_TOFU_LOG_FILE: ${{ runner.temp }}/velnor-tofu-apply.log
           VELNOR_TOFU_PLAN_FILE: ${{ runner.temp }}/velnor-tofu-apply.tfplan
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; umask 077; if mise --no-config --no-env --no-hooks exec opentofu@1.13.1 -- tofu plan -input=false -lock=true -refresh=true -detailed-exitcode -no-color '\\''-out='\\''\"$VELNOR_TOFU_PLAN_FILE\" > \"$VELNOR_TOFU_LOG_FILE\" 2>&1; then tofu_status=0; else tofu_status=$?; fi; case \"$tofu_status\" in 0|2) test -s \"$VELNOR_TOFU_PLAN_FILE\" ;; *) exit 1 ;; esac'"
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; umask 077; if mise --no-config --no-env --no-hooks exec opentofu@1.13.2 -- tofu plan -input=false -lock=true -refresh=true -detailed-exitcode -no-color '\\''-out='\\''\"$VELNOR_TOFU_PLAN_FILE\" > \"$VELNOR_TOFU_LOG_FILE\" 2>&1; then tofu_status=0; else tofu_status=$?; fi; case \"$tofu_status\" in 0|2) test -s \"$VELNOR_TOFU_PLAN_FILE\" ;; *) exit 1 ;; esac'"
       - name: Fail closed on saved plan actions
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -198,7 +198,7 @@ jobs:
           NPM_TOKEN: ""
           VELNOR_TOFU_LOG_FILE: ${{ runner.temp }}/velnor-tofu-apply.log
           VELNOR_TOFU_PLAN_FILE: ${{ runner.temp }}/velnor-tofu-apply.tfplan
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; mise --no-config --no-env --no-hooks exec opentofu@1.13.1 -- tofu show -json \"$VELNOR_TOFU_PLAN_FILE\" 2>/dev/null | jq -e '\\''def no_provisioners: type == \"object\" and ((.resources // []) | type == \"array\") and ((.module_calls // {}) | type == \"object\") and all((.resources // [])[]; ((has(\"provisioners\") | not) or (.provisioners | type == \"array\" and length == 0))) and all((.module_calls // {})[]; (.module | no_provisioners)); type == \"object\" and (.format_version | type == \"string\" and startswith(\"1.\")) and .errored == false and ((has(\"resource_changes\") | not) or (.resource_changes | type == \"array\")) and (.configuration | type == \"object\") and (.configuration.root_module | no_provisioners) and (.planned_values | type == \"object\") and ((.checks // []) | type == \"array\" and all(.[]; .status == \"pass\")) and ((has(\"complete\") | not) or .complete == true) and ((has(\"applyable\") | not) or .applyable == true) and ((has(\"deferred_changes\") | not) or .deferred_changes == []) and ((has(\"action_invocations\") | not) or .action_invocations == []) and ((has(\"removed\") | not) or .removed == []) and all((.resource_changes // [])[]; ((.mode == \"managed\") and (.change.actions == [\"no-op\"] or .change.actions == [\"create\"] or .change.actions == [\"update\"]) or ((.mode == \"data\") and (.change.actions == [\"no-op\"] or .change.actions == [\"read\"]))))'\\'' >/dev/null 2>&1'"
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; mise --no-config --no-env --no-hooks exec opentofu@1.13.2 -- tofu show -json \"$VELNOR_TOFU_PLAN_FILE\" 2>/dev/null | jq -e '\\''def no_provisioners: type == \"object\" and ((.resources // []) | type == \"array\") and ((.module_calls // {}) | type == \"object\") and all((.resources // [])[]; ((has(\"provisioners\") | not) or (.provisioners | type == \"array\" and length == 0))) and all((.module_calls // {})[]; (.module | no_provisioners)); type == \"object\" and (.format_version | type == \"string\" and startswith(\"1.\")) and .errored == false and ((has(\"resource_changes\") | not) or (.resource_changes | type == \"array\")) and (.configuration | type == \"object\") and (.configuration.root_module | no_provisioners) and (.planned_values | type == \"object\") and ((.checks // []) | type == \"array\" and all(.[]; .status == \"pass\")) and ((has(\"complete\") | not) or .complete == true) and ((has(\"applyable\") | not) or .applyable == true) and ((has(\"deferred_changes\") | not) or .deferred_changes == []) and ((has(\"action_invocations\") | not) or .action_invocations == []) and ((has(\"removed\") | not) or .removed == []) and all((.resource_changes // [])[]; ((.mode == \"managed\") and (.change.actions == [\"no-op\"] or .change.actions == [\"create\"] or .change.actions == [\"update\"]) or ((.mode == \"data\") and (.change.actions == [\"no-op\"] or .change.actions == [\"read\"]))))'\\'' >/dev/null 2>&1'"
       - name: Recheck default-branch head before apply
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -234,7 +234,7 @@ jobs:
           TF_VAR_github_tokens: "{\"chainargos\":\"${{ secrets.GH_TOKEN_CHAINARGOS }}\",\"tailrocks\":\"${{ secrets.GH_TOKEN_TAILROCKS }}\"}"
           VELNOR_TOFU_LOG_FILE: ${{ runner.temp }}/velnor-tofu-apply.log
           VELNOR_TOFU_PLAN_FILE: ${{ runner.temp }}/velnor-tofu-apply.tfplan
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; umask 077; if mise --no-config --no-env --no-hooks exec opentofu@1.13.1 -- tofu apply -input=false -lock=true -no-color \"$VELNOR_TOFU_PLAN_FILE\" > \"$VELNOR_TOFU_LOG_FILE\" 2>&1; then tofu_status=0; else tofu_status=$?; fi; test \"$tofu_status\" -eq 0'"
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; umask 077; if mise --no-config --no-env --no-hooks exec opentofu@1.13.2 -- tofu apply -input=false -lock=true -no-color \"$VELNOR_TOFU_PLAN_FILE\" > \"$VELNOR_TOFU_LOG_FILE\" 2>&1; then tofu_status=0; else tofu_status=$?; fi; test \"$tofu_status\" -eq 0'"
       - name: Verify desired configuration converged
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -256,7 +256,7 @@ jobs:
           TF_VAR_github_tokens: "{\"chainargos\":\"${{ secrets.GH_TOKEN_CHAINARGOS }}\",\"tailrocks\":\"${{ secrets.GH_TOKEN_TAILROCKS }}\"}"
           VELNOR_TOFU_LOG_FILE: ${{ runner.temp }}/velnor-tofu-apply.log
           VELNOR_TOFU_PLAN_FILE: ${{ runner.temp }}/velnor-tofu-apply.tfplan
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; umask 077; if mise --no-config --no-env --no-hooks exec opentofu@1.13.1 -- tofu plan -input=false -refresh-only -lock=true -refresh=true -detailed-exitcode -no-color > \"$VELNOR_TOFU_LOG_FILE\" 2>&1; then tofu_status=0; else tofu_status=$?; fi; test \"$tofu_status\" -eq 0'"
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; umask 077; if mise --no-config --no-env --no-hooks exec opentofu@1.13.2 -- tofu plan -input=false -refresh-only -lock=true -refresh=true -detailed-exitcode -no-color > \"$VELNOR_TOFU_LOG_FILE\" 2>&1; then tofu_status=0; else tofu_status=$?; fi; test \"$tofu_status\" -eq 0'"
       - name: Remove private saved plan
         if: always()
         env:

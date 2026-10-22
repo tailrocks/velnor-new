@@ -13,8 +13,9 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
 use velnor_actions_contract::workflow::cache_family::CacheFamily;
 use velnor_actions_contract::workflow::cache_family_steps::{
-    FAMILY_ADMITTED_OUTPUT, FAMILY_SAVE_OUTPUT, family_key_expr, family_output_stem,
-    family_restore_keys_expr, family_save_condition, family_size_step_id, is_stack_family,
+    FAMILY_ADMITTED_OUTPUT, FAMILY_SAVE_OUTPUT, FAMILY_WRITER_ENV, FAMILY_WRITER_EXPR,
+    family_key_expr, family_output_stem, family_restore_keys_expr, family_save_condition,
+    family_size_step_id, is_stack_family,
 };
 use velnor_actions_contract::{Step, StepId, StepRole};
 
@@ -147,6 +148,21 @@ fn key_commands(plan: &FamilyCachePlan) -> Vec<String> {
 ///
 /// Returns render errors for an empty or unsafe plan.
 pub fn family_keys_step(plans: &[FamilyCachePlan]) -> Result<Step, RenderError> {
+    keys_step(plans, false)
+}
+
+/// The key step of a matrix job: only the leg [`FAMILY_WRITER_ENV`] names `1`
+/// may save, every other leg restores read-only. A job outside a matrix keeps
+/// [`family_keys_step`] byte for byte.
+///
+/// # Errors
+///
+/// Returns render errors for an empty or unsafe plan.
+pub fn family_keys_step_single_writer(plans: &[FamilyCachePlan]) -> Result<Step, RenderError> {
+    keys_step(plans, true)
+}
+
+fn keys_step(plans: &[FamilyCachePlan], single_writer: bool) -> Result<Step, RenderError> {
     if plans.is_empty() {
         return Err(RenderError::InvalidWorkflow("family_keys_empty".to_owned()));
     }
@@ -169,13 +185,20 @@ pub fn family_keys_step(plans: &[FamilyCachePlan]) -> Result<Step, RenderError> 
         plan.check()?;
         script.extend(key_commands(plan));
     }
+    let mut env = BTreeMap::from([(DEFAULT_REF_ENV.to_owned(), DEFAULT_REF_EXPR.to_owned())]);
+    if single_writer {
+        script.push(format!(
+            "case \"${{{FAMILY_WRITER_ENV}:-}}\" in 1) ;; *) save=false ;; esac"
+        ));
+        env.insert(FAMILY_WRITER_ENV.to_owned(), FAMILY_WRITER_EXPR.to_owned());
+    }
     script.push(format!(
         "printf '%s\\n' \"{FAMILY_SAVE_OUTPUT}=$save\" >> \"$GITHUB_OUTPUT\""
     ));
     let mut step = shell_step(
         FAMILY_KEYS_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script.join("; ")],
-        BTreeMap::from([(DEFAULT_REF_ENV.to_owned(), DEFAULT_REF_EXPR.to_owned())]),
+        env,
     )?;
     step.id = Some(StepId::FamilyKeys);
     step.role = Some(StepRole::FamilyKeys);

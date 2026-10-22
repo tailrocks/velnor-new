@@ -47,7 +47,7 @@ mod cache_helper_support;
 use self::cache_helper_support::insert_verified_cache_helper;
 
 /// Pinned Alint binary release tag for the step's `version:` input.
-pub const ALINT_BINARY_VERSION: &str = "v0.19.0";
+pub const ALINT_BINARY_VERSION: &str = "v0.20.0";
 
 #[path = "render_context.rs"]
 mod context;
@@ -318,11 +318,13 @@ fn render_merged_with_routing(
     let suite_matrices = (
         matrix::suites::suite_matrices_of(jobs)?,
         matrix::suites::suite_allow_failure_jobs_of(jobs),
+        matrix::bun::bun_matrices_of(jobs)?,
     );
     let jobs = if matrix.is_some()
         || !caps.is_empty()
         || !suite_matrices.0.is_empty()
         || !suite_matrices.1.is_empty()
+        || !suite_matrices.2.is_empty()
     {
         matrix::scrub_matrix_marker(jobs)
     } else {

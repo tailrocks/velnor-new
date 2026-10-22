@@ -5,8 +5,6 @@ mod binding;
 mod cleanup;
 pub(crate) use cleanup::StorageCleanupIdentity;
 pub(crate) use cleanup::StorageCleanupObserverWitness;
-#[cfg(test)]
-pub(crate) use cleanup::{StorageCleanupCgroup, StorageCleanupMount};
 mod containers;
 pub(crate) use containers::{BootstrapContainerCreateClaim, BootstrapStartClaim};
 mod initialization;
@@ -44,8 +42,6 @@ pub(crate) use initialization::{
     VerifiedMetadataInitialization, VerifiedMetadataInitializationHandoff,
 };
 pub(crate) use metadata_settlement::{MetadataSettlementResult, StorageMetadataSettlementClaim};
-#[cfg(test)]
-pub(crate) use network::StorageNetworkRecoveryIdentity;
 pub(crate) use network::{
     RecordedStorageNetwork, StorageNetworkCreateClaim, StorageNetworkRemovalClaim,
 };

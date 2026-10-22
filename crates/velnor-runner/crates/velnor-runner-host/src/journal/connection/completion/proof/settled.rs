@@ -49,7 +49,7 @@ pub(super) async fn matches_terminal_settlement(
     {
         return Ok(false);
     }
-    let expected = completion_settlement_digest(CompletionSettlementDigest {
+    let expected = completion_settlement_digest(&CompletionSettlementDigest {
         connection_id,
         reservation_id,
         intent_id,
@@ -96,7 +96,7 @@ struct CompletionSettlementDigest<'a> {
     event_digest: &'a str,
 }
 
-fn completion_settlement_digest(identity: CompletionSettlementDigest<'_>) -> String {
+fn completion_settlement_digest(identity: &CompletionSettlementDigest<'_>) -> String {
     let canonical = format!(
         "{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
         identity.connection_id,

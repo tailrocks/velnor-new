@@ -9,7 +9,9 @@ pub(super) fn runner_assignment_fields(key: &AssignmentKey) -> (Option<i64>, Opt
         AssignmentKey::AssignedRequest { request_id } => {
             (Some(*request_id), Some(format!("v{request_id}")))
         }
+        #[cfg(test)]
         AssignmentKey::PopulationMessage { message_id } => (None, Some(format!("m{message_id}"))),
+        #[cfg(test)]
         AssignmentKey::Session { name } => (None, Some(name.clone())),
         AssignmentKey::Remote { .. } => (None, None),
     }

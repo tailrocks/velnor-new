@@ -147,8 +147,6 @@ pub(crate) use enumerate::{
     PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation,
 };
 #[cfg(test)]
-pub(crate) use physical_attempt::PhysicalAttemptIdentity;
-#[cfg(test)]
 pub(crate) use read::ReservationSnapshot;
 pub(crate) use read::ReservationState;
 
@@ -192,10 +190,6 @@ pub(crate) use provisioning::{
     PreJitNetworkIdentity, PreJitStorageObject,
 };
 #[cfg(test)]
-pub(crate) use provisioning::{
-    StorageCleanupCgroup, StorageCleanupMount, StorageNetworkRecoveryIdentity,
-};
-#[cfg(test)]
 pub(crate) use storage_budget::StorageAdmission;
 pub(crate) use storage_budget::{
     BoundJobFactsSnapshot, StorageAdmissionSample, StorageFilesystemKind, StorageInodePolicy,
@@ -204,13 +198,9 @@ pub(crate) use storage_budget::{
     StorageRoleLimit, StorageSampleIdentity,
 };
 #[cfg(test)]
-pub(crate) use storage_budget::{StorageReservationPlan, StorageRoleCharge};
-
-#[cfg(test)]
 pub(crate) use storage_budget_tests::{
     fixture_admission, fixture_profile, fixture_provisioning_profile,
     fixture_storage_provisioning_admission, fixture_storage_provisioning_admission_for_profile,
-    fixture_storage_provisioning_admission_with_filesystem_digest,
 };
 
 pub(super) async fn validate_storage_budget_schema(

@@ -159,8 +159,6 @@ async fn validate_parent_reference(connection: &turso::Connection) -> Result<(),
 
 include!("storage_initialization/validation.rs");
 
-include!("storage_initialization/v22.rs");
-
 async fn scalar_count(connection: &turso::Connection, sql: &str) -> Result<i64, HostError> {
     let mut rows = connection
         .query(sql, ())
@@ -261,3 +259,5 @@ fn canonicalize_table_parts(parts: Vec<String>) -> Vec<String> {
     }
     canonical
 }
+
+include!("storage_initialization/v22.rs");
