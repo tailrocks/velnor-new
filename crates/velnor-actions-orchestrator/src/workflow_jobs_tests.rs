@@ -240,7 +240,6 @@ fn plan_tools_follow_role_in_all_order() {
             PinnedTool::Rust,
             PinnedTool::Jactionlint,
             PinnedTool::Shellcheck,
-            PinnedTool::Zizmor,
         ]
     );
     assert_eq!(
@@ -251,7 +250,6 @@ fn plan_tools_follow_role_in_all_order() {
         vec![
             PinnedTool::Jactionlint,
             PinnedTool::Shellcheck,
-            PinnedTool::Zizmor,
             PinnedTool::Opentofu,
         ],
         "pure-tofu plans carry opentofu plus the validators, no Rust"
@@ -266,7 +264,6 @@ fn plan_tools_follow_role_in_all_order() {
             PinnedTool::Rust,
             PinnedTool::Jactionlint,
             PinnedTool::Shellcheck,
-            PinnedTool::Zizmor,
             PinnedTool::Nextest,
             PinnedTool::Opentofu,
         ],
@@ -340,7 +337,6 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
             catalog.tool_spec(PinnedTool::Rust),
             catalog.tool_spec(PinnedTool::Jactionlint),
             catalog.tool_spec(PinnedTool::Shellcheck),
-            catalog.tool_spec(PinnedTool::Zizmor),
         ];
         if use_nextest {
             specs.push(catalog.tool_spec(PinnedTool::Nextest));

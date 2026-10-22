@@ -207,7 +207,7 @@ pub fn with_credential_scrub(env: &BTreeMap<String, String>) -> BTreeMap<String,
 /// Second, empty is poison for GitHub-auth consumers: CI run
 /// 36815180228 proved `MISE_GITHUB_TOKEN=""` makes Mise send an empty
 /// bearer (GitHub API 401, breaking `ubi:` tool installs) and
-/// `GH_TOKEN=""` makes zizmor abort (`GitHub token cannot be empty`),
+/// `GH_TOKEN=""` made the former zizmor job abort (`GitHub token cannot be empty`),
 /// while truly-absent variables fall back to clean unauthenticated
 /// fetches. `GH_HOST`/`GH_CONFIG_DIR` join the set for the same
 /// reason: an empty endpoint selector misroutes or breaks `gh`-family

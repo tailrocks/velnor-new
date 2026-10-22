@@ -69,9 +69,6 @@ pub(crate) fn tool_source(tool: PinnedTool, version: &str) -> String {
         PinnedTool::Shellcheck => {
             format!("https://github.com/koalaman/shellcheck/releases/tag/v{version}")
         }
-        PinnedTool::Zizmor => {
-            format!("https://github.com/zizmorcore/zizmor/releases/tag/v{version}")
-        }
         PinnedTool::Nextest => {
             format!("https://github.com/nextest-rs/nextest/releases/tag/cargo-nextest-{version}")
         }

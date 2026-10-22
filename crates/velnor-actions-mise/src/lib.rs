@@ -62,7 +62,7 @@ pub use catalog::{
     GH_VERSION, JACTIONLINT_DIGESTS, JACTIONLINT_VERSION, JactionlintDigest, MISE_VERSION,
     MR_BOXINGTON_VERSION, OPENTOFU_SHA256_DARWIN_AMD64, OPENTOFU_SHA256_DARWIN_ARM64,
     OPENTOFU_SHA256_LINUX_AMD64, OPENTOFU_SHA256_LINUX_ARM64, OPENTOFU_VERSION, PinnedTool,
-    RUST_TARGET_TRIPLE, RUST_VERSION, SHELLCHECK_VERSION, ToolCatalog, ZIZMOR_VERSION,
+    RUST_TARGET_TRIPLE, RUST_VERSION, SHELLCHECK_VERSION, ToolCatalog,
     check_freshness_requirements, jactionlint_archive_sha256, jactionlint_executable_sha256,
     validate_concrete_exact_version, validate_exact_version,
 };

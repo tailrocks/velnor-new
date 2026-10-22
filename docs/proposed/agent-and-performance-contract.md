@@ -35,7 +35,7 @@ structure preflight; it MUST NOT trigger Rust compilation or cache transfers.
 | Lints | Required Clippy/rustdoc output fails CI; unsafe policy is enforced |
 | Tool path | Preflight proves exact Velnor pins ran through Mise and MBX handled compilation; all three project tool files remain byte-identical |
 | Dependencies | cargo-deny and cargo-machete pass; Git sources are pinned |
-| Workflows | Generated YAML is deterministic, action-pinned, jactionlint/zizmor clean |
+| Workflows | Generated YAML is deterministic, action-pinned, jactionlint clean |
 | Plan report | Stable text, no YAML/JSON, parity with generated jobs and matrix, no repository writes |
 | Agent integrity | Policy files are protected; feature PR cannot remove its own gate |
 | Performance | Named-runner measurements meet budgets; cache misses have reasons |
