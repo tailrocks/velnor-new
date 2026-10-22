@@ -2,6 +2,8 @@
 
 use crate::RenderError;
 use crate::commands::join_argv_for_run;
+
+use super::ci_run_lookup;
 use velnor_actions_contract::package_release::PackageReleaseChannel;
 
 use velnor_actions_contract::CI_WORKFLOW_PATH;
@@ -79,6 +81,7 @@ pub(super) fn consumer_script(
     );
     Ok(ELIGIBILITY_SCRIPT
         .replace("@GH_FUNCTION@", &gh_function)
+        .replace("@CI_RUN_LISTING_FUNCTION@", &ci_run_lookup::bash_function())
         .replace("@REPOSITORY@", &context.repository)
         .replace("@DEFAULT_BRANCH@", &context.default_branch)
         .replace("@WORKFLOW_PATH@", context.channel.workflow_path())
@@ -184,16 +187,20 @@ current_default_branch_sha() {
     || fail 'default branch commit response is invalid'
 }
 
+@CI_RUN_LISTING_FUNCTION@
+
 latest_ci_run() {
-  gh_api --paginate --slurp -X GET \
+  local listing
+  listing="$(list_exact_source_ci_runs 'release eligibility' gh_api --paginate --slurp -X GET \
     "repos/$repository/actions/workflows/@CI_WORKFLOW_API_ID@/runs" \
-    -f "head_sha=$source_sha" -f "branch=$default_branch" -f event=push -F per_page=100 \
-    | jq -c \
-        --arg source_sha "$source_sha" \
-        --arg workflow_path "$ci_workflow_path" \
-        --arg repository "$repository" \
-        --arg default_branch "$default_branch" \
-        '@LATEST_RUN_JQ@' \
+    -f "head_sha=$source_sha" -F per_page=100)" \
+    || fail 'CI run lookup failed'
+  printf '%s\n' "$listing" | jq -c \
+      --arg source_sha "$source_sha" \
+      --arg workflow_path "$ci_workflow_path" \
+      --arg repository "$repository" \
+      --arg default_branch "$default_branch" \
+      '@LATEST_RUN_JQ@' \
     || fail 'CI run response is invalid'
 }
 

@@ -50,6 +50,17 @@ pub(super) struct Resources {
     pub(super) selected_engine: SelectedEngineContext,
 }
 
+struct StartWithJournalInput<'a> {
+    journal: journal_ref::CompletionJournal,
+    connection_id: &'a str,
+    docker: Docker,
+    admin_base: &'a str,
+    admin_token: String,
+    state: &'a Path,
+    native_cleanup: NativeCleanupRuntime,
+    selected_engine: SelectedEngineContext,
+}
+
 /// One independently scheduled completion cleanup worker.
 pub(crate) struct CompletionWorker {
     wake: SyncSender<()>,
@@ -72,28 +83,29 @@ impl CompletionWorker {
         state: &Path,
     ) -> Result<Self, HostError> {
         let connection_id = journal.connection_id().as_str().to_owned();
-        Self::start_with_journal(
-            journal_ref::CompletionJournal::scoped(journal),
-            &connection_id,
+        Self::start_with_journal(StartWithJournalInput {
+            journal: journal_ref::CompletionJournal::scoped(journal),
+            connection_id: &connection_id,
             docker,
             admin_base,
             admin_token,
             state,
             native_cleanup,
-            selected,
-        )
+            selected_engine: selected,
+        })
     }
 
-    fn start_with_journal(
-        journal: journal_ref::CompletionJournal,
-        connection_id: &str,
-        docker: Docker,
-        admin_base: &str,
-        admin_token: String,
-        state: &Path,
-        native_cleanup: NativeCleanupRuntime,
-        selected_engine: SelectedEngineContext,
-    ) -> Result<Self, HostError> {
+    fn start_with_journal(input: StartWithJournalInput<'_>) -> Result<Self, HostError> {
+        let StartWithJournalInput {
+            journal,
+            connection_id,
+            docker,
+            admin_base,
+            admin_token,
+            state,
+            native_cleanup,
+            selected_engine,
+        } = input;
         if admin_token.is_empty() {
             return Err(HostError::EmptySecret);
         }

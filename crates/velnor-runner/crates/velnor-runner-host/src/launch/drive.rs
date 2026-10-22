@@ -111,7 +111,7 @@ impl fmt::Debug for Drive {
             .field("source_authorized", &self.source_authorized)
             .field("admission_state", &self.admission_state.is_some())
             .field("pat", &"[redacted]")
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
