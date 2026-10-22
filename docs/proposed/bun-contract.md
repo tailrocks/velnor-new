@@ -283,11 +283,14 @@ Playwright project and shard matrix) are specified in
   timeout (`config/bun_tests.rs`).
 - Adapter: lockfile policy, JSONC, workspace resolution, `bunfig`, tool
   agreement, reads and claims (`velnor-actions-bun` tests).
-- Renderer: job shape, permissions and role gates (`impl_renderer_bun.rs`).
+- Renderer: job shape, permissions and role gates for member and suite jobs
+  (`impl_renderer_bun.rs`).
+- Suites: see [Bun browser suites](bun-browser-suites.md#verification).
 - Golden: `fixtures/bun-workspace` (two members, Chromium on one) must
   generate a byte-identical `ci.yml` (`impl_bun_golden.rs`); it proves that
   repositories which declare no suite are unchanged by later Bun features.
-  Regenerate deliberately with `VELNOR_UPDATE_GOLDENS=1`.
+  `fixtures/bun-workspace-suites` (a sanitized platform configuration) is the
+  opt-in golden. Regenerate deliberately with `VELNOR_UPDATE_GOLDENS=1`.
 - Orchestrator: generated jobs, determinism, project-policy and lockfile
   failures (`impl_bun.rs`), the member timeout chain (`impl_bun_timeout.rs`)
   and plan dispositions (`impl_bun_select.rs`).

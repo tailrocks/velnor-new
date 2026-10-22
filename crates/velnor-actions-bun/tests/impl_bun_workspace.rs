@@ -1,5 +1,8 @@
 use std::collections::BTreeMap;
-use velnor_actions_bun::{job_id, job_name, member_scripts, resolve, slug};
+use velnor_actions_bun::{
+    job_id, job_name, member_job_scripts, member_scripts, resolve, slug, suite_claims,
+    suite_job_id, suite_job_name,
+};
 
 use velnor_actions_contract::config::BunStackConfig;
 
@@ -184,4 +187,72 @@ fn playwright_core_is_the_lock_trust_anchor() {
     assert_eq!(core.integrity, integrity);
     let bare = resolve("frontend", ROOT, LOCK, &members()).expect("workspace");
     assert!(bare.playwright_core.is_none());
+}
+
+#[test]
+fn suites_take_their_scripts_out_of_the_member_job() {
+    let workspace = resolve("frontend", ROOT, LOCK, &members()).expect("workspace");
+    let get = |name: &str| {
+        workspace
+            .members
+            .iter()
+            .find(|m| m.name == name)
+            .expect("member")
+            .clone()
+    };
+    let docs = get("chainargos-docs");
+    let plain = config(r#"{"roots":["frontend"]}"#).expect("config");
+    assert_eq!(
+        member_job_scripts(&docs, &plain).expect("scripts"),
+        Some(member_scripts(&docs, &plain).expect("scripts"))
+    );
+    assert!(suite_claims(&docs, &plain).is_empty());
+    let unit = config(
+        r#"{"roots":["frontend"],"members":{"chainargos-docs":{"suites":{"unit":{"scripts":["test"]},"dev":{"scripts":["dev"]}}}}}"#,
+    )
+    .expect("config");
+    assert_eq!(
+        member_job_scripts(&docs, &unit).expect("scripts"),
+        Some(vec!["typecheck".to_owned(), "build".to_owned()])
+    );
+    assert_eq!(
+        suite_claims(&docs, &unit).into_iter().collect::<Vec<_>>(),
+        ["dev", "test"]
+    );
+    let all = config(
+        r#"{"roots":["frontend"],"members":{"chainargos-docs":{"scripts":["test"],"suites":{"unit":{"scripts":["test"]}}}}}"#,
+    )
+    .expect("config");
+    assert_eq!(member_job_scripts(&docs, &all).expect("omitted"), None);
+    let contracts = get("@chainargos/contracts");
+    assert_eq!(
+        member_job_scripts(&contracts, &plain)
+            .expect_err("nothing")
+            .code(),
+        "bun_member_no_scripts:@chainargos/contracts"
+    );
+    let only_suite = config(
+        r#"{"roots":["frontend"],"members":{"@chainargos/contracts":{"suites":{"fmt":{"scripts":["format"]}}}}}"#,
+    )
+    .expect("config");
+    assert_eq!(
+        member_job_scripts(&contracts, &only_suite).expect("omitted"),
+        None
+    );
+    let missing = config(
+        r#"{"roots":["frontend"],"members":{"chainargos-docs":{"suites":{"unit":{"scripts":["nope"]}}}}}"#,
+    )
+    .expect("config");
+    assert_eq!(
+        member_job_scripts(&docs, &missing)
+            .expect_err("missing")
+            .code(),
+        "bun_script_missing:chainargos-docs:nope"
+    );
+    assert_eq!(suite_job_id(&docs, "unit"), "bun-chainargos-docs--unit");
+    assert_eq!(
+        suite_job_name(&docs, "unit"),
+        "Bun / chainargos-docs / unit"
+    );
+    assert!(!job_id(&docs).contains("--"));
 }

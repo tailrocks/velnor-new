@@ -83,6 +83,20 @@ pub fn job_name(member: &Member) -> String {
     format!("Bun / {}", member.name)
 }
 
+/// Generated job id of one of a member's suites (`bun-<slug>--<suite>`).
+///
+/// [`slug`] never emits `--`, so a suite id never collides with a member id.
+#[must_use]
+pub fn suite_job_id(member: &Member, suite: &str) -> String {
+    format!("{}--{suite}", job_id(member))
+}
+
+/// Display name of a suite's job (`Bun / <name> / <suite>`).
+#[must_use]
+pub fn suite_job_name(member: &Member, suite: &str) -> String {
+    format!("Bun / {} / {suite}", member.name)
+}
+
 /// Resolve one workspace root from its text.
 ///
 /// `members` maps each `bun.lock` workspace key to that member's
@@ -229,6 +243,61 @@ fn check_unique(members: &[Member]) -> Result<(), BunError> {
 /// Returns `bun_script_missing:<member>:<script>` for an override naming a
 /// script the member lacks and `bun_member_no_scripts:<member>` when nothing runs.
 pub fn member_scripts(member: &Member, config: &BunStackConfig) -> Result<Vec<String>, BunError> {
+    let scripts = configured_scripts(member, config)?;
+    if scripts.is_empty() {
+        return Err(BunError::new("bun_member_no_scripts", &member.name));
+    }
+    Ok(scripts)
+}
+
+/// Scripts the member job runs once its suites claimed theirs, or `None`
+/// when the suites claim every script and the member job is omitted.
+///
+/// Without suites this is [`member_scripts`] exactly.
+///
+/// # Errors
+///
+/// [`member_scripts`]'s errors, plus `bun_script_missing:<member>:<script>`
+/// for a suite script the member's `package.json` lacks. A member with no
+/// suite and nothing to run still fails with `bun_member_no_scripts`.
+pub fn member_job_scripts(
+    member: &Member,
+    config: &BunStackConfig,
+) -> Result<Option<Vec<String>>, BunError> {
+    let claims = suite_claims(member, config);
+    if claims.is_empty() {
+        return member_scripts(member, config).map(Some);
+    }
+    if let Some(missing) = claims.iter().find(|name| !member.scripts.contains(**name)) {
+        return Err(BunError::new(
+            "bun_script_missing",
+            &format!("{}:{missing}", member.name),
+        ));
+    }
+    let left: Vec<String> = configured_scripts(member, config)?
+        .into_iter()
+        .filter(|script| !claims.contains(script.as_str()))
+        .collect();
+    Ok((!left.is_empty()).then_some(left))
+}
+
+/// Every script a suite of `member` claims.
+#[must_use]
+pub fn suite_claims<'a>(
+    member: &Member,
+    config: &'a BunStackConfig,
+) -> std::collections::BTreeSet<&'a str> {
+    config
+        .members
+        .get(&member.name)
+        .into_iter()
+        .flat_map(|options| options.suites.values())
+        .flat_map(|suite| suite.scripts.iter().map(String::as_str))
+        .collect()
+}
+
+/// Scripts the member's configuration selects before suites claim theirs.
+fn configured_scripts(member: &Member, config: &BunStackConfig) -> Result<Vec<String>, BunError> {
     let declared = config
         .members
         .get(&member.name)
@@ -255,8 +324,5 @@ pub fn member_scripts(member: &Member, config: &BunStackConfig) -> Result<Vec<St
             .filter(|name| member.scripts.contains(name))
             .collect()
     };
-    if scripts.is_empty() {
-        return Err(BunError::new("bun_member_no_scripts", &member.name));
-    }
     Ok(scripts)
 }

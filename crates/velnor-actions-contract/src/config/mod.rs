@@ -73,8 +73,9 @@ pub use build_task::{
     BuildTask, BuildTaskRunner, BuildTaskXcodeCapability, is_valid_build_tool_key,
 };
 pub use bun::{
-    BUN_JOB_PREFIX, BunBrowser, BunInputRule, BunMemberConfig, BunStackConfig, DEFAULT_BUN_SCRIPTS,
-    MAX_BUN_TIMEOUT_MINUTES, is_valid_member_name, is_valid_script_name,
+    BUN_JOB_PREFIX, BunBrowser, BunInputRule, BunMemberConfig, BunStackConfig, BunSuiteConfig,
+    DEFAULT_BUN_SCRIPTS, MAX_BUN_TIMEOUT_MINUTES, RESERVED_BUN_SUITE_IDS, is_valid_member_name,
+    is_valid_script_name, is_valid_suite_id,
 };
 pub use check_receipt_budget::*;
 pub use dbt::{DBT_JOB_PREFIX, DbtCheck, DbtService, DbtStackConfig};

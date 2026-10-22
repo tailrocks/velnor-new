@@ -210,14 +210,17 @@ app_private_key_secret = \"VELNOR_DEPS_APP_PRIVATE_KEY\"\nnpm_scopes = [\"@chain
 const COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
 const SHA: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
-#[test]
-fn pinned_release_assets_wire_the_app_token_block_ahead_of_every_install() -> TestResult {
+/// A Bun repository pinning one private release asset (HD-7), plus `extra`
+/// `[stacks.bun]` configuration.
+pub(crate) fn release_asset_repo(
+    extra: &str,
+) -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
     let config = format!(
         "{}[private_sources]\nowner = \"acme\"\napp_id_variable = \"VELNOR_DEPS_APP_ID\"\n\
 app_private_key_secret = \"VELNOR_DEPS_APP_PRIVATE_KEY\"\nnpm_scopes = [\"@chainargos\"]\n\
 [[private_sources.release_assets]]\nid = \"ui-assets\"\nrepository = \"acme/ui-assets\"\n\
 tag = \"v1.0.0\"\nasset = \"assets.tar.gz\"\nextract_to = \"ui-assets\"\n",
-        bun_config("")
+        bun_config(extra)
     );
     let repo = make_repo(&config)?;
     write_workspace(repo.path(), MISE)?;
@@ -230,6 +233,12 @@ extract_to = \"ui-assets\"\n"
         ),
     )?;
     git(&["add", "."], repo.path())?;
+    Ok(repo)
+}
+
+#[test]
+fn pinned_release_assets_wire_the_app_token_block_ahead_of_every_install() -> TestResult {
+    let repo = release_asset_repo("")?;
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     let ci = required_file(&tree, ".github/workflows/ci.yml")?;
     let docs = job_body(ci, "bun-chainargos-docs")?;
