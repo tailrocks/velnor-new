@@ -48,7 +48,36 @@ pub(super) async fn acquired_candidate_fixture() -> Result<AcquiredCandidateFixt
         scope.record_source_authorization(&request, &source).await?,
         SourceAuthorizationResult::Recorded
     );
+    let reservation_id = claim_acquired_reservation(&scope, &request, REQUEST_ID).await?;
 
+    let policy = config
+        .validated_job_authority_policy(scope.connection_id())?
+        .ok_or(HostError::Identity)?;
+    let candidate = scope
+        .acquired_recovery_candidate(
+            &request,
+            reservation_id,
+            policy.generation(),
+            policy.policy_sha256(),
+        )
+        .await?
+        .ok_or(HostError::Journal)?;
+    Ok(AcquiredCandidateFixture {
+        _scratch: scratch,
+        _journal: journal,
+        scope,
+        request,
+        set_id: SET_ID,
+        binding,
+        candidate,
+    })
+}
+
+async fn claim_acquired_reservation(
+    scope: &crate::journal::ConnectionJournal,
+    request: &crate::journal::AssignmentIdentity,
+    request_id: i64,
+) -> Result<i64, HostError> {
     let physical = scope
         .assignment_identity(AssignmentKey::Remote {
             kind: "runner".to_owned(),
@@ -83,30 +112,9 @@ pub(super) async fn acquired_candidate_fixture() -> Result<AcquiredCandidateFixt
     };
     assert!(reservation_id > 0 && intent_id > 0);
     scope
-        .record_request_acquire(&request, AssignedAcquireResult::Returned(vec![REQUEST_ID]))
+        .record_request_acquire(request, AssignedAcquireResult::Returned(vec![request_id]))
         .await?;
-
-    let policy = config
-        .validated_job_authority_policy(scope.connection_id())?
-        .ok_or(HostError::Identity)?;
-    let candidate = scope
-        .acquired_recovery_candidate(
-            &request,
-            reservation_id,
-            policy.generation(),
-            policy.policy_sha256(),
-        )
-        .await?
-        .ok_or(HostError::Journal)?;
-    Ok(AcquiredCandidateFixture {
-        _scratch: scratch,
-        _journal: journal,
-        scope,
-        request,
-        set_id: SET_ID,
-        binding,
-        candidate,
-    })
+    Ok(reservation_id)
 }
 
 #[tokio::test]
