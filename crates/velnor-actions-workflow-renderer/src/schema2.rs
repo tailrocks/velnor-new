@@ -36,6 +36,8 @@ pub use consumer_preview::{
     ConsumerReleaseSpec, ConsumerReleaseTapSpec, ConsumerRollingPreviewSpec,
     render_consumer_preview, render_release_tap_reconcile,
 };
+#[path = "schema2_ci_run_lookup.rs"]
+mod ci_run_lookup;
 #[path = "schema2_consumer_binary_release.rs"]
 mod consumer_binary_release;
 #[path = "schema2_consumer_release_eligibility.rs"]
