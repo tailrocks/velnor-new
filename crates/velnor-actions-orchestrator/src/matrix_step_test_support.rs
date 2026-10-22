@@ -129,6 +129,7 @@ pub(super) fn renderer_context(
 ) -> velnor_actions_workflow_renderer::render::RenderContext {
     let generator_version = env!("CARGO_PKG_VERSION").to_owned();
     velnor_actions_workflow_renderer::render::RenderContext {
+        tool_pins: Vec::new(),
         staged_binary: format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{generator_version}"),
         generator_version: generator_version.clone(),
         report_helper_version: generator_version,

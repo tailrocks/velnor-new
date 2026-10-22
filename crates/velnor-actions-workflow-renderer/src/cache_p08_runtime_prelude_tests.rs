@@ -154,7 +154,8 @@ fn generated_files_exist_only_for_real_v2_consumers() -> Result<(), RenderError>
         cache_mode: None,
     };
     let jobs = BTreeMap::from([("fixture".to_owned(), job)]);
-    let files = crate::render_cache_files::with_runtime_identity_files(Vec::new(), &jobs, "0.1.0")?;
+    let files =
+        crate::render_cache_files::with_runtime_identity_files(Vec::new(), &jobs, "0.1.0", &[])?;
     let paths = files
         .iter()
         .map(|file| file.path.as_str())
@@ -169,6 +170,7 @@ fn generated_files_exist_only_for_real_v2_consumers() -> Result<(), RenderError>
         Vec::new(),
         &BTreeMap::new(),
         "0.1.0",
+        &[],
     )?;
     assert_eq!(no_cache_files.len(), 0);
     Ok(())

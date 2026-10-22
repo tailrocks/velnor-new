@@ -96,12 +96,10 @@ Checked locally against a real rustup install (1.99.1, default profile with
 restored-phase run verified it in 73 s (all tarballs downloaded), the
 installed-phase run in 23 s (sums reused), and replacing `bin/rustc` fails.
 
-## Remaining cache trust (named, not fixed here)
+## The other cached tools
 
 The same cache entry restores the other Mise installs (MBX, Nextest and the
-rest of `~/.local/share/mise/installs`); only the Mise binary itself is
-re-checked against its pinned digest on restore. Those installs carry
-`mise.lock` checksums at install time but are not re-verified after a
-restore, so a default-branch job that runs code could poison them the same
-way. Closing that needs a post-restore check of every install against
-`mise.lock`, which is a tools-cache contract change for the owner.
+rest of `~/.local/share/mise/installs`). Since cache decision 10 the restore
+composite re-verifies each of them against its `mise.lock` or catalog
+archive pin and discards any that does not match; see
+[tools cache V2](../proposed/tools-cache-v2.md#re-verification-after-restore).
