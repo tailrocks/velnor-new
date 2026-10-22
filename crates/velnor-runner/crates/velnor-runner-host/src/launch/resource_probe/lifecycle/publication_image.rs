@@ -8,16 +8,6 @@ use super::super::projection::VerifiedProbeImage;
 use super::super::provider::{ImageProvider, ProbeImagePreparationEvidence};
 use super::{Deadline, bind_info, info, same_guest, verified_image};
 
-pub(in crate::launch::resource_probe) async fn verify_publication_image<P: ImageProvider>(
-    docker: &Docker,
-    journal: &Journal,
-    provider: &P,
-    expected: &SelectedEngineContext,
-) -> Result<(VerifiedProbeImage, ProbeImagePreparationEvidence), HostError> {
-    verify_publication_image_with_deadline(docker, journal, provider, expected, Deadline::new())
-        .await
-}
-
 pub(in crate::launch::resource_probe) async fn verify_publication_image_until<P: ImageProvider>(
     docker: &Docker,
     journal: &Journal,
