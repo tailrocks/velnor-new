@@ -135,7 +135,7 @@ impl Fixture {
         )
         .expect("stage context");
         let mut writer = crate::cache_action_stage::create_stage(&context).expect("stage writer");
-        writer.write_all(&bytes).expect("write cache transport");
+        writer.write_all(bytes).expect("write cache transport");
         writer.finish().expect("claim cache transport")
     }
 }

@@ -2,12 +2,15 @@ use super::super::super::manifest::{PayloadManifest, PayloadRoot};
 use super::super::super::roots::{CacheRootId, CacheRootSet};
 use super::super::payload::{self, ArchiveEntry, ArchiveEntryKind};
 use super::{
-    FILE_DOMAIN, HeaderFields, MAX_ENTRIES, MAX_INVENTORY_TEXT_BYTES, MemberKind, effective_value,
-    hash_entry, hex, is_file_root, root_name, utf8_text, validate_archive_path,
+    HeaderFields, MAX_ENTRIES, MAX_INVENTORY_TEXT_BYTES, MemberKind, is_file_root, root_name,
+    validate_archive_path,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
 use tar::Entry;
+
+#[path = "transfer_transport_tar_read_state/member.rs"]
+mod member;
 
 pub(super) struct ParseState<'a> {
     roots: BTreeMap<CacheRootId, RootState<'a>>,
@@ -30,6 +33,14 @@ struct FileIdentity {
     mode: u32,
     size: u64,
     digest: [u8; 32],
+    hardlink_target: Option<String>,
+}
+
+struct MemberContent {
+    kind: MemberKind,
+    size: u64,
+    digest: [u8; 32],
+    link_target: Option<String>,
     hardlink_target: Option<String>,
 }
 
@@ -83,9 +94,41 @@ impl<'a> ParseState<'a> {
         fields: HeaderFields,
     ) -> Result<(), &'static str> {
         let (root_id, relative, root_member) = self.classify_path(archive_path)?;
-        if !root_member && !self.has_parent_directories(root_id, &relative) {
+        self.validate_member_parent(root_id, &relative, root_member)?;
+        self.validate_root_member(root_id, root_member, fields)?;
+        let content = member::read_member_content(
+            self,
+            entry,
+            root_id,
+            &relative,
+            archive_path,
+            root_member,
+            fields,
+        )?;
+        if !root_member {
+            self.append_member(root_id, relative, fields.mode, content)?;
+        }
+        Ok(())
+    }
+
+    fn validate_member_parent(
+        &self,
+        root_id: CacheRootId,
+        relative: &str,
+        root_member: bool,
+    ) -> Result<(), &'static str> {
+        if !root_member && !self.has_parent_directories(root_id, relative) {
             return Err("qualification_cache_payload_parent_missing");
         }
+        Ok(())
+    }
+
+    fn validate_root_member(
+        &mut self,
+        root_id: CacheRootId,
+        root_member: bool,
+        fields: HeaderFields,
+    ) -> Result<(), &'static str> {
         let root = self
             .roots
             .get_mut(&root_id)
@@ -113,126 +156,44 @@ impl<'a> ParseState<'a> {
         } else if expected_file_root || !root.root_seen {
             return Err("qualification_cache_payload_root_mismatch");
         }
+        Ok(())
+    }
 
-        let (kind, size, digest, symlink_target, hardlink_target) = match fields.kind {
-            kind if kind.is_file() => {
-                let prefix = if root_member {
-                    let mut prefix = FILE_DOMAIN.to_vec();
-                    prefix.extend_from_slice(&fields.mode.to_be_bytes());
-                    prefix.extend_from_slice(&fields.size.to_be_bytes());
-                    Some(prefix)
-                } else {
-                    None
-                };
-                let (digest, read_size) = hash_entry(entry, fields.size, prefix.as_deref())?;
-                if root_member {
-                    let expected = format!("b3-{}", hex(&digest));
-                    if root.manifest.digest.as_deref() != Some(expected.as_str()) {
-                        return Err("qualification_cache_payload_digest_mismatch");
-                    }
-                } else {
-                    self.previous_files.insert(
-                        (root_id, relative.clone()),
-                        FileIdentity {
-                            mode: fields.mode,
-                            size: fields.size,
-                            digest,
-                            hardlink_target: None,
-                        },
-                    );
-                }
-                (MemberKind::File, read_size, digest, None, None)
-            }
-            kind if kind.is_dir() => {
-                if fields.size != 0 {
-                    return Err("qualification_cache_payload_entry_invalid");
-                }
-                if !root_member {
-                    self.directories.insert(archive_path.to_owned());
-                }
-                (MemberKind::Directory, 0, [0; 32], None, None)
-            }
-            kind if kind.is_symlink() => {
-                if fields.size != 0 || root_member {
-                    return Err("qualification_cache_payload_entry_invalid");
-                }
-                let target = effective_value(entry, "linkpath")?;
-                let target = utf8_text(target, "qualification_cache_payload_symlink_invalid")?;
-                payload::validate_internal_link(&relative, &target)?;
-                self.inventory_text_bytes = self
-                    .inventory_text_bytes
-                    .checked_add(target.len())
-                    .filter(|size| *size <= MAX_INVENTORY_TEXT_BYTES)
-                    .ok_or("qualification_cache_payload_limit")?;
-                let size =
-                    u64::try_from(target.len()).map_err(|_| "qualification_cache_payload_limit")?;
-                let digest = *blake3::hash(target.as_bytes()).as_bytes();
-                (MemberKind::Symlink, size, digest, Some(target), None)
-            }
-            kind if kind.is_hard_link() => {
-                if fields.size != 0 || root_member {
-                    return Err("qualification_cache_payload_entry_invalid");
-                }
-                let target = effective_value(entry, "linkpath")?;
-                let target = utf8_text(target, "qualification_cache_payload_hardlink_invalid")?;
-                let target_prefix = format!("roots/{}/", root_name(root_id));
-                let target = target
-                    .strip_prefix(&target_prefix)
-                    .ok_or("qualification_cache_payload_hardlink_invalid")?
-                    .to_owned();
-                validate_archive_path(&target)?;
-                self.inventory_text_bytes = self
-                    .inventory_text_bytes
-                    .checked_add(target.len())
-                    .filter(|size| *size <= MAX_INVENTORY_TEXT_BYTES)
-                    .ok_or("qualification_cache_payload_limit")?;
-                let previous = self
-                    .previous_files
-                    .get(&(root_id, target.clone()))
-                    .filter(|file| file.hardlink_target.is_none())
-                    .ok_or("qualification_cache_payload_hardlink_invalid")?;
-                if previous.mode != fields.mode {
-                    return Err("qualification_cache_payload_hardlink_invalid");
-                }
-                let identity = previous.clone();
-                self.previous_files.insert(
-                    (root_id, relative.clone()),
-                    FileIdentity {
-                        hardlink_target: Some(target.clone()),
-                        ..identity.clone()
-                    },
-                );
-                (
-                    MemberKind::File,
-                    identity.size,
-                    identity.digest,
-                    None,
-                    Some(target),
-                )
-            }
-            _ => return Err("qualification_cache_payload_entry_unsupported"),
-        };
-        if !root_member {
-            self.inventory_text_bytes = self
-                .inventory_text_bytes
-                .checked_add(relative.len())
-                .filter(|size| *size <= MAX_INVENTORY_TEXT_BYTES)
-                .ok_or("qualification_cache_payload_limit")?;
-            root.entries.push(ArchiveEntry {
-                path: relative,
-                kind: match kind {
-                    MemberKind::Directory => ArchiveEntryKind::Directory,
-                    MemberKind::File => ArchiveEntryKind::File,
-                    MemberKind::Symlink => ArchiveEntryKind::Symlink,
-                },
-                mode: fields.mode,
-                size,
-                content_digest: digest,
-                hardlink_target,
-                link_target: symlink_target,
-                stat: None,
-            });
-        }
+    fn append_member(
+        &mut self,
+        root_id: CacheRootId,
+        relative: String,
+        mode: u32,
+        content: MemberContent,
+    ) -> Result<(), &'static str> {
+        self.add_inventory_text(relative.len())?;
+        let root = self
+            .roots
+            .get_mut(&root_id)
+            .ok_or("qualification_cache_payload_root_mismatch")?;
+        root.entries.push(ArchiveEntry {
+            path: relative,
+            kind: match content.kind {
+                MemberKind::Directory => ArchiveEntryKind::Directory,
+                MemberKind::File => ArchiveEntryKind::File,
+                MemberKind::Symlink => ArchiveEntryKind::Symlink,
+            },
+            mode,
+            size: content.size,
+            content_digest: content.digest,
+            hardlink_target: content.hardlink_target,
+            link_target: content.link_target,
+            stat: None,
+        });
+        Ok(())
+    }
+
+    fn add_inventory_text(&mut self, amount: usize) -> Result<(), &'static str> {
+        self.inventory_text_bytes = self
+            .inventory_text_bytes
+            .checked_add(amount)
+            .filter(|size| *size <= MAX_INVENTORY_TEXT_BYTES)
+            .ok_or("qualification_cache_payload_limit")?;
         Ok(())
     }
 
