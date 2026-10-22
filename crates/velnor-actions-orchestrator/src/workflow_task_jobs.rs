@@ -7,8 +7,8 @@ use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::{
     build_verification_task_job,
     verification_jobs::{
-        WorkflowTaskPolicy, build_build_task_job, build_bun_member_job, build_image_build_job,
-        build_native_image_job, build_stack_job,
+        WorkflowTaskPolicy, build_build_task_job, build_bun_member_job, build_bun_suite_job,
+        build_image_build_job, build_native_image_job, build_stack_job,
     },
 };
 
@@ -84,7 +84,18 @@ pub(crate) fn policies(
                 .map(WorkflowTaskPolicy::NativeImage),
         )
         .chain(image_policies.into_iter().map(WorkflowTaskPolicy::Image))
-        .chain(bun_policies.into_iter().map(WorkflowTaskPolicy::Bun))
+        .chain(
+            bun_policies
+                .members
+                .into_iter()
+                .map(WorkflowTaskPolicy::Bun),
+        )
+        .chain(
+            bun_policies
+                .suites
+                .into_iter()
+                .map(WorkflowTaskPolicy::BunSuite),
+        )
         .chain(dbt_policies.into_iter().map(WorkflowTaskPolicy::Stack))
         .chain(ansible_policies.into_iter().map(WorkflowTaskPolicy::Stack))
         .collect::<Vec<_>>();
@@ -114,6 +125,10 @@ pub(crate) fn insert_jobs(
             WorkflowTaskPolicy::Bun(policy) => vec![(
                 policy.id.clone(),
                 build_bun_member_job(policy, CHECKOUT_USES)?,
+            )],
+            WorkflowTaskPolicy::BunSuite(policy) => vec![(
+                policy.id.clone(),
+                build_bun_suite_job(policy, CHECKOUT_USES)?,
             )],
             WorkflowTaskPolicy::Stack(policy) => {
                 vec![(policy.id.clone(), build_stack_job(policy, CHECKOUT_USES)?)]
