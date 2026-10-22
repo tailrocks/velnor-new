@@ -30,77 +30,8 @@ async fn missing_wrong_and_uncertain_metadata_absence_keep_the_hold_after_reopen
         .await?;
 
     let names = WorkerIdentityNames::from_nonce(&fixture.provisioned.nonce)?;
-    let legacy_names = vec![
-        names.volume_name(WorkerVolumeRole::Socket),
-        names.volume_name(WorkerVolumeRole::Home),
-        names.volume_name(WorkerVolumeRole::Work),
-        names.volume_name(WorkerVolumeRole::DindData),
-    ];
-    let missing_metadata = cleanup_proof(&fixture, legacy_names)?;
-    assert!(
-        fixture
-            .scope
-            .record_storage_cleanup(missing_metadata)
-            .await
-            .is_err(),
-        "Four-object recovery proof must not establish cleanup for a topology 2 capacity reservation."
-    );
-
-    assert!(
-        cleanup_proof(&fixture, Vec::new()).is_err(),
-        "The proof constructor must reject an empty object list without indexing or a panic."
-    );
-
-    let mut wrong_metadata_names = names_for_topology_two(&names);
-    wrong_metadata_names[4] = format!("{}-metadata-other", names.private_volume());
-    assert!(
-        cleanup_proof(&fixture, wrong_metadata_names).is_err(),
-        "the typed proof rejects an unowned metadata volume name"
-    );
-
-    let wrong_owner = test_verified_storage_cleanup(
-        fixture.provisioned.reservation_id,
-        fixture.provisioned.intent_id + 1,
-        TEST_ENGINE_ID.to_owned(),
-        fixture.provisioned.docker_root_digest.clone(),
-        fixture.provisioned.runner_container_id.clone(),
-        fixture.provisioned.dind_container_id.clone(),
-        names_for_topology_two(&names),
-        fixture.provisioned.instance_binding_digest.clone(),
-        StorageRole::PHYSICAL.to_vec(),
-        true,
-        true,
-        true,
-        true,
-    )?;
-    assert!(
-        fixture
-            .scope
-            .record_storage_cleanup(wrong_owner)
-            .await
-            .is_err(),
-        "The journal must reject a correct object inventory from another operation."
-    );
-
-    let uncertain = test_verified_storage_cleanup(
-        fixture.provisioned.reservation_id,
-        fixture.provisioned.intent_id,
-        TEST_ENGINE_ID.to_owned(),
-        fixture.provisioned.docker_root_digest.clone(),
-        fixture.provisioned.runner_container_id.clone(),
-        fixture.provisioned.dind_container_id.clone(),
-        names_for_topology_two(&names),
-        fixture.provisioned.instance_binding_digest.clone(),
-        StorageRole::PHYSICAL.to_vec(),
-        true,
-        false,
-        true,
-        true,
-    );
-    assert!(
-        uncertain.is_err(),
-        "Unverified volume absence must not produce cleanup proof."
-    );
+    assert_missing_and_unowned_metadata_proofs_rejected(&fixture, &names).await?;
+    assert_wrong_owner_and_uncertain_absence_rejected(&fixture, &names).await?;
 
     assert_eq!(
         fixture
@@ -134,6 +65,90 @@ async fn missing_wrong_and_uncertain_metadata_absence_keep_the_hold_after_reopen
             .await
             .is_err(),
         "metadata settlement cannot start without complete owned-object cleanup"
+    );
+    Ok(())
+}
+
+async fn assert_missing_and_unowned_metadata_proofs_rejected(
+    fixture: &super::review_counterexamples::Ready,
+    names: &WorkerIdentityNames,
+) -> Result<(), HostError> {
+    let legacy_names = vec![
+        names.volume_name(WorkerVolumeRole::Socket),
+        names.volume_name(WorkerVolumeRole::Home),
+        names.volume_name(WorkerVolumeRole::Work),
+        names.volume_name(WorkerVolumeRole::DindData),
+    ];
+    let missing_metadata = cleanup_proof(fixture, legacy_names)?;
+    assert!(
+        fixture
+            .scope
+            .record_storage_cleanup(missing_metadata)
+            .await
+            .is_err(),
+        "Four-object recovery proof must not establish cleanup for a topology 2 capacity reservation."
+    );
+
+    assert!(
+        cleanup_proof(fixture, Vec::new()).is_err(),
+        "The proof constructor must reject an empty object list without indexing or a panic."
+    );
+
+    let mut wrong_metadata_names = names_for_topology_two(names);
+    wrong_metadata_names[4] = format!("{}-metadata-other", names.private_volume());
+    assert!(
+        cleanup_proof(fixture, wrong_metadata_names).is_err(),
+        "the typed proof rejects an unowned metadata volume name"
+    );
+    Ok(())
+}
+
+async fn assert_wrong_owner_and_uncertain_absence_rejected(
+    fixture: &super::review_counterexamples::Ready,
+    names: &WorkerIdentityNames,
+) -> Result<(), HostError> {
+    let wrong_owner = test_verified_storage_cleanup(
+        fixture.provisioned.reservation_id,
+        fixture.provisioned.intent_id + 1,
+        TEST_ENGINE_ID.to_owned(),
+        fixture.provisioned.docker_root_digest.clone(),
+        fixture.provisioned.runner_container_id.clone(),
+        fixture.provisioned.dind_container_id.clone(),
+        names_for_topology_two(names),
+        fixture.provisioned.instance_binding_digest.clone(),
+        StorageRole::PHYSICAL.to_vec(),
+        true,
+        true,
+        true,
+        true,
+    )?;
+    assert!(
+        fixture
+            .scope
+            .record_storage_cleanup(wrong_owner)
+            .await
+            .is_err(),
+        "The journal must reject a correct object inventory from another operation."
+    );
+
+    let uncertain = test_verified_storage_cleanup(
+        fixture.provisioned.reservation_id,
+        fixture.provisioned.intent_id,
+        TEST_ENGINE_ID.to_owned(),
+        fixture.provisioned.docker_root_digest.clone(),
+        fixture.provisioned.runner_container_id.clone(),
+        fixture.provisioned.dind_container_id.clone(),
+        names_for_topology_two(names),
+        fixture.provisioned.instance_binding_digest.clone(),
+        StorageRole::PHYSICAL.to_vec(),
+        true,
+        false,
+        true,
+        true,
+    );
+    assert!(
+        uncertain.is_err(),
+        "Unverified volume absence must not produce cleanup proof."
     );
     Ok(())
 }
