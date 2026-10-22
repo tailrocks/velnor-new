@@ -2,8 +2,13 @@
 use super::rust_suites::WorkflowDispatchConfig;
 use super::rust_suites_validate::validate_preserve_workflows;
 use super::workflow_flags::{default_true, is_false, is_true};
-pub use super::workflow_timeouts::{default_crate_timeout_minutes, default_plan_timeout_minutes};
-use super::workflow_timeouts::{is_default_crate_timeout, is_default_plan_timeout};
+pub use super::workflow_timeouts::{
+    default_crate_timeout_minutes, default_dependency_seed_timeout_minutes,
+    default_plan_timeout_minutes,
+};
+use super::workflow_timeouts::{
+    is_default_crate_timeout, is_default_dependency_seed_timeout, is_default_plan_timeout,
+};
 use crate::config::{TofuApplyConfig, WorkflowLintConfig, WorkflowTask};
 use crate::errors::ContractError;
 use crate::workflow::ValidatorKind;
@@ -56,6 +61,12 @@ pub struct WorkflowConfig {
         skip_serializing_if = "is_default_crate_timeout"
     )]
     pub crate_timeout_minutes: u16,
+    /// Literal timeout for each whole-workspace dependency seed job (`1..=360`, default `30`).
+    #[serde(
+        default = "default_dependency_seed_timeout_minutes",
+        skip_serializing_if = "is_default_dependency_seed_timeout"
+    )]
+    pub dependency_seed_timeout_minutes: u16,
     /// Keep `MISE_QUIET=1` in the generated workflow environment (default true).
     ///
     /// Silence is the default for log hygiene. `false` omits `MISE_QUIET` so
@@ -216,6 +227,11 @@ impl WorkflowConfig {
             u32::from(self.plan_timeout_minutes),
             file,
             "workflow.plan_timeout_minutes",
+        )?;
+        crate::workflow::timeout::JobTimeout::check_config(
+            u32::from(self.dependency_seed_timeout_minutes),
+            file,
+            "workflow.dependency_seed_timeout_minutes",
         )?;
         if let Some(branch) = &self.default_branch
             && !crate::is_valid_branch_name(branch)
