@@ -10,7 +10,7 @@ pub(in crate::launch::completion::cleanup::native) async fn capacity_retry_fixtu
     let permit =
         crate::launch::StartPermit::test_fixture_with_engine_id(&sample_generation, TEST_ENGINE_ID);
     let digest = crate::launch::resource_probe::filesystem_instance_digest(
-        crate::launch::resource_probe::FilesystemInstanceDigestInput {
+        &crate::launch::resource_probe::FilesystemInstanceDigestInput {
             engine_id: permit.engine_id(),
             docker_root_digest: permit.docker_root_digest(),
             guest_boot_id: b"12345678-1234-1234-1234-123456789abc",

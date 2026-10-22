@@ -1,4 +1,4 @@
-use super::VerificationTaskPolicy;
+use crate::verification_jobs::MiseTaskBootstrapPolicy;
 
 pub(super) fn base_environment(root: &str) -> Vec<String> {
     vec![
@@ -41,9 +41,9 @@ pub(super) fn private_environment() -> Vec<String> {
 pub(super) fn source_hash_check(
     path: &str,
     expected: Option<&str>,
-    policy: &VerificationTaskPolicy,
+    policy: &MiseTaskBootstrapPolicy,
 ) -> String {
-    let (hash_bin, hash_args) = match policy.task.runner {
+    let (hash_bin, hash_args) = match policy.runner {
         velnor_actions_contract::VerificationRunner::LinuxX64 => ("/usr/bin/sha256sum", ""),
         velnor_actions_contract::VerificationRunner::MacosArm64
         | velnor_actions_contract::VerificationRunner::Macos26Arm64
@@ -84,12 +84,9 @@ pub(super) fn private_config_chain_check(expected: &str) -> String {
     )
 }
 
-pub(super) fn workspace_config_chain_check(policy: &VerificationTaskPolicy) -> String {
-    let config_path = format!("$workspace_root/{}", policy.task.source.mise_config);
-    let rust_path = format!(
-        "$workspace_root/{}",
-        policy.task.source.rust_toolchain_path()
-    );
+pub(super) fn workspace_config_chain_check(policy: &MiseTaskBootstrapPolicy) -> String {
+    let config_path = format!("$workspace_root/{}", policy.source.mise_config);
+    let rust_path = format!("$workspace_root/{}", policy.source.rust_toolchain_path());
     let mut checks = vec![
         "mise --no-env --no-hooks config ls --json | \"$jq_path\" -r '.[].path' | LC_ALL=C /usr/bin/sort > \"$task_root/mise_configs.txt\"".to_owned(),
         "workspace_config_found=false".to_owned(),
@@ -103,10 +100,10 @@ pub(super) fn workspace_config_chain_check(policy: &VerificationTaskPolicy) -> S
     checks.join("; ")
 }
 
-pub(super) fn task_root(policy: &VerificationTaskPolicy) -> String {
+pub(super) fn task_root(policy: &MiseTaskBootstrapPolicy) -> String {
     format!(
-        "${{RUNNER_TEMP}}/velnor-verification-${{GITHUB_RUN_ID}}-${{GITHUB_RUN_ATTEMPT}}-{}",
-        policy.task.id
+        "${{RUNNER_TEMP}}/velnor-{}-${{GITHUB_RUN_ID}}-${{GITHUB_RUN_ATTEMPT}}-{}",
+        policy.root_prefix, policy.id
     )
 }
 

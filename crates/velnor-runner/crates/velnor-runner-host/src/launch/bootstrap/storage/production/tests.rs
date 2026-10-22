@@ -16,7 +16,7 @@ mod prefix;
 #[tokio::test]
 async fn metadata_volume_uses_the_disk_role_and_records_exact_identity() -> Result<(), String> {
     let fixture = metadata_fixture().await?;
-    let responses = metadata_responses(&fixture)?;
+    let responses = metadata_responses(&fixture);
     let stub = crate::launch::inspect_tests::DockerStub::open(responses)?;
     let result = crate::launch::bootstrap::containers::create_metadata_storage_object(
         &stub.docker,
@@ -105,7 +105,7 @@ async fn metadata_fixture() -> Result<MetadataFixture, String> {
 
 fn metadata_responses(
     fixture: &MetadataFixture,
-) -> Result<Vec<crate::launch::inspect_tests::DockerResponse>, String> {
+) -> Vec<crate::launch::inspect_tests::DockerResponse> {
     let labels = HashMap::from([
         (
             "velnor.connection".to_owned(),
@@ -144,7 +144,7 @@ fn metadata_responses(
         crate::launch::inspect_tests::http(200, &metadata),
         crate::launch::inspect_tests::http(200, &daemon_info()),
     ]);
-    Ok(responses)
+    responses
 }
 
 #[test]

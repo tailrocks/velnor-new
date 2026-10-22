@@ -1,7 +1,35 @@
 use super::{
     check_composite_env_value, check_composite_qualification_cache_env_value, check_env_value,
-    check_with_value,
+    check_with_action_value, check_with_value,
 };
+
+#[test]
+fn event_sha_is_allowed_only_for_checkout_ref() {
+    assert!(
+        check_with_action_value(
+            "actions/checkout@0123456789012345678901234567890123456789",
+            "ref",
+            "${{ github.sha }}"
+        )
+        .is_ok()
+    );
+    assert!(
+        check_with_action_value(
+            "actions/upload-artifact@0123456789012345678901234567890123456789",
+            "ref",
+            "${{ github.sha }}"
+        )
+        .is_err()
+    );
+    assert!(
+        check_with_action_value(
+            "actions/checkout@0123456789012345678901234567890123456789",
+            "ref",
+            "prefix-${{ github.sha }}"
+        )
+        .is_err()
+    );
+}
 
 #[test]
 fn qualification_cache_runtime_paths_accept_only_their_typed_step_output() {

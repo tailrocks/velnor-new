@@ -222,8 +222,8 @@ async fn uncertain_jit_remains_charged_and_enumerated_after_restart() -> Result<
     assert_eq!(rows[0].reservation.state, ReservationState::Uncertain);
     assert!(!rows[0].reservation.resume_eligible);
     assert_eq!(rows[0].requested_runner_name, Some(runner_name('b')));
-    assert!(!rows[0].remote_cleanup_proven);
-    assert!(!rows[0].local_cleanup_proven);
+    assert!(!rows[0].remote_cleanup_proven());
+    assert!(!rows[0].local_cleanup_proven());
     assert_eq!(journal.occupied_reservation_count().await?, 1);
     Ok(())
 }
@@ -307,7 +307,7 @@ async fn completed_runner_remains_enumerated_until_cleanup_proofs() -> Result<()
     assert_eq!(rows[0].jit_state, PhysicalRunnerJitState::Completed);
     assert_eq!(rows[0].completed_request_id, Some(105));
     assert!(rows[0].completion_cleanup_pending);
-    assert!(!rows[0].intent_cleanup_proven);
+    assert!(!rows[0].intent_cleanup_proven());
     assert_eq!(journal.occupied_reservation_count().await?, 1);
     Ok(())
 }

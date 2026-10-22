@@ -11,9 +11,14 @@ pub(crate) struct NativeCompletionReservation {
     dind_container_id: String,
     instance_binding_digest: String,
     remote_cleanup_proven: bool,
-    storage_cleanup_proven: bool,
-    network_cleanup_proven: bool,
-    local_cleanup_proven: bool,
+    local_cleanup_evidence: LocalCleanupEvidence,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LocalCleanupEvidence {
+    storage: bool,
+    network: bool,
+    local: bool,
 }
 
 impl NativeCompletionReservation {
@@ -50,15 +55,15 @@ impl NativeCompletionReservation {
     }
 
     pub(crate) const fn storage_cleanup_proven(&self) -> bool {
-        self.storage_cleanup_proven
+        self.local_cleanup_evidence.storage
     }
 
     pub(crate) const fn network_cleanup_proven(&self) -> bool {
-        self.network_cleanup_proven
+        self.local_cleanup_evidence.network
     }
 
     pub(crate) const fn local_cleanup_proven(&self) -> bool {
-        self.local_cleanup_proven
+        self.local_cleanup_evidence.local
     }
 }
 

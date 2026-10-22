@@ -1,0 +1,40 @@
+//! Locked source resolution and standalone emission for Mise task suites.
+
+use velnor_actions_workflow_renderer::{
+    MiseTaskSuitePolicy, MiseTaskSuitesRenderSpec, RenderedFile, render_mise_task_suites,
+};
+
+use crate::OrchestratorError;
+use crate::pins::resolve_verification_mise_setup;
+use crate::prepare::GenerationPreparation;
+
+/// Resolve and render standalone task-suite workflow files.
+pub(crate) fn suite_workflow_files(
+    prep: &GenerationPreparation,
+) -> Result<Vec<RenderedFile>, OrchestratorError> {
+    let mut suites = Vec::with_capacity(prep.config.workflow.task_suites.len());
+    for suite in &prep.config.workflow.task_suites {
+        let resolved = crate::verification_tasks::resolve_mise_task_tools(
+            &prep.discovery.tool_checks,
+            &suite.source,
+            &suite.mise_task,
+            suite.runner,
+        )?;
+        suites.push(MiseTaskSuitePolicy {
+            suite: suite.clone(),
+            runner_label: suite.runner.runs_on().to_owned(),
+            mise_setup: resolve_verification_mise_setup(&prep.config, suite.runner)?,
+            selected_tools: resolved.selected_tools,
+            mise_config_sha256: resolved.mise_config_sha256,
+            mise_lock_sha256: resolved.mise_lock_sha256,
+            rust_toolchain_sha256: resolved.rust_toolchain_sha256,
+        });
+    }
+    let spec = MiseTaskSuitesRenderSpec {
+        suites,
+        default_branch: prep.default_branch.clone(),
+        checkout_uses: crate::workflow::CHECKOUT_USES.to_owned(),
+        generator_version: env!("CARGO_PKG_VERSION").to_owned(),
+    };
+    render_mise_task_suites(&spec).map_err(Into::into)
+}

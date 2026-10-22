@@ -238,10 +238,10 @@ pub(super) fn validate_retained_memory(
         .checked_add(base_memory_charge)
         .ok_or(HostError::Journal)?;
     let memory_after = memory
-        .ancestor_memory_current_bytes
+        .ancestor_memory_current
         .checked_add(total)
         .ok_or(HostError::Journal)?;
-    if memory.guest_available_bytes >= total && memory_after <= memory.ancestor_memory_max_bytes {
+    if memory.guest_available >= total && memory_after <= memory.ancestor_memory_max {
         Ok(())
     } else {
         Err(HostError::Journal)

@@ -30,10 +30,10 @@ fn response_fixture(
     let value = response_value(
         schema_version,
         &request,
-        runner_init,
-        runner_helper,
-        dind_init,
-        dind_helper,
+        &runner_init,
+        &runner_helper,
+        &dind_init,
+        &dind_helper,
     );
     let observation: OwnedCgroupObservation = serde_json::from_value(value)?;
     let mut bytes = serde_json::to_vec(&observation)?;
@@ -44,10 +44,10 @@ fn response_fixture(
 fn response_value(
     schema_version: u8,
     request: &OwnedCgroupRequest,
-    runner_init: serde_json::Value,
-    runner_helper: serde_json::Value,
-    dind_init: serde_json::Value,
-    dind_helper: serde_json::Value,
+    runner_init: &serde_json::Value,
+    runner_helper: &serde_json::Value,
+    dind_init: &serde_json::Value,
+    dind_helper: &serde_json::Value,
 ) -> serde_json::Value {
     serde_json::json!({
         "wire_mode": "owned_container_cgroup",
@@ -144,8 +144,8 @@ fn root_backing(
     role: &str,
     container_id: &str,
     boot_id: &str,
-    init: serde_json::Value,
-    helper: serde_json::Value,
+    init: &serde_json::Value,
+    helper: &serde_json::Value,
 ) -> serde_json::Value {
     serde_json::json!({
         "role": role,
@@ -232,7 +232,10 @@ fn owned_request_is_one_canonical_bounded_line() {
         && let Ok(line) = subjects.request_line(&"c".repeat(32), "/var/lib/docker")
     {
         assert_eq!(line.last(), Some(&b'\n'));
-        assert_eq!(line.iter().filter(|byte| **byte == b'\n').count(), 1);
+        assert_eq!(
+            line.iter().position(|byte| *byte == b'\n'),
+            Some(line.len() - 1)
+        );
         assert!(line.len() <= velnor_resource_probe::worker_binding::WORKER_REQUEST_LIMIT);
         assert!(
             serde_json::from_slice::<velnor_resource_probe::worker_binding::OwnedCgroupRequest>(
@@ -249,10 +252,7 @@ fn owned_request_is_one_canonical_bounded_line() {
         );
         assert_eq!(
             subjects.request_sha256(&"c".repeat(32), "/var/lib/docker"),
-            Ok(expected
-                .iter()
-                .map(|byte| format!("{byte:02x}"))
-                .collect::<String>())
+            Ok(crate::digest_hex::lowercase_hex(&expected))
         );
     }
 }

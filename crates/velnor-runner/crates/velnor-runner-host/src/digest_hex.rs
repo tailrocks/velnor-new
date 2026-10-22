@@ -21,7 +21,9 @@ mod tests {
         let encoded = lowercase_hex(&bytes);
 
         assert_eq!(encoded.len(), bytes.len() * 2);
-        for (value, pair) in bytes.iter().zip(encoded.as_bytes().chunks_exact(2)) {
+        let (pairs, remainder) = encoded.as_bytes().as_chunks::<2>();
+        assert_eq!(remainder, &[] as &[u8]);
+        for (value, pair) in bytes.iter().zip(pairs) {
             assert_eq!(pair[0], HEX[usize::from(value >> 4)]);
             assert_eq!(pair[1], HEX[usize::from(value & 0x0f)]);
         }

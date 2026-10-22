@@ -59,6 +59,20 @@ impl PhysicalRunnerOwnership {
     }
 }
 
+/// Independent durable proofs that cleanup completed for each physical resource.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct PhysicalRunnerCleanupEvidence {
+    intent: bool,
+    worker: bool,
+    resources: PhysicalRunnerResourceCleanupEvidence,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct PhysicalRunnerResourceCleanupEvidence {
+    remote: bool,
+    local: bool,
+}
+
 /// One charged runner capacity row, including uncertain and cleanup states.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PhysicalRunnerReservation {
@@ -96,16 +110,36 @@ pub(crate) struct PhysicalRunnerReservation {
     pub(crate) runner_container_id: Option<String>,
     /// Private `DinD` container identity.
     pub(crate) dind_container_id: Option<String>,
-    /// Whether the intent row itself records cleanup proof.
-    pub(crate) intent_cleanup_proven: bool,
-    /// Whether worker-volume cleanup has proof.
-    pub(crate) worker_cleanup_proven: bool,
-    /// Whether remote runner cleanup has proof.
-    pub(crate) remote_cleanup_proven: bool,
-    /// Whether local container cleanup has proof.
-    pub(crate) local_cleanup_proven: bool,
+    /// Independent cleanup proofs for the intent, worker, remote, and local resources.
+    pub(crate) cleanup_evidence: PhysicalRunnerCleanupEvidence,
     /// Whether completion still has a cleanup row.
     pub(crate) completion_cleanup_pending: bool,
+}
+
+impl PhysicalRunnerReservation {
+    /// Whether the intent row itself records cleanup proof.
+    #[must_use]
+    pub(crate) const fn intent_cleanup_proven(&self) -> bool {
+        self.cleanup_evidence.intent
+    }
+
+    /// Whether worker-volume cleanup has proof.
+    #[must_use]
+    pub(crate) const fn worker_cleanup_proven(&self) -> bool {
+        self.cleanup_evidence.worker
+    }
+
+    /// Whether remote runner cleanup has proof.
+    #[must_use]
+    pub(crate) const fn remote_cleanup_proven(&self) -> bool {
+        self.cleanup_evidence.resources.remote
+    }
+
+    /// Whether local container cleanup has proof.
+    #[must_use]
+    pub(crate) const fn local_cleanup_proven(&self) -> bool {
+        self.cleanup_evidence.resources.local
+    }
 }
 
 impl ConnectionJournal {

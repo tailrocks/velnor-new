@@ -111,11 +111,11 @@ impl StoragePoolObservation {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct StorageMemoryObservation {
-    pub(super) guest_available_bytes: u64,
-    pub(super) ancestor_memory_max_bytes: u64,
-    pub(super) ancestor_memory_current_bytes: u64,
-    pub(super) ancestor_swap_max_bytes: u64,
-    pub(super) ancestor_swap_current_bytes: u64,
+    pub(super) guest_available: u64,
+    pub(super) ancestor_memory_max: u64,
+    pub(super) ancestor_memory_current: u64,
+    pub(super) ancestor_swap_max: u64,
+    pub(super) ancestor_swap_current: u64,
 }
 
 impl StorageMemoryObservation {
@@ -144,32 +144,32 @@ impl StorageMemoryObservation {
             return Err(HostError::Journal);
         }
         Ok(Self {
-            guest_available_bytes,
-            ancestor_memory_max_bytes,
-            ancestor_memory_current_bytes,
-            ancestor_swap_max_bytes,
-            ancestor_swap_current_bytes,
+            guest_available: guest_available_bytes,
+            ancestor_memory_max: ancestor_memory_max_bytes,
+            ancestor_memory_current: ancestor_memory_current_bytes,
+            ancestor_swap_max: ancestor_swap_max_bytes,
+            ancestor_swap_current: ancestor_swap_current_bytes,
         })
     }
 
     pub(crate) fn guest_available_bytes(&self) -> u64 {
-        self.guest_available_bytes
+        self.guest_available
     }
 
     pub(crate) fn ancestor_memory_max_bytes(&self) -> u64 {
-        self.ancestor_memory_max_bytes
+        self.ancestor_memory_max
     }
 
     pub(crate) fn ancestor_memory_current_bytes(&self) -> u64 {
-        self.ancestor_memory_current_bytes
+        self.ancestor_memory_current
     }
 
     pub(crate) fn ancestor_swap_max_bytes(&self) -> u64 {
-        self.ancestor_swap_max_bytes
+        self.ancestor_swap_max
     }
 
     pub(crate) fn ancestor_swap_current_bytes(&self) -> u64 {
-        self.ancestor_swap_current_bytes
+        self.ancestor_swap_current
     }
 }
 

@@ -351,8 +351,10 @@ impl Fixture {
         self.assert_identity().await?;
         let expected = if matches!(case, Case::Symlink | Case::RegularFile) {
             24
+        } else if matches!(case, Case::Missing) {
+            3
         } else {
-            if matches!(case, Case::Missing) { 3 } else { 0 }
+            0
         };
         if result.exit_code != Some(expected) {
             return Err(format!("collector exit code differed for {}", case.name()));

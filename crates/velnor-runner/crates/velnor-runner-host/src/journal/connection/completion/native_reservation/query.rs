@@ -3,7 +3,17 @@ use crate::journal::CompletedLaunch;
 use crate::journal::connection::ConnectionJournal;
 use crate::journal::connection::storage::read_transaction;
 
-use super::NativeCompletionReservation;
+use super::{LocalCleanupEvidence, NativeCompletionReservation};
+
+struct ReservationCleanupFlags {
+    remote: bool,
+    local: bool,
+}
+
+struct IntentStateFlags {
+    cleanup_proven: bool,
+    runner_completed: bool,
+}
 
 struct ReservationRow {
     reservation_id: i64,
@@ -11,12 +21,10 @@ struct ReservationRow {
     engine_id: String,
     docker_root_digest: String,
     reservation_state: String,
-    remote_cleanup_proven: bool,
-    local_cleanup_proven: bool,
+    reservation_cleanup: ReservationCleanupFlags,
     kind: String,
     intent_state: String,
-    intent_cleanup_proven: bool,
-    runner_completed: bool,
+    intent_state_flags: IntentStateFlags,
     worker_volume: Option<String>,
     intent_set_id: Option<i64>,
     intent_request_id: Option<i64>,
@@ -63,12 +71,16 @@ impl ReservationRow {
             engine_id: row.get(2).map_err(|_| HostError::Journal)?,
             docker_root_digest: row.get(3).map_err(|_| HostError::Journal)?,
             reservation_state: row.get(4).map_err(|_| HostError::Journal)?,
-            remote_cleanup_proven: row.get(5).map_err(|_| HostError::Journal)?,
-            local_cleanup_proven: row.get(6).map_err(|_| HostError::Journal)?,
+            reservation_cleanup: ReservationCleanupFlags {
+                remote: row.get(5).map_err(|_| HostError::Journal)?,
+                local: row.get(6).map_err(|_| HostError::Journal)?,
+            },
             kind: row.get(7).map_err(|_| HostError::Journal)?,
             intent_state: row.get(8).map_err(|_| HostError::Journal)?,
-            intent_cleanup_proven: row.get(9).map_err(|_| HostError::Journal)?,
-            runner_completed: row.get(10).map_err(|_| HostError::Journal)?,
+            intent_state_flags: IntentStateFlags {
+                cleanup_proven: row.get(9).map_err(|_| HostError::Journal)?,
+                runner_completed: row.get(10).map_err(|_| HostError::Journal)?,
+            },
             worker_volume: row.get(11).map_err(|_| HostError::Journal)?,
             intent_set_id: row.get(12).map_err(|_| HostError::Journal)?,
             intent_request_id: row.get(13).map_err(|_| HostError::Journal)?,
@@ -121,8 +133,8 @@ impl ReservationRow {
             )
             && self.kind == "launch"
             && self.intent_state == launch.intent.state.as_str()
-            && !self.intent_cleanup_proven
-            && self.runner_completed
+            && !self.intent_state_flags.cleanup_proven
+            && self.intent_state_flags.runner_completed
             && self.worker_volume.is_none()
             && self.intent_set_id == Some(launch.identity.scale_set_id)
             && self.intent_request_id == Some(launch.identity.runner_request_id)
@@ -199,10 +211,12 @@ impl ReservationRow {
             runner_container_id: self.runner_container_id.ok_or(HostError::Identity)?,
             dind_container_id: self.dind_container_id.ok_or(HostError::Identity)?,
             instance_binding_digest,
-            remote_cleanup_proven: self.remote_cleanup_proven,
-            storage_cleanup_proven: self.storage_cleanup_proven,
-            network_cleanup_proven: self.network_remove_state.as_deref() == Some("removed"),
-            local_cleanup_proven: self.local_cleanup_proven,
+            remote_cleanup_proven: self.reservation_cleanup.remote,
+            local_cleanup_evidence: LocalCleanupEvidence {
+                storage: self.storage_cleanup_proven,
+                network: self.network_remove_state.as_deref() == Some("removed"),
+                local: self.reservation_cleanup.local,
+            },
         })
     }
 }

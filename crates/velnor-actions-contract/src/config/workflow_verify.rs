@@ -53,7 +53,8 @@ impl VerifyConfig {
             }
             let mut paths = std::collections::BTreeSet::new();
             for path in files {
-                if !valid_json_path(path) || !paths.insert(path) {
+                if !super::workflow_validation_helpers::valid_json_path(path) || !paths.insert(path)
+                {
                     return Err(ContractError::config(
                         file,
                         "workflow.verify.strict_json_files",
@@ -63,7 +64,7 @@ impl VerifyConfig {
             }
         }
         for arg in &self.lychee_args {
-            if !valid_lychee_arg(arg) {
+            if !super::workflow_validation_helpers::valid_lychee_arg(arg) {
                 return Err(ContractError::config(
                     file,
                     "workflow.verify.lychee_args",
@@ -80,29 +81,4 @@ impl VerifyConfig {
         }
         Ok(())
     }
-}
-
-fn valid_json_path(value: &str) -> bool {
-    !value.is_empty()
-        && std::path::Path::new(value)
-            .extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
-        && !value.starts_with('/')
-        && value.split('/').all(|part| {
-            !part.is_empty()
-                && part != "."
-                && part != ".."
-                && part
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
-        })
-}
-
-fn valid_lychee_arg(value: &str) -> bool {
-    !value.is_empty()
-        && value != "--"
-        && !value.contains("${{")
-        && !value.contains(['$', '`'])
-        && !value.chars().any(char::is_control)
-        && !value.split_whitespace().any(|word| word == "mise")
 }

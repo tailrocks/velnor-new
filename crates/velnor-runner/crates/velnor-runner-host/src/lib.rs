@@ -20,7 +20,6 @@ mod https;
 mod ipc;
 mod journal;
 mod journal_assignment;
-mod journal_effects;
 mod journal_identity;
 mod journal_schema;
 mod journal_sql;

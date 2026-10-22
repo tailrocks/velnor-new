@@ -9,7 +9,10 @@ use crate::journal::connection::{AssignmentIdentity, AssignmentKey, ConnectionJo
 use crate::reconcile::LaunchPhase;
 use velnor_runner_github::RunnerReference;
 
-use super::{PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation};
+use super::{
+    PhysicalRunnerCleanupEvidence, PhysicalRunnerJitState, PhysicalRunnerOwnership,
+    PhysicalRunnerReservation, PhysicalRunnerResourceCleanupEvidence,
+};
 
 mod decode;
 use decode::{jit_is_consistent, parse_runner, read_intent, read_reservation, read_runner_jit};
@@ -243,10 +246,14 @@ fn build_reservation(
         worker_volume: intent.worker_volume,
         runner_container_id: intent.runner_container_id,
         dind_container_id: intent.dind_container_id,
-        intent_cleanup_proven: intent.cleanup_proven.unwrap_or(true),
-        worker_cleanup_proven: intent.worker_cleanup_proven.unwrap_or(false),
-        remote_cleanup_proven: reservation.remote_cleanup_proven,
-        local_cleanup_proven: reservation.local_cleanup_proven,
+        cleanup_evidence: PhysicalRunnerCleanupEvidence {
+            intent: intent.cleanup_proven.unwrap_or(true),
+            worker: intent.worker_cleanup_proven.unwrap_or(false),
+            resources: PhysicalRunnerResourceCleanupEvidence {
+                remote: reservation.remote_cleanup_proven,
+                local: reservation.local_cleanup_proven,
+            },
+        },
         completion_cleanup_pending: jit.completion_cleanup_pending,
     }
 }

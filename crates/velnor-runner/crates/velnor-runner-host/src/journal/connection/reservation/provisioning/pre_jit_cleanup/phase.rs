@@ -106,7 +106,7 @@ impl ConnectionJournal {
             {
                 return Err(HostError::Identity);
             }
-            let from = proof.from_phase().as_str();
+            let from = proof.source_phase().as_str();
             let to = proof.to_phase().as_str();
             let changed = connection
                 .execute(
