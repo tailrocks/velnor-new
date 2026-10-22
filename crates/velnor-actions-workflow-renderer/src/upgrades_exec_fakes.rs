@@ -54,6 +54,24 @@ esac
 exit 0
 "#;
 
+/// `mise` behind the fake for a prepare run: Rust comes from `mise.toml`,
+/// `SANDBOX_RUST_BUMP` is what `mise upgrade --bump rust` moves it to, and
+/// `SANDBOX_CARGO_UPGRADE_FAILS` makes `cargo upgrade` fail (a private git
+/// source without its fetch credential).
+pub(super) const PREPARE_MISE: &str = r#"#!/bin/sh
+rust() { sed -n "s/^rust = [\"']\([^\"']*\)[\"']\$/\1/p" mise.toml; }
+case "$*" in
+  "ls --local --json")
+    v=$(rust); printf '{"rust":[{"requested_version":"%s","version":"%s"}]}\n' "$v" "$v" ;;
+  "upgrade --bump rust")
+    if [ -n "${SANDBOX_RUST_BUMP:-}" ]; then
+      sed "s/^rust = .*/rust = \"$SANDBOX_RUST_BUMP\"/" mise.toml > mise.toml.next && mv mise.toml.next mise.toml
+    fi ;;
+  "exec cargo:cargo-edit@"*) [ -z "${SANDBOX_CARGO_UPGRADE_FAILS:-}" ] || { echo "cargo upgrade: private source" >&2; exit 1; } ;;
+esac
+exit 0
+"#;
+
 /// Stand-in `velnor-actions`: `generate` writes the version's `ci.yml`;
 /// releases after 0.1.0 also retire `retired.yml`.
 pub(super) fn generator(version: &str) -> String {
