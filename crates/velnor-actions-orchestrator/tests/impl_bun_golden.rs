@@ -19,7 +19,9 @@ use std::path::{Path, PathBuf};
 
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 
-use crate::impl_common::{TestResult, fixture_manifest_json, git, install_fixture_release_manifest};
+use crate::impl_common::{
+    TestResult, fixture_manifest_json, git, install_fixture_release_manifest,
+};
 use crate::impl_schema2_routing::required_file;
 
 /// Golden refresh switch; comparison is the default.
@@ -106,7 +108,7 @@ pub(crate) fn check_golden(case: &str) -> TestResult {
         .lines()
         .zip(actual.lines())
         .position(|(left, right)| left != right)
-        .map_or_else(|| expected.lines().count().min(actual.lines().count()), |at| at)
+        .unwrap_or_else(|| expected.lines().count().min(actual.lines().count()))
         + 1;
     Err(format!(
         "golden mismatch {case}/{CI} at line {line}: expected {:?}, actual {:?}",
