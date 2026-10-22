@@ -71,13 +71,13 @@ async fn expired_poll_refreshes_exact_session_then_builds_get_with_new_credentia
     assert!(transport.requests[2].headers.iter().any(|(name, value)| {
         name.eq_ignore_ascii_case("authorization") && value == "Bearer queue-token-new"
     }));
-    let refreshes = scope
+    let refresh_records = scope
         .session_refreshes(intent_id)
         .await
         .map_err(|error| error.to_string())?;
-    assert_eq!(refreshes.len(), 1);
+    assert_eq!(refresh_records.len(), 1);
     assert_eq!(
-        refreshes[0].state(),
+        refresh_records[0].state(),
         crate::journal::SessionRefreshState::Succeeded
     );
     assert_eq!(
