@@ -103,6 +103,9 @@ artifact identities, and reruns keep distinct identities too.
 Retention for an evidence window MUST include enough time for that window and
 its predecessor/scheduling margin.
 
+See the [pinned artifact upload source reference](github-actions-artifact-reference.md)
+for the action's missing-file and path matching semantics.
+
 An empty artifact list emits no upload. Uploaded artifacts are outputs of
 unprivileged repository task jobs and do not authorize publication, protected
 checks, or conclusions in `Required`.
