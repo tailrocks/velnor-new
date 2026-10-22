@@ -3,13 +3,6 @@ use super::*;
 #[test]
 fn preview_has_isolated_privileges_and_exact_inventory_attestation() {
     let spec = fixture();
-    let producer_ids = spec
-        .policy
-        .payload_pairs()
-        .expect("payload pairs")
-        .iter()
-        .map(|pair| spec.policy.payload_job_id(pair).expect("payload job ID"))
-        .collect::<Vec<_>>();
     let rendered = render_consumer_preview(&spec, &hosted_policy()).expect("preview");
     assert_eq!(rendered.path, ".github/workflows/binary-preview.yml");
     let yaml = &rendered.bytes;
@@ -19,34 +12,70 @@ fn preview_has_isolated_privileges_and_exact_inventory_attestation() {
     assert!(triggers.contains("- CI"));
     assert!(triggers.contains("- completed"));
     assert!(!triggers.contains("  push:"));
-    let eligibility = job(yaml, "preview-eligibility", Some("preview-payload-000"));
-    assert!(eligibility.contains("ref: ${{ github.sha }}"));
-    assert_eq!(eligibility.matches("actions/checkout").count(), 1);
-    assert!(eligibility.find("actions/checkout") < eligibility.find("Verify source and CI"));
+    let eligibility = job(yaml, "preview-eligibility", Some("preview-payload"));
+    let select = eligibility
+        .find("select-preview-source-v1")
+        .expect("source selector");
+    let checkout = eligibility
+        .find("actions/checkout@")
+        .expect("exact-source checkout");
+    let finalize = eligibility
+        .find("finalize-preview-source-v1")
+        .expect("source finalizer");
+    assert!(select < checkout && checkout < finalize);
+    assert_eq!(eligibility.matches("actions/checkout@").count(), 1);
+    assert!(eligibility.contains("ref: ${{ steps.source-select.outputs.source_sha }}"));
     assert!(eligibility.contains("fetch-depth: 0"));
     assert!(eligibility.contains("persist-credentials: false"));
-    for (index, id) in producer_ids.iter().enumerate() {
-        let next = producer_ids
-            .get(index + 1)
-            .map_or("preview-assemble", String::as_str);
-        let producer = job(yaml, id, Some(next));
-        assert!(producer.contains("fetch-depth: 0"));
-        assert!(producer.contains("persist-credentials: false"));
-        assert!(!producer.contains("environment:"));
-        assert!(!producer.contains("GH_TOKEN: \"${{ github.token }}\""));
-        assert!(!producer.contains("id-token"));
-        assert!(!producer.contains("contents: write"));
-        assert!(!producer.contains("RELEASE_STATUS_READ_TOKEN"));
-    }
-    let signer = job(yaml, "preview-signer", Some("preview-publisher"));
-    assert!(!signer.contains("actions/checkout"));
-    assert!(signer.contains("id-token: write"));
-    assert!(signer.contains("contents: read"));
-    assert!(!signer.contains("contents: write"));
-    assert_eq!(signer.matches("/velnor/release-signed/").count(), 8);
-    assert!(!signer.contains("artifact-metadata"));
-    assert!(signer.contains("create-storage-record: false"));
-    assert!(!signer.contains("RELEASE_STATUS_READ_TOKEN"));
+    assert!(eligibility.contains("fetch-depth: 0"));
+    assert!(eligibility.contains("persist-credentials: false"));
+    // The admitted producer rows share one job-level permission boundary.
+    let producer = job(yaml, "preview-payload", Some("preview-assemble"));
+    assert!(
+        producer
+            .contains("matrix: ${{ fromJSON(needs.preview-eligibility.outputs.payload_matrix) }}")
+    );
+    assert!(producer.contains("fetch-depth: 0"));
+    assert!(producer.contains("persist-credentials: false"));
+    assert!(!producer.contains("environment:"));
+    assert!(!producer.contains("GH_TOKEN: \"${{ github.token }}\""));
+    assert!(!producer.contains("id-token"));
+    assert!(!producer.contains("contents: write"));
+    let executor = producer
+        .find("execute-release-producer-v1")
+        .expect("native producer executor");
+    assert!(producer[..executor].contains("${{ secrets.RELEASE_STATUS_READ_TOKEN }}"));
+    assert!(producer[executor..].contains("unset VELNOR_RELEASE_STATUS_TOKEN"));
+    assert!(!producer[executor..].contains("${{ secrets.RELEASE_STATUS_READ_TOKEN }}"));
+    let signer_yaml = job(yaml, "preview-signer", Some("preview-publisher"));
+    assert!(!signer_yaml.contains("actions/checkout"));
+    assert!(signer_yaml.contains("id-token: write"));
+    assert!(signer_yaml.contains("contents: read"));
+    assert!(!signer_yaml.contains("contents: write"));
+    assert!(signer_yaml.contains("admit-release-aggregate-v1"));
+    assert!(signer_yaml.contains("steps.release.outputs.attestation_subject_paths"));
+    assert!(!signer_yaml.contains("artifact-metadata"));
+    assert!(signer_yaml.contains("create-storage-record: false"));
+    let (_, signer_document) = signer(&spec).expect("signer job");
+    let Yaml::Seq(steps) = field(&signer_document, "steps") else {
+        panic!("signer steps");
+    };
+    assert_job_credentials_are_native_only(&signer_document);
+    let attestation_step = steps
+        .iter()
+        .find(|step| {
+            let Yaml::Map(fields) = step else {
+                return false;
+            };
+            fields.iter().any(|(key, value)| {
+                key == "uses" && value == &Yaml::str(crate::steps::ATTEST_BUILD_PROVENANCE_USES)
+            })
+        })
+        .expect("pinned provenance step");
+    assert_eq!(
+        field(field(attestation_step, "with"), "subject-path"),
+        &Yaml::str("${{ steps.release.outputs.attestation_subject_paths }}")
+    );
     let publisher = job(yaml, "preview-publisher", None);
     assert!(!publisher.contains("actions/checkout"));
     assert!(!publisher.contains("id-token"));
@@ -82,7 +111,7 @@ fn manual_recovery_has_no_build_or_signing_authority() {
     assert!(!yaml.contains("Original push workflow run ID"));
     assert!(!yaml.contains("Original signer run attempt"));
     for (name, next) in [
-        ("preview-payload-000", "preview-payload-001"),
+        ("preview-payload", "preview-assemble"),
         ("preview-assemble", "preview-signer"),
         ("preview-signer", "preview-publisher"),
         ("preview-publisher", "preview-recovery"),
@@ -98,4 +127,11 @@ fn manual_recovery_has_no_build_or_signing_authority() {
     assert!(!recovery.contains("id-token"));
     assert!(!recovery.contains("attestations: write"));
     assert!(recovery.contains("${{ secrets.RELEASE_STATUS_READ_TOKEN }}"));
+}
+
+fn field<'a>(yaml: &'a Yaml, name: &str) -> &'a Yaml {
+    let Yaml::Map(fields) = yaml else {
+        panic!("{name} map");
+    };
+    &fields.iter().find(|(key, _)| key == name).expect(name).1
 }

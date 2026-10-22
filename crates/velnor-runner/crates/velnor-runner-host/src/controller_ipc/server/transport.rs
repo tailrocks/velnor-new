@@ -40,20 +40,23 @@ fn read_frame_length(stream: &mut UnixStream) -> Result<usize, HostError> {
     Ok(length)
 }
 
-pub(super) fn trusted_peer(_stream: &UnixStream) -> bool {
+pub(super) fn trusted_peer(stream: &UnixStream) -> bool {
     // The private parent directory and 0600 socket restrict connect access to
     // the state owner on macOS; Linux additionally validates SO_PEERCRED.
     #[cfg(target_os = "linux")]
     {
         use std::os::fd::AsFd;
 
-        let Ok(credentials) = rustix::net::sockopt::socket_peercred(_stream.as_fd()) else {
+        let Ok(credentials) = rustix::net::sockopt::socket_peercred(stream.as_fd()) else {
             return false;
         };
-        return credentials.uid == rustix::process::geteuid();
+        credentials.uid == rustix::process::geteuid()
     }
     #[cfg(not(target_os = "linux"))]
-    true
+    {
+        let _ = stream;
+        true
+    }
 }
 
 pub(super) fn private_state_directory(path: &Path) -> Result<PathBuf, HostError> {

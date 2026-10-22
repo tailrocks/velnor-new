@@ -21,6 +21,8 @@ mod payloads;
 mod policies;
 #[path = "schema2_consumer_preview_recovery_tests.rs"]
 mod recovery;
+#[path = "schema2_consumer_preview_render_tests.rs"]
+mod render;
 #[path = "schema2_consumer_preview_routing_tests.rs"]
 mod routing;
 #[path = "schema2_consumer_preview_source_tests.rs"]

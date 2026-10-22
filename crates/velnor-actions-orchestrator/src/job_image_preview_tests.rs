@@ -90,17 +90,50 @@ fn candidate_preview_rejects_consumer_policy_and_wrong_origin_before_output() {
 }
 
 #[test]
-fn candidate_preview_requires_image_release_and_keeps_scale_set_validation() {
-    for (config, mode) in [
-        (CONFIG.replace("[\"image_release\"]", "[]"), None),
-        (CONFIG.to_owned(), Some(ExecutionMode::ScaleSet)),
-    ] {
-        let source = fixture(&config, "https://github.com/tailrocks/velnor-new.git");
-        let output = tempfile::tempdir().expect("Create the output directory.");
-        let destination = output.path().join("candidate");
-        assert!(preview_job_image_candidate(source.path(), &destination, mode).is_err());
-        assert!(!destination.exists());
-    }
+fn candidate_preview_requires_image_release_before_output() {
+    let config = CONFIG.replace("[\"image_release\"]", "[]");
+    let source = fixture(&config, "https://github.com/tailrocks/velnor-new.git");
+    let output = tempfile::tempdir().expect("Create the output directory.");
+    let destination = output.path().join("candidate");
+    assert!(preview_job_image_candidate(source.path(), &destination, None).is_err());
+    assert!(!destination.exists());
+}
+
+#[test]
+fn candidate_preview_routes_containerless_scale_set_and_writes_only_candidate() {
+    let source = fixture(CONFIG, "https://github.com/tailrocks/velnor-new.git");
+    let output = tempfile::tempdir().expect("Create the output directory.");
+    let destination = output.path().join("candidate");
+    let paths =
+        preview_job_image_candidate(source.path(), &destination, Some(ExecutionMode::ScaleSet))
+            .expect("Generate the containerless Scale Set workflow.");
+    assert_eq!(paths, vec![".github/workflows/job-image-candidate.yml"]);
+    let rendered = fs::read_to_string(candidate(&destination)).expect("Read the workflow.");
+    assert_eq!(
+        rendered
+            .matches("runs-on: [velnor, ubuntu-26.04-scale-set]")
+            .count(),
+        3
+    );
+    assert!(!rendered.contains("container:"));
+    assert!(!source.path().join(".github").exists());
+    assert!(!source.path().join("Cargo.toml").exists());
+}
+
+#[test]
+fn candidate_preview_rejects_hosted_label_in_scale_set_before_output() {
+    let config = CONFIG.replace(
+        "labels = [\"velnor\", \"ubuntu-26.04-scale-set\"]",
+        "labels = [\"velnor\", \"ubuntu-26.04\"]",
+    );
+    let source = fixture(&config, "https://github.com/tailrocks/velnor-new.git");
+    let output = tempfile::tempdir().expect("Create the output directory.");
+    let destination = output.path().join("candidate");
+    assert!(
+        preview_job_image_candidate(source.path(), &destination, Some(ExecutionMode::ScaleSet))
+            .is_err()
+    );
+    assert!(!destination.exists());
 }
 
 #[test]

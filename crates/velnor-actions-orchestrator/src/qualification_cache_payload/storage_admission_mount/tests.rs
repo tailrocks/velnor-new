@@ -18,10 +18,7 @@ fn observation() -> MountObservation {
 fn sha256_hex(bytes: &[u8]) -> String {
     use sha2::{Digest as _, Sha256};
 
-    Sha256::digest(bytes)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    super::lower_hex(&Sha256::digest(bytes))
 }
 
 fn line(mount_id: u64, options: &str, target: &str) -> String {
