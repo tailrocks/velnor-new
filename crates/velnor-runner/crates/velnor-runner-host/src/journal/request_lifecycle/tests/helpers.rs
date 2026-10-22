@@ -131,7 +131,6 @@ pub(crate) async fn bootstrap_start_state(
 }
 
 pub(crate) struct StorageInitializerPhase {
-    pub(crate) start: String,
     pub(crate) result: String,
     pub(crate) remove: String,
     pub(crate) abort: String,
@@ -154,8 +153,8 @@ pub(crate) async fn storage_initializer_phase(
             .await
             .map_err(|_| HostError::Journal)?
             .ok_or(HostError::Journal)?;
+        let _: String = row.get(0).map_err(|_| HostError::Journal)?;
         let phase = StorageInitializerPhase {
-            start: row.get::<String>(0).map_err(|_| HostError::Journal)?,
             result: row.get::<String>(1).map_err(|_| HostError::Journal)?,
             remove: row.get::<String>(2).map_err(|_| HostError::Journal)?,
             abort: row.get::<String>(3).map_err(|_| HostError::Journal)?,
