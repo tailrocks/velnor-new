@@ -121,7 +121,7 @@ impl DecisionRow {
             rest_job_id: self.rest_job_id.as_deref(),
             source_json: self.source_json.as_deref(),
         })?;
-        validate_decision_file(DecisionFile {
+        validate_decision_file(&DecisionFile {
             state: &self.delivery_state,
             json: &self.decision_json,
             path: self.file_path.as_deref(),
@@ -217,7 +217,7 @@ struct DecisionFile<'a> {
     no_copy: Option<i64>,
 }
 
-fn validate_decision_file(fields: DecisionFile<'_>) -> Result<(), HostError> {
+fn validate_decision_file(fields: &DecisionFile<'_>) -> Result<(), HostError> {
     let exists = fields.inode.is_some();
     if (fields.state == "delivered") != exists
         || (exists
