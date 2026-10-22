@@ -9,6 +9,10 @@ use crate::{RenderError, render::RenderedFile, runs_on::runs_on_yaml, yaml::Yaml
 
 use super::Schema2WorkflowRequest;
 
+#[path = "schema2_job_image_candidate/permissions.rs"]
+mod permission_map;
+use permission_map::permissions;
+
 /// The file path for the job image candidate workflow.
 pub(super) const WORKFLOW_PATH: &str = ".github/workflows/job-image-candidate.yml";
 
@@ -385,15 +389,6 @@ fn download_step(artifact_id: &str) -> Yaml {
             ]),
         ),
     ])
-}
-
-fn permissions(values: &[(&str, &str)]) -> Yaml {
-    Yaml::Map(
-        values
-            .iter()
-            .map(|(key, value)| ((*key).to_owned(), Yaml::str(*value)))
-            .collect(),
-    )
 }
 
 #[cfg(test)]
