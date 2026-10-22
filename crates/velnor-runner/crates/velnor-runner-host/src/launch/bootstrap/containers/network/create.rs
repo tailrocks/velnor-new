@@ -1,4 +1,7 @@
-use std::time::{Duration, Instant};
+use std::{
+    collections::BTreeMap,
+    time::{Duration, Instant},
+};
 
 use bollard::Docker;
 use bollard::models::NetworkCreateRequest;
@@ -69,23 +72,7 @@ async fn create_claimed(
     let labels = claim.labels().clone();
     let response = request(
         deadline,
-        docker.create_network(NetworkCreateRequest {
-            name: claim.network_name().to_owned(),
-            driver: Some("bridge".to_owned()),
-            scope: Some("local".to_owned()),
-            internal: Some(false),
-            attachable: Some(false),
-            ingress: Some(false),
-            enable_ipv4: Some(true),
-            enable_ipv6: Some(false),
-            labels: Some(
-                labels
-                    .iter()
-                    .map(|(key, value)| (key.clone(), value.clone()))
-                    .collect(),
-            ),
-            ..Default::default()
-        }),
+        docker.create_network(network_create_request(claim, &labels)),
     )
     .await?
     .map_err(|_| HostError::Docker)?;
@@ -122,4 +109,27 @@ async fn create_claimed(
         labels,
     };
     journal.record_storage_network_created(claim, &proof).await
+}
+
+fn network_create_request(
+    claim: &StorageNetworkCreateClaim,
+    labels: &BTreeMap<String, String>,
+) -> NetworkCreateRequest {
+    NetworkCreateRequest {
+        name: claim.network_name().to_owned(),
+        driver: Some("bridge".to_owned()),
+        scope: Some("local".to_owned()),
+        internal: Some(false),
+        attachable: Some(false),
+        ingress: Some(false),
+        enable_ipv4: Some(true),
+        enable_ipv6: Some(false),
+        labels: Some(
+            labels
+                .iter()
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
+        ),
+        ..Default::default()
+    }
 }
