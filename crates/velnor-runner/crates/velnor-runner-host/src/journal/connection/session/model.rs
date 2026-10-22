@@ -66,13 +66,6 @@ impl BoundConnectionSession {
 }
 
 impl SessionCreateRecord {
-    /// Give the repository connection that owns this attempt.
-    #[must_use]
-    #[cfg(test)]
-    pub(crate) fn connection_id(&self) -> &ConnectionId {
-        &self.connection_id
-    }
-
     /// Give the exact Scale Set ID.
     #[must_use]
     pub(crate) const fn scale_set_id(&self) -> i64 {
