@@ -18,7 +18,6 @@ pub(crate) struct BootstrapStartClaimFixture {
     pub(crate) engine_id: String,
     pub(crate) docker_root_digest: String,
     pub(crate) reservation_id: i64,
-    pub(crate) intent_id: i64,
 }
 
 pub(crate) async fn prepare_bootstrap_start_claim_for_nonce(
@@ -90,13 +89,15 @@ pub(crate) async fn prepare_bootstrap_start_claim_for_nonce(
             filesystem_instance_digest: "a".repeat(64),
         })
         .await?;
+    if claim.operation_id() != intent_id {
+        return Err(HostError::Journal);
+    }
     Ok(BootstrapStartClaimFixture {
         claim,
         metadata_handoff,
         engine_id: TEST_ENGINE_ID.to_owned(),
         docker_root_digest,
         reservation_id,
-        intent_id,
     })
 }
 
