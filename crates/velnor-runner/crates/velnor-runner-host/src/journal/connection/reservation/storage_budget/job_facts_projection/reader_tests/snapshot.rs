@@ -35,6 +35,34 @@ async fn bound_journal_snapshot_reopens_with_thirteen_roles_and_exact_aliases() 
     );
     let value: serde_json::Value =
         serde_json::from_slice(&first_bytes).expect("consumer document JSON");
+    assert_guest_image_and_cache_aliases(&value);
+
+    let BoundFixture {
+        scratch,
+        repository,
+        journal,
+        scope,
+        ready,
+        channel,
+        claim,
+    } = fixture;
+    drop(scope);
+    drop(journal);
+    let reopened = Journal::open(&scratch.file())
+        .await
+        .expect("reopen journal");
+    let reopened_scope = reopened
+        .connection_scope(&repository)
+        .await
+        .expect("reopen connection scope");
+    let after_reopen = reopened_scope
+        .job_facts_snapshot(&claim, &ready.ready, &channel, &"a".repeat(64))
+        .await
+        .expect("same durable facts after reopen");
+    assert_eq!(after_reopen.bytes(), first_bytes);
+}
+
+fn assert_guest_image_and_cache_aliases(value: &serde_json::Value) {
     assert_eq!(
         value["guest_image_sha256"],
         serde_json::json!("a".repeat(64))
@@ -64,28 +92,4 @@ async fn bound_journal_snapshot_reopens_with_thirteen_roles_and_exact_aliases() 
         value["cache"]["stage_path"],
         "/__w/_temp/velnor/cache-staging"
     );
-
-    let BoundFixture {
-        scratch,
-        repository,
-        journal,
-        scope,
-        ready,
-        channel,
-        claim,
-    } = fixture;
-    drop(scope);
-    drop(journal);
-    let reopened = Journal::open(&scratch.file())
-        .await
-        .expect("reopen journal");
-    let reopened_scope = reopened
-        .connection_scope(&repository)
-        .await
-        .expect("reopen connection scope");
-    let after_reopen = reopened_scope
-        .job_facts_snapshot(&claim, &ready.ready, &channel, &"a".repeat(64))
-        .await
-        .expect("same durable facts after reopen");
-    assert_eq!(after_reopen.bytes(), first_bytes);
 }
