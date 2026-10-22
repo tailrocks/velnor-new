@@ -1,4 +1,5 @@
 use bollard::Docker;
+use velnor_resource_probe::worker_binding::OwnedCgroupRequest;
 
 use crate::error::HostError;
 use crate::journal::{Journal, ProbePhase, ResourceProbePurpose};
@@ -48,16 +49,7 @@ async fn execute_owned_cgroups(
     if projection.purpose != ResourceProbePurpose::OwnedCgroups {
         return Err(HostError::Identity);
     }
-    let request_line = subjects.request_line(&projection.operation_id, projection.root.path())?;
-    let request = subjects.request(
-        projection.operation_id.clone(),
-        projection.root.path().to_owned(),
-    );
-    if subjects.request_sha256(&projection.operation_id, projection.root.path())?
-        != projection.request_sha256
-    {
-        return Err(HostError::Identity);
-    }
+    let (request_line, request) = validated_request(projection, subjects)?;
     deadline
         .within(journal.transition_probe(
             &projection.operation_id,
@@ -128,4 +120,21 @@ async fn execute_owned_cgroups(
         .ok_or(HostError::Journal)?;
     let cleanup = recover::cleanup(docker, journal, &row, projection, deadline).await?;
     Ok((observation, cleanup, host_pid))
+}
+
+fn validated_request(
+    projection: &ProbeProjection,
+    subjects: &OwnedCgroupSubjects,
+) -> Result<(Vec<u8>, OwnedCgroupRequest), HostError> {
+    let request_line = subjects.request_line(&projection.operation_id, projection.root.path())?;
+    let request = subjects.request(
+        projection.operation_id.clone(),
+        projection.root.path().to_owned(),
+    );
+    if subjects.request_sha256(&projection.operation_id, projection.root.path())?
+        != projection.request_sha256
+    {
+        return Err(HostError::Identity);
+    }
+    Ok((request_line, request))
 }

@@ -1,12 +1,14 @@
 //! One bounded probe attempt, including prior-operation recovery.
 
-use bollard::Docker;
+use bollard::{Docker, models::SystemInfo};
 use uuid::Uuid;
 
 use crate::error::HostError;
-use crate::journal::{DoctorProbeTicket, Journal, ProbePhase, ProbeSeed, ResourceProbePurpose};
+use crate::journal::{
+    DoctorProbeTicket, Journal, ProbePhase, ProbeRow, ProbeSeed, ResourceProbePurpose,
+};
 
-use super::projection::ProbeProjection;
+use super::projection::{DockerRoot, ProbeProjection};
 use super::provider::ImageProvider;
 use super::sample::Observation;
 
@@ -203,17 +205,15 @@ async fn collect_for_request_with_recovery<P: ImageProvider>(
         return Err(HostError::Identity);
     }
     let (engine_id, root, _, _) = bind_info(&before, journal, &preparation_deadline).await?;
-    if let Some(row) = active {
-        Box::pin(recover::active(
-            docker,
-            journal,
-            &before,
-            &root,
-            &preparation_deadline,
-            row,
-        ))
-        .await?;
-    }
+    recover_active_probe(
+        docker,
+        journal,
+        &before,
+        &root,
+        &preparation_deadline,
+        active,
+    )
+    .await?;
     let Some(candidate) = provider
         .verified_candidate(docker, journal, &engine_id, &before)
         .await?
@@ -266,4 +266,21 @@ async fn collect_for_request_with_recovery<P: ImageProvider>(
         engine_id,
         root.digest().to_owned(),
     ))
+}
+
+async fn recover_active_probe(
+    docker: &Docker,
+    journal: &Journal,
+    before: &SystemInfo,
+    root: &DockerRoot,
+    deadline: &Deadline,
+    active: Option<ProbeRow>,
+) -> Result<(), HostError> {
+    if let Some(row) = active {
+        Box::pin(recover::active(
+            docker, journal, before, root, deadline, row,
+        ))
+        .await?;
+    }
+    Ok(())
 }

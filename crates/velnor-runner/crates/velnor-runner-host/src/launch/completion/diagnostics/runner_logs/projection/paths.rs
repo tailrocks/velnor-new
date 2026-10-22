@@ -2,7 +2,7 @@ use crate::error::HostError;
 
 use super::valid_timestamp;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum ArchiveDirectory {
     Root,
     Pages,
