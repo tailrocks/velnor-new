@@ -32,6 +32,8 @@ pub(crate) use pre_jit_recovery::{
     recover_pre_jit_reservation, remove_bootstrap_after_terminal_failure,
 };
 pub(crate) use publication::JobFactsPublication;
+#[cfg(test)]
+pub(crate) use publication::JobFactsPublicationFixtureInput;
 pub(crate) use publication::job_facts_publication;
 pub(in crate::launch) use storage::StorageObservationContext;
 pub(crate) use storage::VerifiedStorageResourceBinding;
