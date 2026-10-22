@@ -56,8 +56,10 @@ pub(super) fn validate_context(
     if context.repository_id == 0
         || context.head_repository_id != context.repository_id
         || !lower_hex(&context.source_sha, 40)
+        || !lower_hex(&context.workflow_authority_sha, 40)
         || context.source_ref != format!("refs/heads/{}", plan.default_branch)
-        || context.workflow_authority_sha != context.source_sha
+        || (plan.channel == crate::package_release::PackageReleaseChannel::Stable
+            && context.workflow_authority_sha != context.source_sha)
         || context.run_id == 0
         || context.run_attempt == 0
         || context.ci_run_id == 0

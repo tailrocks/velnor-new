@@ -18,6 +18,20 @@ the 2026-10-20 rolling-preview exception; manual stable version/tag authority,
 image publication and permanent release bundles retain their contracts. See the
 [native channel contract](proposed/native-preview-contract.md).
 
+**Preview source/workflow separation (2026-10-22).** Let A be the successful
+source CI commit, B the current preview workflow definition SHA, and H the
+current protected `main` tip. Admission requires authenticated ancestry
+`A <= B <= H`; A, B and H are distinct identities with distinct roles. A owns
+the version, immutable tag, source configuration, package inventory and signed
+release receipt. B owns the active workflow, signer certificate/run/job
+identity, and trusted bootstrap/tool custody. A later protected tip does not
+invalidate an ancestor A while the ancestry and latest successful CI attempt
+for A remain valid. Every recovery still rechecks that exact-A CI attempt and
+the current ancestry. Homebrew promotion is eligible only when A is the current
+protected `main` tip; otherwise the native result is a typed clean skip. Stable
+publication is unchanged. This supersedes the earlier same-SHA and newer-tip
+revocation wording in the native preview design.
+
 **Manual stable version and tag authority (2026-10-20).** The owner requires
 existing release-plz version management and a permanent stable version tag before
 exact-tag binary builds. The fixed qualified manual preparation phase may inspect

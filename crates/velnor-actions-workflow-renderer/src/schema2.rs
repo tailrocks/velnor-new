@@ -38,8 +38,6 @@ pub use consumer_preview::{
 };
 #[path = "schema2_consumer_binary_release.rs"]
 mod consumer_binary_release;
-#[path = "schema2_consumer_release_eligibility.rs"]
-mod consumer_release_eligibility;
 #[path = "schema2_features.rs"]
 mod features;
 #[path = "schema2_generator_release.rs"]

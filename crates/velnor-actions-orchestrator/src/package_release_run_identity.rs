@@ -19,6 +19,13 @@ pub(super) use active_job::CurrentRun;
 mod active_role;
 pub(super) use active_role::{continuation_job_name, release_job_name};
 pub(super) use cache::RunIdentityCache;
+#[path = "package_release_run_jobs.rs"]
+mod jobs;
+#[cfg(test)]
+use jobs::IdentifiedWorkflowJob;
+use jobs::{
+    MAX_WORKFLOW_JOB_PAGES, WORKFLOW_JOBS_PAGE_SIZE, WorkflowJobsAccumulator, WorkflowJobsPage,
+};
 
 #[derive(Clone, Copy)]
 pub(super) struct RunSource<'a> {
@@ -92,7 +99,7 @@ impl GitHubApi {
             attempt: receipt.workflow.run_attempt,
             source: RunSource {
                 repository_id: receipt.repository.id,
-                sha: &receipt.source.commit_sha,
+                sha: &receipt.workflow.authority_sha,
                 branch: &receipt.source.default_branch,
             },
             workflow: &workflow,
@@ -121,7 +128,7 @@ impl GitHubApi {
     ) -> Result<(), OrchestratorError> {
         let source = RunSource {
             repository_id: receipt.repository.id,
-            sha: &receipt.source.commit_sha,
+            sha: &receipt.workflow.authority_sha,
             branch: &receipt.source.default_branch,
         };
         if !run_matches(
@@ -153,7 +160,9 @@ impl GitHubApi {
         let key = cache::CompletedAttempt::new(id, attempt, source, &workflow);
         if !self.run_identity_cache.borrow().contains(&key) {
             let run = self.workflow_run(id, attempt)?;
-            if !ci_run_is_success(&run, id, attempt, source, &workflow) {
+            if !run_repository_names_match(&run, self.repository_name())
+                || !ci_run_is_success(&run, id, attempt, source, &workflow)
+            {
                 return Err(internal("package_ci_run_identity_mismatch"));
             }
             require_required_job(&self.complete_workflow_jobs(id, attempt)?, id, source.sha)?;
@@ -169,7 +178,9 @@ impl GitHubApi {
             }
             let current: WorkflowRunResponse =
                 self.get_json(&self.route(&format!("actions/runs/{id}")))?;
-            if !ci_run_is_success(&current, id, attempt, source, &workflow) {
+            if !run_repository_names_match(&current, self.repository_name())
+                || !ci_run_is_success(&current, id, attempt, source, &workflow)
+            {
                 return Err(internal("package_ci_latest_attempt_mismatch"));
             }
         }
@@ -189,7 +200,11 @@ impl GitHubApi {
             let count = list.workflow_runs.len();
             runs.extend(list.workflow_runs);
             if count < 100 {
-                return latest_ci_run(runs, workflow, source);
+                let latest = latest_ci_run(runs, workflow, source)?;
+                if !run_repository_names_match(&latest, self.repository_name()) {
+                    return Err(internal("package_ci_run_identity_mismatch"));
+                }
+                return Ok(latest);
             }
         }
         Err(internal("package_ci_run_pages_exceeded"))
@@ -200,19 +215,29 @@ impl GitHubApi {
         id: u64,
         attempt: u32,
     ) -> Result<WorkflowJobList, OrchestratorError> {
-        let mut jobs = Vec::new();
-        for page in 1..=20 {
-            let list: WorkflowJobList = self.get_json(&self.route(&format!(
-                "actions/runs/{id}/attempts/{attempt}/jobs?per_page=100&page={page}"
+        let mut jobs = WorkflowJobsAccumulator::default();
+        for page in 1..=MAX_WORKFLOW_JOB_PAGES {
+            let response: WorkflowJobsPage = self.get_json(&self.route(&format!(
+                "actions/runs/{id}/attempts/{attempt}/jobs?per_page={WORKFLOW_JOBS_PAGE_SIZE}&page={page}"
             )))?;
-            let count = list.jobs.len();
-            jobs.extend(list.jobs);
-            if count < 100 {
-                return Ok(WorkflowJobList { jobs });
+            if jobs.admit_page(response)? {
+                return Ok(jobs.into_list());
             }
         }
         Err(internal("package_ci_job_pages_exceeded"))
     }
+}
+
+fn run_repository_names_match(run: &WorkflowRunResponse, repository: &str) -> bool {
+    [run.repository.as_ref(), run.head_repository.as_ref()]
+        .into_iter()
+        .flatten()
+        .all(|run_repository| {
+            run_repository
+                .full_name
+                .as_deref()
+                .is_none_or(|full_name| full_name == repository)
+        })
 }
 
 pub(super) fn run_matches(

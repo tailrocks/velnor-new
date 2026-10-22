@@ -67,7 +67,13 @@ fn native_production_and_both_tap_channels_apply_lfs_without_privileged_checkout
                 .iter()
                 .map(|(_, job)| checkout_count(job, enabled))
                 .sum::<usize>();
-            assert_eq!(count, spec.policy.payload_pairs().expect("pairs").len() + 1);
+            let expected_production_checkouts =
+                if spec.policy.channel == PackageReleaseChannel::Preview {
+                    2 // One matrix payload job and one aggregate checkout.
+                } else {
+                    spec.policy.payload_pairs().expect("pairs").len() + 1
+                };
+            assert_eq!(count, expected_production_checkouts);
             for (_, job) in [
                 signer(&spec).expect("signer"),
                 publisher(&spec).expect("publisher"),

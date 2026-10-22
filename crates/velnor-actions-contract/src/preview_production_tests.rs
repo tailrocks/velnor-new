@@ -25,10 +25,10 @@ fn six_pairs_preserve_complete_product_bins_and_full_plan() {
     );
     assert_eq!(request.plan.products[0].bins.len(), 3);
     assert_eq!(request.plan.channel.assemble_job_id(), "preview-assemble");
-    for (index, pair) in pairs.into_iter().enumerate() {
+    for pair in pairs {
         assert_eq!(
             release_payload_job_id(&request.plan, &pair).expect("fixed job"),
-            format!("preview-payload-{index:03}")
+            "preview-payload"
         );
         let mut leaf = request.clone();
         leaf.stage = ReleaseProductionStage::Payload { pair };
@@ -103,7 +103,9 @@ fn context_rejects_forks_refs_authority_versions_and_nonpositive_identities() {
         |context: &mut ReleaseProductionContext| {
             context.source_ref = "refs/pull/1/merge".to_owned();
         },
-        |context: &mut ReleaseProductionContext| context.workflow_authority_sha = "b".repeat(40),
+        |context: &mut ReleaseProductionContext| context.workflow_authority_sha = "B".repeat(40),
+        |context: &mut ReleaseProductionContext| context.workflow_authority_sha = "b".repeat(39),
+        |context: &mut ReleaseProductionContext| context.workflow_authority_sha = "g".repeat(40),
         |context: &mut ReleaseProductionContext| context.run_id = 0,
         |context: &mut ReleaseProductionContext| context.run_attempt = 0,
         |context: &mut ReleaseProductionContext| context.ci_run_id = 0,
@@ -117,6 +119,56 @@ fn context_rejects_forks_refs_authority_versions_and_nonpositive_identities() {
         assert!(validate_release_production_context(&candidate.plan, &candidate.context).is_err());
         assert!(release_aggregate_artifact_name(&candidate.plan, &candidate.context).is_err());
     }
+}
+
+#[test]
+fn preview_context_keeps_eligible_source_when_workflow_authority_advances() {
+    let mut candidate = request();
+    let source_sha = candidate.context.source_sha.clone();
+    let source_version = candidate.context.version.clone();
+    candidate.context.workflow_authority_sha = "b".repeat(40);
+
+    candidate
+        .validate()
+        .expect("distinct full source and authority SHAs");
+    assert_eq!(candidate.context.source_sha, source_sha);
+    assert_eq!(candidate.context.version, source_version);
+    assert_eq!(candidate.context.version, "0.6.4-preview.1306+aaaaaaa");
+    assert!(
+        candidate
+            .validate_against(
+                &support::policy(&candidate.plan),
+                &candidate.plan,
+                &candidate.context
+            )
+            .is_ok()
+    );
+
+    let mut unauthenticated = candidate.context.clone();
+    unauthenticated.workflow_authority_sha = "c".repeat(40);
+    assert!(
+        candidate
+            .validate_against(
+                &support::policy(&candidate.plan),
+                &candidate.plan,
+                &unauthenticated
+            )
+            .is_err()
+    );
+}
+
+#[test]
+fn stable_context_still_requires_workflow_authority_to_match_source() {
+    let mut candidate = request();
+    candidate.plan.channel = crate::package_release::PackageReleaseChannel::Stable;
+    candidate.context.commit_count = 0;
+    candidate.context.version = candidate.plan.base_version.clone();
+    candidate.context.workflow_authority_sha = candidate.context.source_sha.clone();
+    validate_release_production_context(&candidate.plan, &candidate.context)
+        .expect("stable source and authority remain identical");
+
+    candidate.context.workflow_authority_sha = "b".repeat(40);
+    assert!(validate_release_production_context(&candidate.plan, &candidate.context).is_err());
 }
 
 #[test]
@@ -225,171 +277,8 @@ fn leaf_rejects_unknown_pairs_and_mixed_channel_context() {
     assert!(release_aggregate_artifact_name(&stable, &context).is_err());
 }
 
-#[test]
-fn strict_parser_rejects_unknown_duplicate_noncanonical_and_oversized_json() {
-    let bytes = request().canonical_bytes().expect("request bytes");
-    let text = String::from_utf8(bytes.clone()).expect("UTF-8");
-    for invalid in [
-        format!(" {text}"),
-        text.replacen(
-            "\"schema\":\"velnor.release-production.v1\"",
-            "\"extra\":true,\"schema\":\"velnor.release-production.v1\"",
-            1,
-        ),
-        text.replacen(
-            "\"base_version\":\"0.6.4\"",
-            "\"base_version\":\"0.6.4\",\"matrix\":[]",
-            1,
-        ),
-        text.replacen("\"run_id\":202", "\"run_id\":2.02e2", 1),
-        text.replacen("\"run_attempt\":2", "\"run_attempt\":02", 1),
-        text.replacen("\"run_id\":202", "\"run_id\":202,\"run_id\":202", 1),
-        text.replacen("\"kind\":\"payload\"", "\"kind\":\"arbitrary\"", 1),
-        text.replacen(
-            "\"kind\":\"payload\"",
-            "\"kind\":\"payload\",\"argv\":[]",
-            1,
-        ),
-        text.replacen(
-            "\"repository_id\":101",
-            "\"repository_id\":101,\"verified\":true",
-            1,
-        ),
-        text.replacen(
-            "\"product_id\":\"jackin\"",
-            "\"product_id\":\"jackin\",\"selector\":\"all\"",
-            1,
-        ),
-    ] {
-        assert_ne!(invalid.as_bytes(), bytes, "mutation must be exercised");
-        assert!(
-            parse_release_production_request(invalid.as_bytes()).is_err(),
-            "{invalid}"
-        );
-    }
-    assert!(parse_release_production_request(&[0xff]).is_err());
-    assert!(
-        parse_release_production_request(&vec![b' '; MAX_RELEASE_PRODUCTION_BYTES + 1]).is_err()
-    );
-}
-
-#[test]
-fn strict_assembly_parser_rejects_missing_digest_and_unknown_reference_fields() {
-    let bytes = assembly().canonical_bytes().expect("assembly bytes");
-    let text = String::from_utf8(bytes).expect("UTF-8");
-    for invalid in [
-        text.replacen(&format!(",\"sha256\":\"{}\"", "b".repeat(64)), "", 1),
-        text.replacen("\"artifact_id\":100", "\"artifact_id\":-1", 1),
-        text.replacen(
-            "\"artifact_id\":100",
-            "\"artifact_id\":18446744073709551616",
-            1,
-        ),
-        text.replacen(
-            "\"artifact_id\":100",
-            "\"artifact_id\":100,\"verified\":true",
-            1,
-        ),
-    ] {
-        assert_ne!(invalid, text, "mutation must be exercised");
-        assert!(parse_release_production_request(invalid.as_bytes()).is_err());
-    }
-}
-
-#[test]
-fn artifact_name_binds_pair_run_and_attempt_without_name_lookup_authority() {
-    let request = request();
-    let pairs = expected_release_payload_pairs(&request.plan).expect("pairs");
-    let name = release_payload_artifact_name(&request.plan, &pairs[0], &request.context)
-        .expect("canonical locator");
-    assert_eq!(
-        name,
-        "velnor-release-payload-r202-a2-jackin-aarch64-apple-darwin"
-    );
-    let mut retry = request.context.clone();
-    retry.run_attempt += 1;
-    assert_ne!(
-        name,
-        release_payload_artifact_name(&request.plan, &pairs[0], &retry).expect("retry")
-    );
-    assert_ne!(
-        name,
-        release_payload_artifact_name(&request.plan, &pairs[1], &request.context)
-            .expect("other leaf")
-    );
-    let mut unknown = pairs[0].clone();
-    unknown.product_id = "../../escape".to_owned();
-    assert!(release_payload_artifact_name(&request.plan, &unknown, &request.context).is_err());
-    assert!(release_payload_job_id(&request.plan, &unknown).is_err());
-}
-
-#[test]
-fn pair_expansion_has_its_own_bounded_preview_inventory() {
-    let mut plan = request().plan;
-    let template = plan.products[0].clone();
-    plan.products = (0..32)
-        .map(|index| {
-            let mut product = template.clone();
-            product.id = format!("product-{index:02}");
-            product.package = product.id.clone();
-            product
-        })
-        .collect();
-    assert_eq!(
-        expected_release_payload_pairs(&plan)
-            .expect("closed maximum")
-            .len(),
-        MAX_RELEASE_PAYLOAD_PAIRS
-    );
-    let pairs = expected_release_payload_pairs(&plan).expect("maximum inventory");
-    let ids = pairs
-        .iter()
-        .map(|pair| release_payload_job_id(&plan, pair).expect("bounded job"))
-        .collect::<std::collections::BTreeSet<_>>();
-    assert_eq!(ids.len(), 128);
-    assert_eq!(ids.first().expect("first"), "preview-payload-000");
-    assert_eq!(ids.last().expect("last"), "preview-payload-127");
-    let mut extra = template;
-    extra.id = "product-32".to_owned();
-    extra.targets.truncate(1);
-    extra.package = extra.id.clone();
-    plan.products.push(extra);
-    plan.validate()
-        .expect("129 pairs remain valid full release inventory");
-    assert_eq!(
-        plan.products
-            .iter()
-            .map(|product| product.targets.len())
-            .sum::<usize>(),
-        129
-    );
-    assert!(expected_release_payload_pairs(&plan).is_err());
-}
-
-#[test]
-fn aggregate_locator_requires_valid_full_context_and_binds_current_run_attempt() {
-    let request = request();
-    validate_release_production_context(&request.plan, &request.context).expect("syntax only");
-    assert_eq!(
-        release_aggregate_artifact_name(&request.plan, &request.context).expect("locator"),
-        "velnor-release-aggregate-r202-a2"
-    );
-    let mut retry = request.context.clone();
-    retry.run_attempt += 1;
-    assert_eq!(
-        release_aggregate_artifact_name(&request.plan, &retry).expect("new attempt"),
-        "velnor-release-aggregate-r202-a3"
-    );
-    retry.run_id += 1;
-    assert_eq!(
-        release_aggregate_artifact_name(&request.plan, &retry).expect("new run"),
-        "velnor-release-aggregate-r203-a3"
-    );
-    let mut invalid = request.plan;
-    invalid.products.clear();
-    assert!(validate_release_production_context(&invalid, &retry).is_err());
-    assert!(release_aggregate_artifact_name(&invalid, &retry).is_err());
-}
+#[path = "preview_production_parser_tests.rs"]
+mod parser_tests;
 
 #[path = "preview_production_channel_tests.rs"]
 mod channel;

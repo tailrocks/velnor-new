@@ -1,4 +1,5 @@
 use super::super::github::sha256;
+use super::discovery::discover_preview_inputs;
 use super::fixture::{record, request};
 use super::*;
 use std::io::{Read, Write};
@@ -10,6 +11,8 @@ use std::{
 
 struct Fake {
     pages: RefCell<VecDeque<ArtifactPage>>,
+    job_names: RefCell<Vec<String>>,
+    job_sha: RefCell<String>,
     authentications: Cell<usize>,
     fail_authentication: Option<usize>,
     bytes: Vec<u8>,
@@ -22,6 +25,8 @@ impl Fake {
                 total_count: records.len(),
                 artifacts: records,
             }])),
+            job_names: RefCell::new(vec!["Build app / aarch64-apple-darwin".to_owned()]),
+            job_sha: RefCell::new("b".repeat(40)),
             authentications: Cell::new(0),
             fail_authentication: None,
             bytes: b"closed ZIP bytes".to_vec(),
@@ -49,6 +54,20 @@ impl ArtifactReadApi for Fake {
             .borrow_mut()
             .pop_front()
             .ok_or_else(|| internal("unexpected_page"))
+    }
+    fn jobs(&self, run: u64, _: u32) -> Result<Vec<JobRecord>, OrchestratorError> {
+        Ok(self
+            .job_names
+            .borrow()
+            .iter()
+            .map(|name| JobRecord {
+                run_id: run,
+                name: name.clone(),
+                head_sha: Some(self.job_sha.borrow().clone()),
+                status: Some("completed".to_owned()),
+                conclusion: Some("success".to_owned()),
+            })
+            .collect())
     }
     fn download(
         &self,
@@ -109,6 +128,50 @@ fn acquire_fixture(
     Ok(rows)
 }
 
+fn configure_jobs(api: &Fake, request: &ReleaseProductionRequest) {
+    *api.job_names.borrow_mut() =
+        velnor_actions_contract::preview_production::expected_release_payload_pairs(&request.plan)
+            .expect("pairs")
+            .into_iter()
+            .map(|pair| format!("Build {} / {}", pair.product_id, pair.target))
+            .collect();
+    *api.job_sha.borrow_mut() = request.context.workflow_authority_sha.clone();
+}
+
+/// Exercise the same fake authenticated transport used by inventory tests from
+/// the composed source-acquisition test.
+pub(crate) fn discover_request_for_sealing_test(
+    request: &ReleaseProductionRequest,
+) -> Result<ReleaseProductionRequest, OrchestratorError> {
+    let pairs =
+        velnor_actions_contract::preview_production::expected_release_payload_pairs(&request.plan)
+            .map_err(|_| internal("fixture_pairs"))?;
+    let artifacts = pairs
+        .iter()
+        .enumerate()
+        .map(|(index, pair)| {
+            let mut artifact = record();
+            artifact.id = u64::try_from(index + 303).map_err(|_| internal("fixture_id"))?;
+            artifact.name = release_payload_artifact_name(&request.plan, pair, &request.context)
+                .map_err(|_| internal("fixture_name"))?;
+            let source = artifact
+                .workflow_run
+                .as_mut()
+                .ok_or_else(|| internal("fixture_source"))?;
+            source.id = request.context.run_id;
+            source.repository_id = request.context.repository_id;
+            source.head_repository_id = request.context.head_repository_id;
+            source.head_sha = request.context.workflow_authority_sha.clone();
+            Ok(artifact)
+        })
+        .collect::<Result<Vec<_>, OrchestratorError>>()?;
+    let api = Fake::new(artifacts);
+    configure_jobs(&api, request);
+    let root = tempfile::tempdir().expect("download directory");
+    let directory = root.path().canonicalize().expect("canonical directory");
+    super::acquire(&api, request, &directory, deadline(), &mut |_| Ok(()))
+}
+
 #[test]
 fn exact_id_digest_size_and_current_attempt_admit_only_service_archive_bytes() {
     let api = Fake::new(vec![record()]);
@@ -123,6 +186,102 @@ fn exact_id_digest_size_and_current_attempt_admit_only_service_archive_bytes() {
 }
 
 #[test]
+fn preview_assembly_discovers_complete_union_without_needs_inputs() {
+    let mut request = request();
+    let ReleaseProductionStage::Assemble { inputs } = &mut request.stage else {
+        unreachable!()
+    };
+    inputs.clear();
+    let api = Fake::new(vec![record()]);
+    let admitted = acquire_fixture(&api, &request, deadline()).expect("API-discovered union");
+    assert_eq!(admitted.len(), 1);
+    assert_eq!(admitted[0].reference.artifact_id, 303);
+    assert_eq!(admitted[0].reference.pair.product_id, "app");
+}
+
+#[test]
+fn preview_acquisition_returns_the_exact_discovered_union_for_sealing() {
+    let request = request();
+    let api = Fake::new(vec![record()]);
+    let root = tempfile::tempdir().expect("download directory");
+    let directory = root.path().canonicalize().expect("canonical directory");
+    let completed = super::acquire(&api, &request, &directory, deadline(), &mut |_| Ok(()))
+        .expect("API discovers and returns complete request");
+    let ReleaseProductionStage::Assemble { inputs } = &completed.stage else {
+        panic!("complete assembly")
+    };
+    assert_eq!(inputs.len(), 1);
+    assert_eq!(inputs[0].artifact_id, 303);
+    assert_eq!(inputs[0].sha256, sha256(b"closed ZIP bytes"));
+    assert_eq!(completed.context.source_sha, request.context.source_sha);
+    assert_eq!(
+        completed.context.workflow_authority_sha,
+        request.context.workflow_authority_sha
+    );
+}
+
+#[test]
+fn preview_union_rejects_incomplete_foreign_duplicate_and_unexpected_entries() {
+    let request = request();
+    let expected_job = JobRecord {
+        run_id: request.context.run_id,
+        name: "Build app / aarch64-apple-darwin".into(),
+        head_sha: Some(request.context.workflow_authority_sha.clone()),
+        status: Some("completed".into()),
+        conclusion: Some("success".into()),
+    };
+    let artifact = record();
+    let valid = BTreeMap::from([(artifact.id, artifact.clone())]);
+    assert_eq!(
+        discover_preview_inputs(&request, &valid, std::slice::from_ref(&expected_job))
+            .expect("complete source-bound union")[0]
+            .artifact_id,
+        artifact.id
+    );
+    assert!(
+        discover_preview_inputs(
+            &request,
+            &BTreeMap::new(),
+            std::slice::from_ref(&expected_job)
+        )
+        .is_err()
+    );
+    let mut duplicate = artifact.clone();
+    duplicate.id += 1;
+    let duplicate_inventory =
+        BTreeMap::from([(artifact.id, artifact.clone()), (duplicate.id, duplicate)]);
+    assert!(
+        discover_preview_inputs(
+            &request,
+            &duplicate_inventory,
+            std::slice::from_ref(&expected_job)
+        )
+        .is_err()
+    );
+    let mut extra = artifact;
+    extra.id += 1;
+    extra.name = format!(
+        "velnor-release-payload-r{}-a{}-unexpected",
+        request.context.run_id, request.context.run_attempt
+    );
+    assert!(
+        discover_preview_inputs(
+            &request,
+            &BTreeMap::from([(303, record()), (extra.id, extra)]),
+            std::slice::from_ref(&expected_job)
+        )
+        .is_err()
+    );
+    let mut foreign = expected_job.clone();
+    foreign.run_id += 1;
+    assert!(discover_preview_inputs(&request, &valid, &[foreign]).is_err());
+    let mut wrong_authority = expected_job.clone();
+    wrong_authority.head_sha = Some(request.context.source_sha.clone());
+    assert!(discover_preview_inputs(&request, &valid, &[wrong_authority]).is_err());
+    assert!(discover_preview_inputs(&request, &valid, &[]).is_err());
+}
+
+#[test]
 fn independently_valid_leaves_exceed_the_old_union_cap_and_are_consumed_one_at_a_time() {
     let mut request = request();
     request.plan.products[0]
@@ -131,17 +290,18 @@ fn independently_valid_leaves_exceed_the_old_union_cap_and_are_consumed_one_at_a
     request.plan_sha256 =
         velnor_actions_contract::preview_production::release_plan_sha256(&request.plan)
             .expect("full plan");
-    let ReleaseProductionStage::Assemble { inputs } = &mut request.stage else {
-        unreachable!()
-    };
-    let mut second = inputs[0].clone();
-    second.artifact_id = 304;
-    second.pair.target = "x86_64-apple-darwin".into();
-    inputs.push(second);
-    let ReleaseProductionStage::Assemble { inputs } = &request.stage else {
-        unreachable!()
-    };
-    let records = inputs
+    let references =
+        velnor_actions_contract::preview_production::expected_release_payload_pairs(&request.plan)
+            .expect("complete plan")
+            .into_iter()
+            .enumerate()
+            .map(|(index, pair)| PayloadArtifactRef {
+                pair,
+                artifact_id: 303 + u64::try_from(index).expect("small fixture index"),
+                sha256: sha256(b"closed ZIP bytes"),
+            })
+            .collect::<Vec<_>>();
+    let records = references
         .iter()
         .map(|reference| ArtifactRecord {
             id: reference.artifact_id,
@@ -150,7 +310,7 @@ fn independently_valid_leaves_exceed_the_old_union_cap_and_are_consumed_one_at_a
             ..record()
         })
         .collect::<Vec<_>>();
-    for (artifact, reference) in records.iter().zip(inputs.iter()) {
+    for (artifact, reference) in records.iter().zip(references.iter()) {
         let large = ArtifactRecord {
             size_in_bytes: 600 * 1024 * 1024,
             ..artifact.clone()
@@ -162,10 +322,11 @@ fn independently_valid_leaves_exceed_the_old_union_cap_and_are_consumed_one_at_a
     assert!(observed_total > ZipProfile::Recovery.compressed());
     assert!(observed_total < leaf_union_compressed_bound(records.len()));
     let api = Fake::new(records);
+    configure_jobs(&api, &request);
     let root = tempfile::tempdir().expect("root");
     let directory = root.path().canonicalize().expect("canonical");
     let mut seen = Vec::new();
-    super::acquire(
+    let completed = super::acquire(
         &api,
         &request,
         &directory,
@@ -183,6 +344,10 @@ fn independently_valid_leaves_exceed_the_old_union_cap_and_are_consumed_one_at_a
         },
     )
     .expect("every leaf consumed");
+    let ReleaseProductionStage::Assemble { inputs } = completed.stage else {
+        panic!("completed API-discovered assembly")
+    };
+    assert_eq!(inputs, references);
     assert_eq!(seen, [303, 304]);
     assert_eq!(*api.downloads.borrow(), [303, 304]);
     assert_eq!(api.authentications.get(), 2);
@@ -261,118 +426,5 @@ fn inventory_requires_stable_totals_full_pages_unique_positive_ids_and_count_bou
     }
 }
 
-#[test]
-fn selected_metadata_rejects_expiry_size_digest_source_fork_and_old_attempt_name() {
-    let mutations: Vec<fn(&mut ArtifactRecord)> = vec![
-        |a| a.expired = true,
-        |a| a.size_in_bytes = 0,
-        |a| a.size_in_bytes = ZipProfile::PreviewLeaf.compressed() + 1,
-        |a| a.digest = None,
-        |a| a.digest = Some(format!("sha256:{}", "b".repeat(64))),
-        |a| a.name = a.name.replace("-a2-", "-a1-"),
-        |a| a.id += 1,
-        |a| a.workflow_run = None,
-        |a| a.workflow_run.as_mut().expect("run").id += 1,
-        |a| a.workflow_run.as_mut().expect("run").repository_id += 1,
-        |a| a.workflow_run.as_mut().expect("run").head_repository_id += 1,
-        |a| a.workflow_run.as_mut().expect("run").head_sha = "b".repeat(40),
-        |a| a.workflow_run.as_mut().expect("run").head_branch = "other".into(),
-    ];
-    for mutate in mutations {
-        let mut artifact = record();
-        mutate(&mut artifact);
-        let api = Fake::new(vec![artifact]);
-        assert!(acquire_fixture(&api, &request(), deadline()).is_err());
-        assert!(api.downloads.borrow().is_empty());
-    }
-}
-
-#[test]
-fn same_size_content_conflict_size_conflict_or_final_attempt_change_return_no_bytes() {
-    for bytes in [b"different bytes!".to_vec(), b"short".to_vec()] {
-        let mut api = Fake::new(vec![record()]);
-        api.bytes = bytes;
-        assert!(acquire_fixture(&api, &request(), deadline()).is_err());
-        assert_eq!(api.authentications.get(), 1);
-    }
-    for call in [1, 2] {
-        let mut api = Fake::new(vec![record()]);
-        api.fail_authentication = Some(call);
-        assert!(acquire_fixture(&api, &request(), deadline()).is_err());
-        assert_eq!(api.downloads.borrow().len(), usize::from(call == 2));
-    }
-}
-
-#[test]
-fn exhausted_deadline_and_invalid_requests_do_not_start_transport() {
-    let api = Fake::new(vec![record()]);
-    let expired = CheckDeadline::from_start(
-        std::time::Instant::now()
-            .checked_sub(Duration::from_secs(1))
-            .expect("one second before test clock"),
-        Duration::from_millis(1),
-    )
-    .expect("past deadline");
-    assert!(acquire_fixture(&api, &request(), expired).is_err());
-    let mut invalid = request();
-    invalid.context.workflow_authority_sha = "b".repeat(40);
-    assert!(acquire_fixture(&api, &invalid, deadline()).is_err());
-    assert_eq!(api.authentications.get(), 0);
-    assert!(api.downloads.borrow().is_empty());
-}
-
-#[test]
-fn complete_metadata_union_exceeding_total_byte_bound_downloads_nothing() {
-    let mut request = request();
-    let template = request.plan.products[0].clone();
-    request.plan.products = (0..8)
-        .map(|index| {
-            let mut product = template.clone();
-            product.id = format!("app-{index:03}");
-            product.package = product.id.clone();
-            product.bins = vec![product.id.clone()];
-            product
-        })
-        .collect();
-    request.plan_sha256 =
-        velnor_actions_contract::preview_production::release_plan_sha256(&request.plan)
-            .expect("full plan");
-    let pairs =
-        velnor_actions_contract::preview_production::expected_release_payload_pairs(&request.plan)
-            .expect("eight pairs");
-    let inputs = pairs
-        .into_iter()
-        .enumerate()
-        .map(|(index, pair)| PayloadArtifactRef {
-            pair,
-            artifact_id: 303 + index as u64,
-            sha256: sha256(b"closed ZIP bytes"),
-        })
-        .collect::<Vec<_>>();
-    let records = inputs
-        .iter()
-        .map(|reference| ArtifactRecord {
-            id: reference.artifact_id,
-            name: release_payload_artifact_name(&request.plan, &reference.pair, &request.context)
-                .expect("name"),
-            size_in_bytes: 1024 * 1024 * 1024,
-            ..record()
-        })
-        .collect::<Vec<_>>();
-    request.stage = ReleaseProductionStage::Assemble { inputs };
-    request.validate().expect("complete eight-pair request");
-    let ReleaseProductionStage::Assemble { inputs } = &request.stage else {
-        unreachable!()
-    };
-    for (artifact, reference) in records.iter().zip(inputs) {
-        validate_selected(artifact, reference, &request)
-            .expect("each individual leaf is within its own bound");
-    }
-    let api = Fake::new(records);
-    let error = acquire_fixture(&api, &request, deadline()).expect_err("complete union bound");
-    assert!(
-        error.to_string().contains("preview_artifact_total_size"),
-        "{error}"
-    );
-    assert!(api.downloads.borrow().is_empty());
-}
+#[path = "preview_artifact_transport_boundary_tests.rs"]
+mod boundary_tests;

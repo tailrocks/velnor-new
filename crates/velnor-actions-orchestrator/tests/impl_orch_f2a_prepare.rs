@@ -50,7 +50,7 @@ fn assert_configuration_admission_boundaries(config_calls: &[String]) {
     // `deps lock` and the private fetch reload it to resolve and verify the declared private sources;
     // `playwright lock` reloads it to resolve the declared browser archives;
     // `unmanaged` reads only the `[github]` and preserve policy, with no discovery.
-    assert_eq!(config_calls.len(), 12, "{config_calls:?}");
+    assert_eq!(config_calls.len(), 13, "{config_calls:?}");
     assert!(
         config_calls
             .iter()
@@ -85,6 +85,7 @@ fn assert_configuration_admission_boundaries(config_calls: &[String]) {
         config_calls.iter().all(|call| {
             call.starts_with("prepare.rs")
                 || call.starts_with("preview_producer_entry.rs")
+                || call.starts_with("preview_source_admission_finalization.rs")
                 || call.starts_with("check_runtime.rs")
                 || call.starts_with("routing.rs")
                 || call.starts_with("deps_lock.rs")

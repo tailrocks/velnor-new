@@ -56,6 +56,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
             "playwright_resolve.rs",
             "prepare.rs",
             "preview_producer_entry.rs",
+            "preview_source_admission_finalization.rs",
             "private_fetch.rs",
             "qualification_resolver.rs",
             "routing.rs",
@@ -136,13 +137,24 @@ fn preview_budget_admission_passes_one_validated_config_to_shared_preparation() 
             .count(),
         1
     );
-    assert!(entry.contains("prepare_with_config(&workspace, config)?"));
+    assert!(entry.contains("prepare_with_config(&workspace, config)"));
     assert_eq!(entry.matches("prepare_with_config(").count(), 1);
     let compact = entry.split_whitespace().collect::<String>();
-    assert!(compact.contains(
-        "deadline.scope(||{let(policy,plan)=crate::release_policy_admission::admitted_policy_plan(&temp,deadline)?;letprep=prepare_with_config(&workspace,config)?;"
-    ));
-    assert!(compact.contains("execution::execute(&prep,&temp,&preview,&request,deadline,guard)"));
+    let admission = compact
+        .find("crate::release_policy_admission::admitted_policy_plan(&temp,deadline)?")
+        .expect("admit policy before source preparation");
+    let preflight = compact
+        .find("preflight_preview_source(&workspace,&temp,&config,&plan,deadline)")
+        .expect("validate source before preparation");
+    let prepare = compact
+        .find(
+            "prepare_after_source_preflight(preflight,||{prepare_with_config(&workspace,config)})?",
+        )
+        .expect("prepare after preflight");
+    let execute = compact
+        .find("execution::execute(&prep,&temp,&preview,&request,deadline,guard)")
+        .expect("execute prepared source");
+    assert!(admission < preflight && preflight < prepare && prepare < execute);
     assert!(!entry.contains("let mut config"));
     let prepare = std::fs::read_to_string(orch_src().join("prepare.rs"))?;
     assert!(prepare.contains("prepare_inner(root, None, None)"));

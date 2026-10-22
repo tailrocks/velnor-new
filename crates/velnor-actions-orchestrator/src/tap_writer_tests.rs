@@ -115,3 +115,16 @@ fn pull_request_promotion_outcome_has_a_distinct_tagged_shape() {
     assert!(value.get("merged_at").is_none());
     assert!(serde_json::from_value::<TapPromotionOutcome>(value).is_ok());
 }
+
+#[test]
+fn stale_preview_skip_is_a_successful_typed_outcome_without_a_pr_identity() {
+    let source = "a".repeat(40);
+    let outcome = TapPromotionOutcome::SkippedStaleSource {
+        source_sha: source.clone(),
+    };
+    let value = serde_json::to_value(&outcome).expect("skip outcome JSON");
+    assert_eq!(value["state"], "skipped_stale_source");
+    assert_eq!(value["source_sha"], source);
+    assert!(value.get("pull_request").is_none());
+    assert!(serde_json::from_value::<TapPromotionOutcome>(value).is_ok());
+}

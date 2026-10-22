@@ -60,6 +60,7 @@ pub(super) fn run() -> ExitCode {
                 TapMergeOutcome::Pending => "pending",
                 TapMergeOutcome::Merged => "merged",
                 TapMergeOutcome::AlreadyPromoted => "already-promoted",
+                TapMergeOutcome::SkippedStaleSource => "skipped-stale-source",
             };
             println!("tap_merge_status={status}");
             ExitCode::SUCCESS

@@ -34,6 +34,8 @@ pub(super) fn fixture() -> ConsumerReleaseSpec {
         producer_timeout_minutes: 5,
         linux_acquire: acquire.clone(),
         producer_acquire: acquire,
+        producer_acquire_by_target: producer_acquire_targets(),
+        producer_setup_by_target: producer_setup_targets(),
         producer_setup: setup_fixture(),
         linux_setup: setup_fixture(),
         install_gh_argv: vec![
@@ -76,6 +78,95 @@ pub(super) fn fixture() -> ConsumerReleaseSpec {
         gh_argv: vec!["gh".to_owned()],
         homebrew_tap: None,
     }
+}
+
+fn assert_production_credentials_are_native_only(spec: &ConsumerReleaseSpec) {
+    let jobs = production::jobs(spec).expect("production jobs");
+    for (_, job) in jobs {
+        assert_job_credentials_are_native_only(&job);
+    }
+}
+
+fn assert_job_credentials_are_native_only(job: &Yaml) {
+    let Yaml::Map(job_fields) = job else {
+        panic!("job map")
+    };
+    let Some((_, Yaml::Seq(steps))) = job_fields.iter().find(|(key, _)| key == "steps") else {
+        panic!("job steps")
+    };
+    for step in steps {
+        let Yaml::Map(step_fields) = step else {
+            panic!("step map")
+        };
+        let Some((_, Yaml::Map(environment))) = step_fields.iter().find(|(key, _)| key == "env")
+        else {
+            continue;
+        };
+        let carries_credentials = environment.iter().any(|(key, value)| {
+            matches!(
+                key.as_str(),
+                "GH_TOKEN" | "GITHUB_TOKEN" | "VELNOR_RELEASE_STATUS_TOKEN"
+            ) && value != &Yaml::str("")
+        });
+        if carries_credentials {
+            let operation = environment
+                .iter()
+                .find(|(key, _)| key == "VELNOR_INTERNAL_OP")
+                .map(|(_, value)| value);
+            assert!(
+                matches!(
+                    operation,
+                    Some(Yaml::Str(value))
+                        if matches!(value.as_str(),
+                            "acquire-preview-source-v1"
+                                | "acquire-release-leaves-v1"
+                                | "admit-release-aggregate-v1"
+                                | "sign-package-release-v1")
+                ),
+                "credentials must stay on source-admission operations: {step:?}"
+            );
+        }
+    }
+}
+
+fn producer_acquire_targets() -> BTreeMap<velnor_actions_contract::targets::ReleaseTarget, Step> {
+    velnor_actions_contract::targets::ReleaseTarget::ALL
+        .into_iter()
+        .map(|target| {
+            let digest = match target {
+                velnor_actions_contract::targets::ReleaseTarget::LinuxX86_64 => "sha256sum -c -",
+                velnor_actions_contract::targets::ReleaseTarget::MacosArm64
+                | velnor_actions_contract::targets::ReleaseTarget::MacosX86_64 => {
+                    "shasum -a 256 -c -"
+                }
+            };
+            let step = provision_acquire_step(
+                &HelperProvenance::ReleaseAsset {
+                    url: format!(
+                        "https://github.com/tailrocks/velnor-new/releases/download/v0.1.12/velnor-actions-0.1.12-{}",
+                        target.triple()
+                    ),
+                    sha256: "c".repeat(64),
+                    commit: "b".repeat(40),
+                },
+                vec![
+                    "sh".to_owned(),
+                    "-c".to_owned(),
+                    format!(r#"curl -fsSL "$VELNOR_ASSET_URL" -o "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.12" && printf '%s  %s\n' "$VELNOR_ASSET_SHA256" "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.12" | {digest}"#),
+                ],
+            )
+            .expect("target helper");
+            (target, step)
+        })
+        .collect()
+}
+
+fn producer_setup_targets() -> BTreeMap<velnor_actions_contract::targets::ReleaseTarget, MiseSetup>
+{
+    velnor_actions_contract::targets::ReleaseTarget::ALL
+        .into_iter()
+        .map(|target| (target, setup_fixture()))
+        .collect()
 }
 
 fn policy_fixture() -> PackageReleasePolicy {
@@ -138,7 +229,8 @@ fn job<'a>(yaml: &'a str, name: &str, next: Option<&str>) -> &'a str {
 
 #[test]
 fn preview_has_isolated_privileges_and_exact_inventory_attestation() {
-    let rendered = render_consumer_preview(&fixture()).expect("preview");
+    let spec = fixture();
+    let rendered = render_consumer_preview(&spec).expect("preview");
     assert_eq!(rendered.path, ".github/workflows/binary-preview.yml");
     let yaml = &rendered.bytes;
     let triggers = &yaml[..yaml.find("jobs:").expect("jobs")];
@@ -151,29 +243,29 @@ fn preview_has_isolated_privileges_and_exact_inventory_attestation() {
         "native-preview-${{ github.repository }}-${{ github.event.workflow_run.head_sha || inputs.original_run_id }}"
     ));
     assert!(yaml.contains("cancel-in-progress: false"));
-    let eligibility = job(yaml, "preview-eligibility", Some("preview-payload-000"));
-    assert!(eligibility.contains("ref: ${{ github.sha }}"));
-    assert_eq!(eligibility.matches("actions/checkout").count(), 1);
-    assert!(eligibility.find("actions/checkout") < eligibility.find("Verify source and CI"));
-    assert!(eligibility.contains("fetch-depth: 0"));
+    let eligibility = job(yaml, "preview-eligibility", Some("preview-payload"));
+    assert!(eligibility.contains("select-preview-source-v1"));
+    assert!(eligibility.contains("finalize-preview-source-v1"));
+    assert!(eligibility.contains("actions/checkout@"));
     assert!(eligibility.contains("persist-credentials: false"));
-    let producer = job(yaml, "preview-payload-000", Some("preview-payload-001"));
+    let producer = job(yaml, "preview-payload", Some("preview-assemble"));
+    assert_production_credentials_are_native_only(&spec);
     assert!(producer.contains("fetch-depth: 0"));
     assert!(producer.contains("persist-credentials: false"));
     assert!(!producer.contains("environment:"));
     assert!(!producer.contains("GH_TOKEN: \"${{ github.token }}\""));
     assert!(!producer.contains("id-token"));
     assert!(!producer.contains("contents: write"));
-    assert!(!producer.contains("RELEASE_STATUS_READ_TOKEN"));
+    let (_, signer_job) = signer(&spec).expect("signer job");
+    assert_job_credentials_are_native_only(&signer_job);
     let signer = job(yaml, "preview-signer", Some("preview-publisher"));
     assert!(!signer.contains("actions/checkout"));
     assert!(signer.contains("id-token: write"));
     assert!(signer.contains("contents: read"));
     assert!(!signer.contains("contents: write"));
-    assert_eq!(signer.matches("/velnor/release-signed/").count(), 8);
+    assert!(signer.contains("steps.release.outputs.attestation_subject_paths"));
     assert!(!signer.contains("artifact-metadata"));
     assert!(signer.contains("create-storage-record: false"));
-    assert!(!signer.contains("RELEASE_STATUS_READ_TOKEN"));
     let publisher = job(yaml, "preview-publisher", None);
     assert!(!publisher.contains("actions/checkout"));
     assert!(!publisher.contains("id-token"));
@@ -209,7 +301,7 @@ fn manual_recovery_has_no_build_or_signing_authority() {
     assert!(!yaml.contains("Original push workflow run ID"));
     assert!(!yaml.contains("Original signer run attempt"));
     for (name, next) in [
-        ("preview-payload-000", "preview-payload-001"),
+        ("preview-payload", "preview-assemble"),
         ("preview-assemble", "preview-signer"),
         ("preview-signer", "preview-publisher"),
         ("preview-publisher", "preview-recovery"),
@@ -285,87 +377,8 @@ fn with_tap() -> ConsumerReleaseSpec {
     spec
 }
 
-#[test]
-fn tap_jobs_separate_unprivileged_preparation_and_scoped_app_authority() {
-    let rendered = render_consumer_preview(&with_tap()).expect("tap workflow");
-    let yaml = &rendered.bytes;
-    let prepare = job(yaml, "preview-tap-prepare", Some("preview-tap-writer"));
-    assert!(prepare.contains("actions/checkout"));
-    assert!(!prepare.contains("environment:"));
-    assert!(!prepare.contains("create-github-app-token"));
-    assert!(!prepare.contains("${{ secrets.TAP_APP_PRIVATE_KEY }}"));
-    assert!(!prepare.contains("\n      contents: write\n"));
-    assert!(prepare.contains("needs.preview-recovery.result == 'success'"));
-    assert!(prepare.contains("needs.preview-publisher.result == 'success'"));
-    for (id, next) in [
-        ("preview-tap-writer", Some("preview-tap-merge")),
-        ("preview-tap-merge", None),
-    ] {
-        let privileged = job(yaml, id, next);
-        assert!(!privileged.contains("actions/checkout"));
-        assert!(!privileged.contains("id-token:"));
-        assert!(!privileged.contains("\n      contents: write\n"));
-        assert!(privileged.contains("environment: tap-update"));
-        assert!(privileged.contains("owner: example"));
-        assert!(privileged.contains("repositories: homebrew-tap"));
-        assert!(privileged.contains("skip-token-revoke: false"));
-        assert!(privileged.contains("${{ secrets.RELEASE_STATUS_READ_TOKEN }}"));
-        assert!(privileged.contains("VELNOR_RELEASE_ORIGINAL_RUN_ID:"));
-    }
-    let writer = job(yaml, "preview-tap-writer", Some("preview-tap-merge"));
-    assert!(!writer.contains("permission-administration"));
-    assert!(writer.contains("VELNOR_TAP_TOKEN:"));
-    assert!(!writer.contains("VELNOR_TAP_MERGE_TOKEN:"));
-    let merge = job(yaml, "preview-tap-merge", None);
-    assert!(merge.contains("permission-administration: read"));
-    assert!(!merge.contains("permission-checks: read"));
-    assert!(merge.contains("VELNOR_TAP_PROTECTION_TOKEN"));
-    assert!(!writer.contains("VELNOR_TAP_PROTECTION_"));
-    assert!(!writer.contains("${{ secrets.TAP_PROTECTION_APP_PRIVATE_KEY }}"));
-    assert!(!prepare.contains("VELNOR_TAP_PROTECTION_"));
-    assert!(!prepare.contains("${{ secrets.TAP_PROTECTION_APP_PRIVATE_KEY }}"));
-    let observer = merge
-        .split("id: tap-protection-token")
-        .nth(1)
-        .expect("observer mint");
-    assert!(observer.contains("permission-administration: read"));
-    assert!(merge.contains("VELNOR_TAP_MERGE_TOKEN:"));
-    assert!(!merge.contains("VELNOR_TAP_TOKEN:"));
-    assert!(merge.contains("VELNOR_TAP_COMPLETION_APP_ID:"));
-    assert!(merge.contains("VELNOR_TAP_REVIEWER_APP_ID_0:"));
-}
-
-#[test]
-fn credential_references_cannot_become_privileged_environment_keys() {
-    let mut spec = with_tap();
-    spec.homebrew_tap
-        .as_mut()
-        .expect("tap")
-        .policy
-        .review_completion
-        .app_id_variable = "PATH".to_owned();
-    let yaml = render_consumer_preview(&spec)
-        .expect("literal variable reference")
-        .bytes;
-    let merge = job(&yaml, "preview-tap-merge", None);
-    assert!(merge.contains("VELNOR_TAP_COMPLETION_APP_ID: ${{ vars.PATH }}"));
-    assert!(!merge.contains("\n          PATH:"));
-}
-
-#[test]
-fn tap_updater_rejects_self_hosted_execution_without_native_provisioning() {
-    let mut spec = with_tap();
-    let runner = &mut spec
-        .homebrew_tap
-        .as_mut()
-        .expect("tap")
-        .policy
-        .updater
-        .runner;
-    runner.executor = velnor_actions_contract::config::CheckExecutor::EphemeralSelfHosted;
-    runner.label = "tap-updater".to_owned();
-    assert!(render_consumer_preview(&spec).is_err());
-}
+#[path = "schema2_consumer_preview_credential_tests.rs"]
+mod credential_tests;
 
 #[path = "schema2_consumer_preview_trigger_tests.rs"]
 mod triggers;

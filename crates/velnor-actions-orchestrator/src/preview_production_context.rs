@@ -67,9 +67,18 @@ pub(super) fn from_context(
         context,
         stage,
     };
-    request
-        .validate()
-        .map_err(|_| internal("preview_request_invalid"))?;
+    // Preview assembly resolves the complete attempt-local artifact union from
+    // GitHub's authenticated inventory. Its request deliberately carries no
+    // caller-supplied `needs` locators; the artifact transport validates the
+    // completed request after discovery. Stable keeps its literal inputs.
+    let discovered_preview_assembly = request.plan.channel
+        == velnor_actions_contract::package_release::PackageReleaseChannel::Preview
+        && matches!(&request.stage, ReleaseProductionStage::Assemble { .. });
+    if !discovered_preview_assembly {
+        request
+            .validate()
+            .map_err(|_| internal("preview_request_invalid"))?;
+    }
     validate_role(&request, &required_env("GITHUB_JOB")?)?;
     Ok(request)
 }
@@ -99,7 +108,9 @@ pub(super) fn workflow_context(
         return crate::stable_tag_origin::admitted_production_context(plan, deadline);
     }
     validate_workflow(plan)?;
-    let source_sha = required_env("GITHUB_SHA")?;
+    // Preview payloads execute under authority B while building independently
+    // admitted CI source A. Keep the identities explicit; GITHUB_SHA remains B.
+    let source_sha = required_env("VELNOR_RELEASE_SOURCE_SHA")?;
     let count = positive_env("VELNOR_RELEASE_COMMIT_COUNT")?;
     let identity = PreviewIdentity::derive(&plan.base_version, &source_sha, count)
         .map_err(|_| internal("preview_identity_invalid"))?;
@@ -109,7 +120,7 @@ pub(super) fn workflow_context(
         head_repository_id: repository_id,
         source_sha,
         source_ref: required_env("GITHUB_REF")?,
-        workflow_authority_sha: required_env("GITHUB_WORKFLOW_SHA")?,
+        workflow_authority_sha: required_env("VELNOR_RELEASE_WORKFLOW_AUTHORITY_SHA")?,
         run_id: positive_env("GITHUB_RUN_ID")?,
         run_attempt: u32::try_from(positive_env("GITHUB_RUN_ATTEMPT")?)
             .map_err(|_| internal("preview_context_number"))?,
@@ -167,9 +178,17 @@ fn stage(
             {
                 return Err(internal("preview_assembly_unexpected_selector"));
             }
-            Ok(ReleaseProductionStage::Assemble {
-                inputs: parse_needs(&required_env("VELNOR_RELEASE_NEEDS_JSON")?, plan, context)?,
-            })
+            let inputs = if plan.channel
+                == velnor_actions_contract::package_release::PackageReleaseChannel::Preview
+            {
+                if env::var_os("VELNOR_RELEASE_NEEDS_JSON").is_some() {
+                    return Err(internal("preview_assembly_unexpected_inputs"));
+                }
+                Vec::new()
+            } else {
+                parse_needs(&required_env("VELNOR_RELEASE_NEEDS_JSON")?, plan, context)?
+            };
+            Ok(ReleaseProductionStage::Assemble { inputs })
         }
         _ => Err(internal("preview_stage_unknown")),
     }
@@ -186,6 +205,32 @@ pub(super) fn parse_needs(
     text: &str,
     plan: &PackageReleasePlan,
     context: &ReleaseProductionContext,
+) -> Result<Vec<PayloadArtifactRef>, OrchestratorError> {
+    let mut additional_outputs = BTreeMap::new();
+    if plan.channel == velnor_actions_contract::package_release::PackageReleaseChannel::Stable {
+        for (key, env) in [
+            ("origin_artifact_id", "VELNOR_STABLE_TAG_ORIGIN_ARTIFACT_ID"),
+            (
+                "origin_artifact_digest",
+                "VELNOR_STABLE_TAG_ORIGIN_ARTIFACT_DIGEST",
+            ),
+            ("intent_artifact_id", "VELNOR_STABLE_TAG_INTENT_ARTIFACT_ID"),
+            (
+                "intent_artifact_digest",
+                "VELNOR_STABLE_TAG_INTENT_ARTIFACT_DIGEST",
+            ),
+        ] {
+            additional_outputs.insert(key.to_owned(), required_env(env)?);
+        }
+    }
+    parse_needs_with_outputs(text, plan, context, &additional_outputs)
+}
+
+fn parse_needs_with_outputs(
+    text: &str,
+    plan: &PackageReleasePlan,
+    context: &ReleaseProductionContext,
+    additional_outputs: &BTreeMap<String, String>,
 ) -> Result<Vec<PayloadArtifactRef>, OrchestratorError> {
     let value =
         velnor_actions_contract::strict_json::parse_strict_json_bytes(text.as_bytes(), 1024 * 1024)
@@ -210,22 +255,7 @@ pub(super) fn parse_needs(
         ("ci_attempt".to_owned(), context.ci_run_attempt.to_string()),
         ("commit_count".to_owned(), context.commit_count.to_string()),
     ]);
-    if plan.channel == velnor_actions_contract::package_release::PackageReleaseChannel::Stable {
-        for (key, env) in [
-            ("origin_artifact_id", "VELNOR_STABLE_TAG_ORIGIN_ARTIFACT_ID"),
-            (
-                "origin_artifact_digest",
-                "VELNOR_STABLE_TAG_ORIGIN_ARTIFACT_DIGEST",
-            ),
-            ("intent_artifact_id", "VELNOR_STABLE_TAG_INTENT_ARTIFACT_ID"),
-            (
-                "intent_artifact_digest",
-                "VELNOR_STABLE_TAG_INTENT_ARTIFACT_DIGEST",
-            ),
-        ] {
-            expected.insert(key.to_owned(), required_env(env)?);
-        }
-    }
+    expected.extend(additional_outputs.clone());
     if eligibility.result != "success" || eligibility.outputs != expected {
         return Err(internal("preview_needs_eligibility"));
     }
@@ -261,16 +291,17 @@ pub(super) fn parse_needs(
 }
 
 fn validate_workflow(plan: &PackageReleasePlan) -> Result<(), OrchestratorError> {
-    if required_env("GITHUB_EVENT_NAME")? != "workflow_run"
-        || !workflow_identity_matches(
-            plan,
-            &required_env("GITHUB_REPOSITORY")?,
-            &required_env("GITHUB_REF")?,
-            &required_env("GITHUB_SHA")?,
-            &required_env("GITHUB_WORKFLOW_SHA")?,
-            &required_env("GITHUB_WORKFLOW_REF")?,
-        )
-    {
+    if !matches!(
+        required_env("GITHUB_EVENT_NAME")?.as_str(),
+        "workflow_run" | "workflow_dispatch"
+    ) || !workflow_identity_matches(
+        plan,
+        &required_env("GITHUB_REPOSITORY")?,
+        &required_env("GITHUB_REF")?,
+        &required_env("GITHUB_SHA")?,
+        &required_env("GITHUB_WORKFLOW_SHA")?,
+        &required_env("GITHUB_WORKFLOW_REF")?,
+    ) {
         return Err(internal("preview_workflow_context_mismatch"));
     }
     Ok(())
@@ -313,6 +344,14 @@ fn validate_event(
     let event =
         velnor_actions_contract::strict_json::parse_strict_json_bytes(&bytes, 4 * 1024 * 1024)
             .map_err(|_| internal("preview_event_json"))?;
+    if required_env("GITHUB_EVENT_NAME")? == "workflow_dispatch" {
+        if event["repository"]["id"].as_u64() != Some(context.repository_id)
+            || event["repository"]["full_name"].as_str() != Some(plan.repository.as_str())
+        {
+            return Err(internal("preview_event_repository_identity"));
+        }
+        return Ok(());
+    }
     let run = &event["workflow_run"];
     if event["action"].as_str() != Some("completed")
         || event["repository"]["id"].as_u64() != Some(context.repository_id)

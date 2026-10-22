@@ -106,13 +106,19 @@ fn publisher_ci_gate_binds_exact_run_and_attempt() {
         name: Some(velnor_actions_contract::WORKFLOW_DISPLAY_NAME.to_owned()),
         workflow_id: Some(7),
         run_number: Some(12),
-        head_repository: Some(RunRepository { id: 9 }),
+        head_repository: Some(RunRepository {
+            id: 9,
+            full_name: None,
+        }),
         head_sha: Some("a".repeat(40)),
         head_branch: Some("main".to_owned()),
         event: Some("push".to_owned()),
         status: Some("completed".to_owned()),
         conclusion: Some("success".to_owned()),
-        repository: Some(RunRepository { id: 9 }),
+        repository: Some(RunRepository {
+            id: 9,
+            full_name: None,
+        }),
     };
     let workflow = WorkflowMetadata {
         state: "active".to_owned(),

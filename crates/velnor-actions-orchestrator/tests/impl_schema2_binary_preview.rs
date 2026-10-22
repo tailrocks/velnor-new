@@ -160,7 +160,11 @@ executor = "hosted"
     let preview = tree
         .get(".github/workflows/binary-preview.yml")
         .ok_or("preview missing")?;
-    assert!(preview.contains("runs-on: xcode-27"));
+    assert!(preview.contains("runs-on: ${{ matrix.runner }}"));
+    assert!(
+        preview
+            .contains("matrix: ${{ fromJSON(needs.preview-eligibility.outputs.payload_matrix) }}")
+    );
     assert!(preview.contains("Resolve project tool versions"));
     let ci = tree.get(".github/workflows/ci.yml").ok_or("CI missing")?;
     assert!(ci.contains("check-native:"));

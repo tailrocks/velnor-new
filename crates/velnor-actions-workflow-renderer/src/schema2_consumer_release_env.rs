@@ -18,33 +18,38 @@ pub(super) fn environment(
     )
     .map_err(|error| RenderError::InvalidWorkflow(error.to_string()))?;
     let mut env = Vec::new();
-    push(&mut env, "VELNOR_RELEASE_POLICY", plan);
+    let selecting_preview = matches!(
+        op,
+        "select-preview-source-v1" | "finalize-preview-source-v1"
+    );
+    push(
+        &mut env,
+        "VELNOR_RELEASE_POLICY",
+        if spec.policy.channel == PackageReleaseChannel::Preview
+            && matches!(context, TapInvocationContext::Preview)
+            && !selecting_preview
+        {
+            "${{ needs.preview-eligibility.outputs.release_policy }}".to_owned()
+        } else {
+            plan
+        },
+    );
     push(&mut env, "VELNOR_INTERNAL_OP", op);
     push(
         &mut env,
         "VELNOR_REQUEST_FILE",
-        if op == "execute-release-producer-v1" {
+        if matches!(
+            op,
+            "select-preview-source-v1" | "finalize-preview-source-v1"
+        ) {
+            "${{ runner.temp }}/velnor/preview-source-seed-policy.json"
+        } else if op == "execute-release-producer-v1" {
             "${{ runner.temp }}/velnor/package-release-plan.json"
         } else {
             "${{ runner.temp }}/velnor/package-release-policy.json"
         },
     );
-    for (key, value) in context.release_inputs() {
-        push(&mut env, key, value);
-    }
-    channel_bindings(&mut env, spec, op, context)?;
-    if matches!(
-        op,
-        "recover-package-release-v1"
-            | "admit-homebrew-tap-v1"
-            | "prepare-homebrew-tap-v1"
-            | "write-homebrew-tap-pr-v1"
-            | "merge-homebrew-tap-pr-v1"
-    ) {
-        for (key, value) in context.original() {
-            push(&mut env, key, value);
-        }
-    }
+    release_context_bindings(&mut env, spec, op, context, selecting_preview)?;
     if spec.policy.channel == PackageReleaseChannel::Preview
         && matches!(
             op,
@@ -60,12 +65,51 @@ pub(super) fn environment(
             "${{ steps.policy-admission.outputs.admission_digest }}",
         );
     }
+    credential_bindings(&mut env, op, authenticated);
+    Ok(Yaml::Map(env))
+}
+
+fn release_context_bindings(
+    env: &mut Vec<(String, Yaml)>,
+    spec: &ConsumerReleaseSpec,
+    op: &str,
+    context: TapInvocationContext,
+    selecting_preview: bool,
+) -> Result<(), RenderError> {
+    if !selecting_preview {
+        for (key, value) in context.release_inputs() {
+            push(env, key, value);
+        }
+    }
+    channel_bindings(env, spec, op, context)?;
+    if matches!(
+        op,
+        "recover-package-release-v1"
+            | "admit-homebrew-tap-v1"
+            | "prepare-homebrew-tap-v1"
+            | "write-homebrew-tap-pr-v1"
+            | "merge-homebrew-tap-pr-v1"
+    ) {
+        for (key, value) in context.original() {
+            push(env, key, value);
+        }
+    }
+    Ok(())
+}
+
+fn credential_bindings(env: &mut Vec<(String, Yaml)>, op: &str, authenticated: bool) {
     if authenticated {
-        push(&mut env, "GH_TOKEN", "${{ github.token }}");
+        push(env, "GH_TOKEN", "${{ github.token }}");
     }
     if matches!(
         op,
-        "publish-package-release-v1"
+        "select-preview-source-v1"
+            | "finalize-preview-source-v1"
+            | "acquire-preview-source-v1"
+            | "acquire-release-leaves-v1"
+            | "admit-release-aggregate-v1"
+            | "sign-package-release-v1"
+            | "publish-package-release-v1"
             | "recover-package-release-v1"
             | "write-stable-tag-intent-v1"
             | "write-stable-tag-origin-v1"
@@ -77,12 +121,11 @@ pub(super) fn environment(
             | "select-release-tap-continuation-v1"
     ) {
         push(
-            &mut env,
+            env,
             "VELNOR_RELEASE_STATUS_TOKEN",
             "${{ secrets.RELEASE_STATUS_READ_TOKEN }}",
         );
     }
-    Ok(Yaml::Map(env))
 }
 fn channel_bindings(
     env: &mut Vec<(String, Yaml)>,
@@ -90,6 +133,38 @@ fn channel_bindings(
     op: &str,
     context: TapInvocationContext,
 ) -> Result<(), RenderError> {
+    if spec.policy.channel == PackageReleaseChannel::Preview
+        && matches!(context, TapInvocationContext::Preview)
+        && !matches!(
+            op,
+            "select-preview-source-v1" | "finalize-preview-source-v1"
+        )
+    {
+        for (key, value) in [
+            (
+                "VELNOR_RELEASE_SOURCE_SHA",
+                "${{ needs.preview-eligibility.outputs.source_sha }}",
+            ),
+            (
+                "VELNOR_RELEASE_WORKFLOW_AUTHORITY_SHA",
+                "${{ needs.preview-eligibility.outputs.workflow_authority_sha }}",
+            ),
+            (
+                "VELNOR_RELEASE_SOURCE_ADMISSION_ARTIFACT_ID",
+                "${{ needs.preview-eligibility.outputs.source_admission_artifact_id }}",
+            ),
+            (
+                "VELNOR_RELEASE_SOURCE_ADMISSION_ARTIFACT_DIGEST",
+                "${{ needs.preview-eligibility.outputs.source_admission_artifact_digest }}",
+            ),
+            (
+                "VELNOR_RELEASE_SOURCE_ADMISSION_SHA256",
+                "${{ needs.preview-eligibility.outputs.source_admission_sha256 }}",
+            ),
+        ] {
+            push(env, key, value);
+        }
+    }
     if spec.policy.channel == PackageReleaseChannel::Stable {
         push(env, "VELNOR_STABLE_OPERATION", "${{ inputs.operation }}");
         let stable = spec

@@ -71,7 +71,19 @@ pub(crate) fn load_config(root: &Path) -> Result<VelnorConfig, OrchestratorError
         }
         crate::safe_read::RepoRead::Text(text) => text,
     };
-    let partial: PartialConfig = toml::from_str(&text).map_err(|err| {
+    load_config_from_text(&text)
+}
+
+/// Parse and validate the exact serialized configuration bytes.
+pub(crate) fn load_config_from_text(text: &str) -> Result<VelnorConfig, OrchestratorError> {
+    if u64::try_from(text.len()).unwrap_or(u64::MAX) > crate::safe_read::MAX_REPO_FILE_BYTES {
+        return Err(OrchestratorError::config(
+            CONFIG_REL,
+            "document",
+            "config_too_large",
+        ));
+    }
+    let partial: PartialConfig = toml::from_str(text).map_err(|err| {
         config_error(velnor_actions_contract::ContractError::map_decode_error(
             CONFIG_REL,
             &err.to_string(),

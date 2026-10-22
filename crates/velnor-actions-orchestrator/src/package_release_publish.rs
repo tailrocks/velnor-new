@@ -18,7 +18,6 @@ use crate::{
 
 #[path = "release_policy_admission.rs"]
 pub(crate) mod release_policy_admission;
-pub use release_policy_admission::{ADMIT_RELEASE_POLICY_OP, admit_release_policy_from_env};
 
 #[path = "stable_tag_origin.rs"]
 pub(crate) mod stable_tag_origin;
@@ -32,6 +31,18 @@ pub use stable_tag_origin::{
 #[path = "package_release_published.rs"]
 mod published;
 pub(crate) use published::verify_published_release;
+
+/// Authenticate the protected source main tip for downstream promotion decisions.
+pub(crate) fn verify_preview_main_tip(
+    repository: &str,
+    repository_id: u64,
+    branch: &str,
+) -> Result<String, OrchestratorError> {
+    if !velnor_actions_contract::vcs::is_safe_github_repository(repository) {
+        return Err(internal("package_publish_preview_tip_repository_invalid"));
+    }
+    github::GitHubApi::new(repository.to_owned()).verify_preview_main_tip(repository_id, branch)
+}
 
 #[path = "package_release_publish_backend.rs"]
 mod backend;
@@ -51,6 +62,8 @@ mod run_identity;
 pub(crate) mod artifact_zip;
 #[path = "preview_artifact_transport.rs"]
 mod preview_artifacts;
+#[cfg(test)]
+pub(crate) use preview_artifacts::tests::discover_request_for_sealing_test;
 pub(crate) use preview_artifacts::{
     AdmittedReleaseArtifact, acquire_release_aggregate, acquire_release_artifacts,
 };

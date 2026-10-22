@@ -47,16 +47,48 @@ fn fixture() -> ReleaseProductionRequest {
     }
 }
 
+fn stable_fixture() -> ReleaseProductionRequest {
+    let mut request = fixture();
+    request.plan.channel = PackageReleaseChannel::Stable;
+    request.plan_sha256 = release_plan_sha256(&request.plan).expect("stable digest");
+    request.context.commit_count = 0;
+    request.context.version = request.plan.base_version.clone();
+    request
+}
+
+fn stable_origin_outputs() -> BTreeMap<String, String> {
+    BTreeMap::from([
+        ("origin_artifact_id".to_owned(), "43".to_owned()),
+        ("origin_artifact_digest".to_owned(), "c".repeat(64)),
+        ("intent_artifact_id".to_owned(), "44".to_owned()),
+        ("intent_artifact_digest".to_owned(), "d".repeat(64)),
+    ])
+}
+
 fn needs(request: &ReleaseProductionRequest) -> Value {
     let mut map = serde_json::Map::new();
     map.insert(
-        "preview-eligibility".to_owned(),
+        match request.plan.channel {
+            PackageReleaseChannel::Preview => "preview-eligibility",
+            PackageReleaseChannel::Stable => "stable-tag",
+        }
+        .to_owned(),
         json!({"result":"success", "outputs":{
             "source_sha":request.context.source_sha,
             "workflow_authority_sha":request.context.workflow_authority_sha,
-            "ci_run_id":"2", "ci_attempt":"1", "commit_count":"10"
+            "ci_run_id":request.context.ci_run_id.to_string(),
+            "ci_attempt":request.context.ci_run_attempt.to_string(),
+            "commit_count":request.context.commit_count.to_string()
         }}),
     );
+    if request.plan.channel == PackageReleaseChannel::Stable {
+        let outputs = map.get_mut("stable-tag").expect("stable tag need");
+        let mut values = outputs["outputs"].as_object().expect("output map").clone();
+        for (key, value) in stable_origin_outputs() {
+            values.insert(key, json!(value));
+        }
+        outputs["outputs"] = Value::Object(values);
+    }
     for (index, pair) in expected_release_payload_pairs(&request.plan)
         .expect("pairs")
         .iter()
@@ -76,15 +108,30 @@ fn parse(
     request: &ReleaseProductionRequest,
     value: &Value,
 ) -> Result<Vec<PayloadArtifactRef>, OrchestratorError> {
-    parse_needs(&value.to_string(), &request.plan, &request.context)
+    let additional = if request.plan.channel == PackageReleaseChannel::Stable {
+        stable_origin_outputs()
+    } else {
+        BTreeMap::new()
+    };
+    parse_needs_with_outputs(
+        &value.to_string(),
+        &request.plan,
+        &request.context,
+        &additional,
+    )
 }
 
 #[test]
 fn needs_requires_full_success_union_and_exact_eligibility_identity() {
-    let request = fixture();
+    let request = stable_fixture();
     let good = needs(&request);
     assert_eq!(parse(&request, &good).expect("union").len(), 2);
-    for job in ["preview-payload-000", "preview-payload-001"] {
+    let jobs = expected_release_payload_pairs(&request.plan)
+        .expect("pairs")
+        .iter()
+        .map(|pair| release_payload_job_id(&request.plan, pair).expect("job"))
+        .collect::<Vec<_>>();
+    for job in &jobs {
         let mut missing = good.clone();
         missing.as_object_mut().expect("map").remove(job);
         assert!(parse(&request, &missing).is_err());
@@ -105,23 +152,36 @@ fn needs_requires_full_success_union_and_exact_eligibility_identity() {
         "commit_count",
     ] {
         let mut wrong = good.clone();
-        wrong["preview-eligibility"]["outputs"][key] = json!("wrong");
+        wrong["stable-tag"]["outputs"][key] = json!("wrong");
         assert!(parse(&request, &wrong).is_err());
     }
 }
 
 #[test]
 fn needs_rejects_duplicate_json_noncanonical_ids_and_request_duplicate_artifacts() {
-    let mut request = fixture();
+    let mut request = stable_fixture();
     let good = needs(&request);
-    assert!(parse_needs("{\"x\":{},\"x\":{}}", &request.plan, &request.context).is_err());
+    assert!(
+        parse_needs_with_outputs(
+            "{\"x\":{},\"x\":{}}",
+            &request.plan,
+            &request.context,
+            &stable_origin_outputs()
+        )
+        .is_err()
+    );
+    let pairs = expected_release_payload_pairs(&request.plan).expect("pairs");
     for value in ["0", "01", "+1", "-1", "18446744073709551616"] {
         let mut bad = good.clone();
-        bad["preview-payload-000"]["outputs"]["artifact_id"] = json!(value);
+        let first = pairs.first().expect("first pair");
+        let job = release_payload_job_id(&request.plan, first).expect("first job");
+        bad[&job]["outputs"]["artifact_id"] = json!(value);
         assert!(parse(&request, &bad).is_err());
     }
     let mut duplicated = good.clone();
-    duplicated["preview-payload-001"]["outputs"]["artifact_id"] = json!("100");
+    let second = pairs.get(1).expect("second pair");
+    let job = release_payload_job_id(&request.plan, second).expect("second job");
+    duplicated[&job]["outputs"]["artifact_id"] = json!("100");
     request.stage = ReleaseProductionStage::Assemble {
         inputs: parse(&request, &duplicated).expect("syntax"),
     };
@@ -138,9 +198,9 @@ fn job_role_is_bound_to_selected_pair_or_complete_assembler() {
             .expect("pairs")
             .remove(0),
     };
-    assert!(validate_role(&request, "preview-payload-000").is_ok());
+    assert!(validate_role(&request, "preview-payload").is_ok());
     for role in [
-        "preview-payload-001",
+        "preview-payload-000",
         "preview-assemble",
         "preview-signer",
         "",

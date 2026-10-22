@@ -10,6 +10,15 @@ use velnor_actions_contract::config::HomebrewTapConfig;
 
 const TAP_BASE: &str = "main";
 
+/// A write operation may stop cleanly when the separately authenticated source main advanced.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum CurrentSourceWrite<T> {
+    /// Source A remained the current protected main tip and the operation completed.
+    Completed(T),
+    /// The protected main tip is now newer than signed source A; retain prior safe side effects.
+    SkippedStaleSource,
+}
+
 pub(super) struct BranchRequest<'a> {
     pub(super) proof: &'a HomebrewTapPreparationProof,
     pub(super) formula: &'a [u8],
@@ -17,17 +26,21 @@ pub(super) struct BranchRequest<'a> {
     pub(super) base_tree_sha: &'a str,
     pub(super) branch: &'a str,
     pub(super) bot: &'a BotIdentity,
-    pub(super) verify_current: &'a mut dyn FnMut() -> Result<(), OrchestratorError>,
+    pub(super) verify_current: &'a mut dyn FnMut() -> Result<bool, OrchestratorError>,
 }
 
 pub(super) fn create_or_reconcile_branch(
     api: &TapGitHubApi,
     request: &mut BranchRequest<'_>,
-) -> Result<String, OrchestratorError> {
-    (request.verify_current)()?;
+) -> Result<CurrentSourceWrite<String>, OrchestratorError> {
+    if !(request.verify_current)()? {
+        return Ok(CurrentSourceWrite::SkippedStaleSource);
+    }
     let blob: github::BlobCreateResponse =
         api.post_blob(&api.repo_route("git/blobs"), request.formula)?;
-    (request.verify_current)()?;
+    if !(request.verify_current)()? {
+        return Ok(CurrentSourceWrite::SkippedStaleSource);
+    }
     let tree: github::TreeCreateResponse = api.post_fields(
         &api.repo_route("git/trees"),
         &[
@@ -40,22 +53,38 @@ pub(super) fn create_or_reconcile_branch(
     )?;
     let expected_message = signed_off_message(request.proof, request.bot);
     if let Some(existing_sha) = exact_branch_ref(api, request.branch, request.proof.channel)? {
-        return validate_existing_branch(
+        let head = validate_existing_branch(
             api,
             request.branch,
             &existing_sha,
             request.base_sha,
             &tree.sha,
             &expected_message,
-        );
+        )?;
+        return if (request.verify_current)()? {
+            Ok(CurrentSourceWrite::Completed(head))
+        } else {
+            Ok(CurrentSourceWrite::SkippedStaleSource)
+        };
     }
+    create_branch_commit_and_ref(api, request, &tree.sha, &expected_message)
+}
+
+fn create_branch_commit_and_ref(
+    api: &TapGitHubApi,
+    request: &mut BranchRequest<'_>,
+    tree_sha: &str,
+    expected_message: &str,
+) -> Result<CurrentSourceWrite<String>, OrchestratorError> {
     let email = bot_email(request.bot);
-    (request.verify_current)()?;
+    if !(request.verify_current)()? {
+        return Ok(CurrentSourceWrite::SkippedStaleSource);
+    }
     let commit: github::CommitCreateResponse = api.post_fields(
         &api.repo_route("git/commits"),
         &[
-            ("message", expected_message.clone()),
-            ("tree", tree.sha.clone()),
+            ("message", expected_message.to_owned()),
+            ("tree", tree_sha.to_owned()),
             ("parents[]", request.base_sha.to_owned()),
             ("author[name]", request.bot.login.clone()),
             ("author[email]", email),
@@ -63,14 +92,16 @@ pub(super) fn create_or_reconcile_branch(
             ("committer[email]", bot_email(request.bot)),
         ],
     )?;
-    if commit.tree.sha != tree.sha
+    if commit.tree.sha != tree_sha
         || commit.parents.len() != 1
         || commit.parents[0].sha != request.base_sha
         || commit.message != expected_message
     {
         return Err(internal("tap_writer_commit_response_mismatch"));
     }
-    (request.verify_current)()?;
+    if !(request.verify_current)()? {
+        return Ok(CurrentSourceWrite::SkippedStaleSource);
+    }
     let create_ref = api.post_fields::<serde_json::Value>(
         &api.repo_route("git/refs"),
         &[
@@ -79,18 +110,27 @@ pub(super) fn create_or_reconcile_branch(
         ],
     );
     if create_ref.is_ok() {
-        return Ok(commit.sha);
+        return if (request.verify_current)()? {
+            Ok(CurrentSourceWrite::Completed(commit.sha))
+        } else {
+            Ok(CurrentSourceWrite::SkippedStaleSource)
+        };
     }
     let raced = exact_branch_ref(api, request.branch, request.proof.channel)?
         .ok_or_else(|| internal("tap_writer_ref_create_failed"))?;
-    validate_existing_branch(
+    let head = validate_existing_branch(
         api,
         request.branch,
         &raced,
         request.base_sha,
-        &tree.sha,
-        &expected_message,
-    )
+        tree_sha,
+        expected_message,
+    )?;
+    if (request.verify_current)()? {
+        Ok(CurrentSourceWrite::Completed(head))
+    } else {
+        Ok(CurrentSourceWrite::SkippedStaleSource)
+    }
 }
 
 fn exact_branch_ref(
@@ -161,13 +201,13 @@ pub(super) struct PullRequestRequest<'a> {
     pub(super) proof_digest: &'a str,
     pub(super) release: &'a VerifiedPackageRelease,
     pub(super) bot: &'a BotIdentity,
-    pub(super) verify_current: &'a mut dyn FnMut() -> Result<(), OrchestratorError>,
+    pub(super) verify_current: &'a mut dyn FnMut() -> Result<bool, OrchestratorError>,
 }
 
 pub(super) fn create_or_reconcile_pr(
     api: &TapGitHubApi,
     request: &mut PullRequestRequest<'_>,
-) -> Result<u64, OrchestratorError> {
+) -> Result<CurrentSourceWrite<u64>, OrchestratorError> {
     let policy = request.policy;
     let branch = request.branch;
     let owner = policy
@@ -193,11 +233,17 @@ pub(super) fn create_or_reconcile_pr(
         if !matches_expected_pr(pull, request, owner) {
             return Err(internal("tap_writer_conflicting_pull_request_retry"));
         }
-        return Ok(pull.number);
+        return if (request.verify_current)()? {
+            Ok(CurrentSourceWrite::Completed(pull.number))
+        } else {
+            Ok(CurrentSourceWrite::SkippedStaleSource)
+        };
     }
     let title = expected_pr_title(request.release);
     let body = expected_pr_body(request.release, request.proof_digest, request.base_sha);
-    (request.verify_current)()?;
+    if !(request.verify_current)()? {
+        return Ok(CurrentSourceWrite::SkippedStaleSource);
+    }
     let created: PullRequestResponse = api.post_fields(
         &api.repo_route("pulls"),
         &[
@@ -211,7 +257,11 @@ pub(super) fn create_or_reconcile_pr(
     if !matches_expected_pr(&created, request, owner) {
         return Err(internal("tap_writer_pull_request_response_mismatch"));
     }
-    Ok(created.number)
+    if (request.verify_current)()? {
+        Ok(CurrentSourceWrite::Completed(created.number))
+    } else {
+        Ok(CurrentSourceWrite::SkippedStaleSource)
+    }
 }
 
 fn matches_expected_pr(

@@ -1,9 +1,6 @@
 //! Retained-run recovery admission and identity verification.
 
-use std::{
-    env, fs,
-    path::{Path, PathBuf},
-};
+use std::path::Path;
 
 use velnor_actions_contract::{
     PackageReleasePlan, PackageReleasePolicy,
@@ -38,6 +35,12 @@ const POLICY_FILE: &str = "package-release-policy.json";
 const INPUT_DIR: &str = "release-recovery-input";
 const MAX_PLAN_BYTES: u64 = 1024 * 1024;
 const MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
+#[path = "package_release_publish_recovery_support.rs"]
+mod support;
+use support::{
+    create_fresh_directory, env_path, env_text, positive_env, positive_env_u32,
+    read_regular_bounded, runner_root,
+};
 
 pub(super) fn recover() -> Result<super::PackagePublicationOutcome, OrchestratorError> {
     let (signed, mode) = verified_original(Purpose::PublicationRecovery)?;
@@ -69,13 +72,17 @@ fn verified_original(
     let api = GitHubApi::new(policy.repository.clone());
     api.verify_repository(repository_id)?;
 
-    let (artifact_source_sha, zip_bytes) = original_archive(
+    let (artifact_workflow_sha, zip_bytes) = original_archive(
         &api,
         &policy,
         original_run_id,
         original_attempt,
         repository_id,
     )?;
+    let artifact_source_sha = match policy.channel {
+        PackageReleaseChannel::Preview => archive::preview_source_sha(&zip_bytes)?,
+        PackageReleaseChannel::Stable => artifact_workflow_sha.clone(),
+    };
     let plan =
         super::release_policy_admission::resolve_policy_at_source(&policy, &artifact_source_sha)?;
     validate_recovery_context(&plan, purpose)?;
@@ -91,7 +98,9 @@ fn verified_original(
         original_run_id,
         original_attempt,
         &artifact_source_sha,
-    ) {
+    ) || (plan.channel == PackageReleaseChannel::Preview
+        && receipt.workflow.authority_sha != artifact_workflow_sha)
+    {
         return Err(internal("package_recovery_receipt_run_mismatch"));
     }
     let identity = original_signing_identity(
@@ -231,7 +240,7 @@ fn original_signing_identity(
     if !source_run_matches(
         &workflow_run,
         plan,
-        source.commit_sha.as_str(),
+        receipt.workflow.authority_sha.as_str(),
         run_id,
         attempt,
         repository_id,
@@ -244,9 +253,20 @@ fn original_signing_identity(
     require_successful_job(
         &jobs,
         run_id,
-        &source.commit_sha,
+        &receipt.workflow.authority_sha,
         plan.channel.signer_job_id(),
     )?;
+    if workflow_run.head_sha.as_deref() != Some(receipt.workflow.authority_sha.as_str()) {
+        return Err(internal("package_recovery_workflow_sha_mismatch"));
+    }
+    if plan.channel == PackageReleaseChannel::Preview {
+        api.verify_preview_main_ancestry(
+            repository_id,
+            &plan.default_branch,
+            &source.commit_sha,
+            &receipt.workflow.authority_sha,
+        )?;
+    }
     api.verify_ci_identity(
         source.ci_run_id,
         source.ci_run_attempt,
@@ -272,14 +292,14 @@ fn original_signing_identity(
             plan.channel.workflow_path(),
             source_ref
         ),
-        workflow_sha: workflow_run.head_sha.unwrap_or_default(),
+        workflow_sha: receipt.workflow.authority_sha.clone(),
         run_id,
         run_attempt: attempt,
         ci_run_id: source.ci_run_id,
         ci_run_attempt: source.ci_run_attempt,
         commit_count: receipt.version.commit_count,
     };
-    if identity.workflow_sha != source.commit_sha {
+    if plan.channel == PackageReleaseChannel::Stable && identity.workflow_sha != source.commit_sha {
         return Err(internal("package_recovery_workflow_sha_mismatch"));
     }
     Ok(identity)
@@ -335,61 +355,6 @@ pub(super) fn require_successful_job(
 
 #[path = "package_release_publish_recovery_archive.rs"]
 mod archive;
-
-fn create_fresh_directory(path: &Path) -> Result<(), OrchestratorError> {
-    fs::create_dir(path).map_err(|_| internal("package_recovery_input_not_fresh"))
-}
-
-fn runner_root() -> Result<PathBuf, OrchestratorError> {
-    let runner = PathBuf::from(env_text("RUNNER_TEMP")?);
-    if !runner.is_absolute() {
-        return Err(internal("package_recovery_runner_temp_invalid"));
-    }
-    let root = runner.join("velnor");
-    let metadata =
-        fs::symlink_metadata(&root).map_err(|_| internal("package_recovery_root_missing"))?;
-    if metadata.file_type().is_symlink() || !metadata.is_dir() {
-        return Err(internal("package_recovery_root_invalid"));
-    }
-    Ok(root)
-}
-
-fn env_path(key: &str) -> Result<PathBuf, OrchestratorError> {
-    Ok(PathBuf::from(env_text(key)?))
-}
-
-fn env_text(key: &str) -> Result<String, OrchestratorError> {
-    env::var(key)
-        .ok()
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| internal("package_recovery_context_missing"))
-}
-
-fn positive_env(key: &str) -> Result<u64, OrchestratorError> {
-    env_text(key)?
-        .parse::<u64>()
-        .ok()
-        .filter(|value| *value > 0)
-        .ok_or_else(|| internal("package_recovery_numeric_context_invalid"))
-}
-
-fn positive_env_u32(key: &str) -> Result<u32, OrchestratorError> {
-    env_text(key)?
-        .parse::<u32>()
-        .ok()
-        .filter(|value| *value > 0)
-        .ok_or_else(|| internal("package_recovery_numeric_context_invalid"))
-}
-
-fn read_regular_bounded(path: &Path, max: u64) -> Result<Vec<u8>, OrchestratorError> {
-    let metadata =
-        fs::symlink_metadata(path).map_err(|_| internal("package_recovery_plan_missing"))?;
-    if !metadata.file_type().is_file() || metadata.len() == 0 || metadata.len() > max {
-        return Err(internal("package_recovery_plan_invalid"));
-    }
-    super::release_policy_admission::metadata::read(path)
-        .map_err(|_| internal("package_recovery_plan_read"))
-}
 
 #[cfg(test)]
 #[path = "package_release_publish_recovery_tests.rs"]

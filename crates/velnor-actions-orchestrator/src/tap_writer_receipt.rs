@@ -52,4 +52,9 @@ pub enum TapPromotionOutcome {
         /// GitHub merge timestamp for the selected historical PR.
         merged_at: String,
     },
+    /// Signed historical preview retained successfully without opening or changing a tap PR.
+    SkippedStaleSource {
+        /// Exact source commit in the immutable signed release.
+        source_sha: String,
+    },
 }

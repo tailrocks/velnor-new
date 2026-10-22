@@ -3,7 +3,8 @@ use serde_json::{Value, json};
 use std::{fs, process::Command};
 use velnor_actions_contract::{
     CargoVersionBinding, CargoVersionPolicy, PACKAGE_RELEASE_POLICY_SCHEMA_V1,
-    canonical_json_bytes, preview_production::ReleaseProductionContext,
+    canonical_json_bytes, config::RustBinaryReleaseProducer,
+    preview_production::ReleaseProductionContext,
 };
 
 const CHILD: &str = "package_release_signer::request::tests::static_policy_request_loads_only_digest_pinned_channel_admission";
@@ -252,6 +253,8 @@ fn child(
         .env("GITHUB_REPOSITORY_ID", "42")
         .env("GITHUB_SHA", source)
         .env("GITHUB_WORKFLOW_SHA", source)
+        .env("VELNOR_RELEASE_SOURCE_SHA", source)
+        .env("VELNOR_RELEASE_WORKFLOW_AUTHORITY_SHA", source)
         .env("GITHUB_REF", "refs/heads/main")
         .env(
             "GITHUB_WORKFLOW_REF",
@@ -278,8 +281,14 @@ fn admission(
     plan: &[u8],
 ) -> Value {
     if channel == PackageReleaseChannel::Preview {
-        json!({"schema":"velnor.release-policy-admission.v1", "policy_sha256":super::super::sha256(policy),
-            "plan_sha256":super::super::sha256(plan), "context":context})
+        let producer = RustBinaryReleaseProducer {
+            task: "release-preview".to_owned(),
+            ..RustBinaryReleaseProducer::default()
+        };
+        json!({"schema":"velnor.preview-source-admission.v1", "policy_sha256":super::super::sha256(policy),
+            "plan_sha256":super::super::sha256(plan), "context":context, "source_files":[],
+            "producer":serde_json::to_value(producer).expect("serialized producer"), "task_config":"", "task_inputs":[],
+            "tool_specs":[], "qualified_tools":[], "qualification_digest":"f".repeat(64)})
     } else {
         json!({"schema":"velnor.stable-production-admission.v1", "intent":{
             "schema":"velnor.stable-tag-authorization.v1", "repository":"jackin-project/jackin",

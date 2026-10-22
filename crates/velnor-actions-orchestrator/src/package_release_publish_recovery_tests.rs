@@ -183,10 +183,16 @@ fn recovery_original_run_must_match_exact_workflow_source_and_attempt() {
         name: Some("Rust binary preview".to_owned()),
         workflow_id: Some(7),
         run_number: Some(12),
-        head_repository: Some(RunRepository { id: 9 }),
+        head_repository: Some(RunRepository {
+            id: 9,
+            full_name: None,
+        }),
         status: Some("completed".to_owned()),
         conclusion: Some("failure".to_owned()),
-        repository: Some(RunRepository { id: 9 }),
+        repository: Some(RunRepository {
+            id: 9,
+            full_name: None,
+        }),
     };
     let workflow = WorkflowMetadata {
         state: "active".to_owned(),

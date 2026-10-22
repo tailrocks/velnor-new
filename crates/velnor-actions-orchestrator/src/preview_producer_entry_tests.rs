@@ -36,6 +36,23 @@ fn preview_producer_accepts_only_actual_workflow_run_event() {
 }
 
 #[test]
+fn failed_source_preflight_stops_before_repository_metadata_preparation() {
+    for reason in [
+        "preview_source_head_mismatch",
+        "release_policy_source_closure_substitution",
+        "release_policy_source_closure_blob",
+    ] {
+        let mut metadata_started = false;
+        let result = prepare_after_source_preflight(Err(internal(reason)), || {
+            metadata_started = true;
+            Ok(())
+        });
+        assert!(result.is_err(), "accepted preflight error {reason}");
+        assert!(!metadata_started, "metadata started after {reason}");
+    }
+}
+
+#[test]
 fn preview_entry_rejects_mismatched_workflow_authority() {
     let plan = plan();
     let sha = "0123456789abcdef0123456789abcdef01234567";

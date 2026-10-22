@@ -3,7 +3,10 @@
 //! This module consumes an admitted static policy/plan and retained producer bytes. It
 //! never loads repository configuration, resolves task code, or executes source.
 
-use std::path::{Path, PathBuf};
+use std::{
+    io::Write as _,
+    path::{Path, PathBuf},
+};
 
 use velnor_actions_contract::{
     PackageReleasePlan,
@@ -26,6 +29,8 @@ use runtime::{
     require_private_directory, sha256, signing_identity_from_env, validate_identity,
     validate_release_directory, write_new_file,
 };
+#[path = "package_release_signer_verified.rs"]
+mod verified;
 
 #[path = "package_release_signer_attestation.rs"]
 mod attestation;
@@ -80,38 +85,6 @@ pub(crate) struct VerifiedAttestedSignedPackage {
     signed: VerifiedSignedPackage,
     closure: std::sync::Arc<crate::filesystem_owner::held_directory::HeldDirectory>,
     identity: PackageReleaseSigningIdentity,
-}
-
-impl VerifiedAttestedSignedPackage {
-    pub(crate) fn closure(
-        &self,
-    ) -> std::sync::Arc<crate::filesystem_owner::held_directory::HeldDirectory> {
-        std::sync::Arc::clone(&self.closure)
-    }
-
-    pub(crate) fn plan(&self) -> &PackageReleasePlan {
-        self.signed.plan()
-    }
-
-    pub(crate) fn receipt(&self) -> &PackageReleaseReceipt {
-        self.signed.receipt()
-    }
-
-    pub(crate) fn directory(&self) -> &Path {
-        self.signed.directory()
-    }
-}
-
-impl VerifiedSignedPackage {
-    pub(crate) fn plan(&self) -> &PackageReleasePlan {
-        &self.plan
-    }
-    pub(crate) fn receipt(&self) -> &PackageReleaseReceipt {
-        &self.receipt
-    }
-    pub(crate) fn directory(&self) -> &Path {
-        &self.directory
-    }
 }
 
 /// Execute the private signer operation using fixed runner paths and a strict
@@ -294,12 +267,69 @@ pub(crate) fn sign_package_release(
     if bundle.name != "release.json.bundle" {
         return Err(internal("package_signer_receipt_bundle_name"));
     }
-    verify_signed_package(&output_dir, plan, identity)?;
+    let signed = verify_signed_package(&output_dir, plan, identity)?;
+    append_attestation_subject_paths(&signed, root)?;
     Ok(VerifiedSignedPackage {
         plan: plan.clone(),
         receipt,
         directory: output_dir,
     })
+}
+
+fn append_attestation_subject_paths(
+    signed: &VerifiedSignedPackage,
+    root: &Path,
+) -> Result<(), OrchestratorError> {
+    let runner_temp = absolute_env("RUNNER_TEMP")?;
+    if !runner_temp.is_absolute() || root != runner_temp.join("velnor") {
+        return Err(internal("package_signer_subject_root_invalid"));
+    }
+    let subject_dir = root.join(OUTPUT_DIR);
+    if signed.directory() != subject_dir {
+        return Err(internal("package_signer_subject_root_invalid"));
+    }
+    let mut paths = signed
+        .receipt()
+        .assets
+        .iter()
+        .filter(|asset| {
+            matches!(
+                asset.kind,
+                PackageReleaseAssetKind::Payload | PackageReleaseAssetKind::Companion
+            )
+        })
+        .map(|asset| subject_dir.join(&asset.name))
+        .collect::<Vec<_>>();
+    paths.push(subject_dir.join("release.json"));
+    paths.sort();
+    paths.dedup();
+    if paths.is_empty() {
+        return Err(internal("package_signer_subject_inventory_invalid"));
+    }
+    let mut output = String::from("attestation_subject_paths<<VELNOR_ATTESTATION_SUBJECT_PATHS\n");
+    for path in paths {
+        if path.parent() != Some(subject_dir.as_path())
+            || !path.is_absolute()
+            || path.to_string_lossy().contains(['\n', '\r'])
+        {
+            return Err(internal("package_signer_subject_path_invalid"));
+        }
+        let metadata = std::fs::symlink_metadata(&path)
+            .map_err(|_| internal("package_signer_subject_path_invalid"))?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() || metadata.len() == 0 {
+            return Err(internal("package_signer_subject_path_invalid"));
+        }
+        output.push_str(&path.to_string_lossy());
+        output.push('\n');
+    }
+    output.push_str("VELNOR_ATTESTATION_SUBJECT_PATHS\n");
+    let output_path = absolute_env("GITHUB_OUTPUT")?;
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(output_path)
+        .map_err(|_| internal("package_signer_output_write"))?;
+    file.write_all(output.as_bytes())
+        .map_err(|_| internal("package_signer_output_write"))
 }
 
 /// Authenticate the canonical receipt and every signed asset against trusted

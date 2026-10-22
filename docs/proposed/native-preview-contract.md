@@ -94,13 +94,38 @@ five minutes. General crate-job policy is independent and is not changed here.
 
 ## Source and version authority
 
-Preview is automatically selected only by completion of the exact source's
-full default-branch push CI. The actual source SHA, workflow authority SHA,
-repository, default branch and original CI run attempt must agree. The latest
-CI attempt, `Required`, every source-declared execution obligation and all
-required job results must be successful before publication. Recheck current
-main and these facts before every mutation and final commit. A newer main makes
-an unfinished older preview ineligible; retained evidence is not new authority.
+Preview admission keeps source and workflow authority separate. Let A be the
+full source SHA selected from successful push CI, B the full SHA of the active
+preview workflow definition, and H the current protected `main` tip. Authenticate
+the ancestry relation `A <= B <= H`, along with the repository, branch, workflow,
+run and attempt identities. A does not have to equal B or H. The latest
+successful CI attempt for exact source A, its `Required` job, every source-
+declared execution obligation and all required job results remain mandatory,
+including during recovery. A newer CI attempt for A must be checked; historical
+success cannot stand in for the latest exact-A attempt. Every remote mutation
+rechecks the current ancestry and the relevant current run/attempt authority.
+
+Source selection is two-phase. Before checkout, a credential-free admission
+step authenticates the CI source A and workflow authority B from GitHub facts;
+it performs no source execution. A is then checked out with complete history in
+a credential-free context. From A, native code reads canonical configuration,
+projects the package/product inventory with the bounded pure manifest
+projection, and discovers the declared task and its exact input closure with
+`discover_preview_producer`. Explicit qualified-tool declarations and producer
+policy come from A. B supplies workflow custody and trusted bootstrap tools;
+source-controlled tools are only admitted through A's declared qualification.
+The resulting canonical admission record binds A's policy, plan, task closure,
+tool declarations and execution tuple before any declared task runs.
+
+The producer executes the admitted A task, while the active run, workflow,
+signer certificate, run attempt and job authority are bound to B. The signed
+release receipt records source A and workflow authority B separately. The
+version and immutable tag remain A-derived: `<base>-preview.<full-history-count>+
+<A-sha7>` and `preview-<full-A-sha>`. A later protected tip H may be newer than
+A; it does not revoke an otherwise admitted ancestor release. Homebrew promotion
+has a narrower rule: it proceeds only if A is still the current protected
+`main` tip at the tap mutation boundary. Otherwise the result is a typed clean
+skip, leaving the immutable release intact.
 
 Workflow identity is admitted active once per SDK invocation, with exact workflow
 ID, canonical path and display name. GitHub documents that
@@ -108,12 +133,13 @@ ID, canonical path and display name. GitHub documents that
 prevents new triggers and reruns but does not cancel existing runs. Disabling is
 therefore not a cancellation authority for an already admitted producing run.
 Its current attempt and required running/completed state remain fresh checks.
-Successful completed CI-attempt evidence, including the exact-source `Required`
+Successful completed CI-attempt evidence, including the exact-A `Required`
 job, may be reused within that invocation under its full repository, source,
 branch, workflow, run and attempt identity. Failed or incomplete evidence is
-never cached as success. Every latest-CI admission still reads the latest source
-CI listing and current run attempt, status and conclusion; this cache never
-substitutes historical success for a newer or unsuccessful current attempt.
+never cached as success. Every latest exact-A CI admission still reads the
+latest matching source-CI listing and current run attempt, status and
+conclusion; this cache never substitutes historical success for a newer or
+unsuccessful current attempt.
 Artifact expiry after immutable bytes are admitted cannot change those held
 bytes, but may prevent a future recovery invocation from reacquiring them. The
 terminal publication verifier reauthenticates the held original closure and
@@ -157,15 +183,16 @@ An unfinished draft may resume only from the original retained signed artifact
 and exact authenticated receipt. Upload only missing assets whose expected
 names, sizes and digests match the receipt. Publish once after complete asset
 verification. A published preview must be immutable and match the exact receipt
-and complete asset set; otherwise fail closed. A newer main tip may make an
-unfinished older candidate ineligible, but it never authorizes changing that
-candidate's tag or bytes.
+and complete asset set; otherwise fail closed. A newer protected tip H does
+not revoke an unfinished source A when authenticated `A <= B <= H`, exact-A CI
+remains successful, and original evidence is reacquired. It never authorizes
+changing that candidate's tag or bytes.
 
 ## Complete signed generation and publication transaction
 
 Producer and assembly still emit one complete, bounded typed inventory. Each
-product/target has one leaf with its human product/target name, followed by
-complete-union assembly. No unselected product, undeclared companion, arbitrary
+product/target is one entry in a bounded source matrix, followed by complete
+API-union assembly. No unselected product, undeclared companion, arbitrary
 path or proof-disable option is admitted. The six Jackin executable archives,
 archive checksums, SBOMs, capsule manifest, detached bundles, aggregate checksum
 list and canonical receipt remain mandatory where declared by the shared plan.
@@ -173,7 +200,7 @@ Desktop companions retain their existing task and signing/notarization custody;
 a new Cask or executable formula change is not implied by this contract.
 
 Canonical `velnor.package-release.v2` receipt bytes bind channel, repository slug
-and numeric ID, source/ref/event and original CI attempt, workflow authority and
+and numeric ID, source A/ref/event and original CI attempt, workflow authority B and
 original producer/signer run attempt, version, tag, complete products and members,
 companion inventory, asset sizes/digests, evidence profile and signer identity.
 Unknown/duplicate fields and noncanonical JSON fail. Preview uses `workflow_run`
@@ -184,8 +211,8 @@ old one-bin Apple-only raw payload path. Receipt and detached bundle are exclude
 from receipt self-digests; signatures authenticate those exact receipt bytes.
 
 Every required archive and companion, and the receipt, has its required detached
-signature and GitHub SLSA attestation with exact source, workflow, run/attempt,
-issuer and hosted-runner identity. SBOM entries come from actual compiled units
+signature and GitHub SLSA attestation with exact source A, workflow authority B,
+run/attempt, issuer and hosted-runner identity. SBOM entries come from actual compiled units
 and bind their archive bytes; workspace presence is not compilation evidence.
 No field claiming successful verification replaces actual cryptographic checks.
 
@@ -194,7 +221,8 @@ A native bounded journal binds the immutable source tag, original source/run/rec
 complete logical inventory, uploaded asset IDs and exact sizes/digests. Remote
 names come from the trusted receipt, never arbitrary producer URLs. Upload and
 verify the complete asset set before publishing the draft. Only then may native
-Homebrew promotion consume that immutable source generation.
+Homebrew promotion consume that immutable source generation, and only while A
+is still current protected `main`; otherwise promotion is a typed clean skip.
 
 The executor proposes transitions; it does not grant write authority. The
 backend consumes each private observation once, including on failure, and checks

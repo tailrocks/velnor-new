@@ -46,25 +46,28 @@ pub(super) fn execute(
             Some(super::acquisition::load(temp, request, preview, deadline)?)
         }
     };
+    let execution_request = admitted
+        .as_ref()
+        .map_or_else(|| request.clone(), |leaves| leaves.request.clone());
     let task = handoff::write_task_request(
         temp,
-        request,
+        &execution_request,
         admitted
             .as_ref()
             .map_or(&[], |leaves| leaves.inputs.as_slice()),
         deadline,
     )?;
     let identity = crate::release_task_identity::ReleaseTaskIdentity::derive(
-        &request.plan,
-        &request.context.source_sha,
-        request.context.commit_count,
+        &execution_request.plan,
+        &execution_request.context.source_sha,
+        execution_request.context.commit_count,
     )?;
     let producer = execute_preview_task(
         &prep.root,
         temp,
         PreviewTaskSpec {
             identity: &identity,
-            source_ref: &request.context.source_ref,
+            source_ref: &execution_request.context.source_ref,
             preview,
             handoff: &task.path,
         },
@@ -84,7 +87,7 @@ pub(super) fn execute(
         manifest,
         temp,
         raw: &raw,
-        request,
+        request: &execution_request,
         deadline,
     };
     progress.mark(crate::preview_producer::progress::Phase::Artifacts);

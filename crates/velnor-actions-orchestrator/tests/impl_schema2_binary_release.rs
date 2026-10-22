@@ -107,7 +107,7 @@ fn binary_release_is_default_off_and_generated_through_render_tree() -> TestResu
     assert!(workflow.contains("attestations: write"));
     assert!(workflow.contains("sign-package-release-v1"));
     assert!(workflow.contains("publish-package-release-v1"));
-    assert!(workflow.contains("tar.gz"));
+    assert!(workflow.contains("\\\"format\\\":\\\"tar-gz\\\""));
     assert!(!workflow.contains("raw-binary"));
     assert!(!workflow.contains("gh release create"));
     assert!(!workflow.contains("gh release edit"));

@@ -49,6 +49,9 @@ impl ArtifactReadApi for SignerApi {
             artifacts: vec![self.artifact.borrow_mut().take().expect("single inventory")],
         })
     }
+    fn jobs(&self, _: u64, _: u32) -> Result<Vec<super::super::JobRecord>, OrchestratorError> {
+        Ok(Vec::new())
+    }
     fn download(
         &self,
         id: u64,

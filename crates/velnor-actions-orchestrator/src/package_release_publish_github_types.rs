@@ -6,6 +6,8 @@ use serde::Deserialize;
 pub(crate) struct RepositoryResponse {
     pub id: u64,
     pub full_name: Option<String>,
+    #[serde(default)]
+    pub default_branch: Option<String>,
 }
 #[derive(Deserialize)]
 pub(crate) struct ImmutableResponse {
@@ -60,6 +62,8 @@ pub(crate) struct WorkflowRunResponse {
 #[derive(Clone, Deserialize)]
 pub(crate) struct RunRepository {
     pub id: u64,
+    #[serde(default)]
+    pub full_name: Option<String>,
 }
 
 #[derive(Deserialize)]

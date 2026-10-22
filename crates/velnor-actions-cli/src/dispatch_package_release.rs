@@ -18,6 +18,25 @@ pub(super) fn gate_request(path: &Path) -> Option<PathBuf> {
 pub(super) fn gate_producer_request(path: &Path) -> Option<PathBuf> {
     gate_named_request(path, "package-release-plan.json")
 }
+pub(super) fn gate_preview_source_seed_request(path: &Path) -> Option<PathBuf> {
+    gate_named_request(path, "preview-source-seed-policy.json")
+}
+pub(super) fn gate_preview_source_acquisition(path: &Path) -> Option<PathBuf> {
+    let runner_temp = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty())?;
+    let root = PathBuf::from(runner_temp).join("velnor");
+    if !root.is_absolute() || path != root.join(REQUEST_FILE) {
+        return None;
+    }
+    let root_meta = fs::symlink_metadata(&root).ok()?;
+    if root_meta.file_type().is_symlink() || !root_meta.is_dir() {
+        return None;
+    }
+    match fs::symlink_metadata(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        _ => return None,
+    }
+    Some(path.to_path_buf())
+}
 fn gate_named_request(path: &Path, name: &str) -> Option<PathBuf> {
     let runner_temp = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty())?;
     let runner_temp = PathBuf::from(runner_temp);
