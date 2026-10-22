@@ -298,7 +298,7 @@ async fn native_home_volume_delete_failure_case() -> Result<(), HostError> {
     ));
     assert_eq!(fixture.server.effects().container_deletes, 2);
     assert_eq!(fixture.server.effects().volume_deletes, 2);
-    let crate::launch::bootstrap::CleanupRuntimeFixture { _base: base, .. } = &fixture;
+    let crate::launch::bootstrap::CleanupRuntimeFixture { base, .. } = &fixture;
     let crate::journal::request_lifecycle::tests::NativeStartedIntakeFixture {
         reservation_assignment,
         ..

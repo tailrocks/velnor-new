@@ -41,7 +41,7 @@ async fn progressed_claim_reuses_local_and_network_proofs_after_expiry_inner()
 -> Result<(), HostError> {
     let fixture = cleanup_runtime_fixture().await?;
     let selected = selected_engine(&fixture.scope, fixture.reservation_id).await?;
-    test_support::recover_fixture(&fixture._base).await?;
+    test_support::recover_fixture(&fixture.base).await?;
     let first = record_first_generation(&fixture, &selected).await?;
     tokio::time::sleep(Duration::from_secs(11)).await;
     let candidate = fixture
@@ -79,7 +79,7 @@ async fn record_first_generation(
         .scope
         .record_retirement_local_absence(&claim, proof)
         .await?;
-    let receipt = absent_receipt(&fixture._base.runner)?;
+    let receipt = absent_receipt(&fixture.base.runner)?;
     fixture
         .scope
         .record_mocked_retirement_remote_absence(&claim, &receipt)
@@ -107,7 +107,7 @@ async fn resume_retry_generation(
     if !fixture.scope.resume_retirement_local_absence(claim).await? {
         return Err(HostError::Identity);
     }
-    let receipt = absent_receipt(&fixture._base.runner)?;
+    let receipt = absent_receipt(&fixture.base.runner)?;
     fixture
         .scope
         .record_mocked_retirement_remote_absence(claim, &receipt)
