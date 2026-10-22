@@ -1,7 +1,8 @@
 # Bun browser suites (hard decision 6 amendment)
 
-Status: proposed. Each part names the change that implements it; until then
-generation rejects its keys as unknown. Hard decision:
+Status: suites, their jobs, timeouts and Required membership are implemented;
+"Playwright sharding" is proposed, and generation rejects the `playwright` key
+as unknown until it lands. Hard decision:
 [decision 6](../hard-decisions.md#6-one-job-per-bun-workspace-member-with-parallel-script-steps).
 Base contract: [Bun contract](bun-contract.md).
 
@@ -72,7 +73,13 @@ shards = 2                                   # 1..=64, per project when projects
 - Every gating suite (`required = true`, the default) joins Required. A
   matrix job reports one aggregate result, so one job id covers all its legs.
   The plan gives every suite job its member's disposition, so a
-  `not_affected` member's suites are skipped and pass.
+  `not_affected` member's suites are skipped and pass; a member job the
+  suites made empty has no disposition and no job.
+- `required = false` runs the job outside Required's `needs`; it is still
+  reconstructed and checked like every other generated job.
+- A suite in a repository whose `.velnor/deps.lock` pins release assets fails
+  with `bun_suite_private_assets_unsupported:<member>` until the one-job asset
+  fetch exists, so the App secret never reaches a suite job.
 
 Validation codes (`stacks.bun.members.suites`): `bad_suite_id:<id>`
 (`[a-z][a-z0-9-]{0,31}`, no trailing `-`), `reserved_suite_id:<id>`
@@ -84,7 +91,7 @@ Validation codes (`stacks.bun.members.suites`): `bad_suite_id:<id>`
 `report_requires_shards_or_projects:<id>`, `bad_retention_days:<n>`.
 Generation adds `bun_script_missing` for a suite script the member lacks.
 
-## Playwright sharding
+## Playwright sharding (proposed)
 
 A suite with a `[playwright]` table runs as a static
 `strategy.matrix.include` of legs, sorted by `(project, shard)`, with
@@ -123,8 +130,20 @@ Required) downloads every leg blob and runs `playwright merge-reports
 | Merged report | `velnor-pw-report-<job-id>` | report job | `report_retention_days` |
 
 Matrix legs restore the `bun-install` and `playwright-browsers` families
-read-only; only leg 1 may save them (`VELNOR_FAMILY_WRITER`). A suite in a
-repository whose `.velnor/deps.lock` pins release assets fails generation with
-`bun_suite_private_assets_unsupported` until a one-job asset fetch exists, so
-no leg ever holds the App secret.
+read-only; only leg 1 may save them (`VELNOR_FAMILY_WRITER`). No leg ever holds the App secret (see the private-asset rule above).
 
+## Verification
+
+- Contract: suite tables, every suite code, timeout bounds and defaults
+  omitted (`config/bun_tests.rs`).
+- Adapter: claimed scripts, member-job omission and suite job ids
+  (`impl_bun_workspace.rs`).
+- Renderer: suite job shape, permissions, gate and the shared member
+  invariants (`impl_renderer_bun.rs`).
+- Orchestrator: claimed scripts, member-job omission, non-gating suites, the
+  timeout chain, configuration and private-asset refusals, determinism
+  (`impl_bun_suites.rs`), suite dispositions (`impl_bun_select.rs`), the
+  suite-only browser install (`impl_bun_playwright.rs`) and the Required folds
+  of a suite job id (`required_dispositions_tests.rs`).
+- Goldens: `fixtures/bun-workspace` (no suite) stays byte-identical;
+  `fixtures/bun-workspace-suites` is the opt-in golden (`impl_bun_golden.rs`).

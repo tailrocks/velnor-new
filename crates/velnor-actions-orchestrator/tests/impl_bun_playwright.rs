@@ -8,15 +8,25 @@ use crate::impl_bun::{LOCK, MISE, bun_config, write_workspace};
 use crate::impl_common::{TestResult, git, make_repo};
 use crate::impl_schema2_routing::{job_body, required_file};
 
-fn core_integrity() -> String {
+pub(crate) fn core_integrity() -> String {
     format!("sha512-{}==", "A".repeat(86))
 }
 
 fn playwright_repo(
     lock_integrity: Option<&str>,
 ) -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
-    let config =
-        bun_config("[stacks.bun.members.\"chainargos-docs\"]\nbrowsers = [\"chromium\"]\n");
+    playwright_repo_with(
+        "[stacks.bun.members.\"chainargos-docs\"]\nbrowsers = [\"chromium\"]\n",
+        lock_integrity,
+    )
+}
+
+/// The Playwright workspace with `extra` `[stacks.bun]` configuration.
+pub(crate) fn playwright_repo_with(
+    extra: &str,
+    lock_integrity: Option<&str>,
+) -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
+    let config = bun_config(extra);
     let repo = make_repo(&config)?;
     write_workspace(repo.path(), MISE)?;
     let lock = LOCK
@@ -124,5 +134,30 @@ fn browsers_fail_closed_without_a_matching_lock() -> TestResult {
     ))?;
     write_workspace(repo.path(), MISE)?;
     fails(repo, "bun_playwright_missing:chainargos-docs")?;
+    Ok(())
+}
+
+#[test]
+fn only_the_suite_that_declares_browsers_installs_them() -> TestResult {
+    let repo = playwright_repo_with(
+        "[stacks.bun.members.\"chainargos-docs\".suites.browser]\nscripts = [\"test\"]\nbrowsers = [\"chromium\"]\n",
+        Some(&core_integrity()),
+    )?;
+    let tree = render_staged_tree(&prepare(repo.path())?)?;
+    let ci = required_file(&tree, ".github/workflows/ci.yml")?;
+    let member = job_body(ci, "bun-chainargos-docs")?;
+    assert!(!member.contains("Install Playwright browsers"), "{member}");
+    assert!(!member.contains("PLAYWRIGHT_BROWSERS_PATH"), "{member}");
+    let suite = job_body(ci, "bun-chainargos-docs--browser")?;
+    let install = suite
+        .find("name: Install Playwright browsers")
+        .ok_or("install")?;
+    let test = suite.find("name: Test\n").ok_or("test")?;
+    assert!(install < test, "{suite}");
+    assert!(
+        suite.contains("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD"),
+        "{suite}"
+    );
+    assert!(suite.contains("chromium-1248:"), "{suite}");
     Ok(())
 }
