@@ -163,6 +163,19 @@ impl GitHubApi {
         source: RunSource<'_>,
         latest: bool,
     ) -> Result<(), OrchestratorError> {
+        self.verify_ci_identity_with_sleep(id, attempt, source, latest, sleep_for_retry)
+    }
+
+    /// Same as [`Self::verify_ci_identity`], with the empty-listing retry
+    /// sleeper of the latest-attempt recheck injected (tests run instantly).
+    pub(super) fn verify_ci_identity_with_sleep(
+        &self,
+        id: u64,
+        attempt: u32,
+        source: RunSource<'_>,
+        latest: bool,
+        sleep: impl FnMut(Duration) -> Result<(), OrchestratorError>,
+    ) -> Result<(), OrchestratorError> {
         let workflow = self.admitted_workflow(CI_WORKFLOW_PATH, WORKFLOW_DISPLAY_NAME)?;
         let key = cache::CompletedAttempt::new(id, attempt, source, &workflow);
         if !self.run_identity_cache.borrow().contains(&key) {
@@ -176,7 +189,7 @@ impl GitHubApi {
             self.run_identity_cache.borrow_mut().admit_completed(key)?;
         }
         if latest {
-            let observed = self.latest_source_ci(&workflow, source)?;
+            let observed = self.latest_source_ci_with_sleep(&workflow, source, sleep)?;
             if observed.id != Some(id)
                 || observed.run_attempt != Some(attempt)
                 || !ci_run_is_success(&observed, id, attempt, source, &workflow)

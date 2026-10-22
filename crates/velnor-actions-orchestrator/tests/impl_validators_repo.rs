@@ -284,6 +284,7 @@ fn repo_config_sample_covers_schema_keys() -> TestResult {
                 "generator_validation",
                 "max_parallel_jobs",
                 "crate_timeout_minutes",
+                "plan_timeout_minutes",
                 "pull_request_cache_policy",
                 "runner_label",
                 "lint",
