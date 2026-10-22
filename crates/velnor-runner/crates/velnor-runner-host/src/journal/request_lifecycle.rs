@@ -11,10 +11,6 @@ pub(in crate::journal) mod source;
 pub(crate) mod tests;
 
 use crate::config::ConnectionId;
-#[cfg(test)]
-use crate::error::HostError;
-#[cfg(test)]
-use crate::journal::connection::AssignmentIdentity;
 
 pub(crate) use acquire::AcquiredRecoveryCandidate;
 pub(crate) use authorized_offers::AuthorizedOffer;
@@ -47,30 +43,4 @@ pub(crate) struct RunnerJitClaim {
     intent_id: i64,
     witness_request_id: i64,
     requested_name: String,
-}
-
-#[cfg(test)]
-impl RunnerJitClaim {
-    /// Give the physical capacity intent ID.
-    #[must_use]
-    pub(crate) const fn intent_id(&self) -> i64 {
-        self.intent_id
-    }
-
-    /// Give the acquired request selected for the JIT audit record.
-    pub(crate) fn witness_request(&self) -> Result<AssignmentIdentity, HostError> {
-        AssignmentIdentity::new(
-            &self.connection_id,
-            self.scale_set_id,
-            crate::journal::connection::AssignmentKey::AssignedRequest {
-                request_id: self.witness_request_id,
-            },
-        )
-    }
-
-    /// Give the exact runner name requested from GitHub.
-    #[must_use]
-    pub(crate) fn runner_name(&self) -> &str {
-        &self.requested_name
-    }
 }
