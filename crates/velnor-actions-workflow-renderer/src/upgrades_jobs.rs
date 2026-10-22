@@ -117,7 +117,11 @@ pub(super) fn prepare_job(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
             ("if".to_owned(), Yaml::str(ON_DEFAULT_BRANCH)),
             (
                 "outputs".to_owned(),
-                env(&[("changed", "${{ steps.bump.outputs.changed }}")]),
+                env(&[
+                    ("changed", "${{ steps.bump.outputs.changed }}"),
+                    ("failed", "${{ steps.bump.outputs.failed }}"),
+                    ("failures", "${{ steps.bump.outputs.failures }}"),
+                ]),
             ),
         ],
         &[("contents", "read")],
@@ -285,6 +289,11 @@ pub(super) fn gate_job(spec: &UpgradesSpec) -> Result<Yaml, RenderError> {
                 ("GH_TOKEN", "${{ github.token }}"),
                 ("VELNOR_PREPARE_RESULT", "${{ needs.prepare.result }}"),
                 ("VELNOR_STALE", "${{ needs.prepare.outputs.changed }}"),
+                ("VELNOR_SCOPE_FAILED", "${{ needs.prepare.outputs.failed }}"),
+                (
+                    "VELNOR_SCOPE_FAILURES",
+                    "${{ needs.prepare.outputs.failures }}",
+                ),
                 ("VELNOR_STUCK_DAYS", &stuck),
                 ("VELNOR_UPGRADE_BRANCH", UPGRADES_BRANCH),
                 ("VELNOR_GH_VERSION", &spec.gh_version),

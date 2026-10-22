@@ -13,10 +13,14 @@
   `scripts/upgrades/bump-gradle-catalog.py`, and emission and plan listing
   in `velnor-actions-orchestrator` (`upgrades_emit.rs`).
 - Acceptance evidence: `config::upgrades::tests`, `upgrades::filter_exec_tests`
-  (the rendered scripts executed against crafted attack patches, see
+  and `upgrades::prepare_exec_tests` (prepare's Rust bump, toolchain mirror
+  and rollback, and one upgrade through every job) execute the rendered
+  scripts; the filter tests run them against crafted attack patches (see
   [Patch filter](#patch-filter)), `upgrades::verify_exec_tests` (prepare's
   `.github/` reaches the branch only as a verified regeneration, see
-  [Trust boundary](#trust-boundary)), `upgrades::tests` (including
+  [Trust boundary](#trust-boundary)), `upgrades::gate_exec_tests` (prepare
+  and the freshness gate executed: a rolled-back scope with an empty diff
+  keeps the gate red), `upgrades::tests` (including
   the byte-exact golden `crates/velnor-actions-workflow-renderer/tests/goldens/upgrades.yml`),
   `impl_upgrades`. The golden passes actionlint 1.7.12 with shellcheck 0.11.0
   and zizmor 1.31.1 with no findings.
@@ -79,10 +83,12 @@ default branch. One concurrency group, never cancelled.
      project Rust (verified file by file against its pinned channel
      manifest before use, [verified Rust installs](rust-channel-manifest.md))
      and every Cargo workspace's sources (`upgrades_generate.sh`, outside the
-     project configuration). If the newest Rust is not in
-     that Velnor's [channel-manifest catalog](rust-channel-manifest.md), the
-     Rust bump alone is rolled back and recorded, so the pull request stays
-     green and the gate stays red until a Velnor release adds the digest.
+     project configuration). If regeneration fails after the Rust bump, for
+     any reason (the newest Rust is not yet in that Velnor's
+     [channel-manifest catalog](rust-channel-manifest.md), or any other
+     check), the Rust scope alone is rolled back and recorded with the first
+     error line, and regeneration runs again, so the pull request stays green
+     and the gate stays red until the cause is fixed.
    - Only what the [patch filter](#patch-filter) admits is kept. Anything
      else is unstaged and reported. The result is uploaded as a text patch
      (`git diff --cached --no-renames --full-index`, never `--binary`) plus a
@@ -107,7 +113,12 @@ default branch. One concurrency group, never cancelled.
    workflows.
 4. **Freshness gate** (`contents: read`, `pull-requests: read`, runs even when
    prepare failed): fails with `pins_not_latest` when prepare found anything
-   to upgrade, `upgrade_prepare_failed` when prepare did not succeed, and
+   to upgrade, `upgrade_prepare_failed` when prepare did not succeed,
+   `upgrade_scope_needs_migration` when any scope failed and was rolled back
+   (prepare's `failed` and `failures` outputs; this fires even when nothing
+   else changed, so a scope that can never upgrade, such as a private git
+   source, keeps the gate red and lists each failure, indented so prepared
+   text cannot start a workflow command), and
    `upgrade_pull_request_stuck` when the open `velnor/upgrades` pull request
    is older than `stuck_days`. It exists only in `upgrades.yml`, never in
    `ci.yml` or `Required`, so an upstream release never blocks unrelated pull

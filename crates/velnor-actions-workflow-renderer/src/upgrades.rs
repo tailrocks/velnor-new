@@ -45,7 +45,9 @@ mod jobs;
 mod scripts;
 use jobs::{env, gate_job, prepare_job, publish_job, verify_job};
 #[cfg(test)]
-use scripts::{FILTER, PUBLISH, RELEASE, publish_check_script, verify_script};
+use scripts::{
+    FILTER, GATE, PUBLISH, RELEASE, prepare_script, publish_check_script, verify_script,
+};
 const CATALOG_BUMPER: &str = include_str!("../../../scripts/upgrades/bump-gradle-catalog.py");
 const WORK_DIR: &str = "${{ runner.temp }}/velnor-upgrades";
 const ON_DEFAULT_BRANCH: &str =
@@ -192,3 +194,11 @@ mod filter_exec_tests;
 #[cfg(test)]
 #[path = "upgrades_verify_exec_tests.rs"]
 mod verify_exec_tests;
+
+#[cfg(test)]
+#[path = "upgrades_gate_exec_tests.rs"]
+mod gate_exec_tests;
+
+#[cfg(test)]
+#[path = "upgrades_prepare_exec_tests.rs"]
+mod prepare_exec_tests;
