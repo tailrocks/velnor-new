@@ -16,6 +16,7 @@ use super::Observation;
 const DOCKER_ROOT_TARGET: &str = "/velnor/docker-root";
 const BTRFS_SUPER_MAGIC: u64 = 0x9123_683e;
 const TMPFS_SUPER_MAGIC: u64 = 0x0102_1994;
+const HEX_DIGITS: &[u8; 16] = b"0123456789abcdef";
 
 impl Observation {
     /// Bind this fresh selected-guest sample to the exact immutable profile.
@@ -168,10 +169,9 @@ pub(in crate::launch) fn filesystem_instance_digest(
     hasher.update(statx_device_minor.to_be_bytes());
     hasher.update(filesystem_id.to_be_bytes());
     let mut digest = String::with_capacity(64);
-    const HEX: &[u8; 16] = b"0123456789abcdef";
     for byte in hasher.finalize() {
-        digest.push(char::from(HEX[usize::from(byte >> 4)]));
-        digest.push(char::from(HEX[usize::from(byte & 0x0f)]));
+        digest.push(char::from(HEX_DIGITS[usize::from(byte >> 4)]));
+        digest.push(char::from(HEX_DIGITS[usize::from(byte & 0x0f)]));
     }
     digest
 }
