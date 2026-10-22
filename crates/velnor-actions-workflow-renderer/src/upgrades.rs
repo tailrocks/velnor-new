@@ -191,3 +191,7 @@ mod verify_exec_tests;
 #[cfg(test)]
 #[path = "upgrades_gate_exec_tests.rs"]
 mod gate_exec_tests;
+
+#[cfg(test)]
+#[path = "upgrades_prepare_exec_tests.rs"]
+mod prepare_exec_tests;

@@ -13,7 +13,9 @@
   `scripts/upgrades/bump-gradle-catalog.py`, and emission and plan listing
   in `velnor-actions-orchestrator` (`upgrades_emit.rs`).
 - Acceptance evidence: `config::upgrades::tests`, `upgrades::filter_exec_tests`
-  (the rendered scripts executed against crafted attack patches, see
+  and `upgrades::prepare_exec_tests` (prepare's Rust bump, toolchain mirror
+  and rollback, and one upgrade through every job) execute the rendered
+  scripts; the filter tests run them against crafted attack patches (see
   [Patch filter](#patch-filter)), `upgrades::verify_exec_tests` (prepare's
   `.github/` reaches the branch only as a verified regeneration, see
   [Trust boundary](#trust-boundary)), `upgrades::gate_exec_tests` (prepare
@@ -79,10 +81,13 @@ default branch. One concurrency group, never cancelled.
      rewrites `.github/` and every generated file, after installing what it
      executes: the Velnor-pinned validators (`VELNOR_GENERATE_TOOLS`), the
      project Rust and every Cargo workspace's sources
-     (`upgrades_generate.sh`, outside the project configuration). If the newest Rust is not in
-     that Velnor's [channel-manifest catalog](rust-channel-manifest.md), the
-     Rust bump alone is rolled back and recorded, so the pull request stays
-     green and the gate stays red until a Velnor release adds the digest.
+     (`upgrades_generate.sh`, outside the project configuration). If
+     regeneration fails after the Rust bump, for any reason (the newest Rust
+     is not yet in that Velnor's
+     [channel-manifest catalog](rust-channel-manifest.md), or any other
+     check), the Rust scope alone is rolled back and recorded with the first
+     error line, and regeneration runs again, so the pull request stays green
+     and the gate stays red until the cause is fixed.
    - Only what the [patch filter](#patch-filter) admits is kept. Anything
      else is unstaged and reported. The result is uploaded as a text patch
      (`git diff --cached --no-renames --full-index`, never `--binary`) plus a
