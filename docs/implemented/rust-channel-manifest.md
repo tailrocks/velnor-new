@@ -47,7 +47,12 @@ first version of this step did exactly that.
    was produced by hashing the downloaded manifest and comparing it with the
    published `channel-rust-<version>.toml.sha256`; the rows cover every
    stable release from 1.85.0 to the catalog pin.
-2. One script (`rust_toolchain_script.rs`) verifies a toolchain file by file:
+2. One script (`rust_toolchain_script.rs`) verifies a toolchain file by file.
+   Its first command sets `PATH=/usr/bin:/bin:/usr/sbin:/sbin`, so every
+   helper (`sha256sum`, `curl`, `tar`, `find`) comes from root-owned system
+   directories and never from the restored Mise `bin/` or `shims/` that Setup
+   Mise put on `PATH` first
+   ([hermetic checks](../proposed/tools-cache-v2.md#the-checks-run-hermetically)):
    - it looks up the run-time `${VELNOR_TOOL_RUST}` in the digest table
      embedded in the step (the generated text stays version-free, hard
      decision 4), fetches the manifest over HTTPS (`--proto =https

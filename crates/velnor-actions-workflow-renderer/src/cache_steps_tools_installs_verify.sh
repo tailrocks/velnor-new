@@ -8,11 +8,18 @@ set -euo pipefail
 # algorithm, a changed or planted file, an escaping symlink) is discarded, so
 # `Prepare pinned tools` reinstalls it from the lock. Rust is checked by its
 # own step (`Verify restored Rust toolchain`).
+#
+# Setup Mise already put the restored `bin/` and `shims/` on PATH ahead of
+# the system directories, so every helper comes from root-owned system
+# directories only (the step's shell is an absolute path for the same reason).
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+export PATH
 root="$HOME/.local/share/mise"
 installs="$root/installs"
 lock="${GITHUB_WORKSPACE:-$PWD}/mise.lock"
 # Code Mise could run that no lock pins: rebuilt on demand, never restored.
 rm -rf "$root/plugins" "$root/shims"
+[ ! -L "$installs" ] || rm -f "$installs"
 [ -d "$installs" ] || exit 0
 case "${RUNNER_OS:-}-${RUNNER_ARCH:-}" in
   Linux-X64) platform=linux-x64 ;;
@@ -86,23 +93,38 @@ verify_install() {
   x=$(LC_ALL=C comm -23 "$work/install.sums" "$work/archive.sums" | head -n 1)
   [ -z "$x" ] || { echo "a file differs from the pinned archive"; return 1; }
 }
-for tool_dir in "$installs"/*; do
+# Every entry, dot-named ones included (a glob skips those), is verified or
+# discarded: tool directories, version directories and aliases alike.
+entries() { find "$1" -mindepth 1 -maxdepth 1 -print0; }
+while IFS= read -r -d '' tool_dir; do
   [ -d "$tool_dir" ] && [ ! -L "$tool_dir" ] || { rm -rf "$tool_dir"; continue; }
   tool=${tool_dir##*/}
   case "$tool" in rust|core-rust) continue ;; esac
-  for dir in "$tool_dir"/*; do
-    [ -e "$dir" ] || [ -L "$dir" ] || continue
+  # Real version directories first, so an alias is judged by a verified one.
+  verified=" "
+  while IFS= read -r -d '' dir; do
+    [ ! -L "$dir" ] || continue
     version=${dir##*/}
-    if [ -L "$dir" ]; then
-      # Version aliases (`1.26 -> ./1.26.0`) must name a sibling.
-      case "$(readlink "$dir")" in ./*/*|/*|*..*) rm -f "$dir" ;; ./*) ;; *) rm -f "$dir" ;; esac
+    if [ ! -d "$dir" ]; then
+      # Mise's per-tool backend record is data; any other file is dropped.
+      [ "$version" = .mise.backend.toml ] && [ -f "$dir" ] && [ ! -x "$dir" ] || rm -rf "$dir"
       continue
     fi
-    [ -d "$dir" ] || { rm -f "$dir"; continue; }
     if reason=$(verify_install "$dir" "$tool" "$version"); then
+      verified="$verified$version "
       printf 'velnor: restored %s@%s matches its mise.lock archive\n' "$tool" "$version"
     else
       discard "$tool@$version" "${reason:-verification failed}" "$dir"
     fi
-  done
-done
+  done < <(entries "$tool_dir")
+  # A version alias (`1.26 -> ./1.26.0`) is kept only when it names a sibling
+  # version directory verified above; a chain, a path or a dangling link is not.
+  while IFS= read -r -d '' dir; do
+    [ -L "$dir" ] || continue
+    target=$(readlink "$dir")
+    target=${target#./}
+    case "$target" in ''|.|..|*/*) rm -f "$dir"; continue ;; esac
+    case "$verified" in *" $target "*) ;; *) rm -f "$dir"; continue ;; esac
+    [ -d "$tool_dir/$target" ] && [ ! -L "$tool_dir/$target" ] || rm -f "$dir"
+  done < <(entries "$tool_dir")
+done < <(entries "$installs")

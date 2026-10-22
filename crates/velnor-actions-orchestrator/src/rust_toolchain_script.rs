@@ -5,7 +5,10 @@
 //! `ci.yml` run it twice (on whatever the tools cache restored, then on the
 //! installed toolchain), and release, qualification and freshness jobs run
 //! it once after their install. Step validators reject `$(`, backticks and
-//! newlines, so every value travels through files and `read`.
+//! newlines, so every value travels through files and `read`. It resolves
+//! every helper from [`VERIFY_PATH`] only.
+
+use velnor_actions_workflow_renderer::VERIFY_PATH;
 
 /// When the script runs relative to the toolchain install.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,6 +46,10 @@ pub(crate) fn toolchain_script(
         .collect::<String>();
     let mut lines = vec![
         "set -eu".to_owned(),
+        // Setup Mise put the restored `bin/` and `shims/` on PATH ahead of
+        // the system directories: no helper may come from them.
+        format!("PATH={VERIFY_PATH}"),
+        "export PATH".to_owned(),
         format!("v=\"{version}\""),
         "fail() { printf \"%s\\n\" \"::error::$1\" >&2; exit 1; }".to_owned(),
         format!(
