@@ -76,6 +76,11 @@ pub(in crate::journal) async fn recover_at_startup(
             return Err(HostError::Journal);
         }
     }
+    mark_completed_requests_stale(connection).await?;
+    ensure_single_active_request(connection).await
+}
+
+async fn mark_completed_requests_stale(connection: &turso::Connection) -> Result<(), HostError> {
     let _completed_to_stale = connection
         .execute(
             "UPDATE doctor_probe_requests SET state = 'stale' WHERE state = 'completed'",
@@ -83,6 +88,10 @@ pub(in crate::journal) async fn recover_at_startup(
         )
         .await
         .map_err(|_| HostError::Journal)?;
+    Ok(())
+}
+
+async fn ensure_single_active_request(connection: &turso::Connection) -> Result<(), HostError> {
     let mut rows = connection
         .query(
             "SELECT COUNT(*) FROM doctor_probe_requests WHERE state IN ('queued', 'running', 'recovering', 'uncertain')",
