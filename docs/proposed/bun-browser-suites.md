@@ -2,9 +2,8 @@
 
 Status: implemented: suites, their jobs, timeouts and Required membership,
 the Playwright leg matrix, leg blob verification and artifacts, the merged
-report job, and the single cache writer for legs. Proposed: the one-job
-release-asset fetch for suites (until then suites refuse pinned release
-assets). Hard decision:
+report job, the single cache writer for legs, and the one assets job that
+fetches pinned release assets for a member's suites. Hard decision:
 [decision 6](../hard-decisions.md#6-one-job-per-bun-workspace-member-with-parallel-script-steps).
 Base contract: [Bun contract](bun-contract.md).
 
@@ -79,9 +78,23 @@ shards = 2                                   # 1..=64, per project when projects
   suites made empty has no disposition and no job.
 - `required = false` runs the job outside Required's `needs`; it is still
   reconstructed and checked like every other generated job.
-- A suite in a repository whose `.velnor/deps.lock` pins release assets fails
-  with `bun_suite_private_assets_unsupported:<member>` until the one-job asset
-  fetch exists, so the App secret never reaches a suite job.
+- In a repository whose `.velnor/deps.lock` pins release assets, suites never
+  copy the App-token block (HD-7). One job per member, `bun-<slug>--assets`
+  (`Bun / <name> / assets`, `needs: [plan]`, the member's disposition, not in
+  Required), runs the staged helper, mint, fetch and revoke, then bundles the
+  verified `.velnor/deps` tree as one bounded `tar.gz` file. Upload uses
+  `archive: false`, preserving executable bits and safe symlinks across
+  artifact transport; the filename is `velnor-pw-assets-<member job id>.tar.gz`
+  (1 day). Every suite job (each leg, and the report job) needs it. Before any
+  tool setup or repository install, the job removes stale or planted
+  `.velnor/deps`, resets private runner-temp staging, downloads the one archive,
+  extracts it through the bounded archive reader, and checks the typed
+  `verified.json` release-asset digests against `VELNOR_BUN_ASSET_PINS`. The
+  extractor rejects traversal, duplicate paths, special files and unsafe
+  symlinks. The archive inventory includes nested files named
+  `velnor-assets.sha256` as ordinary payload. A failed fetch (a fork pull
+  request has no secret) skips the suites, so Required fails closed with
+  `planned_job_skipped`. The member job keeps its own block, unchanged.
 
 Validation codes (`stacks.bun.members.suites`): `bad_suite_id:<id>`
 (`[a-z][a-z0-9-]{0,31}`, no trailing `-`), `reserved_suite_id:<id>`
@@ -196,7 +209,7 @@ conclusions are the verdict, and a broken merge must neither mask nor fake it.
 
 Matrix legs restore the `bun-install` and `playwright-browsers` families
 read-only; only leg 1 may save them (`VELNOR_FAMILY_WRITER`, cache decision 11). No leg
-ever holds the App secret (see the private-asset rule above).
+ever holds the App secret (see the assets job above).
 
 Playwright blob metadata does not record `--project`. For a non-empty
 project-selected leg, Velnor requires an `onProject` event for the requested
@@ -230,5 +243,8 @@ fails verification because it provides no project evidence.
   refusal (`impl_bun_report.rs`); report and retention bounds
   (`config/bun_tests.rs`); the artifact-action allowance and the report policy
   (`impl_renderer_bun.rs`).
+- Assets job: block placement, index and upload, the suite hand-off order,
+  no secret in suite jobs, the literal pins and Required membership
+  (`impl_bun_suites.rs`); the policy and its `needs` (`impl_renderer_bun_assets.rs`).
 - Goldens: `fixtures/bun-workspace` (no suite) stays byte-identical;
   `fixtures/bun-workspace-suites` is the opt-in golden (`impl_bun_golden.rs`).

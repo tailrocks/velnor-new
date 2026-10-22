@@ -7,8 +7,9 @@ use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::{
     build_verification_task_job,
     verification_jobs::{
-        WorkflowTaskPolicy, build_build_task_job, build_bun_member_job, build_bun_report_job,
-        build_bun_suite_job, build_image_build_job, build_native_image_job, build_stack_job,
+        WorkflowTaskPolicy, build_build_task_job, build_bun_assets_job, build_bun_member_job,
+        build_bun_report_job, build_bun_suite_job, build_image_build_job, build_native_image_job,
+        build_stack_job,
     },
 };
 
@@ -23,6 +24,8 @@ pub(crate) mod ansible_inventory;
 mod ansible_steps;
 #[path = "ansible_tasks.rs"]
 mod ansible_tasks;
+#[path = "bun_assets_steps.rs"]
+pub(crate) mod bun_assets_steps;
 #[path = "bun_inventory.rs"]
 pub(crate) mod bun_inventory;
 #[path = "bun_report_steps.rs"]
@@ -98,6 +101,12 @@ pub(crate) fn policies(
                 .into_iter()
                 .map(WorkflowTaskPolicy::BunSuite),
         )
+        .chain(
+            bun_policies
+                .assets
+                .into_iter()
+                .map(WorkflowTaskPolicy::BunAssets),
+        )
         .chain(dbt_policies.into_iter().map(WorkflowTaskPolicy::Stack))
         .chain(ansible_policies.into_iter().map(WorkflowTaskPolicy::Stack))
         .collect::<Vec<_>>();
@@ -127,6 +136,10 @@ pub(crate) fn insert_jobs(
             WorkflowTaskPolicy::Bun(policy) => vec![(
                 policy.id.clone(),
                 build_bun_member_job(policy, CHECKOUT_USES)?,
+            )],
+            WorkflowTaskPolicy::BunAssets(policy) => vec![(
+                policy.id.clone(),
+                build_bun_assets_job(policy, CHECKOUT_USES)?,
             )],
             WorkflowTaskPolicy::BunSuite(policy) => {
                 let mut built = vec![(
