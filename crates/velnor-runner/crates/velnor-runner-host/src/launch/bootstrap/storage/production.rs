@@ -4,8 +4,7 @@ use crate::error::HostError;
 use crate::journal::StorageRole;
 use crate::worker::ResourceBudget;
 use crate::worker::storage_initialization::{
-    ObservedStorageInitialization, PendingStorageInitialization, StorageInitializationImage,
-    StorageInitializationLimits,
+    PendingStorageInitialization, StorageInitializationImage, StorageInitializationLimits,
 };
 
 use super::super::adapter::StorageCreationContext;
@@ -24,16 +23,11 @@ const TMPFS_ROLES: [StorageRole; 4] = [
 pub(crate) struct PreparedTmpfsStorage {
     objects: [VerifiedCreatedStorageObject; 4],
     pending_initialization: Option<PendingStorageInitialization>,
-    initialized: ObservedStorageInitialization,
 }
 
 impl PreparedTmpfsStorage {
     pub(crate) fn objects(&self) -> &[VerifiedCreatedStorageObject; 4] {
         &self.objects
-    }
-
-    pub(crate) fn initialized(&self) -> &ObservedStorageInitialization {
-        &self.initialized
     }
 
     pub(crate) fn pending_initialization(&self) -> Option<&PendingStorageInitialization> {
@@ -44,10 +38,6 @@ impl PreparedTmpfsStorage {
         &mut self,
     ) -> &mut Option<PendingStorageInitialization> {
         &mut self.pending_initialization
-    }
-
-    pub(crate) fn take_pending_initialization(&mut self) -> Option<PendingStorageInitialization> {
-        self.pending_initialization.take()
     }
 }
 
@@ -103,11 +93,9 @@ pub(crate) async fn create_and_initialize(
         metadata,
     )
     .await?;
-    let initialized = pending_initialization.observed().clone();
     Ok(PreparedTmpfsStorage {
         objects,
         pending_initialization: Some(pending_initialization),
-        initialized,
     })
 }
 

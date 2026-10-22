@@ -9,12 +9,9 @@ use velnor_runner_github::workflow_run::{
 use crate::config::{
     ConnectionId, RepositoryConnection, SourcePolicy, SourcePolicyMode, WorkflowEvent,
 };
-use crate::https::HttpsTransport;
 use crate::journal::SourceAuthorizationBinding;
 use sha2::{Digest, Sha256};
 use velnor_runner_github::Transport;
-
-const GITHUB_API: &str = "https://api.github.com";
 
 /// Authenticated source facts accepted for queue admission.
 ///
@@ -129,26 +126,6 @@ impl SourceBlock {
 }
 
 /// Compare message source fields with the GitHub API record and use connection policy.
-pub(super) fn authorize_job(
-    connection: &RepositoryConnection,
-    binding: &SourceAuthorizationBinding,
-    source: &SourceMetadata,
-    request_id: i64,
-    message_id: i64,
-    token: &str,
-) -> Result<AuthorizedSourceReceipt, SourceBlock> {
-    let mut transport = HttpsTransport::new(GITHUB_API).map_err(|_| SourceBlock::ApiUnavailable)?;
-    authorize_job_with_transport(
-        connection,
-        binding,
-        source,
-        request_id,
-        message_id,
-        token,
-        &mut transport,
-    )
-}
-
 pub(super) fn authorize_job_with_transport<T: Transport + ?Sized>(
     connection: &RepositoryConnection,
     binding: &SourceAuthorizationBinding,

@@ -42,8 +42,6 @@ pub(crate) enum AssignedPopulationBlock {
     InvalidCount,
     /// A reservation row has unknown or uncertain ownership.
     UncertainPhysicalWork,
-    /// The journal has more than one reservation for one request.
-    DuplicateRequestReservation,
     /// A runner has no linked acquired request.
     MissingSourceWitness,
     /// An acquired request has no saved reservation with the same identity.

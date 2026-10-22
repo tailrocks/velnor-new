@@ -80,10 +80,6 @@ impl Lane for FakeLane {
     fn on_queue(&mut self) -> Result<(), crate::scale_set::EnsureError> {
         Ok(())
     }
-
-    fn use_github_api(&mut self) -> Result<(), crate::scale_set::EnsureError> {
-        Ok(())
-    }
 }
 
 struct Scratch(PathBuf);
