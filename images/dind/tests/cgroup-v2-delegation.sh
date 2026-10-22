@@ -156,8 +156,10 @@ grep -Fxq '101' "$scratch/migrated-pids" || fail 'initial root task was not move
 grep -Fxq '202' "$scratch/migrated-pids" || fail 'racing root task was not moved'
 [ "$(cat "$fixture/cgroup.subtree_control")" = 'cpu memory pids' ] \
 	|| fail 'recovered delegation did not enable all controllers'
-[ "$(cat "$scratch/dockerd.args")" = '--host=unix:///var/run/docker.sock' ] \
-	|| fail 'dockerd did not keep the Unix-socket-only endpoint'
+[ "$(cat "$scratch/dockerd.args")" = '--host=unix:///var/run/docker.sock
+--host=tcp://127.0.0.1:2375
+--tls=false' ] \
+	|| fail 'dockerd endpoints did not stay private and fixed'
 [ -e "$scratch/dockerd.started" ] || fail 'dockerd did not start after delegation succeeded'
 
 printf 'cgroup-v2 delegation checks passed\n'
