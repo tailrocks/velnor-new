@@ -1,4 +1,4 @@
-use super::{BunStackConfig, is_valid_member_name, is_valid_script_name};
+use super::{BunStackConfig, is_valid_member_name, is_valid_script_name, is_valid_suite_id};
 use serde_json::{Value, json};
 
 fn parse(wire: Value) -> BunStackConfig {
@@ -128,4 +128,128 @@ fn member_timeout_is_bounded_and_omitted_at_default() {
         None
     );
     assert_eq!(serde_json::to_value(&config).expect("serialize"), wire);
+}
+
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "json! literals read best passed by value"
+)]
+fn suites(suites: Value) -> Value {
+    json!({ "roots": ["."], "members": { "ui": { "suites": suites } } })
+}
+
+#[test]
+fn suites_validate_round_trip_and_omit_defaults() {
+    let wire = suites(json!({
+        "unit": { "scripts": ["test"] },
+        "browser": { "scripts": ["test:browser"], "browsers": ["chromium", "webkit"], "timeout_minutes": 25 },
+        "smoke": { "scripts": ["smoke"], "required": false }
+    }));
+    let config = parse(wire.clone());
+    config.validate("config.toml").expect("valid");
+    let member = config.members.get("ui").expect("member");
+    assert!(member.suites.get("unit").expect("unit").required);
+    assert!(!member.suites.get("smoke").expect("smoke").required);
+    assert_eq!(serde_json::to_value(&config).expect("serialize"), wire);
+    let explicit = parse(suites(
+        json!({ "unit": { "scripts": ["test"], "required": true } }),
+    ));
+    assert_eq!(
+        serde_json::to_value(&explicit).expect("serialize"),
+        suites(json!({ "unit": { "scripts": ["test"] } }))
+    );
+}
+
+#[test]
+fn suite_tables_are_strict() {
+    for wire in [
+        suites(json!({ "unit": { "scripts": ["test"], "run": "bun test" } })),
+        suites(json!({ "unit": { "scripts": ["test"], "env": { "A": "b" } } })),
+        suites(json!({ "unit": { "browsers": ["chromium"] } })),
+        suites(json!({ "unit": { "scripts": ["test"], "browsers": ["opera"] } })),
+    ] {
+        assert!(serde_json::from_value::<BunStackConfig>(wire).is_err());
+    }
+}
+
+#[test]
+fn every_suite_code_is_reported() {
+    let cases = [
+        (
+            json!({ "Unit": { "scripts": ["test"] } }),
+            "bad_suite_id:Unit",
+        ),
+        (
+            json!({ "1unit": { "scripts": ["test"] } }),
+            "bad_suite_id:1unit",
+        ),
+        (
+            json!({ "unit-": { "scripts": ["test"] } }),
+            "bad_suite_id:unit-",
+        ),
+        (
+            json!({ "a--b": { "scripts": ["test"] } }),
+            "bad_suite_id:a--b",
+        ),
+        (
+            json!({ "report": { "scripts": ["test"] } }),
+            "reserved_suite_id:report",
+        ),
+        (
+            json!({ "assets": { "scripts": ["test"] } }),
+            "reserved_suite_id:assets",
+        ),
+        (
+            json!({ "unit": { "scripts": [] } }),
+            "empty_suite_scripts:unit",
+        ),
+        (
+            json!({ "unit": { "scripts": ["a b"] } }),
+            "bad_script_name:a b",
+        ),
+        (
+            json!({ "unit": { "scripts": ["test", "test"] } }),
+            "duplicate_script:test",
+        ),
+        (
+            json!({ "a": { "scripts": ["test"] }, "b": { "scripts": ["lint", "test"] } }),
+            "suite_script_claimed_twice:test",
+        ),
+        (
+            json!({ "unit": { "scripts": ["test"], "browsers": ["webkit", "chromium"] } }),
+            "must_be_sorted_and_unique",
+        ),
+        (
+            json!({ "unit": { "scripts": ["test"], "timeout_minutes": 0 } }),
+            "bad_timeout:0:expected_1..=360",
+        ),
+        (
+            json!({ "unit": { "scripts": ["test"], "timeout_minutes": 361 } }),
+            "bad_timeout:361:expected_1..=360",
+        ),
+    ];
+    for (table, code) in cases {
+        let got = problem(suites(table));
+        assert!(got.contains(code), "{code}: {got}");
+    }
+}
+
+#[test]
+fn suite_id_grammar() {
+    for id in ["unit", "browser", "browser-dev", "e2e2", &"a".repeat(32)] {
+        assert!(is_valid_suite_id(id), "{id}");
+    }
+    for id in [
+        "",
+        "-a",
+        "a-",
+        "a--b",
+        "A",
+        "a_b",
+        "a.b",
+        "1a",
+        &"a".repeat(33),
+    ] {
+        assert!(!is_valid_suite_id(id), "{id:?}");
+    }
 }

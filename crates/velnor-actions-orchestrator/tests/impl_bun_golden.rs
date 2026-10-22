@@ -11,6 +11,9 @@
 //! do not opt into suites, sharding or the newer Bun keys keep byte-identical
 //! output: every change after it must leave it unchanged.
 //!
+//! `bun-workspace-suites` opts in (a sanitized copy of the `ChainArgos/platform`
+//! configuration): it changes only when a suite feature changes on purpose.
+//!
 //! Regenerate deliberately, at a known-good commit, with
 //! `VELNOR_UPDATE_GOLDENS=1`; the default mode compares and never writes.
 
@@ -121,6 +124,11 @@ pub(crate) fn check_golden(case: &str) -> TestResult {
 #[test]
 fn bun_workspace_without_suites_is_byte_identical() -> TestResult {
     check_golden("bun-workspace")
+}
+
+#[test]
+fn bun_workspace_with_suites_matches_its_golden() -> TestResult {
+    check_golden("bun-workspace-suites")
 }
 
 #[test]

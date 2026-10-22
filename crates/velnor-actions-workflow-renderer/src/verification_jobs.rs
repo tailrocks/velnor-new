@@ -21,6 +21,8 @@ pub(crate) mod build_task_mise_tools;
 pub(crate) mod bun_member_jobs;
 #[path = "bun_registry_step.rs"]
 pub(crate) mod bun_registry_step;
+#[path = "bun_suite_jobs.rs"]
+pub(crate) mod bun_suite_jobs;
 #[path = "image_build_jobs.rs"]
 pub(crate) mod image_build_jobs;
 #[path = "native_image_jobs.rs"]
@@ -43,6 +45,7 @@ pub use bun_member_jobs::{BUN_RUNNER, BunMemberPolicy, build_bun_member_job};
 pub use bun_registry_step::{
     BUN_REGISTRY_STEP_NAME, BUN_ROOT_ENV, BUN_SCOPES_ENV, bun_registry_step,
 };
+pub use bun_suite_jobs::{BUN_SUITE_SEPARATOR, BunSuitePolicy, build_bun_suite_job};
 pub use image_build_jobs::{
     BUILDKIT_IMAGE, ImageBuildPolicy, artifact_name, artifact_path, build_image_build_job,
 };
